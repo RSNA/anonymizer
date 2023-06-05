@@ -1,19 +1,19 @@
 import tkinter
-import customtkinter
+import customtkinter as ctk
 from PIL import Image
 
-customtkinter.set_appearance_mode(
-    "Light"
-)  # Modes: "System" (standard), "Dark", "Light"
-customtkinter.set_default_color_theme(
-    "blue"
-)  # Themes: "blue" (standard), "green", "dark-blue", "dark-green", "light-blue", "light-green"
+ctk.set_appearance_mode("Light")  # Modes: "System" (standard), "Dark", "Light"
+ctk.set_default_color_theme(
+    "assets/rsna_color_scheme_font.json"
+)  # sets all colors and default font
 
-# Custom Colors:
-RSNA_BLUE = "#005DA9"
-RSNA_DARK_BLUE = "#014F8F"
-APP_BACKGROUND_COLOR = "white"
-APP_TITLE_COLOR = RSNA_DARK_BLUE
+# Colors and font handled by custom color scheme in json file in assets folder
+# RSNA Dicom Anonymizer Color Scheme & default font based on dark-blue
+# RSNA_BLUE = "#005DA9"
+# RSNA_DARK_BLUE = "#014F8F"
+# APP_FONT_FAMILY = "Domine"  # TODO: load font if not on system
+# APP_FONT_SIZE = 20
+# APP_FONT_WEIGHT = "bold"
 
 # Fixed Frame Dimensions:
 APP_WINDOW_WIDTH = 1280  # 1440
@@ -21,71 +21,56 @@ APP_WINDOW_HEIGHT = 720  # 1024
 
 HEADER_FRAME_HEIGHT = APP_WINDOW_HEIGHT / 10
 
-CONTENT_FRAME_HEIGHT = APP_WINDOW_HEIGHT - HEADER_FRAME_HEIGHT
 CONTENT_FRAME_BORDER_WIDTH = HEADER_FRAME_HEIGHT / 6
-CONTENT_FRAME_PAD = 20
-CONTENT_FRAME_BORDER_COLOR = RSNA_DARK_BLUE
+CONTENT_FRAME_PAD = CONTENT_FRAME_BORDER_WIDTH
 
+RSNA_LOGO_WIDTH = 150
+RSNA_LOGO_HEIGHT = 40
 APP_TITLE = "DICOM Anonymizer Version 17"
 
-# Font:
-APP_FONT_FAMILY = "Domine"  # TODO: load font if not on system
-APP_FONT_SIZE = 20
-APP_FONT_WEIGHT = "bold"
 
-
-class App(customtkinter.CTk):
+class App(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        # configure App main window
         self.title(APP_TITLE)
         self.geometry(f"{APP_WINDOW_WIDTH}x{APP_WINDOW_HEIGHT}")
-        self.font = customtkinter.CTkFont(
-            family=APP_FONT_FAMILY, size=APP_FONT_SIZE, weight=APP_FONT_WEIGHT
-        )
+        self.font = ctk.CTkFont()  # get default font as defined in json file
+        self.title_height = self.font.metrics("linespace")
 
-        # set Main App Frame Grid layout : 2 Rows for Header and Content, 1 Column
+        # Main Frame adjustability:
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        self.logo_image = customtkinter.CTkImage(
-            Image.open("assets/rsna_logo.png"), size=(154, 42)
+        # Logo:
+        self.logo_image = ctk.CTkImage(
+            Image.open("assets/rsna_logo.png"), size=(RSNA_LOGO_WIDTH, RSNA_LOGO_HEIGHT)
         )
-
-        # Header Frame
-        self.header_frame = customtkinter.CTkFrame(
-            self,
-            height=HEADER_FRAME_HEIGHT,
-            border_color="red",
-            border_width=2,
-        )
-        self.header_frame.grid(row=0, column=0, padx=CONTENT_FRAME_PAD, sticky="ew")
-
-        self.logo = customtkinter.CTkLabel(
-            self.header_frame, image=self.logo_image, text=""
-        )
+        self.logo = ctk.CTkLabel(self, image=self.logo_image, text="")
         self.logo.grid(
-            row=0, column=0, padx=CONTENT_FRAME_PAD, pady=CONTENT_FRAME_PAD, sticky="nw"
+            row=0,
+            column=0,
+            padx=CONTENT_FRAME_PAD,
+            pady=(CONTENT_FRAME_PAD, 0),
+            sticky="w",
         )
 
-        self.title_label = customtkinter.CTkLabel(
-            self.header_frame,
+        # Title:
+        self.title_label = ctk.CTkLabel(
+            self,  # .header_frame,
             text=APP_TITLE,
             font=self.font,
-            text_color=APP_TITLE_COLOR,
         )
         self.title_label.grid(
             row=0,
-            column=1,
-            pady=CONTENT_FRAME_PAD,
+            column=0,
+            pady=(RSNA_LOGO_HEIGHT + CONTENT_FRAME_PAD - self.title_height, 0),
             sticky="n",
         )
 
         # Content Frame:
-        self.content_frame = customtkinter.CTkFrame(
+        self.content_frame = ctk.CTkFrame(
             self,
-            border_color=CONTENT_FRAME_BORDER_COLOR,
             border_width=CONTENT_FRAME_BORDER_WIDTH,
         )
         self.content_frame.grid(
