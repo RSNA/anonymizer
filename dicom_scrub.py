@@ -29,6 +29,36 @@ RSNA_LOGO_HEIGHT = 40
 APP_TITLE = "DICOM Anonymizer Version 17"
 
 
+class RSNATabView(ctk.CTkTabview):
+    def __init__(self, master, **kwargs):
+        super().__init__(master, **kwargs)
+
+        self.tabview = ctk.CTkTabview(
+            master,
+            border_width=CONTENT_FRAME_BORDER_WIDTH,
+            # width=master._getconfigure("width") - 2 * CONTENT_FRAME_PAD,
+            # height=master._getconfigure("height") - 2 * CONTENT_FRAME_PAD,
+        )
+
+        self.tabview.grid(
+            row=1,
+            column=0,
+            padx=CONTENT_FRAME_PAD,
+            pady=CONTENT_FRAME_PAD,
+            sticky="nsew",
+        )
+        self.tabview.add("     About     ")
+        self.tabview.add("Storage")
+        self.tabview.add("Settings")
+        self.tabview.add("Import")
+        self.tabview.add("Verify")
+        self.tabview.add("Export")
+        self.tabview.add("Admin")
+        # configure grid of individual tabs
+        # self.tabview.tab("About").grid_columnconfigure(0, weight=1)
+        # self.tabview.tab("Storage").grid_columnconfigure(0, weight=1)
+
+
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -69,17 +99,19 @@ class App(ctk.CTk):
         )
 
         # Content Frame:
-        self.content_frame = ctk.CTkFrame(
-            self,
-            border_width=CONTENT_FRAME_BORDER_WIDTH,
-        )
-        self.content_frame.grid(
-            row=1,
-            column=0,
-            padx=CONTENT_FRAME_PAD,
-            pady=(0, CONTENT_FRAME_PAD),
-            sticky="nsew",
-        )
+        # self.content_frame = ctk.CTkFrame(
+        #     self,
+        #     # border_width=CONTENT_FRAME_BORDER_WIDTH,
+        # )
+        # self.content_frame.grid(
+        #     row=1,
+        #     column=0,
+        #     padx=CONTENT_FRAME_PAD,
+        #     pady=(0, CONTENT_FRAME_PAD),
+        #     sticky="nsew",
+        # )
+
+        self.tab_view = RSNATabView(master=self)  # .content_frame)
 
 
 if __name__ == "__main__":

@@ -139,7 +139,7 @@
     "macOS": {
       "family": "Domine",
       "size": 20,
-      "weight": "bold"
+      "weight": "normal"
     },
     "Windows": {
       "family": "Domine",
