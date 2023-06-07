@@ -28,56 +28,52 @@ class TabViewMain(ctk.CTkTabview):
             tabview_nested.grid(row=0, column=0, sticky="nswe")
 
 
-PAD = 10
-LOGO_WIDTH = 75
-LOGO_HEIGHT = 20
-APP_TITLE = "DICOM Anonymizer Version 17"
-
-
 class App(ctk.CTk):
-    def __init__(self, tabs):
+    def __init__(self, title, logo_file, logo_width, logo_height, tabs, pad):
         super().__init__()
 
         ctk.set_appearance_mode("Light")  # Modes: "System" (standard), "Dark", "Light"
         # sets all colors and default font:
         ctk.set_default_color_theme("assets/rsna_color_scheme_font.json")
 
-        self.title(APP_TITLE)
         self.geometry("800x600")
         self.font = ctk.CTkFont()  # get default font as defined in json file
+        self.title(title)
         self.title_height = self.font.metrics("linespace")
         self.rowconfigure(1, weight=1)
         self.columnconfigure(0, weight=1)
+
         # Logo:
         self.logo = ctk.CTkImage(
-            light_image=Image.open("assets/rsna_logo.png"),
-            dark_image=Image.open("assets/rsna_logo.png"),
-            size=(LOGO_WIDTH, LOGO_HEIGHT),
+            light_image=Image.open(logo_file),
+            dark_image=Image.open(logo_file),
+            size=(logo_width, logo_height),
         )
         self.logo = ctk.CTkLabel(self, image=self.logo, text="")
         self.logo.grid(
             row=0,
             column=0,
-            padx=PAD,
-            pady=(PAD, 0),
+            padx=pad,
+            pady=(pad, 0),
             sticky="nw",
         )
 
         # Title:
         self.title_label = ctk.CTkLabel(
             self,
-            text=APP_TITLE,
+            text=title,
             # font=self.font,
         )
         self.title_label.grid(
             row=0,
             column=0,
-            pady=(LOGO_HEIGHT + PAD - self.title_height, 0),
+            pady=(logo_height + pad - self.title_height, 0),
             sticky="n",
         )
 
-        self.tab_view = TabViewMain(master=self, tabs=tabs, border_width=PAD)
-        self.tab_view.grid(row=1, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")
+        # Content (TabView):
+        self.tab_view = TabViewMain(master=self, tabs=tabs, border_width=pad)
+        self.tab_view.grid(row=1, column=0, padx=pad, pady=(0, pad), sticky="nswe")
 
 
 tabs = {
@@ -90,5 +86,12 @@ tabs = {
     "Admin": ["Import Log", "Export Log"],
 }
 
-app = App(tabs=tabs)
+app = App(
+    title="DICOM Anonymizer Version 17",
+    logo_file="assets/rsna_logo.png",
+    logo_width=75,
+    logo_height=20,
+    tabs=tabs,
+    pad=10,
+)
 app.mainloop()
