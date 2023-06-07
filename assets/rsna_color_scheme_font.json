@@ -138,18 +138,18 @@
   "CTkFont": {
     "macOS": {
       "family": "Domine",
-      "size": 20,
+      "size": 14,
       "weight": "normal"
     },
     "Windows": {
       "family": "Domine",
-      "size": 20,
-      "weight": "bold"
+      "size": 14,
+      "weight": "normal"
     },
     "Linux": {
       "family": "Domine",
-      "size": 20,
-      "weight": "bold"
+      "size": 14,
+      "weight": "normal"
     }
   }
 }
