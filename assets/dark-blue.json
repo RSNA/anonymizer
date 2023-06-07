@@ -10,7 +10,7 @@
     "border_width": 0,
     "fg_color": ["gray90", "gray13"],
     "top_fg_color": ["gray85", "gray16"],
-    "border_color": ["#014F8F", "#014F8F"]
+    "border_color": ["gray65", "gray28"]
   },
   "CTkButton": {
     "corner_radius": 6,
@@ -24,7 +24,7 @@
   "CTkLabel": {
     "corner_radius": 0,
     "fg_color": "transparent",
-    "text_color": ["#014F8F", "#005DA9"]
+    "text_color": ["gray14", "gray84"]
   },
   "CTkEntry": {
     "corner_radius": 6,
@@ -121,7 +121,7 @@
   "CTkTextbox": {
     "corner_radius": 6,
     "border_width": 0,
-    "fg_color": ["gray90", "gray20"],
+    "fg_color": ["gray100", "gray20"],
     "border_color": ["#979DA2", "#565B5E"],
     "text_color": ["gray14", "gray84"],
     "scrollbar_button_color": ["gray55", "gray41"],
@@ -137,18 +137,18 @@
   },
   "CTkFont": {
     "macOS": {
-      "family": "Domine",
-      "size": 16,
+      "family": "SF Display",
+      "size": 13,
       "weight": "normal"
     },
     "Windows": {
-      "family": "Domine",
-      "size": 16,
+      "family": "Roboto",
+      "size": 13,
       "weight": "normal"
     },
     "Linux": {
-      "family": "Domine",
-      "size": 16,
+      "family": "Roboto",
+      "size": 13,
       "weight": "normal"
     }
   }
