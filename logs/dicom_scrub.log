@@ -1,0 +1,22 @@
+2023-06-07 16:13:43,324 INFO dicom_scrub.<module>.145 Starting DICOM SCRUB GUI...
+2023-06-07 16:13:52,471 INFO dicom_scrub.<module>.156 DICOM SCRUB GUI closed.
+2023-06-07 16:14:55,382 INFO dicom_scrub.<module>.145 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-07 16:14:58,689 INFO dicom_scrub.<module>.156 DICOM SCRUB GUI closed.
+2023-06-07 16:16:55,410 INFO dicom_scrub.<module>.145 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-07 16:17:48,180 INFO dicom_scrub.<module>.156 DICOM SCRUB GUI closed.
+2023-06-07 16:22:23,516 INFO dicom_scrub.<module>.145 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-07 16:22:33,778 INFO dicom_scrub.<module>.156 DICOM SCRUB GUI closed.
+2023-06-07 16:24:09,295 INFO dicom_scrub.<module>.145 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-07 16:24:18,245 INFO dicom_scrub.<module>.156 DICOM SCRUB GUI closed.
+2023-06-07 16:25:14,539 INFO dicom_scrub.<module>.145 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-07 16:25:14,540 INFO dicom_scrub.<module>.146 Running from {os.getcwd()}
+2023-06-07 16:25:22,333 INFO dicom_scrub.<module>.157 DICOM SCRUB GUI closed.
+2023-06-07 16:25:28,172 INFO dicom_scrub.<module>.145 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-07 16:25:28,172 INFO dicom_scrub.<module>.146 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-07 16:25:36,193 INFO dicom_scrub.<module>.157 DICOM SCRUB GUI closed.
+2023-06-07 16:44:21,368 INFO dicom_scrub.<module>.142 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-07 16:44:21,368 INFO dicom_scrub.<module>.143 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-07 16:44:32,559 INFO dicom_scrub.<module>.142 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-07 16:44:32,559 INFO dicom_scrub.<module>.143 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-07 16:44:32,559 INFO dicom_scrub.<module>.145 Directory of dicom_scrub.py: /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-07 16:44:39,572 INFO dicom_scrub.<module>.159 DICOM SCRUB GUI Stop.

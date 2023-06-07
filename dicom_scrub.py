@@ -1,5 +1,14 @@
+import os
 import customtkinter as ctk
 from PIL import Image
+import logging
+import logging.handlers
+
+__version__ = "17.1.0.1"
+LOGS_DIR = "logs/"
+LOG_FILENAME = "dicom_scrub.log"
+LOG_DEFAULT_LEVEL = logging.INFO
+logger = logging.getLogger()
 
 ABOUT_WELCOME = "RSNA is assembling a repository of de-identified COVID-19-related imaging data for research and education. Medical institutions interested in joining this international collaboration are invited to submit de-identified imaging data for inclusion in this repository. The RSNA Anonymizer program is a free open-source tool for collecting and de-identifying DICOM studies to prepare them for submission. It may be used to ensure privacy by removing protected health information from your DICOM imaging studies.\n\nYou can learn more about the RSNA COVID-19 Imaging Data Repository initiative here."
 
@@ -109,13 +118,42 @@ tabs = {
 }
 
 
-app = App(
-    color_theme="assets/rsna_color_scheme_font.json",
-    title="DICOM Anonymizer Version 17",
-    logo_files=("assets/rsna_logo_light.png", "assets/rsna_logo_dark.png"),
-    logo_width=75,
-    logo_height=20,
-    tabs=tabs,
-    pad=10,
-)
-app.mainloop()
+def setup_logging() -> None:
+    # TODO: allow setup from log.config file
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    # Setup  rotating log file:
+    logFormatter = logging.Formatter(
+        "{asctime} {levelname} {module}.{funcName}.{lineno} {message}", style="{"
+    )
+    fileHandler = logging.handlers.RotatingFileHandler(
+        LOGS_DIR + LOG_FILENAME, maxBytes=1024 * 1024, backupCount=10
+    )
+    fileHandler.setFormatter(logFormatter)
+    logger.addHandler(fileHandler)
+    # Setup stderr console output:
+    consoleHandler = logging.StreamHandler()
+    consoleHandler.setFormatter(logFormatter)
+    logger.addHandler(consoleHandler)
+    logger.setLevel(logging.INFO)
+
+
+if __name__ == "__main__":
+    setup_logging()
+    logger.info("Starting DICOM SCRUB GUI Version %s", __version__)
+    logging.info(f"Running from {os.getcwd()}")
+    install_dir = os.path.dirname(os.path.realpath(__file__))
+    logging.info(f"Directory of dicom_scrub.py: {install_dir}")
+    app = App(
+        color_theme=install_dir + "/assets/rsna_color_scheme_font.json",
+        title="DICOM Anonymizer Version 17",
+        logo_files=(
+            install_dir + "/assets/rsna_logo_light.png",
+            install_dir + "/assets/rsna_logo_dark.png",
+        ),
+        logo_width=75,
+        logo_height=20,
+        tabs=tabs,
+        pad=10,
+    )
+    app.mainloop()
+    logging.info("DICOM SCRUB GUI Stop.")
