@@ -24,7 +24,7 @@ if __name__ == "__main__":
     )
 
     print(
-        "Using PyInstaller to create a single file dx_gate.exe from python source & libs + versionfile.txt + favicon.ico"
+        "Using PyInstaller to create a single file exe from python source & libs + versionfile.txt + icon"
     )
     PyInstaller.__main__.run(
         [
@@ -32,11 +32,13 @@ if __name__ == "__main__":
             "--onedir",
             "--windowed",
             "--add-data",
-            "<CustomTkinter Location>/customtkinter;customtkinter/",
+            "C:\\Users\\tatea\\.virtualenvs\\dicom_scrub-yrdUUzYX\\Lib\\site-packages\\customtkinter;customtkinter\\",
+            "--add-data",
+            "assets\\;assets\\",
             "--log-level",
             "WARN",
             "--icon",
-            "rsna_logo.ico",
+            "assets\\rsna_icon.ico",
             "--version-file",
             "versionfile.txt",
             "--name",

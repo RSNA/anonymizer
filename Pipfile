@@ -6,6 +6,8 @@ name = "pypi"
 [packages]
 customtkinter = "*"
 pyinstaller = "*"
+pillow = "*"
+pyinstaller-versionfile = "*"
 
 [dev-packages]
 
