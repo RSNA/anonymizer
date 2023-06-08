@@ -20,3 +20,11 @@
 2023-06-07 16:44:32,559 INFO dicom_scrub.<module>.143 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
 2023-06-07 16:44:32,559 INFO dicom_scrub.<module>.145 Directory of dicom_scrub.py: /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
 2023-06-07 16:44:39,572 INFO dicom_scrub.<module>.159 DICOM SCRUB GUI Stop.
+2023-06-07 17:39:23,396 INFO dicom_scrub.<module>.144 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-07 17:39:23,396 INFO dicom_scrub.<module>.145 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-07 17:39:23,396 INFO dicom_scrub.<module>.147 Directory of dicom_scrub.py: /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-07 17:39:26,654 INFO dicom_scrub.<module>.161 DICOM SCRUB GUI Stop.
+2023-06-07 17:46:09,343 INFO dicom_scrub.<module>.144 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-07 17:46:09,344 INFO dicom_scrub.<module>.145 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-07 17:46:09,344 INFO dicom_scrub.<module>.147 Directory of dicom_scrub.py: /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-07 17:46:21,626 INFO dicom_scrub.<module>.161 DICOM SCRUB GUI Stop.

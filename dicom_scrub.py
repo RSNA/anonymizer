@@ -5,7 +5,7 @@ import logging
 import logging.handlers
 
 __version__ = "17.1.0.1"
-LOGS_DIR = "logs/"
+LOGS_DIR = "/logs/"
 LOG_FILENAME = "dicom_scrub.log"
 LOG_DEFAULT_LEVEL = logging.INFO
 logger = logging.getLogger()
@@ -118,15 +118,15 @@ tabs = {
 }
 
 
-def setup_logging() -> None:
+def setup_logging(logs_dir) -> None:
     # TODO: allow setup from log.config file
-    os.makedirs(LOGS_DIR, exist_ok=True)
+    os.makedirs(logs_dir, exist_ok=True)
     # Setup  rotating log file:
     logFormatter = logging.Formatter(
         "{asctime} {levelname} {module}.{funcName}.{lineno} {message}", style="{"
     )
     fileHandler = logging.handlers.RotatingFileHandler(
-        LOGS_DIR + LOG_FILENAME, maxBytes=1024 * 1024, backupCount=10
+        logs_dir + LOG_FILENAME, maxBytes=1024 * 1024, backupCount=10
     )
     fileHandler.setFormatter(logFormatter)
     logger.addHandler(fileHandler)
@@ -138,11 +138,12 @@ def setup_logging() -> None:
 
 
 if __name__ == "__main__":
-    setup_logging()
-    logger.info("Starting DICOM SCRUB GUI Version %s", __version__)
-    logging.info(f"Running from {os.getcwd()}")
     install_dir = os.path.dirname(os.path.realpath(__file__))
-    logging.info(f"Directory of dicom_scrub.py: {install_dir}")
+    setup_logging(install_dir + LOGS_DIR)
+    os.chdir(install_dir)
+    logger.info("Starting DICOM SCRUB GUI Version %s", __version__)
+    logger.info(f"Running from {os.getcwd()}")
+    logger.info(f"Directory of dicom_scrub.py: {install_dir}")
     app = App(
         color_theme=install_dir + "/assets/rsna_color_scheme_font.json",
         title="DICOM Anonymizer Version 17",
@@ -156,4 +157,4 @@ if __name__ == "__main__":
         pad=10,
     )
     app.mainloop()
-    logging.info("DICOM SCRUB GUI Stop.")
+    logger.info("DICOM SCRUB GUI Stop.")
