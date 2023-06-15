@@ -123,7 +123,7 @@
     "border_width": 0,
     "fg_color": ["gray90", "gray20"],
     "border_color": ["#979DA2", "#565B5E"],
-    "text_color": ["gray14", "gray84"],
+    "text_color": ["#014F8F", "#005DA9"],
     "scrollbar_button_color": ["gray55", "gray41"],
     "scrollbar_button_hover_color": ["gray40", "gray53"]
   },
@@ -137,17 +137,17 @@
   },
   "CTkFont": {
     "macOS": {
-      "family": "Domine",
+      "family": "DIN Alternate",
       "size": 16,
       "weight": "normal"
     },
     "Windows": {
-      "family": "Domine",
+      "family": "DIN Alternate",
       "size": 16,
       "weight": "normal"
     },
     "Linux": {
-      "family": "Domine",
+      "family": "DIN Alternate",
       "size": 16,
       "weight": "normal"
     }

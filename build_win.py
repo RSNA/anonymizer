@@ -38,7 +38,7 @@ if __name__ == "__main__":
             "--log-level",
             "WARN",
             "--icon",
-            "assets\\rsna_icon.ico",
+            "assets\\images\\rsna_icon.ico",
             "--version-file",
             "versionfile.txt",
             "--name",

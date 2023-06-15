@@ -1,0 +1,256 @@
+<html>
+
+<body>
+	<div style="text-align: center;">
+		<h1>Anonymizer Help</h1>
+	</div>
+	<a href="https://www.rsna.org/covid-19/covid-19-ricord">CLICK </a>
+	Anonymizer is a general-purpose stand-alone deidentification utility.
+	It imports images either from DICOM transfers or from external storage,
+	deidentifies them, and stores them in a local file structure.
+
+	<p>The program runs on any computer that has Java 7 or better on it.
+
+	<p>To run the program, either double-click the Anonymizer.jar file or
+		launch a command window, navigate to the Anonymizer directory,
+		and type:
+		<br><br>&nbsp;&nbsp;&nbsp;&nbsp;<code>java -jar Anonymizer.jar</code>
+
+	<p>If the program reports errors that are not obvious from the
+		text shown in the Results pane, you may get additional information
+		by running the program in a command window.
+
+	<p>If an out-of-memory error occurs, you may assign more memory to
+		the program by running it in a command window with the command:
+		<br><br>&nbsp;&nbsp;&nbsp;&nbsp;<code>java -Xmx768m -jar Anonymizer.jar</code>
+
+	<p><b>The Q/R SCU Tab</b>
+
+	<p>The Q/R SCU tab provides control of a DICOM Query/Retrieve SCU for finding
+		and importing images via the DICOM protocol from a PACS Q/R SCP. It also lists the
+		AE Title used by the SCU for the query. These parameters may be obtained from the
+		PACS administrator when the PACS is configured to accept connections from the program.
+
+	<p>Text boxes are supplied for the PatientName, PatientID, and StudyDate
+		search fields. At least one search field must contain text for a query to be initiated.
+		A blank field is considered a match for anything.
+		The <b>Clear</b> button erases the fields.
+
+	<p>When specifying a query, the ? character matches any individual character, and the * character
+		matches any sequence of characters. A StudyDate must be specified in full, for example 20190315,
+		and wild card characters are not allowed.
+
+	<p>BACKGROUND: A PACS is configured with Application Entity Titles (AE Titles, or AETs)
+		for all of the external Service Class Providers (SCPs) and Service Class Users (SCUs) with which
+		it interacts. The PACS knows the SCPs and SCUs by their AETs, which it uses to search its
+		internal tables for the IP addresses
+		and ports of the computers on which they are running. The Anonymizer program contains
+		a DICOM Query/Retrieve SCU and a DICOM Storage SCP. When the Anonymizer program retrieves
+		images from the PACS, the Q/R SCU tells the PACS to send to the AET of the Storage
+		SCP. The PACS uses the IP and port information that it associates with the AET it is given,
+		so if your computer's IP address has changed, or if you have changed the SCP's port, the
+		transfer will fail. For this reason, if the computer running the Anonymizer program has
+		a dynamic IP address, you must configure the PACS to use a domain name for the computer
+		so the PACS will be able to get the IP address from a DNS.
+
+	<p><b>The Storage SCP Tab</b>
+
+	<p>The Storage SCP tab provides control of a DICOM Storage SCP for receiving images via
+		the DICOM protocol from modalities, workstations, and PACS.
+
+	<p>The header displays the IP address of the SCP and provides a text box
+		allowing the port to be specified. It also provides a button for starting
+		and stopping the SCP. The <b>Autostart</b> checkbox, if checked, causes the
+		program to start the SCP automatically when the program starts. Events are
+		logged in the main panel of the tab as images are processed. The <b>Clear</b> button
+		erases the panel.
+
+	<p>Processing of images is automatic. The processing is the same as that done
+		when images are imported manually using the Directory tab.
+
+	<p><b>The Directory Tab</b>
+
+	<p>The Directory tab has a left and right pane. The left pane provides
+		navigation through the files on the computer. The right pane displays
+		the results of actions. At the bottom of the right pane, there are buttons
+		to initiate the functions provided by the program.
+
+	<p>The pulldown menu in the upper right of the Directory pane allows
+		selection of the file system root that will be displayed in the
+		directory tree.
+
+	<p>The directory tree does not track changes in the directory structure
+		that occur behind the program's back. You can refresh the directory tree
+		by clicking the root of the tree or clicking the Refresh button in the header
+		of the left pane.
+
+	<p>The button in the lower right of the Directory pane displays a dialog
+		that allows selection of the file extensions that are displayed
+		in the directory tree. If the list of extensions includes an asterisk,
+		all files are displayed. There is a special notation, "[dcm]", that
+		selects files whose names contain only numerals and periods. This can
+		be used, for example, to select images on DICOM CDs or files that were
+		named by their SOPInstanceUIDs.
+
+	<p>The <b>Import</b> button starts the import and deidentification
+		process. Which files are processed depends on whether a file or a directory is selected
+		in the Directory pane and on whether the <b>Include subdirectories</b> checkbox
+		is selected:
+	<ul>
+		<li>If a single file is selected, that file is processed.</li>
+		<li>If a directory is selected and the <b>Include subdirectories</b> checkbox is
+			not selected, all the files in the selected directory are processed, but no
+			files in subdirectories are processed.</li>
+		<li>If a directory is selected and the <b>Include subdirectories</b> checkbox is
+			selected, all the files in the selected directory and all its subdirectories
+			are processed.</li>
+	</ul>
+
+	<p>Events that occur during the anonymization process are logged in the Results pane.
+
+	<p>Images are stored in file structures for each date of processing. The file structures
+		are stored in a parent directory. By default, the parent directory is called Submissions, and it
+		is located in the directory containing the program. To change the parent directory, click the
+		<b>Set Storage Directory</b> button, navigate to the desired directory, and click <b>Save</b>.
+		The currently selected output directory is shown in the header of the right pane. Clicking that text
+		repositions the directory tree in the left pane to point to the submisssions directory.
+
+	<p><b>The Export Tab</b>
+
+	<p>The Export tab lists the patients in the storage directory tree. It provides two means of export:
+		HTTP and DICOM. Switching between the two protocols is accomplished by clicking the <b>Switch to...</b>
+		button in the lower left corner of the window. The selected export protocol must be configured in the
+		header of the pane.
+
+	<p>For HTTP, enter the IP address (or domain name) of the destination and the port. Do not include the
+		name of the protocol. Do not include any path information.
+
+	<p>For DICOM, you must register with the administrator of the destination SCP and set the fields in
+		the header.
+
+	<p>Once configured, check the boxes of the patients to be exported and click the <b>Export</b> button
+		in the footer. As patients are transmitted, the date is entered in the ExportDate column and the checkbox
+		is cleared. The <b>Select All</b> button in the footer checks the boxes of all patients that have not been
+		exported.
+
+	<p><b>The Admin Tab</b>
+
+	<p>The Admin tab displays additional tabs for viewing images and DICOM elements, for configuring the filter
+		and anonymizer scripts, and for searching or displaying the patient index.
+
+	<p><b>The Viewer Tab</b>
+
+	<p>The Viewer tab displays the currently selected DICOM image. If the image file contains multiple frames,
+		the <b>Next Frame</b> and <b>Previous Frame</b> buttons sequence through
+		the frames. Frame sequencing is also provided through the mouse wheel.
+
+	<p>Zoom, pan, and window width and level
+		functions are provided through icons in the upper right of the window.
+
+	<p>The window width and level can also
+		be set manually by typing values into the provided text boxes. When entering text in the window width and level
+		boxes, the values do not take effect until the Enter key is pressed.
+
+	<p>The <b>Save As JPEG</b> button saves the image, reduced to the width specified in a popup dialog.
+
+	<p><b>The Elements Tab</b>
+
+	<p>The Elements tab displays the element contents of the selected DICOM image.
+
+	<p><b>The Filter Tab</b>
+
+	<p>To be accepted for import and processing, a file must be a DICOM image. It must also match a filter script
+		as described in http://mircwiki.rsna.org/index.php?title=The_CTP_DICOM_Filter.
+
+	<p>The Filter tab provides an editing window for creating or modifying the filter script. Any text changes
+		in the window are immediately active, but they are not saved until the Save button is clicked. The Refresh
+		button
+		discards any unsaved changes and reloads the filter text from the last saved version.
+
+	<p>The Filter tab has three checkboxes in its footer:
+	<ul>
+		<li><b>Remove Structured Report Files</b> is selected by default. If selected, the filter does not accept SR
+			objects. Since SR objects
+			generally contain PHI in hard-to-find places, this is the safe option.</li>
+		<li><b>Remove Secondary Capture Files</b> is selected by default. If selected, the filter does not accept
+			secondary capture objects.
+			Since these objects often contain PHI burned into the pixels, this is the safe option.</li>
+		<li><b>Accept Reformatted Images</b> is selected by default. If selected, the filter accepts secondary capture
+			objects if
+			they are reformatted images, even if Remove Secondary Capture Files is selected. Since reformatted image
+			files generally
+			do not contain PHI burned into the pixels, this is generally safe.</li>
+	</ul>
+
+	<p><b>The Script Tab</b>
+
+	<p>The DICOM deidentification process is driven by a script file called "dicom-anonymizer.script" located in the
+		directory
+		containing the program. A default version is included in the installation.
+
+	<p>The Script tab displays the DICOM anonymizer scripts. You can edit the scripts and click the <b>Save Changes</b>
+		button.
+		Changes are not effective until the scripts are saved. If you make a change and decide you made an error
+		before saving, click the <b>Reset</b> button and the scripts will be refreshed from the last saved version.
+
+	<p>The DICOM anonymizer script functions are documented in
+		http://mircwiki.rsna.org/index.php?title=The_CTP_DICOM_Anonymizer.
+
+	<p>Before beginning to import and process images, the first item in the script should be updated to reflect the site
+		identifier (SITEID). Unless special deidentification rules are required by the project, no other parts of the
+		script
+		need be modified.
+
+	<p><b>The Index Tab</b>
+
+	<p>The Index tab provides an interface for searching the index of files that have been anonymized and stored in
+		the directory tree of submissions. The index is persistent, so it contains information on every patient
+		processed
+		by the program. To find the original PatientName and PatientID for a study subject, enter the anonymized
+		PatientName
+		in the search field and type the Enter key or click the <b>Search</b> button. The search field is not case
+		sensitive.
+
+	<p>To list the entire index, click the <b>List</b> button. When in the List pane, the <b>Save</b> button saves the
+		index
+		in a spreadsheet file, including study information.
+
+	<p><b>The Log Tab</b>
+
+	<p>The Log tab lists events logged by various components in the program. The log may be useful in initial setup, as
+		the
+		configuration is tested before production use.
+
+		<center>
+			<h1>Credits</h1>
+		</center>
+	<ul>
+		<li>The Anonymizer program was developed under the aegis of the Radiological Society of North America (RSNA).
+		</li>
+		<li>The CTP servlet container (CTP) was developed by the RSNA.</li>
+		<li>The DICOM library (dcm4che) was developed by the incomparable Gunter Zeilinger.</li>
+		<li>The CTP multipart library is a highly modified version of the COS library
+			developed by Jason Hunter.</li>
+		<li>The CTP database is based on the Apache JDBM module developed by Cees de Groot,
+			Alex Boisvert, and associated contributors.
+		<li>The Apache POI library was developed by the Apache Software Foundation.
+	</ul>
+	<h3>Licenses</h3>
+	<ul>
+		<li>The RSNA software is released under the RSNA Public License.
+			(See http://mirc.rsna.org/rsnapubliclicense.pdf)</li>
+		<li>The DICOM library (dcm4che) is released under the GNU Lesser Public license.
+			(See https://www.gnu.org/licenses/lgpl-3.0.en.html)</li>
+		<li>The original multipart library (COS) is released under the servlets.com license.
+			(http://www.servlets.com/cos/license.html)</li>
+		<li>The Apache POI library is licensed under the Apache 2.0 License.
+			(See https://www.apache.org/licenses/LICENSE-2.0)</li>
+	</ul>
+	<h3>Copyrights</h3>
+	<ul>
+		<li>CTP and MIRC are copyrighted 2001-2020 by the RSNA.</li>
+		<li>JDBM is copyrighted 2000-2001 by Cees de Groot, Alex Boisvert, and associated contributors.</li>
+	</ul>
+</body>
+
+</html>

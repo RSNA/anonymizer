@@ -28,3 +28,308 @@
 2023-06-07 17:46:09,344 INFO dicom_scrub.<module>.145 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
 2023-06-07 17:46:09,344 INFO dicom_scrub.<module>.147 Directory of dicom_scrub.py: /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
 2023-06-07 17:46:21,626 INFO dicom_scrub.<module>.161 DICOM SCRUB GUI Stop.
+2023-06-08 21:11:45,724 INFO dicom_scrub.<module>.144 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-08 21:11:45,724 INFO dicom_scrub.<module>.145 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-08 21:11:45,724 INFO dicom_scrub.<module>.146 Directory of dicom_scrub.py: /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-08 21:12:35,903 INFO dicom_scrub.<module>.160 DICOM SCRUB GUI Stop.
+2023-06-08 21:12:44,107 INFO dicom_scrub.<module>.144 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-08 21:12:44,107 INFO dicom_scrub.<module>.145 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-08 21:12:44,107 INFO dicom_scrub.<module>.146 Directory of dicom_scrub.py: /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-08 21:19:46,712 INFO dicom_scrub.<module>.160 DICOM SCRUB GUI Stop.
+2023-06-13 11:07:29,675 INFO dicom_scrub.<module>.153 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-13 11:07:29,675 INFO dicom_scrub.<module>.154 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-13 11:07:44,422 INFO dicom_scrub.<module>.171 DICOM SCRUB GUI Stop.
+2023-06-13 11:21:12,692 INFO dicom_scrub.<module>.154 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-13 11:21:12,693 INFO dicom_scrub.<module>.155 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-13 11:22:00,451 INFO dicom_scrub.<module>.172 DICOM SCRUB GUI Stop.
+2023-06-13 11:22:36,425 INFO dicom_scrub.main.154 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-13 11:22:36,426 INFO dicom_scrub.main.155 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-13 11:23:04,031 INFO dicom_scrub.main.172 DICOM SCRUB GUI Stop.
+2023-06-13 11:36:00,969 INFO dicom_scrub.main.158 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-13 11:36:00,970 INFO dicom_scrub.main.159 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-13 11:36:14,176 INFO dicom_scrub.main.176 DICOM SCRUB GUI Stop.
+2023-06-13 14:59:52,789 INFO dicom_scrub.main.164 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-13 14:59:52,789 INFO dicom_scrub.main.165 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-13 15:00:01,590 INFO dicom_scrub.main.182 DICOM SCRUB GUI Stop.
+2023-06-13 15:02:08,599 INFO dicom_scrub.main.166 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-13 15:02:08,600 INFO dicom_scrub.main.167 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-13 15:08:44,636 INFO dicom_scrub.main.184 DICOM SCRUB GUI Stop.
+2023-06-13 15:42:36,132 INFO dicom_scrub.main.196 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-13 15:42:36,133 INFO dicom_scrub.main.197 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-13 16:59:51,088 INFO dicom_scrub.main.195 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-13 16:59:51,089 INFO dicom_scrub.main.196 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-13 17:00:02,258 INFO dicom_scrub.main.215 DICOM SCRUB GUI Stop.
+2023-06-13 17:03:41,870 INFO dicom_scrub.main.200 Starting DICOM SCRUB GUI Version 17.1.0.1
+2023-06-13 17:03:41,871 INFO dicom_scrub.main.201 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-13 17:03:51,556 INFO dicom_scrub.main.220 DICOM SCRUB GUI Stop.
+2023-06-14 14:42:01,234 INFO dicom_scrub.main.205 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 14:42:01,234 INFO dicom_scrub.main.206 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 14:42:01,616 INFO welcome.create_view.19 Creating Welcome View
+2023-06-14 14:42:23,354 INFO dicom_scrub.main.223 DICOM ANONYMIZER GUI Stop.
+2023-06-14 14:45:43,586 INFO dicom_scrub.main.210 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 14:45:43,587 INFO dicom_scrub.main.211 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 14:46:17,233 INFO dicom_scrub.main.212 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 14:46:17,234 INFO dicom_scrub.main.213 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 14:46:25,845 INFO dicom_scrub.main.230 DICOM ANONYMIZER GUI Stop.
+2023-06-14 14:47:13,207 INFO dicom_scrub.main.204 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 14:47:13,207 INFO dicom_scrub.main.205 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 14:47:13,437 INFO welcome.create_view.19 Creating Welcome View
+2023-06-14 14:47:25,812 INFO dicom_scrub.main.222 DICOM ANONYMIZER GUI Stop.
+2023-06-14 14:58:41,253 INFO dicom_scrub.main.204 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 14:58:41,254 INFO dicom_scrub.main.205 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 14:58:41,912 INFO welcome.create_view.26 Creating Welcome View
+2023-06-14 14:59:00,746 INFO dicom_scrub.main.204 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 14:59:00,747 INFO dicom_scrub.main.205 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 14:59:00,958 INFO welcome.create_view.26 Creating Welcome View
+2023-06-14 15:01:38,477 INFO dicom_scrub.main.222 DICOM ANONYMIZER GUI Stop.
+2023-06-14 15:04:06,699 INFO dicom_scrub.main.204 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 15:04:06,700 INFO dicom_scrub.main.205 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 15:04:07,022 INFO welcome.create_view.26 Creating Welcome View
+2023-06-14 15:07:22,382 INFO dicom_scrub.main.204 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 15:07:22,382 INFO dicom_scrub.main.205 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 15:07:22,631 INFO welcome.create_view.26 Creating Welcome View
+2023-06-14 15:16:01,210 INFO dicom_scrub.main.204 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 15:16:01,211 INFO dicom_scrub.main.205 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 15:16:01,526 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 15:22:29,757 INFO dicom_scrub.main.204 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 15:22:29,757 INFO dicom_scrub.main.205 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 15:22:30,066 INFO welcome.create_view.29 Creating Welcome View
+2023-06-14 15:24:56,270 INFO dicom_scrub.main.204 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 15:24:56,271 INFO dicom_scrub.main.205 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 15:24:56,583 INFO welcome.create_view.29 Creating Welcome View
+2023-06-14 15:25:42,304 INFO dicom_scrub.main.204 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 15:25:42,304 INFO dicom_scrub.main.205 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 15:25:42,518 INFO welcome.create_view.29 Creating Welcome View
+2023-06-14 15:27:48,144 INFO dicom_scrub.main.204 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 15:27:48,144 INFO dicom_scrub.main.205 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 15:28:01,206 INFO dicom_scrub.main.204 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 15:28:01,207 INFO dicom_scrub.main.205 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 15:28:01,412 INFO welcome.create_view.29 Creating Welcome View
+2023-06-14 15:30:30,801 INFO dicom_scrub.main.204 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 15:30:30,801 INFO dicom_scrub.main.205 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 15:30:31,042 INFO welcome.create_view.29 Creating Welcome View
+2023-06-14 15:31:20,745 INFO dicom_scrub.main.204 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 15:31:20,746 INFO dicom_scrub.main.205 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 15:31:20,940 INFO welcome.create_view.29 Creating Welcome View
+2023-06-14 15:32:00,928 INFO dicom_scrub.main.204 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 15:32:00,928 INFO dicom_scrub.main.205 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 15:32:01,130 INFO welcome.create_view.29 Creating Welcome View
+2023-06-14 15:54:49,042 INFO dicom_scrub.main.204 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 15:54:49,042 INFO dicom_scrub.main.205 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 15:54:49,331 INFO welcome.create_view.29 Creating Welcome View
+2023-06-14 16:00:55,878 INFO dicom_scrub.main.171 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:00:55,878 INFO dicom_scrub.main.172 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:00:56,203 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:00:56,370 INFO help.create_view.9 Creating Help View
+2023-06-14 16:08:51,294 INFO dicom_scrub.main.189 DICOM ANONYMIZER GUI Stop.
+2023-06-14 16:08:56,656 INFO dicom_scrub.main.171 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:08:56,656 INFO dicom_scrub.main.172 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:08:57,131 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:08:57,269 INFO help.create_view.9 Creating Help View
+2023-06-14 16:09:37,158 INFO dicom_scrub.main.189 DICOM ANONYMIZER GUI Stop.
+2023-06-14 16:15:11,297 INFO dicom_scrub.main.175 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:15:11,298 INFO dicom_scrub.main.176 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:15:11,737 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:15:11,851 INFO help.create_view.9 Creating Help View
+2023-06-14 16:15:59,934 INFO dicom_scrub.main.193 DICOM ANONYMIZER GUI Stop.
+2023-06-14 16:24:02,551 INFO dicom_scrub.main.175 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:24:02,551 INFO dicom_scrub.main.176 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:24:02,969 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:24:03,145 INFO help.create_view.9 Creating Help View
+2023-06-14 16:26:28,971 INFO dicom_scrub.main.175 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:26:28,971 INFO dicom_scrub.main.176 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:26:29,216 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:26:29,328 INFO help.create_view.10 Creating Help View
+2023-06-14 16:26:29,329 INFO help.create_view.13 Reading help file: {HELP_FILE}
+2023-06-14 16:26:47,941 INFO dicom_scrub.main.175 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:26:47,942 INFO dicom_scrub.main.176 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:26:48,238 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:26:48,343 INFO help.create_view.10 Creating Help View
+2023-06-14 16:26:48,343 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-14 16:27:43,643 INFO dicom_scrub.main.175 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:27:43,644 INFO dicom_scrub.main.176 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:27:43,919 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:27:44,025 INFO help.create_view.10 Creating Help View
+2023-06-14 16:27:44,025 ERROR help.create_view.16 Help file: assets/help1.html not found.
+2023-06-14 16:28:21,410 INFO dicom_scrub.main.175 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:28:21,410 INFO dicom_scrub.main.176 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:28:21,694 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:28:21,801 INFO help.create_view.10 Creating Help View
+2023-06-14 16:28:21,801 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-14 16:31:34,934 INFO dicom_scrub.main.175 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:31:34,935 INFO dicom_scrub.main.176 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:31:35,218 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:31:35,334 INFO help.create_view.10 Creating Help View
+2023-06-14 16:31:35,334 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-14 16:32:06,269 INFO dicom_scrub.main.175 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:32:06,270 INFO dicom_scrub.main.176 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:32:06,517 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:32:06,624 INFO help.create_view.10 Creating Help View
+2023-06-14 16:32:06,625 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-14 16:33:26,769 INFO dicom_scrub.main.175 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:33:26,769 INFO dicom_scrub.main.176 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:33:27,061 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:33:27,175 INFO help.create_view.10 Creating Help View
+2023-06-14 16:33:27,175 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-14 16:34:59,991 INFO dicom_scrub.main.175 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:34:59,992 INFO dicom_scrub.main.176 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:35:00,272 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:35:00,385 INFO help.create_view.10 Creating Help View
+2023-06-14 16:35:00,385 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-14 16:35:46,427 INFO dicom_scrub.main.175 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:35:46,428 INFO dicom_scrub.main.176 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:35:46,675 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:35:46,781 INFO help.create_view.10 Creating Help View
+2023-06-14 16:35:46,781 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-14 16:36:30,235 INFO dicom_scrub.main.175 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:36:30,236 INFO dicom_scrub.main.176 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:36:30,497 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:36:30,607 INFO help.create_view.10 Creating Help View
+2023-06-14 16:36:30,607 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-14 16:36:39,693 INFO dicom_scrub.main.175 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:36:39,693 INFO dicom_scrub.main.176 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:36:39,931 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:36:40,049 INFO help.create_view.10 Creating Help View
+2023-06-14 16:36:40,050 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-14 16:37:15,923 INFO dicom_scrub.main.175 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:37:15,923 INFO dicom_scrub.main.176 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:37:16,169 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:37:42,819 INFO dicom_scrub.main.175 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:37:42,819 INFO dicom_scrub.main.176 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:37:43,065 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:38:01,877 INFO dicom_scrub.main.175 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:38:01,877 INFO dicom_scrub.main.176 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:38:02,135 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:38:02,244 INFO help.create_view.10 Creating Help View
+2023-06-14 16:38:02,244 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-14 16:38:42,093 INFO dicom_scrub.main.175 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:38:42,094 INFO dicom_scrub.main.176 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:38:42,357 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:38:42,473 INFO help.create_view.10 Creating Help View
+2023-06-14 16:38:42,474 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-14 16:40:27,422 INFO dicom_scrub.main.175 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:40:27,423 INFO dicom_scrub.main.176 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:40:27,703 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:40:27,819 INFO help.create_view.10 Creating Help View
+2023-06-14 16:40:27,819 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-14 16:42:16,586 INFO dicom_scrub.main.175 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:42:16,587 INFO dicom_scrub.main.176 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:42:16,888 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:42:17,004 INFO help.create_view.10 Creating Help View
+2023-06-14 16:42:17,005 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-14 16:47:33,198 INFO dicom_scrub.main.177 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:47:33,199 INFO dicom_scrub.main.178 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:47:33,547 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:47:33,679 INFO help.create_view.10 Creating Help View
+2023-06-14 16:47:33,679 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-14 16:48:20,380 INFO dicom_scrub.main.177 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:48:20,381 INFO dicom_scrub.main.178 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:48:20,666 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:48:20,785 INFO help.create_view.10 Creating Help View
+2023-06-14 16:48:20,785 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-14 16:49:20,782 INFO dicom_scrub.main.177 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:49:20,783 INFO dicom_scrub.main.178 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:49:21,084 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:49:21,200 INFO help.create_view.10 Creating Help View
+2023-06-14 16:49:21,200 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-14 16:50:52,377 INFO dicom_scrub.main.177 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:50:52,378 INFO dicom_scrub.main.178 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:50:52,689 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:50:52,818 INFO help.create_view.10 Creating Help View
+2023-06-14 16:50:52,818 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-14 16:55:33,215 INFO dicom_scrub.main.177 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:55:33,216 INFO dicom_scrub.main.178 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:55:33,541 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:55:33,670 INFO help.create_view.16 Creating Help View
+2023-06-14 16:55:33,670 INFO help.create_view.19 Reading help file: assets/help.html
+2023-06-14 16:57:06,982 INFO dicom_scrub.main.177 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:57:06,982 INFO dicom_scrub.main.178 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:57:07,268 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:57:07,385 INFO help.create_view.16 Creating Help View
+2023-06-14 16:57:07,386 INFO help.create_view.19 Reading help file: assets/help.html
+2023-06-14 16:57:32,793 INFO dicom_scrub.main.177 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 16:57:32,794 INFO dicom_scrub.main.178 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 16:57:33,074 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 16:57:33,184 INFO help.create_view.16 Creating Help View
+2023-06-14 16:57:33,185 INFO help.create_view.19 Reading help file: assets/help.html
+2023-06-14 19:02:54,503 INFO dicom_scrub.main.181 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 19:02:54,504 INFO dicom_scrub.main.182 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 19:02:54,896 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 19:06:29,126 INFO dicom_scrub.main.177 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 19:06:29,126 INFO dicom_scrub.main.178 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 19:06:29,467 INFO welcome.create_view.28 Creating Welcome View
+2023-06-14 19:06:29,656 INFO help.create_view.16 Creating Help View
+2023-06-14 19:06:29,656 INFO help.create_view.19 Reading help file: assets/help.html
+2023-06-14 20:02:19,424 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 20:02:19,425 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 20:02:19,784 INFO welcome.create_view.25 Creating Welcome View
+2023-06-14 20:03:09,346 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 20:03:09,346 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 20:03:09,621 INFO welcome.create_view.25 Creating Welcome View
+2023-06-14 20:03:30,967 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 20:03:30,967 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 20:03:31,185 INFO welcome.create_view.25 Creating Welcome View
+2023-06-14 20:04:07,682 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 20:04:07,683 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 20:04:07,962 INFO welcome.create_view.23 Creating Welcome View
+2023-06-14 20:04:08,133 INFO help.create_view.16 Creating Help View
+2023-06-14 20:04:08,133 INFO help.create_view.19 Reading help file: assets/help.html
+2023-06-14 20:05:50,031 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-14 20:05:50,032 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-14 20:05:50,313 INFO welcome.create_view.23 Creating Welcome View
+2023-06-14 20:05:50,391 INFO help.create_view.16 Creating Help View
+2023-06-14 20:05:50,392 INFO help.create_view.19 Reading help file: assets/help.html
+2023-06-14 20:57:13,871 INFO dicom_scrub.main.188 DICOM ANONYMIZER GUI Stop.
+2023-06-15 14:39:01,983 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-15 14:39:01,984 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-15 14:39:02,401 INFO welcome.create_view.23 Creating Welcome View
+2023-06-15 14:39:02,521 INFO help.create_view.16 Creating Help View
+2023-06-15 14:39:02,521 INFO help.create_view.19 Reading help file: assets/help.html
+2023-06-15 15:07:29,820 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-15 15:07:29,822 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-15 15:07:30,143 INFO welcome.create_view.29 Creating Welcome View
+2023-06-15 15:07:30,211 INFO help.create_view.16 Creating Help View
+2023-06-15 15:07:30,211 INFO help.create_view.19 Reading help file: assets/help.html
+2023-06-15 15:11:06,868 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-15 15:11:06,869 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-15 15:11:07,159 INFO welcome.create_view.29 Creating Welcome View
+2023-06-15 15:11:07,226 INFO help.create_view.16 Creating Help View
+2023-06-15 15:11:07,226 INFO help.create_view.19 Reading help file: assets/help.html
+2023-06-15 15:17:44,934 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-15 15:17:44,935 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-15 15:17:45,240 INFO welcome.create_view.22 Creating Welcome View
+2023-06-15 15:18:20,198 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-15 15:18:20,198 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-15 15:18:20,402 INFO welcome.create_view.22 Creating Welcome View
+2023-06-15 15:18:20,469 INFO help.create_view.16 Creating Help View
+2023-06-15 15:18:20,469 INFO help.create_view.19 Reading help file: assets/help.html
+2023-06-15 15:19:59,873 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-15 15:19:59,873 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-15 15:20:00,083 INFO welcome.create_view.22 Creating Welcome View
+2023-06-15 15:20:00,109 INFO help.create_view.17 Creating Help View
+2023-06-15 15:20:00,109 INFO help.create_view.20 Reading help file: assets/help.html
+2023-06-15 15:21:36,154 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-15 15:21:36,155 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-15 15:21:36,395 INFO welcome.create_view.22 Creating Welcome View
+2023-06-15 15:21:36,422 INFO help.create_view.17 Creating Help View
+2023-06-15 15:21:36,422 INFO help.create_view.20 Reading help file: assets/help.html
+2023-06-15 15:22:39,481 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-15 15:22:39,481 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-15 15:22:39,697 INFO welcome.create_view.22 Creating Welcome View
+2023-06-15 15:22:39,724 INFO help.create_view.17 Creating Help View
+2023-06-15 15:22:39,725 INFO help.create_view.20 Reading help file: assets/help.html
+2023-06-15 15:27:41,866 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-15 15:27:41,867 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-15 15:27:42,190 INFO welcome.create_view.22 Creating Welcome View
+2023-06-15 15:27:42,254 INFO help.create_view.11 Creating Help View
+2023-06-15 15:27:42,255 INFO help.create_view.14 Reading help file: assets/help.html
+2023-06-15 15:28:03,053 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-15 15:28:03,053 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-15 15:28:03,244 INFO welcome.create_view.22 Creating Welcome View
+2023-06-15 15:28:03,272 INFO help.create_view.11 Creating Help View
+2023-06-15 15:28:03,273 INFO help.create_view.14 Reading help file: assets/help.html
+2023-06-15 15:29:06,349 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-15 15:29:06,349 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-15 15:29:06,566 INFO welcome.create_view.22 Creating Welcome View
+2023-06-15 15:29:06,594 INFO help.create_view.11 Creating Help View
+2023-06-15 15:29:06,594 INFO help.create_view.14 Reading help file: assets/help.html

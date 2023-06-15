@@ -8,6 +8,7 @@ customtkinter = "*"
 pyinstaller = "*"
 pillow = "*"
 pyinstaller-versionfile = "*"
+tkhtmlview = "*"
 
 [dev-packages]
 
