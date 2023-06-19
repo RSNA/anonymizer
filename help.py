@@ -1,4 +1,3 @@
-from turtle import back
 import customtkinter as ctk
 from tkhtmlview import HTMLScrolledText
 import logging

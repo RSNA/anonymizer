@@ -333,3 +333,573 @@
 2023-06-15 15:29:06,566 INFO welcome.create_view.22 Creating Welcome View
 2023-06-15 15:29:06,594 INFO help.create_view.11 Creating Help View
 2023-06-15 15:29:06,594 INFO help.create_view.14 Reading help file: assets/help.html
+2023-06-16 08:07:25,222 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 08:07:25,223 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 08:07:25,656 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 08:07:25,724 INFO help.create_view.11 Creating Help View
+2023-06-16 08:07:25,724 INFO help.create_view.14 Reading help file: assets/help.html
+2023-06-16 08:07:39,726 INFO dicom_scrub.main.188 DICOM ANONYMIZER GUI Stop.
+2023-06-16 15:07:26,287 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 15:07:26,288 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 15:07:26,590 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 15:07:26,648 INFO help.create_view.11 Creating Help View
+2023-06-16 15:07:26,648 INFO help.create_view.14 Reading help file: assets/help.html
+2023-06-16 15:08:09,688 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 15:08:09,688 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 15:08:09,886 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 15:08:09,913 INFO help.create_view.11 Creating Help View
+2023-06-16 15:08:09,914 INFO help.create_view.14 Reading help file: assets/help.html
+2023-06-16 15:11:13,021 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 15:11:13,021 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 15:11:13,230 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 15:11:13,270 INFO help.create_view.12 Creating Help View
+2023-06-16 15:11:13,271 INFO help.create_view.15 Reading help file: assets/help.html
+2023-06-16 15:13:33,232 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 15:13:33,233 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 15:13:33,455 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 15:13:33,482 INFO help.create_view.12 Creating Help View
+2023-06-16 15:13:33,482 INFO help.create_view.15 Reading help file: assets/help.html
+2023-06-16 15:13:56,849 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 15:13:56,850 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 15:13:57,040 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 15:13:57,065 INFO help.create_view.12 Creating Help View
+2023-06-16 15:13:57,066 INFO help.create_view.15 Reading help file: assets/help.html
+2023-06-16 15:14:10,962 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 15:14:10,963 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 15:14:11,175 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 15:14:11,204 INFO help.create_view.12 Creating Help View
+2023-06-16 15:14:11,205 INFO help.create_view.15 Reading help file: assets/help.html
+2023-06-16 15:14:27,173 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 15:14:27,173 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 15:14:27,360 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 15:14:27,387 INFO help.create_view.12 Creating Help View
+2023-06-16 15:14:27,387 INFO help.create_view.15 Reading help file: assets/help.html
+2023-06-16 15:36:53,186 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 15:36:53,187 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 15:36:53,492 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 15:36:53,541 INFO help.create_view.12 Creating Help View
+2023-06-16 15:36:53,542 INFO help.create_view.15 Reading help file: assets/help.html
+2023-06-16 15:37:34,320 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 15:37:34,322 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 15:37:34,575 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 15:37:34,606 INFO help.create_view.12 Creating Help View
+2023-06-16 15:37:34,606 INFO help.create_view.15 Reading help file: assets/help.html
+2023-06-16 15:38:00,223 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 15:38:00,223 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 15:38:00,397 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 15:38:00,422 INFO help.create_view.12 Creating Help View
+2023-06-16 15:38:00,423 INFO help.create_view.15 Reading help file: assets/help.html
+2023-06-16 15:39:02,401 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 15:39:02,401 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 15:39:02,602 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 15:39:02,678 INFO help.create_view.12 Creating Help View
+2023-06-16 15:39:02,678 INFO help.create_view.15 Reading help file: assets/help.html
+2023-06-16 15:40:17,893 INFO dicom_scrub.main.188 DICOM ANONYMIZER GUI Stop.
+2023-06-16 15:40:37,816 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 15:40:37,817 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 15:40:38,030 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 15:40:38,098 INFO help.create_view.12 Creating Help View
+2023-06-16 15:40:38,098 INFO help.create_view.15 Reading help file: assets/help.html
+2023-06-16 15:42:51,127 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 15:42:51,128 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 15:42:51,361 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 15:42:51,441 INFO help.create_view.11 Creating Help View
+2023-06-16 15:42:51,441 INFO help.create_view.14 Reading help file: assets/help.html
+2023-06-16 15:44:24,807 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 15:44:24,807 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 15:44:25,001 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 15:44:25,029 INFO help.create_view.11 Creating Help View
+2023-06-16 15:44:25,029 INFO help.create_view.14 Reading help file: assets/help.html
+2023-06-16 15:44:44,781 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 15:44:44,781 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 15:44:44,983 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 15:44:45,011 INFO help.create_view.11 Creating Help View
+2023-06-16 15:44:45,012 INFO help.create_view.14 Reading help file: assets/help.html
+2023-06-16 15:46:38,772 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 15:46:38,772 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 15:46:38,989 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 15:46:39,059 INFO help.create_view.11 Creating Help View
+2023-06-16 15:46:39,060 INFO help.create_view.14 Reading help file: assets/help.html
+2023-06-16 15:50:33,507 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 15:50:33,508 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 15:50:33,736 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 15:50:33,762 INFO help.create_view.11 Creating Help View
+2023-06-16 15:50:33,762 INFO help.create_view.14 Reading help file: assets/help.html
+2023-06-16 15:51:07,814 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 15:51:07,815 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 15:51:08,051 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 15:51:08,098 INFO help.create_view.11 Creating Help View
+2023-06-16 15:51:08,098 INFO help.create_view.14 Reading help file: assets/help.html
+2023-06-16 15:51:21,300 INFO dicom_scrub.main.188 DICOM ANONYMIZER GUI Stop.
+2023-06-16 15:52:02,509 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-16 15:52:02,509 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-16 15:52:02,799 INFO welcome.create_view.22 Creating Welcome View
+2023-06-16 15:52:02,842 INFO help.create_view.11 Creating Help View
+2023-06-16 15:52:02,843 INFO help.create_view.14 Reading help file: assets/help.html
+2023-06-16 15:57:06,816 INFO dicom_scrub.main.188 DICOM ANONYMIZER GUI Stop.
+2023-06-19 11:12:58,645 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 11:12:58,646 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 11:12:59,022 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 11:12:59,120 INFO help.create_view.11 Creating Help View
+2023-06-19 11:12:59,120 INFO help.create_view.14 Reading help file: assets/help.html
+2023-06-19 11:14:32,654 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 11:14:32,655 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 11:14:32,994 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 11:14:33,043 INFO help.create_view.11 Creating Help View
+2023-06-19 11:14:33,043 INFO help.create_view.14 Reading help file: assets/help.html
+2023-06-19 11:16:22,176 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 11:16:22,177 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 11:16:22,510 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 11:16:22,587 INFO help.create_view.11 Creating Help View
+2023-06-19 11:16:22,587 INFO help.create_view.14 Reading help file: assets/help.html
+2023-06-19 12:02:57,805 INFO dicom_scrub.main.173 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 12:02:57,805 INFO dicom_scrub.main.174 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 12:02:58,186 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 12:02:58,246 INFO help.create_view.10 Creating Help View
+2023-06-19 12:02:58,246 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 12:03:10,468 INFO dicom_scrub.main.188 DICOM ANONYMIZER GUI Stop.
+2023-06-19 12:07:56,051 INFO dicom_scrub.main.191 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 12:07:56,052 INFO dicom_scrub.main.192 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 12:07:56,314 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 12:07:56,353 INFO help.create_view.10 Creating Help View
+2023-06-19 12:07:56,354 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 12:07:56,462 INFO storage_dir.create_view.18 Creating Set Storage Directory View
+2023-06-19 12:15:26,732 INFO dicom_scrub.main.191 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 12:15:26,732 INFO dicom_scrub.main.192 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 12:15:27,021 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 12:15:27,069 INFO help.create_view.10 Creating Help View
+2023-06-19 12:15:27,069 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 12:15:27,190 INFO storage_dir.create_view.18 Creating Set Storage Directory View
+2023-06-19 12:16:30,153 INFO dicom_scrub.main.191 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 12:16:30,153 INFO dicom_scrub.main.192 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 12:16:30,412 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 12:16:30,452 INFO help.create_view.10 Creating Help View
+2023-06-19 12:16:30,452 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 12:16:30,561 INFO storage_dir.create_view.18 Creating Set Storage Directory View
+2023-06-19 12:16:57,915 INFO dicom_scrub.main.191 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 12:16:57,916 INFO dicom_scrub.main.192 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 12:16:58,136 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 12:16:58,175 INFO help.create_view.10 Creating Help View
+2023-06-19 12:16:58,175 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 12:16:58,279 INFO storage_dir.create_view.18 Creating Set Storage Directory View
+2023-06-19 12:20:49,439 INFO dicom_scrub.main.191 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 12:20:49,439 INFO dicom_scrub.main.192 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 12:20:49,679 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 12:20:49,716 INFO help.create_view.10 Creating Help View
+2023-06-19 12:20:49,717 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 12:20:49,823 INFO storage_dir.create_view.32 Creating Set Storage Directory View
+2023-06-19 12:23:35,263 INFO dicom_scrub.main.191 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 12:23:35,264 INFO dicom_scrub.main.192 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 12:23:35,529 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 12:23:35,567 INFO help.create_view.10 Creating Help View
+2023-06-19 12:23:35,568 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 12:23:35,688 INFO storage_dir.create_view.32 Creating Set Storage Directory View
+2023-06-19 12:27:04,072 INFO dicom_scrub.main.191 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 12:27:04,072 INFO dicom_scrub.main.192 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 12:27:04,366 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 12:27:04,406 INFO help.create_view.10 Creating Help View
+2023-06-19 12:27:04,406 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 12:27:04,522 INFO storage_dir.create_view.32 Creating Set Storage Directory View
+2023-06-19 12:29:28,468 INFO dicom_scrub.main.191 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 12:29:28,468 INFO dicom_scrub.main.192 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 12:29:28,729 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 12:29:28,771 INFO help.create_view.10 Creating Help View
+2023-06-19 12:29:28,771 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 12:29:28,889 INFO storage_dir.create_view.32 Creating Set Storage Directory View
+2023-06-19 12:41:15,390 INFO dicom_scrub.main.191 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 12:41:15,391 INFO dicom_scrub.main.192 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 12:41:15,682 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 12:41:15,721 INFO help.create_view.10 Creating Help View
+2023-06-19 12:41:15,721 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 12:41:15,838 INFO storage_dir.create_view.38 Creating Set Storage Directory View
+2023-06-19 12:43:32,351 INFO dicom_scrub.main.191 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 12:43:32,352 INFO dicom_scrub.main.192 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 12:43:32,659 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 12:43:32,698 INFO help.create_view.10 Creating Help View
+2023-06-19 12:43:32,698 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 12:43:32,810 INFO storage_dir.create_view.41 Creating Set Storage Directory View
+2023-06-19 12:47:22,087 INFO dicom_scrub.main.191 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 12:47:22,087 INFO dicom_scrub.main.192 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 12:47:22,369 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 12:47:22,410 INFO help.create_view.10 Creating Help View
+2023-06-19 12:47:22,410 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 12:47:22,525 INFO storage_dir.create_view.40 Creating Set Storage Directory View
+2023-06-19 12:47:55,635 INFO dicom_scrub.main.206 DICOM ANONYMIZER GUI Stop.
+2023-06-19 12:53:16,909 INFO dicom_scrub.main.191 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 12:53:16,909 INFO dicom_scrub.main.192 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 12:53:17,238 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 12:53:17,276 INFO help.create_view.10 Creating Help View
+2023-06-19 12:53:17,277 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 12:53:17,391 INFO storage_dir.create_view.40 Creating Set Storage Directory View
+2023-06-19 12:53:36,650 INFO dicom_scrub.main.206 DICOM ANONYMIZER GUI Stop.
+2023-06-19 13:00:28,937 INFO dicom_scrub.main.190 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 13:00:28,938 INFO dicom_scrub.main.191 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 13:00:29,337 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 13:00:29,401 INFO help.create_view.10 Creating Help View
+2023-06-19 13:00:29,401 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 13:00:29,525 INFO storage_dir.create_view.40 Creating f{view.winfo_name()} View
+2023-06-19 13:08:42,748 INFO dicom_scrub.main.190 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 13:08:42,749 INFO dicom_scrub.main.191 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 13:08:43,104 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 13:08:43,164 INFO help.create_view.10 Creating Help View
+2023-06-19 13:08:43,165 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 13:08:43,279 INFO storage_dir.create_view.32 Creating f{view.winfo_name()} View
+2023-06-19 13:09:13,454 INFO dicom_scrub.main.190 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 13:09:13,455 INFO dicom_scrub.main.191 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 13:09:13,711 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 13:09:13,749 INFO help.create_view.10 Creating Help View
+2023-06-19 13:09:13,749 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 13:09:13,854 INFO storage_dir.create_view.32 Creating !ctkframe View
+2023-06-19 13:09:17,820 INFO dicom_scrub.main.205 DICOM ANONYMIZER GUI Stop.
+2023-06-19 13:10:09,432 INFO dicom_scrub.main.190 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 13:10:09,432 INFO dicom_scrub.main.191 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 13:10:09,698 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 13:10:09,739 INFO help.create_view.10 Creating Help View
+2023-06-19 13:10:09,739 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 13:10:09,852 INFO storage_dir.create_view.32 Creating Set Storage Directory View
+2023-06-19 13:22:21,937 INFO dicom_scrub.main.190 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 13:22:21,937 INFO dicom_scrub.main.191 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 13:22:22,253 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 13:22:22,292 INFO help.create_view.10 Creating Help View
+2023-06-19 13:22:22,292 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 13:22:22,406 INFO storage_dir.create_view.21 Creating Set Storage Directory View
+2023-06-19 13:22:47,965 INFO dicom_scrub.main.190 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 13:22:47,966 INFO dicom_scrub.main.191 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 13:22:48,225 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 13:22:48,262 INFO help.create_view.10 Creating Help View
+2023-06-19 13:22:48,262 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 13:22:48,369 INFO storage_dir.create_view.21 Creating Set Storage Directory View
+2023-06-19 13:23:43,799 INFO dicom_scrub.main.190 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 13:23:43,800 INFO dicom_scrub.main.191 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 13:23:44,078 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 13:23:44,116 INFO help.create_view.10 Creating Help View
+2023-06-19 13:23:44,117 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 13:23:44,222 INFO storage_dir.create_view.21 Creating Set Storage Directory View
+2023-06-19 13:28:51,741 INFO dicom_scrub.main.190 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 13:28:51,742 INFO dicom_scrub.main.191 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 13:28:52,021 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 13:28:52,060 INFO help.create_view.10 Creating Help View
+2023-06-19 13:28:52,061 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 13:28:52,175 INFO storage_dir.create_view.21 Creating Set Storage Directory View
+2023-06-19 13:29:26,663 INFO dicom_scrub.main.190 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 13:29:26,664 INFO dicom_scrub.main.191 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 13:29:26,934 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 13:29:26,973 INFO help.create_view.10 Creating Help View
+2023-06-19 13:29:26,973 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 13:29:27,089 INFO storage_dir.create_view.21 Creating Set Storage Directory View
+2023-06-19 13:30:16,490 INFO dicom_scrub.main.190 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 13:30:16,490 INFO dicom_scrub.main.191 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 13:30:16,768 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 13:30:16,806 INFO help.create_view.10 Creating Help View
+2023-06-19 13:30:16,807 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 13:30:16,921 INFO storage_dir.create_view.21 Creating Set Storage Directory View
+2023-06-19 13:30:36,594 INFO dicom_scrub.main.190 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 13:30:36,595 INFO dicom_scrub.main.191 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 13:30:36,826 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 13:30:36,864 INFO help.create_view.10 Creating Help View
+2023-06-19 13:30:36,864 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 13:30:36,971 INFO storage_dir.create_view.21 Creating Set Storage Directory View
+2023-06-19 13:31:26,957 INFO dicom_scrub.main.190 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 13:31:26,958 INFO dicom_scrub.main.191 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 13:31:27,228 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 13:31:27,267 INFO help.create_view.10 Creating Help View
+2023-06-19 13:31:27,267 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 13:31:27,382 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 13:33:55,383 INFO dicom_scrub.main.190 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 13:33:55,384 INFO dicom_scrub.main.191 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 13:33:55,648 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 13:33:55,687 INFO help.create_view.10 Creating Help View
+2023-06-19 13:33:55,687 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 13:33:55,802 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 14:18:33,669 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 14:18:33,671 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 14:18:34,143 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 14:18:34,233 INFO help.create_view.10 Creating Help View
+2023-06-19 14:18:34,233 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 14:18:34,363 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 14:18:34,367 INFO storage_scp.create_view.22 Creating Configure DICOM Storage SCP View
+2023-06-19 14:18:34,368 INFO storage_scp.create_view.29 Local IP addresses:
+2023-06-19 14:18:34,368 INFO storage_scp.create_view.31 127.0.0.1
+2023-06-19 14:18:34,368 INFO storage_scp.create_view.31 192.168.1.134
+2023-06-19 14:19:27,347 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 14:19:27,348 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 14:19:27,648 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 14:19:27,687 INFO help.create_view.10 Creating Help View
+2023-06-19 14:19:27,687 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 14:19:27,802 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 14:19:27,806 INFO storage_scp.create_view.23 Creating Configure DICOM Storage SCP View
+2023-06-19 14:19:27,807 INFO storage_scp.create_view.30 Local IP addresses:
+2023-06-19 14:19:27,807 INFO storage_scp.create_view.32 127.0.0.1
+2023-06-19 14:19:27,807 INFO storage_scp.create_view.32 192.168.1.134
+2023-06-19 15:05:26,040 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:05:26,041 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:05:26,446 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:05:26,542 INFO help.create_view.10 Creating Help View
+2023-06-19 15:05:26,542 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:05:26,670 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:05:26,674 INFO storage_scp.create_view.26 Creating Configure DICOM Storage SCP View
+2023-06-19 15:05:26,675 INFO storage_scp.create_view.33 Local IP addresses:
+2023-06-19 15:05:26,676 INFO storage_scp.create_view.34 ['127.0.0.1', '192.168.1.134']
+2023-06-19 15:07:59,970 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:07:59,971 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:08:00,354 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:08:00,411 INFO help.create_view.10 Creating Help View
+2023-06-19 15:08:00,411 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:08:00,537 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:08:00,541 INFO storage_scp.create_view.26 Creating Configure DICOM Storage SCP View
+2023-06-19 15:08:00,542 INFO storage_scp.create_view.33 Local IP addresses: ['127.0.0.1', '192.168.1.134']
+2023-06-19 15:10:45,642 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:10:45,643 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:10:45,908 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:10:45,946 INFO help.create_view.10 Creating Help View
+2023-06-19 15:10:45,946 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:10:46,061 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:10:46,065 INFO storage_scp.create_view.26 Creating Configure DICOM Storage SCP View
+2023-06-19 15:10:46,066 INFO storage_scp.create_view.33 Local IP addresses: ['127.0.0.1', '192.168.1.134']
+2023-06-19 15:12:36,376 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:12:36,377 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:12:36,642 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:12:36,687 INFO help.create_view.10 Creating Help View
+2023-06-19 15:12:36,687 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:12:36,804 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:12:36,808 INFO storage_scp.create_view.26 Creating Configure DICOM Storage SCP View
+2023-06-19 15:12:36,809 INFO storage_scp.create_view.33 Local IP addresses: ['127.0.0.1', '192.168.1.134']
+2023-06-19 15:13:23,098 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:13:23,099 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:13:23,345 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:13:23,385 INFO help.create_view.10 Creating Help View
+2023-06-19 15:13:23,385 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:13:23,494 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:13:23,497 INFO storage_scp.create_view.26 Creating Configure DICOM Storage SCP View
+2023-06-19 15:13:23,498 INFO storage_scp.create_view.33 Local IP addresses: ['127.0.0.1', '192.168.1.134']
+2023-06-19 15:13:48,453 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:13:48,454 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:13:48,677 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:13:48,715 INFO help.create_view.10 Creating Help View
+2023-06-19 15:13:48,715 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:13:48,821 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:13:48,825 INFO storage_scp.create_view.26 Creating Configure DICOM Storage SCP View
+2023-06-19 15:13:48,826 INFO storage_scp.create_view.33 Local IP addresses: ['127.0.0.1', '192.168.1.134']
+2023-06-19 15:19:43,984 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:19:43,984 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:19:44,254 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:19:44,294 INFO help.create_view.10 Creating Help View
+2023-06-19 15:19:44,294 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:19:44,410 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:19:44,413 INFO storage_scp.create_view.26 Creating Configure DICOM Storage SCP View
+2023-06-19 15:19:44,414 INFO storage_scp.create_view.33 Local IP addresses: ['127.0.0.1', '192.168.1.134']
+2023-06-19 15:20:44,638 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:20:44,639 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:20:44,903 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:20:44,941 INFO help.create_view.10 Creating Help View
+2023-06-19 15:20:44,942 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:20:45,057 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:20:45,060 INFO storage_scp.create_view.27 Creating Configure DICOM Storage SCP View
+2023-06-19 15:20:45,061 INFO storage_scp.create_view.34 Local IP addresses: ['127.0.0.1', '192.168.1.134']
+2023-06-19 15:21:36,101 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:21:36,102 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:21:36,343 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:21:36,385 INFO help.create_view.10 Creating Help View
+2023-06-19 15:21:36,385 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:21:36,500 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:21:36,504 INFO storage_scp.create_view.27 Creating Configure DICOM Storage SCP View
+2023-06-19 15:21:36,505 INFO storage_scp.create_view.34 Local IP addresses: ['127.0.0.1', '192.168.1.134']
+2023-06-19 15:22:11,854 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:22:11,855 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:22:12,116 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:22:12,155 INFO help.create_view.10 Creating Help View
+2023-06-19 15:22:12,155 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:22:12,264 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:22:12,268 INFO storage_scp.create_view.27 Creating Configure DICOM Storage SCP View
+2023-06-19 15:22:12,269 INFO storage_scp.create_view.34 Local IP addresses: ['127.0.0.1', '192.168.1.134']
+2023-06-19 15:22:27,557 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:22:27,557 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:22:27,810 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:22:27,847 INFO help.create_view.10 Creating Help View
+2023-06-19 15:22:27,848 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:22:27,953 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:22:27,956 INFO storage_scp.create_view.27 Creating Configure DICOM Storage SCP View
+2023-06-19 15:22:27,957 INFO storage_scp.create_view.34 Local IP addresses: ['127.0.0.1', '192.168.1.134']
+2023-06-19 15:24:09,793 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:24:09,793 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:24:10,066 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:24:10,104 INFO help.create_view.10 Creating Help View
+2023-06-19 15:24:10,104 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:24:10,210 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:24:10,214 INFO storage_scp.create_view.27 Creating Configure DICOM Storage SCP View
+2023-06-19 15:24:10,215 INFO storage_scp.create_view.34 Local IP addresses: ['127.0.0.1', '192.168.1.134']
+2023-06-19 15:24:23,238 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:24:23,242 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:24:23,476 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:24:23,513 INFO help.create_view.10 Creating Help View
+2023-06-19 15:24:23,513 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:24:23,619 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:24:23,622 INFO storage_scp.create_view.27 Creating Configure DICOM Storage SCP View
+2023-06-19 15:24:23,623 INFO storage_scp.create_view.34 Local IP addresses: ['127.0.0.1', '192.168.1.134']
+2023-06-19 15:24:37,875 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:24:37,876 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:24:38,107 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:24:38,145 INFO help.create_view.10 Creating Help View
+2023-06-19 15:24:38,145 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:24:38,252 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:24:38,255 INFO storage_scp.create_view.27 Creating Configure DICOM Storage SCP View
+2023-06-19 15:24:38,256 INFO storage_scp.create_view.34 Local IP addresses: ['127.0.0.1', '192.168.1.134']
+2023-06-19 15:26:36,233 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:26:36,234 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:26:36,489 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:26:36,527 INFO help.create_view.10 Creating Help View
+2023-06-19 15:26:36,528 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:26:36,633 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:26:36,637 INFO storage_scp.create_view.28 Creating Configure DICOM Storage SCP View
+2023-06-19 15:26:36,638 INFO storage_scp.create_view.36 Local IP addresses: ['127.0.0.1', '192.168.1.134']
+2023-06-19 15:27:03,827 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:27:03,827 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:27:04,065 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:27:04,107 INFO help.create_view.10 Creating Help View
+2023-06-19 15:27:04,107 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:27:04,213 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:27:04,217 INFO storage_scp.create_view.28 Creating Configure DICOM Storage SCP View
+2023-06-19 15:27:04,218 INFO storage_scp.create_view.36 Local IP addresses: ['127.0.0.1', '192.168.1.134']
+2023-06-19 15:27:45,902 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:27:45,903 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:27:46,141 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:27:46,179 INFO help.create_view.10 Creating Help View
+2023-06-19 15:27:46,179 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:27:46,285 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:27:46,289 INFO storage_scp.create_view.28 Creating Configure DICOM Storage SCP View
+2023-06-19 15:27:46,290 INFO storage_scp.create_view.36 Local IP addresses: ['127.0.0.1', '192.168.1.134']
+2023-06-19 15:28:27,730 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:28:27,730 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:28:27,964 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:28:28,001 INFO help.create_view.10 Creating Help View
+2023-06-19 15:28:28,002 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:28:28,107 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:28:28,111 INFO storage_scp.create_view.28 Creating Configure DICOM Storage SCP View
+2023-06-19 15:28:28,112 INFO storage_scp.create_view.36 Local IP addresses: ['127.0.0.1', '192.168.1.134']
+2023-06-19 15:29:00,050 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:29:00,050 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:29:00,292 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:29:00,332 INFO help.create_view.10 Creating Help View
+2023-06-19 15:29:00,332 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:29:00,437 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:29:00,441 INFO storage_scp.create_view.28 Creating Configure DICOM Storage SCP View
+2023-06-19 15:29:00,442 INFO storage_scp.create_view.36 Local IP addresses: ['127.0.0.1', '192.168.1.134']
+2023-06-19 15:29:21,069 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 15:29:21,069 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 15:29:21,314 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 15:29:21,352 INFO help.create_view.10 Creating Help View
+2023-06-19 15:29:21,352 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 15:29:21,458 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 15:29:21,462 INFO storage_scp.create_view.28 Creating Configure DICOM Storage SCP View
+2023-06-19 15:29:21,463 INFO storage_scp.create_view.36 Local IP addresses: ['127.0.0.1', '192.168.1.134']
+2023-06-19 21:24:57,962 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 21:24:57,962 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 21:24:58,305 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 21:24:58,353 INFO help.create_view.10 Creating Help View
+2023-06-19 21:24:58,353 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 21:24:58,482 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 21:24:58,486 INFO storage_scp.create_view.30 Creating Configure DICOM Storage SCP View
+2023-06-19 21:24:58,487 INFO storage_scp.create_view.40 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 21:25:40,330 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 21:25:40,330 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 21:25:40,640 INFO welcome.create_view.22 Creating Welcome View
+2023-06-19 21:25:40,679 INFO help.create_view.10 Creating Help View
+2023-06-19 21:25:40,679 INFO help.create_view.13 Reading help file: assets/help.html
+2023-06-19 21:25:40,787 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 21:25:40,791 INFO storage_scp.create_view.30 Creating Configure DICOM Storage SCP View
+2023-06-19 21:25:40,792 INFO storage_scp.create_view.40 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 21:28:21,987 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 21:28:21,988 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 21:28:22,270 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 21:28:22,274 INFO storage_scp.create_view.30 Creating Configure DICOM Storage SCP View
+2023-06-19 21:28:22,275 INFO storage_scp.create_view.40 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 21:30:40,214 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 21:30:40,214 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 21:30:40,494 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 21:30:40,497 INFO storage_scp.create_view.32 Creating Configure DICOM Storage SCP View
+2023-06-19 21:30:40,498 INFO storage_scp.create_view.42 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 21:30:57,324 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 21:30:57,325 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 21:30:57,578 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 21:30:57,582 INFO storage_scp.create_view.32 Creating Configure DICOM Storage SCP View
+2023-06-19 21:30:57,583 INFO storage_scp.create_view.42 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 21:32:11,955 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 21:32:11,955 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 21:32:12,227 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 21:32:12,230 INFO storage_scp.create_view.32 Creating Configure DICOM Storage SCP View
+2023-06-19 21:32:12,231 INFO storage_scp.create_view.42 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 21:36:11,560 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 21:36:11,561 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 21:36:11,840 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 21:36:11,844 INFO storage_scp.create_view.32 Creating Configure DICOM Storage SCP View
+2023-06-19 21:36:11,845 INFO storage_scp.create_view.42 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 21:41:13,346 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 21:41:13,346 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 21:41:13,668 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 21:41:13,672 INFO storage_scp.create_view.32 Creating Configure DICOM Storage SCP View
+2023-06-19 21:41:13,673 INFO storage_scp.create_view.42 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 21:51:40,063 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 21:51:40,063 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 21:51:40,411 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 21:51:40,415 INFO storage_scp.create_view.29 Creating Configure DICOM Storage SCP View
+2023-06-19 21:51:40,416 INFO storage_scp.create_view.39 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 21:52:24,780 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 21:52:24,781 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 21:52:25,061 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 21:52:25,064 INFO storage_scp.create_view.29 Creating Configure DICOM Storage SCP View
+2023-06-19 21:52:25,065 INFO storage_scp.create_view.39 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 21:53:31,085 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 21:53:31,085 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 21:53:31,388 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 21:53:31,392 INFO storage_scp.create_view.29 Creating Configure DICOM Storage SCP View
+2023-06-19 21:53:31,393 INFO storage_scp.create_view.39 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 21:53:58,613 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 21:53:58,614 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 21:53:58,882 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 21:53:58,886 INFO storage_scp.create_view.29 Creating Configure DICOM Storage SCP View
+2023-06-19 21:53:58,887 INFO storage_scp.create_view.39 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 21:54:46,132 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 21:54:46,133 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 21:54:46,452 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 21:54:46,456 INFO storage_scp.create_view.29 Creating Configure DICOM Storage SCP View
+2023-06-19 21:54:46,457 INFO storage_scp.create_view.39 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 21:55:34,307 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 21:55:34,308 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 21:55:34,602 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 21:55:34,606 INFO storage_scp.create_view.29 Creating Configure DICOM Storage SCP View
+2023-06-19 21:55:34,607 INFO storage_scp.create_view.39 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 21:55:48,864 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 21:55:48,864 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 21:55:49,143 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 21:55:49,147 INFO storage_scp.create_view.29 Creating Configure DICOM Storage SCP View
+2023-06-19 21:55:49,148 INFO storage_scp.create_view.39 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 21:56:06,712 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 21:56:06,712 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 21:56:06,982 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 21:56:06,985 INFO storage_scp.create_view.29 Creating Configure DICOM Storage SCP View
+2023-06-19 21:56:06,986 INFO storage_scp.create_view.39 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 21:56:50,558 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 21:56:50,558 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 21:56:50,837 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 21:56:50,841 INFO storage_scp.create_view.29 Creating Configure DICOM Storage SCP View
+2023-06-19 21:56:50,842 INFO storage_scp.create_view.39 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 21:57:08,550 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 21:57:08,551 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 21:57:08,827 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 21:57:08,831 INFO storage_scp.create_view.29 Creating Configure DICOM Storage SCP View
+2023-06-19 21:57:08,832 INFO storage_scp.create_view.39 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 21:58:01,007 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 21:58:01,007 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 21:58:01,289 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 21:58:01,293 INFO storage_scp.create_view.29 Creating Configure DICOM Storage SCP View
+2023-06-19 21:58:01,294 INFO storage_scp.create_view.39 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 22:01:40,562 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 22:01:40,562 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 22:01:40,851 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 22:01:40,854 INFO storage_scp.create_view.29 Creating Configure DICOM Storage SCP View
+2023-06-19 22:01:40,855 INFO storage_scp.create_view.34 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-19 22:02:05,842 INFO dicom_scrub.main.193 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-19 22:02:05,842 INFO dicom_scrub.main.194 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-19 22:02:06,112 INFO storage_dir.create_view.22 Creating Set Storage Directory View
+2023-06-19 22:02:06,116 INFO storage_scp.create_view.29 Creating Configure DICOM Storage SCP View
+2023-06-19 22:02:06,117 INFO storage_scp.create_view.34 Local IP addresses: ['127.0.0.1', '192.168.1.102']

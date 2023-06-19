@@ -1,5 +1,6 @@
 import os
 import gettext
+from tkinter import W
 import customtkinter as ctk
 from PIL import Image
 import logging
@@ -30,8 +31,9 @@ PAD = 10
 # All UX View Modules:
 import welcome
 import help
+import storage_dir
+import storage_scp
 
-# import storage
 # import settings
 # import import_files
 # import verify
@@ -58,14 +60,29 @@ def setup_logging(logs_dir) -> None:
     logger.setLevel(logging.INFO)
 
 
+# View Names:
+WELCOME_VIEW = _("Welcome")
+HELP_VIEW = _("Help")
+SET_STORAGE_DIR_VIEW = _("Set Storage Directory")
+CONFIGURE_STORAGE_SCP_VIEW = _("Configure Storage SCP")
+ANONYMIZER_SCRIPT_VIEW = _("Anonymizer Script")
+FILTER_SETTINGS_VIEW = _("Filter Settings")
+SELECT_LOCAL_FILES_VIEW = _("Select Local Files")
+QUERY_SCP_STORAGE_VIEW = _("Query SCP Storage")
+PATIENT_INDEX_LIST_VIEW = _("Patient Index List")
+EXPORT_TO_HTTPS_VIEW = _("Export to HTTPS")
+EXPORT_TO_SCP_STORAGE_VIEW = _("Export to SCP Storage")
+IMPORT_LOG_VIEW = _("Import Log")
+EXPORT_LOG_VIEW = _("Export Log")
+
 APP_TABS = {
-    _("About"): [_("Welcome"), _("Help")],
-    _("Storage"): [_("Set Storage Directory"), _("Configure Storage SCP")],
-    _("Settings"): [_("Anonymizer Script"), _("Filter Settings")],
-    _("Import"): [_("Select Local Files"), _("Query SCP Storage")],
-    _("Verify"): [_("Patient Index List")],
-    _("Export"): [_("Export to HTTPS"), _("Export to SCP Storage")],
-    _("Admin"): [_("Import Log"), _("Export Log")],
+    # _("About"): [WELCOME_VIEW, HELP_VIEW],
+    _("Storage"): [SET_STORAGE_DIR_VIEW, CONFIGURE_STORAGE_SCP_VIEW],
+    _("Settings"): [ANONYMIZER_SCRIPT_VIEW, FILTER_SETTINGS_VIEW],
+    _("Import"): [SELECT_LOCAL_FILES_VIEW, QUERY_SCP_STORAGE_VIEW],
+    _("Verify"): [PATIENT_INDEX_LIST_VIEW],
+    _("Export"): [EXPORT_TO_HTTPS_VIEW, EXPORT_TO_SCP_STORAGE_VIEW],
+    _("Admin"): [IMPORT_LOG_VIEW, EXPORT_LOG_VIEW],
 }
 
 
@@ -75,10 +92,14 @@ class TabViewNested(ctk.CTkTabview):
         for tab in tabs:
             tabview = self.add(tab)
 
-            if tab == _("Welcome"):
+            if tab == WELCOME_VIEW:
                 welcome.create_view(tabview)
-            elif tab == _("Help"):
+            elif tab == HELP_VIEW:
                 help.create_view(tabview)
+            elif tab == SET_STORAGE_DIR_VIEW:
+                storage_dir.create_view(tabview, tab)
+            elif tab == CONFIGURE_STORAGE_SCP_VIEW:
+                storage_scp.create_view(tabview)
 
 
 class TabViewMain(ctk.CTkTabview):
@@ -131,7 +152,6 @@ class App(ctk.CTk):
         # Logo:
         self.logo = ctk.CTkImage(
             light_image=Image.open(logo_file),
-            dark_image=None,
             size=(logo_width, logo_height),
         )
         self.logo = ctk.CTkLabel(self, image=self.logo, text="")

@@ -9,6 +9,7 @@ pyinstaller = "*"
 pillow = "*"
 pyinstaller-versionfile = "*"
 tkhtmlview = "*"
+netifaces = "*"
 
 [dev-packages]
 
