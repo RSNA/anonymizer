@@ -2,6 +2,7 @@ import os
 import customtkinter as ctk
 from tkinter import filedialog
 import logging
+from translate import _
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,9 @@
+from threading import local
 import tkinter as tk
 import netifaces
 import customtkinter as ctk
 import logging
+from translate import _
 
 logger = logging.getLogger(__name__)
 DICOM_STORAGE_SCP = _("DICOM Storage SCP:")
@@ -39,10 +41,12 @@ def create_view(view: ctk.CTkFrame):
     dicom_scp_label = ctk.CTkLabel(view, text=DICOM_STORAGE_SCP)
     dicom_scp_label.grid(row=0, column=0, pady=(PAD, 0), sticky="nw")
 
+    local_ip_var = ctk.StringVar(value=local_ips[0])
     local_ips_optionmenu = ctk.CTkOptionMenu(
         view,
         dynamic_resizing=False,
         values=local_ips,
+        variable=local_ip_var,
     )
     local_ips_optionmenu.grid(row=0, column=1, pady=(PAD, 0), padx=PAD, sticky="nw")
 

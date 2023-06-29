@@ -1,18 +1,15 @@
 import os
-import gettext
-from tkinter import W
 import customtkinter as ctk
 from PIL import Image
 import logging
 import logging.handlers
+from translate import _
 
-# Set the locale and path for .mo translation files
-domain = "dicom_scrub"
-localedir = os.path.join(os.path.dirname(__file__), "assets", "langpacks")
-gettext.bindtextdomain(domain, localedir)
-gettext.textdomain(domain)
-t = gettext.translation(domain, localedir, fallback=True)
-t.install()
+# All UX View Modules:
+import welcome
+import help
+import storage_dir
+import storage_scp
 
 LOGS_DIR = "/logs/"
 LOG_FILENAME = "dicom_scrub.log"
@@ -27,18 +24,6 @@ __version__ = "17.1.0.1"
 LOGO_WIDTH = 75
 LOGO_HEIGHT = 20
 PAD = 10
-
-# All UX View Modules:
-import welcome
-import help
-import storage_dir
-import storage_scp
-
-# import settings
-# import import_files
-# import verify
-# import export
-# import admin
 
 
 def setup_logging(logs_dir) -> None:
