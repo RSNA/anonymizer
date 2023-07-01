@@ -19,31 +19,11 @@ LOG_DEFAULT_LEVEL = logging.INFO
 logger = logging.getLogger()
 
 APP_TITLE = _("DICOM Anonymizer Version 17")
-APP_START_GEOMETRY = "800x600"
+APP_START_GEOMETRY = "1200x800"
 __version__ = "17.1.0.1"
 LOGO_WIDTH = 75
 LOGO_HEIGHT = 20
 PAD = 10
-
-
-def setup_logging(logs_dir) -> None:
-    # TODO: allow setup from log.config file
-    os.makedirs(logs_dir, exist_ok=True)
-    # Setup  rotating log file:
-    logFormatter = logging.Formatter(
-        "{asctime} {levelname} {module}.{funcName}.{lineno} {message}", style="{"
-    )
-    fileHandler = logging.handlers.RotatingFileHandler(
-        logs_dir + LOG_FILENAME, maxBytes=LOG_SIZE, backupCount=LOG_BACKUP_COUNT
-    )
-    fileHandler.setFormatter(logFormatter)
-    logger.addHandler(fileHandler)
-    # Setup stderr console output:
-    consoleHandler = logging.StreamHandler()
-    consoleHandler.setFormatter(logFormatter)
-    logger.addHandler(consoleHandler)
-    logger.setLevel(logging.INFO)
-
 
 # View Names:
 WELCOME_VIEW = _("Welcome")
@@ -77,6 +57,7 @@ class TabViewNested(ctk.CTkTabview):
         for tab in tabs:
             tabview = self.add(tab)
 
+            # TODO: move all view modules in /views and import them here using importlib, move embedded tabs into APP_TABS with tuple of (view_module, view_name)
             if tab == WELCOME_VIEW:
                 welcome.create_view(tabview)
             elif tab == HELP_VIEW:
@@ -168,6 +149,25 @@ class App(ctk.CTk):
             border_width=pad,
         )
         self.tab_view.grid(row=1, column=0, padx=pad, pady=(0, pad), sticky="nswe")
+
+
+def setup_logging(logs_dir) -> None:
+    # TODO: allow setup from log.config file
+    os.makedirs(logs_dir, exist_ok=True)
+    # Setup  rotating log file:
+    logFormatter = logging.Formatter(
+        "{asctime} {levelname} {module}.{funcName}.{lineno} {message}", style="{"
+    )
+    fileHandler = logging.handlers.RotatingFileHandler(
+        logs_dir + LOG_FILENAME, maxBytes=LOG_SIZE, backupCount=LOG_BACKUP_COUNT
+    )
+    fileHandler.setFormatter(logFormatter)
+    logger.addHandler(fileHandler)
+    # Setup stderr console output:
+    consoleHandler = logging.StreamHandler()
+    consoleHandler.setFormatter(logFormatter)
+    logger.addHandler(consoleHandler)
+    logger.setLevel(logging.INFO)
 
 
 def main():

@@ -1,14 +1,22 @@
+# Purpose: Create a view for the user to select a storage directory for the
+#          application to use.
+
 import os
 import customtkinter as ctk
 from tkinter import filedialog
 import logging
 from translate import _
+import config
 
 logger = logging.getLogger(__name__)
 
 # Initialize storage directory to user's home directory:
 storage_directory = os.path.expanduser("~")
-PAD = 10
+
+
+# Load module globals from config.json
+settings = config.load(__name__)
+globals().update(settings)
 
 
 def open_directory_dialog(label: ctk.CTkLabel):
@@ -17,9 +25,11 @@ def open_directory_dialog(label: ctk.CTkLabel):
     if path:
         storage_directory = path
         label.configure(text=storage_directory)
+        config.save(__name__, "storage_directory", storage_directory)
 
 
 def create_view(view: ctk.CTkFrame, name: str):
+    PAD = 10
     logger.info(f"Creating {name} View")
 
     button = ctk.CTkButton(

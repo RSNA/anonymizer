@@ -10,6 +10,7 @@ pillow = "*"
 pyinstaller-versionfile = "*"
 tkhtmlview = "*"
 netifaces = "*"
+ctktooltip = "*"
 
 [dev-packages]
 

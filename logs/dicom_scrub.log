@@ -915,3 +915,357 @@
 2023-06-29 13:21:54,060 INFO storage_scp.create_view.31 Creating Configure DICOM Storage SCP View
 2023-06-29 13:21:54,060 INFO storage_scp.create_view.36 Local IP addresses: ['127.0.0.1', '192.168.1.102']
 2023-06-29 13:21:59,454 INFO dicom_scrub.main.193 DICOM ANONYMIZER GUI Stop.
+2023-06-29 16:01:23,348 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-29 16:01:23,348 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-29 16:01:23,711 INFO storage_dir.create_view.23 Creating Set Storage Directory View
+2023-06-29 16:01:23,713 INFO storage_scp.create_view.31 Creating Configure DICOM Storage SCP View
+2023-06-29 16:01:23,714 INFO storage_scp.create_view.36 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-29 16:03:24,628 INFO dicom_scrub.main.193 DICOM ANONYMIZER GUI Stop.
+2023-06-30 13:43:17,884 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-30 13:43:17,884 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-30 13:43:18,241 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-06-30 13:43:18,243 INFO storage_scp.create_view.27 Creating Configure DICOM Storage SCP View
+2023-06-30 13:43:18,244 INFO storage_scp.create_view.32 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-30 13:44:28,662 INFO dicom_scrub.main.193 DICOM ANONYMIZER GUI Stop.
+2023-06-30 13:45:26,935 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-30 13:45:26,936 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-30 13:45:27,199 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-06-30 13:45:27,201 INFO storage_scp.create_view.27 Creating Configure DICOM Storage SCP View
+2023-06-30 13:45:27,202 INFO storage_scp.create_view.32 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-30 13:45:32,277 INFO dicom_scrub.main.193 DICOM ANONYMIZER GUI Stop.
+2023-06-30 14:20:37,208 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-30 14:20:37,208 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-30 14:20:37,565 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-06-30 14:20:37,568 INFO storage_scp.create_view.33 Creating Configure DICOM Storage SCP View
+2023-06-30 14:20:37,568 INFO storage_scp.create_view.38 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-30 14:21:08,654 INFO dicom_scrub.main.193 DICOM ANONYMIZER GUI Stop.
+2023-06-30 14:21:16,746 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-30 14:21:16,746 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-30 14:21:16,961 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-06-30 14:21:16,963 INFO storage_scp.create_view.33 Creating Configure DICOM Storage SCP View
+2023-06-30 14:21:16,964 INFO storage_scp.create_view.38 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-30 14:21:21,204 INFO dicom_scrub.main.193 DICOM ANONYMIZER GUI Stop.
+2023-06-30 14:21:54,586 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-30 14:21:54,587 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-30 14:21:54,810 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-06-30 14:21:54,812 INFO storage_scp.create_view.33 Creating Configure DICOM Storage SCP View
+2023-06-30 14:21:54,813 INFO storage_scp.create_view.38 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-30 14:22:10,519 INFO dicom_scrub.main.193 DICOM ANONYMIZER GUI Stop.
+2023-06-30 14:28:16,046 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-30 14:28:16,047 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-30 14:28:16,298 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-06-30 14:28:16,300 INFO storage_scp.create_view.33 Creating Configure DICOM Storage SCP View
+2023-06-30 14:28:16,301 INFO storage_scp.create_view.38 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-30 14:39:12,909 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-30 14:39:12,910 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-30 14:39:13,196 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-06-30 14:39:13,198 INFO storage_scp.create_view.33 Creating Configure DICOM Storage SCP View
+2023-06-30 14:39:13,199 INFO storage_scp.create_view.38 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-30 14:40:00,442 INFO dicom_scrub.main.193 DICOM ANONYMIZER GUI Stop.
+2023-06-30 14:40:04,678 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-30 14:40:04,678 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-30 14:40:04,899 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-06-30 14:40:04,902 INFO storage_scp.create_view.33 Creating Configure DICOM Storage SCP View
+2023-06-30 14:40:04,903 INFO storage_scp.create_view.38 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-30 14:40:28,603 INFO dicom_scrub.main.193 DICOM ANONYMIZER GUI Stop.
+2023-06-30 14:49:21,917 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-30 14:49:21,918 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-30 14:49:22,208 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-06-30 14:49:22,210 INFO storage_scp.create_view.33 Creating Configure DICOM Storage SCP View
+2023-06-30 14:49:22,210 INFO storage_scp.create_view.38 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-30 15:00:40,423 INFO dicom_scrub.main.193 DICOM ANONYMIZER GUI Stop.
+2023-06-30 15:08:22,523 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-30 15:08:22,523 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-30 15:08:22,872 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-06-30 15:08:22,875 INFO storage_scp.create_view.33 Creating Configure DICOM Storage SCP View
+2023-06-30 15:08:22,875 INFO storage_scp.create_view.38 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-30 15:51:06,439 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-30 15:51:06,440 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-30 15:51:06,900 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-06-30 15:51:06,903 INFO storage_scp.create_view.33 Creating Configure DICOM Storage SCP View
+2023-06-30 15:51:06,903 INFO storage_scp.create_view.38 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-30 15:53:12,236 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-30 15:53:12,236 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-30 15:53:12,432 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-06-30 15:53:12,435 INFO storage_scp.create_view.33 Creating Configure DICOM Storage SCP View
+2023-06-30 15:53:12,436 INFO storage_scp.create_view.38 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-30 15:53:28,236 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-30 15:53:28,243 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-30 15:53:28,422 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-06-30 15:53:28,424 INFO storage_scp.create_view.33 Creating Configure DICOM Storage SCP View
+2023-06-30 15:53:28,425 INFO storage_scp.create_view.38 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-30 16:00:49,557 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-30 16:00:49,557 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-30 16:00:50,012 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-06-30 16:00:50,015 INFO storage_scp.create_view.33 Creating Configure DICOM Storage SCP View
+2023-06-30 16:00:50,016 INFO storage_scp.create_view.38 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-30 16:01:32,957 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-30 16:01:32,958 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-30 16:01:33,169 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-06-30 16:01:33,171 INFO storage_scp.create_view.33 Creating Configure DICOM Storage SCP View
+2023-06-30 16:01:33,172 INFO storage_scp.create_view.38 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-30 16:06:18,532 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-06-30 16:06:18,532 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-06-30 16:06:18,762 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-06-30 16:06:18,765 INFO storage_scp.create_view.33 Creating Configure DICOM Storage SCP View
+2023-06-30 16:06:18,766 INFO storage_scp.create_view.38 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-06-30 16:06:32,222 INFO storage_scp.autostart_checkbox_event.91 autostart_checkbox_event toggled, current value: off
+2023-06-30 16:06:35,350 INFO storage_scp.autostart_checkbox_event.91 autostart_checkbox_event toggled, current value: on
+2023-06-30 16:06:36,966 INFO storage_scp.autostart_checkbox_event.91 autostart_checkbox_event toggled, current value: off
+2023-06-30 16:06:42,133 INFO storage_scp.autostart_checkbox_event.91 autostart_checkbox_event toggled, current value: on
+2023-07-01 12:36:19,778 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 12:36:19,779 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 12:36:20,271 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 12:36:20,277 INFO storage_scp.create_view.54 Creating Configure DICOM Storage SCP View
+2023-07-01 12:36:20,278 INFO storage_scp.create_view.59 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 12:50:44,313 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 12:50:44,314 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 12:50:44,808 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 12:50:44,812 INFO storage_scp.create_view.56 Creating Configure DICOM Storage SCP View
+2023-07-01 12:50:44,813 INFO storage_scp.create_view.61 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 12:52:10,939 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 12:52:10,940 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 12:52:11,260 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 12:52:11,264 INFO storage_scp.create_view.56 Creating Configure DICOM Storage SCP View
+2023-07-01 12:52:11,265 INFO storage_scp.create_view.61 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 13:27:11,996 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 13:27:11,997 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 13:27:12,632 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 13:27:12,637 INFO storage_scp.create_view.56 Creating Configure DICOM Storage SCP View
+2023-07-01 13:27:12,638 INFO storage_scp.create_view.58 Font Character Width: 13
+2023-07-01 13:27:12,639 INFO storage_scp.create_view.63 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 13:32:06,048 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 13:32:06,049 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 13:32:06,638 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 13:32:06,642 INFO storage_scp.create_view.56 Creating Configure DICOM Storage SCP View
+2023-07-01 13:32:06,643 INFO storage_scp.create_view.58 Font Character Width: ±13
+2023-07-01 13:32:06,644 INFO storage_scp.create_view.63 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 13:33:51,196 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 13:33:51,196 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 13:33:51,621 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 13:33:51,627 INFO storage_scp.create_view.56 Creating Configure DICOM Storage SCP View
+2023-07-01 13:33:51,627 INFO storage_scp.create_view.58 Font Character Width: ±13
+2023-07-01 13:33:51,628 INFO storage_scp.create_view.63 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 13:49:49,913 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 13:49:49,914 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 13:49:50,453 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 13:49:50,458 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 13:49:50,458 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 13:49:50,459 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 13:54:58,921 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 13:54:58,921 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 13:54:59,416 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 13:54:59,420 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 13:54:59,421 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 13:54:59,422 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 13:58:48,065 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 13:58:48,066 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 13:58:48,407 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 13:58:48,412 INFO storage_scp.create_view.58 Creating Configure DICOM Storage SCP View
+2023-07-01 13:58:48,412 INFO storage_scp.create_view.60 Font Character Width: ±13
+2023-07-01 13:58:48,414 INFO storage_scp.create_view.65 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 14:12:41,289 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 14:12:41,290 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 14:12:41,882 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 14:12:41,887 INFO storage_scp.create_view.66 Creating Configure DICOM Storage SCP View
+2023-07-01 14:12:41,887 INFO storage_scp.create_view.68 Font Character Width: ±13
+2023-07-01 14:12:41,888 INFO storage_scp.create_view.73 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 14:15:09,230 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 14:15:09,230 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 14:15:09,648 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 14:15:09,652 INFO storage_scp.create_view.66 Creating Configure DICOM Storage SCP View
+2023-07-01 14:15:09,653 INFO storage_scp.create_view.68 Font Character Width: ±13
+2023-07-01 14:15:09,654 INFO storage_scp.create_view.73 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 14:18:23,218 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 14:18:23,219 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 14:18:23,656 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 14:18:23,661 INFO storage_scp.create_view.66 Creating Configure DICOM Storage SCP View
+2023-07-01 14:18:23,661 INFO storage_scp.create_view.68 Font Character Width: ±13
+2023-07-01 14:18:23,663 INFO storage_scp.create_view.73 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 14:24:12,007 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 14:24:12,008 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 14:24:12,346 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 14:24:12,350 INFO storage_scp.create_view.68 Creating Configure DICOM Storage SCP View
+2023-07-01 14:24:12,350 INFO storage_scp.create_view.70 Font Character Width: ±13
+2023-07-01 14:24:12,351 INFO storage_scp.create_view.75 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 14:26:02,450 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 14:26:02,450 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 14:26:02,781 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 14:26:02,785 INFO storage_scp.create_view.68 Creating Configure DICOM Storage SCP View
+2023-07-01 14:26:02,785 INFO storage_scp.create_view.70 Font Character Width: ±13
+2023-07-01 14:26:02,786 INFO storage_scp.create_view.75 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 14:28:37,998 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 14:28:37,999 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 14:28:38,317 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 14:28:38,322 INFO storage_scp.create_view.68 Creating Configure DICOM Storage SCP View
+2023-07-01 14:28:38,322 INFO storage_scp.create_view.70 Font Character Width: ±13
+2023-07-01 14:28:38,323 INFO storage_scp.create_view.75 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 14:29:16,926 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 14:29:16,927 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 14:29:17,235 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 14:29:17,240 INFO storage_scp.create_view.68 Creating Configure DICOM Storage SCP View
+2023-07-01 14:29:17,240 INFO storage_scp.create_view.70 Font Character Width: ±13
+2023-07-01 14:29:17,241 INFO storage_scp.create_view.75 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 14:41:10,581 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 14:41:10,582 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 14:41:10,955 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 14:41:10,959 INFO storage_scp.create_view.70 Creating Configure DICOM Storage SCP View
+2023-07-01 14:41:10,960 INFO storage_scp.create_view.72 Font Character Width: ±13
+2023-07-01 14:41:10,962 INFO storage_scp.create_view.77 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 14:43:33,397 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 14:43:33,398 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 14:43:33,699 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 14:43:33,703 INFO storage_scp.create_view.70 Creating Configure DICOM Storage SCP View
+2023-07-01 14:43:33,703 INFO storage_scp.create_view.72 Font Character Width: ±13
+2023-07-01 14:43:33,704 INFO storage_scp.create_view.77 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 14:45:41,723 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 14:45:41,724 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 14:45:42,151 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 14:45:42,155 INFO storage_scp.create_view.70 Creating Configure DICOM Storage SCP View
+2023-07-01 14:45:42,156 INFO storage_scp.create_view.72 Font Character Width: ±13
+2023-07-01 14:45:42,157 INFO storage_scp.create_view.77 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 14:48:27,780 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 14:48:27,781 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 14:48:28,179 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 14:48:28,183 INFO storage_scp.create_view.67 Creating Configure DICOM Storage SCP View
+2023-07-01 14:48:28,184 INFO storage_scp.create_view.69 Font Character Width: ±13
+2023-07-01 14:48:28,185 INFO storage_scp.create_view.74 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 14:53:37,799 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 14:53:37,800 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 14:53:38,200 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 14:53:38,204 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 14:53:38,204 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 14:55:34,634 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 15:03:17,406 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 15:03:17,406 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 15:03:17,786 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 15:03:17,790 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 15:03:17,790 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 15:03:17,791 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 15:04:59,343 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 15:04:59,343 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 15:04:59,673 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 15:04:59,678 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 15:04:59,678 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 15:04:59,679 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 15:05:20,154 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 15:05:20,154 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 15:05:20,398 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 15:05:20,402 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 15:05:20,403 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 15:05:20,404 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 15:05:44,181 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 15:05:44,182 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 15:05:44,434 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 15:05:44,438 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 15:05:44,439 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 15:05:44,440 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 15:07:13,037 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 15:07:13,038 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 15:07:13,325 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 15:07:13,329 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 15:07:13,329 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 15:07:13,330 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 15:08:25,488 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 15:08:25,488 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 15:08:25,915 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 15:08:25,920 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 15:08:25,921 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 15:08:25,922 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 15:08:52,284 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 15:08:52,285 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 15:08:52,576 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 15:08:52,581 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 15:08:52,581 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 15:08:52,582 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 15:10:39,071 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 15:10:39,071 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 15:10:39,383 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 15:10:39,388 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 15:10:39,388 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 15:10:39,389 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 15:11:16,470 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 15:11:16,470 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 15:11:16,840 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 15:11:16,845 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 15:11:16,845 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 15:11:16,846 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 15:11:40,504 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 15:11:40,504 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 15:11:40,750 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 15:11:40,754 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 15:11:40,755 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 15:11:40,755 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 15:12:33,877 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 15:12:33,877 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 15:12:34,172 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 15:12:34,176 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 15:12:34,177 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 15:12:34,178 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 15:13:24,106 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 15:13:24,107 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 15:13:24,398 INFO welcome.create_view.23 Creating Welcome View
+2023-07-01 15:13:24,458 INFO help.create_view.11 Creating Help View
+2023-07-01 15:13:24,459 INFO help.create_view.14 Reading help file: assets/help.html
+2023-07-01 15:13:24,624 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 15:13:24,628 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 15:13:24,629 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 15:13:24,630 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 15:15:01,788 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 15:15:01,789 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 15:15:02,039 INFO welcome.create_view.23 Creating Welcome View
+2023-07-01 15:15:02,087 INFO help.create_view.11 Creating Help View
+2023-07-01 15:15:02,087 INFO help.create_view.14 Reading help file: assets/help.html
+2023-07-01 15:15:02,232 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 15:15:02,237 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 15:15:02,238 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 15:15:02,239 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 15:15:24,572 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 15:15:24,572 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 15:15:24,833 INFO welcome.create_view.23 Creating Welcome View
+2023-07-01 15:15:24,882 INFO help.create_view.11 Creating Help View
+2023-07-01 15:15:24,882 INFO help.create_view.14 Reading help file: assets/help.html
+2023-07-01 15:15:25,017 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 15:15:25,020 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 15:15:25,021 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 15:15:25,022 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 15:16:12,180 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 15:16:12,180 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 15:16:12,444 INFO welcome.create_view.23 Creating Welcome View
+2023-07-01 15:16:12,491 INFO help.create_view.11 Creating Help View
+2023-07-01 15:16:12,491 INFO help.create_view.14 Reading help file: assets/help.html
+2023-07-01 15:16:12,656 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 15:16:12,660 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 15:16:12,661 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 15:16:12,662 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 15:16:57,623 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 15:16:57,624 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 15:16:57,874 INFO welcome.create_view.23 Creating Welcome View
+2023-07-01 15:16:57,917 INFO help.create_view.11 Creating Help View
+2023-07-01 15:16:57,918 INFO help.create_view.14 Reading help file: assets/help.html
+2023-07-01 15:16:58,049 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 15:16:58,053 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 15:16:58,053 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 15:16:58,054 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 15:17:17,030 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 15:17:17,030 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 15:17:17,368 INFO welcome.create_view.23 Creating Welcome View
+2023-07-01 15:17:17,441 INFO help.create_view.11 Creating Help View
+2023-07-01 15:17:17,441 INFO help.create_view.14 Reading help file: assets/help.html
+2023-07-01 15:17:17,597 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 15:17:17,602 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 15:17:17,602 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 15:17:17,603 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 15:17:50,359 INFO dicom_scrub.main.178 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-01 15:17:50,360 INFO dicom_scrub.main.179 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-01 15:17:50,630 INFO welcome.create_view.23 Creating Welcome View
+2023-07-01 15:17:50,679 INFO help.create_view.11 Creating Help View
+2023-07-01 15:17:50,679 INFO help.create_view.14 Reading help file: assets/help.html
+2023-07-01 15:17:50,809 INFO storage_dir.create_view.33 Creating Set Storage Directory View
+2023-07-01 15:17:50,814 INFO storage_scp.create_view.60 Creating Configure DICOM Storage SCP View
+2023-07-01 15:17:50,814 INFO storage_scp.create_view.62 Font Character Width: ±13
+2023-07-01 15:17:50,815 INFO storage_scp.create_view.67 Local IP addresses: ['127.0.0.1', '192.168.1.102']
+2023-07-01 15:19:12,612 INFO storage_scp.autostart_checkbox_event.147 autostart_checkbox_event toggled, current value: off
+2023-07-01 15:19:13,478 INFO storage_scp.autostart_checkbox_event.147 autostart_checkbox_event toggled, current value: on
+2023-07-01 15:19:14,261 INFO storage_scp.autostart_checkbox_event.147 autostart_checkbox_event toggled, current value: off
+2023-07-01 15:19:14,994 INFO storage_scp.autostart_checkbox_event.147 autostart_checkbox_event toggled, current value: on

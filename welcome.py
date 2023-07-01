@@ -16,12 +16,11 @@ WELCOME_TEXT = _(
 TITLED_LOGO_FILE = "assets/images/rsna_titled_logo_alpha.png"  # alpha channel  / transparent background
 TITLED_LOGO_WIDTH = 255
 TITLED_LOGO_HEIGHT = 155
-PAD = 10
 
 
 def create_view(view: ctk.CTkFrame):
+    PAD = 10
     logger.info("Creating Welcome View")
-    view.grid_rowconfigure(1, weight=1)
     view.grid_columnconfigure(0, weight=1)
     # Titled RSNA Logo:
     titled_logo_image = ctk.CTkImage(

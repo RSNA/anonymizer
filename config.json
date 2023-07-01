@@ -1,0 +1,10 @@
+{
+    "storage_dir": {
+        "storage_directory": "/Users/michaelevans/Downloads"
+    },
+    "storage_scp": {
+        "aet": "RSNA",
+        "ip_addr": "192.168.1.102",
+        "ip_port": 1048
+    }
+}
