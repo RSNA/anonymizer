@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "cc064cf3e5c7127bcf35eaef9ffe422d703b15690cf328574bdb1c582a63200c"
+            "sha256": "79a9b0b7467bc7c56d476a6026c7d36be23ca47fb0635475d79f31a17f5c4b53"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -332,6 +332,14 @@
             "index": "pypi",
             "version": "==9.5.0"
         },
+        "pydicom": {
+            "hashes": [
+                "sha256:301cbf8bf2cca95643ccf678f5b0cfecfd15974cd27e199f0856c44694852c0e",
+                "sha256:6cb210dbe5586841036e8eeb2d4feb4df22a48f39161ba7ee0bf3c89faaba946"
+            ],
+            "index": "pypi",
+            "version": "==2.4.1"
+        },
         "pyinstaller": {
             "hashes": [
                 "sha256:0df43697c4914285ecd333be968d2cd042ab9b2670124879ee87931d2344eaf5",
@@ -365,6 +373,14 @@
             ],
             "index": "pypi",
             "version": "==2.1.1"
+        },
+        "pynetdicom": {
+            "hashes": [
+                "sha256:231212e9b9c5e0debf2af4f17d8afa14ecd1b262a11cdb891b2b2b15f7ab5939",
+                "sha256:6726173d25a51f66f2a4557d816c0f93b3b2a8435ce3d319e6cdd8e48bf657d5"
+            ],
+            "index": "pypi",
+            "version": "==2.0.2"
         },
         "pyyaml": {
             "hashes": [

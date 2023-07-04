@@ -11,6 +11,8 @@ pyinstaller-versionfile = "*"
 tkhtmlview = "*"
 netifaces = "*"
 ctktooltip = "*"
+pydicom = "*"
+pynetdicom = "*"
 
 [dev-packages]
 

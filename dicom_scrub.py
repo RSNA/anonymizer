@@ -19,7 +19,7 @@ LOG_DEFAULT_LEVEL = logging.INFO
 logger = logging.getLogger()
 
 APP_TITLE = _("DICOM Anonymizer Version 17")
-APP_START_GEOMETRY = "1200x800"
+APP_START_GEOMETRY = "1000x400"
 __version__ = "17.1.0.1"
 LOGO_WIDTH = 75
 LOGO_HEIGHT = 20
@@ -109,9 +109,11 @@ class App(ctk.CTk):
         ctk.set_default_color_theme(color_theme)
 
         self.geometry(APP_START_GEOMETRY)
+        self.minsize(800, 400)  # width, height
         self.font = ctk.CTkFont()  # get default font as defined in json file
         self.title(title)
         self.title_height = self.font.metrics("linespace")
+        # self.rowconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
         self.columnconfigure(0, weight=1)
 
