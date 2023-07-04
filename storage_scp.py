@@ -1,3 +1,4 @@
+import string
 import tkinter as tk
 import customtkinter as ctk
 from CTkToolTip import *
@@ -33,10 +34,23 @@ def get_local_ip_addresses():
 
 # Entry field callback functions for validating user input and saving to config.json:
 # TODO: Move these to utils.py
+def validate_entry(final_value: str, allowed_chars: str, max: str):
+    # BUG: max is always a string, so convert to int
+    if len(final_value) > int(max):
+        return False
+    for char in final_value:
+        if char not in allowed_chars:
+            return False
+    return True
+
+
 def int_entry_change(
     event: Event, var: ctk.IntVar, min: int, max: int, config_name: str
-):
-    value = var.get()
+) -> None:
+    try:
+        value = var.get()
+    except:
+        value = 0
     if value > max:
         var.set(max)
     elif value < min:
@@ -45,21 +59,22 @@ def int_entry_change(
 
 
 def str_entry_change(
-    var: ctk.StringVar, min_len: int, max_len: int, name: str, *args
+    event: Event, var: ctk.StringVar, min_len: int, max_len: int, config_name: str
 ) -> None:
     value = var.get()
     if len(value) > max_len:
         var.set(value[:max_len])
     elif len(value) < min_len:
         var.set(value[:min_len])
-    config.save(__name__, name, var.get())
+    config.save(__name__, config_name, var.get())
 
 
 def create_view(view: ctk.CTkFrame):
     PAD = 10
     logger.info(f"Creating Configure DICOM Storage SCP View")
-    char_width_px = ctk.CTkFont().measure("M")
-    logger.info(f"Font Character Width: ±{char_width_px}")
+    char_width_px = ctk.CTkFont().measure("M") * 0.85
+    validate_entry_cmd = view.register(validate_entry)
+    logger.info(f"Font Character Width in pixels: ±{char_width_px}")
     view.grid_rowconfigure(0, weight=1)
 
     local_ips = get_local_ip_addresses()
@@ -74,9 +89,9 @@ def create_view(view: ctk.CTkFrame):
 
     # IP Address:
     ip_var = ctk.StringVar(view, value=ip_addr)
-    ip_var.trace_add(
-        "write", lambda *args: str_entry_change(ip_var, 8, 15, "ip_addr", *args)
-    )
+    # ip_var.trace_add(
+    #     "write", lambda *args: str_entry_change(ip_var, 8, 15, "ip_addr", *args)
+    # )
     local_ips_optionmenu = ctk.CTkOptionMenu(
         view,
         dynamic_resizing=False,
@@ -92,22 +107,23 @@ def create_view(view: ctk.CTkFrame):
     # IP Port:
     ip_port_min = 104
     ip_port_max = 65535
+    ip_port_max_chars = len(str(ip_port_max))
     port_label = ctk.CTkLabel(view, text=_("Port:"))
     port_label.grid(row=0, column=2, pady=(PAD, 0), sticky="n")
     port_var = ctk.IntVar(view, value=ip_port)
     port_entry = ctk.CTkEntry(
-        view, width=len(str(ip_port_max)) * char_width_px, textvariable=port_var
+        view,
+        width=int(ip_port_max_chars * char_width_px),
+        textvariable=port_var,
+        validate="key",
+        validatecommand=(validate_entry_cmd, "%P", string.digits, ip_port_max_chars),
     )
     port_entry_tooltip = CTkToolTip(
         port_entry,
         message=_(
-            "Port number to listen on for incoming DICOM files: [{ip_port_min}..{ip_port_max}]"
+            f"Port number to listen on for incoming DICOM files: [{ip_port_min}..{ip_port_max}]"
         ),
     )
-    # port_var.trace_add(
-    #     "write",
-    #     lambda *args: entry_edit(port_entry, len(str(ip_port_max)), *args),
-    # )
     entry_callback = lambda event: int_entry_change(
         event, port_var, ip_port_min, ip_port_max, "ip_port"
     )
@@ -118,9 +134,32 @@ def create_view(view: ctk.CTkFrame):
     # AET:
     aet_label = ctk.CTkLabel(view, text=_("AET:"))
     aet_label.grid(row=0, column=4, pady=(PAD, 0), sticky="n")
+    aet_min_chars = 3
+    aet_max_chars = 16
     aet_var = ctk.StringVar(view, value=aet)
-    aet_entry = ctk.CTkEntry(view, width=120, textvariable=aet_var)
-    aet_var.trace("w", lambda *args: config.save(__name__, "aet", aet_var.get()))
+    aet_entry = ctk.CTkEntry(
+        view,
+        width=int(aet_max_chars * char_width_px),
+        textvariable=aet_var,
+        validate="key",
+        validatecommand=(
+            validate_entry_cmd,
+            "%P",
+            string.digits + string.ascii_uppercase + " ",
+            str(aet_max_chars),
+        ),
+    )
+    aet_entry_tooltip = CTkToolTip(
+        aet_entry,
+        message=_(
+            f"DICOM AE Title to use when responding to incoming DICOM files: uppercase alphanumeric, spaces allowed [{aet_min_chars}..{aet_max_chars}] chars"
+        ),
+    )
+    entry_callback = lambda event: str_entry_change(
+        event, aet_var, aet_min_chars, aet_max_chars, "aet"
+    )
+    aet_entry.bind("<Return>", entry_callback)
+    aet_entry.bind("<FocusOut>", entry_callback)
     aet_entry.grid(row=0, column=5, pady=(PAD, 0), padx=PAD, sticky="n")
 
     # SCP Server On/Off Switch:
