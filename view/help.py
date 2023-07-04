@@ -1,7 +1,7 @@
 import customtkinter as ctk
 from tkhtmlview import HTMLScrolledText
 import logging
-from translate import _
+from utils.translate import _
 
 logger = logging.getLogger(__name__)
 HELP_FILE = "assets/help.html"

@@ -1,7 +1,7 @@
 import customtkinter as ctk
 from PIL import Image
 import logging
-from translate import _
+from utils.translate import _
 
 logger = logging.getLogger(__name__)
 

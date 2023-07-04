@@ -3,13 +3,13 @@ import customtkinter as ctk
 from PIL import Image
 import logging
 import logging.handlers
-from translate import _
+from utils.translate import _
 
 # All UX View Modules:
-import welcome
-import help
-import storage_dir
-import storage_scp
+import view.welcome as welcome
+import view.help as help
+import view.storage_dir as storage_dir
+import view.storage_scp as storage_scp
 
 LOGS_DIR = "/logs/"
 LOG_FILENAME = "dicom_scrub.log"

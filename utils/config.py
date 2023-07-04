@@ -26,6 +26,9 @@ def save(module_name, name, value):
     else:
         config_dict = {}
 
+    # Ensure module_name exists in config_dict:
+    config_dict.setdefault(module_name, {})
+
     config_dict[module_name][name] = value
 
     with open(_CONFIG_FILE, "w") as f:

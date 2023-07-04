@@ -4,10 +4,9 @@ import customtkinter as ctk
 from CTkToolTip import *
 import netifaces
 import logging
-
-from yaml import Event
-from translate import _
-import config
+from utils.translate import _
+import utils.config as config
+import controller.dicom_scp as dicom_scp
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +44,7 @@ def validate_entry(final_value: str, allowed_chars: str, max: str):
 
 
 def int_entry_change(
-    event: Event, var: ctk.IntVar, min: int, max: int, config_name: str
+    event: tk.Event, var: ctk.IntVar, min: int, max: int, config_name: str
 ) -> None:
     try:
         value = var.get()
@@ -59,7 +58,7 @@ def int_entry_change(
 
 
 def str_entry_change(
-    event: Event, var: ctk.StringVar, min_len: int, max_len: int, config_name: str
+    event: tk.Event, var: ctk.StringVar, min_len: int, max_len: int, config_name: str
 ) -> None:
     value = var.get()
     if len(value) > max_len:
@@ -72,7 +71,7 @@ def str_entry_change(
 def create_view(view: ctk.CTkFrame):
     PAD = 10
     logger.info(f"Creating Configure DICOM Storage SCP View")
-    char_width_px = ctk.CTkFont().measure("M") * 0.85
+    char_width_px = ctk.CTkFont().measure("A")
     validate_entry_cmd = view.register(validate_entry)
     logger.info(f"Font Character Width in pixels: ±{char_width_px}")
     view.grid_rowconfigure(0, weight=1)
@@ -152,7 +151,7 @@ def create_view(view: ctk.CTkFrame):
     aet_entry_tooltip = CTkToolTip(
         aet_entry,
         message=_(
-            f"DICOM AE Title to use when responding to incoming DICOM files: uppercase alphanumeric, spaces allowed [{aet_min_chars}..{aet_max_chars}] chars"
+            f"DICOM AE Title: uppercase alphanumeric & spaces [{aet_min_chars}..{aet_max_chars}] chars"
         ),
     )
     entry_callback = lambda event: str_entry_change(
@@ -166,8 +165,13 @@ def create_view(view: ctk.CTkFrame):
     scp_var = ctk.StringVar(value="on")
 
     def scp_switch_event():
-        logging.info("scp_switch_event toggled, current value:", scp_var.get())
-        scp_var.set("off")
+        logging.info("scp_switch_event")
+        if scp_var.get() == "on":
+            if not dicom_scp.start():
+                scp_var.set("off")
+        else:
+            if not dicom_scp.stop():
+                scp_var.set("on")
 
     scp_switch = ctk.CTkSwitch(
         view,

@@ -5,8 +5,8 @@ import os
 import customtkinter as ctk
 from tkinter import filedialog
 import logging
-from translate import _
-import config
+from utils.translate import _
+import utils.config as config
 
 logger = logging.getLogger(__name__)
 
