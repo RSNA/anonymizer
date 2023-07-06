@@ -11,19 +11,18 @@ from view.storage_dir import storage_directory
 
 logger = logging.getLogger(__name__)
 
+# Default values:
 ip_addr = "127.0.0.1"
 ip_port = 104
 aet = "ANONSTORE"
-scp_autostart = "off"
-scp_log_font_family = "courier"
-scp_log_font_size = 13
+scp_autostart = False
 
 # Load module globals from config.json
 settings = config.load(__name__)
 globals().update(settings)
 
 
-def get_local_ip_addresses():
+def _get_local_ip_addresses():
     ip_addresses = []
     interfaces = netifaces.interfaces()
     for interface in interfaces:
@@ -81,7 +80,7 @@ def create_view(view: ctk.CTkFrame):
     view.grid_rowconfigure(1, weight=1)
     view.grid_columnconfigure(5, weight=1)
 
-    local_ips = get_local_ip_addresses()
+    local_ips = _get_local_ip_addresses()
     if local_ips:
         logger.info(f"Local IP addresses: {local_ips}")
     else:
@@ -95,7 +94,7 @@ def create_view(view: ctk.CTkFrame):
     ip_var = ctk.StringVar(view, value=ip_addr)
     local_ips_optionmenu = ctk.CTkOptionMenu(
         view,
-        dynamic_resizing=True,
+        dynamic_resizing=False,
         values=local_ips,
         variable=ip_var,
         command=lambda *args: config.save(__name__, "ip_addr", ip_var.get()),
@@ -165,31 +164,29 @@ def create_view(view: ctk.CTkFrame):
     aet_entry.grid(row=0, column=5, pady=(PAD, 0), padx=PAD, sticky="nw")
 
     # SCP Server On/Off Switch:
-    scp_var = ctk.StringVar(value="off")
+    scp_var = ctk.BooleanVar(view, value=False)
 
     def scp_switch_event():
         logger.info("scp_switch_event")
-        if scp_var.get() == "on":
+        if scp_var.get():
             if not dicom_scp.start(
                 ip_var.get(), port_var.get(), aet_var.get(), storage_directory
             ):
-                scp_var.set("off")
+                scp_var.set(False)
         else:
             if not dicom_scp.stop():
-                scp_var.set("on")
+                scp_var.set(True)
 
     scp_switch = ctk.CTkSwitch(
         view,
         text="SCP Server",
         command=scp_switch_event,
         variable=scp_var,
-        onvalue="on",
-        offvalue="off",
     )
     scp_switch.grid(row=0, column=6, pady=PAD, sticky="n")
 
     # SCP Server Autostart Checkbox:
-    scp_autostart_var = ctk.StringVar(value=scp_autostart)
+    scp_autostart_var = ctk.BooleanVar(view, value=scp_autostart)
 
     def scp_autostart_checkbox_event():
         logging.info(
@@ -202,8 +199,6 @@ def create_view(view: ctk.CTkFrame):
         text="Autostart",
         command=scp_autostart_checkbox_event,
         variable=scp_autostart_var,
-        onvalue="on",
-        offvalue="off",
     )
     scp_autostart_checkbox.grid(row=0, column=7, padx=PAD, pady=PAD, sticky="n")
 
@@ -211,14 +206,11 @@ def create_view(view: ctk.CTkFrame):
     scp_log = ctk.CTkTextbox(
         view,
         wrap="none",
-        font=ctk.CTkFont(family=scp_log_font_family, size=scp_log_font_size),
     )
     dicom_scp.loghandler(scp_log)
     scp_log.grid(row=1, columnspan=8, sticky="nswe")
 
     # Handle SCP Server Autostart:
-    if scp_autostart == "on":
-        if not dicom_scp.start(ip_addr, ip_port, aet, storage_directory):
-            scp_var.set("off")
-        else:
-            scp_var.set("on")
+    if scp_autostart:
+        if dicom_scp.start(ip_addr, ip_port, aet, storage_directory):
+            scp_var.set(True)

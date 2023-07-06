@@ -1,11 +1,10 @@
 {
-    "view.storage_dir": {
-        "storage_directory": "/Users/michaelevans/Desktop"
-    },
     "view.storage_scp": {
-        "aet": "RSNA1",
-        "ip_port": 1054,
-        "ip_addr": "127.0.0.1",
-        "scp_autostart": "on"
+        "scp_autostart": false,
+        "ip_port": 1045,
+        "aet": "RSNA"
+    },
+    "view.storage_dir": {
+        "storage_directory": "/Users/michaelevans/Downloads"
     }
 }

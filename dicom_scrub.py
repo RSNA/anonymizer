@@ -10,6 +10,8 @@ import view.welcome as welcome
 import view.help as help
 import view.storage_dir as storage_dir
 import view.storage_scp as storage_scp
+import view.select_local_files as select_local_files
+import controller.dicom_scp as dicom_scp
 
 LOGS_DIR = "/logs/"
 LOG_FILENAME = "dicom_scrub.log"
@@ -19,7 +21,8 @@ LOG_DEFAULT_LEVEL = logging.INFO
 logger = logging.getLogger()
 
 APP_TITLE = _("DICOM Anonymizer Version 17")
-APP_START_GEOMETRY = "1000x400"
+APP_MIN_WIDTH = 1000
+APP_MIN_HEIGHT = 600
 __version__ = "17.1.0.1"
 LOGO_WIDTH = 75
 LOGO_HEIGHT = 20
@@ -42,12 +45,12 @@ EXPORT_LOG_VIEW = _("Export Log")
 
 APP_TABS = {
     # _("About"): [WELCOME_VIEW, HELP_VIEW],
-    _("Storage"): [SET_STORAGE_DIR_VIEW, CONFIGURE_STORAGE_SCP_VIEW],
-    _("Settings"): [ANONYMIZER_SCRIPT_VIEW, FILTER_SETTINGS_VIEW],
+    # _("Storage"): [SET_STORAGE_DIR_VIEW, CONFIGURE_STORAGE_SCP_VIEW],
+    # _("Settings"): [ANONYMIZER_SCRIPT_VIEW, FILTER_SETTINGS_VIEW],
     _("Import"): [SELECT_LOCAL_FILES_VIEW, QUERY_SCP_STORAGE_VIEW],
-    _("Verify"): [PATIENT_INDEX_LIST_VIEW],
-    _("Export"): [EXPORT_TO_HTTPS_VIEW, EXPORT_TO_SCP_STORAGE_VIEW],
-    _("Admin"): [IMPORT_LOG_VIEW, EXPORT_LOG_VIEW],
+    # _("Verify"): [PATIENT_INDEX_LIST_VIEW],
+    # _("Export"): [EXPORT_TO_HTTPS_VIEW, EXPORT_TO_SCP_STORAGE_VIEW],
+    # _("Admin"): [IMPORT_LOG_VIEW, EXPORT_LOG_VIEW],
 }
 
 
@@ -58,6 +61,7 @@ class TabViewNested(ctk.CTkTabview):
             tabview = self.add(tab)
 
             # TODO: move all view modules in /views and import them here using importlib, move embedded tabs into APP_TABS with tuple of (view_module, view_name)
+            # instead of calling create_view, automatically call the create_view function in the view module when initialised via importlib
             if tab == WELCOME_VIEW:
                 welcome.create_view(tabview)
             elif tab == HELP_VIEW:
@@ -66,6 +70,8 @@ class TabViewNested(ctk.CTkTabview):
                 storage_dir.create_view(tabview, tab)
             elif tab == CONFIGURE_STORAGE_SCP_VIEW:
                 storage_scp.create_view(tabview)
+            elif tab == SELECT_LOCAL_FILES_VIEW:
+                select_local_files.create_view(tabview)
 
 
 class TabViewMain(ctk.CTkTabview):
@@ -108,8 +114,8 @@ class App(ctk.CTk):
         # sets all colors and default font:
         ctk.set_default_color_theme(color_theme)
 
-        self.geometry(APP_START_GEOMETRY)
-        self.minsize(800, 400)  # width, height
+        self.geometry(f"{APP_MIN_WIDTH}x{APP_MIN_HEIGHT}")
+        self.minsize(800, 600)  # width, height
         self.font = ctk.CTkFont()  # get default font as defined in json file
         self.title(title)
         self.title_height = self.font.metrics("linespace")
@@ -191,6 +197,11 @@ def main():
     )
 
     app.mainloop()
+
+    # Ensure DICOM C-STORE SCP is stopped and socket is closed:
+    if dicom_scp.scp:
+        logger.info("Final shutdown: Stop DICOM C-STORE SCP and close socket")
+        dicom_scp.stop(True)
 
     logger.info("DICOM ANONYMIZER GUI Stop.")
 

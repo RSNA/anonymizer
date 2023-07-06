@@ -1,11 +1,15 @@
 import logging
+from pathlib import Path
+from plistlib import UID
 import customtkinter as ctk
 
 from pydicom._version import __version__ as pydicom_version
+from pydicom.uid import UID
 from pydicom.filewriter import write_file_meta_info
 
 from pynetdicom._version import __version__ as pynetdicom_version
-from pynetdicom.events import EVT_C_STORE
+from pynetdicom.dimse_primitives import C_STORE
+from pynetdicom.events import Event, EVT_C_STORE
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.presentation import AllStoragePresentationContexts
 
@@ -53,11 +57,13 @@ def loghandler(textbox: ctk.CTkTextbox):
 
 
 # DICOM C-STORE SCP event handler:
-def handle_store(event) -> int:
+def _handle_store(event: Event) -> int:
     logger.info("handle_store")
     remote = event.assoc.remote
     logger.info(remote)
-    incoming_filename = destination_dir + "/" + event.request.AffectedSOPInstanceUID
+    incoming_filename = Path(
+        destination_dir, event.request.AffectedSOPInstanceUID + ".dcm"  # type: ignore
+    )
     logger.info(f"Save incoming DICOM file: {incoming_filename}")
     with open(incoming_filename, "wb") as f:
         # Write the preamble and prefix
@@ -66,7 +72,7 @@ def handle_store(event) -> int:
         # Encode and write the File Meta Information
         write_file_meta_info(f, event.file_meta, enforce_standard=True)  # type: ignore
         # Write the encoded dataset
-        f.write(event.request.DataSet.getvalue())
+        f.write(event.request.DataSet.getvalue())  # type: ignore
 
     return C_STORE_SUCCESS
 
@@ -83,7 +89,7 @@ def start(address, port, aet, storage_dir):
         scp = ae.start_server(
             (address, port),
             block=False,
-            evt_handlers=[(EVT_C_STORE, handle_store)],
+            evt_handlers=[(EVT_C_STORE, _handle_store)],
             contexts=AllStoragePresentationContexts,
         )
     except Exception as e:
@@ -98,10 +104,11 @@ def start(address, port, aet, storage_dir):
     return True
 
 
-def stop():
+def stop(final_shutdown=False):
     global scp
     if scp is not None:
-        logger.info("Stop DICOM C-STORE SCP and close socket")
+        if not final_shutdown:
+            logger.info("User initiated: Stop DICOM C-STORE SCP and close socket")
         scp.shutdown()
         scp = None
     return True
