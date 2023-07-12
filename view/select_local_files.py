@@ -1,5 +1,5 @@
 import os
-from re import A
+from pydicom.misc import is_dicom
 from typing import Sequence
 import customtkinter as ctk
 from tkinter import Tk, filedialog
@@ -12,7 +12,8 @@ from view.storage_dir import storage_directory
 logger = logging.getLogger(__name__)
 
 file_extension_filters = [
-    ("DICOM Files", "*.dcm"),
+    ("dcm Files", "*.dcm"),
+    ("dicom Files", "*.dicom"),
     ("All Files", "*.*"),
 ]
 
@@ -22,11 +23,11 @@ def _insert_files_into_textbox(
 ):
     if file_paths:
         for file_path in file_paths:
-            # TODO: check if file_path is a valid DICOM file
-            textbox.configure(state="normal")
-            textbox.insert(ctk.END, file_path + "\n")
-            anonymize_button.configure(state="normal")
-            textbox.configure(state="disabled")
+            if os.path.isfile(file_path) and is_dicom(file_path):
+                textbox.configure(state="normal")
+                textbox.insert(ctk.END, file_path + "\n")
+                anonymize_button.configure(state="normal")
+                textbox.configure(state="disabled")
         textbox.see(ctk.END)
 
 
@@ -43,7 +44,7 @@ def _open_directory_dialog(
     anonymize_button: ctk.CTkButton,
     recurse: bool = True,
 ):
-    logging.info(f"open_directory_dialog resurse:{recurse}")
+    logging.info(f"open_directory_dialog recurse:{recurse}")
     path = filedialog.askdirectory()  # for directory
     if path:
         if recurse:

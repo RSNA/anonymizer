@@ -1,6 +1,7 @@
-**/.DS_Store
-.env
+*.DS_Store
 *.pyc
+*.log
+.env
 *.spec
 build/*
 dist/*

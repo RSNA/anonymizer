@@ -2935,3 +2935,7 @@
 2023-07-06 15:03:35,405 INFO select_local_files._open_directory_dialog.46 open_directory_dialog resurse:True
 2023-07-06 15:03:42,929 INFO anonymize.anonymize.5 anonymize files:['/Users/michaelevans/Downloads/Subject Choice Booklet- Grade 10 .pdf', '/Users/michaelevans/Downloads/.DS_Store', '/Users/michaelevans/Downloads/.localized', '/Users/michaelevans/Downloads/GUIDELINES.PDF', '/Users/michaelevans/Downloads/IC-Gantt-Chart-Template-in-Mac-Numbers.numbers', '/Users/michaelevans/Downloads/account_statement.pdf', '/Users/michaelevans/Downloads/2023 Semester 2 Dear SS Students and Parents.pdf', '/Users/michaelevans/Downloads/Boxing Classes.jpg', '/Users/michaelevans/Downloads/ANZ_Bonus_Plan_Advice_2023_07_03.pdf', '/Users/michaelevans/Downloads/RSNA Anonymizer MVP Proposal 28 June 2023.pdf', '/Users/michaelevans/Downloads/ARSTMTWHS.pdf', '/Users/michaelevans/Downloads/RSNA_SEG/RSNA_87_SEGS.zip', '/Users/michaelevans/Downloads/RSNA_SEG/SEGS.zip', '/Users/michaelevans/Downloads/RSNA_SEG/RSNA_SEGS_NORM_075_075_08.zip', '', '']
 2023-07-06 15:04:35,548 INFO dicom_scrub.main.206 DICOM ANONYMIZER GUI Stop.
+2023-07-06 16:12:44,810 INFO dicom_scrub.main.186 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-06 16:12:44,810 INFO dicom_scrub.main.187 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-06 16:12:45,177 INFO select_local_files.create_view.67 Creating Select Local Files View
+2023-07-06 16:13:55,792 INFO select_local_files._open_directory_dialog.47 open_directory_dialog resurse:True
