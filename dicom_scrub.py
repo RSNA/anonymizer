@@ -11,7 +11,7 @@ import view.help as help
 import view.storage_dir as storage_dir
 import view.storage_scp as storage_scp
 import view.select_local_files as select_local_files
-import controller.dicom_scp as dicom_scp
+import controller.dicom_storage_scp as dicom_storage_scp
 
 LOGS_DIR = "/logs/"
 LOG_FILENAME = "dicom_scrub.log"
@@ -199,9 +199,9 @@ def main():
     app.mainloop()
 
     # Ensure DICOM C-STORE SCP is stopped and socket is closed:
-    if dicom_scp.scp:
+    if dicom_storage_scp.scp:
         logger.info("Final shutdown: Stop DICOM C-STORE SCP and close socket")
-        dicom_scp.stop(True)
+        dicom_storage_scp.stop(True)
 
     logger.info("DICOM ANONYMIZER GUI Stop.")
 

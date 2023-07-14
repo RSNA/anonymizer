@@ -1,11 +1,13 @@
 import os
+from pathlib import Path
 from pydicom.misc import is_dicom
 from typing import Sequence
 import customtkinter as ctk
 from tkinter import Tk, filedialog
-from CTkToolTip import *
+from CTkToolTip import *  # TOD: see CtkThemeBuilder source for including CTkToolTip source
 import logging
-from controller.anonymize import anonymize
+from pydicom import dcmread
+from controller.anonymize import anonymize_dataset
 from utils.translate import _
 from view.storage_dir import storage_directory
 
@@ -62,6 +64,16 @@ def _open_directory_dialog(
             _insert_files_into_textbox(textbox, file_paths, anonymize_button)
 
 
+# Read the DICOM files one by one into memory and anonymize them
+# Do not store any PHI on disk in temp files etc.
+def anonymize_files(files: list[str]):
+    logging.info(f"anonymize files:{files}")
+    for file in files:
+        ds = dcmread(file)
+        anonymize_dataset(ds)
+        ds.save_as(Path(storage_directory, file))
+
+
 def create_view(view: ctk.CTkFrame):
     PAD = 10
     logger.info(f"Creating Select Local Files View")
@@ -91,7 +103,7 @@ def create_view(view: ctk.CTkFrame):
         view,
         text=_("Anonymize"),
         state="disabled",
-        command=lambda: anonymize(selected_files.get("1.0", ctk.END).split("\n")),
+        command=anonymize_files(selected_files.get("1.0", ctk.END).split("\n")),
     )
     anonymize_button.grid(row=2, column=2, padx=PAD, pady=PAD, sticky="e")
 

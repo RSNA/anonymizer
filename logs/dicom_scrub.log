@@ -2939,3 +2939,13 @@
 2023-07-06 16:12:44,810 INFO dicom_scrub.main.187 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
 2023-07-06 16:12:45,177 INFO select_local_files.create_view.67 Creating Select Local Files View
 2023-07-06 16:13:55,792 INFO select_local_files._open_directory_dialog.47 open_directory_dialog resurse:True
+2023-07-12 15:57:21,597 INFO dicom_scrub.main.186 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-12 15:57:21,598 INFO dicom_scrub.main.187 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-12 15:57:21,961 INFO select_local_files.create_view.67 Creating Select Local Files View
+2023-07-13 12:33:39,641 INFO dicom_scrub.main.186 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-13 12:33:39,641 INFO dicom_scrub.main.187 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-13 12:33:39,947 INFO select_local_files.create_view.67 Creating Select Local Files View
+2023-07-13 12:33:54,720 INFO dicom_scrub.main.206 DICOM ANONYMIZER GUI Stop.
+2023-07-14 11:07:48,085 INFO dicom_scrub.main.186 Starting DICOM ANONYMIZER GUI Version 17.1.0.1
+2023-07-14 11:07:48,090 INFO dicom_scrub.main.187 Running from /Users/michaelevans/Documents/CODE/RSNA/dicom_scrub
+2023-07-14 11:07:48,905 INFO select_local_files.create_view.67 Creating Select Local Files View

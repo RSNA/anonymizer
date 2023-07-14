@@ -6,7 +6,7 @@ import netifaces
 import logging
 from utils.translate import _
 import utils.config as config
-import controller.dicom_storage_scp as dicom_storage_scp
+import controller.dicom_QR_find_scu as dicom_QR_find_scu
 from view.storage_dir import storage_directory
 
 logger = logging.getLogger(__name__)
@@ -169,12 +169,12 @@ def create_view(view: ctk.CTkFrame):
     def scp_switch_event():
         logger.info("scp_switch_event")
         if scp_var.get():
-            if not dicom_storage_scp.start(
+            if not dicom_scp.start(
                 ip_var.get(), port_var.get(), aet_var.get(), storage_directory
             ):
                 scp_var.set(False)
         else:
-            if not dicom_storage_scp.stop():
+            if not dicom_scp.stop():
                 scp_var.set(True)
 
     scp_switch = ctk.CTkSwitch(
@@ -207,10 +207,10 @@ def create_view(view: ctk.CTkFrame):
         view,
         wrap="none",
     )
-    dicom_storage_scp.loghandler(scp_log)
+    dicom_scp.loghandler(scp_log)
     scp_log.grid(row=1, columnspan=8, sticky="nswe")
 
     # Handle SCP Server Autostart:
     if scp_autostart:
-        if dicom_storage_scp.start(ip_addr, ip_port, aet, storage_directory):
+        if dicom_scp.start(ip_addr, ip_port, aet, storage_directory):
             scp_var.set(True)
