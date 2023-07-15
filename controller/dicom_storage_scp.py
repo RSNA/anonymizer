@@ -15,8 +15,14 @@ logger = logging.getLogger(__name__)
 
 # Global var to hold storage directory passed to start():
 destination_dir = ""
-# Store scp after ae.start_server() is called:
-_scp = None
+# Store scp instance after ae.start_server() is called:
+scp = None
+
+
+def server_running():
+    global scp
+    return scp is not None
+
 
 # C-STORE status values from DICOM Standard, Part 7:
 # https://dicom.nema.org/medical/dicom/current/output/chtml/part07/chapter_9.html#sect_9.1.1
@@ -87,7 +93,7 @@ def _handle_store(event: Event) -> int:
 
 
 def start(address, port, aet, storage_dir):
-    global _scp
+    global scp
     logger.info("start")
     destination_dir = storage_dir
     ae = AE(aet)
@@ -95,7 +101,7 @@ def start(address, port, aet, storage_dir):
     ae.maximum_pdu_size = 0
 
     try:
-        _scp = ae.start_server(
+        scp = ae.start_server(
             (address, port),
             block=False,
             evt_handlers=[(EVT_C_STORE, _handle_store)],
@@ -114,10 +120,10 @@ def start(address, port, aet, storage_dir):
 
 
 def stop(final_shutdown=False):
-    global _scp
-    if _scp is not None:
+    global scp
+    if scp is not None:
         if not final_shutdown:
             logger.info("User initiated: Stop DICOM C-STORE scp and close socket")
-        _scp.shutdown()
-        _scp = None
+        scp.shutdown()
+        scp = None
     return True

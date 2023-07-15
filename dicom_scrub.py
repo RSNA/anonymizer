@@ -199,7 +199,7 @@ def main():
     app.mainloop()
 
     # Ensure DICOM C-STORE SCP is stopped and socket is closed:
-    if dicom_storage_scp.scp:
+    if dicom_storage_scp.server_running():
         logger.info("Final shutdown: Stop DICOM C-STORE SCP and close socket")
         dicom_storage_scp.stop(True)
 
