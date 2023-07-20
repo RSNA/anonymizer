@@ -4,6 +4,7 @@ from PIL import Image
 import logging
 import logging.handlers
 from utils.translate import _
+from pydicom import config as pydicom_config
 
 # All UX View Modules:
 import view.welcome as welcome
@@ -18,7 +19,9 @@ LOG_FILENAME = "dicom_scrub.log"
 LOG_SIZE = 1024 * 1024
 LOG_BACKUP_COUNT = 10
 LOG_DEFAULT_LEVEL = logging.INFO
-logger = logging.getLogger()
+LOG_FORMAT = "{asctime} {levelname} {module}.{funcName}.{lineno} {message}"
+
+logger = logging.getLogger()  # get root logger
 
 APP_TITLE = _("DICOM Anonymizer Version 17")
 APP_MIN_WIDTH = 1000
@@ -160,12 +163,11 @@ class App(ctk.CTk):
 
 
 def setup_logging(logs_dir) -> None:
-    # TODO: allow setup from log.config file
+    # TODO: move logging to utils.logging and allow setup from config.json
+    # TODO: provide UX to change log level
     os.makedirs(logs_dir, exist_ok=True)
-    # Setup  rotating log file:
-    logFormatter = logging.Formatter(
-        "{asctime} {levelname} {module}.{funcName}.{lineno} {message}", style="{"
-    )
+    # Setup rotating log file:
+    logFormatter = logging.Formatter(LOG_FORMAT, style="{")
     fileHandler = logging.handlers.RotatingFileHandler(
         logs_dir + LOG_FILENAME, maxBytes=LOG_SIZE, backupCount=LOG_BACKUP_COUNT
     )
@@ -175,7 +177,13 @@ def setup_logging(logs_dir) -> None:
     consoleHandler = logging.StreamHandler()
     consoleHandler.setFormatter(logFormatter)
     logger.addHandler(consoleHandler)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(LOG_DEFAULT_LEVEL)
+
+    logging.captureWarnings(True)
+
+    # pydicom specific:
+    # TODO: ensure it reflects UX setting
+    pydicom_config.debug(LOG_DEFAULT_LEVEL == logging.DEBUG)
 
 
 def main():

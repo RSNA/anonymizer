@@ -1,7 +1,7 @@
 import string
 import tkinter as tk
 import customtkinter as ctk
-from CTkToolTip import *
+from CTkToolTip import CTkToolTip
 import netifaces
 import logging
 from utils.translate import _

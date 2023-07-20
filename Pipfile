@@ -13,6 +13,7 @@ netifaces = "*"
 ctktooltip = "*"
 pydicom = "*"
 pynetdicom = "*"
+ctklistbox = "*"
 
 [dev-packages]
 

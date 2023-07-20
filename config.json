@@ -5,6 +5,12 @@
         "aet": "RSNA"
     },
     "view.storage_dir": {
-        "storage_directory": "/Users/michaelevans/Downloads"
+        "storage_directory": "/Users/michaelevans/Downloads/Test"
+    },
+    "project": {
+        "SITEID": "SITE-9999",
+        "PROJECTNAME": "MY-PROJECT",
+        "TRIALNAME": "MY-TRIAL",
+        "UIDROOT": "1.2.826.0.1.3680043.10.474"
     }
 }

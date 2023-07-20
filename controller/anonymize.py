@@ -1,8 +1,7 @@
 from ast import Tuple
 import logging
+import project
 from pydicom import dcmread, Dataset
-
-logger = logging.getLogger(__name__)
 
 _tag_ops = {}
 _tag_keep = {}
