@@ -14,6 +14,7 @@ ctktooltip = "*"
 pydicom = "*"
 pynetdicom = "*"
 ctklistbox = "*"
+pandastable = "*"
 
 [dev-packages]
 

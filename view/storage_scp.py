@@ -1,13 +1,13 @@
 import string
-import tkinter as tk
 import customtkinter as ctk
 from CTkToolTip import CTkToolTip
-import netifaces
 import logging
 from utils.translate import _
 import utils.config as config
 import controller.dicom_storage_scp as dicom_storage_scp
 from view.storage_dir import storage_directory
+from utils.network import get_local_ip_addresses
+from utils.ux_verify import validate_entry, int_entry_change, str_entry_change
 
 logger = logging.getLogger(__name__)
 
@@ -22,55 +22,6 @@ settings = config.load(__name__)
 globals().update(settings)
 
 
-def _get_local_ip_addresses():
-    ip_addresses = []
-    interfaces = netifaces.interfaces()
-    for interface in interfaces:
-        addresses = netifaces.ifaddresses(interface)
-        if netifaces.AF_INET in addresses:
-            for address_info in addresses[netifaces.AF_INET]:
-                ip_address = address_info["addr"]
-                ip_addresses.append(ip_address)
-    return ip_addresses
-
-
-# Entry field callback functions for validating user input and saving to config.json:
-# TODO: Move these to utils.py
-def validate_entry(final_value: str, allowed_chars: str, max: str):
-    # BUG: max is always a string, so convert to int
-    if len(final_value) > int(max):
-        return False
-    for char in final_value:
-        if char not in allowed_chars:
-            return False
-    return True
-
-
-def int_entry_change(
-    event: tk.Event, var: ctk.IntVar, min: int, max: int, config_name: str
-) -> None:
-    try:
-        value = var.get()
-    except:
-        value = 0
-    if value > max:
-        var.set(max)
-    elif value < min:
-        var.set(min)
-    config.save(__name__, config_name, var.get())
-
-
-def str_entry_change(
-    event: tk.Event, var: ctk.StringVar, min_len: int, max_len: int, config_name: str
-) -> None:
-    value = var.get()
-    if len(value) > max_len:
-        var.set(value[:max_len])
-    elif len(value) < min_len:
-        var.set(value[:min_len])
-    config.save(__name__, config_name, var.get())
-
-
 def create_view(view: ctk.CTkFrame):
     PAD = 10
     logger.info(f"Creating Configure DICOM Storage SCP View")
@@ -80,15 +31,15 @@ def create_view(view: ctk.CTkFrame):
     view.grid_rowconfigure(1, weight=1)
     view.grid_columnconfigure(5, weight=1)
 
-    local_ips = _get_local_ip_addresses()
+    local_ips = get_local_ip_addresses()
     if local_ips:
         logger.info(f"Local IP addresses: {local_ips}")
     else:
         local_ips = [_("No local IP addresses found.")]
         logger.error(local_ips[0])
 
-    dicom_scp_label = ctk.CTkLabel(view, text=_("DICOM Storage SCP:"))
-    dicom_scp_label.grid(row=0, column=0, pady=(PAD, 0), sticky="nw")
+    scp_label = ctk.CTkLabel(view, text=_("DICOM Storage SCP:"))
+    scp_label.grid(row=0, column=0, pady=(PAD, 0), sticky="nw")
 
     # IP Address:
     ip_var = ctk.StringVar(view, value=ip_addr)
@@ -101,7 +52,7 @@ def create_view(view: ctk.CTkFrame):
     )
     ip_ToolTip = CTkToolTip(
         local_ips_optionmenu,
-        message=_("Local IP address to listen on for incoming DICOM files."),
+        message=_("Local IP address to listen on for incoming DICOM files"),
     )
     local_ips_optionmenu.grid(row=0, column=1, pady=(PAD, 0), padx=PAD, sticky="nw")
 
@@ -126,7 +77,7 @@ def create_view(view: ctk.CTkFrame):
         ),
     )
     entry_callback = lambda event: int_entry_change(
-        event, port_var, ip_port_min, ip_port_max, "ip_port"
+        event, port_var, ip_port_min, ip_port_max, __name__, "ip_port"
     )
     port_entry.bind("<Return>", entry_callback)
     port_entry.bind("<FocusOut>", entry_callback)
@@ -157,7 +108,7 @@ def create_view(view: ctk.CTkFrame):
         ),
     )
     entry_callback = lambda event: str_entry_change(
-        event, aet_var, aet_min_chars, aet_max_chars, "aet"
+        event, aet_var, aet_min_chars, aet_max_chars, __name__, "aet"
     )
     aet_entry.bind("<Return>", entry_callback)
     aet_entry.bind("<FocusOut>", entry_callback)

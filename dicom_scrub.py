@@ -12,6 +12,7 @@ import view.help as help
 import view.storage_dir as storage_dir
 import view.storage_scp as storage_scp
 import view.select_local_files as select_local_files
+import view.query_scp as query_scp
 import controller.dicom_storage_scp as dicom_storage_scp
 
 LOGS_DIR = "/logs/"
@@ -24,8 +25,8 @@ LOG_FORMAT = "{asctime} {levelname} {module}.{funcName}.{lineno} {message}"
 logger = logging.getLogger()  # get root logger
 
 APP_TITLE = _("DICOM Anonymizer Version 17")
-APP_MIN_WIDTH = 1000
-APP_MIN_HEIGHT = 600
+APP_MIN_WIDTH = 1200
+APP_MIN_HEIGHT = 800
 __version__ = "17.1.0.1"
 LOGO_WIDTH = 75
 LOGO_HEIGHT = 20
@@ -75,6 +76,8 @@ class TabViewNested(ctk.CTkTabview):
                 storage_scp.create_view(tabview)
             elif tab == SELECT_LOCAL_FILES_VIEW:
                 select_local_files.create_view(tabview)
+            elif tab == QUERY_SCP_STORAGE_VIEW:
+                query_scp.create_view(tabview)
 
 
 class TabViewMain(ctk.CTkTabview):
