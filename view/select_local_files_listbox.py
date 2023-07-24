@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-from xmlrpc.server import DocXMLRPCRequestHandler
 from pydicom.misc import is_dicom
 from typing import Sequence
 import customtkinter as ctk
@@ -12,7 +11,7 @@ from pydicom import dcmread, config
 from controller.anonymize import anonymize_dataset
 from utils.translate import _
 from view.storage_dir import storage_directory
-import project
+import model.project as project
 
 logger = logging.getLogger(__name__)
 

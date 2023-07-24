@@ -21,5 +21,11 @@
     },
     "utils.ux_verify": {
         "scp_ip_port": 104
+    },
+    "model.project": {
+        "SITEID": "DEFAULT-SITE",
+        "PROJECTNAME": "DEFAULT-PROJECT",
+        "TRIALNAME": "DEFAULT-TRIAL",
+        "UIDROOT": "1.2.826.0.1.3680043.10.474"
     }
 }

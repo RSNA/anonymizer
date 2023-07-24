@@ -5,7 +5,7 @@
       "name": "DICOM SCRUB",
       "type": "python",
       "request": "launch",
-      "program": "dicom_scrub.py",
+      "program": "anonymizer.py",
       "console": "integratedTerminal",
       "justMyCode": true
     }

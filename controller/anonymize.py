@@ -1,6 +1,6 @@
 from ast import Tuple
 import logging
-import project
+import model.project as project
 from pydicom import dcmread, Dataset
 
 _tag_ops = {}

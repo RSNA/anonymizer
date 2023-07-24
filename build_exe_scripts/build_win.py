@@ -3,7 +3,7 @@
 # pipenv shell
 # python build_win.py
 
-from dicom_scrub import __version__
+from anonymizer import __version__
 
 import pyinstaller_versionfile
 import PyInstaller.__main__
@@ -17,9 +17,9 @@ if __name__ == "__main__":
         version=__version__,
         company_name="Radiology Society of North America",
         file_description="RSNA DICOM Anonymizer & Scrubber",
-        internal_name="dicom_scrub",
+        internal_name="anonymizer",
         legal_copyright="© Radiology Society of North America. All rights reserved.",
-        original_filename="dicom_scrub.exe",
+        original_filename="anonymizer.exe",
         product_name="DICOM Anonymizer",
     )
 
@@ -43,6 +43,6 @@ if __name__ == "__main__":
             "versionfile.txt",
             "--name",
             "DICOM Anonymizer",
-            "dicom_scrub.py",
+            "anonymizer.py",
         ]
     )
