@@ -15,6 +15,7 @@ pydicom = "*"
 pynetdicom = "*"
 ctklistbox = "*"
 pandastable = "*"
+pytest = "*"
 
 [dev-packages]
 

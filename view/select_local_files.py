@@ -13,6 +13,13 @@ from utils.translate import _
 from view.storage_dir import storage_directory
 import model.project as project
 
+# The following unused imports are for pyinstaller
+# TODO: pyinstaller cmd line special import doesn't work
+from pydicom.encoders import (
+    pylibjpeg,
+    gdcm,
+)
+
 logger = logging.getLogger(__name__)
 
 file_extension_filters = [

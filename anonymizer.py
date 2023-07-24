@@ -5,6 +5,7 @@ import logging
 import logging.handlers
 from utils.translate import _
 from pydicom import config as pydicom_config
+from __version__ import __version__
 
 # All UX View Modules:
 import view.welcome as welcome
@@ -16,7 +17,7 @@ import view.query_scp as query_scp
 import controller.dicom_storage_scp as dicom_storage_scp
 
 LOGS_DIR = "/logs/"
-LOG_FILENAME = "dicom_scrub.log"
+LOG_FILENAME = "anonymizer.log"
 LOG_SIZE = 1024 * 1024
 LOG_BACKUP_COUNT = 10
 LOG_DEFAULT_LEVEL = logging.INFO
@@ -27,7 +28,6 @@ logger = logging.getLogger()  # get root logger
 APP_TITLE = _("DICOM Anonymizer Version 17")
 APP_MIN_WIDTH = 1200
 APP_MIN_HEIGHT = 800
-__version__ = "17.1.0.1"
 LOGO_WIDTH = 75
 LOGO_HEIGHT = 20
 PAD = 10
@@ -194,7 +194,7 @@ def main():
     setup_logging(install_dir + LOGS_DIR)
     os.chdir(install_dir)
 
-    logger.info("Starting DICOM ANONYMIZER GUI Version %s", __version__)
+    logger.info("Starting ANONYMIZER GUI Version %s", __version__)
     logger.info(f"Running from {os.getcwd()}")
 
     app = App(
@@ -214,7 +214,7 @@ def main():
         logger.info("Final shutdown: Stop DICOM C-STORE SCP and close socket")
         dicom_storage_scp.stop(True)
 
-    logger.info("DICOM ANONYMIZER GUI Stop.")
+    logger.info("ANONYMIZER GUI Stop.")
 
 
 if __name__ == "__main__":
