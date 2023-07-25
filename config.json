@@ -1,6 +1,6 @@
 {
     "view.storage_scp": {
-        "scp_autostart": false,
+        "scp_autostart": true,
         "ip_port": 1045,
         "aet": "RSNA"
     },
@@ -26,6 +26,10 @@
         "SITEID": "DEFAULT-SITE",
         "PROJECTNAME": "DEFAULT-PROJECT",
         "TRIALNAME": "DEFAULT-TRIAL",
-        "UIDROOT": "1.2.826.0.1.3680043.10.474"
+        "UIDROOT": "1.2.826.0.1.3680043.10.474",
+        "SITE_ID": "DEFAULT-SITE",
+        "PROJECT_NAME": "DEFAULT-PROJECT",
+        "TRIAL_NAME": "DEFAULT-TRIAL",
+        "UID_ROOT": "1.2.826.0.1.3680043.10.474"
     }
 }

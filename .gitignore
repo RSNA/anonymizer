@@ -1,4 +1,5 @@
 *.DS_Store
+*.dcm
 *.pyc
 *.log
 .env
@@ -6,4 +7,5 @@
 build/*
 dist/*
 logs/*
+dicom/*
 ```

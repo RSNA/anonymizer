@@ -1,0 +1,76 @@
+RSNA-MIRC Public License
+
+1. RSNA MIRC Public License Version 2.0
+THIS LICENSE APPLIES TO ALL SOURCE CODE MODULES THAT CONTAIN THE NOTATION:
+This source software is released under the terms of the RSNA Public License.
+1. DEFINITIONS
+"Source Code Module" means a computer program source code file.
+"Original Module" means the original version of a Source Code Module as distributed
+by the Radiological Society of North America, Inc. ("RSNA").
+"Derivative Work" means any computer program, either in source or object form, which
+incorporates Original Modules in whole or in part.
+"Recipient" means anyone who receives Original Modules or Derivative Works under this
+Agreement.
+2. GRANT OF RIGHTS
+a. The RSNA hereby grants to each Recipient a non-exclusive, worldwide, royalty-free copyright license to use, reproduce, publicly display, publicly perform,
+and distribute Original Modules.
+b. The RSNA hereby grants to each Recipient a non-exclusive, worldwide, royalty-free copyright license to prepare Derivative Works and to publicly display,
+publicly perform, sell, distribute and sublicense such Derivative Works.
+c. Recipient understands that the RSNA provides no assurances that the Original
+Modules do not infringe the patent or other intellectual property rights of any
+other entity. The RSNA disclaims any liability to Recipients for claims brought
+by any other entity based on infringement of intellectual property rights or
+otherwise. As a condition to exercising the rights and licenses granted
+hereunder, each Recipient hereby assumes sole responsibility to secure any
+other intellectual property rights needed, if any. For example, if a third
+party patent license is required to allow Recipient to distribute the Original
+Modules or Derivative Works, it is Recipient's responsibility to acquire that
+license before distributing the Program.
+3. REQUIREMENTS
+A Recipient may choose to distribute Original Modules or Derivative works in source
+or object code form under its own license agreement, provided that it complies with
+the terms and conditions of this Agreement.
+When Derivative Works are made available in source code form, any unmodified Original
+Modules that are included must retain the copyright notice and the notation
+referencing this agreement. Any modified Original Modules must contain a notation
+identifying the developer of the Derivative Work in a manner that reasonably allows
+subsequent Recipients to identify the developer.
+4. COMMERCIAL DISTRIBUTION
+Commercial distributors of Derivative Works may accept certain responsibilities with
+respect to end users, business partners and the like. While this license is intended
+to facilitate the commercial use of Original Modules in Derivative Works, a 
+distributor who includes Original Modules in a commercial product offering must do so
+in a manner that does not create potential liability for the RSNA. Therefore, if a
+distributor ("Commercial Distributor") includes Original Modules in a commercial
+product offering, such Commercial Distributor hereby agrees to defend and indemnify
+the RSNA against any losses, damages and costs arising from claims, lawsuits and
+other legal actions brought by a third party against the RSNA to the extent caused by
+or based upon the acts or omissions of such Commercial Distributor in connection with
+its distribution of the Derivative Work in a commercial product offering.
+5. NO WARRANTY
+EXCEPT AS EXPRESSLY SET FORTH IN THIS AGREEMENT, THE ORIGINAL MODULES ARE PROVIDED ON
+AN "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR
+IMPLIED INCLUDING, WITHOUT LIMITATION, ANY WARRANTIES OR CONDITIONS OF TITLE, NONINFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE. Each Recipient is
+solely responsible for determining the appropriateness of using and distributing the
+Original Modules and assumes all risks associated with its exercise of rights under
+this Agreement, including but not limited to the risks and costs of programming
+errors, compliance with applicable laws, damage to or loss of data, programs or
+equipment, and unavailability or interruption of operations.
+6. DISCLAIMER OF LIABILITY
+EXCEPT AS EXPRESSLY SET FORTH IN THIS AGREEMENT, NO RECIPIENT SHALL HAVE ANY
+LIABILITY FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING WITHOUT LIMITATION LOST PROFITS), HOWEVER CAUSED AND ON ANY THEORY
+OF LIABILITY, WHETHER IN CONTRACT OR TORT (INCLUDING STRICT LIABILITY, NEGLIGENCE OR
+OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OR DISTRIBUTION OF THE ORIGINAL MODULES
+OR THE EXERCISE OF ANY RIGHTS GRANTED HEREUNDER, EVEN IF ADVISED OF THE POSSIBILITY
+OF SUCH DAMAGES.
+7. GENERAL
+If any provision of this Agreement is invalid or unenforceable under applicable law,
+it shall not affect the validity or enforceability of the remainder of the terms of
+this Agreement, and without further action by the parties hereto, such provision
+shall be reformed to the minimum extent necessary to make such provision valid and
+enforceable.
+This Agreement is governed by the laws of the State of Illinois and the intellectual
+property laws of the United States of America. No party to this Agreement may bring a
+legal action under this Agreement more than one year after the cause of action arose.
+Each party waives its rights to a jury trial in any resulting litigation. 

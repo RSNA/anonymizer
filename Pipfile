@@ -16,6 +16,7 @@ pynetdicom = "*"
 ctklistbox = "*"
 pandastable = "*"
 pytest = "*"
+ttkwidgets = "*"
 
 [dev-packages]
 

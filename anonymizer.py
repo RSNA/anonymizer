@@ -49,7 +49,7 @@ EXPORT_LOG_VIEW = _("Export Log")
 
 APP_TABS = {
     # _("About"): [WELCOME_VIEW, HELP_VIEW],
-    # _("Storage"): [SET_STORAGE_DIR_VIEW, CONFIGURE_STORAGE_SCP_VIEW],
+    _("Storage"): [SET_STORAGE_DIR_VIEW, CONFIGURE_STORAGE_SCP_VIEW],
     # _("Settings"): [ANONYMIZER_SCRIPT_VIEW, FILTER_SETTINGS_VIEW],
     _("Import"): [SELECT_LOCAL_FILES_VIEW, QUERY_SCP_STORAGE_VIEW],
     # _("Verify"): [PATIENT_INDEX_LIST_VIEW],
@@ -190,6 +190,7 @@ def setup_logging(logs_dir) -> None:
 
 
 def main():
+    # TODO: handle command line arguments, implement command line interface
     install_dir = os.path.dirname(os.path.realpath(__file__))
     setup_logging(install_dir + LOGS_DIR)
     os.chdir(install_dir)
@@ -197,8 +198,9 @@ def main():
     logger.info("Starting ANONYMIZER GUI Version %s", __version__)
     logger.info(f"Running from {os.getcwd()}")
 
+    # GUI
     app = App(
-        color_theme=install_dir + "/assets/rsna_color_scheme_font.json",
+        color_theme=install_dir + "/assets/themes/rsna_color_scheme_font.json",
         title=APP_TITLE,
         logo_file=install_dir + "/assets/images/rsna_logo_alpha.png",
         logo_width=LOGO_WIDTH,

@@ -66,6 +66,7 @@ def loghandler(textbox: ctk.CTkTextbox):
 
 # DICOM C-STORE scp event handler:
 def _handle_store(event: Event) -> int:
+    global destination_dir
     logger.info("_handle_store")
     remote = event.assoc.remote
     logger.info(remote)
@@ -94,6 +95,7 @@ def _handle_store(event: Event) -> int:
 
 def start(address, port, aet, storage_dir):
     global scp
+    global destination_dir
     logger.info("start")
     destination_dir = storage_dir
     ae = AE(aet)
@@ -114,7 +116,7 @@ def start(address, port, aet, storage_dir):
         return False
 
     logger.info(
-        f"DICOM C-STORE scp listening on {address}:{port}, with AE Title = {aet}"
+        f"DICOM C-STORE scp listening on {address}:{port}, with AE Title = {aet}, storing files in {storage_dir}"
     )
     return True
 

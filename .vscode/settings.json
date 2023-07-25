@@ -3,8 +3,7 @@
     "editor.defaultFormatter": "ms-python.black-formatter"
   },
   "python.formatting.provider": "none",
-  "cSpell.enableFiletypes": ["!json", "!python"],
-  "python.linting.pylintArgs": ["--additional-builtins", "_"],
+  "cSpell.enableFiletypes": ["!json", "!plaintext", "!python", "!script"],
   "python.testing.pytestArgs": ["tests"],
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true

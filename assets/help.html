@@ -5,9 +5,9 @@
 		<h1>Anonymizer Help</h1>
 	</div>
 	<a href="https://www.rsna.org/covid-19/covid-19-ricord">CLICK </a>
-	Anonymizer is a general-purpose stand-alone deidentification utility.
+	Anonymizer is a general-purpose stand-alone de-identification utility.
 	It imports images either from DICOM transfers or from external storage,
-	deidentifies them, and stores them in a local file structure.
+	de-identifies them, and stores them in a local file structure.
 
 	<p>The program runs on any computer that has Java 7 or better on it.
 
@@ -92,7 +92,7 @@
 		be used, for example, to select images on DICOM CDs or files that were
 		named by their SOPInstanceUIDs.
 
-	<p>The <b>Import</b> button starts the import and deidentification
+	<p>The <b>Import</b> button starts the import and de-identification
 		process. Which files are processed depends on whether a file or a directory is selected
 		in the Directory pane and on whether the <b>Include subdirectories</b> checkbox
 		is selected:
@@ -113,7 +113,7 @@
 		is located in the directory containing the program. To change the parent directory, click the
 		<b>Set Storage Directory</b> button, navigate to the desired directory, and click <b>Save</b>.
 		The currently selected output directory is shown in the header of the right pane. Clicking that text
-		repositions the directory tree in the left pane to point to the submisssions directory.
+		repositions the directory tree in the left pane to point to the submissions directory.
 
 	<p><b>The Export Tab</b>
 
@@ -184,7 +184,7 @@
 
 	<p><b>The Script Tab</b>
 
-	<p>The DICOM deidentification process is driven by a script file called "dicom-anonymizer.script" located in the
+	<p>The DICOM de-identification process is driven by a script file called "dicom-anonymizer.script" located in the
 		directory
 		containing the program. A default version is included in the installation.
 
@@ -197,7 +197,7 @@
 		http://mircwiki.rsna.org/index.php?title=The_CTP_DICOM_Anonymizer.
 
 	<p>Before beginning to import and process images, the first item in the script should be updated to reflect the site
-		identifier (SITEID). Unless special deidentification rules are required by the project, no other parts of the
+		identifier (SITEID). Unless special de-identification rules are required by the project, no other parts of the
 		script
 		need be modified.
 
@@ -227,29 +227,15 @@
 	<ul>
 		<li>The Anonymizer program was developed under the aegis of the Radiological Society of North America (RSNA).
 		</li>
-		<li>The CTP servlet container (CTP) was developed by the RSNA.</li>
-		<li>The DICOM library (dcm4che) was developed by the incomparable Gunter Zeilinger.</li>
-		<li>The CTP multipart library is a highly modified version of the COS library
-			developed by Jason Hunter.</li>
-		<li>The CTP database is based on the Apache JDBM module developed by Cees de Groot,
-			Alex Boisvert, and associated contributors.
-		<li>The Apache POI library was developed by the Apache Software Foundation.
 	</ul>
 	<h3>Licenses</h3>
 	<ul>
 		<li>The RSNA software is released under the RSNA Public License.
 			(See http://mirc.rsna.org/rsnapubliclicense.pdf)</li>
-		<li>The DICOM library (dcm4che) is released under the GNU Lesser Public license.
-			(See https://www.gnu.org/licenses/lgpl-3.0.en.html)</li>
-		<li>The original multipart library (COS) is released under the servlets.com license.
-			(http://www.servlets.com/cos/license.html)</li>
-		<li>The Apache POI library is licensed under the Apache 2.0 License.
-			(See https://www.apache.org/licenses/LICENSE-2.0)</li>
 	</ul>
 	<h3>Copyrights</h3>
 	<ul>
-		<li>CTP and MIRC are copyrighted 2001-2020 by the RSNA.</li>
-		<li>JDBM is copyrighted 2000-2001 by Cees de Groot, Alex Boisvert, and associated contributors.</li>
+		<li>CTP and MIRC are copyrighted 2001-2023 by the RSNA.</li>
 	</ul>
 </body>
 
