@@ -30,7 +30,7 @@ def init(script) -> bool:
 
 def anonymize_dataset(ds: Dataset) -> Dataset:
     # To create an anonymized dataset:
-    #   Get Anon_PatientName and Anon_PatientID for this patient
+    #   Get Anon_PatientName and Anon_PatientID for this patient from get_anon_patient()
     #   Iterate through each tag in _tag_keep and copy ds[tag] to the new dataset
     #   Iterate through each tag from _tags_ops and apply the relevant anonymization function on ds[tag]
     return ds

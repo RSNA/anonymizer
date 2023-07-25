@@ -1,13 +1,13 @@
 import os
 from pathlib import Path
-from pydicom import FileDataset
+from pydicom import Dataset
 
 
-def local_storage_path(base_dir: str, siteid: str, ds: FileDataset) -> Path:
+def local_storage_path(base_dir: str, siteid: str, ds: Dataset) -> Path:
     dest_path = Path(
         base_dir,
         siteid,
-        str(ds.PatientName),
+        str(ds.PatientName).replace(" ", "_").replace("^", "").replace("*", ""),
         "Study"
         + "-"
         + ds.Modality

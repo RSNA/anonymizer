@@ -20,7 +20,8 @@
         "scu_ip_addr": "127.0.0.1"
     },
     "utils.ux_verify": {
-        "scp_ip_port": 104
+        "scp_ip_port": 104,
+        "ip_port": 1045
     },
     "model.project": {
         "SITEID": "DEFAULT-SITE",

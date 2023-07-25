@@ -7,9 +7,15 @@ from pydicom.uid import UID
 from pydicom.filewriter import write_file_meta_info
 
 from pynetdicom._version import __version__ as pynetdicom_version
-from pynetdicom.events import Event, EVT_C_STORE
+
+from pynetdicom.events import Event, EVT_C_STORE, EVT_C_ECHO
 from pynetdicom.ae import ApplicationEntity as AE
-from pynetdicom.presentation import StoragePresentationContexts
+from pynetdicom.presentation import (
+    build_context,
+    StoragePresentationContexts,
+    VerificationPresentationContexts,
+)
+from pynetdicom._globals import ALL_TRANSFER_SYNTAXES
 
 from utils.translate import _
 from utils.storage import local_storage_path
@@ -33,6 +39,7 @@ def server_running():
 # https://dicom.nema.org/medical/dicom/current/output/chtml/part07/chapter_9.html#sect_9.1.1
 # https://pydicom.github.io/pynetdicom/stable/reference/generated/pynetdicom._handlers.doc_handle_store.html
 # Non-Service Class specific statuses - PS3.7 Annex C
+C_ECHO_SUCCESS = 0x0000
 C_STORE_SUCCESS = 0x0000
 C_STORE_NOT_AUTHORISED = 0x0124
 C_STORE_OUT_OF_RESOURCES = 0xA700
@@ -58,6 +65,7 @@ class TextBoxHandler(logging.Handler):
         self.text.see(ctk.END)
 
 
+# Install log handler for SCP Textbox:
 def loghandler(textbox: ctk.CTkTextbox):
     logger.info(
         f"loghandler pydicom version: {pydicom_version}, pynetdicom version: {pynetdicom_version}   "
@@ -69,34 +77,27 @@ def loghandler(textbox: ctk.CTkTextbox):
     logger.addHandler(ch)
 
 
-# DICOM C-STORE scp event handler:
+# DICOM C-ECHO Verification event handler (EVT_C_ECHO)
+def _handle_echo(event):
+    logger.debug("_handle_echo")
+    # TODO: Validate remote IP & AE Title
+    remote = event.assoc.remote
+    logger.info(f"C-ECHO from: {remote}")
+    return C_ECHO_SUCCESS
+
+
+# DICOM C-STORE scp event handler (EVT_C_STORE)):
 def _handle_store(event: Event) -> int:
     global destination_dir
-    logger.info("_handle_store")
-    remote = event.assoc.remote
-    logger.info(remote)
+    logger.debug("_handle_store")
     # TODO: Validate remote IP & AE Title
-    incoming_filename = Path(
-        destination_dir, event.request.AffectedSOPInstanceUID + ".dcm"  # type: ignore
-    )
-
-    # Read the DICOM file data from the request's *DataSet* parameter
-    # and decode it using the *decode* parameter (which is automatically
-    # set based on the presentation context's accepted transfer syntaxes)
-    ds = event.request.DataSet.decode()  # type: ignore
-
-    incoming_filename = local_storage_path(destination_dir, SITEID, ds)
-
-    logger.info(f"Save incoming DICOM file: {incoming_filename}")
-    with open(incoming_filename, "wb") as f:
-        # Write the preamble and prefix
-        f.write(b"\x00" * 128)
-        f.write(b"DICM")
-        # Encode and write the File Meta Information
-        write_file_meta_info(f, event.file_meta, enforce_standard=True)  # type: ignore
-        # Write the encoded dataset
-        f.write(event.request.DataSet.getvalue())  # type: ignore
-
+    remote = event.assoc.remote
+    ds = event.dataset
+    logger.debug(ds)
+    ds.file_meta = event.file_meta
+    filename = local_storage_path(destination_dir, SITEID, ds)
+    logger.info(f"C-STORE: {remote['ae_title']} => {filename}")
+    ds.save_as(filename, write_like_original=True)
     return C_STORE_SUCCESS
 
 
@@ -113,8 +114,9 @@ def start(address, port, aet, storage_dir):
         scp = ae.start_server(
             (address, port),
             block=False,
-            evt_handlers=[(EVT_C_STORE, _handle_store)],
-            contexts=StoragePresentationContexts,
+            evt_handlers=[(EVT_C_ECHO, _handle_echo), (EVT_C_STORE, _handle_store)],
+            # TODO: uncompressed TS by default, build contexts for compressed transfer syntaxes
+            contexts=VerificationPresentationContexts + StoragePresentationContexts,
         )
     except Exception as e:
         logger.error(

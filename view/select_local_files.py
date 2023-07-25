@@ -93,7 +93,7 @@ def anonymize_files(textbox: ctk.CTkTextbox, anonymize_button: ctk.CTkButton):
         dest_path = local_storage_path(storage_directory, project.SITEID, ds)
         ds.save_as(dest_path)
         textbox.delete("1.0", "2.0")
-        if i % 20 == 0:
+        if i % 10 == 0:
             textbox.master.update()
         logger.info(f"{file} => {dest_path}")
 
