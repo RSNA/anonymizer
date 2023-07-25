@@ -6,6 +6,7 @@ import utils.config as config
 
 logger = logging.getLogger(__name__)
 
+# Names and format of these vars for backward compatibility
 SITEID = "DEFAULT-SITE"
 PROJECTNAME = "DEFAULT-PROJECT"
 TRIALNAME = "DEFAULT-TRIAL"

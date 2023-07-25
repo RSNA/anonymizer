@@ -11,6 +11,11 @@ from pynetdicom.events import Event, EVT_C_STORE
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.presentation import StoragePresentationContexts
 
+from utils.translate import _
+from utils.storage import local_storage_path
+
+from model.project import SITEID, PROJECTNAME, TRIALNAME, UIDROOT
+
 logger = logging.getLogger(__name__)
 
 # Global var to hold storage directory passed to start():
@@ -78,7 +83,9 @@ def _handle_store(event: Event) -> int:
     # Read the DICOM file data from the request's *DataSet* parameter
     # and decode it using the *decode* parameter (which is automatically
     # set based on the presentation context's accepted transfer syntaxes)
-    dataset = event.request.DataSet.decode()  # type: ignore
+    ds = event.request.DataSet.decode()  # type: ignore
+
+    incoming_filename = local_storage_path(destination_dir, SITEID, ds)
 
     logger.info(f"Save incoming DICOM file: {incoming_filename}")
     with open(incoming_filename, "wb") as f:

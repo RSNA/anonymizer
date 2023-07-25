@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-from re import L
 from pydicom.misc import is_dicom
 from typing import Sequence
 import customtkinter as ctk
@@ -11,6 +10,7 @@ from pydicom import dcmread
 from controller.anonymize import anonymize_dataset
 from utils.translate import _
 from view.storage_dir import storage_directory
+from utils.storage import local_storage_path
 import model.project as project
 
 # The following unused imports are for pyinstaller
@@ -90,20 +90,7 @@ def anonymize_files(textbox: ctk.CTkTextbox, anonymize_button: ctk.CTkButton):
         ds = dcmread(file)
         anonymize_dataset(ds)
         # TODO: handle errors, send to quarantine, etc., try / except around ds.save_as() on critical error return
-        dest_path = Path(
-            storage_directory,
-            project.SITEID,
-            str(ds.PatientName),
-            "Study"
-            + "-"
-            + ds.Modality
-            + "-"
-            + str(ds.StudyDate),  # TODO: magic number at end
-            "Series" + "-" + str(ds.SeriesNumber),
-            "Image" + "-" + str(ds.InstanceNumber) + ".dcm",
-        )
-        # Ensure all directories in the path exist
-        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+        dest_path = local_storage_path(storage_directory, project.SITEID, ds)
         ds.save_as(dest_path)
         textbox.delete("1.0", "2.0")
         if i % 20 == 0:
