@@ -26,14 +26,14 @@ jobs:
       with:
           python-version: "3.11"
 
-    - name: Install pipenv
+    - name: Install pipenv for virtual environment
       run: |
           pip install pipenv
 
-    - name: Install dependencies
+    - name: Install dependencies including development dependencies
       run: |
           pipenv install --dev
     
-    - name: Test with pytest
+    - name: Run Unit Tests within pipenv with pytest
       run: |
-        pytest
+        pipenv run pytest
