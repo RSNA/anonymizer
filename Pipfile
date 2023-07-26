@@ -5,20 +5,18 @@ name = "pypi"
 
 [packages]
 customtkinter = "*"
-pyinstaller = "*"
 pillow = "*"
-pyinstaller-versionfile = "*"
 tkhtmlview = "*"
 netifaces = "*"
 ctktooltip = "*"
 pydicom = "*"
 pynetdicom = "*"
-ctklistbox = "*"
-pandastable = "*"
-pytest = "*"
 ttkwidgets = "*"
 
 [dev-packages]
+pyinstaller = "*"
+pyinstaller-versionfile = "*"
+pytest = "*"
 
 [requires]
 python_version = "3.11"
