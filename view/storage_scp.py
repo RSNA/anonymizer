@@ -5,7 +5,7 @@ import logging
 from utils.translate import _
 import utils.config as config
 import controller.dicom_storage_scp as dicom_storage_scp
-from view.storage_dir import storage_directory
+from view.storage_dir import get_storage_directory
 from utils.network import get_local_ip_addresses
 from utils.ux_verify import validate_entry, int_entry_change, str_entry_change
 
@@ -121,7 +121,7 @@ def create_view(view: ctk.CTkFrame):
         logger.info("scp_switch_event")
         if scp_var.get():
             if not dicom_storage_scp.start(
-                ip_var.get(), port_var.get(), aet_var.get(), storage_directory
+                ip_var.get(), port_var.get(), aet_var.get(), get_storage_directory()
             ):
                 scp_var.set(False)
         else:
@@ -163,5 +163,5 @@ def create_view(view: ctk.CTkFrame):
 
     # Handle SCP Server Autostart:
     if scp_autostart:
-        if dicom_storage_scp.start(ip_addr, ip_port, aet, storage_directory):
+        if dicom_storage_scp.start(ip_addr, ip_port, aet, get_storage_directory()):
             scp_var.set(True)

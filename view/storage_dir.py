@@ -10,6 +10,11 @@ import utils.config as config
 
 logger = logging.getLogger(__name__)
 
+
+def get_storage_directory():
+    return storage_directory
+
+
 # Initialize storage directory to user's home directory:
 storage_directory = os.path.expanduser("~")
 

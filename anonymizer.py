@@ -20,7 +20,7 @@ LOGS_DIR = "/logs/"
 LOG_FILENAME = "anonymizer.log"
 LOG_SIZE = 1024 * 1024
 LOG_BACKUP_COUNT = 10
-LOG_DEFAULT_LEVEL = logging.INFO
+LOG_DEFAULT_LEVEL = logging.WARN
 LOG_FORMAT = "{asctime} {levelname} {module}.{funcName}.{lineno} {message}"
 
 logger = logging.getLogger()  # get root logger

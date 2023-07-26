@@ -2,16 +2,10 @@
     "view.storage_scp": {
         "scp_autostart": true,
         "ip_port": 1045,
-        "aet": "RSNA"
+        "aet": "ANONSTORE"
     },
     "view.storage_dir": {
-        "storage_directory": "/Users/michaelevans/Downloads/Test"
-    },
-    "project": {
-        "SITEID": "SITE-9999",
-        "PROJECTNAME": "MY-PROJECT",
-        "TRIALNAME": "MY-TRIAL",
-        "UIDROOT": "1.2.826.0.1.3680043.10.474"
+        "storage_directory": "/Users/michaelevans/Downloads/RSNA_ANON_STORE/PYTHON_ANON_STORE"
     },
     "view.query_scp": {
         "ip_addr": "192.168.1.130",
@@ -24,13 +18,9 @@
         "ip_port": 1045
     },
     "model.project": {
-        "SITEID": "DEFAULT-SITE",
-        "PROJECTNAME": "DEFAULT-PROJECT",
-        "TRIALNAME": "DEFAULT-TRIAL",
-        "UIDROOT": "1.2.826.0.1.3680043.10.474",
-        "SITE_ID": "DEFAULT-SITE",
-        "PROJECT_NAME": "DEFAULT-PROJECT",
-        "TRIAL_NAME": "DEFAULT-TRIAL",
-        "UID_ROOT": "1.2.826.0.1.3680043.10.474"
+        "SITEID": "527408",
+        "PROJECTNAME": "MIDRC-RICORD",
+        "TRIALNAME": "MIDRC-RICORD",
+        "UIDROOT": "1.2.826.0.1.3680043.10.474"
     }
 }

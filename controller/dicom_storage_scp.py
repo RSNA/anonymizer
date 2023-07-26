@@ -11,11 +11,11 @@ from pynetdicom._version import __version__ as pynetdicom_version
 from pynetdicom.events import Event, EVT_C_STORE, EVT_C_ECHO
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.presentation import (
-    build_context,
     StoragePresentationContexts,
     VerificationPresentationContexts,
 )
 from pynetdicom._globals import ALL_TRANSFER_SYNTAXES
+from controller.anonymize import anonymize_dataset
 
 from utils.translate import _
 from utils.storage import local_storage_path
@@ -24,8 +24,6 @@ from model.project import SITEID, PROJECTNAME, TRIALNAME, UIDROOT
 
 logger = logging.getLogger(__name__)
 
-# Global var to hold storage directory passed to start():
-destination_dir = ""
 # Store scp instance after ae.start_server() is called:
 scp = None
 
@@ -87,36 +85,50 @@ def _handle_echo(event):
 
 
 # DICOM C-STORE scp event handler (EVT_C_STORE)):
-def _handle_store(event: Event) -> int:
+def _handle_store(event: Event, storage_dir) -> int:
     global destination_dir
     logger.debug("_handle_store")
     # TODO: Validate remote IP & AE Title
     remote = event.assoc.remote
     ds = event.dataset
-    logger.debug(ds)
     ds.file_meta = event.file_meta
-    filename = local_storage_path(destination_dir, SITEID, ds)
-    logger.info(f"C-STORE: {remote['ae_title']} => {filename}")
-    ds.save_as(filename, write_like_original=True)
+    logger.debug(remote)
+    logger.debug(ds)
+    filename = local_storage_path(storage_dir, SITEID, ds)
+    logger.info(
+        f"C-STORE [{ds.file_meta.TransferSyntaxUID}]: {remote['ae_title']} => {filename}"
+    )
+    ds = anonymize_dataset(ds)
+    try:
+        ds.save_as(filename, write_like_original=False)
+    except Exception as exception:
+        logger.error("Failed writing instance to storage directory")
+        logger.exception(exception)
+        return C_STORE_OUT_OF_RESOURCES
+
     return C_STORE_SUCCESS
 
 
 def start(address, port, aet, storage_dir):
     global scp
-    global destination_dir
     logger.info("start")
-    destination_dir = storage_dir
     ae = AE(aet)
     # Unlimited PDU size
     ae.maximum_pdu_size = 0
+    storage_sop_classes = [
+        cx.abstract_syntax
+        for cx in StoragePresentationContexts + VerificationPresentationContexts
+    ]
+    for uid in storage_sop_classes:
+        ae.add_supported_context(uid, ALL_TRANSFER_SYNTAXES)  # type: ignore
+
+    handlers = [(EVT_C_ECHO, _handle_echo), (EVT_C_STORE, _handle_store, [storage_dir])]
 
     try:
         scp = ae.start_server(
             (address, port),
             block=False,
-            evt_handlers=[(EVT_C_ECHO, _handle_echo), (EVT_C_STORE, _handle_store)],
-            # TODO: uncompressed TS by default, build contexts for compressed transfer syntaxes
-            contexts=VerificationPresentationContexts + StoragePresentationContexts,
+            evt_handlers=handlers,
         )
     except Exception as e:
         logger.error(

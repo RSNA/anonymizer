@@ -6,8 +6,9 @@ from pydicom import Dataset
 def local_storage_path(base_dir: str, siteid: str, ds: Dataset) -> Path:
     dest_path = Path(
         base_dir,
-        siteid,
-        str(ds.PatientName).replace(" ", "_").replace("^", "").replace("*", ""),
+        siteid
+        + "-"
+        + str(ds.PatientName).replace(" ", "_").replace("^", "").replace("*", ""),
         "Study"
         + "-"
         + ds.Modality
