@@ -14,8 +14,6 @@ pynetdicom = "*"
 ttkwidgets = "*"
 
 [dev-packages]
-pyinstaller = "*"
-pyinstaller-versionfile = "*"
 pytest = "*"
 
 [requires]
