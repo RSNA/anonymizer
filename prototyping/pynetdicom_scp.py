@@ -10,6 +10,8 @@ from pynetdicom.presentation import (
 )
 from pynetdicom._globals import ALL_TRANSFER_SYNTAXES
 
+from ..utils.storage import local_storage_path
+
 debug_logger()
 
 
@@ -19,12 +21,12 @@ def handle_store(event, storage_dir):
     except:
         return 0xC001
 
-    # We rely on the UID from the C-STORE request instead of decoding
-    fname = os.path.join(storage_dir, event.request.AffectedSOPInstanceUID)
+    # os.path.join(storage_dir, event.request.AffectedSOPInstanceUID)
 
     remote = event.assoc.remote
     ds = event.dataset
     ds.file_meta = event.file_meta
+    fname = local_storage_path(storage_dir, "527408", ds)
     ds.save_as(fname, write_like_original=False)
 
     # with open(fname, "wb") as f:
@@ -38,7 +40,13 @@ def handle_store(event, storage_dir):
     return 0x0000
 
 
-handlers = [(EVT_C_STORE, handle_store, ["out"])]
+handlers = [
+    (
+        EVT_C_STORE,
+        handle_store,
+        ["/Users/michaelevans/Downloads/RSNA_ANON_STORE/PYTHON_ANON_STORE"],
+    )
+]
 
 ae = AE("ANONSTORE")
 storage_sop_classes = [
