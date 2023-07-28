@@ -22,5 +22,11 @@
         "PROJECTNAME": "MIDRC-RICORD",
         "TRIALNAME": "MIDRC-RICORD",
         "UIDROOT": "1.2.826.0.1.3680043.10.474"
+    },
+    "view.new_open_project": {
+        "projectname": "MIDRC-RICORD",
+        "siteid": "527408",
+        "trialname": "MIDRC-RICORD$$",
+        "uidroot": "1.2.826.0.1.3680043."
     }
 }

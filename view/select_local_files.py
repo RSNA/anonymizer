@@ -3,7 +3,7 @@ from pathlib import Path
 from pydicom.misc import is_dicom
 from typing import Sequence
 import customtkinter as ctk
-from tkinter import Tk, filedialog
+from tkinter import filedialog
 from CTkToolTip import CTkToolTip
 import logging
 from pydicom import dcmread

@@ -16,6 +16,7 @@ UIDROOT = "1.2.826.0.1.3680043.10.474"
 # Load module globals from config.json
 settings = config.load(__name__)
 globals().update(settings)
+
 config.save(__name__, "SITEID", SITEID)
 config.save(__name__, "PROJECTNAME", PROJECTNAME)
 config.save(__name__, "TRIALNAME", TRIALNAME)
