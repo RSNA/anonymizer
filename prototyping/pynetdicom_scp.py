@@ -10,7 +10,7 @@ from pynetdicom.presentation import (
 )
 from pynetdicom._globals import ALL_TRANSFER_SYNTAXES
 
-from ..utils.storage import local_storage_path
+from utils.storage import local_storage_path
 
 debug_logger()
 
@@ -47,7 +47,8 @@ handlers = [
         ["/Users/michaelevans/Downloads/RSNA_ANON_STORE/PYTHON_ANON_STORE"],
     )
 ]
-
+install_dir = os.path.dirname(os.path.realpath(__file__))
+os.chdir(install_dir)
 ae = AE("ANONSTORE")
 storage_sop_classes = [
     cx.abstract_syntax

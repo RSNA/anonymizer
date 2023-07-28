@@ -1,0 +1,26 @@
+R&D Review Meeting 28 July 2023, 9AM CST
+
+Presenter: 
+    Michael Evans
+
+Attendees: 
+    Chris Carr
+    Jon Ludwig
+    Maryam Vazirabad
+    Adam Flanders
+
+AGENDA
+
+1. Design Goals
+    - Functional Equivalence
+    - Leverage Open Source
+    - Better Performance
+    - Web-based development path, GUI and execution
+    - No PHI on disk
+
+2. DICOM Libraries choice
+3. GUI choice
+3. Python / pynetdicom performance test & acceptance text
+4. CI/CD Github with pytest on 3 x OS
+6. Prototype python Anonymizer demo
+7. Questions
