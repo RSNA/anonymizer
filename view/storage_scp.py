@@ -7,7 +7,15 @@ import utils.config as config
 import controller.dicom_storage_scp as dicom_storage_scp
 from view.storage_dir import get_storage_directory
 from utils.network import get_local_ip_addresses
-from utils.ux_verify import validate_entry, int_entry_change, str_entry_change
+from utils.ux_verify import (
+    validate_entry,
+    int_entry_change,
+    str_entry_change,
+    aet_max_chars,
+    aet_min_chars,
+    ip_port_max,
+    ip_port_min,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +65,6 @@ def create_view(view: ctk.CTkFrame):
     local_ips_optionmenu.grid(row=0, column=1, pady=(PAD, 0), padx=PAD, sticky="nw")
 
     # IP Port:
-    ip_port_min = 104
-    ip_port_max = 65535
     ip_port_max_chars = len(str(ip_port_max))
     port_label = ctk.CTkLabel(view, text=_("Port:"))
     port_label.grid(row=0, column=2, pady=(PAD, 0), sticky="nw")
@@ -86,8 +92,6 @@ def create_view(view: ctk.CTkFrame):
     # AET:
     aet_label = ctk.CTkLabel(view, text=_("AET:"))
     aet_label.grid(row=0, column=4, pady=(PAD, 0), sticky="nw")
-    aet_min_chars = 3
-    aet_max_chars = 16
     aet_var = ctk.StringVar(view, value=aet)
     aet_entry = ctk.CTkEntry(
         view,
@@ -125,8 +129,7 @@ def create_view(view: ctk.CTkFrame):
             ):
                 scp_var.set(False)
         else:
-            if not dicom_storage_scp.stop():
-                scp_var.set(True)
+            dicom_storage_scp.stop()
 
     scp_switch = ctk.CTkSwitch(
         view,
@@ -158,7 +161,7 @@ def create_view(view: ctk.CTkFrame):
         view,
         wrap="none",
     )
-    dicom_storage_scp.loghandler(scp_log)
+    dicom_storage_scp.install_loghandler(scp_log)
     scp_log.grid(row=1, columnspan=8, sticky="nswe")
 
     # Handle SCP Server Autostart:

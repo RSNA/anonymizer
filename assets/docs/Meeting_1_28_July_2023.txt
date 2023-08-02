@@ -1,13 +1,16 @@
-R&D Review Meeting 28 July 2023, 9AM CST
+R&D Review Meeting 28 July 2023, 9AM-1040AM CST
 
 Presenter: 
-    Michael Evans
+    Michael Evans (Algorhythm Software)
 
 Attendees: 
-    Chris Carr
-    Jon Ludwig
-    Maryam Vazirabad
-    Adam Flanders
+    Chris Carr (RSNA)
+    Jon Ludwig (RSNA)
+    Maryam Vazirabad (RSNA)
+    Thomas O' Sullivan (RSNA)
+    Jason Sho (RSNA)
+    Adam Flanders (Thomas Jefferson University Hospital)
+    George Shih (Weill Cornell Medical College)
 
 AGENDA
 

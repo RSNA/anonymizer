@@ -22,7 +22,7 @@ LOGS_DIR = "/logs/"
 LOG_FILENAME = "anonymizer.log"
 LOG_SIZE = 1024 * 1024
 LOG_BACKUP_COUNT = 10
-LOG_DEFAULT_LEVEL = logging.WARN
+LOG_DEFAULT_LEVEL = logging.INFO
 LOG_FORMAT = "{asctime} {levelname} {module}.{funcName}.{lineno} {message}"
 
 logger = logging.getLogger()  # get root logger
@@ -72,12 +72,12 @@ class TabViewNested(ctk.CTkTabview):
                 welcome.create_view(tabview)
             # elif tab == HELP_VIEW:
             #     help.create_view(tabview)
-            # elif tab == SET_STORAGE_DIR_VIEW:
-            #     storage_dir.create_view(tabview, tab)
-            # elif tab == CONFIGURE_STORAGE_SCP_VIEW:
-            #     storage_scp.create_view(tabview)
-            # elif tab == SELECT_LOCAL_FILES_VIEW:
-            #     select_local_files.create_view(tabview)
+            elif tab == SET_STORAGE_DIR_VIEW:
+                storage_dir.create_view(tabview, tab)
+            elif tab == CONFIGURE_STORAGE_SCP_VIEW:
+                storage_scp.create_view(tabview)
+            elif tab == SELECT_LOCAL_FILES_VIEW:
+                select_local_files.create_view(tabview)
             # elif tab == QUERY_SCP_STORAGE_VIEW:
             #     query_scp.create_view(tabview)
 
@@ -119,15 +119,13 @@ class App(ctk.CTk):
         super().__init__()
 
         ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
-        # sets all colors and default font:
-        ctk.set_default_color_theme(color_theme)
+        ctk.set_default_color_theme(color_theme)  # colors and default font
 
         self.geometry(f"{APP_MIN_WIDTH}x{APP_MIN_HEIGHT}")
-        self.minsize(800, 600)  # width, height
+        self.minsize(APP_MIN_WIDTH, APP_MIN_HEIGHT)  # width, height
         self.font = ctk.CTkFont()  # get default font as defined in json file
         self.title(title)
         self.title_height = self.font.metrics("linespace")
-        # self.rowconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
         self.columnconfigure(0, weight=1)
 

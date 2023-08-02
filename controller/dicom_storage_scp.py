@@ -1,11 +1,9 @@
 import logging
 from pathlib import Path
+from typing import final
 import customtkinter as ctk
 
 from pydicom._version import __version__ as pydicom_version
-from pydicom.uid import UID
-from pydicom.filewriter import write_file_meta_info
-
 from pynetdicom._version import __version__ as pynetdicom_version
 
 from pynetdicom.events import Event, EVT_C_STORE, EVT_C_ECHO
@@ -19,6 +17,7 @@ from controller.anonymize import anonymize_dataset
 
 from utils.translate import _
 from utils.storage import local_storage_path
+from utils.network import get_network_timeout
 
 from model.project import SITEID, PROJECTNAME, TRIALNAME, UIDROOT
 
@@ -28,6 +27,7 @@ logger = logging.getLogger(__name__)
 scp = None
 
 
+# Is SCP running?
 def server_running():
     global scp
     return scp is not None
@@ -37,6 +37,7 @@ def server_running():
 # https://dicom.nema.org/medical/dicom/current/output/chtml/part07/chapter_9.html#sect_9.1.1
 # https://pydicom.github.io/pynetdicom/stable/reference/generated/pynetdicom._handlers.doc_handle_store.html
 # Non-Service Class specific statuses - PS3.7 Annex C
+# TODO: trim error codes to those relevant to C-STORE and C-ECHO
 C_ECHO_SUCCESS = 0x0000
 C_STORE_SUCCESS = 0x0000
 C_STORE_NOT_AUTHORISED = 0x0124
@@ -64,19 +65,28 @@ class TextBoxHandler(logging.Handler):
 
 
 # Install log handler for SCP Textbox:
-def loghandler(textbox: ctk.CTkTextbox):
+def install_loghandler(textbox: ctk.CTkTextbox) -> None:
+    global handler
+    handler = TextBoxHandler(textbox)
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
     logger.info(
         f"loghandler pydicom version: {pydicom_version}, pynetdicom version: {pynetdicom_version}   "
     )
-    ch = TextBoxHandler(textbox)
-    ch.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
+
+
+def remove_loghandler():
+    global handler
+    if handler is not None:
+        logger.removeHandler(handler)
+        handler.close()  # Close the handler if it's using any resources
+        handler = None
 
 
 # DICOM C-ECHO Verification event handler (EVT_C_ECHO)
-def _handle_echo(event):
+def _handle_echo(event: Event) -> int:
     logger.debug("_handle_echo")
     # TODO: Validate remote IP & AE Title
     remote = event.assoc.remote
@@ -109,12 +119,19 @@ def _handle_store(event: Event, storage_dir) -> int:
     return C_STORE_SUCCESS
 
 
-def start(address, port, aet, storage_dir):
+# Start SCP:
+def start(address, port, aet, storage_dir) -> bool:
     global scp
     logger.info("start")
+
+    if server_running():
+        logger.error("DICOM C-STORE scp is already running")
+        return False
+
     ae = AE(aet)
     # Unlimited PDU size
     ae.maximum_pdu_size = 0
+    ae.network_timeout = get_network_timeout()
     storage_sop_classes = [
         cx.abstract_syntax
         for cx in StoragePresentationContexts + VerificationPresentationContexts
@@ -142,11 +159,12 @@ def start(address, port, aet, storage_dir):
     return True
 
 
-def stop(final_shutdown=False):
+# Stop SCP:
+def stop(final_shutdown=False) -> None:
     global scp
-    if scp is not None:
-        if not final_shutdown:
-            logger.info("User initiated: Stop DICOM C-STORE scp and close socket")
-        scp.shutdown()
-        scp = None
-    return True
+    if not final_shutdown:
+        logger.info("User initiated: Stop DICOM C-STORE scp and close socket")
+    if not scp:
+        return
+    scp.shutdown()
+    scp = None

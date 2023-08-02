@@ -1,6 +1,6 @@
 {
     "view.storage_scp": {
-        "scp_autostart": true,
+        "scp_autostart": false,
         "ip_port": 1045,
         "aet": "ANONSTORE"
     },
@@ -9,13 +9,10 @@
     },
     "view.query_scp": {
         "ip_addr": "192.168.1.130",
-        "scu_aet": "ANONSCU",
-        "scp_aet": "RSNA222",
-        "scu_ip_addr": "127.0.0.1"
-    },
-    "utils.ux_verify": {
-        "scp_ip_port": 104,
-        "ip_port": 1045
+        "scu_aet": "RSNA",
+        "scp_aet": "MDEDEV",
+        "scu_ip_addr": "127.0.0.1",
+        "scp_ip_port": 11112
     },
     "model.project": {
         "SITEID": "527408",
@@ -26,7 +23,7 @@
     "view.new_open_project": {
         "projectname": "MIDRC-RICORD",
         "siteid": "527408",
-        "trialname": "MIDRC-RICORD$$",
+        "trialname": "MIDRC-RICORD",
         "uidroot": "1.2.826.0.1.3680043."
     }
 }

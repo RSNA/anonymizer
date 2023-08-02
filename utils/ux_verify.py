@@ -2,6 +2,14 @@ import utils.config as config
 import tkinter as tk
 import customtkinter as ctk
 
+# Entry limits:
+ip_min_chars = 7
+ip_max_chars = 15
+aet_min_chars = 3
+aet_max_chars = 16
+ip_port_min = 104
+ip_port_max = 65535
+
 
 # Entry field callback functions for validating user input and saving to config.json:
 def validate_entry(final_value: str, allowed_chars: str, max: str):
@@ -30,7 +38,7 @@ def int_entry_change(
         var.set(max)
     elif value < min:
         var.set(min)
-    config.save(__name__, config_name, var.get())
+    config.save(module_name, config_name, var.get())
 
 
 def str_entry_change(
