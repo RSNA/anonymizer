@@ -19,7 +19,7 @@ import view.query_scp as query_scp
 # To ensure DICOM C-STORE SCP is stopped and socket is closed on exit:
 import controller.dicom_storage_scp as dicom_storage_scp
 
-APP_TITLE = _("DICOM Anonymizer Version 17")
+APP_TITLE = _("RSNA DICOM Anonymizer Version 17")
 APP_MIN_WIDTH = 1200
 APP_MIN_HEIGHT = 800
 LOGO_WIDTH = 75
@@ -42,13 +42,13 @@ IMPORT_LOG_VIEW = _("Import Log")
 EXPORT_LOG_VIEW = _("Export Log")
 
 APP_TABS = {
-    _("About"): [WELCOME_VIEW, HELP_VIEW],
-    _("Storage"): [SET_STORAGE_DIR_VIEW, CONFIGURE_STORAGE_SCP_VIEW],
-    _("Settings"): [ANONYMIZER_SCRIPT_VIEW, FILTER_SETTINGS_VIEW],
+    # _("About"): [WELCOME_VIEW, HELP_VIEW],
+    # _("Storage"): [SET_STORAGE_DIR_VIEW, CONFIGURE_STORAGE_SCP_VIEW],
+    # _("Settings"): [ANONYMIZER_SCRIPT_VIEW, FILTER_SETTINGS_VIEW],
     _("Import"): [SELECT_LOCAL_FILES_VIEW, QUERY_SCP_STORAGE_VIEW],
-    _("Verify"): [PATIENT_INDEX_LIST_VIEW],
-    _("Export"): [EXPORT_TO_SCP_STORAGE_VIEW, EXPORT_TO_AWS_VIEW],
-    _("Admin"): [IMPORT_LOG_VIEW, EXPORT_LOG_VIEW],
+    # _("Verify"): [PATIENT_INDEX_LIST_VIEW],
+    # _("Export"): [EXPORT_TO_SCP_STORAGE_VIEW, EXPORT_TO_AWS_VIEW],
+    # _("Admin"): [IMPORT_LOG_VIEW, EXPORT_LOG_VIEW],
 }
 
 
@@ -62,8 +62,8 @@ class TabViewNested(ctk.CTkTabview):
             # instead of calling create_view, automatically call the create_view function in the view module when initialised via importlib
             if tab == WELCOME_VIEW:
                 welcome.create_view(tabview)
-            # elif tab == HELP_VIEW:
-            #     help.create_view(tabview)
+            elif tab == HELP_VIEW:
+                help.create_view(tabview)
             elif tab == SET_STORAGE_DIR_VIEW:
                 storage_dir.create_view(tabview, tab)
             elif tab == CONFIGURE_STORAGE_SCP_VIEW:

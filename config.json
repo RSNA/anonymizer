@@ -25,5 +25,15 @@
         "siteid": "527408",
         "trialname": "MIDRC-RICORD",
         "uidroot": "1.2.826.0.1.3680043."
+    },
+    "!ctkframe2": {
+        "Patient Name": ""
+    },
+    "!ctkframe": {
+        "Patient Name": "",
+        "Patient Name:": "",
+        "Patient ID:": "",
+        "Accession No.:": "",
+        "Study Date:": ""
     }
 }

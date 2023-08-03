@@ -9,17 +9,25 @@ from utils.ux_verify import (
     validate_entry,
     int_entry_change,
     str_entry_change,
+    str_entry,
     ip_min_chars,
     ip_max_chars,
     aet_max_chars,
     aet_min_chars,
     ip_port_max,
     ip_port_min,
+    patient_name_max_chars,
+    patient_id_max_chars,
+    accession_no_max_chars,
+    dicom_date_chars,
+    modality_max_chars,
+    modality_min_chars,
 )
 from utils.logging import install_loghandler
 
 # import controller.dicom_QR_find_scu as dicom_QR_find_scu
 import controller.dicom_echo_scu as dicom_echo_scu
+
 
 logger = logging.getLogger(__name__)
 
@@ -36,13 +44,13 @@ globals().update(settings)
 
 
 def create_view(view: ctk.CTkFrame):
-    PAD = 10
+    PAD = 5
     logger.info(f"Creating Configure DICOM Query/Retrieve SCU View")
     char_width_px = ctk.CTkFont().measure("A")
     digit_width_px = ctk.CTkFont().measure("9")
     validate_entry_cmd = view.register(validate_entry)
     logger.info(f"Font Character Width in pixels: ±{char_width_px}")
-    view.grid_rowconfigure(1, weight=1)
+    view.grid_rowconfigure(2, weight=1)
     view.grid_columnconfigure(6, weight=1)
 
     local_ips = get_local_ip_addresses()
@@ -52,7 +60,7 @@ def create_view(view: ctk.CTkFrame):
         local_ips = [_("No local IP addresses found")]
         logger.error(local_ips[0])
 
-    # SCP UX variables:
+    # SCP & SCU UX variables:
     scp_ip_var = ctk.StringVar(view, value=scp_ip_addr)
     scp_port_var = ctk.IntVar(view, value=scp_ip_port)
     scp_aet_var = ctk.StringVar(view, value=scp_aet)
@@ -206,6 +214,99 @@ def create_view(view: ctk.CTkFrame):
     scu_aet_entry.bind("<FocusOut>", entry_callback)
     scu_aet_entry.grid(row=0, column=10, pady=(PAD, 0), padx=PAD, sticky="nw")
 
+    # QUERY PARAMETERS:
+    # Create new frame
+    query_param_frame = ctk.CTkFrame(view)
+    # query_param_frame.grid_rowconfigure(0, weight=1)
+    # query_param_frame.grid_columnconfigure(0, weight=1)
+    query_param_frame.grid(row=1, pady=(PAD, 0), columnspan=11, sticky="nswe")
+    # Patient Name
+    patient_name_var = ctk.StringVar(view)
+    str_entry(
+        query_param_frame,
+        patient_name_var,
+        validate_entry_cmd,
+        char_width_px,
+        label=_("Patient Name:"),
+        min_chars=0,
+        max_chars=patient_name_max_chars,
+        charset=string.ascii_letters + string.digits + "*",
+        tooltipmsg="Alpha-numeric, * for wildcard",
+        row=0,
+        col=0,
+        pad=PAD,
+        sticky="nw",
+    )
+    # Patient ID
+    patient_id_var = ctk.StringVar(view)
+    str_entry(
+        query_param_frame,
+        patient_id_var,
+        validate_entry_cmd,
+        char_width_px,
+        label=_("Patient ID:"),
+        min_chars=0,
+        max_chars=patient_name_max_chars,
+        charset=string.ascii_letters + string.digits + "*",
+        tooltipmsg="Alpha-numeric, * for wildcard",
+        row=1,
+        col=0,
+        pad=PAD,
+        sticky="nw",
+    )
+    # Accession No.
+    accession_no_var = ctk.StringVar(view)
+    str_entry(
+        query_param_frame,
+        accession_no_var,
+        validate_entry_cmd,
+        char_width_px,
+        label=_("Accession No.:"),
+        min_chars=0,
+        max_chars=patient_name_max_chars,
+        charset=string.ascii_letters + string.digits + "*",
+        tooltipmsg="Alpha-numeric, * for wildcard",
+        row=2,
+        col=0,
+        pad=PAD,
+        sticky="nw",
+    )
+
+    # Study Date:
+    study_date_var = ctk.StringVar(view)
+    str_entry(
+        query_param_frame,
+        study_date_var,
+        validate_entry_cmd,
+        char_width_px,
+        label=_("Study Date:"),
+        min_chars=dicom_date_chars,
+        max_chars=dicom_date_chars,
+        charset=string.digits + "*",
+        tooltipmsg="Numeric YYYYMMDD, * for wildcard",
+        row=0,
+        col=3,
+        pad=PAD,
+        sticky="nw",
+    )
+
+    # Modality:
+    modality_var = ctk.StringVar(view)
+    str_entry(
+        query_param_frame,
+        modality_var,
+        validate_entry_cmd,
+        char_width_px,
+        label=_("Modality:"),
+        min_chars=modality_min_chars,
+        max_chars=modality_max_chars,
+        charset=string.ascii_uppercase,
+        tooltipmsg="Modality Code",
+        row=1,
+        col=3,
+        pad=PAD,
+        sticky="nw",
+    )
     # SCU Client Log:
     scu_log = ctk.CTkTextbox(
         view,
@@ -213,4 +314,4 @@ def create_view(view: ctk.CTkFrame):
     )
 
     install_loghandler(dicom_echo_scu.logger, scu_log)
-    scu_log.grid(row=1, pady=(PAD, 0), columnspan=11, sticky="nswe")
+    scu_log.grid(row=2, pady=(PAD, 0), columnspan=11, sticky="nswe")

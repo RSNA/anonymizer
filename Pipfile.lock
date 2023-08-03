@@ -107,11 +107,11 @@
         },
         "ctktooltip": {
             "hashes": [
-                "sha256:84580c1c81bb59aa9d2ab2a3322166e780371ee8c1ca3c561a2030303df5a8fe",
-                "sha256:8f21bac827fffb87b6a0f18a6acab927e695b2c966148af6ceed751cc19ed85e"
+                "sha256:07d89228942df20a3e4986a422980bab2bc774a20c87f7dea49b2f2176007360",
+                "sha256:09fd1a9cb6c759bebfdf96c37386e25c5aea222f2ad48c4d8a6ef41548c12fb8"
             ],
             "index": "pypi",
-            "version": "==0.4"
+            "version": "==0.7"
         },
         "customtkinter": {
             "hashes": [
