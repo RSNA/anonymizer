@@ -1,6 +1,6 @@
 {
     "view.storage_scp": {
-        "scp_autostart": false,
+        "scp_autostart": true,
         "ip_port": 1045,
         "aet": "ANONSTORE"
     },

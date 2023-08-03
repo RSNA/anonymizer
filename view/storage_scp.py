@@ -6,6 +6,7 @@ from utils.translate import _
 import utils.config as config
 import controller.dicom_storage_scp as dicom_storage_scp
 from view.storage_dir import get_storage_directory
+from utils.textbox_loghandler import install_loghandler
 from utils.network import get_local_ip_addresses
 from utils.ux_verify import (
     validate_entry,
@@ -46,8 +47,10 @@ def create_view(view: ctk.CTkFrame):
         local_ips = [_("No local IP addresses found.")]
         logger.error(local_ips[0])
 
-    scp_label = ctk.CTkLabel(view, text=_("DICOM Storage SCP:"))
+    scp_label = ctk.CTkLabel(view, text=_("Local Server:"))
     scp_label.grid(row=0, column=0, pady=(PAD, 0), sticky="nw")
+    # TODO: tooltip causes TclError on program close
+    # scp_label_tooltip = CTkToolTip(scp_label, message=_("Local DICOM Storage SCP"))
 
     # IP Address:
     ip_var = ctk.StringVar(view, value=ip_addr)
@@ -161,7 +164,7 @@ def create_view(view: ctk.CTkFrame):
         view,
         wrap="none",
     )
-    dicom_storage_scp.install_loghandler(scp_log)
+    install_loghandler(dicom_storage_scp.logger, scp_log)
     scp_log.grid(row=1, columnspan=8, sticky="nswe")
 
     # Handle SCP Server Autostart:

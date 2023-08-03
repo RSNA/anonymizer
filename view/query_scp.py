@@ -16,9 +16,10 @@ from utils.ux_verify import (
     ip_port_max,
     ip_port_min,
 )
+from utils.textbox_loghandler import install_loghandler
 
 # import controller.dicom_QR_find_scu as dicom_QR_find_scu
-from controller.dicom_echo_scu import echo
+import controller.dicom_echo_scu as dicom_echo_scu
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ def create_view(view: ctk.CTkFrame):
     validate_entry_cmd = view.register(validate_entry)
     logger.info(f"Font Character Width in pixels: ±{char_width_px}")
     view.grid_rowconfigure(1, weight=1)
-    view.grid_columnconfigure(5, weight=1)
+    view.grid_columnconfigure(6, weight=1)
 
     local_ips = get_local_ip_addresses()
     if local_ips:
@@ -59,10 +60,11 @@ def create_view(view: ctk.CTkFrame):
     scu_aet_var = ctk.StringVar(view, value=scu_aet)
 
     # Q/R SCP IP Address:
-    def scp_button_event(scp_button: ctk.CTkButton):
+    def scp_echo_button_event(scp_button: ctk.CTkButton):
         logger.info(f"scp_button_event Echo to {scp_aet_var.get()}...")
+        scp_button.configure(text_color="light grey")
         # Echo SCP:
-        if echo(
+        if dicom_echo_scu.echo(
             scp_ip_var.get(),
             scp_port_var.get(),
             scp_aet_var.get(),
@@ -75,11 +77,23 @@ def create_view(view: ctk.CTkFrame):
             logger.error(f"Echo to {scp_aet_var.get()} failed")
             scp_button.configure(text_color="red")
 
-    scp_button = ctk.CTkButton(
-        view, text=_("DICOM Q/R SCP:"), command=lambda: scp_button_event(scp_button)
+    scp_echo_button = ctk.CTkButton(
+        view,
+        width=int(5 * char_width_px),
+        text=_("ECHO"),
+        command=lambda: scp_echo_button_event(scp_echo_button),
     )
-    scp_button.grid(row=0, column=0, pady=(PAD, 0), sticky="nw")
-    scp_button_tooltip = CTkToolTip(scp_button, message=_(f"Click to check connection"))
+
+    scp_echo_button.grid(row=0, column=0, padx=(0, PAD), pady=(PAD, 0), sticky="nw")
+    # TODO: tooltip causes TclError on program close
+    # scp_echo_button_tooltip = CTkToolTip(
+    #     scp_echo_button,
+    #     message=_("Click to check connection from Local SCU to Remote SCP"),
+    # )
+    scp_label = ctk.CTkLabel(view, text=_("Remote Server:"))
+    scp_label.grid(row=0, column=1, pady=(PAD, 0), sticky="nw")
+    # TODO: tooltip causes TclError on program close
+    # scp_label_tooltip = CTkToolTip(scp_label, message=_("Remote DICOM Storage SCP"))
 
     scp_ip_entry = ctk.CTkEntry(
         view,
@@ -97,12 +111,12 @@ def create_view(view: ctk.CTkFrame):
         scp_ip_entry,
         message=_(f"Remote IP address [{ip_min_chars}..{ip_max_chars}] chars"),
     )
-    scp_ip_entry.grid(row=0, column=1, pady=(PAD, 0), padx=PAD, sticky="nw")
+    scp_ip_entry.grid(row=0, column=2, pady=(PAD, 0), padx=PAD, sticky="nw")
 
     # Q/R SCP IP Port:
     ip_port_max_chars = len(str(ip_port_max)) + 2
     scp_port_label = ctk.CTkLabel(view, text=_("Port:"))
-    scp_port_label.grid(row=0, column=2, pady=(PAD, 0), sticky="nw")
+    scp_port_label.grid(row=0, column=3, pady=(PAD, 0), sticky="nw")
 
     scp_port_entry = ctk.CTkEntry(
         view,
@@ -120,11 +134,11 @@ def create_view(view: ctk.CTkFrame):
     )
     scp_port_entry.bind("<Return>", entry_callback)
     scp_port_entry.bind("<FocusOut>", entry_callback)
-    scp_port_entry.grid(row=0, column=3, pady=(PAD, 0), padx=PAD, sticky="n")
+    scp_port_entry.grid(row=0, column=4, pady=(PAD, 0), padx=PAD, sticky="n")
 
     # Q/R SCP AET:
     scp_aet_label = ctk.CTkLabel(view, text=_("AET:"))
-    scp_aet_label.grid(row=0, column=4, pady=(PAD, 0), sticky="nw")
+    scp_aet_label.grid(row=0, column=5, pady=(PAD, 0), sticky="nw")
 
     scp_aet_entry = ctk.CTkEntry(
         view,
@@ -147,11 +161,11 @@ def create_view(view: ctk.CTkFrame):
     )
     scp_aet_entry.bind("<Return>", entry_callback)
     scp_aet_entry.bind("<FocusOut>", entry_callback)
-    scp_aet_entry.grid(row=0, column=5, pady=(PAD, 0), padx=PAD, sticky="nw")
+    scp_aet_entry.grid(row=0, column=6, pady=(PAD, 0), padx=PAD, sticky="nw")
 
     # Q/R SCU IP Address:
-    scu_label = ctk.CTkLabel(view, text=_("DICOM Q/R SCU:"))
-    scu_label.grid(row=0, column=6, pady=(PAD, 0), sticky="nw")
+    scu_label = ctk.CTkLabel(view, text=_("Local Client:"))
+    scu_label.grid(row=0, column=7, pady=(PAD, 0), sticky="nw")
 
     local_ips_optionmenu = ctk.CTkOptionMenu(
         view,
@@ -164,11 +178,11 @@ def create_view(view: ctk.CTkFrame):
         local_ips_optionmenu,
         message=_("Local IP address interface"),
     )
-    local_ips_optionmenu.grid(row=0, column=7, pady=(PAD, 0), padx=PAD, sticky="nw")
+    local_ips_optionmenu.grid(row=0, column=8, pady=(PAD, 0), padx=PAD, sticky="nw")
 
     # Q/R SCU AET:
     scp_aet_label = ctk.CTkLabel(view, text=_("AET:"))
-    scp_aet_label.grid(row=0, column=8, pady=(PAD, 0), sticky="nw")
+    scp_aet_label.grid(row=0, column=9, pady=(PAD, 0), sticky="nw")
     scu_aet_entry = ctk.CTkEntry(
         view,
         width=int(aet_max_chars * char_width_px),
@@ -190,7 +204,7 @@ def create_view(view: ctk.CTkFrame):
     )
     scu_aet_entry.bind("<Return>", entry_callback)
     scu_aet_entry.bind("<FocusOut>", entry_callback)
-    scu_aet_entry.grid(row=0, column=9, pady=(PAD, 0), padx=PAD, sticky="nw")
+    scu_aet_entry.grid(row=0, column=10, pady=(PAD, 0), padx=PAD, sticky="nw")
 
     # SCU Client Log:
     scu_log = ctk.CTkTextbox(
@@ -198,5 +212,5 @@ def create_view(view: ctk.CTkFrame):
         wrap="none",
     )
 
-    # dicom_storage_scp.loghandler(scp_log)
-    scu_log.grid(row=1, pady=(PAD, 0), columnspan=10, sticky="nswe")
+    install_loghandler(dicom_echo_scu.logger, scu_log)
+    scu_log.grid(row=1, pady=(PAD, 0), columnspan=11, sticky="nswe")

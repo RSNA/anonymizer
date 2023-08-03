@@ -6,6 +6,8 @@ import logging.handlers
 from utils.translate import _
 from pydicom import config as pydicom_config
 from __version__ import __version__
+from pydicom._version import __version__ as pydicom_version
+from pynetdicom._version import __version__ as pynetdicom_version
 
 # All UX View Modules:
 import view.welcome as welcome
@@ -38,14 +40,14 @@ PAD = 10
 WELCOME_VIEW = _("Welcome")
 HELP_VIEW = _("Help")
 SET_STORAGE_DIR_VIEW = _("Set Storage Directory")
-CONFIGURE_STORAGE_SCP_VIEW = _("Configure Storage SCP")
+CONFIGURE_STORAGE_SCP_VIEW = _("Configure Local Storage Server")
 ANONYMIZER_SCRIPT_VIEW = _("Anonymizer Script")
 FILTER_SETTINGS_VIEW = _("Filter Settings")
 SELECT_LOCAL_FILES_VIEW = _("Select Local Files")
-QUERY_SCP_STORAGE_VIEW = _("Query SCP Storage")
+QUERY_SCP_STORAGE_VIEW = _("Query Remote Storage Server")
 PATIENT_INDEX_LIST_VIEW = _("Patient Index List")
-EXPORT_TO_HTTPS_VIEW = _("Export to HTTPS")
-EXPORT_TO_SCP_STORAGE_VIEW = _("Export to SCP Storage")
+EXPORT_TO_AWS_VIEW = _("Export to AWS")
+EXPORT_TO_SCP_STORAGE_VIEW = _("Export to Remote Storage Server")
 IMPORT_LOG_VIEW = _("Import Log")
 EXPORT_LOG_VIEW = _("Export Log")
 
@@ -55,7 +57,7 @@ APP_TABS = {
     _("Settings"): [ANONYMIZER_SCRIPT_VIEW, FILTER_SETTINGS_VIEW],
     _("Import"): [SELECT_LOCAL_FILES_VIEW, QUERY_SCP_STORAGE_VIEW],
     _("Verify"): [PATIENT_INDEX_LIST_VIEW],
-    _("Export"): [EXPORT_TO_HTTPS_VIEW, EXPORT_TO_SCP_STORAGE_VIEW],
+    _("Export"): [EXPORT_TO_SCP_STORAGE_VIEW, EXPORT_TO_AWS_VIEW],
     _("Admin"): [IMPORT_LOG_VIEW, EXPORT_LOG_VIEW],
 }
 
@@ -78,8 +80,8 @@ class TabViewNested(ctk.CTkTabview):
                 storage_scp.create_view(tabview)
             elif tab == SELECT_LOCAL_FILES_VIEW:
                 select_local_files.create_view(tabview)
-            # elif tab == QUERY_SCP_STORAGE_VIEW:
-            #     query_scp.create_view(tabview)
+            elif tab == QUERY_SCP_STORAGE_VIEW:
+                query_scp.create_view(tabview)
 
 
 class TabViewMain(ctk.CTkTabview):
@@ -197,6 +199,9 @@ def main():
 
     logger.info("Starting ANONYMIZER GUI Version %s", __version__)
     logger.info(f"Running from {os.getcwd()}")
+    logger.info(
+        f"pydicom Version: {pydicom_version}, pynetdicom Version: {pynetdicom_version}"
+    )
 
     # GUI
     app = App(

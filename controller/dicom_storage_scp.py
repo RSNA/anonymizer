@@ -3,9 +3,6 @@ from pathlib import Path
 from typing import final
 import customtkinter as ctk
 
-from pydicom._version import __version__ as pydicom_version
-from pynetdicom._version import __version__ as pynetdicom_version
-
 from pynetdicom.events import Event, EVT_C_STORE, EVT_C_ECHO
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.presentation import (
@@ -13,6 +10,7 @@ from pynetdicom.presentation import (
     VerificationPresentationContexts,
 )
 from pynetdicom._globals import ALL_TRANSFER_SYNTAXES
+
 from controller.anonymize import anonymize_dataset
 
 from utils.translate import _
@@ -48,41 +46,6 @@ C_STORE_DUPLICATE_INVOCATION = 0x0210
 C_STORE_DECODE_ERROR = 0xC210
 C_STORE_UNRECOGNIZED_OPERATION = 0xC211
 C_STORE_PROCESSING_FAILURE = 0x0110
-
-
-# TODO: move this to utils.py, investigate global, detachable log window with level and module filter
-class TextBoxHandler(logging.Handler):
-    def __init__(self, text):
-        logging.Handler.__init__(self)
-        self.text = text
-
-    def emit(self, record):
-        msg = self.format(record)
-        self.text.configure(state="normal")
-        self.text.insert(ctk.END, msg + "\n")
-        self.text.configure(state="disabled")
-        self.text.see(ctk.END)
-
-
-# Install log handler for SCP Textbox:
-def install_loghandler(textbox: ctk.CTkTextbox) -> None:
-    global handler
-    handler = TextBoxHandler(textbox)
-    handler.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    logger.info(
-        f"loghandler pydicom version: {pydicom_version}, pynetdicom version: {pynetdicom_version}   "
-    )
-
-
-def remove_loghandler():
-    global handler
-    if handler is not None:
-        logger.removeHandler(handler)
-        handler.close()  # Close the handler if it's using any resources
-        handler = None
 
 
 # DICOM C-ECHO Verification event handler (EVT_C_ECHO)

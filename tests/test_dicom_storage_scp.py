@@ -18,7 +18,7 @@ def test_start_stop_dicom_storage_scp(temp_dir):
     logger.info(f"start local scp on port {TEST_SCP_PORT}")
     assert not server_running()
     assert start(TEST_SCP_IP, TEST_SCP_PORT, TEST_SCP_AET, temp_dir)
-    assert server_running()v
+    assert server_running()
     logger.info("stop local scp")
     stop(True)
     assert not server_running()
