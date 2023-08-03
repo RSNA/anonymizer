@@ -6,7 +6,7 @@ from utils.translate import _
 import utils.config as config
 import controller.dicom_storage_scp as dicom_storage_scp
 from view.storage_dir import get_storage_directory
-from utils.textbox_loghandler import install_loghandler
+from utils.logging import install_loghandler
 from utils.network import get_local_ip_addresses
 from utils.ux_verify import (
     validate_entry,

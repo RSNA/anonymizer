@@ -16,7 +16,7 @@ from utils.ux_verify import (
     ip_port_max,
     ip_port_min,
 )
-from utils.textbox_loghandler import install_loghandler
+from utils.logging import install_loghandler
 
 # import controller.dicom_QR_find_scu as dicom_QR_find_scu
 import controller.dicom_echo_scu as dicom_echo_scu

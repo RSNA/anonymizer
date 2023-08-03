@@ -2,9 +2,8 @@ import os
 import customtkinter as ctk
 from PIL import Image
 import logging
-import logging.handlers
 from utils.translate import _
-from pydicom import config as pydicom_config
+from utils.logging import init_logging
 from __version__ import __version__
 from pydicom._version import __version__ as pydicom_version
 from pynetdicom._version import __version__ as pynetdicom_version
@@ -19,15 +18,6 @@ import view.query_scp as query_scp
 
 # To ensure DICOM C-STORE SCP is stopped and socket is closed on exit:
 import controller.dicom_storage_scp as dicom_storage_scp
-
-LOGS_DIR = "/logs/"
-LOG_FILENAME = "anonymizer.log"
-LOG_SIZE = 1024 * 1024
-LOG_BACKUP_COUNT = 10
-LOG_DEFAULT_LEVEL = logging.INFO
-LOG_FORMAT = "{asctime} {levelname} {module}.{funcName}.{lineno} {message}"
-
-logger = logging.getLogger()  # get root logger
 
 APP_TITLE = _("DICOM Anonymizer Version 17")
 APP_MIN_WIDTH = 1200
@@ -167,35 +157,13 @@ class App(ctk.CTk):
         self.tab_view.grid(row=1, column=0, padx=pad, pady=(0, pad), sticky="nswe")
 
 
-def setup_logging(logs_dir) -> None:
-    # TODO: move logging to utils.logging and allow setup from config.json
-    # TODO: provide UX to change log level
-    os.makedirs(logs_dir, exist_ok=True)
-    # Setup rotating log file:
-    logFormatter = logging.Formatter(LOG_FORMAT, style="{")
-    fileHandler = logging.handlers.RotatingFileHandler(
-        logs_dir + LOG_FILENAME, maxBytes=LOG_SIZE, backupCount=LOG_BACKUP_COUNT
-    )
-    fileHandler.setFormatter(logFormatter)
-    logger.addHandler(fileHandler)
-    # Setup stderr console output:
-    consoleHandler = logging.StreamHandler()
-    consoleHandler.setFormatter(logFormatter)
-    logger.addHandler(consoleHandler)
-    logger.setLevel(LOG_DEFAULT_LEVEL)
-
-    logging.captureWarnings(True)
-
-    # pydicom specific:
-    # TODO: ensure it reflects UX setting
-    pydicom_config.debug(LOG_DEFAULT_LEVEL == logging.DEBUG)
-
-
 def main():
     # TODO: handle command line arguments, implement command line interface
     install_dir = os.path.dirname(os.path.realpath(__file__))
-    setup_logging(install_dir + LOGS_DIR)
+    init_logging(install_dir)
     os.chdir(install_dir)
+
+    logger = logging.getLogger()  # get root logger
 
     logger.info("Starting ANONYMIZER GUI Version %s", __version__)
     logger.info(f"Running from {os.getcwd()}")
