@@ -71,7 +71,7 @@ class TabViewNested(ctk.CTkTabview):
             elif tab == SELECT_LOCAL_FILES_VIEW:
                 select_local_files.create_view(tabview)
             elif tab == QUERY_SCP_STORAGE_VIEW:
-                query_scp.create_view(tabview)
+                query_scp.create_view(tabview, PAD)
 
 
 class TabViewMain(ctk.CTkTabview):
@@ -164,7 +164,6 @@ def main():
     os.chdir(install_dir)
 
     logger = logging.getLogger()  # get root logger
-
     logger.info("Starting ANONYMIZER GUI Version %s", __version__)
     logger.info(f"Running from {os.getcwd()}")
     logger.info(

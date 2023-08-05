@@ -26,7 +26,7 @@ from utils.ux_verify import (
 from utils.logging import install_loghandler
 
 # import controller.dicom_QR_find_scu as dicom_QR_find_scu
-import controller.dicom_echo_scu as dicom_echo_scu
+import controller.dicom_echo_send_scu as dicom_echo_send_scu
 
 
 logger = logging.getLogger(__name__)
@@ -43,8 +43,7 @@ settings = config.load(__name__)
 globals().update(settings)
 
 
-def create_view(view: ctk.CTkFrame):
-    PAD = 5
+def create_view(view: ctk.CTkFrame, PAD: int):
     logger.info(f"Creating Configure DICOM Query/Retrieve SCU View")
     char_width_px = ctk.CTkFont().measure("A")
     digit_width_px = ctk.CTkFont().measure("9")
@@ -72,7 +71,7 @@ def create_view(view: ctk.CTkFrame):
         logger.info(f"scp_button_event Echo to {scp_aet_var.get()}...")
         scp_button.configure(text_color="light grey")
         # Echo SCP:
-        if dicom_echo_scu.echo(
+        if dicom_echo_send_scu.echo(
             scp_ip_var.get(),
             scp_port_var.get(),
             scp_aet_var.get(),
@@ -162,7 +161,9 @@ def create_view(view: ctk.CTkFrame):
     )
     scp_aet_entry_tooltip = CTkToolTip(
         scp_aet_entry,
-        message=_(f"Remote AE Title [{aet_min_chars}..{aet_max_chars}] chars"),
+        message=_(
+            f"Remote AE Title uppercase alphanumeric [{aet_min_chars}..{aet_max_chars}] chars"
+        ),
     )
     entry_callback = lambda event: str_entry_change(
         event, scp_aet_var, aet_min_chars, aet_max_chars, __name__, "scp_aet"
@@ -313,5 +314,5 @@ def create_view(view: ctk.CTkFrame):
         wrap="none",
     )
 
-    install_loghandler(dicom_echo_scu.logger, scu_log)
+    install_loghandler(dicom_echo_send_scu.logger, scu_log)
     scu_log.grid(row=2, pady=(PAD, 0), columnspan=11, sticky="nswe")
