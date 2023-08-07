@@ -9,7 +9,7 @@ LOGS_DIR = "/logs/"
 LOG_FILENAME = "anonymizer.log"
 LOG_SIZE = 1024 * 1024
 LOG_BACKUP_COUNT = 10
-LOG_DEFAULT_LEVEL = logging.DEBUG
+LOG_DEFAULT_LEVEL = logging.INFO
 LOG_FORMAT = "{asctime} {levelname} {module} {funcName}.{lineno} {message}"
 
 
@@ -36,7 +36,6 @@ def init_logging(install_dir: str) -> None:
     logging.captureWarnings(True)
 
     # pydicom specific:
-    # TODO: ensure it reflects UX setting
     pydicom_config.debug(LOG_DEFAULT_LEVEL == logging.DEBUG)
 
 

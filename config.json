@@ -10,9 +10,9 @@
     "view.query_scp": {
         "ip_addr": "192.168.1.130",
         "scu_aet": "RSNA",
-        "scp_aet": "ANONSTORE",
+        "scp_aet": "MDEDEV",
         "scu_ip_addr": "127.0.0.1",
-        "scp_ip_port": 104
+        "scp_ip_port": 11112
     },
     "model.project": {
         "SITEID": "527408",
@@ -35,6 +35,6 @@
         "Patient ID:": "",
         "Accession No.:": "",
         "Study Date:": "",
-        "Modality:": ""
+        "Modality:": "CT"
     }
 }

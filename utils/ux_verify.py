@@ -57,15 +57,16 @@ def str_entry_change(
     var: ctk.StringVar,
     min_len: int,
     max_len: int,
-    module_name: str,
-    config_name: str,
+    module_name=None,
+    config_name=None,
 ) -> None:
     value = var.get()
     if len(value) > max_len:
         var.set(value[:max_len])
     elif len(value) < min_len:
         var.set(value[:min_len])
-    config.save(module_name, config_name, var.get())
+    if module_name and config_name:
+        config.save(module_name, config_name, var.get())
 
 
 def str_entry(

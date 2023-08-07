@@ -2,6 +2,7 @@ import logging
 from pydicom.dataset import Dataset
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.presentation import build_context
+from pynetdicom.status import QR_FIND_SERVICE_CLASS_STATUS
 from utils.network import get_network_timeout
 
 logger = logging.getLogger(__name__)
@@ -23,15 +24,22 @@ def find(
     acc_no: str,
     study_date: str,
     modality: str,
-) -> bool:
+) -> list[Dataset] | None:
     logger.info(f"C-FIND from {scu_ae}@{scu_ip} to {scp_ae}@{scp_ip}:{scp_port}")
+
     ds = Dataset()
     ds.QueryRetrieveLevel = "STUDY"
     ds.PatientName = name
     ds.PatientID = id
     ds.AccessionNumber = acc_no
     ds.StudyDate = study_date
-    ds.Modality = modality
+    ds.ModalitiesInStudy = modality
+    ds.NumberOfStudyRelatedSeries = 0
+    ds.NumberOfStudyRelatedInstances = 0
+    ds.StudyDescription = ""
+    ds.StudyInstanceUID = ""
+
+    logger.info(f"Query: {name}, {id}, {acc_no}, {study_date}, {modality}")
     # Initialize the Application Entity
     ae = AE(scu_ae)
     ae.network_timeout = get_network_timeout()
@@ -45,7 +53,7 @@ def find(
         )
         if not assoc.is_established:
             logger.error("Association rejected, aborted or never connected")
-            return False
+            return None
 
         logger.info(f"Association established with {assoc.acceptor.ae_title}")
 
@@ -55,31 +63,29 @@ def find(
             query_model=StudyQueryModel,
         )
 
+        # Process the responses received from the peer
+        results = []
         for status, identifier in responses:
-            if status:
-                logger.debug("C-FIND query status: 0x{0:04x}".format(status.Status))
-                if status.Status in (0xFF00, 0xFF01):
-                    logger.info(f"C-FIND Pending: {identifier}")
-                elif status.Status == 0x0000:
-                    logger.info("C-FIND Success")
-                else:
-                    logger.error(status)
+            if not status or status.Status not in (0xFF00, 0xFF01, 0x0000):
+                if not status:
                     logger.error(
-                        "C-FIND Failed status: 0x{0:04x}".format(status.Status)
+                        "Connection timed out, was aborted, or received an invalid response"
+                    )
+                else:
+                    logger.error(
+                        f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}"
                     )
             else:
-                logger.error(
-                    "Connection timed out, was aborted or received invalid response"
-                )
-
-            # If the status is 'Pending' then identifier is the C-FIND response
-            if status.Status in (0xFF00, 0xFF01):
-                logger.info("C-FIND Pending")
-            elif status.Status == 0x0000:
-                logger.info("C-FIND Success")
-            else:
-                logger.error(status)
-                logger.error("C-FIND Failed status: 0x{0:04x}".format(status.Status))
+                if identifier:
+                    fields_to_remove = [
+                        "QueryRetrieveLevel",
+                        "RetrieveAETitle",
+                        "SpecificCharacterSet",
+                    ]
+                    for field in fields_to_remove:
+                        if field in identifier:
+                            delattr(identifier, field)
+                    results.append(identifier)
 
         # Release the association
         assoc.release()
@@ -88,6 +94,16 @@ def find(
         logger.error(
             f"Failed DICOM C-FIND to {scp_ae}@{scp_ip}:{scp_port}, Error: {str(e)}"
         )
-        return False
+        return None
 
-    return True
+    if len(results) == 0:
+        logger.info("No query results found")
+        return None
+    else:
+        logger.info(f"{len(results)} Query results found")
+        for result in results:
+            logger.info(
+                f"{result.PatientName}, {result.PatientID}, {result.StudyDate}, {result.StudyDescription}, {result.AccessionNumber}, {result.ModalitiesInStudy}, {result.NumberOfStudyRelatedSeries}, {result.NumberOfStudyRelatedInstances}, {result.StudyInstanceUID} "
+            )
+
+    return results

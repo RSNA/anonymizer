@@ -1,5 +1,8 @@
 import string
 import customtkinter as ctk
+from numpy import pad
+import pandas as pd
+from tkinter import ttk, font
 from CTkToolTip import CTkToolTip
 import logging
 from utils.translate import _
@@ -27,6 +30,7 @@ from utils.logging import install_loghandler
 
 # import controller.dicom_QR_find_scu as dicom_QR_find_scu
 import controller.dicom_echo_send_scu as dicom_echo_send_scu
+import controller.dicom_QR_find_scu as dicom_QR_find_scu
 
 
 logger = logging.getLogger(__name__)
@@ -38,9 +42,47 @@ scp_aet = "RSNA"
 scu_ip_addr = "127.0.0.1"
 scu_aet = "ANONSCU"
 
+# C-FIND DICOM attributes to display in the results Treeview:
+attr_map = {
+    "PatientName": _("Patient Name"),
+    "PatientID": _("Patient ID"),
+    "StudyDate": _("Study Date"),
+    "StudyDescription": _("Study Description"),
+    "AccessionNumber": _("Accession No."),
+    "ModalitiesInStudy": _("Modality"),
+    "NumberOfStudyRelatedSeries": _("Series"),
+    "NumberOfStudyRelatedInstances": _("Instances"),
+    "StudyInstanceUID": _("StudyInstanceUID"),  # not for display, for retrieve
+}
+
 # Load module globals from config.json
 settings = config.load(__name__)
 globals().update(settings)
+
+
+def adjust_column_width(tree, column_id, padding=10):
+    """
+    Adjust the width of a column in a ttk.Treeview to fit its content.
+
+    Parameters:
+    - tree: The Treeview widget.
+    - column_id: The identifier of the column to be adjusted.
+    - padding: Extra space added to the width (default is 10 pixels).
+    """
+
+    # Start with the width of the column header
+    max_width = font.Font().measure(column_id)
+
+    # Iterate over each item in the column
+    for item in tree.get_children():
+        item_value = tree.set(item, column_id)
+        item_width = font.Font().measure(item_value)
+
+        # Update max_width if this value is wider than any previously checked
+        max_width = max(max_width, item_width)
+
+    # Adjust the column width
+    tree.column(column_id, width=max_width + padding)
 
 
 def create_view(view: ctk.CTkFrame, PAD: int):
@@ -265,7 +307,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         label=_("Accession No.:"),
         min_chars=0,
         max_chars=patient_name_max_chars,
-        charset=string.ascii_letters + string.digits + "*",
+        charset=string.ascii_letters + string.digits + " */-_",
         tooltipmsg="Alpha-numeric, * for wildcard",
         row=2,
         col=0,
@@ -297,7 +339,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         query_param_frame,
         modality_var,
         validate_entry_cmd,
-        char_width_px,
+        char_width_px + 4,
         label=_("Modality:"),
         min_chars=modality_min_chars,
         max_chars=modality_max_chars,
@@ -308,6 +350,90 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         pad=PAD,
         sticky="nw",
     )
+
+    # Managing C-FIND results Treeview:
+    def update_treeview_data(tree: ttk.Treeview, data: pd.DataFrame):
+        # Clear existing items
+        for item in tree.get_children():
+            tree.delete(item)
+
+        # Insert new data
+
+        for index, row in data.iterrows():
+            display_values = [
+                val for col, val in row.items() if col != "StudyInstanceUID"
+            ]
+            tree.insert("", "end", iid=row["StudyInstanceUID"], values=display_values)
+
+        for col_id in tree["columns"]:
+            adjust_column_width(tree, col_id, padding=5)
+
+    # Query Button:
+    # TODO: query on <Return> // move to next query entry on <Return>
+    def query_button_pressed(tree: ttk.Treeview):
+        logger.info(f"Query button pressed")
+        results = dicom_QR_find_scu.find(
+            scp_ip_var.get(),
+            scp_port_var.get(),
+            scp_aet_var.get(),
+            scu_ip_var.get(),
+            scu_aet_var.get(),
+            patient_name_var.get(),
+            patient_id_var.get(),
+            accession_no_var.get(),
+            study_date_var.get(),
+            modality_var.get(),
+        )
+        # Create Pandas DataFrame from results and display in Treeview:
+        if results:
+            # List the DICOM attributes in the desired order using the keys from the mapping
+            ordered_attrs = list(attr_map.keys())
+            data_dicts = [
+                {
+                    attr_map[attr]: getattr(ds, attr, None)
+                    for attr in ordered_attrs
+                    if hasattr(ds, attr)
+                }
+                for ds in results
+            ]
+            df = pd.DataFrame(data_dicts)
+
+            # Update column headers only if they've changed
+            current_cols = list(tree["columns"])
+            if current_cols != list(df.columns):
+                tree["columns"] = [
+                    col for col in df.columns if col != "StudyInstanceUID"
+                ]
+                for col in tree["columns"]:
+                    tree.heading(col, text=col)
+
+            # Update the treeview with the new data
+            update_treeview_data(tree, df)
+        else:
+            logger.info(f"No results returned")
+
+    tree = ttk.Treeview(view, show="headings")
+    tree.grid(row=2, column=0, columnspan=11, sticky="nswe")
+
+    def retrieve_button_pressed():
+        uids = list(tree.selection())
+        logger.info(f"Retrieving StudyInstanceUIDs: {uids}")
+
+    # Create a Scrollbar and associate it with the Treeview
+    scrollbar = ttk.Scrollbar(view, orient="vertical", command=tree.yview)
+    scrollbar.grid(row=2, column=11, sticky="ns")
+    tree.configure(yscrollcommand=scrollbar.set)
+
+    query_button = ctk.CTkButton(
+        query_param_frame, text=_("Query"), command=lambda: query_button_pressed(tree)
+    )
+    query_button.grid(row=2, column=4, padx=PAD, pady=PAD, sticky="nswe")
+
+    retrieve_button = ctk.CTkButton(
+        query_param_frame, text=_("Retrieve"), command=retrieve_button_pressed
+    )
+    retrieve_button.grid(row=2, column=5, padx=PAD, pady=PAD, sticky="nswe")
+
     # SCU Client Log:
     scu_log = ctk.CTkTextbox(
         view,
@@ -315,4 +441,5 @@ def create_view(view: ctk.CTkFrame, PAD: int):
     )
 
     install_loghandler(dicom_echo_send_scu.logger, scu_log)
-    scu_log.grid(row=2, pady=(PAD, 0), columnspan=11, sticky="nswe")
+    install_loghandler(dicom_QR_find_scu.logger, scu_log)
+    scu_log.grid(row=3, pady=(PAD, 0), columnspan=11, sticky="swe")
