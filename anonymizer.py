@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import customtkinter as ctk
 from PIL import Image
 import logging
@@ -14,7 +15,7 @@ import view.help as help
 import view.storage_dir as storage_dir
 import view.storage_scp as storage_scp
 import view.select_local_files as select_local_files
-import view.query_scp as query_scp
+import view.query_retrieve_scp as query_retrieve_scp
 
 # To ensure DICOM C-STORE SCP is stopped and socket is closed on exit:
 import controller.dicom_storage_scp as dicom_storage_scp
@@ -43,7 +44,7 @@ EXPORT_LOG_VIEW = _("Export Log")
 
 APP_TABS = {
     # _("About"): [WELCOME_VIEW, HELP_VIEW],
-    # _("Storage"): [SET_STORAGE_DIR_VIEW, CONFIGURE_STORAGE_SCP_VIEW],
+    _("Storage"): [SET_STORAGE_DIR_VIEW, CONFIGURE_STORAGE_SCP_VIEW],
     # _("Settings"): [ANONYMIZER_SCRIPT_VIEW, FILTER_SETTINGS_VIEW],
     _("Import"): [SELECT_LOCAL_FILES_VIEW, QUERY_SCP_STORAGE_VIEW],
     # _("Verify"): [PATIENT_INDEX_LIST_VIEW],
@@ -71,7 +72,7 @@ class TabViewNested(ctk.CTkTabview):
             elif tab == SELECT_LOCAL_FILES_VIEW:
                 select_local_files.create_view(tabview)
             elif tab == QUERY_SCP_STORAGE_VIEW:
-                query_scp.create_view(tabview, PAD)
+                query_retrieve_scp.create_view(tabview, PAD)
 
 
 class TabViewMain(ctk.CTkTabview):
@@ -180,6 +181,26 @@ def main():
         tabs=APP_TABS,
         pad=PAD,
     )
+
+    # from controller.dicom_move_scu import move
+
+    # TEST_SCP_IP = "127.0.0.1"
+    # TEST_SCP_PORT = 11112
+    # TEST_SCP_AET = "MDEDEV"
+    # TEST_SCU_IP = "127.0.0.1"
+
+    # logger.info(
+    #     move(
+    #         TEST_SCP_IP,
+    #         TEST_SCP_PORT,
+    #         TEST_SCP_AET,
+    #         TEST_SCU_IP,
+    #         "PYANON",
+    #         "1.3.51.0.7.2580558702.65205.27203.38597.5639.39660.54942",
+    #         # "1.2.840.113619.2.278.3.2831181056.402.1645770506.560",
+    #         "dicom",
+    #     )
+    # )
 
     app.mainloop()
 

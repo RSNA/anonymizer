@@ -1,10 +1,10 @@
+import logging
 import string
 import customtkinter as ctk
-from numpy import pad
 import pandas as pd
 from tkinter import ttk, font
 from CTkToolTip import CTkToolTip
-import logging
+from view.storage_dir import get_storage_directory
 from utils.translate import _
 import utils.config as config
 from utils.network import get_local_ip_addresses
@@ -28,10 +28,9 @@ from utils.ux_verify import (
 )
 from utils.logging import install_loghandler
 
-# import controller.dicom_QR_find_scu as dicom_QR_find_scu
 import controller.dicom_echo_send_scu as dicom_echo_send_scu
 import controller.dicom_QR_find_scu as dicom_QR_find_scu
-
+import controller.dicom_move_scu as dicom_move_scu
 
 logger = logging.getLogger(__name__)
 
@@ -289,7 +288,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         char_width_px,
         label=_("Patient ID:"),
         min_chars=0,
-        max_chars=patient_name_max_chars,
+        max_chars=patient_id_max_chars,
         charset=string.ascii_letters + string.digits + "*",
         tooltipmsg="Alpha-numeric, * for wildcard",
         row=1,
@@ -306,7 +305,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         char_width_px,
         label=_("Accession No.:"),
         min_chars=0,
-        max_chars=patient_name_max_chars,
+        max_chars=accession_no_max_chars,
         charset=string.ascii_letters + string.digits + " */-_",
         tooltipmsg="Alpha-numeric, * for wildcard",
         row=2,
@@ -326,7 +325,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         min_chars=dicom_date_chars,
         max_chars=dicom_date_chars,
         charset=string.digits + "*",
-        tooltipmsg="Numeric YYYYMMDD, * for wildcard",
+        tooltipmsg=_("Numeric YYYYMMDD, * for wildcard"),
         row=0,
         col=3,
         pad=PAD,
@@ -344,7 +343,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         min_chars=modality_min_chars,
         max_chars=modality_max_chars,
         charset=string.ascii_uppercase,
-        tooltipmsg="Modality Code",
+        tooltipmsg=_("Modality Code"),
         row=1,
         col=3,
         pad=PAD,
@@ -417,7 +416,20 @@ def create_view(view: ctk.CTkFrame, PAD: int):
 
     def retrieve_button_pressed():
         uids = list(tree.selection())
+        logger.info(f"Retrieve button pressed")
         logger.info(f"Retrieving StudyInstanceUIDs: {uids}")
+
+        for uid in uids:
+            if dicom_move_scu.move(
+                scp_ip_var.get(),
+                scp_port_var.get(),
+                scp_aet_var.get(),
+                scu_ip_var.get(),
+                scu_aet_var.get(),
+                uid,
+                get_storage_directory(),
+            ):
+                logger.info(f"Retrieve successful")
 
     # Create a Scrollbar and associate it with the Treeview
     scrollbar = ttk.Scrollbar(view, orient="vertical", command=tree.yview)
@@ -442,4 +454,5 @@ def create_view(view: ctk.CTkFrame, PAD: int):
 
     install_loghandler(dicom_echo_send_scu.logger, scu_log)
     install_loghandler(dicom_QR_find_scu.logger, scu_log)
+    # install_loghandler(dicom_move_scu.logger, scu_log)
     scu_log.grid(row=3, pady=(PAD, 0), columnspan=11, sticky="swe")

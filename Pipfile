@@ -12,6 +12,7 @@ ctktooltip = "*"
 pydicom = "*"
 pynetdicom = "*"
 ttkwidgets = "*"
+ctkmessagebox = "*"
 
 [dev-packages]
 pytest = "*"

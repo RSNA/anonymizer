@@ -17,7 +17,7 @@ import view.help as help
 import view.storage_dir as storage_dir
 import view.storage_scp as storage_scp
 import view.select_local_files as select_local_files
-import view.query_scp as query_scp
+import view.query_retrieve_scp as query_retrieve_scp
 
 # To ensure DICOM C-STORE SCP is stopped and socket is closed on exit:
 import controller.dicom_storage_scp as dicom_storage_scp

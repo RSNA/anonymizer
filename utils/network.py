@@ -1,7 +1,7 @@
 import netifaces
 
 # TODO: provide UX and persistence for network timeout
-_network_timeout = 5  # seconds
+_network_timeout = 3  # seconds
 
 
 def get_network_timeout():

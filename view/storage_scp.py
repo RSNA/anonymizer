@@ -1,4 +1,5 @@
 import string
+import threading
 import customtkinter as ctk
 from CTkToolTip import CTkToolTip
 import logging
@@ -169,5 +170,11 @@ def create_view(view: ctk.CTkFrame):
 
     # Handle SCP Server Autostart:
     if scp_autostart:
+        # threading.Thread(
+        #     target=dicom_storage_scp.start,
+        #     args=(ip_addr, ip_port, aet, get_storage_directory()),
+        #     daemon=True,
+        # ).start()
+        # scp_var.set(True)
         if dicom_storage_scp.start(ip_addr, ip_port, aet, get_storage_directory()):
             scp_var.set(True)

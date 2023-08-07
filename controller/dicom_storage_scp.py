@@ -1,7 +1,4 @@
 import logging
-from pathlib import Path
-from typing import final
-import customtkinter as ctk
 
 from pynetdicom.events import Event, EVT_C_STORE, EVT_C_ECHO
 from pynetdicom.ae import ApplicationEntity as AE
@@ -21,23 +18,42 @@ from model.project import SITEID, PROJECTNAME, TRIALNAME, UIDROOT
 
 logger = logging.getLogger(__name__)
 
+# TODO: convert to singleton class
+
 # Store scp instance after ae.start_server() is called:
 scp = None
+ae = None
 
 
 # Is SCP running?
-def server_running():
+def server_running() -> bool:
     global scp
-    return scp is not None
+    if scp is None:
+        return False
+    else:
+        return True
+
+
+# SCP AE Title:
+def get_aet() -> str:
+    global scp
+    if scp is None:
+        return ""
+    else:
+        return scp.ae_title
+
+
+def get_AE():
+    global ae
+    return ae
 
 
 # C-STORE status values from DICOM Standard, Part 7:
 # https://dicom.nema.org/medical/dicom/current/output/chtml/part07/chapter_9.html#sect_9.1.1
 # https://pydicom.github.io/pynetdicom/stable/reference/generated/pynetdicom._handlers.doc_handle_store.html
 # Non-Service Class specific statuses - PS3.7 Annex C
-# TODO: trim error codes to those relevant to C-STORE and C-ECHO
-C_ECHO_SUCCESS = 0x0000
-C_STORE_SUCCESS = 0x0000
+# TODO: trim error codes to those relevant, move to utils/errors.py
+C_SUCCESS = 0x0000
 C_STORE_NOT_AUTHORISED = 0x0124
 C_STORE_OUT_OF_RESOURCES = 0xA700
 C_MOVE_UNKNOWN_AE = 0xA801
@@ -46,6 +62,9 @@ C_STORE_DUPLICATE_INVOCATION = 0x0210
 C_STORE_DECODE_ERROR = 0xC210
 C_STORE_UNRECOGNIZED_OPERATION = 0xC211
 C_STORE_PROCESSING_FAILURE = 0x0110
+C_CANCEL = 0xFE00
+C_PENDING_A = 0xFF00
+C_PENDING_B = 0xFF01
 
 
 # DICOM C-ECHO Verification event handler (EVT_C_ECHO)
@@ -54,19 +73,19 @@ def _handle_echo(event: Event) -> int:
     # TODO: Validate remote IP & AE Title
     remote = event.assoc.remote
     logger.info(f"C-ECHO from: {remote}")
-    return C_ECHO_SUCCESS
+    return C_SUCCESS
 
 
 # DICOM C-STORE scp event handler (EVT_C_STORE)):
-def _handle_store(event: Event, storage_dir) -> int:
-    global destination_dir
-    logger.debug("_handle_store")
+def _handle_store(event: Event, storage_dir: str) -> int:
+    logger.info("_handle_store")
     # TODO: Validate remote IP & AE Title
     remote = event.assoc.remote
     ds = event.dataset
     ds.file_meta = event.file_meta
     logger.debug(remote)
     logger.debug(ds)
+    # TODO: ensure ds has values for PatientName, Modality, StudyDate, SeriesNumber, InstanceNumber
     filename = local_storage_path(storage_dir, SITEID, ds)
     logger.info(
         f"C-STORE [{ds.file_meta.TransferSyntaxUID}]: {remote['ae_title']} => {filename}"
@@ -79,13 +98,13 @@ def _handle_store(event: Event, storage_dir) -> int:
         logger.exception(exception)
         return C_STORE_OUT_OF_RESOURCES
 
-    return C_STORE_SUCCESS
+    return C_SUCCESS
 
 
 # Start SCP:
 def start(address, port, aet, storage_dir) -> bool:
-    global scp
-    logger.info("start")
+    global scp, ae
+    logger.info(f"start {address}, {port}, {aet}, {storage_dir}...")
 
     if server_running():
         logger.error("DICOM C-STORE scp is already running")

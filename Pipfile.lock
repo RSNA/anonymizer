@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "21f15372b3b18234582ec83f3467768c7146895df61e67c7839f6924ca24212f"
+            "sha256": "ea30bc02020b7a62e5840c988c994a7df92df9724a74592e67dffca258985846"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -104,6 +104,14 @@
             ],
             "markers": "python_full_version >= '3.7.0'",
             "version": "==3.2.0"
+        },
+        "ctkmessagebox": {
+            "hashes": [
+                "sha256:b809afce24dc9b7eeb10b3d38c1bf2d9163af91b8f1ebdba88a2f98b9ebb124b",
+                "sha256:d2e828c5a4a8ddebf12e6a7c4ad976589645804b6ac701da2940ee2bdc29506d"
+            ],
+            "index": "pypi",
+            "version": "==2.4"
         },
         "ctktooltip": {
             "hashes": [

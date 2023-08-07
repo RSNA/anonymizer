@@ -2,13 +2,11 @@ import logging
 from pydicom.dataset import Dataset
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.presentation import build_context
+from pynetdicom.sop_class import _QR_CLASSES as QR_CLASSES
 from pynetdicom.status import QR_FIND_SERVICE_CLASS_STATUS
 from utils.network import get_network_timeout
 
 logger = logging.getLogger(__name__)
-
-# StudyRootQueryRetrieveInformationModelFind
-StudyQueryModel = "1.2.840.10008.5.1.4.1.2.2.1"
 
 
 # Query remote server for studies matching the given query dataset:
@@ -43,11 +41,13 @@ def find(
     # Initialize the Application Entity
     ae = AE(scu_ae)
     ae.network_timeout = get_network_timeout()
+    ae.acse_timeout = get_network_timeout()
+    ae.dimse_timeout = get_network_timeout()
     try:
         assoc = ae.associate(
             scp_ip,
             scp_port,
-            [build_context(StudyQueryModel)],
+            [build_context(QR_CLASSES["StudyRootQueryRetrieveInformationModelFind"])],
             ae_title=scp_ae,
             bind_address=(scu_ip, 0),
         )
@@ -60,7 +60,7 @@ def find(
         # Use the C-FIND service to send the identifier
         responses = assoc.send_c_find(
             ds,
-            query_model=StudyQueryModel,
+            query_model=QR_CLASSES["StudyRootQueryRetrieveInformationModelFind"],
         )
 
         # Process the responses received from the peer

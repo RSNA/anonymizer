@@ -1,8 +1,8 @@
 {
     "view.storage_scp": {
-        "scp_autostart": true,
-        "ip_port": 1045,
-        "aet": "ANONSTORE"
+        "scp_autostart": false,
+        "ip_port": 1046,
+        "aet": "PYANONSTORE"
     },
     "view.storage_dir": {
         "storage_directory": "/Users/michaelevans/Downloads/RSNA_ANON_STORE/PYTHON_ANON_STORE"
@@ -36,5 +36,11 @@
         "Accession No.:": "",
         "Study Date:": "",
         "Modality:": "CT"
+    },
+    "view.query_retrieve_scp": {
+        "scp_ip_port": 11112,
+        "scp_aet": "MDEDEV",
+        "scu_aet": "PYANON",
+        "scu_ip_addr": "127.0.0.1"
     }
 }

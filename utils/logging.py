@@ -10,7 +10,7 @@ LOG_FILENAME = "anonymizer.log"
 LOG_SIZE = 1024 * 1024
 LOG_BACKUP_COUNT = 10
 LOG_DEFAULT_LEVEL = logging.INFO
-LOG_FORMAT = "{asctime} {levelname} {module} {funcName}.{lineno} {message}"
+LOG_FORMAT = "{asctime} [{levelname}] {filename}:{lineno}: {message}"
 
 
 def init_logging(install_dir: str) -> None:
