@@ -55,7 +55,7 @@ class TextBoxHandler(logging.Handler):
 # Install log handler for SCP Textbox:
 def install_loghandler(logger, textbox: ctk.CTkTextbox) -> logging.Handler:
     handler = TextBoxHandler(textbox)
-    handler.setLevel(logging.INFO)
+    handler.setLevel(LOG_DEFAULT_LEVEL)
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     handler.setFormatter(formatter)
     logger.addHandler(handler)

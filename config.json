@@ -1,8 +1,8 @@
 {
     "view.storage_scp": {
-        "scp_autostart": false,
-        "ip_port": 1046,
-        "aet": "PYANONSTORE"
+        "scp_autostart": true,
+        "ip_port": 1045,
+        "aet": "PYANON"
     },
     "view.storage_dir": {
         "storage_directory": "/Users/michaelevans/Downloads/RSNA_ANON_STORE/PYTHON_ANON_STORE"

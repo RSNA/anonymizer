@@ -1,5 +1,4 @@
 import logging
-
 from pynetdicom.events import Event, EVT_C_STORE, EVT_C_ECHO
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.presentation import (
@@ -84,13 +83,14 @@ def _handle_store(event: Event, storage_dir: str) -> int:
     ds = event.dataset
     ds.file_meta = event.file_meta
     logger.debug(remote)
-    logger.debug(ds)
+    logger.debug(f"PHI:\n{ds}")
+    ds = anonymize_dataset(ds)
+    logger.debug(f"ANON:\n{ds}")
     # TODO: ensure ds has values for PatientName, Modality, StudyDate, SeriesNumber, InstanceNumber
     filename = local_storage_path(storage_dir, SITEID, ds)
     logger.info(
         f"C-STORE [{ds.file_meta.TransferSyntaxUID}]: {remote['ae_title']} => {filename}"
     )
-    ds = anonymize_dataset(ds)
     try:
         ds.save_as(filename, write_like_original=False)
     except Exception as exception:
@@ -114,6 +114,8 @@ def start(address, port, aet, storage_dir) -> bool:
     # Unlimited PDU size
     ae.maximum_pdu_size = 0
     ae.network_timeout = get_network_timeout()
+    ae.acse_timeout = get_network_timeout()
+    ae.dimse_timeout = get_network_timeout()
     storage_sop_classes = [
         cx.abstract_syntax
         for cx in StoragePresentationContexts + VerificationPresentationContexts

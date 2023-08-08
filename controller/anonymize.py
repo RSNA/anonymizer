@@ -1,9 +1,29 @@
-from ast import Tuple
-import logging
-import model.project as project
-from pydicom import dcmread, Dataset
+# Description: Anonymization functions for DICOM datasets
+# See https://mircwiki.rsna.org/index.php?title=The_CTP_DICOM_Anonymizer for legacy anonymizer documentation
 
-_tag_ops = {}
+import logging
+from pprint import pformat
+from model.project import UIDROOT, SITEID, PROJECTNAME, TRIALNAME
+from pydicom import Dataset, Sequence
+import utils.config as config
+from utils.translate import _
+import xml.etree.ElementTree as ET
+
+logger = logging.getLogger(__name__)
+
+# Default values:
+anonymizer_script_filename = "assets/scripts/default-anonymizer.script"
+deidentification_method = _(
+    "RSNA DICOM ANONYMIZER"
+)  # TODO: link to app title & version
+patient_id_lookup = {}
+acc_no_seq_no = 1
+uid_seq_no = 1
+
+# Load module globals from config.json
+settings = config.load(__name__)
+globals().update(settings)
+
 _tag_keep = {}
 
 
@@ -15,22 +35,102 @@ def get_anon_patient(name: str, id: str) -> tuple:
 
 
 # Anonymization functions for each script operation
-def _hash_date(date: str) -> str:
+def _hash_date(date: str, patient_id: str) -> str:
     return date
 
 
-# TODO: functions to handle @param(), @integer()
+def init(script_filename: str = anonymizer_script_filename) -> bool:
+    # Parse the anonymize script and create a dict of tags to keep: _tag_keep["tag"] = "operation"
+    # The anonymization function indicated by the script operation will be used to transform source dataset
+
+    # Open and parse the XML script file
+    try:
+        root = ET.parse(script_filename).getroot()
+
+        # Extract 'e' tags into _tag_keep dictionary
+        for e in root.findall("e"):
+            tag = e.attrib.get("t")
+            operation = e.text if e.text is not None else ""
+            if "@remove" not in operation:
+                _tag_keep[tag] = operation
+
+        filtered_tag_keep = {k: v for k, v in _tag_keep.items() if v != ""}
+        logger.info(
+            f"_tag_keep has {len(_tag_keep)} entries with {len(filtered_tag_keep)} operations"
+        )
+        logger.info(f"_tag_keep operations:\n{pformat(filtered_tag_keep)}")
+        return True
+
+    except FileNotFoundError:
+        logger.error(f"{script_filename} not found")
+
+    except ET.ParseError:
+        logger.error(
+            f"Error parsing the script file {script_filename}. Please ensure it's a valid XML."
+        )
+
+    except Exception as e:
+        # Catch other generic exceptions and print the error message
+        logger.error(f"Error Parsing script file {script_filename}: {str(e)}")
+
+    return False
 
 
-def init(script) -> bool:
-    # Parse the anonymize script and create a dict of tags to keep
-    # and dict of tags to transform using the anonymization function indicated by the script operation
-    return True
+def anonymize_element(dataset, data_element):
+    global uid_seq_no
+    # Remove data_element if not in _tag_keep:
+    if data_element.tag not in _tag_keep:
+        del dataset[data_element.tag]
+        return
+    # Keep data_element if value is empty string (no operation):
+    if data_element.value == "":
+        return
+    # Anonymize operations:
+    if "@empty" in _tag_keep[data_element.tag]:  # data_element.value:
+        dataset[data_element.tag].value = ""
+    if "uid" in _tag_keep[data_element.tag]:
+        dataset[data_element.tag].value = f"{UIDROOT}.{SITEID}.{uid_seq_no}"
+        uid_seq_no += 1
+    if "pid" in _tag_keep[data_element.tag]:
+        if dataset.PatientID not in patient_id_lookup:
+            patient_id_lookup[
+                dataset.PatientID
+            ] = f"{SITEID}-{len(patient_id_lookup):06}"
+        dataset[data_element.tag].value = patient_id_lookup[dataset.PatientID]
+    if "hashdate" in _tag_keep[data_element.tag]:
+        dataset[data_element.tag].value = _hash_date(
+            data_element.value, dataset.PatientID
+        )
+    return
 
 
 def anonymize_dataset(ds: Dataset) -> Dataset:
     # To create an anonymized dataset:
     #   Get Anon_PatientName and Anon_PatientID for this patient from get_anon_patient()
     #   Iterate through each tag in _tag_keep and copy ds[tag] to the new dataset
-    #   Iterate through each tag from _tags_ops and apply the relevant anonymization function on ds[tag]
+    ds.remove_private_tags()  # TODO: provide a switch for this? how does java anon handle this? see <r> tag
+    ds.walk(anonymize_element)
+    # Handle Global Tags:
+    ds[0x0012, 0x0063].value = deidentification_method
+    de_ident_seq = Sequence()
+    methods = [
+        ("113100", _("Basic Application Confidentiality Profile")),
+        ("113107", _("Retain Longitudinal Temporal Information Modified Dates Option")),
+        ("113108", _("Retain Patient Characteristics Option")),
+    ]
+    for code, descr in methods:
+        item = Dataset()
+        item.CodeValue = code
+        item.CodingSchemeDesignator = "DCM"
+        item.CodeMeaning = descr
+        de_ident_seq.append(item)
+    ds.DeIdentificationMethodCodeSequence = de_ident_seq
+    ds[0x0013, 0x0010].value = deidentification_method
+    ds[0x0013, 0x1010].value = PROJECTNAME
+    ds[0x0013, 0x1011].value = TRIALNAME
+    ds[0x0013, 0x1012].value = SITEID
+    ds[0x0013, 0x1013].value = SITEID
+    config.save(__name__, "patient_id_lookup", patient_id_lookup)
+    config.save(__name__, "acc_no_seq_no", acc_no_seq_no)
+    config.save(__name__, "uid_seq_no", uid_seq_no)
     return ds

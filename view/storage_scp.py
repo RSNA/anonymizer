@@ -161,20 +161,14 @@ def create_view(view: ctk.CTkFrame):
     scp_autostart_checkbox.grid(row=0, column=7, padx=PAD, pady=PAD, sticky="n")
 
     # SCP Server Log:
-    scp_log = ctk.CTkTextbox(
-        view,
-        wrap="none",
-    )
-    install_loghandler(dicom_storage_scp.logger, scp_log)
-    scp_log.grid(row=1, columnspan=8, sticky="nswe")
+    # scp_log = ctk.CTkTextbox(
+    #     view,
+    #     wrap="none",
+    # )
+    # install_loghandler(dicom_storage_scp.logger, scp_log)
+    # scp_log.grid(row=1, columnspan=8, sticky="nswe")
 
     # Handle SCP Server Autostart:
     if scp_autostart:
-        # threading.Thread(
-        #     target=dicom_storage_scp.start,
-        #     args=(ip_addr, ip_port, aet, get_storage_directory()),
-        #     daemon=True,
-        # ).start()
-        # scp_var.set(True)
         if dicom_storage_scp.start(ip_addr, ip_port, aet, get_storage_directory()):
             scp_var.set(True)

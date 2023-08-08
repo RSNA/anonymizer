@@ -30,7 +30,8 @@ from utils.logging import install_loghandler
 
 import controller.dicom_echo_send_scu as dicom_echo_send_scu
 import controller.dicom_QR_find_scu as dicom_QR_find_scu
-import controller.dicom_move_scu as dicom_move_scu
+from controller.dicom_move_scu import move
+from controller.dicom_storage_scp import get_aet as get_storage_scp_aet
 
 logger = logging.getLogger(__name__)
 
@@ -420,14 +421,14 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         logger.info(f"Retrieving StudyInstanceUIDs: {uids}")
 
         for uid in uids:
-            if dicom_move_scu.move(
+            if move(
                 scp_ip_var.get(),
                 scp_port_var.get(),
                 scp_aet_var.get(),
                 scu_ip_var.get(),
                 scu_aet_var.get(),
+                get_storage_scp_aet(),
                 uid,
-                get_storage_directory(),
             ):
                 logger.info(f"Retrieve successful")
 
@@ -447,12 +448,12 @@ def create_view(view: ctk.CTkFrame, PAD: int):
     retrieve_button.grid(row=2, column=5, padx=PAD, pady=PAD, sticky="nswe")
 
     # SCU Client Log:
-    scu_log = ctk.CTkTextbox(
-        view,
-        wrap="none",
-    )
+    # scu_log = ctk.CTkTextbox(
+    #     view,
+    #     wrap="none",
+    # )
 
-    install_loghandler(dicom_echo_send_scu.logger, scu_log)
-    install_loghandler(dicom_QR_find_scu.logger, scu_log)
-    # install_loghandler(dicom_move_scu.logger, scu_log)
-    scu_log.grid(row=3, pady=(PAD, 0), columnspan=11, sticky="swe")
+    # install_loghandler(dicom_echo_send_scu.logger, scu_log)
+    # install_loghandler(dicom_QR_find_scu.logger, scu_log)
+    # # install_loghandler(dicom_move_scu.logger, scu_log)
+    # scu_log.grid(row=3, pady=(PAD, 0), columnspan=11, sticky="swe")
