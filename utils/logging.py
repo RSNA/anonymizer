@@ -39,17 +39,22 @@ def init_logging(install_dir: str) -> None:
     pydicom_config.debug(LOG_DEFAULT_LEVEL == logging.DEBUG)
 
 
+import threading
+
+
 class TextBoxHandler(logging.Handler):
     def __init__(self, text):
         logging.Handler.__init__(self)
         self.text = text
+        self._lock = threading.RLock()
 
     def emit(self, record):
-        msg = self.format(record)
-        self.text.configure(state="normal")
-        self.text.insert(ctk.END, msg + "\n")
-        self.text.configure(state="disabled")
-        self.text.see(ctk.END)
+        with self._lock:
+            msg = self.format(record)
+            self.text.configure(state="normal")
+            self.text.insert(ctk.END, msg + "\n")
+            self.text.configure(state="disabled")
+            self.text.see(ctk.END)
 
 
 # Install log handler for SCP Textbox:

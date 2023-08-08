@@ -6,14 +6,14 @@ from pydicom import Dataset
 def local_storage_path(base_dir: str, siteid: str, ds: Dataset) -> Path:
     dest_path = Path(
         base_dir,
-        siteid
-        + "-"
-        + str(ds.PatientName).replace(" ", "_").replace("^", "").replace("*", ""),
+        str(ds.PatientName),
         "Study"
         + "-"
         + ds.Modality
         + "-"
-        + str(ds.StudyDate),  # TODO: magic number at end
+        + str(ds.StudyDate)
+        + "T"
+        + str(ds.StudyTime)[:6] # TODO: 4 digit magic number at end, checksum?
         "Series" + "-" + str(ds.SeriesNumber),
         "Image" + "-" + str(ds.InstanceNumber) + ".dcm",
     )

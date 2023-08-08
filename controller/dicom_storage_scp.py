@@ -86,7 +86,7 @@ def _handle_store(event: Event, storage_dir: str) -> int:
     logger.debug(f"PHI:\n{ds}")
     ds = anonymize_dataset(ds)
     logger.debug(f"ANON:\n{ds}")
-    # TODO: ensure ds has values for PatientName, Modality, StudyDate, SeriesNumber, InstanceNumber
+    # TODO: ensure ds has values for PatientName, Modality, StudyDate, StudyTime, SeriesNumber, InstanceNumber
     filename = local_storage_path(storage_dir, SITEID, ds)
     logger.info(
         f"C-STORE [{ds.file_meta.TransferSyntaxUID}]: {remote['ae_title']} => {filename}"

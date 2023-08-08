@@ -36,7 +36,7 @@ def get_anon_patient(name: str, id: str) -> tuple:
 
 # Anonymization functions for each script operation
 def _hash_date(date: str, patient_id: str) -> str:
-    return date
+    return "20000101"
 
 
 def init(script_filename: str = anonymizer_script_filename) -> bool:
@@ -77,41 +77,50 @@ def init(script_filename: str = anonymizer_script_filename) -> bool:
 
 
 def anonymize_element(dataset, data_element):
-    global uid_seq_no
+    global uid_seq_no, acc_no_seq_no
+    trans = str.maketrans("", "", "() ,")
+    tag = str(data_element.tag).translate(trans).upper()
     # Remove data_element if not in _tag_keep:
-    if data_element.tag not in _tag_keep:
-        del dataset[data_element.tag]
+    if tag not in _tag_keep:
+        del dataset[tag]
         return
-    # Keep data_element if value is empty string (no operation):
-    if data_element.value == "":
+    operation = _tag_keep[tag]
+    # Keep data_element if no operation:
+    if operation == "":
         return
     # Anonymize operations:
-    if "@empty" in _tag_keep[data_element.tag]:  # data_element.value:
-        dataset[data_element.tag].value = ""
-    if "uid" in _tag_keep[data_element.tag]:
-        dataset[data_element.tag].value = f"{UIDROOT}.{SITEID}.{uid_seq_no}"
+    if "@empty" in operation:  # data_element.value:
+        dataset[tag].value = ""
+    elif "uid" in operation:
+        dataset[tag].value = f"{UIDROOT}.{SITEID}.{uid_seq_no}"
         uid_seq_no += 1
-    if "pid" in _tag_keep[data_element.tag]:
+        return
+    elif "ptid" in operation:
         if dataset.PatientID not in patient_id_lookup:
             patient_id_lookup[
                 dataset.PatientID
             ] = f"{SITEID}-{len(patient_id_lookup):06}"
-        dataset[data_element.tag].value = patient_id_lookup[dataset.PatientID]
-    if "hashdate" in _tag_keep[data_element.tag]:
-        dataset[data_element.tag].value = _hash_date(
-            data_element.value, dataset.PatientID
-        )
+        dataset[tag].value = patient_id_lookup[dataset.PatientID]
+    elif "acc" in operation:
+        dataset[tag].value = f"{acc_no_seq_no}"
+        acc_no_seq_no += 1
+    elif "hashdate" in operation:
+        dataset[tag].value = _hash_date(data_element.value, dataset.PatientID)
     return
 
 
 def anonymize_dataset(ds: Dataset) -> Dataset:
+    if not _tag_keep:
+        if not init():
+            logger.error("Failed to initialise anonymizer module")
+            return ds
     # To create an anonymized dataset:
     #   Get Anon_PatientName and Anon_PatientID for this patient from get_anon_patient()
     #   Iterate through each tag in _tag_keep and copy ds[tag] to the new dataset
     ds.remove_private_tags()  # TODO: provide a switch for this? how does java anon handle this? see <r> tag
     ds.walk(anonymize_element)
     # Handle Global Tags:
-    ds[0x0012, 0x0063].value = deidentification_method
+    ds.DeidentificationMethod = deidentification_method
     de_ident_seq = Sequence()
     methods = [
         ("113100", _("Basic Application Confidentiality Profile")),
@@ -124,12 +133,11 @@ def anonymize_dataset(ds: Dataset) -> Dataset:
         item.CodingSchemeDesignator = "DCM"
         item.CodeMeaning = descr
         de_ident_seq.append(item)
-    ds.DeIdentificationMethodCodeSequence = de_ident_seq
-    ds[0x0013, 0x0010].value = deidentification_method
-    ds[0x0013, 0x1010].value = PROJECTNAME
-    ds[0x0013, 0x1011].value = TRIALNAME
-    ds[0x0013, 0x1012].value = SITEID
-    ds[0x0013, 0x1013].value = SITEID
+    ds.DeidentificationMethodCodeSequence = de_ident_seq
+    block = ds.private_block(0x0013, _("RSNA"), create=True)
+    block.add_new(0x1, "SH", PROJECTNAME)
+    block.add_new(0x2, "SH", TRIALNAME)
+    block.add_new(0x3, "SH", SITEID)
     config.save(__name__, "patient_id_lookup", patient_id_lookup)
     config.save(__name__, "acc_no_seq_no", acc_no_seq_no)
     config.save(__name__, "uid_seq_no", uid_seq_no)

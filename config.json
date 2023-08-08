@@ -20,27 +20,20 @@
         "TRIALNAME": "MIDRC-RICORD",
         "UIDROOT": "1.2.826.0.1.3680043.10.474"
     },
-    "view.new_open_project": {
-        "projectname": "MIDRC-RICORD",
-        "siteid": "527408",
-        "trialname": "MIDRC-RICORD",
-        "uidroot": "1.2.826.0.1.3680043."
-    },
-    "!ctkframe2": {
-        "Patient Name": ""
-    },
-    "!ctkframe": {
-        "Patient Name": "",
-        "Patient Name:": "",
-        "Patient ID:": "",
-        "Accession No.:": "",
-        "Study Date:": "",
-        "Modality:": "CT"
-    },
     "view.query_retrieve_scp": {
         "scp_ip_port": 11112,
         "scp_aet": "MDEDEV",
         "scu_aet": "PYANON",
         "scu_ip_addr": "127.0.0.1"
+    },
+    "controller.anonymize": {
+        "patient_id_lookup": {
+            "999": "527408-000000",
+            "6707280126081": "527408-000001",
+            "4707095050056": "527408-000002",
+            "12345678901": "527408-000003"
+        },
+        "acc_no_seq_no": 300,
+        "uid_seq_no": 2645
     }
 }
