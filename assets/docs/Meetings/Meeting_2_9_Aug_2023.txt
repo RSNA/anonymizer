@@ -27,7 +27,7 @@ AGENDA
     - verify anonymization by looking at DICOM header
 3. BETA UX Preview
 3. Questions
-    - Necessity for SCP & SCU AET?
+    - Necessity for SCP & SCU AET? 
     - Prevent full wildcard search?
     - Custom anonymization scripts from other users (anticipate other operations beyond default)
 4. Future Improvements
