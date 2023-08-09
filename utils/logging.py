@@ -7,7 +7,7 @@ import customtkinter as ctk
 # TODO: investigate global, detachable log window with level and module filter
 LOGS_DIR = "/logs/"
 LOG_FILENAME = "anonymizer.log"
-LOG_SIZE = 1024 * 1024
+LOG_SIZE = 1024 * 1024 * 20  # 20 MB
 LOG_BACKUP_COUNT = 10
 LOG_DEFAULT_LEVEL = logging.INFO
 LOG_FORMAT = "{asctime} [{levelname}] {filename}:{lineno}: {message}"
