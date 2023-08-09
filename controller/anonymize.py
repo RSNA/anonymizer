@@ -17,8 +17,8 @@ deidentification_method = _(
     "RSNA DICOM ANONYMIZER"
 )  # TODO: link to app title & version
 patient_id_lookup = {}
+uid_lookup = {}
 acc_no_seq_no = 1
-uid_seq_no = 1
 
 # Load module globals from config.json
 settings = config.load(__name__)
@@ -85,6 +85,7 @@ def anonymize_element(dataset, data_element):
         del dataset[tag]
         return
     operation = _tag_keep[tag]
+    value = data_element.value
     # Keep data_element if no operation:
     if operation == "":
         return
@@ -92,14 +93,15 @@ def anonymize_element(dataset, data_element):
     if "@empty" in operation:  # data_element.value:
         dataset[tag].value = ""
     elif "uid" in operation:
-        dataset[tag].value = f"{UIDROOT}.{SITEID}.{uid_seq_no}"
-        uid_seq_no += 1
+        if not value in uid_lookup:
+            next_uid_ndx = len(uid_lookup) + 1
+            uid_lookup[value] = f"{UIDROOT}.{SITEID}.{next_uid_ndx}"
+        dataset[tag].value = uid_lookup[value]
         return
     elif "ptid" in operation:
         if dataset.PatientID not in patient_id_lookup:
-            patient_id_lookup[
-                dataset.PatientID
-            ] = f"{SITEID}-{len(patient_id_lookup):06}"
+            next_patient_ndx = len(patient_id_lookup) + 1
+            patient_id_lookup[dataset.PatientID] = f"{SITEID}-{next_patient_ndx:06}"
         dataset[tag].value = patient_id_lookup[dataset.PatientID]
     elif "acc" in operation:
         dataset[tag].value = f"{acc_no_seq_no}"
@@ -139,6 +141,6 @@ def anonymize_dataset(ds: Dataset) -> Dataset:
     block.add_new(0x2, "SH", TRIALNAME)
     block.add_new(0x3, "SH", SITEID)
     config.save(__name__, "patient_id_lookup", patient_id_lookup)
+    config.save(__name__, "uid_lookup", uid_lookup)
     config.save(__name__, "acc_no_seq_no", acc_no_seq_no)
-    config.save(__name__, "uid_seq_no", uid_seq_no)
     return ds

@@ -44,6 +44,7 @@ def move(
     #     logger.error("No Application Entity")
     #     return None
     ae.network_timeout = get_network_timeout()
+    ae.connection_timeout = get_network_timeout()
     ae.acse_timeout = get_network_timeout()
     ae.dimse_timeout = get_network_timeout()
     error = False

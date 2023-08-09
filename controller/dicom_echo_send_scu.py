@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 from pydicom.dataset import Dataset
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.presentation import (
@@ -12,6 +11,7 @@ from utils.network import get_network_timeout
 logger = logging.getLogger(__name__)
 
 _RADIOLOGY_CLASSES = {
+    "Computed Radiography Image Storage": "1.2.840.10008.5.1.4.1.1.1",
     "Computed Tomography Image Storage": "1.2.840.10008.5.1.4.1.1.2",
     "Enhanced CT Image Storage": "1.2.840.10008.5.1.4.1.1.2.1",
     "Digital X-Ray Image Storage - For Presentation": "1.2.840.10008.5.1.4.1.1.1.1",
@@ -39,7 +39,11 @@ def echo(scp_ip: str, scp_port: int, scp_ae: str, scu_ip: str, scu_ae: str) -> b
     logger.info(f"C-ECHO from {scu_ae}@{scu_ip} to {scp_ae}@{scp_ip}:{scp_port}")
     # Initialize the Application Entity
     ae = AE(scu_ae)
+    # TODO: implement ae timeout setting in util.network
     ae.network_timeout = get_network_timeout()
+    ae.connection_timeout = get_network_timeout()
+    ae.acse_timeout = get_network_timeout()
+    ae.dimse_timeout = get_network_timeout()
     try:
         assoc = ae.associate(
             scp_ip,
@@ -86,12 +90,15 @@ def send(
     scp_ae: str,
     scu_ip: str,
     scu_ae: str,
-    dicom_files: list[str | Path | Dataset],
+    dicom_files: list[str],
 ) -> bool:
     logger.info(f"C-STORE from {scu_ae}@{scu_ip} to {scp_ae}@{scp_ip}:{scp_port}")
     # Initialize the Application Entity
     ae = AE(scu_ae)
     ae.network_timeout = get_network_timeout()
+    ae.connection_timeout = get_network_timeout()
+    ae.acse_timeout = get_network_timeout()
+    ae.dimse_timeout = get_network_timeout()
     try:
         # Establish association with SCP:
         assoc = ae.associate(
@@ -108,6 +115,7 @@ def send(
         logger.info(f"Association established with {assoc.acceptor.ae_title}")
 
         # Send DICOM Files:
+        # TODO: yield mechanism, progress bar for dashboard/status bar
         for dicom_file in dicom_files:
             response = (Dataset)(assoc.send_c_store(dicom_file))
             if response.Status != 0:

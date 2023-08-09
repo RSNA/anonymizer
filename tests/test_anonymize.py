@@ -12,4 +12,4 @@ def test_hash_datet1():
     date = "2021-01-01"
     patient_id = "123456"
     hashed_date = _hash_date(date, patient_id)
-    assert hashed_date == "2021-01-01"
+    assert hashed_date == "20000101"

@@ -114,6 +114,7 @@ def start(address, port, aet, storage_dir) -> bool:
     # Unlimited PDU size
     ae.maximum_pdu_size = 0
     ae.network_timeout = get_network_timeout()
+    ae.connection_timeout = get_network_timeout()
     ae.acse_timeout = get_network_timeout()
     ae.dimse_timeout = get_network_timeout()
     storage_sop_classes = [

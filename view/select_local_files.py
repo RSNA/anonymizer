@@ -130,7 +130,7 @@ def create_view(view: ctk.CTkFrame):
 
     anonymize_button = ctk.CTkButton(
         view,
-        text=_("Anonymize"),
+        text=_("Import & Anonymize"),
         state="disabled",
         command=lambda: anonymize_files(selected_files, anonymize_button),
     )

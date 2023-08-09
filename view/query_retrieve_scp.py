@@ -2,7 +2,7 @@ import logging
 import string
 import customtkinter as ctk
 import pandas as pd
-from tkinter import ttk, font
+from tkinter import ttk
 from CTkToolTip import CTkToolTip
 from view.storage_dir import get_storage_directory
 from utils.translate import _
@@ -13,6 +13,7 @@ from utils.ux_verify import (
     int_entry_change,
     str_entry_change,
     str_entry,
+    adjust_column_width,
     ip_min_chars,
     ip_max_chars,
     aet_max_chars,
@@ -60,33 +61,8 @@ settings = config.load(__name__)
 globals().update(settings)
 
 
-def adjust_column_width(tree, column_id, padding=10):
-    """
-    Adjust the width of a column in a ttk.Treeview to fit its content.
-
-    Parameters:
-    - tree: The Treeview widget.
-    - column_id: The identifier of the column to be adjusted.
-    - padding: Extra space added to the width (default is 10 pixels).
-    """
-
-    # Start with the width of the column header
-    max_width = font.Font().measure(column_id)
-
-    # Iterate over each item in the column
-    for item in tree.get_children():
-        item_value = tree.set(item, column_id)
-        item_width = font.Font().measure(item_value)
-
-        # Update max_width if this value is wider than any previously checked
-        max_width = max(max_width, item_width)
-
-    # Adjust the column width
-    tree.column(column_id, width=max_width + padding)
-
-
 def create_view(view: ctk.CTkFrame, PAD: int):
-    logger.info(f"Creating Configure DICOM Query/Retrieve SCU View")
+    logger.info(f"Creating Query/Retrieve SCU View")
     char_width_px = ctk.CTkFont().measure("A")
     digit_width_px = ctk.CTkFont().measure("9")
     validate_entry_cmd = view.register(validate_entry)
@@ -270,6 +246,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         patient_name_var,
         validate_entry_cmd,
         char_width_px,
+        __name__,
         label=_("Patient Name:"),
         min_chars=0,
         max_chars=patient_name_max_chars,
@@ -287,6 +264,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         patient_id_var,
         validate_entry_cmd,
         char_width_px,
+        __name__,
         label=_("Patient ID:"),
         min_chars=0,
         max_chars=patient_id_max_chars,
@@ -304,6 +282,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         accession_no_var,
         validate_entry_cmd,
         char_width_px,
+        __name__,
         label=_("Accession No.:"),
         min_chars=0,
         max_chars=accession_no_max_chars,
@@ -322,6 +301,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         study_date_var,
         validate_entry_cmd,
         char_width_px,
+        __name__,
         label=_("Study Date:"),
         min_chars=dicom_date_chars,
         max_chars=dicom_date_chars,
@@ -340,6 +320,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         modality_var,
         validate_entry_cmd,
         char_width_px + 4,
+        __name__,
         label=_("Modality:"),
         min_chars=modality_min_chars,
         max_chars=modality_max_chars,
@@ -443,7 +424,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
     query_button.grid(row=2, column=4, padx=PAD, pady=PAD, sticky="nswe")
 
     retrieve_button = ctk.CTkButton(
-        query_param_frame, text=_("Retrieve"), command=retrieve_button_pressed
+        query_param_frame, text=_("Import & Anonymize"), command=retrieve_button_pressed
     )
     retrieve_button.grid(row=2, column=5, padx=PAD, pady=PAD, sticky="nswe")
 
