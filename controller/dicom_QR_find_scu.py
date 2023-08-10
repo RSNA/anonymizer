@@ -1,10 +1,11 @@
 import logging
+from typing import final
 from pydicom.dataset import Dataset
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.presentation import build_context
 from pynetdicom.sop_class import _QR_CLASSES as QR_CLASSES
 from pynetdicom.status import QR_FIND_SERVICE_CLASS_STATUS
-from utils.network import get_network_timeout
+from controller.dicom_ae import set_network_timeout
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +41,10 @@ def find(
     logger.info(f"Query: {name}, {id}, {acc_no}, {study_date}, {modality}")
     # Initialize the Application Entity
     ae = AE(scu_ae)
-    ae.network_timeout = get_network_timeout()
-    ae.connection_timeout = get_network_timeout()
-    ae.acse_timeout = get_network_timeout()
-    ae.dimse_timeout = get_network_timeout()
+    set_network_timeout(ae)
+
+    results = []
+    assoc = None
     try:
         assoc = ae.associate(
             scp_ip,
@@ -65,7 +66,6 @@ def find(
         )
 
         # Process the responses received from the peer
-        results = []
         for status, identifier in responses:
             if not status or status.Status not in (0xFF00, 0xFF01, 0x0000):
                 if not status:
@@ -88,14 +88,14 @@ def find(
                             delattr(identifier, field)
                     results.append(identifier)
 
-        # Release the association
-        assoc.release()
-
     except Exception as e:
         logger.error(
             f"Failed DICOM C-FIND to {scp_ae}@{scp_ip}:{scp_port}, Error: {str(e)}"
         )
-        return None
+    finally:
+        if assoc:
+            assoc.release()
+        ae.shutdown()
 
     if len(results) == 0:
         logger.info("No query results found")

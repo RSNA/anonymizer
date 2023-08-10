@@ -10,7 +10,7 @@ from view.storage_dir import get_storage_directory
 from utils.translate import _
 import utils.config as config
 from utils.network import get_local_ip_addresses
-from utils.ux_verify import (
+from utils.ux_fields import (
     validate_entry,
     int_entry_change,
     str_entry,
@@ -22,8 +22,6 @@ from utils.ux_verify import (
     ip_port_max,
     ip_port_min,
 )
-from utils.logging import install_loghandler
-
 from controller.dicom_echo_send_scu import echo, send
 
 logger = logging.getLogger(__name__)

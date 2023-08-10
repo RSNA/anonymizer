@@ -7,11 +7,10 @@ from pynetdicom.status import QR_MOVE_SERVICE_CLASS_STATUS
 from pynetdicom import debug_logger
 from controller.dicom_storage_scp import (
     C_SUCCESS,
-    C_STORE_OUT_OF_RESOURCES,
     C_PENDING_A,
     C_PENDING_B,
 )
-from utils.network import get_network_timeout
+from controller.dicom_ae import set_network_timeout
 
 logger = logging.getLogger(__name__)
 
@@ -39,14 +38,7 @@ def move(
     logger.info(f"Move StudyInstanceUID: {study_uid}")
     # Initialize the Application Entity
     ae = AE(scu_ae)
-    # ae = get_AE()
-    # if ae is None:
-    #     logger.error("No Application Entity")
-    #     return None
-    ae.network_timeout = get_network_timeout()
-    ae.connection_timeout = get_network_timeout()
-    ae.acse_timeout = get_network_timeout()
-    ae.dimse_timeout = get_network_timeout()
+    set_network_timeout(ae)
     error = False
     assoc = None
     try:

@@ -4,7 +4,7 @@ from tkinter import filedialog
 import logging
 from utils.translate import _
 import utils.config as config
-from utils.ux_verify import validate_entry, int_entry_change, str_entry_change
+from utils.ux_fields import validate_entry, int_entry_change, str_entry_change
 from model.project import SITEID, PROJECTNAME, TRIALNAME, UIDROOT
 
 logger = logging.getLogger(__name__)

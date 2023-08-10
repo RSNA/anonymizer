@@ -2,9 +2,8 @@ import os
 import logging
 import logging.handlers
 from pydicom import config as pydicom_config
-import customtkinter as ctk
 
-# TODO: investigate global, detachable log window with level and module filter
+# TODO: investigate global, detachable log window with level and module filter / or delegate to OpenLogView app
 LOGS_DIR = "/logs/"
 LOG_FILENAME = "anonymizer.log"
 LOG_SIZE = 1024 * 1024 * 20  # 20 MB
@@ -14,7 +13,6 @@ LOG_FORMAT = "{asctime} [{levelname}] {filename}:{lineno}: {message}"
 
 
 def init_logging(install_dir: str) -> None:
-    # TODO: move logging to utils.logging and allow setup from config.json
     # TODO: provide UX to change log level
     logs_dir = install_dir + LOGS_DIR
     os.makedirs(logs_dir, exist_ok=True)
@@ -39,29 +37,5 @@ def init_logging(install_dir: str) -> None:
     pydicom_config.debug(LOG_DEFAULT_LEVEL == logging.DEBUG)
 
 
-import threading
-
-
-class TextBoxHandler(logging.Handler):
-    def __init__(self, text):
-        logging.Handler.__init__(self)
-        self.text = text
-        self._lock = threading.RLock()
-
-    def emit(self, record):
-        with self._lock:
-            msg = self.format(record)
-            self.text.configure(state="normal")
-            self.text.insert(ctk.END, msg + "\n")
-            self.text.configure(state="disabled")
-            self.text.see(ctk.END)
-
-
-# Install log handler for SCP Textbox:
-def install_loghandler(logger, textbox: ctk.CTkTextbox) -> logging.Handler:
-    handler = TextBoxHandler(textbox)
-    handler.setLevel(LOG_DEFAULT_LEVEL)
-    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    return handler
+def set_log_level(level: int) -> None:
+    logging.getLogger().setLevel(level)

@@ -1,5 +1,4 @@
 import string
-import threading
 import customtkinter as ctk
 from CTkToolTip import CTkToolTip
 import logging
@@ -7,9 +6,8 @@ from utils.translate import _
 import utils.config as config
 import controller.dicom_storage_scp as dicom_storage_scp
 from view.storage_dir import get_storage_directory
-from utils.logging import install_loghandler
 from utils.network import get_local_ip_addresses
-from utils.ux_verify import (
+from utils.ux_fields import (
     validate_entry,
     int_entry_change,
     str_entry_change,
@@ -159,14 +157,6 @@ def create_view(view: ctk.CTkFrame):
         variable=scp_autostart_var,
     )
     scp_autostart_checkbox.grid(row=0, column=7, padx=PAD, pady=PAD, sticky="n")
-
-    # SCP Server Log:
-    # scp_log = ctk.CTkTextbox(
-    #     view,
-    #     wrap="none",
-    # )
-    # install_loghandler(dicom_storage_scp.logger, scp_log)
-    # scp_log.grid(row=1, columnspan=8, sticky="nswe")
 
     # Handle SCP Server Autostart:
     if scp_autostart:

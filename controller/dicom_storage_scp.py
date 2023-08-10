@@ -1,18 +1,10 @@
 import logging
 from pynetdicom.events import Event, EVT_C_STORE, EVT_C_ECHO
 from pynetdicom.ae import ApplicationEntity as AE
-from pynetdicom.presentation import (
-    StoragePresentationContexts,
-    VerificationPresentationContexts,
-)
-from pynetdicom._globals import ALL_TRANSFER_SYNTAXES
-
 from controller.anonymize import anonymize_dataset
-
+from controller.dicom_ae import set_network_timeout, set_radiology_storage_contexts
 from utils.translate import _
 from utils.storage import local_storage_path
-from utils.network import get_network_timeout
-
 from model.project import SITEID, PROJECTNAME, TRIALNAME, UIDROOT
 
 logger = logging.getLogger(__name__)
@@ -21,30 +13,19 @@ logger = logging.getLogger(__name__)
 
 # Store scp instance after ae.start_server() is called:
 scp = None
-ae = None
 
 
 # Is SCP running?
 def server_running() -> bool:
     global scp
-    if scp is None:
-        return False
-    else:
-        return True
+    return scp is not None
 
 
-# SCP AE Title:
-def get_aet() -> str:
+def get_storage_scp_aet():
     global scp
     if scp is None:
-        return ""
-    else:
-        return scp.ae_title
-
-
-def get_AE():
-    global ae
-    return ae
+        return None
+    return scp.ae_title
 
 
 # C-STORE status values from DICOM Standard, Part 7:
@@ -111,18 +92,16 @@ def start(address, port, aet, storage_dir) -> bool:
         return False
 
     ae = AE(aet)
-    # Unlimited PDU size
-    ae.maximum_pdu_size = 0
-    ae.network_timeout = get_network_timeout()
-    ae.connection_timeout = get_network_timeout()
-    ae.acse_timeout = get_network_timeout()
-    ae.dimse_timeout = get_network_timeout()
-    storage_sop_classes = [
-        cx.abstract_syntax
-        for cx in StoragePresentationContexts + VerificationPresentationContexts
-    ]
-    for uid in storage_sop_classes:
-        ae.add_supported_context(uid, ALL_TRANSFER_SYNTAXES)  # type: ignore
+    ae.maximum_pdu_size = 0  # no limit
+    set_network_timeout(ae)
+    set_radiology_storage_contexts(ae)
+
+    # storage_sop_classes = [
+    #     cx.abstract_syntax
+    #     for cx in StoragePresentationContexts + VerificationPresentationContexts
+    # ]
+    # for uid in storage_sop_classes:
+    #     ae.add_supported_context(uid, ALL_TRANSFER_SYNTAXES)  # type: ignore
 
     handlers = [(EVT_C_ECHO, _handle_echo), (EVT_C_STORE, _handle_store, [storage_dir])]
 

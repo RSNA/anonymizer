@@ -1,12 +1,5 @@
 import netifaces
 
-# TODO: provide UX and persistence for network timeout
-_network_timeout = 3  # seconds
-
-
-def get_network_timeout():
-    return _network_timeout
-
 
 def get_local_ip_addresses():
     ip_addresses = []

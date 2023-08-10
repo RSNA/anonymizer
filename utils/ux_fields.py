@@ -1,4 +1,4 @@
-import os
+# User Interface Field Validation & Utilities
 import utils.config as config
 import tkinter as tk
 import customtkinter as ctk
@@ -7,6 +7,7 @@ from CTkToolTip import CTkToolTip
 from utils.translate import _
 
 # Entry Limits:
+
 # Network Addresses:
 ip_min_chars = 7
 ip_max_chars = 15
@@ -14,6 +15,7 @@ aet_min_chars = 3
 aet_max_chars = 16
 ip_port_min = 104
 ip_port_max = 65535
+
 # DICOM Query Fields:
 patient_name_max_chars = 30  # dicomVR PN=64 max
 patient_id_max_chars = 30  # dicomVR LO=64 max

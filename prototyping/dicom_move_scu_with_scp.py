@@ -18,7 +18,7 @@ from controller.anonymize import anonymize_dataset
 
 from utils.translate import _
 from utils.storage import local_storage_path
-from utils.network import get_network_timeout
+from utils.network import set_network_timeout
 
 from model.project import SITEID, PROJECTNAME, TRIALNAME, UIDROOT
 
@@ -69,15 +69,13 @@ def move(
     # requesting the move study to this AE
     ae = AE(scu_ae)
     ae.maximum_pdu_size = 0  # Unlimited PDU size
+    set_network_timeout(ae)
 
     storage_sop_classes = [cx.abstract_syntax for cx in StoragePresentationContexts]
     for uid in storage_sop_classes:
         ae.add_supported_context(uid, ALL_TRANSFER_SYNTAXES)  # type: ignore
 
     handlers = [(EVT_C_STORE, _handle_store, [storage_dir])]
-    ae.network_timeout = get_network_timeout()
-    ae.acse_timeout = get_network_timeout()
-    ae.dimse_timeout = get_network_timeout()
 
     # Start our Storage SCP in non-blocking mode, listening on port 1045
     scu_port = 1045

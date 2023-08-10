@@ -2,7 +2,7 @@
 import os
 import gettext
 
-domain = "dicom_scrub"
+domain = "anonymizer"
 localedir = os.path.join(os.path.dirname(__file__), "assets", "langpacks")
 language_translations = gettext.translation(domain, localedir, fallback=True)
 language_translations.install()

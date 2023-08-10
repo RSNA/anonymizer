@@ -36,6 +36,7 @@ def get_anon_patient(name: str, id: str) -> tuple:
 
 # Anonymization functions for each script operation
 def _hash_date(date: str, patient_id: str) -> str:
+    
     return "20000101"
 
 

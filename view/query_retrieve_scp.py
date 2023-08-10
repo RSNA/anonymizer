@@ -8,7 +8,7 @@ from view.storage_dir import get_storage_directory
 from utils.translate import _
 import utils.config as config
 from utils.network import get_local_ip_addresses
-from utils.ux_verify import (
+from utils.ux_fields import (
     validate_entry,
     int_entry_change,
     str_entry_change,
@@ -27,12 +27,11 @@ from utils.ux_verify import (
     modality_max_chars,
     modality_min_chars,
 )
-from utils.logging import install_loghandler
 
-import controller.dicom_echo_send_scu as dicom_echo_send_scu
-import controller.dicom_QR_find_scu as dicom_QR_find_scu
+from controller.dicom_echo_send_scu import echo
+from controller.dicom_QR_find_scu import find
 from controller.dicom_move_scu import move
-from controller.dicom_storage_scp import get_aet as get_storage_scp_aet
+from controller.dicom_storage_scp import get_storage_scp_aet
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +88,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         logger.info(f"scp_button_event Echo to {scp_aet_var.get()}...")
         scp_button.configure(text_color="light grey")
         # Echo SCP:
-        if dicom_echo_send_scu.echo(
+        if echo(
             scp_ip_var.get(),
             scp_port_var.get(),
             scp_aet_var.get(),
@@ -353,7 +352,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
     # TODO: query on <Return> // move to next query entry on <Return>
     def query_button_pressed(tree: ttk.Treeview):
         logger.info(f"Query button pressed")
-        results = dicom_QR_find_scu.find(
+        results = find(
             scp_ip_var.get(),
             scp_port_var.get(),
             scp_aet_var.get(),
@@ -396,10 +395,16 @@ def create_view(view: ctk.CTkFrame, PAD: int):
     tree = ttk.Treeview(view, show="headings")
     tree.grid(row=2, column=0, columnspan=11, sticky="nswe")
 
+    # TODO: only enable retrieve if storage scp is running:
     def retrieve_button_pressed():
         uids = list(tree.selection())
         logger.info(f"Retrieve button pressed")
         logger.info(f"Retrieving StudyInstanceUIDs: {uids}")
+
+        dest_scp_aet = get_storage_scp_aet()
+        if dest_scp_aet is None:
+            logger.error(f"Storage SCP AET is None. Is it running?")
+            return
 
         for uid in uids:
             if move(
@@ -408,7 +413,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
                 scp_aet_var.get(),
                 scu_ip_var.get(),
                 scu_aet_var.get(),
-                get_storage_scp_aet(),
+                dest_scp_aet,
                 uid,
             ):
                 logger.info(f"Retrieve successful")
@@ -427,14 +432,3 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         query_param_frame, text=_("Import & Anonymize"), command=retrieve_button_pressed
     )
     retrieve_button.grid(row=2, column=5, padx=PAD, pady=PAD, sticky="nswe")
-
-    # SCU Client Log:
-    # scu_log = ctk.CTkTextbox(
-    #     view,
-    #     wrap="none",
-    # )
-
-    # install_loghandler(dicom_echo_send_scu.logger, scu_log)
-    # install_loghandler(dicom_QR_find_scu.logger, scu_log)
-    # # install_loghandler(dicom_move_scu.logger, scu_log)
-    # scu_log.grid(row=3, pady=(PAD, 0), columnspan=11, sticky="swe")
