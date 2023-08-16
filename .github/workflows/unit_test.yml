@@ -4,8 +4,8 @@
 name: anonymizer-unit-test
 
 on:
-#  push:
-#    branches: [ "master" ]
+  push:
+    branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
 
@@ -38,4 +38,4 @@ jobs:
     
     - name: Run Unit Tests within pipenv with pytest
       run: |
-        pipenv run pytest
+        pipenv run pytest --log-cli-level=DEBUG

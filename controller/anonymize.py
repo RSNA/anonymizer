@@ -27,6 +27,13 @@ globals().update(settings)
 _tag_keep = {}
 
 
+def clear_lookups():
+    global patient_id_lookup, uid_lookup, acc_no_seq_no
+    patient_id_lookup = {}
+    uid_lookup = {}
+    acc_no_seq_no = 1
+
+
 # Patient Mapping Function:
 def get_anon_patient(name: str, id: str) -> tuple:
     # Create/Manage lookup table per project for mapping Actual to Anonymized Patient
@@ -36,7 +43,6 @@ def get_anon_patient(name: str, id: str) -> tuple:
 
 # Anonymization functions for each script operation
 def _hash_date(date: str, patient_id: str) -> str:
-    
     return "20000101"
 
 
@@ -49,7 +55,7 @@ def init(script_filename: str = anonymizer_script_filename) -> bool:
         root = ET.parse(script_filename).getroot()
 
         # Extract 'e' tags into _tag_keep dictionary
-        for e in root.findall("e"):
+        for e in root.findall("e"):  # type: ignore
             tag = e.attrib.get("t")
             operation = e.text if e.text is not None else ""
             if "@remove" not in operation:

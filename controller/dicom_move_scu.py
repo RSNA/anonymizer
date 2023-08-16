@@ -5,7 +5,7 @@ from pynetdicom.presentation import build_context
 from pynetdicom.sop_class import _QR_CLASSES as QR_CLASSES
 from pynetdicom.status import QR_MOVE_SERVICE_CLASS_STATUS
 from pynetdicom import debug_logger
-from controller.dicom_storage_scp import (
+from controller.dicom_return_codes import (
     C_SUCCESS,
     C_PENDING_A,
     C_PENDING_B,
@@ -27,7 +27,7 @@ def move(
     scu_ae: str,
     dest_scp_ae: str,
     study_uid: str,
-) -> bool:
+) -> list[Dataset] | None:
     logger.info(
         f"C-MOVE scu:{scu_ae}@{scu_ip} scp:{scp_ae}@{scp_ip}:{scp_port} move to: {dest_scp_ae}"
     )
@@ -39,6 +39,8 @@ def move(
     # Initialize the Application Entity
     ae = AE(scu_ae)
     set_network_timeout(ae)
+
+    results = []
     error = False
     assoc = None
     try:
@@ -69,7 +71,7 @@ def move(
         )
 
         # Process the responses received from the remote scp:
-        for status, _ in responses:
+        for status, identifier in responses:
             if not status or status.Status not in (C_SUCCESS, C_PENDING_A, C_PENDING_B):
                 error = True
                 if not status:
@@ -81,13 +83,26 @@ def move(
                         f"C-MOVE Failed: {QR_MOVE_SERVICE_CLASS_STATUS[status.Status][1]}"
                     )
 
+            # The responses received from the SCP include notifications
+            # on whether or not the storage sub-operations have been successful.
+            # Result dataset:
+            # (0000, 0900) Status                              US:
+            # If no error:
+            # (0000, 1020) Number of Remaining Sub-operations  US:
+            # (0000, 1021) Number of Completed Sub-operations  US:
+            # (0000, 1022) Number of Failed Sub-operations     US:
+            # (0000, 1023) Number of Warning Sub-operations    US:
+            results.append(status)
+
     except Exception as e:
         logger.error(f"Failed DICOM C-MOVE to {scu_ae}, Error: {str(e)}")
-        error = True
+        if error:
+            return None
 
     finally:
         # Release the association
         if assoc:
             assoc.release()
         ae.shutdown()
-        return not error
+
+    return results

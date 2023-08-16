@@ -28,8 +28,8 @@ from utils.ux_fields import (
     modality_min_chars,
 )
 
-from controller.dicom_echo_send_scu import echo
-from controller.dicom_QR_find_scu import find
+from controller.dicom_echo_scu import echo
+from controller.dicom_find_scu import find
 from controller.dicom_move_scu import move
 from controller.dicom_storage_scp import get_storage_scp_aet
 

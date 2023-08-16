@@ -5,7 +5,12 @@ from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.presentation import build_context
 from pynetdicom.sop_class import _QR_CLASSES as QR_CLASSES
 from pynetdicom.status import QR_FIND_SERVICE_CLASS_STATUS
-from controller.dicom_ae import set_network_timeout
+from controller.dicom_ae import set_network_timeout, get_study_root_qr_contexts
+from controller.dicom_return_codes import (
+    C_SUCCESS,
+    C_PENDING_A,
+    C_PENDING_B,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,13 +48,14 @@ def find(
     ae = AE(scu_ae)
     set_network_timeout(ae)
 
+    error = False
     results = []
     assoc = None
     try:
         assoc = ae.associate(
             scp_ip,
             scp_port,
-            [build_context(QR_CLASSES["StudyRootQueryRetrieveInformationModelFind"])],
+            get_study_root_qr_contexts(),
             ae_title=scp_ae,
             bind_address=(scu_ip, 0),
         )
@@ -59,15 +65,17 @@ def find(
 
         logger.info(f"Association established with {assoc.acceptor.ae_title}")
 
-        # Use the C-FIND service to send the identifier
+        # Use the C-FIND service to send the identifier using the StudyRootQueryRetrieveInformationModelFind
         responses = assoc.send_c_find(
             ds,
             query_model=QR_CLASSES["StudyRootQueryRetrieveInformationModelFind"],
         )
 
         # Process the responses received from the peer
+        # TODO: reflect status dataset back to UX client to provide find error detail
         for status, identifier in responses:
-            if not status or status.Status not in (0xFF00, 0xFF01, 0x0000):
+            if not status or status.Status not in (C_SUCCESS, C_PENDING_A, C_PENDING_B):
+                error = True
                 if not status:
                     logger.error(
                         "Connection timed out, was aborted, or received an invalid response"
@@ -78,6 +86,7 @@ def find(
                     )
             else:
                 if identifier:
+                    # TODO: move this code to UX client?
                     fields_to_remove = [
                         "QueryRetrieveLevel",
                         "RetrieveAETitle",
@@ -89,6 +98,7 @@ def find(
                     results.append(identifier)
 
     except Exception as e:
+        error = True
         logger.error(
             f"Failed DICOM C-FIND to {scp_ae}@{scp_ip}:{scp_port}, Error: {str(e)}"
         )
@@ -96,15 +106,24 @@ def find(
         if assoc:
             assoc.release()
         ae.shutdown()
+        if error:
+            return None
 
     if len(results) == 0:
         logger.info("No query results found")
-        return None
     else:
         logger.info(f"{len(results)} Query results found")
         for result in results:
             logger.info(
-                f"{result.PatientName}, {result.PatientID}, {result.StudyDate}, {result.StudyDescription}, {result.AccessionNumber}, {result.ModalitiesInStudy}, {result.NumberOfStudyRelatedSeries}, {result.NumberOfStudyRelatedInstances}, {result.StudyInstanceUID} "
+                f"{getattr(result, 'PatientName', 'N/A')}, "
+                f"{getattr(result, 'PatientID', 'N/A')}, "
+                f"{getattr(result, 'StudyDate', 'N/A')}, "
+                f"{getattr(result, 'StudyDescription', 'N/A')}, "
+                f"{getattr(result, 'AccessionNumber', 'N/A')}, "
+                f"{getattr(result, 'ModalitiesInStudy', 'N/A')}, "
+                f"{getattr(result, 'NumberOfStudyRelatedSeries', 'N/A')}, "
+                f"{getattr(result, 'NumberOfStudyRelatedInstances', 'N/A')}, "
+                f"{getattr(result, 'StudyInstanceUID', 'N/A')} "
             )
 
     return results

@@ -2,10 +2,9 @@ import os
 import logging
 import string
 import customtkinter as ctk
-import pandas as pd
+import queue
 from tkinter import ttk
 from CTkToolTip import CTkToolTip
-from requests import get
 from view.storage_dir import get_storage_directory
 from utils.translate import _
 import utils.config as config
@@ -22,9 +21,12 @@ from utils.ux_fields import (
     ip_port_max,
     ip_port_min,
 )
-from controller.dicom_echo_send_scu import echo, send
+from controller.dicom_echo_scu import echo
+from controller.dicom_send_scu import send, SendRequest, SendResponse
 
 logger = logging.getLogger(__name__)
+
+export_queue = queue.Queue()
 
 # Default values for initialising UX ctk.Vars (overwritten at startup from config.json):
 scp_ip_addr = "127.0.0.1"
@@ -249,15 +251,22 @@ def create_view(view: ctk.CTkFrame, PAD: int):
                 logger.error(f"No DICOM files found in {path}")
                 continue
 
-            if send(
-                scp_ip_var.get(),
-                scp_port_var.get(),
-                scp_aet_var.get(),
-                scu_ip_var.get(),
-                scu_aet_var.get(),
-                file_paths,
-            ):
-                logger.info(f"Export {dir} successful")
+            ux_Q = queue.Queue()
+
+            req: SendRequest = SendRequest(
+                scp_ip=scp_ip_var.get(),
+                scp_port=scp_port_var.get(),
+                scp_ae=scp_aet_var.get(),
+                scu_ip=scu_ip_var.get(),
+                scu_ae=scu_aet_var.get(),
+                dicom_files=file_paths,
+                ux_Q=ux_Q,
+            )
+
+            if send(req):
+                logger.info(f"Export {dir} initiated")
+
+            # TODO: timed callback to update treeview with export status
 
     export_button = ctk.CTkButton(view, text=_("Export"), command=export_button_pressed)
     export_button.grid(row=2, column=10, padx=PAD, pady=PAD, sticky="e")

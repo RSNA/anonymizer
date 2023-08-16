@@ -1,8 +1,14 @@
+import os
 import logging
 from pynetdicom.events import Event, EVT_C_STORE, EVT_C_ECHO
 from pynetdicom.ae import ApplicationEntity as AE
+from controller.dicom_return_codes import C_SUCCESS, C_STORE_OUT_OF_RESOURCES
 from controller.anonymize import anonymize_dataset
-from controller.dicom_ae import set_network_timeout, set_radiology_storage_contexts
+from controller.dicom_ae import (
+    set_network_timeout,
+    set_radiology_storage_contexts,
+    set_verification_context,
+)
 from utils.translate import _
 from utils.storage import local_storage_path
 from model.project import SITEID, PROJECTNAME, TRIALNAME, UIDROOT
@@ -26,25 +32,6 @@ def get_storage_scp_aet():
     if scp is None:
         return None
     return scp.ae_title
-
-
-# C-STORE status values from DICOM Standard, Part 7:
-# https://dicom.nema.org/medical/dicom/current/output/chtml/part07/chapter_9.html#sect_9.1.1
-# https://pydicom.github.io/pynetdicom/stable/reference/generated/pynetdicom._handlers.doc_handle_store.html
-# Non-Service Class specific statuses - PS3.7 Annex C
-# TODO: trim error codes to those relevant, move to utils/errors.py
-C_SUCCESS = 0x0000
-C_STORE_NOT_AUTHORISED = 0x0124
-C_STORE_OUT_OF_RESOURCES = 0xA700
-C_MOVE_UNKNOWN_AE = 0xA801
-C_STORE_DATASET_ERROR = 0xA900  # Dataset does not match SOP class
-C_STORE_DUPLICATE_INVOCATION = 0x0210
-C_STORE_DECODE_ERROR = 0xC210
-C_STORE_UNRECOGNIZED_OPERATION = 0xC211
-C_STORE_PROCESSING_FAILURE = 0x0110
-C_CANCEL = 0xFE00
-C_PENDING_A = 0xFF00
-C_PENDING_B = 0xFF01
 
 
 # DICOM C-ECHO Verification event handler (EVT_C_ECHO)
@@ -91,10 +78,14 @@ def start(address, port, aet, storage_dir) -> bool:
         logger.error("DICOM C-STORE scp is already running")
         return False
 
+    # Make sure storage directory exists:
+    os.makedirs(storage_dir, exist_ok=True)
+
     ae = AE(aet)
     ae.maximum_pdu_size = 0  # no limit
     set_network_timeout(ae)
     set_radiology_storage_contexts(ae)
+    set_verification_context(ae)
 
     # storage_sop_classes = [
     #     cx.abstract_syntax
