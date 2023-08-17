@@ -1,8 +1,8 @@
 {
+  "workbench.editor.labelFormat": "medium", // short,medium,long
   "[python]": {
     "editor.defaultFormatter": "ms-python.black-formatter"
   },
-  "python.formatting.provider": "none",
   "cSpell.enableFiletypes": ["!json", "!plaintext", "!python", "!script"],
   "python.testing.pytestArgs": ["tests"],
   "python.testing.unittestEnabled": false,

@@ -10,9 +10,8 @@ from utils.translate import _
 import utils.config as config
 from utils.network import get_local_ip_addresses
 from utils.ux_fields import (
-    validate_entry,
-    int_entry_change,
     str_entry,
+    int_entry,
     adjust_column_width,
     ip_min_chars,
     ip_max_chars,
@@ -44,8 +43,6 @@ def create_view(view: ctk.CTkFrame, PAD: int):
     logger.info(f"Creating Export View")
     char_width_px = ctk.CTkFont().measure("A")
     digit_width_px = ctk.CTkFont().measure("9")
-    validate_entry_cmd = view.register(validate_entry)
-    logger.info(f"Font Character Width in pixels: ±{char_width_px}")
     view.grid_rowconfigure(1, weight=1)
     view.grid_columnconfigure(6, weight=1)
 
@@ -55,13 +52,6 @@ def create_view(view: ctk.CTkFrame, PAD: int):
     else:
         local_ips = [_("No local IP addresses found")]
         logger.error(local_ips[0])
-
-    # SCP & SCU UX variables:
-    scp_ip_var = ctk.StringVar(view, value=scp_ip_addr)
-    scp_port_var = ctk.IntVar(view, value=scp_ip_port)
-    scp_aet_var = ctk.StringVar(view, value=scp_aet)
-    scu_ip_var = ctk.StringVar(view, value=scu_ip_addr)
-    scu_aet_var = ctk.StringVar(view, value=scu_aet)
 
     # SCP Echo Button:
     # TODO: implement class hierachy for all clients and servers, with watchdog heartbeats for all servers activated
@@ -96,13 +86,10 @@ def create_view(view: ctk.CTkFrame, PAD: int):
     # )
 
     # SCP IP Address:
-    str_entry(
-        view,
-        scp_ip_var,
-        validate_entry_cmd,
-        digit_width_px,
-        __name__,
+    scp_ip_var = str_entry(
+        view=view,
         label=_("Remote Server:"),
+        initial_value=scp_ip_addr,
         min_chars=ip_min_chars,
         max_chars=ip_max_chars,
         charset=string.digits + ".",
@@ -111,49 +98,43 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         col=1,
         pad=PAD,
         sticky="nw",
+        module=__name__,
+        var_name="scp_ip_addr",
     )
 
-    # SCP IP Port:
-    ip_port_max_chars = len(str(ip_port_max)) + 2
-    scp_port_label = ctk.CTkLabel(view, text=_("Port:"))
-    scp_port_label.grid(row=0, column=3, pady=(PAD, 0), sticky="nw")
+    scp_port_var = int_entry(
+        view=view,
+        label=_("Port:"),
+        initial_value=scp_ip_port,
+        min=ip_port_min,
+        max=ip_port_max,
+        tooltipmsg=_(f"Port number to listen on for incoming DICOM files"),
+        row=0,
+        col=3,
+        pad=PAD,
+        sticky="nw",
+        module=__name__,
+        var_name="scp_ip_port",
+    )
 
-    scp_port_entry = ctk.CTkEntry(
-        view,
-        width=int(ip_port_max_chars * digit_width_px),
-        textvariable=scp_port_var,
-        validate="key",
-        validatecommand=(validate_entry_cmd, "%P", string.digits, ip_port_max_chars),
-    )
-    scp_port_entry_tooltip = CTkToolTip(
-        scp_port_entry,
-        message=_(f"Remote IP port [{ip_port_min}..{ip_port_max}]"),
-    )
-    entry_callback = lambda event: int_entry_change(
-        event, scp_port_var, ip_port_min, ip_port_max, __name__, "scp_ip_port"
-    )
-    scp_port_entry.bind("<Return>", entry_callback)
-    scp_port_entry.bind("<FocusOut>", entry_callback)
-    scp_port_entry.grid(row=0, column=4, pady=(PAD, 0), padx=PAD, sticky="n")
-
-    str_entry(
-        view,
-        scp_aet_var,
-        validate_entry_cmd,
-        char_width_px,
-        __name__,
+    scp_aet_var = str_entry(
+        view=view,
         label=_("AET:"),
+        initial_value=scp_aet,
         min_chars=aet_min_chars,
         max_chars=aet_max_chars,
         charset=string.digits + string.ascii_uppercase + " ",
-        tooltipmsg=_("Remote AE Title uppercase alphanumeric"),
+        tooltipmsg=_(f"Remote AE Title uppercase alphanumeric"),
         row=0,
         col=5,
         pad=PAD,
         sticky="nw",
+        module=__name__,
+        var_name="scp_aet",
     )
 
     # SCU IP Address:
+    scu_ip_var = ctk.StringVar(view, value=scu_ip_addr)
     scu_label = ctk.CTkLabel(view, text=_("Local Client:"))
     scu_label.grid(row=0, column=7, pady=(PAD, 0), sticky="nw")
 
@@ -171,21 +152,20 @@ def create_view(view: ctk.CTkFrame, PAD: int):
     local_ips_optionmenu.grid(row=0, column=8, pady=(PAD, 0), padx=PAD, sticky="nw")
 
     # SCU AET:
-    str_entry(
-        view,
-        scu_aet_var,
-        validate_entry_cmd,
-        char_width_px,
-        __name__,
+    scu_aet_var = str_entry(
+        view=view,
         label=_("AET:"),
+        initial_value=scu_aet,
         min_chars=aet_min_chars,
         max_chars=aet_max_chars,
         charset=string.digits + string.ascii_uppercase + " ",
-        tooltipmsg=_("Local AE Title uppercase alphanumeric"),
+        tooltipmsg=_(f"Local AE Title uppercase alphanumeric"),
         row=0,
         col=9,
         pad=PAD,
         sticky="nw",
+        module=__name__,
+        var_name="scu_aet",
     )
 
     # Managing Anonymizer Store Directory Treeview:

@@ -3,6 +3,11 @@ from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.presentation import PresentationContext, build_context
 from pynetdicom._globals import ALL_TRANSFER_SYNTAXES, DEFAULT_TRANSFER_SYNTAXES
 
+
+class DICOMRuntimeError(Exception):
+    pass
+
+
 _Verification_Class = "1.2.840.10008.1.1"
 _STUDY_ROOT_QR_CLASSES = [
     "1.2.840.10008.5.1.4.1.2.2.1",  # Find

@@ -29,8 +29,8 @@ _tag_keep = {}
 
 def clear_lookups():
     global patient_id_lookup, uid_lookup, acc_no_seq_no
-    patient_id_lookup = {}
-    uid_lookup = {}
+    patient_id_lookup.clear()
+    uid_lookup.clear()
     acc_no_seq_no = 1
 
 
@@ -129,8 +129,9 @@ def anonymize_dataset(ds: Dataset) -> Dataset:
     ds.remove_private_tags()  # TODO: provide a switch for this? how does java anon handle this? see <r> tag
     ds.walk(anonymize_element)
     # Handle Global Tags:
-    ds.DeidentificationMethod = deidentification_method
-    de_ident_seq = Sequence()
+    ds.PatientIdentityRemoved = "YES"  # CS: (0012, 0062)
+    ds.DeidentificationMethod = deidentification_method  # LO: (0012,0063)
+    de_ident_seq = Sequence()  # SQ: (0012,0064)
     methods = [
         ("113100", _("Basic Application Confidentiality Profile")),
         ("113107", _("Retain Longitudinal Temporal Information Modified Dates Option")),

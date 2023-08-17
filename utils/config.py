@@ -5,11 +5,6 @@ import os
 _CONFIG_FILE = "config.json"
 
 
-def remove_config():
-    if os.path.isfile(_CONFIG_FILE):
-        os.remove(_CONFIG_FILE)
-
-
 def load(module_name) -> dict:
     # Default settings
     settings = {}

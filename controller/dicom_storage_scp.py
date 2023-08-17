@@ -5,6 +5,7 @@ from pynetdicom.ae import ApplicationEntity as AE
 from controller.dicom_return_codes import C_SUCCESS, C_STORE_OUT_OF_RESOURCES
 from controller.anonymize import anonymize_dataset
 from controller.dicom_ae import (
+    DICOMRuntimeError,
     set_network_timeout,
     set_radiology_storage_contexts,
     set_verification_context,
@@ -52,9 +53,9 @@ def _handle_store(event: Event, storage_dir: str) -> int:
     ds.file_meta = event.file_meta
     logger.debug(remote)
     logger.debug(f"PHI:\n{ds}")
+    # TODO: ensure ds has values for PatientName, Modality, StudyDate, StudyTime, SeriesNumber, InstanceNumber
     ds = anonymize_dataset(ds)
     logger.debug(f"ANON:\n{ds}")
-    # TODO: ensure ds has values for PatientName, Modality, StudyDate, StudyTime, SeriesNumber, InstanceNumber
     filename = local_storage_path(storage_dir, SITEID, ds)
     logger.info(
         f"C-STORE [{ds.file_meta.TransferSyntaxUID}]: {remote['ae_title']} => {filename}"
@@ -70,13 +71,32 @@ def _handle_store(event: Event, storage_dir: str) -> int:
 
 
 # Start SCP:
-def start(address, port, aet, storage_dir) -> bool:
-    global scp, ae
+def start(address, port, aet, storage_dir):
+    """
+    Starts the DICOM C-STORE service class provider (SCP).
+
+    Parameters:
+    - address (str): The IP address or hostname the server will bind to.
+    - port (int): The port number the server will listen on.
+    - aet (str): The Application Entity Title the server will use.
+    - storage_dir (str): Directory path where incoming DICOM files will be stored.
+
+    Raises:
+    - DICOMRuntimeError: If the SCP is already running or if there's an error starting the server.
+
+    Returns:
+    None
+
+    Note:
+    The function will log informative and error messages using the logger.
+    """
+    global scp
     logger.info(f"start {address}, {port}, {aet}, {storage_dir}...")
 
     if server_running():
-        logger.error("DICOM C-STORE scp is already running")
-        return False
+        msg = _(f"DICOM C-STORE scp is already running on {address}:{port}:{aet}")
+        logger.error(msg)
+        raise DICOMRuntimeError(msg)
 
     # Make sure storage directory exists:
     os.makedirs(storage_dir, exist_ok=True)
@@ -87,13 +107,6 @@ def start(address, port, aet, storage_dir) -> bool:
     set_radiology_storage_contexts(ae)
     set_verification_context(ae)
 
-    # storage_sop_classes = [
-    #     cx.abstract_syntax
-    #     for cx in StoragePresentationContexts + VerificationPresentationContexts
-    # ]
-    # for uid in storage_sop_classes:
-    #     ae.add_supported_context(uid, ALL_TRANSFER_SYNTAXES)  # type: ignore
-
     handlers = [(EVT_C_ECHO, _handle_echo), (EVT_C_STORE, _handle_store, [storage_dir])]
 
     try:
@@ -103,19 +116,34 @@ def start(address, port, aet, storage_dir) -> bool:
             evt_handlers=handlers,
         )
     except Exception as e:
-        logger.error(
+        msg = _(
             f"Failed to start DICOM C-STORE scp on {address}:{port}, with AE Title = {aet}, Error: {str(e)}"
         )
-        return False
+        logger.error(msg)
+        raise DICOMRuntimeError(msg)
 
     logger.info(
         f"DICOM C-STORE scp listening on {address}:{port}, with AE Title = {aet}, storing files in {storage_dir}"
     )
-    return True
+    return
 
 
 # Stop SCP:
 def stop(final_shutdown=False) -> None:
+    """
+    Stops the DICOM C-STORE service class provider (SCP).
+
+    Parameters:
+    - final_shutdown (bool, optional): Indicates if this stop action is the final shutdown.
+                                       If True, certain log messages are suppressed.
+                                       Defaults to False.
+
+    Returns:
+    None
+
+    Note:
+    The function will log an informative message on user-initiated stops.
+    """
     global scp
     if not final_shutdown:
         logger.info("User initiated: Stop DICOM C-STORE scp and close socket")

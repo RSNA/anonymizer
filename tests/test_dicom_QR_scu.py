@@ -32,12 +32,12 @@ logger.setLevel(logging.DEBUG)
 
 
 # UNIT TESTS:
-def test_start_echo_stop_test_pacs_scp(temp_dir: str):
+def test_echo_test_pacs(temp_dir: str):
     start_pacs_simulator_scp(temp_dir)
     echo_pacs_simulator_scp()
 
 
-def test_start_send_1_CT_file_stop_test_pacs_scp(temp_dir: str):
+def test_send_1_CT_file_to_test_pacs(temp_dir: str):
     start_pacs_simulator_scp(temp_dir)
     send_file_to_scp(ct_small_filename, True)
     dirlist = os.listdir(pacs_storage_dir(temp_dir))
@@ -45,7 +45,7 @@ def test_start_send_1_CT_file_stop_test_pacs_scp(temp_dir: str):
     assert dirlist[0] == ct_small_SeriesInstanceUID + ".1.dcm"
 
 
-def test_start_send_1_MR_file_stop_test_pacs_scp(temp_dir: str):
+def test_send_1_MR_file_to_test_pacs(temp_dir: str):
     start_pacs_simulator_scp(temp_dir)
     send_file_to_scp(mr_small_filename, True)
     dirlist = os.listdir(pacs_storage_dir(temp_dir))
@@ -53,7 +53,7 @@ def test_start_send_1_MR_file_stop_test_pacs_scp(temp_dir: str):
     assert dirlist[0] == mr_small_SeriesInstanceUID + ".1.dcm"
 
 
-def test_send_2_files_find_all_studies_on_test_pacs_scp(temp_dir: str):
+def test_send_2_files_find_all_studies_on_test_pacs(temp_dir: str):
     start_pacs_simulator_scp(temp_dir)
     send_file_to_scp(ct_small_filename, True)
     send_file_to_scp(mr_small_filename, True)

@@ -1,16 +1,17 @@
 import string
 import customtkinter as ctk
 from CTkToolTip import CTkToolTip
+from CTkMessagebox import CTkMessagebox
 import logging
+from controller.dicom_ae import DICOMRuntimeError
 from utils.translate import _
 import utils.config as config
 import controller.dicom_storage_scp as dicom_storage_scp
 from view.storage_dir import get_storage_directory
 from utils.network import get_local_ip_addresses
 from utils.ux_fields import (
-    validate_entry,
-    int_entry_change,
-    str_entry_change,
+    int_entry,
+    str_entry,
     aet_max_chars,
     aet_min_chars,
     ip_port_max,
@@ -30,12 +31,8 @@ settings = config.load(__name__)
 globals().update(settings)
 
 
-def create_view(view: ctk.CTkFrame):
-    PAD = 10
+def create_view(view: ctk.CTkFrame, PAD: int = 10):
     logger.info(f"Creating Configure DICOM Storage SCP View")
-    char_width_px = ctk.CTkFont().measure("A")
-    validate_entry_cmd = view.register(validate_entry)
-    logger.info(f"Font Character Width in pixels: ±{char_width_px}")
     view.grid_rowconfigure(1, weight=1)
     view.grid_columnconfigure(5, weight=1)
 
@@ -46,10 +43,9 @@ def create_view(view: ctk.CTkFrame):
         local_ips = [_("No local IP addresses found.")]
         logger.error(local_ips[0])
 
+    # TODO: create dicom node class to encapsulate these variables, move to ux_fields.py
     scp_label = ctk.CTkLabel(view, text=_("Local Server:"))
     scp_label.grid(row=0, column=0, pady=(PAD, 0), sticky="nw")
-    # TODO: tooltip causes TclError on program close
-    # scp_label_tooltip = CTkToolTip(scp_label, message=_("Local DICOM Storage SCP"))
 
     # IP Address:
     ip_var = ctk.StringVar(view, value=ip_addr)
@@ -66,59 +62,36 @@ def create_view(view: ctk.CTkFrame):
     )
     local_ips_optionmenu.grid(row=0, column=1, pady=(PAD, 0), padx=PAD, sticky="nw")
 
-    # IP Port:
-    ip_port_max_chars = len(str(ip_port_max))
-    port_label = ctk.CTkLabel(view, text=_("Port:"))
-    port_label.grid(row=0, column=2, pady=(PAD, 0), sticky="nw")
-    port_var = ctk.IntVar(view, value=ip_port)
-    port_entry = ctk.CTkEntry(
-        view,
-        width=int(ip_port_max_chars * char_width_px),
-        textvariable=port_var,
-        validate="key",
-        validatecommand=(validate_entry_cmd, "%P", string.digits, ip_port_max_chars),
+    port_var = int_entry(
+        view=view,
+        label=_("Port:"),
+        initial_value=ip_port,
+        min=ip_port_min,
+        max=ip_port_max,
+        tooltipmsg=f"Port number to listen on for incoming DICOM files",
+        row=0,
+        col=2,
+        pad=PAD,
+        sticky="nw",
+        module=__name__,
+        var_name="ip_port",
     )
-    port_entry_tooltip = CTkToolTip(
-        port_entry,
-        message=_(
-            f"Port number to listen on for incoming DICOM files: [{ip_port_min}..{ip_port_max}]"
-        ),
-    )
-    entry_callback = lambda event: int_entry_change(
-        event, port_var, ip_port_min, ip_port_max, __name__, "ip_port"
-    )
-    port_entry.bind("<Return>", entry_callback)
-    port_entry.bind("<FocusOut>", entry_callback)
-    port_entry.grid(row=0, column=3, pady=(PAD, 0), padx=PAD, sticky="n")
 
-    # AET:
-    aet_label = ctk.CTkLabel(view, text=_("AET:"))
-    aet_label.grid(row=0, column=4, pady=(PAD, 0), sticky="nw")
-    aet_var = ctk.StringVar(view, value=aet)
-    aet_entry = ctk.CTkEntry(
-        view,
-        width=int(aet_max_chars * char_width_px),
-        textvariable=aet_var,
-        validate="key",
-        validatecommand=(
-            validate_entry_cmd,
-            "%P",
-            string.digits + string.ascii_uppercase + " ",
-            str(aet_max_chars),
-        ),
+    aet_var = str_entry(
+        view=view,
+        label=_("AET:"),
+        initial_value=aet,
+        min_chars=aet_min_chars,
+        max_chars=aet_max_chars,
+        charset=string.digits + string.ascii_uppercase + " ",
+        tooltipmsg=_(f"DICOM AE Title: uppercase alphanumeric & spaces"),
+        row=0,
+        col=4,
+        pad=PAD,
+        sticky="nw",
+        module=__name__,
+        var_name="aet",
     )
-    aet_entry_tooltip = CTkToolTip(
-        aet_entry,
-        message=_(
-            f"DICOM AE Title: uppercase alphanumeric & spaces [{aet_min_chars}..{aet_max_chars}] chars"
-        ),
-    )
-    entry_callback = lambda event: str_entry_change(
-        event, aet_var, aet_min_chars, aet_max_chars, __name__, "aet"
-    )
-    aet_entry.bind("<Return>", entry_callback)
-    aet_entry.bind("<FocusOut>", entry_callback)
-    aet_entry.grid(row=0, column=5, pady=(PAD, 0), padx=PAD, sticky="nw")
 
     # SCP Server On/Off Switch:
     scp_var = ctk.BooleanVar(view, value=False)
@@ -126,10 +99,18 @@ def create_view(view: ctk.CTkFrame):
     def scp_switch_event():
         logger.info("scp_switch_event")
         if scp_var.get():
-            if not dicom_storage_scp.start(
-                ip_var.get(), port_var.get(), aet_var.get(), get_storage_directory()
-            ):
+            try:
+                dicom_storage_scp.start(
+                    ip_var.get(), port_var.get(), aet_var.get(), get_storage_directory()
+                )
+                scp_var.set(True)
+            except DICOMRuntimeError as e:
                 scp_var.set(False)
+                CTkMessagebox(
+                    title=_("Storage Server Startup Error"),
+                    message=f"{e}",
+                    icon="cancel",
+                )
         else:
             dicom_storage_scp.stop()
 
@@ -160,5 +141,10 @@ def create_view(view: ctk.CTkFrame):
 
     # Handle SCP Server Autostart:
     if scp_autostart:
-        if dicom_storage_scp.start(ip_addr, ip_port, aet, get_storage_directory()):
+        try:
+            dicom_storage_scp.start(ip_addr, ip_port, aet, get_storage_directory())
             scp_var.set(True)
+        except DICOMRuntimeError as e:
+            CTkMessagebox(
+                title=_("Storage Server Startup Error"), message=f"{e}", icon="cancel"
+            )

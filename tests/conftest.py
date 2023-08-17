@@ -30,6 +30,7 @@ def temp_dir():
     temp_path = tempfile.mkdtemp()
     logger.info(f"Creating temporary directory: {temp_path}")
 
+    # Clear the uid_lookup and patient_id_lookup dictionaries
     clear_lookups()
 
     # Yield the directory path to the test function

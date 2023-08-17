@@ -10,6 +10,7 @@ from pydicom._version import __version__ as pydicom_version
 from pynetdicom._version import __version__ as pynetdicom_version
 
 # All UX View Modules:
+from utils.ux_fields import validate_entry
 import view.welcome as welcome
 import view.help as help
 import view.storage_dir as storage_dir
@@ -118,6 +119,8 @@ class App(ctk.CTk):
         ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
         ctk.set_default_color_theme(color_theme)  # colors and default font
 
+        # Register the validate_entry function with root window:
+        self.validate_entry_cmd = self.register(validate_entry)
         self.geometry(f"{APP_MIN_WIDTH}x{APP_MIN_HEIGHT}")
         self.minsize(APP_MIN_WIDTH, APP_MIN_HEIGHT)  # width, height
         self.font = ctk.CTkFont()  # get default font as defined in json file
@@ -127,12 +130,12 @@ class App(ctk.CTk):
         self.columnconfigure(0, weight=1)
 
         # Logo:
-        self.logo = ctk.CTkImage(
+        self.logo_image = ctk.CTkImage(
             light_image=Image.open(logo_file),
             size=(logo_width, logo_height),
         )
-        self.logo = ctk.CTkLabel(self, image=self.logo, text="")
-        self.logo.grid(
+        self.logo_label = ctk.CTkLabel(self, image=self.logo_image, text="")
+        self.logo_label.grid(
             row=0,
             column=0,
             padx=pad,
