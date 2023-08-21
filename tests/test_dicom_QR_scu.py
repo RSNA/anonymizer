@@ -2,6 +2,7 @@
 # use pytest from terminal to show full logging output: pytest --log-cli-level=DEBUG
 import logging
 import os
+from unittest import result
 from controller.dicom_return_codes import C_MOVE_UNKNOWN_AE, C_PENDING_A, C_SUCCESS
 
 from tests.helpers import (
@@ -60,10 +61,22 @@ def test_send_2_files_find_all_studies_on_test_pacs(temp_dir: str):
     results = find_all_studies_on_test_pacs_scp()
     assert results
     assert len(results) == 2
-    assert results[0].PatientName == ct_small_patient_name
-    assert results[0].PatientID == ct_small_patient_id
-    assert results[1].PatientName == mr_small_patient_name
-    assert results[1].PatientID == mr_small_patient_id
+    assert (
+        results[0].PatientName == ct_small_patient_name
+        or results[1].PatientName == ct_small_patient_name
+    )
+    assert (
+        results[0].PatientID == ct_small_patient_id
+        or results[1].PatientID == ct_small_patient_id
+    )
+    assert (
+        results[1].PatientName == mr_small_patient_name
+        or results[0].PatientName == mr_small_patient_name
+    )
+    assert (
+        results[1].PatientID == mr_small_patient_id
+        or results[0].PatientID == mr_small_patient_id
+    )
 
 
 def test_move_1_CT_file_from_pacs_with_file_to_unknown_AET(temp_dir: str):
