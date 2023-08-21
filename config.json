@@ -27,7 +27,8 @@
     },
     "view.export": {
         "scp_ip_port": 11112,
-        "scp_aet": "MDEDEV"
+        "scp_aet": "MDEDEV",
+        "scp_ip_addr": "127.0.0.1"
     },
     "view.storage_dir": {
         "storage_directory": "/Users/michaelevans/Downloads/RSNA_ANON_STORE/PYTHON_ANON_STORE"

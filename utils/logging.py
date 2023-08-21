@@ -36,6 +36,10 @@ def init_logging(install_dir: str) -> None:
     # pydicom specific:
     pydicom_config.debug(LOG_DEFAULT_LEVEL == logging.DEBUG)
 
+    # pynetdicom specific:
+    pynetdicom_logger = logging.getLogger("pynetdicom")
+    pynetdicom_logger.setLevel(logging.WARNING)
+
 
 def set_log_level(level: int) -> None:
     logging.getLogger().setLevel(level)

@@ -16,6 +16,7 @@ ctkmessagebox = "*"
 
 [dev-packages]
 pytest = "*"
+radon = "*"
 
 [requires]
 python_version = "3.11"

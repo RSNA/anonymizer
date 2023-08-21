@@ -187,3 +187,6 @@ def adjust_column_width(tree, column_id, padding=10):
 
     # Adjust the column width
     tree.column(column_id, width=max_width + padding)
+
+    # Center justify the content of the column
+    tree.column(column_id, anchor="center")

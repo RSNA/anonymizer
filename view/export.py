@@ -1,12 +1,14 @@
 import os
 import logging
 import string
-import customtkinter as ctk
 import queue
+import threading
+import customtkinter as ctk
 from tkinter import ttk
 from CTkToolTip import CTkToolTip
 from view.storage_dir import get_storage_directory
 from utils.translate import _
+from utils.storage import count_dcm_files
 import utils.config as config
 from utils.network import get_local_ip_addresses
 from utils.ux_fields import (
@@ -21,13 +23,17 @@ from utils.ux_fields import (
     ip_port_min,
 )
 from controller.dicom_echo_scu import echo
-from controller.dicom_send_scu import send, SendRequest, SendResponse
+from controller.dicom_send_scu import (
+    DICOMNode,
+    export_patients,
+    ExportRequest,
+    ExportResponse,
+)
 
 logger = logging.getLogger(__name__)
 
-export_queue = queue.Queue()
-
 # Default values for initialising UX ctk.Vars (overwritten at startup from config.json):
+monitor_export_interval = 0.1  # seconds
 scp_ip_addr = "127.0.0.1"
 scp_ip_port = 104
 scp_aet = "PACS"
@@ -42,7 +48,6 @@ globals().update(settings)
 def create_view(view: ctk.CTkFrame, PAD: int):
     logger.info(f"Creating Export View")
     char_width_px = ctk.CTkFont().measure("A")
-    digit_width_px = ctk.CTkFont().measure("9")
     view.grid_rowconfigure(1, weight=1)
     view.grid_columnconfigure(6, weight=1)
 
@@ -169,17 +174,19 @@ def create_view(view: ctk.CTkFrame, PAD: int):
     )
 
     # Managing Anonymizer Store Directory Treeview:
-    def update_treeview_data(tree: ttk.Treeview):
+    def update_treeview_from_storage_direcctory(tree: ttk.Treeview):
         store_dir = get_storage_directory()
         logger.info(f"Updating treeview data from {store_dir} ")
-        anon_dirs = [f for f in os.listdir(store_dir) if not f.startswith(".")]
+        # Directory Names = Patient IDs
+        patient_ids = [f for f in os.listdir(store_dir) if not f.startswith(".")]
         # Clear existing items
         for item in tree.get_children():
             tree.delete(item)
 
         # Insert new data
-        for dir in anon_dirs:
-            tree.insert("", "end", iid=dir, values=[dir])
+        for pt_id in patient_ids:
+            file_count = count_dcm_files(store_dir + "/" + pt_id)
+            tree.insert("", "end", iid=pt_id, values=[pt_id, file_count, 0])
 
         for col_id in tree["columns"]:
             adjust_column_width(tree, col_id, padding=5)
@@ -187,66 +194,165 @@ def create_view(view: ctk.CTkFrame, PAD: int):
     tree = ttk.Treeview(view, show="headings")
     tree.grid(row=1, column=0, pady=(PAD, 0), columnspan=11, sticky="nswe")
 
+    # TODO: exported state: when and where, required to be tracked?
     tree["columns"] = [
         _("Patient ID"),
-        _("Studies"),
         _("Files"),
-        _("Exported Date"),
+        _("Files Sent"),
+        _("Errors"),
+        # _("Exported Date"),
     ]
+
     for col in tree["columns"]:
         tree.heading(col, text=col)
-    update_treeview_data(tree)
+
+    # Setup display tags:
+    tree.tag_configure("green", foreground="light green")
+    tree.tag_configure("red", foreground="red")
+
+    update_treeview_from_storage_direcctory(tree)
 
     # Create a Scrollbar and associate it with the Treeview
     scrollbar = ttk.Scrollbar(view, orient="vertical", command=tree.yview)
     scrollbar.grid(row=1, column=11, pady=(PAD, 0), sticky="ns")
     tree.configure(yscrollcommand=scrollbar.set)
 
+    # Refresh Button:
     def refresh_button_pressed():
         logger.info(f"Refresh button pressed")
-        update_treeview_data(tree)
+        update_treeview_from_storage_direcctory(tree)
 
     refresh_button = ctk.CTkButton(
         view, text=_("Refresh"), command=refresh_button_pressed
     )
     refresh_button.grid(row=2, column=0, columnspan=2, padx=PAD, pady=PAD, sticky="we")
 
-    def export_button_pressed():
-        sel_anon_dirs = list(tree.selection())
-        logger.info(f"Export button pressed")
-        logger.info(f"Exporting: {sel_anon_dirs}")
+    # Select All Button:
+    def select_all_button_pressed(tree: ttk.Treeview):
+        logger.info(f"Select All button pressed")
 
-        for dir in sel_anon_dirs:
-            path = get_storage_directory() + "/" + dir
-            if not os.path.isdir(path):
-                logger.error(f"Selected directory {path} is not a directory")
-                continue
+        all_items = set(tree.get_children())
+        selected_items = set(tree.selection())
 
-            file_paths = []
-            for root, _, files in os.walk(path):
-                file_paths.extend(
-                    os.path.join(root, file) for file in files if file.endswith(".dcm")
+        # If all items are already selected, unselect them.
+        # Otherwise, select all items.
+        if all_items == selected_items:
+            for item in all_items:
+                tree.selection_remove(item)
+            select_all_button.configure(text=_("Select All"))
+        else:
+            for item in all_items:
+                tree.selection_add(item)
+            select_all_button.configure(text=_("Unselect All"))
+
+    select_all_button = ctk.CTkButton(
+        view, text=_("Select All"), command=lambda: select_all_button_pressed(tree)
+    )
+    select_all_button.grid(row=2, column=8, padx=PAD, pady=PAD, sticky="e")
+
+    def monitor_export_queue(remaining_patients: int, ux_Q: queue.Queue):
+        critical_error = False
+        while not ux_Q.empty():
+            try:
+                resp: ExportResponse = ux_Q.get_nowait()
+                logger.info(f"{resp}")
+                # Check for full export termination due to critical error:
+                if resp.errors == -1:
+                    critical_error = True
+                    break
+
+                # If one file failed to send, mark the patient as red:
+                if resp.errors != 0:
+                    tree.item(resp.patient_id, tags="red")
+                # Update treeview item:
+                tree.item(
+                    resp.patient_id,
+                    values=[
+                        resp.patient_id,
+                        resp.files_to_send,
+                        resp.files_sent,
+                        resp.errors,
+                    ],
                 )
-            if not file_paths:
-                logger.error(f"No DICOM files found in {path}")
-                continue
+                # Check for completion of this patient's export:
+                if resp.files_to_send == resp.files_sent + resp.errors:
+                    logger.info(f"Patient {resp.patient_id} export complete")
+                    # remove selection highlight to indicate export of this item finished
+                    tree.selection_remove(resp.patient_id)
+                    remaining_patients -= 1
+                    if resp.errors == 0:
+                        tree.item(resp.patient_id, tags="green")
 
-            ux_Q = queue.Queue()
+            except queue.Empty:
+                logger.info("Queue is empty")
 
-            req: SendRequest = SendRequest(
-                scp_ip=scp_ip_var.get(),
-                scp_port=scp_port_var.get(),
-                scp_ae=scp_aet_var.get(),
-                scu_ip=scu_ip_var.get(),
-                scu_ae=scu_aet_var.get(),
-                dicom_files=file_paths,
-                ux_Q=ux_Q,
+        # Check for completion of full export:
+        if remaining_patients == 0 or critical_error:
+            if critical_error:
+                logger.error("Critical export error detected, aborting monitore")
+            else:
+                logger.info("All patients exported")
+            # re-enable refresh and select_all buttons now export is complete
+            refresh_button.configure(state=ctk.NORMAL)
+            select_all_button.configure(state=ctk.NORMAL)
+            # re-enable tree interaction now export is complete
+            tree.configure(selectmode="extended")
+            return
+
+        threading.Timer(
+            monitor_export_interval,
+            monitor_export_queue,
+            args=(remaining_patients, ux_Q),
+        ).start()
+
+    def export_button_pressed():
+        logger.info(f"Export button pressed")
+        sel_patient_ids = list(tree.selection())
+        patients_to_send = len(sel_patient_ids)
+        if patients_to_send == 0:
+            logger.error(f"No patients selected for export")
+            return
+
+        # Create 1 UX queue to handle the full export operation:
+        ux_Q = queue.Queue()
+        scu = DICOMNode(scu_ip_var.get(), 0, scu_aet_var.get(), False)
+        scp = DICOMNode(scp_ip_var.get(), scp_port_var.get(), scp_aet_var.get(), True)
+
+        # Export all selected patients using a background thread pool:
+        export_patients(
+            ExportRequest(
+                scu,
+                scp,
+                sel_patient_ids,
+                ux_Q,
             )
+        )
 
-            if send(req):
-                logger.info(f"Export {dir} initiated")
+        logger.info(f"Export of {patients_to_send} patients initiated")
+        # disable tree interaction during export:
+        tree.configure(selectmode="none")
+        # disable refresh, select_all and export buttons while export is in progress
+        export_button.configure(state=ctk.DISABLED)
+        refresh_button.configure(state=ctk.DISABLED)
+        select_all_button.configure(state=ctk.DISABLED)
+        monitor_export_queue(patients_to_send, ux_Q)  # trigger the queue monitor
 
-            # TODO: timed callback to update treeview with export status
+    def update_export_button_state():
+        if tree.selection():
+            export_button.configure(
+                state=ctk.NORMAL
+            )  # Enable button if there's a selection
+        else:
+            export_button.configure(
+                state=ctk.DISABLED
+            )  # Disable button if no selection
 
-    export_button = ctk.CTkButton(view, text=_("Export"), command=export_button_pressed)
+    tree.bind("<<TreeviewSelect>>", lambda e: update_export_button_state())
+
+    export_button = ctk.CTkButton(
+        view,
+        text=_("Export"),
+        state=ctk.DISABLED,
+        command=lambda: export_button_pressed(),
+    )
     export_button.grid(row=2, column=10, padx=PAD, pady=PAD, sticky="e")

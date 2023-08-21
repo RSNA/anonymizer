@@ -1,84 +1,251 @@
 import logging
+import os
+from sys import exception
 import threading
 import queue
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pydicom.dataset import Dataset
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.status import STORAGE_SERVICE_CLASS_STATUS
+from utils.translate import _
+from view.storage_dir import get_storage_directory
 from controller.dicom_ae import (
+    DICOMRuntimeError,
     set_network_timeout,
     set_radiology_storage_contexts,
     get_radiology_storage_contexts,
 )
 from dataclasses import dataclass
 
+# Max concurrent patient exports:
+# (each export is a thread which sends a single patient's files sequentially)
+# TODO: make this user settable & add to config.son?
+patient_export_thread_pool_size = 2
+MAX_RETRIES = 3
+
 
 @dataclass
-class SendRequest:
-    scp_ip: str
-    scp_port: int
-    scp_ae: str
-    scu_ip: str
-    scu_ae: str
-    dicom_files: list[Dataset | str]  # list of datasets or paths to dicom files
+class DICOMNode:
+    ip: str
+    port: int
+    aet: str
+    scp: bool
+
+
+@dataclass
+class ExportRequest:
+    scu: DICOMNode
+    scp: DICOMNode
+    patient_ids: list[str]  # list of patient IDs to export
     ux_Q: queue.Queue  # queue for UX updates
 
 
 @dataclass
-class SendResponse:
-    dicom_file: Dataset | str  # dataset or path to dicom file
-    status: int  # as per dicom standard
+class ExportResponse:
+    patient_id: str
+    files_to_send: int
+    files_sent: int
+    errors: int
 
 
 logger = logging.getLogger(__name__)
 
 
-def _send(sc: SendRequest):
-    logger.info(
-        f"C-STORE from {sc.scu_ae}@{sc.scu_ip} to {sc.scp_ae}@{sc.scp_ip}:{sc.scp_port}"
-    )
+# Blocking send (for testing), return False immediately on error:
+def send(file_paths: list[str], scu: DICOMNode, scp: DICOMNode) -> bool:
     # Initialize the Application Entity
-    ae = AE(sc.scu_ae)
+    ae = AE(scu.aet)
     set_network_timeout(ae)
     set_radiology_storage_contexts(ae)
+
+    # Establish an association (thread) with SCP for this patient's sequential file transfer
+    assoc = None
     try:
-        # Establish association with SCP:
         assoc = ae.associate(
-            sc.scp_ip,
-            sc.scp_port,
+            scp.ip,
+            scp.port,
             contexts=get_radiology_storage_contexts(),
-            ae_title=sc.scp_ae,
-            bind_address=(sc.scu_ip, 0),
+            ae_title=scp.aet,
+            bind_address=(scu.ip, 0),
         )
+
         if not assoc.is_established:
-            logger.error("Association rejected, aborted or never connected")
-            return
+            raise ConnectionError(
+                f"Failed to establish association with {scp.aet}@{scp.ip}:{scp.port}"
+            )
 
-        logger.info(f"Association established with {assoc.acceptor.ae_title}")
+    except (ConnectionError, TimeoutError, RuntimeError) as e:
+        logger.error(f"Error establishing association: {e}")
+        return False
 
-        # Send DICOM Files:
-        for dicom_file in sc.dicom_files:
-            dcm_response = (Dataset)(assoc.send_c_store(dicom_file))
-            resp = SendResponse(dicom_file, dcm_response.Status)
+    for dicom_file_path in file_paths:
+        try:
+            dcm_response: Dataset = assoc.send_c_store(dataset=dicom_file_path)
+
             if dcm_response.Status != 0:
-                logger.error(
-                    f"Error sending DICOM file {dicom_file}: {STORAGE_SERVICE_CLASS_STATUS[dcm_response.Status][1]}"
+                raise DICOMRuntimeError(
+                    f"DICOM Response: {STORAGE_SERVICE_CLASS_STATUS[dcm_response.Status][1]}"
                 )
-            sc.ux_Q.put(resp)  # TODO: handle queue full
 
-        logging.info(f"C-STORE Success files sent = {len(sc.dicom_files)}")
-
-    except Exception as e:
-        logger.error(f"Failed DICOM C-STORE, Error: {str(e)}")
-        return
+        except Exception as e:
+            logger.error(f"Error sending DICOM file {dicom_file_path}: {e}")
+            assoc.release()
+            return False
 
     assoc.release()
-    ae.shutdown()
-    return
+    return True
 
 
-def send(sc: SendRequest) -> None:
+# Background export worker thread:
+def _export_patient(
+    ae: AE, scu: DICOMNode, scp: DICOMNode, patient_id: str, ux_Q: queue.Queue
+) -> bool:
+    logger.info("_export_patient {patient_id} start")
+
+    # Indicates patient termination
+    patient_critical_error_resp = ExportResponse(
+        patient_id=patient_id,
+        files_to_send=0,
+        files_sent=0,
+        errors=1,
+    )
+
+    # indicates full export termination
+    full_export_critical_error_resp = ExportResponse(
+        patient_id=patient_id,
+        files_to_send=0,
+        files_sent=0,
+        errors=-1,
+    )
+
+    # Load DICOM files to send from local storage for this patient:
+    path = os.path.join(get_storage_directory(), patient_id)
+
+    if not os.path.isdir(path):
+        logger.error(f"Selected directory {path} is not a directory")
+        ux_Q.put(patient_critical_error_resp)
+        return False
+
+    file_paths = []
+    for root, _, files in os.walk(path):
+        file_paths.extend(
+            os.path.join(root, file) for file in files if file.endswith(".dcm")
+        )
+
+    if not file_paths:
+        logger.error(f"No DICOM files found in {path}")
+        ux_Q.put(patient_critical_error_resp)
+        return False
+
+    # Establish an association (thread) with SCP for this patient's sequential file transfer
+    assoc = None
+    try:
+        assoc = ae.associate(
+            scp.ip,
+            scp.port,
+            contexts=get_radiology_storage_contexts(),
+            ae_title=scp.aet,
+            bind_address=(scu.ip, 0),
+        )
+
+        if not assoc.is_established:
+            raise ConnectionError(
+                f"Failed to establish association with {scp.aet}@{scp.ip}:{scp.port}"
+            )
+
+    except (ConnectionError, TimeoutError, RuntimeError) as e:
+        logger.error(f"Error establishing association: {e}")
+        # If association can't be established with this SCP terminate full export:
+        ux_Q.put(full_export_critical_error_resp)
+        return False
+
+    files_to_send = len(file_paths)
+    files_sent = 0
+    errors = 0
+    for dicom_file_path in file_paths:
+        retries = 0
+        while retries < MAX_RETRIES:
+            try:
+                dcm_response: Dataset = assoc.send_c_store(dataset=dicom_file_path)
+
+                if dcm_response.Status != 0:
+                    errors += 1
+                    logger.error(
+                        f"Error sending DICOM file {dicom_file_path}: {STORAGE_SERVICE_CLASS_STATUS[dcm_response.Status][1]}"
+                    )
+                else:
+                    files_sent += 1
+
+            except TimeoutError:
+                retries += 1
+                logger.warning(
+                    f"Timeout error sending DICOM file {dicom_file_path}. Retry {retries}/{MAX_RETRIES}."
+                )
+                # Raise exception to terminate this patient's export and to signal to the thread pool to terminate all other exports:
+                if retries == MAX_RETRIES:
+                    ux_Q.put(full_export_critical_error_resp)
+                    assoc.release()
+                    raise DICOMRuntimeError(
+                        f"Timeout error sending DICOM file {dicom_file_path}."
+                    )
+
+            except Exception as e:
+                logger.error(f"Error sending DICOM file {dicom_file_path}: {e}")
+                errors += 1
+                break
+
+        ux_Q.put(
+            ExportResponse(
+                patient_id=patient_id,
+                files_to_send=files_to_send,
+                files_sent=files_sent,
+                errors=errors,
+            )
+        )
+
+    logging.info(
+        f"_export_patient {patient_id} complete, files sent = {files_sent} / {files_to_send}"
+    )
+
+    assoc.release()
+    return True
+
+
+# Manage bulk patient export using a thread pool:
+def manage_export(er: ExportRequest) -> None:
+    # Initialize the Application Entity
+    ae = AE(er.scu.aet)
+    set_network_timeout(ae)
+    set_radiology_storage_contexts(ae)
+
+    futures = []
+
+    with ThreadPoolExecutor(max_workers=patient_export_thread_pool_size) as executor:
+        for i in range(len(er.patient_ids)):
+            future = executor.submit(
+                _export_patient, ae, er.scu, er.scp, er.patient_ids[i], er.ux_Q
+            )
+            futures.append(future)
+
+        # Check for exceptions in the completed futures
+        for future in futures:
+            try:
+                # This will raise any exceptions that _export_patient might have raised.
+                future.result()
+            except Exception as e:
+                # Handle specific exceptions if needed
+                logger.error(f"An error occurred during export: {e}")
+                executor.shutdown(
+                    wait=False
+                )  # Shutdown executor in case of critical error
+                break
+
+
+# Non-blocking send:
+def export_patients(er: ExportRequest) -> None:
     threading.Thread(
-        target=_send,
-        args=(sc,),
+        target=manage_export,
+        args=(er,),
         daemon=True,
     ).start()

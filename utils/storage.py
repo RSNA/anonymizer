@@ -20,3 +20,12 @@ def local_storage_path(base_dir: str, siteid: str, ds: Dataset) -> Path:
     # Ensure all directories in the path exist
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)
     return dest_path
+
+
+def count_dcm_files(root_path):
+    count = 0
+    for root, _, files in os.walk(root_path):
+        for file in files:
+            if file.endswith(".dcm"):
+                count += 1
+    return count
