@@ -17,6 +17,7 @@ ctkmessagebox = "*"
 [dev-packages]
 pytest = "*"
 radon = "*"
+coverage = "*"
 
 [requires]
 python_version = "3.11"

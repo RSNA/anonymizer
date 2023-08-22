@@ -6,6 +6,5 @@
   "cSpell.enableFiletypes": ["!json", "!plaintext", "!python", "!script"],
   "python.testing.pytestArgs": ["tests"],
   "python.testing.unittestEnabled": false,
-  "python.testing.pytestEnabled": true,
-  "python.radon.executable": "/Users/michaelevans/.local/share/virtualenvs/anonymizer-QAZRwulL/bin/radon"
+  "python.testing.pytestEnabled": true
 }

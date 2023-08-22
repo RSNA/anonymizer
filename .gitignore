@@ -10,3 +10,4 @@ dist/*
 logs/*
 dicom/*
 .env
+.coverage

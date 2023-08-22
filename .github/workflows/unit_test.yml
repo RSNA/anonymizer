@@ -36,6 +36,8 @@ jobs:
       run: |
           pipenv install --dev
     
-    - name: Run Unit Tests within pipenv with pytest
+    - name: Run Unit Tests within pipenv with pytest and generate coverage report
       run: |
-        pipenv run pytest --log-cli-level=DEBUG
+        pipenv coverage run pytest --log-cli-level=DEBUG
+        pipenv coverage report --omit="tests/*" --fail-under=80
+
