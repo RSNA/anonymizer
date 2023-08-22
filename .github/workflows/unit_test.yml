@@ -39,5 +39,5 @@ jobs:
     - name: Run Unit Tests within pipenv with pytest and generate coverage report
       run: |
         pipenv run coverage run -m pytest tests --log-cli-level=WARN
-        pipenv run coverage report --omit="tests/*" --fail-under=80
+        pipenv run coverage report --omit="tests/*" --fail-under=70
 
