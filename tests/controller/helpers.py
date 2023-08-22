@@ -9,11 +9,11 @@ from controller.dicom_move_scu import move
 from controller.dicom_send_scu import DICOMNode, send, ExportRequest, ExportResponse
 from controller.dicom_ae import get_network_timeout
 import controller.dicom_storage_scp as storage_scp
-import tests.dicom_pacs_simulator_scp as pacs_simulator_scp
+import tests.controller.dicom_pacs_simulator_scp as pacs_simulator_scp
 
 
 # TODO: use dicom node dataclass: ip, port, aet
-from tests.dicom_test_nodes import (
+from tests.controller.dicom_test_nodes import (
     TEST_LOCAL_SCP_IP,
     TEST_LOCAL_SCP_PORT,
     TEST_LOCAL_SCP_AET,

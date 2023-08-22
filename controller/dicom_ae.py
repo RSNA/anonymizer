@@ -4,6 +4,7 @@ from pynetdicom.presentation import PresentationContext, build_context
 from pynetdicom._globals import ALL_TRANSFER_SYNTAXES, DEFAULT_TRANSFER_SYNTAXES
 
 
+# Controller Custom Error classes:
 class DICOMRuntimeError(Exception):
     pass
 

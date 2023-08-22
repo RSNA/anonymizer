@@ -6,7 +6,7 @@ import pytest
 import logging
 from controller.anonymize import clear_lookups
 from controller.dicom_storage_scp import stop as local_storage_scp_stop
-from tests.dicom_pacs_simulator_scp import stop as pacs_simulator_scp_stop
+from tests.controller.dicom_pacs_simulator_scp import stop as pacs_simulator_scp_stop
 
 # Configure the logging format
 logging.basicConfig(

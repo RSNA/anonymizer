@@ -18,11 +18,6 @@ from controller.dicom_ae import (
     set_verification_context,
     set_study_root_qr_contexts,
 )
-from tests.dicom_test_nodes import (
-    TEST_LOCAL_SCP_IP,
-    TEST_LOCAL_SCP_PORT,
-    TEST_LOCAL_SCP_AET,
-)
 
 logger = logging.getLogger(__name__)
 
