@@ -5,6 +5,7 @@ from pynetdicom.ae import ApplicationEntity as AE
 from controller.dicom_return_codes import C_SUCCESS, C_STORE_OUT_OF_RESOURCES
 from controller.anonymize import anonymize_dataset
 from controller.dicom_ae import (
+    DICOMNode,
     DICOMRuntimeError,
     set_network_timeout,
     set_radiology_storage_contexts,
@@ -12,11 +13,11 @@ from controller.dicom_ae import (
 )
 from utils.translate import _
 from utils.storage import local_storage_path
-from model.project import SITEID, PROJECTNAME, TRIALNAME, UIDROOT
+from model.project import SITEID
 
 logger = logging.getLogger(__name__)
 
-# TODO: convert to singleton class
+# TODO: convert to singleton class inheriting from pynetdicom.AE
 
 # Store scp instance after ae.start_server() is called:
 scp = None
@@ -71,14 +72,15 @@ def _handle_store(event: Event, storage_dir: str) -> int:
 
 
 # Start SCP:
-def start(address, port, aet, storage_dir):
+def start(addr: DICOMNode, storage_dir: str):
     """
     Starts the DICOM C-STORE service class provider (SCP).
 
     Parameters:
-    - address (str): The IP address or hostname the server will bind to.
-    - port (int): The port number the server will listen on.
-    - aet (str): The Application Entity Title the server will use.
+    - addr (DICOMNode): The DICOMNode object containing the following attributes:
+        - ip (str): The IP address or hostname the server will bind to.
+        - port (int): The port number the server will listen on.
+        - aet (str): The Application Entity Title the server will use.
     - storage_dir (str): Directory path where incoming DICOM files will be stored.
 
     Raises:
@@ -91,17 +93,19 @@ def start(address, port, aet, storage_dir):
     The function will log informative and error messages using the logger.
     """
     global scp
-    logger.info(f"start {address}, {port}, {aet}, {storage_dir}...")
+    logger.info(f"start {addr.ip}, {addr.port}, {addr.aet}, {storage_dir}...")
 
     if server_running():
-        msg = _(f"DICOM C-STORE scp is already running on {address}:{port}:{aet}")
+        msg = _(
+            f"DICOM C-STORE scp is already running on {addr.ip}:{addr.port}:{addr.aet}"
+        )
         logger.error(msg)
         raise DICOMRuntimeError(msg)
 
     # Make sure storage directory exists:
     os.makedirs(storage_dir, exist_ok=True)
 
-    ae = AE(aet)
+    ae = AE(addr.aet)
     ae.maximum_pdu_size = 0  # no limit
     set_network_timeout(ae)
     set_radiology_storage_contexts(ae)
@@ -111,19 +115,19 @@ def start(address, port, aet, storage_dir):
 
     try:
         scp = ae.start_server(
-            (address, port),
+            (addr.ip, addr.port),
             block=False,
             evt_handlers=handlers,
         )
     except Exception as e:
         msg = _(
-            f"Failed to start DICOM C-STORE scp on {address}:{port}, with AE Title = {aet}, Error: {str(e)}"
+            f"Failed to start DICOM C-STORE scp on {addr.ip}:{addr.port}, with AE Title = {addr.aet}, Error: {str(e)}"
         )
         logger.error(msg)
         raise DICOMRuntimeError(msg)
 
     logger.info(
-        f"DICOM C-STORE scp listening on {address}:{port}, with AE Title = {aet}, storing files in {storage_dir}"
+        f"DICOM C-STORE scp listening on {addr.ip}:{addr.port}, with AE Title = {addr.aet}, storing files in {storage_dir}"
     )
     return
 

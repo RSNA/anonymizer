@@ -12,6 +12,7 @@ from controller.dicom_return_codes import (
     C_MOVE_UNKNOWN_AE,
 )
 from controller.dicom_ae import (
+    DICOMNode,
     set_network_timeout,
     set_radiology_storage_contexts,
     get_radiology_storage_contexts,
@@ -182,11 +183,11 @@ def _handle_move(event, storage_dir: str, known_aet_dict: dict):
 
 
 # Start SCP:
-def start(
-    address: str, port: int, aet: str, storage_dir: str, known_aet_dict: dict
-) -> bool:
+def start(addr: DICOMNode, storage_dir: str, known_nodes: list[DICOMNode]) -> bool:
     global scp
-    logger.info(f"start {address}, {port}, {aet}, {storage_dir} {known_aet_dict}...")
+    logger.info(f"start {addr.ip}, {addr.port}, {addr.aet}, {storage_dir} ...")
+
+    known_aet_dict = {node.aet: (node.ip, node.port) for node in known_nodes}
 
     if server_running():
         logger.error("PACS SIMULATOR scp is already running")
@@ -195,7 +196,7 @@ def start(
     # Make sure storage directory exists:
     os.makedirs(storage_dir, exist_ok=True)
 
-    ae = AE(aet)
+    ae = AE(addr.aet)
     ae.maximum_pdu_size = 0  # no limit
     set_network_timeout(ae)
     set_verification_context(ae)
@@ -211,18 +212,16 @@ def start(
 
     try:
         scp = ae.start_server(
-            (address, port),
+            (addr.ip, addr.port),
             block=False,
             evt_handlers=handlers,
         )
     except Exception as e:
-        logger.error(
-            f"Failed to start DICOM QR-MOVE scp on {address}:{port}, with AE Title = {aet}, Error: {str(e)}"
-        )
+        logger.error(f"Failed to start DICOM QR-MOVE scp on {addr}, Error: {str(e)}")
         return False
 
     logger.info(
-        f"DICOM QR-MOVE scp listening on {address}:{port}, with AE Title = {aet}, storing files in {storage_dir}"
+        f"DICOM QR-MOVE scp listening on {addr}, storing files in {storage_dir}"
     )
     return True
 

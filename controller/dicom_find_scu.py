@@ -1,11 +1,13 @@
 import logging
-from typing import final
 from pydicom.dataset import Dataset
 from pynetdicom.ae import ApplicationEntity as AE
-from pynetdicom.presentation import build_context
 from pynetdicom.sop_class import _QR_CLASSES as QR_CLASSES
 from pynetdicom.status import QR_FIND_SERVICE_CLASS_STATUS
-from controller.dicom_ae import set_network_timeout, get_study_root_qr_contexts
+from controller.dicom_ae import (
+    DICOMNode,
+    set_network_timeout,
+    get_study_root_qr_contexts,
+)
 from controller.dicom_return_codes import (
     C_SUCCESS,
     C_PENDING_A,
@@ -18,18 +20,15 @@ logger = logging.getLogger(__name__)
 # Query remote server for studies matching the given query dataset:
 # TODO: dicom address class (ip, port, ae)
 def find(
-    scp_ip: str,
-    scp_port: int,
-    scp_ae: str,
-    scu_ip: str,
-    scu_ae: str,
+    scu: DICOMNode,
+    scp: DICOMNode,
     name: str,
     id: str,
     acc_no: str,
     study_date: str,
     modality: str,
 ) -> list[Dataset] | None:
-    logger.info(f"C-FIND from {scu_ae}@{scu_ip} to {scp_ae}@{scp_ip}:{scp_port}")
+    logger.info(f"C-FIND from {scu} to {scp}")
 
     ds = Dataset()
     ds.QueryRetrieveLevel = "STUDY"
@@ -45,7 +44,7 @@ def find(
 
     logger.info(f"Query: {name}, {id}, {acc_no}, {study_date}, {modality}")
     # Initialize the Application Entity
-    ae = AE(scu_ae)
+    ae = AE(scu.aet)
     set_network_timeout(ae)
 
     error = False
@@ -53,11 +52,11 @@ def find(
     assoc = None
     try:
         assoc = ae.associate(
-            scp_ip,
-            scp_port,
+            scp.ip,
+            scp.port,
             get_study_root_qr_contexts(),
-            ae_title=scp_ae,
-            bind_address=(scu_ip, 0),
+            ae_title=scp.aet,
+            bind_address=(scu.ip, 0),
         )
         if not assoc.is_established:
             logger.error("Association rejected, aborted or never connected")
@@ -99,9 +98,7 @@ def find(
 
     except Exception as e:
         error = True
-        logger.error(
-            f"Failed DICOM C-FIND to {scp_ae}@{scp_ip}:{scp_port}, Error: {str(e)}"
-        )
+        logger.error(f"Failed DICOM C-FIND to {scp}, Error: {str(e)}")
     finally:
         if assoc:
             assoc.release()

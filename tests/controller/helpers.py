@@ -1,52 +1,35 @@
 import os
-import queue
 from pydicom.data import get_testdata_file
 from pydicom import Dataset
-from controller.dicom_ae import DICOMRuntimeError
+from controller.dicom_ae import DICOMNode, DICOMRuntimeError
 from controller.dicom_echo_scu import echo
 from controller.dicom_find_scu import find
 from controller.dicom_move_scu import move
-from controller.dicom_send_scu import DICOMNode, send, ExportRequest, ExportResponse
+from controller.dicom_send_scu import send, ExportRequest, ExportResponse
 from controller.dicom_ae import get_network_timeout
 import controller.dicom_storage_scp as storage_scp
 import tests.controller.dicom_pacs_simulator_scp as pacs_simulator_scp
 
-
-# TODO: use dicom node dataclass: ip, port, aet
 from tests.controller.dicom_test_nodes import (
-    TEST_LOCAL_SCP_IP,
-    TEST_LOCAL_SCP_PORT,
-    TEST_LOCAL_SCP_AET,
-    TEST_PACS_IP,
-    TEST_PACS_PORT,
-    TEST_PACS_AET,
-    TEST_PACS_KNOWN_AET,
-    TEST_SCU_IP,
-    TEST_SCU_AET,
+    LocalSCU,
+    LocalStorageSCP,
+    PACSSimulatorSCP,
 )
-
-LocalSCU = DICOMNode(TEST_LOCAL_SCP_IP, TEST_LOCAL_SCP_PORT, TEST_LOCAL_SCP_AET, False)
-LocalStorageSCP = DICOMNode(
-    TEST_LOCAL_SCP_IP, TEST_LOCAL_SCP_PORT, TEST_LOCAL_SCP_AET, True
-)
-PACSSimulatorSCP = DICOMNode(TEST_PACS_IP, TEST_PACS_PORT, TEST_PACS_AET, True)
 
 
 # HELPER FUNCTIONS
 def local_storage_dir(temp_dir: str):
-    return os.path.join(temp_dir, TEST_LOCAL_SCP_AET)
+    return os.path.join(temp_dir, LocalStorageSCP.aet)
 
 
 def pacs_storage_dir(temp_dir: str):
-    return os.path.join(temp_dir, TEST_PACS_AET)
+    return os.path.join(temp_dir, PACSSimulatorSCP.aet)
 
 
 def start_local_storage_scp(temp_dir: str):
     try:
         storage_scp.start(
-            TEST_LOCAL_SCP_IP,
-            TEST_LOCAL_SCP_PORT,
-            TEST_LOCAL_SCP_AET,
+            LocalStorageSCP,
             local_storage_dir(temp_dir),
         )
         return True
@@ -60,22 +43,16 @@ def stop_local_storage_scp():
 
 
 def echo_local_storage_scp():
-    assert echo(
-        TEST_LOCAL_SCP_IP,
-        TEST_LOCAL_SCP_PORT,
-        TEST_LOCAL_SCP_AET,
-        TEST_SCU_IP,
-        TEST_SCU_AET,
-    )
+    assert echo(LocalSCU, LocalStorageSCP)
 
 
-def start_pacs_simulator_scp(temp_dir: str, known_aet_dict: dict = TEST_PACS_KNOWN_AET):
+def start_pacs_simulator_scp(
+    temp_dir: str, known_nodes: list[DICOMNode] = [LocalStorageSCP]
+):
     assert pacs_simulator_scp.start(
-        TEST_PACS_IP,
-        TEST_PACS_PORT,
-        TEST_PACS_AET,
+        PACSSimulatorSCP,
         pacs_storage_dir(temp_dir),
-        known_aet_dict,
+        known_nodes,  # one move destination
     )
     assert pacs_simulator_scp.server_running()
 
@@ -86,10 +63,10 @@ def stop_pacs_simulator_scp():
 
 
 def echo_pacs_simulator_scp():
-    assert echo(TEST_PACS_IP, TEST_PACS_PORT, TEST_PACS_AET, TEST_SCU_IP, TEST_SCU_AET)
+    assert echo(LocalSCU, PACSSimulatorSCP)
 
 
-def send_file_to_scp(pydicom_test_filename: str, to_pacs_simulator: bool):
+def send_file_to_scp(pydicom_test_filename: str, to_pacs_simulator: bool) -> Dataset:
     # Use test data which comes with pydicom,
     # if not found, get_testdata_file() will try and download it
     ds = get_testdata_file(pydicom_test_filename, read=True)
@@ -103,6 +80,7 @@ def send_file_to_scp(pydicom_test_filename: str, to_pacs_simulator: bool):
         LocalSCU,
         PACSSimulatorSCP if to_pacs_simulator else LocalStorageSCP,
     )
+    return ds
 
 
 # def send_to_scp(
@@ -133,13 +111,10 @@ def send_file_to_scp(pydicom_test_filename: str, to_pacs_simulator: bool):
 #     send(req)
 
 
-def find_all_studies_on_test_pacs_scp():
+def find_all_studies_on_pacs_simulator_scp():
     results = find(
-        TEST_PACS_IP,
-        TEST_PACS_PORT,
-        TEST_PACS_AET,
-        TEST_SCU_IP,
-        TEST_SCU_AET,
+        LocalSCU,
+        PACSSimulatorSCP,
         "",
         "",
         "",
@@ -149,13 +124,10 @@ def find_all_studies_on_test_pacs_scp():
     return results
 
 
-def move_study_from_test_pacs_scp_to_local_scp(study_uid: str):
+def move_study_from_pacs_simulator_scp_to_local_scp(study_uid: str):
     return move(
-        TEST_PACS_IP,
-        TEST_PACS_PORT,
-        TEST_PACS_AET,
-        TEST_SCU_IP,
-        TEST_SCU_AET,
-        TEST_LOCAL_SCP_AET,
+        LocalSCU,
+        PACSSimulatorSCP,
+        LocalStorageSCP.aet,
         study_uid,
     )

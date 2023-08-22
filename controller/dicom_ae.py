@@ -1,4 +1,5 @@
 from typing import List
+from dataclasses import dataclass
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.presentation import PresentationContext, build_context
 from pynetdicom._globals import ALL_TRANSFER_SYNTAXES, DEFAULT_TRANSFER_SYNTAXES
@@ -7,6 +8,14 @@ from pynetdicom._globals import ALL_TRANSFER_SYNTAXES, DEFAULT_TRANSFER_SYNTAXES
 # Controller Custom Error classes:
 class DICOMRuntimeError(Exception):
     pass
+
+
+@dataclass
+class DICOMNode:
+    ip: str
+    port: int
+    aet: str
+    scp: bool
 
 
 _Verification_Class = "1.2.840.10008.1.1"

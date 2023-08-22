@@ -10,7 +10,7 @@ from controller.dicom_return_codes import (
     C_PENDING_A,
     C_PENDING_B,
 )
-from controller.dicom_ae import set_network_timeout
+from controller.dicom_ae import DICOMNode, set_network_timeout
 
 logger = logging.getLogger(__name__)
 
@@ -20,24 +20,19 @@ logger = logging.getLogger(__name__)
 # Move list of studies from remote server to the local scp storage:
 # TODO: dicom address class (ip, port, ae)
 def move(
-    scp_ip: str,
-    scp_port: int,
-    scp_ae: str,
-    scu_ip: str,
-    scu_ae: str,
+    scu: DICOMNode,
+    scp: DICOMNode,
     dest_scp_ae: str,
     study_uid: str,
 ) -> list[Dataset] | None:
-    logger.info(
-        f"C-MOVE scu:{scu_ae}@{scu_ip} scp:{scp_ae}@{scp_ip}:{scp_port} move to: {dest_scp_ae}"
-    )
+    logger.info(f"C-MOVE scu:{scu} scp:{scp} move to: {dest_scp_ae}")
     ds = Dataset()
     ds.QueryRetrieveLevel = "STUDY"
     ds.StudyInstanceUID = study_uid
 
     logger.info(f"Move StudyInstanceUID: {study_uid}")
     # Initialize the Application Entity
-    ae = AE(scu_ae)
+    ae = AE(scu.aet)
     set_network_timeout(ae)
 
     results = []
@@ -46,13 +41,13 @@ def move(
     try:
         # Connect to remote scp:
         assoc = ae.associate(
-            addr=scp_ip,
-            port=scp_port,
+            addr=scp.ip,
+            port=scp.port,
             contexts=[
                 build_context(QR_CLASSES["StudyRootQueryRetrieveInformationModelMove"])
             ],
-            ae_title=scp_ae,
-            bind_address=(scu_ip, 0),
+            ae_title=scp.aet,
+            bind_address=(scu.ip, 0),
         )
         if not assoc.is_established:
             raise Exception("Association rejected, aborted or never connected")
@@ -95,7 +90,7 @@ def move(
             results.append(status)
 
     except Exception as e:
-        logger.error(f"Failed DICOM C-MOVE to {scu_ae}, Error: {str(e)}")
+        logger.error(f"Failed DICOM C-MOVE to {dest_scp_ae}, Error: {str(e)}")
         if error:
             return None
 

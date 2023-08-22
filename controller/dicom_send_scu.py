@@ -1,9 +1,7 @@
 import logging
 import os
-from sys import exception
 import threading
 import queue
-import threading
 from concurrent.futures import ThreadPoolExecutor
 from pydicom.dataset import Dataset
 from pynetdicom.ae import ApplicationEntity as AE
@@ -11,6 +9,7 @@ from pynetdicom.status import STORAGE_SERVICE_CLASS_STATUS
 from utils.translate import _
 from view.storage_dir import get_storage_directory
 from controller.dicom_ae import (
+    DICOMNode,
     DICOMRuntimeError,
     set_network_timeout,
     set_radiology_storage_contexts,
@@ -23,14 +22,6 @@ from dataclasses import dataclass
 # TODO: make this user settable & add to config.son?
 patient_export_thread_pool_size = 2
 MAX_RETRIES = 3
-
-
-@dataclass
-class DICOMNode:
-    ip: str
-    port: int
-    aet: str
-    scp: bool
 
 
 @dataclass

@@ -3,6 +3,7 @@ from pydicom.dataset import Dataset
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.status import VERIFICATION_SERVICE_CLASS_STATUS
 from controller.dicom_ae import (
+    DICOMNode,
     set_network_timeout,
     set_verification_context,
     get_verification_context,
@@ -11,20 +12,20 @@ from controller.dicom_ae import (
 logger = logging.getLogger(__name__)
 
 
-def echo(scp_ip: str, scp_port: int, scp_ae: str, scu_ip: str, scu_ae: str) -> bool:
-    logger.info(f"C-ECHO from {scu_ae}@{scu_ip} to {scp_ae}@{scp_ip}:{scp_port}")
+def echo(scu: DICOMNode, scp: DICOMNode) -> bool:
+    logger.info(f"C-ECHO from {scu.aet}@{scu.ip} to {scp.aet}@{scp.ip}:{scp.port}")
     # Initialize the Application Entity
-    ae = AE(scu_ae)
+    ae = AE(scu.aet)
     set_network_timeout(ae)
     set_verification_context(ae)
 
     try:
         assoc = ae.associate(
-            scp_ip,
-            scp_port,
+            scp.ip,
+            scp.port,
             contexts=[get_verification_context()],
-            ae_title=scp_ae,
-            bind_address=(scu_ip, 0),
+            ae_title=scp.aet,
+            bind_address=(scu.ip, 0),
         )
         if not assoc.is_established:
             logger.error("Association rejected, aborted or never connected")
@@ -35,7 +36,7 @@ def echo(scp_ip: str, scp_port: int, scp_ae: str, scu_ip: str, scu_ae: str) -> b
 
     except Exception as e:
         logger.error(
-            f"Failed DICOM C-ECHO from {scu_ae} to {scp_ip}:{scp_port}, with AE Title = {scp_ae}, Error: {str(e)}"
+            f"Failed DICOM C-ECHO from {scu.aet} to {scp.ip}:{scp.port}, with AE Title = {scp.aet}, Error: {str(e)}"
         )
         return False
 

@@ -4,6 +4,7 @@ import customtkinter as ctk
 import pandas as pd
 from tkinter import ttk
 from CTkToolTip import CTkToolTip
+from controller.dicom_ae import DICOMNode
 from utils.translate import _
 import utils.config as config
 from utils.network import get_local_ip_addresses
@@ -76,11 +77,8 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         scp_button.configure(text_color="light grey")
         # Echo SCP:
         if echo(
-            scp_ip_var.get(),
-            scp_port_var.get(),
-            scp_aet_var.get(),
-            scu_ip_var.get(),
-            scu_aet_var.get(),
+            DICOMNode(scu_ip_var.get(), 0, scu_aet_var.get(), False),
+            DICOMNode(scp_ip_var.get(), scp_port_var.get(), scp_aet_var.get(), True),
         ):
             logger.info(f"Echo to {scp_aet_var.get()} successful")
             scp_button.configure(text_color="light green")
@@ -278,11 +276,8 @@ def create_view(view: ctk.CTkFrame, PAD: int):
     def query_button_pressed(tree: ttk.Treeview):
         logger.info(f"Query button pressed")
         results = find(
-            scp_ip_var.get(),
-            scp_port_var.get(),
-            scp_aet_var.get(),
-            scu_ip_var.get(),
-            scu_aet_var.get(),
+            DICOMNode(scu_ip_var.get(), 0, scu_aet_var.get(), False),
+            DICOMNode(scp_ip_var.get(), scp_port_var.get(), scp_aet_var.get(), True),
             patient_name_var.get(),
             patient_id_var.get(),
             accession_no_var.get(),
@@ -333,11 +328,10 @@ def create_view(view: ctk.CTkFrame, PAD: int):
 
         for uid in uids:
             if move(
-                scp_ip_var.get(),
-                scp_port_var.get(),
-                scp_aet_var.get(),
-                scu_ip_var.get(),
-                scu_aet_var.get(),
+                DICOMNode(scu_ip_var.get(), 0, scu_aet_var.get(), False),
+                DICOMNode(
+                    scp_ip_var.get(), scp_port_var.get(), scp_aet_var.get(), True
+                ),
                 dest_scp_aet,
                 uid,
             ):
