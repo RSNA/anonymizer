@@ -16,7 +16,7 @@ from tests.controller.helpers import (
 )
 from controller.dicom_return_codes import C_MOVE_UNKNOWN_AE, C_SUCCESS, C_PENDING_A
 from model.project import UIDROOT, SITEID
-from tests.controller.dcm_tst_files import ct_small_filename
+from tests.controller.dicom_test_files import ct_small_filename
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -36,10 +36,8 @@ def test_move_1_CT_file_from_pacs_with_file_to_unknown_AET(temp_dir: str):
 def test_move_1_file_from_empty_pacs_to_local_storage(temp_dir: str):
     start_local_storage_scp(temp_dir)
     start_pacs_simulator_scp(temp_dir)
-    # ds: Dataset = send_file_to_scp(ct_small_filename, True)
-    # dirlist = os.listdir(pacs_storage_dir(temp_dir))
-    # assert len(dirlist) == 1
-    # assert dirlist[0] == ds.SeriesInstanceUID + ".1.dcm"
+    dirlist = os.listdir(pacs_storage_dir(temp_dir))
+    assert len(dirlist) == 0
     results = move_study_from_pacs_simulator_scp_to_local_scp("1.2.3.4.5.6")
     assert results
     assert len(results) == 1

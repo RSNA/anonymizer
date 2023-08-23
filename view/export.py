@@ -65,11 +65,10 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         scp_button.configure(text_color="light grey")
         # Echo SCP:
         if echo(
-            scp_ip_var.get(),
-            scp_port_var.get(),
-            scp_aet_var.get(),
-            scu_ip_var.get(),
-            scu_aet_var.get(),
+            scu=DICOMNode(scu_ip_var.get(), 0, scu_aet_var.get(), False),
+            scp=DICOMNode(
+                scp_ip_var.get(), scp_port_var.get(), scp_aet_var.get(), True
+            ),
         ):
             logger.info(f"Echo to {scp_aet_var.get()} successful")
             scp_button.configure(text_color="light green")
@@ -257,7 +256,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
                 resp: ExportResponse = ux_Q.get_nowait()
                 logger.info(f"{resp}")
                 # Check for full export termination due to critical error:
-                if resp.errors == -1:
+                if resp == ExportResponse.full_export_critical_error():
                     critical_error = True
                     break
 
@@ -274,10 +273,13 @@ def create_view(view: ctk.CTkFrame, PAD: int):
                         resp.errors,
                     ],
                 )
-                # Check for completion of this patient's export:
-                if resp.files_to_send == resp.files_sent + resp.errors:
+                # Check for completion or critical error of this patient's export :
+                if resp in [
+                    ExportResponse.patient_critical_error(resp.patient_id),
+                    ExportResponse.patient_export_complete(resp),
+                ]:
                     logger.info(f"Patient {resp.patient_id} export complete")
-                    # remove selection highlight to indicate export of this item finished
+                    # remove selection highlight to indicate export of this item/patient is finished
                     tree.selection_remove(resp.patient_id)
                     remaining_patients -= 1
                     if resp.errors == 0:
@@ -289,7 +291,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         # Check for completion of full export:
         if remaining_patients == 0 or critical_error:
             if critical_error:
-                logger.error("Critical export error detected, aborting monitore")
+                logger.error("Critical export error detected, aborting monitor")
             else:
                 logger.info("All patients exported")
             # re-enable refresh and select_all buttons now export is complete

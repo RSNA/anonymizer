@@ -3,7 +3,6 @@
 import os
 import logging
 from pydicom.dataset import Dataset
-from pydicom.data import get_testdata_file
 from controller.anonymize import uid_lookup
 from tests.controller.helpers import (
     start_local_storage_scp,
@@ -11,7 +10,7 @@ from tests.controller.helpers import (
     local_storage_dir,
 )
 from model.project import UIDROOT, SITEID
-from tests.controller.dcm_tst_files import (
+from tests.controller.dicom_test_files import (
     cr1_filename,
     ct_small_filename,
     mr_small_filename,

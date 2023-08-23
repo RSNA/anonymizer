@@ -56,9 +56,10 @@ def _handle_store(event: Event, storage_dir: str) -> int:
     ds.file_meta = event.file_meta
     logger.debug(remote)
     logger.info(ds)
-    filename = (
-        storage_dir + "/" + ds.SeriesInstanceUID + "." + str(ds.InstanceNumber) + ".dcm"
+    filename = os.path.join(
+        storage_dir, f"{ds.SeriesInstanceUID}.{ds.InstanceNumber}.dcm"
     )
+
     logger.info(
         f"C-STORE [TxSyn:{ds.file_meta.TransferSyntaxUID}]: {remote['ae_title']} => {filename}"
     )
@@ -217,11 +218,11 @@ def start(addr: DICOMNode, storage_dir: str, known_nodes: list[DICOMNode]) -> bo
             evt_handlers=handlers,
         )
     except Exception as e:
-        logger.error(f"Failed to start DICOM QR-MOVE scp on {addr}, Error: {str(e)}")
+        logger.error(f"Failed to start PACS SIMULATOR scp on {addr}, Error: {str(e)}")
         return False
 
     logger.info(
-        f"DICOM QR-MOVE scp listening on {addr}, storing files in {storage_dir}"
+        f"PACS SIMULATOR scp listening on {addr}, storing files in {storage_dir}"
     )
     return True
 
@@ -230,7 +231,7 @@ def start(addr: DICOMNode, storage_dir: str, known_nodes: list[DICOMNode]) -> bo
 def stop(final_shutdown=False) -> None:
     global scp
     if not final_shutdown:
-        logger.info("User initiated: Stop DICOM QR-MOVE scp and close socket")
+        logger.info("User initiated: Stop PACS SIMULATOR scp and close socket")
     if not scp:
         return
     scp.shutdown()

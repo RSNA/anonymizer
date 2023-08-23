@@ -21,12 +21,18 @@ logger = logging.getLogger(__name__)
 
 # Store scp instance after ae.start_server() is called:
 scp = None
+active_storage_dir = None  # latched when scp is started
 
 
 # Is SCP running?
 def server_running() -> bool:
     global scp
     return scp is not None
+
+
+def get_active_storage_dir():
+    global active_storage_dir
+    return active_storage_dir
 
 
 def get_storage_scp_aet():
@@ -92,8 +98,9 @@ def start(addr: DICOMNode, storage_dir: str):
     Note:
     The function will log informative and error messages using the logger.
     """
-    global scp
+    global scp, active_storage_dir
     logger.info(f"start {addr.ip}, {addr.port}, {addr.aet}, {storage_dir}...")
+    active_storage_dir = storage_dir
 
     if server_running():
         msg = _(

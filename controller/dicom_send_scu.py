@@ -1,5 +1,5 @@
-import logging
 import os
+import logging
 import threading
 import queue
 from concurrent.futures import ThreadPoolExecutor
@@ -7,7 +7,7 @@ from pydicom.dataset import Dataset
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.status import STORAGE_SERVICE_CLASS_STATUS
 from utils.translate import _
-from view.storage_dir import get_storage_directory
+from controller.dicom_storage_scp import get_active_storage_dir
 from controller.dicom_ae import (
     DICOMNode,
     DICOMRuntimeError,
@@ -21,7 +21,7 @@ from dataclasses import dataclass
 # (each export is a thread which sends a single patient's files sequentially)
 # TODO: make this user settable & add to config.son?
 patient_export_thread_pool_size = 2
-MAX_RETRIES = 3
+MAX_RETRIES = 2
 
 
 @dataclass
@@ -29,15 +29,40 @@ class ExportRequest:
     scu: DICOMNode
     scp: DICOMNode
     patient_ids: list[str]  # list of patient IDs to export
-    ux_Q: queue.Queue  # queue for UX updates
+    ux_Q: queue.Queue  # queue for UX updates for the full export
 
 
 @dataclass
 class ExportResponse:
     patient_id: str
-    files_to_send: int
-    files_sent: int
+    files_to_send: int  # total number of files to send for this patient, remains constant
+    files_sent: int  # incremented for each file sent successfully
     errors: int
+
+    # Class attribute for single patient termination
+    @classmethod
+    def patient_critical_error(cls, patient_id):
+        return cls(
+            patient_id=patient_id,
+            files_to_send=0,
+            files_sent=0,
+            errors=1,
+        )
+
+    # Class attribute for ALL patients export termination
+    @classmethod
+    def full_export_critical_error(cls):
+        return cls(
+            patient_id="",  # empty string for ALL patients
+            files_to_send=0,
+            files_sent=0,
+            errors=1,
+        )
+
+    # Class attribute to check if patient export is complete
+    @classmethod
+    def patient_export_complete(cls, response):
+        return response.files_to_send <= (response.files_sent + response.errors)
 
 
 logger = logging.getLogger(__name__)
@@ -92,30 +117,20 @@ def send(file_paths: list[str], scu: DICOMNode, scp: DICOMNode) -> bool:
 def _export_patient(
     ae: AE, scu: DICOMNode, scp: DICOMNode, patient_id: str, ux_Q: queue.Queue
 ) -> bool:
-    logger.info("_export_patient {patient_id} start")
+    logger.info(f"_export_patient {patient_id} start")
 
-    # Indicates patient termination
-    patient_critical_error_resp = ExportResponse(
-        patient_id=patient_id,
-        files_to_send=0,
-        files_sent=0,
-        errors=1,
-    )
+    local_storage_dir = get_active_storage_dir()
+    if local_storage_dir is None:
+        logger.error(f"Active storage directory not set")
+        ux_Q.put(ExportResponse.full_export_critical_error())
+        return False
 
-    # indicates full export termination
-    full_export_critical_error_resp = ExportResponse(
-        patient_id=patient_id,
-        files_to_send=0,
-        files_sent=0,
-        errors=-1,
-    )
-
-    # Load DICOM files to send from local storage for this patient:
-    path = os.path.join(get_storage_directory(), patient_id)
+    # Load DICOM files to send from active local storage directory for this patient:
+    path = os.path.join(local_storage_dir, patient_id)
 
     if not os.path.isdir(path):
         logger.error(f"Selected directory {path} is not a directory")
-        ux_Q.put(patient_critical_error_resp)
+        ux_Q.put(ExportResponse.patient_critical_error(patient_id))
         return False
 
     file_paths = []
@@ -126,7 +141,7 @@ def _export_patient(
 
     if not file_paths:
         logger.error(f"No DICOM files found in {path}")
-        ux_Q.put(patient_critical_error_resp)
+        ux_Q.put(ExportResponse.patient_critical_error(patient_id))
         return False
 
     # Establish an association (thread) with SCP for this patient's sequential file transfer
@@ -148,7 +163,7 @@ def _export_patient(
     except (ConnectionError, TimeoutError, RuntimeError) as e:
         logger.error(f"Error establishing association: {e}")
         # If association can't be established with this SCP terminate full export:
-        ux_Q.put(full_export_critical_error_resp)
+        ux_Q.put(ExportResponse.full_export_critical_error())
         return False
 
     files_to_send = len(file_paths)
@@ -168,6 +183,8 @@ def _export_patient(
                 else:
                     files_sent += 1
 
+                break
+
             except TimeoutError:
                 retries += 1
                 logger.warning(
@@ -175,7 +192,7 @@ def _export_patient(
                 )
                 # Raise exception to terminate this patient's export and to signal to the thread pool to terminate all other exports:
                 if retries == MAX_RETRIES:
-                    ux_Q.put(full_export_critical_error_resp)
+                    ux_Q.put(ExportResponse.full_export_critical_error())
                     assoc.release()
                     raise DICOMRuntimeError(
                         f"Timeout error sending DICOM file {dicom_file_path}."
@@ -204,18 +221,18 @@ def _export_patient(
 
 
 # Manage bulk patient export using a thread pool:
-def manage_export(er: ExportRequest) -> None:
+def _manage_export(req: ExportRequest) -> None:
     # Initialize the Application Entity
-    ae = AE(er.scu.aet)
+    ae = AE(req.scu.aet)
     set_network_timeout(ae)
     set_radiology_storage_contexts(ae)
 
     futures = []
 
     with ThreadPoolExecutor(max_workers=patient_export_thread_pool_size) as executor:
-        for i in range(len(er.patient_ids)):
+        for i in range(len(req.patient_ids)):
             future = executor.submit(
-                _export_patient, ae, er.scu, er.scp, er.patient_ids[i], er.ux_Q
+                _export_patient, ae, req.scu, req.scp, req.patient_ids[i], req.ux_Q
             )
             futures.append(future)
 
@@ -236,7 +253,7 @@ def manage_export(er: ExportRequest) -> None:
 # Non-blocking send:
 def export_patients(er: ExportRequest) -> None:
     threading.Thread(
-        target=manage_export,
+        target=_manage_export,
         args=(er,),
         daemon=True,
     ).start()
