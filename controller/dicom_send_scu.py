@@ -4,6 +4,7 @@ import threading
 import queue
 from concurrent.futures import ThreadPoolExecutor
 from pydicom.dataset import Dataset
+from pydicom.errors import InvalidDicomError
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.status import STORAGE_SERVICE_CLASS_STATUS
 from utils.translate import _
@@ -68,8 +69,13 @@ class ExportResponse:
 logger = logging.getLogger(__name__)
 
 
-# Blocking send (for testing), return False immediately on error:
-def send(file_paths: list[str], scu: DICOMNode, scp: DICOMNode) -> bool:
+# Blocking send, raises exception on error:
+def send(
+    file_paths: list[str],
+    scu: DICOMNode,
+    scp: DICOMNode,
+    contexts=get_radiology_storage_contexts(),
+) -> bool:
     # Initialize the Application Entity
     ae = AE(scu.aet)
     set_network_timeout(ae)
@@ -81,7 +87,7 @@ def send(file_paths: list[str], scu: DICOMNode, scp: DICOMNode) -> bool:
         assoc = ae.associate(
             scp.ip,
             scp.port,
-            contexts=get_radiology_storage_contexts(),
+            contexts=contexts,
             ae_title=scp.aet,
             bind_address=(scu.ip, 0),
         )
@@ -93,7 +99,7 @@ def send(file_paths: list[str], scu: DICOMNode, scp: DICOMNode) -> bool:
 
     except (ConnectionError, TimeoutError, RuntimeError) as e:
         logger.error(f"Error establishing association: {e}")
-        return False
+        raise
 
     for dicom_file_path in file_paths:
         try:
@@ -104,10 +110,10 @@ def send(file_paths: list[str], scu: DICOMNode, scp: DICOMNode) -> bool:
                     f"DICOM Response: {STORAGE_SERVICE_CLASS_STATUS[dcm_response.Status][1]}"
                 )
 
-        except Exception as e:
+        except (RuntimeError, AttributeError, ValueError, InvalidDicomError) as e:
             logger.error(f"Error sending DICOM file {dicom_file_path}: {e}")
             assoc.release()
-            return False
+            raise
 
     assoc.release()
     return True

@@ -96,6 +96,14 @@ def get_radiology_storage_contexts() -> List[PresentationContext]:
     ]
 
 
+# For testing:
+def get_radiology_storage_contexts_BIGENDIAN() -> List[PresentationContext]:
+    return [
+        build_context(abstract_syntax, "1.2.840.10008.1.2.2")  # Explicit VR Big Endian,
+        for abstract_syntax in _RADIOLOGY_STORAGE_CLASSES.values()
+    ]
+
+
 def get_study_root_qr_contexts() -> List[PresentationContext]:
     return [
         build_context(abstract_syntax, _TRANSFER_SYNTAXES)
