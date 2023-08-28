@@ -1,10 +1,12 @@
 import logging
+import threading
+from queue import Queue
+from dataclasses import dataclass
 from pydicom.dataset import Dataset
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.presentation import build_context
 from pynetdicom.sop_class import _QR_CLASSES as QR_CLASSES
 from pynetdicom.status import QR_MOVE_SERVICE_CLASS_STATUS
-from pynetdicom import debug_logger
 from controller.dicom_return_codes import (
     C_SUCCESS,
     C_PENDING_A,
@@ -14,16 +16,23 @@ from controller.dicom_ae import DICOMNode, set_network_timeout
 
 logger = logging.getLogger(__name__)
 
-# debug_logger()
+
+@dataclass
+class MoveRequest:
+    scu: DICOMNode
+    scp: DICOMNode
+    dest_scp_ae: str
+    study_uid: str
+    ux_Q: Queue
 
 
-# Move list of studies from remote server to the local scp storage:
-# TODO: dicom address class (ip, port, ae)
+# Blocking: Move list of studies from remote server to the local scp storage:
 def move(
     scu: DICOMNode,
     scp: DICOMNode,
     dest_scp_ae: str,
     study_uid: str,
+    ux_Q=None,
 ) -> list[Dataset] | None:
     logger.info(f"C-MOVE scu:{scu} scp:{scp} move to: {dest_scp_ae}")
     ds = Dataset()
@@ -88,6 +97,8 @@ def move(
             # (0000, 1022) Number of Failed Sub-operations     US:
             # (0000, 1023) Number of Warning Sub-operations    US:
             results.append(status)
+            if ux_Q:
+                ux_Q.put(status)
 
     except Exception as e:
         logger.error(f"Failed DICOM C-MOVE to {dest_scp_ae}, Error: {str(e)}")
@@ -101,3 +112,15 @@ def move(
         ae.shutdown()
 
     return results
+
+
+# TODO: thread pool
+
+
+# Non-blocking Move:
+def move_ex(mr: MoveRequest) -> None:
+    threading.Thread(
+        target=move,
+        args=(mr.scu, mr.scp, mr.dest_scp_ae, mr.study_uid, mr.ux_Q),
+        daemon=True,
+    ).start()

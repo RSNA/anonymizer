@@ -1,24 +1,41 @@
 import logging
+import threading
+from queue import Queue
+from dataclasses import dataclass
 from pydicom.dataset import Dataset
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.sop_class import _QR_CLASSES as QR_CLASSES
 from pynetdicom.status import QR_FIND_SERVICE_CLASS_STATUS
 from controller.dicom_ae import (
     DICOMNode,
+    DICOMRuntimeError,
     set_network_timeout,
     get_study_root_qr_contexts,
 )
-from controller.dicom_return_codes import (
-    C_SUCCESS,
-    C_PENDING_A,
-    C_PENDING_B,
-)
+from controller.dicom_return_codes import C_SUCCESS, C_PENDING_A, C_PENDING_B, C_FAILURE
 
 logger = logging.getLogger(__name__)
 
 
-# Query remote server for studies matching the given query dataset:
-# TODO: dicom address class (ip, port, ae)
+@dataclass
+class FindRequest:
+    scu: DICOMNode
+    scp: DICOMNode
+    name: str
+    id: str
+    acc_no: str
+    study_date: str
+    modality: str
+    ux_Q: Queue
+
+
+@dataclass
+class FindResponse:
+    status: Dataset
+    identifier: Dataset | None
+
+
+# Blocking: Query remote server for studies matching the given query dataset:
 def find(
     scu: DICOMNode,
     scp: DICOMNode,
@@ -27,6 +44,7 @@ def find(
     acc_no: str,
     study_date: str,
     modality: str,
+    ux_Q=None,
 ) -> list[Dataset] | None:
     logger.info(f"C-FIND from {scu} to {scp}")
 
@@ -47,9 +65,9 @@ def find(
     ae = AE(scu.aet)
     set_network_timeout(ae)
 
-    error = False
     results = []
     assoc = None
+    error_msg = ""
     try:
         assoc = ae.associate(
             scp.ip,
@@ -60,8 +78,9 @@ def find(
         )
         if not assoc.is_established:
             logger.error("Association rejected, aborted or never connected")
-            return None
-
+            raise ConnectionError(
+                f"Failed to establish association with {scp.aet}@{scp.ip}:{scp.port}"
+            )
         logger.info(f"Association established with {assoc.acceptor.ae_title}")
 
         # Use the C-FIND service to send the identifier using the StudyRootQueryRetrieveInformationModelFind
@@ -74,16 +93,17 @@ def find(
         # TODO: reflect status dataset back to UX client to provide find error detail
         for status, identifier in responses:
             if not status or status.Status not in (C_SUCCESS, C_PENDING_A, C_PENDING_B):
-                error = True
                 if not status:
-                    logger.error(
-                        "Connection timed out, was aborted, or received an invalid response"
-                    )
+                    msg = "Connection timed out, was aborted, or received an invalid response"
+                    logger.error(msg)
+                    raise ConnectionError(msg)
                 else:
-                    logger.error(
-                        f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}"
-                    )
+                    msg = f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}"
+                    logger.error(msg)
+                    raise DICOMRuntimeError(msg)
             else:
+                if status.Status == C_SUCCESS:
+                    logger.info("C-FIND query success")
                 if identifier:
                     # TODO: move this code to UX client?
                     fields_to_remove = [
@@ -95,23 +115,35 @@ def find(
                         if field in identifier:
                             delattr(identifier, field)
                     results.append(identifier)
+                if ux_Q:
+                    ux_Q.put(FindResponse(status, identifier))
 
-    except Exception as e:
-        error = True
+    except (
+        ConnectionError,
+        TimeoutError,
+        RuntimeError,
+        ValueError,
+        DICOMRuntimeError,
+    ) as e:
         logger.error(f"Failed DICOM C-FIND to {scp}, Error: {str(e)}")
+        error_msg = str(e)  # latch exception error msg
+        if ux_Q:
+            ds = Dataset()
+            ds.Status = C_FAILURE
+            ds.ErrorComment = error_msg
+            ux_Q.put(FindResponse(ds, None))
+
     finally:
         if assoc:
             assoc.release()
         ae.shutdown()
-        if error:
-            return None
 
     if len(results) == 0:
         logger.info("No query results found")
     else:
         logger.info(f"{len(results)} Query results found")
         for result in results:
-            logger.info(
+            logger.debug(
                 f"{getattr(result, 'PatientName', 'N/A')}, "
                 f"{getattr(result, 'PatientID', 'N/A')}, "
                 f"{getattr(result, 'StudyDate', 'N/A')}, "
@@ -124,3 +156,21 @@ def find(
             )
 
     return results
+
+
+# Non-blocking Find:
+def find_ex(fr: FindRequest) -> None:
+    threading.Thread(
+        target=find,
+        args=(
+            fr.scu,
+            fr.scp,
+            fr.name,
+            fr.id,
+            fr.acc_no,
+            fr.study_date,
+            fr.modality,
+            fr.ux_Q,
+        ),
+        daemon=True,
+    ).start()

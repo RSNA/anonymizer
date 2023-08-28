@@ -3,7 +3,7 @@ import logging
 from pynetdicom.events import Event, EVT_C_STORE, EVT_C_ECHO
 from pynetdicom.ae import ApplicationEntity as AE
 from controller.dicom_return_codes import C_SUCCESS, C_STORE_OUT_OF_RESOURCES
-from controller.anonymize import anonymize_dataset
+from controller.anonymize import anonymize_dataset_and_store
 from controller.dicom_ae import (
     DICOMNode,
     DICOMRuntimeError,
@@ -12,8 +12,6 @@ from controller.dicom_ae import (
     set_verification_context,
 )
 from utils.translate import _
-from utils.storage import local_storage_path
-from model.project import SITEID
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +30,7 @@ def server_running() -> bool:
 
 def get_active_storage_dir():
     global active_storage_dir
+    assert active_storage_dir is not None
     return active_storage_dir
 
 
@@ -58,22 +57,12 @@ def _handle_store(event: Event, storage_dir: str) -> int:
     remote = event.assoc.remote
     ds = event.dataset
     ds.file_meta = event.file_meta
-    logger.debug(remote)
+    scu = DICOMNode(remote["address"], remote["port"], remote["ae_title"], False)
+    logger.debug(scu)
     logger.debug(f"PHI:\n{ds}")
-    # TODO: ensure ds has values for PatientName, Modality, StudyDate, StudyTime, SeriesNumber, InstanceNumber
-    ds = anonymize_dataset(ds)
-    logger.debug(f"ANON:\n{ds}")
-    filename = local_storage_path(storage_dir, SITEID, ds)
-    logger.info(
-        f"C-STORE [{ds.file_meta.TransferSyntaxUID}]: {remote['ae_title']} => {filename}"
-    )
-    try:
-        ds.save_as(filename, write_like_original=False)
-    except Exception as exception:
-        logger.error("Failed writing instance to storage directory")
-        logger.exception(exception)
-        return C_STORE_OUT_OF_RESOURCES
-
+    # TODO: full integrity checking before anonymization
+    # ensure ds has values for PatientName, Modality, StudyDate, StudyTime, SeriesNumber, InstanceNumber
+    anonymize_dataset_and_store(scu, ds, storage_dir)
     return C_SUCCESS
 
 

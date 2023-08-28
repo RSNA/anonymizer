@@ -1,8 +1,9 @@
 import os
 import logging
 import threading
-import queue
+from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pydicom.dataset import Dataset
 from pydicom.errors import InvalidDicomError
 from pynetdicom.ae import ApplicationEntity as AE
@@ -16,12 +17,12 @@ from controller.dicom_ae import (
     set_radiology_storage_contexts,
     get_radiology_storage_contexts,
 )
-from dataclasses import dataclass
+
 
 # Max concurrent patient exports:
 # (each export is a thread which sends a single patient's files sequentially)
 # TODO: make this user settable & add to config.son?
-patient_export_thread_pool_size = 2
+patient_export_thread_pool_size = 3
 MAX_RETRIES = 2
 
 
@@ -30,7 +31,7 @@ class ExportRequest:
     scu: DICOMNode
     scp: DICOMNode
     patient_ids: list[str]  # list of patient IDs to export
-    ux_Q: queue.Queue  # queue for UX updates for the full export
+    ux_Q: Queue  # queue for UX updates for the full export
 
 
 @dataclass
@@ -39,6 +40,7 @@ class ExportResponse:
     files_to_send: int  # total number of files to send for this patient, remains constant
     files_sent: int  # incremented for each file sent successfully
     errors: int
+    # TODO: add error message to reflect specific error to UX
 
     # Class attribute for single patient termination
     @classmethod
@@ -121,7 +123,7 @@ def send(
 
 # Background export worker thread:
 def _export_patient(
-    ae: AE, scu: DICOMNode, scp: DICOMNode, patient_id: str, ux_Q: queue.Queue
+    ae: AE, scu: DICOMNode, scp: DICOMNode, patient_id: str, ux_Q: Queue
 ) -> bool:
     logger.info(f"_export_patient {patient_id} start")
 
@@ -151,6 +153,7 @@ def _export_patient(
         return False
 
     # Establish an association (thread) with SCP for this patient's sequential file transfer
+    # TODO: Optimization, use one association for all patients?
     assoc = None
     try:
         assoc = ae.associate(

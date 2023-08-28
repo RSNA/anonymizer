@@ -7,11 +7,9 @@ from tkinter import filedialog
 from CTkToolTip import CTkToolTip
 import logging
 from pydicom import dcmread
-from controller.anonymize import anonymize_dataset
+from controller.anonymize import anonymize_dataset_and_store
 from utils.translate import _
 from view.storage_dir import storage_directory
-from utils.storage import local_storage_path
-import model.project as project
 
 # The following unused imports are for pyinstaller
 # TODO: pyinstaller cmd line special import doesn't work
@@ -73,8 +71,6 @@ def _open_directory_dialog(
         anonymize_button.configure(state="normal")
 
 
-# Read the DICOM files one by one into memory and anonymize them
-# Do not store any PHI on disk in temp files etc.
 def anonymize_files(textbox: ctk.CTkTextbox, anonymize_button: ctk.CTkButton):
     num_files = int(textbox.index("end-1c").split(".")[0])
     logging.info(f"anonymize files: {num_files-1} files ")
@@ -87,15 +83,13 @@ def anonymize_files(textbox: ctk.CTkTextbox, anonymize_button: ctk.CTkButton):
         if file.strip() == "":  # handle null string
             textbox.delete("1.0", "2.0")
             continue
+        # TODO: handle invalid dicom file exception
         ds = dcmread(file)
-        anonymize_dataset(ds)
-        # TODO: handle errors, send to quarantine, etc., try / except around ds.save_as() on critical error return
-        dest_path = local_storage_path(storage_directory, project.SITEID, ds)
-        ds.save_as(dest_path)
+        anonymize_dataset_and_store(file, ds, storage_directory)
+        # TODO: change to same tree as for query scp
         textbox.delete("1.0", "2.0")
         if i % 10 == 0:
             textbox.master.update()
-        logger.info(f"{file} => {dest_path}")
 
     textbox.configure(state="disabled")
     anonymize_button.configure(state="disabled")

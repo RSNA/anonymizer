@@ -3,7 +3,7 @@ import customtkinter as ctk
 from CTkToolTip import CTkToolTip
 from CTkMessagebox import CTkMessagebox
 import logging
-from controller.dicom_ae import DICOMRuntimeError
+from controller.dicom_ae import DICOMNode, DICOMRuntimeError
 from utils.translate import _
 import utils.config as config
 import controller.dicom_storage_scp as dicom_storage_scp
@@ -101,7 +101,8 @@ def create_view(view: ctk.CTkFrame, PAD: int = 10):
         if scp_var.get():
             try:
                 dicom_storage_scp.start(
-                    ip_var.get(), port_var.get(), aet_var.get(), get_storage_directory()
+                    DICOMNode(ip_var.get(), port_var.get(), aet_var.get(), True),
+                    get_storage_directory(),
                 )
                 scp_var.set(True)
             except DICOMRuntimeError as e:
@@ -142,7 +143,10 @@ def create_view(view: ctk.CTkFrame, PAD: int = 10):
     # Handle SCP Server Autostart:
     if scp_autostart:
         try:
-            dicom_storage_scp.start(ip_addr, ip_port, aet, get_storage_directory())
+            logger.info("Autostart Local Storage Server...")
+            dicom_storage_scp.start(
+                DICOMNode(ip_addr, ip_port, aet, True), get_storage_directory()
+            )
             scp_var.set(True)
         except DICOMRuntimeError as e:
             CTkMessagebox(

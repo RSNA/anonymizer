@@ -1,17 +1,17 @@
 import logging
 import string
+from queue import Queue, Empty, Full
 import customtkinter as ctk
 import pandas as pd
 from tkinter import ttk
 from CTkToolTip import CTkToolTip
-from controller.dicom_ae import DICOMNode
+from controller.dicom_return_codes import C_PENDING_A, C_PENDING_B, C_SUCCESS, C_FAILURE
 from utils.translate import _
 import utils.config as config
 from utils.network import get_local_ip_addresses
 from utils.ux_fields import (
     str_entry,
     int_entry,
-    adjust_column_width,
     ip_min_chars,
     ip_max_chars,
     aet_max_chars,
@@ -24,10 +24,11 @@ from utils.ux_fields import (
     dicom_date_chars,
     modality_max_chars,
     modality_min_chars,
+    ux_poll_find_response_interval,
 )
-
+from controller.dicom_ae import DICOMNode
 from controller.dicom_echo_scu import echo
-from controller.dicom_find_scu import find
+from controller.dicom_find_scu import find, find_ex, FindRequest, FindResponse
 from controller.dicom_move_scu import move
 from controller.dicom_storage_scp import get_storage_scp_aet
 
@@ -41,16 +42,21 @@ scu_ip_addr = "127.0.0.1"
 scu_aet = "ANONSCU"
 
 # C-FIND DICOM attributes to display in the results Treeview:
+# Key: DICOM field name, Value: (display name, centre justify)
 attr_map = {
-    "PatientName": _("Patient Name"),
-    "PatientID": _("Patient ID"),
-    "StudyDate": _("Study Date"),
-    "StudyDescription": _("Study Description"),
-    "AccessionNumber": _("Accession No."),
-    "ModalitiesInStudy": _("Modality"),
-    "NumberOfStudyRelatedSeries": _("Series"),
-    "NumberOfStudyRelatedInstances": _("Instances"),
-    "StudyInstanceUID": _("StudyInstanceUID"),  # not for display, for retrieve
+    "PatientName": (_("Patient Name"), 20, False),
+    "PatientID": (_("Patient ID"), 10, False),
+    "StudyDate": (_("Date"), 8, True),
+    "StudyDescription": (_("Study Description"), 20, False),
+    "AccessionNumber": (_("Accession No."), 15, True),
+    "ModalitiesInStudy": (_("Modality"), 9, True),
+    "NumberOfStudyRelatedSeries": (_("Series"), 6, True),
+    "NumberOfStudyRelatedInstances": (_("Images"), 6, True),
+    "StudyInstanceUID": (
+        _("StudyInstanceUID"),
+        0,
+        False,
+    ),  # not for display, for find/move
 }
 
 # Load module globals from config.json
@@ -187,8 +193,12 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         initial_value="",
         min_chars=0,
         max_chars=patient_name_max_chars,
-        charset=string.ascii_letters + string.digits + "*",
-        tooltipmsg="Alpha-numeric, * for wildcard",
+        charset=string.ascii_letters
+        + string.digits
+        + "- ' ^ *"
+        + "À-ÖØ-öø-ÿ"
+        + string.whitespace,
+        tooltipmsg="Alphabetic ^ spaces * for wildcard",
         row=0,
         col=0,
         pad=PAD,
@@ -255,42 +265,66 @@ def create_view(view: ctk.CTkFrame, PAD: int):
     )
 
     # Managing C-FIND results Treeview:
+    fixed_width_font = ("Courier", 14)  # Specify the font family and size
+    # Create a custom style for the Treeview
+    # TODO: see if theme manager can do this and stor in rsna_color_scheme_font.json
+    style = ttk.Style()
+    style.configure(
+        "Treeview", font=fixed_width_font
+    )  # Set the font for the Treeview style
+
+    tree = ttk.Treeview(
+        view, show="headings", style="Treeview", columns=list(attr_map.keys())[:-1]
+    )
+    tree.grid(row=2, column=0, columnspan=11, sticky="nswe")
+    # Set tree column headers, width and justification
+    for col in tree["columns"]:
+        tree.heading(col, text=attr_map[col][0])
+        tree.column(
+            col,
+            width=attr_map[col][1] * char_width_px,
+            anchor="center" if attr_map[col][2] else "w",
+        )
+
     def update_treeview_data(tree: ttk.Treeview, data: pd.DataFrame):
-        # Clear existing items
-        for item in tree.get_children():
-            tree.delete(item)
-
         # Insert new data
-
-        for index, row in data.iterrows():
+        for _, row in data.iterrows():
             display_values = [
                 val for col, val in row.items() if col != "StudyInstanceUID"
             ]
             tree.insert("", "end", iid=row["StudyInstanceUID"], values=display_values)
 
-        for col_id in tree["columns"]:
-            adjust_column_width(tree, col_id, padding=5)
-
     # Query Button:
-    # TODO: query on <Return> // move to next query entry on <Return>
-    def query_button_pressed(tree: ttk.Treeview):
-        logger.info(f"Query button pressed")
-        results = find(
-            DICOMNode(scu_ip_var.get(), 0, scu_aet_var.get(), False),
-            DICOMNode(scp_ip_var.get(), scp_port_var.get(), scp_aet_var.get(), True),
-            patient_name_var.get(),
-            patient_id_var.get(),
-            accession_no_var.get(),
-            study_date_var.get(),
-            modality_var.get(),
-        )
+    def monitor_query_response(ux_Q: Queue, tree: ttk.Treeview):
+        results = []
+        query_finished = False
+        while not ux_Q.empty():
+            try:
+                resp: FindResponse = ux_Q.get_nowait()
+                logger.debug(f"{resp}")
+                if resp.status.Status in [C_PENDING_A, C_PENDING_B, C_SUCCESS]:
+                    if resp.identifier:
+                        results.append(resp.identifier)
+                    if resp.status.Status == C_SUCCESS:
+                        query_finished = True
+                        logger.info(f"Query finished, {len(results)} results")
+                else:
+                    assert resp.status.Status == C_FAILURE
+                    query_finished = True
+
+                    # TODO:Display error box with resp.ErrorComment:
+            except Empty:
+                logger.info("Queue is empty")
+            except Full:
+                logger.error("Queue is full")
+
         # Create Pandas DataFrame from results and display in Treeview:
         if results:
             # List the DICOM attributes in the desired order using the keys from the mapping
             ordered_attrs = list(attr_map.keys())
             data_dicts = [
                 {
-                    attr_map[attr]: getattr(ds, attr, None)
+                    attr_map[attr][0]: getattr(ds, attr, None)
                     for attr in ordered_attrs
                     if hasattr(ds, attr)
                 }
@@ -298,22 +332,35 @@ def create_view(view: ctk.CTkFrame, PAD: int):
             ]
             df = pd.DataFrame(data_dicts)
 
-            # Update column headers only if they've changed
-            current_cols = list(tree["columns"])
-            if current_cols != list(df.columns):
-                tree["columns"] = [
-                    col for col in df.columns if col != "StudyInstanceUID"
-                ]
-                for col in tree["columns"]:
-                    tree.heading(col, text=col)
-
             # Update the treeview with the new data
             update_treeview_data(tree, df)
-        else:
-            logger.info(f"No results returned")
 
-    tree = ttk.Treeview(view, show="headings")
-    tree.grid(row=2, column=0, columnspan=11, sticky="nswe")
+        if not query_finished:
+            # Re-trigger monitor callback:
+            tree.after(
+                ux_poll_find_response_interval, monitor_query_response, ux_Q, tree
+            )
+
+    # TODO: query on <Return> // move to next query entry on <Return>
+    # TODO: only enable query if server healthy, disable query button during find request
+    def query_button_pressed(tree: ttk.Treeview):
+        logger.info(f"Query button pressed, initiate find request...")
+        # Clear tree:
+        tree.delete(*tree.get_children())
+        ux_Q = Queue()
+        req: FindRequest = FindRequest(
+            DICOMNode(scu_ip_var.get(), 0, scu_aet_var.get(), False),
+            DICOMNode(scp_ip_var.get(), scp_port_var.get(), scp_aet_var.get(), True),
+            patient_name_var.get(),
+            patient_id_var.get(),
+            accession_no_var.get(),
+            study_date_var.get(),
+            modality_var.get(),
+            ux_Q,
+        )
+        find_ex(req)
+        # Start FindResponse monitor:
+        tree.after(ux_poll_find_response_interval, monitor_query_response, ux_Q, tree)
 
     # TODO: only enable retrieve if storage scp is running:
     def retrieve_button_pressed():
@@ -326,6 +373,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
             logger.error(f"Storage SCP AET is None. Is it running?")
             return
 
+        # TODO: Multi-threaded retrieve/move with ux_Q, red/green indication on items selected as per export treeview
         for uid in uids:
             if move(
                 DICOMNode(scu_ip_var.get(), 0, scu_aet_var.get(), False),
@@ -335,7 +383,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
                 dest_scp_aet,
                 uid,
             ):
-                logger.info(f"Retrieve successful")
+                logger.info(f"Retrieve successful???")
 
     # Create a Scrollbar and associate it with the Treeview
     scrollbar = ttk.Scrollbar(view, orient="vertical", command=tree.yview)

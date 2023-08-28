@@ -3,7 +3,6 @@ import string
 import utils.config as config
 import tkinter as tk
 import customtkinter as ctk
-from tkinter import font
 from CTkToolTip import CTkToolTip
 from utils.translate import _
 
@@ -24,6 +23,12 @@ accession_no_max_chars = 16  # dicomVR SH=16 max
 dicom_date_chars = 8  # dicomVR DA=8 max
 modality_min_chars = 2  # dicomVR CS=16 max
 modality_max_chars = 3  # dicomVR CS=16 max
+
+# UX Monitor  (find, move, export)
+ux_poll_find_response_interval = 500  # milli-seconds
+ux_poll_export_response_interval = 300  # milli-seconds
+ux_poll_move_response_interval = 500  # milli-seconds
+ux_poll_local_storage_interval = 1000  # milli-seconds
 
 
 # Entry field callback functions for
@@ -162,31 +167,3 @@ def int_entry(
     ctk_entry.bind("<FocusOut>", entry_callback)
     ctk_entry.grid(row=row, column=col + 1, padx=pad, pady=(pad, 0), sticky="nw")
     return int_var
-
-
-def adjust_column_width(tree, column_id, padding=10):
-    """
-    Adjust the width of a column in a ttk.Treeview to fit its content.
-
-    Parameters:
-    - tree: The Treeview widget.
-    - column_id: The identifier of the column to be adjusted.
-    - padding: Extra space added to the width (default is 10 pixels).
-    """
-
-    # Start with the width of the column header
-    max_width = font.Font().measure(column_id)
-
-    # Iterate over each item in the column
-    for item in tree.get_children():
-        item_value = tree.set(item, column_id)
-        item_width = font.Font().measure(item_value)
-
-        # Update max_width if this value is wider than any previously checked
-        max_width = max(max_width, item_width)
-
-    # Adjust the column width
-    tree.column(column_id, width=max_width + padding)
-
-    # Center justify the content of the column
-    tree.column(column_id, anchor="center")
