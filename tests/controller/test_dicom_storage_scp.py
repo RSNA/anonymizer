@@ -2,6 +2,7 @@
 # use pytest from terminal to show full logging output: pytest --log-cli-level=DEBUG
 import os
 import logging
+import time
 from pydicom.dataset import Dataset
 from controller.anonymize import uid_lookup
 from tests.controller.helpers import (
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 def test_send_cr1(temp_dir: str):
     start_local_storage_scp(temp_dir)
     ds: Dataset = send_file_to_scp(cr1_filename, False)
+    time.sleep(0.5)
     dirlist = os.listdir(local_storage_dir(temp_dir))
     assert len(dirlist) == 1
     assert dirlist[0] == SITEID + "-000001"
@@ -33,6 +35,7 @@ def test_send_cr1(temp_dir: str):
 def test_send_ct_small(temp_dir: str):
     start_local_storage_scp(temp_dir)
     ds: Dataset = send_file_to_scp(ct_small_filename, False)
+    time.sleep(0.5)
     dirlist = os.listdir(local_storage_dir(temp_dir))
     assert len(dirlist) == 1
     assert dirlist[0] == SITEID + "-000001"
@@ -44,6 +47,7 @@ def test_send_ct_small(temp_dir: str):
 def test_send_mr_small(temp_dir: str):
     start_local_storage_scp(temp_dir)
     ds: Dataset = send_file_to_scp(mr_small_filename, False)
+    time.sleep(0.5)
     dirlist = os.listdir(local_storage_dir(temp_dir))
     assert len(dirlist) == 1
     assert dirlist[0] == SITEID + "-000001"

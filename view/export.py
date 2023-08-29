@@ -1,6 +1,5 @@
-from cgitb import text
-from importlib.metadata import files
 import os
+from datetime import datetime
 import logging
 import string
 from queue import Queue, Empty, Full
@@ -11,7 +10,7 @@ from CTkToolTip import CTkToolTip
 from CTkMessagebox import CTkMessagebox
 from controller.dicom_storage_scp import get_active_storage_dir
 from utils.translate import _
-from utils.storage import count_dcm_files
+from utils.storage import count_dcm_files_and_studies
 import utils.config as config
 from utils.network import get_local_ip_addresses
 from utils.ux_fields import (
@@ -33,6 +32,7 @@ from controller.dicom_send_scu import (
     ExportRequest,
     ExportResponse,
 )
+from controller.anonymize import phi_name
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +44,14 @@ scu_ip_addr = "127.0.0.1"
 scu_aet = "ANONSCU"
 
 
-# C-FIND DICOM attributes to display in the results Treeview:
-# Key: DICOM field name, Value: (display name, centre justify)
+# Export attributes to display in the results Treeview:
+# Key: column id: (column name, width, centre justify)
 attr_map = {
-    "Anon_PatientID": (_("Patient ID"), 10, True),
+    "Patient_Name": (_("Patient Name"), 10, False),
+    "Anon_PatientID": (_("Anonymized ID"), 10, True),
+    "Studies": (_("Studies"), 10, True),
     "Files": (_("Files"), 10, True),
+    "DateTime": (_("Date Time"), 15, True),
     "FilesSent": (_("Files Sent"), 10, True),
     "Errors": (_("Errors"), 10, True),
 }
@@ -223,29 +226,44 @@ def create_view(view: ctk.CTkFrame, PAD: int):
 
         # Storage Directory Sub-directory Names = Patient IDs
         # Sequentially added
-        pt_ids = [f for f in sorted(os.listdir(store_dir)) if not f.startswith(".")]
+        anon_pt_ids = [
+            f for f in sorted(os.listdir(store_dir)) if not f.startswith(".")
+        ]
 
         existing_iids = set(tree.get_children())
-        not_in_treeview = sorted(set(pt_ids) - existing_iids)
+        not_in_treeview = sorted(set(anon_pt_ids) - existing_iids)
 
         # Insert NEW data
-        for pt_id in not_in_treeview:
-            file_count = count_dcm_files(os.path.join(store_dir, pt_id))
-            tree.insert("", 0, iid=pt_id, values=[pt_id, file_count])
-            # tree.see(pt_id)
+        for anon_pt_id in not_in_treeview:
+            study_count, file_count = count_dcm_files_and_studies(
+                os.path.join(store_dir, anon_pt_id)
+            )
+            phi_pt_name = phi_name(anon_pt_id)
+            tree.insert(
+                "",
+                0,
+                iid=anon_pt_id,
+                values=[phi_pt_name, anon_pt_id, study_count, file_count],
+            )
+
+        if not_in_treeview:
+            logger.info(f"Added {len(not_in_treeview)} new patients to treeview")
 
         # To handle updates to incoming studies
         # Update the values of the last 10 patients in the store directory
-        for pt_id in pt_ids[-10:]:
-            file_count = count_dcm_files(os.path.join(store_dir, pt_id))
-            current_values = list(tree.item(pt_id, "values"))
-            current_values[1] = str(file_count)
-            tree.item(pt_id, values=current_values)
+        for anon_pt_id in anon_pt_ids[-10:]:
+            study_count, file_count = count_dcm_files_and_studies(
+                os.path.join(store_dir, anon_pt_id)
+            )
+            current_values = list(tree.item(anon_pt_id, "values"))
+            current_values[2] = str(study_count)
+            current_values[3] = str(file_count)
+            tree.item(anon_pt_id, values=current_values)
 
-        # tree.after(ux_poll_local_storage_interval, update_tree_from_storage_direcctory)
+        tree.after(ux_poll_local_storage_interval, update_tree_from_storage_direcctory)
 
-    # Start Background task to update treeview from storage directory:
-    # tree.after(ux_poll_local_storage_interval, update_tree_from_storage_direcctory)
+    # Populate treeview with existing patients, trigger Background task to update treeview dynamically:
+    update_tree_from_storage_direcctory()
 
     # Create a Scrollbar and associate it with the Treeview
     scrollbar = ttk.Scrollbar(view, orient="vertical", command=tree.yview)
@@ -305,15 +323,16 @@ def create_view(view: ctk.CTkFrame, PAD: int):
                     tree.item(resp.patient_id, tags="red")
 
                 # Update treeview item:
-                tree.item(
-                    resp.patient_id,
-                    values=[
-                        resp.patient_id,
-                        resp.files_to_send,
-                        resp.files_sent,
-                        resp.errors,
-                    ],
-                )
+                current_values = list(tree.item(resp.patient_id, "values"))
+                # Ensure there are at least 7 values in the list:
+                while len(current_values) < 7:
+                    current_values.append("")
+                # Format the date and time as "YYYY-MM-DD HH:MM:SS"
+                current_values[4] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                current_values[5] = str(resp.files_sent)
+                current_values[6] = str(resp.errors)
+                tree.item(resp.patient_id, values=current_values)
+
                 # Check for completion or critical error of this patient's export
                 if (
                     resp == ExportResponse.patient_critical_error(resp.patient_id)
@@ -338,6 +357,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
                     tree.selection_remove(item)
             else:
                 logger.info("All patients exported")
+            export_button.configure(state=ctk.NORMAL)
             select_all_button.configure(state=ctk.NORMAL)
             # re-enable tree interaction now export is complete
             tree.configure(selectmode="extended")
@@ -353,6 +373,9 @@ def create_view(view: ctk.CTkFrame, PAD: int):
     def export_button_pressed():
         logger.info(f"Export button pressed")
         sel_patient_ids = list(tree.selection())
+        if not sel_patient_ids:
+            logger.error(f"No patients selected for export")
+            return
         patients_to_send = len(sel_patient_ids)
         if patients_to_send == 0:
             logger.error(f"No patients selected for export")
@@ -387,22 +410,22 @@ def create_view(view: ctk.CTkFrame, PAD: int):
             ux_Q,
         )
 
-    def update_export_button_state():
-        if tree.selection():
-            export_button.configure(
-                state=ctk.NORMAL
-            )  # Enable button if there's a selection
-        else:
-            export_button.configure(
-                state=ctk.DISABLED
-            )  # Disable button if no selection
+    # def update_export_button_state():
+    #     if tree.selection():
+    #         export_button.configure(
+    #             state=ctk.NORMAL
+    #         )  # Enable button if there's a selection
+    #     else:
+    #         export_button.configure(
+    #             state=ctk.DISABLED
+    #         )  # Disable button if no selection
 
-    tree.bind("<<TreeviewSelect>>", lambda e: update_export_button_state())
+    # tree.bind("<<TreeviewSelect>>", lambda e: update_export_button_state())
 
     export_button = ctk.CTkButton(
         view,
         text=_("Export"),
-        state=ctk.DISABLED,
+        # state=ctk.DISABLED,
         command=lambda: export_button_pressed(),
     )
     export_button.grid(row=2, column=10, padx=PAD, pady=PAD, sticky="e")

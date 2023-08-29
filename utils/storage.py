@@ -25,10 +25,24 @@ def local_storage_path(base_dir: str, siteid: str, ds: Dataset) -> Path:
     return dest_path
 
 
-def count_dcm_files(root_path):
-    count = 0
-    for root, _, files in os.walk(root_path):
+# def count_dcm_files(root_path):
+#     count = 0
+#     for root, _, files in os.walk(root_path):
+#         for file in files:
+#             if file.endswith(".dcm"):
+#                 count += 1
+#     return count
+
+
+def count_dcm_files_and_studies(patient_path: str):
+    study_count = 0
+    file_count = 0
+
+    for root, dirs, files in os.walk(patient_path):
+        if root == patient_path:
+            study_count += len(dirs)
         for file in files:
             if file.endswith(".dcm"):
-                count += 1
-    return count
+                file_count += 1
+
+    return study_count, file_count

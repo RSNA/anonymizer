@@ -2,6 +2,7 @@
 # use pytest from terminal to show full logging output: pytest --log-cli-level=DEBUG
 import os
 import logging
+import time
 from pydicom.dataset import Dataset
 from controller.anonymize import uid_lookup, patient_id_lookup
 from controller.dicom_ae import DICOMNode
@@ -61,6 +62,7 @@ def test_move_1_CT_file_from_pacs_with_file_to_local_storage(temp_dir: str):
     assert results[1].Status == C_SUCCESS
     assert results[1].NumberOfCompletedSuboperations == 1
     assert results[1].NumberOfFailedSuboperations == 0
+    time.sleep(1)
     dirlist = os.listdir(local_storage_dir(temp_dir))
     assert len(dirlist) == 1
     assert dirlist[0] == SITEID + "-000001"

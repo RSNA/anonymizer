@@ -1,9 +1,10 @@
 import os
 import logging
+import time
 from pynetdicom.events import Event, EVT_C_STORE, EVT_C_ECHO
 from pynetdicom.ae import ApplicationEntity as AE
-from controller.dicom_return_codes import C_SUCCESS, C_STORE_OUT_OF_RESOURCES
-from controller.anonymize import anonymize_dataset_and_store
+from controller.dicom_return_codes import C_SUCCESS, C_DATA_ELEMENT_DOES_NOT_EXIST
+from controller.anonymize import anonymize_dataset_and_store, uid_lookup
 from controller.dicom_ae import (
     DICOMNode,
     DICOMRuntimeError,
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 # Store scp instance after ae.start_server() is called:
 scp = None
 active_storage_dir = None  # latched when scp is started
+_handle_store_time_slice_interval = 0.1  # seconds
 
 
 # Is SCP running?
@@ -50,18 +52,43 @@ def _handle_echo(event: Event) -> int:
     return C_SUCCESS
 
 
+_required_attributes = [
+    "PatientID",
+    "PatientName",
+    "StudyInstanceUID",
+    "StudyDate",
+    "AccessionNumber",
+    "Modality",
+    "SeriesNumber",
+    "InstanceNumber",
+]
+
+
 # DICOM C-STORE scp event handler (EVT_C_STORE)):
 def _handle_store(event: Event, storage_dir: str) -> int:
-    logger.info("_handle_store")
+    # Throttle incoming requests by adding a delay
+    time.sleep(_handle_store_time_slice_interval)  # to ensure UX responsiveness
+    logger.debug("_handle_store")
     # TODO: Validate remote IP & AE Title
     remote = event.assoc.remote
     ds = event.dataset
     ds.file_meta = event.file_meta
     scu = DICOMNode(remote["address"], remote["port"], remote["ae_title"], False)
     logger.debug(scu)
+    if not all(attr_name in ds for attr_name in _required_attributes):
+        missing_attributes = [
+            attr_name for attr_name in _required_attributes if attr_name not in ds
+        ]
+        logger.error(
+            f"DICOM C-STORE request is missing required attributes: {missing_attributes}"
+        )
+        logger.error(f"\n{ds}")
+        return C_DATA_ELEMENT_DOES_NOT_EXIST
     logger.debug(f"PHI:\n{ds}")
-    # TODO: full integrity checking before anonymization
-    # ensure ds has values for PatientName, Modality, StudyDate, StudyTime, SeriesNumber, InstanceNumber
+    # Return success if study already stored:
+    if ds.StudyInstanceUID in uid_lookup:
+        logger.debug(f"Study already stored: {ds.PatientID} {ds.StudyInstanceUID}")
+        return C_SUCCESS
     anonymize_dataset_and_store(scu, ds, storage_dir)
     return C_SUCCESS
 

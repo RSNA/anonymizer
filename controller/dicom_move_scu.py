@@ -96,9 +96,11 @@ def move(
             # (0000, 1021) Number of Completed Sub-operations  US:
             # (0000, 1022) Number of Failed Sub-operations     US:
             # (0000, 1023) Number of Warning Sub-operations    US:
-            results.append(status)
+
             if ux_Q:
                 ux_Q.put(status)
+            else:
+                results.append(status)
 
     except Exception as e:
         logger.error(f"Failed DICOM C-MOVE to {dest_scp_ae}, Error: {str(e)}")

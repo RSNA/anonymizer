@@ -4,6 +4,7 @@ import threading
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+import time
 from pydicom.dataset import Dataset
 from pydicom.errors import InvalidDicomError
 from pynetdicom.ae import ApplicationEntity as AE
@@ -22,7 +23,7 @@ from controller.dicom_ae import (
 # Max concurrent patient exports:
 # (each export is a thread which sends a single patient's files sequentially)
 # TODO: make this user settable & add to config.son?
-patient_export_thread_pool_size = 3
+patient_export_thread_pool_size = 4
 MAX_RETRIES = 2
 
 
@@ -179,6 +180,7 @@ def _export_patient(
     files_sent = 0
     errors = 0
     for dicom_file_path in file_paths:
+        time.sleep(0.1)  # throttle for UX responsiveness
         retries = 0
         while retries < MAX_RETRIES:
             try:

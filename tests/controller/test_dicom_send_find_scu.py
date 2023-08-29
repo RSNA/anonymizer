@@ -1,4 +1,5 @@
 import os
+import time
 from pydicom.dataset import Dataset
 from pydicom.errors import InvalidDicomError
 from model.project import SITEID
@@ -158,6 +159,7 @@ def test_export_patient_CR_study_to_test_pacs(temp_dir: str):
     start_local_storage_scp(temp_dir)
     # Send 1 Study with 1 CR files to local storage:
     phi_dsets: list[Dataset] = send_files_to_scp([cr1_filename], False)
+    time.sleep(0.5)
     dirlist = os.listdir(local_storage_dir(temp_dir))
     anon_pt_id = SITEID + "-000001"
     assert len(dirlist) == 1
@@ -231,6 +233,7 @@ def test_export_4_patients_to_test_pacs(temp_dir: str):
     ctsmall_ds: Dataset = send_file_to_scp(ct_small_filename, False)
     # Send Patient 4: 1 Study with 1 MR file to local storage:
     mrsmall_ds: Dataset = send_file_to_scp(mr_small_filename, False)
+    time.sleep(0.5)
     dirlist = os.listdir(local_storage_dir(temp_dir))
     ct_anon_pt_id = SITEID + "-000001"
     mr_anon_pt_id = SITEID + "-000002"

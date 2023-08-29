@@ -26,9 +26,9 @@ modality_max_chars = 3  # dicomVR CS=16 max
 
 # UX Monitor  (find, move, export)
 ux_poll_find_response_interval = 500  # milli-seconds
-ux_poll_export_response_interval = 300  # milli-seconds
+ux_poll_export_response_interval = 500  # milli-seconds
 ux_poll_move_response_interval = 500  # milli-seconds
-ux_poll_local_storage_interval = 1000  # milli-seconds
+ux_poll_local_storage_interval = 500  # milli-seconds
 
 
 # Entry field callback functions for
@@ -59,7 +59,8 @@ def int_entry_change(
         var.set(max)
     elif value < min:
         var.set(min)
-    config.save(module_name, var_name, var.get())
+    if module_name and var_name:
+        config.save(module_name, var_name, var.get())
 
 
 def str_entry_change(

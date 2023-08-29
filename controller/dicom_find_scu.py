@@ -114,7 +114,8 @@ def find(
                     for field in fields_to_remove:
                         if field in identifier:
                             delattr(identifier, field)
-                    results.append(identifier)
+                    if ux_Q == None:
+                        results.append(identifier)
                 if ux_Q:
                     ux_Q.put(FindResponse(status, identifier))
 

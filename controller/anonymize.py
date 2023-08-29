@@ -5,6 +5,7 @@ import logging
 import threading
 from queue import Queue
 from pprint import pformat
+import time
 import xml.etree.ElementTree as ET
 from controller.dicom_ae import DICOMNode, DICOMRuntimeError
 from model.project import UIDROOT, SITEID, PROJECTNAME, TRIALNAME
@@ -35,6 +36,18 @@ globals().update(settings)
 
 _tag_keep = {}
 _anon_Q = Queue()
+_anonymize_time_slice_interval = 0.1  # seconds
+_anonymize_batch_size = 10  # number of items to process in a batch
+
+deidentification_methods = [
+    ("113100", _("Basic Application Confidentiality Profile")),
+    (
+        "113107",
+        _("Retain Longitudinal Temporal Information Modified Dates Option"),
+    ),
+    ("113108", _("Retain Patient Characteristics Option")),
+]
+private_block_name = _("RSNA")
 
 
 def clear_lookups():
@@ -46,10 +59,15 @@ def clear_lookups():
 
 
 def update_lookups():
-    config.save(__name__, "patient_id_lookup", patient_id_lookup)
-    config.save(__name__, "phi_lookup", phi_lookup)
-    config.save(__name__, "uid_lookup", uid_lookup)
-    config.save(__name__, "acc_no_lookup", acc_no_lookup)
+    config.save_bulk(
+        __name__,
+        {
+            "patient_id_lookup": patient_id_lookup,
+            "uid_lookup": uid_lookup,
+            "acc_no_lookup": acc_no_lookup,
+            "phi_lookup": phi_lookup,
+        },
+    )
 
 
 # Anonymization functions for each script operation
@@ -97,6 +115,10 @@ def init(script_filename: str = anonymizer_script_filename) -> bool:
 def get_next_anon_pt_id() -> str:
     next_patient_index = len(patient_id_lookup) + 1
     return f"{SITEID}-{next_patient_index:06}"
+
+
+def phi_name(anon_pt_id: str) -> str:
+    return phi_lookup[anon_pt_id][0]
 
 
 # Get PHI from dataset and update lookup tables
@@ -174,56 +196,60 @@ def anonymize_dataset_and_store(source: DICOMNode | str, ds: Dataset, dir: str) 
 # TODO: Error handling & reporting
 def _anonymize_worker(ds_Q: Queue) -> None:
     while True:
-        source, ds, dir = ds_Q.get()
-        # Capture PHI and store for new studies:
-        if ds.StudyInstanceUID not in uid_lookup:
-            anon_pt_id, phi_update = phi_from_dataset(ds, source)
-            phi_lookup[anon_pt_id] = phi_update
+        while not ds_Q.empty():
+            batch = []
+            for _ in range(_anonymize_batch_size):  # Process a batch of items at a time
+                if not ds_Q.empty():
+                    batch.append(ds_Q.get())
 
-        # Anonymize dataset (overwrite phi dataset) (prevents dataset copy)
-        ds.remove_private_tags()  # TODO: provide a switch for this? how does java anon handle this? see <r> tag
-        ds.walk(anonymize_element)
+            for item in batch:
+                source, ds, dir = item  # ds_Q.get()
 
-        # Handle Global Tags:
-        ds.PatientIdentityRemoved = "YES"  # CS: (0012, 0062)
-        ds.DeidentificationMethod = deidentification_method  # LO: (0012,0063)
-        de_ident_seq = Sequence()  # SQ: (0012,0064)
-        methods = [
-            ("113100", _("Basic Application Confidentiality Profile")),
-            (
-                "113107",
-                _("Retain Longitudinal Temporal Information Modified Dates Option"),
-            ),
-            ("113108", _("Retain Patient Characteristics Option")),
-        ]
+                # Capture PHI and store for new studies:
+                if ds.StudyInstanceUID not in uid_lookup:
+                    anon_pt_id, phi_update = phi_from_dataset(ds, source)
+                    phi_lookup[anon_pt_id] = phi_update
 
-        for code, descr in methods:
-            item = Dataset()
-            item.CodeValue = code
-            item.CodingSchemeDesignator = "DCM"
-            item.CodeMeaning = descr
-            de_ident_seq.append(item)
+                # Anonymize dataset (overwrite phi dataset) (prevents dataset copy)
+                ds.remove_private_tags()  # TODO: provide a switch for this? how does java anon handle this? see <r> tag
+                ds.walk(anonymize_element)
 
-        ds.DeidentificationMethodCodeSequence = de_ident_seq
-        block = ds.private_block(0x0013, _("RSNA"), create=True)
-        block.add_new(0x1, "SH", PROJECTNAME)
-        block.add_new(0x2, "SH", TRIALNAME)
-        block.add_new(0x3, "SH", SITEID)
+                # Handle Global Tags:
+                ds.PatientIdentityRemoved = "YES"  # CS: (0012, 0062)
+                ds.DeidentificationMethod = deidentification_method  # LO: (0012,0063)
+                de_ident_seq = Sequence()  # SQ: (0012,0064)
 
-        logger.debug(f"ANON:\n{ds}")
+                for code, descr in deidentification_methods:
+                    item = Dataset()
+                    item.CodeValue = code
+                    item.CodingSchemeDesignator = "DCM"
+                    item.CodeMeaning = descr
+                    de_ident_seq.append(item)
 
-        # Save anonymized dataset to dicom file in local storage:
-        filename = local_storage_path(dir, SITEID, ds)
-        logger.info(
-            f"C-STORE [{ds.file_meta.TransferSyntaxUID}]: {source} => {filename}"
-        )
-        try:
-            ds.save_as(filename, write_like_original=False)
-        except Exception as exception:
-            logger.error("Failed writing instance to storage directory")
-            logger.exception(exception)
+                ds.DeidentificationMethodCodeSequence = de_ident_seq
+                block = ds.private_block(0x0013, private_block_name, create=True)
+                block.add_new(0x1, "SH", PROJECTNAME)
+                block.add_new(0x2, "SH", TRIALNAME)
+                block.add_new(0x3, "SH", SITEID)
 
-        update_lookups()
+                logger.debug(f"ANON:\n{ds}")
+
+                # Save anonymized dataset to dicom file in local storage:
+                filename = local_storage_path(dir, SITEID, ds)
+                logger.debug(
+                    f"C-STORE [{ds.file_meta.TransferSyntaxUID}]: {source} => {filename}"
+                )
+                try:
+                    ds.save_as(filename, write_like_original=False)
+                except Exception as exception:
+                    logger.error("Failed writing instance to storage directory")
+                    logger.exception(exception)
+
+            update_lookups()
+
+        time.sleep(
+            _anonymize_time_slice_interval
+        )  # timeslice for UX during intense receive activity
 
     return
 

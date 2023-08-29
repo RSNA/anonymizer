@@ -1,6 +1,7 @@
 import logging
 import string
 from queue import Queue, Empty, Full
+import time
 import customtkinter as ctk
 import pandas as pd
 from tkinter import ttk
@@ -29,7 +30,7 @@ from utils.ux_fields import (
 from controller.dicom_ae import DICOMNode
 from controller.dicom_echo_scu import echo
 from controller.dicom_find_scu import find, find_ex, FindRequest, FindResponse
-from controller.dicom_move_scu import move
+from controller.dicom_move_scu import MoveRequest, move_ex
 from controller.dicom_storage_scp import get_storage_scp_aet
 
 logger = logging.getLogger(__name__)
@@ -288,6 +289,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
 
     def update_treeview_data(tree: ttk.Treeview, data: pd.DataFrame):
         # Insert new data
+        logger.info(f"update_treeview_data items: {len(data)}")
         for _, row in data.iterrows():
             display_values = [
                 val for col, val in row.items() if col != "StudyInstanceUID"
@@ -311,8 +313,11 @@ def create_view(view: ctk.CTkFrame, PAD: int):
                 else:
                     assert resp.status.Status == C_FAILURE
                     query_finished = True
+                    logger.error(f"Query failed: {resp.status.ErrorComment}")
+                    # TODO:Display error box with resp.ErrorComment
 
-                    # TODO:Display error box with resp.ErrorComment:
+                ux_Q.task_done()
+
             except Empty:
                 logger.info("Queue is empty")
             except Full:
@@ -320,6 +325,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
 
         # Create Pandas DataFrame from results and display in Treeview:
         if results:
+            logger.info(f"monitor_query_response: processing {len(results)} results")
             # List the DICOM attributes in the desired order using the keys from the mapping
             ordered_attrs = list(attr_map.keys())
             data_dicts = [
@@ -373,17 +379,14 @@ def create_view(view: ctk.CTkFrame, PAD: int):
             logger.error(f"Storage SCP AET is None. Is it running?")
             return
 
-        # TODO: Multi-threaded retrieve/move with ux_Q, red/green indication on items selected as per export treeview
+        # Create 1 UX queue to handle the full move / retrieve operation
+        ux_Q = Queue()
+        scu = DICOMNode(scu_ip_var.get(), 0, scu_aet_var.get(), False)
+        scp = DICOMNode(scp_ip_var.get(), scp_port_var.get(), scp_aet_var.get(), True)
+
         for uid in uids:
-            if move(
-                DICOMNode(scu_ip_var.get(), 0, scu_aet_var.get(), False),
-                DICOMNode(
-                    scp_ip_var.get(), scp_port_var.get(), scp_aet_var.get(), True
-                ),
-                dest_scp_aet,
-                uid,
-            ):
-                logger.info(f"Retrieve successful???")
+            req = MoveRequest(scu, scp, dest_scp_aet, uid, ux_Q)
+            move_ex(req)
 
     # Create a Scrollbar and associate it with the Treeview
     scrollbar = ttk.Scrollbar(view, orient="vertical", command=tree.yview)
