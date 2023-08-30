@@ -3,6 +3,7 @@ import string
 from queue import Queue, Empty, Full
 import time
 import customtkinter as ctk
+from matplotlib.pyplot import show
 import pandas as pd
 from tkinter import ttk
 from CTkToolTip import CTkToolTip
@@ -28,6 +29,7 @@ from utils.ux_fields import (
     ux_poll_find_response_interval,
 )
 from controller.dicom_ae import DICOMNode
+from controller.anonymize import uid_lookup
 from controller.dicom_echo_scu import echo
 from controller.dicom_find_scu import find, find_ex, FindRequest, FindResponse
 from controller.dicom_move_scu import MoveRequest, move_ex
@@ -46,9 +48,9 @@ scu_aet = "ANONSCU"
 # Key: DICOM field name, Value: (display name, centre justify)
 attr_map = {
     "PatientName": (_("Patient Name"), 20, False),
-    "PatientID": (_("Patient ID"), 10, False),
-    "StudyDate": (_("Date"), 8, True),
-    "StudyDescription": (_("Study Description"), 20, False),
+    "PatientID": (_("Patient ID"), 15, True),
+    "StudyDate": (_("Date"), 10, True),
+    "StudyDescription": (_("Study Description"), 30, False),
     "AccessionNumber": (_("Accession No."), 15, True),
     "ModalitiesInStudy": (_("Modality"), 9, True),
     "NumberOfStudyRelatedSeries": (_("Series"), 6, True),
@@ -65,7 +67,7 @@ settings = config.load(__name__)
 globals().update(settings)
 
 
-def create_view(view: ctk.CTkFrame, PAD: int):
+def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
     logger.info(f"Creating Query/Retrieve SCU View")
     view.grid_rowconfigure(2, weight=1)
     view.grid_columnconfigure(6, weight=1)
@@ -287,6 +289,10 @@ def create_view(view: ctk.CTkFrame, PAD: int):
             anchor="center" if attr_map[col][2] else "w",
         )
 
+    # Setup display tags:
+    tree.tag_configure("green", background="limegreen")
+    tree.tag_configure("red", background="red")
+
     def update_treeview_data(tree: ttk.Treeview, data: pd.DataFrame):
         # Insert new data
         logger.info(f"update_treeview_data items: {len(data)}")
@@ -295,6 +301,9 @@ def create_view(view: ctk.CTkFrame, PAD: int):
                 val for col, val in row.items() if col != "StudyInstanceUID"
             ]
             tree.insert("", "end", iid=row["StudyInstanceUID"], values=display_values)
+            # If the StudyInstanceUID is already in the uid_lookup, tag it green:
+            if row["StudyInstanceUID"] in uid_lookup:
+                tree.item(row["StudyInstanceUID"], tags="green")
 
     # Query Button:
     def monitor_query_response(ux_Q: Queue, tree: ttk.Treeview):
@@ -368,11 +377,11 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         # Start FindResponse monitor:
         tree.after(ux_poll_find_response_interval, monitor_query_response, ux_Q, tree)
 
-    # TODO: only enable retrieve if storage scp is running:
+    # TODO: only enable retrieve if storage scp is running and query or retrieve is not active:
     def retrieve_button_pressed():
-        uids = list(tree.selection())
-        logger.info(f"Retrieve button pressed")
-        logger.info(f"Retrieving StudyInstanceUIDs: {uids}")
+        study_uids = list(tree.selection())
+        logger.debug(f"Retrieve button pressed")
+        logger.debug(f"Retrieving StudyInstanceUIDs: {study_uids}")
 
         dest_scp_aet = get_storage_scp_aet()
         if dest_scp_aet is None:
@@ -384,9 +393,13 @@ def create_view(view: ctk.CTkFrame, PAD: int):
         scu = DICOMNode(scu_ip_var.get(), 0, scu_aet_var.get(), False)
         scp = DICOMNode(scp_ip_var.get(), scp_port_var.get(), scp_aet_var.get(), True)
 
-        for uid in uids:
-            req = MoveRequest(scu, scp, dest_scp_aet, uid, ux_Q)
+        for study_uid in study_uids:
+            if study_uid in uid_lookup:
+                logger.info(f"StudyInstanceUID {study_uid} already stored")
+                continue
+            req = MoveRequest(scu, scp, dest_scp_aet, study_uid, ux_Q)
             move_ex(req)
+            # TODO: monitor move response, set success/fail in Q/R Treeview
 
     # Create a Scrollbar and associate it with the Treeview
     scrollbar = ttk.Scrollbar(view, orient="vertical", command=tree.yview)

@@ -64,7 +64,7 @@ settings = config.load(__name__)
 globals().update(settings)
 
 
-def create_view(view: ctk.CTkFrame, PAD: int):
+def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
     logger.info(f"Creating Export View")
     char_width_px = ctk.CTkFont().measure("A")
     view.grid_rowconfigure(1, weight=1)
@@ -213,7 +213,7 @@ def create_view(view: ctk.CTkFrame, PAD: int):
 
     # Setup display tags:
     tree.tag_configure("green", background="limegreen")
-    tree.tag_configure("red", background="firebrick")
+    tree.tag_configure("red", background="red")
 
     # Set background color of treeview to light grey for all rows:
     # ttk.Style().configure(
