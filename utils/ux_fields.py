@@ -94,7 +94,7 @@ def str_entry(
     sticky: str,
     module: str | None = None,
     var_name: str | None = None,
-):
+) -> ctk.StringVar:
     str_var = ctk.StringVar(view, value=initial_value)
     char_width_px = ctk.CTkFont().measure("A")
     ctk_label = ctk.CTkLabel(view, text=label)

@@ -35,7 +35,7 @@ def init_logging(install_dir: str) -> None:
 
     # pydicom specific:
     pydicom_config.debug(LOG_DEFAULT_LEVEL == logging.DEBUG)
-    pydicom_config.Settings.reading_validation_mode = pydicom_config.IGNORE
+    pydicom_config.settings.reading_validation_mode = pydicom_config.IGNORE
 
     # pynetdicom specific:
     pynetdicom_logger = logging.getLogger("pynetdicom")

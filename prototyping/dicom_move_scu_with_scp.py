@@ -8,17 +8,17 @@ from pynetdicom.events import Event, EVT_C_STORE
 from pynetdicom.presentation import StoragePresentationContexts
 from pynetdicom._globals import ALL_TRANSFER_SYNTAXES
 
-from controller.dicom_storage_scp import (
+from controller.dicom_return_codes import (
     C_SUCCESS,
     C_STORE_OUT_OF_RESOURCES,
     C_PENDING_A,
     C_PENDING_B,
 )
-from controller.anonymize import anonymize_dataset
+from controller.anonymize import anonymize_dataset_and_store
+from controller.dicom_ae import set_network_timeout, DICOMNode
 
 from utils.translate import _
 from utils.storage import local_storage_path
-from utils.network import set_network_timeout
 
 from model.project import SITEID, PROJECTNAME, TRIALNAME, UIDROOT
 
@@ -35,18 +35,8 @@ def _handle_store(event: Event, storage_dir: str) -> int:
     logger.debug(remote)
     logger.debug(ds)
     # TODO: ensure ds has values for PatientName, Modality, StudyDate, SeriesNumber, InstanceNumber
-    filename = local_storage_path(storage_dir, SITEID, ds)
-    logger.info(
-        f"C-STORE [{ds.file_meta.TransferSyntaxUID}]: {remote['ae_title']} => {filename}"
-    )
-    ds = anonymize_dataset(ds)
-    try:
-        ds.save_as(filename, write_like_original=False)
-    except Exception as exception:
-        logger.error("Failed writing instance to storage directory")
-        logger.exception(exception)
-        return C_STORE_OUT_OF_RESOURCES
-
+    scu = DICOMNode(remote["address"], remote["port"], remote["ae_title"], False)
+    anonymize_dataset_and_store(scu, ds, storage_dir)
     return C_SUCCESS
 
 

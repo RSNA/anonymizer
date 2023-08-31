@@ -2,6 +2,7 @@ import os
 import logging
 from pydicom import dcmread, Dataset
 from pynetdicom.events import Event, EVT_C_ECHO, EVT_C_FIND, EVT_C_STORE, EVT_C_MOVE
+from pynetdicom.transport import ThreadedAssociationServer
 from pynetdicom.ae import ApplicationEntity as AE
 from controller.dicom_return_codes import (
     C_SUCCESS,
@@ -23,7 +24,7 @@ from controller.dicom_ae import (
 logger = logging.getLogger(__name__)
 
 # Store scp instance after ae.start_server() is called:
-scp = None
+scp: ThreadedAssociationServer = None
 
 
 # Is SCP running?

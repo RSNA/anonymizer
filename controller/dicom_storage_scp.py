@@ -3,6 +3,7 @@ import logging
 import time
 from pynetdicom.events import Event, EVT_C_STORE, EVT_C_ECHO
 from pynetdicom.ae import ApplicationEntity as AE
+from pynetdicom.transport import ThreadedAssociationServer
 from controller.dicom_return_codes import C_SUCCESS, C_DATA_ELEMENT_DOES_NOT_EXIST
 from controller.anonymize import anonymize_dataset_and_store, uid_lookup
 from controller.dicom_ae import (
@@ -19,8 +20,8 @@ logger = logging.getLogger(__name__)
 # TODO: convert to singleton class inheriting from pynetdicom.AE
 
 # Store scp instance after ae.start_server() is called:
-scp = None
-active_storage_dir = None  # latched when scp is started
+scp: ThreadedAssociationServer | None = None
+active_storage_dir: str | None = None  # latched when scp is started
 _handle_store_time_slice_interval = 0.1  # seconds
 
 # Required DICOM field attributes for C-STORE and C_FIND results:

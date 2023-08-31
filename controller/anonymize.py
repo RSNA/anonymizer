@@ -1,6 +1,6 @@
 # Description: Anonymization functions for DICOM datasets
 # See https://mircwiki.rsna.org/index.php?title=The_CTP_DICOM_Anonymizer for legacy anonymizer documentation
-
+from typing import Dict, Tuple, List
 import logging
 import threading
 from queue import Queue
@@ -25,19 +25,19 @@ deidentification_method = _("RSNA DICOM ANONYMIZER")
 
 # Lookup tables for anonymization:
 # TODO: move to pandas dataframe and/or sqlite db, hf5, parquet
-patient_id_lookup = {}
-uid_lookup = {}
-acc_no_lookup = {}
-phi_lookup = {}
+patient_id_lookup: Dict[str, str] = {}
+uid_lookup: Dict[str, str] = {}
+acc_no_lookup: Dict[str, str] = {}
+phi_lookup: Dict[str, Tuple[str, str, List[Tuple[str, str, str, str]]]] = {}
 
 # Load module globals from config.json
 settings = config.load(__name__)
 globals().update(settings)
 
-_tag_keep = {}
-_anon_Q = Queue()
-_anonymize_time_slice_interval = 0.1  # seconds
-_anonymize_batch_size = 10  # number of items to process in a batch
+_tag_keep: Dict[str, str] = {}  # DICOM Tag: Operation
+_anon_Q: Queue = Queue()
+_anonymize_time_slice_interval: float = 0.2  # seconds
+_anonymize_batch_size: int = 40  # number of items to process in a batch
 
 deidentification_methods = [
     ("113100", _("Basic Application Confidentiality Profile")),
@@ -85,7 +85,7 @@ def init(script_filename: str = anonymizer_script_filename) -> bool:
 
         # Extract 'e' tags into _tag_keep dictionary
         for e in root.findall("e"):  # type: ignore
-            tag = e.attrib.get("t")
+            tag = str(e.attrib.get("t"))
             operation = e.text if e.text is not None else ""
             if "@remove" not in operation:
                 _tag_keep[tag] = operation
@@ -124,7 +124,7 @@ def phi_name(anon_pt_id: str) -> str:
 # Get PHI from dataset and update lookup tables
 # Returns tuple of (anon_patient_id, phi update: (patient_name, patient_id, study_tuples))
 def phi_from_dataset(phi_ds: Dataset, source: DICOMNode | str) -> tuple:
-    def study_tuple_from_dataset(ds: Dataset) -> tuple:
+    def study_tuple_from_dataset(ds: Dataset) -> tuple[str, str, str, str]:
         return (
             str(ds.StudyDate),
             str(ds.AccessionNumber) if hasattr(phi_ds, "AccessionNumber") else "?",

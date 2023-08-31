@@ -39,7 +39,7 @@
                         "20040826",
                         "",
                         "1.3.6.1.4.1.5962.1.2.4.20040826185059.5457",
-                        "DICOMNode(ip='127.0.0.1', port=53870, aet='ANONSCU', scp=False)"
+                        "DICOMNode(ip='127.0.0.1', port=56189, aet='ANONSCU', scp=False)"
                     ]
                 ]
             ]
