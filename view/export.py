@@ -50,9 +50,9 @@ attr_map = {
     "Patient_Name": (_("Patient Name"), 10, False),
     "Anon_PatientID": (_("Anonymized ID"), 10, True),
     "Studies": (_("Studies"), 10, True),
-    "Files": (_("Files"), 10, True),
+    "Files": (_("Images"), 10, True),
     "DateTime": (_("Date Time"), 15, True),
-    "FilesSent": (_("Files Sent"), 10, True),
+    "FilesSent": (_("Images Sent"), 10, True),
     "Errors": (_("Errors"), 10, True),
 }
 # TODO: exported state: when and where, required to be tracked?

@@ -168,6 +168,8 @@ def _move_study(
                         f"C-MOVE Failed: {QR_MOVE_SERVICE_CLASS_STATUS[status.Status][1]}"
                     )
 
+            # Add the study_uid to the status dataset:
+            status.StudyInstanceUID = study_uid
             ux_Q.put(status)
 
     except (
@@ -184,6 +186,7 @@ def _move_study(
             ds = Dataset()
             ds.Status = C_FAILURE
             ds.ErrorComment = error_msg
+            ds.StudyInstanceUID = study_uid
             ux_Q.put(ds)
 
     finally:

@@ -4,7 +4,7 @@
 *.log
 .env
 *.spec
-config.json
+./config.json
 build/*
 dist/*
 logs/*

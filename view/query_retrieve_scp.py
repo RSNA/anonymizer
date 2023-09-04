@@ -2,8 +2,9 @@ import logging
 import string
 from queue import Queue, Empty, Full
 import time
+from unittest import result
 import customtkinter as ctk
-from matplotlib.pyplot import show
+from pydicom import Dataset
 import pandas as pd
 from tkinter import ttk
 from CTkToolTip import CTkToolTip
@@ -27,12 +28,13 @@ from utils.ux_fields import (
     modality_max_chars,
     modality_min_chars,
     ux_poll_find_response_interval,
+    ux_poll_move_response_interval,
 )
 from controller.dicom_ae import DICOMNode
 from controller.anonymize import uid_lookup
 from controller.dicom_echo_scu import echo
 from controller.dicom_find_scu import find, find_ex, FindRequest, FindResponse
-from controller.dicom_move_scu import MoveRequest, move_ex
+from controller.dicom_move_scu import MoveRequest, move_studies
 from controller.dicom_storage_scp import get_storage_scp_aet
 
 logger = logging.getLogger(__name__)
@@ -52,9 +54,11 @@ attr_map = {
     "StudyDate": (_("Date"), 10, True),
     "StudyDescription": (_("Study Description"), 30, False),
     "AccessionNumber": (_("Accession No."), 15, True),
-    "ModalitiesInStudy": (_("Modality"), 9, True),
+    "ModalitiesInStudy": (_("Modalities"), 9, True),
     "NumberOfStudyRelatedSeries": (_("Series"), 6, True),
     "NumberOfStudyRelatedInstances": (_("Images"), 6, True),
+    "NumberOfCompletedSuboperations": (_("Stored"), 10, True),
+    "NumberOfFailedSuboperations": (_("Errors"), 10, True),
     "StudyInstanceUID": (
         _("StudyInstanceUID"),
         0,
@@ -377,6 +381,58 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
         # Start FindResponse monitor:
         tree.after(ux_poll_find_response_interval, monitor_query_response, ux_Q, tree)
 
+    # Import & Anonymize Button:
+    def monitor_move_response(remaining_studies: int, ux_Q: Queue, tree: ttk.Treeview):
+        move_finished = False
+        while not ux_Q.empty():
+            try:
+                # TODO: do this in batches
+                resp: Dataset = ux_Q.get_nowait()
+                logger.debug(f"{resp}")
+
+                # If one file failed to moved, mark the patient as red:
+                # TODO: hover over item to see error message
+                if resp.Status not in [C_PENDING_A, C_PENDING_B, C_SUCCESS]:
+                    tree.item(resp.StudyInstanceUID, tags="red")
+                    if not hasattr(resp, "StudyInstanceUID"):
+                        logger.error(
+                            f"Fatal Move Error detected exit monitor_move_response"
+                        )
+                        move_finished = True
+                        break
+
+                if resp.Status == C_SUCCESS:
+                    tree.selection_remove(resp.StudyInstanceUID)
+                    tree.item(resp.StudyInstanceUID, tags="green")
+                    remaining_studies -= 1
+                    if remaining_studies == 0:
+                        logger.info(f"Move finished for study: {resp.StudyInstanceUID}")
+                        move_finished = True
+
+                # Update treeview item:
+                current_values = list(tree.item(resp.StudyInstanceUID, "values"))
+                # Ensure there are at least 10 values in the list:
+                while len(current_values) < 10:
+                    current_values.append("")
+                current_values[8] = str(resp.NumberOfCompletedSuboperations)
+                current_values[9] = str(resp.NumberOfFailedSuboperations)
+                tree.item(resp.StudyInstanceUID, values=current_values)
+
+            except Empty:
+                logger.info("Queue is empty")
+            except Full:
+                logger.error("Queue is full")
+
+        if not move_finished:
+            # Re-trigger monitor callback:
+            tree.after(
+                ux_poll_find_response_interval,
+                monitor_move_response,
+                remaining_studies,
+                ux_Q,
+                tree,
+            )
+
     # TODO: only enable retrieve if storage scp is running and query or retrieve is not active:
     def retrieve_button_pressed():
         study_uids = list(tree.selection())
@@ -393,13 +449,20 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
         scu = DICOMNode(scu_ip_var.get(), 0, scu_aet_var.get(), False)
         scp = DICOMNode(scp_ip_var.get(), scp_port_var.get(), scp_aet_var.get(), True)
 
-        for study_uid in study_uids:
-            if study_uid in uid_lookup:
-                logger.info(f"StudyInstanceUID {study_uid} already stored")
-                continue
-            req = MoveRequest(scu, scp, dest_scp_aet, study_uid, ux_Q)
-            move_ex(req)
-            # TODO: monitor move response, set success/fail in Q/R Treeview
+        unstored_study_uids = [
+            study_uid for study_uid in study_uids if study_uid not in uid_lookup
+        ]
+
+        req = MoveRequest(scu, scp, dest_scp_aet, unstored_study_uids, ux_Q)
+        move_studies(req)
+        # Start MoveResponse monitor:
+        tree.after(
+            ux_poll_move_response_interval,
+            monitor_move_response,
+            len(unstored_study_uids),
+            ux_Q,
+            tree,
+        )
 
     # Create a Scrollbar and associate it with the Treeview
     scrollbar = ttk.Scrollbar(view, orient="vertical", command=tree.yview)

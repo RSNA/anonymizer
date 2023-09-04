@@ -182,7 +182,7 @@ def _export_patient(
     errors = 0
     for dicom_file_path in file_paths:
         # TODO: send in batches?
-        time.sleep(0.1)  # throttle for UX responsiveness
+        # time.sleep(0.1)  # throttle for UX responsiveness
         retries = 0
         # TODO: simplify, remote retries?
         while retries < MAX_RETRIES:
