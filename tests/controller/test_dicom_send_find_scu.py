@@ -175,6 +175,7 @@ def test_export_patient_CT_study_to_test_pacs(temp_dir: str):
     start_local_storage_scp(temp_dir)
     # Send 1 Study with 4 CT files to local storage:
     phi_dsets: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, False)
+    time.sleep(0.5)
     dirlist = os.listdir(local_storage_dir(temp_dir))
     anon_pt_id = SITEID + "-000001"
     assert len(dirlist) == 1
