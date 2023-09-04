@@ -42,6 +42,7 @@ class ExportResponse:
     files_sent: int  # incremented for each file sent successfully
     errors: int
     # TODO: add error message to reflect specific error to UX
+    # TODO: simplify: stop export on ANY error
 
     # Class attribute for single patient termination
     @classmethod
@@ -180,8 +181,10 @@ def _export_patient(
     files_sent = 0
     errors = 0
     for dicom_file_path in file_paths:
+        # TODO: send in batches?
         time.sleep(0.1)  # throttle for UX responsiveness
         retries = 0
+        # TODO: simplify, remote retries?
         while retries < MAX_RETRIES:
             try:
                 dcm_response: Dataset = assoc.send_c_store(dataset=dicom_file_path)
@@ -214,6 +217,7 @@ def _export_patient(
                 errors += 1
                 break
 
+        # Notify in batches, not every file:
         ux_Q.put(
             ExportResponse(
                 patient_id=patient_id,
@@ -233,7 +237,6 @@ def _export_patient(
 
 # Manage bulk patient export using a thread pool:
 def _manage_export(req: ExportRequest) -> None:
-    # Initialize the Application Entity
     ae = AE(req.scu.aet)
     set_network_timeout(ae)
     set_radiology_storage_contexts(ae)

@@ -1,11 +1,13 @@
 import os
 from queue import Queue
+from time import sleep
 from pydicom.data import get_testdata_file
 from pydicom import Dataset
 from controller.dicom_ae import DICOMNode, DICOMRuntimeError
 from controller.dicom_echo_scu import echo
 from controller.dicom_find_scu import find
-from controller.dicom_move_scu import move
+from controller.dicom_move_scu import move, move_studies, MoveRequest
+from controller.dicom_return_codes import C_SUCCESS, C_PENDING_A, C_PENDING_B
 from controller.dicom_send_scu import (
     send,
     export_patients,
@@ -129,6 +131,31 @@ def move_study_from_pacs_simulator_scp_to_local_scp(study_uid: str):
         LocalStorageSCP.aet,
         study_uid,
     )
+
+
+def move_studies_from_pacs_simulator_scp_to_local_scp(
+    study_ids: list[str],
+) -> bool:
+    ux_Q: Queue[Dataset] = Queue()
+    req: MoveRequest = MoveRequest(
+        LocalSCU, PACSSimulatorSCP, LocalStorageSCP.aet, study_ids, ux_Q
+    )
+    move_studies(req)
+    move_count = 0
+    while move_count < len(study_ids):
+        try:
+            resp: Dataset = ux_Q.get(timeout=6)
+            assert resp.Status in [C_SUCCESS, C_PENDING_A, C_PENDING_B]
+            assert resp.NumberOfCompletedSuboperations != 0
+            assert resp.NumberOfFailedSuboperations == 0
+            assert resp.NumberOfWarningSuboperations == 0
+            if resp.Status == C_SUCCESS:
+                move_count += 1
+
+        except Exception as e:  # timeout reading ux_Q
+            assert False
+
+    return True
 
 
 def verify_files_sent_to_pacs_simulator(dsets: list[Dataset], tempdir: str):

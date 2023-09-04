@@ -61,7 +61,7 @@ def find(
     ds.StudyInstanceUID = ""
 
     logger.info(f"Query: {name}, {id}, {acc_no}, {study_date}, {modality}")
-    # Initialize the Application Entity
+
     ae = AE(scu.aet)
     set_network_timeout(ae)
 
@@ -77,11 +77,11 @@ def find(
             bind_address=(scu.ip, 0),
         )
         if not assoc.is_established:
-            logger.error("Association rejected, aborted or never connected")
             raise ConnectionError(
                 f"Failed to establish association with {scp.aet}@{scp.ip}:{scp.port}"
             )
-        logger.info(f"Association established with {assoc.acceptor.ae_title}")
+
+        logger.debug(f"Association established with {assoc.acceptor.ae_title}")
 
         # Use the C-FIND service to send the identifier using the StudyRootQueryRetrieveInformationModelFind
         responses = assoc.send_c_find(
@@ -90,20 +90,20 @@ def find(
         )
 
         # Process the responses received from the peer
-        # TODO: reflect status dataset back to UX client to provide find error detail
         for status, identifier in responses:
             if not status or status.Status not in (C_SUCCESS, C_PENDING_A, C_PENDING_B):
                 if not status:
-                    msg = "Connection timed out, was aborted, or received an invalid response"
-                    logger.error(msg)
-                    raise ConnectionError(msg)
+                    raise ConnectionError(
+                        "Connection timed out, was aborted, or received an invalid response"
+                    )
                 else:
-                    msg = f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}"
-                    logger.error(msg)
-                    raise DICOMRuntimeError(msg)
+                    raise DICOMRuntimeError(
+                        f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}"
+                    )
             else:
                 if status.Status == C_SUCCESS:
                     logger.info("C-FIND query success")
+
                 if identifier:
                     # TODO: move this code to UX client?
                     fields_to_remove = [
@@ -126,8 +126,9 @@ def find(
         ValueError,
         DICOMRuntimeError,
     ) as e:
-        logger.error(f"Failed DICOM C-FIND to {scp}, Error: {str(e)}")
+        # Reflect status dataset back to UX client to provide find error detail
         error_msg = str(e)  # latch exception error msg
+        logger.error(error_msg)
         if ux_Q:
             ds = Dataset()
             ds.Status = C_FAILURE
