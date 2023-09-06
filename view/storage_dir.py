@@ -6,7 +6,7 @@ import customtkinter as ctk
 from tkinter import filedialog
 import logging
 from utils.translate import _
-import utils.config as config
+import model.config as config
 from utils.storage import DEFAULT_LOCAL_STORAGE_DIR
 
 logger = logging.getLogger(__name__)

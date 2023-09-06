@@ -14,11 +14,9 @@ def local_storage_path(base_dir: str, siteid: str, ds: Dataset) -> Path:
         + "-"
         + ds.Modality
         + "-"
-        + str(ds.StudyDate)
+        + ds.AccessionNumber
         + "-"
         + str(ds.StudyInstanceUID[-4:]),
-        # + "T"
-        # + str(ds.StudyTime)[:6],  # TODO: 4 digit magic number at end, checksum?
         "Series" + "-" + str(ds.SeriesNumber),
         "Image" + "-" + str(ds.InstanceNumber) + ".dcm",
     )

@@ -2,7 +2,7 @@
 import json
 import os
 
-_CONFIG_FILE = "config.json"
+_CONFIG_FILE = "model/config.json"
 
 
 def load(module_name) -> dict:

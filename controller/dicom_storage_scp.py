@@ -68,7 +68,7 @@ def _handle_echo(event: Event) -> int:
 # DICOM C-STORE scp event handler (EVT_C_STORE)):
 def _handle_store(event: Event, storage_dir: str) -> int:
     # Throttle incoming requests by adding a delay
-    # time.sleep(_handle_store_time_slice_interval)  # to ensure UX responsiveness
+    time.sleep(_handle_store_time_slice_interval)  # to ensure UX responsiveness
     logger.debug("_handle_store")
     # TODO: Validate remote IP & AE Title
     remote = event.assoc.remote

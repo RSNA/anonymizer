@@ -1,6 +1,6 @@
 # User Interface Field Validation & Utilities
 import string
-import utils.config as config
+import model.config as config
 import tkinter as tk
 import customtkinter as ctk
 from CTkToolTip import CTkToolTip
@@ -96,12 +96,12 @@ def str_entry(
     var_name: str | None = None,
 ) -> ctk.StringVar:
     str_var = ctk.StringVar(view, value=initial_value)
-    char_width_px = ctk.CTkFont().measure("A")
+    char_width_px = ctk.CTkFont().measure("_")
     ctk_label = ctk.CTkLabel(view, text=label)
     ctk_label.grid(row=row, column=col, padx=pad, pady=(pad, 0), sticky=sticky)
     ctk_entry = ctk.CTkEntry(
         view,
-        width=int(max_chars * char_width_px),
+        width=(max_chars + 1) * char_width_px,
         textvariable=str_var,
         validate="key",
         validatecommand=(
@@ -146,7 +146,7 @@ def int_entry(
     ctk_label.grid(row=row, column=col, padx=pad, pady=(pad, 0), sticky=sticky)
     ctk_entry = ctk.CTkEntry(
         view,
-        width=round(max_chars * digit_width_px),
+        width=max_chars * digit_width_px,
         textvariable=int_var,
         validate="key",
         validatecommand=(

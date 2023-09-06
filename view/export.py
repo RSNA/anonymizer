@@ -11,7 +11,7 @@ from CTkMessagebox import CTkMessagebox
 from controller.dicom_storage_scp import get_active_storage_dir
 from utils.translate import _
 from utils.storage import count_dcm_files_and_studies
-import utils.config as config
+import model.config as config
 from utils.network import get_local_ip_addresses
 from utils.ux_fields import (
     str_entry,

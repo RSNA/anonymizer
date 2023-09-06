@@ -1,6 +1,8 @@
 # Description: Anonymization functions for DICOM datasets
 # See https://mircwiki.rsna.org/index.php?title=The_CTP_DICOM_Anonymizer for legacy anonymizer documentation
 from typing import Dict, Tuple, List
+import hashlib
+from datetime import datetime, timedelta
 import logging
 import threading
 from queue import Queue
@@ -10,10 +12,17 @@ import xml.etree.ElementTree as ET
 from controller.dicom_ae import DICOMNode, DICOMRuntimeError
 from model.project import UIDROOT, SITEID, PROJECTNAME, TRIALNAME
 from pydicom import Dataset, Sequence
-import utils.config as config
+import model.config as config
 from utils.translate import _
 from utils.storage import local_storage_path
-from model.project import SITEID
+from model.project import (
+    SITEID,
+    patient_id_lookup,
+    uid_lookup,
+    acc_no_lookup,
+    phi_lookup,
+    update_lookups,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -22,21 +31,11 @@ logger = logging.getLogger(__name__)
 anonymizer_script_filename = "assets/scripts/default-anonymizer.script"
 # TODO: link to app title & version
 deidentification_method = _("RSNA DICOM ANONYMIZER")
-
-# Lookup tables for anonymization:
-# TODO: move to pandas dataframe and/or sqlite db, hf5, parquet
-patient_id_lookup: Dict[str, str] = {}
-uid_lookup: Dict[str, str] = {}
-acc_no_lookup: Dict[str, str] = {}
-phi_lookup: Dict[str, Tuple[str, str, List[Tuple[str, str, str, str]]]] = {}
-
-# Load module globals from config.json
-settings = config.load(__name__)
-globals().update(settings)
+default_anon_date = "20000101"  # if source date is invalid or before 19000101
 
 _tag_keep: Dict[str, str] = {}  # DICOM Tag: Operation
 _anon_Q: Queue = Queue()
-_anonymize_time_slice_interval: float = 0.2  # seconds
+_anonymize_time_slice_interval: float = 0.1  # seconds
 _anonymize_batch_size: int = 40  # number of items to process in a batch
 
 deidentification_methods = [
@@ -50,29 +49,42 @@ deidentification_methods = [
 private_block_name = _("RSNA")
 
 
-def clear_lookups():
-    global patient_id_lookup, uid_lookup, acc_no_lookup
-    patient_id_lookup.clear()
-    uid_lookup.clear()
-    acc_no_lookup.clear()
-    phi_lookup.clear()
+# Date must be YYYYMMDD format and a valid date after 19000101:
+def valid_date(date_str: str) -> bool:
+    try:
+        date_obj = datetime.strptime(date_str, "%Y%m%d")
+        if date_obj < datetime(1900, 1, 1):
+            return False  # Return the default date for dates before 19000101
+        return True
+    except ValueError:
+        return False
 
 
-def update_lookups():
-    config.save_bulk(
-        __name__,
-        {
-            "patient_id_lookup": patient_id_lookup,
-            "uid_lookup": uid_lookup,
-            "acc_no_lookup": acc_no_lookup,
-            "phi_lookup": phi_lookup,
-        },
-    )
-
-
-# Anonymization functions for each script operation
+# Increment date by a number of days determined by MD5 hash of PatientID mod 10 years
+# DICOM Date format: YYYYMMDD
 def _hash_date(date: str, patient_id: str) -> str:
-    return "20000101"
+    if not valid_date(date) or not len(patient_id):
+        return default_anon_date
+
+    # Calculate MD5 hash of PatientID
+    md5_hash = hashlib.md5(patient_id.encode()).hexdigest()
+
+    # Convert MD5 hash to an integer
+    hash_integer = int(md5_hash, 16)
+
+    # Calculate number of days to increment (10 years in days)
+    days_to_increment = hash_integer % 3652
+
+    # Parse the input date as a datetime object
+    input_date = datetime.strptime(date, "%Y%m%d")
+
+    # Increment the date by the calculated number of days
+    incremented_date = input_date + timedelta(days=days_to_increment)
+
+    # Format the incremented date as "YYYYMMDD"
+    formatted_date = incremented_date.strftime("%Y%m%d")
+
+    return formatted_date
 
 
 def init(script_filename: str = anonymizer_script_filename) -> bool:
@@ -118,6 +130,7 @@ def get_next_anon_pt_id() -> str:
 
 
 def phi_name(anon_pt_id: str) -> str:
+    assert anon_pt_id in phi_lookup
     return phi_lookup[anon_pt_id][0]
 
 
@@ -152,7 +165,6 @@ def phi_from_dataset(phi_ds: Dataset, source: DICOMNode | str) -> tuple:
 
 
 def anonymize_element(dataset, data_element):
-    global uid_seq_no, acc_no_seq_no
     trans = str.maketrans("", "", "() ,")
     tag = str(data_element.tag).translate(trans).upper()
     # Remove data_element if not in _tag_keep:

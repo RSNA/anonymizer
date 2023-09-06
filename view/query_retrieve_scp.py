@@ -10,7 +10,7 @@ from tkinter import ttk
 from CTkToolTip import CTkToolTip
 from controller.dicom_return_codes import C_PENDING_A, C_PENDING_B, C_SUCCESS, C_FAILURE
 from utils.translate import _
-import utils.config as config
+import model.config as config
 from utils.network import get_local_ip_addresses
 from utils.ux_fields import (
     str_entry,
@@ -202,7 +202,7 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
         max_chars=patient_name_max_chars,
         charset=string.ascii_letters
         + string.digits
-        + "- ' ^ *"
+        + "- '^*?"
         + "À-ÖØ-öø-ÿ"
         + string.whitespace,
         tooltipmsg="Alphabetic ^ spaces * for wildcard",
@@ -219,8 +219,8 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
         initial_value="",
         min_chars=0,
         max_chars=patient_id_max_chars,
-        charset=string.ascii_letters + string.digits + "*",
-        tooltipmsg="Alpha-numeric, * for wildcard",
+        charset=string.ascii_letters + string.digits + "*?",
+        tooltipmsg="Alpha-numeric, * or ? for wildcard",
         row=1,
         col=0,
         pad=PAD,
@@ -233,8 +233,8 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
         initial_value="",
         min_chars=0,
         max_chars=accession_no_max_chars,
-        charset=string.ascii_letters + string.digits + " */-_",
-        tooltipmsg="Alpha-numeric, * for wildcard",
+        charset=string.ascii_letters + string.digits + " *?/-_",
+        tooltipmsg="Alpha-numeric, * or ? for wildcard",
         row=2,
         col=0,
         pad=PAD,
@@ -249,7 +249,7 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
         min_chars=dicom_date_chars,
         max_chars=dicom_date_chars,
         charset=string.digits + "*",
-        tooltipmsg=_("Numeric YYYYMMDD, * for wildcard"),
+        tooltipmsg=_("Numeric YYYYMMDD, * or ? for wildcard"),
         row=0,
         col=3,
         pad=PAD,
@@ -304,13 +304,21 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
             display_values = [
                 val for col, val in row.items() if col != "StudyInstanceUID"
             ]
-            tree.insert("", "end", iid=row["StudyInstanceUID"], values=display_values)
+            try:
+                tree.insert(
+                    "", "end", iid=row["StudyInstanceUID"], values=display_values
+                )
+            except Exception as e:
+                logger.error(
+                    f"Exception: {e}"
+                )  # _tkinter.TclError: Item {iid} already exists
+
             # If the StudyInstanceUID is already in the uid_lookup, tag it green:
             if row["StudyInstanceUID"] in uid_lookup:
                 tree.item(row["StudyInstanceUID"], tags="green")
 
     # Query Button:
-    def monitor_query_response(ux_Q: Queue, tree: ttk.Treeview):
+    def monitor_query_response(ux_Q: Queue, tree: ttk.Treeview, found_count: int):
         results = []
         query_finished = False
         while not ux_Q.empty():
@@ -322,7 +330,6 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
                         results.append(resp.identifier)
                     if resp.status.Status == C_SUCCESS:
                         query_finished = True
-                        logger.info(f"Query finished, {len(results)} results")
                 else:
                     assert resp.status.Status == C_FAILURE
                     query_finished = True
@@ -339,6 +346,7 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
         # Create Pandas DataFrame from results and display in Treeview:
         if results:
             logger.info(f"monitor_query_response: processing {len(results)} results")
+            found_count += len(results)
             # List the DICOM attributes in the desired order using the keys from the mapping
             ordered_attrs = list(attr_map.keys())
             data_dicts = [
@@ -354,10 +362,16 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
             # Update the treeview with the new data
             update_treeview_data(tree, df)
 
-        if not query_finished:
-            # Re-trigger monitor callback:
+        if query_finished:
+            logger.info(f"Query finished, {found_count} results")
+        else:
+            # Re-trigger monitor_query_response callback:
             tree.after(
-                ux_poll_find_response_interval, monitor_query_response, ux_Q, tree
+                ux_poll_find_response_interval,
+                monitor_query_response,
+                ux_Q,
+                tree,
+                found_count,
             )
 
     # TODO: query on <Return> // move to next query entry on <Return>
@@ -379,7 +393,14 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
         )
         find_ex(req)
         # Start FindResponse monitor:
-        tree.after(ux_poll_find_response_interval, monitor_query_response, ux_Q, tree)
+        found_count = 0
+        tree.after(
+            ux_poll_find_response_interval,
+            monitor_query_response,
+            ux_Q,
+            tree,
+            found_count,
+        )
 
     # Import & Anonymize Button:
     def monitor_move_response(remaining_studies: int, ux_Q: Queue, tree: ttk.Treeview):
@@ -392,7 +413,7 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
 
                 # If one file failed to moved, mark the patient as red:
                 # TODO: hover over item to see error message
-                if resp.Status not in [C_PENDING_A, C_PENDING_B, C_SUCCESS]:
+                if resp.Status == C_FAILURE:
                     tree.item(resp.StudyInstanceUID, tags="red")
                     if not hasattr(resp, "StudyInstanceUID"):
                         logger.error(
@@ -400,23 +421,25 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
                         )
                         move_finished = True
                         break
+                else:
+                    # Update treeview item:
+                    current_values = list(tree.item(resp.StudyInstanceUID, "values"))
+                    # Ensure there are at least 10 values in the list:
+                    while len(current_values) < 10:
+                        current_values.append("")
+                    current_values[8] = str(resp.NumberOfCompletedSuboperations)
+                    current_values[9] = str(resp.NumberOfFailedSuboperations)
+                    tree.item(resp.StudyInstanceUID, values=current_values)
 
-                if resp.Status == C_SUCCESS:
-                    tree.selection_remove(resp.StudyInstanceUID)
-                    tree.item(resp.StudyInstanceUID, tags="green")
-                    remaining_studies -= 1
-                    if remaining_studies == 0:
-                        logger.info(f"Move finished for study: {resp.StudyInstanceUID}")
-                        move_finished = True
-
-                # Update treeview item:
-                current_values = list(tree.item(resp.StudyInstanceUID, "values"))
-                # Ensure there are at least 10 values in the list:
-                while len(current_values) < 10:
-                    current_values.append("")
-                current_values[8] = str(resp.NumberOfCompletedSuboperations)
-                current_values[9] = str(resp.NumberOfFailedSuboperations)
-                tree.item(resp.StudyInstanceUID, values=current_values)
+                    if resp.Status == C_SUCCESS:
+                        tree.selection_remove(resp.StudyInstanceUID)
+                        tree.item(resp.StudyInstanceUID, tags="green")
+                        remaining_studies -= 1
+                        if remaining_studies == 0:
+                            logger.info(
+                                f"Move finished for study: {resp.StudyInstanceUID}"
+                            )
+                            move_finished = True
 
             except Empty:
                 logger.info("Queue is empty")

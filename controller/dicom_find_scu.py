@@ -46,7 +46,9 @@ def find(
     modality: str,
     ux_Q=None,
 ) -> list[Dataset] | None:
-    logger.info(f"C-FIND from {scu} to {scp}")
+    logger.info(
+        f"C-FIND from {scu} to {scp} Query: {name}, {id}, {acc_no}, {study_date}, {modality}"
+    )
 
     ds = Dataset()
     ds.QueryRetrieveLevel = "STUDY"
@@ -59,8 +61,6 @@ def find(
     ds.NumberOfStudyRelatedInstances = 0
     ds.StudyDescription = ""
     ds.StudyInstanceUID = ""
-
-    logger.info(f"Query: {name}, {id}, {acc_no}, {study_date}, {modality}")
 
     ae = AE(scu.aet)
     set_network_timeout(ae)
@@ -114,8 +114,9 @@ def find(
                     for field in fields_to_remove:
                         if field in identifier:
                             delattr(identifier, field)
-                    if ux_Q == None:
-                        results.append(identifier)
+
+                    results.append(identifier)
+
                 if ux_Q:
                     ux_Q.put(FindResponse(status, identifier))
 
