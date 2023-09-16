@@ -1,12 +1,24 @@
 # tests/conftest.py
-
+import os
+from pathlib import Path
 import shutil
 import tempfile
 import pytest
 import logging
-from model.project import clear_lookups
-from controller.dicom_storage_scp import stop as local_storage_scp_stop
-from tests.controller.dicom_pacs_simulator_scp import stop as pacs_simulator_scp_stop
+
+from model.project import ProjectModel
+from controller.project import ProjectController
+import tests.controller.dicom_pacs_simulator_scp as pacs_simulator_scp
+from tests.controller.dicom_test_nodes import (
+    TEST_PROJECTNAME,
+    TEST_SITEID,
+    TEST_TRIALNAME,
+    TEST_UIDROOT,
+    LocalSCU,
+    LocalStorageSCP,
+    PACSSimulatorSCP,
+    RemoteSCPDict,
+)
 
 # Configure the logging format
 logging.basicConfig(
@@ -30,14 +42,49 @@ def temp_dir():
     temp_path = tempfile.mkdtemp()
     logger.info(f"Creating temporary directory: {temp_path}")
 
-    # Clear the uid_lookup and patient_id_lookup dictionaries
-    clear_lookups()
-
     # Yield the directory path to the test function
     yield temp_path
 
     # Remove the temporary directory after the test is done
     logger.info(f"Removing temporary directory: {temp_path}")
     shutil.rmtree(temp_path)
-    local_storage_scp_stop()
-    pacs_simulator_scp_stop()
+
+
+@pytest.fixture
+def controller(temp_dir):
+    anon_store = Path(temp_dir, LocalSCU.aet)
+    # Make sure storage directory exists:
+    os.makedirs(anon_store, exist_ok=True)
+    # Create Test ProjectModel:
+    project_model = ProjectModel(
+        siteid=TEST_SITEID,
+        projectname=TEST_PROJECTNAME,
+        trialname=TEST_TRIALNAME,
+        uidroot=TEST_UIDROOT,
+        storage_dir=anon_store,
+        scu=LocalSCU,
+        scp=LocalStorageSCP,
+        remote_scps=RemoteSCPDict,
+        network_timeout=3,
+    )
+
+    project_controller = ProjectController(project_model)
+
+    assert project_controller
+
+    # Start PACS Simulator:
+    assert pacs_simulator_scp.start(
+        PACSSimulatorSCP,
+        os.path.join(temp_dir, PACSSimulatorSCP.aet),
+        [LocalStorageSCP],  # one move destination
+    )
+    assert pacs_simulator_scp.server_running()
+
+    yield project_controller
+
+    # Ensure Local Storage is stopped
+    # (cleanup of project_controller doesn't happen fast enough)
+    project_controller.stop_scp()
+
+    # Stop PACS Simulator:
+    pacs_simulator_scp.stop()

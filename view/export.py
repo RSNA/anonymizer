@@ -8,7 +8,6 @@ import customtkinter as ctk
 from tkinter import ttk
 from CTkToolTip import CTkToolTip
 from CTkMessagebox import CTkMessagebox
-from controller.dicom_storage_scp import get_active_storage_dir
 from utils.translate import _
 from utils.storage import count_dcm_files_and_studies
 import model.config as config
@@ -25,14 +24,8 @@ from utils.ux_fields import (
     ux_poll_local_storage_interval,
     ux_poll_export_response_interval,
 )
-from controller.dicom_echo_scu import echo
-from controller.dicom_send_scu import (
-    DICOMNode,
-    export_patients,
-    ExportRequest,
-    ExportResponse,
-)
-from controller.anonymize import phi_name
+
+from controller.anonymizer import phi_name
 
 logger = logging.getLogger(__name__)
 

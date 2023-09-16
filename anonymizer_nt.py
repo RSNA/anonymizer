@@ -21,9 +21,9 @@ import view.query_retrieve_scp as query_retrieve_scp
 import view.welcome as welcome
 
 # To ensure DICOM C-STORE SCP is stopped and socket is closed on exit:
-from controller.dicom_ae import DICOMNode
-import controller.dicom_storage_scp as dicom_storage_scp
-from controller.anonymize import init as init_anonymizer, anonymize_dataset_and_store
+from controller.project import DICOMNode
+import prototyping.dicom_storage_scp as dicom_storage_scp
+from controller.anonymizer import init as init_anonymizer, anonymize_dataset_and_store
 
 LOGS_DIR = "/logs/"
 LOG_FILENAME = "anonymizer.log"

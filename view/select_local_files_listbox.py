@@ -8,7 +8,7 @@ from CTkToolTip import CTkToolTip
 from CTkListbox import CTkListbox
 import logging
 from pydicom import dcmread, config
-from controller.anonymize import anonymize_dataset
+from controller.anonymizer import anonymize_dataset
 from utils.translate import _
 from view.storage_dir import storage_directory
 import model.project as project

@@ -1,10 +1,14 @@
 import os
 import logging
+from typing import List
+from dataclasses import dataclass
 from pydicom import dcmread, Dataset
 from pynetdicom.events import Event, EVT_C_ECHO, EVT_C_FIND, EVT_C_STORE, EVT_C_MOVE
-from pynetdicom.transport import ThreadedAssociationServer
 from pynetdicom.ae import ApplicationEntity as AE
-from controller.dicom_return_codes import (
+from pynetdicom.presentation import PresentationContext, build_context
+from pynetdicom._globals import ALL_TRANSFER_SYNTAXES, DEFAULT_TRANSFER_SYNTAXES
+
+from controller.dicom_C_codes import (
     C_SUCCESS,
     C_STORE_OUT_OF_RESOURCES,
     C_SOP_CLASS_INVALID,
@@ -12,19 +16,82 @@ from controller.dicom_return_codes import (
     C_CANCEL,
     C_MOVE_UNKNOWN_AE,
 )
-from controller.dicom_ae import (
-    DICOMNode,
-    set_network_timeout,
-    set_radiology_storage_contexts,
-    get_radiology_storage_contexts,
-    set_verification_context,
-    set_study_root_qr_contexts,
-)
+
+from model.project import DICOMNode
 
 logger = logging.getLogger(__name__)
 
+# TODO: create PACSimulator(AE) class as per ProjectController
+
+
+_Verification_Class = "1.2.840.10008.1.1"
+_STUDY_ROOT_QR_CLASSES = [
+    "1.2.840.10008.5.1.4.1.2.2.1",  # Find
+    "1.2.840.10008.5.1.4.1.2.2.2",  # Move
+    "1.2.840.10008.5.1.4.1.2.2.3",  # Get
+]
+
+_TRANSFER_SYNTAXES = DEFAULT_TRANSFER_SYNTAXES
+
+# TODO: provide UX for these classes and supported transfer syntaxes
+_RADIOLOGY_STORAGE_CLASSES = {
+    "Computed Radiography Image Storage": "1.2.840.10008.5.1.4.1.1.1",
+    "Computed Tomography Image Storage": "1.2.840.10008.5.1.4.1.1.2",
+    "Digital X-Ray Image Storage - For Presentation": "1.2.840.10008.5.1.4.1.1.1.1",
+    "Digital X-Ray Image Storage - For Processing": "1.2.840.10008.5.1.4.1.1.1.1.1",
+    "Magnetic Resonance Image Storage": "1.2.840.10008.5.1.4.1.1.4",
+}
+
+_network_timeout = 3  # seconds
+
+
+# Set *all* AE timeouts to the global network timeout:
+def set_network_timeout(ae: AE) -> None:
+    ae.acse_timeout = _network_timeout
+    ae.dimse_timeout = _network_timeout
+    ae.network_timeout = _network_timeout
+    ae.connection_timeout = _network_timeout
+    return
+
+
+def get_network_timeout() -> int:
+    return _network_timeout
+
+
+# FOR SCP AE: Set allowed storage and verification contexts and corresponding transfer syntaxes
+def set_verification_context(ae: AE):
+    ae.add_supported_context(_Verification_Class, _TRANSFER_SYNTAXES)
+    return
+
+
+def set_radiology_storage_contexts(ae: AE) -> None:
+    for uid in sorted(_RADIOLOGY_STORAGE_CLASSES.values()):
+        ae.add_supported_context(uid, _TRANSFER_SYNTAXES)
+    return
+
+
+def set_study_root_qr_contexts(ae: AE) -> None:
+    for uid in sorted(_STUDY_ROOT_QR_CLASSES):
+        ae.add_supported_context(uid, _TRANSFER_SYNTAXES)
+    return
+
+
+def get_radiology_storage_contexts() -> List[PresentationContext]:
+    return [
+        build_context(abstract_syntax, _TRANSFER_SYNTAXES)
+        for abstract_syntax in _RADIOLOGY_STORAGE_CLASSES.values()
+    ]
+
+
+def get_study_root_qr_contexts() -> List[PresentationContext]:
+    return [
+        build_context(abstract_syntax, _TRANSFER_SYNTAXES)
+        for abstract_syntax in _STUDY_ROOT_QR_CLASSES
+    ]
+
+
 # Store scp instance after ae.start_server() is called:
-scp: ThreadedAssociationServer = None
+scp = None
 
 
 # Is SCP running?
@@ -229,11 +296,10 @@ def start(addr: DICOMNode, storage_dir: str, known_nodes: list[DICOMNode]) -> bo
 
 
 # Stop SCP:
-def stop(final_shutdown=False) -> None:
+def stop() -> None:
     global scp
-    if not final_shutdown:
-        logger.info("User initiated: Stop PACS SIMULATOR scp and close socket")
     if not scp:
         return
+    logger.info("Stop PACS SIMULATOR scp and close socket")
     scp.shutdown()
     scp = None

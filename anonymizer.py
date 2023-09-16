@@ -20,8 +20,8 @@ import view.query_retrieve_scp as query_retrieve_scp
 import view.export as export
 
 # To ensure DICOM C-STORE SCP is stopped and socket is closed on exit:
-import controller.dicom_storage_scp as dicom_storage_scp
-from controller.anonymize import init as init_anonymizer
+import prototyping.dicom_storage_scp as dicom_storage_scp
+from controller.anonymizer import init as init_anonymizer
 
 APP_TITLE = _("RSNA DICOM Anonymizer Version " + __version__)
 APP_MIN_WIDTH = 1200

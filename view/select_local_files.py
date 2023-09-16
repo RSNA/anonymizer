@@ -7,7 +7,7 @@ from tkinter import filedialog
 from CTkToolTip import CTkToolTip
 import logging
 from pydicom import dcmread
-from controller.anonymize import anonymize_dataset_and_store
+from controller.anonymizer import anonymize_dataset_and_store
 from utils.translate import _
 from view.storage_dir import storage_directory
 

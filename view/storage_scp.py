@@ -3,10 +3,10 @@ import customtkinter as ctk
 from CTkToolTip import CTkToolTip
 from CTkMessagebox import CTkMessagebox
 import logging
-from controller.dicom_ae import DICOMNode, DICOMRuntimeError
+from controller.project import DICOMNode, DICOMRuntimeError
 from utils.translate import _
 import model.config as config
-import controller.dicom_storage_scp as dicom_storage_scp
+import prototyping.dicom_storage_scp as dicom_storage_scp
 from view.storage_dir import get_storage_directory
 from utils.network import get_local_ip_addresses
 from utils.ux_fields import (

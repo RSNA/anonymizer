@@ -8,7 +8,7 @@ from pydicom import Dataset
 import pandas as pd
 from tkinter import ttk
 from CTkToolTip import CTkToolTip
-from controller.dicom_return_codes import C_PENDING_A, C_PENDING_B, C_SUCCESS, C_FAILURE
+from controller.dicom_C_codes import C_PENDING_A, C_PENDING_B, C_SUCCESS, C_FAILURE
 from utils.translate import _
 import model.config as config
 from utils.network import get_local_ip_addresses
@@ -30,12 +30,12 @@ from utils.ux_fields import (
     ux_poll_find_response_interval,
     ux_poll_move_response_interval,
 )
-from controller.dicom_ae import DICOMNode
-from controller.anonymize import uid_lookup
+from controller.project import DICOMNode
+from controller.anonymizer import uid_lookup
 from controller.dicom_echo_scu import echo
-from controller.dicom_find_scu import find, find_ex, FindRequest, FindResponse
-from controller.dicom_move_scu import MoveRequest, move_studies
-from controller.dicom_storage_scp import get_storage_scp_aet
+from prototyping.dicom_find_scu import find, find_ex, FindRequest, FindResponse
+from prototyping.dicom_move_scu import MoveRequest, move_studies
+from prototyping.dicom_storage_scp import get_storage_scp_aet
 
 logger = logging.getLogger(__name__)
 

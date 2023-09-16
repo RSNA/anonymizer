@@ -1,12 +1,11 @@
 import os
 from pathlib import Path
-from unittest.mock import DEFAULT
 from pydicom import Dataset
 
 DEFAULT_LOCAL_STORAGE_DIR = os.path.join(os.path.expanduser("~"), "ANONYMIZER_STORE")
 
 
-def local_storage_path(base_dir: str, siteid: str, ds: Dataset) -> Path:
+def local_storage_path(base_dir: Path, siteid: str, ds: Dataset) -> Path:
     dest_path = Path(
         base_dir,
         str(ds.PatientName),
