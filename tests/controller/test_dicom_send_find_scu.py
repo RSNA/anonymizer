@@ -161,7 +161,7 @@ def test_export_patient_CR_study_to_test_pacs(
     phi_dsets: list[Dataset] = send_files_to_scp([cr1_filename], False, controller)
     time.sleep(0.5)
     dirlist = os.listdir(controller.model.storage_dir)
-    anon_pt_id = controller.model.siteid + "-000001"
+    anon_pt_id = controller.model.site_id + "-000001"
     assert len(dirlist) == 1
     assert dirlist[0] == anon_pt_id
     # Export this patient from local storage to test PACS:
@@ -177,7 +177,7 @@ def test_export_patient_CT_study_to_test_pacs(
     )
     time.sleep(0.5)
     dirlist = os.listdir(controller.model.storage_dir)
-    anon_pt_id = controller.model.siteid + "-000001"
+    anon_pt_id = controller.model.site_id + "-000001"
     assert len(dirlist) == 1
     assert dirlist[0] == anon_pt_id
     # Export this patient from local storage to test PACS:
@@ -201,7 +201,7 @@ def test_export_1_patient_2_studies_CR_CT_to_test_pacs(
     time.sleep(0.5)
     assert ct_phi_dsets[0].PatientName == "Doe^Archibald"
     dirlist = os.listdir(controller.model.storage_dir)
-    anon_pt_id = controller.model.siteid + "-000001"
+    anon_pt_id = controller.model.site_id + "-000001"
     assert len(dirlist) == 1
     assert anon_pt_id in dirlist
     # Check 2 studies and 7 files in patient directory on local storage:
@@ -228,8 +228,8 @@ def test_export_2_patients_to_test_pacs(temp_dir: str, controller: ProjectContro
     time.sleep(0.5)
     assert mr_phi_dsets[0].PatientName == "Doe^Peter"
     dirlist = os.listdir(controller.model.storage_dir)
-    ct_anon_pt_id = controller.model.siteid + "-000001"
-    mr_anon_pt_id = controller.model.siteid + "-000002"
+    ct_anon_pt_id = controller.model.site_id + "-000001"
+    mr_anon_pt_id = controller.model.site_id + "-000002"
     assert len(dirlist) == 2
     assert ct_anon_pt_id in dirlist
     assert mr_anon_pt_id in dirlist
@@ -266,10 +266,10 @@ def test_export_4_patients_to_test_pacs(temp_dir: str, controller: ProjectContro
     mrsmall_ds: Dataset = send_file_to_scp(mr_small_filename, False, controller)
     time.sleep(0.5)
     dirlist = os.listdir(controller.model.storage_dir)
-    ct_anon_pt_id = controller.model.siteid + "-000001"
-    mr_anon_pt_id = controller.model.siteid + "-000002"
-    ctsmall_anon_pt_id = controller.model.siteid + "-000003"
-    mrsmall_anon_pt_id = controller.model.siteid + "-000004"
+    ct_anon_pt_id = controller.model.site_id + "-000001"
+    mr_anon_pt_id = controller.model.site_id + "-000002"
+    ctsmall_anon_pt_id = controller.model.site_id + "-000003"
+    mrsmall_anon_pt_id = controller.model.site_id + "-000004"
     assert len(dirlist) == 4
     assert ct_anon_pt_id in dirlist
     assert mr_anon_pt_id in dirlist

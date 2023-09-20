@@ -138,7 +138,7 @@
   "CTkFont": {
     "macOS": {
       "family": "DIN Alternate",
-      "size": 13,
+      "size": 14,
       "weight": "normal"
     },
     "Windows": {

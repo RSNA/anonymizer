@@ -33,6 +33,8 @@ ux_poll_local_storage_interval = 500  # milli-seconds
 
 # Entry field callback functions for
 # validating user input and saving update to config.json:
+
+
 def validate_entry(final_value: str, allowed_chars: str, max: str):
     # BUG: max is always a string, so convert to int
     if len(final_value) > int(max):
@@ -81,13 +83,13 @@ def str_entry_change(
 
 
 def str_entry(
-    view: ctk.CTkFrame,
+    view: ctk.CTkFrame | ctk.CTkToplevel,
     label: str,
     initial_value: str,
     min_chars: int,
     max_chars: int,
     charset: str,
-    tooltipmsg: str,
+    tooltipmsg: str | None,
     row: int,
     col: int,
     pad: int,
@@ -99,22 +101,26 @@ def str_entry(
     char_width_px = ctk.CTkFont().measure("_")
     ctk_label = ctk.CTkLabel(view, text=label)
     ctk_label.grid(row=row, column=col, padx=pad, pady=(pad, 0), sticky=sticky)
+
     ctk_entry = ctk.CTkEntry(
         view,
         width=(max_chars + 1) * char_width_px,
         textvariable=str_var,
         validate="key",
         validatecommand=(
-            view.winfo_toplevel().validate_entry_cmd,  # type: ignore
+            # view.winfo_toplevel().validate_entry_cmd,  # type: ignore
+            view.register(validate_entry),
             "%P",
             charset,
             str(max_chars),
         ),
     )
-    entry_tooltip = CTkToolTip(
-        ctk_entry,
-        message=_(f"{tooltipmsg} [{min_chars}..{max_chars}] chars"),
-    )
+
+    if tooltipmsg:
+        entry_tooltip = CTkToolTip(
+            ctk_entry,
+            message=_(f"{tooltipmsg} [{min_chars}..{max_chars}] chars"),
+        )
 
     entry_callback = lambda event: str_entry_change(
         event, str_var, min_chars, max_chars, module, var_name
@@ -126,12 +132,12 @@ def str_entry(
 
 
 def int_entry(
-    view: ctk.CTkFrame,
+    view: ctk.CTkFrame | ctk.CTkToplevel,
     label: str,
     initial_value: int,
     min: int,
     max: int,
-    tooltipmsg: str,
+    tooltipmsg: str | None,
     row: int,
     col: int,
     pad: int,
@@ -141,7 +147,8 @@ def int_entry(
 ) -> ctk.IntVar:
     int_var = ctk.IntVar(view, value=initial_value)
     max_chars = len(str(max))
-    digit_width_px = ctk.CTkFont().measure("A") + 2
+    # TODO: why is this not accurate?
+    digit_width_px = ctk.CTkFont().measure("A") + 3
     ctk_label = ctk.CTkLabel(view, text=label)
     ctk_label.grid(row=row, column=col, padx=pad, pady=(pad, 0), sticky=sticky)
     ctk_entry = ctk.CTkEntry(
@@ -150,16 +157,19 @@ def int_entry(
         textvariable=int_var,
         validate="key",
         validatecommand=(
-            view.winfo_toplevel().validate_entry_cmd,  # type: ignore
+            # view.winfo_toplevel().validate_entry_cmd,  # type: ignore
+            view.register(validate_entry),
             "%P",
             string.digits,
             max_chars,
         ),
     )
-    entry_tooltip = CTkToolTip(
-        ctk_entry,
-        message=_(f"{tooltipmsg} [{min}..{max}]"),
-    )
+
+    if tooltipmsg:
+        entry_tooltip = CTkToolTip(
+            ctk_entry,
+            message=_(f"{tooltipmsg} [{min}..{max}]"),
+        )
 
     entry_callback = lambda event: int_entry_change(
         event, int_var, min, max, module, var_name

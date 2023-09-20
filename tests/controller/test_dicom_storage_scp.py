@@ -21,7 +21,7 @@ def test_send_cr1(temp_dir: str, controller):
     time.sleep(0.5)
     dirlist = os.listdir(controller.model.storage_dir)
     assert len(dirlist) == 1
-    assert dirlist[0] == controller.model.siteid + "-000001"
+    assert dirlist[0] == controller.model.site_id + "-000001"
     assert (
         controller.anonymizer.model.get_anon_uid(ds.SOPInstanceUID)
         == f"{TEST_UIDROOT}.{TEST_SITEID}.{1}"

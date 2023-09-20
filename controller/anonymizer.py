@@ -45,9 +45,13 @@ class AnonymizerController:
         if os.path.exists(anon_pkl_path):
             with open(anon_pkl_path, "rb") as pkl_file:
                 self.model = pickle.load(pkl_file)
+                logger.info(f"Anonymizer Model loaded from: {anon_pkl_path}")
         else:
             # Initialise AnonymizerModel if no pickle file found in project directory:
             self.model = AnonymizerModel(project_model.anonymizer_script_path)
+            logger.info(
+                f"Anonymizer Model initialised from: {project_model.anonymizer_script_path}"
+            )
 
         self._anon_Q: Queue = Queue()
 
@@ -68,12 +72,13 @@ class AnonymizerController:
         )
         with open(anon_pkl_path, "wb") as pkl_file:
             pickle.dump(self.model, pkl_file)
+            pkl_file.close()
 
         logger.info(f"Model saved to: {anon_pkl_path}")
 
     def get_next_anon_patient_id(self) -> str:
         next_patient_index = self.model.get_patient_id_count() + 1
-        return f"{self.project_model.siteid}-{next_patient_index:06}"
+        return f"{self.project_model.site_id}-{next_patient_index:06}"
 
     # Date must be YYYYMMDD format and a valid date after 19000101:
     def valid_date(self, date_str: str) -> bool:
@@ -160,7 +165,7 @@ class AnonymizerController:
             anon_uid = self.model.get_anon_uid(value)
             if not anon_uid:
                 next_uid_ndx = self.model.get_uid_count() + 1
-                anon_uid = f"{self.project_model.uidroot}.{self.project_model.siteid}.{next_uid_ndx}"
+                anon_uid = f"{self.project_model.uid_root}.{self.project_model.site_id}.{next_uid_ndx}"
                 self.model.set_anon_uid(value, anon_uid)
             dataset[tag].value = anon_uid
             return
@@ -230,14 +235,14 @@ class AnonymizerController:
 
                     ds.DeidentificationMethodCodeSequence = de_ident_seq
                     block = ds.private_block(0x0013, private_block_name, create=True)
-                    block.add_new(0x1, "SH", self.project_model.projectname)
-                    block.add_new(0x2, "SH", self.project_model.trialname)
-                    block.add_new(0x3, "SH", self.project_model.siteid)
+                    block.add_new(0x1, "SH", self.project_model.project_name)
+                    block.add_new(0x2, "SH", self.project_model.trial_name)
+                    block.add_new(0x3, "SH", self.project_model.site_id)
 
                     logger.debug(f"ANON:\n{ds}")
 
                     # Save anonymized dataset to dicom file in local storage:
-                    filename = local_storage_path(dir, self.project_model.siteid, ds)
+                    filename = local_storage_path(dir, self.project_model.site_id, ds)
                     logger.debug(
                         f"STORE ANON[{ds.file_meta.TransferSyntaxUID}]: {source} => {filename}"
                     )

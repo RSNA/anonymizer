@@ -1,10 +1,11 @@
+import os
 import logging
+from pprint import pformat
 from typing import Dict, Tuple, List
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from pynetdicom._globals import ALL_TRANSFER_SYNTAXES, DEFAULT_TRANSFER_SYNTAXES
 from utils.translate import _
-import model.config as config
 
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,7 @@ class DICOMNode:
     ip: str
     port: int
     aet: str
-    scp: bool
+    local: bool
 
 
 @dataclass
@@ -38,17 +39,36 @@ class PHI:
     studies: List[Study]
 
 
-class ProjectModel:
-    pickle_filename = "ProjectModel.pkl"
-    default_anonymizer_script_path = Path("assets/scripts/default-anonymizer.script")
-    # TODO: provide UX to manage the allowed storage classes and supported transfer syntaxes, *FIXED FOR MVP*
-    _TRANSFER_SYNTAXES = DEFAULT_TRANSFER_SYNTAXES  # change to ALL_TRANSFER_SYNTAXES to support compression
-    _RADIOLOGY_STORAGE_CLASSES = {
+def default_project_filename() -> str:
+    return "ProjectModel.pkl"
+
+
+def default_storage_dir() -> Path:
+    return Path(os.path.expanduser("~"), "ANONYMIZER_STORE")
+
+
+def default_local_server() -> DICOMNode:
+    return DICOMNode("127.0.0.1", 1045, _("ANONYMIZER"), True)
+
+
+def default_remote_scps() -> Dict[str, DICOMNode]:
+    return {
+        "QUERY": DICOMNode("127.0.0.1", 11112, "MDEDEV", False),
+        "EXPORT": DICOMNode("127.0.0.1", 11112, "MDEDEV", False),
+    }
+
+
+def default_transfer_syntaxes() -> List[str]:
+    return DEFAULT_TRANSFER_SYNTAXES  # change to ALL_TRANSFER_SYNTAXES to support compression
+
+
+def default_radiology_storage_classes() -> Dict[str, str]:
+    return {
         "Computed Radiography Image Storage": "1.2.840.10008.5.1.4.1.1.1",
-        "Computed Tomography Image Storage": "1.2.840.10008.5.1.4.1.1.2",
-        # "Enhanced CT Image Storage": "1.2.840.10008.5.1.4.1.1.2.1",
         "Digital X-Ray Image Storage - For Presentation": "1.2.840.10008.5.1.4.1.1.1.1",
         "Digital X-Ray Image Storage - For Processing": "1.2.840.10008.5.1.4.1.1.1.1.1",
+        "Computed Tomography Image Storage": "1.2.840.10008.5.1.4.1.1.2",
+        # "Enhanced CT Image Storage": "1.2.840.10008.5.1.4.1.1.2.1",
         # "Digital Mammography X-Ray Image Storage For Presentation": "1.2.840.10008.5.1.4.1.1.1.2",
         # "Digital Mammography X-Ray Image Storage For Processing": "1.2.840.10008.5.1.4.1.1.1.2.1",
         # "Digital Intra Oral X-Ray Image Storage For Presentation": "1.2.840.10008.5.1.4.1.1.1.3",
@@ -62,57 +82,26 @@ class ProjectModel:
         # "BreastTomosynthesisImageStorage": "1.2.840.10008.5.1.4.1.1.13.1.3",
     }
 
-    def __init__(
-        self,
-        siteid: str,
-        projectname: str,
-        trialname: str,
-        uidroot: str,
-        storage_dir: Path,
-        scu: DICOMNode,
-        scp: DICOMNode,
-        remote_scps: Dict[str, DICOMNode],
-        network_timeout: int,
-        anonymizer_script_path: Path = default_anonymizer_script_path,
-    ):
-        # Check if any string parameter is empty (zero-length)
-        if not all(
-            param.strip() for param in (siteid, projectname, trialname, uidroot)
-        ):
-            raise ValueError("String parameters must not be empty")
 
-        # Check if storage_dir is a valid directory
-        if not storage_dir or not storage_dir.is_dir():
-            raise ValueError("storage_dir must be a valid directory")
+@dataclass
+class ProjectModel:
+    site_id: str = _("9999")
+    project_name: str = _("PROJECT")
+    trial_name: str = _("TRIAL")
+    uid_root: str = "1.2.826.0.1.3680043.10.188"
+    storage_dir: Path = field(default_factory=default_storage_dir)
+    scu: DICOMNode = field(default_factory=default_local_server)
+    scp: DICOMNode = field(default_factory=default_local_server)
+    remote_scps: Dict[str, DICOMNode] = field(default_factory=default_remote_scps)
+    network_timeout: int = 3  # seconds
+    anonymizer_script_path: Path = Path("assets/scripts/default-anonymizer.script")
 
-        # Check if anonymizer_script_path is a valid Path and exists
-        if (
-            not anonymizer_script_path
-            or not isinstance(anonymizer_script_path, Path)
-            or not anonymizer_script_path.exists()
-        ):
-            raise ValueError("anonymizer_script_path must be a valid Path that exists")
+    # TODO: provide UX to manage the allowed storage classes and supported transfer syntaxes, *FIXED FOR MVP*
+    _TRANSFER_SYNTAXES: List[str] = field(default_factory=default_transfer_syntaxes)
+    _RADIOLOGY_STORAGE_CLASSES: Dict[str, str] = field(
+        default_factory=default_radiology_storage_classes
+    )
 
-        # Check if network_timeout is a positive integer
-        if not isinstance(network_timeout, int) or network_timeout <= 0:
-            raise ValueError("network_timeout must be a positive integer")
-
-        self.siteid = siteid
-        self.projectname = projectname
-        self.trialname = trialname
-        self.uidroot = uidroot
-        self.storage_dir = storage_dir
-        self.scu = scu
-        self.scp = scp
-        self.remote_scps = remote_scps
-        self.network_timeout = network_timeout
-        self.anonymizer_script_path = anonymizer_script_path
-
-    def __str__(self):
-        return f"{self.siteid}-{self.projectname}-{self.trialname}"
-
-    def __repr__(self):
-        return f"{self.siteid}-{self.projectname}-{self.trialname}"
-
-    def __hash__(self):
-        return hash(self.__dict__)
+    def __repr__(self) -> str:
+        class_name = self.__class__.__name__
+        return f"{class_name}\n({pformat(self.__dict__)})"

@@ -1,21 +1,19 @@
 import os
 from pathlib import Path
+from turtle import st
 from pydicom import Dataset
-
-DEFAULT_LOCAL_STORAGE_DIR = os.path.join(os.path.expanduser("~"), "ANONYMIZER_STORE")
 
 
 def local_storage_path(base_dir: Path, siteid: str, ds: Dataset) -> Path:
+    study_uid = str(ds.StudyInstanceUID)
+    if not "." in study_uid:
+        study_suffix = "INVALID"
+    else:
+        study_suffix = study_uid.rsplit(".", 1)[-1]
     dest_path = Path(
         base_dir,
         str(ds.PatientName),
-        "Study"
-        + "-"
-        + ds.Modality
-        + "-"
-        + ds.AccessionNumber
-        + "-"
-        + str(ds.StudyInstanceUID[-4:]),
+        "Study" + "-" + ds.Modality + "-" + ds.AccessionNumber + "-" + study_suffix,
         "Series" + "-" + str(ds.SeriesNumber),
         "Image" + "-" + str(ds.InstanceNumber) + ".dcm",
     )

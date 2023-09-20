@@ -96,8 +96,8 @@ def test_anonymize_dataset(temp_dir: str, controller):
     anonymizer.anonymize_dataset_and_store(LocalSCU, ds, local_storage_dir(temp_dir))
     sleep(0.5)
     dirlist = os.listdir(local_storage_dir(temp_dir))
-    SITEID = controller.model.siteid
-    UIDROOT = controller.model.uidroot
+    SITEID = controller.model.site_id
+    UIDROOT = controller.model.uid_root
 
     anon_pt_id = SITEID + "-000001"
     assert len(dirlist) == 1

@@ -1,8 +1,6 @@
 import logging
 import string
 from queue import Queue, Empty, Full
-import time
-from unittest import result
 import customtkinter as ctk
 from pydicom import Dataset
 import pandas as pd
@@ -30,12 +28,14 @@ from utils.ux_fields import (
     ux_poll_find_response_interval,
     ux_poll_move_response_interval,
 )
-from controller.project import DICOMNode
-from controller.anonymizer import uid_lookup
-from controller.dicom_echo_scu import echo
-from prototyping.dicom_find_scu import find, find_ex, FindRequest, FindResponse
-from prototyping.dicom_move_scu import MoveRequest, move_studies
-from prototyping.dicom_storage_scp import get_storage_scp_aet
+
+from controller.project import (
+    ProjectController,
+    DICOMNode,
+    FindRequest,
+    FindResponse,
+    MoveRequest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,128 +71,16 @@ settings = config.load(__name__)
 globals().update(settings)
 
 
-def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
+def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectController):
     logger.info(f"Creating Query/Retrieve SCU View")
     view.grid_rowconfigure(2, weight=1)
     view.grid_columnconfigure(6, weight=1)
     char_width_px = ctk.CTkFont().measure("A")
 
-    local_ips = get_local_ip_addresses()
-    if local_ips:
-        logger.info(f"Local IP addresses: {local_ips}")
-    else:
-        local_ips = [_("No local IP addresses found")]
-        logger.error(local_ips[0])
-
-    # Q/R SCP IP Address:
-    def scp_echo_button_event(scp_button: ctk.CTkButton):
-        logger.info(f"scp_button_event Echo to {scp_aet_var.get()}...")
-        scp_button.configure(text_color="light grey")
-        # Echo SCP:
-        if echo(
-            DICOMNode(scu_ip_var.get(), 0, scu_aet_var.get(), False),
-            DICOMNode(scp_ip_var.get(), scp_port_var.get(), scp_aet_var.get(), True),
-        ):
-            logger.info(f"Echo to {scp_aet_var.get()} successful")
-            scp_button.configure(text_color="light green")
-        else:
-            logger.error(f"Echo to {scp_aet_var.get()} failed")
-            scp_button.configure(text_color="red")
-
-    scp_echo_button = ctk.CTkButton(
-        view,
-        width=int(5 * char_width_px),
-        text=_("ECHO"),
-        command=lambda: scp_echo_button_event(scp_echo_button),
-    )
-
-    scp_echo_button.grid(row=0, column=0, padx=(0, PAD), pady=(PAD, 0), sticky="nw")
-
-    scp_ip_var = str_entry(
-        view=view,
-        label=_("Remote Server:"),
-        initial_value=scp_ip_addr,
-        min_chars=ip_min_chars,
-        max_chars=ip_max_chars,
-        charset=string.digits + ".",
-        tooltipmsg=_(f"Remote IP address"),
-        row=0,
-        col=1,
-        pad=PAD,
-        sticky="nw",
-        module=__name__,
-        var_name="scp_ip_addr",
-    )
-
-    scp_port_var = int_entry(
-        view=view,
-        label=_("Port:"),
-        initial_value=scp_ip_port,
-        min=ip_port_min,
-        max=ip_port_max,
-        tooltipmsg=_(f"Port number to listen on for incoming DICOM files"),
-        row=0,
-        col=3,
-        pad=PAD,
-        sticky="nw",
-        module=__name__,
-        var_name="scp_ip_port",
-    )
-
-    scp_aet_var = str_entry(
-        view=view,
-        label=_("AET:"),
-        initial_value=scp_aet,
-        min_chars=aet_min_chars,
-        max_chars=aet_max_chars,
-        charset=string.digits + string.ascii_uppercase + " ",
-        tooltipmsg=_(f"Remote AE Title uppercase alphanumeric"),
-        row=0,
-        col=5,
-        pad=PAD,
-        sticky="nw",
-        module=__name__,
-        var_name="scp_aet",
-    )
-
-    # Q/R SCU IP Address:
-    scu_ip_var = ctk.StringVar(view, value=scu_ip_addr)
-    scu_label = ctk.CTkLabel(view, text=_("Local Client:"))
-    scu_label.grid(row=0, column=7, pady=(PAD, 0), sticky="nw")
-
-    local_ips_optionmenu = ctk.CTkOptionMenu(
-        view,
-        dynamic_resizing=False,
-        values=local_ips,
-        variable=scu_ip_var,
-        command=lambda *args: config.save(__name__, "scu_ip_addr", scu_ip_var.get()),
-    )
-    scu_ip_ToolTip = CTkToolTip(
-        local_ips_optionmenu,
-        message=_("Local IP address interface"),
-    )
-    local_ips_optionmenu.grid(row=0, column=8, pady=(PAD, 0), padx=PAD, sticky="nw")
-
-    scu_aet_var = str_entry(
-        view=view,
-        label=_("AET:"),
-        initial_value=scu_aet,
-        min_chars=aet_min_chars,
-        max_chars=aet_max_chars,
-        charset=string.digits + string.ascii_uppercase + " ",
-        tooltipmsg=_(f"Local AE Title uppercase alphanumeric"),
-        row=0,
-        col=9,
-        pad=PAD,
-        sticky="nw",
-        module=__name__,
-        var_name="scu_aet",
-    )
-
     # QUERY PARAMETERS:
     # Create new frame
     query_param_frame = ctk.CTkFrame(view)
-    query_param_frame.grid(row=1, pady=(PAD, 0), columnspan=11, sticky="nswe")
+    query_param_frame.grid(row=1, columnspan=11, sticky="nswe")
     # Patient Name
     patient_name_var = str_entry(
         view=query_param_frame,
@@ -205,7 +93,7 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
         + "- '^*?"
         + "À-ÖØ-öø-ÿ"
         + string.whitespace,
-        tooltipmsg="Alphabetic ^ spaces * for wildcard",
+        tooltipmsg=None,  # "Alphabetic ^ spaces * for wildcard",
         row=0,
         col=0,
         pad=PAD,
@@ -220,7 +108,7 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
         min_chars=0,
         max_chars=patient_id_max_chars,
         charset=string.ascii_letters + string.digits + "*?",
-        tooltipmsg="Alpha-numeric, * or ? for wildcard",
+        tooltipmsg=None,  # "Alpha-numeric, * or ? for wildcard",
         row=1,
         col=0,
         pad=PAD,
@@ -234,7 +122,7 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
         min_chars=0,
         max_chars=accession_no_max_chars,
         charset=string.ascii_letters + string.digits + " *?/-_",
-        tooltipmsg="Alpha-numeric, * or ? for wildcard",
+        tooltipmsg=None,  # "Alpha-numeric, * or ? for wildcard",
         row=2,
         col=0,
         pad=PAD,
@@ -249,7 +137,7 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
         min_chars=dicom_date_chars,
         max_chars=dicom_date_chars,
         charset=string.digits + "*",
-        tooltipmsg=_("Numeric YYYYMMDD, * or ? for wildcard"),
+        tooltipmsg=None,  # _("Numeric YYYYMMDD, * or ? for wildcard"),
         row=0,
         col=3,
         pad=PAD,
@@ -264,7 +152,7 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
         min_chars=modality_min_chars,
         max_chars=modality_max_chars,
         charset=string.ascii_uppercase,
-        tooltipmsg=_("Modality Code"),
+        tooltipmsg=None,  # _("Modality Code"),
         row=1,
         col=3,
         pad=PAD,
@@ -314,7 +202,9 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
                 )  # _tkinter.TclError: Item {iid} already exists
 
             # If the StudyInstanceUID is already in the uid_lookup, tag it green:
-            if row["StudyInstanceUID"] in uid_lookup:
+            if project_controller.anonymizer.model.get_anon_uid(
+                row["StudyInstanceUID"]
+            ):
                 tree.item(row["StudyInstanceUID"], tags="green")
 
     # Query Button:
@@ -382,8 +272,7 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
         tree.delete(*tree.get_children())
         ux_Q = Queue()
         req: FindRequest = FindRequest(
-            DICOMNode(scu_ip_var.get(), 0, scu_aet_var.get(), False),
-            DICOMNode(scp_ip_var.get(), scp_port_var.get(), scp_aet_var.get(), True),
+            "QUERY",
             patient_name_var.get(),
             patient_id_var.get(),
             accession_no_var.get(),
@@ -391,7 +280,7 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
             modality_var.get(),
             ux_Q,
         )
-        find_ex(req)
+        project_controller.find_ex(req)
         # Start FindResponse monitor:
         found_count = 0
         tree.after(
@@ -462,22 +351,23 @@ def create_view(view: ctk.CTkFrame, PAD: int, show_addr=True):
         logger.debug(f"Retrieve button pressed")
         logger.debug(f"Retrieving StudyInstanceUIDs: {study_uids}")
 
-        dest_scp_aet = get_storage_scp_aet()
-        if dest_scp_aet is None:
-            logger.error(f"Storage SCP AET is None. Is it running?")
-            return
-
         # Create 1 UX queue to handle the full move / retrieve operation
         ux_Q = Queue()
-        scu = DICOMNode(scu_ip_var.get(), 0, scu_aet_var.get(), False)
-        scp = DICOMNode(scp_ip_var.get(), scp_port_var.get(), scp_aet_var.get(), True)
 
         unstored_study_uids = [
-            study_uid for study_uid in study_uids if study_uid not in uid_lookup
+            study_uid
+            for study_uid in study_uids
+            if project_controller.anonymizer.model.get_anon_uid(study_uid) is None
         ]
 
-        req = MoveRequest(scu, scp, dest_scp_aet, unstored_study_uids, ux_Q)
-        move_studies(req)
+        req = MoveRequest(
+            "QUERY",
+            project_controller.model.scu.aet,
+            unstored_study_uids,
+            ux_Q,
+        )
+        project_controller.move_studies(req)
+
         # Start MoveResponse monitor:
         tree.after(
             ux_poll_move_response_interval,

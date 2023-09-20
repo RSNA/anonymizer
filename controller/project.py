@@ -1,5 +1,5 @@
+from math import log
 import os
-from sqlite3 import connect
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
@@ -28,7 +28,12 @@ from controller.dicom_C_codes import (
     C_FAILURE,
 )
 
-from model.project import ProjectModel, DICOMNode, DICOMRuntimeError
+from model.project import (
+    ProjectModel,
+    DICOMNode,
+    DICOMRuntimeError,
+    default_project_filename,
+)
 from controller.anonymizer import AnonymizerController
 
 from utils.translate import _
@@ -107,6 +112,8 @@ class ProjectController(AE):
         # Make sure storage directory exists:
         os.makedirs(self.model.storage_dir, exist_ok=True)
         self.set_all_timeouts(model.network_timeout)
+        # TODO: maintain list of allowed calling AET's and use: def require_calling_aet(self, ae_titles: List[str]) -> None:
+        self._require_called_aet = True
         self.set_radiology_storage_contexts()
         self.set_verification_context()
         self.maximum_pdu_size = 0  # no limit
@@ -115,8 +122,11 @@ class ProjectController(AE):
         self.start_scp()
         self.anonymizer = AnonymizerController(model)
 
+    def __str__(self):
+        return super().__str__() + f"\n{self.model}" + f"\n{self.anonymizer.model}"
+
     def save_model(self):
-        project_pkl_path = Path(self.model.storage_dir, ProjectModel.pickle_filename)
+        project_pkl_path = Path(self.model.storage_dir, default_project_filename())
         with open(project_pkl_path, "wb") as pkl_file:
             pickle.dump(self.model, pkl_file)
         logger.info(f"Model saved to: {project_pkl_path}")
@@ -127,10 +137,10 @@ class ProjectController(AE):
 
     # Set *all* AE timeouts to the global network timeout:
     def set_all_timeouts(self, timeout):
-        self.acse_timeout = timeout
-        self.dimse_timeout = timeout
-        self.network_timeout = timeout
-        self.connection_timeout = timeout
+        self._acse_timeout = timeout
+        self._dimse_timeout = timeout
+        self._network_timeout = timeout
+        self._connection_timeout = timeout
 
     def get_network_timeout(self) -> int:
         return self.model.network_timeout
@@ -256,10 +266,12 @@ class ProjectController(AE):
         self.scp = None
 
     def connect(self, scp_name: str, contexts=None) -> Association:
-        assert scp_name in self.model.remote_scps
-        remote_scp = self.model.remote_scps[scp_name]
-        assoc = None
+        association = None
         try:
+            if scp_name not in self.model.remote_scps:
+                raise ConnectionError(f"Remote SCP {scp_name} not found")
+            remote_scp = self.model.remote_scps[scp_name]
+
             association = self.associate(
                 remote_scp.ip,
                 remote_scp.port,
@@ -278,7 +290,9 @@ class ProjectController(AE):
         return association
 
     def echo(self, scp_name: str) -> bool:
-        logger.info(f"C-ECHO from {self.model.scu} to {scp_name}")
+        logger.debug(
+            f"C-ECHO from {self.model.scu} to {self.model.remote_scps[scp_name]}"
+        )
         association = None
         try:
             association = self.connect(scp_name, [self.get_verification_context()])
@@ -288,7 +302,8 @@ class ProjectController(AE):
                     "Connection timed out, was aborted, or received an invalid response"
                 )
             if status.Status == C_SUCCESS:
-                logger.info(f"C-ECHO Success")
+                logger.debug(f"C-ECHO Success")
+                association.release()
                 return True
             else:
                 logger.error(status)
@@ -300,7 +315,7 @@ class ProjectController(AE):
 
         except Exception as e:
             logger.error(
-                f"Failed DICOM C-ECHO from from {self.model.scu} to {scp_name}, Error: {str(e)}"
+                f"Failed DICOM C-ECHO from from {self.model.scu} to {scp_name}, Error: {(e)}"
             )
             if association:
                 association.release()

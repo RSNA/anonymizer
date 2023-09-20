@@ -11,14 +11,13 @@ netifaces = "*"
 ctktooltip = "*"
 pydicom = "*"
 pynetdicom = "*"
-ttkwidgets = "*"
 ctkmessagebox = "*"
 
 [dev-packages]
 pytest = "*"
 radon = "*"
 coverage = "*"
-mypy = "*"
+pyinstaller = "*"
 
 [requires]
 python_version = "3.11"

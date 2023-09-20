@@ -1,8 +1,8 @@
 from model.project import DICOMNode
 
-LocalSCU = DICOMNode("127.0.0.1", 0, "ANONYMIZER", False)
+LocalSCU = DICOMNode("127.0.0.1", 0, "ANONYMIZER", True)
 LocalStorageSCP = DICOMNode("127.0.0.1", 1041, "ANONYMIZER", True)
-PACSSimulatorSCP = DICOMNode("127.0.0.1", 1042, "TESTPACS", True)
+PACSSimulatorSCP = DICOMNode("127.0.0.1", 1042, "TESTPACS", False)
 
 # TODO: test more than one remote scp
 RemoteSCPDict = {

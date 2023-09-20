@@ -7,12 +7,11 @@ from tkinter import filedialog
 import logging
 from utils.translate import _
 import model.config as config
-from utils.storage import DEFAULT_LOCAL_STORAGE_DIR
 
 logger = logging.getLogger(__name__)
 
 # Initialize storage directory
-storage_directory = DEFAULT_LOCAL_STORAGE_DIR
+storage_directory = ""
 
 
 def get_storage_directory():

@@ -86,7 +86,7 @@ def test_move_1_CT_file_from_pacs_with_file_to_local_storage(
     time.sleep(1)
     dirlist = os.listdir(local_storage_dir(temp_dir))
     assert len(dirlist) == 1
-    assert dirlist[0] == controller.model.siteid + "-000001"
+    assert dirlist[0] == controller.model.site_id + "-000001"
 
 
 def test_move_of_unknown_StudyUID_from_pacs_with_file_to_local_storage(

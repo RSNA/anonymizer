@@ -22,6 +22,14 @@ class AnonymizerModel:
         self._tag_keep: Dict[str, str] = {}  # DICOM Tag: Operation
         self.load_script(script_path)
 
+    def __repr__(self) -> str:
+        class_name = self.__class__.__name__
+        # Exclude the '_tag_keep' attribute from the dictionary
+        filtered_dict = {
+            key: value for key, value in self.__dict__.items() if key != "_tag_keep"
+        }
+        return f"{class_name}\n({pformat(filtered_dict)})"
+
     def load_script(self, script_path: Path):
         # Parse the anonymize script and create a dict of tags to keep: self._tag_keep["tag"] = "operation"
         # The anonymization function indicated by the script operation will be used to transform source dataset

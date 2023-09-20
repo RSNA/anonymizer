@@ -57,10 +57,10 @@ def controller(temp_dir):
     os.makedirs(anon_store, exist_ok=True)
     # Create Test ProjectModel:
     project_model = ProjectModel(
-        siteid=TEST_SITEID,
-        projectname=TEST_PROJECTNAME,
-        trialname=TEST_TRIALNAME,
-        uidroot=TEST_UIDROOT,
+        site_id=TEST_SITEID,
+        project_name=TEST_PROJECTNAME,
+        trial_name=TEST_TRIALNAME,
+        uid_root=TEST_UIDROOT,
         storage_dir=anon_store,
         scu=LocalSCU,
         scp=LocalStorageSCP,
