@@ -138,12 +138,12 @@
   "CTkFont": {
     "macOS": {
       "family": "DIN Alternate",
-      "size": 14,
+      "size": 13,
       "weight": "normal"
     },
     "Windows": {
       "family": "DIN Alternate",
-      "size": 16,
+      "size": 13,
       "weight": "normal"
     },
     "Linux": {

@@ -443,8 +443,8 @@ class ProjectController(AE):
                 ux_Q.put(FindResponse(ds, None))
 
         finally:
-            if assoc:
-                assoc.release()
+            if association:
+                association.release()
 
         if len(results) == 0:
             logger.info("No query results found")
@@ -508,6 +508,9 @@ class ProjectController(AE):
                 dcm_response: Dataset = association.send_c_store(
                     dataset=dicom_file_path
                 )
+
+                if not hasattr(dcm_response, "Status"): 
+                    raise TimeoutError("send_c_store timeout")
 
                 if dcm_response.Status != 0:
                     raise DICOMRuntimeError(

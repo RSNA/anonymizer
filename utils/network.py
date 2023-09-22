@@ -1,13 +1,16 @@
-import netifaces
+import ifaddr
 
 
 def get_local_ip_addresses():
     ip_addresses = []
-    interfaces = netifaces.interfaces()
-    for interface in interfaces:
-        addresses = netifaces.ifaddresses(interface)
-        if netifaces.AF_INET in addresses:
-            for address_info in addresses[netifaces.AF_INET]:
-                ip_address = address_info["addr"]
-                ip_addresses.append(ip_address)
+
+    adapters = ifaddr.get_adapters()
+
+    for adapter in adapters:
+        print("IPs of network adapter " + adapter.nice_name)
+        for ip in adapter.ips:
+            print("   %s/%s" % (ip.ip, ip.network_prefix))
+            if isinstance(ip.ip, str) and not ip.ip.startswith('169.'):
+                ip_addresses.append(ip.ip)
+
     return ip_addresses

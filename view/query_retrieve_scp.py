@@ -5,20 +5,10 @@ import customtkinter as ctk
 from pydicom import Dataset
 import pandas as pd
 from tkinter import ttk
-from CTkToolTip import CTkToolTip
 from controller.dicom_C_codes import C_PENDING_A, C_PENDING_B, C_SUCCESS, C_FAILURE
 from utils.translate import _
-import model.config as config
-from utils.network import get_local_ip_addresses
 from utils.ux_fields import (
     str_entry,
-    int_entry,
-    ip_min_chars,
-    ip_max_chars,
-    aet_max_chars,
-    aet_min_chars,
-    ip_port_max,
-    ip_port_min,
     patient_name_max_chars,
     patient_id_max_chars,
     accession_no_max_chars,
@@ -31,20 +21,12 @@ from utils.ux_fields import (
 
 from controller.project import (
     ProjectController,
-    DICOMNode,
     FindRequest,
     FindResponse,
     MoveRequest,
 )
 
 logger = logging.getLogger(__name__)
-
-# Default values for initialising UX ctk.Vars (overwritten at startup from config.json):
-scp_ip_addr = "127.0.0.1"
-scp_ip_port = 104
-scp_aet = "RSNA"
-scu_ip_addr = "127.0.0.1"
-scu_aet = "ANONSCU"
 
 # C-FIND DICOM attributes to display in the results Treeview:
 # Key: DICOM field name, Value: (display name, centre justify)
@@ -65,11 +47,6 @@ attr_map = {
         False,
     ),  # not for display, for find/move
 }
-
-# Load module globals from config.json
-settings = config.load(__name__)
-globals().update(settings)
-
 
 def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectController):
     logger.info(f"Creating Query/Retrieve SCU View")
@@ -160,9 +137,9 @@ def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectControl
     )
 
     # Managing C-FIND results Treeview:
-    fixed_width_font = ("Courier", 14)  # Specify the font family and size
+    fixed_width_font = ("Courier", 12)  # Specify the font family and size
     # Create a custom style for the Treeview
-    # TODO: see if theme manager can do this and stor in rsna_color_scheme_font.json
+    # TODO: see if theme manager can do this and store in rsna_color_scheme_font.json
     style = ttk.Style()
     style.configure(
         "Treeview", font=fixed_width_font

@@ -101,10 +101,12 @@ def str_entry(
     char_width_px = ctk.CTkFont().measure("_")
     ctk_label = ctk.CTkLabel(view, text=label)
     ctk_label.grid(row=row, column=col, padx=pad, pady=(pad, 0), sticky=sticky)
+    width = (max_chars+3) * char_width_px
+    #TO DO: this approach is not accurate
 
     ctk_entry = ctk.CTkEntry(
         view,
-        width=(max_chars + 1) * char_width_px,
+        width=width,
         textvariable=str_var,
         validate="key",
         validatecommand=(
@@ -148,12 +150,13 @@ def int_entry(
     int_var = ctk.IntVar(view, value=initial_value)
     max_chars = len(str(max))
     # TODO: why is this not accurate?
-    digit_width_px = ctk.CTkFont().measure("A") + 3
+    digit_width_px = ctk.CTkFont().measure("A")
+    width = (max_chars+3) * digit_width_px
     ctk_label = ctk.CTkLabel(view, text=label)
     ctk_label.grid(row=row, column=col, padx=pad, pady=(pad, 0), sticky=sticky)
     ctk_entry = ctk.CTkEntry(
         view,
-        width=max_chars * digit_width_px,
+        width=width,
         textvariable=int_var,
         validate="key",
         validatecommand=(

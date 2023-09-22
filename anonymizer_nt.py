@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from time import sleep
 import logging
 import pickle
 import tkinter as tk
@@ -89,7 +90,6 @@ class App(ctk.CTk):
             assert self.project_controller
             logger.info(f"{self.project_controller}")
             self._open_project()
-
         else:
             CTkMessagebox(
                 title=_("Open Project Error"),
@@ -122,6 +122,7 @@ class App(ctk.CTk):
         self.dashboard.pack(expand=True, fill="both")
         self.set_menu_project_open()
         self.dashboard.focus_force()
+        self.protocol("WM_DELETE_WINDOW", self.close_project)
 
     def close_project(self, event=None):
         logging.info("Close Project")
@@ -141,8 +142,10 @@ class App(ctk.CTk):
             self.create_main_frame()
             self.welcome_view = welcome.create_view(self.main_frame)
             self.title(APP_TITLE)
+            self.protocol("WM_DELETE_WINDOW", self.quit)
         self.project_controller = None
         self.set_menu_project_closed()
+        
 
     # File Menu when project is open:
     def import_files(self, event=None):
@@ -209,8 +212,8 @@ class App(ctk.CTk):
 
         if self.qr_window is None or not self.qr_window.winfo_exists():
             self.qr_window = ToplevelWindow(self)
-        else:
-            self.qr_window.focus_force()
+       
+        self.qr_window.focus_force()
 
     def export(self):
         assert self.project_controller
@@ -226,14 +229,14 @@ class App(ctk.CTk):
                 self.columnconfigure(0, weight=1)
                 self.export_frame = ctk.CTkFrame(self)
                 self.export_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nswe")
-                self.qr_view = export.create_view(
+                self.export_view = export.create_view(
                     self.export_frame, PAD, parent.project_controller
                 )
 
         if self.export_window is None or not self.export_window.winfo_exists():
             self.export_window = ToplevelWindow(self)
-        else:
-            self.export_window.focus_force()
+        
+        self.export_window.focus_force()
 
     # def hide_window(self):
     #     self.set_menu_project_closed()
@@ -280,8 +283,8 @@ class App(ctk.CTk):
 
         if self.help_window is None or not self.help_window.winfo_exists():
             self.help_window = ToplevelWindow(self)
-        else:
-            self.help_window.focus_force()
+        
+        self.help_window.focus_force()
 
     def view_license(self):
         logging.info("View License")
@@ -390,7 +393,7 @@ class App(ctk.CTk):
         ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
         ctk.set_default_color_theme(color_theme)  # sets all colors and default font:
 
-        self.protocol("WM_DELETE_WINDOW", self.close_project)
+        # self.protocol("WM_DELETE_WINDOW", self.close_project)
         self.project_controller = None
         self.model = None
         self.qr_window = None

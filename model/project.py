@@ -53,8 +53,8 @@ def default_local_server() -> DICOMNode:
 
 def default_remote_scps() -> Dict[str, DICOMNode]:
     return {
-        "QUERY": DICOMNode("127.0.0.1", 11112, "MDEDEV", False),
-        "EXPORT": DICOMNode("127.0.0.1", 11112, "MDEDEV", False),
+        "QUERY": DICOMNode("127.0.0.1", 104, "QUERYAE", False),
+        "EXPORT": DICOMNode("127.0.0.1", 104, "EXPORTAE", False),
     }
 
 
@@ -93,7 +93,7 @@ class ProjectModel:
     scu: DICOMNode = field(default_factory=default_local_server)
     scp: DICOMNode = field(default_factory=default_local_server)
     remote_scps: Dict[str, DICOMNode] = field(default_factory=default_remote_scps)
-    network_timeout: int = 3  # seconds
+    network_timeout: int = 5  # seconds
     anonymizer_script_path: Path = Path("assets/scripts/default-anonymizer.script")
 
     # TODO: provide UX to manage the allowed storage classes and supported transfer syntaxes, *FIXED FOR MVP*

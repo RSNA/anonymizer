@@ -7,11 +7,12 @@ name = "pypi"
 customtkinter = "*"
 pillow = "*"
 tkhtmlview = "*"
-netifaces = "*"
 ctktooltip = "*"
 pydicom = "*"
 pynetdicom = "*"
 ctkmessagebox = "*"
+ifaddr = "*"
+pandas = "*"
 
 [dev-packages]
 pytest = "*"
