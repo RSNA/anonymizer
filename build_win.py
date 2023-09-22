@@ -32,6 +32,8 @@ if __name__ == "__main__":
         [
             "--noconfirm",
             "--onefile",
+            "--splash",
+            "C:\\dxlife\\anonymizer\\assets\\images\\rsna_titled_logo_alpha.png",
             "--windowed",
             "--add-data",
             "C:\\Users\\Tate\\.virtualenvs\\anonymizer-cG_OOYDL\\Lib\\site-packages\\customtkinter;customtkinter\\",

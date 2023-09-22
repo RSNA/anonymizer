@@ -1,4 +1,6 @@
+import pyi_splash
 import os
+from time import sleep
 from pathlib import Path
 import logging
 import pickle
@@ -446,8 +448,10 @@ def main():
     init_logging(install_dir)
     os.chdir(install_dir)
 
+    startup_msg = f"Starting ANONYMIZER GUI Version {__version__}"
     logger = logging.getLogger()  # get root logger
-    logger.info("Starting ANONYMIZER GUI Version %s", __version__)
+    logger.info(startup_msg)
+    pyi_splash.update_text(startup_msg) # type: ignore
     logger.info(f"Running from {os.getcwd()}")
     logger.info(
         f"pydicom Version: {pydicom_version}, pynetdicom Version: {pynetdicom_version}"
@@ -462,6 +466,8 @@ def main():
         logo_height=LOGO_HEIGHT,
         pad=PAD,
     )
+
+    pyi_splash.close()
 
     app.mainloop()
 
