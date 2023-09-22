@@ -3,7 +3,9 @@
 # pipenv shell
 # python build_win.py
 
-from anonymizer import __version__
+from __version__ import __version__
+
+#__version__ = "17.0.0"
 
 import pyinstaller_versionfile
 import PyInstaller.__main__
@@ -16,11 +18,11 @@ if __name__ == "__main__":
         output_file="versionfile.txt",
         version=__version__,
         company_name="Radiology Society of North America",
-        file_description="RSNA DICOM Anonymizer & Scrubber",
+        file_description="RSNA DICOM Anonymizer",
         internal_name="anonymizer",
-        legal_copyright="© Radiology Society of North America. All rights reserved.",
+        legal_copyright="© 2023 Radiology Society of North America. All rights reserved.",
         original_filename="anonymizer.exe",
-        product_name="DICOM Anonymizer",
+        product_name="RSNA DICOM Anonymizer",
     )
 
     print(
@@ -29,10 +31,10 @@ if __name__ == "__main__":
     PyInstaller.__main__.run(
         [
             "--noconfirm",
-            "--onedir",
+            "--onefile",
             "--windowed",
             "--add-data",
-            "C:\\Users\\tatea\\.virtualenvs\\dicom_scrub-yrdUUzYX\\Lib\\site-packages\\customtkinter;customtkinter\\",
+            "C:\\Users\\Tate\\.virtualenvs\\anonymizer-cG_OOYDL\\Lib\\site-packages\\customtkinter;customtkinter\\",
             "--add-data",
             "assets\\;assets\\",
             "--log-level",
@@ -42,7 +44,7 @@ if __name__ == "__main__":
             "--version-file",
             "versionfile.txt",
             "--name",
-            "DICOM Anonymizer",
-            "anonymizer.py",
+            "RSNA DICOM Anonymizer",
+            "anonymizer_nt.py",
         ]
     )

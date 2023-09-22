@@ -13,6 +13,8 @@ pynetdicom = "*"
 ctkmessagebox = "*"
 ifaddr = "*"
 pandas = "*"
+pytest = "*"
+pyinstaller-versionfile = "*"
 
 [dev-packages]
 pytest = "*"

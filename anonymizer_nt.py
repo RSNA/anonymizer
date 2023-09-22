@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-from time import sleep
 import logging
 import pickle
 import tkinter as tk
@@ -392,6 +391,7 @@ class App(ctk.CTk):
         super().__init__()
         ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
         ctk.set_default_color_theme(color_theme)  # sets all colors and default font:
+        self.iconbitmap("assets\\images\\rsna_icon.ico")
 
         # self.protocol("WM_DELETE_WINDOW", self.close_project)
         self.project_controller = None
