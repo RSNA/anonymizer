@@ -25,11 +25,19 @@ class Dashboard(ctk.CTkFrame):
 
     def query_button_click(self):
         logger.info(f"query_button_click")
-        self.parent.master.query_retrieve()
+        if self.controller.echo("QUERY"):
+            self.query_button.configure(text_color="light green")
+            self.parent.master.query_retrieve()
+        else:
+            self.query_button.configure(text_color="red")
 
     def export_button_click(self):
         logger.info(f"export_button_click")
-        self.parent.master.export()
+        if self.controller.echo("EXPORT"):
+            self.export_button.configure(text_color="light green")
+            self.parent.master.export()
+        else:
+            self.export_button.configure(text_color="red")
 
     def create_widgets(self):
         PAD = 20
@@ -93,15 +101,15 @@ class Dashboard(ctk.CTkFrame):
         self._images.grid(row=row, column=3, padx=PAD, pady=PAD)
 
     def update_dashboard(self):
-        if self.controller.echo("QUERY"):
-            self.query_button.configure(text_color="light green")
-        else:
-            self.query_button.configure(text_color="red")
+        # if self.controller.echo("QUERY"):
+        #     self.query_button.configure(text_color="light green")
+        # else:
+        #     self.query_button.configure(text_color="red")
 
-        if self.controller.echo("EXPORT"):
-            self.export_button.configure(text_color="light green")
-        else:
-            self.export_button.configure(text_color="red")
+        # if self.controller.echo("EXPORT"):
+        #     self.export_button.configure(text_color="light green")
+        # else:
+        #     self.export_button.configure(text_color="red")
 
         dir = self.controller.model.storage_dir
         pts = os.listdir(dir)

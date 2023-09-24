@@ -1,4 +1,7 @@
-import pyi_splash
+try:
+    import pyi_splash
+except:
+    pass
 import os
 from time import sleep
 from pathlib import Path
@@ -451,7 +454,6 @@ def main():
     startup_msg = f"Starting ANONYMIZER GUI Version {__version__}"
     logger = logging.getLogger()  # get root logger
     logger.info(startup_msg)
-    pyi_splash.update_text(startup_msg) # type: ignore
     logger.info(f"Running from {os.getcwd()}")
     logger.info(
         f"pydicom Version: {pydicom_version}, pynetdicom Version: {pynetdicom_version}"
@@ -467,7 +469,10 @@ def main():
         pad=PAD,
     )
 
-    pyi_splash.close()
+    try:
+        pyi_splash.close()
+    except:
+        pass
 
     app.mainloop()
 

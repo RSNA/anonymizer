@@ -31,7 +31,7 @@ if __name__ == "__main__":
     PyInstaller.__main__.run(
         [
             "--noconfirm",
-            "--onefile",
+            "--onedir",
             "--splash",
             "C:\\dxlife\\anonymizer\\assets\\images\\rsna_titled_logo_alpha.png",
             "--windowed",
