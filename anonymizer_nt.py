@@ -118,12 +118,12 @@ class App(ctk.CTk):
         assert self.model
         assert self.project_controller
         self.title(
-            f"{self.model.project_name} => .../{self.model.storage_dir.parts[-1]}"
+            f"{self.model.project_name}[{self.model.site_id}] => .../{self.model.storage_dir.parts[-1]}"
         )
         self.main_frame.destroy()
         self.create_main_frame()
         self.dashboard = Dashboard(self.main_frame, self.project_controller)
-        self.dashboard.pack(expand=True, fill="both")
+        # self.dashboard.pack(expand=True, fill="both")
         self.set_menu_project_open()
         self.dashboard.focus_force()
         self.protocol("WM_DELETE_WINDOW", self.close_project)
@@ -149,7 +149,6 @@ class App(ctk.CTk):
             self.protocol("WM_DELETE_WINDOW", self.quit)
         self.project_controller = None
         self.set_menu_project_closed()
-        
 
     # File Menu when project is open:
     def import_files(self, event=None):
@@ -216,7 +215,7 @@ class App(ctk.CTk):
 
         if self.qr_window is None or not self.qr_window.winfo_exists():
             self.qr_window = ToplevelWindow(self)
-       
+
         self.qr_window.focus_force()
 
     def export(self):
@@ -239,7 +238,7 @@ class App(ctk.CTk):
 
         if self.export_window is None or not self.export_window.winfo_exists():
             self.export_window = ToplevelWindow(self)
-        
+
         self.export_window.focus_force()
 
     # def hide_window(self):
@@ -287,7 +286,7 @@ class App(ctk.CTk):
 
         if self.help_window is None or not self.help_window.winfo_exists():
             self.help_window = ToplevelWindow(self)
-        
+
         self.help_window.focus_force()
 
     def view_license(self):
@@ -382,7 +381,7 @@ class App(ctk.CTk):
 
     def create_main_frame(self):
         self.main_frame = ctk.CTkFrame(self)
-        self.main_frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nswe")
+        self.main_frame.grid(row=0, column=0, padx=PAD, pady=PAD)
 
     def __init__(
         self,
@@ -411,8 +410,6 @@ class App(ctk.CTk):
         self.font = ctk.CTkFont()  # get default font as defined in json file
         self.title(title)
         self.title_height = self.font.metrics("linespace")
-        self.rowconfigure(0, weight=1)
-        self.columnconfigure(0, weight=1)
 
         self.set_menu_project_closed()  # creates self.menu_bar
 

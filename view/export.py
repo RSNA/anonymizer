@@ -6,7 +6,7 @@ import customtkinter as ctk
 from tkinter import ttk
 from controller.project import ProjectController, ExportRequest, ExportResponse
 from utils.translate import _
-from utils.storage import count_dcm_files_and_studies
+from utils.storage import count_studies_series_images
 from utils.ux_fields import (
     ux_poll_local_storage_interval,
     ux_poll_export_response_interval,
@@ -22,6 +22,7 @@ attr_map = {
     "Patient_Name": (_("Patient Name"), 10, False),
     "Anon_PatientID": (_("Anonymized ID"), 10, True),
     "Studies": (_("Studies"), 10, True),
+    "Series": (_("Series"), 10, True),
     "Files": (_("Images"), 10, True),
     "DateTime": (_("Date Time"), 15, True),
     "FilesSent": (_("Images Sent"), 10, True),
@@ -102,7 +103,7 @@ def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectControl
 
         # Insert NEW data
         for anon_pt_id in not_in_treeview:
-            study_count, file_count = count_dcm_files_and_studies(
+            study_count, series_count, file_count = count_studies_series_images(
                 os.path.join(project_controller.storage_dir, anon_pt_id)
             )
             phi_name = project_controller.anonymizer.model.get_phi_name(anon_pt_id)
@@ -110,7 +111,7 @@ def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectControl
                 "",
                 0,
                 iid=anon_pt_id,
-                values=[phi_name, anon_pt_id, study_count, file_count],
+                values=[phi_name, anon_pt_id, study_count, series_count, file_count],
             )
 
         if not_in_treeview:
@@ -119,12 +120,13 @@ def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectControl
         # To handle updates to incoming studies
         # Update the values of the last 10 patients in the store directory
         for anon_pt_id in anon_pt_ids[-10:]:
-            study_count, file_count = count_dcm_files_and_studies(
+            study_count, series_count, file_count = count_studies_series_images(
                 os.path.join(project_controller.storage_dir, anon_pt_id)
             )
             current_values = list(tree.item(anon_pt_id, "values"))
             current_values[2] = str(study_count)
-            current_values[3] = str(file_count)
+            current_values[3] = str(series_count)
+            current_values[4] = str(file_count)
             tree.item(anon_pt_id, values=current_values)
 
         # tree.after(ux_poll_local_storage_interval, update_tree_from_storage_direcctory)

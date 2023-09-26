@@ -109,7 +109,7 @@ class DICOMNodeDialog(ctk.CTkToplevel):
             initial_value=self.address.aet,
             min_chars=aet_min_chars,
             max_chars=aet_max_chars,
-            charset=string.digits + string.ascii_uppercase + " ",
+            charset=string.printable,
             tooltipmsg=None,
             row=row,
             col=0,

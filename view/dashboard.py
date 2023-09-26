@@ -5,14 +5,14 @@ from queue import Queue, Empty, Full
 import customtkinter as ctk
 from controller.project import ProjectController
 from utils.translate import _
-from utils.storage import count_dcm_files_and_studies
+from utils.storage import count_studies_series_images
 
 
 logger = logging.getLogger(__name__)
 
 DASHBOARD_TITLE_FONT = ("DIN Alternate", 28)
-DASHBOARD_LABEL_FONT = ("DIN Alternate", 24)
-DASHBOARD_DATA_FONT = ("DIN Alternate", 32)
+DASHBOARD_LABEL_FONT = ("DIN Alternate", 32)
+DASHBOARD_DATA_FONT = ("DIN Alternate", 48)
 
 
 class Dashboard(ctk.CTkFrame):
@@ -42,9 +42,6 @@ class Dashboard(ctk.CTkFrame):
     def create_widgets(self):
         PAD = 20
         # TODO: manage fonts using theme
-        # self.columnconfigure(3, weight=1)
-        # self.rowconfigure(0, weight=1)
-        # self.rowconfigure(1, weight=1)
 
         # self.title_site_id = ctk.CTkLabel(
         #     self,
@@ -62,43 +59,57 @@ class Dashboard(ctk.CTkFrame):
         row = 0
 
         self.query_button = ctk.CTkButton(
-            self, width=100, text=_("Query"), command=self.query_button_click
+            self.parent, width=100, text=_("Query"), command=self.query_button_click
         )
         self.query_button.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="w")
 
         self.export_button = ctk.CTkButton(
-            self, width=100, text=_("Export"), command=self.export_button_click
+            self.parent, width=100, text=_("Export"), command=self.export_button_click
         )
-        self.export_button.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="w")
+        self.export_button.grid(row=row, column=3, padx=PAD, pady=(PAD, 0), sticky="e")
 
         row += 1
 
-        # TODO: parameterize / enum labels and data
+        self._databoard = ctk.CTkFrame(self.parent)
+        db_row = 0
+
         self.label_patients = ctk.CTkLabel(
-            self, font=DASHBOARD_LABEL_FONT, text="Patients"
+            self._databoard, font=DASHBOARD_LABEL_FONT, text="Patients"
         )
         self.label_studies = ctk.CTkLabel(
-            self, font=DASHBOARD_LABEL_FONT, text="Studies"
+            self._databoard, font=DASHBOARD_LABEL_FONT, text="Studies"
         )
-        # self.label_series = ctk.CTkLabel(self, font=DASHBOARD_LABEL_FONT, text="Series")
-        self.label_images = ctk.CTkLabel(self, font=DASHBOARD_LABEL_FONT, text="Images")
+        self.label_series = ctk.CTkLabel(
+            self._databoard, font=DASHBOARD_LABEL_FONT, text="Series"
+        )
+        self.label_images = ctk.CTkLabel(
+            self._databoard, font=DASHBOARD_LABEL_FONT, text="Images"
+        )
 
-        self.label_patients.grid(row=row, column=0, padx=PAD, pady=PAD)
-        self.label_studies.grid(row=row, column=1, padx=PAD, pady=PAD)
-        # self.label_series.grid(row=row, column=2, padx=PAD, pady=PAD)
-        self.label_images.grid(row=row, column=3, padx=PAD, pady=PAD)
+        self.label_patients.grid(row=db_row, column=0, padx=PAD, pady=(PAD, 0))
+        self.label_studies.grid(row=db_row, column=1, padx=PAD, pady=(PAD, 0))
+        self.label_series.grid(row=db_row, column=2, padx=PAD, pady=(PAD, 0))
+        self.label_images.grid(row=db_row, column=3, padx=PAD, pady=(PAD, 0))
 
-        row += 1
+        db_row += 1
 
-        self._patients = ctk.CTkLabel(self, font=DASHBOARD_DATA_FONT, text="0")
-        self._studies = ctk.CTkLabel(self, font=DASHBOARD_DATA_FONT, text="0")
-        # self._series = ctk.CTkLabel(self, font=DASHBOARD_DATA_FONT, text="0")
-        self._images = ctk.CTkLabel(self, font=DASHBOARD_DATA_FONT, text="0")
+        self._patients = ctk.CTkLabel(
+            self._databoard, font=DASHBOARD_DATA_FONT, text="0"
+        )
+        self._studies = ctk.CTkLabel(
+            self._databoard, font=DASHBOARD_DATA_FONT, text="0"
+        )
+        self._series = ctk.CTkLabel(self._databoard, font=DASHBOARD_DATA_FONT, text="0")
+        self._images = ctk.CTkLabel(self._databoard, font=DASHBOARD_DATA_FONT, text="0")
 
-        self._patients.grid(row=row, column=0, padx=PAD, pady=PAD)
-        self._studies.grid(row=row, column=1, padx=PAD, pady=PAD)
-        # self._series.grid(row=row, column=2, padx=PAD, pady=PAD)
-        self._images.grid(row=row, column=3, padx=PAD, pady=PAD)
+        self._patients.grid(row=db_row, column=0, padx=PAD, pady=(0, PAD))
+        self._studies.grid(row=db_row, column=1, padx=PAD, pady=(0, PAD))
+        self._series.grid(row=db_row, column=2, padx=PAD, pady=(0, PAD))
+        self._images.grid(row=db_row, column=3, padx=PAD, pady=(0, PAD))
+
+        self._databoard.grid(
+            row=row, column=0, columnspan=4, padx=PAD, pady=PAD, sticky="n"
+        )
 
     def update_dashboard(self):
         # if self.controller.echo("QUERY"):
@@ -115,16 +126,20 @@ class Dashboard(ctk.CTkFrame):
         pts = os.listdir(dir)
         pts = [item for item in pts if not item.endswith(".pkl")]
         studies = 0
+        series = 0
         images = 0
 
         for pt in pts:
-            study_count, file_count = count_dcm_files_and_studies(os.path.join(dir, pt))
+            study_count, series_count, file_count = count_studies_series_images(
+                os.path.join(dir, pt)
+            )
             studies += study_count
+            series += series_count
             images += file_count
 
         self._patients.configure(text=f"{len(pts)}")
         self._studies.configure(text=f"{studies}")
-        # self._series.configure(text=f"{num_series}")
+        self._series.configure(text=f"{series}")
         self._images.configure(text=f"{images}")
 
         self.after(500, self.update_dashboard)

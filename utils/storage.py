@@ -22,15 +22,27 @@ def local_storage_path(base_dir: Path, siteid: str, ds: Dataset) -> Path:
     return dest_path
 
 
-def count_dcm_files_and_studies(patient_path: str):
+def count_studies_series_images(patient_path: str):
+    """
+    Counts the number of studies, series, and images in a given patient directory.
+
+    Args:
+        patient_path (str): The path to the patient directory.
+
+    Returns:
+        A tuple containing the number of studies, series, and images in the patient directory.
+    """
     study_count = 0
-    file_count = 0
+    series_count = 0
+    image_count = 0
 
     for root, dirs, files in os.walk(patient_path):
         if root == patient_path:
             study_count += len(dirs)
+        else:
+            series_count += len(dirs)
         for file in files:
             if file.endswith(".dcm"):
-                file_count += 1
+                image_count += 1
 
-    return study_count, file_count
+    return study_count, series_count, image_count
