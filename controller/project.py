@@ -1,5 +1,5 @@
-from math import log
 import os
+from typing import cast
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
@@ -13,7 +13,7 @@ from pydicom import Dataset
 from pynetdicom.association import Association
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.presentation import PresentationContext, build_context
-from pynetdicom.events import Event, EVT_C_STORE, EVT_C_ECHO
+from pynetdicom.events import Event, EVT_C_STORE, EVT_C_ECHO, EventHandlerType
 from pynetdicom.status import (
     VERIFICATION_SERVICE_CLASS_STATUS,
     STORAGE_SERVICE_CLASS_STATUS,
@@ -89,19 +89,6 @@ class ProjectController(AE):
         "1.2.840.10008.5.1.4.1.2.2.2",  # Move
         "1.2.840.10008.5.1.4.1.2.2.3",  # Get
     ]
-
-    # Required DICOM field attributes for C-STORE and C_FIND results:
-    required_attributes = [
-        "PatientID",
-        "PatientName",
-        "StudyInstanceUID",
-        "StudyDate",
-        #   "AccessionNumber",
-        "Modality",
-        "SeriesNumber",
-        "InstanceNumber",
-    ]
-
     _handle_store_time_slice_interval = 0.1  # seconds
     _patient_export_thread_pool_size = 4
     _study_move_thread_pool_size = 4
@@ -212,24 +199,12 @@ class ProjectController(AE):
             remote["address"], remote["port"], remote["ae_title"], False
         )
         logger.debug(remote_scu)
-        if not all(attr_name in ds for attr_name in self.required_attributes):
-            missing_attributes = [
-                attr_name
-                for attr_name in self.required_attributes
-                if attr_name not in ds
-            ]
-            logger.error(
-                f"DICOM C-STORE request is missing required attributes: {missing_attributes}"
-            )
-            logger.error(f"\n{ds}")
-            return C_DATA_ELEMENT_DOES_NOT_EXIST
-        logger.debug(f"PHI:\n{ds}")
-        # Return success if study already stored:
-        if self.anonymizer.model.get_anon_uid(ds.SOPInstanceUID):
-            logger.info(f"Instance already stored: {ds.PatientID} {ds.SOPInstanceUID}")
-            return C_SUCCESS
         self.anonymizer.anonymize_dataset_and_store(remote_scu, ds, self.storage_dir)
         return C_SUCCESS
+
+    from typing import cast
+
+    # ...
 
     def start_scp(self) -> None:
         logger.info(f"start {self.model.scp}, {self.model.storage_dir}...")
@@ -245,7 +220,7 @@ class ProjectController(AE):
             self.scp = self.start_server(
                 (self.model.scp.ip, self.model.scp.port),
                 block=False,
-                evt_handlers=handlers,
+                evt_handlers=cast(List[EventHandlerType], handlers),
             )
         except Exception as e:
             msg = _(
@@ -509,7 +484,7 @@ class ProjectController(AE):
                     dataset=dicom_file_path
                 )
 
-                if not hasattr(dcm_response, "Status"): 
+                if not hasattr(dcm_response, "Status"):
                     raise TimeoutError("send_c_store timeout")
 
                 if dcm_response.Status != 0:

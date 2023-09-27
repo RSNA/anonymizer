@@ -5,7 +5,7 @@ from pydicom.errors import InvalidDicomError
 import tests.controller.dicom_pacs_simulator_scp as pacs_simulator_scp
 from controller.project import ProjectController
 
-from utils.storage import count_dcm_files_and_studies
+from utils.storage import count_studies_series_images
 from pydicom.data import get_testdata_file
 
 # DICOM NODES involved in tests:
@@ -205,9 +205,9 @@ def test_export_1_patient_2_studies_CR_CT_to_test_pacs(
     assert len(dirlist) == 1
     assert anon_pt_id in dirlist
     # Check 2 studies and 7 files in patient directory on local storage:
-    assert count_dcm_files_and_studies(
+    assert count_studies_series_images(
         os.path.join(controller.model.storage_dir, anon_pt_id)
-    ) == (2, 7)
+    ) == (2, 4, 7)
     # Export these patient from local storage to test PACS:
     assert export_patients_from_local_storage_to_test_pacs([anon_pt_id], controller)
     time.sleep(0.5)
@@ -233,14 +233,14 @@ def test_export_2_patients_to_test_pacs(temp_dir: str, controller: ProjectContro
     assert len(dirlist) == 2
     assert ct_anon_pt_id in dirlist
     assert mr_anon_pt_id in dirlist
-    # Check 1 study and 3 files in ct patient directory on local storage:
-    assert count_dcm_files_and_studies(
+    # Check 1 study, 3 series and 3 images in ct patient directory on local storage:
+    assert count_studies_series_images(
         os.path.join(controller.model.storage_dir, ct_anon_pt_id)
-    ) == (1, 3)
-    # Check 1 study and 11 files in mr patient directory on local storage:
-    assert count_dcm_files_and_studies(
+    ) == (1, 3, 3)
+    # Check 1 study, 3 series and 11 images in mr patient directory on local storage:
+    assert count_studies_series_images(
         os.path.join(controller.model.storage_dir, mr_anon_pt_id)
-    ) == (1, 11)
+    ) == (1, 3, 11)
     # Export these patient from local storage to test PACS:
     assert export_patients_from_local_storage_to_test_pacs(
         [ct_anon_pt_id, mr_anon_pt_id], controller
@@ -275,22 +275,22 @@ def test_export_4_patients_to_test_pacs(temp_dir: str, controller: ProjectContro
     assert mr_anon_pt_id in dirlist
     assert ctsmall_anon_pt_id in dirlist
     assert mrsmall_anon_pt_id in dirlist
-    # Check 1 study and 3 files in ct patient 1 directory on local storage:
-    assert count_dcm_files_and_studies(
+    # Check 1 study, 3 series and 3 images in ct patient 1 directory on local storage:
+    assert count_studies_series_images(
         os.path.join(controller.model.storage_dir, ct_anon_pt_id)
-    ) == (1, 3)
-    # Check 1 study and 11 files in mr patient 2 directory on local storage:
-    assert count_dcm_files_and_studies(
+    ) == (1, 3, 3)
+    # Check 1 study, 3 series and 11 images in mr patient 2 directory on local storage:
+    assert count_studies_series_images(
         os.path.join(controller.model.storage_dir, mr_anon_pt_id)
-    ) == (1, 11)
-    # Check 1 study and 1 files in ctsmall patient 3 directory on local storage:
-    assert count_dcm_files_and_studies(
+    ) == (1, 3, 11)
+    # Check 1 study, 1 series and 1 image in ctsmall patient 3 directory on local storage:
+    assert count_studies_series_images(
         os.path.join(controller.model.storage_dir, ctsmall_anon_pt_id)
-    ) == (1, 1)
-    # Check 1 study and 1 files in mrsmall patient 4 directory on local storage:
-    assert count_dcm_files_and_studies(
+    ) == (1, 1, 1)
+    # Check 1 study, 1 series and 1 image in mrsmall patient 4 directory on local storage:
+    assert count_studies_series_images(
         os.path.join(controller.model.storage_dir, mrsmall_anon_pt_id)
-    ) == (1, 1)
+    ) == (1, 1, 1)
     # Export these patient from local storage to test PACS:
     assert export_patients_from_local_storage_to_test_pacs(
         [ct_anon_pt_id, mr_anon_pt_id, ctsmall_anon_pt_id, mrsmall_anon_pt_id],

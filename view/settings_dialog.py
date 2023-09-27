@@ -61,6 +61,7 @@ class SettingsDialog(ctk.CTkToplevel):
             col=0,
             pad=PAD,
             sticky="nw",
+            enabled=self.new_model,
         )
         row += 1
 
@@ -76,6 +77,7 @@ class SettingsDialog(ctk.CTkToplevel):
             col=0,
             pad=PAD,
             sticky="nw",
+            enabled=self.new_model,
         )
         row += 1
 
@@ -91,6 +93,7 @@ class SettingsDialog(ctk.CTkToplevel):
             col=0,
             pad=PAD,
             sticky="nw",
+            enabled=self.new_model,
         )
         row += 1
 
@@ -106,6 +109,7 @@ class SettingsDialog(ctk.CTkToplevel):
             col=0,
             pad=PAD,
             sticky="nw",
+            enabled=self.new_model,
         )
         row += 1
 
@@ -161,32 +165,46 @@ class SettingsDialog(ctk.CTkToplevel):
             row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw"
         )
 
-        self._storage_dir_button = ctk.CTkButton(
-            self,
-            text=str(self.model.storage_dir),
-            command=self._open_storage_directory_dialog,
-        )
-        self._storage_dir_button.grid(
-            row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw"
-        )
+        # Only allow setting of storage directory for NEW project:
+        if self.new_model:
+            self._storage_dir_button = ctk.CTkButton(
+                self,
+                text=self.model.abridged_storage_dir(),
+                command=self._open_storage_directory_dialog,
+                state=ctk.NORMAL if self.new_model else ctk.DISABLED,
+            )
+            self._storage_dir_button.grid(
+                row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw"
+            )
+        else:
+            self._storage_dir_label = ctk.CTkLabel(
+                self, text=self.model.abridged_storage_dir()
+            )
+            self._storage_dir_label.grid(
+                row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw"
+            )
 
         row += 1
 
-        self._script_file_label = ctk.CTkLabel(self, text=str("Script File:"))
-        self._script_file_label.grid(
-            row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw"
-        )
+        # Script File is selectable ONLY for NEW projects
+        # On project creation the script file is parsed and saved to the Anonymizer model
+        if self.new_model:
+            self._script_file_label = ctk.CTkLabel(self, text=str("Script File:"))
+            self._script_file_label.grid(
+                row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw"
+            )
 
-        self._script_file_button = ctk.CTkButton(
-            self,
-            text=str(self.model.anonymizer_script_path),
-            command=self._script_file_dialog,
-        )
-        self._script_file_button.grid(
-            row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw"
-        )
+            self._script_file_button = ctk.CTkButton(
+                self,
+                text=str(self.model.anonymizer_script_path),
+                command=self._script_file_dialog,
+            )
+            self._script_file_button.grid(
+                row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw"
+            )
 
-        row += 1
+            row += 1
+
         if self.new_model:
             btn_text = _("Create Project")
         else:
@@ -245,7 +263,7 @@ class SettingsDialog(ctk.CTkToplevel):
         )
         if path:
             self.model.storage_dir = Path(path)
-            self._storage_dir_button.configure(text=path)
+            self._storage_dir_button.configure(text=self.model.abridged_storage_dir())
             logger.info(f"Storage Directory: {self.model.storage_dir}")
 
     def _script_file_dialog(self):

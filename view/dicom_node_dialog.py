@@ -78,7 +78,7 @@ class DICOMNodeDialog(ctk.CTkToplevel):
                 initial_value=self.address.ip,
                 min_chars=ip_min_chars,
                 max_chars=ip_max_chars,
-                charset=string.digits + ".",
+                charset=string.digits + ".",  # + string.ascii_lowercase
                 tooltipmsg=None,
                 row=row,
                 col=0,
@@ -109,7 +109,7 @@ class DICOMNodeDialog(ctk.CTkToplevel):
             initial_value=self.address.aet,
             min_chars=aet_min_chars,
             max_chars=aet_max_chars,
-            charset=string.printable,
+            charset=string.ascii_letters + string.digits + " !#$%&()#*+-.,:;_^@?~|",
             tooltipmsg=None,
             row=row,
             col=0,

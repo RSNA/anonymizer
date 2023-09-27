@@ -5,7 +5,7 @@ import logging
 import time
 from queue import Queue
 from pydicom.dataset import Dataset
-from utils.storage import count_dcm_files_and_studies
+from utils.storage import count_studies_series_images
 
 from controller.project import ProjectController
 from tests.controller.dicom_test_nodes import LocalStorageSCP, PACSSimulatorSCP
@@ -130,10 +130,10 @@ def test_move_of_3_studies_from_pacs_to_local_storage(
     total_studies = 0
     total_files = 0
     for i in range(len(dirlist)):
-        studies, files = count_dcm_files_and_studies(
+        studies, series, images = count_studies_series_images(
             os.path.join(local_storage_dir(temp_dir), dirlist[i])
         )
         total_studies += studies
-        total_files += files
+        total_files += images
     assert total_studies == 3
     assert total_files == 13

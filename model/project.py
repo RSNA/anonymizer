@@ -105,3 +105,6 @@ class ProjectModel:
     def __repr__(self) -> str:
         class_name = self.__class__.__name__
         return f"{class_name}\n({pformat(self.__dict__)})"
+
+    def abridged_storage_dir(self) -> str:
+        return f".../{self.storage_dir.parts[-2]}/{self.storage_dir.parts[-1]}"

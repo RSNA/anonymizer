@@ -9,7 +9,7 @@ import pickle
 from datetime import datetime, timedelta
 from pathlib import Path
 from queue import Queue
-from pydicom import Dataset, Sequence
+from pydicom import Dataset, Sequence, dcmread
 from utils.translate import _
 from utils.storage import local_storage_path
 from model.project import DICOMNode, Study, PHI, ProjectModel
@@ -17,7 +17,7 @@ from model.anonymizer import AnonymizerModel
 
 logger = logging.getLogger(__name__)
 
-# TODO: where best to put these string constants? dicom_ae.py?
+# TODO: where best to put these string constants?
 # TODO: link to app title & version
 deidentification_method = _("RSNA DICOM ANONYMIZER")
 deidentification_methods = [
@@ -36,6 +36,17 @@ class AnonymizerController:
     _anonymize_time_slice_interval: float = 0.1  # seconds
     _anonymize_batch_size: int = 40  # number of items to process in a batch
     _clean_tag_translate_table = str.maketrans("", "", "() ,")
+    # Required DICOM field attributes for accepting files:
+    required_attributes = [
+        "PatientID",
+        "PatientName",
+        "StudyInstanceUID",
+        "StudyDate",
+        #   "AccessionNumber",
+        "Modality",
+        "SeriesNumber",
+        "InstanceNumber",
+    ]
 
     def __init__(self, project_model: ProjectModel):
         self.project_model = project_model
@@ -187,7 +198,7 @@ class AnonymizerController:
         return
 
     def anonymize_dataset_and_store(
-        self, source: DICOMNode | str, ds: Dataset, dir: Path
+        self, source: DICOMNode | str, ds: Dataset | None, dir: Path
     ) -> None:
         self._anon_Q.put((source, ds, dir))
         return
@@ -201,6 +212,9 @@ class AnonymizerController:
             time.sleep(self._anonymize_time_slice_interval)
 
             while not ds_Q.empty():
+                logger.debug(
+                    "_anonymize_worker processing batch size: {self._anonymize_batch_size}}"
+                )
                 batch = []
                 for _ in range(
                     self._anonymize_batch_size
@@ -210,6 +224,39 @@ class AnonymizerController:
 
                 for item in batch:
                     source, ds, dir = item  # ds_Q.get()
+
+                    # Load dataset from file if not provided:
+                    if ds is None:
+                        try:
+                            assert os.path.exists(source)
+                            ds = dcmread(source)
+                        except Exception as e:
+                            logger.error(f"dcmread error: {source}: {e}")
+                            continue
+
+                    # Ensure dataset has required attributes:
+                    if not all(
+                        attr_name in ds for attr_name in self.required_attributes
+                    ):
+                        missing_attributes = [
+                            attr_name
+                            for attr_name in self.required_attributes
+                            if attr_name not in ds
+                        ]
+                        logger.error(
+                            f"Incoming dataset is missing required attributes: {missing_attributes}"
+                        )
+                        logger.error(f"\n{ds}")
+                        continue
+
+                    # Return success if study already stored:
+                    if self.model.get_anon_uid(ds.SOPInstanceUID):
+                        logger.info(
+                            f"Instance already stored: {ds.PatientID} {ds.SOPInstanceUID}"
+                        )
+                        continue
+
+                    logger.debug(f"PHI:\n{ds}")
 
                     # Capture PHI and store for new studies:
                     if self.model.get_anon_uid(ds.StudyInstanceUID) == None:

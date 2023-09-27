@@ -179,12 +179,12 @@ def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectControl
 
                 # Update treeview item:
                 current_values = list(tree.item(resp.patient_id, "values"))
-                # Ensure there are at least 6 values in the list:
-                while len(current_values) < 6:
+                # Ensure there are at least 7 values in the list:
+                while len(current_values) < 7:
                     current_values.append("")
                 # Format the date and time as "YYYY-MM-DD HH:MM:SS"
-                current_values[4] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                current_values[5] = str(resp.files_sent)
+                current_values[5] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                current_values[6] = str(resp.files_sent)
                 tree.item(resp.patient_id, values=current_values)
 
                 # Check for completion or critical error of this patient's export

@@ -1,9 +1,4 @@
-try:
-    import pyi_splash
-except:
-    pass
 import os
-from time import sleep
 from pathlib import Path
 import logging
 import pickle
@@ -15,7 +10,6 @@ from model.project import default_project_filename, default_storage_dir
 from utils.translate import _
 from utils.logging import init_logging
 from __version__ import __version__
-from pydicom import dcmread
 from pydicom._version import __version__ as pydicom_version
 from pynetdicom._version import __version__ as pynetdicom_version
 
@@ -118,7 +112,7 @@ class App(ctk.CTk):
         assert self.model
         assert self.project_controller
         self.title(
-            f"{self.model.project_name}[{self.model.site_id}] => .../{self.model.storage_dir.parts[-1]}"
+            f"{self.model.project_name}[{self.model.site_id}] => {self.model.abridged_storage_dir()}"
         )
         self.main_frame.destroy()
         self.create_main_frame()
@@ -164,34 +158,29 @@ class App(ctk.CTk):
         self.focus_force()
         if paths:
             for path in paths:
-                ds = dcmread(path)
+                # ds = dcmread(path)
                 self.project_controller.anonymizer.anonymize_dataset_and_store(
-                    path, ds, self.project_controller.storage_dir
+                    path, None, self.project_controller.storage_dir
                 )
 
     def import_directory(self, event=None):
         assert self.project_controller
-
         logging.info("Import Directory")
-        path = filedialog.askdirectory(title=_("Select DICOM Directory"))
-        self.focus_force()
-        if path:
-            # Recurse into subdirectories
-            for root, dirs, files in os.walk(path):
-                file_paths = [
-                    os.path.join(root, file)
-                    for file in files
-                    if not file.startswith(".")
-                ]
-                for path in file_paths:
-                    try:
-                        ds = dcmread(path)
-                        self.project_controller.anonymizer.anonymize_dataset_and_store(
-                            path, ds, self.project_controller.storage_dir
-                        )
-                    except Exception as e:
-                        logger.error(f"{path}: {e}")
-                        continue
+        root_dir = filedialog.askdirectory(title=_("Select DICOM Directory"))
+        logger.info(root_dir)
+
+        if root_dir:
+            file_paths = [
+                os.path.join(root, file)
+                for root, _, files in os.walk(root_dir)
+                for file in files
+                if not file.startswith(".")  # and is_dicom(os.path.join(root, file))
+            ]
+            logger.info(f"Processing {len(file_paths)}")
+            for path in file_paths:
+                self.project_controller.anonymizer.anonymize_dataset_and_store(
+                    path, None, self.project_controller.storage_dir
+                )
 
     def query_retrieve(self):
         assert self.project_controller
@@ -466,9 +455,13 @@ def main():
         pad=PAD,
     )
 
+    # Pyinstaller splash page close
     try:
-        pyi_splash.close()
-    except:
+        import PyInstaller.utils.cliutils as pyi_utils
+
+        if hasattr(pyi_utils, "pyi_splash"):
+            pyi_utils.pyi_splash.close()  # type: ignore
+    except AttributeError:
         pass
 
     app.mainloop()

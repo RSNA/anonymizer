@@ -11,7 +11,7 @@ from utils.storage import count_studies_series_images
 logger = logging.getLogger(__name__)
 
 DASHBOARD_TITLE_FONT = ("DIN Alternate", 28)
-DASHBOARD_LABEL_FONT = ("DIN Alternate", 32)
+DASHBOARD_LABEL_FONT = ("DIN Alternate Italic", 32)
 DASHBOARD_DATA_FONT = ("DIN Alternate", 48)
 
 

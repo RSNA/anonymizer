@@ -96,39 +96,43 @@ def str_entry(
     sticky: str,
     module: str | None = None,
     var_name: str | None = None,
+    enabled: bool = True,
 ) -> ctk.StringVar:
     str_var = ctk.StringVar(view, value=initial_value)
     char_width_px = ctk.CTkFont().measure("_")
     ctk_label = ctk.CTkLabel(view, text=label)
     ctk_label.grid(row=row, column=col, padx=pad, pady=(pad, 0), sticky=sticky)
-    width = (max_chars+3) * char_width_px
-    #TO DO: this approach is not accurate
+    width = (max_chars + 3) * char_width_px  # TO DO: this approach is not accurate
 
-    ctk_entry = ctk.CTkEntry(
-        view,
-        width=width,
-        textvariable=str_var,
-        validate="key",
-        validatecommand=(
-            # view.winfo_toplevel().validate_entry_cmd,  # type: ignore
-            view.register(validate_entry),
-            "%P",
-            charset,
-            str(max_chars),
-        ),
-    )
-
-    if tooltipmsg:
-        entry_tooltip = CTkToolTip(
-            ctk_entry,
-            message=_(f"{tooltipmsg} [{min_chars}..{max_chars}] chars"),
+    if not enabled:
+        ctk_entry = ctk.CTkLabel(view, textvariable=str_var)
+    else:
+        ctk_entry = ctk.CTkEntry(
+            view,
+            width=width,
+            textvariable=str_var,
+            validate="key",
+            validatecommand=(
+                # view.winfo_toplevel().validate_entry_cmd,  # type: ignore
+                view.register(validate_entry),
+                "%P",
+                charset,
+                str(max_chars),
+            ),
         )
 
-    entry_callback = lambda event: str_entry_change(
-        event, str_var, min_chars, max_chars, module, var_name
-    )
-    ctk_entry.bind("<Return>", entry_callback)
-    ctk_entry.bind("<FocusOut>", entry_callback)
+        if tooltipmsg:
+            entry_tooltip = CTkToolTip(
+                ctk_entry,
+                message=_(f"{tooltipmsg} [{min_chars}..{max_chars}] chars"),
+            )
+
+        entry_callback = lambda event: str_entry_change(
+            event, str_var, min_chars, max_chars, module, var_name
+        )
+        ctk_entry.bind("<Return>", entry_callback)
+        ctk_entry.bind("<FocusOut>", entry_callback)
+
     ctk_entry.grid(row=row, column=col + 1, padx=pad, pady=(pad, 0), sticky="nw")
     return str_var
 
@@ -151,7 +155,7 @@ def int_entry(
     max_chars = len(str(max))
     # TODO: why is this not accurate?
     digit_width_px = ctk.CTkFont().measure("A")
-    width = (max_chars+3) * digit_width_px
+    width = (max_chars + 3) * digit_width_px
     ctk_label = ctk.CTkLabel(view, text=label)
     ctk_label.grid(row=row, column=col, padx=pad, pady=(pad, 0), sticky=sticky)
     ctk_entry = ctk.CTkEntry(
