@@ -3,7 +3,7 @@ from pathlib import Path
 import logging
 from pprint import pformat
 import xml.etree.ElementTree as ET
-from model.project import PHI
+from .project import PHI
 from utils.translate import _
 
 logger = logging.getLogger(__name__)

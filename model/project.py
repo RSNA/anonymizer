@@ -7,7 +7,6 @@ from pathlib import Path
 from pynetdicom._globals import ALL_TRANSFER_SYNTAXES, DEFAULT_TRANSFER_SYNTAXES
 from utils.translate import _
 
-
 logger = logging.getLogger(__name__)
 
 

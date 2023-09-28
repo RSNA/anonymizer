@@ -1,6 +1,6 @@
 # User Interface Field Validation & Utilities
 import string
-import model.config as config
+import prototyping.config as config
 import tkinter as tk
 import customtkinter as ctk
 from CTkToolTip import CTkToolTip

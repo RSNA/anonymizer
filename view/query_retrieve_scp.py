@@ -48,6 +48,7 @@ attr_map = {
     ),  # not for display, for find/move
 }
 
+
 def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectController):
     logger.info(f"Creating Query/Retrieve SCU View")
     view.grid_rowconfigure(2, weight=1)
@@ -303,7 +304,7 @@ def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectControl
                         remaining_studies -= 1
                         if remaining_studies == 0:
                             logger.info(
-                                f"Move finished for study: {resp.StudyInstanceUID}"
+                                f"Move operation finished, {resp.NumberOfCompletedSuboperations} images moved, {resp.NumberOfFailedSuboperations} errors"
                             )
                             move_finished = True
 

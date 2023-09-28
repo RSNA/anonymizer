@@ -20,7 +20,7 @@ from pynetdicom.status import (
     QR_FIND_SERVICE_CLASS_STATUS,
     QR_MOVE_SERVICE_CLASS_STATUS,
 )
-from controller.dicom_C_codes import (
+from .dicom_C_codes import (
     C_SUCCESS,
     C_DATA_ELEMENT_DOES_NOT_EXIST,
     C_PENDING_A,
@@ -34,7 +34,7 @@ from model.project import (
     DICOMRuntimeError,
     default_project_filename,
 )
-from controller.anonymizer import AnonymizerController
+from .anonymizer import AnonymizerController
 
 from utils.translate import _
 
@@ -457,7 +457,7 @@ class ProjectController(AE):
         ).start()
 
     def _export_patient(self, scp_name: str, patient_id: str, ux_Q: Queue) -> None:
-        logger.info(f"_export_patient {patient_id} start")
+        logger.debug(f"_export_patient {patient_id} start")
 
         association = None
         files_sent = 0
@@ -556,7 +556,7 @@ class ProjectController(AE):
         study_uid: str,
         ux_Q: Queue,
     ) -> None:
-        logger.info(
+        logger.debug(
             f"C-MOVE scp:{scp_name} move to: {dest_scp_ae} study_uid: {study_uid}"
         )
 

@@ -1,8 +1,8 @@
 import os
-from datetime import datetime
 import logging
-from queue import Queue, Empty, Full
+from turtle import st
 import customtkinter as ctk
+import controller
 from controller.project import ProjectController
 from utils.translate import _
 from utils.storage import count_studies_series_images
@@ -16,9 +16,13 @@ DASHBOARD_DATA_FONT = ("DIN Alternate", 48)
 
 
 class Dashboard(ctk.CTkFrame):
+    dashboard_update_interval = 500  # milliseconds
+
     def __init__(self, parent, controller: ProjectController):
         super().__init__(parent)
-        self.parent = parent
+        self._parent = parent
+        self._last_qsize = 0
+        self._latch_max_qsize = 1
         self.controller = controller
         self.create_widgets()
         self.update_dashboard()
@@ -27,7 +31,7 @@ class Dashboard(ctk.CTkFrame):
         logger.info(f"query_button_click")
         if self.controller.echo("QUERY"):
             self.query_button.configure(text_color="light green")
-            self.parent.master.query_retrieve()
+            self._parent.master.query_retrieve()
         else:
             self.query_button.configure(text_color="red")
 
@@ -35,7 +39,7 @@ class Dashboard(ctk.CTkFrame):
         logger.info(f"export_button_click")
         if self.controller.echo("EXPORT"):
             self.export_button.configure(text_color="light green")
-            self.parent.master.export()
+            self._parent.master.export()
         else:
             self.export_button.configure(text_color="red")
 
@@ -59,18 +63,18 @@ class Dashboard(ctk.CTkFrame):
         row = 0
 
         self.query_button = ctk.CTkButton(
-            self.parent, width=100, text=_("Query"), command=self.query_button_click
+            self._parent, width=100, text=_("Query"), command=self.query_button_click
         )
         self.query_button.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="w")
 
         self.export_button = ctk.CTkButton(
-            self.parent, width=100, text=_("Export"), command=self.export_button_click
+            self._parent, width=100, text=_("Export"), command=self.export_button_click
         )
         self.export_button.grid(row=row, column=3, padx=PAD, pady=(PAD, 0), sticky="e")
 
         row += 1
 
-        self._databoard = ctk.CTkFrame(self.parent)
+        self._databoard = ctk.CTkFrame(self._parent)
         db_row = 0
 
         self.label_patients = ctk.CTkLabel(
@@ -91,6 +95,19 @@ class Dashboard(ctk.CTkFrame):
         self.label_series.grid(row=db_row, column=2, padx=PAD, pady=(PAD, 0))
         self.label_images.grid(row=db_row, column=3, padx=PAD, pady=(PAD, 0))
 
+        self.progressbar = ctk.CTkProgressBar(
+            self._databoard, orientation="vertical", height=0  # auto size to row
+        )
+        self.progressbar.grid(
+            row=db_row,
+            column=4,
+            rowspan=2,
+            # padx=(PAD, 2 * PAD),
+            # pady=(PAD, PAD),
+            sticky="ns",
+        )
+        self.progressbar.set(0)
+
         db_row += 1
 
         self._patients = ctk.CTkLabel(
@@ -109,6 +126,20 @@ class Dashboard(ctk.CTkFrame):
 
         self._databoard.grid(
             row=row, column=0, columnspan=4, padx=PAD, pady=PAD, sticky="n"
+        )
+
+        row += 1
+
+        self._status_frame = ctk.CTkFrame(self._parent)
+
+        self.label_queue = ctk.CTkLabel(self._status_frame, text="Anonymizer Queue:")
+        self.label_queue.grid(row=0, column=0, padx=PAD, sticky="w")
+
+        self._qsize = ctk.CTkLabel(self._status_frame, text="0")
+        self._qsize.grid(row=0, column=1, sticky="w")
+
+        self._status_frame.grid(
+            row=row, column=0, columnspan=4, sticky="nsew", padx=PAD
         )
 
     def update_dashboard(self):
@@ -142,4 +173,18 @@ class Dashboard(ctk.CTkFrame):
         self._series.configure(text=f"{series}")
         self._images.configure(text=f"{images}")
 
-        self.after(500, self.update_dashboard)
+        # Determine if Anonymizer Queue is increasing or decreasing
+        # If increasing then set progressbar to full
+        qsize = self.controller.anonymizer._anon_Q.qsize()
+        self._qsize.configure(text=f"{qsize}")
+
+        if qsize > self._last_qsize:
+            self.progressbar.set(1)
+            self._latch_max_qsize = qsize
+        else:
+            # If decreasing then set progressbar range and track items in Queue proportionally
+            self.progressbar.set(qsize / self._latch_max_qsize)
+
+        self._last_qsize = qsize
+
+        self.after(self.dashboard_update_interval, self.update_dashboard)

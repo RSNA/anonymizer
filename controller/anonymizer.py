@@ -42,7 +42,7 @@ class AnonymizerController:
         "PatientName",
         "StudyInstanceUID",
         "StudyDate",
-        #   "AccessionNumber",
+        "AccessionNumber",
         "Modality",
         "SeriesNumber",
         "InstanceNumber",
