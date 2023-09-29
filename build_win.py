@@ -4,9 +4,6 @@
 # python build_win.py
 
 from __version__ import __version__
-
-#__version__ = "17.0.0"
-
 import pyinstaller_versionfile
 import PyInstaller.__main__
 
@@ -26,14 +23,14 @@ if __name__ == "__main__":
     )
 
     print(
-        "Using PyInstaller to create a single file exe from python source & libs + versionfile.txt + icon"
+        "Using PyInstaller to create install dir with exe from python source & libs + versionfile.txt + icon"
     )
     PyInstaller.__main__.run(
         [
             "--noconfirm",
             "--onedir",
             "--splash",
-            "C:\\dxlife\\anonymizer\\assets\\images\\rsna_titled_logo_alpha.png",
+            "C:\\dxlife\\anonymizer\\assets\\images\\rsna_logo_head_profile.png",
             "--windowed",
             "--add-data",
             "C:\\Users\\Tate\\.virtualenvs\\anonymizer-cG_OOYDL\\Lib\\site-packages\\customtkinter;customtkinter\\",

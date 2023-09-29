@@ -457,11 +457,9 @@ def main():
 
     # Pyinstaller splash page close
     try:
-        import PyInstaller.utils.cliutils as pyi_utils
-
-        if hasattr(pyi_utils, "pyi_splash"):
-            pyi_utils.pyi_splash.close()  # type: ignore
-    except AttributeError:
+        import pyi_splash
+        pyi_splash.close()  # type: ignore
+    except Exception:
         pass
 
     app.mainloop()
