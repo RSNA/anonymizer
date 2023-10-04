@@ -9,6 +9,7 @@ from controller.project import DICOMNode
 from view.dicom_node_dialog import DICOMNodeDialog
 from utils.translate import _
 from utils.ux_fields import str_entry, int_entry
+from view.sop_classes_dialog import SOPClassesDialog
 
 
 logger = logging.getLogger(__name__)
@@ -125,19 +126,19 @@ class SettingsDialog(ctk.CTkToplevel):
 
         row += 1
 
-        self._local_server_button = ctk.CTkButton(
+        self._query_server_button = ctk.CTkButton(
             self, width=100, text=_("Query Server"), command=self._query_server_click
         )
-        self._local_server_button.grid(
+        self._query_server_button.grid(
             row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="w"
         )
 
         row += 1
 
-        self._local_server_button = ctk.CTkButton(
+        self._export_server_button = ctk.CTkButton(
             self, width=100, text=_("Export Server"), command=self._export_server_click
         )
-        self._local_server_button.grid(
+        self._export_server_button.grid(
             row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="w"
         )
 
@@ -158,9 +159,7 @@ class SettingsDialog(ctk.CTkToplevel):
 
         row += 1
 
-        self._storage_directory_label = ctk.CTkLabel(
-            self, text=str("Storage Directory:")
-        )
+        self._storage_directory_label = ctk.CTkLabel(self, text=_("Storage Directory:"))
         self._storage_directory_label.grid(
             row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw"
         )
@@ -183,6 +182,22 @@ class SettingsDialog(ctk.CTkToplevel):
             self._storage_dir_label.grid(
                 row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw"
             )
+
+        row += 1
+
+        self._storage_classes_label = ctk.CTkLabel(self, text=_("Storage Classes:"))
+        self._storage_classes_label.grid(
+            row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw"
+        )
+
+        self._storage_classes_button = ctk.CTkButton(
+            self,
+            text=_("Select Storage Classes"),
+            command=self._open_storage_classes_dialog,
+        )
+        self._storage_classes_button.grid(
+            row=row, column=1, pady=(PAD, 0), padx=PAD, sticky="nw"
+        )
 
         row += 1
 
@@ -265,6 +280,15 @@ class SettingsDialog(ctk.CTkToplevel):
             self.model.storage_dir = Path(path)
             self._storage_dir_button.configure(text=self.model.abridged_storage_dir())
             logger.info(f"Storage Directory: {self.model.storage_dir}")
+
+    def _open_storage_classes_dialog(self):
+        dlg = SOPClassesDialog(self.model.storage_classes)
+        edited_classes = dlg.get_input()
+        if edited_classes is None:
+            logger.info(f"Storage Classes cancelled")
+            return
+        self.model.storage_classes = edited_classes
+        logger.info(f"Storage Classes updated: {self.model.storage_classes}")
 
     def _script_file_dialog(self):
         path = filedialog.askopenfilename(

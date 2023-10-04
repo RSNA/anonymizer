@@ -1,3 +1,4 @@
+from ast import Set
 import os
 import logging
 from pprint import pformat
@@ -57,29 +58,18 @@ def default_remote_scps() -> Dict[str, DICOMNode]:
     }
 
 
+def default_storage_classes() -> List[str]:
+    return [
+        "1.2.840.10008.5.1.4.1.1.1",  # "Computed Radiography Image Storage"
+        "1.2.840.10008.5.1.4.1.1.1.1",  # "Digital X-Ray Image Storage - For Presentation"
+        "1.2.840.10008.5.1.4.1.1.1.1.1",  # "Digital X-Ray Image Storage - For Processing"
+        "1.2.840.10008.5.1.4.1.1.2",  # "Computed Tomography Image Storage"
+        "1.2.840.10008.5.1.4.1.1.4",  # "Magnetic Resonance Image Storage"
+    ]
+
+
 def default_transfer_syntaxes() -> List[str]:
     return DEFAULT_TRANSFER_SYNTAXES  # change to ALL_TRANSFER_SYNTAXES to support compression
-
-
-def default_radiology_storage_classes() -> Dict[str, str]:
-    return {
-        "Computed Radiography Image Storage": "1.2.840.10008.5.1.4.1.1.1",
-        "Digital X-Ray Image Storage - For Presentation": "1.2.840.10008.5.1.4.1.1.1.1",
-        "Digital X-Ray Image Storage - For Processing": "1.2.840.10008.5.1.4.1.1.1.1.1",
-        "Computed Tomography Image Storage": "1.2.840.10008.5.1.4.1.1.2",
-        # "Enhanced CT Image Storage": "1.2.840.10008.5.1.4.1.1.2.1",
-        # "Digital Mammography X-Ray Image Storage For Presentation": "1.2.840.10008.5.1.4.1.1.1.2",
-        # "Digital Mammography X-Ray Image Storage For Processing": "1.2.840.10008.5.1.4.1.1.1.2.1",
-        # "Digital Intra Oral X-Ray Image Storage For Presentation": "1.2.840.10008.5.1.4.1.1.1.3",
-        # "Digital Intra Oral X-Ray Image Storage For Processing": "1.2.840.10008.5.1.4.1.1.1.3.1",
-        "Magnetic Resonance Image Storage": "1.2.840.10008.5.1.4.1.1.4",
-        # "Enhanced MR Image Storage": "1.2.840.10008.5.1.4.1.1.4.1",
-        # "Positron Emission Tomography Image Storage": "1.2.840.10008.5.1.4.1.1.128",
-        # "Enhanced PET Image Storage": "1.2.840.10008.5.1.4.1.1.130",
-        # "Ultrasound Image Storage": "1.2.840.10008.5.1.4.1.1.6.1",
-        # "Mammography CAD SR Storage": "1.2.840.10008.5.1.4.1.1.88.50",
-        # "BreastTomosynthesisImageStorage": "1.2.840.10008.5.1.4.1.1.13.1.3",
-    }
 
 
 @dataclass
@@ -89,6 +79,8 @@ class ProjectModel:
     trial_name: str = _("TRIAL")
     uid_root: str = "1.2.826.0.1.3680043.10.188"
     storage_dir: Path = field(default_factory=default_storage_dir)
+    storage_classes: List[str] = field(default_factory=default_storage_classes)
+
     scu: DICOMNode = field(default_factory=default_local_server)
     scp: DICOMNode = field(default_factory=default_local_server)
     remote_scps: Dict[str, DICOMNode] = field(default_factory=default_remote_scps)
@@ -97,9 +89,6 @@ class ProjectModel:
 
     # TODO: provide UX to manage the allowed storage classes and supported transfer syntaxes, *FIXED FOR MVP*
     _TRANSFER_SYNTAXES: List[str] = field(default_factory=default_transfer_syntaxes)
-    _RADIOLOGY_STORAGE_CLASSES: Dict[str, str] = field(
-        default_factory=default_radiology_storage_classes
-    )
 
     def __repr__(self) -> str:
         class_name = self.__class__.__name__

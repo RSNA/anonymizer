@@ -139,6 +139,12 @@ def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectControl
     scrollbar.grid(row=1, column=11, pady=(PAD, 0), sticky="ns")
     tree.configure(yscrollcommand=scrollbar.set)
 
+    # Disable Keyboard selection bindings:
+    tree.bind("<Left>", lambda e: "break")
+    tree.bind("<Right>", lambda e: "break")
+    tree.bind("<Up>", lambda e: "break")
+    tree.bind("<Down>", lambda e: "break")
+
     # Refresh Button:
     def refresh_button_pressed():
         logger.info(f"Refresh button pressed")

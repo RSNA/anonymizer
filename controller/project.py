@@ -98,6 +98,7 @@ class ProjectController(AE):
         self.model = model
         # Make sure storage directory exists:
         os.makedirs(self.model.storage_dir, exist_ok=True)
+        self.model.storage_classes = []
         self.set_all_timeouts(model.network_timeout)
         # TODO: maintain list of allowed calling AET's and use: def require_calling_aet(self, ae_titles: List[str]) -> None:
         self._require_called_aet = True
@@ -140,7 +141,7 @@ class ProjectController(AE):
         return
 
     def set_radiology_storage_contexts(self) -> None:
-        for uid in sorted(self.model._RADIOLOGY_STORAGE_CLASSES.values()):
+        for uid in sorted(self.model.storage_classes):
             self.add_supported_context(uid, self.model._TRANSFER_SYNTAXES)
         return
 
@@ -153,7 +154,7 @@ class ProjectController(AE):
     def get_radiology_storage_contexts(self) -> List[PresentationContext]:
         return [
             build_context(abstract_syntax, self.model._TRANSFER_SYNTAXES)
-            for abstract_syntax in self.model._RADIOLOGY_STORAGE_CLASSES.values()
+            for abstract_syntax in self.model.storage_classes
         ]
 
     def set_study_root_qr_contexts(self) -> None:
@@ -167,7 +168,7 @@ class ProjectController(AE):
             build_context(
                 abstract_syntax, "1.2.840.10008.1.2.2"
             )  # Explicit VR Big Endian,
-            for abstract_syntax in self.model._RADIOLOGY_STORAGE_CLASSES.values()
+            for abstract_syntax in self.model.storage_classes
         ]
 
     def get_study_root_qr_contexts(self) -> List[PresentationContext]:

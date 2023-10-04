@@ -138,13 +138,11 @@ def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectControl
     )
 
     # Managing C-FIND results Treeview:
-    fixed_width_font = ("Courier", 12)  # Specify the font family and size
+    fixed_width_font = ("Courier", 12, "bold")
     # Create a custom style for the Treeview
     # TODO: see if theme manager can do this and store in rsna_color_scheme_font.json
     style = ttk.Style()
-    style.configure(
-        "Treeview", font=fixed_width_font
-    )  # Set the font for the Treeview style
+    style.configure("Treeview", font=fixed_width_font)
 
     tree = ttk.Treeview(
         view, show="headings", style="Treeview", columns=list(attr_map.keys())[:-1]
@@ -359,6 +357,12 @@ def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectControl
     scrollbar = ttk.Scrollbar(view, orient="vertical", command=tree.yview)
     scrollbar.grid(row=2, column=11, sticky="ns")
     tree.configure(yscrollcommand=scrollbar.set)
+
+    # Disable Keyboard selection bindings:
+    tree.bind("<Left>", lambda e: "break")
+    tree.bind("<Right>", lambda e: "break")
+    tree.bind("<Up>", lambda e: "break")
+    tree.bind("<Down>", lambda e: "break")
 
     query_button = ctk.CTkButton(
         query_param_frame, text=_("Query"), command=lambda: query_button_pressed(tree)
