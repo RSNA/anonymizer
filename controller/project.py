@@ -98,7 +98,6 @@ class ProjectController(AE):
         self.model = model
         # Make sure storage directory exists:
         os.makedirs(self.model.storage_dir, exist_ok=True)
-        self.model.storage_classes = []
         self.set_all_timeouts(model.network_timeout)
         # TODO: maintain list of allowed calling AET's and use: def require_calling_aet(self, ae_titles: List[str]) -> None:
         self._require_called_aet = True

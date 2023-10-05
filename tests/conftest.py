@@ -6,7 +6,7 @@ import tempfile
 import pytest
 import logging
 
-from model.project import ProjectModel
+from model.project import ProjectModel, default_storage_classes
 from controller.project import ProjectController
 import tests.controller.dicom_pacs_simulator_scp as pacs_simulator_scp
 from tests.controller.dicom_test_nodes import (
@@ -62,6 +62,7 @@ def controller(temp_dir):
         trial_name=TEST_TRIALNAME,
         uid_root=TEST_UIDROOT,
         storage_dir=anon_store,
+        storage_classes=default_storage_classes(),
         scu=LocalSCU,
         scp=LocalStorageSCP,
         remote_scps=RemoteSCPDict,
