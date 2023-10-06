@@ -69,7 +69,7 @@ def default_storage_classes() -> List[str]:
 
 
 def default_transfer_syntaxes() -> List[str]:
-    return DEFAULT_TRANSFER_SYNTAXES  # change to ALL_TRANSFER_SYNTAXES to support compression
+    return DEFAULT_TRANSFER_SYNTAXES
 
 
 @dataclass
@@ -80,15 +80,13 @@ class ProjectModel:
     uid_root: str = "1.2.826.0.1.3680043.10.188"
     storage_dir: Path = field(default_factory=default_storage_dir)
     storage_classes: List[str] = field(default_factory=default_storage_classes)
+    transfer_syntaxes: List[str] = field(default_factory=default_transfer_syntaxes)
 
     scu: DICOMNode = field(default_factory=default_local_server)
     scp: DICOMNode = field(default_factory=default_local_server)
     remote_scps: Dict[str, DICOMNode] = field(default_factory=default_remote_scps)
     network_timeout: int = 5  # seconds
     anonymizer_script_path: Path = Path("assets/scripts/default-anonymizer.script")
-
-    # TODO: provide UX to manage the allowed storage classes and supported transfer syntaxes, *FIXED FOR MVP*
-    _TRANSFER_SYNTAXES: List[str] = field(default_factory=default_transfer_syntaxes)
 
     def __repr__(self) -> str:
         class_name = self.__class__.__name__

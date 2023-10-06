@@ -2,56 +2,57 @@ from typing import Dict, Union
 import customtkinter as ctk
 from tkinter import ttk
 import logging
-from pynetdicom.sop_class import _STORAGE_CLASSES
-from utils.translate import _, insert_spaces_between_cases, insert_space_after_codes
+from utils.translate import _
 
 logger = logging.getLogger(__name__)
 
 
-class SOPClassesDialog(ctk.CTkToplevel):
-    storage_codes = [
-        "DX",
-        "CR",
-        "MR",
-        "CT",
-        "SC",
-        "MPR",
-        "PET",
-        "US",
-        "MG",
-        "NM",
-        "PT",
-        "RT",
-        "ECG",
-        "VL",
-        "SR",
-        "PDF",
-        "CDA",
-        "STL",
-        "OBJ",
-        "MTL",
-        "CAD",
-        "3D",
-        "XA",
-        "XRF",
-    ]
+class TransferSyntaxesDialog(ctk.CTkToplevel):
     attr_map = {
-        "ClassName": (_("Class Name"), 60, False),
-        "ClassID": (_("Class UID"), 30, False),
+        "SyntaxName": (_("Transfer Syntax Name"), 50, False),
+        "SyntaxUID": (_("Transfer Syntax UID"), 30, False),
     }
-    sc_lookup = {value: key for key, value in _STORAGE_CLASSES.items()}
+    # description strings added to pynetdicom.globals.ALL_TRANSFER_SYNTAXES
+    ts_lookup = {
+        "1.2.840.10008.1.2": "Implicit VR Little Endian",
+        "1.2.840.10008.1.2.1": "Explicit VR Little Endian",
+        "1.2.840.10008.1.2.1.99": "Deflated Explicit VR Little Endian",
+        "1.2.840.10008.1.2.2": "Explicit VR Big Endian",
+        "1.2.840.10008.1.2.4.50": "JPEG Baseline",
+        "1.2.840.10008.1.2.4.51": "JPEG Extended",
+        "1.2.840.10008.1.2.4.57": "JPEG Lossless P14",
+        "1.2.840.10008.1.2.4.70": "JPEG Lossless",
+        "1.2.840.10008.1.2.4.80": "JPEG-LS Lossless",
+        "1.2.840.10008.1.2.4.81": "JPEG-LS Lossy",
+        "1.2.840.10008.1.2.4.90": "JPEG 2000 Lossless",
+        "1.2.840.10008.1.2.4.91": "JPEG 2000",
+        "1.2.840.10008.1.2.4.92": "JPEG 2000 Multi-Component Lossless",
+        "1.2.840.10008.1.2.4.93": "JPEG 2000 Multi-Component",
+        "1.2.840.10008.1.2.4.94": "JPIP Referenced",
+        "1.2.840.10008.1.2.4.95": "JPIP Referenced Deflate",
+        "1.2.840.10008.1.2.4.100": "MPEG2 Main Profile / Main Level",
+        "1.2.840.10008.1.2.4.101": "MPEG2 Main Profile / High Level",
+        "1.2.840.10008.1.2.4.102": "MPEG-4 AVC/H.264 High Profile / Level 4.1",
+        "1.2.840.10008.1.2.4.103": "MPEG-4 AVC/H.264 BD-compatible High Profile",
+        "1.2.840.10008.1.2.4.104": "MPEG-4 AVC/H.264 High Profile For 2D Video",
+        "1.2.840.10008.1.2.4.105": "MPEG-4 AVC/H.264 High Profile For 3D Video",
+        "1.2.840.10008.1.2.4.106": "MPEG-4 AVC/H.264 Stereo High Profile",
+        "1.2.840.10008.1.2.4.107": "HEVC/H.265 Main Profile / Level 5.1",
+        "1.2.840.10008.1.2.4.108": "HEVC/H.265 Main 10 Profile / Level 5.1",
+        "1.2.840.10008.1.2.5": "RLE Lossless",
+    }
 
     def __init__(
         self,
-        sop_classes: list[str],
-        title: str = _("Select Storage Classes"),
+        transfer_syntaxes: list[str],
+        title: str = _("Select Transfer Syntaxes"),
     ):
         super().__init__()
-        self.sop_classes = sop_classes
+        self.transfer_syntaxes = transfer_syntaxes
         self.title(title)
         self.attributes("-topmost", True)  # stay on top
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
-        self.geometry("750x600")
+        self.geometry("600x550")
         self.resizable(True, True)
         self.grab_set()  # make dialog modal
         self._user_input: Union[list, None] = None
@@ -65,14 +66,14 @@ class SOPClassesDialog(ctk.CTkToplevel):
             return
         selected_item = selected_items[0]
         self.tree.selection_remove(selected_item)
-        if selected_item in self.sop_classes:
-            logger.info(f"REMOVE {selected_item} from sop_classes")
-            self.sop_classes.remove(selected_item)
+        if selected_item in self.transfer_syntaxes:
+            logger.info(f"REMOVE {selected_item} to transfer_syntaxes")
+            self.transfer_syntaxes.remove(selected_item)
             self.tree.item(selected_item, tags="")
 
         else:
-            logger.info(f"ADD {selected_item} to sop_classes")
-            self.sop_classes.append(selected_item)
+            logger.info(f"ADD {selected_item} to transfer_syntaxes")
+            self.transfer_syntaxes.append(selected_item)
             self.tree.item(selected_item, tags="green")
 
     def _create_widgets(self):
@@ -106,17 +107,18 @@ class SOPClassesDialog(ctk.CTkToplevel):
         scrollbar.grid(row=0, column=2, sticky="ns")
         self.tree.configure(yscrollcommand=scrollbar.set)
 
-        for class_id in _STORAGE_CLASSES.values():
-            class_name = self.sc_lookup[class_id]
-            class_name = insert_space_after_codes(
-                insert_spaces_between_cases(class_name), self.storage_codes
-            ).replace("XRay", "X-Ray")
+        for transfer_syntax in self.ts_lookup:
+            syntax_name = self.ts_lookup[transfer_syntax]
             tag = ""
-            if class_id in self.sop_classes:
+            if transfer_syntax in self.transfer_syntaxes:
                 tag = "green"
             try:
                 self.tree.insert(
-                    "", "end", iid=class_id, values=[class_name, class_id], tags=tag
+                    "",
+                    "end",
+                    iid=transfer_syntax,
+                    values=[syntax_name, transfer_syntax],
+                    tags=tag,
                 )
             except Exception as e:
                 logger.error(
@@ -135,7 +137,7 @@ class SOPClassesDialog(ctk.CTkToplevel):
         )
 
     def _ok_event(self, event=None):
-        self._user_input = self.sop_classes
+        self._user_input = self.transfer_syntaxes
         self.grab_release()
         self.destroy()
 

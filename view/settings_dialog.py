@@ -10,6 +10,7 @@ from view.dicom_node_dialog import DICOMNodeDialog
 from utils.translate import _
 from utils.ux_fields import str_entry, int_entry
 from view.sop_classes_dialog import SOPClassesDialog
+from view.transfer_syntaxes_dialog import TransferSyntaxesDialog
 
 
 logger = logging.getLogger(__name__)
@@ -201,6 +202,22 @@ class SettingsDialog(ctk.CTkToplevel):
 
         row += 1
 
+        self._transfer_syntaxes_label = ctk.CTkLabel(self, text=_("Transfer Syntaxes:"))
+        self._transfer_syntaxes_label.grid(
+            row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw"
+        )
+
+        self._transfer_syntaxes_button = ctk.CTkButton(
+            self,
+            text=_("Select Transfer Syntaxes"),
+            command=self._open_transfer_syntaxes_dialog,
+        )
+        self._transfer_syntaxes_button.grid(
+            row=row, column=1, pady=(PAD, 0), padx=PAD, sticky="nw"
+        )
+
+        row += 1
+
         # Script File is selectable ONLY for NEW projects
         # On project creation the script file is parsed and saved to the Anonymizer model
         if self.new_model:
@@ -290,6 +307,15 @@ class SettingsDialog(ctk.CTkToplevel):
         self.model.storage_classes = edited_classes
         logger.info(f"Storage Classes updated: {self.model.storage_classes}")
 
+    def _open_transfer_syntaxes_dialog(self):
+        dlg = TransferSyntaxesDialog(self.model.transfer_syntaxes)
+        edited_syntaxes = dlg.get_input()
+        if edited_syntaxes is None:
+            logger.info(f"Transfer Syntaxes cancelled")
+            return
+        self.model.transfer_syntaxes = edited_syntaxes
+        logger.info(f"Transfer Syntaxes updated: {self.model.transfer_syntaxes}")
+
     def _script_file_dialog(self):
         path = filedialog.askopenfilename(
             initialfile=str(self.model.anonymizer_script_path),
@@ -311,6 +337,8 @@ class SettingsDialog(ctk.CTkToplevel):
             trial_name=self.trial_name_var.get(),
             uid_root=self.uidroot_var.get(),
             storage_dir=self.model.storage_dir,
+            storage_classes=self.model.storage_classes,
+            transfer_syntaxes=self.model.transfer_syntaxes,
             scu=self.model.scu,
             scp=self.model.scp,
             remote_scps=self.model.remote_scps,

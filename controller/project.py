@@ -22,7 +22,6 @@ from pynetdicom.status import (
 )
 from .dicom_C_codes import (
     C_SUCCESS,
-    C_DATA_ELEMENT_DOES_NOT_EXIST,
     C_PENDING_A,
     C_PENDING_B,
     C_FAILURE,
@@ -135,30 +134,30 @@ class ProjectController(AE):
     # FOR SCP AE: Set allowed storage and verification contexts and corresponding transfer syntaxes
     def set_verification_context(self):
         self.add_supported_context(
-            self._VERIFICATION_CLASS, self.model._TRANSFER_SYNTAXES
+            self._VERIFICATION_CLASS, self.model.transfer_syntaxes
         )
         return
 
     def set_radiology_storage_contexts(self) -> None:
         for uid in sorted(self.model.storage_classes):
-            self.add_supported_context(uid, self.model._TRANSFER_SYNTAXES)
+            self.add_supported_context(uid, self.model.transfer_syntaxes)
         return
 
     # FOR SCU Association:
     def get_verification_context(self) -> PresentationContext:
         return build_context(
-            self._VERIFICATION_CLASS, self.model._TRANSFER_SYNTAXES
+            self._VERIFICATION_CLASS, self.model.transfer_syntaxes
         )  # do not include compressed transfer syntaxes
 
     def get_radiology_storage_contexts(self) -> List[PresentationContext]:
         return [
-            build_context(abstract_syntax, self.model._TRANSFER_SYNTAXES)
+            build_context(abstract_syntax, self.model.transfer_syntaxes)
             for abstract_syntax in self.model.storage_classes
         ]
 
     def set_study_root_qr_contexts(self) -> None:
         for uid in sorted(self._STUDY_ROOT_QR_CLASSES):
-            self.add_supported_context(uid, self.model._TRANSFER_SYNTAXES)
+            self.add_supported_context(uid, self.model.transfer_syntaxes)
         return
 
     # For testing:
@@ -172,7 +171,7 @@ class ProjectController(AE):
 
     def get_study_root_qr_contexts(self) -> List[PresentationContext]:
         return [
-            build_context(abstract_syntax, self.model._TRANSFER_SYNTAXES)
+            build_context(abstract_syntax, self.model.transfer_syntaxes)
             for abstract_syntax in self._STUDY_ROOT_QR_CLASSES
         ]
 
@@ -567,7 +566,7 @@ class ProjectController(AE):
                 scp_name=scp_name,
                 contexts=[
                     build_context(
-                        self._STUDY_ROOT_QR_CLASSES[1], self.model._TRANSFER_SYNTAXES
+                        self._STUDY_ROOT_QR_CLASSES[1], self.model.transfer_syntaxes
                     )
                 ],
             )

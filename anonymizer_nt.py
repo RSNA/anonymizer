@@ -41,6 +41,7 @@ PAD = 10
 
 class App(ctk.CTk):
     default_local_server = DICOMNode("127.0.0.1", 1045, "ANONYMIZER", True)
+    project_open_startup_dwell_time = 2000  # milliseconds
 
     # File Menu when project is closed:
     def new_project(self):
@@ -428,7 +429,7 @@ class App(ctk.CTk):
 
         self.create_main_frame()
         self.welcome_view = welcome.create_view(self.main_frame)
-        self.after(2000, self._open_project_startup)
+        self.after(self.project_open_startup_dwell_time, self._open_project_startup)
 
 
 def main():
@@ -458,6 +459,7 @@ def main():
     # Pyinstaller splash page close
     try:
         import pyi_splash
+
         pyi_splash.close()  # type: ignore
     except Exception:
         pass
