@@ -4,6 +4,7 @@ import logging
 from queue import Queue, Empty, Full
 import customtkinter as ctk
 from tkinter import ttk
+from CTkMessagebox import CTkMessagebox
 from controller.project import ProjectController, ExportRequest, ExportResponse
 from utils.translate import _
 from utils.storage import count_studies_series_images
@@ -30,6 +31,8 @@ attr_map = {
 # TODO: exported state: when and where, required to be tracked?
 
 _select_all_state = False
+patients_processed = 0
+patients_to_process = 0
 
 
 def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectController):
@@ -60,7 +63,7 @@ def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectControl
     # scp_echo_button.grid(row=0, column=0, padx=(0, PAD), pady=(PAD, 0), sticky="nw")
 
     # Treeview:
-    fixed_width_font = ("Courier", 14, "bold")  # Specify the font family and size
+    fixed_width_font = ("Courier", 12, "bold")  # Specify the font family and size
     # TODO: see if theme manager can do this and stor in rsna_color_scheme_font.json
     style = ttk.Style()
     style.configure("Treeview", font=fixed_width_font)
@@ -82,11 +85,6 @@ def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectControl
     # Setup display tags:
     tree.tag_configure("green", background="limegreen")
     tree.tag_configure("red", background="red")
-
-    # Set background color of treeview to light grey for all rows:
-    # ttk.Style().configure(
-    #     "Treeview", background="lightgray", fieldbackground="lightgray"
-    # )
 
     # Managing Anonymizer Store Directory Treeview:
     def update_tree_from_storage_direcctory():
@@ -156,9 +154,17 @@ def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectControl
     refresh_button = ctk.CTkButton(
         view, text=_("Refresh"), command=refresh_button_pressed
     )
-    refresh_button.grid(row=2, column=0, columnspan=2, padx=PAD, pady=PAD, sticky="we")
+    refresh_button.grid(row=2, column=7, columnspan=2, padx=PAD, pady=PAD, sticky="we")
 
     # Select All Button:
+    # def select_all_button_pressed(event):
+    #     logger.info(f"Select All button pressed")
+    #     pass
+
+    # def clear_selection_button_pressed(event):
+    #     logger.info(f"Clear Selection button pressed")
+    #     pass
+
     def toggle_select(event):
         global _select_all_state
         if not _select_all_state:
@@ -171,13 +177,71 @@ def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectControl
             select_all_button.configure(text=_("Select All"))
             _select_all_state = False
 
+    def update_export_progress():
+        global patients_processed
+        global patients_to_process
+
+        progressbar.set(patients_processed / patients_to_process)
+        if patients_processed == patients_to_process:
+            status.configure(text=f"Processed {patients_to_process} Patients")
+        else:
+            status.configure(
+                text=f"Processing {patients_processed} of {patients_to_process} Patients"
+            )
+
+    def cancel_export_button_pressed():
+        logger.info(f"Cancel Export button pressed")
+        project_controller.abort_export()
+
+    # Progress bar and status:
+    status = ctk.CTkLabel(view, text=f"Processing 0 of 0 Patients")
+    status.grid(row=2, column=0, padx=PAD, pady=0, sticky="w")
+
+    progressbar = ctk.CTkProgressBar(view)
+    progressbar.grid(
+        row=2,
+        column=1,
+        padx=PAD,
+        pady=0,
+        sticky="w",
+    )
+    progressbar.set(0)
+
+    cancel_export_button = ctk.CTkButton(
+        view,
+        text=_("Cancel Export"),
+        command=cancel_export_button_pressed,
+    )
+    cancel_export_button.grid(row=2, column=2, padx=PAD, pady=PAD, sticky="w")
+
+    def create_phi_button_pressed():
+        logger.info(f"Create PHI button pressed")
+        # TODO: error handling
+        csv_path = project_controller.create_phi_csv()
+        CTkMessagebox(
+            master=view,
+            title=_("PHI CSV File Created"),
+            message=f"PHI Lookup Data saved to: {csv_path}",
+            icon="info",
+            sound=True,
+            topmost=True,
+        )
+
+    create_phi_button = ctk.CTkButton(
+        view,
+        text=_("Create PHI"),
+        command=create_phi_button_pressed,
+    )
+    create_phi_button.grid(row=2, column=3, padx=PAD, pady=PAD, sticky="w")
+
     select_all_button = ctk.CTkButton(
         view, text=_("Select All"), command=lambda: toggle_select(event=None)
     )
     select_all_button.grid(row=2, column=8, padx=PAD, pady=PAD, sticky="e")
 
-    def monitor_export_queue(remaining_patients: int, ux_Q: Queue):
-        export_error = False
+    def monitor_export_queue(ux_Q: Queue):
+        global patients_to_process
+        global patients_processed
         while not ux_Q.empty():
             try:
                 resp: ExportResponse = ux_Q.get_nowait()
@@ -192,20 +256,21 @@ def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectControl
                 current_values[5] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 current_values[6] = str(resp.files_sent)
                 tree.item(resp.patient_id, values=current_values)
+                tree.see(resp.patient_id)
 
                 # Check for completion or critical error of this patient's export
                 if resp.complete:
                     logger.info(f"Patient {resp.patient_id} export complete")
                     # remove selection highlight to indicate export of this item/patient is finished
                     tree.selection_remove(resp.patient_id)
-                    remaining_patients -= 1
+                    if resp.files_sent == int(current_values[4]):
+                        tree.item(resp.patient_id, tags="green")
+                    patients_processed += 1
+                    update_export_progress()
 
                 if resp.error:
+                    tree.selection_remove(resp.patient_id)
                     tree.item(resp.patient_id, tags="red")
-                    export_error = True
-                    break
-                else:
-                    tree.item(resp.patient_id, tags="green")
 
             except Empty:
                 logger.info("Queue is empty")
@@ -214,12 +279,8 @@ def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectControl
 
         # Unselect
         # Check for completion of full export:
-        if remaining_patients == 0 or export_error:
-            if export_error:
-                logger.error("Export error detected, aborting monitor")
-            else:
-                logger.info("All patients exported")
-
+        if patients_processed >= patients_to_process:
+            logger.info("All patients exported")
             export_button.configure(state=ctk.NORMAL)
             select_all_button.configure(state=ctk.NORMAL)
             # re-enable tree interaction now export is complete
@@ -229,18 +290,19 @@ def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectControl
         tree.after(
             ux_poll_export_response_interval,
             monitor_export_queue,
-            remaining_patients,
             ux_Q,
         )
 
     def export_button_pressed():
+        global patients_to_process
+        global patients_processed
         logger.info(f"Export button pressed")
         sel_patient_ids = list(tree.selection())
         if not sel_patient_ids:
             logger.error(f"No patients selected for export")
             return
-        patients_to_send = len(sel_patient_ids)
-        if patients_to_send == 0:
+        patients_to_process = len(sel_patient_ids)
+        if patients_to_process == 0:
             logger.error(f"No patients selected for export")
             return
 
@@ -256,8 +318,9 @@ def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectControl
             )
         )
 
-        logger.info(f"Export of {patients_to_send} patients initiated")
-
+        logger.info(f"Export of {patients_to_process} patients initiated")
+        patients_processed = 0
+        progressbar.set(0)
         # disable tree interaction during export
         tree.configure(selectmode="none")
         # disable select_all and export buttons while export is in progress
@@ -268,7 +331,6 @@ def create_view(view: ctk.CTkFrame, PAD: int, project_controller: ProjectControl
         tree.after(
             ux_poll_export_response_interval,
             monitor_export_queue,
-            patients_to_send,
             ux_Q,
         )
 

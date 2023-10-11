@@ -7,6 +7,7 @@ import logging
 from model.project import ProjectModel
 from controller.project import DICOMNode
 from view.dicom_node_dialog import DICOMNodeDialog
+from view.aws_cognito_dialog import AWSCognitoDialog
 from utils.translate import _
 from utils.ux_fields import str_entry, int_entry
 from view.sop_classes_dialog import SOPClassesDialog
@@ -115,7 +116,7 @@ class SettingsDialog(ctk.CTkToplevel):
         )
         row += 1
 
-        servers_label = ctk.CTkLabel(self, text=_("Servers:"))
+        servers_label = ctk.CTkLabel(self, text=_("DICOM Servers:"))
         servers_label.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="nw")
 
         self._local_server_button = ctk.CTkButton(
@@ -145,9 +146,25 @@ class SettingsDialog(ctk.CTkToplevel):
 
         row += 1
 
+        servers_label = ctk.CTkLabel(self, text=_("AWS S3 Server:"))
+        servers_label.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="nw")
+
+        self._export_server_button = ctk.CTkButton(
+            self,
+            width=100,
+            text=_("AWS Cognito Credentials"),
+            command=self._aws_cognito_click,
+        )
+        self._export_server_button.grid(
+            row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="w"
+        )
+
+        row += 1
+
+        # TODO: None for timeout means no timeout, implement checkbox for enable/disable timeout
         self.nework_timeout_var = int_entry(
             view=self,
-            label=_("Network Timeout:"),
+            label=_("Network Timeout [seconds]:"),
             initial_value=self.model.network_timeout,
             min=0,
             max=30,
@@ -288,6 +305,15 @@ class SettingsDialog(ctk.CTkToplevel):
             return
         self.model.remote_scps["EXPORT"] = scp
         logger.info(f"Remote Servers: {self.model.remote_scps}")
+
+    def _aws_cognito_click(self, event=None):
+        dlg = AWSCognitoDialog(self.model.aws_cognito, self.model.export_to_AWS)
+        aws_cognito = dlg.get_input()
+        if aws_cognito is None:
+            logger.info(f"AWS Cognito cancelled")
+            return
+        self.model.aws_cognito = aws_cognito
+        logger.info(f"AWS Cognito: {self.model.aws_cognito}")
 
     def _open_storage_directory_dialog(self):
         path = filedialog.askdirectory(

@@ -1,7 +1,9 @@
-import os
+from math import log
+import os, sys
 from pathlib import Path
 import logging
 import pickle
+from re import sub
 import tkinter as tk
 from tkinter import filedialog
 import customtkinter as ctk
@@ -22,10 +24,14 @@ from pydicom.encoders import (
 
 from view.settings_dialog import SettingsDialog
 from view.dashboard import Dashboard
+from view.progress_dialog import ProgressDialog
+from view.query_retrieve_import import QueryView
+
+import view.query_retrieve_import as query_retrieve_import
 import view.export as export
 import view.welcome as welcome
 import view.help as help
-import view.query_retrieve_scp as query_retrieve_scp
+
 
 from controller.project import ProjectController, ProjectModel, DICOMNode
 
@@ -41,9 +47,8 @@ PAD = 10
 
 class App(ctk.CTk):
     default_local_server = DICOMNode("127.0.0.1", 1045, "ANONYMIZER", True)
-    project_open_startup_dwell_time = 2000  # milliseconds
+    project_open_startup_dwell_time = 500  # milliseconds
 
-    # File Menu when project is closed:
     def new_project(self):
         logging.info("New Project")
         self.disable_file_menu()
@@ -131,9 +136,9 @@ class App(ctk.CTk):
             self.project_controller.anonymizer.save_model()
             del self.project_controller.anonymizer
             del self.project_controller
-            if self.qr_window:
-                self.qr_window.destroy()
-                self.qr_window = None
+            if self._query_view:
+                self._query_view.destroy()
+                self._query_view = None
             if self.export_window:
                 self.export_window.destroy()
                 self.export_window = None
@@ -156,13 +161,18 @@ class App(ctk.CTk):
             ("All Files", "*.*"),
         ]
         paths = filedialog.askopenfilenames(filetypes=file_extension_filters)
-        self.focus_force()
         if paths:
             for path in paths:
-                # ds = dcmread(path)
                 self.project_controller.anonymizer.anonymize_dataset_and_store(
                     path, None, self.project_controller.storage_dir
                 )
+        if len(paths) > 30:
+            dlg = ProgressDialog(
+                self.project_controller.anonymizer._anon_Q,
+                title=_("Import Files Progress"),
+                sub_title=_(f"Import {len(paths)} files"),
+            )
+            dlg.get_input()
 
     def import_directory(self, event=None):
         assert self.project_controller
@@ -177,36 +187,31 @@ class App(ctk.CTk):
                 for file in files
                 if not file.startswith(".")  # and is_dicom(os.path.join(root, file))
             ]
-            logger.info(f"Processing {len(file_paths)}")
+            logger.info(f"Importing {len(file_paths)} files, adding to anonymizer Q")
             for path in file_paths:
                 self.project_controller.anonymizer.anonymize_dataset_and_store(
                     path, None, self.project_controller.storage_dir
                 )
+        dlg = ProgressDialog(
+            self.project_controller.anonymizer._anon_Q,
+            title=_("Import Directory Progress"),
+            sub_title=_(f"Import files from {root_dir}"),
+        )
+        dlg.get_input()
 
     def query_retrieve(self):
         assert self.project_controller
+        if self._query_view and self._query_view.winfo_exists():
+            logger.info(f"QueryView already OPEN")
+            self._query_view.deiconify()
+            self._query_view.focus_force()
+            return
 
-        logging.info("Query & Retrieve")
-
-        class ToplevelWindow(ctk.CTkToplevel):
-            def __init__(self, parent):
-                super().__init__(parent)
-                self.geometry(f"{1000}x{400}")
-                self.title(
-                    _(f"Query & Import from {parent.model.remote_scps['QUERY'].aet}")
-                )
-                self.rowconfigure(0, weight=1)
-                self.columnconfigure(0, weight=1)
-                self.qr_frame = ctk.CTkFrame(self)
-                self.qr_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nswe")
-                self.qr_view = query_retrieve_scp.create_view(
-                    self.qr_frame, PAD, parent.project_controller
-                )
-
-        if self.qr_window is None or not self.qr_window.winfo_exists():
-            self.qr_window = ToplevelWindow(self)
-
-        self.qr_window.focus_force()
+        logging.info("OPEN QueryView")
+        self._query_view = QueryView(self, self.project_controller)
+        # self._query_view.display()  # blocks until window is closed
+        # logger.info(f"QueryView CLOSED")
+        # self._query_view = None
 
     def export(self):
         assert self.project_controller
@@ -216,7 +221,7 @@ class App(ctk.CTk):
         class ToplevelWindow(ctk.CTkToplevel):
             def __init__(self, parent):
                 super().__init__(parent)
-                self.geometry(f"{1000}x{400}")
+                self.geometry(f"{1100}x{400}")
                 self.title(_(f"Export to {parent.model.remote_scps['EXPORT'].aet}"))
                 self.rowconfigure(0, weight=1)
                 self.columnconfigure(0, weight=1)
@@ -229,15 +234,8 @@ class App(ctk.CTk):
         if self.export_window is None or not self.export_window.winfo_exists():
             self.export_window = ToplevelWindow(self)
 
+        self.export_window.deiconify()
         self.export_window.focus_force()
-
-    # def hide_window(self):
-    #     self.set_menu_project_closed()
-    #     if self.qr_window:
-    #         # self.qr_window.withdraw()  # Hide the query retrieve window
-    #         self.qr_window.destroy()
-    #         self.qr_window = None
-    #     self.withdraw()  # Hide the main window
 
     # View Menu:
     def settings(self):
@@ -327,16 +325,17 @@ class App(ctk.CTk):
             command=self.import_directory,
             # accelerator="Command+D",
         )
-        file_menu.add_command(
-            label=_("Query & Retrieve"),
-            command=self.query_retrieve,
-            # accelerator="Command+R",
-        )
-        file_menu.add_command(
-            label=_("Export"),
-            command=self.export,
-            # accelerator="Command+E",
-        )
+
+        # file_menu.add_command(
+        #     label=_("Query & Retrieve"),
+        #     command=self.query_retrieve,
+        #     # accelerator="Command+R",
+        # )
+        # file_menu.add_command(
+        #     label=_("Export"),
+        #     command=self.export,
+        #     # accelerator="Command+E",
+        # )
         file_menu.add_separator()
         file_menu.add_command(
             label=_("Close Project"),
@@ -390,7 +389,7 @@ class App(ctk.CTk):
         # self.protocol("WM_DELETE_WINDOW", self.close_project)
         self.project_controller = None
         self.model = None
-        self.qr_window = None
+        self._query_view = None
         self.export_window = None
         self.help_window = None
 
@@ -426,6 +425,8 @@ class App(ctk.CTk):
         #     pady=(pad, 0),
         #     sticky="nw",
         # )
+        # self.bind("<Unmap>", self.OnUnmap)
+        # self.bind("<Map>", self.OnMap)
 
         self.create_main_frame()
         self.welcome_view = welcome.create_view(self.main_frame)
@@ -457,12 +458,13 @@ def main():
     )
 
     # Pyinstaller splash page close
-    try:
-        import pyi_splash
+    if sys.platform.startswith("win"):
+        try:
+            import pyi_splash
 
-        pyi_splash.close()  # type: ignore
-    except Exception:
-        pass
+            pyi_splash.close()  # type: ignore
+        except Exception:
+            pass
 
     app.mainloop()
 

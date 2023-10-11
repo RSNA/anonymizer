@@ -16,7 +16,7 @@ import view.help as help
 import view.storage_dir as storage_dir
 import view.storage_scp as storage_scp
 import view.select_local_files as select_local_files
-import view.query_retrieve_scp as query_retrieve_scp
+import view.query_retrieve_import as query_retrieve_import
 import view.export as export
 
 # To ensure DICOM C-STORE SCP is stopped and socket is closed on exit:
@@ -75,7 +75,7 @@ class TabViewNested(ctk.CTkTabview):
             elif tab == SELECT_LOCAL_FILES_VIEW:
                 select_local_files.create_view(tabview)
             elif tab == QUERY_SCP_STORAGE_VIEW:
-                query_retrieve_scp.create_view(tabview, PAD)
+                query_retrieve_import.create_view(tabview, PAD)
             elif tab == EXPORT_TO_SCP_STORAGE_VIEW:
                 export.create_view(tabview, PAD)
 

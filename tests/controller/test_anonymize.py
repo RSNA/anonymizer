@@ -102,7 +102,7 @@ def test_anonymize_dataset(temp_dir: str, controller):
     anon_pt_id = SITEID + "-000001"
     assert len(dirlist) == 1
     assert dirlist[0] == anon_pt_id
-    anon_filename = local_storage_path(local_storage_dir(temp_dir), anon_pt_id, ds)
+    anon_filename = local_storage_path(local_storage_dir(temp_dir), ds)
     anon_ds = dcmread(anon_filename)
     assert isinstance(anon_ds, Dataset)
     assert anon_ds.PatientID == anon_pt_id
