@@ -249,7 +249,7 @@ class AnonymizerController:
                         logger.error(f"\n{ds}")
                         continue
 
-                    # Return success if study already stored:
+                    # Return success if instance is already stored:
                     if self.model.get_anon_uid(ds.SOPInstanceUID):
                         logger.info(
                             f"Instance already stored: {ds.PatientID} {ds.SOPInstanceUID}"
@@ -289,7 +289,7 @@ class AnonymizerController:
                     logger.debug(f"ANON:\n{ds}")
 
                     # Save anonymized dataset to dicom file in local storage:
-                    filename = local_storage_path(dir, self.project_model.site_id, ds)
+                    filename = local_storage_path(dir, ds)
                     logger.debug(
                         f"STORE ANON[{ds.file_meta.TransferSyntaxUID}]: {source} => {filename}"
                     )

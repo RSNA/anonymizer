@@ -2,7 +2,7 @@ from typing import Union
 import customtkinter as ctk
 import string
 import logging
-from controller.project import DICOMNode
+from model.project import DICOMNode
 from utils.translate import _
 from utils.network import get_local_ip_addresses
 

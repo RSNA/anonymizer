@@ -1,4 +1,5 @@
 from ast import Set
+from email.policy import default
 import os
 import logging
 from pprint import pformat
@@ -39,6 +40,15 @@ class PHI:
     studies: List[Study]
 
 
+@dataclass
+class AWSCognito:
+    client_id: str
+    s3_bucket: str
+    s3_prefix: str
+    username: str
+    password: str
+
+
 def default_project_filename() -> str:
     return "ProjectModel.pkl"
 
@@ -53,9 +63,19 @@ def default_local_server() -> DICOMNode:
 
 def default_remote_scps() -> Dict[str, DICOMNode]:
     return {
-        "QUERY": DICOMNode("127.0.0.1", 104, "QUERYAE", False),
-        "EXPORT": DICOMNode("127.0.0.1", 104, "EXPORTAE", False),
+        "QUERY": DICOMNode("127.0.0.1", 11112, "QUERYAE", False),
+        "EXPORT": DICOMNode("127.0.0.1", 11112, "EXPORTAE", False),
     }
+
+
+def default_aws_cognito() -> AWSCognito:
+    return AWSCognito(
+        client_id="<client_id>",
+        s3_bucket="<s3_bucket>",
+        s3_prefix="uploads/",
+        username="test_user",
+        password="",
+    )
 
 
 def default_storage_classes() -> List[str]:
@@ -85,6 +105,8 @@ class ProjectModel:
     scu: DICOMNode = field(default_factory=default_local_server)
     scp: DICOMNode = field(default_factory=default_local_server)
     remote_scps: Dict[str, DICOMNode] = field(default_factory=default_remote_scps)
+    export_to_AWS: bool = False
+    aws_cognito: AWSCognito = field(default_factory=default_aws_cognito)
     network_timeout: int = 5  # seconds
     anonymizer_script_path: Path = Path("assets/scripts/default-anonymizer.script")
 

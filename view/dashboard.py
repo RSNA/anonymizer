@@ -31,9 +31,10 @@ class Dashboard(ctk.CTkFrame):
         logger.info(f"query_button_click")
         if self.controller.echo("QUERY"):
             self.query_button.configure(text_color="light green")
-            self._parent.master.query_retrieve()
+
         else:
             self.query_button.configure(text_color="red")
+        self._parent.master.query_retrieve()
 
     def export_button_click(self):
         logger.info(f"export_button_click")
@@ -95,18 +96,18 @@ class Dashboard(ctk.CTkFrame):
         self.label_series.grid(row=db_row, column=2, padx=PAD, pady=(PAD, 0))
         self.label_images.grid(row=db_row, column=3, padx=PAD, pady=(PAD, 0))
 
-        self.progressbar = ctk.CTkProgressBar(
-            self._databoard, orientation="vertical", height=0  # auto size to row
-        )
-        self.progressbar.grid(
-            row=db_row,
-            column=4,
-            rowspan=2,
-            # padx=(PAD, 2 * PAD),
-            # pady=(PAD, PAD),
-            sticky="ns",
-        )
-        self.progressbar.set(0)
+        # self.progressbar = ctk.CTkProgressBar(
+        #     self._databoard, orientation="vertical", height=0  # auto size to row
+        # )
+        # self.progressbar.grid(
+        #     row=db_row,
+        #     column=4,
+        #     rowspan=2,
+        #     # padx=(PAD, 2 * PAD),
+        #     # pady=(PAD, PAD),
+        #     sticky="ns",
+        # )
+        # self.progressbar.set(0)
 
         db_row += 1
 
@@ -178,13 +179,13 @@ class Dashboard(ctk.CTkFrame):
         qsize = self.controller.anonymizer._anon_Q.qsize()
         self._qsize.configure(text=f"{qsize}")
 
-        if qsize > self._last_qsize:
-            self.progressbar.set(1)
-            self._latch_max_qsize = qsize
-        else:
-            # If decreasing then set progressbar range and track items in Queue proportionally
-            self.progressbar.set(qsize / self._latch_max_qsize)
+        # if qsize > self._last_qsize:
+        #     self.progressbar.set(1)
+        #     self._latch_max_qsize = qsize
+        # else:
+        #     # If decreasing then set progressbar range and track items in Queue proportionally
+        #     self.progressbar.set(qsize / self._latch_max_qsize)
 
-        self._last_qsize = qsize
+        # self._last_qsize = qsize
 
         self.after(self.dashboard_update_interval, self.update_dashboard)

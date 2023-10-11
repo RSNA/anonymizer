@@ -25,9 +25,9 @@ modality_min_chars = 2  # dicomVR CS=16 max
 modality_max_chars = 3  # dicomVR CS=16 max
 
 # UX Monitor  (find, move, export)
-ux_poll_find_response_interval = 500  # milli-seconds
+
 ux_poll_export_response_interval = 500  # milli-seconds
-ux_poll_move_response_interval = 500  # milli-seconds
+
 ux_poll_local_storage_interval = 500  # milli-seconds
 
 
@@ -113,7 +113,6 @@ def str_entry(
             textvariable=str_var,
             validate="key",
             validatecommand=(
-                # view.winfo_toplevel().validate_entry_cmd,  # type: ignore
                 view.register(validate_entry),
                 "%P",
                 charset,

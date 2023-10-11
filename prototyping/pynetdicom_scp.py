@@ -26,7 +26,7 @@ def handle_store(event, storage_dir):
     remote = event.assoc.remote
     ds = event.dataset
     ds.file_meta = event.file_meta
-    fname = local_storage_path(storage_dir, "527408", ds)
+    fname = local_storage_path(storage_dir, ds)
     ds.save_as(fname, write_like_original=False)
 
     # with open(fname, "wb") as f:

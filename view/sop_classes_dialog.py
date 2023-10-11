@@ -52,7 +52,7 @@ class SOPClassesDialog(ctk.CTkToplevel):
         self.attributes("-topmost", True)  # stay on top
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.geometry("750x600")
-        self.resizable(True, True)
+        self.resizable(False, False)
         self.grab_set()  # make dialog modal
         self._user_input: Union[list, None] = None
         self.rowconfigure(0, weight=1)

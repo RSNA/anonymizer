@@ -1,11 +1,12 @@
 import os
-from typing import cast
+from typing import cast, Optional
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 import logging
 import time
 import pickle
+import csv
 from pathlib import Path
 from typing import List
 from dataclasses import dataclass
@@ -29,6 +30,7 @@ from .dicom_C_codes import (
 
 from model.project import (
     ProjectModel,
+    PHI,
     DICOMNode,
     DICOMRuntimeError,
     default_project_filename,
@@ -104,6 +106,10 @@ class ProjectController(AE):
         self.set_verification_context()
         self.maximum_pdu_size = 0  # no limit
         self._handle_store_time_slice_interval = 0.1  # seconds
+        self._abort_move = False
+        self._abort_export = False
+        self._executor = None
+        self._futures = []
         self.scp = None
         self.start_scp()
         self.anonymizer = AnonymizerController(model)
@@ -122,11 +128,20 @@ class ProjectController(AE):
         return self.model.storage_dir
 
     # Set *all* AE timeouts to the global network timeout:
-    def set_all_timeouts(self, timeout):
-        self._acse_timeout = timeout
-        self._dimse_timeout = timeout
-        self._network_timeout = timeout
-        self._connection_timeout = timeout
+    # Value of None means no timeout
+    def set_all_timeouts(self, timeout_secs: Optional[float]):
+        # ACSE: association timeout
+        # The maximum amount of time (in seconds) to wait for association related messages.
+        self._acse_timeout = timeout_secs
+        # The maximum amount of time (in seconds) to wait for a TCP connection to be established:
+        # only used during the connection phase of an association request.
+        self._connection_timeout = timeout_secs
+        # DICOM Message Service Element timeout
+        # The maximum amount of time (in seconds) to wait for DIMSE related messages.
+        self._dimse_timeout = timeout_secs
+        # Network timeout
+        # The maximum amount of time (in seconds) to wait for network messages before closing an association:
+        self._network_timeout = timeout_secs
 
     def get_network_timeout(self) -> int:
         return self.model.network_timeout
@@ -201,10 +216,6 @@ class ProjectController(AE):
         self.anonymizer.anonymize_dataset_and_store(remote_scu, ds, self.storage_dir)
         return C_SUCCESS
 
-    from typing import cast
-
-    # ...
-
     def start_scp(self) -> None:
         logger.info(f"start {self.model.scp}, {self.model.storage_dir}...")
 
@@ -235,7 +246,7 @@ class ProjectController(AE):
     def stop_scp(self) -> None:
         if not self.scp:
             return
-        logger.info("Stop {scu.aet} scp and close socket")
+        logger.info(f"Stop {self.model.scp} scp and close socket")
         self.scp.shutdown()
         self.scp = None
 
@@ -479,6 +490,9 @@ class ProjectController(AE):
             association = self.connect(scp_name, self.get_radiology_storage_contexts())
 
             for dicom_file_path in file_paths:
+                if self._abort_export:
+                    raise RuntimeError("Export aborted")
+
                 dcm_response: Dataset = association.send_c_store(
                     dataset=dicom_file_path
                 )
@@ -495,20 +509,19 @@ class ProjectController(AE):
                 # TODO: notify UX in batches of 10 files sent?
                 ux_Q.put(ExportResponse(patient_id, files_sent, None, False))
 
-        except Exception as e:
-            logger.error(f"Export Patient {patient_id} Error: {e}")
-            # TERMINATE patient export on ANY error:
-            ux_Q.put(ExportResponse(patient_id, files_sent, f"{e}", True))
-            # For all errors other than DICOMRuntimeError, terminate the full export
-            # by raiseing the exception in the ThreadPoolExecutor:
-            if not isinstance(e, DICOMRuntimeError):
-                raise
-            else:
-                return
-
-        finally:
             # Successful export:
             ux_Q.put(ExportResponse(patient_id, files_sent, None, True))
+
+        except Exception as e:
+            logger.error(f"Export Patient {patient_id} Error: {e}")
+            ux_Q.put(ExportResponse(patient_id, files_sent, f"{e}", True))
+            # TERMINATE patient export on ANY error:
+            # For all errors other than DICOMRuntimeError, terminate the full export
+            # by raising the exception in the ThreadPoolExecutor:
+            if not isinstance(e, DICOMRuntimeError):
+                raise
+
+        finally:
             if association:
                 association.release()
 
@@ -541,11 +554,17 @@ class ProjectController(AE):
 
     # Non-blocking export_patients:
     def export_patients(self, er: ExportRequest) -> None:
-        threading.Thread(
+        self._abort_export = False
+        self._export_patients_thread = threading.Thread(
             target=self._manage_export,
             args=(er,),
             daemon=True,
-        ).start()
+        )
+        self._export_patients_thread.start()
+
+    def abort_export(self):
+        logger.info("Abort Export")
+        self._abort_export = True
 
     # Blocking Move Study:
     def _move_study(
@@ -558,6 +577,9 @@ class ProjectController(AE):
         logger.debug(
             f"C-MOVE scp:{scp_name} move to: {dest_scp_ae} study_uid: {study_uid}"
         )
+
+        if self._abort_move:
+            raise RuntimeError("Move aborted")
 
         association = None
         error_msg = ""
@@ -584,6 +606,9 @@ class ProjectController(AE):
 
             # Process the responses received from the remote scp:
             for status, identifier in responses:
+                if self._abort_move:
+                    raise RuntimeError("Move aborted")
+
                 if not status or status.Status not in (
                     C_SUCCESS,
                     C_PENDING_A,
@@ -627,11 +652,13 @@ class ProjectController(AE):
 
     # Manage bulk patient move using a thread pool:
     def _manage_move(self, req: MoveRequest) -> None:
-        futures = []
+        self._futures = []
 
-        with ThreadPoolExecutor(
+        self._executor = ThreadPoolExecutor(
             max_workers=self._study_move_thread_pool_size
-        ) as executor:
+        )
+
+        with self._executor as executor:
             for i in range(len(req.study_uids)):
                 future = executor.submit(
                     self._move_study,
@@ -640,10 +667,10 @@ class ProjectController(AE):
                     req.study_uids[i],
                     req.ux_Q,
                 )
-                futures.append(future)
+                self._futures.append(future)
 
             # Check for exceptions in the completed futures
-            for future in futures:
+            for future in self._futures:
                 try:
                     # This will raise any exceptions that _move_study may have raised:
                     future.result()
@@ -656,8 +683,63 @@ class ProjectController(AE):
 
     # Non-blocking Move Studies:
     def move_studies(self, mr: MoveRequest) -> None:
+        self._abort_move = False
         threading.Thread(
             target=self._manage_move,
             args=(mr,),
             daemon=True,
         ).start()
+
+    def abort_move(self):
+        logger.info("Abort Move")
+        self._abort_move = True
+        if self._executor:
+            for future in self._futures:
+                future.cancel()
+            self._executor.shutdown(wait=False)
+            self._executor = None
+
+    def create_phi_csv(self) -> Path:
+        logger.info("Create PHI CSV")
+        field_names = [
+            _("ANON-PatientID"),
+            _("ANON-PatientName"),
+            _("PHI-PatientName"),
+            _("PHI-PatientID"),
+            _("PHI-StudyDate"),
+            _("ANON-Accession"),
+            _("PHI-Accession"),
+            _("ANON-StudyInstanceUID"),
+            _("PHI-StudyInstanceUID"),
+        ]
+        phi_data = []
+        # Create PHI data table from anonymizer model lookup tables:
+        for anon_pt_id in self.anonymizer.model._phi_lookup.keys():
+            phi: PHI = self.anonymizer.model._phi_lookup[anon_pt_id]
+            for study in phi.studies:
+                phi_data.append(
+                    (
+                        anon_pt_id,
+                        anon_pt_id,
+                        phi.patient_name,
+                        phi.patient_id,
+                        study.study_date,
+                        self.anonymizer.model._acc_no_lookup[study.accession_number],
+                        study.accession_number,
+                        self.anonymizer.model._uid_lookup[study.study_uid],
+                        study.study_uid,
+                    )
+                )
+
+        filename = (
+            f"{self.model.site_id}_{self.model.project_name}_PHI_{len(phi_data)}.csv"
+        )
+        phi_csv_path = Path(self.model.storage_dir, filename)
+        # TODO: #6 csv error handling
+        with open(phi_csv_path, "w", newline="") as csv_file:
+            writer = csv.writer(csv_file, delimiter=",")
+            writer.writerow(field_names)
+            writer.writerows(phi_data)
+        logger.info(f"PHI saved to: {phi_csv_path}")
+
+        return phi_csv_path
