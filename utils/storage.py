@@ -75,4 +75,4 @@ def images_stored(base_dir: Path, anon_pt_id: str, study_uid: str, acc_no: str) 
         for file in files:
             if file.endswith(".dcm"):
                 image_count += 1
-    return image_count  # len(list(study_path.glob("*.dcm")))
+    return image_count

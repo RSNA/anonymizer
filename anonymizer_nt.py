@@ -26,9 +26,8 @@ from view.settings_dialog import SettingsDialog
 from view.dashboard import Dashboard
 from view.progress_dialog import ProgressDialog
 from view.query_retrieve_import import QueryView
+from view.export import ExportView
 
-import view.query_retrieve_import as query_retrieve_import
-import view.export as export
 import view.welcome as welcome
 import view.help as help
 
@@ -215,27 +214,14 @@ class App(ctk.CTk):
 
     def export(self):
         assert self.project_controller
+        if self._export_view and self._export_view.winfo_exists():
+            logger.info(f"ExportView already OPEN")
+            self._export_view.deiconify()
+            self._export_view.focus_force()
+            return
 
-        logging.info("Export")
-
-        class ToplevelWindow(ctk.CTkToplevel):
-            def __init__(self, parent):
-                super().__init__(parent)
-                self.geometry(f"{1100}x{400}")
-                self.title(_(f"Export to {parent.model.remote_scps['EXPORT'].aet}"))
-                self.rowconfigure(0, weight=1)
-                self.columnconfigure(0, weight=1)
-                self.export_frame = ctk.CTkFrame(self)
-                self.export_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nswe")
-                self.export_view = export.create_view(
-                    self.export_frame, PAD, parent.project_controller
-                )
-
-        if self.export_window is None or not self.export_window.winfo_exists():
-            self.export_window = ToplevelWindow(self)
-
-        self.export_window.deiconify()
-        self.export_window.focus_force()
+        logging.info("OPEN ExportView")
+        self._export_view = ExportView(self, self.project_controller)
 
     # View Menu:
     def settings(self):
@@ -390,7 +376,7 @@ class App(ctk.CTk):
         self.project_controller = None
         self.model = None
         self._query_view = None
-        self.export_window = None
+        self._export_view = None
         self.help_window = None
 
         # self.minsize(APP_MIN_WIDTH, APP_MIN_HEIGHT)  # width, height

@@ -24,12 +24,6 @@ dicom_date_chars = 8  # dicomVR DA=8 max
 modality_min_chars = 2  # dicomVR CS=16 max
 modality_max_chars = 3  # dicomVR CS=16 max
 
-# UX Monitor  (find, move, export)
-
-ux_poll_export_response_interval = 500  # milli-seconds
-
-ux_poll_local_storage_interval = 500  # milli-seconds
-
 
 # Entry field callback functions for
 # validating user input and saving update to config.json:

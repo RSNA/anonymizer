@@ -61,7 +61,7 @@ class FindResponse:
 
 @dataclass
 class ExportRequest:
-    scp_name: str
+    dest_name: str
     patient_ids: list[str]  # list of patient IDs to export
     ux_Q: Queue  # queue for UX updates for the full export
 
@@ -213,6 +213,7 @@ class ProjectController(AE):
             remote["address"], remote["port"], remote["ae_title"], False
         )
         logger.debug(remote_scu)
+        # TODO: custom filtering via script specifying dicom field patterns
         self.anonymizer.anonymize_dataset_and_store(remote_scu, ds, self.storage_dir)
         return C_SUCCESS
 
@@ -250,7 +251,7 @@ class ProjectController(AE):
         self.scp.shutdown()
         self.scp = None
 
-    def connect(self, scp_name: str, contexts=None) -> Association:
+    def _connect_to_scp(self, scp_name: str, contexts=None) -> Association:
         association = None
         try:
             if scp_name not in self.model.remote_scps:
@@ -280,7 +281,9 @@ class ProjectController(AE):
         )
         association = None
         try:
-            association = self.connect(scp_name, [self.get_verification_context()])
+            association = self._connect_to_scp(
+                scp_name, [self.get_verification_context()]
+            )
             status = (Dataset)(association.send_c_echo())
             if not status:
                 raise ConnectionError(
@@ -314,7 +317,7 @@ class ProjectController(AE):
             send_contexts = self.get_radiology_storage_contexts()
         files_sent = 0
         try:
-            association = self.connect(scp_name, send_contexts)
+            association = self._connect_to_scp(scp_name, send_contexts)
             for dicom_file_path in file_paths:
                 dcm_response: Dataset = association.send_c_store(
                     dataset=dicom_file_path
@@ -363,11 +366,12 @@ class ProjectController(AE):
         ds.StudyInstanceUID = ""
 
         results = []
-        assoc = None
         error_msg = ""
         association = None
         try:
-            association = self.connect(scp_name, self.get_study_root_qr_contexts())
+            association = self._connect_to_scp(
+                scp_name, self.get_study_root_qr_contexts()
+            )
             # Use the C-FIND service to send the identifier
             # using the StudyRootQueryRetrieveInformationModelFind
             responses = association.send_c_find(
@@ -466,8 +470,8 @@ class ProjectController(AE):
             daemon=True,
         ).start()
 
-    def _export_patient(self, scp_name: str, patient_id: str, ux_Q: Queue) -> None:
-        logger.debug(f"_export_patient {patient_id} start")
+    def _export_patient(self, dest_name: str, patient_id: str, ux_Q: Queue) -> None:
+        logger.debug(f"_export_patient {patient_id} start to {dest_name}")
 
         association = None
         files_sent = 0
@@ -487,7 +491,10 @@ class ProjectController(AE):
             if len(file_paths) == 0:
                 raise DICOMRuntimeError(f"No DICOM files found in {patient_dir}")
 
-            association = self.connect(scp_name, self.get_radiology_storage_contexts())
+            # Connect to remote SCP:
+            association = self._connect_to_scp(
+                dest_name, self.get_radiology_storage_contexts()
+            )
 
             for dicom_file_path in file_paths:
                 if self._abort_export:
@@ -536,7 +543,7 @@ class ProjectController(AE):
         ) as executor:
             for i in range(len(req.patient_ids)):
                 future = executor.submit(
-                    self._export_patient, req.scp_name, req.patient_ids[i], req.ux_Q
+                    self._export_patient, req.dest_name, req.patient_ids[i], req.ux_Q
                 )
                 futures.append(future)
 
@@ -584,7 +591,7 @@ class ProjectController(AE):
         association = None
         error_msg = ""
         try:
-            association = self.connect(
+            association = self._connect_to_scp(
                 scp_name=scp_name,
                 contexts=[
                     build_context(

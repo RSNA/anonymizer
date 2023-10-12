@@ -63,11 +63,13 @@ class QueryView(ctk.CTkToplevel):
         self.title(f"{title} from {scp_aet}")
         self._query_active = False
         self._move_active = False
+        self._studies_processed = 0
+        self._studies_to_process = 0
         self.width = 1200
         self.height = 400
         self.geometry(f"{self.width}x{self.height}")
         self.resizable(True, True)
-        self.lift()  # lift window on top
+        self.lift()
         # self.attributes("-topmost", True)  # stay on top
         # self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         # self.overrideredirect(True) # remove window decorations
@@ -88,6 +90,7 @@ class QueryView(ctk.CTkToplevel):
         # Create frame for Query Input:
         self._query_frame = ctk.CTkFrame(self)
         self._query_frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nswe")
+        self._query_frame.grid_columnconfigure(7, weight=1)
 
         # Patient Name
         self._patient_name_var = str_entry(
@@ -175,9 +178,7 @@ class QueryView(ctk.CTkToplevel):
         self._studies_found_label = ctk.CTkLabel(
             self._query_frame, text=_("Studies Found:")
         )
-        self._studies_found_label.grid(row=1, column=7, padx=PAD, pady=PAD, sticky="w")
-        self._studies_found = ctk.CTkLabel(self._query_frame, text=_("0"))
-        self._studies_found.grid(row=1, column=8, padx=PAD, pady=PAD, sticky="w")
+        self._studies_found_label.grid(row=0, column=8, padx=PAD, pady=PAD, sticky="w")
 
         self._load_accession_file_button = ctk.CTkButton(
             self._query_frame,
@@ -185,7 +186,7 @@ class QueryView(ctk.CTkToplevel):
             command=self._load_accession_file_button_pressed,
         )
         self._load_accession_file_button.grid(
-            row=1, column=9, padx=PAD, pady=PAD, sticky="e"
+            row=1, column=8, padx=PAD, pady=PAD, sticky="e"
         )
 
         # Create frame for Query results:
@@ -194,7 +195,7 @@ class QueryView(ctk.CTkToplevel):
             row=1, column=0, padx=PAD, pady=(0, PAD), sticky="nswe"
         )
         self._results_frame.grid_rowconfigure(0, weight=1)
-        self._results_frame.grid_columnconfigure(1, weight=1)
+        self._results_frame.grid_columnconfigure(4, weight=1)
 
         # Managing C-FIND results Treeview:
         fixed_width_font = ("Courier", 12, "bold")
@@ -214,7 +215,7 @@ class QueryView(ctk.CTkToplevel):
             style="Treeview",
             columns=list(self._attr_map.keys())[:-1],
         )
-        self._tree.grid(row=0, column=0, columnspan=10, padx=(PAD, 0), sticky="nswe")
+        self._tree.grid(row=0, column=0, columnspan=10, sticky="nswe")
 
         # Create a Scrollbar and associate it with the Treeview
         scrollbar = ttk.Scrollbar(
@@ -351,7 +352,7 @@ class QueryView(ctk.CTkToplevel):
             self._update_treeview_data(df)
 
         # Update UX label for studies found:
-        self._studies_found.configure(text=f"{found_count}")
+        self._studies_found_label.configure(text=f"Studies Found: {found_count}")
 
         if query_finished:
             logger.info(f"Query finished, {found_count} results")
@@ -493,6 +494,8 @@ class QueryView(ctk.CTkToplevel):
                 if self._studies_processed >= self._studies_to_process:
                     logger.info(f"Full Move operation finished")
                     self._move_active = False
+                    # re-enable tree interaction now move is complete
+                    self._tree.configure(selectmode="extended")
                     return
 
             except Empty:
@@ -524,6 +527,8 @@ class QueryView(ctk.CTkToplevel):
             return
 
         self._move_active = True
+        # disable tree interaction during move
+        self._tree.configure(selectmode="none")
 
         # Create 1 UX queue to handle the full move / retrieve operation
         ux_Q = Queue()
