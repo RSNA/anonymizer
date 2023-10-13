@@ -7,7 +7,7 @@ from controller.project import DICOMNode, DICOMRuntimeError
 from utils.translate import _
 import prototyping.config as config
 import prototyping.dicom_storage_scp as dicom_storage_scp
-from view.storage_dir import get_storage_directory
+from prototyping.storage_dir import get_storage_directory
 from utils.network import get_local_ip_addresses
 from utils.ux_fields import (
     int_entry,

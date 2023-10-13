@@ -9,7 +9,7 @@ import logging
 from pydicom import dcmread
 from controller.anonymizer import anonymize_dataset_and_store
 from utils.translate import _
-from view.storage_dir import storage_directory
+from prototyping.storage_dir import storage_directory
 
 # The following unused imports are for pyinstaller
 # TODO: pyinstaller cmd line special import doesn't work

@@ -101,7 +101,8 @@ class ProjectController(AE):
         os.makedirs(self.model.storage_dir, exist_ok=True)
         self.set_all_timeouts(model.network_timeout)
         # TODO: maintain list of allowed calling AET's and use: def require_calling_aet(self, ae_titles: List[str]) -> None:
-        self._require_called_aet = True
+        self.require_called_aet = True
+        # self.require_calling_aet = ["MDEDEV"]
         self.set_radiology_storage_contexts()
         self.set_verification_context()
         self.maximum_pdu_size = 0  # no limit

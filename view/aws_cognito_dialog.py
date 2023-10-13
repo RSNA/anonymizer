@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Tuple
 import customtkinter as ctk
 import string
 import logging
@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 class AWSCognitoDialog(ctk.CTkToplevel):
     def __init__(
         self,
-        aws_cognito: AWSCognito,
         export_to_aws: bool,
+        aws_cognito: AWSCognito,
         title: str = _("AWS Cognito Credentials for Export to S3"),
     ):
         super().__init__()
@@ -25,8 +25,12 @@ class AWSCognitoDialog(ctk.CTkToplevel):
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.resizable(False, False)
         self.grab_set()  # make dialog modal
-        self._user_input: Union[AWSCognito, None] = None
+        self._user_input = None
         self._create_widgets()
+
+    @property
+    def user_input(self) -> Union[Tuple[bool, AWSCognito], None]:
+        return self._user_input
 
     def _create_widgets(self):
         logger.info(f"_create_widgets")
@@ -121,6 +125,9 @@ class AWSCognitoDialog(ctk.CTkToplevel):
         row += 1
 
         self._export_to_aws_checkbox = ctk.CTkCheckBox(self, text=_("Export to AWS"))
+        if self.export_to_aws:
+            self._export_to_aws_checkbox.select()
+
         self._export_to_aws_checkbox.grid(
             row=row,
             column=0,
@@ -141,12 +148,15 @@ class AWSCognitoDialog(ctk.CTkToplevel):
         )
 
     def _ok_event(self, event=None):
-        self._user_input = AWSCognito(
-            self.client_id_var.get(),
-            self.s3_bucket_var.get(),
-            self.s3_prefix_var.get(),
-            self.username_var.get(),
-            self.password_var.get(),
+        self._user_input = (
+            self._export_to_aws_checkbox.get() == 1,
+            AWSCognito(
+                self.client_id_var.get(),
+                self.s3_bucket_var.get(),
+                self.s3_prefix_var.get(),
+                self.username_var.get(),
+                self.password_var.get(),
+            ),
         )
         self.grab_release()
         self.destroy()

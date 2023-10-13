@@ -120,6 +120,9 @@ def str_entry(
                 message=_(f"{tooltipmsg} [{min_chars}..{max_chars}] chars"),
             )
 
+        if "password" in label.lower():
+            ctk_entry.configure(show="*")
+
         entry_callback = lambda event: str_entry_change(
             event, str_var, min_chars, max_chars, module, var_name
         )

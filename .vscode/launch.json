@@ -8,14 +8,6 @@
       "program": "anonymizer.py",
       "console": "integratedTerminal",
       "justMyCode": true
-    },
-    {
-      "name": "Anonymizer NT GUI",
-      "type": "python",
-      "request": "launch",
-      "program": "anonymizer_nt.py",
-      "console": "integratedTerminal",
-      "justMyCode": true
     }
   ]
 }

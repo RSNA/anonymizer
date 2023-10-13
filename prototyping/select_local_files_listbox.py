@@ -10,7 +10,7 @@ import logging
 from pydicom import dcmread, config
 from controller.anonymizer import anonymize_dataset
 from utils.translate import _
-from view.storage_dir import storage_directory
+from prototyping.storage_dir import storage_directory
 import model.project as project
 
 logger = logging.getLogger(__name__)

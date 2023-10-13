@@ -1,3 +1,4 @@
+from math import exp
 from pathlib import Path
 from typing import Union
 import customtkinter as ctk
@@ -47,13 +48,16 @@ class SettingsDialog(ctk.CTkToplevel):
         # validate_entry_cmd = self.register(validate_entry)
         logger.info(f"Font Character Width in pixels: ±{char_width_px}")
 
-        self.columnconfigure(1, weight=1)
-        self.rowconfigure(3, weight=1)
+        # self.columnconfigure(1, weight=1)
+        # self.rowconfigure(3, weight=1)
+
+        self._frame = ctk.CTkFrame(self)
+        self._frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nswe")
 
         row = 0
 
         self.site_id__var = str_entry(
-            view=self,
+            view=self._frame,
             label=_("Site ID:"),
             initial_value=self.model.site_id,
             min_chars=min_chars,
@@ -69,7 +73,7 @@ class SettingsDialog(ctk.CTkToplevel):
         row += 1
 
         self.project_name_var = str_entry(
-            view=self,
+            view=self._frame,
             label=_("Project Name:"),
             initial_value=self.model.project_name,
             min_chars=min_chars,
@@ -85,7 +89,7 @@ class SettingsDialog(ctk.CTkToplevel):
         row += 1
 
         self.trial_name_var = str_entry(
-            view=self,
+            view=self._frame,
             label=_("Trial Name:"),
             initial_value=self.model.trial_name,
             min_chars=min_chars,
@@ -101,7 +105,7 @@ class SettingsDialog(ctk.CTkToplevel):
         row += 1
 
         self.uidroot_var = str_entry(
-            view=self,
+            view=self._frame,
             label=_("UID Root:"),
             initial_value=self.model.uid_root,
             min_chars=min_chars,
@@ -116,11 +120,14 @@ class SettingsDialog(ctk.CTkToplevel):
         )
         row += 1
 
-        servers_label = ctk.CTkLabel(self, text=_("DICOM Servers:"))
+        servers_label = ctk.CTkLabel(self._frame, text=_("DICOM Servers:"))
         servers_label.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="nw")
 
         self._local_server_button = ctk.CTkButton(
-            self, width=100, text=_("Local Server"), command=self._local_server_click
+            self._frame,
+            width=100,
+            text=_("Local Server"),
+            command=self._local_server_click,
         )
         self._local_server_button.grid(
             row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="w"
@@ -129,7 +136,10 @@ class SettingsDialog(ctk.CTkToplevel):
         row += 1
 
         self._query_server_button = ctk.CTkButton(
-            self, width=100, text=_("Query Server"), command=self._query_server_click
+            self._frame,
+            width=100,
+            text=_("Query Server"),
+            command=self._query_server_click,
         )
         self._query_server_button.grid(
             row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="w"
@@ -138,7 +148,10 @@ class SettingsDialog(ctk.CTkToplevel):
         row += 1
 
         self._export_server_button = ctk.CTkButton(
-            self, width=100, text=_("Export Server"), command=self._export_server_click
+            self._frame,
+            width=100,
+            text=_("Export Server"),
+            command=self._export_server_click,
         )
         self._export_server_button.grid(
             row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="w"
@@ -146,11 +159,11 @@ class SettingsDialog(ctk.CTkToplevel):
 
         row += 1
 
-        servers_label = ctk.CTkLabel(self, text=_("AWS S3 Server:"))
+        servers_label = ctk.CTkLabel(self._frame, text=_("AWS S3 Server:"))
         servers_label.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="nw")
 
         self._export_server_button = ctk.CTkButton(
-            self,
+            self._frame,
             width=100,
             text=_("AWS Cognito Credentials"),
             command=self._aws_cognito_click,
@@ -163,7 +176,7 @@ class SettingsDialog(ctk.CTkToplevel):
 
         # TODO: None for timeout means no timeout, implement checkbox for enable/disable timeout
         self.nework_timeout_var = int_entry(
-            view=self,
+            view=self._frame,
             label=_("Network Timeout [seconds]:"),
             initial_value=self.model.network_timeout,
             min=0,
@@ -177,7 +190,9 @@ class SettingsDialog(ctk.CTkToplevel):
 
         row += 1
 
-        self._storage_directory_label = ctk.CTkLabel(self, text=_("Storage Directory:"))
+        self._storage_directory_label = ctk.CTkLabel(
+            self._frame, text=_("Storage Directory:")
+        )
         self._storage_directory_label.grid(
             row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw"
         )
@@ -185,7 +200,7 @@ class SettingsDialog(ctk.CTkToplevel):
         # Only allow setting of storage directory for NEW project:
         if self.new_model:
             self._storage_dir_button = ctk.CTkButton(
-                self,
+                self._frame,
                 text=self.model.abridged_storage_dir(),
                 command=self._open_storage_directory_dialog,
                 state=ctk.NORMAL if self.new_model else ctk.DISABLED,
@@ -195,7 +210,7 @@ class SettingsDialog(ctk.CTkToplevel):
             )
         else:
             self._storage_dir_label = ctk.CTkLabel(
-                self, text=self.model.abridged_storage_dir()
+                self._frame, text=self.model.abridged_storage_dir()
             )
             self._storage_dir_label.grid(
                 row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw"
@@ -203,13 +218,15 @@ class SettingsDialog(ctk.CTkToplevel):
 
         row += 1
 
-        self._storage_classes_label = ctk.CTkLabel(self, text=_("Storage Classes:"))
+        self._storage_classes_label = ctk.CTkLabel(
+            self._frame, text=_("Storage Classes:")
+        )
         self._storage_classes_label.grid(
             row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw"
         )
 
         self._storage_classes_button = ctk.CTkButton(
-            self,
+            self._frame,
             text=_("Select Storage Classes"),
             command=self._open_storage_classes_dialog,
         )
@@ -219,13 +236,15 @@ class SettingsDialog(ctk.CTkToplevel):
 
         row += 1
 
-        self._transfer_syntaxes_label = ctk.CTkLabel(self, text=_("Transfer Syntaxes:"))
+        self._transfer_syntaxes_label = ctk.CTkLabel(
+            self._frame, text=_("Transfer Syntaxes:")
+        )
         self._transfer_syntaxes_label.grid(
             row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw"
         )
 
         self._transfer_syntaxes_button = ctk.CTkButton(
-            self,
+            self._frame,
             text=_("Select Transfer Syntaxes"),
             command=self._open_transfer_syntaxes_dialog,
         )
@@ -238,13 +257,15 @@ class SettingsDialog(ctk.CTkToplevel):
         # Script File is selectable ONLY for NEW projects
         # On project creation the script file is parsed and saved to the Anonymizer model
         if self.new_model:
-            self._script_file_label = ctk.CTkLabel(self, text=str("Script File:"))
+            self._script_file_label = ctk.CTkLabel(
+                self._frame, text=str("Script File:")
+            )
             self._script_file_label.grid(
                 row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw"
             )
 
             self._script_file_button = ctk.CTkButton(
-                self,
+                self._frame,
                 text=str(self.model.anonymizer_script_path),
                 command=self._script_file_dialog,
             )
@@ -259,7 +280,7 @@ class SettingsDialog(ctk.CTkToplevel):
         else:
             btn_text = _("Update Project")
         self._create_project_button = ctk.CTkButton(
-            self, width=100, text=btn_text, command=self._create_project
+            self._frame, width=100, text=btn_text, command=self._create_project
         )
         self._create_project_button.grid(
             row=row,
@@ -307,13 +328,15 @@ class SettingsDialog(ctk.CTkToplevel):
         logger.info(f"Remote Servers: {self.model.remote_scps}")
 
     def _aws_cognito_click(self, event=None):
-        dlg = AWSCognitoDialog(self.model.aws_cognito, self.model.export_to_AWS)
-        aws_cognito = dlg.get_input()
-        if aws_cognito is None:
+        dlg = AWSCognitoDialog(self.model.export_to_AWS, self.model.aws_cognito)
+        input = dlg.get_input()
+        if input is None:
             logger.info(f"AWS Cognito cancelled")
             return
-        self.model.aws_cognito = aws_cognito
-        logger.info(f"AWS Cognito: {self.model.aws_cognito}")
+        self.model.export_to_AWS, self.model.aws_cognito = input
+        logger.info(
+            f"Export to AWS: {self.model.export_to_AWS}, Cognito: {self.model.aws_cognito}"
+        )
 
     def _open_storage_directory_dialog(self):
         path = filedialog.askdirectory(
@@ -368,7 +391,10 @@ class SettingsDialog(ctk.CTkToplevel):
             scu=self.model.scu,
             scp=self.model.scp,
             remote_scps=self.model.remote_scps,
+            export_to_AWS=self.model.export_to_AWS,
+            aws_cognito=self.model.aws_cognito,
             network_timeout=self.nework_timeout_var.get(),
+            anonymizer_script_path=self.model.anonymizer_script_path,
         )
         self.grab_release()
         self.destroy()

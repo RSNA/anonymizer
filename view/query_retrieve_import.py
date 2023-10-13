@@ -476,7 +476,10 @@ class QueryView(ctk.CTkToplevel):
                     self._tree.selection_remove(resp.StudyInstanceUID)
                     self._tree.item(resp.StudyInstanceUID, tags="red")
                     self._studies_processed += 1
+                    if current_values[9] == "":
+                        current_values[9] = "0"
                     current_values[9] = str(int(current_values[9]) + 1)
+                    self._tree.item(resp.StudyInstanceUID, values=current_values)
                     self._update_move_progress()
                 else:
                     current_values[8] = str(resp.NumberOfCompletedSuboperations)
