@@ -23,92 +23,66 @@ class Dashboard(ctk.CTkFrame):
         self._parent = parent
         self._last_qsize = 0
         self._latch_max_qsize = 1
-        self.controller = controller
-        self.create_widgets()
-        self.update_dashboard()
+        self._controller = controller
+        self._create_widgets()
+        self._update_dashboard()
 
-    def query_button_click(self):
-        logger.info(f"query_button_click")
-        if self.controller.echo("QUERY"):
-            self.query_button.configure(text_color="light green")
+    def _query_button_click(self):
+        logger.info(f"_query_button_click")
+        if self._controller.echo("QUERY"):
+            self._query_button.configure(text_color="light green")
         else:
-            self.query_button.configure(text_color="red")
+            self._query_button.configure(text_color="red")
 
         self._parent.master.query_retrieve()
 
-    def export_button_click(self):
-        logger.info(f"export_button_click")
-        if self.controller.echo("EXPORT"):
-            self.export_button.configure(text_color="light green")
+    def _export_button_click(self):
+        logger.info(f"_export_button_click")
+        if self._controller.echo("EXPORT"):
+            self._export_button.configure(text_color="light green")
         else:
-            self.export_button.configure(text_color="red")
+            self._export_button.configure(text_color="red")
 
         self._parent.master.export()
 
-    def create_widgets(self):
+    def _create_widgets(self):
         PAD = 20
         # TODO: manage fonts using theme
 
-        # self.title_site_id = ctk.CTkLabel(
-        #     self,
-        #     font=DASHBOARD_TITLE_FONT,
-        #     text=f"Site: {self.controller.model.site_id} ",
-        # )
-        # self.title_trial_name = ctk.CTkLabel(
-        #     self,
-        #     font=DASHBOARD_TITLE_FONT,
-        #     text=f"Trial: {self.controller.model.trial_name} ",
-        # )
-
-        # self.title_site_id.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nw")
-        # self.title_trial_name.grid(row=0, column=2, padx=PAD, pady=PAD, sticky="ne")
         row = 0
 
-        self.query_button = ctk.CTkButton(
-            self._parent, width=100, text=_("Query"), command=self.query_button_click
+        self._query_button = ctk.CTkButton(
+            self._parent, width=100, text=_("Query"), command=self._query_button_click
         )
-        self.query_button.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="w")
+        self._query_button.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="w")
 
-        self.export_button = ctk.CTkButton(
-            self._parent, width=100, text=_("Export"), command=self.export_button_click
+        self._export_button = ctk.CTkButton(
+            self._parent, width=100, text=_("Export"), command=self._export_button_click
         )
-        self.export_button.grid(row=row, column=3, padx=PAD, pady=(PAD, 0), sticky="e")
+        self._export_button.grid(row=row, column=3, padx=PAD, pady=(PAD, 0), sticky="e")
 
         row += 1
 
         self._databoard = ctk.CTkFrame(self._parent)
         db_row = 0
 
-        self.label_patients = ctk.CTkLabel(
-            self._databoard, font=DASHBOARD_LABEL_FONT, text="Patients"
+        self._label_patients = ctk.CTkLabel(
+            self._databoard, font=DASHBOARD_LABEL_FONT, text=_("Patients")
         )
-        self.label_studies = ctk.CTkLabel(
-            self._databoard, font=DASHBOARD_LABEL_FONT, text="Studies"
+        self._label_studies = ctk.CTkLabel(
+            self._databoard, font=DASHBOARD_LABEL_FONT, text=_("Studies")
         )
-        self.label_series = ctk.CTkLabel(
-            self._databoard, font=DASHBOARD_LABEL_FONT, text="Series"
+        self._label_series = ctk.CTkLabel(
+            self._databoard, font=DASHBOARD_LABEL_FONT, text=_("Series")
         )
-        self.label_images = ctk.CTkLabel(
-            self._databoard, font=DASHBOARD_LABEL_FONT, text="Images"
+        self._label_images = ctk.CTkLabel(
+            self._databoard, font=DASHBOARD_LABEL_FONT, text=_("Images")
         )
 
-        self.label_patients.grid(row=db_row, column=0, padx=PAD, pady=(PAD, 0))
-        self.label_studies.grid(row=db_row, column=1, padx=PAD, pady=(PAD, 0))
-        self.label_series.grid(row=db_row, column=2, padx=PAD, pady=(PAD, 0))
-        self.label_images.grid(row=db_row, column=3, padx=PAD, pady=(PAD, 0))
-
-        # self.progressbar = ctk.CTkProgressBar(
-        #     self._databoard, orientation="vertical", height=0  # auto size to row
-        # )
-        # self.progressbar.grid(
-        #     row=db_row,
-        #     column=4,
-        #     rowspan=2,
-        #     # padx=(PAD, 2 * PAD),
-        #     # pady=(PAD, PAD),
-        #     sticky="ns",
-        # )
-        # self.progressbar.set(0)
+        self._label_patients.grid(row=db_row, column=0, padx=PAD, pady=(PAD, 0))
+        self._label_studies.grid(row=db_row, column=1, padx=PAD, pady=(PAD, 0))
+        self._label_series.grid(row=db_row, column=2, padx=PAD, pady=(PAD, 0))
+        self._label_images.grid(row=db_row, column=3, padx=PAD, pady=(PAD, 0))
 
         db_row += 1
 
@@ -144,18 +118,8 @@ class Dashboard(ctk.CTkFrame):
             row=row, column=0, columnspan=4, sticky="nsew", padx=PAD
         )
 
-    def update_dashboard(self):
-        # if self.controller.echo("QUERY"):
-        #     self.query_button.configure(text_color="light green")
-        # else:
-        #     self.query_button.configure(text_color="red")
-
-        # if self.controller.echo("EXPORT"):
-        #     self.export_button.configure(text_color="light green")
-        # else:
-        #     self.export_button.configure(text_color="red")
-
-        dir = self.controller.model.storage_dir
+    def _update_dashboard(self):
+        dir = self._controller.model.storage_dir
         pts = os.listdir(dir)
         pts = [item for item in pts if os.path.isdir(os.path.join(dir, item))]
         studies = 0
@@ -175,18 +139,6 @@ class Dashboard(ctk.CTkFrame):
         self._series.configure(text=f"{series}")
         self._images.configure(text=f"{images}")
 
-        # Determine if Anonymizer Queue is increasing or decreasing
-        # If increasing then set progressbar to full
-        qsize = self.controller.anonymizer._anon_Q.qsize()
-        self._qsize.configure(text=f"{qsize}")
+        self._qsize.configure(text=f"{self._controller.anonymizer._anon_Q.qsize()}")
 
-        # if qsize > self._last_qsize:
-        #     self.progressbar.set(1)
-        #     self._latch_max_qsize = qsize
-        # else:
-        #     # If decreasing then set progressbar range and track items in Queue proportionally
-        #     self.progressbar.set(qsize / self._latch_max_qsize)
-
-        # self._last_qsize = qsize
-
-        self.after(self.dashboard_update_interval, self.update_dashboard)
+        self.after(self.dashboard_update_interval, self._update_dashboard)

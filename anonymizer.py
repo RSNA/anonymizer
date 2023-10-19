@@ -30,16 +30,16 @@ from view.dashboard import Dashboard
 from view.progress_dialog import ProgressDialog
 from view.query_retrieve_import import QueryView
 from view.export import ExportView
+from view.html_view import HTMLView
 
 import view.welcome as welcome
-import view.help as help
 
 
 from controller.project import ProjectController, ProjectModel, DICOMNode
 
 logger = logging.getLogger()  # get ROOT logger
 
-APP_TITLE = _("RSNA DICOM Anonymizer Version " + __version__)
+APP_TITLE = _("RSNA DICOM Anonymizer BETA Version " + __version__)
 APP_MIN_WIDTH = 800
 APP_MIN_HEIGHT = 600
 LOGO_WIDTH = 75
@@ -135,10 +135,8 @@ class App(ctk.CTk):
         self.main_frame.destroy()
         self.create_main_frame()
         self.dashboard = Dashboard(self.main_frame, self.project_controller)
-        # self.dashboard.pack(expand=True, fill="both")
-        self.set_menu_project_open()
-        self.dashboard.focus_force()
         self.protocol("WM_DELETE_WINDOW", self.close_project)
+        self.set_menu_project_open()
 
     def close_project(self, event=None):
         logging.info("Close Project")
@@ -229,9 +227,6 @@ class App(ctk.CTk):
 
         logging.info("OPEN QueryView")
         self._query_view = QueryView(self, self.project_controller)
-        # self._query_view.display()  # blocks until window is closed
-        # logger.info(f"QueryView CLOSED")
-        # self._query_view = None
 
     def export(self):
         assert self.project_controller
@@ -268,26 +263,36 @@ class App(ctk.CTk):
 
     # Help Menu:
     def instructions(self):
-        logging.info("Instructions")
+        if self._instructions_view and self._instructions_view.winfo_exists():
+            logger.info(f"Instructions HTMLView already OPEN")
+            self._instructions_view.deiconify()
+            self._instructions_view.focus_force()
+            return
 
-        class ToplevelWindow(ctk.CTkToplevel):
-            def __init__(self, parent):
-                super().__init__(parent)
-                self.geometry(f"{1000}x{800}")
-                self.title(_(f"{APP_TITLE} Instructions"))
-                self.rowconfigure(0, weight=1)
-                self.columnconfigure(0, weight=1)
-                self.help_frame = ctk.CTkFrame(self)
-                self.help_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nswe")
-                self.help_view = help.create_view(self.help_frame)
-
-        if self.help_window is None or not self.help_window.winfo_exists():
-            self.help_window = ToplevelWindow(self)
-
-        self.help_window.focus_force()
+        logging.info("OPEN Instructions HTMLView")
+        self.instructions_window = HTMLView(
+            self,
+            title=_(f"{APP_TITLE} Instructions"),
+            width=800,
+            height=600,
+            html_file_path="assets/html/instructions.html",
+        )
 
     def view_license(self):
-        logging.info("View License")
+        if self._license_view and self._license_view.winfo_exists():
+            logger.info(f"License HTMLView already OPEN")
+            self._license_view.deiconify()
+            self._license_view.focus_force()
+            return
+
+        logging.info("OPEN License HTMLView")
+        self._license_view = HTMLView(
+            self,
+            title=_(f"{APP_TITLE} License"),
+            width=600,
+            height=300,
+            html_file_path="assets/html/license.html",
+        )
 
     def get_help_menu(self):
         help_menu = tk.Menu(self.menu_bar, tearoff=0)
@@ -380,6 +385,7 @@ class App(ctk.CTk):
     def create_main_frame(self):
         self.main_frame = ctk.CTkFrame(self)
         self.main_frame.grid(row=0, column=0, padx=PAD, pady=PAD)
+        self.main_frame.focus_set()
 
     def __init__(
         self,
@@ -402,7 +408,8 @@ class App(ctk.CTk):
         self.model = None
         self._query_view = None
         self._export_view = None
-        self.help_window = None
+        self._instructions_view = None
+        self._license_view = None
 
         # self.minsize(APP_MIN_WIDTH, APP_MIN_HEIGHT)  # width, height
         # self.geometry(f"{APP_MIN_WIDTH}x{APP_MIN_HEIGHT}")

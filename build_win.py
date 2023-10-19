@@ -44,6 +44,6 @@ if __name__ == "__main__":
             "versionfile.txt",
             "--name",
             "RSNA DICOM Anonymizer",
-            "anonymizer_nt.py",
+            "anonymizer.py",
         ]
     )

@@ -35,6 +35,9 @@ class DICOMNodeDialog(ctk.CTkToplevel):
         self.resizable(False, False)
         self.grab_set()  # make dialog modal
         self._user_input: Union[DICOMNode, None] = None
+        # Bind keyboard <Return> and <Escape>:
+        self.bind("<Return>", self._enter_keypress)
+        self.bind("<Escape>", self._escape_keypress)
         self._create_widgets()
 
     def _create_widgets(self):
@@ -70,6 +73,7 @@ class DICOMNodeDialog(ctk.CTkToplevel):
             local_ips_optionmenu.grid(
                 row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw"
             )
+            local_ips_optionmenu.focus_set()
         else:
             self.domain_name_var = str_entry(
                 view=self,
@@ -86,6 +90,7 @@ class DICOMNodeDialog(ctk.CTkToplevel):
                 col=0,
                 pad=PAD,
                 sticky="nw",
+                focus_set=True,
             )
 
             row += 1
@@ -164,6 +169,10 @@ class DICOMNodeDialog(ctk.CTkToplevel):
     def _dns_lookup_event(self, event=None):
         self.ip_var.set(dns_lookup(self.domain_name_var.get()))
 
+    def _enter_keypress(self, event):
+        logger.info(f"_enter_pressed")
+        self._ok_event()
+
     def _ok_event(self, event=None):
         self._user_input = DICOMNode(
             self.ip_var.get(),
@@ -173,6 +182,10 @@ class DICOMNodeDialog(ctk.CTkToplevel):
         )
         self.grab_release()
         self.destroy()
+
+    def _escape_keypress(self, event):
+        logger.info(f"_escape_pressed")
+        self._on_cancel()
 
     def _on_cancel(self):
         self.grab_release()

@@ -1,12 +1,13 @@
 import logging
 import string
 from queue import Queue, Empty, Full
-from tkinter import filedialog
+from tkinter import Tk, filedialog
 from turtle import st
 import customtkinter as ctk
 from CTkMessagebox import CTkMessagebox
 from pydicom import Dataset
 import pandas as pd
+import tkinter as tk
 from tkinter import ttk
 from controller.dicom_C_codes import C_PENDING_A, C_PENDING_B, C_SUCCESS, C_FAILURE
 from utils.translate import _
@@ -67,17 +68,15 @@ class QueryView(ctk.CTkToplevel):
         self._acc_no_list = []
         self._studies_processed = 0
         self._studies_to_process = 0
+        self._acc_no_file_path = None
         self.width = 1200
         self.height = 400
-        self.geometry(f"{self.width}x{self.height}")
+        # Try to move query window below the dashboard:
+        self.geometry(f"{self.width}x{self.height}+0+{self.master.winfo_height()+60}")
         self.resizable(True, True)
         self.lift()
-        # self.attributes("-topmost", True)  # stay on top
-        # self.protocol("WM_DELETE_WINDOW", self._on_cancel)
-        # self.overrideredirect(True) # remove window decorations
-        # self.grab_set()  # make window modal
-        # Bind keyboard <Return>:
         self.bind("<Return>", self._enter_keypress)
+        self.bind("<Escape>", self._escape_keypress)
         self._create_widgets()
 
     def _create_widgets(self):
@@ -94,6 +93,7 @@ class QueryView(ctk.CTkToplevel):
         self._query_frame = ctk.CTkFrame(self)
         self._query_frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nswe")
         # self._query_frame.grid_columnconfigure(7, weight=1)
+        self._query_frame.focus_set()
 
         # Patient Name
         self._patient_name_var = str_entry(
@@ -134,7 +134,7 @@ class QueryView(ctk.CTkToplevel):
             label=_("Accession No.:"),
             initial_value="",
             min_chars=0,
-            max_chars=accession_no_max_chars,
+            max_chars=None,
             charset=string.ascii_letters + string.digits + " *?/-_,.",
             tooltipmsg=None,  # "Alpha-numeric, * or ? for wildcard",
             row=0,
@@ -337,7 +337,7 @@ class QueryView(ctk.CTkToplevel):
         if self._query_active or self._move_active:
             logger.info(f"Load Accession File disabled, query or move active")
             return
-        file_path = filedialog.askopenfilename(
+        self._acc_no_file_path = filedialog.askopenfilename(
             title=_(
                 "Select text or csv file with list of accession numbers to retrieve"
             ),
@@ -347,7 +347,7 @@ class QueryView(ctk.CTkToplevel):
                 ("CSV Files", "*.csv"),
             ],
         )
-        if not file_path:
+        if not self._acc_no_file_path:
             logger.info(f"Load Accession File cancelled")
             return
 
@@ -355,10 +355,10 @@ class QueryView(ctk.CTkToplevel):
         # Clear Accession Number entry field:
         self._accession_no_var.set("")
         # Read accession numbers from file:
-        with open(file_path, "r") as file:
+        with open(self._acc_no_file_path, "r") as file:
             acc_nos_str = file.read().replace("\n", ",")
 
-        self._acc_no_list = list(set(acc_nos_str.split(",")))  # remove duplicates
+        self._acc_no_list = sorted(set(acc_nos_str.split(",")))  # remove duplicates
 
         # Trigger the query:
         # TODO: optimize query using wildcards * and ? to reduce number of queries for blocks/sequences
@@ -383,11 +383,11 @@ class QueryView(ctk.CTkToplevel):
                     if self._query_active:  # not aborted
                         CTkMessagebox(
                             master=self,
-                            title=_("Query Remote Server Error"),
-                            message=f"{resp.status.ErrorComment}",
+                            message=_(
+                                f"Query Remote Server Error: {resp.status.ErrorComment}"
+                            ),
                             icon="cancel",
-                            sound=True,
-                            topmost=True,
+                            header=True,
                         )
 
                 ux_Q.task_done()
@@ -414,9 +414,11 @@ class QueryView(ctk.CTkToplevel):
             df = pd.DataFrame(data_dicts)
 
             # Update the treeview with the new data
+            # if processing accno list, this will remove found accession numbers from the list
             self._update_treeview_data(df)
 
         # Update UX label for studies found:
+        self._update_query_progress()
         self._studies_found_label.configure(
             text=f"Studies Found: {self._studies_processed}"
         )
@@ -425,12 +427,36 @@ class QueryView(ctk.CTkToplevel):
             logger.info(f"Query finished, {self._studies_processed} results")
             self._query_active = False
             self._enable_action_buttons()
-            # TODO: If accession number list search export unfound accession numbers to file:
             if self._acc_no_list:
                 logger.info(
                     f"- {len(self._acc_no_list)} NOT found: {self._acc_no_list}"
                 )
+                # If processing accession numbers from file,
+                # write any not found to file based on input file name with "_not_found" appended:
+                if self._acc_no_file_path:
+                    not_found_file_path = (
+                        f"{self._acc_no_file_path.split('.')[0]}_not_found.txt"
+                    )
+                    with open(not_found_file_path, "w") as file:
+                        file.write("\n".join(self._acc_no_list))
 
+                    logger.info(
+                        _(
+                            f"Accession numbers not found written to: {not_found_file_path}"
+                        )
+                    )
+
+                    # TODO: investigate errors (hanging and blank box) when using standard form of CTkMessagebox
+                    CTkMessagebox(
+                        master=self,
+                        message=_(
+                            f"Accession Numbers not found were written to: {not_found_file_path}"
+                        ),
+                        icon="info",
+                        header=True,
+                    )
+
+            self._acc_no_file_path = None
             self._acc_no_list = []  # reset accession number list
         else:
             # Re-trigger monitor_query_response callback:
@@ -441,17 +467,23 @@ class QueryView(ctk.CTkToplevel):
             )
 
     def _enter_keypress(self, event):
-        logger.debug(f"_enter_pressed")
+        logger.info(f"_enter_pressed")
         self._query_button_pressed()
 
     def _query_button_pressed(self):
-        logger.info(f"Query button pressed, initiate find request...")
+        logger.info(f"Query button pressed")
 
         if self._query_active:
             logger.error(f"Query disabled, query is active")
             return
         if self._move_active:
             logger.error(f"Query disabled, move is active")
+            return
+
+        if self._controller.echo("QUERY"):
+            self._query_button.configure(text_color="light green")
+        else:
+            self._query_button.configure(text_color="red")
             return
 
         self._query_active = True
@@ -464,13 +496,19 @@ class QueryView(ctk.CTkToplevel):
             self._acc_no_list = self._accession_no_var.get().split(",")
 
         if self._acc_no_list:
-            # Remove empty strings from the list
-            self._acc_no_list = [s.strip() for s in self._acc_no_list if s.strip()]
-            # Add accession numbers to the treeview:
-            # for acc_no in self._acc_no_list:
-            #     self._tree.insert(
-            #         "", "end", iid=acc_no, values=["", "", "", "", acc_no]
-            #     )
+            # Remove null strings and keep unique values
+            filtered_acc_nos = list(filter(None, set(self._acc_no_list)))
+
+            # Separate numeric and non-numeric strings
+            numeric_acc_nos = [x for x in filtered_acc_nos if x.isdigit()]
+            non_numeric_acc_nos = [x for x in filtered_acc_nos if not x.isdigit()]
+
+            # Sort numeric strings in ascending order
+            sorted_numeric = sorted(numeric_acc_nos, key=lambda x: int(x))
+
+            # Concatenate numeric and non-numeric sorted lists
+            self._acc_no_list = sorted_numeric + non_numeric_acc_nos
+
             self._studies_to_process = len(self._acc_no_list)
         else:
             self._studies_to_process = -1  # unknown
@@ -516,7 +554,7 @@ class QueryView(ctk.CTkToplevel):
             )
             return
         self._status.configure(
-            text=f"Found {self._studies_to_process} of {studies_to_process} Studies"
+            text=f"Found {self._studies_processed} of {studies_to_process} Studies"
         )
 
     def _clear_results_tree(self):
@@ -576,11 +614,9 @@ class QueryView(ctk.CTkToplevel):
                     self._move_active = False
                     CTkMessagebox(
                         master=self,
-                        title=_("Fatal Move Error"),
                         message=f"Terminate move operation, fatal error detected: {resp}",
                         icon="cancel",
-                        sound=True,
-                        topmost=True,
+                        header=True,
                     )
                     return
 
@@ -738,6 +774,10 @@ class QueryView(ctk.CTkToplevel):
                     f"Exception: {e}"
                 )  # _tkinter.TclError: Item {iid} already exists
 
+    def _escape_keypress(self, event):
+        logger.info(f"_escape_pressed")
+        self._on_cancel()
+
     def _on_cancel(self):
         logger.info(f"_on_cancel")
         if self._query_active or self._move_active:
@@ -745,8 +785,4 @@ class QueryView(ctk.CTkToplevel):
             return
 
         self.grab_release()
-        self.iconify()
-
-    def display(self):
-        self.master.wait_window(self)
-        return
+        self.destroy()

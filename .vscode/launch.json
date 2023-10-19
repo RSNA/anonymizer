@@ -7,7 +7,7 @@
       "request": "launch",
       "program": "anonymizer.py",
       "console": "integratedTerminal",
-      "justMyCode": true
+      "justMyCode": false
     }
   ]
 }

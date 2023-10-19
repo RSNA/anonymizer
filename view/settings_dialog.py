@@ -36,6 +36,8 @@ class SettingsDialog(ctk.CTkToplevel):
         self.grab_set()  # make dialog modal
         self._user_input: Union[ProjectModel, None] = None
         self._create_widgets()
+        self.bind("<Return>", self._enter_keypress)
+        self.bind("<Escape>", self._escape_keypress)
 
     def _create_widgets(self):
         logger.info(f"_create_widgets")
@@ -389,6 +391,10 @@ class SettingsDialog(ctk.CTkToplevel):
             self._script_file_button.configure(text=path)
             logger.info(f"Anonymizer Script File: {self.model.anonymizer_script_path}")
 
+    def _enter_keypress(self, event):
+        logger.info(f"_enter_pressed")
+        self._create_project()
+
     def _create_project(self):
         self._user_input = ProjectModel(
             site_id=self.site_id__var.get(),
@@ -408,6 +414,10 @@ class SettingsDialog(ctk.CTkToplevel):
         )
         self.grab_release()
         self.destroy()
+
+    def _escape_keypress(self, event):
+        logger.info(f"_escape_pressed")
+        self._on_cancel()
 
     def _on_cancel(self):
         self.grab_release()

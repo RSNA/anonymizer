@@ -1,3 +1,4 @@
+from math import log
 import os
 from typing import cast
 import threading
@@ -339,14 +340,15 @@ class ProjectController(AE):
             logger.debug(
                 f"Association established with {association.acceptor.ae_title}"
             )
-        except (ConnectionError, TimeoutError, RuntimeError) as e:
+        except Exception as e:  # (ConnectionError, TimeoutError, RuntimeError) as e:
             logger.error(f"Error establishing association: {e}")
             raise
+
         return association
 
     def echo(self, scp_name: str) -> bool:
         logger.info(
-            f"C-ECHO from {self.model.scu} to {self.model.remote_scps[scp_name]}"
+            f"Perform C-ECHO from {self.model.scu} to {self.model.remote_scps[scp_name]}"
         )
         association = None
         try:
@@ -553,7 +555,7 @@ class ProjectController(AE):
         logger.info(
             f"C-FIND to {scp} Accession Query: {len(acc_no_list)} accession numbers..."
         )
-        logger.info(f"{acc_no_list}")
+        logger.debug(f"{acc_no_list}")
 
         ds = Dataset()
         ds.QueryRetrieveLevel = "STUDY"
@@ -581,7 +583,6 @@ class ProjectController(AE):
 
                 if acc_no == "":
                     continue
-                logger.debug(f"Search for AccesssionNumber={acc_no}...")
 
                 ds.AccessionNumber = acc_no
 
@@ -590,7 +591,8 @@ class ProjectController(AE):
                     query_model=self._STUDY_ROOT_QR_CLASSES[0],
                 )
 
-                # Process the responses received from the peer
+                # Process the response(s) received from the peer
+                # one response with C_PENDING with identifier and one response with C_SUCCESS and no identifier
                 for status, identifier in responses:
                     if not status or status.Status not in (
                         C_SUCCESS,
@@ -606,11 +608,6 @@ class ProjectController(AE):
                                 f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}"
                             )
                     else:
-                        if status.Status == C_SUCCESS:
-                            logger.debug("C-FIND query success")
-                            if not identifier:
-                                logger.debug("But no query results found")
-
                         if identifier:
                             if verify_attributes:
                                 missing_attributes = (
@@ -622,6 +619,13 @@ class ProjectController(AE):
                                     )
                                     logger.error(f"\n{identifier}")
                                     continue
+
+                            # If PACS does an implicit wildcard search remove these responses, only accept exact matches:
+                            if identifier.AccessionNumber != acc_no:
+                                logger.error(
+                                    f"AccessionNumber {identifier.AccessionNumber} does not match {acc_no}"
+                                )
+                                continue
 
                             # TODO: move this code to UX client?
                             fields_to_remove = [
@@ -635,8 +639,17 @@ class ProjectController(AE):
 
                             results.append(identifier)
 
-                        if ux_Q:
-                            ux_Q.put(FindResponse(status, identifier))
+                            # Only return identifiers back to UX
+                            # do not return (C_SUCCESS,None) as in find()
+                            if ux_Q:
+                                ux_Q.put(FindResponse(status, identifier))
+
+            # Signal success to UX once full list of accession numbers has been processed
+            if ux_Q:
+                logger.info(f"Find Accession Numbers complete")
+                ds = Dataset()
+                ds.Status = C_SUCCESS
+                ux_Q.put(FindResponse(ds, None))
 
         except (
             ConnectionError,
@@ -682,8 +695,11 @@ class ProjectController(AE):
     def find_ex(self, fr: FindRequest) -> None:
         if isinstance(fr.acc_no, list):
             logger.info("Find accession numbers")
-            # Copy the list to allow caller to reset the list:
-            # acc_no_list = fr.acc_no.copy()
+            # Due to client removing numbers as they are found, make a copy of the list:
+            if isinstance(fr.acc_no, list):
+                acc_no_list = fr.acc_no.copy()
+                fr.acc_no = acc_no_list
+
             threading.Thread(
                 target=self.find_acc_nos,
                 args=(
@@ -959,7 +975,7 @@ class ProjectController(AE):
         #     move_association = None
         self._abort_move = True
 
-    def create_phi_csv(self) -> Path:
+    def create_phi_csv(self) -> Path | str:
         logger.info("Create PHI CSV")
         field_names = [
             _("ANON-PatientID"),
@@ -997,11 +1013,16 @@ class ProjectController(AE):
             f"{self.model.site_id}_{self.model.project_name}_PHI_{len(phi_data)}.csv"
         )
         phi_csv_path = Path(self.model.storage_dir, filename)
-        # TODO: #6 csv error handling
-        with open(phi_csv_path, "w", newline="") as csv_file:
-            writer = csv.writer(csv_file, delimiter=",")
-            writer.writerow(field_names)
-            writer.writerows(phi_data)
-        logger.info(f"PHI saved to: {phi_csv_path}")
+
+        try:
+            os.remove(phi_csv_path)
+            with open(phi_csv_path, "w", newline="") as csv_file:
+                writer = csv.writer(csv_file, delimiter=",")
+                writer.writerow(field_names)
+                writer.writerows(phi_data)
+            logger.info(f"PHI saved to: {phi_csv_path}")
+        except Exception as e:
+            logger.error(f"Error writing PHI CSV: {e}")
+            return repr(e)
 
         return phi_csv_path

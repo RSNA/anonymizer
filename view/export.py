@@ -50,10 +50,13 @@ class ExportView(ctk.CTkToplevel):
         self._patients_to_process = 0
         self.width = 1200
         self.height = 400
-        self.geometry(f"{self.width}x{self.height}")
+        # Try to move export window to right of the dashboard:
+        self.geometry(f"{self.width}x{self.height}+{self.master.winfo_width()}+0")
         self.resizable(True, True)
         self.lift()
         self._create_widgets()
+        self.bind("<Return>", self._enter_keypress)
+        self.bind("<Escape>", self._escape_keypress)
 
     def _create_widgets(self):
         logger.info(f"_create_widgets")
@@ -176,9 +179,10 @@ class ExportView(ctk.CTkToplevel):
             width=ButtonWidth,
             text=_("Export"),
             # state=ctk.DISABLED,
-            command=self.export_button_pressed,
+            command=self._export_button_pressed,
         )
         self._export_button.grid(row=1, column=10, padx=PAD, pady=PAD, sticky="e")
+        self._export_button.focus_set()
 
     def _update_tree_from_storage_direcctory(self):
         # Storage Directory Sub-directory Names = Patient IDs
@@ -252,14 +256,25 @@ class ExportView(ctk.CTkToplevel):
         logger.info(f"Create PHI button pressed")
         # TODO: error handling
         csv_path = self._controller.create_phi_csv()
-        CTkMessagebox(
-            master=self,
-            title=_("PHI CSV File Created"),
-            message=f"PHI Lookup Data saved to: {csv_path}",
-            icon="info",
-            sound=True,
-            topmost=True,
-        )
+        if isinstance(csv_path, str):
+            logger.error(f"Failed to create PHI CSV file: {csv_path}")
+            CTkMessagebox(
+                master=self,
+                title=_("Error Creating PHI CSV File"),
+                message=csv_path,
+                icon="cancel",
+                sound=True,
+            )
+            return
+        else:
+            logger.info(f"PHI CSV file created: {csv_path}")
+            CTkMessagebox(
+                master=self,
+                title=_("PHI CSV File Created"),
+                message=f"PHI Lookup Data saved to: {csv_path}",
+                icon="info",
+                sound=True,
+            )
 
     def _update_export_progress(self):
         self._progressbar.set(self._patients_processed / self._patients_to_process)
@@ -298,7 +313,7 @@ class ExportView(ctk.CTkToplevel):
 
                 # Check for completion or critical error of this patient's export
                 if resp.complete:
-                    logger.info(f"Patient {resp.patient_id} export complete")
+                    logger.debug(f"Patient {resp.patient_id} export complete")
                     # remove selection highlight to indicate export of this item/patient is finished
                     self._tree.selection_remove(resp.patient_id)
                     if resp.files_sent == int(current_values[4]):
@@ -332,18 +347,27 @@ class ExportView(ctk.CTkToplevel):
             ux_Q,
         )
 
-    def export_button_pressed(self):
+    def _enter_keypress(self, event):
+        logger.info(f"_enter_pressed")
+        self._export_button_pressed()
+
+    def _export_button_pressed(self):
         logger.info(f"Export button pressed")
         if self._export_active:
             logger.error(f"Selection disabled, export is active")
             return
+
         sel_patient_ids = list(self._tree.selection())
-        if not sel_patient_ids:
-            logger.error(f"No patients selected for export")
-            return
+
         self._patients_to_process = len(sel_patient_ids)
         if self._patients_to_process == 0:
             logger.error(f"No patients selected for export")
+            return
+
+        if self._controller.echo("EXPORT"):
+            self._export_button.configure(text_color="light green")
+        else:
+            self._export_button.configure(text_color="red")
             return
 
         self._export_active = True
@@ -375,3 +399,16 @@ class ExportView(ctk.CTkToplevel):
             self._monitor_export_queue,
             ux_Q,
         )
+
+    def _escape_keypress(self, event):
+        logger.info(f"_escape_pressed")
+        self._on_cancel()
+
+    def _on_cancel(self):
+        logger.info(f"_on_cancel")
+        if self._export_active:
+            logger.info(f"Cancel disabled, export active")
+            return
+
+        self.grab_release()
+        self.destroy()

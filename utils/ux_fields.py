@@ -29,9 +29,9 @@ modality_max_chars = 3  # dicomVR CS=16 max
 # validating user input and saving update to config.json:
 
 
-def validate_entry(final_value: str, allowed_chars: str, max: str):
+def validate_entry(final_value: str, allowed_chars: str, max: str | None):
     # BUG: max is always a string, so convert to int
-    if len(final_value) > int(max):
+    if max and max != "None" and len(final_value) > int(max):
         return False
     for char in final_value:
         if char not in allowed_chars:
@@ -63,12 +63,12 @@ def str_entry_change(
     event: tk.Event,
     var: ctk.StringVar,
     min_len: int,
-    max_len: int,
+    max_len: int | None,
     module_name: str | None = None,
     var_name: str | None = None,
 ) -> None:
     value = var.get()
-    if len(value) > max_len:
+    if max_len and len(value) > max_len:
         var.set(value[:max_len])
     elif len(value) < min_len:
         var.set(value[:min_len])
@@ -81,7 +81,7 @@ def str_entry(
     label: str,
     initial_value: str,
     min_chars: int,
-    max_chars: int,
+    max_chars: int | None,
     charset: str,
     tooltipmsg: str | None,
     row: int,
@@ -91,13 +91,17 @@ def str_entry(
     module: str | None = None,
     var_name: str | None = None,
     enabled: bool = True,
+    width_chars: int = 20,
+    focus_set=False,
 ) -> ctk.StringVar:
     str_var = ctk.StringVar(view, value=initial_value)
     char_width_px = ctk.CTkFont().measure("_")
     ctk_label = ctk.CTkLabel(view, text=label)
     ctk_label.grid(row=row, column=col, padx=pad, pady=(pad, 0), sticky=sticky)
-    width = (max_chars + 3) * char_width_px  # TO DO: this approach is not accurate
-
+    # TO DO: using char width in pixels approach is not accurate
+    width = (
+        (max_chars + 3) * char_width_px if max_chars else width_chars * char_width_px
+    )
     if not enabled:
         ctk_entry = ctk.CTkLabel(view, textvariable=str_var)
     else:
@@ -110,7 +114,7 @@ def str_entry(
                 view.register(validate_entry),
                 "%P",
                 charset,
-                str(max_chars),
+                None if max_chars is None else str(max_chars),
             ),
         )
 
@@ -130,6 +134,9 @@ def str_entry(
         ctk_entry.bind("<FocusOut>", entry_callback)
 
     ctk_entry.grid(row=row, column=col + 1, padx=pad, pady=(pad, 0), sticky="nw")
+
+    if focus_set:
+        ctk_entry.focus_set()
     return str_var
 
 
