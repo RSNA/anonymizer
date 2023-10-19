@@ -68,6 +68,7 @@ def test_move_1_CT_file_from_pacs_with_file_to_local_storage(
     temp_dir: str, controller: ProjectController
 ):
     ds: Dataset = send_file_to_scp(ct_small_filename, True, controller)
+
     dirlist = os.listdir(pacs_storage_dir(temp_dir))
     assert len(dirlist) == 1
     assert dirlist[0] == ds.SeriesInstanceUID + ".1.dcm"
@@ -84,7 +85,10 @@ def test_move_1_CT_file_from_pacs_with_file_to_local_storage(
     assert result2.NumberOfFailedSuboperations == 0
     assert result2.NumberOfWarningSuboperations == 0
     time.sleep(1)
-    dirlist = os.listdir(local_storage_dir(temp_dir))
+    store_dir = local_storage_dir(temp_dir)
+    dirlist = [
+        d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))
+    ]
     assert len(dirlist) == 1
     assert dirlist[0] == controller.model.site_id + "-000001"
 
@@ -124,7 +128,10 @@ def test_move_of_3_studies_from_pacs_to_local_storage(
         [ds1.StudyInstanceUID, ds2.StudyInstanceUID, dsets[0].StudyInstanceUID],
         controller,
     )
-    dirlist = os.listdir(local_storage_dir(temp_dir))
+    store_dir = local_storage_dir(temp_dir)
+    dirlist = [
+        d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))
+    ]
     assert len(dirlist) == 3
     time.sleep(0.5)
     total_studies = 0

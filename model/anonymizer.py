@@ -26,7 +26,9 @@ class AnonymizerModel:
         class_name = self.__class__.__name__
         # Exclude the '_tag_keep' attribute from the dictionary
         filtered_dict = {
-            key: value for key, value in self.__dict__.items() if key != "_tag_keep"
+            key: len(value) if isinstance(value, dict) else value
+            for key, value in (self.__dict__.items())
+            # if key != "_tag_keep"
         }
         return f"{class_name}\n({pformat(filtered_dict)})"
 

@@ -31,18 +31,19 @@ class Dashboard(ctk.CTkFrame):
         logger.info(f"query_button_click")
         if self.controller.echo("QUERY"):
             self.query_button.configure(text_color="light green")
-
         else:
             self.query_button.configure(text_color="red")
+
         self._parent.master.query_retrieve()
 
     def export_button_click(self):
         logger.info(f"export_button_click")
         if self.controller.echo("EXPORT"):
             self.export_button.configure(text_color="light green")
-            self._parent.master.export()
         else:
             self.export_button.configure(text_color="red")
+
+        self._parent.master.export()
 
     def create_widgets(self):
         PAD = 20
@@ -156,7 +157,7 @@ class Dashboard(ctk.CTkFrame):
 
         dir = self.controller.model.storage_dir
         pts = os.listdir(dir)
-        pts = [item for item in pts if not item.endswith(".pkl")]
+        pts = [item for item in pts if os.path.isdir(os.path.join(dir, item))]
         studies = 0
         series = 0
         images = 0

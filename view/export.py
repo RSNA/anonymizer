@@ -141,7 +141,7 @@ class ExportView(ctk.CTkToplevel):
         self._create_phi_button = ctk.CTkButton(
             self._export_frame,
             width=ButtonWidth,
-            text=_("Create PHI"),
+            text=_("Create Patient Lookup"),
             command=self._create_phi_button_pressed,
         )
         self._create_phi_button.grid(row=1, column=5, padx=PAD, pady=PAD, sticky="w")

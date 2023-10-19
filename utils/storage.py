@@ -1,3 +1,4 @@
+from email.mime import base
 import os
 from pathlib import Path
 from turtle import st
@@ -7,15 +8,23 @@ from pydicom import Dataset
 
 
 def local_storage_path(base_dir: Path, ds: Dataset) -> Path:
+    assert base_dir
+    assert hasattr(ds, "PatientID")
     study_uid = str(ds.StudyInstanceUID)
     if not "." in study_uid:
-        study_suffix = "INVALID"
+        study_uid_suffix = "INVALID_STUDY_UID"
     else:
-        study_suffix = study_uid.rsplit(".", 1)[-1]
+        study_uid_suffix = study_uid.rsplit(".", 1)[-1]
+    if (
+        not hasattr(ds, "AccessionNumber")
+        or ds.AccessionNumber is None
+        or ds.AccessionNumber == ""
+    ):
+        ds.AccessionNumber = "ACC_NO_MISSING"
     dest_path = Path(
         base_dir,
         str(ds.PatientName),
-        "Study" + "-" + ds.AccessionNumber + "-" + study_suffix,
+        "Study" + "-" + ds.AccessionNumber + "-" + study_uid_suffix,
         "Series" + "-" + str(ds.SeriesNumber),
         "Image" + "-" + str(ds.InstanceNumber) + ".dcm",
     )
@@ -57,6 +66,7 @@ def images_stored(base_dir: Path, anon_pt_id: str, study_uid: str, acc_no: str) 
     Args:
         anon_uid (str): The anonymous patient ID.
         study_uid (str): The study UID.
+        adc_no (str): The accession number.
 
     Returns:
         The number of images stored in the study directory.
@@ -71,8 +81,10 @@ def images_stored(base_dir: Path, anon_pt_id: str, study_uid: str, acc_no: str) 
     instance_path = local_storage_path(base_dir, ds)
     study_path = instance_path.parent.parent
     image_count = 0
+
     for root, dirs, files in os.walk(study_path):
         for file in files:
             if file.endswith(".dcm"):
                 image_count += 1
+
     return image_count

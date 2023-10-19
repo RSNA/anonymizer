@@ -1,5 +1,6 @@
 from ast import Set
 from email.policy import default
+from multiprocessing import connection
 import os
 import logging
 from pprint import pformat
@@ -26,8 +27,17 @@ class DICOMNode:
 
 
 @dataclass
+class NetworkTimeouts:
+    tcp_connection: float  # max time to wait for tcp connection to be established
+    acse: float  # max time to wait for association messages
+    dimse: float  # max time to wait for DIMSE messages
+    network: float  # max time to wait for network messages
+
+
+@dataclass
 class Study:
     study_date: str
+    anon_date_delta: int
     accession_number: str
     study_uid: str
     source: DICOMNode | str
@@ -42,6 +52,7 @@ class PHI:
 
 @dataclass
 class AWSCognito:
+    region_name: str
     client_id: str
     s3_bucket: str
     s3_prefix: str
@@ -70,6 +81,7 @@ def default_remote_scps() -> Dict[str, DICOMNode]:
 
 def default_aws_cognito() -> AWSCognito:
     return AWSCognito(
+        region_name="<region_name>",
         client_id="<client_id>",
         s3_bucket="<s3_bucket>",
         s3_prefix="uploads/",
@@ -92,6 +104,10 @@ def default_transfer_syntaxes() -> List[str]:
     return DEFAULT_TRANSFER_SYNTAXES
 
 
+def default_timeouts() -> NetworkTimeouts:
+    return NetworkTimeouts(5, 30, 30, 60)
+
+
 @dataclass
 class ProjectModel:
     site_id: str = _("9999")
@@ -107,7 +123,7 @@ class ProjectModel:
     remote_scps: Dict[str, DICOMNode] = field(default_factory=default_remote_scps)
     export_to_AWS: bool = False
     aws_cognito: AWSCognito = field(default_factory=default_aws_cognito)
-    network_timeout: int = 5  # seconds
+    network_timeouts: NetworkTimeouts = field(default_factory=default_timeouts)
     anonymizer_script_path: Path = Path("assets/scripts/default-anonymizer.script")
 
     def __repr__(self) -> str:

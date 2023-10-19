@@ -1,5 +1,5 @@
 import os
-from typing import cast, Optional
+from typing import cast
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
@@ -11,10 +11,17 @@ from pathlib import Path
 from typing import List
 from dataclasses import dataclass
 from pydicom import Dataset
+from pydicom.dataset import FileMetaDataset
 from pynetdicom.association import Association
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.presentation import PresentationContext, build_context
-from pynetdicom.events import Event, EVT_C_STORE, EVT_C_ECHO, EventHandlerType
+from pynetdicom.events import (
+    Event,
+    EVT_ABORTED,
+    EVT_C_STORE,
+    EVT_C_ECHO,
+    EventHandlerType,
+)
 from pynetdicom.status import (
     VERIFICATION_SERVICE_CLASS_STATUS,
     STORAGE_SERVICE_CLASS_STATUS,
@@ -26,12 +33,15 @@ from .dicom_C_codes import (
     C_PENDING_A,
     C_PENDING_B,
     C_FAILURE,
+    C_STORE_DATASET_ERROR,
+    C_STORE_DECODE_ERROR,
 )
 
 from model.project import (
     ProjectModel,
     PHI,
     DICOMNode,
+    NetworkTimeouts,
     DICOMRuntimeError,
     default_project_filename,
 )
@@ -47,7 +57,7 @@ class FindRequest:
     scp_name: str
     name: str
     id: str
-    acc_no: str
+    acc_no: str | list[str]
     study_date: str
     modality: str
     ux_Q: Queue
@@ -93,13 +103,36 @@ class ProjectController(AE):
     _handle_store_time_slice_interval = 0.1  # seconds
     _patient_export_thread_pool_size = 4
     _study_move_thread_pool_size = 4
+    _query_result_required_attributes = [
+        "PatientID",
+        "PatientName",
+        "StudyInstanceUID",
+        "StudyDate",
+        "AccessionNumber",
+        "ModalitiesInStudy",
+        "NumberOfStudyRelatedSeries",
+        "NumberOfStudyRelatedInstances",
+    ]
+
+    def _missing_query_result_attributes(self, ds: Dataset) -> list[str]:
+        return [
+            attr_name
+            for attr_name in self._query_result_required_attributes
+            if attr_name not in ds or getattr(ds, attr_name) == ""
+        ]
+
+    def _reset_scp_vars(self):
+        self._abort_query = False
+        self._abort_move = False
+        self._abort_export = False
+        self.scp = None
 
     def __init__(self, model: ProjectModel):
         super().__init__(model.scu.aet)
         self.model = model
         # Make sure storage directory exists:
         os.makedirs(self.model.storage_dir, exist_ok=True)
-        self.set_all_timeouts(model.network_timeout)
+        self.set_dicom_timeouts(model.network_timeouts)
         # TODO: maintain list of allowed calling AET's and use: def require_calling_aet(self, ae_titles: List[str]) -> None:
         self.require_called_aet = True
         # self.require_calling_aet = ["MDEDEV"]
@@ -107,12 +140,7 @@ class ProjectController(AE):
         self.set_verification_context()
         self.maximum_pdu_size = 0  # no limit
         self._handle_store_time_slice_interval = 0.1  # seconds
-        self._abort_move = False
-        self._abort_export = False
-        self._executor = None
-        self._futures = []
-        self.scp = None
-        self.start_scp()
+        self._reset_scp_vars()
         self.anonymizer = AnonymizerController(model)
 
     def __str__(self):
@@ -128,24 +156,23 @@ class ProjectController(AE):
     def storage_dir(self):
         return self.model.storage_dir
 
-    # Set *all* AE timeouts to the global network timeout:
     # Value of None means no timeout
-    def set_all_timeouts(self, timeout_secs: Optional[float]):
-        # ACSE: association timeout
-        # The maximum amount of time (in seconds) to wait for association related messages.
-        self._acse_timeout = timeout_secs
+    def set_dicom_timeouts(self, timeouts: NetworkTimeouts):
         # The maximum amount of time (in seconds) to wait for a TCP connection to be established:
         # only used during the connection phase of an association request.
-        self._connection_timeout = timeout_secs
+        self._connection_timeout = timeouts.tcp_connection
+        # ACSE: association timeout
+        # The maximum amount of time (in seconds) to wait for association related messages.
+        self._acse_timeout = timeouts.acse
         # DICOM Message Service Element timeout
         # The maximum amount of time (in seconds) to wait for DIMSE related messages.
-        self._dimse_timeout = timeout_secs
+        self._dimse_timeout = timeouts.dimse
         # Network timeout
         # The maximum amount of time (in seconds) to wait for network messages before closing an association:
-        self._network_timeout = timeout_secs
+        self._network_timeout = timeouts.network
 
-    def get_network_timeout(self) -> int:
-        return self.model.network_timeout
+    def get_network_timeouts(self) -> NetworkTimeouts:
+        return self.model.network_timeouts
 
     # FOR SCP AE: Set allowed storage and verification contexts and corresponding transfer syntaxes
     def set_verification_context(self):
@@ -192,6 +219,9 @@ class ProjectController(AE):
         ]
 
     # Handlers:
+    def _handle_abort(self, event: Event):
+        logger.debug("_handle_abort")
+
     # DICOM C-ECHO Verification event handler (EVT_C_ECHO):
     def _handle_echo(self, event: Event):
         logger.debug("_handle_echo")
@@ -208,13 +238,48 @@ class ProjectController(AE):
         logger.debug("_handle_store")
         # TODO: Validate remote IP & AE Title
         remote = event.assoc.remote
-        ds = event.dataset
-        ds.file_meta = event.file_meta
+        try:
+            ds = Dataset(event.dataset)
+            # Remove any Group 0x0002 elements that may have been included
+            ds = ds[0x00030000:]
+        except Exception as exc:
+            logger.error("Unable to decode incoming dataset")
+            logger.exception(exc)
+            # Unable to decode dataset
+            return C_STORE_DECODE_ERROR
+
+        # Add the File Meta Information
+        ds.file_meta = FileMetaDataset(event.file_meta)
+
         remote_scu = DICOMNode(
             remote["address"], remote["port"], remote["ae_title"], False
         )
         logger.debug(remote_scu)
-        # TODO: custom filtering via script specifying dicom field patterns
+
+        # DICOM Dataset integrity checking:
+        if "SOPClassUID" not in ds:
+            logger.error("Rejecting Instance, SOPClassUID not present in DICOM Header")
+            return C_STORE_DATASET_ERROR
+
+        if "SOPInstanceUID" not in ds:
+            logger.error(
+                "Rejecting Instance, SOPInstanceUID not present in DICOM Header"
+            )
+            return C_STORE_DATASET_ERROR
+
+        # Ensure dataset has required attributes:
+        missing_attributes = self.anonymizer.missing_attributes(ds)
+        if missing_attributes != []:
+            logger.error(
+                f"Incoming dataset is missing required attributes: {missing_attributes}"
+            )
+            logger.error(f"\n{ds}")
+            return C_STORE_DATASET_ERROR
+
+        if self.anonymizer.model.get_anon_uid(ds.SOPInstanceUID):
+            logger.info(f"Instance already stored: {ds.PatientID} {ds.SOPInstanceUID}")
+            return C_SUCCESS
+
         self.anonymizer.anonymize_dataset_and_store(remote_scu, ds, self.storage_dir)
         return C_SUCCESS
 
@@ -227,6 +292,7 @@ class ProjectController(AE):
             raise DICOMRuntimeError(msg)
 
         handlers = [(EVT_C_ECHO, self._handle_echo), (EVT_C_STORE, self._handle_store)]
+        self._reset_scp_vars()
 
         try:
             self.scp = self.start_server(
@@ -250,13 +316,14 @@ class ProjectController(AE):
             return
         logger.info(f"Stop {self.model.scp} scp and close socket")
         self.scp.shutdown()
-        self.scp = None
+        self._reset_scp_vars()
 
     def _connect_to_scp(self, scp_name: str, contexts=None) -> Association:
         association = None
         try:
             if scp_name not in self.model.remote_scps:
                 raise ConnectionError(f"Remote SCP {scp_name} not found")
+
             remote_scp = self.model.remote_scps[scp_name]
 
             association = self.associate(
@@ -265,6 +332,7 @@ class ProjectController(AE):
                 contexts=contexts,
                 ae_title=remote_scp.aet,
                 bind_address=(self.model.scu.ip, 0),
+                evt_handlers=[(EVT_ABORTED, self._handle_abort)],
             )
             if not association.is_established:
                 raise ConnectionError(f"Connection error to: {remote_scp}")
@@ -277,7 +345,7 @@ class ProjectController(AE):
         return association
 
     def echo(self, scp_name: str) -> bool:
-        logger.debug(
+        logger.info(
             f"C-ECHO from {self.model.scu} to {self.model.remote_scps[scp_name]}"
         )
         association = None
@@ -291,7 +359,7 @@ class ProjectController(AE):
                     "Connection timed out, was aborted, or received an invalid response"
                 )
             if status.Status == C_SUCCESS:
-                logger.debug(f"C-ECHO Success")
+                logger.info(f"C-ECHO Success")
                 association.release()
                 return True
             else:
@@ -347,11 +415,12 @@ class ProjectController(AE):
         study_date: str,
         modality: str,
         ux_Q=None,
+        verify_attributes=True,
     ) -> list[Dataset] | None:
         assert scp_name in self.model.remote_scps
         scp = self.model.remote_scps[scp_name]
         logger.info(
-            f"C-FIND to {scp} Query: {name}, {id}, {acc_no}, {study_date}, {modality}"
+            f"C-FIND to {scp} Standard Query: {name}, {id}, {acc_no}, {study_date}, {modality}"
         )
 
         ds = Dataset()
@@ -368,20 +437,25 @@ class ProjectController(AE):
 
         results = []
         error_msg = ""
-        association = None
+        query_association = None
+        self._abort_query = False
         try:
-            association = self._connect_to_scp(
+            query_association = self._connect_to_scp(
                 scp_name, self.get_study_root_qr_contexts()
             )
+
             # Use the C-FIND service to send the identifier
             # using the StudyRootQueryRetrieveInformationModelFind
-            responses = association.send_c_find(
+            responses = query_association.send_c_find(
                 ds,
                 query_model=self._STUDY_ROOT_QR_CLASSES[0],
             )
 
             # Process the responses received from the peer
             for status, identifier in responses:
+                if self._abort_query:
+                    raise RuntimeError("Query aborted")
+
                 if not status or status.Status not in (
                     C_SUCCESS,
                     C_PENDING_A,
@@ -400,6 +474,17 @@ class ProjectController(AE):
                         logger.info("C-FIND query success")
 
                     if identifier:
+                        if verify_attributes:
+                            missing_attributes = self._missing_query_result_attributes(
+                                identifier
+                            )
+                            if missing_attributes != []:
+                                logger.error(
+                                    f"Query result is missing required attributes: {missing_attributes}"
+                                )
+                                logger.error(f"\n{identifier}")
+                                continue
+
                         # TODO: move this code to UX client?
                         fields_to_remove = [
                             "QueryRetrieveLevel",
@@ -433,8 +518,146 @@ class ProjectController(AE):
                 ux_Q.put(FindResponse(ds, None))
 
         finally:
-            if association:
-                association.release()
+            if query_association:
+                query_association.release()
+
+        if len(results) == 0:
+            logger.info("No query results found")
+        else:
+            logger.info(f"{len(results)} Query results found")
+            for result in results:
+                logger.debug(
+                    f"{getattr(result, 'PatientName', 'N/A')}, "
+                    f"{getattr(result, 'PatientID', 'N/A')}, "
+                    f"{getattr(result, 'StudyDate', 'N/A')}, "
+                    f"{getattr(result, 'StudyDescription', 'N/A')}, "
+                    f"{getattr(result, 'AccessionNumber', 'N/A')}, "
+                    f"{getattr(result, 'ModalitiesInStudy', 'N/A')}, "
+                    f"{getattr(result, 'NumberOfStudyRelatedSeries', 'N/A')}, "
+                    f"{getattr(result, 'NumberOfStudyRelatedInstances', 'N/A')}, "
+                    f"{getattr(result, 'StudyInstanceUID', 'N/A')} "
+                )
+
+        return results
+
+    # Blocking: Query remote server for studies corresponding to list of accession numbers:
+    def find_acc_nos(
+        self,
+        scp_name: str,
+        acc_no_list: list,
+        ux_Q=None,
+        verify_attributes=True,
+    ) -> list[Dataset] | None:
+        assert scp_name in self.model.remote_scps
+        scp = self.model.remote_scps[scp_name]
+        logger.info(
+            f"C-FIND to {scp} Accession Query: {len(acc_no_list)} accession numbers..."
+        )
+        logger.info(f"{acc_no_list}")
+
+        ds = Dataset()
+        ds.QueryRetrieveLevel = "STUDY"
+        ds.PatientName = ""
+        ds.PatientID = ""
+        ds.StudyDate = ""
+        ds.ModalitiesInStudy = ""
+        ds.NumberOfStudyRelatedSeries = 0
+        ds.NumberOfStudyRelatedInstances = 0
+        ds.StudyDescription = ""
+        ds.StudyInstanceUID = ""
+
+        results = []
+        error_msg = ""
+        query_association = None
+        self._abort_query = False
+        try:
+            query_association = self._connect_to_scp(
+                scp_name, self.get_study_root_qr_contexts()
+            )
+
+            for acc_no in acc_no_list:
+                if self._abort_query:
+                    raise RuntimeError("Query aborted")
+
+                if acc_no == "":
+                    continue
+                logger.debug(f"Search for AccesssionNumber={acc_no}...")
+
+                ds.AccessionNumber = acc_no
+
+                responses = query_association.send_c_find(
+                    ds,
+                    query_model=self._STUDY_ROOT_QR_CLASSES[0],
+                )
+
+                # Process the responses received from the peer
+                for status, identifier in responses:
+                    if not status or status.Status not in (
+                        C_SUCCESS,
+                        C_PENDING_A,
+                        C_PENDING_B,
+                    ):
+                        if not status:
+                            raise ConnectionError(
+                                "Connection timed out, was aborted, or received an invalid response"
+                            )
+                        else:
+                            raise DICOMRuntimeError(
+                                f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}"
+                            )
+                    else:
+                        if status.Status == C_SUCCESS:
+                            logger.debug("C-FIND query success")
+                            if not identifier:
+                                logger.debug("But no query results found")
+
+                        if identifier:
+                            if verify_attributes:
+                                missing_attributes = (
+                                    self._missing_query_result_attributes(identifier)
+                                )
+                                if missing_attributes != []:
+                                    logger.error(
+                                        f"Query result is missing required attributes: {missing_attributes}"
+                                    )
+                                    logger.error(f"\n{identifier}")
+                                    continue
+
+                            # TODO: move this code to UX client?
+                            fields_to_remove = [
+                                "QueryRetrieveLevel",
+                                "RetrieveAETitle",
+                                "SpecificCharacterSet",
+                            ]
+                            for field in fields_to_remove:
+                                if field in identifier:
+                                    delattr(identifier, field)
+
+                            results.append(identifier)
+
+                        if ux_Q:
+                            ux_Q.put(FindResponse(status, identifier))
+
+        except (
+            ConnectionError,
+            TimeoutError,
+            RuntimeError,
+            ValueError,
+            AttributeError,
+            DICOMRuntimeError,
+        ) as e:
+            # Reflect status dataset back to UX client to provide find error detail
+            error_msg = str(e)  # latch exception error msg
+            logger.error(error_msg)
+            if ux_Q:
+                ds = Dataset()
+                ds.Status = C_FAILURE
+                ds.ErrorComment = error_msg
+                ux_Q.put(FindResponse(ds, None))
+
+        finally:
+            if query_association:
+                query_association.release()
 
         if len(results) == 0:
             logger.info("No query results found")
@@ -457,24 +680,48 @@ class ProjectController(AE):
 
     # Non-blocking Find:
     def find_ex(self, fr: FindRequest) -> None:
-        threading.Thread(
-            target=self.find,
-            args=(
-                fr.scp_name,
-                fr.name,
-                fr.id,
-                fr.acc_no,
-                fr.study_date,
-                fr.modality,
-                fr.ux_Q,
-            ),
-            daemon=True,
-        ).start()
+        if isinstance(fr.acc_no, list):
+            logger.info("Find accession numbers")
+            # Copy the list to allow caller to reset the list:
+            # acc_no_list = fr.acc_no.copy()
+            threading.Thread(
+                target=self.find_acc_nos,
+                args=(
+                    fr.scp_name,
+                    fr.acc_no,
+                    fr.ux_Q,
+                ),
+                daemon=True,
+            ).start()
+        else:
+            logger.info("Find")
+            threading.Thread(
+                target=self.find,
+                args=(
+                    fr.scp_name,
+                    fr.name,
+                    fr.id,
+                    fr.acc_no,
+                    fr.study_date,
+                    fr.modality,
+                    fr.ux_Q,
+                ),
+                daemon=True,
+            ).start()
+
+    def abort_query(self):
+        logger.info("Abort Query")
+        # if query_association:
+        #     query_association.abort()
+        #     time.sleep(0.1)
+        #     query_association.release()
+        #     query_association = None
+        self._abort_query = True
 
     def _export_patient(self, dest_name: str, patient_id: str, ux_Q: Queue) -> None:
         logger.debug(f"_export_patient {patient_id} start to {dest_name}")
 
-        association = None
+        export_association = None
         files_sent = 0
         try:
             # Load DICOM files to send from active local storage directory for this patient:
@@ -493,7 +740,7 @@ class ProjectController(AE):
                 raise DICOMRuntimeError(f"No DICOM files found in {patient_dir}")
 
             # Connect to remote SCP:
-            association = self._connect_to_scp(
+            export_association = self._connect_to_scp(
                 dest_name, self.get_radiology_storage_contexts()
             )
 
@@ -501,7 +748,7 @@ class ProjectController(AE):
                 if self._abort_export:
                     raise RuntimeError("Export aborted")
 
-                dcm_response: Dataset = association.send_c_store(
+                dcm_response: Dataset = export_association.send_c_store(
                     dataset=dicom_file_path
                 )
 
@@ -530,8 +777,8 @@ class ProjectController(AE):
                 raise
 
         finally:
-            if association:
-                association.release()
+            if export_association:
+                export_association.release()
 
         return
 
@@ -572,6 +819,11 @@ class ProjectController(AE):
 
     def abort_export(self):
         logger.info("Abort Export")
+        # if export_association:
+        #     export_association.abort()
+        #     time.sleep(0.1)
+        #     export_association.release()
+        #     export_association = None
         self._abort_export = True
 
     # Blocking Move Study:
@@ -589,10 +841,10 @@ class ProjectController(AE):
         if self._abort_move:
             raise RuntimeError("Move aborted")
 
-        association = None
+        move_association = None
         error_msg = ""
         try:
-            association = self._connect_to_scp(
+            move_association = self._connect_to_scp(
                 scp_name=scp_name,
                 contexts=[
                     build_context(
@@ -606,7 +858,7 @@ class ProjectController(AE):
             ds.StudyInstanceUID = study_uid
 
             # Use the C-MOVE service to request that the remote SCP move the Study to local storage scp:
-            responses = association.send_c_move(
+            responses = move_association.send_c_move(
                 ds,
                 dest_scp_ae,
                 query_model=self._STUDY_ROOT_QR_CLASSES[1],
@@ -655,8 +907,8 @@ class ProjectController(AE):
 
         finally:
             # Release the association
-            if association:
-                association.release()
+            if move_association:
+                move_association.release()
 
     # Manage bulk patient move using a thread pool:
     def _manage_move(self, req: MoveRequest) -> None:
@@ -700,12 +952,12 @@ class ProjectController(AE):
 
     def abort_move(self):
         logger.info("Abort Move")
+        # if move_association:
+        #     move_association.abort()
+        #     time.sleep(0.1)
+        #     move_association.release()
+        #     move_association = None
         self._abort_move = True
-        if self._executor:
-            for future in self._futures:
-                future.cancel()
-            self._executor.shutdown(wait=False)
-            self._executor = None
 
     def create_phi_csv(self) -> Path:
         logger.info("Create PHI CSV")
@@ -714,6 +966,7 @@ class ProjectController(AE):
             _("ANON-PatientName"),
             _("PHI-PatientName"),
             _("PHI-PatientID"),
+            _("DateOffset"),
             _("PHI-StudyDate"),
             _("ANON-Accession"),
             _("PHI-Accession"),
@@ -731,6 +984,7 @@ class ProjectController(AE):
                         anon_pt_id,
                         phi.patient_name,
                         phi.patient_id,
+                        study.anon_date_delta,
                         study.study_date,
                         self.anonymizer.model._acc_no_lookup[study.accession_number],
                         study.accession_number,

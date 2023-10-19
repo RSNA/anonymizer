@@ -42,7 +42,7 @@ class AnonymizerController:
         "PatientName",
         "StudyInstanceUID",
         "StudyDate",
-        "AccessionNumber",
+        #      "AccessionNumber",
         "Modality",
         "SeriesNumber",
         "InstanceNumber",
@@ -66,16 +66,26 @@ class AnonymizerController:
 
         self._anon_Q: Queue = Queue()
 
-        threading.Thread(
+        self._active = True
+
+        self._worker = threading.Thread(
             target=self._anonymize_worker,
             args=(self._anon_Q,),
             daemon=True,
         ).start()
 
-    # def __del__(self):
-    #     # Ensure the AnonymizerModel is saved on project/program close:
-    #     logger.info("AnonymizerController save AnonymizerModel and destruct")
-    #     self.save_model()
+    def __del__(self):
+        self._active = False
+
+    def stop(self):
+        self._active = False
+
+    def missing_attributes(self, ds: Dataset) -> list[str]:
+        return [
+            attr_name
+            for attr_name in self.required_attributes
+            if attr_name not in ds or getattr(ds, attr_name) == ""
+        ]
 
     def save_model(self):
         anon_pkl_path = Path(
@@ -85,7 +95,7 @@ class AnonymizerController:
             pickle.dump(self.model, pkl_file)
             pkl_file.close()
 
-        logger.info(f"Model saved to: {anon_pkl_path}")
+        logger.debug(f"Model saved to: {anon_pkl_path}")
 
     def get_next_anon_patient_id(self) -> str:
         next_patient_index = self.model.get_patient_id_count() + 1
@@ -128,6 +138,9 @@ class AnonymizerController:
         def study_from_dataset(ds: Dataset) -> Study:
             return Study(
                 str(ds.StudyDate) if hasattr(phi_ds, "StudyDate") else "?",
+                self._hash_date(ds.StudyDate, phi_ds.PatientID)[0]
+                if hasattr(phi_ds, "StudyDate") and hasattr(phi_ds, "PatientID")
+                else 0,
                 str(ds.AccessionNumber) if hasattr(phi_ds, "AccessionNumber") else "?",
                 str(ds.StudyInstanceUID)
                 if hasattr(phi_ds, "StudyInstanceUID")
@@ -203,12 +216,12 @@ class AnonymizerController:
         self._anon_Q.put((source, ds, dir))
         return
 
-    # TODO: Error handling & reporting - how to reflect queue overflows & file system errors back to UX?
+    # TODO: Error handling & reporting - how to reflect missing attributes, queue overflows & file system errors back to UX?
     # TODO: OPTIMIZE: i/o bound, investigate thread pool for processing batch concurrently
     def _anonymize_worker(self, ds_Q: Queue) -> None:
         logger.info("_anonymize_worker start")
-        while True:
-            # timeslice for UX during intense receive activity
+        while self._active:
+            # timeslice worker thread for UX responsivity:
             time.sleep(self._anonymize_time_slice_interval)
 
             while not ds_Q.empty():
@@ -225,7 +238,7 @@ class AnonymizerController:
                 for item in batch:
                     source, ds, dir = item  # ds_Q.get()
 
-                    # Load dataset from file if not provided:
+                    # Load dataset from file if not provided: (eg. via local file/dir import)
                     if ds is None:
                         try:
                             assert os.path.exists(source)
@@ -234,27 +247,21 @@ class AnonymizerController:
                             logger.error(f"dcmread error: {source}: {e}")
                             continue
 
-                    # Ensure dataset has required attributes:
-                    if not all(
-                        attr_name in ds for attr_name in self.required_attributes
-                    ):
-                        missing_attributes = [
-                            attr_name
-                            for attr_name in self.required_attributes
-                            if attr_name not in ds
-                        ]
-                        logger.error(
-                            f"Incoming dataset is missing required attributes: {missing_attributes}"
-                        )
-                        logger.error(f"\n{ds}")
-                        continue
+                        # Ensure dataset has required attributes:
+                        missing_attributes = self.missing_attributes(ds)
+                        if missing_attributes != []:
+                            logger.error(
+                                f"Incoming dataset is missing required attributes: {missing_attributes}"
+                            )
+                            logger.error(f"\n{ds}")
+                            continue
 
-                    # Return success if instance is already stored:
-                    if self.model.get_anon_uid(ds.SOPInstanceUID):
-                        logger.info(
-                            f"Instance already stored: {ds.PatientID} {ds.SOPInstanceUID}"
-                        )
-                        continue
+                        # Return success if instance is already stored:
+                        if self.model.get_anon_uid(ds.SOPInstanceUID):
+                            logger.info(
+                                f"Instance already stored: {ds.PatientID} {ds.SOPInstanceUID}"
+                            )
+                            continue
 
                     logger.debug(f"PHI:\n{ds}")
 
@@ -288,6 +295,7 @@ class AnonymizerController:
 
                     logger.debug(f"ANON:\n{ds}")
 
+                    # TODO: custom filtering via script specifying dicom field patterns to keep / quarantine / discard
                     # Save anonymized dataset to dicom file in local storage:
                     filename = local_storage_path(dir, ds)
                     logger.debug(
@@ -299,4 +307,8 @@ class AnonymizerController:
                         logger.error("Failed writing instance to storage directory")
                         logger.exception(exception)
 
+                # Save model to disk after processing batch:
+                self.save_model()
+
+        logger.info("_anonymize_worker end")
         return

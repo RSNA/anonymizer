@@ -19,7 +19,10 @@ logger = logging.getLogger(__name__)
 def test_send_cr1(temp_dir: str, controller):
     ds: Dataset = send_file_to_scp(cr1_filename, False, controller)
     time.sleep(0.5)
-    dirlist = os.listdir(controller.model.storage_dir)
+    store_dir = controller.model.storage_dir
+    dirlist = [
+        d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))
+    ]
     assert len(dirlist) == 1
     assert dirlist[0] == controller.model.site_id + "-000001"
     assert (
@@ -39,7 +42,10 @@ def test_send_cr1(temp_dir: str, controller):
 def test_send_ct_small(temp_dir: str, controller):
     ds: Dataset = send_file_to_scp(ct_small_filename, False, controller)
     time.sleep(0.5)
-    dirlist = os.listdir(controller.model.storage_dir)
+    store_dir = controller.model.storage_dir
+    dirlist = [
+        d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))
+    ]
     assert len(dirlist) == 1
     assert dirlist[0] == TEST_SITEID + "-000001"
     assert (
@@ -59,7 +65,10 @@ def test_send_ct_small(temp_dir: str, controller):
 def test_send_mr_small(temp_dir: str, controller):
     ds: Dataset = send_file_to_scp(mr_small_filename, False, controller)
     time.sleep(0.5)
-    dirlist = os.listdir(controller.model.storage_dir)
+    store_dir = controller.model.storage_dir
+    dirlist = [
+        d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))
+    ]
     assert len(dirlist) == 1
     assert dirlist[0] == TEST_SITEID + "-000001"
     assert isinstance(ds, Dataset)

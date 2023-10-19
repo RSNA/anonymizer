@@ -4,7 +4,7 @@ import string
 import logging
 from model.project import DICOMNode
 from utils.translate import _
-from utils.network import get_local_ip_addresses
+from utils.network import get_local_ip_addresses, dns_lookup
 
 from utils.ux_fields import (
     str_entry,
@@ -71,14 +71,45 @@ class DICOMNodeDialog(ctk.CTkToplevel):
                 row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw"
             )
         else:
-            # TODO: allow domain names & DNS lookup
+            self.domain_name_var = str_entry(
+                view=self,
+                label=_("Domain Name:"),
+                initial_value="",
+                min_chars=3,
+                max_chars=30,
+                charset=string.digits
+                + ".-"
+                + string.ascii_lowercase
+                + string.ascii_uppercase,
+                tooltipmsg=None,
+                row=row,
+                col=0,
+                pad=PAD,
+                sticky="nw",
+            )
+
+            row += 1
+
+            self._dns_lookup_button = ctk.CTkButton(
+                self, width=100, text=_("DNS Lookup"), command=self._dns_lookup_event
+            )
+            self._dns_lookup_button.grid(
+                row=row,
+                column=1,
+                padx=PAD,
+                pady=PAD,
+                sticky="w",
+            )
+
+            row += 1
+
             self.ip_var = str_entry(
                 view=self,
-                label=_("Address:"),
+                label=_("IP Address:"),
                 initial_value=self.address.ip,
                 min_chars=ip_min_chars,
                 max_chars=ip_max_chars,
-                charset=string.digits + ".",  # + string.ascii_lowercase
+                charset=string.digits + ".",
                 tooltipmsg=None,
                 row=row,
                 col=0,
@@ -129,6 +160,9 @@ class DICOMNodeDialog(ctk.CTkToplevel):
             pady=PAD,
             sticky="e",
         )
+
+    def _dns_lookup_event(self, event=None):
+        self.ip_var.set(dns_lookup(self.domain_name_var.get()))
 
     def _ok_event(self, event=None):
         self._user_input = DICOMNode(

@@ -160,7 +160,10 @@ def test_export_patient_CR_study_to_test_pacs(
     # Send 1 Study with 1 CR files to local storage:
     phi_dsets: list[Dataset] = send_files_to_scp([cr1_filename], False, controller)
     time.sleep(0.5)
-    dirlist = os.listdir(controller.model.storage_dir)
+    store_dir = controller.model.storage_dir
+    dirlist = [
+        d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))
+    ]
     anon_pt_id = controller.model.site_id + "-000001"
     assert len(dirlist) == 1
     assert dirlist[0] == anon_pt_id
@@ -176,7 +179,10 @@ def test_export_patient_CT_study_to_test_pacs(
         CT_STUDY_1_SERIES_4_IMAGES, False, controller
     )
     time.sleep(0.5)
-    dirlist = os.listdir(controller.model.storage_dir)
+    store_dir = controller.model.storage_dir
+    dirlist = [
+        d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))
+    ]
     anon_pt_id = controller.model.site_id + "-000001"
     assert len(dirlist) == 1
     assert dirlist[0] == anon_pt_id
@@ -200,7 +206,10 @@ def test_export_1_patient_2_studies_CR_CT_to_test_pacs(
     )
     time.sleep(0.5)
     assert ct_phi_dsets[0].PatientName == "Doe^Archibald"
-    dirlist = os.listdir(controller.model.storage_dir)
+    store_dir = controller.model.storage_dir
+    dirlist = [
+        d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))
+    ]
     anon_pt_id = controller.model.site_id + "-000001"
     assert len(dirlist) == 1
     assert anon_pt_id in dirlist
@@ -227,7 +236,10 @@ def test_export_2_patients_to_test_pacs(temp_dir: str, controller: ProjectContro
     )
     time.sleep(0.5)
     assert mr_phi_dsets[0].PatientName == "Doe^Peter"
-    dirlist = os.listdir(controller.model.storage_dir)
+    store_dir = controller.model.storage_dir
+    dirlist = [
+        d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))
+    ]
     ct_anon_pt_id = controller.model.site_id + "-000001"
     mr_anon_pt_id = controller.model.site_id + "-000002"
     assert len(dirlist) == 2
@@ -265,7 +277,10 @@ def test_export_4_patients_to_test_pacs(temp_dir: str, controller: ProjectContro
     # Send Patient 4: 1 Study with 1 MR file to local storage:
     mrsmall_ds: Dataset = send_file_to_scp(mr_small_filename, False, controller)
     time.sleep(0.5)
-    dirlist = os.listdir(controller.model.storage_dir)
+    store_dir = controller.model.storage_dir
+    dirlist = [
+        d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))
+    ]
     ct_anon_pt_id = controller.model.site_id + "-000001"
     mr_anon_pt_id = controller.model.site_id + "-000002"
     ctsmall_anon_pt_id = controller.model.site_id + "-000003"

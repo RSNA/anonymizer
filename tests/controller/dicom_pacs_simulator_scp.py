@@ -168,6 +168,7 @@ def _handle_find(event, storage_dir: str):
             yield (C_CANCEL, None)
 
         logger.info(f"Return instance: {instance.SOPInstanceUID}")
+
         yield (C_PENDING_A, instance)
 
     logger.info("Find complete")

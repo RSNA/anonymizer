@@ -1,4 +1,3 @@
-from math import exp
 from pathlib import Path
 from typing import Union
 import customtkinter as ctk
@@ -9,6 +8,7 @@ from model.project import ProjectModel
 from controller.project import DICOMNode
 from view.dicom_node_dialog import DICOMNodeDialog
 from view.aws_cognito_dialog import AWSCognitoDialog
+from view.network_timeouts_dialog import NetworkTimeoutsDialog
 from utils.translate import _
 from utils.ux_fields import str_entry, int_entry
 from view.sop_classes_dialog import SOPClassesDialog
@@ -175,17 +175,18 @@ class SettingsDialog(ctk.CTkToplevel):
         row += 1
 
         # TODO: None for timeout means no timeout, implement checkbox for enable/disable timeout
-        self.nework_timeout_var = int_entry(
-            view=self._frame,
-            label=_("Network Timeout [seconds]:"),
-            initial_value=self.model.network_timeout,
-            min=0,
-            max=30,
-            tooltipmsg=None,
-            row=row,
-            col=0,
-            pad=PAD,
-            sticky="nw",
+        network_timeouts_label = ctk.CTkLabel(self._frame, text=_("Network Timeouts:"))
+        network_timeouts_label.grid(
+            row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="nw"
+        )
+        self.network_timeout_button = ctk.CTkButton(
+            self._frame,
+            width=100,
+            text=_("Network Timeouts"),
+            command=self._network_timeouts_click,
+        )
+        self.network_timeout_button.grid(
+            row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="w"
         )
 
         row += 1
@@ -338,6 +339,15 @@ class SettingsDialog(ctk.CTkToplevel):
             f"Export to AWS: {self.model.export_to_AWS}, Cognito: {self.model.aws_cognito}"
         )
 
+    def _network_timeouts_click(self, event=None):
+        dlg = NetworkTimeoutsDialog(self.model.network_timeouts)
+        timeouts = dlg.get_input()
+        if timeouts is None:
+            logger.info(f"Network Timeouts cancelled")
+            return
+        self.model.network_timeouts = timeouts
+        logger.info(f"{self.model.network_timeouts}")
+
     def _open_storage_directory_dialog(self):
         path = filedialog.askdirectory(
             initialdir=str(self.model.storage_dir), mustexist=False
@@ -393,7 +403,7 @@ class SettingsDialog(ctk.CTkToplevel):
             remote_scps=self.model.remote_scps,
             export_to_AWS=self.model.export_to_AWS,
             aws_cognito=self.model.aws_cognito,
-            network_timeout=self.nework_timeout_var.get(),
+            network_timeouts=self.model.network_timeouts,
             anonymizer_script_path=self.model.anonymizer_script_path,
         )
         self.grab_release()

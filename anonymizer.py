@@ -1,4 +1,3 @@
-from math import log
 import os, sys
 from pathlib import Path
 import logging
@@ -8,7 +7,11 @@ import tkinter as tk
 from tkinter import filedialog
 import customtkinter as ctk
 from CTkMessagebox import CTkMessagebox
-from model.project import default_project_filename, default_storage_dir
+from model.project import (
+    DICOMRuntimeError,
+    default_project_filename,
+    default_storage_dir,
+)
 from utils.translate import _
 from utils.logging import init_logging
 from __version__ import __version__
@@ -116,6 +119,16 @@ class App(ctk.CTk):
     def _open_project(self):
         assert self.model
         assert self.project_controller
+        try:
+            self.project_controller.start_scp()
+        except DICOMRuntimeError as e:
+            CTkMessagebox(
+                title=_("Local DICOM Server Error"),
+                message=str(e),
+                icon="cancel",
+            )
+            return
+
         self.title(
             f"{self.model.project_name}[{self.model.site_id}] => {self.model.abridged_storage_dir()}"
         )
@@ -133,6 +146,7 @@ class App(ctk.CTk):
             self.project_controller.shutdown()
             self.project_controller.save_model()
             self.project_controller.anonymizer.save_model()
+            self.project_controller.anonymizer.stop()
             del self.project_controller.anonymizer
             del self.project_controller
             if self._query_view:
@@ -146,6 +160,7 @@ class App(ctk.CTk):
             self.welcome_view = welcome.create_view(self.main_frame)
             self.title(APP_TITLE)
             self.protocol("WM_DELETE_WINDOW", self.quit)
+            self.focus_force()
         self.project_controller = None
         self.set_menu_project_closed()
 
@@ -159,7 +174,11 @@ class App(ctk.CTk):
             ("dicom Files", "*.dicom"),
             ("All Files", "*.*"),
         ]
-        paths = filedialog.askopenfilenames(filetypes=file_extension_filters)
+        paths = filedialog.askopenfilenames(
+            title=_("Select DICOM Files to Import & Anonymize"),
+            defaultextension=".dcm",
+            filetypes=file_extension_filters,
+        )
         if paths:
             for path in paths:
                 self.project_controller.anonymizer.anonymize_dataset_and_store(
@@ -176,7 +195,9 @@ class App(ctk.CTk):
     def import_directory(self, event=None):
         assert self.project_controller
         logging.info("Import Directory")
-        root_dir = filedialog.askdirectory(title=_("Select DICOM Directory"))
+        root_dir = filedialog.askdirectory(
+            title=_("Select DICOM Directory to Impport & Anonymize")
+        )
         logger.info(root_dir)
 
         if root_dir:
@@ -233,13 +254,15 @@ class App(ctk.CTk):
         if edited_model is None:
             logger.info("Settings Cancelled")
             return
-        logger.info(f"Edited ProjectModel: {self.model}")
+        logger.info(f"Edited ProjectModel")
+
         # TODO: model equality check
         # if edited_model == self.model:
         #     return
         self.model = edited_model
         self.project_controller.model = self.model
         self.project_controller.save_model()
+        logger.info(f"{self.project_controller}")
         self.project_controller.stop_scp()
         self.project_controller.start_scp()
 
@@ -369,10 +392,12 @@ class App(ctk.CTk):
     ):
         super().__init__()
         ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
-        ctk.set_default_color_theme(color_theme)  # sets all colors and default font:
-        self.iconbitmap("assets\\images\\rsna_icon.ico")
+        ctk.set_default_color_theme(color_theme)  # sets all colors and default font
+        if sys.platform.startswith("win"):
+            self.iconbitmap("assets\\images\\rsna_icon.ico")
+        # else:
+        # self.iconbitmap("/Applications/Anonymizer.app")
 
-        # self.protocol("WM_DELETE_WINDOW", self.close_project)
         self.project_controller = None
         self.model = None
         self._query_view = None

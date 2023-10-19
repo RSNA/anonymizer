@@ -15,7 +15,6 @@ ifaddr = "*"
 pandas = "*"
 pytest = "*"
 pyinstaller-versionfile = "*"
-boto3 = "*"
 
 [dev-packages]
 pytest = "*"

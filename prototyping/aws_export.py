@@ -1,6 +1,8 @@
 import boto3
 from getpass import getpass
 
+# https://www.archerimagine.com/articles/aws/aws-cognito-tutorials.html
+
 # AWS Cognito Client ID
 client_id = "your-client-id"
 
@@ -9,7 +11,7 @@ s3_bucket = "your-s3-bucket"
 s3_prefix = "uploads/"  # Optional: You can specify a prefix within the bucket
 
 # Initialize AWS Cognito and S3 clients
-cognito_client = boto3.client("cognito-idp")
+cognito_client = boto3.client("cognito-idp", region_name="us-east-1")
 s3_client = boto3.client("s3")
 
 

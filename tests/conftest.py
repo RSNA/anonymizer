@@ -5,9 +5,11 @@ import shutil
 import tempfile
 import pytest
 import logging
+from model import project
 
 from model.project import (
     ProjectModel,
+    default_aws_cognito,
     default_storage_classes,
     default_transfer_syntaxes,
 )
@@ -66,17 +68,16 @@ def controller(temp_dir):
         trial_name=TEST_TRIALNAME,
         uid_root=TEST_UIDROOT,
         storage_dir=anon_store,
-        storage_classes=default_storage_classes(),
-        transfer_syntaxes=default_transfer_syntaxes(),
         scu=LocalSCU,
         scp=LocalStorageSCP,
         remote_scps=RemoteSCPDict,
-        network_timeout=3,
     )
 
     project_controller = ProjectController(project_model)
 
     assert project_controller
+
+    project_controller.start_scp()
 
     # Start PACS Simulator:
     assert pacs_simulator_scp.start(

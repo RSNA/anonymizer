@@ -85,6 +85,8 @@ def find_all_studies_on_pacs_simulator_scp(controller: ProjectController):
         "",
         "",
         "",
+        None,
+        False,
     )
     return results
 

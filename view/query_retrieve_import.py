@@ -2,6 +2,7 @@ import logging
 import string
 from queue import Queue, Empty, Full
 from tkinter import filedialog
+from turtle import st
 import customtkinter as ctk
 from CTkMessagebox import CTkMessagebox
 from pydicom import Dataset
@@ -31,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 class QueryView(ctk.CTkToplevel):
-    ux_poll_find_response_interval = 500  # milli-seconds
+    ux_poll_find_response_interval = 250  # milli-seconds
     ux_poll_move_response_interval = 500  # milli-seconds
 
     # C-FIND DICOM attributes to display in the results Treeview:
@@ -63,6 +64,7 @@ class QueryView(ctk.CTkToplevel):
         self.title(f"{title} from {scp_aet}")
         self._query_active = False
         self._move_active = False
+        self._acc_no_list = []
         self._studies_processed = 0
         self._studies_to_process = 0
         self.width = 1200
@@ -81,6 +83,7 @@ class QueryView(ctk.CTkToplevel):
     def _create_widgets(self):
         logger.info(f"_create_widgets")
         PAD = 10
+        ButtonWidth = 100
 
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -90,7 +93,7 @@ class QueryView(ctk.CTkToplevel):
         # Create frame for Query Input:
         self._query_frame = ctk.CTkFrame(self)
         self._query_frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nswe")
-        self._query_frame.grid_columnconfigure(7, weight=1)
+        # self._query_frame.grid_columnconfigure(7, weight=1)
 
         # Patient Name
         self._patient_name_var = str_entry(
@@ -132,10 +135,10 @@ class QueryView(ctk.CTkToplevel):
             initial_value="",
             min_chars=0,
             max_chars=accession_no_max_chars,
-            charset=string.ascii_letters + string.digits + " *?/-_",
+            charset=string.ascii_letters + string.digits + " *?/-_,.",
             tooltipmsg=None,  # "Alpha-numeric, * or ? for wildcard",
             row=0,
-            col=3,
+            col=4,
             pad=PAD,
             sticky="nw",
         )
@@ -149,7 +152,7 @@ class QueryView(ctk.CTkToplevel):
             charset=string.digits + "*",
             tooltipmsg=None,  # _("Numeric YYYYMMDD, * or ? for wildcard"),
             row=1,
-            col=3,
+            col=2,
             pad=PAD,
             sticky="nw",
         )
@@ -163,31 +166,41 @@ class QueryView(ctk.CTkToplevel):
             charset=string.ascii_uppercase,
             tooltipmsg=None,  # _("Modality Code"),
             row=0,
-            col=5,
+            col=2,
             pad=PAD,
             sticky="nw",
         )
 
-        self._query_button = ctk.CTkButton(
-            self._query_frame,
-            text=_("Query"),
-            command=self._query_button_pressed,
-        )
-        self._query_button.grid(row=1, column=6, padx=PAD, pady=PAD, sticky="w")
-
-        self._studies_found_label = ctk.CTkLabel(
-            self._query_frame, text=_("Studies Found:")
-        )
-        self._studies_found_label.grid(row=0, column=8, padx=PAD, pady=PAD, sticky="w")
-
         self._load_accession_file_button = ctk.CTkButton(
             self._query_frame,
+            width=ButtonWidth,
             text=_("Load Accession Numbers"),
             command=self._load_accession_file_button_pressed,
         )
         self._load_accession_file_button.grid(
-            row=1, column=8, padx=PAD, pady=PAD, sticky="e"
+            row=0, column=6, padx=PAD, pady=(PAD, 0), sticky="w"
         )
+
+        self._query_button = ctk.CTkButton(
+            self._query_frame,
+            width=ButtonWidth,
+            text=_("Query"),
+            command=self._query_button_pressed,
+        )
+        self._query_button.grid(row=1, column=4, padx=PAD, pady=PAD, sticky="e")
+
+        self._cancel_query_button = ctk.CTkButton(
+            self._query_frame,
+            width=ButtonWidth,
+            text=_("Cancel Query"),
+            command=self._cancel_query_button_pressed,
+        )
+        self._cancel_query_button.grid(row=1, column=5, padx=PAD, pady=PAD, sticky="w")
+
+        self._studies_found_label = ctk.CTkLabel(
+            self._query_frame, text=_("Studies Found: 0")
+        )
+        self._studies_found_label.grid(row=1, column=6, padx=PAD, pady=PAD, sticky="w")
 
         # Create frame for Query results:
         self._results_frame = ctk.CTkFrame(self)
@@ -195,7 +208,7 @@ class QueryView(ctk.CTkToplevel):
             row=1, column=0, padx=PAD, pady=(0, PAD), sticky="nswe"
         )
         self._results_frame.grid_rowconfigure(0, weight=1)
-        self._results_frame.grid_columnconfigure(4, weight=1)
+        self._results_frame.grid_columnconfigure(7, weight=1)
 
         # Managing C-FIND results Treeview:
         fixed_width_font = ("Courier", 12, "bold")
@@ -261,6 +274,7 @@ class QueryView(ctk.CTkToplevel):
 
         self._cancel_import_button = ctk.CTkButton(
             self._results_frame,
+            width=ButtonWidth,
             text=_("Cancel Import"),
             command=self._cancel_import_button_pressed,
         )
@@ -268,6 +282,7 @@ class QueryView(ctk.CTkToplevel):
 
         self._select_all_button = ctk.CTkButton(
             self._results_frame,
+            width=ButtonWidth,
             text=_("Select All"),
             command=self._select_all_button_pressed,
         )
@@ -275,6 +290,7 @@ class QueryView(ctk.CTkToplevel):
 
         self._clear_selection_button = ctk.CTkButton(
             self._results_frame,
+            width=ButtonWidth,
             text=_("Clear Selection"),
             command=self._clear_selection_button_pressed,
         )
@@ -282,25 +298,73 @@ class QueryView(ctk.CTkToplevel):
             row=1, column=6, padx=PAD, pady=PAD, sticky="w"
         )
 
-        retrieve_button = ctk.CTkButton(
+        self._retrieve_button = ctk.CTkButton(
             self._results_frame,
+            width=ButtonWidth,
             text=_("Import & Anonymize"),
             command=self._retrieve_button_pressed,
         )
-        retrieve_button.grid(row=1, column=8, padx=PAD, pady=PAD, sticky="nswe")
+        self._retrieve_button.grid(row=1, column=7, padx=PAD, pady=PAD, sticky="e")
+
+    def _disable_action_buttons(self):
+        logger.info(f"_disable_action_buttons")
+        self._load_accession_file_button.configure(state="disabled")
+        self._query_button.configure(state="disabled")
+        self._select_all_button.configure(state="disabled")
+        self._clear_selection_button.configure(state="disabled")
+        self._retrieve_button.configure(state="disabled")
+
+        self._cancel_import_button.configure(state="enabled")
+        self._cancel_query_button.configure(state="enabled")
+
+        self._tree.configure(selectmode="none")
+
+    def _enable_action_buttons(self):
+        logger.info(f"_enable_action_buttons")
+        self._load_accession_file_button.configure(state="enabled")
+        self._query_button.configure(state="enabled")
+        self._select_all_button.configure(state="enabled")
+        self._clear_selection_button.configure(state="enabled")
+        self._retrieve_button.configure(state="enabled")
+
+        self._cancel_import_button.configure(state="disabled")
+        self._cancel_query_button.configure(state="disabled")
+
+        self._tree.configure(selectmode="extended")
 
     def _load_accession_file_button_pressed(self):
         logger.info(f"Load Accession File button pressed")
         if self._query_active or self._move_active:
             logger.info(f"Load Accession File disabled, query or move active")
             return
-        path = filedialog.askopenfilenames(
+        file_path = filedialog.askopenfilename(
+            title=_(
+                "Select text or csv file with list of accession numbers to retrieve"
+            ),
+            defaultextension=".txt",
             filetypes=[
                 ("Text Files", "*.txt"),
-            ]
+                ("CSV Files", "*.csv"),
+            ],
         )
+        if not file_path:
+            logger.info(f"Load Accession File cancelled")
+            return
 
-    def _monitor_query_response(self, ux_Q: Queue, found_count: int):
+        logger.info(f"Load Accession File")
+        # Clear Accession Number entry field:
+        self._accession_no_var.set("")
+        # Read accession numbers from file:
+        with open(file_path, "r") as file:
+            acc_nos_str = file.read().replace("\n", ",")
+
+        self._acc_no_list = list(set(acc_nos_str.split(",")))  # remove duplicates
+
+        # Trigger the query:
+        # TODO: optimize query using wildcards * and ? to reduce number of queries for blocks/sequences
+        self._query_button_pressed()
+
+    def _monitor_query_response(self, ux_Q: Queue):
         results = []
         query_finished = False
         while not ux_Q.empty():
@@ -316,14 +380,15 @@ class QueryView(ctk.CTkToplevel):
                     assert resp.status.Status == C_FAILURE
                     query_finished = True
                     logger.error(f"Query failed: {resp.status.ErrorComment}")
-                    CTkMessagebox(
-                        master=self,
-                        title=_("Query Remote Server Error"),
-                        message=f"{resp.status.ErrorComment}",
-                        icon="cancel",
-                        sound=True,
-                        topmost=True,
-                    )
+                    if self._query_active:  # not aborted
+                        CTkMessagebox(
+                            master=self,
+                            title=_("Query Remote Server Error"),
+                            message=f"{resp.status.ErrorComment}",
+                            icon="cancel",
+                            sound=True,
+                            topmost=True,
+                        )
 
                 ux_Q.task_done()
 
@@ -335,7 +400,7 @@ class QueryView(ctk.CTkToplevel):
         # Create Pandas DataFrame from results and display in Treeview:
         if results:
             logger.info(f"monitor_query_response: processing {len(results)} results")
-            found_count += len(results)
+            self._studies_processed += len(results)
             # List the DICOM attributes in the desired order using the keys from the mapping
             ordered_attrs = list(self._attr_map.keys())
             data_dicts = [
@@ -352,26 +417,32 @@ class QueryView(ctk.CTkToplevel):
             self._update_treeview_data(df)
 
         # Update UX label for studies found:
-        self._studies_found_label.configure(text=f"Studies Found: {found_count}")
+        self._studies_found_label.configure(
+            text=f"Studies Found: {self._studies_processed}"
+        )
 
         if query_finished:
-            logger.info(f"Query finished, {found_count} results")
+            logger.info(f"Query finished, {self._studies_processed} results")
             self._query_active = False
+            self._enable_action_buttons()
+            # TODO: If accession number list search export unfound accession numbers to file:
+            if self._acc_no_list:
+                logger.info(
+                    f"- {len(self._acc_no_list)} NOT found: {self._acc_no_list}"
+                )
+
+            self._acc_no_list = []  # reset accession number list
         else:
             # Re-trigger monitor_query_response callback:
             self.after(
                 self.ux_poll_find_response_interval,
                 self._monitor_query_response,
                 ux_Q,
-                found_count,
             )
 
     def _enter_keypress(self, event):
         logger.debug(f"_enter_pressed")
         self._query_button_pressed()
-
-    def _clear_results_tree(self):
-        self._tree.delete(*self._tree.get_children())
 
     def _query_button_pressed(self):
         logger.info(f"Query button pressed, initiate find request...")
@@ -384,27 +455,72 @@ class QueryView(ctk.CTkToplevel):
             return
 
         self._query_active = True
+        self._disable_action_buttons()
         self._clear_results_tree()
+
+        # Handle multiple comma delimited accession numbers:
+        # Entered by user or loaded from file:
+        if self._accession_no_var.get() and "," in self._accession_no_var.get():
+            self._acc_no_list = self._accession_no_var.get().split(",")
+
+        if self._acc_no_list:
+            # Remove empty strings from the list
+            self._acc_no_list = [s.strip() for s in self._acc_no_list if s.strip()]
+            # Add accession numbers to the treeview:
+            # for acc_no in self._acc_no_list:
+            #     self._tree.insert(
+            #         "", "end", iid=acc_no, values=["", "", "", "", acc_no]
+            #     )
+            self._studies_to_process = len(self._acc_no_list)
+        else:
+            self._studies_to_process = -1  # unknown
+
+        self._studies_processed = 0
 
         ux_Q = Queue()
         req: FindRequest = FindRequest(
             "QUERY",
             self._patient_name_var.get(),
             self._patient_id_var.get(),
-            self._accession_no_var.get(),
+            self._accession_no_var.get()
+            if not self._acc_no_list
+            else self._acc_no_list,
             self._study_date_var.get(),
             self._modality_var.get(),
             ux_Q,
         )
         self._controller.find_ex(req)
         # Start FindResponse monitor:
-        found_count = 0
         self._tree.after(
             self.ux_poll_find_response_interval,
             self._monitor_query_response,
             ux_Q,
-            found_count,
         )
+
+    def _cancel_query_button_pressed(self):
+        logger.info(f"Cancel Query button pressed")
+        self._query_active = False
+        self._enable_action_buttons()
+        # self._update_query_progress(cancel=True)
+        self._controller.abort_query()
+
+    def _update_query_progress(self, cancel=False):
+        if self._studies_to_process == -1:
+            studies_to_process = "Unknown"
+        else:
+            studies_to_process = self._studies_to_process
+            self._progressbar.set(self._studies_processed / self._studies_to_process)
+        if cancel:
+            self._status.configure(
+                text=f"Query cancelled: Found {self._studies_processed} of {studies_to_process}"
+            )
+            return
+        self._status.configure(
+            text=f"Found {self._studies_to_process} of {studies_to_process} Studies"
+        )
+
+    def _clear_results_tree(self):
+        self._tree.delete(*self._tree.get_children())
 
     def _select_all_button_pressed(self):
         if self._move_active:
@@ -426,6 +542,7 @@ class QueryView(ctk.CTkToplevel):
         logger.info(f"Cancel Import button pressed")
         self._move_active = False
         self._update_move_progress(cancel=True)
+        self._enable_action_buttons()
         self._controller.abort_move()
 
     def _update_move_progress(self, cancel=False):
@@ -445,10 +562,6 @@ class QueryView(ctk.CTkToplevel):
             )
 
     def _monitor_move_response(self, ux_Q: Queue):
-        if not self._move_active:
-            logger.info(f"Move operation cancelled")
-            return
-
         while not ux_Q.empty():
             try:
                 # TODO: do this in batches
@@ -461,6 +574,14 @@ class QueryView(ctk.CTkToplevel):
                         f"Fatal Move Error detected, exit monitor_move_response"
                     )
                     self._move_active = False
+                    CTkMessagebox(
+                        master=self,
+                        title=_("Fatal Move Error"),
+                        message=f"Terminate move operation, fatal error detected: {resp}",
+                        icon="cancel",
+                        sound=True,
+                        topmost=True,
+                    )
                     return
 
                 # If one file failed to moved, mark the study as red:
@@ -481,6 +602,7 @@ class QueryView(ctk.CTkToplevel):
                     current_values[9] = str(int(current_values[9]) + 1)
                     self._tree.item(resp.StudyInstanceUID, values=current_values)
                     self._update_move_progress()
+                    # TOOD: add last error message to treeview
                 else:
                     current_values[8] = str(resp.NumberOfCompletedSuboperations)
                     current_values[9] = str(resp.NumberOfFailedSuboperations)
@@ -489,6 +611,9 @@ class QueryView(ctk.CTkToplevel):
                     if resp.Status == C_SUCCESS:
                         self._tree.selection_remove(resp.StudyInstanceUID)
                         if resp.NumberOfFailedSuboperations == 0:
+                            # TODO: #8 ensure all images of study have been stored by anonymizer worker
+                            # StudyInstanceUID in uid_lookup and files in storage_dir
+                            # need to wait for anonymizer worker to finish processing this study
                             self._tree.item(resp.StudyInstanceUID, tags="green")
 
                         self._studies_processed += 1
@@ -497,8 +622,7 @@ class QueryView(ctk.CTkToplevel):
                 if self._studies_processed >= self._studies_to_process:
                     logger.info(f"Full Move operation finished")
                     self._move_active = False
-                    # re-enable tree interaction now move is complete
-                    self._tree.configure(selectmode="extended")
+                    self._enable_action_buttons()
                     return
 
             except Empty:
@@ -529,10 +653,6 @@ class QueryView(ctk.CTkToplevel):
             logger.info(f"No studies selected to import")
             return
 
-        self._move_active = True
-        # disable tree interaction during move
-        self._tree.configure(selectmode="none")
-
         # Create 1 UX queue to handle the full move / retrieve operation
         ux_Q = Queue()
 
@@ -544,6 +664,14 @@ class QueryView(ctk.CTkToplevel):
         ]
 
         self._studies_to_process = len(unstored_study_uids)
+
+        if self._studies_to_process == 0:
+            logger.info(f"All studies selected are already stored/imported")
+            return
+
+        self._move_active = True
+        self._disable_action_buttons()
+
         self._studies_processed = 0
         logger.info(f"Retrieving {self._studies_to_process} Study(s)")
         logger.debug(f"StudyInstanceUIDs: {study_uids}")
@@ -567,9 +695,16 @@ class QueryView(ctk.CTkToplevel):
         # Insert new data
         logger.info(f"update_treeview_data items: {len(data)}")
         for _, row in data.iterrows():
+            # Remove found accession numbers from self._acc_no_list:
+            if self._acc_no_list:
+                acc_no = row["Accession No."]
+                if acc_no in self._acc_no_list:
+                    self._acc_no_list.remove(acc_no)
+
             display_values = [
                 val for col, val in row.items() if col != "StudyInstanceUID"
             ]
+
             # If the StudyInstanceUID is already in the uid_lookup / been stored
             # determine how many images have been stored:
             anon_study_uid = self._controller.anonymizer.model.get_anon_uid(
@@ -610,11 +745,7 @@ class QueryView(ctk.CTkToplevel):
             return
 
         self.grab_release()
-
         self.iconify()
-
-        # logger.info("destroy QueryView")
-        # self.destroy()
 
     def display(self):
         self.master.wait_window(self)

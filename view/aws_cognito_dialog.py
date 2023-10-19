@@ -44,6 +44,22 @@ class AWSCognitoDialog(ctk.CTkToplevel):
 
         row = 0
 
+        self.region_name_var = str_entry(
+            view=self,
+            label=_("Region Name:"),
+            initial_value=self.aws_cognito.region_name,
+            min_chars=5,
+            max_chars=64,
+            charset=string.digits + "-" + string.ascii_lowercase,
+            tooltipmsg=None,
+            row=row,
+            col=0,
+            pad=PAD,
+            sticky="nw",
+        )
+
+        row += 1
+
         self.client_id_var = str_entry(
             view=self,
             label=_("Client ID:"),
@@ -124,7 +140,9 @@ class AWSCognitoDialog(ctk.CTkToplevel):
 
         row += 1
 
-        self._export_to_aws_checkbox = ctk.CTkCheckBox(self, text=_("Export to AWS"))
+        self._export_to_aws_checkbox = ctk.CTkCheckBox(
+            self, text=_("Export to AWS"), state="disabled"
+        )
         if self.export_to_aws:
             self._export_to_aws_checkbox.select()
 
@@ -151,6 +169,7 @@ class AWSCognitoDialog(ctk.CTkToplevel):
         self._user_input = (
             self._export_to_aws_checkbox.get() == 1,
             AWSCognito(
+                self.region_name_var.get(),
                 self.client_id_var.get(),
                 self.s3_bucket_var.get(),
                 self.s3_prefix_var.get(),
