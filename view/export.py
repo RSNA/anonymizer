@@ -48,15 +48,17 @@ class ExportView(ctk.CTkToplevel):
         self._export_active = False
         self._patients_processed = 0
         self._patients_to_process = 0
+        self._patient_ids_to_export = []  # dynamically as per export progress
         self.width = 1200
         self.height = 400
         # Try to move export window to right of the dashboard:
         self.geometry(f"{self.width}x{self.height}+{self.master.winfo_width()}+0")
         self.resizable(True, True)
         self.lift()
-        self._create_widgets()
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
+        self._create_widgets()
+        self._enable_action_buttons()
 
     def _create_widgets(self):
         logger.info(f"_create_widgets")
@@ -178,11 +180,34 @@ class ExportView(ctk.CTkToplevel):
             self._export_frame,
             width=ButtonWidth,
             text=_("Export"),
-            # state=ctk.DISABLED,
             command=self._export_button_pressed,
         )
         self._export_button.grid(row=1, column=10, padx=PAD, pady=PAD, sticky="e")
         self._export_button.focus_set()
+
+    def _disable_action_buttons(self):
+        logger.info(f"_disable_action_buttons")
+        self._refresh_button.configure(state="disabled")
+        self._export_button.configure(state="disabled")
+        self._select_all_button.configure(state="disabled")
+        self._clear_selection_button.configure(state="disabled")
+        self._create_phi_button.configure(state="disabled")
+
+        self._cancel_export_button.configure(state="enabled")
+
+        self._tree.configure(selectmode="none")
+
+    def _enable_action_buttons(self):
+        logger.info(f"_enable_action_buttons")
+        self._refresh_button.configure(state="enabled")
+        self._export_button.configure(state="enabled")
+        self._select_all_button.configure(state="enabled")
+        self._clear_selection_button.configure(state="enabled")
+        self._create_phi_button.configure(state="enabled")
+
+        self._cancel_export_button.configure(state="disabled")
+
+        self._tree.configure(selectmode="extended")
 
     def _update_tree_from_storage_direcctory(self):
         # Storage Directory Sub-directory Names = Patient IDs
@@ -230,7 +255,7 @@ class ExportView(ctk.CTkToplevel):
 
     def _refresh_button_pressed(self):
         if self._export_active:
-            logger.error(f"Selection disabled, export is active")
+            logger.error(f"Refresh disabled, export is active")
             return
         logger.info(f"Refresh button pressed, uodate tree from storage directory...")
         # Clear tree to ensure all items are removed before re-populating:
@@ -276,7 +301,12 @@ class ExportView(ctk.CTkToplevel):
                 sound=True,
             )
 
-    def _update_export_progress(self):
+    def _update_export_progress(self, cancel: bool = False):
+        if cancel:
+            self._status.configure(
+                text=f"Export cancelled: Processed {self._patients_processed} of {self._patients_to_process} Patients"
+            )
+            return
         self._progressbar.set(self._patients_processed / self._patients_to_process)
         if self._patients_processed == self._patients_to_process:
             self._status.configure(
@@ -289,12 +319,12 @@ class ExportView(ctk.CTkToplevel):
 
     def _cancel_export_button_pressed(self):
         logger.info(f"Cancel Export button pressed")
-        if not self._export_active:
-            logger.error(f"Export is not active")
-            return
+        self._move_active = False
+        self._update_export_progress(cancel=True)
         self._controller.abort_export()
+        self._enable_action_buttons()
 
-    def _monitor_export_queue(self, ux_Q: Queue):
+    def _monitor_export_response(self, ux_Q: Queue):
         while not ux_Q.empty():
             try:
                 resp: ExportResponse = ux_Q.get_nowait()
@@ -313,11 +343,12 @@ class ExportView(ctk.CTkToplevel):
 
                 # Check for completion or critical error of this patient's export
                 if resp.complete:
-                    logger.debug(f"Patient {resp.patient_id} export complete")
-                    # remove selection highlight to indicate export of this item/patient is finished
-                    self._tree.selection_remove(resp.patient_id)
                     if resp.files_sent == int(current_values[4]):
+                        logger.debug(f"Patient {resp.patient_id} export complete")
+                        self._patient_ids_to_export.remove(resp.patient_id)
+                        self._tree.selection_remove(resp.patient_id)
                         self._tree.item(resp.patient_id, tags="green")
+
                     self._patients_processed += 1
                     self._update_export_progress()
 
@@ -330,22 +361,38 @@ class ExportView(ctk.CTkToplevel):
             except Full:
                 logger.error("Queue is full")
 
-        # Unselect
-        # Check for completion of full export:
+        # Check for completion of full export processing:
         if self._patients_processed >= self._patients_to_process:
-            logger.info("All patients exported")
+            logger.info("All patients processed")
+            self._enable_action_buttons()
             self._export_active = False
-            # self._export_button.configure(state=ctk.NORMAL)
-            # self._select_all_button.configure(state=ctk.NORMAL)
-            # re-enable tree interaction now export is complete
-            self._tree.configure(selectmode="extended")
-            return
+            if len(self._patient_ids_to_export) > 0:
+                logger.error(
+                    f"Failed to export {len(self._patient_ids_to_export)} patients"
+                )
+                msg = CTkMessagebox(
+                    title=_("Export Error"),
+                    message=_(
+                        f"Failed to export {len(self._patient_ids_to_export)} patient(s)"
+                    ),
+                    icon="warning",
+                    option_1="Cancel",
+                    option_2="Retry",
+                    header=True,
+                )
+                if msg.get() == "Retry":
+                    # Select failed patients in treeview to retry export:
+                    self._tree.selection_add(self._patient_ids_to_export)
+                    self._export_button_pressed()
+                    return
 
-        self._tree.after(
-            self.ux_poll_export_response_interval,
-            self._monitor_export_queue,
-            ux_Q,
-        )
+        else:
+            # Re-trigger the export queue monitor:
+            self._tree.after(
+                self.ux_poll_export_response_interval,
+                self._monitor_export_response,
+                ux_Q,
+            )
 
     def _enter_keypress(self, event):
         logger.info(f"_enter_pressed")
@@ -357,11 +404,30 @@ class ExportView(ctk.CTkToplevel):
             logger.error(f"Selection disabled, export is active")
             return
 
-        sel_patient_ids = list(self._tree.selection())
+        if self._controller.echo("EXPORT"):
+            self._export_button.configure(text_color="light green")
+        else:
+            self._export_button.configure(text_color="red")
+            CTkMessagebox(
+                title=_("Connection Error"),
+                message=_(f"Export Server Failed DICOM C-ECHO"),
+                icon="cancel",
+            )
+            return
 
-        self._patients_to_process = len(sel_patient_ids)
+        self._patient_ids_to_export = list(self._tree.selection())
+
+        self._patients_to_process = len(self._patient_ids_to_export)
         if self._patients_to_process == 0:
             logger.error(f"No patients selected for export")
+            CTkMessagebox(
+                title=_("Export Error"),
+                message=_(
+                    f"No patients selected for export."
+                    " Use SHIFT+Click and/or CMD/WIN+Click to select multiple patients."
+                ),
+                icon="cancel",
+            )
             return
 
         if self._controller.echo("EXPORT"):
@@ -370,7 +436,11 @@ class ExportView(ctk.CTkToplevel):
             self._export_button.configure(text_color="red")
             return
 
+        self._disable_action_buttons()
         self._export_active = True
+        self._patients_processed = 0
+        self._progressbar.set(0)
+        self._update_export_progress()
 
         # Create 1 UX queue to handle the full export operation
         ux_Q = Queue()
@@ -379,24 +449,17 @@ class ExportView(ctk.CTkToplevel):
         self._controller.export_patients(
             ExportRequest(
                 "AWS" if self._export_to_AWS else "EXPORT",
-                sel_patient_ids,
+                self._patient_ids_to_export.copy(),
                 ux_Q,
             )
         )
 
         logger.info(f"Export of {self._patients_to_process} patients initiated")
-        self._patients_processed = 0
-        self._progressbar.set(0)
-        # disable tree interaction during export
-        self._tree.configure(selectmode="none")
-        # disable select_all and export buttons while export is in progress
-        # self._export_button.configure(state=ctk.DISABLED)
-        # self._select_all_button.configure(state=ctk.DISABLED)
 
         # Trigger the queue monitor
         self._tree.after(
             self.ux_poll_export_response_interval,
-            self._monitor_export_queue,
+            self._monitor_export_response,
             ux_Q,
         )
 

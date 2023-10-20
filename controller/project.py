@@ -11,6 +11,7 @@ import csv
 from pathlib import Path
 from typing import List
 from dataclasses import dataclass
+from numpy import isin
 from pydicom import Dataset
 from pydicom.dataset import FileMetaDataset
 from pynetdicom.association import Association
@@ -122,12 +123,6 @@ class ProjectController(AE):
             if attr_name not in ds or getattr(ds, attr_name) == ""
         ]
 
-    def _reset_scp_vars(self):
-        self._abort_query = False
-        self._abort_move = False
-        self._abort_export = False
-        self.scp = None
-
     def __init__(self, model: ProjectModel):
         super().__init__(model.scu.aet)
         self.model = model
@@ -143,6 +138,25 @@ class ProjectController(AE):
         self._handle_store_time_slice_interval = 0.1  # seconds
         self._reset_scp_vars()
         self.anonymizer = AnonymizerController(model)
+
+    def _reset_scp_vars(self):
+        self._abort_query = False
+        self._abort_move = False
+        self._abort_export = False
+        self._export_futures = []
+        self._export_executor = None
+        self._move_futures = []
+        self._move_executor = None
+        self.scp = None
+
+    def _post_model_update(self):
+        self.stop_scp()
+        self.set_dicom_timeouts(self.model.network_timeouts)
+        self.set_radiology_storage_contexts()
+        self.set_verification_context()
+        self._reset_scp_vars()
+        self.save_model()
+        self.start_scp()
 
     def __str__(self):
         return super().__str__() + f"\n{self.model}" + f"\n{self.anonymizer.model}"
@@ -294,6 +308,7 @@ class ProjectController(AE):
 
         handlers = [(EVT_C_ECHO, self._handle_echo), (EVT_C_STORE, self._handle_store)]
         self._reset_scp_vars()
+        self.ae_title = self.model.scu.aet
 
         try:
             self.scp = self.start_server(
@@ -314,19 +329,24 @@ class ProjectController(AE):
 
     def stop_scp(self) -> None:
         if not self.scp:
+            logger.error("stop_scp called but self.scp is None")
             return
         logger.info(f"Stop {self.model.scp} scp and close socket")
         self.scp.shutdown()
         self._reset_scp_vars()
 
-    def _connect_to_scp(self, scp_name: str, contexts=None) -> Association:
+    def _connect_to_scp(self, scp: str | DICOMNode, contexts=None) -> Association:
         association = None
+        if isinstance(scp, str):
+            if scp not in self.model.remote_scps:
+                raise ConnectionError(f"Remote SCP {scp} not found")
+            remote_scp = self.model.remote_scps[scp]
+        else:
+            remote_scp = scp
+
+        assert isinstance(remote_scp, DICOMNode)
+
         try:
-            if scp_name not in self.model.remote_scps:
-                raise ConnectionError(f"Remote SCP {scp_name} not found")
-
-            remote_scp = self.model.remote_scps[scp_name]
-
             association = self.associate(
                 remote_scp.ip,
                 remote_scp.port,
@@ -346,15 +366,11 @@ class ProjectController(AE):
 
         return association
 
-    def echo(self, scp_name: str) -> bool:
-        logger.info(
-            f"Perform C-ECHO from {self.model.scu} to {self.model.remote_scps[scp_name]}"
-        )
+    def echo(self, scp: str | DICOMNode) -> bool:
+        logger.info(f"Perform C-ECHO from {self.model.scu} to {scp}")
         association = None
         try:
-            association = self._connect_to_scp(
-                scp_name, [self.get_verification_context()]
-            )
+            association = self._connect_to_scp(scp, [self.get_verification_context()])
             status = (Dataset)(association.send_c_echo())
             if not status:
                 raise ConnectionError(
@@ -374,13 +390,13 @@ class ProjectController(AE):
 
         except Exception as e:
             logger.error(
-                f"Failed DICOM C-ECHO from from {self.model.scu} to {scp_name}, Error: {(e)}"
+                f"Failed DICOM C-ECHO from from {self.model.scu} to {scp}, Error: {(e)}"
             )
             if association:
                 association.release()
             return False
 
-    # Blocking send, raises (ConnectionError,TimeoutError,DICOMRuntimeError,RuntimeError,AttributeError,ValueError)
+    # Blocking send
     def send(self, file_paths: list[str], scp_name: str, send_contexts=None):
         logger.info(f"Send {len(file_paths)} files to {scp_name}")
         association = None
@@ -432,8 +448,8 @@ class ProjectController(AE):
         ds.AccessionNumber = acc_no
         ds.StudyDate = study_date
         ds.ModalitiesInStudy = modality
-        ds.NumberOfStudyRelatedSeries = 0
-        ds.NumberOfStudyRelatedInstances = 0
+        ds.NumberOfStudyRelatedSeries = ""
+        ds.NumberOfStudyRelatedInstances = ""
         ds.StudyDescription = ""
         ds.StudyInstanceUID = ""
 
@@ -468,8 +484,9 @@ class ProjectController(AE):
                             "Connection timed out, was aborted, or received an invalid response"
                         )
                     else:
+                        logger.error(f"C-FIND failure, status: {hex(status.Status)}")
                         raise DICOMRuntimeError(
-                            f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}"
+                            f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status]}"
                         )
                 else:
                     if status.Status == C_SUCCESS:
@@ -563,8 +580,8 @@ class ProjectController(AE):
         ds.PatientID = ""
         ds.StudyDate = ""
         ds.ModalitiesInStudy = ""
-        ds.NumberOfStudyRelatedSeries = 0
-        ds.NumberOfStudyRelatedInstances = 0
+        ds.NumberOfStudyRelatedSeries = ""
+        ds.NumberOfStudyRelatedInstances = ""
         ds.StudyDescription = ""
         ds.StudyInstanceUID = ""
 
@@ -727,11 +744,6 @@ class ProjectController(AE):
 
     def abort_query(self):
         logger.info("Abort Query")
-        # if query_association:
-        #     query_association.abort()
-        #     time.sleep(0.1)
-        #     query_association.release()
-        #     query_association = None
         self._abort_query = True
 
     def _export_patient(self, dest_name: str, patient_id: str, ux_Q: Queue) -> None:
@@ -762,7 +774,11 @@ class ProjectController(AE):
 
             for dicom_file_path in file_paths:
                 if self._abort_export:
-                    raise RuntimeError("Export aborted")
+                    logger.error(f"_export_patient patient_id: {patient_id} aborted")
+                    export_association.abort()
+                    while not ux_Q.empty():
+                        ux_Q.get()
+                    return
 
                 dcm_response: Dataset = export_association.send_c_store(
                     dataset=dicom_file_path
@@ -784,13 +800,9 @@ class ProjectController(AE):
             ux_Q.put(ExportResponse(patient_id, files_sent, None, True))
 
         except Exception as e:
-            logger.error(f"Export Patient {patient_id} Error: {e}")
+            if not self._abort_export:
+                logger.error(f"Export Patient {patient_id} Error: {e}")
             ux_Q.put(ExportResponse(patient_id, files_sent, f"{e}", True))
-            # TERMINATE patient export on ANY error:
-            # For all errors other than DICOMRuntimeError, terminate the full export
-            # by raising the exception in the ThreadPoolExecutor:
-            if not isinstance(e, DICOMRuntimeError):
-                raise
 
         finally:
             if export_association:
@@ -800,28 +812,32 @@ class ProjectController(AE):
 
     # Manage bulk patient export using a thread pool:
     def _manage_export(self, req: ExportRequest) -> None:
-        futures = []
+        self._export_futures = []
 
-        with ThreadPoolExecutor(
+        self._export_executor = ThreadPoolExecutor(
             max_workers=self._patient_export_thread_pool_size
-        ) as executor:
+        )
+
+        with self._export_executor as executor:
             for i in range(len(req.patient_ids)):
                 future = executor.submit(
                     self._export_patient, req.dest_name, req.patient_ids[i], req.ux_Q
                 )
-                futures.append(future)
+                self._export_futures.append(future)
+
+            logger.info(f"Export Futures: {len(self._export_futures)}")
 
             # Check for exceptions in the completed futures
-            for future in futures:
+            for future in self._export_futures:
                 try:
                     # This will raise any exceptions that _export_patient might have raised.
                     future.result()
                 except Exception as e:
                     # Handle specific exceptions if needed
-                    logger.error(f"An error occurred during export: {e}")
-                    # Shutdown executor in case of critical error
-                    executor.shutdown(wait=False)
-                    break
+                    if not self._abort_export:
+                        logger.error(f"Exception caught in _manage_movefuture: {e}")
+
+        logger.info("_manage_export complete")
 
     # Non-blocking export_patients:
     def export_patients(self, er: ExportRequest) -> None:
@@ -835,12 +851,14 @@ class ProjectController(AE):
 
     def abort_export(self):
         logger.info("Abort Export")
-        # if export_association:
-        #     export_association.abort()
-        #     time.sleep(0.1)
-        #     export_association.release()
-        #     export_association = None
         self._abort_export = True
+        # logger.info("Cancel Futures")
+        # for future in self._move_futures:
+        #     future.cancel()
+        if self._export_executor:
+            self._export_executor.shutdown(wait=True, cancel_futures=True)
+            logger.info("Move futures cancelled and executor shutdown")
+            self._export_executor = None
 
     # Blocking Move Study:
     def _move_study(
@@ -861,7 +879,7 @@ class ProjectController(AE):
         error_msg = ""
         try:
             move_association = self._connect_to_scp(
-                scp_name=scp_name,
+                scp=scp_name,
                 contexts=[
                     build_context(
                         self._STUDY_ROOT_QR_CLASSES[1], self.model.transfer_syntaxes
@@ -883,7 +901,11 @@ class ProjectController(AE):
             # Process the responses received from the remote scp:
             for status, identifier in responses:
                 if self._abort_move:
-                    raise RuntimeError("Move aborted")
+                    logger.error(f"_move_study study_uid: {study_uid} aborted")
+                    move_association.abort()
+                    while not ux_Q.empty():
+                        ux_Q.get()
+                    return
 
                 if not status or status.Status not in (
                     C_SUCCESS,
@@ -928,13 +950,13 @@ class ProjectController(AE):
 
     # Manage bulk patient move using a thread pool:
     def _manage_move(self, req: MoveRequest) -> None:
-        self._futures = []
+        self._move_futures = []
 
-        self._executor = ThreadPoolExecutor(
+        self._move_executor = ThreadPoolExecutor(
             max_workers=self._study_move_thread_pool_size
         )
 
-        with self._executor as executor:
+        with self._move_executor as executor:
             for i in range(len(req.study_uids)):
                 future = executor.submit(
                     self._move_study,
@@ -943,19 +965,21 @@ class ProjectController(AE):
                     req.study_uids[i],
                     req.ux_Q,
                 )
-                self._futures.append(future)
+                self._move_futures.append(future)
+
+            logger.info(f"Move Futures: {len(self._move_futures)}")
 
             # Check for exceptions in the completed futures
-            for future in self._futures:
+            for future in self._move_futures:
                 try:
                     # This will raise any exceptions that _move_study may have raised:
                     future.result()
                 except Exception as e:
                     # Handle specific exceptions if needed
-                    logger.error(f"An error occurred during move: {e}")
-                    # Shutdown executor in case of critical error
-                    executor.shutdown(wait=False)
-                    break
+                    if not self._abort_move:
+                        logger.error(f"Exception caught in _manage_movefuture: {e}")
+
+        logger.info("_manage_move complete")
 
     # Non-blocking Move Studies:
     def move_studies(self, mr: MoveRequest) -> None:
@@ -968,12 +992,14 @@ class ProjectController(AE):
 
     def abort_move(self):
         logger.info("Abort Move")
-        # if move_association:
-        #     move_association.abort()
-        #     time.sleep(0.1)
-        #     move_association.release()
-        #     move_association = None
         self._abort_move = True
+        # logger.info("Cancel Futures")
+        # for future in self._move_futures:
+        #     future.cancel()
+        if self._move_executor:
+            self._move_executor.shutdown(wait=True, cancel_futures=True)
+            logger.info("Move futures cancelled and executor shutdown")
+            self._move_executor = None
 
     def create_phi_csv(self) -> Path | str:
         logger.info("Create PHI CSV")
@@ -1015,7 +1041,6 @@ class ProjectController(AE):
         phi_csv_path = Path(self.model.storage_dir, filename)
 
         try:
-            os.remove(phi_csv_path)
             with open(phi_csv_path, "w", newline="") as csv_file:
                 writer = csv.writer(csv_file, delimiter=",")
                 writer.writerow(field_names)

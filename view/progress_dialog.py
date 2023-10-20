@@ -28,13 +28,13 @@ class ProgressDialog(ctk.CTkToplevel):
         self._sub_title = sub_title
         self.attributes("-topmost", True)  # stay on top
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
-        # self.geometry("600x550")
         self.resizable(False, False)
-        self.grab_set()  # make dialog modal
+        # self.grab_set()  # make dialog modal
         self._user_input: Union[list, None] = None
         self.rowconfigure(0, weight=1)
         self.columnconfigure(1, weight=1)
         self._create_widgets()
+        self.bind("<Escape>", self._escape_keypress)
         self._update_progress()
 
     def _create_widgets(self):
@@ -59,7 +59,7 @@ class ProgressDialog(ctk.CTkToplevel):
         self._progress_label.grid(row=2, column=0, padx=PAD, pady=(0, PAD), sticky="w")
 
         self._cancel_button = ctk.CTkButton(
-            self, width=100, text=_("Cancel"), command=self._on_cancel
+            self, text=_("Cancel"), command=self._on_cancel
         )
         self._cancel_button.grid(
             row=3,
@@ -83,6 +83,10 @@ class ProgressDialog(ctk.CTkToplevel):
         self._progressbar.set(current_ndx / self._maxQ)
         self._progress_label.configure(text=f"Processing {current_ndx} of {self._maxQ}")
         self.after(self.progress_update_interval, self._update_progress)
+
+    def _escape_keypress(self, event):
+        logger.info(f"_escape_pressed")
+        self._on_cancel()
 
     def _on_cancel(self):
         logger.info(

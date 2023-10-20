@@ -1,10 +1,10 @@
 # User Interface Field Validation & Utilities
 import string
-import prototyping.config as config
 import tkinter as tk
 import customtkinter as ctk
 from CTkToolTip import CTkToolTip
 from utils.translate import _
+import logging
 
 # Entry Limits:
 
@@ -24,6 +24,7 @@ dicom_date_chars = 8  # dicomVR DA=8 max
 modality_min_chars = 2  # dicomVR CS=16 max
 modality_max_chars = 3  # dicomVR CS=16 max
 
+# TODO: change these utility routines to classes
 
 # Entry field callback functions for
 # validating user input and saving update to config.json:
@@ -41,22 +42,20 @@ def validate_entry(final_value: str, allowed_chars: str, max: str | None):
 
 def int_entry_change(
     event: tk.Event,
-    var: ctk.IntVar,
+    int_var: ctk.IntVar,
     min: int,
     max: int,
-    module_name: str | None = None,
-    var_name: str | None = None,
 ) -> None:
     try:
-        value = var.get()
-    except:
-        value = 0
+        value = int_var.get()
+    except Exception as e:
+        logging.error(f"int_entry_change: {e}")
+        return
+
     if value > max:
-        var.set(max)
+        int_var.set(max)
     elif value < min:
-        var.set(min)
-    if module_name and var_name:
-        config.save(module_name, var_name, var.get())
+        int_var.set(min)
 
 
 def str_entry_change(
@@ -64,16 +63,12 @@ def str_entry_change(
     var: ctk.StringVar,
     min_len: int,
     max_len: int | None,
-    module_name: str | None = None,
-    var_name: str | None = None,
 ) -> None:
     value = var.get()
     if max_len and len(value) > max_len:
         var.set(value[:max_len])
     elif len(value) < min_len:
         var.set(value[:min_len])
-    if module_name and var_name:
-        config.save(module_name, var_name, var.get())
 
 
 def str_entry(
@@ -88,8 +83,6 @@ def str_entry(
     col: int,
     pad: int,
     sticky: str,
-    module: str | None = None,
-    var_name: str | None = None,
     enabled: bool = True,
     width_chars: int = 20,
     focus_set=False,
@@ -128,7 +121,10 @@ def str_entry(
             ctk_entry.configure(show="*")
 
         entry_callback = lambda event: str_entry_change(
-            event, str_var, min_chars, max_chars, module, var_name
+            event,
+            str_var,
+            min_chars,
+            max_chars,
         )
         ctk_entry.bind("<Return>", entry_callback)
         ctk_entry.bind("<FocusOut>", entry_callback)
@@ -151,8 +147,7 @@ def int_entry(
     col: int,
     pad: int,
     sticky: str,
-    module: str | None = None,
-    var_name: str | None = None,
+    focus_set=False,
 ) -> ctk.IntVar:
     int_var = ctk.IntVar(view, value=initial_value)
     max_chars = len(str(max))
@@ -164,6 +159,8 @@ def int_entry(
     ctk_entry = ctk.CTkEntry(
         view,
         width=width,
+        # TODO: ctk docs state this should be a string var,
+        # it works with Int var but raises TclError if entry is empty
         textvariable=int_var,
         validate="key",
         validatecommand=(
@@ -181,10 +178,12 @@ def int_entry(
             message=_(f"{tooltipmsg} [{min}..{max}]"),
         )
 
-    entry_callback = lambda event: int_entry_change(
-        event, int_var, min, max, module, var_name
-    )
+    entry_callback = lambda event: int_entry_change(event, int_var, min, max)
     ctk_entry.bind("<Return>", entry_callback)
     ctk_entry.bind("<FocusOut>", entry_callback)
     ctk_entry.grid(row=row, column=col + 1, padx=pad, pady=(pad, 0), sticky="nw")
+
+    if focus_set:
+        ctk_entry.focus_set()
+
     return int_var

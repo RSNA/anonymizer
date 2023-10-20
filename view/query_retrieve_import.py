@@ -78,6 +78,7 @@ class QueryView(ctk.CTkToplevel):
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
         self._create_widgets()
+        self._enable_action_buttons()
 
     def _create_widgets(self):
         logger.info(f"_create_widgets")
@@ -314,8 +315,10 @@ class QueryView(ctk.CTkToplevel):
         self._clear_selection_button.configure(state="disabled")
         self._retrieve_button.configure(state="disabled")
 
-        self._cancel_import_button.configure(state="enabled")
-        self._cancel_query_button.configure(state="enabled")
+        if self._query_active:
+            self._cancel_query_button.configure(state="enabled")
+        if self._move_active:
+            self._cancel_import_button.configure(state="enabled")
 
         self._tree.configure(selectmode="none")
 
@@ -359,7 +362,7 @@ class QueryView(ctk.CTkToplevel):
             acc_nos_str = file.read().replace("\n", ",")
 
         self._acc_no_list = sorted(set(acc_nos_str.split(",")))  # remove duplicates
-
+        self._cancel_query_button.focus_set()
         # Trigger the query:
         # TODO: optimize query using wildcards * and ? to reduce number of queries for blocks/sequences
         self._query_button_pressed()
@@ -399,7 +402,7 @@ class QueryView(ctk.CTkToplevel):
 
         # Create Pandas DataFrame from results and display in Treeview:
         if results:
-            logger.info(f"monitor_query_response: processing {len(results)} results")
+            logger.debug(f"monitor_query_response: processing {len(results)} results")
             self._studies_processed += len(results)
             # List the DICOM attributes in the desired order using the keys from the mapping
             ordered_attrs = list(self._attr_map.keys())
@@ -428,7 +431,7 @@ class QueryView(ctk.CTkToplevel):
             self._query_active = False
             self._enable_action_buttons()
             if self._acc_no_list:
-                logger.info(
+                logger.debug(
                     f"- {len(self._acc_no_list)} NOT found: {self._acc_no_list}"
                 )
                 # If processing accession numbers from file,
@@ -448,9 +451,9 @@ class QueryView(ctk.CTkToplevel):
 
                     # TODO: investigate errors (hanging and blank box) when using standard form of CTkMessagebox
                     CTkMessagebox(
-                        master=self,
+                        title=_("Accession Numbers not found"),
                         message=_(
-                            f"Accession Numbers not found were written to: {not_found_file_path}"
+                            f"Accession Numbers not found were written to text file:\n {not_found_file_path}"
                         ),
                         icon="info",
                         header=True,
@@ -484,6 +487,11 @@ class QueryView(ctk.CTkToplevel):
             self._query_button.configure(text_color="light green")
         else:
             self._query_button.configure(text_color="red")
+            CTkMessagebox(
+                title=_("Connection Error"),
+                message=_(f"Query Server Failed DICOM C-ECHO"),
+                icon="cancel",
+            )
             return
 
         self._query_active = True
@@ -537,22 +545,15 @@ class QueryView(ctk.CTkToplevel):
 
     def _cancel_query_button_pressed(self):
         logger.info(f"Cancel Query button pressed")
-        self._query_active = False
-        self._enable_action_buttons()
-        # self._update_query_progress(cancel=True)
         self._controller.abort_query()
 
-    def _update_query_progress(self, cancel=False):
+    def _update_query_progress(self):
         if self._studies_to_process == -1:
             studies_to_process = "Unknown"
         else:
             studies_to_process = self._studies_to_process
             self._progressbar.set(self._studies_processed / self._studies_to_process)
-        if cancel:
-            self._status.configure(
-                text=f"Query cancelled: Found {self._studies_processed} of {studies_to_process}"
-            )
-            return
+
         self._status.configure(
             text=f"Found {self._studies_processed} of {studies_to_process} Studies"
         )
@@ -580,8 +581,8 @@ class QueryView(ctk.CTkToplevel):
         logger.info(f"Cancel Import button pressed")
         self._move_active = False
         self._update_move_progress(cancel=True)
-        self._enable_action_buttons()
         self._controller.abort_move()
+        self._enable_action_buttons()
 
     def _update_move_progress(self, cancel=False):
         if cancel:
@@ -707,8 +708,9 @@ class QueryView(ctk.CTkToplevel):
 
         self._move_active = True
         self._disable_action_buttons()
-
         self._studies_processed = 0
+        self._update_move_progress()
+
         logger.info(f"Retrieving {self._studies_to_process} Study(s)")
         logger.debug(f"StudyInstanceUIDs: {study_uids}")
 
@@ -729,7 +731,7 @@ class QueryView(ctk.CTkToplevel):
 
     def _update_treeview_data(self, data: pd.DataFrame):
         # Insert new data
-        logger.info(f"update_treeview_data items: {len(data)}")
+        logger.debug(f"update_treeview_data items: {len(data)}")
         for _, row in data.iterrows():
             # Remove found accession numbers from self._acc_no_list:
             if self._acc_no_list:

@@ -2,7 +2,6 @@ import os, sys
 from pathlib import Path
 import logging
 import pickle
-from re import sub
 import tkinter as tk
 from tkinter import filedialog
 import customtkinter as ctk
@@ -256,10 +255,8 @@ class App(ctk.CTk):
         #     return
         self.model = edited_model
         self.project_controller.model = self.model
-        self.project_controller.save_model()
+        self.project_controller._post_model_update()
         logger.info(f"{self.project_controller}")
-        self.project_controller.stop_scp()
-        self.project_controller.start_scp()
 
     # Help Menu:
     def instructions(self):
@@ -452,15 +449,22 @@ class App(ctk.CTk):
 
 
 def main():
-    # TODO: handle command line arguments, implement command line interface
+    args = str(sys.argv)
+
     install_dir = os.path.dirname(os.path.realpath(__file__))
     init_logging(install_dir)
     os.chdir(install_dir)
 
-    startup_msg = f"Starting ANONYMIZER GUI Version {__version__}"
     logger = logging.getLogger()  # get root logger
-    logger.info(startup_msg)
+    logger.info(f"cmd line args={args}")
+
+    if "debug" in args:
+        logger.info("DEBUG MODE")
+        logger.setLevel(logging.DEBUG)
+
+    logger.info(f"Starting ANONYMIZER GUI Version {__version__}")
     logger.info(f"Running from {os.getcwd()}")
+    logger.info(f"Python Version: {sys.version_info.major}.{sys.version_info.minor}")
     logger.info(
         f"pydicom Version: {pydicom_version}, pynetdicom Version: {pynetdicom_version}"
     )

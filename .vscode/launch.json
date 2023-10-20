@@ -7,6 +7,10 @@
       "request": "launch",
       "program": "anonymizer.py",
       "console": "integratedTerminal",
+      "autoReload": {
+        "enable": true
+      },
+      //"args": ["--debug"],
       "justMyCode": false
     }
   ]

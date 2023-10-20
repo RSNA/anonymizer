@@ -10,7 +10,7 @@ from view.dicom_node_dialog import DICOMNodeDialog
 from view.aws_cognito_dialog import AWSCognitoDialog
 from view.network_timeouts_dialog import NetworkTimeoutsDialog
 from utils.translate import _
-from utils.ux_fields import str_entry, int_entry
+from utils.ux_fields import str_entry
 from view.sop_classes_dialog import SOPClassesDialog
 from view.transfer_syntaxes_dialog import TransferSyntaxesDialog
 
@@ -29,18 +29,18 @@ class SettingsDialog(ctk.CTkToplevel):
         self.model = model
         self.new_model = new_model
         self.title(title)
-        self.lift()  # lift window on top
         self.attributes("-topmost", True)  # stay on top
-        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+        # self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.resizable(False, False)
         self.grab_set()  # make dialog modal
+        self.lift()
         self._user_input: Union[ProjectModel, None] = None
         self._create_widgets()
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
 
     def _create_widgets(self):
-        logger.info(f"_create_widgets")
+        logger.debug(f"_create_widgets")
         PAD = 10
         min_chars = 3
         max_chars = 20
@@ -48,7 +48,7 @@ class SettingsDialog(ctk.CTkToplevel):
 
         char_width_px = ctk.CTkFont().measure("A")
         # validate_entry_cmd = self.register(validate_entry)
-        logger.info(f"Font Character Width in pixels: ±{char_width_px}")
+        logger.debug(f"Font Character Width in pixels: ±{char_width_px}")
 
         # self.columnconfigure(1, weight=1)
         # self.rowconfigure(3, weight=1)
@@ -301,7 +301,7 @@ class SettingsDialog(ctk.CTkToplevel):
             return
         self.model.scp = scp
         self.model.scu = scp  # TODO: remove scu from model?
-        logger.info(f"Local Server: {self.model.scp}")
+        logger.info(f"Local Server update: {self.model.scp}")
         # TODO: prevent local server from being a remote server / same address/port
 
     def _query_server_click(self, event=None):
@@ -348,7 +348,7 @@ class SettingsDialog(ctk.CTkToplevel):
             logger.info(f"Network Timeouts cancelled")
             return
         self.model.network_timeouts = timeouts
-        logger.info(f"{self.model.network_timeouts}")
+        logger.info(f"Network Timeouts updated: {self.model.network_timeouts}")
 
     def _open_storage_directory_dialog(self):
         path = filedialog.askdirectory(
@@ -357,7 +357,7 @@ class SettingsDialog(ctk.CTkToplevel):
         if path:
             self.model.storage_dir = Path(path)
             self._storage_dir_button.configure(text=self.model.abridged_storage_dir())
-            logger.info(f"Storage Directory: {self.model.storage_dir}")
+            logger.info(f"Storage Directory updated: {self.model.storage_dir}")
 
     def _open_storage_classes_dialog(self):
         dlg = SOPClassesDialog(self.model.storage_classes)
@@ -389,7 +389,9 @@ class SettingsDialog(ctk.CTkToplevel):
         if path:
             self.model.anonymizer_script_path = Path(path)
             self._script_file_button.configure(text=path)
-            logger.info(f"Anonymizer Script File: {self.model.anonymizer_script_path}")
+            logger.info(
+                f"Anonymizer Script File updated: {self.model.anonymizer_script_path}"
+            )
 
     def _enter_keypress(self, event):
         logger.info(f"_enter_pressed")

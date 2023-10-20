@@ -1,8 +1,10 @@
+from time import sleep
 from typing import Union
 import customtkinter as ctk
 import string
 import logging
 from model.project import DICOMNode
+from controller.project import ProjectController
 from utils.translate import _
 from utils.network import get_local_ip_addresses, dns_lookup
 
@@ -31,7 +33,7 @@ class DICOMNodeDialog(ctk.CTkToplevel):
         self.title(title)
         self.lift()  # lift window on top
         self.attributes("-topmost", True)  # stay on top
-        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+        # self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.resizable(False, False)
         self.grab_set()  # make dialog modal
         self._user_input: Union[DICOMNode, None] = None
@@ -41,11 +43,11 @@ class DICOMNodeDialog(ctk.CTkToplevel):
         self._create_widgets()
 
     def _create_widgets(self):
-        logger.info(f"_create_widgets")
+        logger.debug(f"_create_widgets")
         PAD = 10
 
         char_width_px = ctk.CTkFont().measure("A")
-        logger.info(f"Font Character Width in pixels: ±{char_width_px}")
+        logger.debug(f"Font Character Width in pixels: ±{char_width_px}")
 
         self.columnconfigure(1, weight=1)
         self.rowconfigure(3, weight=1)
@@ -176,7 +178,7 @@ class DICOMNodeDialog(ctk.CTkToplevel):
     def _ok_event(self, event=None):
         self._user_input = DICOMNode(
             self.ip_var.get(),
-            self.port_var.get(),
+            int(self.port_var.get()),
             self.aet_var.get(),
             self.address.local,
         )

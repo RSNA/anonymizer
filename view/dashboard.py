@@ -2,7 +2,7 @@ import os
 import logging
 from turtle import st
 import customtkinter as ctk
-import controller
+from CTkMessagebox import CTkMessagebox
 from controller.project import ProjectController
 from utils.translate import _
 from utils.storage import count_studies_series_images
@@ -29,23 +29,40 @@ class Dashboard(ctk.CTkFrame):
 
     def _query_button_click(self):
         logger.info(f"_query_button_click")
-        if self._controller.echo("QUERY"):
-            self._query_button.configure(text_color="light green")
-        else:
+        # This blocks for TCP connection timeout
+        if not self._controller.echo("QUERY"):
             self._query_button.configure(text_color="red")
-
+            CTkMessagebox(
+                title=_("Connection Error"),
+                message=_(
+                    f"Query Server Failed DICOM C-ECHO, check Project Settings/Query Server"
+                    " and ensure server is setup for local server: echo, query & move services."
+                ),
+                icon="cancel",
+            )
+            return
+        self._query_button.configure(text_color="light green")
         self._parent.master.query_retrieve()
 
     def _export_button_click(self):
         logger.info(f"_export_button_click")
-        if self._controller.echo("EXPORT"):
-            self._export_button.configure(text_color="light green")
-        else:
+        # This blocks for TCP connection timeout
+        if not self._controller.echo("EXPORT"):
             self._export_button.configure(text_color="red")
-
+            CTkMessagebox(
+                title=_("Connection Error"),
+                message=_(
+                    f"Export Server Failed DICOM C-ECHO, check Project Settings/Export Server"
+                    " and ensure server is setup for local server: echo and storage services."
+                ),
+                icon="cancel",
+            )
+            return
+        self._export_button.configure(text_color="light green")
         self._parent.master.export()
 
     def _create_widgets(self):
+        logger.debug(f"_create_widgets")
         PAD = 20
         # TODO: manage fonts using theme
 

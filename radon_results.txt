@@ -1,0 +1,360 @@
+anonymizer.py
+    LOC: 490
+    LLOC: 264
+    SLOC: 363
+    Comments: 78
+    Single comments: 63
+    Multi: 0
+    Blank: 64
+    - Comment Stats
+        (C % L): 16%
+        (C % S): 21%
+        (C + M % L): 16%
+__version__.py
+    LOC: 3
+    LLOC: 1
+    SLOC: 1
+    Comments: 2
+    Single comments: 2
+    Multi: 0
+    Blank: 0
+    - Comment Stats
+        (C % L): 67%
+        (C % S): 200%
+        (C + M % L): 67%
+radon_raw_totals.py
+    LOC: 22
+    LLOC: 11
+    SLOC: 18
+    Comments: 10
+    Single comments: 2
+    Multi: 0
+    Blank: 2
+    - Comment Stats
+        (C % L): 45%
+        (C % S): 56%
+        (C + M % L): 45%
+build_win.py
+    LOC: 49
+    LLOC: 8
+    SLOC: 42
+    Comments: 3
+    Single comments: 3
+    Multi: 0
+    Blank: 4
+    - Comment Stats
+        (C % L): 6%
+        (C % S): 7%
+        (C + M % L): 6%
+utils/logging.py
+    LOC: 47
+    LLOC: 29
+    SLOC: 31
+    Comments: 10
+    Single comments: 8
+    Multi: 0
+    Blank: 8
+    - Comment Stats
+        (C % L): 21%
+        (C % S): 32%
+        (C + M % L): 21%
+utils/translate.py
+    LOC: 20
+    LLOC: 13
+    SLOC: 13
+    Comments: 2
+    Single comments: 2
+    Multi: 0
+    Blank: 5
+    - Comment Stats
+        (C % L): 10%
+        (C % S): 15%
+        (C + M % L): 10%
+utils/ux_fields.py
+    LOC: 189
+    LLOC: 83
+    SLOC: 154
+    Comments: 19
+    Single comments: 10
+    Multi: 0
+    Blank: 25
+    - Comment Stats
+        (C % L): 10%
+        (C % S): 12%
+        (C + M % L): 10%
+utils/__init__.py
+    LOC: 0
+    LLOC: 0
+    SLOC: 0
+    Comments: 0
+    Single comments: 0
+    Multi: 0
+    Blank: 0
+    - Comment Stats
+        (C % L): 0%
+        (C % S): 0%
+        (C + M % L): 0%
+utils/storage.py
+    LOC: 90
+    LLOC: 50
+    SLOC: 57
+    Comments: 2
+    Single comments: 2
+    Multi: 16
+    Blank: 15
+    - Comment Stats
+        (C % L): 2%
+        (C % S): 4%
+        (C + M % L): 20%
+utils/network.py
+    LOC: 28
+    LLOC: 22
+    SLOC: 22
+    Comments: 0
+    Single comments: 0
+    Multi: 0
+    Blank: 6
+    - Comment Stats
+        (C % L): 0%
+        (C % S): 0%
+        (C + M % L): 0%
+controller/anonymizer.py
+    LOC: 314
+    LLOC: 182
+    SLOC: 239
+    Comments: 47
+    Single comments: 34
+    Multi: 0
+    Blank: 41
+    - Comment Stats
+        (C % L): 15%
+        (C % S): 20%
+        (C + M % L): 15%
+controller/__init__.py
+    LOC: 0
+    LLOC: 0
+    SLOC: 0
+    Comments: 0
+    Single comments: 0
+    Multi: 0
+    Blank: 0
+    - Comment Stats
+        (C % L): 0%
+        (C % S): 0%
+        (C + M % L): 0%
+controller/dicom_C_codes.py
+    LOC: 19
+    LLOC: 14
+    SLOC: 14
+    Comments: 4
+    Single comments: 4
+    Multi: 0
+    Blank: 1
+    - Comment Stats
+        (C % L): 21%
+        (C % S): 29%
+        (C + M % L): 21%
+controller/project.py
+    LOC: 1032
+    LLOC: 554
+    SLOC: 826
+    Comments: 93
+    Single comments: 76
+    Multi: 0
+    Blank: 130
+    - Comment Stats
+        (C % L): 9%
+        (C % S): 11%
+        (C + M % L): 9%
+model/anonymizer.py
+    LOC: 121
+    LLOC: 89
+    SLOC: 90
+    Comments: 10
+    Single comments: 7
+    Multi: 0
+    Blank: 24
+    - Comment Stats
+        (C % L): 8%
+        (C % S): 11%
+        (C + M % L): 8%
+model/__init__.py
+    LOC: 0
+    LLOC: 0
+    SLOC: 0
+    Comments: 0
+    Single comments: 0
+    Multi: 0
+    Blank: 0
+    - Comment Stats
+        (C % L): 0%
+        (C % S): 0%
+        (C + M % L): 0%
+model/project.py
+    LOC: 134
+    LLOC: 120
+    SLOC: 99
+    Comments: 10
+    Single comments: 1
+    Multi: 0
+    Blank: 34
+    - Comment Stats
+        (C % L): 7%
+        (C % S): 10%
+        (C + M % L): 7%
+view/transfer_syntaxes_dialog.py
+    LOC: 150
+    LLOC: 74
+    SLOC: 131
+    Comments: 31
+    Single comments: 4
+    Multi: 0
+    Blank: 15
+    - Comment Stats
+        (C % L): 21%
+        (C % S): 24%
+        (C + M % L): 21%
+view/__init__.py
+    LOC: 0
+    LLOC: 0
+    SLOC: 0
+    Comments: 0
+    Single comments: 0
+    Multi: 0
+    Blank: 0
+    - Comment Stats
+        (C % L): 0%
+        (C % S): 0%
+        (C + M % L): 0%
+view/export.py
+    LOC: 469
+    LLOC: 250
+    SLOC: 380
+    Comments: 31
+    Single comments: 28
+    Multi: 0
+    Blank: 61
+    - Comment Stats
+        (C % L): 7%
+        (C % S): 8%
+        (C + M % L): 7%
+view/dicom_node_dialog.py
+    LOC: 198
+    LLOC: 78
+    SLOC: 169
+    Comments: 5
+    Single comments: 2
+    Multi: 0
+    Blank: 27
+    - Comment Stats
+        (C % L): 3%
+        (C % S): 3%
+        (C + M % L): 3%
+view/query_retrieve_import.py
+    LOC: 789
+    LLOC: 372
+    SLOC: 630
+    Comments: 75
+    Single comments: 61
+    Multi: 0
+    Blank: 98
+    - Comment Stats
+        (C % L): 10%
+        (C % S): 12%
+        (C + M % L): 10%
+view/dashboard.py
+    LOC: 161
+    LLOC: 92
+    SLOC: 128
+    Comments: 4
+    Single comments: 3
+    Multi: 0
+    Blank: 30
+    - Comment Stats
+        (C % L): 2%
+        (C % S): 3%
+        (C + M % L): 2%
+view/progress_dialog.py
+    LOC: 104
+    LLOC: 64
+    SLOC: 84
+    Comments: 5
+    Single comments: 4
+    Multi: 0
+    Blank: 16
+    - Comment Stats
+        (C % L): 5%
+        (C % S): 6%
+        (C + M % L): 5%
+view/sop_classes_dialog.py
+    LOC: 148
+    LLOC: 77
+    SLOC: 130
+    Comments: 7
+    Single comments: 3
+    Multi: 0
+    Blank: 15
+    - Comment Stats
+        (C % L): 5%
+        (C % S): 5%
+        (C + M % L): 5%
+view/network_timeouts_dialog.py
+    LOC: 139
+    LLOC: 56
+    SLOC: 117
+    Comments: 4
+    Single comments: 1
+    Multi: 0
+    Blank: 21
+    - Comment Stats
+        (C % L): 3%
+        (C % S): 3%
+        (C + M % L): 3%
+view/html_view.py
+    LOC: 36
+    LLOC: 28
+    SLOC: 30
+    Comments: 1
+    Single comments: 1
+    Multi: 0
+    Blank: 5
+    - Comment Stats
+        (C % L): 3%
+        (C % S): 3%
+        (C + M % L): 3%
+view/aws_cognito_dialog.py
+    LOC: 189
+    LLOC: 60
+    SLOC: 163
+    Comments: 3
+    Single comments: 0
+    Multi: 0
+    Blank: 26
+    - Comment Stats
+        (C % L): 2%
+        (C % S): 2%
+        (C + M % L): 2%
+view/welcome.py
+    LOC: 48
+    LLOC: 23
+    SLOC: 39
+    Comments: 5
+    Single comments: 3
+    Multi: 0
+    Blank: 6
+    - Comment Stats
+        (C % L): 10%
+        (C % S): 13%
+        (C + M % L): 10%
+view/settings_dialog.py
+    LOC: 430
+    LLOC: 195
+    SLOC: 369
+    Comments: 12
+    Single comments: 9
+    Multi: 0
+    Blank: 52
+    - Comment Stats
+        (C % L): 3%
+        (C % S): 3%
+        (C + M % L): 3%

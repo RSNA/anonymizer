@@ -19,18 +19,20 @@ class NetworkTimeoutsDialog(ctk.CTkToplevel):
         self.title(title)
         self.lift()  # lift window on top
         self.attributes("-topmost", True)  # stay on top
-        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+        # self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.resizable(False, False)
         self.grab_set()  # make dialog modal
         self._user_input: Union[NetworkTimeouts, None] = None
         self._create_widgets()
+        self.bind("<Return>", self._enter_keypress)
+        self.bind("<Escape>", self._escape_keypress)
 
     def _create_widgets(self):
-        logger.info(f"_create_widgets")
+        logger.debug(f"_create_widgets")
         PAD = 10
 
         char_width_px = ctk.CTkFont().measure("A")
-        logger.info(f"Font Character Width in pixels: ±{char_width_px}")
+        logger.debug(f"Font Character Width in pixels: ±{char_width_px}")
 
         self.columnconfigure(1, weight=1)
         self.rowconfigure(3, weight=1)
@@ -48,6 +50,7 @@ class NetworkTimeoutsDialog(ctk.CTkToplevel):
             col=0,
             pad=PAD,
             sticky="nw",
+            focus_set=True,
         )
 
         row += 1
@@ -108,7 +111,12 @@ class NetworkTimeoutsDialog(ctk.CTkToplevel):
             sticky="e",
         )
 
+    def _enter_keypress(self, event):
+        logger.info(f"_enter_pressed")
+        self._ok_event()
+
     def _ok_event(self, event=None):
+        self._ok_button.focus_set()
         self._user_input = NetworkTimeouts(
             self.connection_var.get(),
             self.acse_var.get(),
@@ -117,6 +125,10 @@ class NetworkTimeoutsDialog(ctk.CTkToplevel):
         )
         self.grab_release()
         self.destroy()
+
+    def _escape_keypress(self, event):
+        logger.info(f"_escape_pressed")
+        self._on_cancel()
 
     def _on_cancel(self):
         self.grab_release()
