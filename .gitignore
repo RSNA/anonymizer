@@ -11,3 +11,4 @@ logs/*
 dicom/*
 .env
 .coverage
+versionfile.txt

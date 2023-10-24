@@ -2,9 +2,9 @@ import os
 from datetime import datetime
 import logging
 from queue import Queue, Empty, Full
+import tkinter as tk
 import customtkinter as ctk
-from tkinter import ttk
-from CTkMessagebox import CTkMessagebox
+from tkinter import ttk, messagebox
 from model.project import ProjectModel
 from controller.project import ProjectController, ExportRequest, ExportResponse
 from utils.translate import _
@@ -13,9 +13,12 @@ from utils.storage import count_studies_series_images
 
 logger = logging.getLogger(__name__)
 
-
-class ExportView(ctk.CTkToplevel):
+class ExportView(tk.Toplevel):
+#class ExportView(ctk.CTkToplevel):
     ux_poll_export_response_interval = 500  # milli-seconds
+
+    #TODO: manage fonts using theme manager
+    fixed_width_font = ("Courier", 10)
 
     # Export attributes to display in the results Treeview:
     # Key: column id: (column name, width, centre justify)
@@ -54,7 +57,6 @@ class ExportView(ctk.CTkToplevel):
         # Try to move export window to right of the dashboard:
         self.geometry(f"{self.width}x{self.height}+{self.master.winfo_width()}+0")
         self.resizable(True, True)
-        self.lift()
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
         self._create_widgets()
@@ -75,10 +77,10 @@ class ExportView(ctk.CTkToplevel):
         self._export_frame.grid_columnconfigure(3, weight=1)
 
         # Treeview:
-        fixed_width_font = ("Courier", 12, "bold")  # Specify the font family and size
+        
         # TODO: see if theme manager can do this and stor in rsna_color_scheme_font.json
         style = ttk.Style()
-        style.configure("Treeview", font=fixed_width_font)
+        style.configure("Treeview", font=self.fixed_width_font)
 
         self._tree = ttk.Treeview(
             self._export_frame,
@@ -185,6 +187,9 @@ class ExportView(ctk.CTkToplevel):
         self._export_button.grid(row=1, column=10, padx=PAD, pady=PAD, sticky="e")
         self._export_button.focus_set()
 
+    def busy(self):
+        return self._export_active
+    
     def _disable_action_buttons(self):
         logger.info(f"_disable_action_buttons")
         self._refresh_button.configure(state="disabled")
@@ -283,22 +288,19 @@ class ExportView(ctk.CTkToplevel):
         csv_path = self._controller.create_phi_csv()
         if isinstance(csv_path, str):
             logger.error(f"Failed to create PHI CSV file: {csv_path}")
-            CTkMessagebox(
+            messagebox.showerror(
                 master=self,
                 title=_("Error Creating PHI CSV File"),
                 message=csv_path,
-                icon="cancel",
-                sound=True,
+                parent=self
             )
             return
         else:
             logger.info(f"PHI CSV file created: {csv_path}")
-            CTkMessagebox(
-                master=self,
+            messagebox.showinfo(
                 title=_("PHI CSV File Created"),
                 message=f"PHI Lookup Data saved to: {csv_path}",
-                icon="info",
-                sound=True,
+                parent=self
             )
 
     def _update_export_progress(self, cancel: bool = False):
@@ -370,17 +372,13 @@ class ExportView(ctk.CTkToplevel):
                 logger.error(
                     f"Failed to export {len(self._patient_ids_to_export)} patients"
                 )
-                msg = CTkMessagebox(
+                if messagebox.askretrycancel(
                     title=_("Export Error"),
                     message=_(
                         f"Failed to export {len(self._patient_ids_to_export)} patient(s)"
                     ),
-                    icon="warning",
-                    option_1="Cancel",
-                    option_2="Retry",
-                    header=True,
-                )
-                if msg.get() == "Retry":
+                    parent=self
+                ):
                     # Select failed patients in treeview to retry export:
                     self._tree.selection_add(self._patient_ids_to_export)
                     self._export_button_pressed()
@@ -408,10 +406,10 @@ class ExportView(ctk.CTkToplevel):
             self._export_button.configure(text_color="light green")
         else:
             self._export_button.configure(text_color="red")
-            CTkMessagebox(
+            messagebox.showerror(
                 title=_("Connection Error"),
                 message=_(f"Export Server Failed DICOM C-ECHO"),
-                icon="cancel",
+                parent=self
             )
             return
 
@@ -420,13 +418,13 @@ class ExportView(ctk.CTkToplevel):
         self._patients_to_process = len(self._patient_ids_to_export)
         if self._patients_to_process == 0:
             logger.error(f"No patients selected for export")
-            CTkMessagebox(
+            messagebox.showerror(
                 title=_("Export Error"),
                 message=_(
                     f"No patients selected for export."
-                    " Use SHIFT+Click and/or CMD/WIN+Click to select multiple patients."
+                    " Use SHIFT+Click and/or CMD/CTRL+Click to select multiple patients."
                 ),
-                icon="cancel",
+                parent=self
             )
             return
 

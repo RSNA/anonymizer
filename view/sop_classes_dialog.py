@@ -1,4 +1,5 @@
-from typing import Dict, Union
+from typing import Union
+import tkinter as tk
 import customtkinter as ctk
 from tkinter import ttk
 import logging
@@ -7,8 +8,8 @@ from utils.translate import _, insert_spaces_between_cases, insert_space_after_c
 
 logger = logging.getLogger(__name__)
 
-
-class SOPClassesDialog(ctk.CTkToplevel):
+class SOPClassesDialog(tk.Toplevel):
+#class SOPClassesDialog(ctk.CTkToplevel):
     storage_codes = [
         "DX",
         "CR",
@@ -36,44 +37,29 @@ class SOPClassesDialog(ctk.CTkToplevel):
         "XRF",
     ]
     attr_map = {
-        "ClassName": (_("Class Name"), 60, False),
+        "ClassName": (_("Class Name"), 45, False),
         "ClassID": (_("Class UID"), 30, False),
     }
     sc_lookup = {value: key for key, value in _STORAGE_CLASSES.items()}
 
     def __init__(
         self,
+        parent,
         sop_classes: list[str],
         title: str = _("Select Storage Classes"),
     ):
-        super().__init__()
+        super().__init__(master=parent)
         self.sop_classes = sop_classes
         self.title(title)
-        self.attributes("-topmost", True)  # stay on top
-        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.geometry("750x600")
         self.resizable(False, False)
         self.grab_set()  # make dialog modal
         self._user_input: Union[list, None] = None
         self.rowconfigure(0, weight=1)
         self.columnconfigure(1, weight=1)
+        self.bind("<Return>", self._enter_keypress)
+        self.bind("<Escape>", self._escape_keypress)
         self._create_widgets()
-
-    def on_item_select(self, event):
-        selected_items = self.tree.selection()
-        if len(selected_items) == 0:
-            return
-        selected_item = selected_items[0]
-        self.tree.selection_remove(selected_item)
-        if selected_item in self.sop_classes:
-            logger.info(f"REMOVE {selected_item} from sop_classes")
-            self.sop_classes.remove(selected_item)
-            self.tree.item(selected_item, tags="")
-
-        else:
-            logger.info(f"ADD {selected_item} to sop_classes")
-            self.sop_classes.append(selected_item)
-            self.tree.item(selected_item, tags="green")
 
     def _create_widgets(self):
         logger.info(f"_create_widgets")
@@ -133,16 +119,41 @@ class SOPClassesDialog(ctk.CTkToplevel):
             pady=PAD,
             sticky="e",
         )
+    
+    def on_item_select(self, event):
+        selected_items = self.tree.selection()
+        if len(selected_items) == 0:
+            return
+        selected_item = selected_items[0]
+        self.tree.selection_remove(selected_item)
+        if selected_item in self.sop_classes:
+            logger.info(f"REMOVE {selected_item} from sop_classes")
+            self.sop_classes.remove(selected_item)
+            self.tree.item(selected_item, tags="")
+
+        else:
+            logger.info(f"ADD {selected_item} to sop_classes")
+            self.sop_classes.append(selected_item)
+            self.tree.item(selected_item, tags="green")
+            
+    def _enter_keypress(self, event):
+        logger.info(f"_enter_pressed")
+        self._ok_event()
 
     def _ok_event(self, event=None):
         self._user_input = self.sop_classes
         self.grab_release()
         self.destroy()
 
+    def _escape_keypress(self, event):
+        logger.info(f"_escape_pressed")
+        self._on_cancel()
+
     def _on_cancel(self):
         self.grab_release()
         self.destroy()
 
     def get_input(self):
+        self.focus()
         self.master.wait_window(self)
         return self._user_input

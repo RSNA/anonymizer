@@ -7,20 +7,15 @@ name = "pypi"
 customtkinter = "*"
 pillow = "*"
 tkhtmlview = "*"
-ctktooltip = "*"
 pydicom = "*"
 pynetdicom = "*"
-ctkmessagebox = "*"
 ifaddr = "*"
 pandas = "*"
-pytest = "*"
-pyinstaller-versionfile = "*"
+numpy = "*"
 
 [dev-packages]
-pytest = "*"
 radon = "*"
 coverage = "*"
 pyinstaller = "*"
-
-[requires]
-python_version = "3.11"
+pyinstaller-versionfile = "*"
+pytest = "*"

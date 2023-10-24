@@ -1,4 +1,5 @@
 from typing import Union, Tuple
+import tkinter as tk
 import customtkinter as ctk
 import string
 import logging
@@ -8,25 +9,27 @@ from utils.ux_fields import str_entry
 
 logger = logging.getLogger(__name__)
 
-
-class AWSCognitoDialog(ctk.CTkToplevel):
+class AWSCognitoDialog(tk.Toplevel):
+#class AWSCognitoDialog(ctk.CTkToplevel):
     def __init__(
         self,
+        parent,
         export_to_aws: bool,
         aws_cognito: AWSCognito,
         title: str = _("AWS Cognito Credentials for Export to S3"),
     ):
-        super().__init__()
+        super().__init__(master=parent)
         self.aws_cognito = aws_cognito
         self.export_to_aws = export_to_aws
         self.title(title)
         self.lift()  # lift window on top
         self.attributes("-topmost", True)  # stay on top
-        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.resizable(False, False)
         self.grab_set()  # make dialog modal
         self._user_input = None
         self._create_widgets()
+        self.bind("<Return>", self._enter_keypress)
+        self.bind("<Escape>", self._escape_keypress)
 
     @property
     def user_input(self) -> Union[Tuple[bool, AWSCognito], None]:
@@ -165,6 +168,10 @@ class AWSCognitoDialog(ctk.CTkToplevel):
             sticky="e",
         )
 
+    def _enter_keypress(self, event):
+        logger.info(f"_enter_pressed")
+        self.__ok_event()
+
     def _ok_event(self, event=None):
         self._user_input = (
             self._export_to_aws_checkbox.get() == 1,
@@ -180,10 +187,15 @@ class AWSCognitoDialog(ctk.CTkToplevel):
         self.grab_release()
         self.destroy()
 
+    def _escape_keypress(self, event):
+        logger.info(f"_escape_pressed")
+        self._on_cancel()
+
     def _on_cancel(self):
         self.grab_release()
         self.destroy()
 
     def get_input(self):
+        self.focus()
         self.master.wait_window(self)
         return self._user_input

@@ -1,4 +1,5 @@
 from typing import Union
+import tkinter as tk
 import customtkinter as ctk
 import logging
 from model.project import NetworkTimeouts
@@ -7,19 +8,19 @@ from utils.ux_fields import int_entry
 
 logger = logging.getLogger(__name__)
 
-
-class NetworkTimeoutsDialog(ctk.CTkToplevel):
+class NetworkTimeoutsDialog(tk.Toplevel):
+#class NetworkTimeoutsDialog(ctk.CTkToplevel):
     def __init__(
         self,
+        parent,
         timeouts: NetworkTimeouts,
         title: str = _("Network Timeouts in SECONDS"),
     ):
-        super().__init__()
+        super().__init__(master=parent)
         self.timeouts = timeouts
         self.title(title)
-        self.lift()  # lift window on top
-        self.attributes("-topmost", True)  # stay on top
-        # self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+        self.lift()  
+        self.attributes("-topmost", True)  
         self.resizable(False, False)
         self.grab_set()  # make dialog modal
         self._user_input: Union[NetworkTimeouts, None] = None
@@ -44,7 +45,7 @@ class NetworkTimeoutsDialog(ctk.CTkToplevel):
             label=_("TCP Connection:"),
             initial_value=int(self.timeouts.tcp_connection),
             min=0,
-            max=60,
+            max=15,
             tooltipmsg=None,
             row=row,
             col=0,
@@ -135,5 +136,6 @@ class NetworkTimeoutsDialog(ctk.CTkToplevel):
         self.destroy()
 
     def get_input(self):
+        self.focus()
         self.master.wait_window(self)
         return self._user_input

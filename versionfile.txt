@@ -7,8 +7,8 @@ VSVersionInfo(
   ffi=FixedFileInfo(
     # filevers and prodvers should be always a tuple with four items: (1, 2, 3, 4)
     # Set not needed items to zero 0. Must always contain 4 elements.
-    filevers=(17,0,2,0),
-    prodvers=(17,0,2,0),
+    filevers=(17,0,4,0),
+    prodvers=(17,0,4,0),
     # Contains a bitmask that specifies the valid bits 'flags'r
     mask=0x3f,
     # Contains a bitmask that specifies the Boolean attributes of the file.
@@ -32,12 +32,12 @@ VSVersionInfo(
         u'040904B0',
         [StringStruct(u'CompanyName', u'Radiology Society of North America'),
         StringStruct(u'FileDescription', u'RSNA DICOM Anonymizer'),
-        StringStruct(u'FileVersion', u'17.0.2.0'),
+        StringStruct(u'FileVersion', u'17.0.4.0'),
         StringStruct(u'InternalName', u'anonymizer'),
         StringStruct(u'LegalCopyright', u'© 2023 Radiology Society of North America. All rights reserved.'),
         StringStruct(u'OriginalFilename', u'anonymizer.exe'),
         StringStruct(u'ProductName', u'RSNA DICOM Anonymizer'),
-        StringStruct(u'ProductVersion', u'17.0.2.0')])
+        StringStruct(u'ProductVersion', u'17.0.4.0')])
       ]), 
     VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
   ]

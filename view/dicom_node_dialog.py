@@ -1,10 +1,9 @@
-from time import sleep
 from typing import Union
+import tkinter as tk
 import customtkinter as ctk
 import string
 import logging
 from model.project import DICOMNode
-from controller.project import ProjectController
 from utils.translate import _
 from utils.network import get_local_ip_addresses, dns_lookup
 
@@ -21,23 +20,20 @@ from utils.ux_fields import (
 
 logger = logging.getLogger(__name__)
 
-
-class DICOMNodeDialog(ctk.CTkToplevel):
+class DICOMNodeDialog(tk.Toplevel):
+#class DICOMNodeDialog(ctk.CTkToplevel):
     def __init__(
         self,
+        parent,
         address: DICOMNode,
         title: str = _("DICOM Node"),
     ):
-        super().__init__()
+        super().__init__(master=parent)
         self.address = address
         self.title(title)
-        self.lift()  # lift window on top
-        self.attributes("-topmost", True)  # stay on top
-        # self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.resizable(False, False)
         self.grab_set()  # make dialog modal
         self._user_input: Union[DICOMNode, None] = None
-        # Bind keyboard <Return> and <Escape>:
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
         self._create_widgets()
@@ -194,5 +190,6 @@ class DICOMNodeDialog(ctk.CTkToplevel):
         self.destroy()
 
     def get_input(self):
+        self.focus()
         self.master.wait_window(self)
         return self._user_input

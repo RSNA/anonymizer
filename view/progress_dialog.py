@@ -1,6 +1,6 @@
-from re import sub
 from typing import Dict, Union
 from queue import Queue
+import tkinter as tk
 import customtkinter as ctk
 from tkinter import ttk
 import logging
@@ -8,17 +8,18 @@ from utils.translate import _
 
 logger = logging.getLogger(__name__)
 
-
-class ProgressDialog(ctk.CTkToplevel):
+class ProgressDialog(tk.Toplevel):
+#class ProgressDialog(ctk.CTkToplevel):
     progress_update_interval = 300
 
     def __init__(
         self,
+        parent,
         Q_to_monitor: Queue,
         title: str = _("Progress Dialog"),
         sub_title: str = _("Please wait..."),
     ):
-        super().__init__()
+        super().__init__(master=parent)
         self._Q_to_monitor = Q_to_monitor
         # latch items in queue for progress bar max value
         self._maxQ = Q_to_monitor.qsize()
@@ -28,8 +29,8 @@ class ProgressDialog(ctk.CTkToplevel):
         self._sub_title = sub_title
         self.attributes("-topmost", True)  # stay on top
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+        self.grab_set()  # make dialog modal
         self.resizable(False, False)
-        # self.grab_set()  # make dialog modal
         self._user_input: Union[list, None] = None
         self.rowconfigure(0, weight=1)
         self.columnconfigure(1, weight=1)
@@ -100,5 +101,6 @@ class ProgressDialog(ctk.CTkToplevel):
         self.destroy()
 
     def get_input(self):
+        self.focus()
         self.master.wait_window(self)
         return self._last_qsize

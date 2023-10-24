@@ -1,5 +1,7 @@
+import sys
 from pathlib import Path
 from typing import Union
+import tkinter as tk
 import customtkinter as ctk
 from tkinter import filedialog
 import string
@@ -17,27 +19,34 @@ from view.transfer_syntaxes_dialog import TransferSyntaxesDialog
 
 logger = logging.getLogger(__name__)
 
-
-class SettingsDialog(ctk.CTkToplevel):
+class SettingsDialog(tk.Toplevel):
+#class SettingsDialog(ctk.CTkToplevel):
     def __init__(
         self,
+        parent,
         model: ProjectModel,
         new_model: bool = False,
         title: str = _("Project Settings"),
     ):
-        super().__init__()
+        super().__init__(master=parent)
         self.model = model
         self.new_model = new_model
         self.title(title)
-        self.attributes("-topmost", True)  # stay on top
-        # self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.resizable(False, False)
         self.grab_set()  # make dialog modal
-        self.lift()
         self._user_input: Union[ProjectModel, None] = None
         self._create_widgets()
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
+        # if sys.platform.startswith("win"):
+        #     # override CTkTopLevel which sets icon after 200ms
+        #     self.after(300, self._win_post_init) 
+
+    def _win_post_init(self):
+        self.iconbitmap("assets\\images\\rsna_icon.ico")
+        self.lift()
+        self.focus()
+
 
     def _create_widgets(self):
         logger.debug(f"_create_widgets")
@@ -294,7 +303,7 @@ class SettingsDialog(ctk.CTkToplevel):
         )
 
     def _local_server_click(self, event=None):
-        dlg = DICOMNodeDialog(self.model.scp, title=_("Local Server"))
+        dlg = DICOMNodeDialog(self, self.model.scp, title=_("Local Server"))
         scp = dlg.get_input()
         if scp is None:
             logger.info(f"Local Server cancelled")
@@ -309,7 +318,7 @@ class SettingsDialog(ctk.CTkToplevel):
             scp = self.model.remote_scps["QUERY"]
         else:
             scp = DICOMNode("127.0.0.1", 104, "", False)
-        dlg = DICOMNodeDialog(scp, title=_("Query Server"))
+        dlg = DICOMNodeDialog(self, scp, title=_("Query Server"))
         scp = dlg.get_input()
         if scp is None:
             logger.info(f"Query Server cancelled")
@@ -322,7 +331,7 @@ class SettingsDialog(ctk.CTkToplevel):
             scp = self.model.remote_scps["EXPORT"]
         else:
             scp = DICOMNode("127.0.0.1", 104, "", False)
-        dlg = DICOMNodeDialog(scp, title=_("Export Server"))
+        dlg = DICOMNodeDialog(self, scp, title=_("Export Server"))
         scp = dlg.get_input()
         if scp is None:
             logger.info(f"Export Server cancelled")
@@ -331,7 +340,7 @@ class SettingsDialog(ctk.CTkToplevel):
         logger.info(f"Remote Servers: {self.model.remote_scps}")
 
     def _aws_cognito_click(self, event=None):
-        dlg = AWSCognitoDialog(self.model.export_to_AWS, self.model.aws_cognito)
+        dlg = AWSCognitoDialog(self, self.model.export_to_AWS, self.model.aws_cognito)
         input = dlg.get_input()
         if input is None:
             logger.info(f"AWS Cognito cancelled")
@@ -342,7 +351,7 @@ class SettingsDialog(ctk.CTkToplevel):
         )
 
     def _network_timeouts_click(self, event=None):
-        dlg = NetworkTimeoutsDialog(self.model.network_timeouts)
+        dlg = NetworkTimeoutsDialog(self, self.model.network_timeouts)
         timeouts = dlg.get_input()
         if timeouts is None:
             logger.info(f"Network Timeouts cancelled")
@@ -352,7 +361,7 @@ class SettingsDialog(ctk.CTkToplevel):
 
     def _open_storage_directory_dialog(self):
         path = filedialog.askdirectory(
-            initialdir=str(self.model.storage_dir), mustexist=False
+            parent=self, initialdir=str(self.model.storage_dir), mustexist=False
         )
         if path:
             self.model.storage_dir = Path(path)
@@ -360,7 +369,7 @@ class SettingsDialog(ctk.CTkToplevel):
             logger.info(f"Storage Directory updated: {self.model.storage_dir}")
 
     def _open_storage_classes_dialog(self):
-        dlg = SOPClassesDialog(self.model.storage_classes)
+        dlg = SOPClassesDialog(self, self.model.storage_classes)
         edited_classes = dlg.get_input()
         if edited_classes is None:
             logger.info(f"Storage Classes cancelled")
@@ -369,7 +378,7 @@ class SettingsDialog(ctk.CTkToplevel):
         logger.info(f"Storage Classes updated: {self.model.storage_classes}")
 
     def _open_transfer_syntaxes_dialog(self):
-        dlg = TransferSyntaxesDialog(self.model.transfer_syntaxes)
+        dlg = TransferSyntaxesDialog(self, self.model.transfer_syntaxes)
         edited_syntaxes = dlg.get_input()
         if edited_syntaxes is None:
             logger.info(f"Transfer Syntaxes cancelled")
@@ -379,6 +388,7 @@ class SettingsDialog(ctk.CTkToplevel):
 
     def _script_file_dialog(self):
         path = filedialog.askopenfilename(
+            parent=self,
             initialfile=str(self.model.anonymizer_script_path),
             defaultextension=".script",
             filetypes=[
@@ -426,5 +436,6 @@ class SettingsDialog(ctk.CTkToplevel):
         self.destroy()
 
     def get_input(self):
+        self.focus()
         self.master.wait_window(self)
         return self._user_input

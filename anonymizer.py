@@ -3,9 +3,8 @@ from pathlib import Path
 import logging
 import pickle
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 import customtkinter as ctk
-from CTkMessagebox import CTkMessagebox
 from model.project import (
     DICOMRuntimeError,
     default_project_filename,
@@ -30,45 +29,34 @@ from view.progress_dialog import ProgressDialog
 from view.query_retrieve_import import QueryView
 from view.export import ExportView
 from view.html_view import HTMLView
+from view.welcome import WelcomeView
 
-import view.welcome as welcome
+from controller.project import ProjectController, ProjectModel
 
-
-from controller.project import ProjectController, ProjectModel, DICOMNode
-
-logger = logging.getLogger()  # get ROOT logger
+logger = logging.getLogger()  # ROOT logger
 
 APP_TITLE = _("RSNA DICOM Anonymizer BETA Version " + __version__)
-APP_MIN_WIDTH = 800
-APP_MIN_HEIGHT = 600
-LOGO_WIDTH = 75
-LOGO_HEIGHT = 20
-PAD = 10
-
 
 class App(ctk.CTk):
-    default_local_server = DICOMNode("127.0.0.1", 1045, "ANONYMIZER", True)
     project_open_startup_dwell_time = 500  # milliseconds
+    menu_font=("", 13) 
 
     def new_project(self):
         logging.info("New Project")
         self.disable_file_menu()
 
         dlg = SettingsDialog(
-            model=ProjectModel(), new_model=True, title=_("New Project Settings")
+            parent=self, model=ProjectModel(), new_model=True, title=_("New Project Settings")
         )
-        self.model = dlg.get_input()
-        if self.model is None:
+        self._model = dlg.get_input()
+        if self._model is None:
             logger.info("New Project Cancelled")
         else:
-            assert self.model
-            logger.info(f"New ProjectModel: {self.model}")
-            self.project_controller = ProjectController(self.model)
-            assert self.project_controller
-            self.project_controller.save_model()
-            # self.export_view = export.create_view(
-            #     self.main_frame, PAD, self.project_controller
-            # )
+            assert self._model
+            logger.info(f"New ProjectModel: {self._model}")
+            self._project_controller = ProjectController(self._model)
+            assert self._project_controller
+            self._project_controller.save_model()
             self._open_project()
 
         self.enable_file_menu()
@@ -89,81 +77,103 @@ class App(ctk.CTk):
         project_pkl_path = Path(path, default_project_filename())
         if os.path.exists(project_pkl_path):
             with open(project_pkl_path, "rb") as pkl_file:
-                self.model = pickle.load(pkl_file)
+                self._model = pickle.load(pkl_file)
             logger.info(f"Project Model loaded from: {project_pkl_path}")
-            self.project_controller = ProjectController(self.model)
-            assert self.project_controller
-            logger.info(f"{self.project_controller}")
+            self._project_controller = ProjectController(self._model)
+            assert self._project_controller
+            logger.info(f"{self._project_controller}")
             self._open_project()
         else:
-            CTkMessagebox(
+            messagebox.showerror(
                 title=_("Open Project Error"),
                 message=f"Project file not found in: {path}",
-                icon="cancel",
+                parent=self
             )
+    
 
         self.enable_file_menu()
 
     def _open_project_startup(self):
+        logger.info(f"Default font: {ctk.CTkFont().actual()}")
+        if sys.platform.startswith("win"):
+            self.iconbitmap(default="assets\\images\\rsna_icon.ico") 
         project_pkl_path = Path(default_storage_dir(), default_project_filename())
         if os.path.exists(project_pkl_path):
             with open(project_pkl_path, "rb") as pkl_file:
-                self.model = pickle.load(pkl_file)
+                self._model = pickle.load(pkl_file)
             logger.info(f"Project Model loaded from: {project_pkl_path}")
-            self.project_controller = ProjectController(self.model)
-            assert self.project_controller
-            logger.info(f"{self.project_controller}")
+            self._project_controller = ProjectController(self._model)
+            assert self._project_controller
+            logger.info(f"{self._project_controller}")
             self._open_project()
 
     def _open_project(self):
-        assert self.model
-        assert self.project_controller
+        assert self._model
+        assert self._project_controller
         try:
-            self.project_controller.start_scp()
+            self._project_controller.start_scp()
         except DICOMRuntimeError as e:
-            CTkMessagebox(
+            messagebox.showerror(
                 title=_("Local DICOM Server Error"),
                 message=str(e),
-                icon="cancel",
+                parent=self
             )
             return
 
         self.title(
-            f"{self.model.project_name}[{self.model.site_id}] => {self.model.abridged_storage_dir()}"
+            f"{self._model.project_name}[{self._model.site_id}] => {self._model.abridged_storage_dir()}"
         )
-        self.main_frame.destroy()
-        self.create_main_frame()
-        self.dashboard = Dashboard(self.main_frame, self.project_controller)
+        
+        self._welcome_view.destroy()
+        self.dashboard = Dashboard(self, self._project_controller)
         self.protocol("WM_DELETE_WINDOW", self.close_project)
         self.set_menu_project_open()
 
     def close_project(self, event=None):
         logging.info("Close Project")
-        if self.project_controller:
-            self.project_controller.shutdown()
-            self.project_controller.save_model()
-            self.project_controller.anonymizer.save_model()
-            self.project_controller.anonymizer.stop()
-            del self.project_controller.anonymizer
-            del self.project_controller
+        if self._query_view and self._query_view.busy():
+            logger.info(f"QueryView busy, cannot close project")
+            messagebox.showerror(
+                title=_("Query Busy"),
+                message=_(
+                    f"Query is busy, please wait for query to complete before closing project."
+                ),
+                parent=self
+            )
+            return
+        if self._export_view and self._export_view.busy():
+            logger.info(f"ExportView busy, cannot close project")
+            messagebox.showerror(
+                title=_("Export Busy"),
+                message=_(
+                    f"Export is busy, please wait for export to complete before closing project."
+                ),
+                parent=self
+            )
+            return
+        if self._project_controller:
+            self._project_controller.shutdown()
+            self._project_controller.save_model()
+            self._project_controller.anonymizer.save_model()
+            self._project_controller.anonymizer.stop()
+            del self._project_controller.anonymizer
+            del self._project_controller
             if self._query_view:
                 self._query_view.destroy()
                 self._query_view = None
             if self._export_view:
                 self._export_view.destroy()
                 self._export_view = None
-            self.main_frame.destroy()
-            self.create_main_frame()
-            self.welcome_view = welcome.create_view(self.main_frame)
-            self.title(APP_TITLE)
+            
+            self._welcome_view = WelcomeView(self)
             self.protocol("WM_DELETE_WINDOW", self.quit)
             self.focus_force()
-        self.project_controller = None
+            
+        self._project_controller = None
         self.set_menu_project_closed()
 
-    # File Menu when project is open:
     def import_files(self, event=None):
-        assert self.project_controller
+        assert self._project_controller
 
         logging.info("Import Files")
         file_extension_filters = [
@@ -178,19 +188,19 @@ class App(ctk.CTk):
         )
         if paths:
             for path in paths:
-                self.project_controller.anonymizer.anonymize_dataset_and_store(
-                    path, None, self.project_controller.storage_dir
+                self._project_controller.anonymizer.anonymize_dataset_and_store(
+                    path, None, self._project_controller.storage_dir
                 )
         if len(paths) > 30:
             dlg = ProgressDialog(
-                self.project_controller.anonymizer._anon_Q,
+                self._project_controller.anonymizer._anon_Q,
                 title=_("Import Files Progress"),
                 sub_title=_(f"Import {len(paths)} files"),
             )
             dlg.get_input()
 
     def import_directory(self, event=None):
-        assert self.project_controller
+        assert self._project_controller
         logging.info("Import Directory")
         root_dir = filedialog.askdirectory(
             title=_("Select DICOM Directory to Impport & Anonymize")
@@ -206,18 +216,19 @@ class App(ctk.CTk):
             ]
             logger.info(f"Importing {len(file_paths)} files, adding to anonymizer Q")
             for path in file_paths:
-                self.project_controller.anonymizer.anonymize_dataset_and_store(
-                    path, None, self.project_controller.storage_dir
+                self._project_controller.anonymizer.anonymize_dataset_and_store(
+                    path, None, self._project_controller.storage_dir
                 )
         dlg = ProgressDialog(
-            self.project_controller.anonymizer._anon_Q,
+            self,
+            self._project_controller.anonymizer._anon_Q,
             title=_("Import Directory Progress"),
             sub_title=_(f"Import files from {root_dir}"),
         )
         dlg.get_input()
 
     def query_retrieve(self):
-        assert self.project_controller
+        assert self._project_controller
         if self._query_view and self._query_view.winfo_exists():
             logger.info(f"QueryView already OPEN")
             self._query_view.deiconify()
@@ -225,10 +236,11 @@ class App(ctk.CTk):
             return
 
         logging.info("OPEN QueryView")
-        self._query_view = QueryView(self, self.project_controller)
+        self._query_view = QueryView(self, self._project_controller)
+        self._query_view.focus()
 
     def export(self):
-        assert self.project_controller
+        assert self._project_controller
         if self._export_view and self._export_view.winfo_exists():
             logger.info(f"ExportView already OPEN")
             self._export_view.deiconify()
@@ -236,14 +248,34 @@ class App(ctk.CTk):
             return
 
         logging.info("OPEN ExportView")
-        self._export_view = ExportView(self, self.project_controller)
+        self._export_view = ExportView(self, self._project_controller)
+        self._export_view.focus()
 
-    # View Menu:
     def settings(self):
-        assert self.model
-        assert self.project_controller
         logging.info("Settings")
-        dlg = SettingsDialog(self.model, title=_("Project Settings"))
+        assert self._model
+        assert self._project_controller
+        if self._query_view and self._query_view.busy():
+            logger.info(f"QueryView busy, cannot open SettingsDialog")
+            messagebox.showerror(
+                title=_("Query Busy"),
+                message=_(
+                    f"Query is busy, please wait for query to complete before changing settings."
+                ),
+                parent=self
+            )
+            return
+        if self._export_view and self._export_view.busy():
+            logger.info(f"ExportView busy, cannot open SettingsDialog")
+            messagebox.showerror(
+                title=_("Export Busy"),
+                message=_(
+                    f"Export is busy, please wait for export to complete before changing settings."
+                ),
+                parent=self
+            )
+            return
+        dlg = SettingsDialog(self, self._model, title=_("Project Settings"))
         edited_model = dlg.get_input()
         if edited_model is None:
             logger.info("Settings Cancelled")
@@ -251,30 +283,27 @@ class App(ctk.CTk):
         logger.info(f"Edited ProjectModel")
 
         # TODO: model equality check
-        # if edited_model == self.model:
+        # if edited_model == self._model:
         #     return
-        self.model = edited_model
-        self.project_controller.model = self.model
-        self.project_controller._post_model_update()
-        logger.info(f"{self.project_controller}")
+        self._model = edited_model
+        self._project_controller.model = self._model
+        self._project_controller._post_model_update()
+        logger.info(f"{self._project_controller}")
 
-    # Help Menu:
     def instructions(self):
         if self._instructions_view and self._instructions_view.winfo_exists():
             logger.info(f"Instructions HTMLView already OPEN")
-            self._instructions_view.deiconify()
-            self._instructions_view.focus_force()
-            return
-
+            self._instructions_view.deiconify()  
+            return 
+        
         logging.info("OPEN Instructions HTMLView")
-        self.instructions_window = HTMLView(
+        self._instructions_view = HTMLView(
             self,
-            title=_(f"{APP_TITLE} Instructions"),
-            width=800,
-            height=600,
+            title=_(f"Instructions"),
             html_file_path="assets/html/instructions.html",
         )
-
+        self._instructions_view.focus()
+        
     def view_license(self):
         if self._license_view and self._license_view.winfo_exists():
             logger.info(f"License HTMLView already OPEN")
@@ -285,32 +314,36 @@ class App(ctk.CTk):
         logging.info("OPEN License HTMLView")
         self._license_view = HTMLView(
             self,
-            title=_(f"{APP_TITLE} License"),
-            width=600,
-            height=300,
+            title=_(f"License"),
             html_file_path="assets/html/license.html",
         )
+        self._license_view.focus()
 
     def get_help_menu(self):
         help_menu = tk.Menu(self.menu_bar, tearoff=0)
-        help_menu.add_command(label=_("Instructions"), command=self.instructions)
-        help_menu.add_command(label=_("View License"), command=self.view_license)
+        help_menu.add_command(label=_("Instructions"), font=self.menu_font, command=self.instructions)
+        help_menu.add_command(label=_("View License"), font=self.menu_font, command=self.view_license)
         return help_menu
 
     def set_menu_project_closed(self):
+        
         # Setup menu bar:
         if hasattr(self, "menu_bar"):
             self.menu_bar.destroy()
-        self.menu_bar = tk.Menu(self)
+
+        # font does not effect main menu items, only sub-menus on windows
+        self.menu_bar = tk.Menu(master=self) 
 
         # File Menu:
         file_menu = tk.Menu(self, tearoff=0)
         file_menu.add_command(
             label=_("New Project"),
+            font=self.menu_font,
             command=self.new_project,  # accelerator="Command+N"
         )
         file_menu.add_command(
             label=_("Open Project"),
+            font=self.menu_font,
             command=self.open_project,  # accelerator="Command+O"
         )
         self.menu_bar.add_cascade(label=_("File"), menu=file_menu)
@@ -329,10 +362,12 @@ class App(ctk.CTk):
         file_menu = tk.Menu(self, tearoff=0)
         file_menu.add_command(
             label=_("Import Files"),
+            font=self.menu_font,
             command=self.import_files,  # accelerator="Command+F"
         )
         file_menu.add_command(
             label=_("Import Directory"),
+            font=self.menu_font,
             command=self.import_directory,
             # accelerator="Command+D",
         )
@@ -350,24 +385,21 @@ class App(ctk.CTk):
         file_menu.add_separator()
         file_menu.add_command(
             label=_("Close Project"),
+            font=self.menu_font,
             command=self.close_project,
             # accelerator="Command+P",
         )
-        self.menu_bar.add_cascade(label=_("File"), menu=file_menu)
+        self.menu_bar.add_cascade(label=_("File"), font=self.menu_font, menu=file_menu)
 
         # View Menu:
         view_menu = tk.Menu(self, tearoff=0)
         view_menu.add_command(
             label=_("Project"),
+            font=self.menu_font,
             command=self.settings,
             # accelerator="Command+S",
         )
         self.menu_bar.add_cascade(label=_("Settings"), menu=view_menu)
-
-        # Window Menu:
-        # window_menu = tk.Menu(self, tearoff=0)
-        # window_menu.add_command(label=_("Main Window"))
-        # self.menu_bar.add_cascade(label=_("Window"), menu=window_menu)
 
         # Help Menu:
         self.menu_bar.add_cascade(label=_("Help"), menu=self.get_help_menu())
@@ -379,72 +411,21 @@ class App(ctk.CTk):
     def enable_file_menu(self):
         self.menu_bar.entryconfig(_("File"), state="normal")
 
-    def create_main_frame(self):
-        self.main_frame = ctk.CTkFrame(self)
-        self.main_frame.grid(row=0, column=0, padx=PAD, pady=PAD)
-        self.main_frame.focus_set()
-
-    def __init__(
-        self,
-        color_theme,
-        title,
-        logo_file,
-        logo_width,
-        logo_height,
-        pad,
-    ):
+    def __init__(self):
         super().__init__()
         ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
-        ctk.set_default_color_theme(color_theme)  # sets all colors and default font
-        if sys.platform.startswith("win"):
-            self.iconbitmap("assets\\images\\rsna_icon.ico")
-        # else:
-        # self.iconbitmap("/Applications/Anonymizer.app")
+        ctk.set_default_color_theme("assets/themes/rsna_theme.json") 
 
-        self.project_controller = None
-        self.model = None
-        self._query_view = None
-        self._export_view = None
-        self._instructions_view = None
-        self._license_view = None
-
-        # self.minsize(APP_MIN_WIDTH, APP_MIN_HEIGHT)  # width, height
-        # self.geometry(f"{APP_MIN_WIDTH}x{APP_MIN_HEIGHT}")
+        self._project_controller: ProjectController = None
+        self._model: ProjectModel = None
+        self._query_view: QueryView = None
+        self._export_view: ExportView = None
+        self._instructions_view: HTMLView = None
+        self._license_view: HTMLView = None
         self.resizable(False, False)
-        self.font = ctk.CTkFont()  # get default font as defined in json file
-        self.title(title)
-        self.title_height = self.font.metrics("linespace")
-
+        self.title(APP_TITLE)
         self.set_menu_project_closed()  # creates self.menu_bar
-
-        # Bind keyboard shortcuts:
-        # self.bind_all("<Command-n>", self.new_project)
-        # self.bind_all("<Command-o>", self.open_project)
-        # self.bind_all("<Command-p>", self.close_project)
-        # self.bind_all("<Command-f>", self.import_files)
-        # self.bind_all("<Command-d>", self.import_directory)
-        # self.bind_all("<Command-r>", self.query_retrieve)
-        # self.bind_all("<Command-s>", self.settings)
-        # self.bind_all("<Command-l>", self.logs)
-
-        # Logo:
-        # self.logo = ctk.CTkImage(
-        #     light_image=Image.open(logo_file),
-        #     size=(logo_width, logo_height),
-        # )
-        # self.logo = ctk.CTkLabel(self, image=self.logo, text="")
-        # self.logo.grid(
-        #     row=0,
-        #     column=0,
-        #     padx=pad,
-        #     pady=(pad, 0),
-        #     sticky="nw",
-        # )
-        # self.bind("<Unmap>", self.OnUnmap)
-        # self.bind("<Map>", self.OnMap)
-
-        self.create_main_frame()
-        self.welcome_view = welcome.create_view(self.main_frame)
+        self._welcome_view = WelcomeView(self)
         self.after(self.project_open_startup_dwell_time, self._open_project_startup)
 
 
@@ -470,14 +451,7 @@ def main():
     )
 
     # GUI
-    app = App(
-        color_theme=install_dir + "/assets/themes/rsna_color_scheme_font.json",
-        title=APP_TITLE,
-        logo_file=install_dir + "/assets/images/rsna_logo_alpha.png",
-        logo_width=LOGO_WIDTH,
-        logo_height=LOGO_HEIGHT,
-        pad=PAD,
-    )
+    app = App()
 
     # Pyinstaller splash page close
     if sys.platform.startswith("win"):

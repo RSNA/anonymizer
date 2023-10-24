@@ -2,7 +2,6 @@
 import string
 import tkinter as tk
 import customtkinter as ctk
-from CTkToolTip import CTkToolTip
 from utils.translate import _
 import logging
 
@@ -111,12 +110,6 @@ def str_entry(
             ),
         )
 
-        if tooltipmsg:
-            entry_tooltip = CTkToolTip(
-                ctk_entry,
-                message=_(f"{tooltipmsg} [{min_chars}..{max_chars}] chars"),
-            )
-
         if "password" in label.lower():
             ctk_entry.configure(show="*")
 
@@ -171,12 +164,6 @@ def int_entry(
             max_chars,
         ),
     )
-
-    if tooltipmsg:
-        entry_tooltip = CTkToolTip(
-            ctk_entry,
-            message=_(f"{tooltipmsg} [{min}..{max}]"),
-        )
 
     entry_callback = lambda event: int_entry_change(event, int_var, min, max)
     ctk_entry.bind("<Return>", entry_callback)

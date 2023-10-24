@@ -1,13 +1,11 @@
 import logging
 import string
 from queue import Queue, Empty, Full
-from tkinter import Tk, filedialog
-from turtle import st
+from tkinter import messagebox, filedialog
+import tkinter as tk
 import customtkinter as ctk
-from CTkMessagebox import CTkMessagebox
 from pydicom import Dataset
 import pandas as pd
-import tkinter as tk
 from tkinter import ttk
 from controller.dicom_C_codes import C_PENDING_A, C_PENDING_B, C_SUCCESS, C_FAILURE
 from utils.translate import _
@@ -31,11 +29,12 @@ from controller.project import (
 
 logger = logging.getLogger(__name__)
 
-
-class QueryView(ctk.CTkToplevel):
+class QueryView(tk.Toplevel):
+#class QueryView(ctk.CTkToplevel):
     ux_poll_find_response_interval = 250  # milli-seconds
     ux_poll_move_response_interval = 500  # milli-seconds
 
+    fixed_width_font = ("Courier", 10)
     # C-FIND DICOM attributes to display in the results Treeview:
     # Key: DICOM field name, Value: (display name, centre justify)
     _attr_map = {
@@ -72,9 +71,8 @@ class QueryView(ctk.CTkToplevel):
         self.width = 1200
         self.height = 400
         # Try to move query window below the dashboard:
-        self.geometry(f"{self.width}x{self.height}+0+{self.master.winfo_height()+60}")
+        self.geometry(f"{self.width}x{self.height}+0+{self.master.winfo_height()+80}")
         self.resizable(True, True)
-        self.lift()
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
         self._create_widgets()
@@ -212,7 +210,7 @@ class QueryView(ctk.CTkToplevel):
         self._results_frame.grid_columnconfigure(7, weight=1)
 
         # Managing C-FIND results Treeview:
-        fixed_width_font = ("Courier", 12, "bold")
+        
         # Create a custom style for the Treeview
         # TODO: see if theme manager can do this and store in rsna_color_scheme_font.json
         # # if bg_color=="default":
@@ -221,7 +219,7 @@ class QueryView(ctk.CTkToplevel):
         #     self.bg_color = bg_color
 
         style = ttk.Style()
-        style.configure("Treeview", font=fixed_width_font)
+        style.configure("Treeview", font=self.fixed_width_font)
 
         self._tree = ttk.Treeview(
             self._results_frame,
@@ -307,6 +305,9 @@ class QueryView(ctk.CTkToplevel):
         )
         self._retrieve_button.grid(row=1, column=7, padx=PAD, pady=PAD, sticky="e")
 
+    def busy(self):
+        return self._query_active or self._move_active
+    
     def _disable_action_buttons(self):
         logger.info(f"_disable_action_buttons")
         self._load_accession_file_button.configure(state="disabled")
@@ -384,13 +385,12 @@ class QueryView(ctk.CTkToplevel):
                     query_finished = True
                     logger.error(f"Query failed: {resp.status.ErrorComment}")
                     if self._query_active:  # not aborted
-                        CTkMessagebox(
-                            master=self,
+                        messagebox.showerror(
+                            title=_("Query Remote Server Error: "),
                             message=_(
-                                f"Query Remote Server Error: {resp.status.ErrorComment}"
+                                f"{resp.status.ErrorComment}"
                             ),
-                            icon="cancel",
-                            header=True,
+                            parent=self,
                         )
 
                 ux_Q.task_done()
@@ -450,13 +450,12 @@ class QueryView(ctk.CTkToplevel):
                     )
 
                     # TODO: investigate errors (hanging and blank box) when using standard form of CTkMessagebox
-                    CTkMessagebox(
+                    messagebox.showwarning(
                         title=_("Accession Numbers not found"),
                         message=_(
                             f"Accession Numbers not found were written to text file:\n {not_found_file_path}"
                         ),
-                        icon="info",
-                        header=True,
+                        parent=self
                     )
 
             self._acc_no_file_path = None
@@ -487,10 +486,10 @@ class QueryView(ctk.CTkToplevel):
             self._query_button.configure(text_color="light green")
         else:
             self._query_button.configure(text_color="red")
-            CTkMessagebox(
+            messagebox.showerror(
                 title=_("Connection Error"),
                 message=_(f"Query Server Failed DICOM C-ECHO"),
-                icon="cancel",
+                parent=self
             )
             return
 
@@ -613,11 +612,10 @@ class QueryView(ctk.CTkToplevel):
                         f"Fatal Move Error detected, exit monitor_move_response"
                     )
                     self._move_active = False
-                    CTkMessagebox(
-                        master=self,
+                    messagebox.showerror(
+                        title=_("Move Error"),
                         message=f"Terminate move operation, fatal error detected: {resp}",
-                        icon="cancel",
-                        header=True,
+                        parent=self
                     )
                     return
 

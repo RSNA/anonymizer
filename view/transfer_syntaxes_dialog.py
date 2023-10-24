@@ -1,4 +1,5 @@
-from typing import Dict, Union
+from typing import Union
+import tkinter as tk
 import customtkinter as ctk
 from tkinter import ttk
 import logging
@@ -6,10 +7,10 @@ from utils.translate import _
 
 logger = logging.getLogger(__name__)
 
-
-class TransferSyntaxesDialog(ctk.CTkToplevel):
+class TransferSyntaxesDialog(tk.Toplevel):
+#class TransferSyntaxesDialog(ctk.CTkToplevel):
     attr_map = {
-        "SyntaxName": (_("Transfer Syntax Name"), 50, False),
+        "SyntaxName": (_("Transfer Syntax Name"), 35, False),
         "SyntaxUID": (_("Transfer Syntax UID"), 30, False),
     }
     # description strings added to pynetdicom.globals.ALL_TRANSFER_SYNTAXES
@@ -44,37 +45,22 @@ class TransferSyntaxesDialog(ctk.CTkToplevel):
 
     def __init__(
         self,
+        parent,
         transfer_syntaxes: list[str],
         title: str = _("Select Transfer Syntaxes"),
     ):
-        super().__init__()
+        super().__init__(master=parent)
         self.transfer_syntaxes = transfer_syntaxes
         self.title(title)
-        self.attributes("-topmost", True)  # stay on top
-        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.geometry("600x200")  # 550")
         self.resizable(False, False)
         self.grab_set()  # make dialog modal
         self._user_input: Union[list, None] = None
         self.rowconfigure(0, weight=1)
         self.columnconfigure(1, weight=1)
+        self.bind("<Return>", self._enter_keypress)
+        self.bind("<Escape>", self._escape_keypress)
         self._create_widgets()
-
-    def on_item_select(self, event):
-        selected_items = self.tree.selection()
-        if len(selected_items) == 0:
-            return
-        selected_item = selected_items[0]
-        self.tree.selection_remove(selected_item)
-        if selected_item in self.transfer_syntaxes:
-            logger.info(f"REMOVE {selected_item} to transfer_syntaxes")
-            self.transfer_syntaxes.remove(selected_item)
-            self.tree.item(selected_item, tags="")
-
-        else:
-            logger.info(f"ADD {selected_item} to transfer_syntaxes")
-            self.transfer_syntaxes.append(selected_item)
-            self.tree.item(selected_item, tags="green")
 
     def _create_widgets(self):
         logger.info(f"_create_widgets")
@@ -136,15 +122,40 @@ class TransferSyntaxesDialog(ctk.CTkToplevel):
             sticky="e",
         )
 
+    def on_item_select(self, event):
+        selected_items = self.tree.selection()
+        if len(selected_items) == 0:
+            return
+        selected_item = selected_items[0]
+        self.tree.selection_remove(selected_item)
+        if selected_item in self.transfer_syntaxes:
+            logger.info(f"REMOVE {selected_item} to transfer_syntaxes")
+            self.transfer_syntaxes.remove(selected_item)
+            self.tree.item(selected_item, tags="")
+
+        else:
+            logger.info(f"ADD {selected_item} to transfer_syntaxes")
+            self.transfer_syntaxes.append(selected_item)
+            self.tree.item(selected_item, tags="green")
+
+    def _enter_keypress(self, event):
+        logger.info(f"_enter_pressed")
+        self._ok_event()
+
     def _ok_event(self, event=None):
         self._user_input = self.transfer_syntaxes
         self.grab_release()
         self.destroy()
+
+    def _escape_keypress(self, event):
+        logger.info(f"_escape_pressed")
+        self._on_cancel()
 
     def _on_cancel(self):
         self.grab_release()
         self.destroy()
 
     def get_input(self):
+        self.focus()
         self.master.wait_window(self)
         return self._user_input
