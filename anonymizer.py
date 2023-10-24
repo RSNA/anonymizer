@@ -95,8 +95,6 @@ class App(ctk.CTk):
 
     def _open_project_startup(self):
         logger.info(f"Default font: {ctk.CTkFont().actual()}")
-        if sys.platform.startswith("win"):
-            self.iconbitmap(default="assets\\images\\rsna_icon.ico") 
         project_pkl_path = Path(default_storage_dir(), default_project_filename())
         if os.path.exists(project_pkl_path):
             with open(project_pkl_path, "rb") as pkl_file:
@@ -418,7 +416,9 @@ class App(ctk.CTk):
         if not os.path.exists(theme):
             logger.error(f"Theme file not found: {theme}, reverting to dark-blue theme")
             theme = "dark-blue"
-        ctk.set_default_color_theme(theme) 
+        ctk.set_default_color_theme(theme)
+        if sys.platform.startswith("win"):
+            self.iconbitmap("assets\\images\\rsna_icon.ico", default="assets\\images\\rsna_icon.ico") 
 
         self._project_controller: ProjectController = None
         self._model: ProjectModel = None
