@@ -18,7 +18,7 @@ class ExportView(tk.Toplevel):
     ux_poll_export_response_interval = 500  # milli-seconds
 
     #TODO: manage fonts using theme manager
-    fixed_width_font = ("Courier", 10)
+    fixed_width_font = ("Courier", 10, "bold")
 
     # Export attributes to display in the results Treeview:
     # Key: column id: (column name, width, centre justify)

@@ -34,7 +34,7 @@ class QueryView(tk.Toplevel):
     ux_poll_find_response_interval = 250  # milli-seconds
     ux_poll_move_response_interval = 500  # milli-seconds
 
-    fixed_width_font = ("Courier", 10)
+    fixed_width_font = ("Courier", 10, "bold")
     # C-FIND DICOM attributes to display in the results Treeview:
     # Key: DICOM field name, Value: (display name, centre justify)
     _attr_map = {
@@ -43,7 +43,7 @@ class QueryView(tk.Toplevel):
         "StudyDate": (_("Date"), 10, True),
         "StudyDescription": (_("Study Description"), 30, False),
         "AccessionNumber": (_("Accession No."), 15, True),
-        "ModalitiesInStudy": (_("Modalities"), 9, True),
+        "ModalitiesInStudy": (_("Modalities"), 12, True),
         "NumberOfStudyRelatedSeries": (_("Series"), 6, True),
         "NumberOfStudyRelatedInstances": (_("Images"), 6, True),
         "NumberOfCompletedSuboperations": (_("Stored"), 10, True),
@@ -68,7 +68,7 @@ class QueryView(tk.Toplevel):
         self._studies_processed = 0
         self._studies_to_process = 0
         self._acc_no_file_path = None
-        self.width = 1200
+        self.width = 1300
         self.height = 400
         # Try to move query window below the dashboard:
         self.geometry(f"{self.width}x{self.height}+0+{self.master.winfo_height()+80}")
