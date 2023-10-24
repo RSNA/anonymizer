@@ -321,7 +321,7 @@ class ExportView(tk.Toplevel):
 
     def _cancel_export_button_pressed(self):
         logger.info(f"Cancel Export button pressed")
-        self._move_active = False
+        self._export_active = False
         self._update_export_progress(cancel=True)
         self._controller.abort_export()
         self._enable_action_buttons()

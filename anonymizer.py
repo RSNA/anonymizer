@@ -414,7 +414,11 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
-        ctk.set_default_color_theme("assets/themes/rsna_theme.json") 
+        theme = "assets/themes/rsna_theme.json"
+        if not os.path.exists(theme):
+            logger.error(f"Theme file not found: {theme}, reverting to dark-blue theme")
+            theme = "dark-blue"
+        ctk.set_default_color_theme(theme) 
 
         self._project_controller: ProjectController = None
         self._model: ProjectModel = None
