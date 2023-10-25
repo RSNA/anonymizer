@@ -116,7 +116,6 @@ class App(ctk.CTk):
                 message=str(e),
                 parent=self
             )
-            return
 
         self.title(
             f"{self._model.project_name}[{self._model.site_id}] => {self._model.abridged_storage_dir()}"

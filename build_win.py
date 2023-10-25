@@ -19,7 +19,7 @@ if __name__ == "__main__":
         internal_name="anonymizer",
         legal_copyright="© 2023 Radiology Society of North America. All rights reserved.",
         original_filename="anonymizer.exe",
-        product_name="RSNA DICOM Anonymizer",
+        product_name="Anonymizer",
     )
 
     print(
@@ -43,7 +43,7 @@ if __name__ == "__main__":
             "--version-file",
             "versionfile.txt",
             "--name",
-            "RSNA DICOM Anonymizer",
+            "Anonymizer",
             "anonymizer.py",
         ]
     )
