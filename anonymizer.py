@@ -36,6 +36,7 @@ from controller.project import ProjectController, ProjectModel
 logger = logging.getLogger()  # ROOT logger
 
 APP_TITLE = _("RSNA DICOM Anonymizer BETA Version " + __version__)
+THEME_FILE = "assets/themes/rsna_theme.json"
 
 class App(ctk.CTk):
     project_open_startup_dwell_time = 500  # milliseconds
@@ -122,12 +123,15 @@ class App(ctk.CTk):
         )
         
         self._welcome_view.destroy()
-        self.dashboard = Dashboard(self, self._project_controller)
+        self._dashboard = Dashboard(self, self._project_controller)
         self.protocol("WM_DELETE_WINDOW", self.close_project)
         self.set_menu_project_open()
 
     def close_project(self, event=None):
         logging.info("Close Project")
+        if self._dashboard:
+            self._dashboard.destroy()
+            self._dashboard = None
         if self._query_view and self._query_view.busy():
             logger.info(f"QueryView busy, cannot close project")
             messagebox.showerror(
@@ -153,8 +157,6 @@ class App(ctk.CTk):
             self._project_controller.save_model()
             self._project_controller.anonymizer.save_model()
             self._project_controller.anonymizer.stop()
-            del self._project_controller.anonymizer
-            del self._project_controller
             if self._query_view:
                 self._query_view.destroy()
                 self._query_view = None
@@ -183,6 +185,9 @@ class App(ctk.CTk):
             defaultextension=".dcm",
             filetypes=file_extension_filters,
         )
+        if not paths:
+            logger.info(f"Import Files Cancelled")
+            return
         if paths:
             for path in paths:
                 self._project_controller.anonymizer.anonymize_dataset_and_store(
@@ -204,18 +209,31 @@ class App(ctk.CTk):
         )
         logger.info(root_dir)
 
-        if root_dir:
-            file_paths = [
-                os.path.join(root, file)
-                for root, _, files in os.walk(root_dir)
-                for file in files
-                if not file.startswith(".")  # and is_dicom(os.path.join(root, file))
-            ]
-            logger.info(f"Importing {len(file_paths)} files, adding to anonymizer Q")
-            for path in file_paths:
-                self._project_controller.anonymizer.anonymize_dataset_and_store(
-                    path, None, self._project_controller.storage_dir
-                )
+        if not root_dir:
+            logger.info(f"Import Directory Cancelled")
+            return  
+
+        file_paths = [
+            os.path.join(root, file)
+            for root, _, files in os.walk(root_dir)
+            for file in files
+            if not file.startswith(".") # and is_dicom(os.path.join(root, file))
+        ]
+        if len(file_paths) == 0:
+            logger.info(f"No DICOM files found in {root_dir}")
+            messagebox.showerror(
+                title=_("Import Directory Error"),
+                message=f"No DICOM files found in {root_dir}",
+                parent=self
+            )
+            return
+        logger.info(f"Importing {len(file_paths)} files, adding to anonymizer Q")
+        for path in file_paths:
+            self._project_controller.anonymizer.anonymize_dataset_and_store(
+                path, None, self._project_controller.storage_dir
+            )
+        qsize = self._project_controller.anonymizer._anon_Q.qsize()
+        logging.info(f"File load complete, monitoring anonymizer Q...{qsize}")
         dlg = ProgressDialog(
             self,
             self._project_controller.anonymizer._anon_Q,
@@ -411,7 +429,7 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
-        theme = "assets/themes/rsna_theme.json"
+        theme = THEME_FILE
         if not os.path.exists(theme):
             logger.error(f"Theme file not found: {theme}, reverting to dark-blue theme")
             theme = "dark-blue"
@@ -425,6 +443,7 @@ class App(ctk.CTk):
         self._export_view: ExportView = None
         self._instructions_view: HTMLView = None
         self._license_view: HTMLView = None
+        self._dashboard: Dashboard = None
         self.resizable(False, False)
         self.title(APP_TITLE)
         self.set_menu_project_closed()  # creates self.menu_bar
@@ -434,18 +453,14 @@ class App(ctk.CTk):
 
 def main():
     args = str(sys.argv)
-
     install_dir = os.path.dirname(os.path.realpath(__file__))
-    init_logging(install_dir)
+    debug_mode = "debug" in args or "DEBUG" in args
+    init_logging(install_dir, debug_mode)
     os.chdir(install_dir)
 
     logger = logging.getLogger()  # get root logger
     logger.info(f"cmd line args={args}")
-
-    if "debug" in args:
-        logger.info("DEBUG MODE")
-        logger.setLevel(logging.DEBUG)
-
+    logger.info(f"Python Optimization Level: {sys.flags.optimize}")
     logger.info(f"Starting ANONYMIZER GUI Version {__version__}")
     logger.info(f"Running from {os.getcwd()}")
     logger.info(f"Python Version: {sys.version_info.major}.{sys.version_info.minor}")

@@ -167,9 +167,13 @@ def _handle_find(event, storage_dir: str):
             logger.error("C-CANCEL find operation")
             yield (C_CANCEL, None)
 
-        logger.info(f"Return instance: {instance.SOPInstanceUID}")
-
-        yield (C_PENDING_A, instance)
+        if not hasattr(ds,"StudyInstanceUID") or ds.StudyInstanceUID == "":
+            logger.info(f"Return instance: {instance.SOPInstanceUID}")
+            yield (C_PENDING_A, instance)
+        else:
+            if instance.StudyInstanceUID == ds.StudyInstanceUID:
+                logger.info(f"Return instance: {instance.SOPInstanceUID}")
+                yield (C_PENDING_A, instance)
 
     logger.info("Find complete")
 

@@ -10,6 +10,10 @@ from pydicom import Dataset
 def local_storage_path(base_dir: Path, ds: Dataset) -> Path:
     assert base_dir
     assert hasattr(ds, "PatientID")
+    assert hasattr(ds, "PatientName")
+    assert hasattr(ds, "StudyInstanceUID")
+    assert hasattr(ds, "SeriesNumber")
+    assert hasattr(ds, "InstanceNumber")
     study_uid = str(ds.StudyInstanceUID)
     if not "." in study_uid:
         study_uid_suffix = "INVALID_STUDY_UID"
@@ -66,7 +70,7 @@ def images_stored(base_dir: Path, anon_pt_id: str, study_uid: str, acc_no: str) 
     Args:
         anon_uid (str): The anonymous patient ID.
         study_uid (str): The study UID.
-        adc_no (str): The accession number.
+        acc_no (str): The accession number.
 
     Returns:
         The number of images stored in the study directory.

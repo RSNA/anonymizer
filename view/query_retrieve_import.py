@@ -14,7 +14,7 @@ from utils.ux_fields import (
     str_entry,
     patient_name_max_chars,
     patient_id_max_chars,
-    accession_no_max_chars,
+    accession_no_max_chars, # disabled on entry to allow for list
     dicom_date_chars,
     modality_max_chars,
     modality_min_chars,
@@ -46,11 +46,12 @@ class QueryView(tk.Toplevel):
         "ModalitiesInStudy": (_("Modalities"), 12, True),
         "NumberOfStudyRelatedSeries": (_("Series"), 6, True),
         "NumberOfStudyRelatedInstances": (_("Images"), 6, True),
-        "NumberOfCompletedSuboperations": (_("Stored"), 10, True),
-        "NumberOfFailedSuboperations": (_("Errors"), 10, True),
+        # not a dicom field, for display only:
+        "Imported": (_("Imported"), 10, True),
         # not for display, for find/move:
-        "StudyInstanceUID": (_("StudyInstanceUID"), 0, False),
+        "StudyInstanceUID": (_("StudyInstanceUID"), 0, False), 
     }
+    _tree_column_keys = list(_attr_map.keys())[:-1]
 
     def __init__(
         self,
@@ -67,12 +68,14 @@ class QueryView(tk.Toplevel):
         self._acc_no_list = []
         self._studies_processed = 0
         self._studies_to_process = 0
+        self._study_uids_to_import = []
         self._acc_no_file_path = None
         self.width = 1300
         self.height = 400
         # Try to move query window below the dashboard:
         self.geometry(f"{self.width}x{self.height}+0+{self.master.winfo_height()+80}")
         self.resizable(True, True)
+        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
         self._create_widgets()
@@ -225,7 +228,7 @@ class QueryView(tk.Toplevel):
             self._results_frame,
             show="headings",
             style="Treeview",
-            columns=list(self._attr_map.keys())[:-1],
+            columns=self._tree_column_keys,
         )
         self._tree.grid(row=0, column=0, columnspan=10, sticky="nswe")
 
@@ -236,7 +239,7 @@ class QueryView(tk.Toplevel):
         scrollbar.grid(row=0, column=10, padx=(0, PAD), sticky="news")
         self._tree.configure(yscrollcommand=scrollbar.set)
 
-        # Set tree column headers, width and justification
+        # Set tree column width and justification
         for col in self._tree["columns"]:
             self._tree.heading(col, text=self._attr_map[col][0])
             self._tree.column(
@@ -374,7 +377,7 @@ class QueryView(tk.Toplevel):
         while not ux_Q.empty():
             try:
                 resp: FindResponse = ux_Q.get_nowait()
-                logger.debug(f"{resp}")
+                #logger.debug(f"{resp}")
                 if resp.status.Status in [C_PENDING_A, C_PENDING_B, C_SUCCESS]:
                     if resp.identifier:
                         results.append(resp.identifier)
@@ -450,6 +453,7 @@ class QueryView(tk.Toplevel):
                     )
 
                     # TODO: investigate errors (hanging and blank box) when using standard form of CTkMessagebox
+                    # OSX window manager does not show title bar for messagebox and does not show error icon
                     messagebox.showwarning(
                         title=_("Accession Numbers not found"),
                         message=_(
@@ -599,6 +603,24 @@ class QueryView(tk.Toplevel):
                 text=f"Processing {self._studies_processed} of {self._studies_to_process} Studies Selected"
             )
 
+    def _update_imported_count(self):
+        # Iterate through tree and update imported count for unfinished studies
+        tree_items = self._tree.get_children()
+        for study_uid in tree_items:
+            if study_uid in self._study_uids_to_import:
+                current_values = list(self._tree.item(study_uid, "values"))
+                instances_to_import = int(current_values[self._tree_column_keys.index("NumberOfStudyRelatedInstances")])
+                files_imported = self._images_already_stored_count(
+                    study_uid, 
+                    current_values[self._tree_column_keys.index("PatientID")], 
+                    current_values[self._tree_column_keys.index("AccessionNumber")])
+                current_values[self._tree_column_keys.index("Imported")] = str(files_imported)
+                self._tree.item(study_uid, values=current_values)
+                if files_imported >= instances_to_import:
+                    logging.info(f"Study {study_uid} marked GREEN, all images imported")
+                    self._tree.item(study_uid, tags="green")
+                    self._study_uids_to_import.remove(study_uid)
+
     def _monitor_move_response(self, ux_Q: Queue):
         while not ux_Q.empty():
             try:
@@ -619,43 +641,24 @@ class QueryView(tk.Toplevel):
                     )
                     return
 
-                # If one file failed to moved, mark the study as red:
-                # TODO: hover over item to see error message
-                current_values = list(self._tree.item(resp.StudyInstanceUID, "values"))
-                # Ensure there are at least 10 values in the list:
-                while len(current_values) < 10:
-                    current_values.append("")
-
                 self._tree.see(resp.StudyInstanceUID)
 
                 if resp.Status == C_FAILURE:
                     self._tree.selection_remove(resp.StudyInstanceUID)
                     self._tree.item(resp.StudyInstanceUID, tags="red")
+                    logger.error(f"Study {resp.StudyInstanceUID} marked RED, Error: {resp.ErrorComment}")
                     self._studies_processed += 1
-                    if current_values[9] == "":
-                        current_values[9] = "0"
-                    current_values[9] = str(int(current_values[9]) + 1)
-                    self._tree.item(resp.StudyInstanceUID, values=current_values)
                     self._update_move_progress()
-                    # TOOD: add last error message to treeview
                 else:
-                    current_values[8] = str(resp.NumberOfCompletedSuboperations)
-                    current_values[9] = str(resp.NumberOfFailedSuboperations)
-                    self._tree.item(resp.StudyInstanceUID, values=current_values)
-
+                    self._update_imported_count()
                     if resp.Status == C_SUCCESS:
                         self._tree.selection_remove(resp.StudyInstanceUID)
-                        if resp.NumberOfFailedSuboperations == 0:
-                            # TODO: #8 ensure all images of study have been stored by anonymizer worker
-                            # StudyInstanceUID in uid_lookup and files in storage_dir
-                            # need to wait for anonymizer worker to finish processing this study
-                            self._tree.item(resp.StudyInstanceUID, tags="green")
-
+                        logger.info(f"Study Move Complete: uid:{resp.StudyInstanceUID}, completed:{resp.NumberOfCompletedSuboperations}, failed:{resp.NumberOfFailedSuboperations}")   
                         self._studies_processed += 1
                         self._update_move_progress()
 
                 if self._studies_processed >= self._studies_to_process:
-                    logger.info(f"Full Move operation finished")
+                    logger.info(f"Full Move Complete, studies processed: {self._studies_processed}, studies not yet imported: {len(self._study_uids_to_import)}")
                     self._move_active = False
                     self._enable_action_buttons()
                     return
@@ -699,6 +702,7 @@ class QueryView(tk.Toplevel):
         ]
 
         self._studies_to_process = len(unstored_study_uids)
+        self._study_uids_to_import = unstored_study_uids.copy()
 
         if self._studies_to_process == 0:
             logger.info(f"All studies selected are already stored/imported")
@@ -727,6 +731,27 @@ class QueryView(tk.Toplevel):
             ux_Q,
         )
 
+    def _images_already_stored_count(self, phi_study_uid, phi_patient_id, phi_acc_no):
+        images_stored_count = 0
+        anon_study_uid = self._controller.anonymizer.model.get_anon_uid(
+            phi_study_uid
+        )
+        if anon_study_uid:
+            anon_pt_id = self._controller.anonymizer.model.get_anon_patient_id(
+                phi_patient_id
+            )
+            anon_acc_no = self._controller.anonymizer.model.get_anon_acc_no(
+                phi_acc_no
+            )
+            if anon_pt_id and anon_acc_no:
+                images_stored_count = images_stored(
+                    self._controller.storage_dir,
+                    anon_pt_id,
+                    anon_study_uid,
+                    anon_acc_no,
+                )
+        return images_stored_count
+
     def _update_treeview_data(self, data: pd.DataFrame):
         # Insert new data
         logger.debug(f"update_treeview_data items: {len(data)}")
@@ -741,27 +766,8 @@ class QueryView(tk.Toplevel):
                 val for col, val in row.items() if col != "StudyInstanceUID"
             ]
 
-            # If the StudyInstanceUID is already in the uid_lookup / been stored
-            # determine how many images have been stored:
-            anon_study_uid = self._controller.anonymizer.model.get_anon_uid(
-                row["StudyInstanceUID"]
-            )
-            images_stored_count = 0
-            if anon_study_uid:
-                anon_pt_id = self._controller.anonymizer.model.get_anon_patient_id(
-                    row["Patient ID"]
-                )
-                anon_acc_no = self._controller.anonymizer.model.get_anon_acc_no(
-                    row["Accession No."]
-                )
-                if anon_pt_id and anon_acc_no:
-                    images_stored_count = images_stored(
-                        self._controller.storage_dir,
-                        anon_pt_id,
-                        anon_study_uid,
-                        anon_acc_no,
-                    )
-                    display_values.append(str(images_stored_count))
+            images_stored_count = self._images_already_stored_count(row["StudyInstanceUID"], row["Patient ID"], row["Accession No."])
+            display_values.append(str(images_stored_count))
 
             try:
                 self._tree.insert(
@@ -781,8 +787,14 @@ class QueryView(tk.Toplevel):
     def _on_cancel(self):
         logger.info(f"_on_cancel")
         if self._query_active or self._move_active:
-            logger.info(f"Cancel disabled, query or move active")
-            return
+            msg = _("Cancel active Query?")
+            if not messagebox.askokcancel(title=_("Cancel"), message=msg, parent=self):
+                return
+            else:
+                if self._query_active:
+                    self._controller.abort_query()
+                else:
+                    self._controller.abort_move()
 
         self.grab_release()
         self.destroy()

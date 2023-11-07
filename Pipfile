@@ -12,6 +12,8 @@ pynetdicom = "*"
 ifaddr = "*"
 pandas = "*"
 numpy = "*"
+boto3 = "*"
+qrcode = "*"
 
 [dev-packages]
 radon = "*"
@@ -19,3 +21,4 @@ coverage = "*"
 pyinstaller = "*"
 pyinstaller-versionfile = "*"
 pytest = "*"
+pycognito = "*"

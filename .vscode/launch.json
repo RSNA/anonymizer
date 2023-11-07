@@ -2,15 +2,60 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Anonymizer GUI",
+      "name": "Anonymizer GUI DEBUG",
       "type": "python",
       "request": "launch",
       "program": "anonymizer.py",
+      "env": {
+        "PYTHONOPTIMIZE": "0"
+      },
       "console": "integratedTerminal",
       "autoReload": {
         "enable": true
       },
-      //"args": ["--debug"],
+      "args": ["--debug"],
+      "justMyCode": false
+    },
+    {
+      "name": "Anonymizer GUI Optimzed 0",
+      "type": "python",
+      "request": "launch",
+      "program": "anonymizer.py",
+      "env": {
+        "PYTHONOPTIMIZE": "0"
+      },
+      "console": "integratedTerminal",
+      "autoReload": {
+        "enable": true
+      },
+      "justMyCode": false
+    },
+    {
+      "name": "Anonymizer GUI Optimized 1",
+      "type": "python",
+      "request": "launch",
+      "program": "anonymizer.py",
+      "env": {
+        "PYTHONOPTIMIZE": "1"
+      },
+      "console": "integratedTerminal",
+      "autoReload": {
+        "enable": true
+      },
+      "justMyCode": false
+    },
+    {
+      "name": "Anonymizer GUI Optimized 2",
+      "type": "python",
+      "request": "launch",
+      "program": "anonymizer.py",
+      "env": {
+        "PYTHONOPTIMIZE": "2"
+      },
+      "console": "integratedTerminal",
+      "autoReload": {
+        "enable": true
+      },
       "justMyCode": false
     }
   ]

@@ -3,6 +3,9 @@
 # pipenv shell
 # python build_win.py
 
+import os
+os.environ['PYTHONOPTIMIZE'] = "0"
+
 from __version__ import __version__
 import pyinstaller_versionfile
 import PyInstaller.__main__

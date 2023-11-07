@@ -122,6 +122,22 @@ class Dashboard(ctk.CTkFrame):
     def _export_button_click(self):
         logger.info(f"_export_button_click")
         # This blocks for TCP connection timeout
+        #TODO: create background task for this, how to notify user of status?
+        if self._controller.model.export_to_AWS:
+            if not self._controller.aws_authenticate():
+                self._export_button.configure(text_color="red")
+                messagebox.showerror(
+                    title=_("Connection Error"),
+                    message=_(
+                        f"AWS Authentication Failed, check Project Settings/AWS Cognito"
+                        " and ensure username and password are correct."
+                    ),
+                    parent=self
+                )
+                return
+            self._export_button.configure(text_color="light green")
+            self._parent.export_to_aws()
+            return
         if not self._controller.echo("EXPORT"):
             self._export_button.configure(text_color="red")
             messagebox.showerror(
@@ -136,11 +152,10 @@ class Dashboard(ctk.CTkFrame):
         self._export_button.configure(text_color="light green")
         self._parent.export()
 
-   
-
     def _update_dashboard(self):    
         if not self._controller:
             return
+    
         dir = self._controller.model.storage_dir
         pts = os.listdir(dir)
         pts = [item for item in pts if os.path.isdir(os.path.join(dir, item))]
@@ -161,7 +176,6 @@ class Dashboard(ctk.CTkFrame):
         self._series.configure(text=f"{series}")
         self._images.configure(text=f"{images}")
 
-        if not self._controller:
+        if self._controller and self._controller.anonymizer:
             self._qsize.configure(text=f"{self._controller.anonymizer._anon_Q.qsize()}")
-
-        self.after(self.dashboard_update_interval, self._update_dashboard)
+            self.after(self.dashboard_update_interval, self._update_dashboard)

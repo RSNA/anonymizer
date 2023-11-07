@@ -41,8 +41,8 @@ class AnonymizerController:
         "PatientID",
         "PatientName",
         "StudyInstanceUID",
-        "StudyDate",
-        #      "AccessionNumber",
+        # "StudyDate",
+        # "AccessionNumber",
         "Modality",
         "SeriesNumber",
         "InstanceNumber",
@@ -236,7 +236,7 @@ class AnonymizerController:
                         batch.append(ds_Q.get())
 
                 for item in batch:
-                    source, ds, dir = item  # ds_Q.get()
+                    source, ds, dir = item  
 
                     # Load dataset from file if not provided: (eg. via local file/dir import)
                     if ds is None:
@@ -263,7 +263,8 @@ class AnonymizerController:
                             )
                             continue
 
-                    logger.debug(f"PHI:\n{ds}")
+                    #TOOO: add Trace level?            
+                    # logger.debug(f"PHI:\n{ds}")
 
                     # Capture PHI and store for new studies:
                     if self.model.get_anon_uid(ds.StudyInstanceUID) == None:
@@ -293,13 +294,13 @@ class AnonymizerController:
                     block.add_new(0x2, "SH", self.project_model.trial_name)
                     block.add_new(0x3, "SH", self.project_model.site_id)
 
-                    logger.debug(f"ANON:\n{ds}")
+                    #logger.debug(f"ANON:\n{ds}")
 
                     # TODO: custom filtering via script specifying dicom field patterns to keep / quarantine / discard
                     # Save anonymized dataset to dicom file in local storage:
                     filename = local_storage_path(dir, ds)
-                    logger.debug(
-                        f"STORE ANON[{ds.file_meta.TransferSyntaxUID}]: {source} => {filename}"
+                    logger.info(
+                        f"ANON STORE: {source} => {filename}"
                     )
                     try:
                         ds.save_as(filename, write_like_original=False)

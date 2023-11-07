@@ -57,6 +57,7 @@ class ExportView(tk.Toplevel):
         # Try to move export window to right of the dashboard:
         self.geometry(f"{self.width}x{self.height}+{self.master.winfo_width()}+0")
         self.resizable(True, True)
+        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
         self._create_widgets()
@@ -402,6 +403,7 @@ class ExportView(tk.Toplevel):
             logger.error(f"Selection disabled, export is active")
             return
 
+        
         if self._controller.echo("EXPORT"):
             self._export_button.configure(text_color="light green")
         else:
@@ -468,8 +470,11 @@ class ExportView(tk.Toplevel):
     def _on_cancel(self):
         logger.info(f"_on_cancel")
         if self._export_active:
-            logger.info(f"Cancel disabled, export active")
-            return
-
+            msg = _("Cancel active export?")
+            if not messagebox.askokcancel(title=_("Cancel"), message=msg, parent=self):
+                return
+            else:
+                self._controller.abort_export()
+               
         self.grab_release()
         self.destroy()

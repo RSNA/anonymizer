@@ -3,17 +3,16 @@ import logging
 import logging.handlers
 from pydicom import config as pydicom_config
 
-# TODO: investigate global, detachable log window with level and module filter / or delegate to OpenLogView app
 LOGS_DIR = "/logs/"
 LOG_FILENAME = "anonymizer.log"
-LOG_SIZE = 1024 * 1024 * 20  # 20 MB
+LOG_SIZE = 1024 * 1024 * 60  # 60 MB
 LOG_BACKUP_COUNT = 10
 LOG_DEFAULT_LEVEL = logging.INFO
 # LOG_FORMAT = "{asctime} [{levelname}] {filename}:{lineno}: {message}"
 LOG_FORMAT = "{asctime} {levelname} {module}.{funcName}.{lineno} {message}"
 
 
-def init_logging(install_dir: str) -> None:
+def init_logging(install_dir: str, debug_mode: bool) -> None:
     # TODO: provide UX to change log level
     logs_dir = install_dir + LOGS_DIR
     os.makedirs(logs_dir, exist_ok=True)
@@ -30,18 +29,21 @@ def init_logging(install_dir: str) -> None:
     consoleHandler = logging.StreamHandler()
     consoleHandler.setFormatter(logFormatter)
     logger.addHandler(consoleHandler)
-    logger.setLevel(LOG_DEFAULT_LEVEL)
 
     logging.captureWarnings(True)
-
-    # pydicom specific:
-    pydicom_config.debug(LOG_DEFAULT_LEVEL == logging.DEBUG)
     pydicom_config.settings.reading_validation_mode = pydicom_config.IGNORE
 
-    # pynetdicom specific:
-    pynetdicom_logger = logging.getLogger("pynetdicom")
-    pynetdicom_logger.setLevel(logging.WARNING)  # LOG_DEFAULT_LEVEL)
-
+    set_log_level(LOG_DEFAULT_LEVEL if not debug_mode else logging.DEBUG)
 
 def set_log_level(level: int) -> None:
     logging.getLogger().setLevel(level)
+
+    # pydicom specific:
+    # pydicom_config.debug(level == logging.DEBUG) # this is very low level tracing
+    
+    # Only enable pynetdicom logging for DEBUG level:
+    pynetdicom_logger = logging.getLogger("pynetdicom")
+    if level == logging.DEBUG:
+        pynetdicom_logger.setLevel(level)
+    else:
+        pynetdicom_logger.setLevel(logging.WARNING)

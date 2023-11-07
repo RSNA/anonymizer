@@ -1,4 +1,3 @@
-from math import log
 import os
 from typing import cast
 import threading
@@ -11,7 +10,7 @@ import csv
 from pathlib import Path
 from typing import List
 from dataclasses import dataclass
-from numpy import isin
+from utils.translate import _
 from pydicom import Dataset
 from pydicom.dataset import FileMetaDataset
 from pynetdicom.association import Association
@@ -38,7 +37,6 @@ from .dicom_C_codes import (
     C_STORE_DATASET_ERROR,
     C_STORE_DECODE_ERROR,
 )
-
 from model.project import (
     ProjectModel,
     PHI,
@@ -48,8 +46,8 @@ from model.project import (
     default_project_filename,
 )
 from .anonymizer import AnonymizerController
+import boto3
 
-from utils.translate import _
 
 logger = logging.getLogger(__name__)
 
@@ -103,17 +101,23 @@ class ProjectController(AE):
         "1.2.840.10008.5.1.4.1.2.2.3",  # Get
     ]
     _handle_store_time_slice_interval = 0.1  # seconds
+    _export_file_time_slice_interval = 0.1  # seconds
     _patient_export_thread_pool_size = 4
     _study_move_thread_pool_size = 4
     _query_result_required_attributes = [
         "PatientID",
         "PatientName",
         "StudyInstanceUID",
-        "StudyDate",
-        "AccessionNumber",
+        # "StudyDate",
+        # "AccessionNumber",
         "ModalitiesInStudy",
         "NumberOfStudyRelatedSeries",
         "NumberOfStudyRelatedInstances",
+    ]
+    _query_result_fields_to_remove = [
+        "QueryRetrieveLevel",
+        "RetrieveAETitle",
+        "SpecificCharacterSet",
     ]
 
     def _missing_query_result_attributes(self, ds: Dataset) -> list[str]:
@@ -122,6 +126,11 @@ class ProjectController(AE):
             for attr_name in self._query_result_required_attributes
             if attr_name not in ds or getattr(ds, attr_name) == ""
         ]
+
+    def _strip_query_result_fields(self, ds: Dataset) -> None:
+        for field in self._query_result_fields_to_remove:
+            if field in ds:
+                delattr(ds, field)
 
     def __init__(self, model: ProjectModel):
         super().__init__(model.scu.aet)
@@ -148,6 +157,7 @@ class ProjectController(AE):
         self._move_futures = []
         self._move_executor = None
         self.scp = None
+        self.s3 = None
 
     def _post_model_update(self):
         self.stop_scp()
@@ -235,7 +245,11 @@ class ProjectController(AE):
 
     # Handlers:
     def _handle_abort(self, event: Event):
-        logger.debug("_handle_abort")
+        logger.error("_handle_abort")
+        # if self._move_futures:
+        #     logger.error("Aborting move futures")
+        #     self._abort_move = True
+        
 
     # DICOM C-ECHO Verification event handler (EVT_C_ECHO):
     def _handle_echo(self, event: Event):
@@ -294,6 +308,8 @@ class ProjectController(AE):
         if self.anonymizer.model.get_anon_uid(ds.SOPInstanceUID):
             logger.info(f"Instance already stored: {ds.PatientID} {ds.SOPInstanceUID}")
             return C_SUCCESS
+        
+        logger.info(f"=>{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}")
 
         self.anonymizer.anonymize_dataset_and_store(remote_scu, ds, self.storage_dir)
         return C_SUCCESS
@@ -324,7 +340,7 @@ class ProjectController(AE):
             raise DICOMRuntimeError(msg)
 
         logger.info(
-            f"DICOM C-STORE scp listening on {self.model.scp}, storing files in {self.model.storage_dir}"
+            f"DICOM C-STORE scp listening on {self.model.scp}, storing files in {self.model.storage_dir}, timeouts: {self.model.network_timeouts}"
         )
 
     def stop_scp(self) -> None:
@@ -365,7 +381,7 @@ class ProjectController(AE):
             raise
 
         return association
-
+        
     def echo(self, scp: str | DICOMNode) -> bool:
         logger.info(f"Perform C-ECHO from {self.model.scu} to {scp}")
         association = None
@@ -395,6 +411,62 @@ class ProjectController(AE):
             if association:
                 association.release()
             return False
+
+    def aws_S3_authenticate(self) -> tuple[bool, str | None]:
+        logging.info(f"Authenticate to AWS S3")
+        if self.s3:
+            logging.info(f"Already authenticated to AWS S3, verify bucket list")
+            try:
+                response = self.s3.list_buckets()
+                logging.info(f"Authentication is valid. S3 buckets:", response['Buckets'])
+                return True
+            except Exception as e:
+                logging.error("s3_list_buckets failed. Error:", e)
+                self.s3 = None
+
+        try:
+            cognito_client = boto3.client("cognito-idp", region_name="us-east-1")
+
+            response = cognito_client.initiate_auth(
+                AuthFlow="USER_PASSWORD_AUTH",
+                AuthParameters={
+                    "USERNAME": self.model.aws_cognito.username,
+                    "PASSWORD": self.model.aws_cognito.password,
+                },
+                ClientId=self.model.aws_cognito.client_id,
+            )
+
+            if response["ChallengeName"] == "NEW_PASSWORD_REQUIRED":
+                msg = _("User needs to set a new password")
+                logging.error(msg)
+                return False, msg
+            
+            if "ChallengeName" in response:
+                msg = _(f"Unexpected Authorisation Challenge : {response['ChallengeName']}")
+                logging.error(msg)
+                return False, msg 
+            
+            if "AuthenticationResult" not in response:
+                logging.error(f"AuthenticationResult not in response: {response}")
+                return False, _("AWS Cognito authorisation failed\n Authentication Result & Access Token not in response")
+            
+            if "AccessToken" not in response["AuthenticationResult"]:
+                logging.error(f"AccessToken not in response: {response}")
+                return False, _("AWS Cognito authorisation failed\n Access Token not in response")
+            
+            session_token = response["AuthenticationResult"]["AccessToken"]
+
+            response = cognito_client.get_user(AccessToken=session_token)
+
+            logger.info(f"Cognito Authentication successful. User Details: {response}")
+
+            return True, None
+        
+        except Exception as e:
+            msg = _(f"AWS Authentication failed: {str(e)}")
+            logging.error(msg)
+            return False, msg
+    
 
     # Blocking send
     def send(self, file_paths: list[str], scp_name: str, send_contexts=None):
@@ -438,7 +510,7 @@ class ProjectController(AE):
         assert scp_name in self.model.remote_scps
         scp = self.model.remote_scps[scp_name]
         logger.info(
-            f"C-FIND to {scp} Standard Query: {name}, {id}, {acc_no}, {study_date}, {modality}"
+            f"C-FIND to {scp} Study Level Query: {name}, {id}, {acc_no}, {study_date}, {modality}"
         )
 
         ds = Dataset()
@@ -462,62 +534,53 @@ class ProjectController(AE):
                 scp_name, self.get_study_root_qr_contexts()
             )
 
-            # Use the C-FIND service to send the identifier
-            # using the StudyRootQueryRetrieveInformationModelFind
             responses = query_association.send_c_find(
                 ds,
                 query_model=self._STUDY_ROOT_QR_CLASSES[0],
             )
 
-            # Process the responses received from the peer
             for status, identifier in responses:
                 if self._abort_query:
                     raise RuntimeError("Query aborted")
 
-                if not status or status.Status not in (
+                # Timeouts (Network & DIMSE) are reflected by status being None:
+                if not status:
+                    raise ConnectionError(
+                        "Connection timed out (DIMSE or IDLE), was aborted, or received an invalid response"
+                    )
+                
+                if status.Status not in (
                     C_SUCCESS,
                     C_PENDING_A,
                     C_PENDING_B,
                 ):
-                    if not status:
-                        raise ConnectionError(
-                            "Connection timed out, was aborted, or received an invalid response"
-                        )
-                    else:
-                        logger.error(f"C-FIND failure, status: {hex(status.Status)}")
-                        raise DICOMRuntimeError(
-                            f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status]}"
-                        )
-                else:
-                    if status.Status == C_SUCCESS:
-                        logger.info("C-FIND query success")
+                    logger.error(f"C-FIND failure, status: {hex(status.Status)}")
+                    raise DICOMRuntimeError(
+                        f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status]}"
+                    )
+               
+                if status.Status == C_SUCCESS:
+                    logger.info("C-FIND query success")
 
-                    if identifier:
-                        if verify_attributes:
-                            missing_attributes = self._missing_query_result_attributes(
-                                identifier
+                if identifier:
+
+                    if verify_attributes:
+                        missing_attributes = self._missing_query_result_attributes(
+                            identifier
+                        )
+                        if missing_attributes != []:
+                            logger.error(
+                                f"Query result is missing required attributes: {missing_attributes}"
                             )
-                            if missing_attributes != []:
-                                logger.error(
-                                    f"Query result is missing required attributes: {missing_attributes}"
-                                )
-                                logger.error(f"\n{identifier}")
-                                continue
+                            logger.error(f"\n{identifier}")
+                            continue
 
-                        # TODO: move this code to UX client?
-                        fields_to_remove = [
-                            "QueryRetrieveLevel",
-                            "RetrieveAETitle",
-                            "SpecificCharacterSet",
-                        ]
-                        for field in fields_to_remove:
-                            if field in identifier:
-                                delattr(identifier, field)
+                    self._strip_query_result_fields(identifier)
 
-                        results.append(identifier)
+                    results.append(identifier)
 
-                    if ux_Q:
-                        ux_Q.put(FindResponse(status, identifier))
+                if ux_Q:
+                    ux_Q.put(FindResponse(status, identifier))
 
         except (
             ConnectionError,
@@ -611,55 +674,47 @@ class ProjectController(AE):
                 # Process the response(s) received from the peer
                 # one response with C_PENDING with identifier and one response with C_SUCCESS and no identifier
                 for status, identifier in responses:
-                    if not status or status.Status not in (
+                    if not status:
+                        raise ConnectionError(
+                            "Connection timed out, was aborted, or received an invalid response"
+                        )
+                    if status.Status not in (
                         C_SUCCESS,
                         C_PENDING_A,
                         C_PENDING_B,
                     ):
-                        if not status:
-                            raise ConnectionError(
-                                "Connection timed out, was aborted, or received an invalid response"
+                        logger.error(f"C-FIND failure, status: {hex(status.Status)}")
+                        raise DICOMRuntimeError(
+                            f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}"
+                        )
+                    
+                    if identifier:
+                        if verify_attributes:
+                            missing_attributes = (
+                                self._missing_query_result_attributes(identifier)
                             )
-                        else:
-                            raise DICOMRuntimeError(
-                                f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}"
-                            )
-                    else:
-                        if identifier:
-                            if verify_attributes:
-                                missing_attributes = (
-                                    self._missing_query_result_attributes(identifier)
-                                )
-                                if missing_attributes != []:
-                                    logger.error(
-                                        f"Query result is missing required attributes: {missing_attributes}"
-                                    )
-                                    logger.error(f"\n{identifier}")
-                                    continue
-
-                            # If PACS does an implicit wildcard search remove these responses, only accept exact matches:
-                            if identifier.AccessionNumber != acc_no:
+                            if missing_attributes != []:
                                 logger.error(
-                                    f"AccessionNumber {identifier.AccessionNumber} does not match {acc_no}"
+                                    f"Query result is missing required attributes: {missing_attributes}"
                                 )
+                                logger.error(f"\n{identifier}")
                                 continue
 
-                            # TODO: move this code to UX client?
-                            fields_to_remove = [
-                                "QueryRetrieveLevel",
-                                "RetrieveAETitle",
-                                "SpecificCharacterSet",
-                            ]
-                            for field in fields_to_remove:
-                                if field in identifier:
-                                    delattr(identifier, field)
+                        # If PACS does an implicit wildcard search remove these responses, only accept exact matches:
+                        if identifier.AccessionNumber != acc_no:
+                            logger.error(
+                                f"Remote Server Accession Number partial match: AccessionNumber {identifier.AccessionNumber} does not match request: {acc_no}"
+                            )
+                            continue
 
-                            results.append(identifier)
+                        self._strip_query_result_fields(identifier)
 
-                            # Only return identifiers back to UX
-                            # do not return (C_SUCCESS,None) as in find()
-                            if ux_Q:
-                                ux_Q.put(FindResponse(status, identifier))
+                        results.append(identifier)
+
+                        # Only return identifiers back to UX
+                        # do not return (C_SUCCESS, None) as in find()
+                        if ux_Q:
+                            ux_Q.put(FindResponse(status, identifier))
 
             # Signal success to UX once full list of accession numbers has been processed
             if ux_Q:
@@ -746,6 +801,220 @@ class ProjectController(AE):
         logger.info("Abort Query")
         self._abort_query = True
 
+    def find_uids(self, scp_name: str, study_uid: str, find_series: bool) -> list[str] | None:
+        assert scp_name in self.model.remote_scps
+        scp = self.model.remote_scps[scp_name]
+        logger.info(
+            f"find_uids: C-FIND to {scp} study_uid={study_uid}, find_series={find_series}"
+        )
+        ds = Dataset()
+        ds.QueryRetrieveLevel = "SERIES" if find_series else "IMAGE"
+        ds.StudyInstanceUID = study_uid
+        if find_series:
+            ds.SeriesInstanceUID = ""
+        else:
+            ds.SOPInstanceUID = ""
+        
+        results = []
+        query_association = None
+        self._abort_query = False
+        try:
+            query_association = self._connect_to_scp(
+                scp_name, self.get_study_root_qr_contexts()
+            )
+
+            responses = query_association.send_c_find(
+                ds,
+                query_model=self._STUDY_ROOT_QR_CLASSES[0],
+            )
+
+            for status, identifier in responses:
+                if self._abort_query:
+                    raise RuntimeError("Query aborted")
+                if not status:
+                    raise ConnectionError(
+                        "Connection timed out, was aborted, or received an invalid response"
+                    )
+                if status.Status not in (
+                    C_SUCCESS,
+                    C_PENDING_A,
+                    C_PENDING_B,
+                ):
+                    logger.error(f"C-FIND failure, status: {hex(status.Status)}")
+                    raise DICOMRuntimeError(
+                        f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status]}"
+                    )
+                
+                if status.Status == C_SUCCESS:
+                    logger.info("C-FIND query success")
+
+                if identifier:
+                    results.append(identifier.SeriesInstanceUID) if find_series else results.append(identifier.SOPInstanceUID)
+
+        except Exception as e: 
+            logger.error(str(e))
+
+        finally:
+            if query_association:
+                query_association.release()
+
+        if len(results) == 0:
+            logger.info(f"No uids found for {study_uid}")
+        
+        return results
+
+    # Blocking Move Study:
+    def _move_study(
+        self,
+        scp_name: str,
+        dest_scp_ae: str,
+        study_uid: str,
+        ux_Q: Queue,
+    ) -> None:
+        logger.info(
+            f"C-MOVE scp:{scp_name} move to: {dest_scp_ae} study_uid: {study_uid}"
+        )
+
+        if self._abort_move:
+            raise RuntimeError("Move aborted")
+
+        move_association = None
+        error_msg = ""
+        try:
+            move_association = self._connect_to_scp(
+                scp=scp_name,
+                contexts=[
+                    build_context(
+                        self._STUDY_ROOT_QR_CLASSES[1], self.model.transfer_syntaxes
+                    )
+                ],
+            )
+
+            ds = Dataset()
+            ds.QueryRetrieveLevel = "STUDY"
+            ds.StudyInstanceUID = study_uid
+
+            # Use the C-MOVE service to request that the remote SCP move the Study to local storage scp:
+            responses = move_association.send_c_move(
+                dataset=ds,
+                move_aet=dest_scp_ae,
+                query_model=self._STUDY_ROOT_QR_CLASSES[1],
+                priority=1,
+            )
+
+            # Process the responses received from the remote scp:
+            for status, identifier in responses:
+
+                if self._abort_move:
+                    logger.error(f"_move_study study_uid: {study_uid} aborted")
+                    move_association.abort()
+                    while not ux_Q.empty():
+                        ux_Q.get()
+                    return
+
+                
+                if not status:
+                    raise ConnectionError(
+                        _(f"Connection timed out or aborted moving study_uid: {study_uid}")
+                    )
+                    
+                if status.Status not in (
+                    C_SUCCESS,
+                    C_PENDING_A,
+                    C_PENDING_B,
+                ):
+                    logger.error(f"C-MOVE failure, status: {hex(status.Status)}")
+                    if identifier:
+                        logger.error(identifier)
+                    raise DICOMRuntimeError(
+                        f"C-MOVE Failed: {QR_MOVE_SERVICE_CLASS_STATUS[status.Status][1]}"
+                    )
+                
+                if status.Status == C_SUCCESS:
+                    logger.info(f"C-MOVE success study_uid: {study_uid}")
+
+                # Add the study_uid to the status dataset:
+                status.StudyInstanceUID = study_uid
+                ux_Q.put(status)
+
+            logger.info(f"C-MOVE complete study_uid: {study_uid}")
+
+        except (
+            ConnectionError,
+            TimeoutError,
+            RuntimeError,
+            ValueError,
+            AttributeError,
+            DICOMRuntimeError,
+        ) as e:
+            # Reflect status dataset back to UX client to provide find error detail
+            error_msg = str(e)  # latch exception error msg
+            logger.error(error_msg)
+            if ux_Q:
+                ds = Dataset()
+                ds.Status = C_FAILURE
+                ds.ErrorComment = error_msg
+                ds.StudyInstanceUID = study_uid
+                ux_Q.put(ds)
+
+        finally:
+            # Release the association
+            if move_association:
+                move_association.release()
+
+    # Manage bulk patient move using a thread pool:
+    def _manage_move(self, req: MoveRequest) -> None:
+        self._move_futures = []
+
+        self._move_executor = ThreadPoolExecutor(
+            max_workers=self._study_move_thread_pool_size
+        )
+
+        with self._move_executor as executor:
+            for i in range(len(req.study_uids)):
+                future = executor.submit(
+                    self._move_study,
+                    req.scp_name,
+                    req.dest_scp_ae,
+                    req.study_uids[i],
+                    req.ux_Q,
+                )
+                self._move_futures.append(future)
+
+            logger.info(f"Move Futures: {len(self._move_futures)}")
+
+            # Check for exceptions in the completed futures
+            for future in self._move_futures:
+                try:
+                    # This will raise any exceptions that _move_study may have raised:
+                    future.result()
+                except Exception as e:
+                    # Handle specific exceptions if needed
+                    if not self._abort_move:
+                        logger.error(f"Exception caught in _manage_move: {e}")
+
+        logger.info("_manage_move complete")
+
+    # Non-blocking Move Studies:
+    def move_studies(self, mr: MoveRequest) -> None:
+        self._abort_move = False
+        threading.Thread(
+            target=self._manage_move,
+            args=(mr,),
+            daemon=True,
+        ).start()
+
+    def abort_move(self):
+        logger.info("Abort Move")
+        self._abort_move = True
+        # logger.info("Cancel Futures")
+        # for future in self._move_futures:
+        #     future.cancel()
+        if self._move_executor:
+            self._move_executor.shutdown(wait=True, cancel_futures=True)
+            logger.info("Move futures cancelled and executor shutdown")
+            self._move_executor = None
+    
     def _export_patient(self, dest_name: str, patient_id: str, ux_Q: Queue) -> None:
         logger.debug(f"_export_patient {patient_id} start to {dest_name}")
 
@@ -768,11 +1037,14 @@ class ProjectController(AE):
                 raise DICOMRuntimeError(f"No DICOM files found in {patient_dir}")
 
             # Connect to remote SCP:
+            if self.model.export_to_AWS:
+                self
             export_association = self._connect_to_scp(
                 dest_name, self.get_radiology_storage_contexts()
             )
 
             for dicom_file_path in file_paths:
+                time.sleep(self._export_file_time_slice_interval)
                 if self._abort_export:
                     logger.error(f"_export_patient patient_id: {patient_id} aborted")
                     export_association.abort()
@@ -835,7 +1107,7 @@ class ProjectController(AE):
                 except Exception as e:
                     # Handle specific exceptions if needed
                     if not self._abort_export:
-                        logger.error(f"Exception caught in _manage_movefuture: {e}")
+                        logger.error(f"Exception caught in _manage_export: {e}")
 
         logger.info("_manage_export complete")
 
@@ -859,147 +1131,6 @@ class ProjectController(AE):
             self._export_executor.shutdown(wait=True, cancel_futures=True)
             logger.info("Move futures cancelled and executor shutdown")
             self._export_executor = None
-
-    # Blocking Move Study:
-    def _move_study(
-        self,
-        scp_name: str,
-        dest_scp_ae: str,
-        study_uid: str,
-        ux_Q: Queue,
-    ) -> None:
-        logger.debug(
-            f"C-MOVE scp:{scp_name} move to: {dest_scp_ae} study_uid: {study_uid}"
-        )
-
-        if self._abort_move:
-            raise RuntimeError("Move aborted")
-
-        move_association = None
-        error_msg = ""
-        try:
-            move_association = self._connect_to_scp(
-                scp=scp_name,
-                contexts=[
-                    build_context(
-                        self._STUDY_ROOT_QR_CLASSES[1], self.model.transfer_syntaxes
-                    )
-                ],
-            )
-
-            ds = Dataset()
-            ds.QueryRetrieveLevel = "STUDY"
-            ds.StudyInstanceUID = study_uid
-
-            # Use the C-MOVE service to request that the remote SCP move the Study to local storage scp:
-            responses = move_association.send_c_move(
-                ds,
-                dest_scp_ae,
-                query_model=self._STUDY_ROOT_QR_CLASSES[1],
-            )
-
-            # Process the responses received from the remote scp:
-            for status, identifier in responses:
-                if self._abort_move:
-                    logger.error(f"_move_study study_uid: {study_uid} aborted")
-                    move_association.abort()
-                    while not ux_Q.empty():
-                        ux_Q.get()
-                    return
-
-                if not status or status.Status not in (
-                    C_SUCCESS,
-                    C_PENDING_A,
-                    C_PENDING_B,
-                ):
-                    if not status:
-                        raise ConnectionError(
-                            "Connection timed out, was aborted, or received an invalid response"
-                        )
-                    else:
-                        raise DICOMRuntimeError(
-                            f"C-MOVE Failed: {QR_MOVE_SERVICE_CLASS_STATUS[status.Status][1]}"
-                        )
-
-                # Add the study_uid to the status dataset:
-                status.StudyInstanceUID = study_uid
-                ux_Q.put(status)
-
-        except (
-            ConnectionError,
-            TimeoutError,
-            RuntimeError,
-            ValueError,
-            AttributeError,
-            DICOMRuntimeError,
-        ) as e:
-            # Reflect status dataset back to UX client to provide find error detail
-            error_msg = str(e)  # latch exception error msg
-            logger.error(error_msg)
-            if ux_Q:
-                ds = Dataset()
-                ds.Status = C_FAILURE
-                ds.ErrorComment = error_msg
-                ds.StudyInstanceUID = study_uid
-                ux_Q.put(ds)
-
-        finally:
-            # Release the association
-            if move_association:
-                move_association.release()
-
-    # Manage bulk patient move using a thread pool:
-    def _manage_move(self, req: MoveRequest) -> None:
-        self._move_futures = []
-
-        self._move_executor = ThreadPoolExecutor(
-            max_workers=self._study_move_thread_pool_size
-        )
-
-        with self._move_executor as executor:
-            for i in range(len(req.study_uids)):
-                future = executor.submit(
-                    self._move_study,
-                    req.scp_name,
-                    req.dest_scp_ae,
-                    req.study_uids[i],
-                    req.ux_Q,
-                )
-                self._move_futures.append(future)
-
-            logger.info(f"Move Futures: {len(self._move_futures)}")
-
-            # Check for exceptions in the completed futures
-            for future in self._move_futures:
-                try:
-                    # This will raise any exceptions that _move_study may have raised:
-                    future.result()
-                except Exception as e:
-                    # Handle specific exceptions if needed
-                    if not self._abort_move:
-                        logger.error(f"Exception caught in _manage_movefuture: {e}")
-
-        logger.info("_manage_move complete")
-
-    # Non-blocking Move Studies:
-    def move_studies(self, mr: MoveRequest) -> None:
-        self._abort_move = False
-        threading.Thread(
-            target=self._manage_move,
-            args=(mr,),
-            daemon=True,
-        ).start()
-
-    def abort_move(self):
-        logger.info("Abort Move")
-        self._abort_move = True
-        # logger.info("Cancel Futures")
-        # for future in self._move_futures:
-        #     future.cancel()
-        if self._move_executor:
-            self._move_executor.shutdown(wait=True, cancel_futures=True)
-            logger.info("Move futures cancelled and executor shutdown")
-            self._move_executor = None
 
     def create_phi_csv(self) -> Path | str:
         logger.info("Create PHI CSV")

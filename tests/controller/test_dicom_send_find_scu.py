@@ -317,3 +317,62 @@ def test_export_4_patients_to_test_pacs(temp_dir: str, controller: ProjectContro
 
 # TODO: test export: active storage directory not set, invalid patient directory, valid dir but not files, connection error, invalid response from PACS
 # TODO: test retry mechanism for failed export
+
+def test_find_series_uids(temp_dir: str, controller: ProjectController):
+    dsets: list[Dataset] = send_files_to_scp(
+        CR_STUDY_3_SERIES_3_IMAGES, True, controller
+    )
+    ds_series_uids = [dset.SeriesInstanceUID for dset in dsets]
+    assert len(ds_series_uids) == 3
+    verify_files_sent_to_pacs_simulator(dsets, temp_dir, controller)
+    result_series_uids = controller.find_uids(PACSSimulatorSCP.aet, dsets[0].StudyInstanceUID, True)
+    assert len(result_series_uids) == 3
+    assert set(result_series_uids) == set(ds_series_uids)
+
+def test_find_instance_uids(temp_dir: str, controller: ProjectController):
+    dsets: list[Dataset] = send_files_to_scp(
+        CR_STUDY_3_SERIES_3_IMAGES, True, controller
+    )
+    ds_instance_uids = [dset.SOPInstanceUID for dset in dsets]
+    assert len(ds_instance_uids) == 3
+    verify_files_sent_to_pacs_simulator(dsets, temp_dir, controller)
+    result_instance_uids = controller.find_uids(PACSSimulatorSCP.aet, dsets[0].StudyInstanceUID, False)
+    assert len(result_instance_uids) == 3
+    assert set(result_instance_uids) == set(ds_instance_uids)
+
+def test_find_series_instance_uids(temp_dir: str, controller: ProjectController):
+    # Send 3 studies to TEST PACS
+    ds1: Dataset = send_file_to_scp(ct_small_filename, True, controller)
+    ds2: Dataset = send_file_to_scp(mr_small_filename, True, controller)
+    ds3: list[Dataset] = send_files_to_scp(
+        MR_STUDY_3_SERIES_11_IMAGES, True, controller
+    )
+    dsets = [ds1, ds2] + ds3
+    ds_series_uids = set([dset.SeriesInstanceUID for dset in dsets])
+    ds_instance_uids = [dset.SOPInstanceUID for dset in dsets]
+    assert len(ds_series_uids) == 5
+    assert len(ds_instance_uids) == 13
+
+    verify_files_sent_to_pacs_simulator(dsets, temp_dir, controller)
+    
+    ds1_series_uids = controller.find_uids(PACSSimulatorSCP.aet, ds1.StudyInstanceUID, True)
+    assert len(ds1_series_uids) == 1
+    ds2_series_uids = controller.find_uids(PACSSimulatorSCP.aet, ds2.StudyInstanceUID, True)
+    assert len(ds2_series_uids) == 1
+    ds3_series_uids = set(controller.find_uids(PACSSimulatorSCP.aet, ds3[0].StudyInstanceUID, True))
+    assert len(ds3_series_uids) == 3
+
+    assert set(ds1_series_uids) == set([ds1.SeriesInstanceUID])
+    assert set(ds2_series_uids) == set([ds2.SeriesInstanceUID])
+    assert set(ds3_series_uids) == set([dset.SeriesInstanceUID for dset in ds3])
+
+    ds1_instance_uids = controller.find_uids(PACSSimulatorSCP.aet, ds1.StudyInstanceUID, False)
+    assert len(ds1_instance_uids) == 1
+    ds2_instance_uids = controller.find_uids(PACSSimulatorSCP.aet, ds2.StudyInstanceUID, False)
+    assert len(ds2_instance_uids) == 1
+    ds3_instance_uids = controller.find_uids(PACSSimulatorSCP.aet, ds3[0].StudyInstanceUID, False)
+    assert len(ds3_instance_uids) == 11
+
+    assert set(ds1_instance_uids) == set([ds1.SOPInstanceUID])
+    assert set(ds2_instance_uids) == set([ds2.SOPInstanceUID])
+    assert set(ds3_instance_uids) == set([dset.SOPInstanceUID for dset in ds3])

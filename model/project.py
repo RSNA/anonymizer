@@ -82,11 +82,11 @@ def default_remote_scps() -> Dict[str, DICOMNode]:
 def default_aws_cognito() -> AWSCognito:
     return AWSCognito(
         region_name="<region_name>",
-        client_id="<client_id>",
-        s3_bucket="<s3_bucket>",
-        s3_prefix="uploads/",
-        username="test_user",
-        password="",
+        client_id="46ugbt3jat1spc70ulio46btmc",
+        s3_bucket="amplify-datauploader-prodmi-stagingbucketeec2e4de-x4qrvyzen65z",
+        s3_prefix="private",
+        username="anonymizer",
+        password="P^l-8n+(ha?$6*&3",
     )
 
 
