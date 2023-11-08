@@ -9,12 +9,12 @@ import pandas as pd
 from tkinter import ttk
 from controller.dicom_C_codes import C_PENDING_A, C_PENDING_B, C_SUCCESS, C_FAILURE
 from utils.translate import _
-from utils.storage import images_stored
+from utils.storage import count_study_images
 from utils.ux_fields import (
     str_entry,
     patient_name_max_chars,
     patient_id_max_chars,
-    accession_no_max_chars, # disabled on entry to allow for list
+    accession_no_max_chars,  # disabled on entry to allow for list
     dicom_date_chars,
     modality_max_chars,
     modality_min_chars,
@@ -29,8 +29,9 @@ from controller.project import (
 
 logger = logging.getLogger(__name__)
 
+
 class QueryView(tk.Toplevel):
-#class QueryView(ctk.CTkToplevel):
+    # class QueryView(ctk.CTkToplevel):
     ux_poll_find_response_interval = 250  # milli-seconds
     ux_poll_move_response_interval = 500  # milli-seconds
 
@@ -49,7 +50,7 @@ class QueryView(tk.Toplevel):
         # not a dicom field, for display only:
         "Imported": (_("Imported"), 10, True),
         # not for display, for find/move:
-        "StudyInstanceUID": (_("StudyInstanceUID"), 0, False), 
+        "StudyInstanceUID": (_("StudyInstanceUID"), 0, False),
     }
     _tree_column_keys = list(_attr_map.keys())[:-1]
 
@@ -213,7 +214,7 @@ class QueryView(tk.Toplevel):
         self._results_frame.grid_columnconfigure(7, weight=1)
 
         # Managing C-FIND results Treeview:
-        
+
         # Create a custom style for the Treeview
         # TODO: see if theme manager can do this and store in rsna_color_scheme_font.json
         # # if bg_color=="default":
@@ -310,7 +311,7 @@ class QueryView(tk.Toplevel):
 
     def busy(self):
         return self._query_active or self._move_active
-    
+
     def _disable_action_buttons(self):
         logger.info(f"_disable_action_buttons")
         self._load_accession_file_button.configure(state="disabled")
@@ -377,7 +378,7 @@ class QueryView(tk.Toplevel):
         while not ux_Q.empty():
             try:
                 resp: FindResponse = ux_Q.get_nowait()
-                #logger.debug(f"{resp}")
+                # logger.debug(f"{resp}")
                 if resp.status.Status in [C_PENDING_A, C_PENDING_B, C_SUCCESS]:
                     if resp.identifier:
                         results.append(resp.identifier)
@@ -390,9 +391,7 @@ class QueryView(tk.Toplevel):
                     if self._query_active:  # not aborted
                         messagebox.showerror(
                             title=_("Query Remote Server Error: "),
-                            message=_(
-                                f"{resp.status.ErrorComment}"
-                            ),
+                            message=_(f"{resp.status.ErrorComment}"),
                             parent=self,
                         )
 
@@ -402,6 +401,8 @@ class QueryView(tk.Toplevel):
                 logger.info("Queue is empty")
             except Full:
                 logger.error("Queue is full")
+            # except Exception as e:
+            #     logger.error(f"Exception: {e}")
 
         # Create Pandas DataFrame from results and display in Treeview:
         if results:
@@ -452,14 +453,14 @@ class QueryView(tk.Toplevel):
                         )
                     )
 
-                    # TODO: investigate errors (hanging and blank box) when using standard form of CTkMessagebox
+                    # TODO: implement custom message box with title bar and icons
                     # OSX window manager does not show title bar for messagebox and does not show error icon
                     messagebox.showwarning(
                         title=_("Accession Numbers not found"),
                         message=_(
                             f"Accession Numbers not found were written to text file:\n {not_found_file_path}"
                         ),
-                        parent=self
+                        parent=self,
                     )
 
             self._acc_no_file_path = None
@@ -493,7 +494,7 @@ class QueryView(tk.Toplevel):
             messagebox.showerror(
                 title=_("Connection Error"),
                 message=_(f"Query Server Failed DICOM C-ECHO"),
-                parent=self
+                parent=self,
             )
             return
 
@@ -603,18 +604,27 @@ class QueryView(tk.Toplevel):
                 text=f"Processing {self._studies_processed} of {self._studies_to_process} Studies Selected"
             )
 
-    def _update_imported_count(self):
-        # Iterate through tree and update imported count for unfinished studies
-        tree_items = self._tree.get_children()
-        for study_uid in tree_items:
+    def _update_imported_count(self, study_uid=None):
+        def _parse_tree_item(self, study_uid):
+            current_values = list(self._tree.item(study_uid, "values"))
+            return (
+                current_values[self._tree_column_keys.index("PatientID")],
+                int(
+                    current_values[
+                        self._tree_column_keys.index("NumberOfStudyRelatedInstances")
+                    ]
+                ),
+            )
+
+        uids = self._tree.get_children() if not study_uid else [study_uid]
+        for study_uid in uids:
             if study_uid in self._study_uids_to_import:
                 current_values = list(self._tree.item(study_uid, "values"))
-                instances_to_import = int(current_values[self._tree_column_keys.index("NumberOfStudyRelatedInstances")])
-                files_imported = self._images_already_stored_count(
-                    study_uid, 
-                    current_values[self._tree_column_keys.index("PatientID")], 
-                    current_values[self._tree_column_keys.index("AccessionNumber")])
-                current_values[self._tree_column_keys.index("Imported")] = str(files_imported)
+                pid, instances_to_import = _parse_tree_item(self, study_uid)
+                files_imported = self._images_stored_phi_lookup(pid, study_uid)
+                current_values[self._tree_column_keys.index("Imported")] = str(
+                    files_imported
+                )
                 self._tree.item(study_uid, values=current_values)
                 if files_imported >= instances_to_import:
                     logging.info(f"Study {study_uid} marked GREEN, all images imported")
@@ -626,7 +636,7 @@ class QueryView(tk.Toplevel):
             try:
                 # TODO: do this in batches
                 resp: Dataset = ux_Q.get_nowait()
-                logger.debug(f"{resp}")
+                # logger.debug(f"{resp}")
 
                 # Terminate move operation if an incomplete response is received:
                 if not hasattr(resp, "StudyInstanceUID"):
@@ -637,7 +647,7 @@ class QueryView(tk.Toplevel):
                     messagebox.showerror(
                         title=_("Move Error"),
                         message=f"Terminate move operation, fatal error detected: {resp}",
-                        parent=self
+                        parent=self,
                     )
                     return
 
@@ -646,27 +656,38 @@ class QueryView(tk.Toplevel):
                 if resp.Status == C_FAILURE:
                     self._tree.selection_remove(resp.StudyInstanceUID)
                     self._tree.item(resp.StudyInstanceUID, tags="red")
-                    logger.error(f"Study {resp.StudyInstanceUID} marked RED, Error: {resp.ErrorComment}")
+                    logger.error(
+                        f"Study {resp.StudyInstanceUID} marked RED, Error: {resp.ErrorComment}"
+                    )
                     self._studies_processed += 1
                     self._update_move_progress()
                 else:
-                    self._update_imported_count()
+                    self._update_imported_count(resp.StudyInstanceUID)
                     if resp.Status == C_SUCCESS:
                         self._tree.selection_remove(resp.StudyInstanceUID)
-                        logger.info(f"Study Move Complete: uid:{resp.StudyInstanceUID}, completed:{resp.NumberOfCompletedSuboperations}, failed:{resp.NumberOfFailedSuboperations}")   
+                        logger.info(
+                            f"Study Move Complete: uid:{resp.StudyInstanceUID}, completed:{resp.NumberOfCompletedSuboperations}, failed:{resp.NumberOfFailedSuboperations}"
+                        )
                         self._studies_processed += 1
                         self._update_move_progress()
 
                 if self._studies_processed >= self._studies_to_process:
-                    logger.info(f"Full Move Complete, studies processed: {self._studies_processed}, studies not yet imported: {len(self._study_uids_to_import)}")
+                    self._update_imported_count()  # check all studies processed
+                    logger.info(
+                        f"Full Move Complete, studies processed: {self._studies_processed}, studies not yet imported: {len(self._study_uids_to_import)}"
+                    )
                     self._move_active = False
                     self._enable_action_buttons()
                     return
+
+                ux_Q.task_done()
 
             except Empty:
                 logger.info("Queue is empty")
             except Full:
                 logger.error("Queue is full")
+            # except Exception as e:
+            #     logger.error(f"Exception: {e}")
 
         # Re-trigger monitor callback:
         self._tree.after(
@@ -731,26 +752,21 @@ class QueryView(tk.Toplevel):
             ux_Q,
         )
 
-    def _images_already_stored_count(self, phi_study_uid, phi_patient_id, phi_acc_no):
-        images_stored_count = 0
-        anon_study_uid = self._controller.anonymizer.model.get_anon_uid(
-            phi_study_uid
-        )
+    def _images_stored_phi_lookup(self, phi_patient_id: str, phi_study_uid: str) -> int:
+        image_count = 0
+        anon_study_uid = self._controller.anonymizer.model.get_anon_uid(phi_study_uid)
         if anon_study_uid:
             anon_pt_id = self._controller.anonymizer.model.get_anon_patient_id(
                 phi_patient_id
             )
-            anon_acc_no = self._controller.anonymizer.model.get_anon_acc_no(
-                phi_acc_no
-            )
-            if anon_pt_id and anon_acc_no:
-                images_stored_count = images_stored(
+            assert anon_pt_id is not None
+            if anon_pt_id:
+                image_count = count_study_images(
                     self._controller.storage_dir,
                     anon_pt_id,
                     anon_study_uid,
-                    anon_acc_no,
                 )
-        return images_stored_count
+        return image_count
 
     def _update_treeview_data(self, data: pd.DataFrame):
         # Insert new data
@@ -766,7 +782,9 @@ class QueryView(tk.Toplevel):
                 val for col, val in row.items() if col != "StudyInstanceUID"
             ]
 
-            images_stored_count = self._images_already_stored_count(row["StudyInstanceUID"], row["Patient ID"], row["Accession No."])
+            images_stored_count = self._images_stored_phi_lookup(
+                row["StudyInstanceUID"], row["Patient ID"]
+            )
             display_values.append(str(images_stored_count))
 
             try:

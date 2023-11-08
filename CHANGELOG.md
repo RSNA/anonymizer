@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - If local server does start on open project (eg. due to local server start / port open error) then still open project 
 - Product Name = "Anonymizer" across platforms, File Description = "RSNA DICOM Anonymizer"
 - Query & Retrieve import verification by verifying files in store
+- Storage path naming, remove Series and Instance Number dependency, use uids
 
 ### Removed
  - Removed 

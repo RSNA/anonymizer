@@ -128,7 +128,7 @@ class AnonymizerController:
         input_date = datetime.strptime(date, "%Y%m%d")
         # Increment the date by the calculated number of days
         incremented_date = input_date + timedelta(days=days_to_increment)
-        # Format the incremented date as "YYYYMMDD"
+        # Format the incremented date as "YYYYMMDD"s
         formatted_date = incremented_date.strftime("%Y%m%d")
 
         return days_to_increment, formatted_date
@@ -226,7 +226,7 @@ class AnonymizerController:
 
             while not ds_Q.empty():
                 logger.debug(
-                    "_anonymize_worker processing batch size: {self._anonymize_batch_size}}"
+                    f"_anonymize_worker processing batch size: {self._anonymize_batch_size}"
                 )
                 batch = []
                 for _ in range(
@@ -236,7 +236,7 @@ class AnonymizerController:
                         batch.append(ds_Q.get())
 
                 for item in batch:
-                    source, ds, dir = item  
+                    source, ds, dir = item
 
                     # Load dataset from file if not provided: (eg. via local file/dir import)
                     if ds is None:
@@ -263,7 +263,7 @@ class AnonymizerController:
                             )
                             continue
 
-                    #TOOO: add Trace level?            
+                    # TOOO: add Trace level?
                     # logger.debug(f"PHI:\n{ds}")
 
                     # Capture PHI and store for new studies:
@@ -294,14 +294,12 @@ class AnonymizerController:
                     block.add_new(0x2, "SH", self.project_model.trial_name)
                     block.add_new(0x3, "SH", self.project_model.site_id)
 
-                    #logger.debug(f"ANON:\n{ds}")
+                    # logger.debug(f"ANON:\n{ds}")
 
                     # TODO: custom filtering via script specifying dicom field patterns to keep / quarantine / discard
                     # Save anonymized dataset to dicom file in local storage:
                     filename = local_storage_path(dir, ds)
-                    logger.info(
-                        f"ANON STORE: {source} => {filename}"
-                    )
+                    logger.info(f"ANON STORE: {source} => {filename}")
                     try:
                         ds.save_as(filename, write_like_original=False)
                     except Exception as exception:

@@ -6,10 +6,7 @@ from controller.project import ProjectController
 from utils.translate import _
 from utils.storage import count_studies_series_images
 
-
 logger = logging.getLogger(__name__)
-
-
 
 class Dashboard(ctk.CTkFrame):
     dashboard_update_interval = 500  # milliseconds

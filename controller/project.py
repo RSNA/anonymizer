@@ -249,7 +249,6 @@ class ProjectController(AE):
         # if self._move_futures:
         #     logger.error("Aborting move futures")
         #     self._abort_move = True
-        
 
     # DICOM C-ECHO Verification event handler (EVT_C_ECHO):
     def _handle_echo(self, event: Event):
@@ -308,8 +307,10 @@ class ProjectController(AE):
         if self.anonymizer.model.get_anon_uid(ds.SOPInstanceUID):
             logger.info(f"Instance already stored: {ds.PatientID} {ds.SOPInstanceUID}")
             return C_SUCCESS
-        
-        logger.info(f"=>{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}")
+
+        logger.info(
+            f"=>{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}"
+        )
 
         self.anonymizer.anonymize_dataset_and_store(remote_scu, ds, self.storage_dir)
         return C_SUCCESS
@@ -381,7 +382,7 @@ class ProjectController(AE):
             raise
 
         return association
-        
+
     def echo(self, scp: str | DICOMNode) -> bool:
         logger.info(f"Perform C-ECHO from {self.model.scu} to {scp}")
         association = None
@@ -418,7 +419,9 @@ class ProjectController(AE):
             logging.info(f"Already authenticated to AWS S3, verify bucket list")
             try:
                 response = self.s3.list_buckets()
-                logging.info(f"Authentication is valid. S3 buckets:", response['Buckets'])
+                logging.info(
+                    f"Authentication is valid. S3 buckets:", response["Buckets"]
+                )
                 return True
             except Exception as e:
                 logging.error("s3_list_buckets failed. Error:", e)
@@ -440,20 +443,26 @@ class ProjectController(AE):
                 msg = _("User needs to set a new password")
                 logging.error(msg)
                 return False, msg
-            
+
             if "ChallengeName" in response:
-                msg = _(f"Unexpected Authorisation Challenge : {response['ChallengeName']}")
+                msg = _(
+                    f"Unexpected Authorisation Challenge : {response['ChallengeName']}"
+                )
                 logging.error(msg)
-                return False, msg 
-            
+                return False, msg
+
             if "AuthenticationResult" not in response:
                 logging.error(f"AuthenticationResult not in response: {response}")
-                return False, _("AWS Cognito authorisation failed\n Authentication Result & Access Token not in response")
-            
+                return False, _(
+                    "AWS Cognito authorisation failed\n Authentication Result & Access Token not in response"
+                )
+
             if "AccessToken" not in response["AuthenticationResult"]:
                 logging.error(f"AccessToken not in response: {response}")
-                return False, _("AWS Cognito authorisation failed\n Access Token not in response")
-            
+                return False, _(
+                    "AWS Cognito authorisation failed\n Access Token not in response"
+                )
+
             session_token = response["AuthenticationResult"]["AccessToken"]
 
             response = cognito_client.get_user(AccessToken=session_token)
@@ -461,12 +470,11 @@ class ProjectController(AE):
             logger.info(f"Cognito Authentication successful. User Details: {response}")
 
             return True, None
-        
+
         except Exception as e:
             msg = _(f"AWS Authentication failed: {str(e)}")
             logging.error(msg)
             return False, msg
-    
 
     # Blocking send
     def send(self, file_paths: list[str], scp_name: str, send_contexts=None):
@@ -548,7 +556,7 @@ class ProjectController(AE):
                     raise ConnectionError(
                         "Connection timed out (DIMSE or IDLE), was aborted, or received an invalid response"
                     )
-                
+
                 if status.Status not in (
                     C_SUCCESS,
                     C_PENDING_A,
@@ -558,12 +566,11 @@ class ProjectController(AE):
                     raise DICOMRuntimeError(
                         f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status]}"
                     )
-               
+
                 if status.Status == C_SUCCESS:
                     logger.info("C-FIND query success")
 
                 if identifier:
-
                     if verify_attributes:
                         missing_attributes = self._missing_query_result_attributes(
                             identifier
@@ -687,11 +694,11 @@ class ProjectController(AE):
                         raise DICOMRuntimeError(
                             f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}"
                         )
-                    
+
                     if identifier:
                         if verify_attributes:
-                            missing_attributes = (
-                                self._missing_query_result_attributes(identifier)
+                            missing_attributes = self._missing_query_result_attributes(
+                                identifier
                             )
                             if missing_attributes != []:
                                 logger.error(
@@ -801,7 +808,9 @@ class ProjectController(AE):
         logger.info("Abort Query")
         self._abort_query = True
 
-    def find_uids(self, scp_name: str, study_uid: str, find_series: bool) -> list[str] | None:
+    def find_uids(
+        self, scp_name: str, study_uid: str, find_series: bool
+    ) -> list[str] | None:
         assert scp_name in self.model.remote_scps
         scp = self.model.remote_scps[scp_name]
         logger.info(
@@ -814,7 +823,7 @@ class ProjectController(AE):
             ds.SeriesInstanceUID = ""
         else:
             ds.SOPInstanceUID = ""
-        
+
         results = []
         query_association = None
         self._abort_query = False
@@ -844,14 +853,16 @@ class ProjectController(AE):
                     raise DICOMRuntimeError(
                         f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status]}"
                     )
-                
+
                 if status.Status == C_SUCCESS:
                     logger.info("C-FIND query success")
 
                 if identifier:
-                    results.append(identifier.SeriesInstanceUID) if find_series else results.append(identifier.SOPInstanceUID)
+                    results.append(
+                        identifier.SeriesInstanceUID
+                    ) if find_series else results.append(identifier.SOPInstanceUID)
 
-        except Exception as e: 
+        except Exception as e:
             logger.error(str(e))
 
         finally:
@@ -860,7 +871,7 @@ class ProjectController(AE):
 
         if len(results) == 0:
             logger.info(f"No uids found for {study_uid}")
-        
+
         return results
 
     # Blocking Move Study:
@@ -904,7 +915,6 @@ class ProjectController(AE):
 
             # Process the responses received from the remote scp:
             for status, identifier in responses:
-
                 if self._abort_move:
                     logger.error(f"_move_study study_uid: {study_uid} aborted")
                     move_association.abort()
@@ -912,12 +922,13 @@ class ProjectController(AE):
                         ux_Q.get()
                     return
 
-                
                 if not status:
                     raise ConnectionError(
-                        _(f"Connection timed out or aborted moving study_uid: {study_uid}")
+                        _(
+                            f"Connection timed out or aborted moving study_uid: {study_uid}"
+                        )
                     )
-                    
+
                 if status.Status not in (
                     C_SUCCESS,
                     C_PENDING_A,
@@ -929,7 +940,7 @@ class ProjectController(AE):
                     raise DICOMRuntimeError(
                         f"C-MOVE Failed: {QR_MOVE_SERVICE_CLASS_STATUS[status.Status][1]}"
                     )
-                
+
                 if status.Status == C_SUCCESS:
                     logger.info(f"C-MOVE success study_uid: {study_uid}")
 
@@ -1014,7 +1025,7 @@ class ProjectController(AE):
             self._move_executor.shutdown(wait=True, cancel_futures=True)
             logger.info("Move futures cancelled and executor shutdown")
             self._move_executor = None
-    
+
     def _export_patient(self, dest_name: str, patient_id: str, ux_Q: Queue) -> None:
         logger.debug(f"_export_patient {patient_id} start to {dest_name}")
 

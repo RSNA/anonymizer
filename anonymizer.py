@@ -38,16 +38,20 @@ logger = logging.getLogger()  # ROOT logger
 APP_TITLE = _("RSNA DICOM Anonymizer BETA Version " + __version__)
 THEME_FILE = "assets/themes/rsna_theme.json"
 
+
 class App(ctk.CTk):
     project_open_startup_dwell_time = 500  # milliseconds
-    menu_font=("", 13) 
+    menu_font = ("", 13)
 
     def new_project(self):
         logging.info("New Project")
         self.disable_file_menu()
 
         dlg = SettingsDialog(
-            parent=self, model=ProjectModel(), new_model=True, title=_("New Project Settings")
+            parent=self,
+            model=ProjectModel(),
+            new_model=True,
+            title=_("New Project Settings"),
         )
         self._model = dlg.get_input()
         if self._model is None:
@@ -88,9 +92,8 @@ class App(ctk.CTk):
             messagebox.showerror(
                 title=_("Open Project Error"),
                 message=f"Project file not found in: {path}",
-                parent=self
+                parent=self,
             )
-    
 
         self.enable_file_menu()
 
@@ -113,15 +116,13 @@ class App(ctk.CTk):
             self._project_controller.start_scp()
         except DICOMRuntimeError as e:
             messagebox.showerror(
-                title=_("Local DICOM Server Error"),
-                message=str(e),
-                parent=self
+                title=_("Local DICOM Server Error"), message=str(e), parent=self
             )
 
         self.title(
             f"{self._model.project_name}[{self._model.site_id}] => {self._model.abridged_storage_dir()}"
         )
-        
+
         self._welcome_view.destroy()
         self._dashboard = Dashboard(self, self._project_controller)
         self.protocol("WM_DELETE_WINDOW", self.close_project)
@@ -129,9 +130,6 @@ class App(ctk.CTk):
 
     def close_project(self, event=None):
         logging.info("Close Project")
-        if self._dashboard:
-            self._dashboard.destroy()
-            self._dashboard = None
         if self._query_view and self._query_view.busy():
             logger.info(f"QueryView busy, cannot close project")
             messagebox.showerror(
@@ -139,7 +137,7 @@ class App(ctk.CTk):
                 message=_(
                     f"Query is busy, please wait for query to complete before closing project."
                 ),
-                parent=self
+                parent=self,
             )
             return
         if self._export_view and self._export_view.busy():
@@ -149,9 +147,12 @@ class App(ctk.CTk):
                 message=_(
                     f"Export is busy, please wait for export to complete before closing project."
                 ),
-                parent=self
+                parent=self,
             )
             return
+        if self._dashboard:
+            self._dashboard.destroy()
+            self._dashboard = None
         if self._project_controller:
             self._project_controller.shutdown()
             self._project_controller.save_model()
@@ -163,11 +164,11 @@ class App(ctk.CTk):
             if self._export_view:
                 self._export_view.destroy()
                 self._export_view = None
-            
+
             self._welcome_view = WelcomeView(self)
             self.protocol("WM_DELETE_WINDOW", self.quit)
             self.focus_force()
-            
+
         self._project_controller = None
         self.set_menu_project_closed()
 
@@ -211,20 +212,20 @@ class App(ctk.CTk):
 
         if not root_dir:
             logger.info(f"Import Directory Cancelled")
-            return  
+            return
 
         file_paths = [
             os.path.join(root, file)
             for root, _, files in os.walk(root_dir)
             for file in files
-            if not file.startswith(".") # and is_dicom(os.path.join(root, file))
+            if not file.startswith(".")  # and is_dicom(os.path.join(root, file))
         ]
         if len(file_paths) == 0:
             logger.info(f"No DICOM files found in {root_dir}")
             messagebox.showerror(
                 title=_("Import Directory Error"),
                 message=f"No DICOM files found in {root_dir}",
-                parent=self
+                parent=self,
             )
             return
         logger.info(f"Importing {len(file_paths)} files, adding to anonymizer Q")
@@ -277,7 +278,7 @@ class App(ctk.CTk):
                 message=_(
                     f"Query is busy, please wait for query to complete before changing settings."
                 ),
-                parent=self
+                parent=self,
             )
             return
         if self._export_view and self._export_view.busy():
@@ -287,7 +288,7 @@ class App(ctk.CTk):
                 message=_(
                     f"Export is busy, please wait for export to complete before changing settings."
                 ),
-                parent=self
+                parent=self,
             )
             return
         dlg = SettingsDialog(self, self._model, title=_("Project Settings"))
@@ -308,9 +309,9 @@ class App(ctk.CTk):
     def instructions(self):
         if self._instructions_view and self._instructions_view.winfo_exists():
             logger.info(f"Instructions HTMLView already OPEN")
-            self._instructions_view.deiconify()  
-            return 
-        
+            self._instructions_view.deiconify()
+            return
+
         logging.info("OPEN Instructions HTMLView")
         self._instructions_view = HTMLView(
             self,
@@ -318,7 +319,7 @@ class App(ctk.CTk):
             html_file_path="assets/html/instructions.html",
         )
         self._instructions_view.focus()
-        
+
     def view_license(self):
         if self._license_view and self._license_view.winfo_exists():
             logger.info(f"License HTMLView already OPEN")
@@ -336,18 +337,21 @@ class App(ctk.CTk):
 
     def get_help_menu(self):
         help_menu = tk.Menu(self.menu_bar, tearoff=0)
-        help_menu.add_command(label=_("Instructions"), font=self.menu_font, command=self.instructions)
-        help_menu.add_command(label=_("View License"), font=self.menu_font, command=self.view_license)
+        help_menu.add_command(
+            label=_("Instructions"), font=self.menu_font, command=self.instructions
+        )
+        help_menu.add_command(
+            label=_("View License"), font=self.menu_font, command=self.view_license
+        )
         return help_menu
 
     def set_menu_project_closed(self):
-        
         # Setup menu bar:
         if hasattr(self, "menu_bar"):
             self.menu_bar.destroy()
 
         # font does not effect main menu items, only sub-menus on windows
-        self.menu_bar = tk.Menu(master=self) 
+        self.menu_bar = tk.Menu(master=self)
 
         # File Menu:
         file_menu = tk.Menu(self, tearoff=0)
@@ -435,7 +439,9 @@ class App(ctk.CTk):
             theme = "dark-blue"
         ctk.set_default_color_theme(theme)
         if sys.platform.startswith("win"):
-            self.iconbitmap("assets\\images\\rsna_icon.ico", default="assets\\images\\rsna_icon.ico") 
+            self.iconbitmap(
+                "assets\\images\\rsna_icon.ico", default="assets\\images\\rsna_icon.ico"
+            )
 
         self._project_controller: ProjectController = None
         self._model: ProjectModel = None
