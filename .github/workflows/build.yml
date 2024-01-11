@@ -17,7 +17,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [macos-latest]
 
     steps:
     - name: Checkout repository
@@ -48,7 +48,7 @@ jobs:
         elif [ "${{ matrix.os }}" == "windows-latest" ]; then
           pipenv run python build_win.py
         elif [ "${{ matrix.os }}" == "macos-latest" ]; then
-          pipenv run pyinstaller --noconfirm --target-arch universal2 --onedir --windowed --add-data "assets:assets" --icon assets/images/rsna_icon.icns -n "Anonymizer" anonymizer.py
+          pipenv run pyinstaller --noconfirm --onedir --windowed --add-data "assets:assets" --icon assets/images/rsna_icon.icns -n "Anonymizer" anonymizer.py
         fi
       
     - name: Upload Artifact for ${{ matrix.os }}
