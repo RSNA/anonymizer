@@ -17,7 +17,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-latest]
+        os: [ubuntu-22.04, macos-11, windows-2022]
 
     steps:
     - name: Checkout repository
@@ -56,8 +56,7 @@ jobs:
       with:
         name: anonymizer-${{ matrix.os }}.zip
         path: 'dist'
-        compression-level: 9
         if-no-files-found: error
-        retention-days: 7
+        retention-days: 2
       
 
