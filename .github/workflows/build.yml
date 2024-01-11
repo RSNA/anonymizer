@@ -55,7 +55,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: anonymizer-${{ matrix.os }}.zip
-        path: dist
+        path: ${{ matrix.os == 'macos-latest' && 'dist/Anonymizer.app' || 'dist' }}
         if-no-files-found: error
         retention-days: 7
       
