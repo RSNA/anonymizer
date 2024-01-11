@@ -17,7 +17,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-22.04, windows-2022, macos-11]
+        os: [ubuntu-22.04, windows-latest, macos-11]
 
     steps:
     - name: Checkout repository
@@ -45,7 +45,7 @@ jobs:
       run: |
         if [ "${{ matrix.os }}" == "ubuntu-22.04" ]; then
           pipenv run pyinstaller --noconfirm --onedir --windowed --add-data "assets:assets" --icon assets/images/rsna_icon.png --name "Anonymizer" anonymizer.py
-        elif [ "${{ matrix.os }}" == "windows-2022" ]; then
+        elif [ "${{ matrix.os }}" == "windows-latest" ]; then
           pipenv run python build_win.py
         elif [ "${{ matrix.os }}" == "macos-11" ]; then
           pipenv run pyinstaller --noconfirm --onedir --windowed --add-data "assets:assets" --icon assets/images/rsna_icon.icns -n "Anonymizer" anonymizer.py
