@@ -1,30 +1,26 @@
 import logging
 import string
-from queue import Queue, Empty, Full
-from tkinter import messagebox, filedialog
 import tkinter as tk
+from queue import Empty, Full, Queue
+from tkinter import filedialog, messagebox, ttk
+
 import customtkinter as ctk
 from pydicom import Dataset
-import pandas as pd
-from tkinter import ttk
-from controller.dicom_C_codes import C_PENDING_A, C_PENDING_B, C_SUCCESS, C_FAILURE
-from utils.translate import _
+
+from controller.dicom_C_codes import C_FAILURE, C_PENDING_A, C_PENDING_B, C_SUCCESS
+from controller.project import FindRequest, FindResponse, MoveRequest, ProjectController
 from utils.storage import count_study_images
+from utils.translate import _
 from utils.ux_fields import (
-    str_entry,
-    patient_name_max_chars,
-    patient_id_max_chars,
-    accession_no_max_chars,  # disabled on entry to allow for list
+    accession_no_max_chars,
+)  # disabled on entry to allow for list of acc nos
+from utils.ux_fields import (
     dicom_date_chars,
     modality_max_chars,
     modality_min_chars,
-)
-
-from controller.project import (
-    ProjectController,
-    FindRequest,
-    FindResponse,
-    MoveRequest,
+    patient_id_max_chars,
+    patient_name_max_chars,
+    str_entry,
 )
 
 logger = logging.getLogger(__name__)
@@ -96,7 +92,6 @@ class QueryView(tk.Toplevel):
         self._query_frame = ctk.CTkFrame(self)
         self._query_frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nswe")
         # self._query_frame.grid_columnconfigure(7, weight=1)
-        self._query_frame.focus_set()
 
         # Patient Name
         self._patient_name_var = str_entry(
@@ -404,25 +399,13 @@ class QueryView(tk.Toplevel):
             # except Exception as e:
             #     logger.error(f"Exception: {e}")
 
-        # Create Pandas DataFrame from results and display in Treeview:
+        # Display results in Treeview:
         if results:
             logger.debug(f"monitor_query_response: processing {len(results)} results")
             self._studies_processed += len(results)
-            # List the DICOM attributes in the desired order using the keys from the mapping
-            ordered_attrs = list(self._attr_map.keys())
-            data_dicts = [
-                {
-                    self._attr_map[attr][0]: getattr(ds, attr, None)
-                    for attr in ordered_attrs
-                    if hasattr(ds, attr)
-                }
-                for ds in results
-            ]
-            df = pd.DataFrame(data_dicts)
-
             # Update the treeview with the new data
             # if processing accno list, this will remove found accession numbers from the list
-            self._update_treeview_data(df)
+            self._update_treeview_data(results)
 
         # Update UX label for studies found:
         self._update_query_progress()
@@ -768,7 +751,7 @@ class QueryView(tk.Toplevel):
                 )
         return image_count
 
-    def _update_treeview_data(self, data: pd.DataFrame):
+        # def _update_treeview_data(self, data: pd.DataFrame):
         # Insert new data
         logger.debug(f"update_treeview_data items: {len(data)}")
         for _, row in data.iterrows():
@@ -783,7 +766,8 @@ class QueryView(tk.Toplevel):
             ]
 
             images_stored_count = self._images_stored_phi_lookup(
-                row["StudyInstanceUID"], row["Patient ID"]
+                row["Patient ID"],
+                row["StudyInstanceUID"],
             )
             display_values.append(str(images_stored_count))
 
@@ -797,6 +781,43 @@ class QueryView(tk.Toplevel):
                 logger.error(
                     f"Exception: {e}"
                 )  # _tkinter.TclError: Item {iid} already exists
+
+    def _update_treeview_data(self, dicom_datasets: list):
+        logger.debug(f"update_treeview_data items: {len(dicom_datasets)}")
+
+        for dataset in dicom_datasets:
+            # Remove found accession numbers from self._acc_no_list:
+            if self._acc_no_list:
+                acc_no = dataset.get("AccessionNumber", "")
+                if acc_no in self._acc_no_list:
+                    self._acc_no_list.remove(acc_no)
+
+            display_values = []
+
+            for field, (display_name, _, _) in self._attr_map.items():
+                value = getattr(dataset, field, "")
+                display_values.append(str(value))
+
+            images_stored_count = self._images_stored_phi_lookup(
+                dataset.get("PatientID", ""),
+                dataset.get("StudyInstanceUID", ""),
+            )
+            display_values.append(str(images_stored_count))
+
+            try:
+                self._tree.insert(
+                    "",
+                    "end",
+                    iid=dataset.get("StudyInstanceUID", ""),
+                    values=display_values,
+                )
+                if images_stored_count == dataset.get(
+                    "NumberOfStudyRelatedInstances", 0
+                ):
+                    self._tree.item(dataset.get("StudyInstanceUID", ""), tags="green")
+            except Exception as e:
+                logger.error(f"Exception: {e}")
+                # _tkinter.TclError: Item {iid} already exists
 
     def _escape_keypress(self, event):
         logger.info(f"_escape_pressed")

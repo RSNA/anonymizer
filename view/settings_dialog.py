@@ -19,8 +19,9 @@ from view.transfer_syntaxes_dialog import TransferSyntaxesDialog
 
 logger = logging.getLogger(__name__)
 
+
 class SettingsDialog(tk.Toplevel):
-#class SettingsDialog(ctk.CTkToplevel):
+    # class SettingsDialog(ctk.CTkToplevel):
     def __init__(
         self,
         parent,
@@ -40,13 +41,12 @@ class SettingsDialog(tk.Toplevel):
         self.bind("<Escape>", self._escape_keypress)
         # if sys.platform.startswith("win"):
         #     # override CTkTopLevel which sets icon after 200ms
-        #     self.after(300, self._win_post_init) 
+        #     self.after(300, self._win_post_init)
 
     def _win_post_init(self):
         self.iconbitmap("assets\\images\\rsna_icon.ico")
         self.lift()
         self.focus()
-
 
     def _create_widgets(self):
         logger.debug(f"_create_widgets")
@@ -56,11 +56,7 @@ class SettingsDialog(tk.Toplevel):
         uid_max_chars = 30
 
         char_width_px = ctk.CTkFont().measure("A")
-        # validate_entry_cmd = self.register(validate_entry)
-        logger.debug(f"Font Character Width in pixels: ±{char_width_px}")
-
-        # self.columnconfigure(1, weight=1)
-        # self.rowconfigure(3, weight=1)
+        logger.debug(f"Font Character Width in pixels: {char_width_px}")
 
         self._frame = ctk.CTkFrame(self)
         self._frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nswe")
@@ -79,7 +75,7 @@ class SettingsDialog(tk.Toplevel):
             col=0,
             pad=PAD,
             sticky="nw",
-            enabled=self.new_model,
+            enabled=False,  # Site ID is auto generated and cannot be changed
         )
         row += 1
 
@@ -360,8 +356,12 @@ class SettingsDialog(tk.Toplevel):
         logger.info(f"Network Timeouts updated: {self.model.network_timeouts}")
 
     def _open_storage_directory_dialog(self):
+        msg = _("Select Storage Directory")
         path = filedialog.askdirectory(
-            parent=self, initialdir=str(self.model.storage_dir), mustexist=False
+            message=msg,
+            initialdir=str(self.model.storage_dir),
+            parent=self,
+            mustexist=False,
         )
         if path:
             self.model.storage_dir = Path(path)

@@ -1,6 +1,7 @@
 # Description: Anonymization of DICOM datasets
 # See https://mircwiki.rsna.org/index.php?title=The_CTP_DICOM_Anonymizer for legacy anonymizer documentation
 import os
+import re
 import time
 import logging
 import threading
@@ -17,35 +18,32 @@ from model.anonymizer import AnonymizerModel
 
 logger = logging.getLogger(__name__)
 
-# TODO: where best to put these string constants?
-# TODO: link to app title & version
-deidentification_method = _("RSNA DICOM ANONYMIZER")
-deidentification_methods = [
-    ("113100", _("Basic Application Confidentiality Profile")),
-    (
-        "113107",
-        _("Retain Longitudinal Temporal Information Modified Dates Option"),
-    ),
-    ("113108", _("Retain Patient Characteristics Option")),
-]
-private_block_name = _("RSNA")
-
 
 class AnonymizerController:
+    # TODO: where best to put these string constants?
+    # TODO: link to app title & version
+    deidentification_method = _("RSNA DICOM ANONYMIZER")
+    deidentification_methods = [
+        ("113100", _("Basic Application Confidentiality Profile")),
+        (
+            "113107",
+            _("Retain Longitudinal Temporal Information Modified Dates Option"),
+        ),
+        ("113108", _("Retain Patient Characteristics Option")),
+    ]
+    private_block_name = _("RSNA")
     default_anon_date = "20000101"  # if source date is invalid or before 19000101
+
     _anonymize_time_slice_interval: float = 0.1  # seconds
     _anonymize_batch_size: int = 40  # number of items to process in a batch
     _clean_tag_translate_table = str.maketrans("", "", "() ,")
     # Required DICOM field attributes for accepting files:
     required_attributes = [
+        "SOPClassUID",
+        "SOPInstanceUID",
         "PatientID",
-        "PatientName",
         "StudyInstanceUID",
-        # "StudyDate",
-        # "AccessionNumber",
-        "Modality",
-        "SeriesNumber",
-        "InstanceNumber",
+        "SeriesInstanceUID",
     ]
 
     def __init__(self, project_model: ProjectModel):
@@ -133,6 +131,34 @@ class AnonymizerController:
 
         return days_to_increment, formatted_date
 
+    def extract_first_digit(self, s):
+        match = re.search(r"\d", s)
+        return match.group(0) if match else None
+
+    def _round_age(self, age_string: str, width: int) -> str | None:
+        if age_string is None:
+            return ""
+
+        age_string = age_string.strip()
+        if len(age_string) == 0:
+            return ""
+
+        try:
+            age_float = float("".join(filter(str.isdigit, age_string))) / width
+            age = round(age_float) * width
+            result = str(age) + "".join(filter(str.isalpha, age_string))
+
+            if len(result) % 2 != 0:
+                result = "0" + result
+
+        except ValueError:
+            logger.error(
+                f"Invalid age string: {age_string}, round_age operation failed, keeping original value"
+            )
+            result = age_string
+
+        return result
+
     # Extract PHI from new study and store:
     def capture_phi_from_new_study(self, phi_ds: Dataset, source: DICOMNode | str):
         def study_from_dataset(ds: Dataset) -> Study:
@@ -164,9 +190,10 @@ class AnonymizerController:
         else:  # Existing patient now with more than one study
             phi = self.model.get_phi(anon_patient_id)
             if phi == None:
-                raise Exception(
-                    f"Existing patient {anon_patient_id} not found in phi_lookup"
-                )
+                msg = f"Existing patient {anon_patient_id} not found in phi_lookup"
+                logger.error(msg)
+                raise RuntimeError(msg)
+
             phi.studies.append(study_from_dataset(phi_ds))
             self.model.set_phi(anon_patient_id, phi)
 
@@ -208,6 +235,23 @@ class AnonymizerController:
         elif "hashdate" in operation:
             _, anon_date = self._hash_date(data_element.value, dataset.PatientID)
             dataset[tag].value = anon_date
+        elif "@round" in operation:
+            # TODO: operand is named round but it is age format specific, should be renamed round_age
+            # create separate operand for round that can be used for other numeric values
+            if value is None:
+                return
+            parameter = self.extract_first_digit(operation.replace("@round", ""))
+            if parameter is None:
+                logger.error(
+                    f"Invalid round operation: {operation}, ignoring operation, return unmodified value"
+                )
+                dataset[tag].value = value
+                return
+            else:
+                width = int(parameter)
+            logger.debug(f"round_age: Age:{value} Width:{width}")
+            dataset[tag].value = self._round_age(value, width)
+            logger.debug(f"round_age: Result:{dataset[tag].value}")
         return
 
     def anonymize_dataset_and_store(
@@ -238,7 +282,7 @@ class AnonymizerController:
                 for item in batch:
                     source, ds, dir = item
 
-                    # Load dataset from file if not provided: (eg. via local file/dir import)
+                    # Load dataset from file if dataset not provided: (eg. via local file/dir import)
                     if ds is None:
                         try:
                             assert os.path.exists(source)
@@ -247,7 +291,7 @@ class AnonymizerController:
                             logger.error(f"dcmread error: {source}: {e}")
                             continue
 
-                        # Ensure dataset has required attributes:
+                        # DICOM Dataset integrity checking:
                         missing_attributes = self.missing_attributes(ds)
                         if missing_attributes != []:
                             logger.error(
@@ -277,11 +321,11 @@ class AnonymizerController:
                     # Handle Global Tags:
                     ds.PatientIdentityRemoved = "YES"  # CS: (0012, 0062)
                     ds.DeidentificationMethod = (
-                        deidentification_method  # LO: (0012,0063)
+                        self.deidentification_method  # LO: (0012,0063)
                     )
                     de_ident_seq = Sequence()  # SQ: (0012,0064)
 
-                    for code, descr in deidentification_methods:
+                    for code, descr in self.deidentification_methods:
                         item = Dataset()
                         item.CodeValue = code
                         item.CodingSchemeDesignator = "DCM"
@@ -289,7 +333,9 @@ class AnonymizerController:
                         de_ident_seq.append(item)
 
                     ds.DeidentificationMethodCodeSequence = de_ident_seq
-                    block = ds.private_block(0x0013, private_block_name, create=True)
+                    block = ds.private_block(
+                        0x0013, self.private_block_name, create=True
+                    )
                     block.add_new(0x1, "SH", self.project_model.project_name)
                     block.add_new(0x2, "SH", self.project_model.trial_name)
                     block.add_new(0x3, "SH", self.project_model.site_id)

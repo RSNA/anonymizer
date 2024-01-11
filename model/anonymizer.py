@@ -42,9 +42,9 @@ class AnonymizerModel:
             # Extract 'e' tags into _tag_keep dictionary
             for e in root.findall("e"):  # type: ignore
                 tag = str(e.attrib.get("t"))
-                operation = e.text if e.text is not None else ""
+                operation = str(e.text) if e.text is not None else ""
                 if "@remove" not in operation:
-                    self._tag_keep[tag] = operation
+                    self._tag_keep[tag]: str = operation
 
             filtered_tag_keep = {k: v for k, v in self._tag_keep.items() if v != ""}
             logger.info(

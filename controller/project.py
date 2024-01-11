@@ -43,7 +43,6 @@ from model.project import (
     DICOMNode,
     NetworkTimeouts,
     DICOMRuntimeError,
-    default_project_filename,
 )
 from .anonymizer import AnonymizerController
 import boto3
@@ -100,6 +99,7 @@ class ProjectController(AE):
         "1.2.840.10008.5.1.4.1.2.2.2",  # Move
         "1.2.840.10008.5.1.4.1.2.2.3",  # Get
     ]
+    _maximum_pdu_size = 0  # no limit
     _handle_store_time_slice_interval = 0.1  # seconds
     _export_file_time_slice_interval = 0.1  # seconds
     _patient_export_thread_pool_size = 4
@@ -143,8 +143,6 @@ class ProjectController(AE):
         # self.require_calling_aet = ["MDEDEV"]
         self.set_radiology_storage_contexts()
         self.set_verification_context()
-        self.maximum_pdu_size = 0  # no limit
-        self._handle_store_time_slice_interval = 0.1  # seconds
         self._reset_scp_vars()
         self.anonymizer = AnonymizerController(model)
 
@@ -171,8 +169,10 @@ class ProjectController(AE):
     def __str__(self):
         return super().__str__() + f"\n{self.model}" + f"\n{self.anonymizer.model}"
 
-    def save_model(self):
-        project_pkl_path = Path(self.model.storage_dir, default_project_filename())
+    def save_model(self, dest_dir: str = None) -> bool:
+        if dest_dir is None:
+            dest_dir = self.model.storage_dir
+        project_pkl_path = Path(dest_dir, ProjectModel.default_project_filename())
         with open(project_pkl_path, "wb") as pkl_file:
             pickle.dump(self.model, pkl_file)
         logger.info(f"Model saved to: {project_pkl_path}")
@@ -285,17 +285,6 @@ class ProjectController(AE):
         logger.debug(remote_scu)
 
         # DICOM Dataset integrity checking:
-        if "SOPClassUID" not in ds:
-            logger.error("Rejecting Instance, SOPClassUID not present in DICOM Header")
-            return C_STORE_DATASET_ERROR
-
-        if "SOPInstanceUID" not in ds:
-            logger.error(
-                "Rejecting Instance, SOPInstanceUID not present in DICOM Header"
-            )
-            return C_STORE_DATASET_ERROR
-
-        # Ensure dataset has required attributes:
         missing_attributes = self.anonymizer.missing_attributes(ds)
         if missing_attributes != []:
             logger.error(
@@ -305,7 +294,7 @@ class ProjectController(AE):
             return C_STORE_DATASET_ERROR
 
         if self.anonymizer.model.get_anon_uid(ds.SOPInstanceUID):
-            logger.info(f"Instance already stored: {ds.PatientID} {ds.SOPInstanceUID}")
+            logger.info(f"Instance already stored:{ds.PatientID}/{ds.SOPInstanceUID}")
             return C_SUCCESS
 
         logger.info(
@@ -616,15 +605,15 @@ class ProjectController(AE):
             logger.info(f"{len(results)} Query results found")
             for result in results:
                 logger.debug(
-                    f"{getattr(result, 'PatientName', 'N/A')}, "
-                    f"{getattr(result, 'PatientID', 'N/A')}, "
-                    f"{getattr(result, 'StudyDate', 'N/A')}, "
+                    # f"{getattr(result, 'PatientName', 'N/A')}, "
+                    # f"{getattr(result, 'PatientID', 'N/A')}, "
+                    # f"{getattr(result, 'StudyDate', 'N/A')}, "
                     f"{getattr(result, 'StudyDescription', 'N/A')}, "
                     f"{getattr(result, 'AccessionNumber', 'N/A')}, "
                     f"{getattr(result, 'ModalitiesInStudy', 'N/A')}, "
                     f"{getattr(result, 'NumberOfStudyRelatedSeries', 'N/A')}, "
                     f"{getattr(result, 'NumberOfStudyRelatedInstances', 'N/A')}, "
-                    f"{getattr(result, 'StudyInstanceUID', 'N/A')} "
+                    # f"{getattr(result, 'StudyInstanceUID', 'N/A')} "
                 )
 
         return results

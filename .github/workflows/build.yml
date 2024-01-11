@@ -1,0 +1,62 @@
+# This workflow will install Python dependencies, run tests and lint with a single version of Python
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+
+name: anonymizer-test-build-upload
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+          python-version: "3.11"
+
+    - name: Install pipenv for virtual environment
+      run: |
+          pip install pipenv
+
+    - name: Install dependencies including development dependencies
+      run: |
+          pipenv install --dev
+    
+    - name: Run Unit Tests within pipenv with pytest and generate coverage report
+      run: |
+        pipenv run coverage run -m pytest tests --log-cli-level=WARN
+        pipenv run coverage report --omit="tests/*" --fail-under=60
+
+    - name: PyInstaller - Build for ${{ matrix.os }}
+      run: |
+        if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+          pipenv run pyinstaller --noconfirm --onedir --windowed --add-data "assets:assets" --icon assets/images/rsna_icon.png --name "Anonymizer" anonymizer.py
+        elif [ "${{ matrix.os }}" == "windows-latest" ]; then
+          pipenv run python build_win.py
+        elif [ "${{ matrix.os }}" == "macos-latest" ]; then
+          pipenv run pyinstaller --noconfirm --target-arch universal2 --onedir --windowed --add-data "assets:assets" --icon assets/images/rsna_icon.icns -n "Anonymizer" anonymizer.py
+        fi
+      if: runner.os == matrix.os
+
+    - name: Upload Artifact for ${{ matrix.os }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: anonymizer-${{ matrix.os }}.zip
+        path: dist
+        if-no-files-found: error
+      if: runner.os == matrix.os
+

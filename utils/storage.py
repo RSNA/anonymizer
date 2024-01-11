@@ -10,30 +10,16 @@ from pydicom import Dataset
 def local_storage_path(base_dir: Path, ds: Dataset) -> Path:
     assert base_dir
     assert hasattr(ds, "PatientID")
-    assert hasattr(ds, "PatientName")
     assert hasattr(ds, "StudyInstanceUID")
-    assert hasattr(ds, "SeriesNumber")
-    assert hasattr(ds, "InstanceNumber")
-    study_uid = str(ds.StudyInstanceUID)
-    if not "." in study_uid:
-        study_uid_suffix = "INVALID_STUDY_UID"
-    else:
-        study_uid_suffix = study_uid.rsplit(".", 1)[-1]
-    if (
-        not hasattr(ds, "AccessionNumber")
-        or ds.AccessionNumber is None
-        or ds.AccessionNumber == ""
-    ):
-        ds.AccessionNumber = "ACC_NO_MISSING"
+    assert hasattr(ds, "SeriesInstanceUID")
+    assert hasattr(ds, "SOPInstanceUID")
+
     dest_path = Path(
         base_dir,
-        str(ds.PatientName),
+        ds.PatientID,
         ds.StudyInstanceUID,
         ds.SeriesInstanceUID,
         ds.SOPInstanceUID + ".dcm",
-        # "Study" + "-" + ds.AccessionNumber + "-" + study_uid_suffix,
-        # "Series" + "-" + str(ds.SeriesNumber),
-        # "Image" + "-" + str(ds.InstanceNumber) + ".dcm",
     )
     # Ensure all directories in the path exist
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)

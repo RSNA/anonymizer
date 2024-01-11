@@ -7,12 +7,7 @@ import pytest
 import logging
 from model import project
 
-from model.project import (
-    ProjectModel,
-    default_aws_cognito,
-    default_storage_classes,
-    default_transfer_syntaxes,
-)
+from model.project import ProjectModel
 from controller.project import ProjectController
 import tests.controller.dicom_pacs_simulator_scp as pacs_simulator_scp
 from tests.controller.dicom_test_nodes import (

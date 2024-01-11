@@ -1,15 +1,12 @@
-import os, sys
+import os, sys, json
 from pathlib import Path
 import logging
 import pickle
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import customtkinter as ctk
-from model.project import (
-    DICOMRuntimeError,
-    default_project_filename,
-    default_storage_dir,
-)
+from model.project import DICOMRuntimeError, ProjectModel
+
 from utils.translate import _
 from utils.logging import init_logging
 from __version__ import __version__
@@ -35,13 +32,86 @@ from controller.project import ProjectController, ProjectModel
 
 logger = logging.getLogger()  # ROOT logger
 
-APP_TITLE = _("RSNA DICOM Anonymizer BETA Version " + __version__)
-THEME_FILE = "assets/themes/rsna_theme.json"
-
 
 class App(ctk.CTk):
+    TITLE = _("RSNA DICOM Anonymizer BETA Version " + __version__)
+    THEME_FILE = "assets/themes/rsna_theme.json"
+    CONFIG_FILENAME = "config.json"
+
     project_open_startup_dwell_time = 500  # milliseconds
     menu_font = ("", 13)
+
+    def __init__(self):
+        super().__init__()
+        ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
+        theme = self.THEME_FILE
+        if not os.path.exists(theme):
+            logger.error(f"Theme file not found: {theme}, reverting to dark-blue theme")
+            theme = "dark-blue"
+        ctk.set_default_color_theme(theme)
+        if sys.platform.startswith("win"):
+            self.iconbitmap(
+                "assets\\images\\rsna_icon.ico", default="assets\\images\\rsna_icon.ico"
+            )
+
+        self._project_controller: ProjectController = None
+        self._model: ProjectModel = None
+        self._query_view: QueryView = None
+        self._export_view: ExportView = None
+        self._instructions_view: HTMLView = None
+        self._license_view: HTMLView = None
+        self._dashboard: Dashboard = None
+        self.resizable(False, False)
+        self.title(self.TITLE)
+        self.recent_project_dirs: list[str] = []
+        self.current_open_project_dir: str = None
+        self.load_config()
+        self.set_menu_project_closed()  # creates self.menu_bar, populates Open Recent list
+        self._welcome_view = WelcomeView(self)
+        self.after(self.project_open_startup_dwell_time, self._open_project_startup)
+
+    def load_config(self):
+        try:
+            with open(self.CONFIG_FILENAME, "r") as config_file:
+                try:
+                    config_data = json.load(config_file)
+                except Exception as e:
+                    logger.error("Config file corrupt, start with no global config set")
+                    return
+
+                self.recent_project_dirs = list(
+                    set(config_data.get("recent_project_dirs", []))
+                )
+                for dir in self.recent_project_dirs:
+                    if not os.path.exists(dir):
+                        self.recent_project_dirs.remove(dir)
+                self.current_open_project_dir = config_data.get(
+                    "current_open_project_dir"
+                )
+                if not os.path.exists(self.current_open_project_dir):
+                    self.current_open_project_dir = None
+        except FileNotFoundError:
+            err_msg = _(f"Config file not found: {self.CONFIG_FILENAME}")
+            logger.error(err_msg)
+
+    def save_config(self):
+        try:
+            config_data = {
+                "recent_project_dirs": self.recent_project_dirs,
+                "current_open_project_dir": self.current_open_project_dir or "",
+            }
+            with open(self.CONFIG_FILENAME, "w") as config_file:
+                json.dump(config_data, config_file, indent=2)
+        except Exception as e:
+            err_msg = _(
+                f"Error writing json config file: {self.CONFIG_FILENAME} {str(e)}"
+            )
+            logger.error(err_msg)
+            messagebox.showerror(
+                title=_("Configuration File Write Error"),
+                message=err_msg,
+                parent=self,
+            )
 
     def new_project(self):
         logging.info("New Project")
@@ -61,25 +131,47 @@ class App(ctk.CTk):
             logger.info(f"New ProjectModel: {self._model}")
             self._project_controller = ProjectController(self._model)
             assert self._project_controller
+
+            project_dir = str(self._project_controller.storage_dir)
+            if os.path.exists(project_dir):
+                confirm = messagebox.askyesno(
+                    title=_("Confirm Overwrite"),
+                    message=_(
+                        "The project directory already exists. Do you want to overwrite the existing project?"
+                    ),
+                    parent=self,
+                )
+                if not confirm:
+                    logger.info("New Project Cancelled")
+                    self.enable_file_menu()
+                    return
+
             self._project_controller.save_model()
+            if project_dir not in self.recent_project_dirs:
+                self.recent_project_dirs.insert(0, project_dir)
+            self.current_open_project_dir = project_dir
             self._open_project()
 
         self.enable_file_menu()
 
-    def open_project(self):
+    def open_project(self, project_dir: str = None):
         self.disable_file_menu()
 
-        logging.info("Open Project")
-        path = filedialog.askdirectory(
-            initialdir=default_storage_dir(),
-            title=_("Select Anonymizer Storage Directory"),
-        )
-        if not path:
+        logging.info(f"Open Project project_dir={project_dir}")
+
+        if project_dir is None:
+            project_dir = filedialog.askdirectory(
+                initialdir=ProjectModel.default_storage_dir(),
+                title=_("Select Anonymizer Storage Directory"),
+            )
+
+        if not project_dir:
             logger.info(f"Open Project Cancelled")
             self.enable_file_menu()
             return
 
-        project_pkl_path = Path(path, default_project_filename())
+        project_pkl_path = Path(project_dir, ProjectModel.default_project_filename())
+
         if os.path.exists(project_pkl_path):
             with open(project_pkl_path, "rb") as pkl_file:
                 self._model = pickle.load(pkl_file)
@@ -87,27 +179,26 @@ class App(ctk.CTk):
             self._project_controller = ProjectController(self._model)
             assert self._project_controller
             logger.info(f"{self._project_controller}")
+            if not project_dir in self.recent_project_dirs:
+                self.recent_project_dirs.insert(0, project_dir)
+            self.current_open_project_dir = project_dir
+            self.save_config()
             self._open_project()
         else:
             messagebox.showerror(
                 title=_("Open Project Error"),
-                message=f"Project file not found in: {path}",
+                message=_(f"Project file not found in: \n\n{project_dir}"),
                 parent=self,
             )
+            self.recent_project_dirs.remove(project_dir)
+            self.set_menu_project_closed()
+            self.save_config()
 
         self.enable_file_menu()
 
     def _open_project_startup(self):
-        logger.info(f"Default font: {ctk.CTkFont().actual()}")
-        project_pkl_path = Path(default_storage_dir(), default_project_filename())
-        if os.path.exists(project_pkl_path):
-            with open(project_pkl_path, "rb") as pkl_file:
-                self._model = pickle.load(pkl_file)
-            logger.info(f"Project Model loaded from: {project_pkl_path}")
-            self._project_controller = ProjectController(self._model)
-            assert self._project_controller
-            logger.info(f"{self._project_controller}")
-            self._open_project()
+        if self.current_open_project_dir:
+            self.open_project(self.current_open_project_dir)
 
     def _open_project(self):
         assert self._model
@@ -127,6 +218,7 @@ class App(ctk.CTk):
         self._dashboard = Dashboard(self, self._project_controller)
         self.protocol("WM_DELETE_WINDOW", self.close_project)
         self.set_menu_project_open()
+        self._dashboard.focus_set()
 
     def close_project(self, event=None):
         logging.info("Close Project")
@@ -169,8 +261,65 @@ class App(ctk.CTk):
             self.protocol("WM_DELETE_WINDOW", self.quit)
             self.focus_force()
 
+        self.current_open_project_dir = None
         self._project_controller = None
         self.set_menu_project_closed()
+        self.title(self.TITLE)
+        self.save_config()
+
+    def clone_project(self, event=None):
+        logging.info("Clone Project")
+
+        current_project_dir = self._project_controller.storage_dir
+
+        cloned_project_dir = filedialog.askdirectory(
+            initialdir=current_project_dir.parent,
+            message=_("Select Directory for Cloned Project"),
+            mustexist=False,
+            parent=self,
+        )
+
+        if not cloned_project_dir:
+            logger.info(f"Clone Project Cancelled")
+            return
+
+        assert os.path.exists(cloned_project_dir)
+
+        if cloned_project_dir == current_project_dir:
+            logger.info(
+                f"Clone Project Cancelled, cloned directory same as current project directory"
+            )
+            messagebox.showerror(
+                title=_("Clone Project Error"),
+                message=_(
+                    f"Cloned directory cannot be the same as the current project directory."
+                ),
+                parent=self,
+            )
+            return
+
+        self._project_controller.save_model(cloned_project_dir)
+        self.close_project()
+
+        project_pkl_path = Path(
+            cloned_project_dir, ProjectModel.default_project_filename()
+        )
+
+        with open(project_pkl_path, "rb") as pkl_file:
+            self._model = pickle.load(pkl_file)
+
+        logger.info(f"Project Model loaded from: {project_pkl_path}")
+        # Change storage directory and site_id of clonded model:
+        self._model.storage_dir = Path(cloned_project_dir)
+        self._model.regenerate_site_id()
+        self._project_controller = ProjectController(self._model)
+        assert self._project_controller
+        logger.info(f"{self._project_controller}")
+        if not cloned_project_dir in self.recent_project_dirs:
+            self.recent_project_dirs.insert(0, cloned_project_dir)
+        self.current_open_project_dir = cloned_project_dir
+        self.save_config()
+        self._open_project()
 
     def import_files(self, event=None):
         assert self._project_controller
@@ -181,10 +330,12 @@ class App(ctk.CTk):
             ("dicom Files", "*.dicom"),
             ("All Files", "*.*"),
         ]
+        msg = _("Select DICOM Files to Import & Anonymize")
         paths = filedialog.askopenfilenames(
-            title=_("Select DICOM Files to Import & Anonymize"),
+            message=msg,
             defaultextension=".dcm",
             filetypes=file_extension_filters,
+            parent=self,
         )
         if not paths:
             logger.info(f"Import Files Cancelled")
@@ -205,8 +356,11 @@ class App(ctk.CTk):
     def import_directory(self, event=None):
         assert self._project_controller
         logging.info("Import Directory")
+        msg = _("Select DICOM Directory to Impport & Anonymize")
         root_dir = filedialog.askdirectory(
-            title=_("Select DICOM Directory to Impport & Anonymize")
+            message=msg,
+            mustexist=True,
+            parent=self,
         )
         logger.info(root_dir)
 
@@ -365,6 +519,18 @@ class App(ctk.CTk):
             font=self.menu_font,
             command=self.open_project,  # accelerator="Command+O"
         )
+
+        if self.recent_project_dirs:
+            # Open Recent menu (cascaded)
+            open_recent_menu = tk.Menu(file_menu, tearoff=0, name="open_recent_menu")
+            file_menu.add_cascade(label=_("Open Recent"), menu=open_recent_menu)
+
+            for directory in self.recent_project_dirs:
+                open_recent_menu.add_command(
+                    label=directory,
+                    command=lambda dir=directory: self.open_project(dir),
+                )
+
         self.menu_bar.add_cascade(label=_("File"), menu=file_menu)
 
         # Help Menu:
@@ -403,6 +569,12 @@ class App(ctk.CTk):
         # )
         file_menu.add_separator()
         file_menu.add_command(
+            label=_("Clone Project"),
+            font=self.menu_font,
+            command=self.clone_project,
+            # accelerator="Command+C",
+        )
+        file_menu.add_command(
             label=_("Close Project"),
             font=self.menu_font,
             command=self.close_project,
@@ -430,32 +602,6 @@ class App(ctk.CTk):
     def enable_file_menu(self):
         self.menu_bar.entryconfig(_("File"), state="normal")
 
-    def __init__(self):
-        super().__init__()
-        ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
-        theme = THEME_FILE
-        if not os.path.exists(theme):
-            logger.error(f"Theme file not found: {theme}, reverting to dark-blue theme")
-            theme = "dark-blue"
-        ctk.set_default_color_theme(theme)
-        if sys.platform.startswith("win"):
-            self.iconbitmap(
-                "assets\\images\\rsna_icon.ico", default="assets\\images\\rsna_icon.ico"
-            )
-
-        self._project_controller: ProjectController = None
-        self._model: ProjectModel = None
-        self._query_view: QueryView = None
-        self._export_view: ExportView = None
-        self._instructions_view: HTMLView = None
-        self._license_view: HTMLView = None
-        self._dashboard: Dashboard = None
-        self.resizable(False, False)
-        self.title(APP_TITLE)
-        self.set_menu_project_closed()  # creates self.menu_bar
-        self._welcome_view = WelcomeView(self)
-        self.after(self.project_open_startup_dwell_time, self._open_project_startup)
-
 
 def main():
     args = str(sys.argv)
@@ -466,6 +612,8 @@ def main():
 
     logger = logging.getLogger()  # get root logger
     logger.info(f"cmd line args={args}")
+    if debug_mode:
+        logger.info(f"DEBUG Mode")
     logger.info(f"Python Optimization Level: {sys.flags.optimize}")
     logger.info(f"Starting ANONYMIZER GUI Version {__version__}")
     logger.info(f"Running from {os.getcwd()}")

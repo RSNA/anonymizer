@@ -12,6 +12,7 @@
   "python.testing.pytestEnabled": true,
   "cSpell.words": [
     "DICOM",
-    "RSNA"
+    "RSNA",
+    "uids"
   ]
 }
