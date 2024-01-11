@@ -17,7 +17,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-22.04, windows-latest, macos-11]
+        os: [windows-latest]
 
     steps:
     - name: Checkout repository
@@ -43,11 +43,11 @@ jobs:
 
     - name: PyInstaller - Build for ${{ matrix.os }}
       run: |
-        if [ "${{ matrix.os }}" == "ubuntu-22.04" ]; then
+        if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
           pipenv run pyinstaller --noconfirm --onedir --windowed --add-data "assets:assets" --icon assets/images/rsna_icon.png --name "Anonymizer" anonymizer.py
         elif [ "${{ matrix.os }}" == "windows-latest" ]; then
           pipenv run python build_win.py
-        elif [ "${{ matrix.os }}" == "macos-11" ]; then
+        elif [ "${{ matrix.os }}" == "macos-latest" ]; then
           pipenv run pyinstaller --noconfirm --onedir --windowed --add-data "assets:assets" --icon assets/images/rsna_icon.icns -n "Anonymizer" anonymizer.py
         fi
       
@@ -56,6 +56,7 @@ jobs:
       with:
         name: anonymizer-${{ matrix.os }}.zip
         path: 'dist'
+        compression-level: 9 # best compression
         if-no-files-found: error
         retention-days: 2
       
