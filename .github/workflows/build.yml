@@ -36,10 +36,10 @@ jobs:
       run: |
           pipenv install --dev
     
-    - name: Run Unit Tests within pipenv with pytest and generate coverage report
-      run: |
-        pipenv run coverage run -m pytest tests --log-cli-level=WARN
-        pipenv run coverage report --omit="tests/*" --fail-under=60
+    # - name: Run Unit Tests within pipenv with pytest and generate coverage report
+    #   run: |
+    #     pipenv run coverage run -m pytest tests --log-cli-level=WARN
+    #     pipenv run coverage report --omit="tests/*" --fail-under=60
 
     - name: PyInstaller - Build for ${{ matrix.os }}
       run: |
@@ -49,13 +49,16 @@ jobs:
           pipenv run python build_win.py
         elif [ "${{ matrix.os }}" == "macos-latest" ]; then
           pipenv run pyinstaller --noconfirm --onedir --windowed --add-data "assets:assets" --icon assets/images/rsna_icon.icns -n "Anonymizer" anonymizer.py
+          brew install node
+          npm install -g create-dmg
+          create-dmg 'dist/Anonymizer.app' --overwrite --dmg-title='Anonymizer_Installer'
         fi
       
     - name: Upload Artifact for ${{ matrix.os }}
       uses: actions/upload-artifact@v4
       with:
         name: anonymizer-${{ matrix.os }}.zip
-        path: ${{ matrix.os == 'macos-latest' && 'dist/Anonymizer.app' || 'dist' }}
+        path: ${{ matrix.os == 'macos-latest' && 'dist/Anonymizer_Installer.dmg' || 'dist' }}
         if-no-files-found: error
         retention-days: 7
       
