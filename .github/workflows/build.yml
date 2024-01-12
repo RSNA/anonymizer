@@ -41,20 +41,18 @@ jobs:
     #     pipenv run coverage run -m pytest tests --log-cli-level=WARN
     #     pipenv run coverage report --omit="tests/*" --fail-under=60
 
+    - name: Extract version from version.py
+      id: get_version
+      run: echo "::set-output name=version::$(python -c 'from version import __version__; print(__version__)')"
+
     - name: PyInstaller - Build for ${{ matrix.os }}
       run: |
-        if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
-          pipenv run pyinstaller --noconfirm --onedir --windowed --add-data "assets:assets" --icon assets/images/rsna_icon.png --name "Anonymizer" anonymizer.py
-        elif [ "${{ matrix.os }}" == "windows-latest" ]; then
-          pipenv run python build_win.py
-        elif [ "${{ matrix.os }}" == "macos-latest" ]; then
-          pipenv run pyinstaller --noconfirm --onedir --windowed --add-data "assets:assets" --icon assets/images/rsna_icon.icns -n "Anonymizer" anonymizer.py
-        fi
+        pipenv run python build.py
       
     - name: Upload Artifact for ${{ matrix.os }}
       uses: actions/upload-artifact@v4
       with:
-        name: anonymizer-${{ matrix.os }}.zip
+        name: anonymizer-${{ matrix.os }}-${{ steps.get_version.outputs.version }}.zip
         path: 'dist'
         compression-level: 9 # best compression
         if-no-files-found: error
