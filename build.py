@@ -35,6 +35,7 @@ print(f"Python version tuple: {platform.python_version_tuple()}")
 
 if os.name == "nt":  # Windows
     lib_dir = "Lib"
+    python_version = ""
 else:  # Unix-based systems
     lib_dir = "lib"
 
