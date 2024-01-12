@@ -31,10 +31,17 @@ python_version = (
     + "."
     + platform.python_version_tuple()[1]
 )
+print(f"Python version tuple: {platform.python_version_tuple()}")
+
+if os.name == "nt":  # Windows
+    lib_dir = "Lib"
+else:  # Unix-based systems
+    lib_dir = "lib"
+
 
 # Path to the customtkinter directory
 customtkinter_path = os.path.join(
-    venv_path, "lib", python_version, "site-packages", "customtkinter"
+    venv_path, lib_dir, python_version, "site-packages", "customtkinter"
 )
 
 if not os.path.exists(customtkinter_path):
