@@ -42,8 +42,7 @@ jobs:
     #     pipenv run coverage report --omit="tests/*" --fail-under=60
 
     - name: Extract version from version.py
-      id: get_version
-      run: echo "::set-output name=version::$(python -c 'from version import __version__; print(__version__)')"
+      run: echo "version=$(python -c 'from version import __version__; print(__version__)')" >> $GITHUB_OUTPUT
 
     - name: PyInstaller - Build for ${{ matrix.os }}
       run: |
@@ -52,7 +51,7 @@ jobs:
     - name: Upload Artifact for ${{ matrix.os }}
       uses: actions/upload-artifact@v4
       with:
-        name: anonymizer-${{ matrix.os }}-${{ steps.get_version.outputs.version }}.zip
+        name: anonymizer-${{ matrix.os }}-${{ env.version }}.zip
         path: 'dist'
         compression-level: 9 # best compression
         if-no-files-found: error
