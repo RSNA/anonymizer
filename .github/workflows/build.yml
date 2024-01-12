@@ -42,7 +42,7 @@ jobs:
     #     pipenv run coverage report --omit="tests/*" --fail-under=60
 
     - name: Extract version from version.py
-      run: echo "version=$(python -c 'from version import __version__; print(__version__)')" >> $GITHUB_OUTPUT
+      run: echo "version=$(python -c 'from __version__ import __version__; print(__version__)')" >> $GITHUB_OUTPUT
 
     - name: PyInstaller - Build for ${{ matrix.os }}
       run: |
