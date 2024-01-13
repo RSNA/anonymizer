@@ -116,13 +116,13 @@ if __name__ == "__main__":
                 "assets\\images\\rsna_icon.ico",
                 "--version-file",
                 "versionfile.txt",
-                "--distpath",
-                "dist",
                 "--name",
                 f"Anonymizer_{__version__}",
                 "anonymizer.py",
             ]
         )
+
+        print(os.listdir("."))
 
     elif platform.system() == "Darwin":
         PyInstaller.__main__.run(
