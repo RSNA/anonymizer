@@ -140,7 +140,7 @@ if __name__ == "__main__":
                 "--icon",
                 "assets/images/rsna_icon.icns",
                 "--name",
-                build_version_name",
+                build_version_name,
                 "anonymizer.py",
             ]
         )
