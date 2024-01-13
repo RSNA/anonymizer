@@ -122,8 +122,6 @@ if __name__ == "__main__":
             ]
         )
 
-        print(os.listdir("."))
-
     elif platform.system() == "Darwin":
         PyInstaller.__main__.run(
             [
