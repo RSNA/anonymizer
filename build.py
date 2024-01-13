@@ -78,8 +78,11 @@ def set_macos_version(bundle_path, version):
 
 
 if __name__ == "__main__":
+
+    build_version_name = f"Anonymizer_{__version__}"
+
     print(
-        f"Build Current version: {__version__} on {platform.system()} platform using PyInstaller"
+        f"Build Current version: {build_version_name} on {platform.system()} platform using PyInstaller"
     )
     print(f"Customtkinter path: {customtkinter_path}")
 
@@ -117,7 +120,7 @@ if __name__ == "__main__":
                 "--version-file",
                 "versionfile.txt",
                 "--name",
-                f"Anonymizer_{__version__}",
+                build_version_name,
                 "anonymizer.py",
             ]
         )
@@ -137,7 +140,7 @@ if __name__ == "__main__":
                 "--icon",
                 "assets/images/rsna_icon.icns",
                 "--name",
-                f"Anonymizer_{__version__}",
+                build_version_name",
                 "anonymizer.py",
             ]
         )
@@ -146,7 +149,7 @@ if __name__ == "__main__":
         set_macos_version(f"dist/Anonymizer_{__version__}.app", __version__)
 
         # Delete the redunant build folder
-        app_dir = os.path.join("dist", f"Anonymizer_{__version__}")
+        app_dir = os.path.join("dist", build_version_name)
         if os.path.exists(app_dir):
             shutil.rmtree(app_dir)
 
@@ -163,7 +166,7 @@ if __name__ == "__main__":
                 "--log-level",
                 "INFO",
                 "--name",
-                f"Anonymizer_{__version__}",
+                build_version_name",
                 "anonymizer.py",
             ]
         )

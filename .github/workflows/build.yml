@@ -17,7 +17,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [linux-latest, windows-latest, macos-latest]
+        os: [macos-latest-large]
 
     steps:
     - name: Checkout repository
@@ -55,9 +55,8 @@ jobs:
     - name: Upload Artifact for ${{ matrix.os }}
       uses: actions/upload-artifact@v4
       with:
-        name: anonymizer-${{ matrix.os }}-${{ env.version }}.zip
+        name: anonymizer-${{ matrix.os }}-${{ env.version }}
         path: 'dist'
-        compression-level: 9 # best compression
         if-no-files-found: error
         retention-days: 2
       
