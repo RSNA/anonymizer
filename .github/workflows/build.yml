@@ -52,12 +52,36 @@ jobs:
       run: |
         pipenv run python build.py
       
-    - name: Upload Artifact for ${{ matrix.os }}
-      uses: actions/upload-artifact@v4
+    # - name: Upload Artifact for ${{ matrix.os }}
+    #   uses: actions/upload-artifact@v4
+    #   with:
+    #     name: anonymizer-${{ matrix.os }}-${{ env.version }}
+    #     path: 'dist'
+    #     if-no-files-found: error
+    #     retention-days: 2
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
       with:
-        name: anonymizer-${{ matrix.os }}-${{ env.version }}
-        path: 'dist'
-        if-no-files-found: error
-        retention-days: 2
-      
+        tag_name: ${{ env.version }}
+        release_name: Release ${{ env.version }}
+        draft: false
+        prerelease: false
+
+    - name: Zip dist directory
+      run: zip -r dist.zip dist
+    
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+        asset_path: ./dist.zip
+        asset_name: anonymizer-${{ matrix.os }}-${{ env.version }}.zip
+        asset_content_type: application/zip
+        
 
