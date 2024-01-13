@@ -43,8 +43,11 @@ jobs:
 
     - name: Extract version from version.py
       run: |
-        echo "PYTHONPATH=$(pwd):$PYTHONPATH" >> $GITHUB_ENV
-        echo "version=$(python -c 'from __version__ import __version__; print(__version__)')" >> $GITHUB_ENV
+        echo "version=$(python -c 'from __version__ import __version__; print(__version__)')" >> "$GITHUB_ENV"
+
+    - name: Check version
+      run: |
+        echo "Version: ${{ env.version }}"
 
     - name: List site-packages
       run: |
