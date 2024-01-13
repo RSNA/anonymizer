@@ -83,7 +83,7 @@ if __name__ == "__main__":
     )
     print(f"Customtkinter path: {customtkinter_path}")
 
-    if platform.system() == "win32":
+    if platform.system() == "Windows":
         # Create versionfile.txt
         print(
             f"Create Windows Version Resource Text file: versionfile.txt for PyInstaller, new version: {__version__}"
