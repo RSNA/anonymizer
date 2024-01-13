@@ -24,6 +24,8 @@ os.environ["PIPENV_VERBOSITY"] = "-1"  # to suppress pipenv courtesy notice
 # customtkinter may not be installed in standard python library directory, get path in virtual environment:
 venv_path = subprocess.check_output(["pipenv", "--venv"]).strip().decode()
 
+print("build.py execute...")
+
 # Get the Python version
 python_version = (
     "python"

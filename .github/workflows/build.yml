@@ -42,13 +42,15 @@ jobs:
         pipenv run coverage report --omit="tests/*" --fail-under=60
 
     - name: Extract version from version.py
-      run: echo "version=$(python -c 'from __version__ import __version__; print(__version__)')" >> $GITHUB_ENV
+      run: |
+        echo "PYTHONPATH=$(pwd):$PYTHONPATH" >> $GITHUB_ENV
+        echo "version=$(python -c 'from __version__ import __version__; print(__version__)')" >> $GITHUB_ENV
 
     - name: List site-packages
       run: |
         pipenv run python -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())"
         
-    - name: PyInstaller - Build for ${{ matrix.os }}
+    - name: PyInstaller - Build for ${{ matrix.os }}-${{ env.version }}
       run: |
         pipenv run python build.py
       
