@@ -41,21 +41,18 @@ jobs:
         pipenv run coverage run -m pytest tests --log-cli-level=WARN
         pipenv run coverage report --omit="tests/*" --fail-under=60
 
-    - name: Extract version from version.py
-      run: |
-        echo "version=$(python -c 'from __version__ import __version__; print(__version__)')" >> "$GITHUB_ENV"
-
-    - name: Check version
-      run: |
-        echo "Version: ${{ env.version }}"
-
     - name: List site-packages
       run: |
         pipenv run python -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())"
         
-    - name: PyInstaller - Build for ${{ matrix.os }}-${{ env.version }}
+    - name: PyInstaller - Build for ${{ matrix.os }}
       run: |
         pipenv run python build.py
+
+    - name: Check version
+      run: |
+        echo "Version: ${{ env.version }}"
+  
       
     # - name: Upload Artifact for ${{ matrix.os }}
     #   uses: actions/upload-artifact@v4
