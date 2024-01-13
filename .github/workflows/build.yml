@@ -17,7 +17,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windwos-latest]
+        os: [windows-latest]
 
     steps:
     - name: Checkout repository
