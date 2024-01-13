@@ -78,7 +78,6 @@ def set_macos_version(bundle_path, version):
 
 
 if __name__ == "__main__":
-
     build_version_name = f"Anonymizer_{__version__}"
 
     print(
@@ -166,7 +165,7 @@ if __name__ == "__main__":
                 "--log-level",
                 "INFO",
                 "--name",
-                build_version_name",
+                build_version_name,
                 "anonymizer.py",
             ]
         )
