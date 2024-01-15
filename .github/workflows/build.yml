@@ -62,19 +62,24 @@ jobs:
     #     if-no-files-found: error
     #     retention-days: 2
 
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
-      with:
-        tag_name: ${{ env.version }}
-        release_name: Release ${{ env.version }}
-        draft: false
-        prerelease: false
+    # - name: Create Release
+    #   id: create_release
+    #   uses: actions/create-release@v1
+    #   env:
+    #     GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }} 
+    #   with:
+    #     tag_name: ${{ env.version }}
+    #     release_name: Release ${{ env.version }}
+    #     draft: false
+    #     prerelease: false
 
-    - name: Zip dist directory
-      run: zip -r dist.zip dist
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      with:
+        body_path: changelog.md
+        files: dist/*
+
+    
     
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
