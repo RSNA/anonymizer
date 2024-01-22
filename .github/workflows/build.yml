@@ -49,7 +49,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-2019, macos-11, ubuntu-latest]
+        os: [windows-2019, macos-11, ubuntu-20.04]
 
     steps:
     - name: Checkout repository
