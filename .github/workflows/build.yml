@@ -6,6 +6,8 @@ name: anonymizer-test-build-upload
 on:
   push:
     branches: [ "master" ]
+    tags: 
+      - "v*.*.*"
   pull_request:
     branches: [ "master" ]
 
@@ -77,7 +79,7 @@ jobs:
         name: anonymizer-${{ matrix.os }}-${{ env.version }}
         path: 'dist'
         if-no-files-found: error
-        retention-days: 2
+        retention-days: 1
       if: "!startsWith(github.ref, 'refs/tags/')" # Only upload artifacts for non-tag builds
 
 
