@@ -19,9 +19,17 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+          python-version: "3.11"
+
     - name: set env.version
       run: |
-        python build.py
+        python set_gha_env.py
       
     - name: Create Release
       id: create_release
@@ -37,6 +45,7 @@ jobs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
   
   build:
+    needs: release
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
