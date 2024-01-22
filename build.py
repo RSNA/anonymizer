@@ -12,7 +12,6 @@ import shutil
 import subprocess
 import platform
 import plistlib
-import os
 
 from __version__ import __version__
 import pyinstaller_versionfile

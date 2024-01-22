@@ -19,14 +19,18 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+    - name: set env.version
+      run: |
+        python build.py
+      
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }} 
       with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
+        tag_name: ${{ env.version }}
+        release_name: Release ${{ env.version }}
         draft: false
         prerelease: false
     outputs:
@@ -79,8 +83,6 @@ jobs:
     #     path: 'dist'
     #     if-no-files-found: error
     #     retention-days: 1
-    #   if: "!startsWith(github.ref, 'refs/tags/')" 
-
 
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
