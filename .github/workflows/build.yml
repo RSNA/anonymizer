@@ -71,13 +71,14 @@ jobs:
       run: |
         7z a dist.zip dist\
       
-    # - name: Upload Artifact for ${{ matrix.os }}
-    #   uses: actions/upload-artifact@v4
-    #   with:
-    #     name: anonymizer-${{ matrix.os }}-${{ env.version }}
-    #     path: 'dist'
-    #     if-no-files-found: error
-    #     retention-days: 2
+    - name: Upload Artifact for ${{ matrix.os }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: anonymizer-${{ matrix.os }}-${{ env.version }}
+        path: 'dist'
+        if-no-files-found: error
+        retention-days: 2
+      if: "!startsWith(github.ref, 'refs/tags/')" # Only upload artifacts for non-tag builds
 
 
     - name: Upload Release Asset
