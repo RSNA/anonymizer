@@ -13,6 +13,25 @@ permissions:
   contents: read
 
 jobs:
+
+  release:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check version
+      run: |
+        echo "Version: ${{ env.version }}"
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }} 
+      with:
+        tag_name: ${{ env.version }}
+        release_name: Release ${{ env.version }}
+        draft: false
+        prerelease: false
+      if: ! contains(env.version, 'd')
   
   build:
     runs-on: ${{ matrix.os }}
@@ -49,10 +68,6 @@ jobs:
     - name: PyInstaller - Build for ${{ matrix.os }}
       run: |
         pipenv run python build.py
-
-    - name: Check version
-      run: |
-        echo "Version: ${{ env.version }}"
   
     - name: Create zip file
       run: |
@@ -66,17 +81,6 @@ jobs:
     #     if-no-files-found: error
     #     retention-days: 2
 
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }} 
-      with:
-        tag_name: ${{ env.version }}
-        release_name: Release ${{ env.version }}
-        draft: false
-        prerelease: false
-
 
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
@@ -87,5 +91,6 @@ jobs:
         asset_path: ./dist.zip
         asset_name: anonymizer-${{ matrix.os }}-${{ env.version }}.zip
         asset_content_type: application/zip
+      if: ! contains(env.version, 'd')
         
 
