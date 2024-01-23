@@ -98,7 +98,7 @@ if __name__ == "__main__":
         )
         pyinstaller_versionfile.create_versionfile(
             output_file="versionfile.txt",
-            version=__version__,
+            version=__version__.split("-")[0],
             company_name="Radiology Society of North America",
             file_description="RSNA DICOM Anonymizer",
             internal_name="anonymizer",
