@@ -16,36 +16,36 @@ permissions:
 
 jobs:
 
-  release:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+  # release:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: Checkout repository
+  #     uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v3
-      with:
-          python-version: "3.11"
+  #   - name: Set up Python
+  #     uses: actions/setup-python@v3
+  #     with:
+  #         python-version: "3.11"
 
-    - name: set env.version
-      run: |
-        python set_gha_env.py
+  #   - name: set env.version
+  #     run: |
+  #       python set_gha_env.py
       
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }} 
-      with:
-        tag_name: ${{ env.version }}
-        release_name: Release ${{ env.version }}
-        draft: false
-        prerelease: false
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
+  #   - name: Create Release
+  #     id: create_release
+  #     uses: actions/create-release@v1
+  #     env:
+  #       GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }} 
+  #     with:
+  #       tag_name: ${{ env.version }}
+  #       release_name: Release ${{ env.version }}
+  #       draft: false
+  #       prerelease: false
+  #   outputs:
+  #     upload_url: ${{ steps.create_release.outputs.upload_url }}
   
   build:
-    needs: release
+    #needs: release
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -85,20 +85,21 @@ jobs:
       run: |
         7z a dist.zip dist\
       
-    # - name: Upload Artifact for ${{ matrix.os }}
-    #   uses: actions/upload-artifact@v4
-    #   with:
-    #     name: anonymizer-${{ matrix.os }}-${{ env.version }}
-    #     path: 'dist'
-    #     if-no-files-found: error
-    #     retention-days: 1
+    - name: Upload Artifact for ${{ matrix.os }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: anonymizer-${{ matrix.os }}-${{ env.version }}
+        path: 'dist'
+        if-no-files-found: error
+        retention-days: 1
 
-    - name: Upload Release Asset
+    - name: Upload Release Asset # Only if RELEASE has been created by project manager on github
       uses: actions/upload-release-asset@v1
+      continue-on-error: true
       env:
         GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
       with:
-        upload_url: ${{ needs.release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+        upload_url: "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ env.version }}"
         asset_path: ./dist.zip
         asset_name: anonymizer-${{ matrix.os }}-${{ env.version }}.zip
         asset_content_type: application/zip
