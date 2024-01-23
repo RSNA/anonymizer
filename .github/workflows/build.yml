@@ -32,6 +32,7 @@ jobs:
         python set_gha_env.py
       
     - name: Create Release
+      if: "!contains(env.version, 'RC')"
       id: create_release
       uses: actions/create-release@v1
       env:
@@ -40,7 +41,7 @@ jobs:
         tag_name: ${{ env.version }}
         release_name: Release ${{ env.version }}
         draft: false
-        prerelease: false
+        prerelease: true
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
   
@@ -98,13 +99,13 @@ jobs:
         echo "Upload URL: ${{ needs.release.outputs.upload_url }}"
   
 
-    - name: Upload Release Asset # Only if RELEASE has been created by project manager on github
+    - name: Upload Release Asset 
+      if: "!contains(env.version, 'RC')"
       uses: actions/upload-release-asset@v1
       # continue-on-error: true
       env:
         GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
       with:
-        # upload_url: "https://github.com/mdevans/anonymizer/releases/tag/v${{ env.version }}"
         upload_url: ${{ needs.release.outputs.upload_url }}
         asset_path: ./dist.zip
         asset_name: anonymizer-${{ matrix.os }}-${{ env.version }}.zip

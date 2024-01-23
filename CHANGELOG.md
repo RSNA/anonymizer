@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Changed
 - Moved de-identification string constants within AnonymizerController class
-- unit-test.yml to build.yml, gh action build and upload steps for all platforms using build.py (renamed build_win.py)
+- unit-test.yml to build.yml, gh action build and upload steps for all platforms using build.py (renamed build_win.py) with automatic release if version does not contain "RC"
 
 ## [17.0.7 Beta] - 2023-11-08
 ### Added
