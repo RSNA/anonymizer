@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Select All & Default buttons added for Transfer Syntaxes and SOP Classes dialogs
 - Verify all files are in storage directory after bulk move operation
 - Implement round operand and associated round_age() in AnonymizerController
+- Added assets/images/create_icns.sh script to auto generate icns for osx
 
 ## Changed
 - Moved de-identification string constants within AnonymizerController class

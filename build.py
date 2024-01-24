@@ -22,8 +22,10 @@ os.environ["PIPENV_VERBOSITY"] = "-1"  # to suppress pipenv courtesy notice
 
 env_file = os.getenv("GITHUB_ENV")
 
-with open(env_file, "a") as f:
-    f.write(f"version={__version__}")
+if env_file:
+    print("Running in GitHub Actions, writing version to env file")
+    with open(env_file, "a") as f:
+        f.write(f"version={__version__}")
 
 # customtkinter may not be installed in standard python library directory, get path in virtual environment:
 venv_path = subprocess.check_output(["pipenv", "--venv"]).strip().decode()
