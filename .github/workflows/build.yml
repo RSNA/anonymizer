@@ -87,8 +87,8 @@ jobs:
     - name: Upload Artifact for ${{ matrix.os }}
       uses: actions/upload-artifact@v4
       with:
-        name: anonymizer-${{ matrix.os }}-${{ env.version }}.zip
-        path: '/dist.zip'
+        name: anonymizer-${{ matrix.os }}-${{ env.version }}
+        path: ./dist.zip
         if-no-files-found: error
         retention-days: 1
 
