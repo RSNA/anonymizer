@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Verify all files are in storage directory after bulk move operation
 - Implement round operand and associated round_age() in AnonymizerController
 - Added assets/images/create_icns.sh script to auto generate icns for osx
+- GUI App initialisation creation exception handling
+- Output tkinter and customtkinter version to log at startup
 
 ## Changed
 - Moved de-identification string constants within AnonymizerController class

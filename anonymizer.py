@@ -91,8 +91,10 @@ class App(ctk.CTk):
                 if not os.path.exists(self.current_open_project_dir):
                     self.current_open_project_dir = None
         except FileNotFoundError:
-            err_msg = _(f"Config file not found: {self.CONFIG_FILENAME}")
-            logger.error(err_msg)
+            warn_msg = _(
+                f"Config file not found: {self.CONFIG_FILENAME}, no recent project list or current project set"
+            )
+            logger.warn(warn_msg)
 
     def save_config(self):
         try:
@@ -618,12 +620,19 @@ def main():
     logger.info(f"Starting ANONYMIZER GUI Version {__version__}")
     logger.info(f"Running from {os.getcwd()}")
     logger.info(f"Python Version: {sys.version_info.major}.{sys.version_info.minor}")
+    logger.info(f"tkinter TkVersion: {tk.TkVersion} TclVersion: {tk.TclVersion}")
+    logger.info(f"Customtkinter Version: {ctk.__version__}")
     logger.info(
         f"pydicom Version: {pydicom_version}, pynetdicom Version: {pynetdicom_version}"
     )
 
     # GUI
-    app = App()
+    try:
+        app = App()
+        logger.info("ANONYMIZER GUI Initialised successfully.")
+    except Exception as e:
+        logger.exception(f"Error starting ANONYMIZER GUI, exit: {str(e)}")
+        sys.exit(1)
 
     # Pyinstaller splash page close
     if sys.platform.startswith("win"):

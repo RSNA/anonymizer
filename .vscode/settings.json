@@ -4,7 +4,13 @@
     "editor.defaultFormatter": "ms-python.black-formatter",
     "editor.formatOnSave": true
   },
-  "cSpell.enableFiletypes": ["!json", "!plaintext", "!python", "!script"],
+  "cSpell.enableFiletypes": [
+    "!json",
+    "!markdown",
+    "!plaintext",
+    "!python",
+    "!script"
+  ],
   "python.testing.pytestArgs": [
     "tests"
   ],
