@@ -8,6 +8,7 @@
 # python build.py
 
 import os
+from pathlib import Path
 import shutil
 import subprocess
 import platform
@@ -155,7 +156,7 @@ if __name__ == "__main__":
         # Set the version
         set_macos_version(f"dist/Anonymizer_{__version__}.app", __version__)
 
-        # Delete the redunant build folder
+        # Delete the redundant build folder
         app_dir = os.path.join("dist", build_version_name)
         if os.path.exists(app_dir):
             shutil.rmtree(app_dir)
@@ -170,6 +171,8 @@ if __name__ == "__main__":
                 f"{customtkinter_path}:customtkinter/",
                 "--add-data",
                 "assets:assets",
+                "--hidden-import",
+                "PIL._tkinter_finder",
                 "--log-level",
                 "INFO",
                 "--name",
@@ -177,3 +180,18 @@ if __name__ == "__main__":
                 "anonymizer.py",
             ]
         )
+
+        # TOODO: Add icon files to Linux build
+        # Create the .desktop file
+        # desktop_file_content = f"""[Desktop Entry]
+        # Version={__version__}
+        # Name=My Application
+        # Comment=My Application
+        # Exec={Path(os.getcwd()) / 'dist' / 'Anonymizer_{__version__}'}
+        # Icon={Path(os.getcwd()) / 'assets' / 'images' / 'icon.png'}
+        # Terminal=false
+        # Type=Application
+        # Categories=Utility;Application;
+        # """
+        # with open("MyApplication.desktop", "w") as f:
+        #     f.write(desktop_file_content)
