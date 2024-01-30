@@ -94,7 +94,7 @@ class App(ctk.CTk):
             warn_msg = _(
                 f"Config file not found: {self.CONFIG_FILENAME}, no recent project list or current project set"
             )
-            logger.warn(warn_msg)
+            logger.warning(warn_msg)
 
     def save_config(self):
         try:
@@ -608,14 +608,20 @@ class App(ctk.CTk):
 def main():
     args = str(sys.argv)
     install_dir = os.path.dirname(os.path.realpath(__file__))
+    run_as_exe = getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
+    # TODO: enhance cmd line processing using Click library
+    # TODO: run time log level change
+    # may need user settable log level for pynetdicom and pydicom separately
     debug_mode = "debug" in args or "DEBUG" in args
-    init_logging(install_dir, debug_mode)
+    init_logging(install_dir, debug_mode, run_as_exe)
     os.chdir(install_dir)
 
     logger = logging.getLogger()  # get root logger
     logger.info(f"cmd line args={args}")
     if debug_mode:
         logger.info(f"DEBUG Mode")
+    if run_as_exe:
+        logger.info(f"Running as executable (PyInstaller)")
     logger.info(f"Python Optimization Level: {sys.flags.optimize}")
     logger.info(f"Starting ANONYMIZER GUI Version {__version__}")
     logger.info(f"Running from {os.getcwd()}")
