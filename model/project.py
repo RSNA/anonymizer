@@ -33,6 +33,13 @@ class NetworkTimeouts:
 
 
 @dataclass
+class LoggingLevels:
+    anonymizer: int  # Logging level
+    pynetdicom: int  # Logging level
+    pydicom: bool  # enable/disable debug config
+
+
+@dataclass
 class Study:
     study_date: str
     anon_date_delta: int
@@ -124,6 +131,10 @@ class ProjectModel:
     def default_timeouts() -> NetworkTimeouts:
         return NetworkTimeouts(5, 30, 30, 60)
 
+    @staticmethod
+    def default_logging_levels() -> LoggingLevels:
+        return LoggingLevels(logging.INFO, logging.WARNING, False)
+
     site_id: str = field(default_factory=default_site_id)
     project_name: str = _("PROJECT")
     trial_name: str = _("TRIAL")
@@ -131,6 +142,7 @@ class ProjectModel:
     storage_dir: Path = field(default_factory=default_storage_dir)
     storage_classes: List[str] = field(default_factory=default_storage_classes)
     transfer_syntaxes: List[str] = field(default_factory=default_transfer_syntaxes)
+    logging_levels: LoggingLevels = field(default_factory=default_logging_levels)
 
     scu: DICOMNode = field(default_factory=default_local_server)
     scp: DICOMNode = field(default_factory=default_local_server)

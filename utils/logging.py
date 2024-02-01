@@ -3,6 +3,7 @@ import platform
 import logging
 import logging.handlers
 from pydicom import config as pydicom_config
+from model.project import LoggingLevels
 
 EXE_LOG_DIR = "Anonymizer/"
 PY_DEV_DIR = "/logs/"
@@ -30,7 +31,7 @@ def get_logs_dir(run_as_exe: bool, install_dir: str) -> str:
         return install_dir + PY_DEV_DIR
 
 
-def init_logging(install_dir: str, debug_mode: bool, run_as_exe: bool) -> None:
+def init_logging(install_dir: str, run_as_exe: bool) -> None:
     logs_dir = get_logs_dir(run_as_exe, install_dir)
     os.makedirs(logs_dir, exist_ok=True)
     # Get root logger:
@@ -50,20 +51,33 @@ def init_logging(install_dir: str, debug_mode: bool, run_as_exe: bool) -> None:
     logging.captureWarnings(True)
     pydicom_config.settings.reading_validation_mode = pydicom_config.IGNORE
 
-    set_log_level(LOG_DEFAULT_LEVEL if not debug_mode else logging.DEBUG)
+    set_anonymizer_log_level(LOG_DEFAULT_LEVEL)
+    # by default set pynetdicom to WARNING level
+    set_pynetdicom_log_level(logging.WARNING)
+    # leave pydicom logging at default level, user can enable debug mode if needed
     logger.info("Logging initialized, logs dir: %s", logs_dir)
 
 
-def set_log_level(level: int) -> None:
+def set_logging_levels(levels: LoggingLevels):
+    set_anonymizer_log_level(levels.anonymizer)
+    set_pynetdicom_log_level(levels.pynetdicom)
+    if levels.pydicom:
+        enable_pydicom_debug()
+    else:
+        disable_pydicom_debug()
+
+
+def set_anonymizer_log_level(level: int) -> None:
     logging.getLogger().setLevel(level)
 
-    # pydicom specific:
-    # pydicom_config.debug(level == logging.DEBUG) # this is very low level tracing
 
-    # Only enable pynetdicom logging for DEBUG level:
-    pynetdicom_logger = logging.getLogger("pynetdicom")
-    if level == logging.DEBUG:
-        pynetdicom_logger.setLevel(level)
-    else:
-        # by default set pynetdicom to WARNING level
-        pynetdicom_logger.setLevel(logging.WARNING)
+def set_pynetdicom_log_level(level: int) -> None:
+    logging.getLogger("pynetdicom").setLevel(level)
+
+
+def enable_pydicom_debug() -> None:
+    pydicom_config.debug(True)
+
+
+def disable_pydicom_debug() -> None:
+    pydicom_config.debug(False)

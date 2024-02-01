@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added assets/images/create_icns.sh script to auto generate icns for osx
 - GUI App initialisation creation exception handling
 - Output tkinter and customtkinter version to log at startup
+- Set log levels Anonymizer, pynetdicom, pydicom
 
 ## Changed
 - Moved de-identification string constants within AnonymizerController class

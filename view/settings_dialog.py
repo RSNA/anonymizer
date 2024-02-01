@@ -15,6 +15,8 @@ from utils.translate import _
 from utils.ux_fields import str_entry
 from view.sop_classes_dialog import SOPClassesDialog
 from view.transfer_syntaxes_dialog import TransferSyntaxesDialog
+from view.logging_levels_dialog import LoggingLevelsDialog
+from utils.logging import set_logging_levels
 
 
 logger = logging.getLogger(__name__)
@@ -283,6 +285,24 @@ class SettingsDialog(tk.Toplevel):
 
             row += 1
 
+        # Logging Levels:
+        self._logging_levels_label = ctk.CTkLabel(
+            self._frame, text=_("Logging Levels:")
+        )
+        self._logging_levels_label.grid(
+            row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw"
+        )
+        self._logging_levels_button = ctk.CTkButton(
+            self._frame,
+            text=_("Set Logging Levels"),
+            command=self._set_logging_levels_dialog,
+        )
+        self._logging_levels_button.grid(
+            row=row, column=1, pady=(PAD, 0), padx=PAD, sticky="nw"
+        )
+
+        row += 1
+
         if self.new_model:
             btn_text = _("Create Project")
         else:
@@ -403,6 +423,16 @@ class SettingsDialog(tk.Toplevel):
                 f"Anonymizer Script File updated: {self.model.anonymizer_script_path}"
             )
 
+    def _set_logging_levels_dialog(self):
+        dlg = LoggingLevelsDialog(self, self.model.logging_levels)
+        levels = dlg.get_input()
+        if levels is None:
+            logger.info(f"Logging Levels cancelled")
+            return
+        self.model.logging_levels = levels
+        logger.info(f"Logging Levels updated: {self.model.logging_levels}")
+        set_logging_levels(levels)
+
     def _enter_keypress(self, event):
         logger.info(f"_enter_pressed")
         self._create_project()
@@ -416,6 +446,7 @@ class SettingsDialog(tk.Toplevel):
             storage_dir=self.model.storage_dir,
             storage_classes=self.model.storage_classes,
             transfer_syntaxes=self.model.transfer_syntaxes,
+            logging_levels=self.model.logging_levels,
             scu=self.model.scu,
             scp=self.model.scp,
             remote_scps=self.model.remote_scps,

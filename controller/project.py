@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import List
 from dataclasses import dataclass
 from utils.translate import _
+from utils.logging import set_logging_levels
 from pydicom import Dataset
 from pydicom.dataset import FileMetaDataset
 from pynetdicom.association import Association
@@ -135,6 +136,7 @@ class ProjectController(AE):
     def __init__(self, model: ProjectModel):
         super().__init__(model.scu.aet)
         self.model = model
+        set_logging_levels(model.logging_levels)
         # Make sure storage directory exists:
         os.makedirs(self.model.storage_dir, exist_ok=True)
         self.set_dicom_timeouts(model.network_timeouts)

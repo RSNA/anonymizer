@@ -2,21 +2,6 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Anonymizer GUI DEBUG",
-      "type": "python",
-      "request": "launch",
-      "program": "anonymizer.py",
-      "env": {
-        "PYTHONOPTIMIZE": "0"
-      },
-      "console": "integratedTerminal",
-      "autoReload": {
-        "enable": true
-      },
-      "args": ["--debug"],
-      "justMyCode": false
-    },
-    {
       "name": "Anonymizer GUI Optimzed 0",
       "type": "python",
       "request": "launch",
