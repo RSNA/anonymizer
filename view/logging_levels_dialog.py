@@ -1,5 +1,6 @@
 from typing import Union
 import tkinter as tk
+from tkinter import messagebox
 import customtkinter as ctk
 import logging
 from model.project import LoggingLevels
@@ -109,8 +110,8 @@ class LoggingLevelsDialog(tk.Toplevel):
 
         row += 1
 
-        pydicom_label = ctk.CTkLabel(self, text="PYDICOM Debug:")
-        pydicom_label.grid(row=row, column=0, padx=PAD, pady=PAD, sticky="w")
+        pynetdicom_label = ctk.CTkLabel(self, text="PYDICOM Debug:")
+        pynetdicom_label.grid(row=row, column=0, padx=PAD, pady=PAD, sticky="w")
 
         self.pydicom_debug_var = ctk.BooleanVar(value=self.levels.pydicom)
         self.pydicom_debug = ctk.CTkSwitch(
@@ -119,6 +120,7 @@ class LoggingLevelsDialog(tk.Toplevel):
             variable=self.pydicom_debug_var,
             onvalue=True,
             offvalue=False,
+            command=self._pydicom_debug_event,
         )
         self.pydicom_debug.grid(
             row=row,
@@ -127,6 +129,7 @@ class LoggingLevelsDialog(tk.Toplevel):
             pady=PAD,
             sticky="w",
         )
+
         row += 1
 
         self._ok_button = ctk.CTkButton(
@@ -139,6 +142,18 @@ class LoggingLevelsDialog(tk.Toplevel):
             pady=PAD,
             sticky="e",
         )
+
+    def _pydicom_debug_event(self):
+        logger.info(f"_pydicom_debug_event")
+        if self.pydicom_debug_var.get():
+            if not messagebox.askyesno(
+                _("Warning"),
+                _(
+                    "Enabling debug mode in pydicom will cause PHI to be written to the log file. "
+                    "Are you sure you want to enable pydicom debug mode?"
+                ),
+            ):
+                self.pydicom_debug_var.set(False)
 
     def _enter_keypress(self, event):
         logger.info(f"_enter_pressed")
