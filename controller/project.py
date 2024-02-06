@@ -849,9 +849,11 @@ class ProjectController(AE):
                     logger.info("C-FIND query success")
 
                 if identifier:
-                    results.append(
-                        identifier.SeriesInstanceUID
-                    ) if find_series else results.append(identifier.SOPInstanceUID)
+                    (
+                        results.append(identifier.SeriesInstanceUID)
+                        if find_series
+                        else results.append(identifier.SOPInstanceUID)
+                    )
 
         except Exception as e:
             logger.error(str(e))
@@ -1147,6 +1149,8 @@ class ProjectController(AE):
             _("PHI-Accession"),
             _("ANON-StudyInstanceUID"),
             _("PHI-StudyInstanceUID"),
+            _("Number of Series"),
+            _("Number of Instances"),
         ]
         phi_data = []
         # Create PHI data table from anonymizer model lookup tables:
@@ -1165,6 +1169,8 @@ class ProjectController(AE):
                         study.accession_number,
                         self.anonymizer.model._uid_lookup[study.study_uid],
                         study.study_uid,
+                        len(study.series),
+                        sum([s.instances for s in study.series]),
                     )
                 )
 

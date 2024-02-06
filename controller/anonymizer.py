@@ -13,14 +13,14 @@ from queue import Queue
 from pydicom import Dataset, Sequence, dcmread
 from utils.translate import _
 from utils.storage import local_storage_path
-from model.project import DICOMNode, Study, PHI, ProjectModel
+from model.project import DICOMNode, Study, Series, PHI, ProjectModel
 from model.anonymizer import AnonymizerModel
 
 logger = logging.getLogger(__name__)
 
 
 class AnonymizerController:
-    # TODO: where best to put these string constants?
+    # TODO: where best to put these string constants? Make available via UX?
     # TODO: link to app title & version
     deidentification_method = _("RSNA DICOM ANONYMIZER")
     deidentification_methods = [
@@ -41,7 +41,7 @@ class AnonymizerController:
     required_attributes = [
         "SOPClassUID",
         "SOPInstanceUID",
-        "PatientID",
+        "PatientID",  # TODO: handle missing PatientID
         "StudyInstanceUID",
         "SeriesInstanceUID",
     ]
@@ -164,14 +164,34 @@ class AnonymizerController:
         def study_from_dataset(ds: Dataset) -> Study:
             return Study(
                 str(ds.StudyDate) if hasattr(phi_ds, "StudyDate") else "?",
-                self._hash_date(ds.StudyDate, phi_ds.PatientID)[0]
-                if hasattr(phi_ds, "StudyDate") and hasattr(phi_ds, "PatientID")
-                else 0,
+                (
+                    self._hash_date(ds.StudyDate, phi_ds.PatientID)[0]
+                    if hasattr(phi_ds, "StudyDate") and hasattr(phi_ds, "PatientID")
+                    else 0
+                ),
                 str(ds.AccessionNumber) if hasattr(phi_ds, "AccessionNumber") else "?",
-                str(ds.StudyInstanceUID)
-                if hasattr(phi_ds, "StudyInstanceUID")
-                else "?",
+                (
+                    str(ds.StudyInstanceUID)
+                    if hasattr(phi_ds, "StudyInstanceUID")
+                    else "?"
+                ),
                 source,
+                [
+                    Series(
+                        (
+                            ds.SeriesInstanceUID
+                            if hasattr(phi_ds, "SeriesInstanceUID")
+                            else "?"
+                        ),
+                        (
+                            str(ds.SeriesDescription)
+                            if hasattr(phi_ds, "SeriesDescription")
+                            else "?"
+                        ),
+                        str(ds.Modality) if hasattr(phi_ds, "Modality") else "?",
+                        1,
+                    )
+                ],
             )
 
         anon_patient_id = self.model.get_anon_patient_id(phi_ds.PatientID)
@@ -196,6 +216,59 @@ class AnonymizerController:
 
             phi.studies.append(study_from_dataset(phi_ds))
             self.model.set_phi(anon_patient_id, phi)
+
+    def update_phi_from_new_instance(self, ds: Dataset, source: DICOMNode | str):
+        # Study PHI already captured, update series and instance counts from new instance:
+        anon_patient_id = self.model.get_anon_patient_id(ds.PatientID)
+        assert anon_patient_id != None
+        phi = self.model.get_phi(anon_patient_id)
+        if phi == None:
+            msg = f"Existing patient {anon_patient_id} not found in phi_lookup"
+            logger.error(msg)
+            raise RuntimeError(msg)
+
+        # Find study in PHI:
+        if phi.studies is not None and ds.StudyInstanceUID is not None:
+            study = next(
+                (
+                    study
+                    for study in phi.studies
+                    if study.study_uid == ds.StudyInstanceUID
+                ),
+                None,
+            )
+        else:
+            study = None
+        if study == None:
+            msg = f"Existing study {ds.StudyInstanceUID} not found in phi_lookup"
+            logger.error(msg)
+            raise RuntimeError(msg)
+
+        # Find series in study:
+        if study.series is not None and ds.SeriesInstanceUID is not None:
+            series = next(
+                (
+                    series
+                    for series in study.series
+                    if series.series_uid == ds.SeriesInstanceUID
+                ),
+                None,
+            )
+        else:
+            series = None
+
+        if series == None:
+            # NEW series, add to study:
+            study.series.append(
+                Series(
+                    str(ds.SeriesInstanceUID),
+                    str(ds.SeriesDescription),
+                    str(ds.Modality),
+                    1,
+                )
+            )
+        else:
+            series.instances += 1
 
     def _anonymize_element(self, dataset, data_element):
         # removes parentheses, spaces, and commas from tag
@@ -307,12 +380,11 @@ class AnonymizerController:
                             )
                             continue
 
-                    # TOOO: add Trace level?
-                    # logger.debug(f"PHI:\n{ds}")
-
                     # Capture PHI and store for new studies:
                     if self.model.get_anon_uid(ds.StudyInstanceUID) == None:
                         self.capture_phi_from_new_study(ds, source)
+                    else:
+                        self.update_phi_from_new_instance(ds, source)
 
                     # Anonymize dataset (overwrite phi dataset) (prevents dataset copy)
                     ds.remove_private_tags()  # TODO: provide a switch for this? how does java anon handle this? see <r> tag
@@ -340,7 +412,7 @@ class AnonymizerController:
                     block.add_new(0x2, "SH", self.project_model.trial_name)
                     block.add_new(0x3, "SH", self.project_model.site_id)
 
-                    # logger.debug(f"ANON:\n{ds}")
+                    logger.debug(f"ANON:\n{ds}")
 
                     # TODO: custom filtering via script specifying dicom field patterns to keep / quarantine / discard
                     # Save anonymized dataset to dicom file in local storage:

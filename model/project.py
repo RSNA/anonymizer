@@ -40,12 +40,21 @@ class LoggingLevels:
 
 
 @dataclass
+class Series:
+    series_uid: str
+    series_desc: str
+    modality: str
+    instances: int
+
+
+@dataclass
 class Study:
     study_date: str
     anon_date_delta: int
     accession_number: str
     study_uid: str
     source: DICOMNode | str
+    series: List[Series]
 
 
 @dataclass
