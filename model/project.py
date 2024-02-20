@@ -5,7 +5,9 @@ from pprint import pformat
 from typing import Dict, Tuple, List
 from dataclasses import dataclass, field
 from pathlib import Path
+from pynetdicom.sop_class import _STORAGE_CLASSES
 from pynetdicom._globals import ALL_TRANSFER_SYNTAXES, DEFAULT_TRANSFER_SYNTAXES
+from utils.modalities import MODALITIES
 from utils.translate import _
 
 logger = logging.getLogger(__name__)
@@ -122,15 +124,18 @@ class ProjectModel:
             password="Anonymizer2!",
         )
 
-    @staticmethod
-    def default_storage_classes() -> List[str]:
-        return [
-            "1.2.840.10008.5.1.4.1.1.1",  # "Computed Radiography Image Storage"
-            "1.2.840.10008.5.1.4.1.1.1.1",  # "Digital X-Ray Image Storage - For Presentation"
-            "1.2.840.10008.5.1.4.1.1.1.1.1",  # "Digital X-Ray Image Storage - For Processing"
-            "1.2.840.10008.5.1.4.1.1.2",  # "Computed Tomography Image Storage"
-            "1.2.840.10008.5.1.4.1.1.4",  # "Magnetic Resonance Image Storage"
-        ]
+    # @staticmethod
+    # def default_storage_classes() -> set[str]:
+    #     return [
+    #         "1.2.840.10008.5.1.4.1.1.1",  # "Computed Radiography Image Storage"
+    #         "1.2.840.10008.5.1.4.1.1.1.1",  # "Digital X-Ray Image Storage - For Presentation"
+    #         "1.2.840.10008.5.1.4.1.1.1.1.1",  # "Digital X-Ray Image Storage - For Processing"
+    #         "1.2.840.10008.5.1.4.1.1.2",  # "Computed Tomography Image Storage"
+    #         "1.2.840.10008.5.1.4.1.1.4",  # "Magnetic Resonance Image Storage"
+    #     ]
+
+    def default_modalities() -> List[str]:
+        return ["CR", "DX", "CT", "MR"]
 
     @staticmethod
     def default_transfer_syntaxes() -> List[str]:
@@ -149,7 +154,8 @@ class ProjectModel:
     trial_name: str = _("TRIAL")
     uid_root: str = "1.2.826.0.1.3680043.10.188"
     storage_dir: Path = field(default_factory=default_storage_dir)
-    storage_classes: List[str] = field(default_factory=default_storage_classes)
+    modalities: List[str] = field(default_factory=default_modalities)
+    storage_classes: List[str] = None  # initialised in post_init
     transfer_syntaxes: List[str] = field(default_factory=default_transfer_syntaxes)
     logging_levels: LoggingLevels = field(default_factory=default_logging_levels)
 
@@ -161,6 +167,9 @@ class ProjectModel:
     network_timeouts: NetworkTimeouts = field(default_factory=default_timeouts)
     anonymizer_script_path: Path = Path("assets/scripts/default-anonymizer.script")
 
+    def __post_init__(self):
+        self.set_storage_classes_from_modalities()
+
     def __repr__(self) -> str:
         class_name = self.__class__.__name__
         return f"{class_name}\n({pformat(self.__dict__)})"
@@ -170,3 +179,11 @@ class ProjectModel:
 
     def regenerate_site_id(self) -> None:
         self.site_id = self.default_site_id()
+
+    def set_storage_classes_from_modalities(self):
+        if self.storage_classes is None:
+            self.storage_classes = []
+        else:
+            self.storage_classes.clear()
+        for modality in self.modalities:
+            self.storage_classes += MODALITIES[modality][1]

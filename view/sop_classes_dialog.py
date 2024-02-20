@@ -5,6 +5,7 @@ from tkinter import ttk
 import logging
 from pynetdicom.sop_class import _STORAGE_CLASSES
 from utils.translate import _, insert_spaces_between_cases, insert_space_after_codes
+from utils.modalities import MODALITIES
 from model.project import ProjectModel
 
 logger = logging.getLogger(__name__)
@@ -48,10 +49,12 @@ class SOPClassesDialog(tk.Toplevel):
         self,
         parent,
         sop_classes: list[str],
+        modalities: list[str],
         title: str = _("Select Storage Classes"),
     ):
         super().__init__(master=parent)
         self.sop_classes = sop_classes
+        self.modalities = modalities
         self.title(title)
         self.geometry("750x600")
         self.resizable(False, True)
@@ -124,13 +127,13 @@ class SOPClassesDialog(tk.Toplevel):
         )
         self._select_all_button.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="w")
 
-        self._default_selection_button = ctk.CTkButton(
+        self._from_modalities_selection_button = ctk.CTkButton(
             self._button_frame,
             width=ButtonWidth,
-            text=_("Default"),
-            command=self._default_selection_button_pressed,
+            text=_("From Modalities"),
+            command=self._from_modalities_selection_button_pressed,
         )
-        self._default_selection_button.grid(
+        self._from_modalities_selection_button.grid(
             row=0, column=1, padx=PAD, pady=PAD, sticky="w"
         )
         self._ok_button = ctk.CTkButton(
@@ -166,10 +169,11 @@ class SOPClassesDialog(tk.Toplevel):
             self.sop_classes.append(item)
             self._tree.item(item, tags="green")
 
-    def _default_selection_button_pressed(self):
-        logger.info("_default_selection_button_pressed")
+    def _from_modalities_selection_button_pressed(self):
+        logger.info("_from_modalities_selection_button_pressed")
         self.sop_classes.clear()
-        self.sop_classes = [sc for sc in ProjectModel.default_storage_classes()]
+        for modality in self.modalities:
+            self.sop_classes += MODALITIES[modality][1]
         for item in self._tree.get_children():
             self._tree.item(item, tags="")
             if item in self.sop_classes:

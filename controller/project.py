@@ -7,6 +7,7 @@ import logging
 import time
 import pickle
 import csv
+import boto3
 from pathlib import Path
 from typing import List
 from dataclasses import dataclass
@@ -46,7 +47,6 @@ from model.project import (
     DICOMRuntimeError,
 )
 from .anonymizer import AnonymizerController
-import boto3
 
 
 logger = logging.getLogger(__name__)

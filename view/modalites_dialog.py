@@ -4,7 +4,7 @@ import customtkinter as ctk
 from tkinter import ttk
 import logging
 from utils.translate import _
-from utils.modalities import _MODALITIES
+from utils.modalities import MODALITIES
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ class ModalitiesDialog(tk.Toplevel):
         # scrollbar.grid(row=0, column=2, sticky="ns")
         # self._tree.configure(yscrollcommand=scrollbar.set)
 
-        for code in _MODALITIES.keys():
+        for code in MODALITIES.keys():
             tag = ""
             if code in self.modalities:
                 tag = "green"
@@ -77,7 +77,7 @@ class ModalitiesDialog(tk.Toplevel):
                     "",
                     "end",
                     iid=code,
-                    values=[code, _MODALITIES[code][0]],
+                    values=[code, MODALITIES[code][0]],
                     tags=tag,
                 )
             except Exception as e:

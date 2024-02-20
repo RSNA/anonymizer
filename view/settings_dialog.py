@@ -1,4 +1,3 @@
-import sys
 from pathlib import Path
 from typing import Union
 import tkinter as tk
@@ -13,6 +12,7 @@ from view.aws_cognito_dialog import AWSCognitoDialog
 from view.network_timeouts_dialog import NetworkTimeoutsDialog
 from utils.translate import _
 from utils.ux_fields import str_entry
+from view.modalites_dialog import ModalitiesDialog
 from view.sop_classes_dialog import SOPClassesDialog
 from view.transfer_syntaxes_dialog import TransferSyntaxesDialog
 from view.logging_levels_dialog import LoggingLevelsDialog
@@ -228,6 +228,23 @@ class SettingsDialog(tk.Toplevel):
 
         row += 1
 
+        self._modalities_label = ctk.CTkLabel(self._frame, text=_("Modalities:"))
+        self._modalities_label.grid(
+            row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw"
+        )
+
+        self._modalities_button = ctk.CTkButton(
+            self._frame,
+            width=100,
+            text=_("Select Modalities"),
+            command=self._open_modalities_dialog,
+        )
+        self._modalities_button.grid(
+            row=row, column=1, pady=(PAD, 0), padx=PAD, sticky="nw"
+        )
+
+        row += 1
+
         self._storage_classes_label = ctk.CTkLabel(
             self._frame, text=_("Storage Classes:")
         )
@@ -388,8 +405,21 @@ class SettingsDialog(tk.Toplevel):
             self._storage_dir_button.configure(text=self.model.abridged_storage_dir())
             logger.info(f"Storage Directory updated: {self.model.storage_dir}")
 
+    def _open_modalities_dialog(self):
+        dlg = ModalitiesDialog(self, self.model.modalities)
+        edited_modalities = dlg.get_input()
+        if edited_modalities is None:
+            logger.info(f"Modalities Dialog cancelled")
+            return
+        self.model.modalities = edited_modalities
+        self.model.set_storage_classes_from_modalities()
+        logger.info(f"Modalities updated: {self.model.modalities}")
+        logger.info(
+            f"Storage Classes set according to Modalities selected: {self.model.storage_classes}"
+        )
+
     def _open_storage_classes_dialog(self):
-        dlg = SOPClassesDialog(self, self.model.storage_classes)
+        dlg = SOPClassesDialog(self, self.model.storage_classes, self.model.modalities)
         edited_classes = dlg.get_input()
         if edited_classes is None:
             logger.info(f"Storage Classes cancelled")

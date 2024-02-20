@@ -3,7 +3,7 @@ from utils.translate import _
 
 # List of supported Modalities
 # Modality Code => Description, Set of Related SOP Storage Class UIDs
-_MODALITIES: Dict[str, Tuple] = {
+MODALITIES: Dict[str, Tuple[str, set]] = {
     "CR": (_("Computed Radiography"), ["1.2.840.10008.5.1.4.1.1.1"]),
     "DX": (
         _("Digital X-Ray"),

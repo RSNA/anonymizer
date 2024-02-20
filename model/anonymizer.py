@@ -44,7 +44,7 @@ class AnonymizerModel:
                 tag = str(e.attrib.get("t"))
                 operation = str(e.text) if e.text is not None else ""
                 if "@remove" not in operation:
-                    self._tag_keep[tag]: str = operation
+                    self._tag_keep[tag] = operation
 
             filtered_tag_keep = {k: v for k, v in self._tag_keep.items() if v != ""}
             logger.info(
