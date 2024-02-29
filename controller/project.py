@@ -66,7 +66,8 @@ class FindRequest:
 @dataclass
 class FindResponse:
     status: Dataset
-    identifier: Dataset | None
+    study_result: Dataset | None
+    series_results: list[Dataset] | None
 
 
 @dataclass
@@ -105,15 +106,18 @@ class ProjectController(AE):
     _export_file_time_slice_interval = 0.1  # seconds
     _patient_export_thread_pool_size = 4
     _study_move_thread_pool_size = 4
-    _query_result_required_attributes = [
+    _study_query_result_required_attributes = [
         "PatientID",
         "PatientName",
         "StudyInstanceUID",
-        # "StudyDate",
-        # "AccessionNumber",
         "ModalitiesInStudy",
         "NumberOfStudyRelatedSeries",
         "NumberOfStudyRelatedInstances",
+    ]
+    _series_query_result_required_attributes = [
+        "StudyInstanceUID",
+        "SeriesInstanceUID",
+        "NumberOfSeriesRelatedInstances",
     ]
     _query_result_fields_to_remove = [
         "QueryRetrieveLevel",
@@ -121,10 +125,12 @@ class ProjectController(AE):
         "SpecificCharacterSet",
     ]
 
-    def _missing_query_result_attributes(self, ds: Dataset) -> list[str]:
+    def _missing_attributes(
+        self, required_attributes: list[str], ds: Dataset
+    ) -> list[str]:
         return [
             attr_name
-            for attr_name in self._query_result_required_attributes
+            for attr_name in required_attributes
             if attr_name not in ds or getattr(ds, attr_name) == ""
         ]
 
@@ -494,6 +500,94 @@ class ProjectController(AE):
                 association.release()
             return files_sent
 
+    def _query(
+        self,
+        query_association: Association,
+        ds: Dataset,
+        ux_Q=None,
+        required_attributes: list[str] = None,
+    ) -> list[Dataset]:
+        results = []
+        error_msg = ""
+        self._abort_query = False
+        try:
+
+            responses = query_association.send_c_find(
+                ds,
+                query_model=self._STUDY_ROOT_QR_CLASSES[0],
+            )
+
+            # Process the response(s) received from the peer
+            # one response with C_PENDING with identifier and one response with C_SUCCESS and no identifier
+            for status, identifier in responses:
+                if self._abort_query:
+                    raise RuntimeError("Query aborted")
+
+                if not status:
+                    raise ConnectionError(
+                        "Connection timed out, was aborted, or received an invalid response"
+                    )
+                if status.Status not in (
+                    C_SUCCESS,
+                    C_PENDING_A,
+                    C_PENDING_B,
+                ):
+                    logger.error(f"C-FIND failure, status: {hex(status.Status)}")
+                    raise DICOMRuntimeError(
+                        f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}"
+                    )
+
+                if identifier:
+                    if required_attributes:
+                        missing_attributes = self._missing_attributes(
+                            required_attributes, identifier
+                        )
+                        if missing_attributes != []:
+                            logger.error(
+                                f"Query result is missing required attributes: {missing_attributes}"
+                            )
+                            logger.error(f"\n{identifier}")
+                            continue
+
+                    self._strip_query_result_fields(identifier)
+
+                    results.append(identifier)
+
+                    # Only return identifiers back to UX
+                    # do not return (C_SUCCESS, None) as in find()
+                    if ux_Q:
+                        ux_Q.put(FindResponse(status, identifier))
+
+            # Signal success to UX once full list of accession numbers has been processed
+            if ux_Q:
+                logger.info(f"Find Accession Numbers complete")
+                ds = Dataset()
+                ds.Status = C_SUCCESS
+                ux_Q.put(FindResponse(ds, None))
+
+        except (
+            ConnectionError,
+            TimeoutError,
+            RuntimeError,
+            ValueError,
+            AttributeError,
+            DICOMRuntimeError,
+        ) as e:
+            # Reflect status dataset back to UX client to provide find error detail
+            error_msg = str(e)  # latch exception error msg
+            logger.error(error_msg)
+            if ux_Q:
+                ds = Dataset()
+                ds.Status = C_FAILURE
+                ds.ErrorComment = error_msg
+                ux_Q.put(FindResponse(ds, None))
+
+        finally:
+            if query_association:
+                query_association.release()
+
+        return results
+
     # Blocking: Query remote server for studies matching the given query dataset:
     def find(
         self,
@@ -504,7 +598,7 @@ class ProjectController(AE):
         study_date: str,
         modality: str,
         ux_Q=None,
-        verify_attributes=True,
+        verify_attributes=False,
     ) -> list[Dataset] | None:
         assert scp_name in self.model.remote_scps
         scp = self.model.remote_scps[scp_name]
@@ -512,13 +606,17 @@ class ProjectController(AE):
             f"C-FIND to {scp} Study Level Query: {name}, {id}, {acc_no}, {study_date}, {modality}"
         )
 
+        # Phase 1: Study Level Query
         ds = Dataset()
         ds.QueryRetrieveLevel = "STUDY"
+
         ds.PatientName = name
         ds.PatientID = id
         ds.AccessionNumber = acc_no
         ds.StudyDate = study_date
-        ds.ModalitiesInStudy = modality
+        ds.Modality = modality  # TODO: does this have any effect @STUDY QR Level?
+
+        ds.ModalitiesInStudy = ""
         ds.NumberOfStudyRelatedSeries = ""
         ds.NumberOfStudyRelatedInstances = ""
         ds.StudyDescription = ""
@@ -533,52 +631,72 @@ class ProjectController(AE):
                 scp_name, self.get_study_root_qr_contexts()
             )
 
-            responses = query_association.send_c_find(
+            study_responses = query_association.send_c_find(
                 ds,
                 query_model=self._STUDY_ROOT_QR_CLASSES[0],
             )
 
-            for status, identifier in responses:
+            for study_status, study_result in study_responses:
                 if self._abort_query:
                     raise RuntimeError("Query aborted")
 
                 # Timeouts (Network & DIMSE) are reflected by status being None:
-                if not status:
+                if not study_status:
                     raise ConnectionError(
                         "Connection timed out (DIMSE or IDLE), was aborted, or received an invalid response"
                     )
 
-                if status.Status not in (
+                if study_status.Status not in (
                     C_SUCCESS,
                     C_PENDING_A,
                     C_PENDING_B,
                 ):
-                    logger.error(f"C-FIND failure, status: {hex(status.Status)}")
+                    logger.error(
+                        f"C-FIND Study failure, status: {hex(study_status.Status)}"
+                    )
                     raise DICOMRuntimeError(
-                        f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status]}"
+                        f"C-FIND Study Failed: {QR_FIND_SERVICE_CLASS_STATUS[study_status.Status]}"
                     )
 
-                if status.Status == C_SUCCESS:
-                    logger.info("C-FIND query success")
+                if study_status.Status == C_SUCCESS:
+                    logger.info("C-FIND study query success")
 
-                if identifier:
+                if study_result:
                     if verify_attributes:
-                        missing_attributes = self._missing_query_result_attributes(
-                            identifier
+                        missing_study_attributes = (
+                            self._missing_query_result_attributes(study_result)
                         )
-                        if missing_attributes != []:
+                        if missing_study_attributes != []:
                             logger.error(
-                                f"Query result is missing required attributes: {missing_attributes}"
+                                f"Query result is missing required attributes: {missing_study_attributes}"
                             )
-                            logger.error(f"\n{identifier}")
+                            logger.error(f"\n{study_result}")
                             continue
 
-                    self._strip_query_result_fields(identifier)
+                    self._strip_query_result_fields(study_result)
 
-                    results.append(identifier)
+                    # Phase 2: Series level query for matching study:
+                    # TODO: this could be parallelized on full study_result list
+                    # TODO: could this be handled with a recursive function(ds) -> list[ds]?
+                    ds.clear()
+                    ds.QueryRetrieveLevel = "SERIES"
+                    ds.NumberOfSeriesRelatedInstances = ""
+                    ds.SeriesDescription = ""
+                    ds.SeriesDate = ""
+                    ds.SeriesInstanceUID = ""
+                    ds.StudyInstanceUID = study_result.StudyInstanceUID
+
+                    study_responses = query_association.send_c_find(
+                        ds,
+                        query_model=self._STUDY_ROOT_QR_CLASSES[0],
+                    )
+
+                    results.append(
+                        study_result
+                    )  # TODO: enhance tests to handle series_results
 
                 if ux_Q:
-                    ux_Q.put(FindResponse(status, identifier))
+                    ux_Q.put(FindResponse(study_status, study_result, None))
 
         except (
             ConnectionError,
@@ -637,9 +755,9 @@ class ProjectController(AE):
 
         ds = Dataset()
         ds.QueryRetrieveLevel = "STUDY"
-        ds.PatientName = ""
-        ds.PatientID = ""
-        ds.StudyDate = ""
+        # ds.PatientName = ""
+        # ds.PatientID = ""
+        # ds.StudyDate = ""
         ds.ModalitiesInStudy = ""
         ds.NumberOfStudyRelatedSeries = ""
         ds.NumberOfStudyRelatedInstances = ""

@@ -13,11 +13,12 @@ from utils.storage import count_studies_series_images
 
 logger = logging.getLogger(__name__)
 
+
 class ExportView(tk.Toplevel):
-#class ExportView(ctk.CTkToplevel):
+    # class ExportView(ctk.CTkToplevel):
     ux_poll_export_response_interval = 500  # milli-seconds
 
-    #TODO: manage fonts using theme manager
+    # TODO: manage fonts using theme manager
     fixed_width_font = ("Courier", 10, "bold")
 
     # Export attributes to display in the results Treeview:
@@ -78,7 +79,7 @@ class ExportView(tk.Toplevel):
         self._export_frame.grid_columnconfigure(3, weight=1)
 
         # Treeview:
-        
+
         # TODO: see if theme manager can do this and stor in rsna_color_scheme_font.json
         style = ttk.Style()
         style.configure("Treeview", font=self.fixed_width_font)
@@ -190,7 +191,7 @@ class ExportView(tk.Toplevel):
 
     def busy(self):
         return self._export_active
-    
+
     def _disable_action_buttons(self):
         logger.info(f"_disable_action_buttons")
         self._refresh_button.configure(state="disabled")
@@ -198,9 +199,7 @@ class ExportView(tk.Toplevel):
         self._select_all_button.configure(state="disabled")
         self._clear_selection_button.configure(state="disabled")
         self._create_phi_button.configure(state="disabled")
-
         self._cancel_export_button.configure(state="enabled")
-
         self._tree.configure(selectmode="none")
 
     def _enable_action_buttons(self):
@@ -209,10 +208,11 @@ class ExportView(tk.Toplevel):
         self._export_button.configure(state="enabled")
         self._select_all_button.configure(state="enabled")
         self._clear_selection_button.configure(state="enabled")
-        self._create_phi_button.configure(state="enabled")
-
+        if not self._tree.get_children():
+            self._create_phi_button.configure(state="disabled")
+        else:
+            self._create_phi_button.configure(state="enabled")
         self._cancel_export_button.configure(state="disabled")
-
         self._tree.configure(selectmode="extended")
 
     def _update_tree_from_storage_direcctory(self):
@@ -267,6 +267,7 @@ class ExportView(tk.Toplevel):
         # Clear tree to ensure all items are removed before re-populating:
         self._tree.delete(*self._tree.get_children())
         self._update_tree_from_storage_direcctory()
+        self._enable_action_buttons()
 
     def _select_all_button_pressed(self):
         if self._export_active:
@@ -293,7 +294,7 @@ class ExportView(tk.Toplevel):
                 master=self,
                 title=_("Error Creating PHI CSV File"),
                 message=csv_path,
-                parent=self
+                parent=self,
             )
             return
         else:
@@ -301,7 +302,7 @@ class ExportView(tk.Toplevel):
             messagebox.showinfo(
                 title=_("PHI CSV File Created"),
                 message=f"PHI Lookup Data saved to: {csv_path}",
-                parent=self
+                parent=self,
             )
 
     def _update_export_progress(self, cancel: bool = False):
@@ -378,7 +379,7 @@ class ExportView(tk.Toplevel):
                     message=_(
                         f"Failed to export {len(self._patient_ids_to_export)} patient(s)"
                     ),
-                    parent=self
+                    parent=self,
                 ):
                     # Select failed patients in treeview to retry export:
                     self._tree.selection_add(self._patient_ids_to_export)
@@ -403,7 +404,6 @@ class ExportView(tk.Toplevel):
             logger.error(f"Selection disabled, export is active")
             return
 
-        
         if self._controller.echo("EXPORT"):
             self._export_button.configure(text_color="light green")
         else:
@@ -411,7 +411,7 @@ class ExportView(tk.Toplevel):
             messagebox.showerror(
                 title=_("Connection Error"),
                 message=_(f"Export Server Failed DICOM C-ECHO"),
-                parent=self
+                parent=self,
             )
             return
 
@@ -426,7 +426,7 @@ class ExportView(tk.Toplevel):
                     f"No patients selected for export."
                     " Use SHIFT+Click and/or CMD/CTRL+Click to select multiple patients."
                 ),
-                parent=self
+                parent=self,
             )
             return
 
@@ -475,6 +475,6 @@ class ExportView(tk.Toplevel):
                 return
             else:
                 self._controller.abort_export()
-               
+
         self.grab_release()
         self.destroy()

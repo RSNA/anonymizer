@@ -474,6 +474,7 @@ class SettingsDialog(tk.Toplevel):
             trial_name=self.trial_name_var.get(),
             uid_root=self.uidroot_var.get(),
             storage_dir=self.model.storage_dir,
+            modalities=self.model.modalities,
             storage_classes=self.model.storage_classes,
             transfer_syntaxes=self.model.transfer_syntaxes,
             logging_levels=self.model.logging_levels,

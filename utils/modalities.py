@@ -3,6 +3,7 @@ from utils.translate import _
 
 # List of supported Modalities
 # Modality Code => Description, Set of Related SOP Storage Class UIDs
+# see: https://dicom.nema.org/medical/dicom/current/output/chtml/part16/sect_CID_29.html
 MODALITIES: Dict[str, Tuple[str, set]] = {
     "CR": (_("Computed Radiography"), ["1.2.840.10008.5.1.4.1.1.1"]),
     "DX": (
@@ -67,8 +68,8 @@ MODALITIES: Dict[str, Tuple[str, set]] = {
 #     "ECG",
 #     "VL",
 #     "MPR":  _("Multi-planar Reconstruction"),
-#     "PDF" : _("Encapsulated PDF"),
-#     "CDA", _("Clinical Document Architecture")
+#     "PDF": _("Encapsulated PDF"),
+#     "CDA": _("Clinical Document Architecture")
 #     "STL",
 #     "OBJ",
 #     "MTL",

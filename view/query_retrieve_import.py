@@ -155,19 +155,33 @@ class QueryView(tk.Toplevel):
             sticky="nw",
         )
         # Modality:
-        self._modality_var = str_entry(
-            view=self._query_frame,
-            label=_("Modality:"),
-            initial_value="",
-            min_chars=modality_min_chars,
-            max_chars=modality_max_chars,
-            charset=string.ascii_uppercase,
-            tooltipmsg=None,  # _("Modality Code"),
-            row=0,
-            col=2,
-            pad=PAD,
-            sticky="nw",
+        _modality_label = ctk.CTkLabel(self._query_frame, text=_("Modality:"))
+        _modality_label.grid(row=0, column=2, padx=PAD, pady=(PAD, 0), sticky="nw")
+        self._modality_var = ctk.StringVar(self._query_frame)
+        modalities_optionmenu = ctk.CTkOptionMenu(
+            self._query_frame,
+            width=60,
+            dynamic_resizing=True,
+            values=self._controller.model.modalities,
+            variable=self._modality_var,
         )
+        modalities_optionmenu.grid(
+            row=0, column=3, padx=PAD, pady=(PAD, 0), sticky="nw"
+        )
+        # Modality free text entry:
+        # self._modality_var = str_entry(
+        #     view=self._query_frame,
+        #     label=_("Modality:"),
+        #     initial_value="",
+        #     min_chars=modality_min_chars,
+        #     max_chars=modality_max_chars,
+        #     charset=string.ascii_uppercase,
+        #     tooltipmsg=None,  # _("Modality Code"),
+        #     row=0,
+        #     col=2,
+        #     pad=PAD,
+        #     sticky="nw",
+        # )
 
         self._load_accession_file_button = ctk.CTkButton(
             self._query_frame,
@@ -375,8 +389,8 @@ class QueryView(tk.Toplevel):
                 resp: FindResponse = ux_Q.get_nowait()
                 # logger.debug(f"{resp}")
                 if resp.status.Status in [C_PENDING_A, C_PENDING_B, C_SUCCESS]:
-                    if resp.identifier:
-                        results.append(resp.identifier)
+                    if resp.study_result:
+                        results.append(resp.study_result)
                     if resp.status.Status == C_SUCCESS:
                         query_finished = True
                 else:
@@ -515,9 +529,11 @@ class QueryView(tk.Toplevel):
             "QUERY",
             self._patient_name_var.get(),
             self._patient_id_var.get(),
-            self._accession_no_var.get()
-            if not self._acc_no_list
-            else self._acc_no_list,
+            (
+                self._accession_no_var.get()
+                if not self._acc_no_list
+                else self._acc_no_list
+            ),
             self._study_date_var.get(),
             self._modality_var.get(),
             ux_Q,
