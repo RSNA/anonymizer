@@ -5,13 +5,11 @@ from pydicom.data import get_testdata_file
 from pydicom import Dataset
 from controller.project import (
     ProjectController,
-    ExportRequest,
-    ExportResponse,
-    MoveRequest,
+    ExportStudyRequest,
+    ExportStudyResponse,
+    MoveStudiesRequest,
 )
 from model.project import DICOMNode, DICOMRuntimeError
-
-# from controller.dicom_move_scu import move, move_studies, MoveRequest
 from controller.dicom_C_codes import C_SUCCESS, C_PENDING_A, C_PENDING_B
 
 # from controller.dicom_send_scu import (
@@ -78,7 +76,7 @@ def send_files_to_scp(
 
 
 def find_all_studies_on_pacs_simulator_scp(controller: ProjectController):
-    results = controller.find(
+    results = controller.find_studies(
         PACSSimulatorSCP.aet,
         "",
         "",
@@ -95,7 +93,7 @@ def move_studies_from_pacs_simulator_scp_to_local_scp(
     study_ids: list[str], controller: ProjectController
 ) -> bool:
     ux_Q: Queue[Dataset] = Queue()
-    req: MoveRequest = MoveRequest(
+    req: MoveStudiesRequest = MoveStudiesRequest(
         PACSSimulatorSCP.aet, LocalStorageSCP.aet, study_ids, ux_Q
     )
     controller.move_studies(req)
@@ -157,13 +155,15 @@ def verify_files_sent_to_pacs_simulator(
 def export_patients_from_local_storage_to_test_pacs(
     patient_ids: list[str], controller
 ) -> bool:
-    ux_Q: Queue[ExportResponse] = Queue()
-    req: ExportRequest = ExportRequest(PACSSimulatorSCP.aet, patient_ids, ux_Q)
+    ux_Q: Queue[ExportStudyResponse] = Queue()
+    req: ExportStudyRequest = ExportStudyRequest(
+        PACSSimulatorSCP.aet, patient_ids, ux_Q
+    )
     controller.export_patients(req)
     export_count = 0
     while not export_count == len(patient_ids):
         try:
-            resp: ExportResponse = ux_Q.get(timeout=6)
+            resp: ExportStudyResponse = ux_Q.get(timeout=6)
             assert not resp.error
 
             if resp.complete:

@@ -7,7 +7,7 @@ import pytest
 import logging
 from model import project
 
-from model.project import ProjectModel
+from model.project import ProjectModel, NetworkTimeouts
 from controller.project import ProjectController
 import tests.controller.dicom_pacs_simulator_scp as pacs_simulator_scp
 from tests.controller.dicom_test_nodes import (
@@ -23,7 +23,7 @@ from tests.controller.dicom_test_nodes import (
 
 # Configure the logging format
 logging.basicConfig(
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    format="%(asctime)s [%(levelname)s] %(name)s:%(funcName)s[%(lineno)s]: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     level=logging.DEBUG,
 )
@@ -66,6 +66,7 @@ def controller(temp_dir):
         scu=LocalSCU,
         scp=LocalStorageSCP,
         remote_scps=RemoteSCPDict,
+        network_timeouts=NetworkTimeouts(2, 2, 2, 3),
     )
 
     project_controller = ProjectController(project_model)

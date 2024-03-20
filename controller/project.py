@@ -1,5 +1,5 @@
 import os
-from typing import cast
+from typing import cast, Dict, Optional, List
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
@@ -35,6 +35,7 @@ from .dicom_C_codes import (
     C_SUCCESS,
     C_PENDING_A,
     C_PENDING_B,
+    C_WARNING,
     C_FAILURE,
     C_STORE_DATASET_ERROR,
     C_STORE_DECODE_ERROR,
@@ -52,8 +53,75 @@ from .anonymizer import AnonymizerController
 logger = logging.getLogger(__name__)
 
 
+class InstanceUIDHierarchy:
+    def __init__(self, uid: str, imported: bool = False):
+        self.uid = uid
+        self.imported = imported
+
+
+class SeriesUIDHierarchy:
+    def __init__(
+        self, uid: str, modality: str = None, description: str = None, instances: Dict[str, InstanceUIDHierarchy] = {}
+    ):
+        self.uid = uid
+        self.modality = modality
+        self.description = description
+        self.instances = instances
+        # from send_c_move status response:
+        self.completed_sub_ops = 0
+        self.failed_sub_ops = 0
+        self.remaining_sub_ops = 0
+        self.warning_sub_ops = 0
+
+    def get_number_of_instances(self) -> int:
+        return len(self.instances)
+
+    def find_instance(self, instance_uid: str) -> Optional[InstanceUIDHierarchy]:
+        if instance_uid in self.instances:
+            return self.instances[instance_uid]
+        return None
+
+    def get_pending_instances(self) -> List[InstanceUIDHierarchy]:
+        return [instance for instance in self.instances.values() if not instance.imported]
+
+    def update_move_stats(self, status: Dataset):
+        if hasattr(status, "NumberOfRemainingSuboperations"):
+            self.remaining_sub_ops = status.NumberOfRemainingSuboperations
+        else:
+            self.remaining_sub_ops = 0  # When status is C_SUCCESS
+        self.completed_sub_ops = status.NumberOfCompletedSuboperations
+        self.failed_sub_ops = status.NumberOfFailedSuboperations
+        self.warning_sub_ops = status.NumberOfWarningSuboperations
+
+
+class StudyUIDHierarchy:
+    def __init__(self, uid: str, series: Dict[str, SeriesUIDHierarchy] = None):
+        self.uid = uid
+        self.series = series if series is not None else {}
+
+    def get_number_of_instances(self) -> int:
+        count = 0
+        for series_obj in self.series.values():
+            count += len(series_obj.instances)
+        return count
+
+    def find_instance(self, instance_uid: str) -> Optional[InstanceUIDHierarchy]:
+        for series in self.series.values():
+            if instance_uid in series.instances:
+                return series.instances[instance_uid]
+        return None
+
+    def get_pending_instances(self) -> List[InstanceUIDHierarchy]:
+        return [
+            instance
+            for series_obj in self.series.values()
+            for instance in series_obj.instances.values()
+            if not instance.imported
+        ]
+
+
 @dataclass
-class FindRequest:
+class FindStudyRequest:
     scp_name: str
     name: str
     id: str
@@ -64,21 +132,20 @@ class FindRequest:
 
 
 @dataclass
-class FindResponse:
+class FindStudyResponse:
     status: Dataset
     study_result: Dataset | None
-    series_results: list[Dataset] | None
 
 
 @dataclass
-class ExportRequest:
+class ExportStudyRequest:
     dest_name: str
     patient_ids: list[str]  # list of patient IDs to export
     ux_Q: Queue  # queue for UX updates for the full export
 
 
 @dataclass
-class ExportResponse:
+class ExportStudyResponse:
     patient_id: str
     files_sent: int  # incremented for each file sent successfully
     error: str | None  # error message
@@ -86,7 +153,7 @@ class ExportResponse:
 
 
 @dataclass
-class MoveRequest:
+class MoveStudiesRequest:
     scp_name: str
     dest_scp_ae: str
     study_uids: list[str]
@@ -106,7 +173,7 @@ class ProjectController(AE):
     _export_file_time_slice_interval = 0.1  # seconds
     _patient_export_thread_pool_size = 4
     _study_move_thread_pool_size = 4
-    _study_query_result_required_attributes = [
+    _required_attributes_study_query = [
         "PatientID",
         "PatientName",
         "StudyInstanceUID",
@@ -114,7 +181,7 @@ class ProjectController(AE):
         "NumberOfStudyRelatedSeries",
         "NumberOfStudyRelatedInstances",
     ]
-    _series_query_result_required_attributes = [
+    _required_attributes_series_query = [
         "StudyInstanceUID",
         "SeriesInstanceUID",
         "NumberOfSeriesRelatedInstances",
@@ -125,14 +192,8 @@ class ProjectController(AE):
         "SpecificCharacterSet",
     ]
 
-    def _missing_attributes(
-        self, required_attributes: list[str], ds: Dataset
-    ) -> list[str]:
-        return [
-            attr_name
-            for attr_name in required_attributes
-            if attr_name not in ds or getattr(ds, attr_name) == ""
-        ]
+    def _missing_attributes(self, required_attributes: list[str], ds: Dataset) -> list[str]:
+        return [attr_name for attr_name in required_attributes if attr_name not in ds or getattr(ds, attr_name) == ""]
 
     def _strip_query_result_fields(self, ds: Dataset) -> None:
         for field in self._query_result_fields_to_remove:
@@ -209,9 +270,7 @@ class ProjectController(AE):
 
     # FOR SCP AE: Set allowed storage and verification contexts and corresponding transfer syntaxes
     def set_verification_context(self):
-        self.add_supported_context(
-            self._VERIFICATION_CLASS, self.model.transfer_syntaxes
-        )
+        self.add_supported_context(self._VERIFICATION_CLASS, self.model.transfer_syntaxes)
         return
 
     def set_radiology_storage_contexts(self) -> None:
@@ -239,9 +298,7 @@ class ProjectController(AE):
     # For testing:
     def get_radiology_storage_contexts_BIGENDIAN(self) -> List[PresentationContext]:
         return [
-            build_context(
-                abstract_syntax, "1.2.840.10008.1.2.2"
-            )  # Explicit VR Big Endian,
+            build_context(abstract_syntax, "1.2.840.10008.1.2.2")  # Explicit VR Big Endian,
             for abstract_syntax in self.model.storage_classes
         ]
 
@@ -251,9 +308,15 @@ class ProjectController(AE):
             for abstract_syntax in self._STUDY_ROOT_QR_CLASSES
         ]
 
+    def get_study_root_find_contexts(self) -> List[PresentationContext]:
+        return [build_context(self._STUDY_ROOT_QR_CLASSES[0])]  # default transfer syntaxes
+
+    def get_study_root_move_contexts(self) -> List[PresentationContext]:
+        return [build_context(self._STUDY_ROOT_QR_CLASSES[1])]  # default transfer syntaxes
+
     # Handlers:
     def _handle_abort(self, event: Event):
-        logger.error("_handle_abort")
+        logger.error(f"_handle_abort SCP Closed Association: event:{event._event}")
         # if self._move_futures:
         #     logger.error("Aborting move futures")
         #     self._abort_move = True
@@ -287,27 +350,21 @@ class ProjectController(AE):
         # Add the File Meta Information
         ds.file_meta = FileMetaDataset(event.file_meta)
 
-        remote_scu = DICOMNode(
-            remote["address"], remote["port"], remote["ae_title"], False
-        )
+        remote_scu = DICOMNode(remote["address"], remote["port"], remote["ae_title"], False)
         logger.debug(remote_scu)
 
         # DICOM Dataset integrity checking:
         missing_attributes = self.anonymizer.missing_attributes(ds)
         if missing_attributes != []:
-            logger.error(
-                f"Incoming dataset is missing required attributes: {missing_attributes}"
-            )
+            logger.error(f"Incoming dataset is missing required attributes: {missing_attributes}")
             logger.error(f"\n{ds}")
             return C_STORE_DATASET_ERROR
 
-        if self.anonymizer.model.get_anon_uid(ds.SOPInstanceUID):
+        if self.anonymizer.model.uid_received(ds.SOPInstanceUID):
             logger.info(f"Instance already stored:{ds.PatientID}/{ds.SOPInstanceUID}")
             return C_SUCCESS
 
-        logger.info(
-            f"=>{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}"
-        )
+        logger.info(f"=>{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}")
 
         self.anonymizer.anonymize_dataset_and_store(remote_scu, ds, self.storage_dir)
         return C_SUCCESS
@@ -331,9 +388,7 @@ class ProjectController(AE):
                 evt_handlers=cast(List[EventHandlerType], handlers),
             )
         except Exception as e:
-            msg = _(
-                f"Failed to start DICOM C-STORE scp on {self.model.scp}, Error: {str(e)}"
-            )
+            msg = _(f"Failed to start DICOM C-STORE scp on {self.model.scp}, Error: {str(e)}")
             logger.error(msg)
             raise DICOMRuntimeError(msg)
 
@@ -371,9 +426,7 @@ class ProjectController(AE):
             )
             if not association.is_established:
                 raise ConnectionError(f"Connection error to: {remote_scp}")
-            logger.debug(
-                f"Association established with {association.acceptor.ae_title}"
-            )
+            logger.debug(f"Association established with {association.acceptor.ae_title}")
         except Exception as e:  # (ConnectionError, TimeoutError, RuntimeError) as e:
             logger.error(f"Error establishing association: {e}")
             raise
@@ -387,25 +440,19 @@ class ProjectController(AE):
             association = self._connect_to_scp(scp, [self.get_verification_context()])
             status = (Dataset)(association.send_c_echo())
             if not status:
-                raise ConnectionError(
-                    "Connection timed out, was aborted, or received an invalid response"
-                )
+                raise ConnectionError("Connection timed out, was aborted, or received an invalid response")
             if status.Status == C_SUCCESS:
                 logger.info(f"C-ECHO Success")
                 association.release()
                 return True
             else:
                 logger.error(status)
-                logger.error(
-                    f"C-ECHO Failed status: {VERIFICATION_SERVICE_CLASS_STATUS[status.Status][1]}"
-                )
+                logger.error(f"C-ECHO Failed status: {VERIFICATION_SERVICE_CLASS_STATUS[status.Status][1]}")
                 association.release()
                 return False
 
         except Exception as e:
-            logger.error(
-                f"Failed DICOM C-ECHO from from {self.model.scu} to {scp}, Error: {(e)}"
-            )
+            logger.error(f"Failed DICOM C-ECHO from from {self.model.scu} to {scp}, Error: {(e)}")
             if association:
                 association.release()
             return False
@@ -416,9 +463,7 @@ class ProjectController(AE):
             logging.info(f"Already authenticated to AWS S3, verify bucket list")
             try:
                 response = self.s3.list_buckets()
-                logging.info(
-                    f"Authentication is valid. S3 buckets:", response["Buckets"]
-                )
+                logging.info(f"Authentication is valid. S3 buckets:", response["Buckets"])
                 return True
             except Exception as e:
                 logging.error("s3_list_buckets failed. Error:", e)
@@ -442,9 +487,7 @@ class ProjectController(AE):
                 return False, msg
 
             if "ChallengeName" in response:
-                msg = _(
-                    f"Unexpected Authorisation Challenge : {response['ChallengeName']}"
-                )
+                msg = _(f"Unexpected Authorisation Challenge : {response['ChallengeName']}")
                 logging.error(msg)
                 return False, msg
 
@@ -456,9 +499,7 @@ class ProjectController(AE):
 
             if "AccessToken" not in response["AuthenticationResult"]:
                 logging.error(f"AccessToken not in response: {response}")
-                return False, _(
-                    "AWS Cognito authorisation failed\n Access Token not in response"
-                )
+                return False, _("AWS Cognito authorisation failed\n Access Token not in response")
 
             session_token = response["AuthenticationResult"]["AccessToken"]
 
@@ -483,13 +524,9 @@ class ProjectController(AE):
         try:
             association = self._connect_to_scp(scp_name, send_contexts)
             for dicom_file_path in file_paths:
-                dcm_response: Dataset = association.send_c_store(
-                    dataset=dicom_file_path
-                )
+                dcm_response: Dataset = association.send_c_store(dataset=dicom_file_path)
                 if dcm_response.Status != 0:
-                    raise DICOMRuntimeError(
-                        f"DICOM Response: {STORAGE_SERVICE_CLASS_STATUS[dcm_response.Status][1]}"
-                    )
+                    raise DICOMRuntimeError(f"DICOM Response: {STORAGE_SERVICE_CLASS_STATUS[dcm_response.Status][1]}")
                 files_sent += 1
 
         except Exception as e:
@@ -499,6 +536,10 @@ class ProjectController(AE):
             if association:
                 association.release()
             return files_sent
+
+    def abort_query(self):
+        logger.info("Abort Query")
+        self._abort_query = True
 
     def _query(
         self,
@@ -514,7 +555,7 @@ class ProjectController(AE):
 
             responses = query_association.send_c_find(
                 ds,
-                query_model=self._STUDY_ROOT_QR_CLASSES[0],
+                query_model=self._STUDY_ROOT_QR_CLASSES[0],  # Find
             )
 
             # Process the response(s) received from the peer
@@ -524,28 +565,20 @@ class ProjectController(AE):
                     raise RuntimeError("Query aborted")
 
                 if not status:
-                    raise ConnectionError(
-                        "Connection timed out, was aborted, or received an invalid response"
-                    )
+                    raise ConnectionError("Connection timed out, was aborted, or received an invalid response")
                 if status.Status not in (
                     C_SUCCESS,
                     C_PENDING_A,
                     C_PENDING_B,
                 ):
                     logger.error(f"C-FIND failure, status: {hex(status.Status)}")
-                    raise DICOMRuntimeError(
-                        f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}"
-                    )
+                    raise DICOMRuntimeError(f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}")
 
                 if identifier:
                     if required_attributes:
-                        missing_attributes = self._missing_attributes(
-                            required_attributes, identifier
-                        )
+                        missing_attributes = self._missing_attributes(required_attributes, identifier)
                         if missing_attributes != []:
-                            logger.error(
-                                f"Query result is missing required attributes: {missing_attributes}"
-                            )
+                            logger.error(f"Query result is missing required attributes: {missing_attributes}")
                             logger.error(f"\n{identifier}")
                             continue
 
@@ -556,14 +589,14 @@ class ProjectController(AE):
                     # Only return identifiers back to UX
                     # do not return (C_SUCCESS, None) as in find()
                     if ux_Q:
-                        ux_Q.put(FindResponse(status, identifier))
+                        ux_Q.put(FindStudyResponse(status, identifier))
 
             # Signal success to UX once full list of accession numbers has been processed
             if ux_Q:
                 logger.info(f"Find Accession Numbers complete")
                 ds = Dataset()
                 ds.Status = C_SUCCESS
-                ux_Q.put(FindResponse(ds, None))
+                ux_Q.put(FindStudyResponse(ds, None))
 
         except (
             ConnectionError,
@@ -580,7 +613,7 @@ class ProjectController(AE):
                 ds = Dataset()
                 ds.Status = C_FAILURE
                 ds.ErrorComment = error_msg
-                ux_Q.put(FindResponse(ds, None))
+                ux_Q.put(FindStudyResponse(ds, None, None))
 
         finally:
             if query_association:
@@ -588,8 +621,8 @@ class ProjectController(AE):
 
         return results
 
-    # Blocking: Query remote server for studies matching the given query dataset:
-    def find(
+    # Blocking: Query remote server for studies matching the given query parameters:
+    def find_studies(
         self,
         scp_name: str,
         name: str,
@@ -598,13 +631,12 @@ class ProjectController(AE):
         study_date: str,
         modality: str,
         ux_Q=None,
-        verify_attributes=False,
+        verify_attributes=True,
     ) -> list[Dataset] | None:
+
         assert scp_name in self.model.remote_scps
         scp = self.model.remote_scps[scp_name]
-        logger.info(
-            f"C-FIND to {scp} Study Level Query: {name}, {id}, {acc_no}, {study_date}, {modality}"
-        )
+        logger.info(f"C-FIND to {scp} Study Level Query: {name}, {id}, {acc_no}, {study_date}, {modality}")
 
         # Phase 1: Study Level Query
         ds = Dataset()
@@ -614,7 +646,9 @@ class ProjectController(AE):
         ds.PatientID = id
         ds.AccessionNumber = acc_no
         ds.StudyDate = study_date
-        ds.Modality = modality  # TODO: does this have any effect @STUDY QR Level?
+        ds.Modality = modality
+        ds.PatientSex = ""
+        ds.PatientBirthDate = ""
 
         ds.ModalitiesInStudy = ""
         ds.NumberOfStudyRelatedSeries = ""
@@ -627,9 +661,7 @@ class ProjectController(AE):
         query_association = None
         self._abort_query = False
         try:
-            query_association = self._connect_to_scp(
-                scp_name, self.get_study_root_qr_contexts()
-            )
+            query_association = self._connect_to_scp(scp_name, self.get_study_root_find_contexts())
 
             study_responses = query_association.send_c_find(
                 ds,
@@ -651,52 +683,28 @@ class ProjectController(AE):
                     C_PENDING_A,
                     C_PENDING_B,
                 ):
-                    logger.error(
-                        f"C-FIND Study failure, status: {hex(study_status.Status)}"
-                    )
-                    raise DICOMRuntimeError(
-                        f"C-FIND Study Failed: {QR_FIND_SERVICE_CLASS_STATUS[study_status.Status]}"
-                    )
+                    logger.error(f"C-FIND Study failure, status: {hex(study_status.Status)}")
+                    raise DICOMRuntimeError(f"C-FIND Study Failed: {QR_FIND_SERVICE_CLASS_STATUS[study_status.Status]}")
 
                 if study_status.Status == C_SUCCESS:
                     logger.info("C-FIND study query success")
 
                 if study_result:
                     if verify_attributes:
-                        missing_study_attributes = (
-                            self._missing_query_result_attributes(study_result)
+                        missing_study_attributes = self._missing_attributes(
+                            self._required_attributes_study_query, study_result
                         )
                         if missing_study_attributes != []:
-                            logger.error(
-                                f"Query result is missing required attributes: {missing_study_attributes}"
-                            )
+                            logger.error(f"Query result is missing required attributes: {missing_study_attributes}")
                             logger.error(f"\n{study_result}")
                             continue
 
                     self._strip_query_result_fields(study_result)
 
-                    # Phase 2: Series level query for matching study:
-                    # TODO: this could be parallelized on full study_result list
-                    # TODO: could this be handled with a recursive function(ds) -> list[ds]?
-                    ds.clear()
-                    ds.QueryRetrieveLevel = "SERIES"
-                    ds.NumberOfSeriesRelatedInstances = ""
-                    ds.SeriesDescription = ""
-                    ds.SeriesDate = ""
-                    ds.SeriesInstanceUID = ""
-                    ds.StudyInstanceUID = study_result.StudyInstanceUID
-
-                    study_responses = query_association.send_c_find(
-                        ds,
-                        query_model=self._STUDY_ROOT_QR_CLASSES[0],
-                    )
-
-                    results.append(
-                        study_result
-                    )  # TODO: enhance tests to handle series_results
+                    results.append(study_result)
 
                 if ux_Q:
-                    ux_Q.put(FindResponse(study_status, study_result, None))
+                    ux_Q.put(FindStudyResponse(study_status, study_result))
 
         except (
             ConnectionError,
@@ -713,7 +721,7 @@ class ProjectController(AE):
                 ds = Dataset()
                 ds.Status = C_FAILURE
                 ds.ErrorComment = error_msg
-                ux_Q.put(FindResponse(ds, None))
+                ux_Q.put(FindStudyResponse(ds, None))
 
         finally:
             if query_association:
@@ -739,39 +747,36 @@ class ProjectController(AE):
         return results
 
     # Blocking: Query remote server for studies corresponding to list of accession numbers:
-    def find_acc_nos(
+    def find_studies_via_acc_nos(
         self,
         scp_name: str,
         acc_no_list: list,
         ux_Q=None,
         verify_attributes=True,
     ) -> list[Dataset] | None:
+
         assert scp_name in self.model.remote_scps
         scp = self.model.remote_scps[scp_name]
-        logger.info(
-            f"C-FIND to {scp} Accession Query: {len(acc_no_list)} accession numbers..."
-        )
+        logger.info(f"C-FIND to {scp} Accession Query: {len(acc_no_list)} accession numbers...")
         logger.debug(f"{acc_no_list}")
 
         ds = Dataset()
         ds.QueryRetrieveLevel = "STUDY"
-        # ds.PatientName = ""
-        # ds.PatientID = ""
-        # ds.StudyDate = ""
         ds.ModalitiesInStudy = ""
         ds.NumberOfStudyRelatedSeries = ""
         ds.NumberOfStudyRelatedInstances = ""
         ds.StudyDescription = ""
         ds.StudyInstanceUID = ""
+        ds.PatientName = ""
+        ds.PatientID = ""
+        ds.StudyDate = ""
 
         results = []
         error_msg = ""
         query_association = None
         self._abort_query = False
         try:
-            query_association = self._connect_to_scp(
-                scp_name, self.get_study_root_qr_contexts()
-            )
+            query_association = self._connect_to_scp(scp_name, self.get_study_root_qr_contexts())
 
             for acc_no in acc_no_list:
                 if self._abort_query:
@@ -791,28 +796,22 @@ class ProjectController(AE):
                 # one response with C_PENDING with identifier and one response with C_SUCCESS and no identifier
                 for status, identifier in responses:
                     if not status:
-                        raise ConnectionError(
-                            "Connection timed out, was aborted, or received an invalid response"
-                        )
+                        raise ConnectionError("Connection timed out, was aborted, or received an invalid response")
                     if status.Status not in (
                         C_SUCCESS,
                         C_PENDING_A,
                         C_PENDING_B,
                     ):
                         logger.error(f"C-FIND failure, status: {hex(status.Status)}")
-                        raise DICOMRuntimeError(
-                            f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}"
-                        )
+                        raise DICOMRuntimeError(f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}")
 
                     if identifier:
                         if verify_attributes:
-                            missing_attributes = self._missing_query_result_attributes(
-                                identifier
+                            missing_study_attributes = self._missing_attributes(
+                                self._required_attributes_study_query, identifier
                             )
-                            if missing_attributes != []:
-                                logger.error(
-                                    f"Query result is missing required attributes: {missing_attributes}"
-                                )
+                            if missing_study_attributes != []:
+                                logger.error(f"Query result is missing required attributes: {missing_study_attributes}")
                                 logger.error(f"\n{identifier}")
                                 continue
 
@@ -830,14 +829,14 @@ class ProjectController(AE):
                         # Only return identifiers back to UX
                         # do not return (C_SUCCESS, None) as in find()
                         if ux_Q:
-                            ux_Q.put(FindResponse(status, identifier))
+                            ux_Q.put(FindStudyResponse(status, identifier))
 
             # Signal success to UX once full list of accession numbers has been processed
             if ux_Q:
                 logger.info(f"Find Accession Numbers complete")
                 ds = Dataset()
                 ds.Status = C_SUCCESS
-                ux_Q.put(FindResponse(ds, None))
+                ux_Q.put(FindStudyResponse(ds, None))
 
         except (
             ConnectionError,
@@ -854,7 +853,7 @@ class ProjectController(AE):
                 ds = Dataset()
                 ds.Status = C_FAILURE
                 ds.ErrorComment = error_msg
-                ux_Q.put(FindResponse(ds, None))
+                ux_Q.put(FindStudyResponse(ds, None))
 
         finally:
             if query_association:
@@ -879,17 +878,126 @@ class ProjectController(AE):
 
         return results
 
-    # Non-blocking Find:
-    def find_ex(self, fr: FindRequest) -> None:
-        if isinstance(fr.acc_no, list):
-            logger.info("Find accession numbers")
-            # Due to client removing numbers as they are found, make a copy of the list:
-            if isinstance(fr.acc_no, list):
-                acc_no_list = fr.acc_no.copy()
-                fr.acc_no = acc_no_list
+    # Blocking: Query remote server for study/series/instance uid hierarchy (required for iterative move):
+    def get_study_uid_hierarchy(self, scp_name: str, study_uid: str) -> StudyUIDHierarchy:
+        assert scp_name in self.model.remote_scps
+        scp = self.model.remote_scps[scp_name]
+        study_uid_hierarchy = StudyUIDHierarchy(uid=study_uid, series={})
+        query_association: Association = None
+        self._abort_query = False
+        try:
+            # 1. Connect to SCP:
+            query_association = self._connect_to_scp(scp_name, self.get_study_root_find_contexts())
 
+            # 2. Get list of Series UIDs for the Study UID:
+            logger.info(f"C-FIND[series] to {scp} study_uid={study_uid}")
+            ds = Dataset()
+            ds.QueryRetrieveLevel = "SERIES"
+            ds.StudyInstanceUID = study_uid
+            ds.SeriesInstanceUID = ""
+            ds.SeriesDescription = ""
+            ds.Modality = ""
+
+            responses = query_association.send_c_find(
+                ds,
+                query_model=self._STUDY_ROOT_QR_CLASSES[0],  # Find
+            )
+
+            for status, identifier in responses:
+                if self._abort_query or self._abort_move:
+                    raise RuntimeError("Query aborted")
+                if not status:
+                    raise ConnectionError("Connection timed out, was aborted, or received an invalid response")
+                if status.Status not in (
+                    C_SUCCESS,
+                    C_PENDING_A,
+                    C_PENDING_B,
+                ):
+                    logger.error(f"C-FIND[series] failure, status: {hex(status.Status)}")
+                    raise DICOMRuntimeError(f"C-FIND[series] Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status]}")
+
+                if status.Status == C_SUCCESS:
+                    logger.info("C-FIND[series] query success")
+                if identifier and hasattr(identifier, "SeriesInstanceUID") and hasattr(identifier, "Modality"):
+                    if identifier.Modality in self.model.modalities:
+                        assert identifier.StudyInstanceUID == study_uid
+                        study_uid_hierarchy.series[identifier.SeriesInstanceUID] = SeriesUIDHierarchy(
+                            uid=identifier.SeriesInstanceUID,
+                            modality=identifier.Modality,
+                            description=(
+                                identifier.SeriesDescription if hasattr(identifier, "SeriesDescription") else "?"
+                            ),
+                            instances={},
+                        )
+                        logger.info(f"New Series: {study_uid_hierarchy.series[identifier.SeriesInstanceUID]}")
+                    else:
+                        logger.info(
+                            f"Skip Series:{identifier.SeriesInstanceUID} with mismatched modality: {identifier.Modality}"
+                        )
+
+            logger.info(f"StudyUID={study_uid}, {len(study_uid_hierarchy.series)} Series found")
+
+            # 3. Get list of Instance UIDs for each Series UID:
+            for series in study_uid_hierarchy.series.values():
+                ds.QueryRetrieveLevel = "IMAGE"
+                ds.SeriesInstanceUID = series.uid
+                ds.SOPInstanceUID = ""
+                responses = query_association.send_c_find(
+                    ds,
+                    query_model=self._STUDY_ROOT_QR_CLASSES[0],  # Find
+                )
+                for status, identifier in responses:
+                    if self._abort_query or self._abort_move:
+                        raise RuntimeError("Query aborted")
+                    if not status:
+                        raise ConnectionError("Connection timed out, was aborted, or received an invalid response")
+                    if status.Status not in (
+                        C_SUCCESS,
+                        C_PENDING_A,
+                        C_PENDING_B,
+                    ):
+                        logger.error(f"C-FIND[instance] failure, status: {hex(status.Status)}")
+                        raise DICOMRuntimeError(
+                            f"C-FIND[instance] Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status]}"
+                        )
+
+                    if status.Status == C_SUCCESS:
+                        logger.info("C-FIND[instance] query success")
+
+                    if (
+                        identifier
+                        and hasattr(identifier, "StudyInstanceUID")
+                        and hasattr(identifier, "SeriesInstanceUID")
+                        and hasattr(identifier, "SOPInstanceUID")
+                    ):
+                        if identifier.StudyInstanceUID == study_uid and identifier.SeriesInstanceUID == series.uid:
+                            series.instances[identifier.SOPInstanceUID] = InstanceUIDHierarchy(
+                                uid=identifier.SOPInstanceUID,
+                                imported=self.anonymizer.model.uid_received(identifier.SOPInstanceUID),
+                            )
+                        else:
+                            logger.error(f"Study and/or Series Mismatch: {identifier}")
+
+                logger.info(f"SeriesUID={series.uid}: {len(series.instances)} Instance UIDs found")
+
+        except Exception as e:
+            logger.error(str(e))
+
+        finally:
+            if query_association:
+                query_association.release()
+
+        return study_uid_hierarchy
+
+    # Non-blocking Find:
+    def find_ex(self, fr: FindStudyRequest) -> None:
+        if isinstance(fr.acc_no, list):
+            logger.info("Find studies from list of accession numbers...")
+            # Due to client removing numbers as they are found, make a copy of the list:
+            acc_no_list = fr.acc_no.copy()
+            fr.acc_no = acc_no_list
             threading.Thread(
-                target=self.find_acc_nos,
+                target=self.find_studies_via_acc_nos,
                 args=(
                     fr.scp_name,
                     fr.acc_no,
@@ -898,9 +1006,9 @@ class ProjectController(AE):
                 daemon=True,
             ).start()
         else:
-            logger.info("Find")
+            logger.info("Find studies from search parameters...")
             threading.Thread(
-                target=self.find,
+                target=self.find_studies,
                 args=(
                     fr.scp_name,
                     fr.name,
@@ -913,104 +1021,20 @@ class ProjectController(AE):
                 daemon=True,
             ).start()
 
-    def abort_query(self):
-        logger.info("Abort Query")
-        self._abort_query = True
-
-    def find_uids(
-        self, scp_name: str, study_uid: str, find_series: bool
-    ) -> list[str] | None:
-        assert scp_name in self.model.remote_scps
-        scp = self.model.remote_scps[scp_name]
-        logger.info(
-            f"find_uids: C-FIND to {scp} study_uid={study_uid}, find_series={find_series}"
-        )
-        ds = Dataset()
-        ds.QueryRetrieveLevel = "SERIES" if find_series else "IMAGE"
-        ds.StudyInstanceUID = study_uid
-        if find_series:
-            ds.SeriesInstanceUID = ""
-        else:
-            ds.SOPInstanceUID = ""
-
-        results = []
-        query_association = None
-        self._abort_query = False
-        try:
-            query_association = self._connect_to_scp(
-                scp_name, self.get_study_root_qr_contexts()
-            )
-
-            responses = query_association.send_c_find(
-                ds,
-                query_model=self._STUDY_ROOT_QR_CLASSES[0],
-            )
-
-            for status, identifier in responses:
-                if self._abort_query:
-                    raise RuntimeError("Query aborted")
-                if not status:
-                    raise ConnectionError(
-                        "Connection timed out, was aborted, or received an invalid response"
-                    )
-                if status.Status not in (
-                    C_SUCCESS,
-                    C_PENDING_A,
-                    C_PENDING_B,
-                ):
-                    logger.error(f"C-FIND failure, status: {hex(status.Status)}")
-                    raise DICOMRuntimeError(
-                        f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status]}"
-                    )
-
-                if status.Status == C_SUCCESS:
-                    logger.info("C-FIND query success")
-
-                if identifier:
-                    (
-                        results.append(identifier.SeriesInstanceUID)
-                        if find_series
-                        else results.append(identifier.SOPInstanceUID)
-                    )
-
-        except Exception as e:
-            logger.error(str(e))
-
-        finally:
-            if query_association:
-                query_association.release()
-
-        if len(results) == 0:
-            logger.info(f"No uids found for {study_uid}")
-
-        return results
-
-    # Blocking Move Study:
-    def _move_study(
+    # Blocking Move Study at Study Level:
+    def _move_study_at_study_level(
         self,
         scp_name: str,
         dest_scp_ae: str,
         study_uid: str,
         ux_Q: Queue,
     ) -> None:
-        logger.info(
-            f"C-MOVE scp:{scp_name} move to: {dest_scp_ae} study_uid: {study_uid}"
-        )
-
-        if self._abort_move:
-            raise RuntimeError("Move aborted")
+        logger.info(f"C-MOVE[Study] scp:{scp_name} move to: {dest_scp_ae} study_uid: {study_uid}")
 
         move_association = None
         error_msg = ""
         try:
-            move_association = self._connect_to_scp(
-                scp=scp_name,
-                contexts=[
-                    build_context(
-                        self._STUDY_ROOT_QR_CLASSES[1], self.model.transfer_syntaxes
-                    )
-                ],
-            )
+            move_association = self._connect_to_scp(scp_name, self.get_study_root_move_contexts())
 
             ds = Dataset()
             ds.QueryRetrieveLevel = "STUDY"
@@ -1027,39 +1051,36 @@ class ProjectController(AE):
             # Process the responses received from the remote scp:
             for status, identifier in responses:
                 if self._abort_move:
-                    logger.error(f"_move_study study_uid: {study_uid} aborted")
+                    logger.error(f"move study_uid: {study_uid} aborted")
                     move_association.abort()
                     while not ux_Q.empty():
                         ux_Q.get()
                     return
 
                 if not status:
-                    raise ConnectionError(
-                        _(
-                            f"Connection timed out or aborted moving study_uid: {study_uid}"
-                        )
-                    )
+                    raise ConnectionError(_(f"Connection timed out or aborted moving study_uid: {study_uid}"))
 
                 if status.Status not in (
                     C_SUCCESS,
                     C_PENDING_A,
                     C_PENDING_B,
                 ):
-                    logger.error(f"C-MOVE failure, status: {hex(status.Status)}")
+                    logger.error(f"C-MOVE[Study] failure, status: {hex(status.Status)}")
                     if identifier:
                         logger.error(identifier)
-                    raise DICOMRuntimeError(
-                        f"C-MOVE Failed: {QR_MOVE_SERVICE_CLASS_STATUS[status.Status][1]}"
-                    )
+                    raise DICOMRuntimeError(f"C-MOVE[Study] Failed: {QR_MOVE_SERVICE_CLASS_STATUS[status.Status][1]}")
 
                 if status.Status == C_SUCCESS:
-                    logger.info(f"C-MOVE success study_uid: {study_uid}")
+                    logger.info(f"C-MOVE[Study] success study_uid: {study_uid}")
 
-                # Add the study_uid to the status dataset:
+                if identifier:
+                    logger.info(f"identifier: {identifier}")
+
+                # Add the study_uid to the status dataset and reflect each status update back to UX:
                 status.StudyInstanceUID = study_uid
                 ux_Q.put(status)
 
-            logger.info(f"C-MOVE complete study_uid: {study_uid}")
+            logger.info(f"C-MOVE[Study] complete study_uid: {study_uid}")
 
         except (
             ConnectionError,
@@ -1084,18 +1105,154 @@ class ProjectController(AE):
             if move_association:
                 move_association.release()
 
-    # Manage bulk patient move using a thread pool:
-    def _manage_move(self, req: MoveRequest) -> None:
+    # Blocking Move Study at Series Level, status updates reflected in study_uid_hierarchy, on exception return error message:
+    def _move_study_at_series_level(
+        self,
+        scp_name: str,
+        dest_scp_ae: str,
+        study: StudyUIDHierarchy,
+    ) -> str | None:
+
+        logger.info(f"C-MOVE[{study.uid}] scp:{scp_name} move to: {dest_scp_ae} ")
+
+        move_association = None
+        error_msg = None
+
+        if study is None or len(study.series) == 0:
+            error_msg = "No Series in Study"
+            return error_msg
+
+        if study.get_number_of_instances() == 0:
+            error_msg = "No Instances in Study"
+            return error_msg
+
+        try:
+            # 1. Establish Association for MOVE request:
+            move_association = self._connect_to_scp(scp_name, self.get_study_root_move_contexts())
+
+            # 2. Move Request for each Series UID & wait for Move Response:
+            for series in study.series.values():
+
+                if len(series.instances) == 0:
+                    logger.error(f"No instances in Series: {series.uid} skipping")
+                    continue
+
+                # TODO: if any instances of this series have already been received/imported
+                # go straight to retrieivng the remaining instances individually
+
+                ds = Dataset()
+                ds.QueryRetrieveLevel = "SERIES"
+                ds.StudyInstanceUID = study.uid
+                ds.SeriesInstanceUID = series.uid
+
+                logger.info(f"C-MOVE[{study.uid}] request SeriesUID: {series.uid}")
+                logger.info(ds)
+
+                responses = move_association.send_c_move(
+                    dataset=ds,
+                    move_aet=dest_scp_ae,
+                    query_model=self._STUDY_ROOT_QR_CLASSES[1],  # Move
+                    priority=1,  # High priority
+                )
+
+                # Process the responses received from the remote scp:
+                # * Note * pynetdicom docs for send_c_move:
+                # If the status category is 'Pending' or 'Success' then yields None.
+                # If the status category is 'Warning', 'Failure' or 'Cancel' then yields a ~pydicom.dataset.Dataset which should contain
+                # an (0008,0058) *Failed SOP Instance UID List* element, however as this comes from the peer this is not guaranteed
+                # and may instead be an empty ~pydicom.dataset.Dataset.
+                for status, identifier in responses:
+                    if self._abort_move:
+                        raise (DICOMRuntimeError(f"C-MOVE[{study.uid}] aborted"))
+
+                    logger.info(f"STATUS: {status}")
+
+                    if not status:
+                        raise (DICOMRuntimeError(f"C-MOVE[{study.uid}] Connection Error, no status returned from scp"))
+
+                    if status.Status not in (C_SUCCESS, C_PENDING_A, C_PENDING_B, C_WARNING):
+                        raise (
+                            DICOMRuntimeError(
+                                f"C-MOVE[{study.uid}] failure, status:{hex(status.Status)}: {QR_MOVE_SERVICE_CLASS_STATUS[status.Status][1]}"
+                            )
+                        )
+
+                    if status.Status == C_SUCCESS:
+                        logger.info(f"C-MOVE[{study.uid}] Series Request SUCCESS series_uid: {series.uid}")
+
+                    # Update Move stats from status:
+                    series.update_move_stats(status)
+
+                    if identifier:
+                        logger.info(f"C-MOVE[{study.uid}] Response identifier: {identifier}")
+                        # Set Move Response State for Instance (if uid matches in series.instances)
+                        # if not identifier.SOPInstanceUID:
+                        #     logger.error(f"Move response does not contain SOPInstanceUID")
+                        # else:
+                        #     found_instance = series.instances.get(identifier.SOPInstanceUID)
+                        #     if not found_instance:
+                        #         logger.error(f"Move response SOPInstanceUID not found in series.instances")
+                        #     else:
+                        #         found_instance.move_response = True
+
+                    # Walk through this series.instances and updated Imported State (using uid_lookup):
+                    for instance in series.instances.values():
+                        if self.anonymizer.model.uid_received(instance.uid):
+                            instance.imported = True
+
+            logger.info(f"C-MOVE[{study.uid}] ALL Series Requests COMPLETE")
+            # TODO: verify completed operations matches number of instances?
+
+            # 4. If there are no pending instances, return without error:
+            pending_instances = study.get_pending_instances()
+            if pending_instances == []:
+                logger.info(f"C-MOVE[{study.uid}] ALL Instances IMPORTED")
+            else:
+                # 4. Wait for ALL instances of Study to be Imported,
+                #    Timeout = NetworkTimeout * Number of Pending Instances
+                #    or for abort signal:
+                import_timeout = self.model.network_timeouts.network * len(pending_instances)
+                while import_timeout > 0:
+                    if self._abort_move:
+                        raise (DICOMRuntimeError(f"C-MOVE[{study.uid}] aborted"))
+
+                    pending_instances = study.get_pending_instances()
+
+                    if pending_instances == []:
+                        logger.info(f"C-MOVE[{study.uid}] ALL Instances IMPORTED")
+                        break
+
+                    for instance in pending_instances:
+                        if self.anonymizer.model.uid_received(instance.uid):
+                            instance.imported = True
+
+                    time.sleep(1)
+                    import_timeout -= 1
+
+                # 6. Raise Error if Timeout
+                if import_timeout == 0:
+                    raise (TimeoutError(f"C-MOVE[{study.uid}] Import Timeout"))
+
+        except Exception as e:
+            error_msg = str(e)  # latch exception error msg
+            logger.error(error_msg)
+
+        finally:
+            # Release the association:
+            if move_association:
+                move_association.release()
+            return error_msg
+
+    # Blocking manage bulk study move using a thread pool:
+    def _manage_move(self, req: MoveStudiesRequest) -> None:
         self._move_futures = []
 
-        self._move_executor = ThreadPoolExecutor(
-            max_workers=self._study_move_thread_pool_size
-        )
+        self._move_executor = ThreadPoolExecutor(max_workers=self._study_move_thread_pool_size)
 
         with self._move_executor as executor:
             for i in range(len(req.study_uids)):
                 future = executor.submit(
-                    self._move_study,
+                    self._move_study_at_study_level,
                     req.scp_name,
                     req.dest_scp_ae,
                     req.study_uids[i],
@@ -1118,7 +1275,7 @@ class ProjectController(AE):
         logger.info("_manage_move complete")
 
     # Non-blocking Move Studies:
-    def move_studies(self, mr: MoveRequest) -> None:
+    def move_studies(self, mr: MoveStudiesRequest) -> None:
         self._abort_move = False
         threading.Thread(
             target=self._manage_move,
@@ -1151,9 +1308,7 @@ class ProjectController(AE):
 
             file_paths = []
             for root, _, files in os.walk(patient_dir):
-                file_paths.extend(
-                    os.path.join(root, file) for file in files if file.endswith(".dcm")
-                )
+                file_paths.extend(os.path.join(root, file) for file in files if file.endswith(".dcm"))
 
             if len(file_paths) == 0:
                 raise DICOMRuntimeError(f"No DICOM files found in {patient_dir}")
@@ -1161,9 +1316,7 @@ class ProjectController(AE):
             # Connect to remote SCP:
             if self.model.export_to_AWS:
                 self
-            export_association = self._connect_to_scp(
-                dest_name, self.get_radiology_storage_contexts()
-            )
+            export_association = self._connect_to_scp(dest_name, self.get_radiology_storage_contexts())
 
             for dicom_file_path in file_paths:
                 time.sleep(self._export_file_time_slice_interval)
@@ -1174,29 +1327,25 @@ class ProjectController(AE):
                         ux_Q.get()
                     return
 
-                dcm_response: Dataset = export_association.send_c_store(
-                    dataset=dicom_file_path
-                )
+                dcm_response: Dataset = export_association.send_c_store(dataset=dicom_file_path)
 
                 if not hasattr(dcm_response, "Status"):
                     raise TimeoutError("send_c_store timeout")
 
                 if dcm_response.Status != 0:
-                    raise DICOMRuntimeError(
-                        f"{STORAGE_SERVICE_CLASS_STATUS[dcm_response.Status][1]}"
-                    )
+                    raise DICOMRuntimeError(f"{STORAGE_SERVICE_CLASS_STATUS[dcm_response.Status][1]}")
 
                 files_sent += 1
                 # TODO: notify UX in batches of 10 files sent?
-                ux_Q.put(ExportResponse(patient_id, files_sent, None, False))
+                ux_Q.put(ExportStudyResponse(patient_id, files_sent, None, False))
 
             # Successful export:
-            ux_Q.put(ExportResponse(patient_id, files_sent, None, True))
+            ux_Q.put(ExportStudyResponse(patient_id, files_sent, None, True))
 
         except Exception as e:
             if not self._abort_export:
                 logger.error(f"Export Patient {patient_id} Error: {e}")
-            ux_Q.put(ExportResponse(patient_id, files_sent, f"{e}", True))
+            ux_Q.put(ExportStudyResponse(patient_id, files_sent, f"{e}", True))
 
         finally:
             if export_association:
@@ -1205,18 +1354,14 @@ class ProjectController(AE):
         return
 
     # Manage bulk patient export using a thread pool:
-    def _manage_export(self, req: ExportRequest) -> None:
+    def _manage_export(self, req: ExportStudyRequest) -> None:
         self._export_futures = []
 
-        self._export_executor = ThreadPoolExecutor(
-            max_workers=self._patient_export_thread_pool_size
-        )
+        self._export_executor = ThreadPoolExecutor(max_workers=self._patient_export_thread_pool_size)
 
         with self._export_executor as executor:
             for i in range(len(req.patient_ids)):
-                future = executor.submit(
-                    self._export_patient, req.dest_name, req.patient_ids[i], req.ux_Q
-                )
+                future = executor.submit(self._export_patient, req.dest_name, req.patient_ids[i], req.ux_Q)
                 self._export_futures.append(future)
 
             logger.info(f"Export Futures: {len(self._export_futures)}")
@@ -1234,7 +1379,7 @@ class ProjectController(AE):
         logger.info("_manage_export complete")
 
     # Non-blocking export_patients:
-    def export_patients(self, er: ExportRequest) -> None:
+    def export_patients(self, er: ExportStudyRequest) -> None:
         self._abort_export = False
         self._export_patients_thread = threading.Thread(
             target=self._manage_export,
@@ -1292,9 +1437,7 @@ class ProjectController(AE):
                     )
                 )
 
-        filename = (
-            f"{self.model.site_id}_{self.model.project_name}_PHI_{len(phi_data)}.csv"
-        )
+        filename = f"{self.model.site_id}_{self.model.project_name}_PHI_{len(phi_data)}.csv"
         phi_csv_path = Path(self.model.storage_dir, filename)
 
         try:

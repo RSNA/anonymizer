@@ -8,7 +8,12 @@ import customtkinter as ctk
 from pydicom import Dataset
 
 from controller.dicom_C_codes import C_FAILURE, C_PENDING_A, C_PENDING_B, C_SUCCESS
-from controller.project import FindRequest, FindResponse, MoveRequest, ProjectController
+from controller.project import (
+    FindStudyRequest,
+    FindStudyResponse,
+    MoveStudiesRequest,
+    ProjectController,
+)
 from utils.storage import count_study_images
 from utils.translate import _
 from utils.ux_fields import (
@@ -158,14 +163,15 @@ class QueryView(tk.Toplevel):
         _modality_label = ctk.CTkLabel(self._query_frame, text=_("Modality:"))
         _modality_label.grid(row=0, column=2, padx=PAD, pady=(PAD, 0), sticky="nw")
         self._modality_var = ctk.StringVar(self._query_frame)
-        modalities_optionmenu = ctk.CTkOptionMenu(
+
+        self._modalities_optionmenu = ctk.CTkOptionMenu(
             self._query_frame,
             width=60,
             dynamic_resizing=True,
-            values=self._controller.model.modalities,
+            values=[""] + self._controller.model.modalities,
             variable=self._modality_var,
         )
-        modalities_optionmenu.grid(
+        self._modalities_optionmenu.grid(
             row=0, column=3, padx=PAD, pady=(PAD, 0), sticky="nw"
         )
         # Modality free text entry:
@@ -386,7 +392,7 @@ class QueryView(tk.Toplevel):
         query_finished = False
         while not ux_Q.empty():
             try:
-                resp: FindResponse = ux_Q.get_nowait()
+                resp: FindStudyResponse = ux_Q.get_nowait()
                 # logger.debug(f"{resp}")
                 if resp.status.Status in [C_PENDING_A, C_PENDING_B, C_SUCCESS]:
                     if resp.study_result:
@@ -503,6 +509,7 @@ class QueryView(tk.Toplevel):
         # Entered by user or loaded from file:
         if self._accession_no_var.get() and "," in self._accession_no_var.get():
             self._acc_no_list = self._accession_no_var.get().split(",")
+            self._modalities_optionmenu.set("")
 
         if self._acc_no_list:
             # Remove null strings and keep unique values
@@ -525,7 +532,7 @@ class QueryView(tk.Toplevel):
         self._studies_processed = 0
 
         ux_Q = Queue()
-        req: FindRequest = FindRequest(
+        req: FindStudyRequest = FindStudyRequest(
             "QUERY",
             self._patient_name_var.get(),
             self._patient_id_var.get(),
@@ -539,7 +546,7 @@ class QueryView(tk.Toplevel):
             ux_Q,
         )
         self._controller.find_ex(req)
-        # Start FindResponse monitor:
+        # Start FindStudyResponse monitor:
         self._tree.after(
             self.ux_poll_find_response_interval,
             self._monitor_query_response,
@@ -736,7 +743,7 @@ class QueryView(tk.Toplevel):
         logger.info(f"Retrieving {self._studies_to_process} Study(s)")
         logger.debug(f"StudyInstanceUIDs: {study_uids}")
 
-        req = MoveRequest(
+        req = MoveStudiesRequest(
             "QUERY",
             self._controller.model.scu.aet,
             unstored_study_uids,
@@ -744,7 +751,7 @@ class QueryView(tk.Toplevel):
         )
         self._controller.move_studies(req)
 
-        # Start MoveResponse monitor:
+        # Start MoveStudyResponse monitor:
         self.after(
             self.ux_poll_move_response_interval,
             self._monitor_move_response,
@@ -767,37 +774,6 @@ class QueryView(tk.Toplevel):
                 )
         return image_count
 
-        # def _update_treeview_data(self, data: pd.DataFrame):
-        # Insert new data
-        logger.debug(f"update_treeview_data items: {len(data)}")
-        for _, row in data.iterrows():
-            # Remove found accession numbers from self._acc_no_list:
-            if self._acc_no_list:
-                acc_no = row["Accession No."]
-                if acc_no in self._acc_no_list:
-                    self._acc_no_list.remove(acc_no)
-
-            display_values = [
-                val for col, val in row.items() if col != "StudyInstanceUID"
-            ]
-
-            images_stored_count = self._images_stored_phi_lookup(
-                row["Patient ID"],
-                row["StudyInstanceUID"],
-            )
-            display_values.append(str(images_stored_count))
-
-            try:
-                self._tree.insert(
-                    "", "end", iid=row["StudyInstanceUID"], values=display_values
-                )
-                if images_stored_count == row["Images"]:
-                    self._tree.item(row["StudyInstanceUID"], tags="green")
-            except Exception as e:
-                logger.error(
-                    f"Exception: {e}"
-                )  # _tkinter.TclError: Item {iid} already exists
-
     def _update_treeview_data(self, dicom_datasets: list):
         logger.debug(f"update_treeview_data items: {len(dicom_datasets)}")
 
@@ -810,15 +786,16 @@ class QueryView(tk.Toplevel):
 
             display_values = []
 
-            for field, (display_name, _, _) in self._attr_map.items():
-                value = getattr(dataset, field, "")
-                display_values.append(str(value))
-
             images_stored_count = self._images_stored_phi_lookup(
                 dataset.get("PatientID", ""),
                 dataset.get("StudyInstanceUID", ""),
             )
-            display_values.append(str(images_stored_count))
+            attr_name = self._tree_column_keys[-1]
+            setattr(dataset, attr_name, images_stored_count)
+
+            for field, (display_name, _, _) in self._attr_map.items():
+                value = getattr(dataset, field, "")
+                display_values.append(str(value))
 
             try:
                 self._tree.insert(

@@ -98,6 +98,9 @@ class AnonymizerModel:
     def set_anon_patient_id(self, phi_patient_id: str, anon_patient_id: str):
         self._patient_id_lookup[phi_patient_id] = anon_patient_id
 
+    def uid_received(self, phi_uid: str) -> bool:
+        return phi_uid in self._uid_lookup
+
     def get_anon_uid(self, phi_uid: str) -> str | None:
         if phi_uid not in self._uid_lookup:
             return None

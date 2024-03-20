@@ -78,16 +78,12 @@ def set_study_root_qr_contexts(ae: AE) -> None:
 
 def get_radiology_storage_contexts() -> List[PresentationContext]:
     return [
-        build_context(abstract_syntax, _TRANSFER_SYNTAXES)
-        for abstract_syntax in _RADIOLOGY_STORAGE_CLASSES.values()
+        build_context(abstract_syntax, _TRANSFER_SYNTAXES) for abstract_syntax in _RADIOLOGY_STORAGE_CLASSES.values()
     ]
 
 
 def get_study_root_qr_contexts() -> List[PresentationContext]:
-    return [
-        build_context(abstract_syntax, _TRANSFER_SYNTAXES)
-        for abstract_syntax in _STUDY_ROOT_QR_CLASSES
-    ]
+    return [build_context(abstract_syntax, _TRANSFER_SYNTAXES) for abstract_syntax in _STUDY_ROOT_QR_CLASSES]
 
 
 # Store scp instance after ae.start_server() is called:
@@ -124,13 +120,9 @@ def _handle_store(event: Event, storage_dir: str) -> int:
     ds.file_meta = event.file_meta
     logger.debug(remote)
     logger.info(ds)
-    filename = os.path.join(
-        storage_dir, f"{ds.SeriesInstanceUID}.{ds.InstanceNumber}.dcm"
-    )
+    filename = os.path.join(storage_dir, f"{ds.SeriesInstanceUID}.{ds.InstanceNumber}.dcm")
 
-    logger.info(
-        f"C-STORE [TxSyn:{ds.file_meta.TransferSyntaxUID}]: {remote['ae_title']} => {filename}"
-    )
+    logger.info(f"C-STORE [TxSyn:{ds.file_meta.TransferSyntaxUID}]: {remote['ae_title']} => {filename}")
     try:
         ds.save_as(filename, write_like_original=False)
     except Exception as exception:
@@ -167,7 +159,7 @@ def _handle_find(event, storage_dir: str):
             logger.error("C-CANCEL find operation")
             yield (C_CANCEL, None)
 
-        if not hasattr(ds,"StudyInstanceUID") or ds.StudyInstanceUID == "":
+        if not hasattr(ds, "StudyInstanceUID") or ds.StudyInstanceUID == "":
             logger.info(f"Return instance: {instance.SOPInstanceUID}")
             yield (C_PENDING_A, instance)
         else:
@@ -219,23 +211,35 @@ def _handle_move(event, storage_dir: str, known_aet_dict: dict):
 
     if ds.QueryRetrieveLevel == "STUDY":
         if "StudyInstanceUID" in ds:
+            matching = [inst for inst in instances if inst.StudyInstanceUID == ds.StudyInstanceUID]
+
+    elif ds.QueryRetrieveLevel == "SERIES":
+        if "StudyInstanceUID" in ds and "SeriesInstanceUID" in ds:
+            matching = [
+                inst
+                for inst in instances
+                if inst.StudyInstanceUID == ds.StudyInstanceUID and inst.SeriesInstanceUID == ds.SeriesInstanceUID
+            ]
+
+    elif ds.QueryRetrieveLevel == "IMAGE":
+        if "StudyInstanceUID" in ds and "SeriesInstanceUID" in ds and "SOPInstanceUID" in ds:
             matching = [
                 inst
                 for inst in instances
                 if inst.StudyInstanceUID == ds.StudyInstanceUID
+                and inst.SeriesInstanceUID == ds.SeriesInstanceUID
+                and inst.SOPInstanceUID == ds.SOPInstanceUID
             ]
 
-        # Skip the other possible attributes...
-
-    # Skip the other QR levels...
+    else:
+        logger.error(f"Unsupported QueryRetrieveLevel: {ds.QueryRetrieveLevel}")
+        yield 0
 
     # Yield the total number of C-STORE sub-operations required
     matches = len(matching)
     logger.info(f"Matching instances: {matches}")
     if not matches:
-        logger.error(
-            f"No matching instances for C-MOVE response StudyInstanceUID={ds.StudyInstanceUID}"
-        )
+        logger.error(f"No matching instances for C-MOVE response StudyInstanceUID={ds.StudyInstanceUID}")
         yield 0
 
     yield matches
@@ -249,7 +253,7 @@ def _handle_move(event, storage_dir: str, known_aet_dict: dict):
 
         # Pending
         logger.info(
-            f"Return StudyInstanceUID: {instance.StudyInstanceUID}, SeriesInstanceUID: {instance.SeriesInstanceUID}, InstanceNumber: {instance.InstanceNumber}"
+            f"Return StudyInstanceUID:{instance.StudyInstanceUID}, SeriesInstanceUID:{instance.SeriesInstanceUID}, InstanceUID:{instance.SOPInstanceUID} InstanceNumber: {instance.InstanceNumber}"
         )
         yield (C_PENDING_A, instance)
 
@@ -294,9 +298,7 @@ def start(addr: DICOMNode, storage_dir: str, known_nodes: list[DICOMNode]) -> bo
         logger.error(f"Failed to start PACS SIMULATOR scp on {addr}, Error: {str(e)}")
         return False
 
-    logger.info(
-        f"PACS SIMULATOR scp listening on {addr}, storing files in {storage_dir}"
-    )
+    logger.info(f"PACS SIMULATOR scp listening on {addr}, storing files in {storage_dir}")
     return True
 
 

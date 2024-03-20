@@ -80,16 +80,12 @@ class AWSCognito:
 class ProjectModel:
     @staticmethod
     def default_site_id() -> str:
-        # Automatically Generate 12 hexadecimal character Unique Site ID based UUID Version 4
+        # Automatically Generate 12 decimal character Unique Site ID based on UUID Version 4
         # UUID version 4 generates 32 hexadecimal character UUIDs based on random or pseudo-random numbers
-        site_id = str(uuid.uuid4()).replace("-", "")[:12].upper()
-
-        # Convert the UUID to a string with hyphens
-        site_id_str = str(site_id)
-
-        # Split the string into 3 sets of 4 characters
-        uid_12_chars = "-".join([site_id_str[:4], site_id_str[4:8], site_id_str[8:12]])
-
+        uuid_hex = uuid.uuid4().hex
+        uuid_dec = str(int(uuid_hex, 16))
+        groups = [uuid_dec[i : i + 4] for i in range(0, 12, 4)]
+        uid_12_chars = "-".join(groups)
         return uid_12_chars
 
     @staticmethod
@@ -121,7 +117,7 @@ class ProjectModel:
             s3_bucket="amplify-datauploader-prodmi-stagingbucketeec2e4de-x4qrvyzen65z",
             s3_prefix="private",
             username="anonymizer2",
-            password="Anonymizer2!",
+            password="SpeedFast1967#",
         )
 
     # @staticmethod

@@ -8,6 +8,7 @@ from utils.storage import count_studies_series_images
 
 logger = logging.getLogger(__name__)
 
+
 class Dashboard(ctk.CTkFrame):
     dashboard_update_interval = 500  # milliseconds
     # TODO: manage fonts using theme manager
@@ -29,18 +30,28 @@ class Dashboard(ctk.CTkFrame):
 
     def _create_widgets(self):
         logger.debug(f"_create_widgets")
-    
+
         row = 0
 
         self._query_button = ctk.CTkButton(
-            self, width=self.button_width, text=_("Query"), command=self._query_button_click
+            self,
+            width=self.button_width,
+            text=_("Query"),
+            command=self._query_button_click,
         )
-        self._query_button.grid(row=row, column=0, padx=self.PAD, pady=(self.PAD,0), sticky="w")
+        self._query_button.grid(
+            row=row, column=0, padx=self.PAD, pady=(self.PAD, 0), sticky="w"
+        )
 
         self._export_button = ctk.CTkButton(
-            self, width=self.button_width, text=_("Export"), command=self._export_button_click
+            self,
+            width=self.button_width,
+            text=_("Export"),
+            command=self._export_button_click,
         )
-        self._export_button.grid(row=row, column=3, padx=self.PAD, pady=(self.PAD,0), sticky="e")
+        self._export_button.grid(
+            row=row, column=3, padx=self.PAD, pady=(self.PAD, 0), sticky="e"
+        )
 
         row += 1
 
@@ -60,19 +71,19 @@ class Dashboard(ctk.CTkFrame):
             self._databoard, font=self.LABEL_FONT, text=_("Images")
         )
 
-        self._label_patients.grid(row=db_row, column=0, padx=self.PAD, pady=(self.PAD, 0))
-        self._label_studies.grid(row=db_row, column=1, padx=self.PAD, pady=(self.PAD, 0))
+        self._label_patients.grid(
+            row=db_row, column=0, padx=self.PAD, pady=(self.PAD, 0)
+        )
+        self._label_studies.grid(
+            row=db_row, column=1, padx=self.PAD, pady=(self.PAD, 0)
+        )
         self._label_series.grid(row=db_row, column=2, padx=self.PAD, pady=(self.PAD, 0))
         self._label_images.grid(row=db_row, column=3, padx=self.PAD, pady=(self.PAD, 0))
 
         db_row += 1
 
-        self._patients = ctk.CTkLabel(
-            self._databoard, font=self.DATA_FONT, text="0"
-        )
-        self._studies = ctk.CTkLabel(
-            self._databoard, font=self.DATA_FONT, text="0"
-        )
+        self._patients = ctk.CTkLabel(self._databoard, font=self.DATA_FONT, text="0")
+        self._studies = ctk.CTkLabel(self._databoard, font=self.DATA_FONT, text="0")
         self._series = ctk.CTkLabel(self._databoard, font=self.DATA_FONT, text="0")
         self._images = ctk.CTkLabel(self._databoard, font=self.DATA_FONT, text="0")
 
@@ -82,7 +93,12 @@ class Dashboard(ctk.CTkFrame):
         self._images.grid(row=db_row, column=3, padx=self.PAD, pady=(0, self.PAD))
 
         self._databoard.grid(
-            row=row, column=0, columnspan=4, padx=self.PAD, pady=(self.PAD,0), sticky="n"
+            row=row,
+            column=0,
+            columnspan=4,
+            padx=self.PAD,
+            pady=(self.PAD, 0),
+            sticky="n",
         )
 
         row += 1
@@ -96,7 +112,12 @@ class Dashboard(ctk.CTkFrame):
         self._qsize.grid(row=0, column=1, sticky="w")
 
         self._status_frame.grid(
-            row=row, column=0, columnspan=4, sticky="nsew", padx=self.PAD, pady=(self.PAD,0)
+            row=row,
+            column=0,
+            columnspan=4,
+            sticky="nsew",
+            padx=self.PAD,
+            pady=(self.PAD, 0),
         )
 
     def _query_button_click(self):
@@ -110,7 +131,7 @@ class Dashboard(ctk.CTkFrame):
                     f"Query Server Failed DICOM C-ECHO, check Project Settings/Query Server"
                     " and ensure server is setup for local server: echo, query & move services."
                 ),
-                parent=self
+                parent=self,
             )
             return
         self._query_button.configure(text_color="light green")
@@ -119,7 +140,7 @@ class Dashboard(ctk.CTkFrame):
     def _export_button_click(self):
         logger.info(f"_export_button_click")
         # This blocks for TCP connection timeout
-        #TODO: create background task for this, how to notify user of status?
+        # TODO: create background task for this, how to notify user of status?
         if self._controller.model.export_to_AWS:
             if not self._controller.aws_authenticate():
                 self._export_button.configure(text_color="red")
@@ -129,7 +150,7 @@ class Dashboard(ctk.CTkFrame):
                         f"AWS Authentication Failed, check Project Settings/AWS Cognito"
                         " and ensure username and password are correct."
                     ),
-                    parent=self
+                    parent=self,
                 )
                 return
             self._export_button.configure(text_color="light green")
@@ -143,16 +164,16 @@ class Dashboard(ctk.CTkFrame):
                     f"Export Server Failed DICOM C-ECHO, check Project Settings/Export Server"
                     " and ensure server is setup for local server: echo and storage services."
                 ),
-                parent=self
+                parent=self,
             )
             return
         self._export_button.configure(text_color="light green")
         self._parent.export()
 
-    def _update_dashboard(self):    
+    def _update_dashboard(self):
         if not self._controller:
             return
-    
+
         dir = self._controller.model.storage_dir
         pts = os.listdir(dir)
         pts = [item for item in pts if os.path.isdir(os.path.join(dir, item))]

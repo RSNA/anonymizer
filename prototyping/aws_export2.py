@@ -9,14 +9,15 @@ from botocore.exceptions import NoCredentialsError
 # s3_prefix="private/"
 # username="anonymizer"
 # password="P^l-8n+(ha?$6*&3"
+account_id = "691746062725"
+client_id = "fgnijvmig42ruvn37mte1p9au"
 user_pool_id = "us-east-1_cFn3IKLqG"
 identity_pool_id = "us-east-1:3c616c9d-58f0-4c89-a412-ea8cf259039a"
 region_name = "us-east-1"
-client_id = "fgnijvmig42ruvn37mte1p9au"
 s3_bucket_name = "amplify-datauploader-prodmi-stagingbucketeec2e4de-x4qrvyzen65z"
-s3_prefix = "private"
-username = "anonymizer2"
-password = "SpeedFast1967#"
+s3_prefix = "private2"
+username = "anonymizer2"  # "johndoe1"
+password = "SpeedFast1967#"  # "SpeedFast1967$"
 # - At least 12 characters
 # - At least one uppercase letter
 # - At least one lowercase letter
@@ -81,7 +82,13 @@ def get_temporary_credentials(cognito_identity_token, identity_pool_id):
     cognito = boto3.client("cognito-identity", region_name=region_name)
     response = cognito.get_id(
         IdentityPoolId=identity_pool_id,
+        AccountId=account_id,
+        Logins={
+            f"cognito-idp.{region_name}.amazonaws.com/{user_pool_id}": cognito_identity_token
+        },
     )
+
+    print(response)
 
     identity_id = response["IdentityId"]
 
@@ -114,8 +121,8 @@ def main():
         # Now you can make S3 requests using the configured credentials
 
         # Example: Upload a file to S3
-        file_path = "/Users/michaelevans/Desktop/2023_Kaggle_AI_Report.pdf"
-        object_key = f"{s3_prefix}/2023_Kaggle_AI_Report.pdf"
+        file_path = "/Users/administrator/Desktop/aws_test_upload.dcm"
+        object_key = f"{s3_prefix}/aws_test_upload.dcm"
 
         s3.upload_file(file_path, s3_bucket_name, object_key)
         print(f"File uploaded successfully to s3://{s3_bucket_name}/{object_key}")
