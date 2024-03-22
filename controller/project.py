@@ -1,5 +1,5 @@
 import os
-from typing import cast, Dict, Optional, List
+from typing import cast, Dict, Optional, List, Tuple
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
@@ -93,17 +93,38 @@ class SeriesUIDHierarchy:
         self.failed_sub_ops = status.NumberOfFailedSuboperations
         self.warning_sub_ops = status.NumberOfWarningSuboperations
 
+    def update_move_stats_instance_level(self, status: Dataset):
+        # Do not track RemainingSuboperations
+        if status.Status == C_SUCCESS and status.NumberOfCompletedSuboperations == 1:
+            self.completed_sub_ops += 1
+            self.failed_sub_ops += status.NumberOfFailedSuboperations
+            self.warning_sub_ops += status.NumberOfWarningSuboperations
+
 
 class StudyUIDHierarchy:
     def __init__(self, uid: str, series: Dict[str, SeriesUIDHierarchy] = None):
         self.uid = uid
         self.series = series if series is not None else {}
+        # from send_c_move status response:
+        self.completed_sub_ops = 0
+        self.failed_sub_ops = 0
+        self.remaining_sub_ops = 0
+        self.warning_sub_ops = 0
 
     def get_number_of_instances(self) -> int:
         count = 0
         for series_obj in self.series.values():
             count += len(series_obj.instances)
         return count
+
+    def update_move_stats(self, status: Dataset):
+        if hasattr(status, "NumberOfRemainingSuboperations"):
+            self.remaining_sub_ops = status.NumberOfRemainingSuboperations
+        else:
+            self.remaining_sub_ops = 0  # When status is C_SUCCESS
+        self.completed_sub_ops = status.NumberOfCompletedSuboperations
+        self.failed_sub_ops = status.NumberOfFailedSuboperations
+        self.warning_sub_ops = status.NumberOfWarningSuboperations
 
     def find_instance(self, instance_uid: str) -> Optional[InstanceUIDHierarchy]:
         for series in self.series.values():
@@ -156,8 +177,8 @@ class ExportStudyResponse:
 class MoveStudiesRequest:
     scp_name: str
     dest_scp_ae: str
-    study_uids: list[str]
-    ux_Q: Queue
+    level: str
+    studies: list[StudyUIDHierarchy]
 
 
 class ProjectController(AE):
@@ -316,10 +337,7 @@ class ProjectController(AE):
 
     # Handlers:
     def _handle_abort(self, event: Event):
-        logger.error(f"_handle_abort SCP Closed Association: event:{event._event}")
-        # if self._move_futures:
-        #     logger.error("Aborting move futures")
-        #     self._abort_move = True
+        logger.error(f"_handle_abort: {event}")  # TODO: handle remote association async abort/disconnect
 
     # DICOM C-ECHO Verification event handler (EVT_C_ECHO):
     def _handle_echo(self, event: Event):
@@ -879,12 +897,13 @@ class ProjectController(AE):
         return results
 
     # Blocking: Query remote server for study/series/instance uid hierarchy (required for iterative move):
-    def get_study_uid_hierarchy(self, scp_name: str, study_uid: str) -> StudyUIDHierarchy:
+    def get_study_uid_hierarchy(self, scp_name: str, study_uid: str) -> Tuple[str | None, StudyUIDHierarchy]:
         assert scp_name in self.model.remote_scps
         scp = self.model.remote_scps[scp_name]
         study_uid_hierarchy = StudyUIDHierarchy(uid=study_uid, series={})
         query_association: Association = None
         self._abort_query = False
+        error_msg = None
         try:
             # 1. Connect to SCP:
             query_association = self._connect_to_scp(scp_name, self.get_study_root_find_contexts())
@@ -908,11 +927,7 @@ class ProjectController(AE):
                     raise RuntimeError("Query aborted")
                 if not status:
                     raise ConnectionError("Connection timed out, was aborted, or received an invalid response")
-                if status.Status not in (
-                    C_SUCCESS,
-                    C_PENDING_A,
-                    C_PENDING_B,
-                ):
+                if status.Status not in (C_SUCCESS, C_PENDING_A, C_PENDING_B):
                     logger.error(f"C-FIND[series] failure, status: {hex(status.Status)}")
                     raise DICOMRuntimeError(f"C-FIND[series] Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status]}")
 
@@ -929,7 +944,7 @@ class ProjectController(AE):
                             ),
                             instances={},
                         )
-                        logger.info(f"New Series: {study_uid_hierarchy.series[identifier.SeriesInstanceUID]}")
+                        logger.info(f"New Series: {identifier.SeriesInstanceUID}")
                     else:
                         logger.info(
                             f"Skip Series:{identifier.SeriesInstanceUID} with mismatched modality: {identifier.Modality}"
@@ -951,11 +966,7 @@ class ProjectController(AE):
                         raise RuntimeError("Query aborted")
                     if not status:
                         raise ConnectionError("Connection timed out, was aborted, or received an invalid response")
-                    if status.Status not in (
-                        C_SUCCESS,
-                        C_PENDING_A,
-                        C_PENDING_B,
-                    ):
+                    if status.Status not in (C_SUCCESS, C_PENDING_A, C_PENDING_B):
                         logger.error(f"C-FIND[instance] failure, status: {hex(status.Status)}")
                         raise DICOMRuntimeError(
                             f"C-FIND[instance] Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status]}"
@@ -976,18 +987,25 @@ class ProjectController(AE):
                                 imported=self.anonymizer.model.uid_received(identifier.SOPInstanceUID),
                             )
                         else:
-                            logger.error(f"Study and/or Series Mismatch: {identifier}")
+                            logger.error(f"Mismatch: Study:{study_uid}<>{identifier.StudyInstanceUID} and/or Series:{series.uid}<>{identifier.SeriesInstanceUID}")
 
                 logger.info(f"SeriesUID={series.uid}: {len(series.instances)} Instance UIDs found")
 
         except Exception as e:
-            logger.error(str(e))
+            error_msg = str(e)  # latch exception error msg
+            logger.error(error_msg)
 
         finally:
             if query_association:
                 query_association.release()
 
-        return study_uid_hierarchy
+        # Set Imported State for all Instance UIDs:
+        for series in study_uid_hierarchy.series.values():
+            for instance in series.instances.values():
+                if self.anonymizer.model.uid_received(instance.uid):
+                    instance.imported = True
+
+        return error_msg, study_uid_hierarchy
 
     # Non-blocking Find:
     def find_ex(self, fr: FindStudyRequest) -> None:
@@ -1026,21 +1044,31 @@ class ProjectController(AE):
         self,
         scp_name: str,
         dest_scp_ae: str,
-        study_uid: str,
-        ux_Q: Queue,
-    ) -> None:
-        logger.info(f"C-MOVE[Study] scp:{scp_name} move to: {dest_scp_ae} study_uid: {study_uid}")
+        study: StudyUIDHierarchy,
+    ) -> str | None:
+        logger.info(f"C-MOVE@Study[{study.uid}] scp:{scp_name} move to: {dest_scp_ae}")
 
         move_association = None
-        error_msg = ""
+        error_msg = None
+
+        if study is None or len(study.series) == 0:
+            error_msg = "No Series in Study"
+            return error_msg
+
+        if study.get_number_of_instances() == 0:
+            error_msg = "No Instances in Study"
+            return error_msg
+
         try:
+            # 1. Establish Association for MOVE request:
             move_association = self._connect_to_scp(scp_name, self.get_study_root_move_contexts())
 
             ds = Dataset()
             ds.QueryRetrieveLevel = "STUDY"
-            ds.StudyInstanceUID = study_uid
+            ds.StudyInstanceUID = study.uid
 
-            # Use the C-MOVE service to request that the remote SCP move the Study to local storage scp:
+            # 2. Use the C-MOVE service to request that the remote SCP move the Study to local storage scp:
+            # 2. Move Request for Study UID & wait for Move Responses for each instance in study:
             responses = move_association.send_c_move(
                 dataset=ds,
                 move_aet=dest_scp_ae,
@@ -1049,71 +1077,87 @@ class ProjectController(AE):
             )
 
             # Process the responses received from the remote scp:
+            # * Note * pynetdicom docs for send_c_move:
+            # If the status category is 'Pending' or 'Success' then yields None.
+            # If the status category is 'Warning', 'Failure' or 'Cancel' then yields a ~pydicom.dataset.Dataset which should contain
+            # an (0008,0058) *Failed SOP Instance UID List* element, however as this comes from the peer this is not guaranteed
+            # and may instead be an empty ~pydicom.dataset.Dataset.
             for status, identifier in responses:
                 if self._abort_move:
-                    logger.error(f"move study_uid: {study_uid} aborted")
-                    move_association.abort()
-                    while not ux_Q.empty():
-                        ux_Q.get()
-                    return
+                    raise (DICOMRuntimeError(f"C-MOVE@Study[{study.uid}] aborted"))
 
                 if not status:
-                    raise ConnectionError(_(f"Connection timed out or aborted moving study_uid: {study_uid}"))
+                    raise ConnectionError(_(f"Connection timed out or aborted moving study_uid: {study.uid}"))
 
-                if status.Status not in (
-                    C_SUCCESS,
-                    C_PENDING_A,
-                    C_PENDING_B,
-                ):
-                    logger.error(f"C-MOVE[Study] failure, status: {hex(status.Status)}")
-                    if identifier:
-                        logger.error(identifier)
-                    raise DICOMRuntimeError(f"C-MOVE[Study] Failed: {QR_MOVE_SERVICE_CLASS_STATUS[status.Status][1]}")
+                if status.Status not in (C_SUCCESS, C_PENDING_A, C_PENDING_B, C_WARNING):
+                    raise (
+                        DICOMRuntimeError(
+                            f"C-MOVE[{study.uid}] failure, status:{hex(status.Status)}: {QR_MOVE_SERVICE_CLASS_STATUS[status.Status][1]}"
+                        )
+                    )
 
                 if status.Status == C_SUCCESS:
-                    logger.info(f"C-MOVE[Study] success study_uid: {study_uid}")
+                    logger.info(f"C-MOVE@Study[{study.uid}] Study Request SUCCESS")
+
+                # Update Move stats from status:
+                study.update_move_stats(status)
 
                 if identifier:
-                    logger.info(f"identifier: {identifier}")
+                    logger.info(f"C-MOVE@Study[{study.uid}] Response identifier: {identifier}")
 
-                # Add the study_uid to the status dataset and reflect each status update back to UX:
-                status.StudyInstanceUID = study_uid
-                ux_Q.put(status)
+                # Walk through all study instances and update Imported State (using uid_lookup):
+                for series in study.series.values():
+                    for instance in series.instances.values():
+                        if self.anonymizer.model.uid_received(instance.uid):
+                            instance.imported = True
 
-            logger.info(f"C-MOVE[Study] complete study_uid: {study_uid}")
+            logger.info(f"C-MOVE@Study[{study.uid}] Request COMPLETE")
 
-        except (
-            ConnectionError,
-            TimeoutError,
-            RuntimeError,
-            ValueError,
-            AttributeError,
-            DICOMRuntimeError,
-        ) as e:
-            # Reflect status dataset back to UX client to provide find error detail
+            # 4. If there are no pending instances, return without error:
+            pending_instances = study.get_pending_instances()
+            if pending_instances == []:
+                logger.info(f"C-MOVE@Study[{study.uid}] ALL Instances IMPORTED")
+            else:
+                # 5. Wait for ALL instances of Study to be Imported,
+                #    Timeout if a pending instance is not received within NetworkTimeout
+                #    or abort on user signal:
+                import_timer = self.model.network_timeouts.network
+                while import_timer > 0:
+                    if self._abort_move:
+                        raise (DICOMRuntimeError(f"C-MOVE@Study[{study.uid}] aborted"))
+
+                    pending_instances = study.get_pending_instances()
+
+                    if pending_instances == []:
+                        logger.info(f"C-MOVE@Study[{study.uid}] ALL Instances IMPORTED")
+                        break
+
+                    for instance in pending_instances:
+                        if self.anonymizer.model.uid_received(instance.uid):
+                            instance.imported = True
+                            import_timer = self.model.network_timeouts.network
+
+                    time.sleep(1)
+                    import_timer -= 1
+
+                # 6. Raise Error if Timeout
+                if import_timer == 0:
+                    raise (TimeoutError(f"C-MOVE@Study[{study.uid}] Import Timeout"))
+
+        except Exception as e:
             error_msg = str(e)  # latch exception error msg
             logger.error(error_msg)
-            if ux_Q:
-                ds = Dataset()
-                ds.Status = C_FAILURE
-                ds.ErrorComment = error_msg
-                ds.StudyInstanceUID = study_uid
-                ux_Q.put(ds)
 
         finally:
             # Release the association
             if move_association:
                 move_association.release()
+            return error_msg
 
     # Blocking Move Study at Series Level, status updates reflected in study_uid_hierarchy, on exception return error message:
-    def _move_study_at_series_level(
-        self,
-        scp_name: str,
-        dest_scp_ae: str,
-        study: StudyUIDHierarchy,
-    ) -> str | None:
+    def _move_study_at_series_level(self, scp_name: str, dest_scp_ae: str, study: StudyUIDHierarchy) -> str | None:
 
-        logger.info(f"C-MOVE[{study.uid}] scp:{scp_name} move to: {dest_scp_ae} ")
+        logger.info(f"C-MOVE@Series[{study.uid}] scp:{scp_name} move to: {dest_scp_ae} ")
 
         move_association = None
         error_msg = None
@@ -1145,8 +1189,8 @@ class ProjectController(AE):
                 ds.StudyInstanceUID = study.uid
                 ds.SeriesInstanceUID = series.uid
 
-                logger.info(f"C-MOVE[{study.uid}] request SeriesUID: {series.uid}")
-                logger.info(ds)
+                logger.info(f"C-MOVE@Series[{study.uid}] request SeriesUID: {series.uid}")
+                logger.debug(ds)
 
                 responses = move_association.send_c_move(
                     dataset=ds,
@@ -1163,9 +1207,7 @@ class ProjectController(AE):
                 # and may instead be an empty ~pydicom.dataset.Dataset.
                 for status, identifier in responses:
                     if self._abort_move:
-                        raise (DICOMRuntimeError(f"C-MOVE[{study.uid}] aborted"))
-
-                    logger.info(f"STATUS: {status}")
+                        raise (DICOMRuntimeError(f"C-MOVE@Series[{study.uid}] aborted"))
 
                     if not status:
                         raise (DICOMRuntimeError(f"C-MOVE[{study.uid}] Connection Error, no status returned from scp"))
@@ -1178,60 +1220,188 @@ class ProjectController(AE):
                         )
 
                     if status.Status == C_SUCCESS:
-                        logger.info(f"C-MOVE[{study.uid}] Series Request SUCCESS series_uid: {series.uid}")
+                        logger.info(f"C-MOVE@Series[{study.uid}] Series Request SUCCESS series_uid: {series.uid}")
 
                     # Update Move stats from status:
                     series.update_move_stats(status)
 
                     if identifier:
-                        logger.info(f"C-MOVE[{study.uid}] Response identifier: {identifier}")
-                        # Set Move Response State for Instance (if uid matches in series.instances)
-                        # if not identifier.SOPInstanceUID:
-                        #     logger.error(f"Move response does not contain SOPInstanceUID")
-                        # else:
-                        #     found_instance = series.instances.get(identifier.SOPInstanceUID)
-                        #     if not found_instance:
-                        #         logger.error(f"Move response SOPInstanceUID not found in series.instances")
-                        #     else:
-                        #         found_instance.move_response = True
+                        logger.info(f"C-MOVE@Series[{study.uid}] Response identifier: {identifier}")
 
                     # Walk through this series.instances and updated Imported State (using uid_lookup):
                     for instance in series.instances.values():
                         if self.anonymizer.model.uid_received(instance.uid):
                             instance.imported = True
 
-            logger.info(f"C-MOVE[{study.uid}] ALL Series Requests COMPLETE")
-            # TODO: verify completed operations matches number of instances?
+            logger.info(f"C-MOVE@Series[{study.uid}] ALL Series Requests COMPLETE")
+
+            # 4. If there are no pending instances, return without error:
+            pending_instances = study.get_pending_instances()
+            if pending_instances == []:
+                logger.info(f"C-MOVE@Series[{study.uid}] ALL Instances IMPORTED")
+            else:
+                # 5. Wait for ALL instances of Study to be Imported,
+                #    Timeout if a pending instance is not received within NetworkTimeout
+                #    or abort on user signal:
+                import_timer = self.model.network_timeouts.network
+                while import_timer > 0:
+                    if self._abort_move:
+                        raise (DICOMRuntimeError(f"C-MOVE@Series[{study.uid}] aborted"))
+
+                    pending_instances = study.get_pending_instances()
+
+                    if pending_instances == []:
+                        logger.info(f"C-MOVE@Series[{study.uid}] ALL Instances IMPORTED")
+                        break
+
+                    for instance in pending_instances:
+                        if self.anonymizer.model.uid_received(instance.uid):
+                            instance.imported = True
+                            import_timer = self.model.network_timeouts.network
+
+                    time.sleep(1)
+                    import_timer -= 1
+
+                # 6. Raise Error if Timeout
+                if import_timer == 0:
+                    raise (TimeoutError(f"C-MOVE@Series[{study.uid}] Import Timeout"))
+
+        except Exception as e:
+            error_msg = str(e)  # latch exception error msg
+            logger.error(error_msg)
+
+        finally:
+            # Release the association:
+            if move_association:
+                move_association.release()
+            return error_msg
+
+    # Blocking Move Study at Instance Level, status updates reflected in study_uid_hierarchy, on exception return error message:
+    def _move_study_at_instance_level(
+        self,
+        scp_name: str,
+        dest_scp_ae: str,
+        study: StudyUIDHierarchy,
+    ) -> str | None:
+
+        logger.info(f"C-MOVE@Instance[{study.uid}] scp:{scp_name} move to: {dest_scp_ae} ")
+
+        move_association = None
+        error_msg = None
+
+        if study is None or len(study.series) == 0:
+            error_msg = "No Series in Study"
+            return error_msg
+
+        if study.get_number_of_instances() == 0:
+            error_msg = "No Instances in Study"
+            return error_msg
+
+        try:
+            # 1. Establish Association for MOVE request:
+            move_association = self._connect_to_scp(scp_name, self.get_study_root_move_contexts())
+
+            # 2. Move Request for each Series UID & wait for Move Response:
+            for series in study.series.values():
+
+                if len(series.instances) == 0:
+                    logger.error(f"No instances in Series: {series.uid} skipping")
+                    continue
+
+                for instance in series.instances.values():
+
+                    # Skip already imported instances
+                    if instance.imported:
+                        logger.info(f"Instance already imported: {instance.uid}, skipping")
+                        continue
+
+                    ds = Dataset()
+                    ds.QueryRetrieveLevel = "IMAGE"
+                    ds.StudyInstanceUID = study.uid
+                    ds.SeriesInstanceUID = series.uid
+                    ds.SOPInstanceUID = instance.uid
+
+                    logger.info(
+                        f"C-MOVE@Instance[{study.uid}] request SeriesUID:{series.uid} InstanceUID:{instance.uid}"
+                    )
+                    logger.debug(ds)
+
+                    responses = move_association.send_c_move(
+                        dataset=ds,
+                        move_aet=dest_scp_ae,
+                        query_model=self._STUDY_ROOT_QR_CLASSES[1],  # Move
+                        priority=1,  # High priority
+                    )
+
+                    # Process the responses received from the remote scp:
+                    # * Note * pynetdicom docs for send_c_move:
+                    # If the status category is 'Pending' or 'Success' then yields None.
+                    # If the status category is 'Warning', 'Failure' or 'Cancel' then yields a ~pydicom.dataset.Dataset which should contain
+                    # an (0008,0058) *Failed SOP Instance UID List* element, however as this comes from the peer this is not guaranteed
+                    # and may instead be an empty ~pydicom.dataset.Dataset.
+                    for status, identifier in responses:
+                        if self._abort_move:
+                            raise (DICOMRuntimeError(f"C-MOVE@Instance[{study.uid}] aborted"))
+
+                        logger.debug(f"STATUS: {status}")
+
+                        if not status:
+                            raise (
+                                DICOMRuntimeError(f"C-MOVE[{study.uid}] Connection Error, no status returned from scp")
+                            )
+
+                        if status.Status not in (C_SUCCESS, C_PENDING_A, C_PENDING_B, C_WARNING):
+                            raise (
+                                DICOMRuntimeError(
+                                    f"C-MOVE@Instance[{study.uid}] failure, status:{hex(status.Status)}: {QR_MOVE_SERVICE_CLASS_STATUS[status.Status][1]}"
+                                )
+                            )
+
+                        if status.Status == C_SUCCESS:
+                            logger.info(
+                                f"C-MOVE@Instance[{study.uid}/{series.uid}/{instance.uid}] Instance Request SUCCESS"
+                            )
+
+                        # Update Move stats from status:
+                        series.update_move_stats_instance_level(status)
+
+                        # Walk through this series.instances and updated Imported State (using uid_lookup):
+                        for instance in series.instances.values():
+                            if self.anonymizer.model.uid_received(instance.uid):
+                                instance.imported = True
+
+            logger.info(f"C-MOVE@Instance[{study.uid}] ALL Instance Requests COMPLETE")
 
             # 4. If there are no pending instances, return without error:
             pending_instances = study.get_pending_instances()
             if pending_instances == []:
                 logger.info(f"C-MOVE[{study.uid}] ALL Instances IMPORTED")
             else:
-                # 4. Wait for ALL instances of Study to be Imported,
-                #    Timeout = NetworkTimeout * Number of Pending Instances
-                #    or for abort signal:
-                import_timeout = self.model.network_timeouts.network * len(pending_instances)
-                while import_timeout > 0:
+                # 5. Wait for ALL instances of Study to be Imported,
+                #    Timeout if a pending instance is not received within NetworkTimeout
+                #    or abort on user signal:
+                import_timer = self.model.network_timeouts.network
+                while import_timer > 0:
                     if self._abort_move:
-                        raise (DICOMRuntimeError(f"C-MOVE[{study.uid}] aborted"))
+                        raise (DICOMRuntimeError(f"C-MOVE@Instance[{study.uid}] aborted"))
 
                     pending_instances = study.get_pending_instances()
 
                     if pending_instances == []:
-                        logger.info(f"C-MOVE[{study.uid}] ALL Instances IMPORTED")
+                        logger.info(f"C-MOVE@Instance[{study.uid}] ALL Instances IMPORTED")
                         break
 
                     for instance in pending_instances:
                         if self.anonymizer.model.uid_received(instance.uid):
                             instance.imported = True
+                            import_timer = self.model.network_timeouts.network
 
                     time.sleep(1)
-                    import_timeout -= 1
+                    import_timer -= 1
 
                 # 6. Raise Error if Timeout
-                if import_timeout == 0:
-                    raise (TimeoutError(f"C-MOVE[{study.uid}] Import Timeout"))
+                if import_timer == 0:
+                    raise (TimeoutError(f"C-MOVE@Instance[{study.uid}] Import Timeout"))
 
         except Exception as e:
             error_msg = str(e)  # latch exception error msg
@@ -1249,14 +1419,24 @@ class ProjectController(AE):
 
         self._move_executor = ThreadPoolExecutor(max_workers=self._study_move_thread_pool_size)
 
+        # By default move level is SERIES
+        move_op = self._move_study_at_series_level
+        if req.level:
+            if "STUDY" in req.level.upper():
+                move_op = self._move_study_at_study_level
+            elif "IMAGE" in req.level.upper() or "INSTANCE" in req.level.upper():
+                move_op = self._move_study_at_instance_level
+
+        logger.info(f"Move Operation: {move_op.__name__}")
+
         with self._move_executor as executor:
-            for i in range(len(req.study_uids)):
+            for study in req.studies:
+
                 future = executor.submit(
-                    self._move_study_at_study_level,
+                    move_op,
                     req.scp_name,
                     req.dest_scp_ae,
-                    req.study_uids[i],
-                    req.ux_Q,
+                    study,
                 )
                 self._move_futures.append(future)
 
@@ -1273,6 +1453,8 @@ class ProjectController(AE):
                         logger.error(f"Exception caught in _manage_move: {e}")
 
         logger.info("_manage_move complete")
+        self._move_futures = None
+        self._move_executor = None
 
     # Non-blocking Move Studies:
     def move_studies(self, mr: MoveStudiesRequest) -> None:
@@ -1286,12 +1468,10 @@ class ProjectController(AE):
     def abort_move(self):
         logger.info("Abort Move")
         self._abort_move = True
-        # logger.info("Cancel Futures")
-        # for future in self._move_futures:
-        #     future.cancel()
         if self._move_executor:
             self._move_executor.shutdown(wait=True, cancel_futures=True)
             logger.info("Move futures cancelled and executor shutdown")
+            self._move_futures = None
             self._move_executor = None
 
     def _export_patient(self, dest_name: str, patient_id: str, ux_Q: Queue) -> None:

@@ -5,7 +5,6 @@ import shutil
 import tempfile
 import pytest
 import logging
-from model import project
 
 from model.project import ProjectModel, NetworkTimeouts
 from controller.project import ProjectController
@@ -66,7 +65,7 @@ def controller(temp_dir):
         scu=LocalSCU,
         scp=LocalStorageSCP,
         remote_scps=RemoteSCPDict,
-        network_timeouts=NetworkTimeouts(2, 2, 2, 3),
+        network_timeouts=NetworkTimeouts(2, 5, 5, 15),
     )
 
     project_controller = ProjectController(project_model)

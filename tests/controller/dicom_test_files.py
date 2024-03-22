@@ -53,6 +53,11 @@ mr_small_SeriesInstanceUID = "1.3.6.1.4.1.5962.1.3.4.1.20040826185059.5457"
 mr_small_patient_name = "CompressedSamples^MR1"
 mr_small_patient_id = "4MR1"
 
+# Brain MRI 3 Series, 11 Images
+mr_brain_StudyInstanceUID = "1.3.6.1.4.1.5962.1.1.0.0.0.1196533885.18148.0.1"
+mr_brain_patient_name = "Doe^Peter"
+mr_brain_patient_id = "98890234"
+
 # MR_small.dcm image, Implicit VR, LittleEndian
 mr_small_implicit_filename = "MR_small_implicit.dcm"
 # MR_small.dcm image, Explicit VR, LittleEndian

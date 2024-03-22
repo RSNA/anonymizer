@@ -114,15 +114,15 @@ def _handle_echo(event: Event) -> int:
 
 # DICOM C-STORE scp event handler (EVT_C_STORE)):
 def _handle_store(event: Event, storage_dir: str) -> int:
-    logger.info("_handle_store")
+    logger.debug("_handle_store")
     remote = event.assoc.remote
     ds: Dataset = event.dataset
     ds.file_meta = event.file_meta
     logger.debug(remote)
-    logger.info(ds)
+    logger.debug(ds)
     filename = os.path.join(storage_dir, f"{ds.SeriesInstanceUID}.{ds.InstanceNumber}.dcm")
 
-    logger.info(f"C-STORE [TxSyn:{ds.file_meta.TransferSyntaxUID}]: {remote['ae_title']} => {filename}")
+    logger.debug(f"C-STORE [TxSyn:{ds.file_meta.TransferSyntaxUID}]: {remote['ae_title']} => {filename}")
     try:
         ds.save_as(filename, write_like_original=False)
     except Exception as exception:
@@ -154,7 +154,38 @@ def _handle_find(event, storage_dir: str):
         logger.error("Missing QueryRetrieveLevel")
         yield C_SOP_CLASS_INVALID, None
 
-    for instance in instances:
+    # if ds.QueryRetrieveLevel == "STUDY":
+    #     if "StudyInstanceUID" in ds:
+    #         if ds.StudyInstanceUID == "":
+    #             matching = instances
+    #         else:
+    #             matching = [inst for inst in instances if inst.StudyInstanceUID == ds.StudyInstanceUID]
+
+    # elif ds.QueryRetrieveLevel == "SERIES":
+    #     if "StudyInstanceUID" in ds and "SeriesInstanceUID" in ds:
+    #         matching = [
+    #             inst
+    #             for inst in instances
+    #             if inst.StudyInstanceUID == ds.StudyInstanceUID and inst.SeriesInstanceUID == ds.SeriesInstanceUID
+    #         ]
+
+    # elif ds.QueryRetrieveLevel == "IMAGE":
+    #     if "StudyInstanceUID" in ds and "SeriesInstanceUID" in ds and "SOPInstanceUID" in ds:
+    #         matching = [
+    #             inst
+    #             for inst in instances
+    #             if inst.StudyInstanceUID == ds.StudyInstanceUID
+    #             and inst.SeriesInstanceUID == ds.SeriesInstanceUID
+    #             and inst.SOPInstanceUID == ds.SOPInstanceUID
+    #         ]
+
+    # else:
+    #     logger.error(f"Unsupported QueryRetrieveLevel: {ds.QueryRetrieveLevel}")
+    #     yield 0
+    matching = instances
+    logger.info(f"Matching instances: {len(matching)}")
+
+    for instance in matching:
         if event.is_cancelled:
             logger.error("C-CANCEL find operation")
             yield (C_CANCEL, None)
@@ -253,7 +284,7 @@ def _handle_move(event, storage_dir: str, known_aet_dict: dict):
 
         # Pending
         logger.info(
-            f"Return StudyInstanceUID:{instance.StudyInstanceUID}, SeriesInstanceUID:{instance.SeriesInstanceUID}, InstanceUID:{instance.SOPInstanceUID} InstanceNumber: {instance.InstanceNumber}"
+            f"Move StudyInstanceUID:{instance.StudyInstanceUID}, SeriesInstanceUID:{instance.SeriesInstanceUID}, InstanceUID:{instance.SOPInstanceUID} InstanceNumber: {instance.InstanceNumber}"
         )
         yield (C_PENDING_A, instance)
 

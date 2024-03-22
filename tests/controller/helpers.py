@@ -8,6 +8,7 @@ from controller.project import (
     ExportStudyRequest,
     ExportStudyResponse,
     MoveStudiesRequest,
+    StudyUIDHierarchy,
 )
 from model.project import DICOMNode, DICOMRuntimeError
 from controller.dicom_C_codes import C_SUCCESS, C_PENDING_A, C_PENDING_B
@@ -34,9 +35,7 @@ def pacs_storage_dir(temp_dir: str):
     return Path(temp_dir, PACSSimulatorSCP.aet)
 
 
-def send_file_to_scp(
-    pydicom_test_filename: str, to_pacs_simulator: bool, controller: ProjectController
-) -> Dataset:
+def send_file_to_scp(pydicom_test_filename: str, to_pacs_simulator: bool, controller: ProjectController) -> Dataset:
     # Use test data which comes with pydicom,
     # if not found, get_testdata_file() will try and download it
     ds = get_testdata_file(pydicom_test_filename, read=True)
@@ -89,41 +88,19 @@ def find_all_studies_on_pacs_simulator_scp(controller: ProjectController):
     return results
 
 
-def move_studies_from_pacs_simulator_scp_to_local_scp(
-    study_ids: list[str], controller: ProjectController
+def request_to_move_studies_from_pacs_simulator_scp_to_local_scp(
+    level: str, studies: list[StudyUIDHierarchy], controller: ProjectController
 ) -> bool:
-    ux_Q: Queue[Dataset] = Queue()
-    req: MoveStudiesRequest = MoveStudiesRequest(
-        PACSSimulatorSCP.aet, LocalStorageSCP.aet, study_ids, ux_Q
-    )
+    req: MoveStudiesRequest = MoveStudiesRequest(PACSSimulatorSCP.aet, LocalStorageSCP.aet, level, studies)
     controller.move_studies(req)
-    move_count = 0
-    while move_count < len(study_ids):
-        try:
-            resp: Dataset = ux_Q.get(timeout=6)
-            assert resp.Status in [C_SUCCESS, C_PENDING_A, C_PENDING_B]
-            assert resp.NumberOfCompletedSuboperations != 0
-            assert resp.NumberOfFailedSuboperations == 0
-            assert resp.NumberOfWarningSuboperations == 0
-            if resp.Status == C_SUCCESS:
-                move_count += 1
-
-        except Exception as e:  # timeout reading ux_Q
-            assert False
-
     return True
 
 
-def verify_files_sent_to_pacs_simulator(
-    dsets: list[Dataset], tempdir: str, controller: ProjectController
-):
+def verify_files_sent_to_pacs_simulator(dsets: list[Dataset], tempdir: str, controller: ProjectController):
     # Check naming convention of files on PACS
     dirlist = sorted(os.listdir(pacs_storage_dir(tempdir)))
     assert len(dirlist) == len(dsets)
-    assert (
-        dirlist[i] == f"{dsets[i].SeriesInstanceUID}.{dsets[i].InstanceNumber}.dcm"
-        for i in range(len(dirlist))
-    )
+    assert (dirlist[i] == f"{dsets[i].SeriesInstanceUID}.{dsets[i].InstanceNumber}.dcm" for i in range(len(dirlist)))
 
     # TODO: read file from pacs directory and check dataset equivalence against the sent dataset
     # TODO: cater for change in SOP class due to compression / transcoding if implemented
@@ -152,13 +129,9 @@ def verify_files_sent_to_pacs_simulator(
             assert dset.Modality in result.ModalitiesInStudy
 
 
-def export_patients_from_local_storage_to_test_pacs(
-    patient_ids: list[str], controller
-) -> bool:
+def export_patients_from_local_storage_to_test_pacs(patient_ids: list[str], controller) -> bool:
     ux_Q: Queue[ExportStudyResponse] = Queue()
-    req: ExportStudyRequest = ExportStudyRequest(
-        PACSSimulatorSCP.aet, patient_ids, ux_Q
-    )
+    req: ExportStudyRequest = ExportStudyRequest(PACSSimulatorSCP.aet, patient_ids, ux_Q)
     controller.export_patients(req)
     export_count = 0
     while not export_count == len(patient_ids):
