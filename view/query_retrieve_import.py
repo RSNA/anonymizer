@@ -27,6 +27,7 @@ from utils.ux_fields import (
     patient_name_max_chars,
     str_entry,
 )
+from view.import_studies_dialog import ImportStudiesDialog
 
 logger = logging.getLogger(__name__)
 
@@ -105,11 +106,7 @@ class QueryView(tk.Toplevel):
             initial_value="",
             min_chars=0,
             max_chars=patient_name_max_chars,
-            charset=string.ascii_letters
-            + string.digits
-            + "- '^*?"
-            + "À-ÖØ-öø-ÿ"
-            + string.whitespace,
+            charset=string.ascii_letters + string.digits + "- '^*?" + "À-ÖØ-öø-ÿ" + string.whitespace,
             tooltipmsg=None,  # "Alphabetic ^ spaces * for wildcard",
             row=0,
             col=0,
@@ -171,9 +168,7 @@ class QueryView(tk.Toplevel):
             values=[""] + self._controller.model.modalities,
             variable=self._modality_var,
         )
-        self._modalities_optionmenu.grid(
-            row=0, column=3, padx=PAD, pady=(PAD, 0), sticky="nw"
-        )
+        self._modalities_optionmenu.grid(row=0, column=3, padx=PAD, pady=(PAD, 0), sticky="nw")
         # Modality free text entry:
         # self._modality_var = str_entry(
         #     view=self._query_frame,
@@ -195,9 +190,7 @@ class QueryView(tk.Toplevel):
             text=_("Load Accession Numbers"),
             command=self._load_accession_file_button_pressed,
         )
-        self._load_accession_file_button.grid(
-            row=0, column=6, padx=PAD, pady=(PAD, 0), sticky="w"
-        )
+        self._load_accession_file_button.grid(row=0, column=6, padx=PAD, pady=(PAD, 0), sticky="w")
 
         self._query_button = ctk.CTkButton(
             self._query_frame,
@@ -215,16 +208,12 @@ class QueryView(tk.Toplevel):
         )
         self._cancel_query_button.grid(row=1, column=5, padx=PAD, pady=PAD, sticky="w")
 
-        self._studies_found_label = ctk.CTkLabel(
-            self._query_frame, text=_("Studies Found: 0")
-        )
+        self._studies_found_label = ctk.CTkLabel(self._query_frame, text=_("Studies Found: 0"))
         self._studies_found_label.grid(row=1, column=6, padx=PAD, pady=PAD, sticky="w")
 
         # Create frame for Query results:
         self._results_frame = ctk.CTkFrame(self)
-        self._results_frame.grid(
-            row=1, column=0, padx=PAD, pady=(0, PAD), sticky="nswe"
-        )
+        self._results_frame.grid(row=1, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")
         self._results_frame.grid_rowconfigure(0, weight=1)
         self._results_frame.grid_columnconfigure(7, weight=1)
 
@@ -249,9 +238,7 @@ class QueryView(tk.Toplevel):
         self._tree.grid(row=0, column=0, columnspan=10, sticky="nswe")
 
         # Create a Scrollbar and associate it with the Treeview
-        scrollbar = ttk.Scrollbar(
-            self._results_frame, orient="vertical", command=self._tree.yview
-        )
+        scrollbar = ttk.Scrollbar(self._results_frame, orient="vertical", command=self._tree.yview)
         scrollbar.grid(row=0, column=10, padx=(0, PAD), sticky="news")
         self._tree.configure(yscrollcommand=scrollbar.set)
 
@@ -275,9 +262,7 @@ class QueryView(tk.Toplevel):
         self._tree.bind("<Down>", lambda e: "break")
 
         # Progress bar and status:
-        self._status = ctk.CTkLabel(
-            self._results_frame, text=f"Processing 0 of 0 Studies"
-        )
+        self._status = ctk.CTkLabel(self._results_frame, text=f"Processing 0 of 0 Studies")
         self._status.grid(row=1, column=0, padx=PAD, pady=0, sticky="w")
 
         self._progressbar = ctk.CTkProgressBar(self._results_frame)
@@ -312,9 +297,7 @@ class QueryView(tk.Toplevel):
             text=_("Clear Selection"),
             command=self._clear_selection_button_pressed,
         )
-        self._clear_selection_button.grid(
-            row=1, column=6, padx=PAD, pady=PAD, sticky="w"
-        )
+        self._clear_selection_button.grid(row=1, column=6, padx=PAD, pady=PAD, sticky="w")
 
         self._retrieve_button = ctk.CTkButton(
             self._results_frame,
@@ -361,9 +344,7 @@ class QueryView(tk.Toplevel):
             logger.info(f"Load Accession File disabled, query or move active")
             return
         self._acc_no_file_path = filedialog.askopenfilename(
-            title=_(
-                "Select text or csv file with list of accession numbers to retrieve"
-            ),
+            title=_("Select text or csv file with list of accession numbers to retrieve"),
             defaultextension=".txt",
             filetypes=[
                 ("Text Files", "*.txt"),
@@ -389,7 +370,7 @@ class QueryView(tk.Toplevel):
 
     def _monitor_query_response(self, ux_Q: Queue):
         results = []
-        query_finished = False
+
         while not ux_Q.empty():
             try:
                 resp: FindStudyResponse = ux_Q.get_nowait()
@@ -398,17 +379,12 @@ class QueryView(tk.Toplevel):
                     if resp.study_result:
                         results.append(resp.study_result)
                     if resp.status.Status == C_SUCCESS:
-                        query_finished = True
+                        self._query_active = False
                 else:
                     assert resp.status.Status == C_FAILURE
-                    query_finished = True
+                    self._query_active = False
                     logger.error(f"Query failed: {resp.status.ErrorComment}")
-                    if self._query_active:  # not aborted
-                        messagebox.showerror(
-                            title=_("Query Remote Server Error: "),
-                            message=_(f"{resp.status.ErrorComment}"),
-                            parent=self,
-                        )
+                    # TODO: reflect error to UX if query not aborted
 
                 ux_Q.task_done()
 
@@ -429,42 +405,34 @@ class QueryView(tk.Toplevel):
 
         # Update UX label for studies found:
         self._update_query_progress()
-        self._studies_found_label.configure(
-            text=f"Studies Found: {self._studies_processed}"
-        )
+        self._studies_found_label.configure(text=f"Studies Found: {self._studies_processed}")
 
-        if query_finished:
+        if not self._query_active:
             logger.info(f"Query finished, {self._studies_processed} results")
             self._query_active = False
             self._enable_action_buttons()
             if self._acc_no_list:
-                logger.debug(
-                    f"- {len(self._acc_no_list)} NOT found: {self._acc_no_list}"
-                )
+                logger.debug(f"- {len(self._acc_no_list)} NOT found: {self._acc_no_list}")
                 # If processing accession numbers from file,
                 # write any not found to file based on input file name with "_not_found" appended:
                 if self._acc_no_file_path:
-                    not_found_file_path = (
-                        f"{self._acc_no_file_path.split('.')[0]}_not_found.txt"
-                    )
+                    not_found_file_path = f"{self._acc_no_file_path.split('.')[0]}_not_found.txt"
                     with open(not_found_file_path, "w") as file:
                         file.write("\n".join(self._acc_no_list))
 
-                    logger.info(
-                        _(
-                            f"Accession numbers not found written to: {not_found_file_path}"
-                        )
-                    )
+                    logger.info(_(f"Accession numbers not found written to: {not_found_file_path}"))
 
                     # TODO: implement custom message box with title bar and icons
                     # OSX window manager does not show title bar for messagebox and does not show error icon
                     messagebox.showwarning(
                         title=_("Accession Numbers not found"),
-                        message=_(
-                            f"Accession Numbers not found were written to text file:\n {not_found_file_path}"
-                        ),
+                        message=_(f"Accession Numbers not found were written to text file:\n {not_found_file_path}"),
                         parent=self,
                     )
+            else:
+                self._progressbar.stop()
+                self._progressbar.mode = "determinate"
+                self._progressbar.set(1)
 
             self._acc_no_file_path = None
             self._acc_no_list = []  # reset accession number list
@@ -528,6 +496,8 @@ class QueryView(tk.Toplevel):
             self._studies_to_process = len(self._acc_no_list)
         else:
             self._studies_to_process = -1  # unknown
+            self._progressbar.mode = "indeterminate"
+            self._progressbar.start()
 
         self._studies_processed = 0
 
@@ -536,11 +506,7 @@ class QueryView(tk.Toplevel):
             "QUERY",
             self._patient_name_var.get(),
             self._patient_id_var.get(),
-            (
-                self._accession_no_var.get()
-                if not self._acc_no_list
-                else self._acc_no_list
-            ),
+            (self._accession_no_var.get() if not self._acc_no_list else self._acc_no_list),
             self._study_date_var.get(),
             self._modality_var.get(),
             ux_Q,
@@ -559,14 +525,11 @@ class QueryView(tk.Toplevel):
 
     def _update_query_progress(self):
         if self._studies_to_process == -1:
-            studies_to_process = "Unknown"
+            self._status.configure(text=f"Found {self._studies_processed} Studies")
         else:
             studies_to_process = self._studies_to_process
             self._progressbar.set(self._studies_processed / self._studies_to_process)
-
-        self._status.configure(
-            text=f"Found {self._studies_processed} of {studies_to_process} Studies"
-        )
+            self._status.configure(text=f"Found {self._studies_processed} of {studies_to_process} Studies")
 
     def _clear_results_tree(self):
         self._tree.delete(*self._tree.get_children())
@@ -615,11 +578,7 @@ class QueryView(tk.Toplevel):
             current_values = list(self._tree.item(study_uid, "values"))
             return (
                 current_values[self._tree_column_keys.index("PatientID")],
-                int(
-                    current_values[
-                        self._tree_column_keys.index("NumberOfStudyRelatedInstances")
-                    ]
-                ),
+                int(current_values[self._tree_column_keys.index("NumberOfStudyRelatedInstances")]),
             )
 
         uids = self._tree.get_children() if not study_uid else [study_uid]
@@ -628,9 +587,7 @@ class QueryView(tk.Toplevel):
                 current_values = list(self._tree.item(study_uid, "values"))
                 pid, instances_to_import = _parse_tree_item(self, study_uid)
                 files_imported = self._images_stored_phi_lookup(pid, study_uid)
-                current_values[self._tree_column_keys.index("Imported")] = str(
-                    files_imported
-                )
+                current_values[self._tree_column_keys.index("Imported")] = str(files_imported)
                 self._tree.item(study_uid, values=current_values)
                 if files_imported >= instances_to_import:
                     logging.info(f"Study {study_uid} marked GREEN, all images imported")
@@ -646,9 +603,7 @@ class QueryView(tk.Toplevel):
 
                 # Terminate move operation if an incomplete response is received:
                 if not hasattr(resp, "StudyInstanceUID"):
-                    logger.error(
-                        f"Fatal Move Error detected, exit monitor_move_response"
-                    )
+                    logger.error(f"Fatal Move Error detected, exit monitor_move_response")
                     self._move_active = False
                     messagebox.showerror(
                         title=_("Move Error"),
@@ -662,9 +617,7 @@ class QueryView(tk.Toplevel):
                 if resp.Status == C_FAILURE:
                     self._tree.selection_remove(resp.StudyInstanceUID)
                     self._tree.item(resp.StudyInstanceUID, tags="red")
-                    logger.error(
-                        f"Study {resp.StudyInstanceUID} marked RED, Error: {resp.ErrorComment}"
-                    )
+                    logger.error(f"Study {resp.StudyInstanceUID} marked RED, Error: {resp.ErrorComment}")
                     self._studies_processed += 1
                     self._update_move_progress()
                 else:
@@ -737,34 +690,37 @@ class QueryView(tk.Toplevel):
 
         self._move_active = True
         self._disable_action_buttons()
-        self._studies_processed = 0
-        self._update_move_progress()
 
-        logger.info(f"Retrieving {self._studies_to_process} Study(s)")
-        logger.debug(f"StudyInstanceUIDs: {study_uids}")
+        dlg = ImportStudiesDialog(self, self._controller, unstored_study_uids)
+        self._studies_processed = dlg.get_imported()
+        self._move_active = False
+        self._enable_action_buttons()
 
-        req = MoveStudiesRequest(
-            "QUERY",
-            self._controller.model.scu.aet,
-            unstored_study_uids,
-            ux_Q,
-        )
-        self._controller.move_studies(req)
+        # self._update_move_progress()
 
-        # Start MoveStudyResponse monitor:
-        self.after(
-            self.ux_poll_move_response_interval,
-            self._monitor_move_response,
-            ux_Q,
-        )
+        # logger.info(f"Retrieving {self._studies_to_process} Study(s)")
+        # logger.debug(f"StudyInstanceUIDs: {study_uids}")
+
+        # req = MoveStudiesRequest(
+        #     "QUERY",
+        #     self._controller.model.scu.aet,
+        #     unstored_study_uids,
+        #     ux_Q,
+        # )
+        # self._controller.move_studies(req)
+
+        # # Start MoveStudyResponse monitor:
+        # self.after(
+        #     self.ux_poll_move_response_interval,
+        #     self._monitor_move_response,
+        #     ux_Q,
+        # )
 
     def _images_stored_phi_lookup(self, phi_patient_id: str, phi_study_uid: str) -> int:
         image_count = 0
         anon_study_uid = self._controller.anonymizer.model.get_anon_uid(phi_study_uid)
         if anon_study_uid:
-            anon_pt_id = self._controller.anonymizer.model.get_anon_patient_id(
-                phi_patient_id
-            )
+            anon_pt_id = self._controller.anonymizer.model.get_anon_patient_id(phi_patient_id)
             assert anon_pt_id is not None
             if anon_pt_id:
                 image_count = count_study_images(
@@ -804,9 +760,7 @@ class QueryView(tk.Toplevel):
                     iid=dataset.get("StudyInstanceUID", ""),
                     values=display_values,
                 )
-                if images_stored_count == dataset.get(
-                    "NumberOfStudyRelatedInstances", 0
-                ):
+                if images_stored_count == dataset.get("NumberOfStudyRelatedInstances", 0):
                     self._tree.item(dataset.get("StudyInstanceUID", ""), tags="green")
             except Exception as e:
                 logger.error(f"Exception: {e}")
@@ -819,7 +773,10 @@ class QueryView(tk.Toplevel):
     def _on_cancel(self):
         logger.info(f"_on_cancel")
         if self._query_active or self._move_active:
-            msg = _("Cancel active Query?")
+            if self._query_active:
+                msg = _("Cancel active Query?")
+            else:
+                msg = _("Cancel active Move?")
             if not messagebox.askokcancel(title=_("Cancel"), message=msg, parent=self):
                 return
             else:

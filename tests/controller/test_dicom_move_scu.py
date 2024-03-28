@@ -54,7 +54,7 @@ def test_move_at_study_level_1_CT_file_from_pacs_with_file_to_unknown_AET(temp_d
     assert series
     assert series.instances[ct_small_SOPInstanceUID]
     error_msg = controller._move_study_at_study_level(PACSSimulatorSCP.aet, "UNKNOWNAE", study_uid_hierarchy)
-    assert "destination unknown" in error_msg
+    assert "Import Timeout" in error_msg
 
 
 def test_move_at_series_level_1_CT_file_from_pacs_with_file_to_unknown_AET(
@@ -68,7 +68,7 @@ def test_move_at_series_level_1_CT_file_from_pacs_with_file_to_unknown_AET(
     assert series
     assert series.instances[ct_small_SOPInstanceUID]
     error_msg = controller._move_study_at_series_level(PACSSimulatorSCP.aet, "UNKNOWNAE", study_uid_hierarchy)
-    assert "destination unknown" in error_msg
+    assert "Import Timeout" in error_msg
 
 
 def test_move_at_instance_level_1_CT_file_from_pacs_with_file_to_unknown_AET(
@@ -82,7 +82,7 @@ def test_move_at_instance_level_1_CT_file_from_pacs_with_file_to_unknown_AET(
     assert series
     assert series.instances[ct_small_SOPInstanceUID]
     error_msg = controller._move_study_at_instance_level(PACSSimulatorSCP.aet, "UNKNOWNAE", study_uid_hierarchy)
-    assert "destination unknown" in error_msg
+    assert "Import Timeout" in error_msg
 
 
 def test_move_at_study_level_1_file_from_empty_pacs_to_local_storage(temp_dir: str, controller: ProjectController):

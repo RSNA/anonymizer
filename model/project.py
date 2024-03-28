@@ -103,7 +103,7 @@ class ProjectModel:
     @staticmethod
     def default_remote_scps() -> Dict[str, DICOMNode]:
         return {
-            "QUERY": DICOMNode("127.0.0.1", 11112, "QUERYAE", False),
+            "QUERY": DICOMNode("127.0.0.1", 4242, "ORTHANC", False),
             "EXPORT": DICOMNode("127.0.0.1", 11112, "EXPORTAE", False),
         }
 
