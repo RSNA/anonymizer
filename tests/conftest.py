@@ -59,7 +59,6 @@ def controller(temp_dir):
     project_model = ProjectModel(
         site_id=TEST_SITEID,
         project_name=TEST_PROJECTNAME,
-        trial_name=TEST_TRIALNAME,
         uid_root=TEST_UIDROOT,
         storage_dir=anon_store,
         scu=LocalSCU,

@@ -11,3 +11,4 @@ dicom/*
 .env
 .coverage
 versionfile.txt
+config.json

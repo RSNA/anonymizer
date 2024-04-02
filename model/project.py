@@ -63,6 +63,20 @@ class Study:
 class PHI:
     patient_name: str
     patient_id: str
+    sex: str
+    dob: str | None
+    weight: str | None
+    bmi: str | None
+    size: str | None
+    smoker: str | None
+    medical_alerts: str | None
+    allergies: str | None
+    ethnic_group: str | None
+    reason_for_visit: str | None
+    admitting_diagnoses: str | None
+    history: str | None
+    additional_history: str | None
+    comments: str | None
     studies: List[Study]
 
 
@@ -85,7 +99,7 @@ class ProjectModel:
         uuid_hex = uuid.uuid4().hex
         uuid_dec = str(int(uuid_hex, 16))
         groups = [uuid_dec[i : i + 4] for i in range(0, 12, 4)]
-        uid_12_chars = "-".join(groups)
+        uid_12_chars = ".".join(groups)
         return uid_12_chars
 
     @staticmethod
@@ -146,8 +160,7 @@ class ProjectModel:
         return LoggingLevels(logging.INFO, logging.WARNING, False)
 
     site_id: str = field(default_factory=default_site_id)
-    project_name: str = _("PROJECT")
-    trial_name: str = _("TRIAL")
+    project_name: str = _("MY_PROJECT")
     uid_root: str = "1.2.826.0.1.3680043.10.188"
     storage_dir: Path = field(default_factory=default_storage_dir)
     modalities: List[str] = field(default_factory=default_modalities)

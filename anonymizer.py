@@ -50,9 +50,7 @@ class App(ctk.CTk):
             theme = "dark-blue"
         ctk.set_default_color_theme(theme)
         if sys.platform.startswith("win"):
-            self.iconbitmap(
-                "assets\\images\\rsna_icon.ico", default="assets\\images\\rsna_icon.ico"
-            )
+            self.iconbitmap("assets\\images\\rsna_icon.ico", default="assets\\images\\rsna_icon.ico")
 
         self._project_controller: ProjectController = None
         self._model: ProjectModel = None
@@ -79,15 +77,11 @@ class App(ctk.CTk):
                     logger.error("Config file corrupt, start with no global config set")
                     return
 
-                self.recent_project_dirs = list(
-                    set(config_data.get("recent_project_dirs", []))
-                )
+                self.recent_project_dirs = list(set(config_data.get("recent_project_dirs", [])))
                 for dir in self.recent_project_dirs:
                     if not os.path.exists(dir):
                         self.recent_project_dirs.remove(dir)
-                self.current_open_project_dir = config_data.get(
-                    "current_open_project_dir"
-                )
+                self.current_open_project_dir = config_data.get("current_open_project_dir")
                 if not os.path.exists(self.current_open_project_dir):
                     self.current_open_project_dir = None
         except FileNotFoundError:
@@ -105,9 +99,7 @@ class App(ctk.CTk):
             with open(self.CONFIG_FILENAME, "w") as config_file:
                 json.dump(config_data, config_file, indent=2)
         except Exception as e:
-            err_msg = _(
-                f"Error writing json config file: {self.CONFIG_FILENAME} {str(e)}"
-            )
+            err_msg = _(f"Error writing json config file: {self.CONFIG_FILENAME} {str(e)}")
             logger.error(err_msg)
             messagebox.showerror(
                 title=_("Configuration File Write Error"),
@@ -126,34 +118,37 @@ class App(ctk.CTk):
             title=_("New Project Settings"),
         )
         self._model = dlg.get_input()
+
         if self._model is None:
             logger.info("New Project Cancelled")
-        else:
-            assert self._model
-            logger.info(f"New ProjectModel: {self._model}")
-            self._project_controller = ProjectController(self._model)
-            assert self._project_controller
+            return
 
-            project_dir = str(self._project_controller.storage_dir)
-            if os.path.exists(project_dir):
-                confirm = messagebox.askyesno(
-                    title=_("Confirm Overwrite"),
-                    message=_(
-                        "The project directory already exists. Do you want to overwrite the existing project?"
-                    ),
-                    parent=self,
-                )
-                if not confirm:
-                    logger.info("New Project Cancelled")
-                    self.enable_file_menu()
-                    return
+        logger.info(f"New ProjectModel: {self._model}")
 
-            self._project_controller.save_model()
-            if project_dir not in self.recent_project_dirs:
-                self.recent_project_dirs.insert(0, project_dir)
-            self.current_open_project_dir = project_dir
-            self._open_project()
+        project_dir = self._model.storage_dir
+        if os.path.exists(project_dir):
+            confirm = messagebox.askyesno(
+                title=_("Confirm Overwrite"),
+                message=_("The project directory already exists. Do you want to overwrite the existing project?"),
+                parent=self,
+            )
+            if not confirm:
+                logger.info("New Project Cancelled")
+                self.enable_file_menu()
+                return
 
+        self._project_controller = ProjectController(self._model)
+        if not self._project_controller:
+            logger.error("Fatal Internal Error, Project Controller not created")
+            return
+
+        self._project_controller.save_model()
+
+        if project_dir not in self.recent_project_dirs:
+            self.recent_project_dirs.insert(0, project_dir)
+
+        self.current_open_project_dir = project_dir
+        self._open_project()
         self.enable_file_menu()
 
     def open_project(self, project_dir: str = None):
@@ -208,13 +203,9 @@ class App(ctk.CTk):
         try:
             self._project_controller.start_scp()
         except DICOMRuntimeError as e:
-            messagebox.showerror(
-                title=_("Local DICOM Server Error"), message=str(e), parent=self
-            )
+            messagebox.showerror(title=_("Local DICOM Server Error"), message=str(e), parent=self)
 
-        self.title(
-            f"{self._model.project_name}[{self._model.site_id}] => {self._model.abridged_storage_dir()}"
-        )
+        self.title(f"{self._model.project_name}[{self._model.site_id}] => {self._model.abridged_storage_dir()}")
 
         self._welcome_view.destroy()
         self._dashboard = Dashboard(self, self._project_controller)
@@ -228,9 +219,7 @@ class App(ctk.CTk):
             logger.info(f"QueryView busy, cannot close project")
             messagebox.showerror(
                 title=_("Query Busy"),
-                message=_(
-                    f"Query is busy, please wait for query to complete before closing project."
-                ),
+                message=_(f"Query is busy, please wait for query to complete before closing project."),
                 parent=self,
             )
             return
@@ -238,9 +227,7 @@ class App(ctk.CTk):
             logger.info(f"ExportView busy, cannot close project")
             messagebox.showerror(
                 title=_("Export Busy"),
-                message=_(
-                    f"Export is busy, please wait for export to complete before closing project."
-                ),
+                message=_(f"Export is busy, please wait for export to complete before closing project."),
                 parent=self,
             )
             return
@@ -288,14 +275,10 @@ class App(ctk.CTk):
         assert os.path.exists(cloned_project_dir)
 
         if cloned_project_dir == current_project_dir:
-            logger.info(
-                f"Clone Project Cancelled, cloned directory same as current project directory"
-            )
+            logger.info(f"Clone Project Cancelled, cloned directory same as current project directory")
             messagebox.showerror(
                 title=_("Clone Project Error"),
-                message=_(
-                    f"Cloned directory cannot be the same as the current project directory."
-                ),
+                message=_(f"Cloned directory cannot be the same as the current project directory."),
                 parent=self,
             )
             return
@@ -303,9 +286,7 @@ class App(ctk.CTk):
         self._project_controller.save_model(cloned_project_dir)
         self.close_project()
 
-        project_pkl_path = Path(
-            cloned_project_dir, ProjectModel.default_project_filename()
-        )
+        project_pkl_path = Path(cloned_project_dir, ProjectModel.default_project_filename())
 
         with open(project_pkl_path, "rb") as pkl_file:
             self._model = pickle.load(pkl_file)
@@ -431,9 +412,7 @@ class App(ctk.CTk):
             logger.info(f"QueryView busy, cannot open SettingsDialog")
             messagebox.showerror(
                 title=_("Query Busy"),
-                message=_(
-                    f"Query is busy, please wait for query to complete before changing settings."
-                ),
+                message=_(f"Query is busy, please wait for query to complete before changing settings."),
                 parent=self,
             )
             return
@@ -441,9 +420,7 @@ class App(ctk.CTk):
             logger.info(f"ExportView busy, cannot open SettingsDialog")
             messagebox.showerror(
                 title=_("Export Busy"),
-                message=_(
-                    f"Export is busy, please wait for export to complete before changing settings."
-                ),
+                message=_(f"Export is busy, please wait for export to complete before changing settings."),
                 parent=self,
             )
             return
@@ -493,12 +470,8 @@ class App(ctk.CTk):
 
     def get_help_menu(self):
         help_menu = tk.Menu(self.menu_bar, tearoff=0)
-        help_menu.add_command(
-            label=_("Instructions"), font=self.menu_font, command=self.instructions
-        )
-        help_menu.add_command(
-            label=_("View License"), font=self.menu_font, command=self.view_license
-        )
+        help_menu.add_command(label=_("Instructions"), font=self.menu_font, command=self.instructions)
+        help_menu.add_command(label=_("View License"), font=self.menu_font, command=self.view_license)
         return help_menu
 
     def set_menu_project_closed(self):
@@ -623,9 +596,7 @@ def main():
     logger.info(f"Python Version: {sys.version_info.major}.{sys.version_info.minor}")
     logger.info(f"tkinter TkVersion: {tk.TkVersion} TclVersion: {tk.TclVersion}")
     logger.info(f"Customtkinter Version: {ctk.__version__}")
-    logger.info(
-        f"pydicom Version: {pydicom_version}, pynetdicom Version: {pynetdicom_version}"
-    )
+    logger.info(f"pydicom Version: {pydicom_version}, pynetdicom Version: {pynetdicom_version}")
 
     # GUI
     try:

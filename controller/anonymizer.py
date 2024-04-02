@@ -58,9 +58,7 @@ class AnonymizerController:
         else:
             # Initialise AnonymizerModel if no pickle file found in project directory:
             self.model = AnonymizerModel(project_model.anonymizer_script_path)
-            logger.info(
-                f"Anonymizer Model initialised from: {project_model.anonymizer_script_path}"
-            )
+            logger.info(f"Anonymizer Model initialised from: {project_model.anonymizer_script_path}")
 
         self._anon_Q: Queue = Queue()
 
@@ -80,15 +78,11 @@ class AnonymizerController:
 
     def missing_attributes(self, ds: Dataset) -> list[str]:
         return [
-            attr_name
-            for attr_name in self.required_attributes
-            if attr_name not in ds or getattr(ds, attr_name) == ""
+            attr_name for attr_name in self.required_attributes if attr_name not in ds or getattr(ds, attr_name) == ""
         ]
 
     def save_model(self):
-        anon_pkl_path = Path(
-            self.project_model.storage_dir, AnonymizerModel.pickle_filename
-        )
+        anon_pkl_path = Path(self.project_model.storage_dir, AnonymizerModel.pickle_filename)
         with open(anon_pkl_path, "wb") as pkl_file:
             pickle.dump(self.model, pkl_file)
             pkl_file.close()
@@ -152,9 +146,7 @@ class AnonymizerController:
                 result = "0" + result
 
         except ValueError:
-            logger.error(
-                f"Invalid age string: {age_string}, round_age operation failed, keeping original value"
-            )
+            logger.error(f"Invalid age string: {age_string}, round_age operation failed, keeping original value")
             result = age_string
 
         return result
@@ -170,24 +162,12 @@ class AnonymizerController:
                     else 0
                 ),
                 str(ds.AccessionNumber) if hasattr(phi_ds, "AccessionNumber") else "?",
-                (
-                    str(ds.StudyInstanceUID)
-                    if hasattr(phi_ds, "StudyInstanceUID")
-                    else "?"
-                ),
+                (str(ds.StudyInstanceUID) if hasattr(phi_ds, "StudyInstanceUID") else "?"),
                 source,
                 [
                     Series(
-                        (
-                            ds.SeriesInstanceUID
-                            if hasattr(phi_ds, "SeriesInstanceUID")
-                            else "?"
-                        ),
-                        (
-                            str(ds.SeriesDescription)
-                            if hasattr(phi_ds, "SeriesDescription")
-                            else "?"
-                        ),
+                        (ds.SeriesInstanceUID if hasattr(phi_ds, "SeriesInstanceUID") else "?"),
+                        (str(ds.SeriesDescription) if hasattr(phi_ds, "SeriesDescription") else "?"),
                         str(ds.Modality) if hasattr(phi_ds, "Modality") else "?",
                         1,
                     )
@@ -198,10 +178,31 @@ class AnonymizerController:
 
         if anon_patient_id == None:  # New patient
             new_anon_patient_id = self.get_next_anon_patient_id()
+            # TODO: write init method for PHI using introspection for fields to look for in dataset
             phi = PHI(
-                str(phi_ds.PatientName),
-                str(phi_ds.PatientID),
-                [
+                patient_name=str(phi_ds.PatientName),
+                patient_id=str(phi_ds.PatientID),
+                sex=phi_ds.PatientSex if hasattr(phi_ds, "PatientSex") else "U",
+                dob=phi_ds.PatientBirthDate if hasattr(phi_ds, "PatientBirthDate") else None,
+                weight=phi_ds.PatientWeight if hasattr(phi_ds, "PatientWeight") else None,
+                bmi=phi_ds.PatientBodyMassIndex if hasattr(phi_ds, "PatientBodyMassIndex") else None,
+                size=phi_ds.PatientSize if hasattr(phi_ds, "PatientSize") else None,
+                smoker=phi_ds.SmokingStatus if hasattr(phi_ds, "SmokingStatus") else None,
+                medical_alerts=phi_ds.MedicalAlerts if hasattr(phi_ds, "MedicalAlerts") else None,
+                allergies=phi_ds.Allergies if hasattr(phi_ds, "Allergies") else None,
+                ethnic_group=phi_ds.EthnicGroup if hasattr(phi_ds, "EthnicGroup") else None,
+                reason_for_visit=(
+                    phi_ds.ReasonForTheRequestedProcedure if hasattr(phi_ds, "ReasonForTheRequestedProcedure") else None
+                ),
+                admitting_diagnoses=(
+                    phi_ds.AdmittingDiagnosesDescription if hasattr(phi_ds, "AdmittingDiagnosesDescription") else None
+                ),
+                history=phi_ds.PatientHistory if hasattr(phi_ds, "PatientHistory") else None,
+                additional_history=(
+                    phi_ds.AdditionalPatientHistory if hasattr(phi_ds, "AdditionalPatientHistory") else None
+                ),
+                comments=phi_ds.PatientComments if hasattr(phi_ds, "PatientComments") else None,
+                studies=[
                     study_from_dataset(phi_ds),
                 ],
             )
@@ -230,11 +231,7 @@ class AnonymizerController:
         # Find study in PHI:
         if phi.studies is not None and ds.StudyInstanceUID is not None:
             study = next(
-                (
-                    study
-                    for study in phi.studies
-                    if study.study_uid == ds.StudyInstanceUID
-                ),
+                (study for study in phi.studies if study.study_uid == ds.StudyInstanceUID),
                 None,
             )
         else:
@@ -247,11 +244,7 @@ class AnonymizerController:
         # Find series in study:
         if study.series is not None and ds.SeriesInstanceUID is not None:
             series = next(
-                (
-                    series
-                    for series in study.series
-                    if series.series_uid == ds.SeriesInstanceUID
-                ),
+                (series for series in study.series if series.series_uid == ds.SeriesInstanceUID),
                 None,
             )
         else:
@@ -315,9 +308,7 @@ class AnonymizerController:
                 return
             parameter = self.extract_first_digit(operation.replace("@round", ""))
             if parameter is None:
-                logger.error(
-                    f"Invalid round operation: {operation}, ignoring operation, return unmodified value"
-                )
+                logger.error(f"Invalid round operation: {operation}, ignoring operation, return unmodified value")
                 dataset[tag].value = value
                 return
             else:
@@ -327,9 +318,7 @@ class AnonymizerController:
             logger.debug(f"round_age: Result:{dataset[tag].value}")
         return
 
-    def anonymize_dataset_and_store(
-        self, source: DICOMNode | str, ds: Dataset | None, dir: Path
-    ) -> None:
+    def anonymize_dataset_and_store(self, source: DICOMNode | str, ds: Dataset | None, dir: Path) -> None:
         self._anon_Q.put((source, ds, dir))
         return
 
@@ -342,13 +331,9 @@ class AnonymizerController:
             time.sleep(self._anonymize_time_slice_interval)
 
             while not ds_Q.empty():
-                logger.debug(
-                    f"_anonymize_worker processing batch size: {self._anonymize_batch_size}"
-                )
+                logger.debug(f"_anonymize_worker processing batch size: {self._anonymize_batch_size}")
                 batch = []
-                for _ in range(
-                    self._anonymize_batch_size
-                ):  # Process a batch of items at a time
+                for _ in range(self._anonymize_batch_size):  # Process a batch of items at a time
                     if not ds_Q.empty():
                         batch.append(ds_Q.get())
 
@@ -367,17 +352,13 @@ class AnonymizerController:
                         # DICOM Dataset integrity checking:
                         missing_attributes = self.missing_attributes(ds)
                         if missing_attributes != []:
-                            logger.error(
-                                f"Incoming dataset is missing required attributes: {missing_attributes}"
-                            )
+                            logger.error(f"Incoming dataset is missing required attributes: {missing_attributes}")
                             logger.error(f"\n{ds}")
                             continue
 
                         # Return success if instance is already stored:
                         if self.model.get_anon_uid(ds.SOPInstanceUID):
-                            logger.info(
-                                f"Instance already stored: {ds.PatientID} {ds.SOPInstanceUID}"
-                            )
+                            logger.info(f"Instance already stored: {ds.PatientID} {ds.SOPInstanceUID}")
                             continue
 
                     # Capture PHI and store for new studies:
@@ -392,9 +373,7 @@ class AnonymizerController:
 
                     # Handle Global Tags:
                     ds.PatientIdentityRemoved = "YES"  # CS: (0012, 0062)
-                    ds.DeidentificationMethod = (
-                        self.deidentification_method  # LO: (0012,0063)
-                    )
+                    ds.DeidentificationMethod = self.deidentification_method  # LO: (0012,0063)
                     de_ident_seq = Sequence()  # SQ: (0012,0064)
 
                     for code, descr in self.deidentification_methods:
@@ -405,11 +384,9 @@ class AnonymizerController:
                         de_ident_seq.append(item)
 
                     ds.DeidentificationMethodCodeSequence = de_ident_seq
-                    block = ds.private_block(
-                        0x0013, self.private_block_name, create=True
-                    )
+                    block = ds.private_block(0x0013, self.private_block_name, create=True)
                     block.add_new(0x1, "SH", self.project_model.project_name)
-                    block.add_new(0x2, "SH", self.project_model.trial_name)
+                    # block.add_new(0x2, "SH", self.project_model.trial_name)
                     block.add_new(0x3, "SH", self.project_model.site_id)
 
                     logger.debug(f"ANON:\n{ds}")

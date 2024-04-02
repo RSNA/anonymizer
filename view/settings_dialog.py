@@ -97,21 +97,21 @@ class SettingsDialog(tk.Toplevel):
         )
         row += 1
 
-        self.trial_name_var = str_entry(
-            view=self._frame,
-            label=_("Trial Name:"),
-            initial_value=self.model.trial_name,
-            min_chars=min_chars,
-            max_chars=max_chars,
-            charset=string.digits + string.ascii_uppercase + " -.",
-            tooltipmsg=None,
-            row=row,
-            col=0,
-            pad=PAD,
-            sticky="nw",
-            enabled=self.new_model,
-        )
-        row += 1
+        # self.trial_name_var = str_entry(
+        #     view=self._frame,
+        #     label=_("Trial Name:"),
+        #     initial_value=self.model.trial_name,
+        #     min_chars=min_chars,
+        #     max_chars=max_chars,
+        #     charset=string.digits + string.ascii_uppercase + " -.",
+        #     tooltipmsg=None,
+        #     row=row,
+        #     col=0,
+        #     pad=PAD,
+        #     sticky="nw",
+        #     enabled=self.new_model,
+        # )
+        # row += 1
 
         self.uidroot_var = str_entry(
             view=self._frame,
@@ -138,9 +138,7 @@ class SettingsDialog(tk.Toplevel):
             text=_("Local Server"),
             command=self._local_server_click,
         )
-        self._local_server_button.grid(
-            row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="w"
-        )
+        self._local_server_button.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="w")
 
         row += 1
 
@@ -150,9 +148,7 @@ class SettingsDialog(tk.Toplevel):
             text=_("Query Server"),
             command=self._query_server_click,
         )
-        self._query_server_button.grid(
-            row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="w"
-        )
+        self._query_server_button.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="w")
 
         row += 1
 
@@ -162,9 +158,7 @@ class SettingsDialog(tk.Toplevel):
             text=_("Export Server"),
             command=self._export_server_click,
         )
-        self._export_server_button.grid(
-            row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="w"
-        )
+        self._export_server_button.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="w")
 
         row += 1
 
@@ -177,35 +171,25 @@ class SettingsDialog(tk.Toplevel):
             text=_("AWS Cognito Credentials"),
             command=self._aws_cognito_click,
         )
-        self._export_server_button.grid(
-            row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="w"
-        )
+        self._export_server_button.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="w")
 
         row += 1
 
         # TODO: None for timeout means no timeout, implement checkbox for enable/disable timeout
         network_timeouts_label = ctk.CTkLabel(self._frame, text=_("Network Timeouts:"))
-        network_timeouts_label.grid(
-            row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="nw"
-        )
+        network_timeouts_label.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="nw")
         self.network_timeout_button = ctk.CTkButton(
             self._frame,
             width=100,
             text=_("Network Timeouts"),
             command=self._network_timeouts_click,
         )
-        self.network_timeout_button.grid(
-            row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="w"
-        )
+        self.network_timeout_button.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="w")
 
         row += 1
 
-        self._storage_directory_label = ctk.CTkLabel(
-            self._frame, text=_("Storage Directory:")
-        )
-        self._storage_directory_label.grid(
-            row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw"
-        )
+        self._storage_directory_label = ctk.CTkLabel(self._frame, text=_("Storage Directory:"))
+        self._storage_directory_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
 
         # Only allow setting of storage directory for NEW project:
         if self.new_model:
@@ -215,23 +199,15 @@ class SettingsDialog(tk.Toplevel):
                 command=self._open_storage_directory_dialog,
                 state=ctk.NORMAL if self.new_model else ctk.DISABLED,
             )
-            self._storage_dir_button.grid(
-                row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw"
-            )
+            self._storage_dir_button.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw")
         else:
-            self._storage_dir_label = ctk.CTkLabel(
-                self._frame, text=self.model.abridged_storage_dir()
-            )
-            self._storage_dir_label.grid(
-                row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw"
-            )
+            self._storage_dir_label = ctk.CTkLabel(self._frame, text=self.model.abridged_storage_dir())
+            self._storage_dir_label.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw")
 
         row += 1
 
         self._modalities_label = ctk.CTkLabel(self._frame, text=_("Modalities:"))
-        self._modalities_label.grid(
-            row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw"
-        )
+        self._modalities_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
 
         self._modalities_button = ctk.CTkButton(
             self._frame,
@@ -239,84 +215,58 @@ class SettingsDialog(tk.Toplevel):
             text=_("Select Modalities"),
             command=self._open_modalities_dialog,
         )
-        self._modalities_button.grid(
-            row=row, column=1, pady=(PAD, 0), padx=PAD, sticky="nw"
-        )
+        self._modalities_button.grid(row=row, column=1, pady=(PAD, 0), padx=PAD, sticky="nw")
 
         row += 1
 
-        self._storage_classes_label = ctk.CTkLabel(
-            self._frame, text=_("Storage Classes:")
-        )
-        self._storage_classes_label.grid(
-            row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw"
-        )
+        self._storage_classes_label = ctk.CTkLabel(self._frame, text=_("Storage Classes:"))
+        self._storage_classes_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
 
         self._storage_classes_button = ctk.CTkButton(
             self._frame,
             text=_("Select Storage Classes"),
             command=self._open_storage_classes_dialog,
         )
-        self._storage_classes_button.grid(
-            row=row, column=1, pady=(PAD, 0), padx=PAD, sticky="nw"
-        )
+        self._storage_classes_button.grid(row=row, column=1, pady=(PAD, 0), padx=PAD, sticky="nw")
 
         row += 1
 
-        self._transfer_syntaxes_label = ctk.CTkLabel(
-            self._frame, text=_("Transfer Syntaxes:")
-        )
-        self._transfer_syntaxes_label.grid(
-            row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw"
-        )
+        self._transfer_syntaxes_label = ctk.CTkLabel(self._frame, text=_("Transfer Syntaxes:"))
+        self._transfer_syntaxes_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
 
         self._transfer_syntaxes_button = ctk.CTkButton(
             self._frame,
             text=_("Select Transfer Syntaxes"),
             command=self._open_transfer_syntaxes_dialog,
         )
-        self._transfer_syntaxes_button.grid(
-            row=row, column=1, pady=(PAD, 0), padx=PAD, sticky="nw"
-        )
+        self._transfer_syntaxes_button.grid(row=row, column=1, pady=(PAD, 0), padx=PAD, sticky="nw")
 
         row += 1
 
         # Script File is selectable ONLY for NEW projects
         # On project creation the script file is parsed and saved to the Anonymizer model
         if self.new_model:
-            self._script_file_label = ctk.CTkLabel(
-                self._frame, text=str("Script File:")
-            )
-            self._script_file_label.grid(
-                row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw"
-            )
+            self._script_file_label = ctk.CTkLabel(self._frame, text=str("Script File:"))
+            self._script_file_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
 
             self._script_file_button = ctk.CTkButton(
                 self._frame,
                 text=str(self.model.anonymizer_script_path),
                 command=self._script_file_dialog,
             )
-            self._script_file_button.grid(
-                row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw"
-            )
+            self._script_file_button.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw")
 
             row += 1
 
         # Logging Levels:
-        self._logging_levels_label = ctk.CTkLabel(
-            self._frame, text=_("Logging Levels:")
-        )
-        self._logging_levels_label.grid(
-            row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw"
-        )
+        self._logging_levels_label = ctk.CTkLabel(self._frame, text=_("Logging Levels:"))
+        self._logging_levels_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
         self._logging_levels_button = ctk.CTkButton(
             self._frame,
             text=_("Set Logging Levels"),
             command=self._set_logging_levels_dialog,
         )
-        self._logging_levels_button.grid(
-            row=row, column=1, pady=(PAD, 0), padx=PAD, sticky="nw"
-        )
+        self._logging_levels_button.grid(row=row, column=1, pady=(PAD, 0), padx=PAD, sticky="nw")
 
         row += 1
 
@@ -324,9 +274,7 @@ class SettingsDialog(tk.Toplevel):
             btn_text = _("Create Project")
         else:
             btn_text = _("Update Project")
-        self._create_project_button = ctk.CTkButton(
-            self._frame, width=100, text=btn_text, command=self._create_project
-        )
+        self._create_project_button = ctk.CTkButton(self._frame, width=100, text=btn_text, command=self._create_project)
         self._create_project_button.grid(
             row=row,
             column=1,
@@ -379,9 +327,7 @@ class SettingsDialog(tk.Toplevel):
             logger.info(f"AWS Cognito cancelled")
             return
         self.model.export_to_AWS, self.model.aws_cognito = input
-        logger.info(
-            f"Export to AWS: {self.model.export_to_AWS}, Cognito: {self.model.aws_cognito}"
-        )
+        logger.info(f"Export to AWS: {self.model.export_to_AWS}, Cognito: {self.model.aws_cognito}")
 
     def _network_timeouts_click(self, event=None):
         dlg = NetworkTimeoutsDialog(self, self.model.network_timeouts)
@@ -414,9 +360,7 @@ class SettingsDialog(tk.Toplevel):
         self.model.modalities = edited_modalities
         self.model.set_storage_classes_from_modalities()
         logger.info(f"Modalities updated: {self.model.modalities}")
-        logger.info(
-            f"Storage Classes set according to Modalities selected: {self.model.storage_classes}"
-        )
+        logger.info(f"Storage Classes set according to Modalities selected: {self.model.storage_classes}")
 
     def _open_storage_classes_dialog(self):
         dlg = SOPClassesDialog(self, self.model.storage_classes, self.model.modalities)
@@ -449,9 +393,7 @@ class SettingsDialog(tk.Toplevel):
         if path:
             self.model.anonymizer_script_path = Path(path)
             self._script_file_button.configure(text=path)
-            logger.info(
-                f"Anonymizer Script File updated: {self.model.anonymizer_script_path}"
-            )
+            logger.info(f"Anonymizer Script File updated: {self.model.anonymizer_script_path}")
 
     def _set_logging_levels_dialog(self):
         dlg = LoggingLevelsDialog(self, self.model.logging_levels)
@@ -471,7 +413,6 @@ class SettingsDialog(tk.Toplevel):
         self._user_input = ProjectModel(
             site_id=self.site_id__var.get(),
             project_name=self.project_name_var.get(),
-            trial_name=self.trial_name_var.get(),
             uid_root=self.uidroot_var.get(),
             storage_dir=self.model.storage_dir,
             modalities=self.model.modalities,
