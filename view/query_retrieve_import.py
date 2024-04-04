@@ -275,13 +275,13 @@ class QueryView(tk.Toplevel):
         )
         self._progressbar.set(0)
 
-        self._cancel_import_button = ctk.CTkButton(
-            self._results_frame,
-            width=ButtonWidth,
-            text=_("Cancel Import"),
-            command=self._cancel_import_button_pressed,
-        )
-        self._cancel_import_button.grid(row=1, column=2, padx=PAD, pady=PAD, sticky="w")
+        # self._cancel_import_button = ctk.CTkButton(
+        #     self._results_frame,
+        #     width=ButtonWidth,
+        #     text=_("Cancel Import"),
+        #     command=self._cancel_import_button_pressed,
+        # )
+        # self._cancel_import_button.grid(row=1, column=2, padx=PAD, pady=PAD, sticky="w")
 
         self._select_all_button = ctk.CTkButton(
             self._results_frame,
@@ -320,8 +320,8 @@ class QueryView(tk.Toplevel):
 
         if self._query_active:
             self._cancel_query_button.configure(state="enabled")
-        if self._move_active:
-            self._cancel_import_button.configure(state="enabled")
+        # if self._move_active:
+        #     self._cancel_import_button.configure(state="enabled")
 
         self._tree.configure(selectmode="none")
 
@@ -333,7 +333,7 @@ class QueryView(tk.Toplevel):
         self._clear_selection_button.configure(state="enabled")
         self._retrieve_button.configure(state="enabled")
 
-        self._cancel_import_button.configure(state="disabled")
+        # self._cancel_import_button.configure(state="disabled")
         self._cancel_query_button.configure(state="disabled")
 
         self._tree.configure(selectmode="extended")
@@ -591,69 +591,19 @@ class QueryView(tk.Toplevel):
                 self._tree.item(study_uid, values=current_values)
                 if files_imported >= instances_to_import:
                     logging.info(f"Study {study_uid} marked GREEN, all images imported")
+                    self._tree.selection_remove(study_uid)
                     self._tree.item(study_uid, tags="green")
                     self._study_uids_to_import.remove(study_uid)
 
-    def _monitor_move_response(self, ux_Q: Queue):
-        while not ux_Q.empty():
-            try:
-                # TODO: do this in batches
-                resp: Dataset = ux_Q.get_nowait()
-                # logger.debug(f"{resp}")
+    def _monitor_move_response(self, study_uids: list[str]):
+        logger.debug("monitor_move_response")
 
-                # Terminate move operation if an incomplete response is received:
-                if not hasattr(resp, "StudyInstanceUID"):
-                    logger.error(f"Fatal Move Error detected, exit monitor_move_response")
-                    self._move_active = False
-                    messagebox.showerror(
-                        title=_("Move Error"),
-                        message=f"Terminate move operation, fatal error detected: {resp}",
-                        parent=self,
-                    )
-                    return
+        if len(self._study_uids_to_import) == 0:
+            logger.error(f"self._study_uids_to_import List Empty, terminate monitor")
+            return
 
-                self._tree.see(resp.StudyInstanceUID)
-
-                if resp.Status == C_FAILURE:
-                    self._tree.selection_remove(resp.StudyInstanceUID)
-                    self._tree.item(resp.StudyInstanceUID, tags="red")
-                    logger.error(f"Study {resp.StudyInstanceUID} marked RED, Error: {resp.ErrorComment}")
-                    self._studies_processed += 1
-                    self._update_move_progress()
-                else:
-                    self._update_imported_count(resp.StudyInstanceUID)
-                    if resp.Status == C_SUCCESS:
-                        self._tree.selection_remove(resp.StudyInstanceUID)
-                        logger.info(
-                            f"Study Move Complete: uid:{resp.StudyInstanceUID}, completed:{resp.NumberOfCompletedSuboperations}, failed:{resp.NumberOfFailedSuboperations}"
-                        )
-                        self._studies_processed += 1
-                        self._update_move_progress()
-
-                if self._studies_processed >= self._studies_to_process:
-                    self._update_imported_count()  # check all studies processed
-                    logger.info(
-                        f"Full Move Complete, studies processed: {self._studies_processed}, studies not yet imported: {len(self._study_uids_to_import)}"
-                    )
-                    self._move_active = False
-                    self._enable_action_buttons()
-                    return
-
-                ux_Q.task_done()
-
-            except Empty:
-                logger.info("Queue is empty")
-            except Full:
-                logger.error("Queue is full")
-            # except Exception as e:
-            #     logger.error(f"Exception: {e}")
-
-        # Re-trigger monitor callback:
-        self._tree.after(
-            self.ux_poll_move_response_interval,
-            self._monitor_move_response,
-            ux_Q,
-        )
+        for study_uid in study_uids:
+            self._update_imported_count(study_uid)
 
     def _retrieve_button_pressed(self):
         logger.debug(f"Retrieve button pressed")
@@ -671,15 +621,7 @@ class QueryView(tk.Toplevel):
             logger.info(f"No studies selected to import")
             return
 
-        # Create 1 UX queue to handle the full move / retrieve operation
-        ux_Q = Queue()
-
-        unstored_study_uids = [
-            study_uid
-            for study_uid in study_uids
-            # if self._controller.anonymizer.model.get_anon_uid(study_uid) is None
-            if not self._tree.tag_has("green", study_uid)
-        ]
+        unstored_study_uids = [study_uid for study_uid in study_uids if not self._tree.tag_has("green", study_uid)]
 
         self._studies_to_process = len(unstored_study_uids)
         self._study_uids_to_import = unstored_study_uids.copy()
@@ -692,9 +634,14 @@ class QueryView(tk.Toplevel):
         self._disable_action_buttons()
 
         dlg = ImportStudiesDialog(self, self._controller, unstored_study_uids)
-        self._studies_processed = dlg.get_imported()
+        imported_study_hierarchies = dlg.get_input()
+
         self._move_active = False
         self._enable_action_buttons()
+
+        self._monitor_move_response(unstored_study_uids)
+
+        # TODO: update each study in study table last error msg fields
 
         # self._update_move_progress()
 

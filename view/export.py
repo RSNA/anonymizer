@@ -113,9 +113,7 @@ class ExportView(tk.Toplevel):
         self._update_tree_from_storage_direcctory()
 
         # Create a Scrollbar and associate it with the Treeview
-        scrollbar = ttk.Scrollbar(
-            self._export_frame, orient="vertical", command=self._tree.yview
-        )
+        scrollbar = ttk.Scrollbar(self._export_frame, orient="vertical", command=self._tree.yview)
         scrollbar.grid(row=0, column=11, pady=(PAD, 0), sticky="ns")
         self._tree.configure(yscrollcommand=scrollbar.set)
 
@@ -126,9 +124,7 @@ class ExportView(tk.Toplevel):
         self._tree.bind("<Down>", lambda e: "break")
 
         # Progress bar and status:
-        self._status = ctk.CTkLabel(
-            self._export_frame, text=f"Processing 0 of 0 Patients"
-        )
+        self._status = ctk.CTkLabel(self._export_frame, text=f"Processing 0 of 0 Patients")
         self._status.grid(row=1, column=0, padx=PAD, pady=0, sticky="w")
 
         self._progressbar = ctk.CTkProgressBar(
@@ -180,9 +176,7 @@ class ExportView(tk.Toplevel):
             text=_("Clear Selection"),
             command=self._clear_selection_button_pressed,
         )
-        self._clear_selection_button.grid(
-            row=1, column=9, padx=PAD, pady=PAD, sticky="w"
-        )
+        self._clear_selection_button.grid(row=1, column=9, padx=PAD, pady=PAD, sticky="w")
 
         self._export_button = ctk.CTkButton(
             self._export_frame,
@@ -317,9 +311,7 @@ class ExportView(tk.Toplevel):
             return
         self._progressbar.set(self._patients_processed / self._patients_to_process)
         if self._patients_processed == self._patients_to_process:
-            self._status.configure(
-                text=f"Processed {self._patients_to_process} Patients"
-            )
+            self._status.configure(text=f"Processed {self._patients_to_process} Patients")
         else:
             self._status.configure(
                 text=f"Processing {self._patients_processed} of {self._patients_to_process} Patients"
@@ -375,14 +367,10 @@ class ExportView(tk.Toplevel):
             self._enable_action_buttons()
             self._export_active = False
             if len(self._patient_ids_to_export) > 0:
-                logger.error(
-                    f"Failed to export {len(self._patient_ids_to_export)} patients"
-                )
+                logger.error(f"Failed to export {len(self._patient_ids_to_export)} patients")
                 if messagebox.askretrycancel(
                     title=_("Export Error"),
-                    message=_(
-                        f"Failed to export {len(self._patient_ids_to_export)} patient(s)"
-                    ),
+                    message=_(f"Failed to export {len(self._patient_ids_to_export)} patient(s)"),
                     parent=self,
                 ):
                     # Select failed patients in treeview to retry export:
@@ -450,7 +438,7 @@ class ExportView(tk.Toplevel):
         ux_Q = Queue()
 
         # Export all selected patients using a background thread pool
-        self._controller.export_patients(
+        self._controller.export_patients_ex(
             ExportStudyRequest(
                 "AWS" if self._export_to_AWS else "EXPORT",
                 self._patient_ids_to_export.copy(),

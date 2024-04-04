@@ -25,6 +25,9 @@ class DICOMNode:
     aet: str
     local: bool
 
+    def __repr__(self) -> str:
+        return f"AET '{self.aet}' on host {self.ip}:{self.port}"
+
 
 @dataclass
 class NetworkTimeouts:

@@ -12,7 +12,6 @@ import tests.controller.dicom_pacs_simulator_scp as pacs_simulator_scp
 from tests.controller.dicom_test_nodes import (
     TEST_PROJECTNAME,
     TEST_SITEID,
-    TEST_TRIALNAME,
     TEST_UIDROOT,
     LocalSCU,
     LocalStorageSCP,
@@ -64,7 +63,7 @@ def controller(temp_dir):
         scu=LocalSCU,
         scp=LocalStorageSCP,
         remote_scps=RemoteSCPDict,
-        network_timeouts=NetworkTimeouts(2, 5, 5, 15),
+        network_timeouts=NetworkTimeouts(2, 5, 5, 9),
     )
 
     project_controller = ProjectController(project_model)

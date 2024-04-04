@@ -9,7 +9,7 @@ from utils.storage import count_studies_series_images
 from pydicom.data import get_testdata_file
 
 # DICOM NODES involved in tests:
-from tests.controller.dicom_test_nodes import PACSSimulatorSCP
+from tests.controller.dicom_test_nodes import PACSSimulatorSCP, LocalStorageSCP, OrthancSCP
 
 from tests.controller.helpers import (
     pacs_storage_dir,
@@ -19,11 +19,25 @@ from tests.controller.helpers import (
     export_patients_from_local_storage_to_test_pacs,
 )
 from tests.controller.dicom_test_files import (
+    patient1_name,
+    patient1_id,
+    patient2_name,
+    patient2_id,
+    patient3_name,
+    patient3_id,
+    patient4_name,
+    patient4_id,
     cr1_filename,
+    cr1_StudyInstanceUID,
     ct_small_filename,
+    ct_small_StudyInstanceUID,
+    ct_small_SeriesInstanceUID,
     mr_small_filename,
+    mr_small_StudyInstanceUID,
+    mr_small_SeriesInstanceUID,
     mr_small_implicit_filename,
     mr_small_bigendian_filename,
+    mr_brain_StudyInstanceUID,
     CR_STUDY_3_SERIES_3_IMAGES,
     CT_STUDY_1_SERIES_4_IMAGES,
     MR_STUDY_3_SERIES_11_IMAGES,
@@ -82,22 +96,22 @@ def test_send_missing_SOPInstanceUID_AttributeError(temp_dir: str, controller: P
 
 
 def test_send_1_CR_file_to_test_pacs(temp_dir: str, controller: ProjectController):
-    ds: Dataset = send_file_to_scp(cr1_filename, True, controller)
+    ds: Dataset = send_file_to_scp(cr1_filename, PACSSimulatorSCP, controller)
     verify_files_sent_to_pacs_simulator([ds], temp_dir, controller)
 
 
 def test_send_1_CT_file_to_test_pacs(temp_dir: str, controller: ProjectController):
-    ds: Dataset = send_file_to_scp(ct_small_filename, True, controller)
+    ds: Dataset = send_file_to_scp(ct_small_filename, PACSSimulatorSCP, controller)
     verify_files_sent_to_pacs_simulator([ds], temp_dir, controller)
 
 
 def test_send_1_MR_file_explicit__VR_little_endian_to_test_pacs(temp_dir: str, controller: ProjectController):
-    ds: Dataset = send_file_to_scp(mr_small_filename, True, controller)
+    ds: Dataset = send_file_to_scp(mr_small_filename, PACSSimulatorSCP, controller)
     verify_files_sent_to_pacs_simulator([ds], temp_dir, controller)
 
 
 def test_send_1_MR_file_implicit_VR_little_endian_to_test_pacs(temp_dir: str, controller: ProjectController):
-    ds: Dataset = send_file_to_scp(mr_small_implicit_filename, True, controller)
+    ds: Dataset = send_file_to_scp(mr_small_implicit_filename, PACSSimulatorSCP, controller)
     verify_files_sent_to_pacs_simulator([ds], temp_dir, controller)
 
 
@@ -116,29 +130,29 @@ def test_send_1_MR_file_explicit_VR_big_endian_to_test_pacs(temp_dir: str, contr
 
 
 def test_send_CT_MR_files_find_all_studies_on_test_pacs(temp_dir: str, controller: ProjectController):
-    ds1: Dataset = send_file_to_scp(ct_small_filename, True, controller)
-    ds2: Dataset = send_file_to_scp(mr_small_filename, True, controller)
+    ds1: Dataset = send_file_to_scp(ct_small_filename, PACSSimulatorSCP, controller)
+    ds2: Dataset = send_file_to_scp(mr_small_filename, PACSSimulatorSCP, controller)
     verify_files_sent_to_pacs_simulator([ds1, ds2], temp_dir, controller)
 
 
 def test_send_3_CR_files_to_test_pacs(temp_dir: str, controller: ProjectController):
-    dsets: list[Dataset] = send_files_to_scp(CR_STUDY_3_SERIES_3_IMAGES, True, controller)
+    dsets: list[Dataset] = send_files_to_scp(CR_STUDY_3_SERIES_3_IMAGES, PACSSimulatorSCP, controller)
     verify_files_sent_to_pacs_simulator(dsets, temp_dir, controller)
 
 
 def test_send_4_CT_files_to_test_pacs(temp_dir: str, controller: ProjectController):
-    dsets: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, True, controller)
+    dsets: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, PACSSimulatorSCP, controller)
     verify_files_sent_to_pacs_simulator(dsets, temp_dir, controller)
 
 
 def test_send_11_MR_files_to_test_pacs(temp_dir: str, controller: ProjectController):
-    dsets: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, True, controller)
+    dsets: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, PACSSimulatorSCP, controller)
     verify_files_sent_to_pacs_simulator(dsets, temp_dir, controller)
 
 
 def test_export_patient_CR_study_to_test_pacs(temp_dir: str, controller: ProjectController):
     # Send 1 Study with 1 CR files to local storage:
-    phi_dsets: list[Dataset] = send_files_to_scp([cr1_filename], False, controller)
+    phi_dsets: list[Dataset] = send_files_to_scp([cr1_filename], LocalStorageSCP, controller)
     time.sleep(0.5)
     store_dir = controller.model.storage_dir
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
@@ -151,7 +165,7 @@ def test_export_patient_CR_study_to_test_pacs(temp_dir: str, controller: Project
 
 def test_export_patient_CT_study_to_test_pacs(temp_dir: str, controller: ProjectController):
     # Send 1 Study with 4 CT files to local storage:
-    phi_dsets: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, False, controller)
+    phi_dsets: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, LocalStorageSCP, controller)
     time.sleep(0.5)
     store_dir = controller.model.storage_dir
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
@@ -166,10 +180,10 @@ def test_export_1_patient_2_studies_CR_CT_to_test_pacs(temp_dir: str, controller
     # SAME Patient: (Doe^Archibald)
     # Send CR & CT studies to local storage:
     # Send 1 Study with 3 CR files to local storage:
-    cr_phi_dsets: list[Dataset] = send_files_to_scp(CR_STUDY_3_SERIES_3_IMAGES, False, controller)
+    cr_phi_dsets: list[Dataset] = send_files_to_scp(CR_STUDY_3_SERIES_3_IMAGES, LocalStorageSCP, controller)
     assert cr_phi_dsets[0].PatientName == "Doe^Archibald"
     # Send 1 Study with 4 CT files to local storage:
-    ct_phi_dsets: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, False, controller)
+    ct_phi_dsets: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, LocalStorageSCP, controller)
     time.sleep(0.5)
     assert ct_phi_dsets[0].PatientName == "Doe^Archibald"
     store_dir = controller.model.storage_dir
@@ -188,64 +202,103 @@ def test_export_1_patient_2_studies_CR_CT_to_test_pacs(temp_dir: str, controller
 
 def test_export_2_patients_to_test_pacs(temp_dir: str, controller: ProjectController):
     # Send Patient 1: 1 CR study to local storage:
-    cr_phi_dsets: list[Dataset] = send_files_to_scp(CR_STUDY_3_SERIES_3_IMAGES, False, controller)
-    assert cr_phi_dsets[0].PatientName == "Doe^Archibald"
+    cr_phi_dsets: list[Dataset] = send_files_to_scp(CR_STUDY_3_SERIES_3_IMAGES, LocalStorageSCP, controller)
+    for ds in cr_phi_dsets:
+        assert ds.PatientName == patient1_name
+        assert ds.PatientID == patient1_id
+        assert ds.StudyInstanceUID == cr1_StudyInstanceUID
+
     # Send Patient 2: 1 Study with 11 MR files to local storage:
-    mr_phi_dsets: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, False, controller)
+    mr_phi_dsets: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, LocalStorageSCP, controller)
+    for ds in mr_phi_dsets:
+        assert ds.PatientName == patient2_name
+        assert ds.PatientID == patient2_id
+        assert ds.StudyInstanceUID == mr_brain_StudyInstanceUID
+
     time.sleep(0.5)
-    assert mr_phi_dsets[0].PatientName == "Doe^Peter"
+
     store_dir = controller.model.storage_dir
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
-    ct_anon_pt_id = controller.model.site_id + "-000001"
-    mr_anon_pt_id = controller.model.site_id + "-000002"
     assert len(dirlist) == 2
-    assert ct_anon_pt_id in dirlist
-    assert mr_anon_pt_id in dirlist
+
+    patient1_anon_pt_id = controller.model.site_id + "-000001"
+    patient2_anon_pt_id = controller.model.site_id + "-000002"
+
+    assert patient1_anon_pt_id in dirlist
+    assert patient2_anon_pt_id in dirlist
+
     # Check 1 study, 3 series and 3 images in ct patient directory on local storage:
-    assert count_studies_series_images(os.path.join(controller.model.storage_dir, ct_anon_pt_id)) == (1, 3, 3)
+    assert count_studies_series_images(os.path.join(controller.model.storage_dir, patient1_anon_pt_id)) == (1, 3, 3)
     # Check 1 study, 3 series and 11 images in mr patient directory on local storage:
-    assert count_studies_series_images(os.path.join(controller.model.storage_dir, mr_anon_pt_id)) == (1, 3, 11)
+    assert count_studies_series_images(os.path.join(controller.model.storage_dir, patient2_anon_pt_id)) == (1, 3, 11)
+
     # Export these patient from local storage to test PACS:
-    assert export_patients_from_local_storage_to_test_pacs([ct_anon_pt_id, mr_anon_pt_id], controller)
+    assert export_patients_from_local_storage_to_test_pacs([patient1_anon_pt_id, patient2_anon_pt_id], controller)
     # Check 14 files in test pacs directory:
     assert len(os.listdir(pacs_storage_dir(temp_dir))) == 14
 
 
 def test_export_4_patients_to_test_pacs(temp_dir: str, controller: ProjectController):
-    # Send Patient 1: 1 CR study to local storage:
-    cr_phi_dsets: list[Dataset] = send_files_to_scp(CR_STUDY_3_SERIES_3_IMAGES, False, controller)
-    assert cr_phi_dsets[0].PatientName == "Doe^Archibald"
-    # Send Patient 2: 1 Study with 11 MR files to local storage:
-    mr_phi_dsets: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, False, controller)
-    assert mr_phi_dsets[0].PatientName == "Doe^Peter"
-    # Send Patient 3: 1 Study with 1 CT file to local storage:
-    ctsmall_ds: Dataset = send_file_to_scp(ct_small_filename, False, controller)
-    # Send Patient 4: 1 Study with 1 MR file to local storage:
-    mrsmall_ds: Dataset = send_file_to_scp(mr_small_filename, False, controller)
-    time.sleep(0.5)
+    # Send Patient 1:
+    # - 1 CR study to local storage:
+    cr_phi_dsets: list[Dataset] = send_files_to_scp(CR_STUDY_3_SERIES_3_IMAGES, LocalStorageSCP, controller)
+    for ds in cr_phi_dsets:
+        assert ds.PatientName == patient1_name
+        assert ds.PatientID == patient1_id
+        assert ds.StudyInstanceUID == cr1_StudyInstanceUID
+
+    # Send Patient 2:
+    # - 1 Study with 11 MR files to local storage:
+    mr_phi_dsets: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, LocalStorageSCP, controller)
+    for ds in mr_phi_dsets:
+        assert ds.PatientName == patient2_name
+        assert ds.PatientID == patient2_id
+        assert ds.StudyInstanceUID == mr_brain_StudyInstanceUID
+
+    # Send Patient 3:
+    # - 1 Study with 1 compressed CT file to local storage:
+    ctsmall_ds: Dataset = send_file_to_scp(ct_small_filename, LocalStorageSCP, controller)
+    assert ctsmall_ds.PatientName == patient3_name
+    assert ctsmall_ds.PatientID == patient3_id
+    assert ctsmall_ds.StudyInstanceUID == ct_small_StudyInstanceUID
+    assert ctsmall_ds.SeriesInstanceUID == ct_small_SeriesInstanceUID
+
+    # Send Patient 4:
+    # - 1 Study with 1 compressed MR file to local storage:
+    mrsmall_ds: Dataset = send_file_to_scp(mr_small_filename, LocalStorageSCP, controller)
+    assert mrsmall_ds.PatientName == patient4_name
+    assert mrsmall_ds.PatientID == patient4_id
+    assert mrsmall_ds.StudyInstanceUID == mr_small_StudyInstanceUID
+    assert mrsmall_ds.SeriesInstanceUID == mr_small_SeriesInstanceUID
+
+    time.sleep(1)
+
     store_dir = controller.model.storage_dir
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
-    ct_anon_pt_id = controller.model.site_id + "-000001"
-    mr_anon_pt_id = controller.model.site_id + "-000002"
-    ctsmall_anon_pt_id = controller.model.site_id + "-000003"
-    mrsmall_anon_pt_id = controller.model.site_id + "-000004"
     assert len(dirlist) == 4
-    assert ct_anon_pt_id in dirlist
-    assert mr_anon_pt_id in dirlist
-    assert ctsmall_anon_pt_id in dirlist
-    assert mrsmall_anon_pt_id in dirlist
-    # Check 1 study, 3 series and 3 images in ct patient 1 directory on local storage:
-    assert count_studies_series_images(os.path.join(controller.model.storage_dir, ct_anon_pt_id)) == (1, 3, 3)
-    # Check 1 study, 3 series and 11 images in mr patient 2 directory on local storage:
-    assert count_studies_series_images(os.path.join(controller.model.storage_dir, mr_anon_pt_id)) == (1, 3, 11)
-    # Check 1 study, 1 series and 1 image in ctsmall patient 3 directory on local storage:
-    assert count_studies_series_images(os.path.join(controller.model.storage_dir, ctsmall_anon_pt_id)) == (1, 1, 1)
-    # Check 1 study, 1 series and 1 image in mrsmall patient 4 directory on local storage:
-    assert count_studies_series_images(os.path.join(controller.model.storage_dir, mrsmall_anon_pt_id)) == (1, 1, 1)
+
+    patient1_anon_pt_id = controller.model.site_id + "-000001"
+    patient2_anon_pt_id = controller.model.site_id + "-000002"
+    patient3_anon_pt_id = controller.model.site_id + "-000003"
+    patient4_anon_pt_id = controller.model.site_id + "-000004"
+
+    assert patient1_anon_pt_id in dirlist
+    assert patient2_anon_pt_id in dirlist
+    assert patient3_anon_pt_id in dirlist
+    assert patient4_anon_pt_id in dirlist
+
+    # Check 1 study, 3 series and 3 images in patient 1 directory on local storage:
+    assert count_studies_series_images(os.path.join(controller.model.storage_dir, patient1_anon_pt_id)) == (1, 3, 3)
+    # Check 1 study, 3 series and 11 images in patient 2 directory on local storage:
+    assert count_studies_series_images(os.path.join(controller.model.storage_dir, patient2_anon_pt_id)) == (1, 3, 11)
+    # Check 1 study, 1 series and 1 image in patient 3 directory on local storage:
+    assert count_studies_series_images(os.path.join(controller.model.storage_dir, patient3_anon_pt_id)) == (1, 1, 1)
+    # Check 1 study, 1 series and 1 image in patient 4 directory on local storage:
+    assert count_studies_series_images(os.path.join(controller.model.storage_dir, patient4_anon_pt_id)) == (1, 1, 1)
+
     # Export these patient from local storage to test PACS:
     assert export_patients_from_local_storage_to_test_pacs(
-        [ct_anon_pt_id, mr_anon_pt_id, ctsmall_anon_pt_id, mrsmall_anon_pt_id],
-        controller,
+        [patient1_anon_pt_id, patient2_anon_pt_id, patient3_anon_pt_id, patient4_anon_pt_id], controller
     )
     # Check 16 files in test pacs directory:
     assert len(os.listdir(pacs_storage_dir(temp_dir))) == 16
@@ -257,9 +310,9 @@ def test_export_4_patients_to_test_pacs(temp_dir: str, controller: ProjectContro
 
 def test_find_study_uid_hierarchy(temp_dir: str, controller: ProjectController):
     # Send 3 studies to TEST PACS
-    ds1: Dataset = send_file_to_scp(ct_small_filename, True, controller)
-    ds2: Dataset = send_file_to_scp(mr_small_filename, True, controller)
-    ds3: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, True, controller)
+    ds1: Dataset = send_file_to_scp(ct_small_filename, PACSSimulatorSCP, controller)
+    ds2: Dataset = send_file_to_scp(mr_small_filename, PACSSimulatorSCP, controller)
+    ds3: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, PACSSimulatorSCP, controller)
     dsets = [ds1, ds2] + ds3
     ds_series_uids = set([dset.SeriesInstanceUID for dset in dsets])
     ds_instance_uids = [dset.SOPInstanceUID for dset in dsets]

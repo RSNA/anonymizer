@@ -20,10 +20,7 @@ from controller.dicom_C_codes import C_SUCCESS, C_PENDING_A, C_PENDING_B
 # )
 
 # DICOM NODES involved in tests:
-from tests.controller.dicom_test_nodes import (
-    LocalStorageSCP,
-    PACSSimulatorSCP,
-)
+from tests.controller.dicom_test_nodes import LocalStorageSCP, PACSSimulatorSCP, OrthancSCP
 
 
 # TEST HELPER FUNCTIONS
@@ -35,7 +32,7 @@ def pacs_storage_dir(temp_dir: str):
     return Path(temp_dir, PACSSimulatorSCP.aet)
 
 
-def send_file_to_scp(pydicom_test_filename: str, to_pacs_simulator: bool, controller: ProjectController) -> Dataset:
+def send_file_to_scp(pydicom_test_filename: str, scp: DICOMNode, controller: ProjectController) -> Dataset:
     # Use test data which comes with pydicom,
     # if not found, get_testdata_file() will try and download it
     ds = get_testdata_file(pydicom_test_filename, read=True)
@@ -46,7 +43,7 @@ def send_file_to_scp(pydicom_test_filename: str, to_pacs_simulator: bool, contro
     assert dcm_file_path
     files_sent = controller.send(
         [dcm_file_path],
-        PACSSimulatorSCP.aet if to_pacs_simulator else LocalStorageSCP.aet,
+        scp.aet,
     )
     assert files_sent == 1
     return ds
@@ -54,7 +51,7 @@ def send_file_to_scp(pydicom_test_filename: str, to_pacs_simulator: bool, contro
 
 def send_files_to_scp(
     pydicom_test_filenames: list[str],
-    to_pacs_simulator: bool,
+    scp: DICOMNode,
     controller: ProjectController,
 ) -> list[Dataset]:
     # Read datasets from test data which comes with pydicom to return to caller
@@ -68,7 +65,7 @@ def send_files_to_scp(
     assert paths
     files_sent = controller.send(
         paths,
-        PACSSimulatorSCP.aet if to_pacs_simulator else LocalStorageSCP.aet,
+        scp.aet,
     )
     assert files_sent == len(datasets)
     return datasets
@@ -88,11 +85,11 @@ def find_all_studies_on_pacs_simulator_scp(controller: ProjectController):
     return results
 
 
-def request_to_move_studies_from_pacs_simulator_scp_to_local_scp(
-    level: str, studies: list[StudyUIDHierarchy], controller: ProjectController
+def request_to_move_studies_from_scp_to_local_scp(
+    level: str, studies: list[StudyUIDHierarchy], scp: DICOMNode, controller: ProjectController
 ) -> bool:
-    req: MoveStudiesRequest = MoveStudiesRequest(PACSSimulatorSCP.aet, LocalStorageSCP.aet, level, studies)
-    controller.move_studies(req)
+    req: MoveStudiesRequest = MoveStudiesRequest(scp.aet, LocalStorageSCP.aet, level, studies)
+    controller.move_studies_ex(req)
     return True
 
 
@@ -132,7 +129,7 @@ def verify_files_sent_to_pacs_simulator(dsets: list[Dataset], tempdir: str, cont
 def export_patients_from_local_storage_to_test_pacs(patient_ids: list[str], controller) -> bool:
     ux_Q: Queue[ExportStudyResponse] = Queue()
     req: ExportStudyRequest = ExportStudyRequest(PACSSimulatorSCP.aet, patient_ids, ux_Q)
-    controller.export_patients(req)
+    controller.export_patients_ex(req)
     export_count = 0
     while not export_count == len(patient_ids):
         try:

@@ -121,6 +121,7 @@ class App(ctk.CTk):
 
         if self._model is None:
             logger.info("New Project Cancelled")
+            self.enable_file_menu()
             return
 
         logger.info(f"New ProjectModel: {self._model}")
@@ -145,7 +146,7 @@ class App(ctk.CTk):
         self._project_controller.save_model()
 
         if project_dir not in self.recent_project_dirs:
-            self.recent_project_dirs.insert(0, project_dir)
+            self.recent_project_dirs.insert(0, str(project_dir))
 
         self.current_open_project_dir = project_dir
         self._open_project()
@@ -299,7 +300,7 @@ class App(ctk.CTk):
         assert self._project_controller
         logger.info(f"{self._project_controller}")
         if not cloned_project_dir in self.recent_project_dirs:
-            self.recent_project_dirs.insert(0, cloned_project_dir)
+            self.recent_project_dirs.insert(0, str(cloned_project_dir))
         self.current_open_project_dir = cloned_project_dir
         self.save_config()
         self._open_project()

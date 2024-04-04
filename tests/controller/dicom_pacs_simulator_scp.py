@@ -191,11 +191,11 @@ def _handle_find(event, storage_dir: str):
             yield (C_CANCEL, None)
 
         if not hasattr(ds, "StudyInstanceUID") or ds.StudyInstanceUID == "":
-            logger.info(f"Return instance: {instance.SOPInstanceUID}")
+            logger.debug(f"Return instance: {instance.SOPInstanceUID}")
             yield (C_PENDING_A, instance)
         else:
             if instance.StudyInstanceUID == ds.StudyInstanceUID:
-                logger.info(f"Return instance: {instance.SOPInstanceUID}")
+                logger.debug(f"Return instance: {instance.SOPInstanceUID}")
                 yield (C_PENDING_A, instance)
 
     logger.info("Find complete")
@@ -279,7 +279,7 @@ def _handle_move(event, storage_dir: str, known_aet_dict: dict):
     for instance in matching:
         # Check if C-CANCEL has been received
         if event.is_cancelled:
-            logger.error("C-CANCEL find operation")
+            logger.error("C-CANCEL move operation")
             yield (C_CANCEL, None)
 
         # Pending
