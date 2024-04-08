@@ -52,7 +52,7 @@
     "progress_color": ["#3a7ebf", "#1f538d"],
     "button_color": ["gray36", "#D5D9DE"],
     "button_hover_color": ["gray20", "gray100"],
-    "text_color": ["gray14", "gray84"],
+    "text_color": ["#014F8F", "#005DA9"],
     "text_color_disabled": ["gray60", "gray45"]
   },
   "CTkRadioButton": {

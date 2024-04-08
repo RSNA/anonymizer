@@ -1,5 +1,5 @@
 import os
-import uuid
+import time
 import logging
 from pprint import pformat
 from typing import Dict, Tuple, List
@@ -97,13 +97,10 @@ class AWSCognito:
 class ProjectModel:
     @staticmethod
     def default_site_id() -> str:
-        # Automatically Generate 12 decimal character Unique Site ID based on UUID Version 4
-        # UUID version 4 generates 32 hexadecimal character UUIDs based on random or pseudo-random numbers
-        uuid_hex = uuid.uuid4().hex
-        uuid_dec = str(int(uuid_hex, 16))
-        groups = [uuid_dec[i : i + 4] for i in range(0, 12, 4)]
-        uid_12_chars = ".".join(groups)
-        return uid_12_chars
+        # (the JAVA Anonymizer created a 6 digit ID based on minutes since 1 Jan 1970 and cycling every million mins (695 days))
+        # Automatically generate a decimal character unique Site ID based on
+        # the number of 30 minute intervals since 1 Jan 1970
+        return str(int(time.time() / (60 * 30)))
 
     @staticmethod
     def default_project_filename() -> str:

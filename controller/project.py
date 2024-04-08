@@ -255,9 +255,9 @@ class ProjectController(AE):
         self._abort_query = False
         self._abort_move = False
         self._abort_export = False
-        self._export_futures = []
+        self._export_futures = None
         self._export_executor = None
-        self._move_futures = []
+        self._move_futures = None
         self._move_executor = None
         self.scp = None
         self.s3 = None
@@ -953,7 +953,6 @@ class ProjectController(AE):
         scp = self.model.remote_scps[scp_name]
         study_uid_hierarchy = StudyUIDHierarchy(uid=study_uid, series={})
         query_association: Association = None
-        self._abort_query = False
         error_msg = None
         try:
             # 1. Connect to SCP:
@@ -975,8 +974,8 @@ class ProjectController(AE):
             )
 
             for status, identifier in responses:
-                if self._abort_move:
-                    raise RuntimeError("Import aborted")
+                if self._abort_query:
+                    raise RuntimeError("Query aborted")
                 if not status:
                     raise ConnectionError("Connection timed out, was aborted, or received an invalid response")
                 if status.Status not in (C_SUCCESS, C_PENDING_A, C_PENDING_B):
@@ -1029,7 +1028,7 @@ class ProjectController(AE):
                     query_model=self._STUDY_ROOT_QR_CLASSES[0],  # Find
                 )
                 for status, identifier in responses:
-                    if self._abort_query or self._abort_move:
+                    if self._abort_query:
                         raise RuntimeError("Query aborted")
                     if not status:
                         raise ConnectionError("Connection timed out, was aborted, or received an invalid response")
@@ -1067,16 +1066,23 @@ class ProjectController(AE):
 
         finally:
             if query_association:
-                query_association.release()
+                if self._abort_query:
+                    query_association.abort()
+                else:
+                    query_association.release()
 
         return error_msg, study_uid_hierarchy
 
     # Blocking: Get List of StudyUIDHierarchies based on value of study_uid within each element of list
     # last_error_msg is set by get_study_uid_hierarchy:
-    # TODO: make this multi-threaded using futures & thread executor as for manage_move
+    # TODO: Optimization: make this multi-threaded using futures & thread executor as for manage_move
     def get_study_uid_hierarchies(self, scp_name: str, studies: List[StudyUIDHierarchy]) -> None:
         logger.info(f"Get StudyUIDHierarchies for {len(studies)} studies")
+        self._abort_query = False
         for study in studies:
+            if self._abort_query:
+                logger.info("Query Aborted")
+                break
             error_msg, study_uid_hierarchy = self.get_study_uid_hierarchy(scp_name, study.uid)
             study.series = study_uid_hierarchy.series
             study.last_error_msg = error_msg

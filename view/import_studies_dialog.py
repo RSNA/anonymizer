@@ -1,5 +1,6 @@
-from typing import List, Union
+from typing import List
 import tkinter as tk
+from tkinter import messagebox
 import customtkinter as ctk
 import logging
 from utils.translate import _
@@ -53,38 +54,40 @@ class ImportStudiesDialog(tk.Toplevel):
         logger.info(f"_create_widgets_1")
         PAD = 10
 
+        self._frame = ctk.CTkFrame(self)
+        self._frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nswe")
+
         row = 0
 
         self._source_label = ctk.CTkLabel(
-            self, text=_(f"Import from {self._controller.model.remote_scps[self._scp_name]}")
+            self._frame, text=_(f"Import from {self._controller.model.remote_scps[self._scp_name]}")
         )
         self._source_label.grid(row=row, column=0, padx=PAD, pady=PAD, sticky="w")
 
         row += 1
 
-        self._metadata_status_label = ctk.CTkLabel(self, text=_("Retrieving Study Metadata..."))
-        self._metadata_status_label.grid(row=row, column=0, padx=PAD, pady=PAD, sticky="w")
+        self._metadata_status_label = ctk.CTkLabel(self._frame, text=_("Retrieving Study Metadata..."))
+        self._metadata_status_label.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="w")
 
         row += 1
 
-        self._metadata_progress_bar = ctk.CTkProgressBar(self)
+        self._metadata_progress_bar = ctk.CTkProgressBar(self._frame)
+        self._metadata_progress_bar.set(0)
         self._metadata_progress_bar.grid(
             row=row,
             column=0,
-            padx=(PAD, 2 * PAD),
-            pady=(PAD, 0),
+            padx=PAD,
             sticky="ew",
         )
 
         row += 1
 
-        self._metadata_progress_bar.set(0)
-        self._metadata_progress_label = ctk.CTkLabel(self, text="")
+        self._metadata_progress_label = ctk.CTkLabel(self._frame, text="")
         self._metadata_progress_label.grid(row=row, column=0, padx=PAD, pady=(0, PAD), sticky="w")
 
         row += 1
 
-        self._cancel_button = ctk.CTkButton(self, width=100, text=_("Cancel"), command=self._on_cancel)
+        self._cancel_button = ctk.CTkButton(self._frame, width=100, text=_("Cancel"), command=self._on_cancel)
         self._cancel_button.grid(
             row=row,
             column=0,
@@ -103,24 +106,23 @@ class ImportStudiesDialog(tk.Toplevel):
 
         row = self._last_grid_row
 
-        self._import_status_label = ctk.CTkLabel(self, text=_(""))
-        self._import_status_label.grid(row=row, column=0, padx=PAD, pady=PAD, sticky="w")
+        self._import_status_label = ctk.CTkLabel(self._frame, text=_(""))
+        self._import_status_label.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="w")
 
         row += 1
 
-        self._import_progress_bar = ctk.CTkProgressBar(self)
+        self._import_progress_bar = ctk.CTkProgressBar(self._frame)
+        self._import_progress_bar.set(0)
         self._import_progress_bar.grid(
             row=row,
             column=0,
-            padx=(PAD, 2 * PAD),
-            pady=(PAD, 0),
+            padx=PAD,
             sticky="ew",
         )
-        self._import_progress_bar.set(0)
 
         row += 1
 
-        self._import_progress_label = ctk.CTkLabel(self, text="")
+        self._import_progress_label = ctk.CTkLabel(self._frame, text="")
         self._import_progress_label.grid(row=row, column=0, padx=PAD, pady=(0, PAD), sticky="w")
 
         row += 1
@@ -144,7 +146,7 @@ class ImportStudiesDialog(tk.Toplevel):
         self._study_metadata_retrieved = sum(1 for study in self.studies if study.series)
         pending_studies = len(self.studies) - errors - self._study_metadata_retrieved
 
-        self._metadata_progress_bar.set(self._study_metadata_retrieved + errors / len(self.studies))
+        self._metadata_progress_bar.set((self._study_metadata_retrieved + errors) / len(self.studies))
 
         text = f"{self._study_metadata_retrieved+errors} of {len(self.studies)} Study Metadata"
         if errors:
@@ -159,7 +161,9 @@ class ImportStudiesDialog(tk.Toplevel):
                 self._cancel_button.configure(text=_("Close"))
             else:
                 # Start Phase 2: Move studies:
-                self._metadata_status_label.configure(text=_("Finished retrieving Study Metadata"))
+                self._metadata_status_label.configure(text=_("Finished retrieving Study Metadata"), text_color="gray60")
+                self._metadata_progress_bar.configure(progress_color="gray60")
+                self._metadata_progress_label.configure(text_color="gray60")
                 self._instances_to_import = sum([study.get_number_of_instances() for study in self.studies])
 
                 mr: MoveStudiesRequest = MoveStudiesRequest(
@@ -194,8 +198,18 @@ class ImportStudiesDialog(tk.Toplevel):
     def _on_cancel(self):
         logger.info(f"_on_cancel")
         if self._controller.bulk_move_active():
-            self._controller.abort_move()
-
+            if messagebox.askyesno(
+                _("Warning"),
+                _(
+                    "Cancelling the move operation may not stop transfers from the remote server.\n\n"
+                    "Are you sure you want to continue?"
+                ),
+            ):
+                self._controller.abort_move()
+            else:
+                return
+        else:
+            self._controller.abort_query()
         self.grab_release()
         self.destroy()
 

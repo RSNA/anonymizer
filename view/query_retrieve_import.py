@@ -11,7 +11,7 @@ from controller.dicom_C_codes import C_FAILURE, C_PENDING_A, C_PENDING_B, C_SUCC
 from controller.project import (
     FindStudyRequest,
     FindStudyResponse,
-    MoveStudiesRequest,
+    StudyUIDHierarchy,
     ProjectController,
 )
 from utils.storage import count_study_images
@@ -35,7 +35,6 @@ logger = logging.getLogger(__name__)
 class QueryView(tk.Toplevel):
     # class QueryView(ctk.CTkToplevel):
     ux_poll_find_response_interval = 250  # milli-seconds
-    ux_poll_move_response_interval = 500  # milli-seconds
 
     fixed_width_font = ("Courier", 10, "bold")
     # C-FIND DICOM attributes to display in the results Treeview:
@@ -49,8 +48,9 @@ class QueryView(tk.Toplevel):
         "ModalitiesInStudy": (_("Modalities"), 12, True),
         "NumberOfStudyRelatedSeries": (_("Series"), 6, True),
         "NumberOfStudyRelatedInstances": (_("Images"), 6, True),
-        # not a dicom field, for display only:
+        # not dicom fields, for display only:
         "Imported": (_("Imported"), 10, True),
+        "Error": (_("Last Import Error"), 50, False),
         # not for display, for find/move:
         "StudyInstanceUID": (_("StudyInstanceUID"), 0, False),
     }
@@ -67,7 +67,6 @@ class QueryView(tk.Toplevel):
         scp_aet = project_controller.model.remote_scps["QUERY"].aet
         self.title(f"{title} from {scp_aet}")
         self._query_active = False
-        self._move_active = False
         self._acc_no_list = []
         self._studies_processed = 0
         self._studies_to_process = 0
@@ -76,7 +75,7 @@ class QueryView(tk.Toplevel):
         self.width = 1300
         self.height = 400
         # Try to move query window below the dashboard:
-        self.geometry(f"{self.width}x{self.height}+0+{self.master.winfo_height()+80}")
+        self.geometry(f"{self.width}x{self.height}+0+{self.master.winfo_height()+60}")
         self.resizable(True, True)
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Return>", self._enter_keypress)
@@ -97,7 +96,7 @@ class QueryView(tk.Toplevel):
         # Create frame for Query Input:
         self._query_frame = ctk.CTkFrame(self)
         self._query_frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nswe")
-        # self._query_frame.grid_columnconfigure(7, weight=1)
+        self._query_frame.grid_columnconfigure(7, weight=1)
 
         # Patient Name
         self._patient_name_var = str_entry(
@@ -169,20 +168,6 @@ class QueryView(tk.Toplevel):
             variable=self._modality_var,
         )
         self._modalities_optionmenu.grid(row=0, column=3, padx=PAD, pady=(PAD, 0), sticky="nw")
-        # Modality free text entry:
-        # self._modality_var = str_entry(
-        #     view=self._query_frame,
-        #     label=_("Modality:"),
-        #     initial_value="",
-        #     min_chars=modality_min_chars,
-        #     max_chars=modality_max_chars,
-        #     charset=string.ascii_uppercase,
-        #     tooltipmsg=None,  # _("Modality Code"),
-        #     row=0,
-        #     col=2,
-        #     pad=PAD,
-        #     sticky="nw",
-        # )
 
         self._load_accession_file_button = ctk.CTkButton(
             self._query_frame,
@@ -191,6 +176,11 @@ class QueryView(tk.Toplevel):
             command=self._load_accession_file_button_pressed,
         )
         self._load_accession_file_button.grid(row=0, column=6, padx=PAD, pady=(PAD, 0), sticky="w")
+
+        self._show_imported_studies_switch = ctk.CTkSwitch(
+            self._query_frame, text=_("Show Imported Studies")  # ,command=self._show_imported_studies_switch_pressed
+        )
+        self._show_imported_studies_switch.grid(row=0, column=7, padx=PAD, pady=(PAD, 0), sticky="e")
 
         self._query_button = ctk.CTkButton(
             self._query_frame,
@@ -208,14 +198,11 @@ class QueryView(tk.Toplevel):
         )
         self._cancel_query_button.grid(row=1, column=5, padx=PAD, pady=PAD, sticky="w")
 
-        self._studies_found_label = ctk.CTkLabel(self._query_frame, text=_("Studies Found: 0"))
-        self._studies_found_label.grid(row=1, column=6, padx=PAD, pady=PAD, sticky="w")
-
         # Create frame for Query results:
         self._results_frame = ctk.CTkFrame(self)
         self._results_frame.grid(row=1, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")
         self._results_frame.grid_rowconfigure(0, weight=1)
-        self._results_frame.grid_columnconfigure(7, weight=1)
+        self._results_frame.grid_columnconfigure(9, weight=1)
 
         # Managing C-FIND results Treeview:
 
@@ -235,12 +222,14 @@ class QueryView(tk.Toplevel):
             style="Treeview",
             columns=self._tree_column_keys,
         )
-        self._tree.grid(row=0, column=0, columnspan=10, sticky="nswe")
 
-        # Create a Scrollbar and associate it with the Treeview
-        scrollbar = ttk.Scrollbar(self._results_frame, orient="vertical", command=self._tree.yview)
-        scrollbar.grid(row=0, column=10, padx=(0, PAD), sticky="news")
-        self._tree.configure(yscrollcommand=scrollbar.set)
+        # Create a Vertical and Horizontal Scrollbar and associate them with the Treeview
+        vertical_scrollbar = ttk.Scrollbar(self._results_frame, orient="vertical", command=self._tree.yview)
+        vertical_scrollbar.grid(row=0, column=10, sticky="ns")
+        self._tree.configure(yscrollcommand=vertical_scrollbar.set)
+        # horizontal_scrollbar = ttk.Scrollbar(self._results_frame, orient="horizontal", command=self._tree.xview)
+        # horizontal_scrollbar.grid(row=1, column=10, sticky="ew")
+        # self._tree.configure(xscrollcommand=horizontal_scrollbar.set)
 
         # Set tree column width and justification
         for col in self._tree["columns"]:
@@ -260,6 +249,8 @@ class QueryView(tk.Toplevel):
         self._tree.bind("<Right>", lambda e: "break")
         self._tree.bind("<Up>", lambda e: "break")
         self._tree.bind("<Down>", lambda e: "break")
+        self._tree.bind("<<TreeviewSelect>>", self._tree_select)
+        self._tree.grid(row=0, column=0, columnspan=10, sticky="nswe")
 
         # Progress bar and status:
         self._status = ctk.CTkLabel(self._results_frame, text=f"Processing 0 of 0 Studies")
@@ -274,14 +265,6 @@ class QueryView(tk.Toplevel):
             sticky="w",
         )
         self._progressbar.set(0)
-
-        # self._cancel_import_button = ctk.CTkButton(
-        #     self._results_frame,
-        #     width=ButtonWidth,
-        #     text=_("Cancel Import"),
-        #     command=self._cancel_import_button_pressed,
-        # )
-        # self._cancel_import_button.grid(row=1, column=2, padx=PAD, pady=PAD, sticky="w")
 
         self._select_all_button = ctk.CTkButton(
             self._results_frame,
@@ -299,49 +282,50 @@ class QueryView(tk.Toplevel):
         )
         self._clear_selection_button.grid(row=1, column=6, padx=PAD, pady=PAD, sticky="w")
 
-        self._retrieve_button = ctk.CTkButton(
+        self._studies_selected_label = ctk.CTkLabel(self._results_frame, text=_("Studies Selected: 0"))
+        self._studies_selected_label.grid(row=1, column=7, padx=PAD, pady=PAD, sticky="w")
+
+        self._import_button = ctk.CTkButton(
             self._results_frame,
             width=ButtonWidth,
             text=_("Import & Anonymize"),
-            command=self._retrieve_button_pressed,
+            command=self._import_button_pressed,
         )
-        self._retrieve_button.grid(row=1, column=7, padx=PAD, pady=PAD, sticky="e")
+        self._import_button.grid(row=1, column=9, padx=PAD, pady=PAD, sticky="e")
 
     def busy(self):
-        return self._query_active or self._move_active
+        return self._query_active or self._controller.bulk_move_active()
 
     def _disable_action_buttons(self):
         logger.info(f"_disable_action_buttons")
         self._load_accession_file_button.configure(state="disabled")
+        self._show_imported_studies_switch.configure(state="disabled")
         self._query_button.configure(state="disabled")
         self._select_all_button.configure(state="disabled")
         self._clear_selection_button.configure(state="disabled")
-        self._retrieve_button.configure(state="disabled")
+        self._import_button.configure(state="disabled")
 
         if self._query_active:
             self._cancel_query_button.configure(state="enabled")
-        # if self._move_active:
-        #     self._cancel_import_button.configure(state="enabled")
 
         self._tree.configure(selectmode="none")
 
     def _enable_action_buttons(self):
         logger.info(f"_enable_action_buttons")
         self._load_accession_file_button.configure(state="enabled")
+        self._show_imported_studies_switch.configure(state="enabled")
         self._query_button.configure(state="enabled")
         self._select_all_button.configure(state="enabled")
         self._clear_selection_button.configure(state="enabled")
-        self._retrieve_button.configure(state="enabled")
-
-        # self._cancel_import_button.configure(state="disabled")
+        self._import_button.configure(state="enabled")
         self._cancel_query_button.configure(state="disabled")
 
         self._tree.configure(selectmode="extended")
 
     def _load_accession_file_button_pressed(self):
         logger.info(f"Load Accession File button pressed")
-        if self._query_active or self._move_active:
-            logger.info(f"Load Accession File disabled, query or move active")
+        if self._query_active:
+            logger.info(f"Load Accession File disabled, query active")
             return
         self._acc_no_file_path = filedialog.askopenfilename(
             title=_("Select text or csv file with list of accession numbers to retrieve"),
@@ -367,6 +351,17 @@ class QueryView(tk.Toplevel):
         # Trigger the query:
         # TODO: optimize query using wildcards * and ? to reduce number of queries for blocks/sequences
         self._query_button_pressed()
+
+    # def _show_imported_studies_switch_pressed(self):
+    #     logger.info(f"Show Imported Studies switch pressed")
+
+    #     if self._query_active:
+    #         logger.error(f"Switch disabled, query is active")
+    #         return
+
+    #     for item in self._tree.get_children():
+    #         if self._tree.tag_has("green", item):
+    #             self._tree.remove(item)
 
     def _monitor_query_response(self, ux_Q: Queue):
         results = []
@@ -405,7 +400,6 @@ class QueryView(tk.Toplevel):
 
         # Update UX label for studies found:
         self._update_query_progress()
-        self._studies_found_label.configure(text=f"Studies Found: {self._studies_processed}")
 
         if not self._query_active:
             logger.info(f"Query finished, {self._studies_processed} results")
@@ -454,9 +448,6 @@ class QueryView(tk.Toplevel):
         if self._query_active:
             logger.error(f"Query disabled, query is active")
             return
-        if self._move_active:
-            logger.error(f"Query disabled, move is active")
-            return
 
         if self._controller.echo("QUERY"):
             self._query_button.configure(text_color="light green")
@@ -500,6 +491,7 @@ class QueryView(tk.Toplevel):
             self._progressbar.start()
 
         self._studies_processed = 0
+        self._studies_selected_label.configure(text=f"Studies Selected: 0")
 
         ux_Q = Queue()
         req: FindStudyRequest = FindStudyRequest(
@@ -531,88 +523,72 @@ class QueryView(tk.Toplevel):
             self._progressbar.set(self._studies_processed / self._studies_to_process)
             self._status.configure(text=f"Found {self._studies_processed} of {studies_to_process} Studies")
 
+    def _tree_select(self, event):
+        # Ensure no Imported Studies are selected:
+        for item in self._tree.selection():
+            if self._tree.tag_has("green", item):
+                self._tree.selection_remove(item)
+        # Update selection count:
+        self._studies_selected_label.configure(text=f"Studies Selected: {len(list(self._tree.selection()))}")
+
     def _clear_results_tree(self):
         self._tree.delete(*self._tree.get_children())
 
     def _select_all_button_pressed(self):
-        if self._move_active:
-            logger.error(f"Selection disabled, move is active")
-            return
-        # self._tree.selection_set(self._tree.get_children())
         for item in self._tree.get_children():
+            # Only selected studies which have not been fully imported:
             if not self._tree.tag_has("green", item):
                 self._tree.selection_add(item)
+        self._studies_selected_label.configure(text=f"Studies Selected: {len(list(self._tree.selection()))}")
 
     def _clear_selection_button_pressed(self):
-        if self._move_active:
-            logger.error(f"Selection disabled, move is active")
-            return
         for item in self._tree.selection():
             self._tree.selection_remove(item)
+        self._studies_selected_label.configure(text=f"Studies Selected: 0")
 
-    def _cancel_import_button_pressed(self):
-        logger.info(f"Cancel Import button pressed")
-        self._move_active = False
-        self._update_move_progress(cancel=True)
-        self._controller.abort_move()
-        self._enable_action_buttons()
+    # def _update_imported_count(self, study_uid: str = None):
+    #     def _parse_tree_item(self, study_uid):
+    #         current_values = list(self._tree.item(study_uid, "values"))
+    #         return (
+    #             current_values[self._tree_column_keys.index("PatientID")],
+    #             int(current_values[self._tree_column_keys.index("NumberOfStudyRelatedInstances")]),
+    #         )
 
-    def _update_move_progress(self, cancel=False):
-        if cancel:
-            self._status.configure(
-                text=f"Import cancelled: Processed {self._studies_processed} of {self._studies_to_process} Studies Selected"
-            )
-            return
-        self._progressbar.set(self._studies_processed / self._studies_to_process)
-        if self._studies_processed == self._studies_to_process:
-            self._status.configure(
-                text=f"Processed {self._studies_to_process} of {self._studies_to_process} Studies Selected"
-            )
-        else:
-            self._status.configure(
-                text=f"Processing {self._studies_processed} of {self._studies_to_process} Studies Selected"
-            )
+    #     uids = self._tree.get_children() if not study_uid else [study_uid]
+    #     for study_uid in uids:
+    #         if study_uid in self._study_uids_to_import:
+    #             current_values = list(self._tree.item(study_uid, "values"))
+    #             pid, instances_to_import = _parse_tree_item(self, study_uid)
+    #             files_imported = self._images_stored_phi_lookup(pid, study_uid)
+    #             current_values[self._tree_column_keys.index("Imported")] = str(files_imported)
+    #             self._tree.item(study_uid, values=current_values)
+    #             if files_imported >= instances_to_import:
+    #                 logging.info(f"Study {study_uid} marked GREEN, all images imported")
+    #                 self._tree.selection_remove(study_uid)
+    #                 self._tree.item(study_uid, tags="green")
+    #                 self._study_uids_to_import.remove(study_uid)
 
-    def _update_imported_count(self, study_uid=None):
-        def _parse_tree_item(self, study_uid):
-            current_values = list(self._tree.item(study_uid, "values"))
-            return (
-                current_values[self._tree_column_keys.index("PatientID")],
-                int(current_values[self._tree_column_keys.index("NumberOfStudyRelatedInstances")]),
-            )
+    def _display_import_result(self, studies: list[StudyUIDHierarchy]):
+        logger.debug("_display_import_result")
 
-        uids = self._tree.get_children() if not study_uid else [study_uid]
-        for study_uid in uids:
-            if study_uid in self._study_uids_to_import:
-                current_values = list(self._tree.item(study_uid, "values"))
-                pid, instances_to_import = _parse_tree_item(self, study_uid)
-                files_imported = self._images_stored_phi_lookup(pid, study_uid)
-                current_values[self._tree_column_keys.index("Imported")] = str(files_imported)
-                self._tree.item(study_uid, values=current_values)
-                if files_imported >= instances_to_import:
-                    logging.info(f"Study {study_uid} marked GREEN, all images imported")
-                    self._tree.selection_remove(study_uid)
-                    self._tree.item(study_uid, tags="green")
-                    self._study_uids_to_import.remove(study_uid)
+        for study in studies:
+            current_values = list(self._tree.item(study.uid, "values"))
+            instances_to_import = int(current_values[self._tree_column_keys.index("NumberOfStudyRelatedInstances")])
+            patient_id = current_values[self._tree_column_keys.index("PatientID")]
+            files_imported = self._images_stored_phi_lookup(patient_id, study.uid)
+            current_values[self._tree_column_keys.index("Imported")] = files_imported
+            if study.last_error_msg:
+                current_values[self._tree_column_keys.index("Error")] = study.last_error_msg
+            self._tree.item(study.uid, values=current_values)
+            if files_imported >= instances_to_import:
+                self._tree.selection_remove(study.uid)
+                self._tree.item(study.uid, tags="green")
 
-    def _monitor_move_response(self, study_uids: list[str]):
-        logger.debug("monitor_move_response")
-
-        if len(self._study_uids_to_import) == 0:
-            logger.error(f"self._study_uids_to_import List Empty, terminate monitor")
-            return
-
-        for study_uid in study_uids:
-            self._update_imported_count(study_uid)
-
-    def _retrieve_button_pressed(self):
-        logger.debug(f"Retrieve button pressed")
+    def _import_button_pressed(self):
+        logger.debug(f"Import button pressed")
 
         if self._query_active:
-            logger.error(f"Retrieve disabled, query is active")
-            return
-        if self._move_active:
-            logger.error(f"Retrieve disabled, move is active")
+            logger.error(f"Import disabled, query is active")
             return
 
         study_uids = list(self._tree.selection())
@@ -630,52 +606,30 @@ class QueryView(tk.Toplevel):
             logger.info(f"All studies selected are already stored/imported")
             return
 
-        self._move_active = True
         self._disable_action_buttons()
 
         dlg = ImportStudiesDialog(self, self._controller, unstored_study_uids)
         imported_study_hierarchies = dlg.get_input()
 
-        self._move_active = False
         self._enable_action_buttons()
 
-        self._monitor_move_response(unstored_study_uids)
-
-        # TODO: update each study in study table last error msg fields
-
-        # self._update_move_progress()
-
-        # logger.info(f"Retrieving {self._studies_to_process} Study(s)")
-        # logger.debug(f"StudyInstanceUIDs: {study_uids}")
-
-        # req = MoveStudiesRequest(
-        #     "QUERY",
-        #     self._controller.model.scu.aet,
-        #     unstored_study_uids,
-        #     ux_Q,
-        # )
-        # self._controller.move_studies(req)
-
-        # # Start MoveStudyResponse monitor:
-        # self.after(
-        #     self.ux_poll_move_response_interval,
-        #     self._monitor_move_response,
-        #     ux_Q,
-        # )
+        self._display_import_result(imported_study_hierarchies)
 
     def _images_stored_phi_lookup(self, phi_patient_id: str, phi_study_uid: str) -> int:
-        image_count = 0
         anon_study_uid = self._controller.anonymizer.model.get_anon_uid(phi_study_uid)
-        if anon_study_uid:
-            anon_pt_id = self._controller.anonymizer.model.get_anon_patient_id(phi_patient_id)
-            assert anon_pt_id is not None
-            if anon_pt_id:
-                image_count = count_study_images(
-                    self._controller.storage_dir,
-                    anon_pt_id,
-                    anon_study_uid,
-                )
-        return image_count
+        if not anon_study_uid:
+            return 0
+
+        anon_pt_id = self._controller.anonymizer.model.get_anon_patient_id(phi_patient_id)
+        if anon_pt_id is None:
+            logger.error(f"Fatal Lookup Error for anon_patient_id where phi_patient_id={phi_patient_id}")
+            return 0
+
+        return count_study_images(
+            self._controller.storage_dir,
+            anon_pt_id,
+            anon_study_uid,
+        )
 
     def _update_treeview_data(self, dicom_datasets: list):
         logger.debug(f"update_treeview_data items: {len(dicom_datasets)}")
@@ -693,7 +647,12 @@ class QueryView(tk.Toplevel):
                 dataset.get("PatientID", ""),
                 dataset.get("StudyInstanceUID", ""),
             )
-            attr_name = self._tree_column_keys[-1]
+            # Do not show Imported Studies if UX switch is on:
+            imported = images_stored_count >= dataset.get("NumberOfStudyRelatedInstances", 0)
+            if imported and not self._show_imported_studies_switch.get():
+                continue
+
+            attr_name = self._tree_column_keys[-2]
             setattr(dataset, attr_name, images_stored_count)
 
             for field, (display_name, _, _) in self._attr_map.items():
@@ -707,7 +666,7 @@ class QueryView(tk.Toplevel):
                     iid=dataset.get("StudyInstanceUID", ""),
                     values=display_values,
                 )
-                if images_stored_count == dataset.get("NumberOfStudyRelatedInstances", 0):
+                if imported:
                     self._tree.item(dataset.get("StudyInstanceUID", ""), tags="green")
             except Exception as e:
                 logger.error(f"Exception: {e}")
@@ -719,18 +678,13 @@ class QueryView(tk.Toplevel):
 
     def _on_cancel(self):
         logger.info(f"_on_cancel")
-        if self._query_active or self._move_active:
-            if self._query_active:
-                msg = _("Cancel active Query?")
-            else:
-                msg = _("Cancel active Move?")
-            if not messagebox.askokcancel(title=_("Cancel"), message=msg, parent=self):
-                return
-            else:
-                if self._query_active:
-                    self._controller.abort_query()
-                else:
-                    self._controller.abort_move()
+
+        if self._query_active and not messagebox.askokcancel(
+            title=_("Cancel"), message=_("Cancel active Query?"), parent=self
+        ):
+            return
+        else:
+            self._controller.abort_query()
 
         self.grab_release()
         self.destroy()

@@ -696,7 +696,7 @@ def test_move_at_instance_level_of_3_studies_from_pacs_to_local_storage(temp_dir
 # include orthanc binaries in repository
 
 
-@pytest.mark.skipif(os.getenv("CI").lower() == "true", reason="Skip test for CI")
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_move_at_study_level_1_CT_file_from_orthanc_with_file_to_local_storage(
     temp_dir: str, controller: ProjectController
 ):
@@ -737,7 +737,7 @@ def test_move_at_study_level_1_CT_file_from_orthanc_with_file_to_local_storage(
     assert count_studies_series_images(os.path.join(local_storage_dir(temp_dir), dirlist[0])) == (1, 1, 1)
 
 
-@pytest.mark.skipif(os.getenv("CI").lower() == "true", reason="Skip test for CI")
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_move_at_study_level_with_network_timeout_then_series_level_MR_Study_from_orthanc_with_file_to_local_storage(
     temp_dir: str, controller: ProjectController
 ):
@@ -781,7 +781,7 @@ def test_move_at_study_level_with_network_timeout_then_series_level_MR_Study_fro
     assert count_studies_series_images(os.path.join(local_storage_dir(temp_dir), dirlist[0])) == (1, 3, 11)
 
 
-@pytest.mark.skipif(os.getenv("CI").lower() == "true", reason="Skip test for CI")
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_move_at_instance_level_of_3_studies_from_orthance_to_local_storage(
     temp_dir: str, controller: ProjectController
 ):
@@ -865,7 +865,7 @@ def test_move_at_instance_level_of_3_studies_from_orthance_to_local_storage(
     assert total_files == 13
 
 
-@pytest.mark.skipif(os.getenv("CI").lower() == "true", reason="Skip test for CI")
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_move_3_studies_with_network_timeout_from_orthance_to_local_storage(
     temp_dir: str, controller: ProjectController
 ):
