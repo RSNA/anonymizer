@@ -9,11 +9,11 @@ from botocore.exceptions import NoCredentialsError
 # s3_prefix="private/"
 # username="anonymizer"
 # password="P^l-8n+(ha?$6*&3"
-account_id = "691746062725"
-client_id = "fgnijvmig42ruvn37mte1p9au"
-user_pool_id = "us-east-1_cFn3IKLqG"
-identity_pool_id = "us-east-1:3c616c9d-58f0-4c89-a412-ea8cf259039a"
-region_name = "us-east-1"
+account_id = "691746062725"  # RSNA AWS account id (covid-image AWS account)
+region_name = "us-east-1"  # AWS region
+app_client_id = "fgnijvmig42ruvn37mte1p9au"  # cognito application client id ("Anonymizer-2")
+user_pool_id = "us-east-1_cFn3IKLqG"  # cognito user pool for "Anonymizer-2"
+identity_pool_id = "us-east-1:3c616c9d-58f0-4c89-a412-ea8cf259039a"  # cognito identity pool
 s3_bucket_name = "amplify-datauploader-prodmi-stagingbucketeec2e4de-x4qrvyzen65z"
 s3_prefix = "private2"
 username = "anonymizer2"  # "johndoe1"
@@ -25,12 +25,13 @@ password = "SpeedFast1967#"  # "SpeedFast1967$"
 # - At least one special character
 
 
-def authenticate_user(username, password, user_pool_id, client_id, identity_pool_id):
+def authenticate_user():
     # Authenticate the user against the Cognito User Pool
     cognito_client = boto3.client("cognito-idp", region_name=region_name)
-    # Sign in with the provided credentials
+
+    # Cognito App Sign in with the provided credentials
     response = cognito_client.initiate_auth(
-        ClientId=client_id,
+        ClientId=app_client_id,
         AuthFlow="USER_PASSWORD_AUTH",
         AuthParameters={
             "USERNAME": username,
@@ -39,15 +40,12 @@ def authenticate_user(username, password, user_pool_id, client_id, identity_pool
     )
     print(response)
 
-    if (
-        "ChallengeName" in response
-        and response["ChallengeName"] == "NEW_PASSWORD_REQUIRED"
-    ):
+    if "ChallengeName" in response and response["ChallengeName"] == "NEW_PASSWORD_REQUIRED":
         # New password required:
         session = response["Session"]
         new_password = "SpeedFast1967#"
         response = cognito_client.respond_to_auth_challenge(
-            ClientId=client_id,
+            ClientId=app_client_id,
             ChallengeName="NEW_PASSWORD_REQUIRED",
             ChallengeResponses={
                 "USERNAME": username,
@@ -72,20 +70,19 @@ def authenticate_user(username, password, user_pool_id, client_id, identity_pool
     print(response)
 
     # Use the Cognito Identity Token to obtain temporary credentials from the Cognito Identity Pool
-    credentials = get_temporary_credentials(cognito_identity_token, identity_pool_id)
+    credentials = get_temporary_credentials(cognito_identity_token)
 
     return credentials
 
 
-def get_temporary_credentials(cognito_identity_token, identity_pool_id):
+def get_temporary_credentials(cognito_identity_token):
+
     # Assume the IAM role associated with the Cognito Identity Pool
     cognito = boto3.client("cognito-identity", region_name=region_name)
     response = cognito.get_id(
         IdentityPoolId=identity_pool_id,
         AccountId=account_id,
-        Logins={
-            f"cognito-idp.{region_name}.amazonaws.com/{user_pool_id}": cognito_identity_token
-        },
+        Logins={f"cognito-idp.{region_name}.amazonaws.com/{user_pool_id}": cognito_identity_token},
     )
 
     print(response)
@@ -95,9 +92,7 @@ def get_temporary_credentials(cognito_identity_token, identity_pool_id):
     # Get temporary AWS credentials
     credentials = cognito.get_credentials_for_identity(
         IdentityId=identity_id,
-        Logins={
-            f"cognito-idp.{region_name}.amazonaws.com/{user_pool_id}": cognito_identity_token
-        },
+        Logins={f"cognito-idp.{region_name}.amazonaws.com/{user_pool_id}": cognito_identity_token},
     )
 
     return credentials
@@ -106,9 +101,7 @@ def get_temporary_credentials(cognito_identity_token, identity_pool_id):
 def main():
     try:
         # Authenticate the user and obtain temporary credentials
-        credentials = authenticate_user(
-            username, password, user_pool_id, client_id, identity_pool_id
-        )
+        credentials = authenticate_user()
 
         # Use the temporary credentials with Boto3 for S3 operations
         s3 = boto3.client(

@@ -1,6 +1,7 @@
 # Description: Anonymization of DICOM datasets
 # See https://mircwiki.rsna.org/index.php?title=The_CTP_DICOM_Anonymizer for legacy anonymizer documentation
 import os
+import copy
 import re
 import time
 import logging
@@ -14,16 +15,16 @@ from pydicom import Dataset, Sequence, dcmread
 from utils.translate import _
 from utils.storage import local_storage_path
 from model.project import DICOMNode, Study, Series, PHI, ProjectModel
-from model.anonymizer import AnonymizerModel
+from model.anonymizer import AnonymizerModel, ANONYMIZER_MODEL_VERSION
 
 logger = logging.getLogger(__name__)
 
 
 class AnonymizerController:
-    # TODO: where best to put these string constants? Make available via UX?
-    # TODO: link to app title & version
-    deidentification_method = _("RSNA DICOM ANONYMIZER")
-    deidentification_methods = [
+    DEIDENTIFICATION_METHOD = _("RSNA DICOM ANONYMIZER")
+    # See docs/RSNA-Covid-19-Deindentification-Protocol.pdf
+    # TODO: if user edits default anonymization script these values should be updated accordingly
+    DEIDENTIFICATION_METHODS = [
         ("113100", _("Basic Application Confidentiality Profile")),
         (
             "113107",
@@ -31,12 +32,13 @@ class AnonymizerController:
         ),
         ("113108", _("Retain Patient Characteristics Option")),
     ]
-    private_block_name = _("RSNA")
-    default_anon_date = "20000101"  # if source date is invalid or before 19000101
+    PRIVATE_BLOCK_NAME = _("RSNA")
+    DEFAULT_ANON_DATE = "20000101"  # if source date is invalid or before 19000101
 
     _anonymize_time_slice_interval: float = 0.1  # seconds
     _anonymize_batch_size: int = 40  # number of items to process in a batch
     _clean_tag_translate_table = str.maketrans("", "", "() ,")
+
     # Required DICOM field attributes for accepting files:
     required_attributes = [
         "SOPClassUID",
@@ -50,15 +52,37 @@ class AnonymizerController:
         self.project_model = project_model
 
         # If present, load pickled AnonymizerModel from project directory:
-        anon_pkl_path = Path(project_model.storage_dir, AnonymizerModel.pickle_filename)
+        anon_pkl_path = Path(project_model.storage_dir, AnonymizerModel.PICKLE_FILENAME)
         if os.path.exists(anon_pkl_path):
             with open(anon_pkl_path, "rb") as pkl_file:
-                self.model = pickle.load(pkl_file)
+                file_model = pickle.load(pkl_file)
                 logger.info(f"Anonymizer Model loaded from: {anon_pkl_path}")
+
+                # TODO: Integrity Checking on loaded model (md5 checksum?), on integrity error try and use backup
+                if not hasattr(file_model, "_version"):
+                    logger.error(f"Anonymizer Model datafile corrupt: version missing")
+                    raise RuntimeError(f"Anonymizer datafile: {anon_pkl_path} corrupt")
+
+                logger.info(f"Anonymizer Model loaded successfully, version: {file_model._version}")
+
+                if file_model._version != ANONYMIZER_MODEL_VERSION:
+                    logger.info(
+                        f"Anonymizer Model version mismatch: {file_model._version} != {ANONYMIZER_MODEL_VERSION} upgrading accordingly"
+                    )
+                    self.model = AnonymizerModel(project_model.anonymizer_script_path)  # new default model
+                    self.model = copy.copy(
+                        file_model
+                    )  # copy over corresponding attributes from the old model (file_model)
+                    self.model._version = ANONYMIZER_MODEL_VERSION  # upgrade version
+                    self.save_model()
+                    logger.info(f"Anonymizer Model upgraded successfully to version: {self.model._version}")
+                else:
+                    self.model = file_model
+
         else:
-            # Initialise AnonymizerModel if no pickle file found in project directory:
+            # Initialise New Default AnonymizerModel if no pickle file found in project directory:
             self.model = AnonymizerModel(project_model.anonymizer_script_path)
-            logger.info(f"Anonymizer Model initialised from: {project_model.anonymizer_script_path}")
+            logger.info(f"New Default Anonymizer Model initialised from: {project_model.anonymizer_script_path}")
 
         self._anon_Q: Queue = Queue()
 
@@ -82,7 +106,7 @@ class AnonymizerController:
         ]
 
     def save_model(self):
-        anon_pkl_path = Path(self.project_model.storage_dir, AnonymizerModel.pickle_filename)
+        anon_pkl_path = Path(self.project_model.storage_dir, AnonymizerModel.PICKLE_FILENAME)
         with open(anon_pkl_path, "wb") as pkl_file:
             pickle.dump(self.model, pkl_file)
             pkl_file.close()
@@ -108,7 +132,7 @@ class AnonymizerController:
     # Returns tuple of (days incremented, incremented date)
     def _hash_date(self, date: str, patient_id: str) -> tuple[int, str]:
         if not self.valid_date(date) or not len(patient_id):
-            return 0, self.default_anon_date
+            return 0, self.DEFAULT_ANON_DATE
 
         # Calculate MD5 hash of PatientID
         md5_hash = hashlib.md5(patient_id.encode()).hexdigest()
@@ -178,7 +202,7 @@ class AnonymizerController:
 
         if anon_patient_id == None:  # New patient
             new_anon_patient_id = self.get_next_anon_patient_id()
-            # TODO: write init method for PHI using introspection for fields to look for in dataset
+            # TODO: write init method for PHI(phi_ds) using introspection for fields to look for in dataset
             phi = PHI(
                 patient_name=str(phi_ds.PatientName),
                 patient_id=str(phi_ds.PatientID),
@@ -361,44 +385,50 @@ class AnonymizerController:
                             logger.info(f"Instance already stored: {ds.PatientID} {ds.SOPInstanceUID}")
                             continue
 
-                    # Capture PHI and store for new studies:
+                    # Capture PHI and source for new studies:
                     if self.model.get_anon_uid(ds.StudyInstanceUID) == None:
                         self.capture_phi_from_new_study(ds, source)
                     else:
                         self.update_phi_from_new_instance(ds, source)
 
-                    # Anonymize dataset (overwrite phi dataset) (prevents dataset copy)
-                    ds.remove_private_tags()  # TODO: provide a switch for this? how does java anon handle this? see <r> tag
-                    ds.walk(self._anonymize_element)
+                    phi_instance_uid = ds.SOPInstanceUID  # if exception, remove this instance from uid_lookup
 
-                    # Handle Global Tags:
-                    ds.PatientIdentityRemoved = "YES"  # CS: (0012, 0062)
-                    ds.DeidentificationMethod = self.deidentification_method  # LO: (0012,0063)
-                    de_ident_seq = Sequence()  # SQ: (0012,0064)
-
-                    for code, descr in self.deidentification_methods:
-                        item = Dataset()
-                        item.CodeValue = code
-                        item.CodingSchemeDesignator = "DCM"
-                        item.CodeMeaning = descr
-                        de_ident_seq.append(item)
-
-                    ds.DeidentificationMethodCodeSequence = de_ident_seq
-                    block = ds.private_block(0x0013, self.private_block_name, create=True)
-                    block.add_new(0x1, "SH", self.project_model.project_name)
-                    # block.add_new(0x2, "SH", self.project_model.trial_name)
-                    block.add_new(0x3, "SH", self.project_model.site_id)
-
-                    logger.debug(f"ANON:\n{ds}")
-
-                    # TODO: custom filtering via script specifying dicom field patterns to keep / quarantine / discard
-                    # Save anonymized dataset to dicom file in local storage:
-                    filename = local_storage_path(dir, ds)
-                    logger.info(f"ANON STORE: {source} => {filename}")
                     try:
+                        # Anonymize dataset (overwrite phi dataset) (prevents dataset copy)
+                        # TODO: process in AnonymizerModel: Script line: <r en="T" t="privategroups">Remove private groups</r>
+                        ds.remove_private_tags()  # remove all private elements
+                        ds.walk(self._anonymize_element)
+
+                        # Handle Global Tags:
+                        ds.PatientIdentityRemoved = "YES"  # CS: (0012, 0062)
+                        ds.DeidentificationMethod = self.DEIDENTIFICATION_METHOD  # LO: (0012,0063)
+                        de_ident_seq = Sequence()  # SQ: (0012,0064)
+
+                        for code, descr in self.DEIDENTIFICATION_METHODS:
+                            item = Dataset()
+                            item.CodeValue = code
+                            item.CodingSchemeDesignator = "DCM"
+                            item.CodeMeaning = descr
+                            de_ident_seq.append(item)
+
+                        ds.DeidentificationMethodCodeSequence = de_ident_seq
+                        block = ds.private_block(0x0013, self.PRIVATE_BLOCK_NAME, create=True)
+                        block.add_new(0x1, "SH", self.project_model.project_name)
+                        block.add_new(0x3, "SH", self.project_model.site_id)
+
+                        logger.debug(f"ANON:\n{ds}")
+
+                        # TODO: custom filtering via script specifying dicom field patterns to keep / quarantine / discard
+                        # Save anonymized dataset to dicom file in local storage:
+                        filename = local_storage_path(dir, ds)
+                        logger.info(f"ANON STORE: {source} => {filename}")
                         ds.save_as(filename, write_like_original=False)
+
                     except Exception as exception:
-                        logger.error("Failed writing instance to storage directory")
+                        # remove this phi instance UID from lookup if anonymization or storage fails
+                        # leave other PHI intact for this patient
+                        self._model.remove_uid(phi_instance_uid)
+                        logger.error("CRITICAL: Failed writing instance to storage directory")
                         logger.exception(exception)
 
                 # Save model to disk after processing batch:

@@ -130,7 +130,7 @@ class QueryView(tk.Toplevel):
         # Accession No.
         self._accession_no_var = str_entry(
             view=self._query_frame,
-            label=_("Accession No.:"),
+            label=_("Accession No.(s):"),
             initial_value="",
             min_chars=0,
             max_chars=None,

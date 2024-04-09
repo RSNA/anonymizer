@@ -85,26 +85,34 @@ class PHI:
 
 @dataclass
 class AWSCognito:
+    account_id: str
     region_name: str
-    client_id: str
+    app_client_id: str
+    user_pool_id: str
+    identity_pool_id: str
     s3_bucket: str
-    s3_prefix: str
     username: str
     password: str
 
 
 @dataclass
 class ProjectModel:
+
+    # Model Version Control
+    @staticmethod
+    def current_model_version() -> int:
+        return 1
+
+    @staticmethod
+    def default_project_filename() -> str:
+        return "ProjectModel.pkl"
+
     @staticmethod
     def default_site_id() -> str:
         # (the JAVA Anonymizer created a 6 digit ID based on minutes since 1 Jan 1970 and cycling every million mins (695 days))
         # Automatically generate a decimal character unique Site ID based on
         # the number of 30 minute intervals since 1 Jan 1970
         return str(int(time.time() / (60 * 30)))
-
-    @staticmethod
-    def default_project_filename() -> str:
-        return "ProjectModel.pkl"
 
     @staticmethod
     def default_storage_dir() -> Path:
@@ -123,13 +131,13 @@ class ProjectModel:
 
     @staticmethod
     def default_aws_cognito() -> AWSCognito:
-        # Identity Pool ID: 1:3c616c9d-58f0-4c89-a412-ea8cf259039a
-        # User Pool ID: us-east-1_cFn3IKLqG
         return AWSCognito(
+            account_id="691746062725",
             region_name="us-east-1",
-            client_id="fgnijvmig42ruvn37mte1p9au",
+            app_client_id="fgnijvmig42ruvn37mte1p9au",
+            user_pool_id="us-east-1_cFn3IKLqG",
+            identity_pool_id="us-east-1:3c616c9d-58f0-4c89-a412-ea8cf259039a",
             s3_bucket="amplify-datauploader-prodmi-stagingbucketeec2e4de-x4qrvyzen65z",
-            s3_prefix="private",
             username="anonymizer2",
             password="SpeedFast1967#",
         )
@@ -159,6 +167,7 @@ class ProjectModel:
     def default_logging_levels() -> LoggingLevels:
         return LoggingLevels(logging.INFO, logging.WARNING, False)
 
+    version: int = field(default_factory=current_model_version)
     site_id: str = field(default_factory=default_site_id)
     project_name: str = _("MY_PROJECT")
     uid_root: str = "1.2.826.0.1.3680043.10.188"

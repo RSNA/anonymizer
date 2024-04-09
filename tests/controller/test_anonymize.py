@@ -37,7 +37,7 @@ def test_valid_date_before_19000101(controller):
     anon = controller.anonymizer
     input_date = "18991231"
     assert not anon.valid_date(input_date)
-    assert anon._hash_date(input_date, "12345") == (0, anon.default_anon_date)
+    assert anon._hash_date(input_date, "12345") == (0, anon.DEFAULT_ANON_DATE)
 
 
 # Test a valid date on or after 19000101
@@ -96,9 +96,7 @@ def test_anonymize_dataset(temp_dir: str, controller):
     anonymizer.anonymize_dataset_and_store(LocalSCU, ds, local_storage_dir(temp_dir))
     sleep(0.5)
     store_dir = local_storage_dir(temp_dir)
-    dirlist = [
-        d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))
-    ]
+    dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
 
     SITEID = controller.model.site_id
     UIDROOT = controller.model.uid_root
@@ -114,10 +112,7 @@ def test_anonymize_dataset(temp_dir: str, controller):
     assert anon_ds.PatientName == anon_pt_id
     assert anon_ds.AccessionNumber == "1"
     assert anon_ds.StudyDate != phi_ds.StudyDate
-    assert (
-        anon_ds.StudyDate
-        == anonymizer._hash_date(phi_ds.StudyDate, phi_ds.PatientID)[1]
-    )
+    assert anon_ds.StudyDate == anonymizer._hash_date(phi_ds.StudyDate, phi_ds.PatientID)[1]
     assert anon_ds.SOPClassUID == phi_ds.SOPClassUID
     assert anon_ds.SOPInstanceUID == f"{UIDROOT}.{SITEID}.1"
     assert anon_ds.StudyInstanceUID == f"{UIDROOT}.{SITEID}.2"

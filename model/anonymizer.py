@@ -8,11 +8,14 @@ from utils.translate import _
 
 logger = logging.getLogger(__name__)
 
+ANONYMIZER_MODEL_VERSION = 1
+
 
 class AnonymizerModel:
-    pickle_filename = "AnonymizerModel.pkl"
+    PICKLE_FILENAME = "AnonymizerModel.pkl"
 
     def __init__(self, script_path: Path):
+        self._version = ANONYMIZER_MODEL_VERSION
         # Dynamic attributes:
         self._patient_id_lookup: Dict[str, str] = {}
         self._uid_lookup: Dict[str, str] = {}
@@ -21,6 +24,7 @@ class AnonymizerModel:
         self._script_path = script_path
         self._tag_keep: Dict[str, str] = {}  # DICOM Tag: Operation
         self.load_script(script_path)
+        self.dummy: str = "dummyA"
 
     def __repr__(self) -> str:
         class_name = self.__class__.__name__
@@ -40,16 +44,23 @@ class AnonymizerModel:
             root = ET.parse(script_path).getroot()
 
             # Extract 'e' tags into _tag_keep dictionary
-            for e in root.findall("e"):  # type: ignore
+            for e in root.findall("e"):
                 tag = str(e.attrib.get("t"))
                 operation = str(e.text) if e.text is not None else ""
                 if "@remove" not in operation:
                     self._tag_keep[tag] = operation
 
+            # Handle:
+            # <k en="F" t="0018">Keep group 0018</k>
+            # <k en="F" t="0020">Keep group 0020</k>
+            # <k en="F" t="0028">Keep group 0028</k>
+            # <r en="T" t="curves">Remove curves</r>
+            # <r en="T" t="overlays">Remove overlays</r>
+            # <r en="T" t="privategroups">Remove private groups</r>
+            # <r en="F" t="unspecifiedelements">Remove unchecked elements</r>
+
             filtered_tag_keep = {k: v for k, v in self._tag_keep.items() if v != ""}
-            logger.info(
-                f"_tag_keep has {len(self._tag_keep)} entries with {len(filtered_tag_keep)} operations"
-            )
+            logger.info(f"_tag_keep has {len(self._tag_keep)} entries with {len(filtered_tag_keep)} operations")
             logger.info(f"_tag_keep operations:\n{pformat(filtered_tag_keep)}")
             return
 
@@ -58,9 +69,7 @@ class AnonymizerModel:
             raise
 
         except ET.ParseError:
-            logger.error(
-                f"Error parsing the script file {script_path}. Ensure it is valid XML."
-            )
+            logger.error(f"Error parsing the script file {script_path}. Ensure it is valid XML.")
             raise
 
         except Exception as e:
@@ -100,6 +109,10 @@ class AnonymizerModel:
 
     def uid_received(self, phi_uid: str) -> bool:
         return phi_uid in self._uid_lookup
+
+    def remove_uid(self, phi_uid: str):
+        if phi_uid in self._uid_lookup:
+            del self._uid_lookup[phi_uid]
 
     def get_anon_uid(self, phi_uid: str) -> str | None:
         if phi_uid not in self._uid_lookup:

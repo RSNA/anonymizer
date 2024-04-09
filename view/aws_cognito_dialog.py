@@ -9,8 +9,9 @@ from utils.ux_fields import str_entry
 
 logger = logging.getLogger(__name__)
 
+
 class AWSCognitoDialog(tk.Toplevel):
-#class AWSCognitoDialog(ctk.CTkToplevel):
+    # class AWSCognitoDialog(ctk.CTkToplevel):
     def __init__(
         self,
         parent,
@@ -47,6 +48,22 @@ class AWSCognitoDialog(tk.Toplevel):
 
         row = 0
 
+        self.account_id_var = str_entry(
+            view=self,
+            label=_("AWS Account ID:"),
+            initial_value=self.aws_cognito.account_id,
+            min_chars=1,
+            max_chars=64,
+            charset=string.digits + "-. ^%$@!~+*&" + string.ascii_letters,
+            tooltipmsg=None,
+            row=row,
+            col=0,
+            pad=PAD,
+            sticky="nw",
+        )
+
+        row += 1
+
         self.region_name_var = str_entry(
             view=self,
             label=_("Region Name:"),
@@ -63,10 +80,42 @@ class AWSCognitoDialog(tk.Toplevel):
 
         row += 1
 
-        self.client_id_var = str_entry(
+        self.app_client_id_var = str_entry(
             view=self,
-            label=_("Client ID:"),
-            initial_value=self.aws_cognito.client_id,
+            label=_("Cognito Application Client ID:"),
+            initial_value=self.aws_cognito.app_client_id,
+            min_chars=5,
+            max_chars=64,
+            charset=string.digits + "-_" + string.ascii_letters,
+            tooltipmsg=None,
+            row=row,
+            col=0,
+            pad=PAD,
+            sticky="nw",
+        )
+
+        row += 1
+
+        self.user_pool_id_var = str_entry(
+            view=self,
+            label=_("Cognito User Pool ID:"),
+            initial_value=self.aws_cognito.user_pool_id,
+            min_chars=5,
+            max_chars=64,
+            charset=string.digits + "-_" + string.ascii_letters,
+            tooltipmsg=None,
+            row=row,
+            col=0,
+            pad=PAD,
+            sticky="nw",
+        )
+
+        row += 1
+
+        self.identity_pool_id_var = str_entry(
+            view=self,
+            label=_("Cognito Identity Pool ID:"),
+            initial_value=self.aws_cognito.identity_pool_id,
             min_chars=5,
             max_chars=64,
             charset=string.digits + "-_" + string.ascii_letters,
@@ -86,22 +135,6 @@ class AWSCognitoDialog(tk.Toplevel):
             min_chars=5,
             max_chars=64,
             charset=string.digits + "-." + string.ascii_lowercase,
-            tooltipmsg=None,
-            row=row,
-            col=0,
-            pad=PAD,
-            sticky="nw",
-        )
-
-        row += 1
-
-        self.s3_prefix_var = str_entry(
-            view=self,
-            label=_("S3 Prefix:"),
-            initial_value=self.aws_cognito.s3_prefix,
-            min_chars=1,
-            max_chars=64,
-            charset=string.digits + "-. ^%$@!~+*&" + string.ascii_letters,
             tooltipmsg=None,
             row=row,
             col=0,
@@ -143,9 +176,7 @@ class AWSCognitoDialog(tk.Toplevel):
 
         row += 1
 
-        self._export_to_aws_checkbox = ctk.CTkCheckBox(
-            self, text=_("Export to AWS"), state="disabled"
-        )
+        self._export_to_aws_checkbox = ctk.CTkCheckBox(self, text=_("Export to AWS"), state="disabled")
         if self.export_to_aws:
             self._export_to_aws_checkbox.select()
 
@@ -157,9 +188,7 @@ class AWSCognitoDialog(tk.Toplevel):
             sticky="w",
         )
 
-        self._ok_button = ctk.CTkButton(
-            self, width=100, text=_("Ok"), command=self._ok_event
-        )
+        self._ok_button = ctk.CTkButton(self, width=100, text=_("Ok"), command=self._ok_event)
         self._ok_button.grid(
             row=row,
             column=1,
@@ -176,10 +205,12 @@ class AWSCognitoDialog(tk.Toplevel):
         self._user_input = (
             self._export_to_aws_checkbox.get() == 1,
             AWSCognito(
+                self.account_id_var.get(),
                 self.region_name_var.get(),
-                self.client_id_var.get(),
+                self.app_client_id_var.get(),
+                self.user_pool_id_var.get(),
+                self.identity_pool_id_var.get(),
                 self.s3_bucket_var.get(),
-                self.s3_prefix_var.get(),
                 self.username_var.get(),
                 self.password_var.get(),
             ),

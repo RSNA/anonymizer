@@ -48,7 +48,7 @@ from model.project import (
     DICOMRuntimeError,
 )
 from .anonymizer import AnonymizerController
-
+from __version__ import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -197,6 +197,10 @@ class MoveStudiesRequest:
 
 
 class ProjectController(AE):
+    # TODO: GET RSNA ROOT ORGANIZATION UID
+    RSNA_ROOT_ORG_UID = "1.2.826.0.1.3680043"
+    IMPLEMENTATION_CLASS_UID = RSNA_ROOT_ORG_UID  # UI: (0002,0012)
+    IMPLEMENTATION_VERSION_NAME = "RSNA DICOM Anonymizer" + " " + __version__
     # DICOM service class uids:
     _VERIFICATION_CLASS = "1.2.840.10008.1.1"  # Echo
     _STUDY_ROOT_QR_CLASSES = [
@@ -382,11 +386,14 @@ class ProjectController(AE):
 
         # Add the File Meta Information
         ds.file_meta = FileMetaDataset(event.file_meta)
+        ds.file_meta.ImplementationClassUID = self.IMPLEMENTATION_CLASS_UID  # UI: (0002,0012)
+        ds.file_meta.ImplementationVersionName = self.IMPLEMENTATION_VERSION_NAME  # SH: (0002,0013)
 
         remote_scu = DICOMNode(remote["address"], remote["port"], remote["ae_title"], False)
         logger.debug(remote_scu)
 
         # DICOM Dataset integrity checking:
+        # TODO: send to quarantine?
         missing_attributes = self.anonymizer.missing_attributes(ds)
         if missing_attributes != []:
             logger.error(f"Incoming dataset is missing required attributes: {missing_attributes}")

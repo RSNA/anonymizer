@@ -1,5 +1,6 @@
 import os, sys, json
 from pathlib import Path
+import copy
 import logging
 import pickle
 import tkinter as tk
@@ -34,7 +35,7 @@ logger = logging.getLogger()  # ROOT logger
 
 
 class App(ctk.CTk):
-    TITLE = _("RSNA DICOM Anonymizer BETA Version " + __version__)
+    TITLE = _("RSNA DICOM Anonymizer Version " + __version__)
     THEME_FILE = "assets/themes/rsna_theme.json"
     CONFIG_FILENAME = "config.json"
 
@@ -172,10 +173,49 @@ class App(ctk.CTk):
 
         if os.path.exists(project_pkl_path):
             with open(project_pkl_path, "rb") as pkl_file:
-                self._model = pickle.load(pkl_file)
+                file_model = pickle.load(pkl_file)
             logger.info(f"Project Model loaded from: {project_pkl_path}")
-            self._project_controller = ProjectController(self._model)
-            assert self._project_controller
+
+            # TODO: Integrity Checking on loaded model (md5 checksum?), inform user, on integrity error use backup or reinitialise
+            if not hasattr(file_model, "version"):
+                logger.error(f"Project Model missing version")
+                messagebox.showerror(
+                    title=_("Open Project Error"),
+                    message=_(f"Project File corrupted, missing version information."),
+                    parent=self,
+                )
+                self.enable_file_menu()
+                return
+            
+            logger.info(f"Project Model loaded successfully, version: {file_model.version}")
+
+            if file_model.version != ProjectModel.current_model_version():
+                logger.info(
+                    f"Project Model version mismatch: {file_model.version} != {ProjectModel.current_model_version()} upgrading accordingly"
+                )
+                self._model = ProjectModel()  # new default model
+                self._model = copy.copy(
+                    file_model
+                )  # copy over corresponding attributes from the old model (file_model)
+                self._model.version = ProjectModel.current_model_version()  # update to latest version
+            else:
+                self._model = file_model
+
+            try:
+                self._project_controller = ProjectController(self._model)
+                if file_model.version != ProjectModel.current_model_version():
+                    self._project_controller.save_model()
+                    logger.info(f"Project Model upgraded successfully to version: {self._model.version}")
+            except Exception as e:
+                logger.error(f"Error creating Project Controller: {str(e)}")
+                messagebox.showerror(
+                    title=_("Open Project Error"),
+                    message=_(f"Error creating Project Controller:\n\n{str(e)}"),
+                    parent=self,
+                )
+                self.enable_file_menu()
+                return
+
             logger.info(f"{self._project_controller}")
             if not project_dir in self.recent_project_dirs:
                 self.recent_project_dirs.insert(0, project_dir)
