@@ -1,6 +1,8 @@
 import boto3
 from botocore.exceptions import NoCredentialsError
 
+# from botocore import S3Object
+
 # https://www.archerimagine.com/articles/aws/aws-cognito-tutorials.html
 
 # AWS S3 Bucket Details
@@ -27,10 +29,10 @@ password = "SpeedFast1967#"  # "SpeedFast1967$"
 
 def authenticate_user():
     # Authenticate the user against the Cognito User Pool
-    cognito_client = boto3.client("cognito-idp", region_name=region_name)
+    cognito_idp_client = boto3.client("cognito-idp", region_name=region_name)
 
     # Cognito App Sign in with the provided credentials
-    response = cognito_client.initiate_auth(
+    response = cognito_idp_client.initiate_auth(
         ClientId=app_client_id,
         AuthFlow="USER_PASSWORD_AUTH",
         AuthParameters={
@@ -44,7 +46,7 @@ def authenticate_user():
         # New password required:
         session = response["Session"]
         new_password = "SpeedFast1967#"
-        response = cognito_client.respond_to_auth_challenge(
+        response = cognito_idp_client.respond_to_auth_challenge(
             ClientId=app_client_id,
             ChallengeName="NEW_PASSWORD_REQUIRED",
             ChallengeResponses={
@@ -66,20 +68,14 @@ def authenticate_user():
         "IdToken"
     ]  # value of AccessToken from cognito-idp.initiate_auth
 
-    response = cognito_client.get_user(AccessToken=session_token)
+    response = cognito_idp_client.get_user(AccessToken=session_token)
     print(response)
 
     # Use the Cognito Identity Token to obtain temporary credentials from the Cognito Identity Pool
-    credentials = get_temporary_credentials(cognito_identity_token)
-
-    return credentials
-
-
-def get_temporary_credentials(cognito_identity_token):
 
     # Assume the IAM role associated with the Cognito Identity Pool
-    cognito = boto3.client("cognito-identity", region_name=region_name)
-    response = cognito.get_id(
+    cognito_identity_client = boto3.client("cognito-identity", region_name=region_name)
+    response = cognito_identity_client.get_id(
         IdentityPoolId=identity_pool_id,
         AccountId=account_id,
         Logins={f"cognito-idp.{region_name}.amazonaws.com/{user_pool_id}": cognito_identity_token},
@@ -90,15 +86,19 @@ def get_temporary_credentials(cognito_identity_token):
     identity_id = response["IdentityId"]
 
     # Get temporary AWS credentials
-    credentials = cognito.get_credentials_for_identity(
+    credentials = cognito_identity_client.get_credentials_for_identity(
         IdentityId=identity_id,
         Logins={f"cognito-idp.{region_name}.amazonaws.com/{user_pool_id}": cognito_identity_token},
     )
+
+    print(credentials)
 
     return credentials
 
 
 def main():
+    print("AWS S3 File Upload Example")
+
     try:
         # Authenticate the user and obtain temporary credentials
         credentials = authenticate_user()
@@ -112,13 +112,28 @@ def main():
         )
 
         # Now you can make S3 requests using the configured credentials
+        # response = s3.list_buckets()
+        # print(response)
 
-        # Example: Upload a file to S3
-        file_path = "/Users/administrator/Desktop/aws_test_upload.dcm"
-        object_key = f"{s3_prefix}/aws_test_upload.dcm"
+        # Example: Upload two files to S3
+        file_path_1 = "/Users/administrator/Desktop/aws_test_upload_1.dcm"
+        object_key = f"{s3_prefix}/1/aws_test_upload_1.dcm"
 
-        s3.upload_file(file_path, s3_bucket_name, object_key)
-        print(f"File uploaded successfully to s3://{s3_bucket_name}/{object_key}")
+        s3.upload_file(file_path_1, s3_bucket_name, object_key)
+        print(f"File 1 uploaded successfully to s3://{s3_bucket_name}/{object_key}")
+
+        file_path_2 = "/Users/administrator/Desktop/aws_test_upload_2.dcm"
+        object_key = f"{s3_prefix}/2/aws_test_upload_2.dcm"
+
+        s3.upload_file(file_path_2, s3_bucket_name, object_key)
+        print(f"File 2 uploaded successfully to s3://{s3_bucket_name}/{object_key}")
+
+        response = s3.list_objects(Bucket=s3_bucket_name, Prefix=s3_prefix)
+        if "Contents" in response:
+            for obj in response["Contents"]:
+                print(obj["Key"])
+        else:
+            print("No objects found in the bucket.")
 
     except NoCredentialsError:
         print("Error: AWS credentials not available.")

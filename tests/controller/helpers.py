@@ -41,6 +41,7 @@ def send_file_to_scp(pydicom_test_filename: str, scp: DICOMNode, controller: Pro
     assert ds.PatientID
     dcm_file_path = str(get_testdata_file(pydicom_test_filename))
     assert dcm_file_path
+    assert os.path.exists(dcm_file_path)
     files_sent = controller.send(
         [dcm_file_path],
         scp.aet,

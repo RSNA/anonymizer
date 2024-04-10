@@ -1,9 +1,10 @@
 {
   "version": "0.2.0",
   "configurations": [
+    {"name":"Python Debugger: Current File","type":"debugpy","request":"launch","program":"${file}","console":"integratedTerminal","justMyCode": false},
     {
       "name": "Anonymizer GUI Optimzed 0",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "program": "anonymizer.py",
       "env": {
@@ -17,7 +18,7 @@
     },
     {
       "name": "Anonymizer GUI Optimized 1",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "program": "anonymizer.py",
       "env": {
@@ -31,7 +32,7 @@
     },
     {
       "name": "Anonymizer GUI Optimized 2",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "program": "anonymizer.py",
       "env": {

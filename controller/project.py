@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 import logging
 import time
+from datetime import datetime, timedelta
 import pickle
 import csv
 import boto3
@@ -253,6 +254,8 @@ class ProjectController(AE):
         self.set_radiology_storage_contexts()
         self.set_verification_context()
         self._reset_scp_vars()
+        self._aws_credentials = {}
+        self._aws_expiration_datetime = None
         self.anonymizer = AnonymizerController(model)
 
     def _reset_scp_vars(self):
@@ -264,7 +267,6 @@ class ProjectController(AE):
         self._move_futures = None
         self._move_executor = None
         self.scp = None
-        self.s3 = None
 
     def _post_model_update(self):
         self.stop_scp()
@@ -499,62 +501,96 @@ class ProjectController(AE):
                 association.release()
             return False
 
-    def aws_S3_authenticate(self) -> tuple[bool, str | None]:
-        logging.info(f"Authenticate to AWS S3")
-        if self.s3:
-            logging.info(f"Already authenticated to AWS S3, verify bucket list")
-            try:
-                response = self.s3.list_buckets()
-                logging.info(f"Authentication is valid. S3 buckets:", response["Buckets"])
-                return True
-            except Exception as e:
-                logging.error("s3_list_buckets failed. Error:", e)
-                self.s3 = None
+    def AWS_authenticate(self) -> str | Dict:
+        # Authenticates AWS Cognito User and returns AWS temporary credentials
+        # to use in creation of S3 client in each export thread
+        # On error returns error message else returns credentials Dictionary
+        # Cache credentials and return cached credentials if expiration longer than 10 mins
+        logging.info(f"AWS_authenticate")
+        if self._aws_credentials and (
+            self._aws_expiration_datetime - datetime.now(self._aws_expiration_datetime.tzinfo) > timedelta(minutes=10)
+        ):
+            logger.info(f"Using cached AWS credentials, Expiration:{self._aws_expiration_datetime}")
+            return self._aws_credentials
 
         try:
-            cognito_client = boto3.client("cognito-idp", region_name="us-east-1")
+            cognito_idp_client = boto3.client("cognito-idp", region_name=self.model.aws_cognito.region_name)
 
-            response = cognito_client.initiate_auth(
+            response = cognito_idp_client.initiate_auth(
+                ClientId=self.model.aws_cognito.app_client_id,
                 AuthFlow="USER_PASSWORD_AUTH",
                 AuthParameters={
                     "USERNAME": self.model.aws_cognito.username,
                     "PASSWORD": self.model.aws_cognito.password,
                 },
-                ClientId=self.model.aws_cognito.client_id,
             )
 
-            if response["ChallengeName"] == "NEW_PASSWORD_REQUIRED":
-                msg = _("User needs to set a new password")
-                logging.error(msg)
-                return False, msg
+            if "ChallengeName" in response and response["ChallengeName"] == "NEW_PASSWORD_REQUIRED":
+                # New password required, reset using previous password:
+                self.model.aws_cognito.password = self.model.aws_cognito.password + "N1-"
+                # TODO: allow user to enter new password?
+                session = response["Session"]
+                response = cognito_idp_client.respond_to_auth_challenge(
+                    ClientId=self.model.aws_cognito.app_client_id,
+                    ChallengeName="NEW_PASSWORD_REQUIRED",
+                    ChallengeResponses={
+                        "USERNAME": self.model.aws_cognito.username,
+                        "NEW_PASSWORD": self.model.aws_cognito.password,
+                    },
+                    Session=session,
+                )
 
             if "ChallengeName" in response:
                 msg = _(f"Unexpected Authorisation Challenge : {response['ChallengeName']}")
                 logging.error(msg)
-                return False, msg
+                return msg
 
             if "AuthenticationResult" not in response:
                 logging.error(f"AuthenticationResult not in response: {response}")
-                return False, _(
-                    "AWS Cognito authorisation failed\n Authentication Result & Access Token not in response"
-                )
+                return _("AWS Cognito IDP authorisation failed\n Authentication Result & Access Token not in response")
 
-            if "AccessToken" not in response["AuthenticationResult"]:
-                logging.error(f"AccessToken not in response: {response}")
-                return False, _("AWS Cognito authorisation failed\n Access Token not in response")
+            if "IdToken" not in response["AuthenticationResult"]:
+                logging.error(f"IdToken not in response: {response}")
+                return _("AWS Cognito authorisation failed\n IdToken Token not in Authentication Result")
 
-            session_token = response["AuthenticationResult"]["AccessToken"]
+            cognito_identity_token = response["AuthenticationResult"]["IdToken"]
 
-            response = cognito_client.get_user(AccessToken=session_token)
+            # Assume the IAM role associated with the Cognito Identity Pool
+            cognito_identity_client = boto3.client("cognito-identity", region_name=self.model.aws_cognito.region_name)
+            response = cognito_identity_client.get_id(
+                IdentityPoolId=self.model.aws_cognito.identity_pool_id,
+                AccountId=self.model.aws_cognito.account_id,
+                Logins={
+                    f"cognito-idp.{self.model.aws_cognito.region_name}.amazonaws.com/{self.model.aws_cognito.user_pool_id}": cognito_identity_token
+                },
+            )
 
-            logger.info(f"Cognito Authentication successful. User Details: {response}")
+            if "IdentityId" not in response:
+                logging.error(f"IdentityId not in response: {response}")
+                return _("AWS Cognito authorisation failed\n IdentityId Token not in response")
 
-            return True, None
+            identity_id = response["IdentityId"]
+
+            # Get temporary AWS credentials
+            self._aws_credentials = cognito_identity_client.get_credentials_for_identity(
+                IdentityId=identity_id,
+                Logins={
+                    f"cognito-idp.{self.model.aws_cognito.region_name}.amazonaws.com/{self.model.aws_cognito.user_pool_id}": cognito_identity_token
+                },
+            )
+
+            self._aws_expiration_datetime = self._aws_credentials["Credentials"][
+                "Expiration"
+            ]  # AWS returns timezone in datetime object
+
+            logger.info(f"AWS Authentication successful, Credentials Expiration:{self._aws_expiration_datetime}")
+
+            return self._aws_credentials
 
         except Exception as e:
             msg = _(f"AWS Authentication failed: {str(e)}")
             logging.error(msg)
-            return False, msg
+            return msg
 
     # Blocking send
     def send(self, file_paths: list[str], scp_name: str, send_contexts=None):
@@ -1627,31 +1663,48 @@ class ProjectController(AE):
             if len(file_paths) == 0:
                 raise DICOMRuntimeError(f"No DICOM files found in {patient_dir}")
 
-            # Connect to remote SCP:
-            # TODO: if self.model.export_to_AWS:
+            if self.model.export_to_AWS:
+                credentials = self.model.get_aws_credentials()
+                # Setup S3 client with AwS credentials
+                s3 = boto3.client(
+                    "s3",
+                    aws_access_key_id=credentials["Credentials"]["AccessKeyId"],
+                    aws_secret_access_key=credentials["Credentials"]["SecretKey"],
+                    aws_session_token=credentials["Credentials"]["SessionToken"],
+                )
 
-            export_association = self._connect_to_scp(dest_name, self.get_radiology_storage_contexts())
+                for dicom_file_path in file_paths:
+                    time.sleep(self._export_file_time_slice_interval)
+                    if self._abort_export:
+                        logger.error(f"_export_patient patient_id: {patient_id} aborted")
+                        return
 
-            for dicom_file_path in file_paths:
-                time.sleep(self._export_file_time_slice_interval)
-                if self._abort_export:
-                    logger.error(f"_export_patient patient_id: {patient_id} aborted")
-                    export_association.abort()
-                    while not ux_Q.empty():
-                        ux_Q.get()
-                    return
+                    object_key = f"unit_test/{dicom_file_path}"
+                    s3.upload_file(dicom_file_path, self.model.aws_cognito.s3_bucket, object_key)
 
-                dcm_response: Dataset = export_association.send_c_store(dataset=dicom_file_path)
+            else:  # DICOM Export:
 
-                if not hasattr(dcm_response, "Status"):
-                    raise TimeoutError("send_c_store timeout")
+                # Connect to remote SCP:
+                export_association = self._connect_to_scp(dest_name, self.get_radiology_storage_contexts())
 
-                if dcm_response.Status != 0:
-                    raise DICOMRuntimeError(f"{STORAGE_SERVICE_CLASS_STATUS[dcm_response.Status][1]}")
+                for dicom_file_path in file_paths:
+                    time.sleep(self._export_file_time_slice_interval)
+                    if self._abort_export:
+                        logger.error(f"_export_patient patient_id: {patient_id} aborted")
+                        export_association.abort()
+                        return
 
-                files_sent += 1
-                # TODO: notify UX in batches of 10 files sent?
-                ux_Q.put(ExportStudyResponse(patient_id, files_sent, None, False))
+                    dcm_response: Dataset = export_association.send_c_store(dataset=dicom_file_path)
+
+                    if not hasattr(dcm_response, "Status"):
+                        raise TimeoutError("send_c_store timeout")
+
+                    if dcm_response.Status != 0:
+                        raise DICOMRuntimeError(f"{STORAGE_SERVICE_CLASS_STATUS[dcm_response.Status][1]}")
+
+                    files_sent += 1
+                    # TODO: notify UX in batches of 10 files sent?
+                    ux_Q.put(ExportStudyResponse(patient_id, files_sent, None, False))
 
             # Successful export:
             ux_Q.put(ExportStudyResponse(patient_id, files_sent, None, True))
@@ -1666,6 +1719,9 @@ class ProjectController(AE):
                 export_association.release()
 
         return
+
+    def bulk_export_active(self) -> bool:
+        return self._export_futures is not None
 
     # Blocking: Manage bulk patient export using a thread pool:
     def _manage_export(self, req: ExportStudyRequest) -> None:
