@@ -7,17 +7,16 @@ import string
 import logging
 from model.project import ProjectModel
 from controller.project import DICOMNode
-from view.dicom_node_dialog import DICOMNodeDialog
-from view.aws_cognito_dialog import AWSCognitoDialog
-from view.network_timeouts_dialog import NetworkTimeoutsDialog
 from utils.translate import _
 from utils.ux_fields import str_entry
-from view.modalites_dialog import ModalitiesDialog
-from view.sop_classes_dialog import SOPClassesDialog
-from view.transfer_syntaxes_dialog import TransferSyntaxesDialog
-from view.logging_levels_dialog import LoggingLevelsDialog
 from utils.logging import set_logging_levels
-
+from view.settings.dicom_node_dialog import DICOMNodeDialog
+from view.settings.aws_cognito_dialog import AWSCognitoDialog
+from view.settings.network_timeouts_dialog import NetworkTimeoutsDialog
+from view.settings.modalites_dialog import ModalitiesDialog
+from view.settings.sop_classes_dialog import SOPClassesDialog
+from view.settings.transfer_syntaxes_dialog import TransferSyntaxesDialog
+from view.settings.logging_levels_dialog import LoggingLevelsDialog
 
 logger = logging.getLogger(__name__)
 
@@ -96,22 +95,6 @@ class SettingsDialog(tk.Toplevel):
             enabled=self.new_model,
         )
         row += 1
-
-        # self.trial_name_var = str_entry(
-        #     view=self._frame,
-        #     label=_("Trial Name:"),
-        #     initial_value=self.model.trial_name,
-        #     min_chars=min_chars,
-        #     max_chars=max_chars,
-        #     charset=string.digits + string.ascii_uppercase + " -.",
-        #     tooltipmsg=None,
-        #     row=row,
-        #     col=0,
-        #     pad=PAD,
-        #     sticky="nw",
-        #     enabled=self.new_model,
-        # )
-        # row += 1
 
         self.uidroot_var = str_entry(
             view=self._frame,

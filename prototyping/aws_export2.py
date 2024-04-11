@@ -116,19 +116,19 @@ def main():
         # print(response)
 
         # Example: Upload two files to S3
-        file_path_1 = "/Users/administrator/Desktop/aws_test_upload_1.dcm"
-        object_key = f"{s3_prefix}/1/aws_test_upload_1.dcm"
+        # file_path_1 = "/Users/administrator/Desktop/aws_test_upload_1.dcm"
+        # object_key = f"{s3_prefix}/1/aws_test_upload_1.dcm"
 
-        s3.upload_file(file_path_1, s3_bucket_name, object_key)
-        print(f"File 1 uploaded successfully to s3://{s3_bucket_name}/{object_key}")
+        # s3.upload_file(file_path_1, s3_bucket_name, object_key)
+        # print(f"File 1 uploaded successfully to s3://{s3_bucket_name}/{object_key}")
 
-        file_path_2 = "/Users/administrator/Desktop/aws_test_upload_2.dcm"
-        object_key = f"{s3_prefix}/2/aws_test_upload_2.dcm"
+        # file_path_2 = "/Users/administrator/Desktop/aws_test_upload_2.dcm"
+        # object_key = f"{s3_prefix}/2/aws_test_upload_2.dcm"
 
-        s3.upload_file(file_path_2, s3_bucket_name, object_key)
-        print(f"File 2 uploaded successfully to s3://{s3_bucket_name}/{object_key}")
+        # s3.upload_file(file_path_2, s3_bucket_name, object_key)
+        # print(f"File 2 uploaded successfully to s3://{s3_bucket_name}/{object_key}")
 
-        response = s3.list_objects(Bucket=s3_bucket_name, Prefix=s3_prefix)
+        response = s3.list_objects(Bucket=s3_bucket_name)
         if "Contents" in response:
             for obj in response["Contents"]:
                 print(obj["Key"])

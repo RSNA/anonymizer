@@ -21,7 +21,7 @@ from pydicom.encoders import (
     gdcm,
 )
 
-from view.settings_dialog import SettingsDialog
+from view.settings.settings_dialog import SettingsDialog
 from view.dashboard import Dashboard
 from view.progress_dialog import ProgressDialog
 from view.query_retrieve_import import QueryView
@@ -186,7 +186,7 @@ class App(ctk.CTk):
                 )
                 self.enable_file_menu()
                 return
-            
+
             logger.info(f"Project Model loaded successfully, version: {file_model.version}")
 
             if file_model.version != ProjectModel.current_model_version():

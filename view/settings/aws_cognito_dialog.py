@@ -176,7 +176,7 @@ class AWSCognitoDialog(tk.Toplevel):
 
         row += 1
 
-        self._export_to_aws_checkbox = ctk.CTkCheckBox(self, text=_("Export to AWS"), state="disabled")
+        self._export_to_aws_checkbox = ctk.CTkCheckBox(self, text=_("Export to AWS"))
         if self.export_to_aws:
             self._export_to_aws_checkbox.select()
 

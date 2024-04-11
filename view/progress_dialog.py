@@ -8,8 +8,9 @@ from utils.translate import _
 
 logger = logging.getLogger(__name__)
 
+
 class ProgressDialog(tk.Toplevel):
-#class ProgressDialog(ctk.CTkToplevel):
+    # class ProgressDialog(ctk.CTkToplevel):
     progress_update_interval = 300
 
     def __init__(
@@ -59,9 +60,7 @@ class ProgressDialog(tk.Toplevel):
         self._progress_label = ctk.CTkLabel(self, text=f"Process 0 of {self._maxQ}")
         self._progress_label.grid(row=2, column=0, padx=PAD, pady=(0, PAD), sticky="w")
 
-        self._cancel_button = ctk.CTkButton(
-            self, text=_("Cancel"), command=self._on_cancel
-        )
+        self._cancel_button = ctk.CTkButton(self, text=_("Cancel"), command=self._on_cancel)
         self._cancel_button.grid(
             row=3,
             column=0,
@@ -90,11 +89,8 @@ class ProgressDialog(tk.Toplevel):
         self._on_cancel()
 
     def _on_cancel(self):
-        logger.info(
-            f"_on_cancel {self._Q_to_monitor.qsize()} remain in Q, clearing Q..."
-        )
+        logger.info(f"_on_cancel {self._Q_to_monitor.qsize()} remain in Q, clearing Q...")
         # dump all items in queue to clear it
-        # TODO: #5 if this is an Import operation it is possible than unsolicited C-STORE-RQ will be lost
         while not self._Q_to_monitor.empty():
             self._Q_to_monitor.get()
         self.grab_release()

@@ -256,6 +256,7 @@ class ProjectController(AE):
         self._reset_scp_vars()
         self._aws_credentials = {}
         self._aws_expiration_datetime = None
+        self._aws_last_error = None
         self.anonymizer = AnonymizerController(model)
 
     def _reset_scp_vars(self):
@@ -501,16 +502,26 @@ class ProjectController(AE):
                 association.release()
             return False
 
+    def AWS_credentials_valid(self) -> bool:
+        # If AWS credentials are cached and expiration is less than 10 minutes away, return True
+        # else clear stale credentials and return False
+        if not self._aws_credentials:
+            return False
+        if self._aws_expiration_datetime - datetime.now(self._aws_expiration_datetime.tzinfo) < timedelta(minutes=10):
+            self._aws_credentials.clear()
+            return False
+        return True
+
+    # Blocking call to AWS to authenticate via boto library:
     def AWS_authenticate(self) -> str | Dict:
         # Authenticates AWS Cognito User and returns AWS temporary credentials
         # to use in creation of S3 client in each export thread
         # On error returns error message else returns credentials Dictionary
         # Cache credentials and return cached credentials if expiration longer than 10 mins
         logging.info(f"AWS_authenticate")
-        if self._aws_credentials and (
-            self._aws_expiration_datetime - datetime.now(self._aws_expiration_datetime.tzinfo) > timedelta(minutes=10)
-        ):
+        if self.AWS_credentials_valid():
             logger.info(f"Using cached AWS credentials, Expiration:{self._aws_expiration_datetime}")
+            self._aws_last_error = None
             return self._aws_credentials
 
         try:
@@ -584,13 +595,19 @@ class ProjectController(AE):
             ]  # AWS returns timezone in datetime object
 
             logger.info(f"AWS Authentication successful, Credentials Expiration:{self._aws_expiration_datetime}")
+            self._aws_last_error = None
 
             return self._aws_credentials
 
         except Exception as e:
             msg = _(f"AWS Authentication failed: {str(e)}")
             logging.error(msg)
+            self._aws_last_error = msg
             return msg
+
+    # Non-blocking call to AWS to authenticate via boto library:
+    def AWS_authenticate_ex(self) -> None:
+        threading.Thread(target=self.AWS_authenticate).start()
 
     # Blocking send
     def send(self, file_paths: list[str], scp_name: str, send_contexts=None):
@@ -972,7 +989,7 @@ class ProjectController(AE):
                     fr.acc_no,
                     fr.ux_Q,
                 ),
-                daemon=True,
+                daemon=True,  # daemon threads are abruptly stopped at shutdown
             ).start()
         else:
             logger.info("Find studies from search parameters...")
@@ -987,7 +1004,7 @@ class ProjectController(AE):
                     fr.modality,
                     fr.ux_Q,
                 ),
-                daemon=True,
+                daemon=True,  # daemon threads are abruptly stopped at shutdown
             ).start()
 
     # Blocking: Query remote server for study/series/instance uid hierarchy (required for iterative move):
@@ -1140,7 +1157,7 @@ class ProjectController(AE):
                 scp_name,
                 studies,
             ),
-            daemon=True,
+            daemon=True,  # daemon threads are abruptly stopped at shutdown
         ).start()
 
     def get_pending_instances(self, study: StudyUIDHierarchy) -> List[InstanceUIDHierarchy]:
@@ -1630,7 +1647,7 @@ class ProjectController(AE):
         threading.Thread(
             target=self._manage_move,
             args=(mr,),
-            daemon=True,
+            daemon=True,  # daemon threads are abruptly stopped at shutdown
         ).start()
 
     def abort_move(self):
@@ -1658,13 +1675,21 @@ class ProjectController(AE):
 
             file_paths = []
             for root, _, files in os.walk(patient_dir):
+                # TODO: Check if already on server:
+                # if AWS check ListObjects dict
+                # if DICOM server for each Study do getStudyUIDHierarchy,
+                #  if instance count match skip export study
+                #  else check each instance file against hierarchy
                 file_paths.extend(os.path.join(root, file) for file in files if file.endswith(".dcm"))
 
             if len(file_paths) == 0:
                 raise DICOMRuntimeError(f"No DICOM files found in {patient_dir}")
 
             if self.model.export_to_AWS:
-                credentials = self.model.get_aws_credentials()
+                credentials = self.AWS_authenticate()
+                if type(credentials) is str:
+                    raise DICOMRuntimeError(f"AWS Autentication Error: {credentials}")
+
                 # Setup S3 client with AwS credentials
                 s3 = boto3.client(
                     "s3",
@@ -1679,8 +1704,15 @@ class ProjectController(AE):
                         logger.error(f"_export_patient patient_id: {patient_id} aborted")
                         return
 
-                    object_key = f"unit_test/{dicom_file_path}"
+                    logger.info(f"Upload to S3: {dicom_file_path}")
+                    object_key = (
+                        f"{self.model.project_name}/{Path(dicom_file_path).relative_to(self.model.storage_dir)}"
+                    )
                     s3.upload_file(dicom_file_path, self.model.aws_cognito.s3_bucket, object_key)
+                    logger.info(f"Uploaded to S3: {object_key}")
+
+                    files_sent += 1
+                    ux_Q.put(ExportStudyResponse(patient_id, files_sent, None, False))
 
             else:  # DICOM Export:
 
@@ -1703,7 +1735,6 @@ class ProjectController(AE):
                         raise DICOMRuntimeError(f"{STORAGE_SERVICE_CLASS_STATUS[dcm_response.Status][1]}")
 
                     files_sent += 1
-                    # TODO: notify UX in batches of 10 files sent?
                     ux_Q.put(ExportStudyResponse(patient_id, files_sent, None, False))
 
             # Successful export:
@@ -1754,7 +1785,7 @@ class ProjectController(AE):
         self._export_patients_thread = threading.Thread(
             target=self._manage_export,
             args=(er,),
-            daemon=True,
+            daemon=True,  # daemon threads are abruptly stopped at shutdown
         )
         self._export_patients_thread.start()
 
