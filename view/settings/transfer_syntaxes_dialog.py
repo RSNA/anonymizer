@@ -21,16 +21,16 @@ class TransferSyntaxesDialog(tk.Toplevel):
         "1.2.840.10008.1.2.1": "Explicit VR Little Endian",
         "1.2.840.10008.1.2.1.99": "Deflated Explicit VR Little Endian",
         "1.2.840.10008.1.2.2": "Explicit VR Big Endian",
-        # "1.2.840.10008.1.2.4.50": "JPEG Baseline",
-        # "1.2.840.10008.1.2.4.51": "JPEG Extended",
-        # "1.2.840.10008.1.2.4.57": "JPEG Lossless P14",
-        # "1.2.840.10008.1.2.4.70": "JPEG Lossless",
-        # "1.2.840.10008.1.2.4.80": "JPEG-LS Lossless",
-        # "1.2.840.10008.1.2.4.81": "JPEG-LS Lossy",
-        # "1.2.840.10008.1.2.4.90": "JPEG 2000 Lossless",
-        # "1.2.840.10008.1.2.4.91": "JPEG 2000",
-        # "1.2.840.10008.1.2.4.92": "JPEG 2000 Multi-Component Lossless",
-        # "1.2.840.10008.1.2.4.93": "JPEG 2000 Multi-Component",
+        "1.2.840.10008.1.2.4.50": "JPEG Baseline",
+        "1.2.840.10008.1.2.4.51": "JPEG Extended",
+        "1.2.840.10008.1.2.4.57": "JPEG Lossless P14",
+        "1.2.840.10008.1.2.4.70": "JPEG Lossless",
+        "1.2.840.10008.1.2.4.80": "JPEG-LS Lossless",
+        "1.2.840.10008.1.2.4.81": "JPEG-LS Lossy",
+        "1.2.840.10008.1.2.4.90": "JPEG 2000 Lossless",
+        "1.2.840.10008.1.2.4.91": "JPEG 2000",
+        "1.2.840.10008.1.2.4.92": "JPEG 2000 Multi-Component Lossless",
+        "1.2.840.10008.1.2.4.93": "JPEG 2000 Multi-Component",
         # "1.2.840.10008.1.2.4.94": "JPIP Referenced",
         # "1.2.840.10008.1.2.4.95": "JPIP Referenced Deflate",
         # "1.2.840.10008.1.2.4.100": "MPEG2 Main Profile / Main Level",
@@ -110,9 +110,7 @@ class TransferSyntaxesDialog(tk.Toplevel):
                     tags=tag,
                 )
             except Exception as e:
-                logger.error(
-                    f"Exception: {e}"
-                )  # _tkinter.TclError: Item {iid} already exists
+                logger.error(f"Exception: {e}")  # _tkinter.TclError: Item {iid} already exists
 
         self._button_frame = ctk.CTkFrame(self)
         self._button_frame.grid(row=1, column=0, sticky="we")
@@ -132,12 +130,8 @@ class TransferSyntaxesDialog(tk.Toplevel):
             text=_("Default"),
             command=self._default_selection_button_pressed,
         )
-        self._default_selection_button.grid(
-            row=0, column=1, padx=PAD, pady=PAD, sticky="w"
-        )
-        self._ok_button = ctk.CTkButton(
-            self._button_frame, width=100, text=_("Ok"), command=self._ok_event
-        )
+        self._default_selection_button.grid(row=0, column=1, padx=PAD, pady=PAD, sticky="w")
+        self._ok_button = ctk.CTkButton(self._button_frame, width=100, text=_("Ok"), command=self._ok_event)
         self._ok_button.grid(
             row=0,
             column=2,

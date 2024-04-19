@@ -1,5 +1,5 @@
 import os
-from typing import cast, Dict, Optional, List, Tuple
+from typing import cast, Dict, Optional, List, Tuple, Any
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from utils.translate import _
 from utils.logging import set_logging_levels
 from pydicom import Dataset
+from pydicom.uid import UID
 from pydicom.dataset import FileMetaDataset
 from pynetdicom.association import Association
 from pynetdicom.ae import ApplicationEntity as AE
@@ -47,6 +48,7 @@ from model.project import (
     DICOMNode,
     NetworkTimeouts,
     DICOMRuntimeError,
+    AuthenticationError,
 )
 from .anonymizer import AnonymizerController
 from __version__ import __version__
@@ -55,7 +57,7 @@ logger = logging.getLogger(__name__)
 
 
 class InstanceUIDHierarchy:
-    def __init__(self, uid: str, number: int = None):
+    def __init__(self, uid: str, number: int | None = None):
         self.uid = uid
         self.number = number
 
@@ -67,9 +69,9 @@ class SeriesUIDHierarchy:
     def __init__(
         self,
         uid: str,
-        number: int = None,
-        modality: str = None,
-        description: str = None,  # TODO: add BodyPartExamined?
+        number: int | None = None,
+        modality: str | None = None,
+        description: str | None = None,  # TODO: add BodyPartExamined?
         instances: Dict[str, InstanceUIDHierarchy] = {},
     ):
         self.uid = uid
@@ -117,15 +119,15 @@ class SeriesUIDHierarchy:
 
 
 class StudyUIDHierarchy:
-    def __init__(self, uid: str, series: Dict[str, SeriesUIDHierarchy] = None):
+    def __init__(self, uid: str, series: Dict[str, SeriesUIDHierarchy] | None = None):
         self.uid = uid
-        self.last_error_msg = None  # set by GetStudyHierarchy() or Move Operation
+        self.last_error_msg: str | None = None  # set by GetStudyHierarchy() or Move Operation
         self.series = series if series is not None else {}
         # from send_c_move status response:
-        self.completed_sub_ops = 0
-        self.failed_sub_ops = 0
-        self.remaining_sub_ops = 0
-        self.warning_sub_ops = 0
+        self.completed_sub_ops: int = 0
+        self.failed_sub_ops: int = 0
+        self.remaining_sub_ops: int = 0
+        self.warning_sub_ops: int = 0
 
     def __str__(self):
         series_str = "{}"
@@ -140,6 +142,12 @@ class StudyUIDHierarchy:
         for series_obj in self.series.values():
             count += len(series_obj.instances)
         return count
+
+    def get_instances(self) -> List[InstanceUIDHierarchy]:
+        instances = []
+        for series_obj in self.series.values():
+            instances.extend(series_obj.instances.values())
+        return instances
 
     def update_move_stats(self, status: Dataset):
         if hasattr(status, "NumberOfRemainingSuboperations"):
@@ -198,9 +206,12 @@ class MoveStudiesRequest:
 
 
 class ProjectController(AE):
+
+    PROJECT_MODEL_FILENAME = "project.pkl"
+
     # TODO: GET RSNA ROOT ORGANIZATION UID
     RSNA_ROOT_ORG_UID = "1.2.826.0.1.3680043"
-    IMPLEMENTATION_CLASS_UID = RSNA_ROOT_ORG_UID  # UI: (0002,0012)
+    IMPLEMENTATION_CLASS_UID = UID(RSNA_ROOT_ORG_UID)  # UI: (0002,0012)
     IMPLEMENTATION_VERSION_NAME = "RSNA DICOM Anonymizer" + " " + __version__
     # DICOM service class uids:
     _VERIFICATION_CLASS = "1.2.840.10008.1.1"  # Echo
@@ -242,22 +253,26 @@ class ProjectController(AE):
                 delattr(ds, field)
 
     def __init__(self, model: ProjectModel):
-        super().__init__(model.scu.aet)
+        super().__init__(ae_title=model.scu.aet)
         self.model = model
-        set_logging_levels(model.logging_levels)
-        # Make sure storage directory exists:
-        os.makedirs(self.model.storage_dir, exist_ok=True)
-        self.set_dicom_timeouts(model.network_timeouts)
-        # TODO: maintain list of allowed calling AET's and use: def require_calling_aet(self, ae_titles: List[str]) -> None:
-        self.require_called_aet = True
-        # self.require_calling_aet = ["MDEDEV"]
+        set_logging_levels(levels=model.logging_levels)
+        # Ensure storage, public and private directories exist:
+        Path(self.model.storage_dir, self.model.PRIVATE_DIR).mkdir(exist_ok=True)
+        Path(self.model.storage_dir, self.model.PUBLIC_DIR).mkdir(exist_ok=True)
+        self.set_dicom_timeouts(timeouts=model.network_timeouts)
+        # remote clients must provide Anonymizer's AE Title
+        self._require_called_aet = True
+        # self._require_calling_aet = ["<list of allowed calling AETs>"] # Default: Allow any calling AE Title
         self.set_radiology_storage_contexts()
         self.set_verification_context()
         self._reset_scp_vars()
+
+        # Dynamic AWS vars:
         self._aws_credentials = {}
-        self._aws_expiration_datetime = None
-        self._aws_last_error = None
-        self.anonymizer = AnonymizerController(model)
+        self._aws_expiration_datetime: datetime | None = None
+        self._aws_user_directory: str | None = None
+        self._aws_last_error: str | None = None
+        self.anonymizer = AnonymizerController(project_model=model)
 
     def _reset_scp_vars(self):
         self._abort_query = False
@@ -281,17 +296,18 @@ class ProjectController(AE):
     def __str__(self):
         return super().__str__() + f"\n{self.model}" + f"\n{self.anonymizer.model}"
 
-    def save_model(self, dest_dir: str = None) -> bool:
+    def save_model(self, dest_dir: Path | None = None) -> bool:
         if dest_dir is None:
             dest_dir = self.model.storage_dir
-        project_pkl_path = Path(dest_dir, ProjectModel.default_project_filename())
-        with open(project_pkl_path, "wb") as pkl_file:
-            pickle.dump(self.model, pkl_file)
-        logger.info(f"Model saved to: {project_pkl_path}")
-
-    @property
-    def storage_dir(self):
-        return self.model.storage_dir
+        project_pkl_path = Path(dest_dir, self.PROJECT_MODEL_FILENAME)
+        try:
+            with open(project_pkl_path, "wb") as pkl_file:
+                pickle.dump(self.model, pkl_file)
+            logger.info(f"Model saved to: {project_pkl_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Fatal Error saving ProjectModel to {project_pkl_path}: {e}")
+            return False
 
     # Value of None means no timeout
     def set_dicom_timeouts(self, timeouts: NetworkTimeouts):
@@ -411,7 +427,7 @@ class ProjectController(AE):
 
         logger.info(f"=>{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}")
 
-        self.anonymizer.anonymize_dataset_and_store(remote_scu, ds, self.storage_dir)
+        self.anonymizer.anonymize_dataset_and_store(remote_scu, ds, self.model.images_dir())
         return C_SUCCESS
 
     def start_scp(self) -> None:
@@ -424,7 +440,7 @@ class ProjectController(AE):
 
         handlers = [(EVT_C_ECHO, self._handle_echo), (EVT_C_STORE, self._handle_store)]
         self._reset_scp_vars()
-        self.ae_title = self.model.scu.aet
+        self._ae_title = self.model.scu.aet
 
         try:
             self.scp = self.start_server(
@@ -505,7 +521,7 @@ class ProjectController(AE):
     def AWS_credentials_valid(self) -> bool:
         # If AWS credentials are cached and expiration is less than 10 minutes away, return True
         # else clear stale credentials and return False
-        if not self._aws_credentials:
+        if not self._aws_credentials or self._aws_expiration_datetime is None:
             return False
         if self._aws_expiration_datetime - datetime.now(self._aws_expiration_datetime.tzinfo) < timedelta(minutes=10):
             self._aws_credentials.clear()
@@ -513,7 +529,7 @@ class ProjectController(AE):
         return True
 
     # Blocking call to AWS to authenticate via boto library:
-    def AWS_authenticate(self) -> str | Dict:
+    def AWS_authenticate(self) -> Dict[str, Dict[str, Any]]:
         # Authenticates AWS Cognito User and returns AWS temporary credentials
         # to use in creation of S3 client in each export thread
         # On error returns error message else returns credentials Dictionary
@@ -552,19 +568,46 @@ class ProjectController(AE):
                 )
 
             if "ChallengeName" in response:
-                msg = _(f"Unexpected Authorisation Challenge : {response['ChallengeName']}")
-                logging.error(msg)
-                return msg
+                raise AuthenticationError(_(f"Unexpected Authorisation Challenge : {response['ChallengeName']}"))
 
             if "AuthenticationResult" not in response:
                 logging.error(f"AuthenticationResult not in response: {response}")
-                return _("AWS Cognito IDP authorisation failed\n Authentication Result & Access Token not in response")
+                raise AuthenticationError(
+                    _("AWS Cognito IDP authorisation failed\n\nAuthentication Result & Access Token not in response")
+                )
 
             if "IdToken" not in response["AuthenticationResult"]:
                 logging.error(f"IdToken not in response: {response}")
-                return _("AWS Cognito authorisation failed\n IdToken Token not in Authentication Result")
+                raise AuthenticationError(
+                    _("AWS Cognito authorisation failed\n\nIdToken Token not in Authentication Result")
+                )
+
+            if "AccessToken" not in response["AuthenticationResult"]:
+                logging.error(f"AccessToken not in response: {response}")
+                raise AuthenticationError(
+                    _("AWS Cognito authorisation failed\n\nAccessToken Token not in Authentication Result")
+                )
 
             cognito_identity_token = response["AuthenticationResult"]["IdToken"]
+
+            # Get the User details and extract the user's sub-directory from User Attributes['sub'] (to follow private prefix)
+            response = cognito_idp_client.get_user(AccessToken=response["AuthenticationResult"]["AccessToken"])
+
+            if "UserAttributes" not in response:
+                logging.error(f"UserAttributes not in response: {response}")
+                raise AuthenticationError(
+                    _("AWS Cognito Get User Attributes failed\n\nUserAttributes Token not in get_user response")
+                )
+
+            user_attribute_1 = response["UserAttributes"][0]
+
+            if not user_attribute_1 or "Name" not in user_attribute_1 or user_attribute_1["Name"] != "sub":
+                logging.error(f"User Attribute 'sub' not in response: {response}")
+                raise AuthenticationError(
+                    _("AWS Cognito Get User Attributes failed\n\nUser Attribute 'sub' not in get_user response")
+                )
+
+            self._aws_user_directory = user_attribute_1["Value"]
 
             # Assume the IAM role associated with the Cognito Identity Pool
             cognito_identity_client = boto3.client("cognito-identity", region_name=self.model.aws_cognito.region_name)
@@ -578,7 +621,7 @@ class ProjectController(AE):
 
             if "IdentityId" not in response:
                 logging.error(f"IdentityId not in response: {response}")
-                return _("AWS Cognito authorisation failed\n IdentityId Token not in response")
+                raise AuthenticationError(_("AWS Cognito authorisation failed\n IdentityId Token not in response"))
 
             identity_id = response["IdentityId"]
 
@@ -600,10 +643,9 @@ class ProjectController(AE):
             return self._aws_credentials
 
         except Exception as e:
-            msg = _(f"AWS Authentication failed: {str(e)}")
-            logging.error(msg)
-            self._aws_last_error = msg
-            return msg
+            # Latch error message for UX:
+            self._aws_last_error = str(e)
+            raise e
 
     # Non-blocking call to AWS to authenticate via boto library:
     def AWS_authenticate_ex(self) -> None:
@@ -641,7 +683,7 @@ class ProjectController(AE):
         query_association: Association,
         ds: Dataset,
         ux_Q=None,
-        required_attributes: list[str] = None,
+        required_attributes: list[str] | None = None,
     ) -> list[Dataset]:
         results = []
         error_msg = ""
@@ -708,7 +750,7 @@ class ProjectController(AE):
                 ds = Dataset()
                 ds.Status = C_FAILURE
                 ds.ErrorComment = error_msg
-                ux_Q.put(FindStudyResponse(ds, None, None))
+                ux_Q.put(FindStudyResponse(ds, None))
 
         finally:
             if query_association:
@@ -1012,8 +1054,14 @@ class ProjectController(AE):
         assert scp_name in self.model.remote_scps
         scp = self.model.remote_scps[scp_name]
         study_uid_hierarchy = StudyUIDHierarchy(uid=study_uid, series={})
-        query_association: Association = None
         error_msg = None
+
+        if self.model.export_to_AWS:
+            # TODO: s3.ListObjects for directory of study_uid
+            return "NOT IMPLEMENTED", study_uid_hierarchy
+
+        query_association: Association | None = None
+
         try:
             # 1. Connect to SCP:
             query_association = self._connect_to_scp(scp_name, self.get_study_root_find_contexts())
@@ -1161,7 +1209,7 @@ class ProjectController(AE):
         ).start()
 
     def get_pending_instances(self, study: StudyUIDHierarchy) -> List[InstanceUIDHierarchy]:
-        pending_instances = []
+        pending_instances: List[InstanceUIDHierarchy] = []
         for series in study.series.values():
             for instance in series.instances.values():
                 if not self.anonymizer.model.uid_received(instance.uid):
@@ -1593,11 +1641,17 @@ class ProjectController(AE):
         logger.info(f"Move Operation: {move_op.__name__}")
 
         with self._move_executor as executor:
+
             for study in req.studies:
 
-                # If ANY Instances have already been received for study (eg. post timeout retry)
-                # set Move Operation to Instance Level
-                if self.get_number_of_pending_instances(study) < study.get_number_of_instances():
+                pending_instances = self.get_number_of_pending_instances(study)
+                if not pending_instances:
+                    logger.warning(f"Study[{study.uid}] has no pending instances, skipping")
+                    continue
+
+                # If ANY Instances have already been received for study
+                # Set Move Operation to Instance Level
+                if pending_instances < study.get_number_of_instances():
                     move_op = self._move_study_at_instance_level
 
                 future = executor.submit(
@@ -1606,15 +1660,17 @@ class ProjectController(AE):
                     req.dest_scp_ae,
                     study,
                 )
-                self._move_futures.append((future, move_op))
+                self._move_futures.append((future, move_op, study))
 
             logger.info(f"Move Futures: {len(self._move_futures)}")
 
-            for future, move_op in self._move_futures:
+            for future, move_op, study in self._move_futures:
+
                 try:
                     error_msg = future.result()  # This will raise any exceptions that _move_study did not catch:
-                    # Auto DOWN LEVEL Study Move operation:
-                    if error_msg:
+
+                    # Auto DOWN LEVEL Study Move operation on Timeout:
+                    if error_msg and "Timeout" in error_msg:
                         logger.warning(f"Study[{study.uid}] Move Future Error: {error_msg}")
                         next_move_op = None
 
@@ -1630,7 +1686,7 @@ class ProjectController(AE):
                                 req.dest_scp_ae,
                                 study,
                             )
-                            self._move_futures.append((new_future, next_move_op))
+                            self._move_futures.append((new_future, next_move_op, study))
                             logger.warning(f"Study[{study.uid}] Move Operation DOWN LEVEL to: {next_move_op.__name__}")
 
                 except Exception as e:
@@ -1668,27 +1724,49 @@ class ProjectController(AE):
         files_sent = 0
         try:
             # Load DICOM files to send from active local storage directory for this patient:
-            patient_dir = Path(self.model.storage_dir, patient_id)
+            patient_dir = Path(self.model.images_dir(), patient_id)
 
             if not patient_dir.exists():
                 raise ValueError(f"Selected directory {patient_dir} does not exist")
 
+            # Get all the DICOM files for this patient:
             file_paths = []
             for root, _, files in os.walk(patient_dir):
-                # TODO: Check if already on server:
-                # if AWS check ListObjects dict
-                # if DICOM server for each Study do getStudyUIDHierarchy,
-                #  if instance count match skip export study
-                #  else check each instance file against hierarchy
                 file_paths.extend(os.path.join(root, file) for file in files if file.endswith(".dcm"))
 
-            if len(file_paths) == 0:
-                raise DICOMRuntimeError(f"No DICOM files found in {patient_dir}")
+            # Convert to dictionary with instance UIDs as keys:
+            export_instance_paths = {Path(file_path).stem: file_path for file_path in file_paths}
 
+            # Iterate through Study sub-directories for this patient
+            # If a study instance is on the remote server, remove from export_instance_paths dict
+            for study_uid in os.listdir(patient_dir):
+                time.sleep(self._export_file_time_slice_interval)
+                if self._abort_export:
+                    logger.error(f"_export_patient patient_id: {patient_id} aborted")
+                    return
+
+                study_path = os.path.join(patient_dir, study_uid)
+                if not os.path.isdir(study_path):
+                    continue
+
+                # Remove all instances which are already on destination from the export list:
+                # Get Study UID Hierarchy:
+                _, study_hierarchy = self.get_study_uid_hierarchy(dest_name, study_uid)
+                for instance in study_hierarchy.get_instances():
+                    if instance.uid in export_instance_paths:
+                        del export_instance_paths[instance.uid]
+
+            # If NO files to export for this patient, indicate successful export to UX:
+            if len(export_instance_paths) == 0:
+                logger.info(f"All studies already exported to {dest_name} for patient: {patient_id}")
+                ux_Q.put(ExportStudyResponse(patient_id, 0, None, True))
+                return
+
+            # EXPORT Files:
             if self.model.export_to_AWS:
-                credentials = self.AWS_authenticate()
-                if type(credentials) is str:
-                    raise DICOMRuntimeError(f"AWS Autentication Error: {credentials}")
+                credentials = self.AWS_authenticate()  # Raise AuthenticationError on error
+                if not credentials or self._aws_user_directory is None:
+                    raise ValueError("AWS Cognito authentication failed")
 
                 # Setup S3 client with AwS credentials
                 s3 = boto3.client(
@@ -1698,16 +1776,21 @@ class ProjectController(AE):
                     aws_session_token=credentials["Credentials"]["SessionToken"],
                 )
 
-                for dicom_file_path in file_paths:
+                for dicom_file_path in export_instance_paths.values():
                     time.sleep(self._export_file_time_slice_interval)
                     if self._abort_export:
                         logger.error(f"_export_patient patient_id: {patient_id} aborted")
                         return
 
                     logger.info(f"Upload to S3: {dicom_file_path}")
-                    object_key = (
-                        f"{self.model.project_name}/{Path(dicom_file_path).relative_to(self.model.storage_dir)}"
-                    )
+
+                    object_key = Path(
+                        self.model.aws_cognito.s3_prefix,
+                        self._aws_user_directory,
+                        self.model.project_name,
+                        Path(dicom_file_path).relative_to(self.model.images_dir()),
+                    ).as_posix()
+
                     s3.upload_file(dicom_file_path, self.model.aws_cognito.s3_bucket, object_key)
                     logger.info(f"Uploaded to S3: {object_key}")
 
@@ -1719,7 +1802,7 @@ class ProjectController(AE):
                 # Connect to remote SCP:
                 export_association = self._connect_to_scp(dest_name, self.get_radiology_storage_contexts())
 
-                for dicom_file_path in file_paths:
+                for dicom_file_path in export_instance_paths.values():
                     time.sleep(self._export_file_time_slice_interval)
                     if self._abort_export:
                         logger.error(f"_export_patient patient_id: {patient_id} aborted")
@@ -1840,8 +1923,9 @@ class ProjectController(AE):
                     )
                 )
 
+        os.makedirs(self.model.phi_export_dir(), exist_ok=True)
         filename = f"{self.model.site_id}_{self.model.project_name}_PHI_{len(phi_data)}.csv"
-        phi_csv_path = Path(self.model.storage_dir, filename)
+        phi_csv_path = Path(self.model.phi_export_dir(), filename)
 
         try:
             with open(phi_csv_path, "w", newline="") as csv_file:

@@ -24,6 +24,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s:%(funcName)s[%(lineno)s]: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     level=logging.DEBUG,
+    force=True,
 )
 
 logger = logging.getLogger(__name__)
@@ -74,9 +75,9 @@ def controller(temp_dir):
 
     # Start PACS Simulator:
     assert pacs_simulator_scp.start(
-        PACSSimulatorSCP,
-        os.path.join(temp_dir, PACSSimulatorSCP.aet),
-        [LocalStorageSCP],  # one move destination
+        addr=PACSSimulatorSCP,
+        storage_dir=os.path.join(temp_dir, PACSSimulatorSCP.aet),
+        known_nodes=[LocalStorageSCP],  # one move destination
     )
     assert pacs_simulator_scp.server_running()
 

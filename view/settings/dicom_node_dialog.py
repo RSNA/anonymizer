@@ -20,8 +20,9 @@ from utils.ux_fields import (
 
 logger = logging.getLogger(__name__)
 
+
 class DICOMNodeDialog(tk.Toplevel):
-#class DICOMNodeDialog(ctk.CTkToplevel):
+    # class DICOMNodeDialog(ctk.CTkToplevel):
     def __init__(
         self,
         parent,
@@ -45,6 +46,9 @@ class DICOMNodeDialog(tk.Toplevel):
         char_width_px = ctk.CTkFont().measure("A")
         logger.debug(f"Font Character Width in pixels: ±{char_width_px}")
 
+        self._frame = ctk.CTkFrame(self)
+        self._frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nswe")
+
         self.columnconfigure(1, weight=1)
         self.rowconfigure(3, weight=1)
 
@@ -58,31 +62,26 @@ class DICOMNodeDialog(tk.Toplevel):
                 local_ips = [_("No local IP addresses found.")]
                 logger.error(local_ips[0])
 
-            scp_label = ctk.CTkLabel(self, text=_("Address:"))
+            scp_label = ctk.CTkLabel(self._frame, text=_("Address:"))
             scp_label.grid(row=0, column=0, padx=PAD, pady=(PAD, 0), sticky="nw")
 
-            self.ip_var = ctk.StringVar(self, value=self.address.ip)
+            self.ip_var = ctk.StringVar(self._frame, value=self.address.ip)
             local_ips_optionmenu = ctk.CTkOptionMenu(
-                self,
+                self._frame,
                 dynamic_resizing=False,
                 values=local_ips,
                 variable=self.ip_var,
             )
-            local_ips_optionmenu.grid(
-                row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw"
-            )
+            local_ips_optionmenu.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw")
             local_ips_optionmenu.focus_set()
         else:
             self.domain_name_var = str_entry(
-                view=self,
+                view=self._frame,
                 label=_("Domain Name:"),
                 initial_value="",
                 min_chars=3,
                 max_chars=30,
-                charset=string.digits
-                + ".-"
-                + string.ascii_lowercase
-                + string.ascii_uppercase,
+                charset=string.digits + ".-" + string.ascii_lowercase + string.ascii_uppercase,
                 tooltipmsg=None,
                 row=row,
                 col=0,
@@ -107,7 +106,7 @@ class DICOMNodeDialog(tk.Toplevel):
             row += 1
 
             self.ip_var = str_entry(
-                view=self,
+                view=self._frame,
                 label=_("IP Address:"),
                 initial_value=self.address.ip,
                 min_chars=ip_min_chars,
@@ -123,7 +122,7 @@ class DICOMNodeDialog(tk.Toplevel):
         row += 1
 
         self.port_var = int_entry(
-            view=self,
+            view=self._frame,
             label=_("Port:"),
             initial_value=self.address.port,
             min=ip_port_min,
@@ -138,7 +137,7 @@ class DICOMNodeDialog(tk.Toplevel):
         row += 1
 
         self.aet_var = str_entry(
-            view=self,
+            view=self._frame,
             label=_("AE Title:"),
             initial_value=self.address.aet,
             min_chars=aet_min_chars,
@@ -153,9 +152,7 @@ class DICOMNodeDialog(tk.Toplevel):
 
         row += 1
 
-        self._ok_button = ctk.CTkButton(
-            self, width=100, text=_("Ok"), command=self._ok_event
-        )
+        self._ok_button = ctk.CTkButton(self._frame, width=100, text=_("Ok"), command=self._ok_event)
         self._ok_button.grid(
             row=row,
             column=1,

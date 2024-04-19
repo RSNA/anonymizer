@@ -2,6 +2,7 @@ import customtkinter as ctk
 from PIL import Image
 from utils.translate import _
 
+
 class WelcomeView(ctk.CTkFrame):
     PAD = 10
     WELCOME_TITLE = _("Welcome")
@@ -49,14 +50,15 @@ class WelcomeView(ctk.CTkFrame):
 
         # Welcome Text:
         text_box_welcome = ctk.CTkTextbox(
-            master=self, 
-            width=self.TEXT_BOX_WIDTH, 
-            height=self.TEXT_BOX_HEIGHT, 
-            wrap="word", 
-            fg_color=self._fg_color, 
-            font=self.WELCOME_TEXT_FONT, 
-            activate_scrollbars=False,)  
-        
+            master=self,
+            width=self.TEXT_BOX_WIDTH,
+            height=self.TEXT_BOX_HEIGHT,
+            wrap="word",
+            fg_color=tuple[str, str](self._fg_color),
+            font=self.WELCOME_TEXT_FONT,
+            activate_scrollbars=False,
+        )
+
         text_box_welcome.insert("0.0", text=self.WELCOME_TEXT)
         text_box_welcome.configure(state="disabled")
         text_box_welcome.grid(row=2, column=0, padx=self.PAD, pady=self.PAD, sticky="nswe")

@@ -43,13 +43,16 @@ class AWSCognitoDialog(tk.Toplevel):
         char_width_px = ctk.CTkFont().measure("A")
         logger.info(f"Font Character Width in pixels: ±{char_width_px}")
 
+        self._frame = ctk.CTkFrame(self)
+        self._frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nswe")
+
         self.columnconfigure(1, weight=1)
         self.rowconfigure(3, weight=1)
 
         row = 0
 
         self.account_id_var = str_entry(
-            view=self,
+            view=self._frame,
             label=_("AWS Account ID:"),
             initial_value=self.aws_cognito.account_id,
             min_chars=1,
@@ -65,7 +68,7 @@ class AWSCognitoDialog(tk.Toplevel):
         row += 1
 
         self.region_name_var = str_entry(
-            view=self,
+            view=self._frame,
             label=_("Region Name:"),
             initial_value=self.aws_cognito.region_name,
             min_chars=5,
@@ -81,7 +84,7 @@ class AWSCognitoDialog(tk.Toplevel):
         row += 1
 
         self.app_client_id_var = str_entry(
-            view=self,
+            view=self._frame,
             label=_("Cognito Application Client ID:"),
             initial_value=self.aws_cognito.app_client_id,
             min_chars=5,
@@ -97,7 +100,7 @@ class AWSCognitoDialog(tk.Toplevel):
         row += 1
 
         self.user_pool_id_var = str_entry(
-            view=self,
+            view=self._frame,
             label=_("Cognito User Pool ID:"),
             initial_value=self.aws_cognito.user_pool_id,
             min_chars=5,
@@ -113,7 +116,7 @@ class AWSCognitoDialog(tk.Toplevel):
         row += 1
 
         self.identity_pool_id_var = str_entry(
-            view=self,
+            view=self._frame,
             label=_("Cognito Identity Pool ID:"),
             initial_value=self.aws_cognito.identity_pool_id,
             min_chars=5,
@@ -129,7 +132,7 @@ class AWSCognitoDialog(tk.Toplevel):
         row += 1
 
         self.s3_bucket_var = str_entry(
-            view=self,
+            view=self._frame,
             label=_("S3 Bucket:"),
             initial_value=self.aws_cognito.s3_bucket,
             min_chars=5,
@@ -144,8 +147,26 @@ class AWSCognitoDialog(tk.Toplevel):
 
         row += 1
 
+        self.s3_prefix_var = str_entry(
+            view=self._frame,
+            label=_("S3 Prefix:"),
+            initial_value=self.aws_cognito.s3_prefix,
+            min_chars=1,
+            max_chars=64,
+            charset=string.digits + "-. ^%$@!~+*&" + string.ascii_letters,
+            tooltipmsg=None,
+            row=row,
+            col=0,
+            pad=PAD,
+            sticky="nw",
+        )
+
+        # TODO: included check box for private user sub-directory via get_user UserAttributes = "sub" value
+
+        row += 1
+
         self.username_var = str_entry(
-            view=self,
+            view=self._frame,
             label=_("Username:"),
             initial_value=self.aws_cognito.username,
             min_chars=3,
@@ -161,7 +182,7 @@ class AWSCognitoDialog(tk.Toplevel):
         row += 1
 
         self.password_var = str_entry(
-            view=self,
+            view=self._frame,
             label=_("Password:"),
             initial_value=self.aws_cognito.password,
             min_chars=6,
@@ -176,7 +197,7 @@ class AWSCognitoDialog(tk.Toplevel):
 
         row += 1
 
-        self._export_to_aws_checkbox = ctk.CTkCheckBox(self, text=_("Export to AWS"))
+        self._export_to_aws_checkbox = ctk.CTkCheckBox(self._frame, text=_("Export to AWS"))
         if self.export_to_aws:
             self._export_to_aws_checkbox.select()
 
@@ -188,7 +209,7 @@ class AWSCognitoDialog(tk.Toplevel):
             sticky="w",
         )
 
-        self._ok_button = ctk.CTkButton(self, width=100, text=_("Ok"), command=self._ok_event)
+        self._ok_button = ctk.CTkButton(self._frame, width=100, text=_("Ok"), command=self._ok_event)
         self._ok_button.grid(
             row=row,
             column=1,
@@ -199,7 +220,7 @@ class AWSCognitoDialog(tk.Toplevel):
 
     def _enter_keypress(self, event):
         logger.info(f"_enter_pressed")
-        self.__ok_event()
+        self._ok_event()
 
     def _ok_event(self, event=None):
         self._user_input = (
@@ -211,6 +232,7 @@ class AWSCognitoDialog(tk.Toplevel):
                 self.user_pool_id_var.get(),
                 self.identity_pool_id_var.get(),
                 self.s3_bucket_var.get(),
+                self.s3_prefix_var.get(),
                 self.username_var.get(),
                 self.password_var.get(),
             ),

@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import boto3
 from botocore.exceptions import NoCredentialsError
 from controller.project import ProjectController
@@ -24,7 +25,15 @@ def test_send_1_dicomfile_to_AWS_S3(temp_dir: str, controller: ProjectController
             aws_session_token=credentials["Credentials"]["SessionToken"],
         )
 
-        object_key = f"unit_test/{ct_small_filename}"
+        assert controller._aws_user_directory
+
+        object_key = Path(
+            controller.model.aws_cognito.s3_prefix,
+            controller._aws_user_directory,
+            controller.model.project_name,
+            f"{ct_small_filename}",
+        ).as_posix()
+
         s3.upload_file(dcm_file_path, controller.model.aws_cognito.s3_bucket, object_key)
 
     except NoCredentialsError:

@@ -3,8 +3,8 @@ from datetime import datetime
 import logging
 from queue import Queue, Empty, Full
 import tkinter as tk
-import customtkinter as ctk
 from tkinter import ttk, messagebox
+import customtkinter as ctk
 from model.project import ProjectModel
 from controller.project import (
     ProjectController,
@@ -13,7 +13,7 @@ from controller.project import (
 )
 from utils.translate import _
 from utils.storage import count_studies_series_images
-
+from view.dashboard import Dashboard
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +39,12 @@ class ExportView(tk.Toplevel):
 
     def __init__(
         self,
-        parent,
+        parent: Dashboard,
         project_controller: ProjectController,
         title: str = _(f"Export Studies"),
     ):
         super().__init__(master=parent)
+        self._parent = parent
         self._controller = project_controller
         self._project_model: ProjectModel = project_controller.model
         self._export_to_AWS = self._project_model.export_to_AWS
@@ -57,7 +58,7 @@ class ExportView(tk.Toplevel):
         self._patients_processed = 0
         self._patients_to_process = 0
         self._patient_ids_to_export = []  # dynamically as per export progress
-        self.width = 1200
+        self.width = 1300
         self.height = 400
         # Try to move export window to right of the dashboard:
         self.geometry(f"{self.width}x{self.height}+{self.master.winfo_width()}+0")
@@ -110,7 +111,7 @@ class ExportView(tk.Toplevel):
         self._tree.tag_configure("red", background="red")
 
         # Populate treeview with existing patients
-        self._update_tree_from_storage_direcctory()
+        self._update_tree_from_images_direcctory()
 
         # Create a Scrollbar and associate it with the Treeview
         scrollbar = ttk.Scrollbar(self._export_frame, orient="vertical", command=self._tree.yview)
@@ -213,12 +214,12 @@ class ExportView(tk.Toplevel):
         self._cancel_export_button.configure(state="disabled")
         self._tree.configure(selectmode="extended")
 
-    def _update_tree_from_storage_direcctory(self):
-        # Storage Directory Sub-directory Names = Patient IDs
+    def _update_tree_from_images_direcctory(self):
+        # Images Directory Sub-directory Names = Patient IDs
         # Sequentially added
         anon_pt_ids = [
             f
-            for f in sorted(os.listdir(self._controller.storage_dir))
+            for f in sorted(os.listdir(self._controller.model.images_dir()))
             if not f.startswith(".") and not (f.endswith(".pkl") or f.endswith(".csv"))
         ]
         existing_iids = set(self._tree.get_children())
@@ -227,7 +228,7 @@ class ExportView(tk.Toplevel):
         # Insert NEW data
         for anon_pt_id in not_in_treeview:
             study_count, series_count, file_count = count_studies_series_images(
-                os.path.join(self._controller.storage_dir, anon_pt_id)
+                os.path.join(self._controller.model.images_dir(), anon_pt_id)
             )
             phi_name = self._controller.anonymizer.model.get_phi_name(anon_pt_id)
             self._tree.insert(
@@ -249,7 +250,7 @@ class ExportView(tk.Toplevel):
         # Update all values (i/o intensive, TODO: could be optimised)
         for anon_pt_id in anon_pt_ids:
             study_count, series_count, file_count = count_studies_series_images(
-                os.path.join(self._controller.storage_dir, anon_pt_id)
+                os.path.join(self._controller.model.images_dir(), anon_pt_id)
             )
             current_values = list(self._tree.item(anon_pt_id, "values"))
             current_values[2] = str(study_count)
@@ -261,10 +262,10 @@ class ExportView(tk.Toplevel):
         if self._export_active:
             logger.error(f"Refresh disabled, export is active")
             return
-        logger.info(f"Refresh button pressed, uodate tree from storage directory...")
+        logger.info(f"Refresh button pressed, uodate tree from images directory...")
         # Clear tree to ensure all items are removed before re-populating:
         self._tree.delete(*self._tree.get_children())
-        self._update_tree_from_storage_direcctory()
+        self._update_tree_from_images_direcctory()
         self._enable_action_buttons()
 
     def _select_all_button_pressed(self):
@@ -299,7 +300,7 @@ class ExportView(tk.Toplevel):
             logger.info(f"PHI CSV file created: {csv_path}")
             messagebox.showinfo(
                 title=_("PHI CSV File Created"),
-                message=f"PHI Lookup Data saved to: {csv_path}",
+                message=f"PHI Lookup Data saved to:\n\n{csv_path}",
                 parent=self,
             )
 
@@ -316,7 +317,7 @@ class ExportView(tk.Toplevel):
             if self._patients_to_process == 1:
                 msg = f"Processing {self._patients_processed+1}" + " Patient"
             else:
-                msg = f"Processing {self._patients_processed+1}" + " of {self._patients_to_process} Patients"
+                msg = f"Processing {self._patients_processed+1} of {self._patients_to_process} Patients"
             self._status.configure(text=msg)
 
     def _cancel_export_button_pressed(self):
@@ -345,12 +346,11 @@ class ExportView(tk.Toplevel):
 
                 # Check for completion or critical error of this patient's export
                 if resp.complete:
-                    if resp.files_sent == int(current_values[4]):
-                        logger.debug(f"Patient {resp.patient_id} export complete")
-                        self._patient_ids_to_export.remove(resp.patient_id)
-                        self._tree.selection_remove(resp.patient_id)
-                        self._tree.item(resp.patient_id, tags="green")
-
+                    # if resp.files_sent == int(current_values[4]):
+                    logger.debug(f"Patient {resp.patient_id} export complete")
+                    self._patient_ids_to_export.remove(resp.patient_id)
+                    self._tree.selection_remove(resp.patient_id)
+                    self._tree.item(resp.patient_id, tags="green")
                     self._patients_processed += 1
                     self._update_export_progress()
 
@@ -398,12 +398,11 @@ class ExportView(tk.Toplevel):
             logger.error(f"Selection disabled, export is active")
             return
 
-        # Verify echo of export server
-        # TODO: re-verify AWS auth if expired after 1 hour?
         if not self._controller.model.export_to_AWS:
+            # Verify echo of export DICOM server
             if not self._controller.echo("EXPORT"):
                 self._export_button.configure(text_color="red")
-                self.master._dashboard._export_button.configure(text_color="red")
+                self._parent._export_button.configure(text_color="red")
                 messagebox.showerror(
                     title=_("Connection Error"),
                     message=_(f"Export Server Failed DICOM C-ECHO"),
@@ -412,7 +411,7 @@ class ExportView(tk.Toplevel):
                 return
 
         self._export_button.configure(text_color="light green")
-        self.master._dashboard._export_button.configure(text_color="light green")
+        self._parent._export_button.configure(text_color="light green")
 
         self._patient_ids_to_export = list(self._tree.selection())
 

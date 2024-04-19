@@ -5,7 +5,6 @@ from pprint import pformat
 from typing import Dict, Tuple, List
 from dataclasses import dataclass, field
 from pathlib import Path
-from pynetdicom.sop_class import _STORAGE_CLASSES
 from pynetdicom._globals import ALL_TRANSFER_SYNTAXES, DEFAULT_TRANSFER_SYNTAXES
 from utils.modalities import MODALITIES
 from utils.translate import _
@@ -15,6 +14,10 @@ logger = logging.getLogger(__name__)
 
 # Controller Custom Error classes:
 class DICOMRuntimeError(Exception):
+    pass
+
+
+class AuthenticationError(Exception):
     pass
 
 
@@ -31,6 +34,7 @@ class DICOMNode:
 
 @dataclass
 class NetworkTimeouts:
+    # all values in seconds
     tcp_connection: float  # max time to wait for tcp connection to be established
     acse: float  # max time to wait for association messages
     dimse: float  # max time to wait for DIMSE messages
@@ -91,21 +95,20 @@ class AWSCognito:
     user_pool_id: str
     identity_pool_id: str
     s3_bucket: str
+    s3_prefix: str
     username: str
     password: str
 
 
 @dataclass
 class ProjectModel:
+    # Sub-directories in the storage directory:
+    PRIVATE_DIR = "private"
+    PUBLIC_DIR = "public"
+    PHI_EXPORT_DIR = "phi_export"
 
     # Model Version Control
-    @staticmethod
-    def current_model_version() -> int:
-        return 1
-
-    @staticmethod
-    def default_project_filename() -> str:
-        return "ProjectModel.pkl"
+    MODEL_VERSION = 1
 
     @staticmethod
     def default_site_id() -> str:
@@ -116,7 +119,7 @@ class ProjectModel:
 
     @staticmethod
     def default_storage_dir() -> Path:
-        return Path(os.path.expanduser("~"), "ANONYMIZER_STORE")
+        return Path(os.path.expanduser("~"), _("ANONYMIZER_STORE"))
 
     @staticmethod
     def default_local_server() -> DICOMNode:
@@ -138,20 +141,16 @@ class ProjectModel:
             user_pool_id="us-east-1_cFn3IKLqG",
             identity_pool_id="us-east-1:3c616c9d-58f0-4c89-a412-ea8cf259039a",
             s3_bucket="amplify-datauploader-prodmi-stagingbucketeec2e4de-x4qrvyzen65z",
+            s3_prefix="private",
             username="anonymizer2",
             password="SpeedFast1967#",
         )
 
-    # @staticmethod
-    # def default_storage_classes() -> set[str]:
-    #     return [
-    #         "1.2.840.10008.5.1.4.1.1.1",  # "Computed Radiography Image Storage"
-    #         "1.2.840.10008.5.1.4.1.1.1.1",  # "Digital X-Ray Image Storage - For Presentation"
-    #         "1.2.840.10008.5.1.4.1.1.1.1.1",  # "Digital X-Ray Image Storage - For Processing"
-    #         "1.2.840.10008.5.1.4.1.1.2",  # "Computed Tomography Image Storage"
-    #         "1.2.840.10008.5.1.4.1.1.4",  # "Magnetic Resonance Image Storage"
-    #     ]
+    @staticmethod
+    def default_storage_classes() -> List[str]:
+        return []
 
+    @staticmethod
     def default_modalities() -> List[str]:
         return ["CR", "DX", "CT", "MR"]
 
@@ -167,13 +166,13 @@ class ProjectModel:
     def default_logging_levels() -> LoggingLevels:
         return LoggingLevels(logging.INFO, logging.WARNING, False)
 
-    version: int = field(default_factory=current_model_version)
+    version: int = MODEL_VERSION
     site_id: str = field(default_factory=default_site_id)
     project_name: str = _("MY_PROJECT")
     uid_root: str = "1.2.826.0.1.3680043.10.188"
     storage_dir: Path = field(default_factory=default_storage_dir)
     modalities: List[str] = field(default_factory=default_modalities)
-    storage_classes: List[str] = None  # initialised in post_init
+    storage_classes: List[str] = field(default_factory=default_storage_classes)  # re-initialised in post_init
     transfer_syntaxes: List[str] = field(default_factory=default_transfer_syntaxes)
     logging_levels: LoggingLevels = field(default_factory=default_logging_levels)
 
@@ -188,12 +187,23 @@ class ProjectModel:
     def __post_init__(self):
         self.set_storage_classes_from_modalities()
 
+    def get_class_name(self) -> str:
+        return self.__class__.__name__
+
     def __repr__(self) -> str:
-        class_name = self.__class__.__name__
-        return f"{class_name}\n({pformat(self.__dict__)})"
+        return f"{self.get_class_name()}\n({pformat(self.__dict__)})"
+
+    def images_dir(self) -> Path:
+        return self.storage_dir.joinpath(self.PUBLIC_DIR)
+
+    def private_dir(self) -> Path:
+        return self.storage_dir.joinpath(self.PRIVATE_DIR)
 
     def abridged_storage_dir(self) -> str:
         return f".../{self.storage_dir.parts[-2]}/{self.storage_dir.parts[-1]}"
+
+    def phi_export_dir(self) -> Path:
+        return self.storage_dir.joinpath(self.PRIVATE_DIR, self.PHI_EXPORT_DIR)
 
     def regenerate_site_id(self) -> None:
         self.site_id = self.default_site_id()

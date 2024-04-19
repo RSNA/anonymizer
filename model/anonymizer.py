@@ -3,19 +3,18 @@ from pathlib import Path
 import logging
 from pprint import pformat
 import xml.etree.ElementTree as ET
-from .project import PHI
+from .project import ProjectModel, PHI
 from utils.translate import _
 
 logger = logging.getLogger(__name__)
 
-ANONYMIZER_MODEL_VERSION = 1
-
 
 class AnonymizerModel:
-    PICKLE_FILENAME = "AnonymizerModel.pkl"
+    # Model Version Control
+    MODEL_VERSION = 1
 
     def __init__(self, script_path: Path):
-        self._version = ANONYMIZER_MODEL_VERSION
+        self._version = AnonymizerModel.MODEL_VERSION
         # Dynamic attributes:
         self._patient_id_lookup: Dict[str, str] = {}
         self._uid_lookup: Dict[str, str] = {}
@@ -24,17 +23,18 @@ class AnonymizerModel:
         self._script_path = script_path
         self._tag_keep: Dict[str, str] = {}  # DICOM Tag: Operation
         self.load_script(script_path)
-        self.dummy: str = "dummyA"
+
+    def get_class_name(self) -> str:
+        return self.__class__.__name__
 
     def __repr__(self) -> str:
-        class_name = self.__class__.__name__
         # Exclude the '_tag_keep' attribute from the dictionary
         filtered_dict = {
             key: len(value) if isinstance(value, dict) else value
             for key, value in (self.__dict__.items())
             # if key != "_tag_keep"
         }
-        return f"{class_name}\n({pformat(filtered_dict)})"
+        return f"{self.get_class_name()}\n({pformat(filtered_dict)})"
 
     def load_script(self, script_path: Path):
         # Parse the anonymize script and create a dict of tags to keep: self._tag_keep["tag"] = "operation"

@@ -6,10 +6,13 @@
   },
   "cSpell.enableFiletypes": [
     "!json",
+    "!jsonc",
+    "!jupyter",
     "!markdown",
     "!plaintext",
     "!python",
-    "!script"
+    "!script",
+    "!yaml"
   ],
   "python.testing.pytestArgs": [
     "tests"
@@ -20,5 +23,23 @@
     "DICOM",
     "RSNA",
     "uids"
-  ]
+  ],
+  "python.analysis.typeCheckingMode": "standard",
+  "editor.defaultFoldingRangeProvider": "ms-python.black-formatter",
+  "editor.defaultFormatter": "ms-python.black-formatter",
+  "python.analysis.inlayHints.functionReturnTypes": false,
+  "python.analysis.inlayHints.variableTypes": false,
+  "python.analysis.inlayHints.pytestParameters": false,
+  "python.analysis.inlayHints.callArgumentNames": "all",
+  "python.analysis.diagnosticMode": "workspace",
+  "python.analysis.autoFormatStrings": true,
+  "python.analysis.completeFunctionParens": true,
+  "python.analysis.ignore": [
+    "builtins.pyi"
+  ],
+  "python.analysis.exclude": [
+    ".vscode",
+    "prototyping"
+  ],
+  "python.analysis.addImport.heuristics": false,
 }

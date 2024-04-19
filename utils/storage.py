@@ -26,6 +26,32 @@ def local_storage_path(base_dir: Path, ds: Dataset) -> Path:
     return dest_path
 
 
+def get_latest_pkl_file(directory: str, filename_contains: str) -> str | None:
+    """
+    This function finds the latest *.pkl file (by modification time) within a directory
+    that also contains the specified string in its filename.
+
+    Args:
+        directory (str): Path to the directory containing the pickle files.
+        filename_contains (str): String to search for within the filenames.
+
+    Returns:
+        str: Path to the latest *.pkl file matching the criteria, or None if no match is found.
+    """
+    latest_file = None
+    latest_mtime = None
+
+    for filename in os.listdir(path=directory):
+        if filename.endswith(".pkl") and filename_contains in filename:
+            filepath = os.path.join(directory, filename)
+            mtime = os.path.getmtime(filename=filepath)  # Get modification time
+            if latest_mtime is None or mtime > latest_mtime:
+                latest_file = filepath
+                latest_mtime = mtime
+
+    return latest_file
+
+
 def count_studies_series_images(patient_path: str):
     """
     Counts the number of studies, series, and images in a given patient directory.

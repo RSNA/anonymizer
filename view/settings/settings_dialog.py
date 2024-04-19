@@ -32,7 +32,7 @@ class SettingsDialog(tk.Toplevel):
     ):
         super().__init__(master=parent)
         self.model = model
-        self.new_model = new_model
+        self.new_model = new_model  # to restrict editing for existing projects, eg. SITE_ID & storage directory changes
         self.title(title)
         self.resizable(False, False)
         self.grab_set()  # make dialog modal
@@ -322,9 +322,8 @@ class SettingsDialog(tk.Toplevel):
         logger.info(f"Network Timeouts updated: {self.model.network_timeouts}")
 
     def _open_storage_directory_dialog(self):
-        msg = _("Select Storage Directory")
         path = filedialog.askdirectory(
-            message=msg,
+            title=_("Select Storage Directory"),
             initialdir=str(self.model.storage_dir),
             parent=self,
             mustexist=False,
@@ -393,23 +392,11 @@ class SettingsDialog(tk.Toplevel):
         self._create_project()
 
     def _create_project(self):
-        self._user_input = ProjectModel(
-            site_id=self.site_id__var.get(),
-            project_name=self.project_name_var.get(),
-            uid_root=self.uidroot_var.get(),
-            storage_dir=self.model.storage_dir,
-            modalities=self.model.modalities,
-            storage_classes=self.model.storage_classes,
-            transfer_syntaxes=self.model.transfer_syntaxes,
-            logging_levels=self.model.logging_levels,
-            scu=self.model.scu,
-            scp=self.model.scp,
-            remote_scps=self.model.remote_scps,
-            export_to_AWS=self.model.export_to_AWS,
-            aws_cognito=self.model.aws_cognito,
-            network_timeouts=self.model.network_timeouts,
-            anonymizer_script_path=self.model.anonymizer_script_path,
-        )
+        self.model.site_id = self.site_id__var.get()
+        self.model.project_name = self.project_name_var.get()
+        self.model.uid_root = self.uidroot_var.get()
+        self._user_input = self.model
+
         self.grab_release()
         self.destroy()
 

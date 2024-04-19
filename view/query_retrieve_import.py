@@ -1,12 +1,10 @@
 import logging
 import string
 import tkinter as tk
-from queue import Empty, Full, Queue
 from tkinter import filedialog, messagebox, ttk
-
 import customtkinter as ctk
 from pydicom import Dataset
-
+from queue import Empty, Full, Queue
 from controller.dicom_C_codes import C_FAILURE, C_PENDING_A, C_PENDING_B, C_SUCCESS
 from controller.project import (
     FindStudyRequest,
@@ -28,6 +26,7 @@ from utils.ux_fields import (
     str_entry,
 )
 from view.import_studies_dialog import ImportStudiesDialog
+from view.dashboard import Dashboard
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +57,7 @@ class QueryView(tk.Toplevel):
 
     def __init__(
         self,
-        parent,
+        parent: Dashboard,
         project_controller: ProjectController,
         title: str = _(f"Query, Retrieve & Import Studies"),
     ):
@@ -425,7 +424,7 @@ class QueryView(tk.Toplevel):
                     )
             else:
                 self._progressbar.stop()
-                self._progressbar.mode = "determinate"
+                self._progressbar.configure(mode="determinate")
                 self._progressbar.set(1)
 
             self._acc_no_file_path = None
@@ -487,7 +486,7 @@ class QueryView(tk.Toplevel):
             self._studies_to_process = len(self._acc_no_list)
         else:
             self._studies_to_process = -1  # unknown
-            self._progressbar.mode = "indeterminate"
+            self._progressbar.configure(mode="indeterminate")
             self._progressbar.start()
 
         self._studies_processed = 0
@@ -576,7 +575,7 @@ class QueryView(tk.Toplevel):
             instances_to_import = int(current_values[self._tree_column_keys.index("NumberOfStudyRelatedInstances")])
             patient_id = current_values[self._tree_column_keys.index("PatientID")]
             files_imported = self._images_stored_phi_lookup(patient_id, study.uid)
-            current_values[self._tree_column_keys.index("Imported")] = files_imported
+            current_values[self._tree_column_keys.index("Imported")] = str(files_imported)
             if study.last_error_msg:
                 current_values[self._tree_column_keys.index("Error")] = study.last_error_msg
             self._tree.item(study.uid, values=current_values)
@@ -626,7 +625,7 @@ class QueryView(tk.Toplevel):
             return 0
 
         return count_study_images(
-            self._controller.storage_dir,
+            self._controller.model.images_dir(),
             anon_pt_id,
             anon_study_uid,
         )

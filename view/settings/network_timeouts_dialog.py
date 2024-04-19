@@ -35,13 +35,16 @@ class NetworkTimeoutsDialog(tk.Toplevel):
         char_width_px = ctk.CTkFont().measure("A")
         logger.debug(f"Font Character Width in pixels: ±{char_width_px}")
 
+        self._frame = ctk.CTkFrame(self)
+        self._frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nswe")
+
         self.columnconfigure(1, weight=1)
         self.rowconfigure(3, weight=1)
 
         row = 0
 
         self.connection_var = int_entry(
-            view=self,
+            view=self._frame,
             label=_("TCP Connection:"),
             initial_value=int(self.timeouts.tcp_connection),
             min=0,
@@ -57,7 +60,7 @@ class NetworkTimeoutsDialog(tk.Toplevel):
         row += 1
 
         self.acse_var = int_entry(
-            view=self,
+            view=self._frame,
             label=_("DICOM Association Messages (ACSE):"),
             initial_value=int(self.timeouts.acse),
             min=0,
@@ -72,7 +75,7 @@ class NetworkTimeoutsDialog(tk.Toplevel):
         row += 1
 
         self.dimse_var = int_entry(
-            view=self,
+            view=self._frame,
             label=_("DICOM Service Element Messages (DIMSE):"),
             initial_value=int(self.timeouts.dimse),
             min=0,
@@ -87,7 +90,7 @@ class NetworkTimeoutsDialog(tk.Toplevel):
         row += 1
 
         self.network_var = int_entry(
-            view=self,
+            view=self._frame,
             label=_("Close Inactive Connection:"),
             initial_value=int(self.timeouts.network),
             min=0,
@@ -102,7 +105,7 @@ class NetworkTimeoutsDialog(tk.Toplevel):
         row += 1
 
         self._ok_button = ctk.CTkButton(
-            self, width=100, text=_("Ok"), command=self._ok_event
+            self._frame, width=100, text=_("Ok"), command=self._ok_event
         )
         self._ok_button.grid(
             row=row,

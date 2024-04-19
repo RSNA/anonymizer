@@ -1,6 +1,6 @@
 import os, sys, json
 from pathlib import Path
-import copy
+from copy import copy
 import logging
 import pickle
 import tkinter as tk
@@ -10,8 +10,10 @@ from model.project import DICOMRuntimeError, ProjectModel
 
 from utils.translate import _
 from utils.logging import init_logging
+from utils.storage import get_latest_pkl_file
 from __version__ import __version__
 from pydicom._version import __version__ as pydicom_version
+from pydicom import dcmread
 from pynetdicom._version import __version__ as pynetdicom_version
 
 # The following unused imports are for pyinstaller
@@ -53,20 +55,19 @@ class App(ctk.CTk):
         if sys.platform.startswith("win"):
             self.iconbitmap("assets\\images\\rsna_icon.ico", default="assets\\images\\rsna_icon.ico")
 
-        self._project_controller: ProjectController = None
-        self._model: ProjectModel = None
-        self._query_view: QueryView = None
-        self._export_view: ExportView = None
-        self._instructions_view: HTMLView = None
-        self._license_view: HTMLView = None
-        self._dashboard: Dashboard = None
+        self.controller: ProjectController | None = None
+        self.query_view: QueryView | None = None
+        self.export_view: ExportView | None = None
+        self.instructions_view: HTMLView | None = None
+        self.license_view: HTMLView | None = None
+        self.dashboard: Dashboard | None = None
+        self.welcome_view = WelcomeView(self)
         self.resizable(False, False)
         self.title(self.TITLE)
-        self.recent_project_dirs: list[str] = []
-        self.current_open_project_dir: str = None
+        self.recent_project_dirs: list[Path] = []
+        self.current_open_project_dir: Path | None = None
         self.load_config()
         self.set_menu_project_closed()  # creates self.menu_bar, populates Open Recent list
-        self._welcome_view = WelcomeView(self)
         self.after(self.project_open_startup_dwell_time, self._open_project_startup)
 
     def load_config(self):
@@ -100,7 +101,7 @@ class App(ctk.CTk):
             with open(self.CONFIG_FILENAME, "w") as config_file:
                 json.dump(config_data, config_file, indent=2)
         except Exception as e:
-            err_msg = _(f"Error writing json config file: {self.CONFIG_FILENAME} {str(e)}")
+            err_msg = _(f"Error writing json config file: {self.CONFIG_FILENAME} {repr(e)}")
             logger.error(err_msg)
             messagebox.showerror(
                 title=_("Configuration File Write Error"),
@@ -118,17 +119,26 @@ class App(ctk.CTk):
             new_model=True,
             title=_("New Project Settings"),
         )
-        self._model = dlg.get_input()
+        model = dlg.get_input()
 
-        if self._model is None:
+        if model is None:
             logger.info("New Project Cancelled")
             self.enable_file_menu()
             return
 
-        logger.info(f"New ProjectModel: {self._model}")
+        logger.info(f"New ProjectModel: {model}")
 
-        project_dir = self._model.storage_dir
-        if os.path.exists(project_dir):
+        if not model.storage_dir:
+            logger.info("New Project Cancelled, storage directory not set")
+            messagebox.showerror(
+                title=_("New Project Error"),
+                message=_(f"Storage Directory not set, please set a valid directory in project settings."),
+                parent=self,
+            )
+            self.enable_file_menu()
+            return
+
+        if os.path.exists(model.storage_dir):
             confirm = messagebox.askyesno(
                 title=_("Confirm Overwrite"),
                 message=_("The project directory already exists. Do you want to overwrite the existing project?"),
@@ -139,29 +149,41 @@ class App(ctk.CTk):
                 self.enable_file_menu()
                 return
 
-        self._project_controller = ProjectController(self._model)
-        if not self._project_controller:
-            logger.error("Fatal Internal Error, Project Controller not created")
+        try:
+            self.controller = ProjectController(model)
+            if not self.controller:
+                raise RuntimeError("Fatal Internal Error, Project Controller not created")
+
+        except Exception as e:
+            logger.error(f"Error creating Project Controller: {str(e)}")
+            messagebox.showerror(
+                title=_("New Project Error"),
+                message=_(f"Error creating Project Controller:\n\n{str(e)}"),
+                parent=self,
+            )
             return
 
-        self._project_controller.save_model()
+        self.controller.save_model()
+        self.current_open_project_dir = self.controller.model.storage_dir
 
-        if project_dir not in self.recent_project_dirs:
-            self.recent_project_dirs.insert(0, str(project_dir))
+        if self.current_open_project_dir not in self.recent_project_dirs:
+            self.recent_project_dirs.insert(0, self.current_open_project_dir)
+            self.save_config()
 
-        self.current_open_project_dir = project_dir
         self._open_project()
         self.enable_file_menu()
 
-    def open_project(self, project_dir: str = None):
+    def open_project(self, project_dir: Path | None = None):
         self.disable_file_menu()
 
         logging.info(f"Open Project project_dir={project_dir}")
 
         if project_dir is None:
-            project_dir = filedialog.askdirectory(
-                initialdir=ProjectModel.default_storage_dir(),
-                title=_("Select Anonymizer Storage Directory"),
+            project_dir = Path(
+                filedialog.askdirectory(
+                    initialdir=ProjectModel.default_storage_dir(),
+                    title=_("Select Anonymizer Storage Directory"),
+                )
             )
 
         if not project_dir:
@@ -169,14 +191,28 @@ class App(ctk.CTk):
             self.enable_file_menu()
             return
 
-        project_pkl_path = Path(project_dir, ProjectModel.default_project_filename())
+        # Get project pkl filename from project directory
+        project_model_path = Path(project_dir, ProjectController.PROJECT_MODEL_FILENAME)
 
-        if os.path.exists(project_pkl_path):
-            with open(project_pkl_path, "rb") as pkl_file:
-                file_model = pickle.load(pkl_file)
-            logger.info(f"Project Model loaded from: {project_pkl_path}")
+        if os.path.exists(project_model_path):
+            try:
+                with open(project_model_path, "rb") as pkl_file:
+                    file_model = pickle.load(pkl_file)
+                    if not isinstance(file_model, ProjectModel):
+                        raise TypeError("Corruption detected: Loaded model is not an instance of ProjectModel")
+            except Exception as e:
+                logger.error(f"Error loading Project Model: {str(e)}")
+                # TODO: load from last backup
+                messagebox.showerror(
+                    title=_("Open Project Error"),
+                    message=_(f"Error loading Project Model from data file: {project_model_path}\n\n{str(e)}"),
+                    parent=self,
+                )
+                self.enable_file_menu()
+                return
 
-            # TODO: Integrity Checking on loaded model (md5 checksum?), inform user, on integrity error use backup or reinitialise
+            logger.info(f"Project Model succesfully loaded from: {project_model_path}")
+
             if not hasattr(file_model, "version"):
                 logger.error(f"Project Model missing version")
                 messagebox.showerror(
@@ -189,23 +225,23 @@ class App(ctk.CTk):
 
             logger.info(f"Project Model loaded successfully, version: {file_model.version}")
 
-            if file_model.version != ProjectModel.current_model_version():
+            if file_model.version != ProjectModel.MODEL_VERSION:
                 logger.info(
-                    f"Project Model version mismatch: {file_model.version} != {ProjectModel.current_model_version()} upgrading accordingly"
+                    f"Project Model version mismatch: {file_model.version} != {ProjectModel.MODEL_VERSION} upgrading accordingly"
                 )
-                self._model = ProjectModel()  # new default model
-                self._model = copy.copy(
-                    file_model
-                )  # copy over corresponding attributes from the old model (file_model)
-                self._model.version = ProjectModel.current_model_version()  # update to latest version
+                model = ProjectModel()  # new default model
+                # TODO: Handle 2 level nested classes/dicts copying by attribute
+                # to handle addition or nested fields and deletion of attributes in new model
+                model = copy(file_model)  # copy over corresponding attributes from the old model
+                model.version = ProjectModel.MODEL_VERSION  # update to latest version
             else:
-                self._model = file_model
+                model = file_model
 
             try:
-                self._project_controller = ProjectController(self._model)
-                if file_model.version != ProjectModel.current_model_version():
-                    self._project_controller.save_model()
-                    logger.info(f"Project Model upgraded successfully to version: {self._model.version}")
+                self.controller = ProjectController(model)
+                if file_model.version != ProjectModel.MODEL_VERSION:
+                    self.controller.save_model()
+                    logger.info(f"Project Model upgraded successfully to version: {self.controller.model.version}")
             except Exception as e:
                 logger.error(f"Error creating Project Controller: {str(e)}")
                 messagebox.showerror(
@@ -216,7 +252,7 @@ class App(ctk.CTk):
                 self.enable_file_menu()
                 return
 
-            logger.info(f"{self._project_controller}")
+            logger.info(f"{self.controller}")
             if not project_dir in self.recent_project_dirs:
                 self.recent_project_dirs.insert(0, project_dir)
             self.current_open_project_dir = project_dir
@@ -225,7 +261,7 @@ class App(ctk.CTk):
         else:
             messagebox.showerror(
                 title=_("Open Project Error"),
-                message=_(f"Project file not found in: \n\n{project_dir}"),
+                message=_(f"No Project file not found in: \n\n{project_dir}"),
                 parent=self,
             )
             self.recent_project_dirs.remove(project_dir)
@@ -239,24 +275,31 @@ class App(ctk.CTk):
             self.open_project(self.current_open_project_dir)
 
     def _open_project(self):
-        assert self._model
-        assert self._project_controller
+
+        if not self.controller:
+            logger.info(f"Open Project Cancelled, no controller")
+            return
+
         try:
-            self._project_controller.start_scp()
+            self.controller.start_scp()
         except DICOMRuntimeError as e:
             messagebox.showerror(title=_("Local DICOM Server Error"), message=str(e), parent=self)
 
-        self.title(f"{self._model.project_name}[{self._model.site_id}] => {self._model.abridged_storage_dir()}")
+        self.title(
+            f"{self.controller.model.project_name}[{self.controller.model.site_id}] => {self.controller.model.abridged_storage_dir()}"
+        )
 
-        self._welcome_view.destroy()
-        self._dashboard = Dashboard(self, self._project_controller)
+        self.welcome_view.destroy()
+        self.dashboard = Dashboard(
+            self, query_callback=self.query_retrieve, export_callback=self.export, controller=self.controller
+        )
         self.protocol("WM_DELETE_WINDOW", self.close_project)
         self.set_menu_project_open()
-        self._dashboard.focus_set()
+        self.dashboard.focus_set()
 
     def close_project(self, event=None):
         logging.info("Close Project")
-        if self._query_view and self._query_view.busy():
+        if self.query_view and self.query_view.busy():
             logger.info(f"QueryView busy, cannot close project")
             messagebox.showerror(
                 title=_("Query Busy"),
@@ -264,7 +307,7 @@ class App(ctk.CTk):
                 parent=self,
             )
             return
-        if self._export_view and self._export_view.busy():
+        if self.export_view and self.export_view.busy():
             logger.info(f"ExportView busy, cannot close project")
             messagebox.showerror(
                 title=_("Export Busy"),
@@ -272,27 +315,27 @@ class App(ctk.CTk):
                 parent=self,
             )
             return
-        if self._dashboard:
-            self._dashboard.destroy()
-            self._dashboard = None
-        if self._project_controller:
-            self._project_controller.shutdown()
-            self._project_controller.save_model()
-            self._project_controller.anonymizer.save_model()
-            self._project_controller.anonymizer.stop()
-            if self._query_view:
-                self._query_view.destroy()
-                self._query_view = None
-            if self._export_view:
-                self._export_view.destroy()
-                self._export_view = None
+        if self.dashboard:
+            self.dashboard.destroy()
+            self.dashboard = None
+        if self.controller:
+            self.controller.shutdown()
+            self.controller.save_model()
+            self.controller.anonymizer.save_model()
+            self.controller.anonymizer.stop()
+            if self.query_view:
+                self.query_view.destroy()
+                self.query_view = None
+            if self.export_view:
+                self.export_view.destroy()
+                self.export_view = None
 
-            self._welcome_view = WelcomeView(self)
+            self.welcome_view = WelcomeView(self)
             self.protocol("WM_DELETE_WINDOW", self.quit)
             self.focus_force()
 
         self.current_open_project_dir = None
-        self._project_controller = None
+        self.controller = None
         self.set_menu_project_closed()
         self.title(self.TITLE)
         self.save_config()
@@ -300,13 +343,24 @@ class App(ctk.CTk):
     def clone_project(self, event=None):
         logging.info("Clone Project")
 
-        current_project_dir = self._project_controller.storage_dir
+        if not self.controller:
+            logger.info(f"Clone Project Cancelled, no project open")
+            messagebox.showerror(
+                title=_("Clone Project Error"),
+                message=_(f"No project open to clone."),
+                parent=self,
+            )
+            return
 
-        cloned_project_dir = filedialog.askdirectory(
-            initialdir=current_project_dir.parent,
-            message=_("Select Directory for Cloned Project"),
-            mustexist=False,
-            parent=self,
+        current_project_dir = self.controller.model.storage_dir
+
+        cloned_project_dir = Path(
+            filedialog.askdirectory(
+                initialdir=current_project_dir.parent,
+                title=_("Select Directory for Cloned Project"),
+                mustexist=False,
+                parent=self,
+            )
         )
 
         if not cloned_project_dir:
@@ -324,31 +378,45 @@ class App(ctk.CTk):
             )
             return
 
-        self._project_controller.save_model(cloned_project_dir)
+        self.controller.save_model(cloned_project_dir)
         self.close_project()
 
-        project_pkl_path = Path(cloned_project_dir, ProjectModel.default_project_filename())
+        project_pkl_path = Path(cloned_project_dir, ProjectController.PROJECT_MODEL_FILENAME)
 
         with open(project_pkl_path, "rb") as pkl_file:
-            self._model = pickle.load(pkl_file)
+            self.controller.model = pickle.load(pkl_file)
 
         logger.info(f"Project Model loaded from: {project_pkl_path}")
-        # Change storage directory and site_id of clonded model:
-        self._model.storage_dir = Path(cloned_project_dir)
-        self._model.regenerate_site_id()
-        self._project_controller = ProjectController(self._model)
-        assert self._project_controller
-        logger.info(f"{self._project_controller}")
+
+        # Change storage directory and site_id of cloned model:
+        self.controller.model.storage_dir = cloned_project_dir
+        self.controller.model.regenerate_site_id()
+
+        try:
+            self.controller = ProjectController(self.controller.model)
+            logger.info(f"{self.controller}")
+        except Exception as e:
+            logger.error(f"Error creating Project Controller: {str(e)}")
+            messagebox.showerror(
+                title=_("Clone Project Error"),
+                message=_(f"Error creating Project Controller:\n\n{str(e)}"),
+                parent=self,
+            )
+            return
+
         if not cloned_project_dir in self.recent_project_dirs:
-            self.recent_project_dirs.insert(0, str(cloned_project_dir))
+            self.recent_project_dirs.insert(0, cloned_project_dir)
         self.current_open_project_dir = cloned_project_dir
         self.save_config()
         self._open_project()
 
     def import_files(self, event=None):
-        assert self._project_controller
-
         logging.info("Import Files")
+
+        if not self.controller:
+            logger.error("Internal Error: no ProjectController")
+            return
+
         file_extension_filters = [
             ("dcm Files", "*.dcm"),
             ("dicom Files", "*.dicom"),
@@ -356,33 +424,38 @@ class App(ctk.CTk):
         ]
         msg = _("Select DICOM Files to Import & Anonymize")
         paths = filedialog.askopenfilenames(
-            message=msg,
+            title=msg,
             defaultextension=".dcm",
             filetypes=file_extension_filters,
             parent=self,
         )
+
         if not paths:
             logger.info(f"Import Files Cancelled")
             return
-        if paths:
-            for path in paths:
-                self._project_controller.anonymizer.anonymize_dataset_and_store(
-                    path, None, self._project_controller.storage_dir
-                )
+
+        for path in paths:
+            self.controller.anonymizer.anonymize_dataset_and_store(path, None, self.controller.model.images_dir())
+
         if len(paths) > 30:
             dlg = ProgressDialog(
-                self._project_controller.anonymizer._anon_Q,
+                self,
+                self.controller.anonymizer._anon_Q,
                 title=_("Import Files Progress"),
                 sub_title=_(f"Import {len(paths)} files"),
             )
             dlg.get_input()
 
     def import_directory(self, event=None):
-        assert self._project_controller
         logging.info("Import Directory")
+
+        if not self.controller:
+            logger.error("Internal Error: no ProjectController")
+            return
+
         msg = _("Select DICOM Directory to Impport & Anonymize")
         root_dir = filedialog.askdirectory(
-            message=msg,
+            title=msg,
             mustexist=True,
             parent=self,
         )
@@ -392,12 +465,69 @@ class App(ctk.CTk):
             logger.info(f"Import Directory Cancelled")
             return
 
-        file_paths = [
-            os.path.join(root, file)
-            for root, _, files in os.walk(root_dir)
-            for file in files
-            if not file.startswith(".")  # and is_dicom(os.path.join(root, file))
-        ]
+        file_paths = []
+        # Handle reading DICOMDIR files in Media Storage Directory (eg. CD/DVD/USB Drive)
+        dicomdir_file = os.path.join(root_dir, "DICOMDIR")
+        if os.path.exists(dicomdir_file):
+            try:
+                ds = dcmread(fp=dicomdir_file)
+                root_dir = Path(str(ds.filename)).resolve().parent
+                logger.info(f"DICOM DIR Root directory: {root_dir}\n")
+
+                # Iterate through the PATIENT records
+                for patient in ds.patient_records:
+                    logger.info(f"PATIENT: PatientID={patient.PatientID}, " f"PatientName={patient.PatientName}")
+
+                    # Find all the STUDY records for the patient
+                    studies = [ii for ii in patient.children if ii.DirectoryRecordType == "STUDY"]
+                    for study in studies:
+                        descr = study.StudyDescription or "(no value available)"
+                        print(
+                            f"{'  ' * 1}STUDY: StudyID={study.StudyID}, "
+                            f"StudyDate={study.StudyDate}, StudyDescription={descr}"
+                        )
+
+                        # Find all the SERIES records in the study
+                        all_series = [ii for ii in study.children if ii.DirectoryRecordType == "SERIES"]
+                        for series in all_series:
+                            # Find all the IMAGE records in the series
+                            images = [ii for ii in series.children if ii.DirectoryRecordType == "IMAGE"]
+                            plural = ("", "s")[len(images) > 1]
+
+                            descr = getattr(series, "SeriesDescription", "(no value available)")
+                            logging.info(
+                                f"{'  ' * 2}SERIES: SeriesNumber={series.SeriesNumber}, "
+                                f"Modality={series.Modality}, SeriesDescription={descr} - "
+                                f"{len(images)} SOP Instance{plural}"
+                            )
+
+                            # Get the absolute file path to each instance
+                            # Each IMAGE contains a relative file path to the root directory
+                            elems = [ii["ReferencedFileID"] for ii in images]
+                            # Make sure the relative file path is always a list of str
+                            file_paths = [[ee.value] if ee.VM == 1 else ee.value for ee in elems]
+                            file_paths = [f"{root_dir}/{fp}" for fp in file_paths]
+
+                            # List the instance file paths
+                            for fp in file_paths:
+                                logger.info(f"{'  ' * 3}IMAGE: Path={os.fspath(fp)}")
+
+            except Exception as e:
+                logger.error(f"Error reading DICOMDIR file: {dicomdir_file}, {str(e)}")
+                messagebox.showerror(
+                    title=_("Import Directory Error"),
+                    message=_(f"Error reading DICOMDIR file: {dicomdir_file}, {str(e)}"),
+                    parent=self,
+                )
+                return
+        else:
+            file_paths = [
+                os.path.join(root, file)
+                for root, _, files in os.walk(root_dir)
+                for file in files
+                if not file.startswith(".")
+            ]
+
         if len(file_paths) == 0:
             logger.info(f"No DICOM files found in {root_dir}")
             messagebox.showerror(
@@ -406,50 +536,70 @@ class App(ctk.CTk):
                 parent=self,
             )
             return
+
         logger.info(f"Importing {len(file_paths)} files, adding to anonymizer Q")
+
         for path in file_paths:
-            self._project_controller.anonymizer.anonymize_dataset_and_store(
-                path, None, self._project_controller.storage_dir
-            )
-        qsize = self._project_controller.anonymizer._anon_Q.qsize()
-        logging.info(f"File load complete, monitoring anonymizer Q...{qsize}")
+            self.controller.anonymizer.anonymize_dataset_and_store(path, None, self.controller.model.images_dir())
+
+        qsize = self.controller.anonymizer._anon_Q.qsize()
+        logging.info(f"File paths load complete, monitoring anonymizer Q...{qsize}")
         dlg = ProgressDialog(
             self,
-            self._project_controller.anonymizer._anon_Q,
+            self.controller.anonymizer._anon_Q,
             title=_("Import Directory Progress"),
             sub_title=_(f"Import files from {root_dir}"),
         )
         dlg.get_input()
 
     def query_retrieve(self):
-        assert self._project_controller
-        if self._query_view and self._query_view.winfo_exists():
-            logger.info(f"QueryView already OPEN")
-            self._query_view.deiconify()
-            self._query_view.focus_force()
+        logging.info("OPEN QueryView")
+
+        if not self.controller:
+            logger.error("Internal Error: no ProjectController")
             return
 
-        logging.info("OPEN QueryView")
-        self._query_view = QueryView(self, self._project_controller)
-        self._query_view.focus()
+        if self.query_view and self.query_view.winfo_exists():
+            logger.info(f"QueryView already OPEN")
+            self.query_view.deiconify()
+            self.query_view.focus_force()
+            return
+
+        if not self.dashboard:
+            logger.error("Internal Error: no Dashboard")
+            return
+
+        self.query_view = QueryView(self.dashboard, self.controller)
+        self.query_view.focus()
 
     def export(self):
-        assert self._project_controller
-        if self._export_view and self._export_view.winfo_exists():
-            logger.info(f"ExportView already OPEN")
-            self._export_view.deiconify()
-            self._export_view.focus_force()
+        logging.info("OPEN ExportView")
+
+        if not self.controller:
+            logger.error("Internal Error: no ProjectController")
             return
 
-        logging.info("OPEN ExportView")
-        self._export_view = ExportView(self, self._project_controller)
-        self._export_view.focus()
+        if self.export_view and self.export_view.winfo_exists():
+            logger.info(f"ExportView already OPEN")
+            self.export_view.deiconify()
+            self.export_view.focus_force()
+            return
+
+        if not self.dashboard:
+            logger.error("Internal Error: no Dashboard")
+            return
+
+        self.export_view = ExportView(self.dashboard, self.controller)
+        self.export_view.focus()
 
     def settings(self):
         logging.info("Settings")
-        assert self._model
-        assert self._project_controller
-        if self._query_view and self._query_view.busy():
+
+        if not self.controller:
+            logger.error("Internal Error: no ProjectController")
+            return
+
+        if self.query_view and self.query_view.busy():
             logger.info(f"QueryView busy, cannot open SettingsDialog")
             messagebox.showerror(
                 title=_("Query Busy"),
@@ -457,7 +607,8 @@ class App(ctk.CTk):
                 parent=self,
             )
             return
-        if self._export_view and self._export_view.busy():
+
+        if self.export_view and self.export_view.busy():
             logger.info(f"ExportView busy, cannot open SettingsDialog")
             messagebox.showerror(
                 title=_("Export Busy"),
@@ -465,49 +616,50 @@ class App(ctk.CTk):
                 parent=self,
             )
             return
-        dlg = SettingsDialog(self, self._model, title=_("Project Settings"))
+
+        dlg = SettingsDialog(self, self.controller.model, title=_("Project Settings"))
         edited_model = dlg.get_input()
         if edited_model is None:
             logger.info("Settings Cancelled")
             return
-        logger.info(f"Edited ProjectModel")
 
-        # TODO: model equality check
-        # if edited_model == self._model:
-        #     return
-        self._model = edited_model
-        self._project_controller.model = self._model
-        self._project_controller._post_model_update()
-        logger.info(f"{self._project_controller}")
+        logger.info(f"User Edited ProjectModel")
+
+        self.controller.model = edited_model
+        self.controller.model = self.controller.model
+        self.controller._post_model_update()
+        logger.info(f"{self.controller}")
 
     def instructions(self):
-        if self._instructions_view and self._instructions_view.winfo_exists():
+        logging.info("OPEN Instructions HTMLView")
+
+        if self.instructions_view and self.instructions_view.winfo_exists():
             logger.info(f"Instructions HTMLView already OPEN")
-            self._instructions_view.deiconify()
+            self.instructions_view.deiconify()
             return
 
-        logging.info("OPEN Instructions HTMLView")
-        self._instructions_view = HTMLView(
+        self.instructions_view = HTMLView(
             self,
             title=_(f"Instructions"),
             html_file_path="assets/html/instructions.html",
         )
-        self._instructions_view.focus()
+        self.instructions_view.focus()
 
     def view_license(self):
-        if self._license_view and self._license_view.winfo_exists():
+        logging.info("OPEN License HTMLView")
+
+        if self.license_view and self.license_view.winfo_exists():
             logger.info(f"License HTMLView already OPEN")
-            self._license_view.deiconify()
-            self._license_view.focus_force()
+            self.license_view.deiconify()
+            self.license_view.focus_force()
             return
 
-        logging.info("OPEN License HTMLView")
-        self._license_view = HTMLView(
+        self.license_view = HTMLView(
             self,
             title=_(f"License"),
             html_file_path="assets/html/license.html",
         )
-        self._license_view.focus()
+        self.license_view.focus()
 
     def get_help_menu(self):
         help_menu = tk.Menu(self.menu_bar, tearoff=0)
@@ -543,7 +695,7 @@ class App(ctk.CTk):
 
             for directory in self.recent_project_dirs:
                 open_recent_menu.add_command(
-                    label=directory,
+                    label=str(directory),
                     command=lambda dir=directory: self.open_project(dir),
                 )
 
@@ -583,6 +735,7 @@ class App(ctk.CTk):
         #     command=self.export,
         #     # accelerator="Command+E",
         # )
+
         file_menu.add_separator()
         file_menu.add_command(
             label=_("Clone Project"),
@@ -647,10 +800,10 @@ def main():
         logger.exception(f"Error starting ANONYMIZER GUI, exit: {str(e)}")
         sys.exit(1)
 
-    # Pyinstaller splash page close
+    # Pyinstaller splash page on Windows close
     if sys.platform.startswith("win"):
         try:
-            import pyi_splash
+            import pyi_splash  # type: ignore
 
             pyi_splash.close()  # type: ignore
         except Exception:

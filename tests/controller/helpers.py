@@ -21,11 +21,16 @@ from controller.dicom_C_codes import C_SUCCESS, C_PENDING_A, C_PENDING_B
 
 # DICOM NODES involved in tests:
 from tests.controller.dicom_test_nodes import LocalStorageSCP, PACSSimulatorSCP, OrthancSCP
+from model.project import ProjectModel
 
 
 # TEST HELPER FUNCTIONS
 def local_storage_dir(temp_dir: str):
-    return Path(temp_dir, LocalStorageSCP.aet)
+    return Path(
+        temp_dir,
+        LocalStorageSCP.aet,
+        ProjectModel.PUBLIC_DIR,
+    )
 
 
 def pacs_storage_dir(temp_dir: str):
@@ -89,8 +94,10 @@ def find_all_studies_on_pacs_simulator_scp(controller: ProjectController):
 def request_to_move_studies_from_scp_to_local_scp(
     level: str, studies: list[StudyUIDHierarchy], scp: DICOMNode, controller: ProjectController
 ) -> bool:
-    req: MoveStudiesRequest = MoveStudiesRequest(scp.aet, LocalStorageSCP.aet, level, studies)
-    controller.move_studies_ex(req)
+    req: MoveStudiesRequest = MoveStudiesRequest(
+        scp_name=scp.aet, dest_scp_ae=LocalStorageSCP.aet, level=level, studies=studies
+    )
+    controller.move_studies_ex(mr=req)
     return True
 
 

@@ -34,12 +34,7 @@ venv_path = subprocess.check_output(["pipenv", "--venv"]).strip().decode()
 print("build.py execute...")
 
 # Get the Python version
-python_version = (
-    "python"
-    + platform.python_version_tuple()[0]
-    + "."
-    + platform.python_version_tuple()[1]
-)
+python_version = "python" + platform.python_version_tuple()[0] + "." + platform.python_version_tuple()[1]
 print(f"Python version tuple: {platform.python_version_tuple()}")
 
 if os.name == "nt":  # Windows
@@ -50,9 +45,7 @@ else:  # Unix-based systems
 
 
 # Path to the customtkinter directory
-customtkinter_path = os.path.join(
-    venv_path, lib_dir, python_version, "site-packages", "customtkinter"
-)
+customtkinter_path = os.path.join(venv_path, lib_dir, python_version, "site-packages", "customtkinter")
 
 if not os.path.exists(customtkinter_path):
     raise Exception(
@@ -89,16 +82,12 @@ def set_macos_version(bundle_path, version):
 if __name__ == "__main__":
     build_version_name = f"Anonymizer_{__version__}"
 
-    print(
-        f"Build Current version: {build_version_name} on {platform.system()} platform using PyInstaller"
-    )
+    print(f"Build Current version: {build_version_name} on {platform.system()} platform using PyInstaller")
     print(f"Customtkinter path: {customtkinter_path}")
 
     if platform.system() == "Windows":
         # Create versionfile.txt
-        print(
-            f"Create Windows Version Resource Text file: versionfile.txt for PyInstaller, new version: {__version__}"
-        )
+        print(f"Create Windows Version Resource Text file: versionfile.txt for PyInstaller, new version: {__version__}")
         pyinstaller_versionfile.create_versionfile(
             output_file="versionfile.txt",
             version=__version__.split("-")[0],
@@ -155,6 +144,9 @@ if __name__ == "__main__":
 
         # Set the version
         set_macos_version(f"dist/Anonymizer_{__version__}.app", __version__)
+
+        # To run this executable after download requires removing the extended attributes via
+        # xattr -r -c <path to exe/app>
 
         # Delete the redundant build folder
         app_dir = os.path.join("dist", build_version_name)

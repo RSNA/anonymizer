@@ -1,7 +1,7 @@
 # Description: Anonymization of DICOM datasets
 # See https://mircwiki.rsna.org/index.php?title=The_CTP_DICOM_Anonymizer for legacy anonymizer documentation
 import os
-import copy
+from copy import copy
 import re
 import time
 import logging
@@ -12,27 +12,29 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from queue import Queue
 from pydicom import Dataset, Sequence, dcmread
+from pydicom.errors import InvalidDicomError
 from utils.translate import _
 from utils.storage import local_storage_path
 from model.project import DICOMNode, Study, Series, PHI, ProjectModel
-from model.anonymizer import AnonymizerModel, ANONYMIZER_MODEL_VERSION
+from model.anonymizer import AnonymizerModel
 
 logger = logging.getLogger(__name__)
 
 
 class AnonymizerController:
-    DEIDENTIFICATION_METHOD = _("RSNA DICOM ANONYMIZER")
+    ANONYMIZER_MODEL_FILENAME = "anonymizer.pkl"
+    DEIDENTIFICATION_METHOD = "RSNA DICOM ANONYMIZER"
     # See docs/RSNA-Covid-19-Deindentification-Protocol.pdf
     # TODO: if user edits default anonymization script these values should be updated accordingly
     DEIDENTIFICATION_METHODS = [
-        ("113100", _("Basic Application Confidentiality Profile")),
+        ("113100", "Basic Application Confidentiality Profile"),
         (
             "113107",
-            _("Retain Longitudinal Temporal Information Modified Dates Option"),
+            "Retain Longitudinal Temporal Information Modified Dates Option",
         ),
-        ("113108", _("Retain Patient Characteristics Option")),
+        ("113108", "Retain Patient Characteristics Option"),
     ]
-    PRIVATE_BLOCK_NAME = _("RSNA")
+    PRIVATE_BLOCK_NAME = "RSNA"
     DEFAULT_ANON_DATE = "20000101"  # if source date is invalid or before 19000101
 
     _anonymize_time_slice_interval: float = 0.1  # seconds
@@ -50,34 +52,41 @@ class AnonymizerController:
 
     def __init__(self, project_model: ProjectModel):
         self.project_model = project_model
+        # Initialise AnonymizerModel datafile full path:
+        self.model_filename = Path(self.project_model.private_dir(), self.ANONYMIZER_MODEL_FILENAME)
 
         # If present, load pickled AnonymizerModel from project directory:
-        anon_pkl_path = Path(project_model.storage_dir, AnonymizerModel.PICKLE_FILENAME)
-        if os.path.exists(anon_pkl_path):
-            with open(anon_pkl_path, "rb") as pkl_file:
-                file_model = pickle.load(pkl_file)
-                logger.info(f"Anonymizer Model loaded from: {anon_pkl_path}")
+        if os.path.exists(self.model_filename):
+            try:
+                with open(self.model_filename, "rb") as pkl_file:
+                    file_model = pickle.load(pkl_file)
+                    if not isinstance(file_model, AnonymizerModel):
+                        raise TypeError("Loaded object is not an instance of AnonymizerModel")
+            except Exception as e:
+                # TODO: Try and open last backup file
+                logger.error(f"Anonymizer Model datafile corrupt: {e}")
+                raise RuntimeError(f"Anonymizer datafile: {self.model_filename} corrupt\n\n{str(e)}")
 
-                # TODO: Integrity Checking on loaded model (md5 checksum?), on integrity error try and use backup
-                if not hasattr(file_model, "_version"):
-                    logger.error(f"Anonymizer Model datafile corrupt: version missing")
-                    raise RuntimeError(f"Anonymizer datafile: {anon_pkl_path} corrupt")
+            logger.info(f"Anonymizer Model successfully loaded from: {self.model_filename}")
 
-                logger.info(f"Anonymizer Model loaded successfully, version: {file_model._version}")
+            if not hasattr(file_model, "_version"):
+                logger.error(f"Anonymizer Model datafile corrupt: version missing")
+                raise RuntimeError(f"Anonymizer datafile: {self.model_filename} corrupt")
 
-                if file_model._version != ANONYMIZER_MODEL_VERSION:
-                    logger.info(
-                        f"Anonymizer Model version mismatch: {file_model._version} != {ANONYMIZER_MODEL_VERSION} upgrading accordingly"
-                    )
-                    self.model = AnonymizerModel(project_model.anonymizer_script_path)  # new default model
-                    self.model = copy.copy(
-                        file_model
-                    )  # copy over corresponding attributes from the old model (file_model)
-                    self.model._version = ANONYMIZER_MODEL_VERSION  # upgrade version
-                    self.save_model()
-                    logger.info(f"Anonymizer Model upgraded successfully to version: {self.model._version}")
-                else:
-                    self.model = file_model
+            logger.info(f"Anonymizer Model loaded successfully, version: {file_model._version}")
+
+            if file_model._version != AnonymizerModel.MODEL_VERSION:
+                logger.info(
+                    f"Anonymizer Model version mismatch: {file_model._version} != {AnonymizerModel.MODEL_VERSION} upgrading accordingly"
+                )
+                self.model = AnonymizerModel(project_model.anonymizer_script_path)  # new default model
+                # TODO: handle new & deleted fields in nested objects
+                self.model = copy(file_model)  # copy over corresponding attributes from the old model (file_model)
+                self.model._version = AnonymizerModel.MODEL_VERSION  # upgrade version
+                self.save_model()
+                logger.info(f"Anonymizer Model upgraded successfully to version: {self.model._version}")
+            else:
+                self.model = file_model
 
         else:
             # Initialise New Default AnonymizerModel if no pickle file found in project directory:
@@ -86,13 +95,19 @@ class AnonymizerController:
 
         self._anon_Q: Queue = Queue()
 
-        self._active = True
+        self._active = False
 
         self._worker = threading.Thread(
             target=self._anonymize_worker,
             args=(self._anon_Q,),
             daemon=True,
         ).start()
+
+        time.sleep(0.2)  # Allow worker thread to start
+
+        if not self._active:
+            logger.error("AnonymizerController failed to start worker thread")
+            raise RuntimeError("AnonymizerController failed to start worker thread")
 
     def __del__(self):
         self._active = False
@@ -105,13 +120,15 @@ class AnonymizerController:
             attr_name for attr_name in self.required_attributes if attr_name not in ds or getattr(ds, attr_name) == ""
         ]
 
-    def save_model(self):
-        anon_pkl_path = Path(self.project_model.storage_dir, AnonymizerModel.PICKLE_FILENAME)
-        with open(anon_pkl_path, "wb") as pkl_file:
-            pickle.dump(self.model, pkl_file)
-            pkl_file.close()
-
-        logger.debug(f"Model saved to: {anon_pkl_path}")
+    def save_model(self) -> bool:
+        try:
+            with open(self.model_filename, "wb") as pkl_file:
+                pickle.dump(self.model, pkl_file)
+            logger.debug(f"Anonymizer Model saved to: {self.model_filename}")
+            return True
+        except Exception as e:
+            logger.error(f"Fatal Error saving AnonymizerModel  error: {e}")
+            return False
 
     def get_next_anon_patient_id(self) -> str:
         next_patient_index = self.model.get_patient_id_count() + 1
@@ -149,7 +166,7 @@ class AnonymizerController:
 
         return days_to_increment, formatted_date
 
-    def extract_first_digit(self, s):
+    def extract_first_digit(self, s: str):
         match = re.search(r"\d", s)
         return match.group(0) if match else None
 
@@ -350,6 +367,7 @@ class AnonymizerController:
     # TODO: OPTIMIZE: i/o bound, investigate thread pool for processing batch concurrently
     def _anonymize_worker(self, ds_Q: Queue) -> None:
         logger.info("_anonymize_worker start")
+        self._active = True  # Worker thread active flag, signal back to controller constructor
         while self._active:
             # timeslice worker thread for UX responsivity:
             time.sleep(self._anonymize_time_slice_interval)
@@ -367,10 +385,23 @@ class AnonymizerController:
                     # Load dataset from file if dataset not provided: (eg. via local file/dir import)
                     if ds is None:
                         try:
-                            assert os.path.exists(source)
                             ds = dcmread(source)
+                        except FileNotFoundError as e:
+                            logger.error(f"File not found: {source}")
+                            continue
+                        except IsADirectoryError as e:
+                            logger.error(f"Is a directory: {source}")
+                            continue
+                        except PermissionError as e:
+                            logger.error(f"Permission denied: {source}")
+                            continue
+                        except InvalidDicomError:
+                            logger.error(f"Invalid DICOM file: {source}")
+                            # TODO: move to invalid dicom quarantine
+                            continue
                         except Exception as e:
                             logger.error(f"dcmread error: {source}: {e}")
+                            # TODO: move to general quarantine
                             continue
 
                         # DICOM Dataset integrity checking:
@@ -427,7 +458,7 @@ class AnonymizerController:
                     except Exception as exception:
                         # remove this phi instance UID from lookup if anonymization or storage fails
                         # leave other PHI intact for this patient
-                        self._model.remove_uid(phi_instance_uid)
+                        self.model.remove_uid(phi_instance_uid)
                         logger.error("CRITICAL: Failed writing instance to storage directory")
                         logger.exception(exception)
 

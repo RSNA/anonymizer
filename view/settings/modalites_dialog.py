@@ -20,7 +20,7 @@ class ModalitiesDialog(tk.Toplevel):
     def __init__(
         self,
         parent,
-        modalities: set[str],
+        modalities: list[str],
         title: str = _("Select Modalities"),
     ):
         super().__init__(master=parent)
@@ -29,7 +29,7 @@ class ModalitiesDialog(tk.Toplevel):
         self.geometry("400x280")
         self.resizable(False, False)
         self.grab_set()  # make dialog modal
-        self._user_input: Union[set, None] = None
+        self._user_input: Union[list, None] = None
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
         self.bind("<Return>", self._enter_keypress)
@@ -95,9 +95,7 @@ class ModalitiesDialog(tk.Toplevel):
         )
         self._select_all_button.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="w")
 
-        self._ok_button = ctk.CTkButton(
-            self._button_frame, width=100, text=_("Ok"), command=self._ok_event
-        )
+        self._ok_button = ctk.CTkButton(self._button_frame, width=100, text=_("Ok"), command=self._ok_event)
         self._ok_button.grid(
             row=0,
             column=2,

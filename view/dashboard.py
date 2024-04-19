@@ -1,32 +1,30 @@
 import os
 import logging
-from queue import Queue
 import customtkinter as ctk
 from tkinter import messagebox
 from controller.project import ProjectController
 from utils.translate import _
 from utils.storage import count_studies_series_images
-from view.progress_dialog import ProgressDialog
 
 logger = logging.getLogger(__name__)
 
 
 class Dashboard(ctk.CTkFrame):
-    DASHBOARD_UPDATE_INTERVAL = 500  # milliseconds
+    DASHBOARD_UPDATE_INTERVAL = 1000  # milliseconds
     AWS_AUTH_TIMEOUT = 10  # seconds
 
     # TODO: manage fonts using theme manager
-    TITLE_FONT = ("DIN Alternate", 28)
     LABEL_FONT = ("DIN Alternate Italic", 32)
     DATA_FONT = ("DIN Alternate", 48)
     PAD = 20
     button_width = 100
 
-    def __init__(self, parent: ctk.CTk, controller: ProjectController):
+    def __init__(self, parent, query_callback, export_callback, controller: ProjectController):
         super().__init__(master=parent)
-        self._parent = parent
         self._last_qsize = 0
         self._latch_max_qsize = 1
+        self._query_callback = query_callback
+        self._export_callback = export_callback
         self._controller = controller
         self._timer = 0
         self._create_widgets()
@@ -130,7 +128,7 @@ class Dashboard(ctk.CTkFrame):
             )
             return
         self._query_button.configure(text_color="light green")
-        self._parent.query_retrieve()
+        self._query_callback()
 
     def _export_button_click(self):
         logger.info(f"_export_button_click")
@@ -157,7 +155,7 @@ class Dashboard(ctk.CTkFrame):
             )
             return
         self._export_button.configure(text_color="light green")
-        self._parent.export()
+        self._export_callback()
 
     def _wait_for_aws(self):
         self._timer -= 1
@@ -176,7 +174,7 @@ class Dashboard(ctk.CTkFrame):
 
         if self._controller.AWS_credentials_valid():
             self._export_button.configure(text_color="light green")
-            self._parent.export()
+            self._export_callback()
             self._status.configure(text="AWS Authenticated")
             return
 
@@ -186,9 +184,9 @@ class Dashboard(ctk.CTkFrame):
         if not self._controller:
             return
 
-        dir = self._controller.model.storage_dir
+        dir = self._controller.model.images_dir()
         pts = os.listdir(dir)
-        pts = [item for item in pts if os.path.isdir(os.path.join(dir, item))]
+        pts = [item for item in pts if os.path.isdir(dir.joinpath(item))]
         studies = 0
         series = 0
         images = 0
