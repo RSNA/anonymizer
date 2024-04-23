@@ -1,6 +1,7 @@
 # Description: Anonymization of DICOM datasets
 # See https://mircwiki.rsna.org/index.php?title=The_CTP_DICOM_Anonymizer for legacy anonymizer documentation
 import os
+from shutil import copyfile
 from copy import copy
 import re
 import time
@@ -10,20 +11,27 @@ import hashlib
 import pickle
 from datetime import datetime, timedelta
 from pathlib import Path
-from queue import Queue
+from queue import Queue, Empty
 from pydicom import Dataset, Sequence, dcmread
 from pydicom.errors import InvalidDicomError
 from utils.translate import _
 from utils.storage import local_storage_path
-from model.project import DICOMNode, Study, Series, PHI, ProjectModel
+from model.project import DICOMRuntimeError, DICOMNode, Study, Series, PHI, ProjectModel
 from model.anonymizer import AnonymizerModel
 
 logger = logging.getLogger(__name__)
 
 
 class AnonymizerController:
-    ANONYMIZER_MODEL_FILENAME = "anonymizer.pkl"
+    ANONYMIZER_MODEL_FILENAME = "AnonymizerModel.pkl"
     DEIDENTIFICATION_METHOD = "RSNA DICOM ANONYMIZER"
+    # Quarantine Errors / Sub-directories:
+    QUARANTINE_MISSING_ATTRIBUTES = "Missing_Attributes"
+    QUARANTINE_INVALID_DICOM = "Invalid_DICOM"
+    QUARANTINE_FILE_READ_ERROR = "File_Read_Error"
+    QUARANTINE_DICOM_READ_ERROR = "DICOM_Read_Error"
+    QUARANTINE_STORAGE_ERROR = "Storage_Error"
+
     # See docs/RSNA-Covid-19-Deindentification-Protocol.pdf
     # TODO: if user edits default anonymization script these values should be updated accordingly
     DEIDENTIFICATION_METHODS = [
@@ -38,7 +46,8 @@ class AnonymizerController:
     DEFAULT_ANON_DATE = "20000101"  # if source date is invalid or before 19000101
 
     _anonymize_time_slice_interval: float = 0.1  # seconds
-    _anonymize_batch_size: int = 40  # number of items to process in a batch
+    _anonymizer_model_autosave_interval: int = 60  # seconds
+    # _anonymize_batch_size: int = 40  # number of items to process in a batch
     _clean_tag_translate_table = str.maketrans("", "", "() ,")
 
     # Required DICOM field attributes for accepting files:
@@ -119,6 +128,9 @@ class AnonymizerController:
         return [
             attr_name for attr_name in self.required_attributes if attr_name not in ds or getattr(ds, attr_name) == ""
         ]
+
+    def get_quarantine_path(self) -> Path:
+        return Path(self.project_model.storage_dir, self.project_model.PRIVATE_DIR, self.project_model.QUARANTINE_DIR)
 
     def save_model(self) -> bool:
         try:
@@ -359,111 +371,135 @@ class AnonymizerController:
             logger.debug(f"round_age: Result:{dataset[tag].value}")
         return
 
-    def anonymize_dataset_and_store(self, source: DICOMNode | str, ds: Dataset | None, dir: Path) -> None:
-        self._anon_Q.put((source, ds, dir))
+    def anonymize(self, source: DICOMNode | str, ds: Dataset) -> str | None:
+        # Capture PHI and source for new studies:
+        if self.model.get_anon_uid(ds.StudyInstanceUID) == None:
+            self.capture_phi_from_new_study(ds, source)
+        else:
+            self.update_phi_from_new_instance(ds, source)
+
+        # To minimize computation overhead DO NOT MAKE COPY of source dataset
+        phi_instance_uid = ds.SOPInstanceUID  # if exception, remove this instance from uid_lookup
+
+        try:
+            # Anonymize dataset (overwrite phi dataset) (prevents dataset copy)
+            # TODO: process in AnonymizerModel: Script line: <r en="T" t="privategroups">Remove private groups</r>
+            ds.remove_private_tags()  # remove all private elements
+            ds.walk(self._anonymize_element)
+
+            # Handle Global Tags:
+            ds.PatientIdentityRemoved = "YES"  # CS: (0012, 0062)
+            ds.DeidentificationMethod = self.DEIDENTIFICATION_METHOD  # LO: (0012,0063)
+            de_ident_seq = Sequence()  # SQ: (0012,0064)
+
+            for code, descr in self.DEIDENTIFICATION_METHODS:
+                item = Dataset()
+                item.CodeValue = code
+                item.CodingSchemeDesignator = "DCM"
+                item.CodeMeaning = descr
+                de_ident_seq.append(item)
+
+            ds.DeidentificationMethodCodeSequence = de_ident_seq
+            block = ds.private_block(0x0013, self.PRIVATE_BLOCK_NAME, create=True)
+            block.add_new(0x1, "SH", self.project_model.project_name)
+            block.add_new(0x3, "SH", self.project_model.site_id)
+
+            logger.debug(f"ANON:\n{ds}")
+
+            # Save ANONYMIZED dataset to dicom file in local storage:
+            filename = local_storage_path(self.project_model.images_dir(), ds)
+            logger.info(f"ANON STORE: {source} => {filename}")
+            ds.save_as(filename, write_like_original=False)
+            return None
+
+        except Exception as e:
+            # remove this phi instance UID from lookup if anonymization or storage fails
+            # leave other PHI intact for this patient
+            self.model.remove_uid(phi_instance_uid)
+            qpath: Path = self.get_quarantine_path().joinpath(self.QUARANTINE_STORAGE_ERROR)
+            filename: Path = local_storage_path(qpath, ds)
+            try:
+                error_msg: str = f"Storage error={e}, QUARANTINE {ds.SOPInstanceUID} to {filename}"
+                logger.error(error_msg)
+                ds.save_as(qpath)
+            except:
+                logger.error(f"Error writing incoming dataset to QUARANTINE: {e}")
+
+            return error_msg
+
+    def move_to_quarantine(self, file: Path, sub_dir: str):
+        """Writes the file to the specified quarantine sub-directory.
+
+        Args:
+            file: file to be quarantined
+            sub_dir: quarantine sub-directory
+
+        Returns:
+            True on successful move, False otherwise.
+        """
+        try:
+            qpath = self.get_quarantine_path().joinpath(sub_dir, file.name)
+            logger.error(f"QUARANTINE {file} to {qpath}")
+            copyfile(file, qpath)
+            return True
+        except Exception as e:
+            logger.error(f"Error Copying to QUARANTINE: {e}")
+            return False
+
+    def anonymize_file(self, file: Path) -> tuple[str | None, Dataset | None]:
+        try:
+            ds: Dataset = dcmread(file)
+        except (FileNotFoundError, IsADirectoryError, PermissionError) as e:
+            self.move_to_quarantine(file, self.QUARANTINE_FILE_READ_ERROR)
+            return str(e), None
+        except InvalidDicomError as e:
+            self.move_to_quarantine(file, self.QUARANTINE_INVALID_DICOM)
+            return str(e), None
+        except Exception as e:
+            self.move_to_quarantine(file, self.QUARANTINE_DICOM_READ_ERROR)
+            return str(e), None
+
+        # DICOM Dataset integrity checking:
+        missing_attributes: list[str] = self.missing_attributes(ds)
+        if missing_attributes != []:
+            self.move_to_quarantine(file, self.QUARANTINE_MISSING_ATTRIBUTES)
+            return f"Missing Attributes: {missing_attributes}", ds
+
+        # Skip instance if already stored:
+        if self.model.get_anon_uid(ds.SOPInstanceUID):
+            return (
+                f"Instance already stored",  #: {file}: {ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}",
+                ds,
+            )
+
+        return self.anonymize(str(file), ds), ds
+
+    def anonymize_dataset_and_store(self, source: DICOMNode | str, ds: Dataset | None) -> None:
+        self._anon_Q.put((source, ds))
         return
 
-    # TODO: Error handling & reporting - how to reflect missing attributes, queue overflows & file system errors back to UX?
-    # TODO: OPTIMIZE: i/o bound, investigate thread pool for processing batch concurrently
+    # TODO: OPTIMIZE: i/o bound, investigate thread pool for concurrent processing
     def _anonymize_worker(self, ds_Q: Queue) -> None:
         logger.info("_anonymize_worker start")
+
         self._active = True  # Worker thread active flag, signal back to controller constructor
+        slices_before_save = 0
         while self._active:
             # timeslice worker thread for UX responsivity:
             time.sleep(self._anonymize_time_slice_interval)
-
-            while not ds_Q.empty():
-                logger.debug(f"_anonymize_worker processing batch size: {self._anonymize_batch_size}")
-                batch = []
-                for _ in range(self._anonymize_batch_size):  # Process a batch of items at a time
-                    if not ds_Q.empty():
-                        batch.append(ds_Q.get())
-
-                for item in batch:
-                    source, ds, dir = item
-
-                    # Load dataset from file if dataset not provided: (eg. via local file/dir import)
-                    if ds is None:
-                        try:
-                            ds = dcmread(source)
-                        except FileNotFoundError as e:
-                            logger.error(f"File not found: {source}")
-                            continue
-                        except IsADirectoryError as e:
-                            logger.error(f"Is a directory: {source}")
-                            continue
-                        except PermissionError as e:
-                            logger.error(f"Permission denied: {source}")
-                            continue
-                        except InvalidDicomError:
-                            logger.error(f"Invalid DICOM file: {source}")
-                            # TODO: move to invalid dicom quarantine
-                            continue
-                        except Exception as e:
-                            logger.error(f"dcmread error: {source}: {e}")
-                            # TODO: move to general quarantine
-                            continue
-
-                        # DICOM Dataset integrity checking:
-                        missing_attributes = self.missing_attributes(ds)
-                        if missing_attributes != []:
-                            logger.error(f"Incoming dataset is missing required attributes: {missing_attributes}")
-                            logger.error(f"\n{ds}")
-                            continue
-
-                        # Return success if instance is already stored:
-                        if self.model.get_anon_uid(ds.SOPInstanceUID):
-                            logger.info(f"Instance already stored: {ds.PatientID} {ds.SOPInstanceUID}")
-                            continue
-
-                    # Capture PHI and source for new studies:
-                    if self.model.get_anon_uid(ds.StudyInstanceUID) == None:
-                        self.capture_phi_from_new_study(ds, source)
-                    else:
-                        self.update_phi_from_new_instance(ds, source)
-
-                    phi_instance_uid = ds.SOPInstanceUID  # if exception, remove this instance from uid_lookup
-
-                    try:
-                        # Anonymize dataset (overwrite phi dataset) (prevents dataset copy)
-                        # TODO: process in AnonymizerModel: Script line: <r en="T" t="privategroups">Remove private groups</r>
-                        ds.remove_private_tags()  # remove all private elements
-                        ds.walk(self._anonymize_element)
-
-                        # Handle Global Tags:
-                        ds.PatientIdentityRemoved = "YES"  # CS: (0012, 0062)
-                        ds.DeidentificationMethod = self.DEIDENTIFICATION_METHOD  # LO: (0012,0063)
-                        de_ident_seq = Sequence()  # SQ: (0012,0064)
-
-                        for code, descr in self.DEIDENTIFICATION_METHODS:
-                            item = Dataset()
-                            item.CodeValue = code
-                            item.CodingSchemeDesignator = "DCM"
-                            item.CodeMeaning = descr
-                            de_ident_seq.append(item)
-
-                        ds.DeidentificationMethodCodeSequence = de_ident_seq
-                        block = ds.private_block(0x0013, self.PRIVATE_BLOCK_NAME, create=True)
-                        block.add_new(0x1, "SH", self.project_model.project_name)
-                        block.add_new(0x3, "SH", self.project_model.site_id)
-
-                        logger.debug(f"ANON:\n{ds}")
-
-                        # TODO: custom filtering via script specifying dicom field patterns to keep / quarantine / discard
-                        # Save anonymized dataset to dicom file in local storage:
-                        filename = local_storage_path(dir, ds)
-                        logger.info(f"ANON STORE: {source} => {filename}")
-                        ds.save_as(filename, write_like_original=False)
-
-                    except Exception as exception:
-                        # remove this phi instance UID from lookup if anonymization or storage fails
-                        # leave other PHI intact for this patient
-                        self.model.remove_uid(phi_instance_uid)
-                        logger.error("CRITICAL: Failed writing instance to storage directory")
-                        logger.exception(exception)
-
-                # Save model to disk after processing batch:
-                self.save_model()
+            slices_before_save += 1
+            try:
+                source, ds = ds_Q.get(block=False)
+                error_msg = self.anonymize(source, ds)
+                # TODO: track specific anonymization errors of incoming datasets in lookup: [ds.SOPInstanceUID]=error_msg for UX
+            except Empty:
+                # Save Anonymizer Model every _anonymizer_model_autosave_interval seconds:
+                if slices_before_save > (
+                    self._anonymizer_model_autosave_interval / self._anonymize_time_slice_interval
+                ):
+                    self.save_model()
+                    slices_before_save = 0
+                continue
 
         logger.info("_anonymize_worker end")
         return

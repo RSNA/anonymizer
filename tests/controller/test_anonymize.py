@@ -93,7 +93,7 @@ def test_anonymize_dataset(temp_dir: str, controller):
     assert ds
     assert ds.PatientID
     phi_ds = deepcopy(ds)
-    anonymizer.anonymize_dataset_and_store(LocalSCU, ds, local_storage_dir(temp_dir))
+    anonymizer.anonymize_dataset_and_store(LocalSCU, ds)
     sleep(0.5)
     store_dir = local_storage_dir(temp_dir)
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]

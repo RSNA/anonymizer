@@ -17,7 +17,8 @@ app_client_id = "fgnijvmig42ruvn37mte1p9au"  # cognito application client id ("A
 user_pool_id = "us-east-1_cFn3IKLqG"  # cognito user pool for "Anonymizer-2"
 identity_pool_id = "us-east-1:3c616c9d-58f0-4c89-a412-ea8cf259039a"  # cognito identity pool
 s3_bucket_name = "amplify-datauploader-prodmi-stagingbucketeec2e4de-x4qrvyzen65z"
-s3_prefix = "private2"
+s3_prefix = "private"
+aws_tag = ""
 username = "anonymizer2"  # "johndoe1"
 password = "SpeedFast1967#"  # "SpeedFast1967$"
 # - At least 12 characters
@@ -40,7 +41,7 @@ def authenticate_user():
             "PASSWORD": password,
         },
     )
-    print(response)
+    # print(response)
 
     if "ChallengeName" in response and response["ChallengeName"] == "NEW_PASSWORD_REQUIRED":
         # New password required:
@@ -69,7 +70,10 @@ def authenticate_user():
     ]  # value of AccessToken from cognito-idp.initiate_auth
 
     response = cognito_idp_client.get_user(AccessToken=session_token)
-    print(response)
+    # print(response)
+    global aws_tag
+    aws_tag = response["UserAttributes"][0]["Value"]
+    print(f"User specfic upload tag: {aws_tag}")
 
     # Use the Cognito Identity Token to obtain temporary credentials from the Cognito Identity Pool
 
@@ -91,8 +95,8 @@ def authenticate_user():
         Logins={f"cognito-idp.{region_name}.amazonaws.com/{user_pool_id}": cognito_identity_token},
     )
 
-    print(credentials)
-
+    # print(credentials)
+    print(f"Temporary credentials obtained successfully for {username}")
     return credentials
 
 
@@ -128,7 +132,8 @@ def main():
         # s3.upload_file(file_path_2, s3_bucket_name, object_key)
         # print(f"File 2 uploaded successfully to s3://{s3_bucket_name}/{object_key}")
 
-        response = s3.list_objects(Bucket=s3_bucket_name)
+        prefix = f"{s3_prefix}/{aws_tag}/ANONYMIZER_UNIT_TEST/"
+        response = s3.list_objects(Bucket=s3_bucket_name, Prefix=prefix)
         if "Contents" in response:
             for obj in response["Contents"]:
                 print(obj["Key"])

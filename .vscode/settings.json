@@ -24,13 +24,13 @@
     "RSNA",
     "uids"
   ],
-  "python.analysis.typeCheckingMode": "standard",
+  "python.analysis.typeCheckingMode": "basic",
   "editor.defaultFoldingRangeProvider": "ms-python.black-formatter",
   "editor.defaultFormatter": "ms-python.black-formatter",
   "python.analysis.inlayHints.functionReturnTypes": false,
-  "python.analysis.inlayHints.variableTypes": false,
-  "python.analysis.inlayHints.pytestParameters": false,
-  "python.analysis.inlayHints.callArgumentNames": "all",
+  "python.analysis.inlayHints.variableTypes": true,
+  "python.analysis.inlayHints.pytestParameters": true,
+  "python.analysis.inlayHints.callArgumentNames": "off",
   "python.analysis.diagnosticMode": "workspace",
   "python.analysis.autoFormatStrings": true,
   "python.analysis.completeFunctionParens": true,
@@ -42,4 +42,32 @@
     "prototyping"
   ],
   "python.analysis.addImport.heuristics": false,
+  "editor.suggest.showTypeParameters": false,
+  "python.analysis.packageIndexDepths": [
+
+    {
+      "name": "sklearn",
+      "depth": 2
+    },
+    {
+      "name": "matplotlib",
+      "depth": 2
+    },
+    {
+      "name": "scipy",
+      "depth": 2
+    },
+    {
+      "name": "django",
+      "depth": 2
+    },
+    {
+      "name": "flask",
+      "depth": 2
+    },
+    {
+      "name": "fastapi",
+      "depth": 2
+    }
+  ],
 }

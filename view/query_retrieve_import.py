@@ -351,17 +351,6 @@ class QueryView(tk.Toplevel):
         # TODO: optimize query using wildcards * and ? to reduce number of queries for blocks/sequences
         self._query_button_pressed()
 
-    # def _show_imported_studies_switch_pressed(self):
-    #     logger.info(f"Show Imported Studies switch pressed")
-
-    #     if self._query_active:
-    #         logger.error(f"Switch disabled, query is active")
-    #         return
-
-    #     for item in self._tree.get_children():
-    #         if self._tree.tag_has("green", item):
-    #             self._tree.remove(item)
-
     def _monitor_query_response(self, ux_Q: Queue):
         results = []
 

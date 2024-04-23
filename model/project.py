@@ -106,6 +106,7 @@ class ProjectModel:
     PRIVATE_DIR = "private"
     PUBLIC_DIR = "public"
     PHI_EXPORT_DIR = "phi_export"
+    QUARANTINE_DIR = "quarantine"
 
     # Model Version Control
     MODEL_VERSION = 1

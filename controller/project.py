@@ -207,7 +207,7 @@ class MoveStudiesRequest:
 
 class ProjectController(AE):
 
-    PROJECT_MODEL_FILENAME = "project.pkl"
+    PROJECT_MODEL_FILENAME = "ProjectModel.pkl"
 
     # TODO: GET RSNA ROOT ORGANIZATION UID
     RSNA_ROOT_ORG_UID = "1.2.826.0.1.3680043"
@@ -257,8 +257,8 @@ class ProjectController(AE):
         self.model = model
         set_logging_levels(levels=model.logging_levels)
         # Ensure storage, public and private directories exist:
-        Path(self.model.storage_dir, self.model.PRIVATE_DIR).mkdir(exist_ok=True)
-        Path(self.model.storage_dir, self.model.PUBLIC_DIR).mkdir(exist_ok=True)
+        self.model.storage_dir.joinpath(self.model.PRIVATE_DIR).mkdir(parents=True, exist_ok=True)
+        self.model.storage_dir.joinpath(self.model.PUBLIC_DIR).mkdir(exist_ok=True)
         self.set_dicom_timeouts(timeouts=model.network_timeouts)
         # remote clients must provide Anonymizer's AE Title
         self._require_called_aet = True
@@ -269,6 +269,7 @@ class ProjectController(AE):
 
         # Dynamic AWS vars:
         self._aws_credentials = {}
+        self._s3 = None
         self._aws_expiration_datetime: datetime | None = None
         self._aws_user_directory: str | None = None
         self._aws_last_error: str | None = None
@@ -427,7 +428,7 @@ class ProjectController(AE):
 
         logger.info(f"=>{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}")
 
-        self.anonymizer.anonymize_dataset_and_store(remote_scu, ds, self.model.images_dir())
+        self.anonymizer.anonymize_dataset_and_store(remote_scu, ds)
         return C_SUCCESS
 
     def start_scp(self) -> None:
@@ -525,20 +526,21 @@ class ProjectController(AE):
             return False
         if self._aws_expiration_datetime - datetime.now(self._aws_expiration_datetime.tzinfo) < timedelta(minutes=10):
             self._aws_credentials.clear()
+            self._s3 = None
             return False
         return True
 
     # Blocking call to AWS to authenticate via boto library:
-    def AWS_authenticate(self) -> Dict[str, Dict[str, Any]]:
-        # Authenticates AWS Cognito User and returns AWS temporary credentials
+    def AWS_authenticate(self) -> Any | None:
+        # Authenticates AWS Cognito User and returns AWS s3 client object
         # to use in creation of S3 client in each export thread
-        # On error returns error message else returns credentials Dictionary
-        # Cache credentials and return cached credentials if expiration longer than 10 mins
+        # On error raises AuthenticationError with error message or re-raises any other exception thrown by boto3
+        # Cache credentials and return s3 client object if credential expiration is longer than 10 mins
         logging.info(f"AWS_authenticate")
         if self.AWS_credentials_valid():
             logger.info(f"Using cached AWS credentials, Expiration:{self._aws_expiration_datetime}")
             self._aws_last_error = None
-            return self._aws_credentials
+            return self._s3
 
         try:
             cognito_idp_client = boto3.client("cognito-idp", region_name=self.model.aws_cognito.region_name)
@@ -640,12 +642,41 @@ class ProjectController(AE):
             logger.info(f"AWS Authentication successful, Credentials Expiration:{self._aws_expiration_datetime}")
             self._aws_last_error = None
 
-            return self._aws_credentials
+            self._s3 = boto3.client(
+                "s3",
+                aws_access_key_id=self._aws_credentials["Credentials"]["AccessKeyId"],
+                aws_secret_access_key=self._aws_credentials["Credentials"]["SecretKey"],
+                aws_session_token=self._aws_credentials["Credentials"]["SessionToken"],
+            )
+
+            return self._s3
 
         except Exception as e:
             # Latch error message for UX:
             self._aws_last_error = str(e)
             raise e
+
+    # Blocking call to get list of objects in S3 bucket for an anonymized patient_id/study:
+    # returns list of instance uids
+    def AWS_get_instances(self, anon_pt_id: str, study_uid: str) -> list[str]:
+        s3 = self.AWS_authenticate()
+        if not s3 or not self._aws_user_directory:
+            raise AuthenticationError("AWS Authentication failed")
+
+        object_path: str = Path(
+            self.model.aws_cognito.s3_prefix, self._aws_user_directory, self.model.project_name, anon_pt_id, study_uid
+        ).as_posix()
+
+        paginator = s3.get_paginator("list_objects_v2")
+        instance_uids: list[str] = []
+
+        # Initial request with prefix (if provided)
+        pagination_config: dict[str, str] = {"Bucket": self.model.aws_cognito.s3_bucket, "Prefix": object_path}
+        for page in paginator.paginate(**pagination_config):
+            if "Contents" in page:
+                instance_uids.extend([os.path.splitext(os.path.basename(obj["Key"]))[0] for obj in page["Contents"]])
+
+        return instance_uids
 
     # Non-blocking call to AWS to authenticate via boto library:
     def AWS_authenticate_ex(self) -> None:
@@ -1049,16 +1080,41 @@ class ProjectController(AE):
                 daemon=True,  # daemon threads are abruptly stopped at shutdown
             ).start()
 
-    # Blocking: Query remote server for study/series/instance uid hierarchy (required for iterative move):
+    # Blocking: Query remote DICOM server for study/series/instance uid hierarchy (required for iterative move):
     def get_study_uid_hierarchy(self, scp_name: str, study_uid: str) -> Tuple[str | None, StudyUIDHierarchy]:
-        assert scp_name in self.model.remote_scps
-        scp = self.model.remote_scps[scp_name]
+
         study_uid_hierarchy = StudyUIDHierarchy(uid=study_uid, series={})
         error_msg = None
 
-        if self.model.export_to_AWS:
-            # TODO: s3.ListObjects for directory of study_uid
-            return "NOT IMPLEMENTED", study_uid_hierarchy
+        # # Export to AWS:
+        # # Get objects in S3 bucket with sub-prefix of study_uid to build StudyUIDHierarchy
+        # if self.model.export_to_AWS or dest_name is "AWS":
+
+        #     s3 = self.AWS_authenticate()  # Raise AuthenticationError on error
+        #     if not s3 or self._aws_user_directory is None:
+        #         raise ValueError("AWS Cognito authentication failed")
+
+        #     if anon_pt_id is None:
+        #         raise ValueError("Anon Pt ID is required for AWS export")
+
+        #     # List the objects in the bucket at the prefix to ensure the file was uploaded
+        #     aws_project_prefix: str = Path(
+        #         self.model.aws_cognito.s3_prefix,
+        #         self._aws_user_directory,
+        #         self.model.project_name,
+        #         anon_pt_id,
+        #         study_uid,
+        #     ).as_posix()
+
+        #     response = s3.list_objects(Bucket=self.model.aws_cognito.s3_bucket, Prefix=aws_project_prefix)
+
+        #     if "Contents" in response:
+        #         aws_files = [obj["Key"] for obj in response["Contents"]]
+        #         logger.info(f"AWS S3 files found for {study_uid}: {len(aws_files)}")
+        #         # TODO: Handle limit of 1000 objects in response["Contents"]
+
+        # Export to DICOM:
+        scp = self.model.remote_scps[scp_name]
 
         query_association: Association | None = None
 
@@ -1718,7 +1774,7 @@ class ProjectController(AE):
         self._abort_move = False
 
     def _export_patient(self, dest_name: str, patient_id: str, ux_Q: Queue) -> None:
-        logger.debug(f"_export_patient {patient_id} start to {dest_name}")
+        logger.info(f"_export_patient {patient_id} start to {dest_name}")
 
         export_association = None
         files_sent = 0
@@ -1738,7 +1794,7 @@ class ProjectController(AE):
             export_instance_paths = {Path(file_path).stem: file_path for file_path in file_paths}
 
             # Iterate through Study sub-directories for this patient
-            # If a study instance is on the remote server, remove from export_instance_paths dict
+            # If a study instance is on the remote server (DICOM or AWS), remove from export_instance_paths dict
             for study_uid in os.listdir(patient_dir):
                 time.sleep(self._export_file_time_slice_interval)
                 if self._abort_export:
@@ -1750,11 +1806,16 @@ class ProjectController(AE):
                     continue
 
                 # Remove all instances which are already on destination from the export list:
-                # Get Study UID Hierarchy:
-                _, study_hierarchy = self.get_study_uid_hierarchy(dest_name, study_uid)
-                for instance in study_hierarchy.get_instances():
-                    if instance.uid in export_instance_paths:
-                        del export_instance_paths[instance.uid]
+                if self.model.export_to_AWS:
+                    for instance_uid in self.AWS_get_instances(patient_id, study_uid):
+                        if instance_uid in export_instance_paths:
+                            del export_instance_paths[instance_uid]
+                else:
+                    # Get Study UID Hierarchy:
+                    _, study_hierarchy = self.get_study_uid_hierarchy(dest_name, study_uid)
+                    for instance in study_hierarchy.get_instances():
+                        if instance.uid in export_instance_paths:
+                            del export_instance_paths[instance.uid]
 
             # If NO files to export for this patient, indicate successful export to UX:
             if len(export_instance_paths) == 0:
@@ -1764,17 +1825,9 @@ class ProjectController(AE):
 
             # EXPORT Files:
             if self.model.export_to_AWS:
-                credentials = self.AWS_authenticate()  # Raise AuthenticationError on error
-                if not credentials or self._aws_user_directory is None:
+                s3 = self.AWS_authenticate()  # Raise AuthenticationError on error
+                if not s3 or self._aws_user_directory is None:
                     raise ValueError("AWS Cognito authentication failed")
-
-                # Setup S3 client with AwS credentials
-                s3 = boto3.client(
-                    "s3",
-                    aws_access_key_id=credentials["Credentials"]["AccessKeyId"],
-                    aws_secret_access_key=credentials["Credentials"]["SecretKey"],
-                    aws_session_token=credentials["Credentials"]["SessionToken"],
-                )
 
                 for dicom_file_path in export_instance_paths.values():
                     time.sleep(self._export_file_time_slice_interval)

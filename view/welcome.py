@@ -54,7 +54,7 @@ class WelcomeView(ctk.CTkFrame):
             width=self.TEXT_BOX_WIDTH,
             height=self.TEXT_BOX_HEIGHT,
             wrap="word",
-            fg_color=tuple[str, str](self._fg_color),
+            # fg_color=tuple[str, str](self._fg_color),
             font=self.WELCOME_TEXT_FONT,
             activate_scrollbars=False,
         )

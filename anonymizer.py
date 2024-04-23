@@ -25,7 +25,7 @@ from pydicom.encoders import (
 
 from view.settings.settings_dialog import SettingsDialog
 from view.dashboard import Dashboard
-from view.progress_dialog import ProgressDialog
+from view.import_files_dialog import ImportFilesDialog
 from view.query_retrieve_import import QueryView
 from view.export import ExportView
 from view.html_view import HTMLView
@@ -95,8 +95,8 @@ class App(ctk.CTk):
     def save_config(self):
         try:
             config_data = {
-                "recent_project_dirs": self.recent_project_dirs,
-                "current_open_project_dir": self.current_open_project_dir or "",
+                "recent_project_dirs": [str(path) for path in self.recent_project_dirs],
+                "current_open_project_dir": str(self.current_open_project_dir) or "",
             }
             with open(self.CONFIG_FILENAME, "w") as config_file:
                 json.dump(config_data, config_file, indent=2)
@@ -119,7 +119,7 @@ class App(ctk.CTk):
             new_model=True,
             title=_("New Project Settings"),
         )
-        model = dlg.get_input()
+        model: ProjectModel | None = dlg.get_input()
 
         if model is None:
             logger.info("New Project Cancelled")
@@ -154,6 +154,13 @@ class App(ctk.CTk):
             if not self.controller:
                 raise RuntimeError("Fatal Internal Error, Project Controller not created")
 
+            self.controller.save_model()
+            self.current_open_project_dir = self.controller.model.storage_dir
+
+            if self.current_open_project_dir not in self.recent_project_dirs:
+                self.recent_project_dirs.insert(0, self.current_open_project_dir)
+                self.save_config()
+
         except Exception as e:
             logger.error(f"Error creating Project Controller: {str(e)}")
             messagebox.showerror(
@@ -161,17 +168,9 @@ class App(ctk.CTk):
                 message=_(f"Error creating Project Controller:\n\n{str(e)}"),
                 parent=self,
             )
-            return
-
-        self.controller.save_model()
-        self.current_open_project_dir = self.controller.model.storage_dir
-
-        if self.current_open_project_dir not in self.recent_project_dirs:
-            self.recent_project_dirs.insert(0, self.current_open_project_dir)
-            self.save_config()
-
-        self._open_project()
-        self.enable_file_menu()
+        finally:
+            self._open_project()
+            self.enable_file_menu()
 
     def open_project(self, project_dir: Path | None = None):
         self.disable_file_menu()
@@ -179,17 +178,17 @@ class App(ctk.CTk):
         logging.info(f"Open Project project_dir={project_dir}")
 
         if project_dir is None:
-            project_dir = Path(
-                filedialog.askdirectory(
-                    initialdir=ProjectModel.default_storage_dir(),
-                    title=_("Select Anonymizer Storage Directory"),
-                )
+            selected_dir = filedialog.askdirectory(
+                initialdir=ProjectModel.default_storage_dir(),
+                title=_("Select Anonymizer Storage Directory"),
             )
 
-        if not project_dir:
-            logger.info(f"Open Project Cancelled")
-            self.enable_file_menu()
-            return
+            if not selected_dir:
+                logger.info(f"Open Project Cancelled")
+                self.enable_file_menu()
+                return
+
+            project_dir = Path(selected_dir)
 
         # Get project pkl filename from project directory
         project_model_path = Path(project_dir, ProjectController.PROJECT_MODEL_FILENAME)
@@ -264,7 +263,8 @@ class App(ctk.CTk):
                 message=_(f"No Project file not found in: \n\n{project_dir}"),
                 parent=self,
             )
-            self.recent_project_dirs.remove(project_dir)
+            if project_dir in self.recent_project_dirs:
+                self.recent_project_dirs.remove(project_dir)
             self.set_menu_project_closed()
             self.save_config()
 
@@ -434,17 +434,14 @@ class App(ctk.CTk):
             logger.info(f"Import Files Cancelled")
             return
 
-        for path in paths:
-            self.controller.anonymizer.anonymize_dataset_and_store(path, None, self.controller.model.images_dir())
-
-        if len(paths) > 30:
-            dlg = ProgressDialog(
-                self,
-                self.controller.anonymizer._anon_Q,
-                title=_("Import Files Progress"),
-                sub_title=_(f"Import {len(paths)} files"),
-            )
-            dlg.get_input()
+        dlg = ImportFilesDialog(
+            self,
+            self.controller.anonymizer,
+            paths,
+            title=_("Import Files Progress"),
+            sub_title=_(f"Import {len(paths)} files"),
+        )
+        dlg.get_input()
 
     def import_directory(self, event=None):
         logging.info("Import Directory")
@@ -537,16 +534,14 @@ class App(ctk.CTk):
             )
             return
 
-        logger.info(f"Importing {len(file_paths)} files, adding to anonymizer Q")
+        logger.info(f"Importing {len(file_paths)} files")
 
-        for path in file_paths:
-            self.controller.anonymizer.anonymize_dataset_and_store(path, None, self.controller.model.images_dir())
+        logging.info(f"File paths load complete, starting Import Files Dialog...")
 
-        qsize = self.controller.anonymizer._anon_Q.qsize()
-        logging.info(f"File paths load complete, monitoring anonymizer Q...{qsize}")
-        dlg = ProgressDialog(
+        dlg = ImportFilesDialog(
             self,
-            self.controller.anonymizer._anon_Q,
+            self.controller.anonymizer,
+            file_paths,
             title=_("Import Directory Progress"),
             sub_title=_(f"Import files from {root_dir}"),
         )
