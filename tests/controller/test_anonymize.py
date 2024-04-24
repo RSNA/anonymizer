@@ -85,7 +85,82 @@ def test_valid_date_hash_patient_id_range(controller):
         assert anon.valid_date(hdate)
 
 
-def test_anonymize_dataset(temp_dir: str, controller):
+def test_anonymize_dataset_without_PatientID(temp_dir: str, controller):
+    anonymizer: AnonymizerController = controller.anonymizer
+    anon_Q = Queue()
+    ds = get_testdata_file(cr1_filename, read=True)
+    assert isinstance(ds, Dataset)
+    assert ds
+    assert ds.PatientID
+    # Remove PatientID
+    del ds.PatientID
+    ds.PatientID = ""
+    phi_ds = deepcopy(ds)
+    anonymizer.anonymize_dataset_and_store(LocalSCU, ds)
+    sleep(0.5)
+    store_dir = local_storage_dir(temp_dir)
+    dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
+
+    SITEID = controller.model.site_id
+    UIDROOT = controller.model.uid_root
+
+    anon_pt_id = SITEID + "-000000"
+    assert len(dirlist) == 1
+    assert dirlist[0] == anon_pt_id
+    anon_filename = local_storage_path(local_storage_dir(temp_dir), ds)
+    anon_ds = dcmread(anon_filename)
+    assert isinstance(anon_ds, Dataset)
+    assert anon_ds.PatientID == anon_pt_id
+    assert anon_ds.PatientName == anon_pt_id
+    assert anon_ds.AccessionNumber == "1"
+    assert anon_ds.StudyDate != phi_ds.StudyDate
+    assert anon_ds.StudyDate == anonymizer.DEFAULT_ANON_DATE
+    assert anon_ds.SOPClassUID == phi_ds.SOPClassUID
+    assert anon_ds.SOPInstanceUID == f"{UIDROOT}.{SITEID}.1"
+    assert anon_ds.StudyInstanceUID == f"{UIDROOT}.{SITEID}.2"
+    assert anon_ds.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.3"
+    assert controller.anonymizer.model.get_phi_name(anon_pt_id) == ""
+    assert controller.anonymizer.model.get_phi(anon_pt_id).patient_id == ""
+
+
+def test_anonymize_dataset_with_blank_PatientID(temp_dir: str, controller):
+    anonymizer: AnonymizerController = controller.anonymizer
+    anon_Q = Queue()
+    ds = get_testdata_file(cr1_filename, read=True)
+    assert isinstance(ds, Dataset)
+    assert ds
+    assert ds.PatientID
+    # Set Blank PatientID
+    ds.PatientID = ""
+    phi_ds = deepcopy(ds)
+    anonymizer.anonymize_dataset_and_store(LocalSCU, ds)
+    sleep(0.5)
+    store_dir = local_storage_dir(temp_dir)
+    dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
+
+    SITEID = controller.model.site_id
+    UIDROOT = controller.model.uid_root
+
+    anon_pt_id = SITEID + "-000000"
+    assert len(dirlist) == 1
+    assert dirlist[0] == anon_pt_id
+    anon_filename = local_storage_path(local_storage_dir(temp_dir), ds)
+    anon_ds = dcmread(anon_filename)
+    assert isinstance(anon_ds, Dataset)
+    assert anon_ds.PatientID == anon_pt_id
+    assert anon_ds.PatientName == anon_pt_id
+    assert anon_ds.AccessionNumber == "1"
+    assert anon_ds.StudyDate != phi_ds.StudyDate
+    assert anon_ds.StudyDate == anonymizer.DEFAULT_ANON_DATE
+    assert anon_ds.SOPClassUID == phi_ds.SOPClassUID
+    assert anon_ds.SOPInstanceUID == f"{UIDROOT}.{SITEID}.1"
+    assert anon_ds.StudyInstanceUID == f"{UIDROOT}.{SITEID}.2"
+    assert anon_ds.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.3"
+    assert controller.anonymizer.model.get_phi_name(anon_pt_id) == ""
+    assert controller.anonymizer.model.get_phi(anon_pt_id).patient_id == ""
+
+
+def test_anonymize_dataset_with_PatientID(temp_dir: str, controller):
     anonymizer: AnonymizerController = controller.anonymizer
     anon_Q = Queue()
     ds = get_testdata_file(cr1_filename, read=True)

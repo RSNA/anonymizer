@@ -20,28 +20,28 @@ class ImportFilesDialog(tk.Toplevel):
         parent,
         controller: AnonymizerController,
         paths: list[str] | tuple[str, ...],
-        title: str = _("Progress Dialog"),
+        title: str = _("Import Files"),
         sub_title: str = _("Please wait..."),
     ) -> None:
         super().__init__(master=parent)
         self._controller: AnonymizerController = controller
         self._paths: list[str] | tuple[str, ...] = paths
         self._cancelled = False
+        self._scrolled_to_bottom = False
         self.files_processed = 0
         self.title(title)
         self._sub_title: str = sub_title
         self.attributes("-topmost", True)  # stay on top
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.grab_set()  # make dialog modal
-        self.text_box_width = 600
+        self.text_box_width = 800
         if len(self._paths) > 10:
             self.text_box_height = 400
         else:
             self.text_box_height = 200
         self.resizable(True, True)
         self._user_input: Union[list, None] = None
-        self.rowconfigure(0, weight=1)
-        self.columnconfigure(0, weight=1)
+
         self.bind("<Escape>", self._escape_keypress)
         self._create_widgets()
         self.after(250, self._anonymize_files)
@@ -50,9 +50,12 @@ class ImportFilesDialog(tk.Toplevel):
         logger.info(f"_create_widgets")
         PAD = 10
 
+        self.rowconfigure(0, weight=1)
+        self.columnconfigure(0, weight=1)
+
         self._frame = ctk.CTkFrame(self)
         self._frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nswe")
-        self._frame.rowconfigure(0, weight=1)
+        self._frame.rowconfigure(3, weight=1)
         self._frame.columnconfigure(0, weight=1)
 
         row = 0
@@ -112,7 +115,15 @@ class ImportFilesDialog(tk.Toplevel):
 
             file_index: int = self.files_processed + 1
             parts: list[str] = path.split(os.sep)
-            abridged_path = f"{file_index}: .../{parts[-2]}/{parts[-1]}"
+            if len(parts) > 2:
+                abridged_path = f"{file_index}: .../{parts[-3]}/{parts[-2]}/{parts[-1]}"
+            else:
+                abridged_path = f"{file_index}: {path}"
+
+            # If user has scrolled to the bottom, keep it there
+            if self._text_box.yview()[1] == 1.0:
+                self._text_box.see(tk.END)
+                self._text_box.yview_moveto(1.0)
 
             self._progress_label.configure(text=f"Processing {file_index} of {files_to_process}")
 
@@ -122,9 +133,12 @@ class ImportFilesDialog(tk.Toplevel):
             else:
                 self._text_box.insert(
                     tk.END,
-                    f"{abridged_path} => {ds.PatientID}\n" if ds else f"{abridged_path} => [No Dataset]\n",
+                    (
+                        f"{abridged_path} {self._controller.model.get_phi_name(ds.PatientID)} => {ds.PatientID}\n"
+                        if ds
+                        else f"{abridged_path} => [No Dataset]\n"
+                    ),
                 )
-            self._text_box.see(tk.END)
 
             self.files_processed += 1
             self._progressbar.set(self.files_processed / files_to_process)

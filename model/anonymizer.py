@@ -12,14 +12,17 @@ logger = logging.getLogger(__name__)
 class AnonymizerModel:
     # Model Version Control
     MODEL_VERSION = 1
+    # When PHI PatientID is missing allocate to Anonymized PatientID: 000000
+    DEFAULT_ANON_PATIENT_ID_SUFFIX = "-000000"
 
-    def __init__(self, script_path: Path):
+    def __init__(self, site_id: str, script_path: Path):
         self._version = AnonymizerModel.MODEL_VERSION
+        self.default_anon_pt_id: str = site_id + self.DEFAULT_ANON_PATIENT_ID_SUFFIX
         # Dynamic attributes:
-        self._patient_id_lookup: Dict[str, str] = {}
+        self._patient_id_lookup: Dict[str, str] = {"": self.default_anon_pt_id}
         self._uid_lookup: Dict[str, str] = {}
         self._acc_no_lookup: Dict[str, str] = {}
-        self._phi_lookup: Dict[str, PHI] = {}
+        self._phi_lookup: Dict[str, PHI] = {self.default_anon_pt_id: PHI()}
         self._script_path = script_path
         self._tag_keep: Dict[str, str] = {}  # DICOM Tag: Operation
         self.load_script(script_path)

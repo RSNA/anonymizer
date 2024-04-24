@@ -226,8 +226,8 @@ class ProjectController(AE):
     _patient_export_thread_pool_size = 4
     _study_move_thread_pool_size = 4
     _required_attributes_study_query = [
-        "PatientID",
-        "PatientName",
+        # "PatientID",
+        # "PatientName",
         "StudyInstanceUID",
         "ModalitiesInStudy",
         "NumberOfStudyRelatedSeries",
@@ -656,31 +656,37 @@ class ProjectController(AE):
             self._aws_last_error = str(e)
             raise e
 
+    # Non-blocking call to AWS to authenticate via boto library:
+    def AWS_authenticate_ex(self) -> None:
+        threading.Thread(target=self.AWS_authenticate).start()
+
     # Blocking call to get list of objects in S3 bucket for an anonymized patient_id/study:
     # returns list of instance uids
-    def AWS_get_instances(self, anon_pt_id: str, study_uid: str) -> list[str]:
+    def AWS_get_instances(self, anon_pt_id: str, study_uid: str | None = None) -> list[str]:
         s3 = self.AWS_authenticate()
         if not s3 or not self._aws_user_directory:
             raise AuthenticationError("AWS Authentication failed")
 
-        object_path: str = Path(
-            self.model.aws_cognito.s3_prefix, self._aws_user_directory, self.model.project_name, anon_pt_id, study_uid
-        ).as_posix()
+        object_path = Path(
+            self.model.aws_cognito.s3_prefix, self._aws_user_directory, self.model.project_name, anon_pt_id
+        )
+
+        if study_uid:
+            object_path = object_path.joinpath(study_uid)
 
         paginator = s3.get_paginator("list_objects_v2")
         instance_uids: list[str] = []
 
         # Initial request with prefix (if provided)
-        pagination_config: dict[str, str] = {"Bucket": self.model.aws_cognito.s3_bucket, "Prefix": object_path}
+        pagination_config: dict[str, str] = {
+            "Bucket": self.model.aws_cognito.s3_bucket,
+            "Prefix": object_path.as_posix(),
+        }
         for page in paginator.paginate(**pagination_config):
             if "Contents" in page:
                 instance_uids.extend([os.path.splitext(os.path.basename(obj["Key"]))[0] for obj in page["Contents"]])
 
         return instance_uids
-
-    # Non-blocking call to AWS to authenticate via boto library:
-    def AWS_authenticate_ex(self) -> None:
-        threading.Thread(target=self.AWS_authenticate).start()
 
     # Blocking send
     def send(self, file_paths: list[str], scp_name: str, send_contexts=None):
@@ -1793,24 +1799,25 @@ class ProjectController(AE):
             # Convert to dictionary with instance UIDs as keys:
             export_instance_paths = {Path(file_path).stem: file_path for file_path in file_paths}
 
-            # Iterate through Study sub-directories for this patient
-            # If a study instance is on the remote server (DICOM or AWS), remove from export_instance_paths dict
-            for study_uid in os.listdir(patient_dir):
-                time.sleep(self._export_file_time_slice_interval)
-                if self._abort_export:
-                    logger.error(f"_export_patient patient_id: {patient_id} aborted")
-                    return
+            # Remove all instances which are already on destination from the export list:
+            # For AWS get all instances for this patient id:
+            if self.model.export_to_AWS:
+                for instance_uid in self.AWS_get_instances(patient_id):
+                    if instance_uid in export_instance_paths:
+                        del export_instance_paths[instance_uid]
+            else:
+                # For DICOM Servers iterate through Study sub-directories for this patient
+                # If a study instance is on the remote server (DICOM or AWS), remove from export_instance_paths dict
+                for study_uid in os.listdir(patient_dir):
+                    time.sleep(self._export_file_time_slice_interval)
+                    if self._abort_export:
+                        logger.error(f"_export_patient patient_id: {patient_id} aborted")
+                        return
 
-                study_path = os.path.join(patient_dir, study_uid)
-                if not os.path.isdir(study_path):
-                    continue
+                    study_path = os.path.join(patient_dir, study_uid)
+                    if not os.path.isdir(study_path):
+                        continue
 
-                # Remove all instances which are already on destination from the export list:
-                if self.model.export_to_AWS:
-                    for instance_uid in self.AWS_get_instances(patient_id, study_uid):
-                        if instance_uid in export_instance_paths:
-                            del export_instance_paths[instance_uid]
-                else:
                     # Get Study UID Hierarchy:
                     _, study_hierarchy = self.get_study_uid_hierarchy(dest_name, study_uid)
                     for instance in study_hierarchy.get_instances():

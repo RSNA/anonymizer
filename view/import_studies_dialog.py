@@ -23,7 +23,7 @@ class ImportStudiesDialog(tk.Toplevel):
     ):
         super().__init__(master=parent)
 
-        self.title(title)
+        self.title(f"{title} from {controller.model.remote_scps[scp_name].aet}")
 
         self.attributes("-topmost", True)  # stay on top
         self.grab_set()  # make dialog modal
@@ -33,7 +33,7 @@ class ImportStudiesDialog(tk.Toplevel):
         self._controller = controller
 
         # Create StudyUIDHierarchy List from study_uids:
-        self.studies = [StudyUIDHierarchy(uid) for uid in study_uids]
+        self.studies: list[StudyUIDHierarchy] = [StudyUIDHierarchy(uid) for uid in study_uids]
         self._instances_to_import = 0
         self._study_metadata_retrieved = 0
         self._scp_name = scp_name

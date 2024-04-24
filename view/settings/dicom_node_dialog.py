@@ -93,7 +93,7 @@ class DICOMNodeDialog(tk.Toplevel):
             row += 1
 
             self._dns_lookup_button = ctk.CTkButton(
-                self, width=100, text=_("DNS Lookup"), command=self._dns_lookup_event
+                self._frame, width=100, text=_("DNS Lookup"), command=self._dns_lookup_event
             )
             self._dns_lookup_button.grid(
                 row=row,

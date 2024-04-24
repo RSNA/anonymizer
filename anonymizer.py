@@ -417,31 +417,35 @@ class App(ctk.CTk):
             logger.error("Internal Error: no ProjectController")
             return
 
+        self.disable_file_menu()
+
         file_extension_filters = [
             ("dcm Files", "*.dcm"),
             ("dicom Files", "*.dicom"),
             ("All Files", "*.*"),
         ]
         msg = _("Select DICOM Files to Import & Anonymize")
-        paths = filedialog.askopenfilenames(
+        file_paths = filedialog.askopenfilenames(
             title=msg,
             defaultextension=".dcm",
             filetypes=file_extension_filters,
             parent=self,
         )
 
-        if not paths:
+        if not file_paths:
             logger.info(f"Import Files Cancelled")
+            self.enable_file_menu()
             return
 
         dlg = ImportFilesDialog(
             self,
             self.controller.anonymizer,
-            paths,
-            title=_("Import Files Progress"),
-            sub_title=_(f"Import {len(paths)} files"),
+            file_paths,
+            title=_("Import Files"),
+            sub_title=_(f"Importing {len(file_paths)} {'file' if len(file_paths) == 1 else 'files'}"),
         )
         dlg.get_input()
+        self.enable_file_menu()
 
     def import_directory(self, event=None):
         logging.info("Import Directory")
@@ -449,6 +453,8 @@ class App(ctk.CTk):
         if not self.controller:
             logger.error("Internal Error: no ProjectController")
             return
+
+        self.disable_file_menu()
 
         msg = _("Select DICOM Directory to Impport & Anonymize")
         root_dir = filedialog.askdirectory(
@@ -460,6 +466,7 @@ class App(ctk.CTk):
 
         if not root_dir:
             logger.info(f"Import Directory Cancelled")
+            self.enable_file_menu()
             return
 
         file_paths = []
@@ -479,7 +486,7 @@ class App(ctk.CTk):
                     studies = [ii for ii in patient.children if ii.DirectoryRecordType == "STUDY"]
                     for study in studies:
                         descr = study.StudyDescription or "(no value available)"
-                        print(
+                        logging.info(
                             f"{'  ' * 1}STUDY: StudyID={study.StudyID}, "
                             f"StudyDate={study.StudyDate}, StudyDescription={descr}"
                         )
@@ -502,12 +509,14 @@ class App(ctk.CTk):
                             # Each IMAGE contains a relative file path to the root directory
                             elems = [ii["ReferencedFileID"] for ii in images]
                             # Make sure the relative file path is always a list of str
-                            file_paths = [[ee.value] if ee.VM == 1 else ee.value for ee in elems]
-                            file_paths = [f"{root_dir}/{fp}" for fp in file_paths]
+                            paths = [[ee.value] if ee.VM == 1 else ee.value for ee in elems]
+                            paths = [f"{root_dir}/{Path(*fp)}" for fp in paths]
 
-                            # List the instance file paths
-                            for fp in file_paths:
+                            # List the instance file paths for this series
+                            for fp in paths:
                                 logger.info(f"{'  ' * 3}IMAGE: Path={os.fspath(fp)}")
+
+                            file_paths.extend(paths)
 
             except Exception as e:
                 logger.error(f"Error reading DICOMDIR file: {dicomdir_file}, {str(e)}")
@@ -532,20 +541,25 @@ class App(ctk.CTk):
                 message=f"No DICOM files found in {root_dir}",
                 parent=self,
             )
+            self.enable_file_menu()
             return
 
-        logger.info(f"Importing {len(file_paths)} files")
+        logger.info(f"Importing {len(file_paths)} {'file' if len(file_paths) == 1 else 'files'}")
+
+        # TODO: optimize "already imported" by detecting patient/study/series hierarchy
+        # and using uid_lookup table and file counts to determine if already imported
 
         logging.info(f"File paths load complete, starting Import Files Dialog...")
 
         dlg = ImportFilesDialog(
             self,
             self.controller.anonymizer,
-            file_paths,
-            title=_("Import Directory Progress"),
+            sorted(file_paths),
+            title=_("Import Directory"),
             sub_title=_(f"Import files from {root_dir}"),
         )
         dlg.get_input()
+        self.enable_file_menu()
 
     def query_retrieve(self):
         logging.info("OPEN QueryView")

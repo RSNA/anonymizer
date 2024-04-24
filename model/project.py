@@ -68,23 +68,23 @@ class Study:
 
 @dataclass
 class PHI:
-    patient_name: str
-    patient_id: str
-    sex: str
-    dob: str | None
-    weight: str | None
-    bmi: str | None
-    size: str | None
-    smoker: str | None
-    medical_alerts: str | None
-    allergies: str | None
-    ethnic_group: str | None
-    reason_for_visit: str | None
-    admitting_diagnoses: str | None
-    history: str | None
-    additional_history: str | None
-    comments: str | None
-    studies: List[Study]
+    patient_name: str = ""
+    patient_id: str = ""
+    sex: str = "U"
+    dob: str | None = None
+    weight: str | None = None
+    bmi: str | None = None
+    size: str | None = None
+    smoker: str | None = None
+    medical_alerts: str | None = None
+    allergies: str | None = None
+    ethnic_group: str | None = None
+    reason_for_visit: str | None = None
+    admitting_diagnoses: str | None = None
+    history: str | None = None
+    additional_history: str | None = None
+    comments: str | None = None
+    studies: List[Study] = field(default_factory=list)
 
 
 @dataclass

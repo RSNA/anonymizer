@@ -54,7 +54,6 @@ class AnonymizerController:
     required_attributes = [
         "SOPClassUID",
         "SOPInstanceUID",
-        "PatientID",  # TODO: handle missing PatientID
         "StudyInstanceUID",
         "SeriesInstanceUID",
     ]
@@ -88,7 +87,9 @@ class AnonymizerController:
                 logger.info(
                     f"Anonymizer Model version mismatch: {file_model._version} != {AnonymizerModel.MODEL_VERSION} upgrading accordingly"
                 )
-                self.model = AnonymizerModel(project_model.anonymizer_script_path)  # new default model
+                self.model = AnonymizerModel(
+                    project_model.site_id, project_model.anonymizer_script_path
+                )  # new default model
                 # TODO: handle new & deleted fields in nested objects
                 self.model = copy(file_model)  # copy over corresponding attributes from the old model (file_model)
                 self.model._version = AnonymizerModel.MODEL_VERSION  # upgrade version
@@ -99,7 +100,7 @@ class AnonymizerController:
 
         else:
             # Initialise New Default AnonymizerModel if no pickle file found in project directory:
-            self.model = AnonymizerModel(project_model.anonymizer_script_path)
+            self.model = AnonymizerModel(project_model.site_id, project_model.anonymizer_script_path)
             logger.info(f"New Default Anonymizer Model initialised from: {project_model.anonymizer_script_path}")
 
         self._anon_Q: Queue = Queue()
@@ -143,8 +144,8 @@ class AnonymizerController:
             return False
 
     def get_next_anon_patient_id(self) -> str:
-        next_patient_index = self.model.get_patient_id_count() + 1
-        return f"{self.project_model.site_id}-{next_patient_index:06}"
+        next_patient_index = self.model.get_patient_id_count()
+        return f"{self.project_model.site_id}-{next_patient_index:06}"  # TODO: handle more than 999999 patients
 
     # Date must be YYYYMMDD format and a valid date after 19000101:
     def valid_date(self, date_str: str) -> bool:
@@ -227,13 +228,15 @@ class AnonymizerController:
                 ],
             )
 
-        anon_patient_id = self.model.get_anon_patient_id(phi_ds.PatientID)
+        # If PHI PatientID is missing, as per DICOM Standard, pydicom will return ""
+        # this corresponds to AnonymizerModel.DEFAULT_ANON_PATIENT_ID ("000000") initialised in AnonymizerModel
+        anon_patient_id = self.model.get_anon_patient_id(phi_ds.PatientID if hasattr(phi_ds, "PatientID") else "")
 
         if anon_patient_id == None:  # New patient
             new_anon_patient_id = self.get_next_anon_patient_id()
             # TODO: write init method for PHI(phi_ds) using introspection for fields to look for in dataset
             phi = PHI(
-                patient_name=str(phi_ds.PatientName),
+                patient_name=str(phi_ds.PatientName) if hasattr(phi_ds, "PatientSex") else "U",
                 patient_id=str(phi_ds.PatientID),
                 sex=phi_ds.PatientSex if hasattr(phi_ds, "PatientSex") else "U",
                 dob=phi_ds.PatientBirthDate if hasattr(phi_ds, "PatientBirthDate") else None,
@@ -273,7 +276,7 @@ class AnonymizerController:
 
     def update_phi_from_new_instance(self, ds: Dataset, source: DICOMNode | str):
         # Study PHI already captured, update series and instance counts from new instance:
-        anon_patient_id = self.model.get_anon_patient_id(ds.PatientID)
+        anon_patient_id = self.model.get_anon_patient_id(ds.PatientID if hasattr(ds, "PatientID") else "")
         assert anon_patient_id != None
         phi = self.model.get_phi(anon_patient_id)
         if phi == None:
@@ -340,7 +343,7 @@ class AnonymizerController:
             dataset[tag].value = anon_uid
             return
         elif "ptid" in operation:
-            anon_pt_id = self.model.get_anon_patient_id(dataset.PatientID)
+            anon_pt_id = self.model.get_anon_patient_id(dataset.PatientID if hasattr(dataset, "PatientID") else "")
             if not anon_pt_id:
                 anon_pt_id = self.get_next_anon_patient_id()
                 self.model.set_anon_patient_id(dataset.PatientID, anon_pt_id)
@@ -352,7 +355,9 @@ class AnonymizerController:
                 self.model.set_anon_acc_no(value, str(anon_acc_no))
             dataset[tag].value = str(anon_acc_no)
         elif "hashdate" in operation:
-            _, anon_date = self._hash_date(data_element.value, dataset.PatientID)
+            _, anon_date = self._hash_date(
+                data_element.value, dataset.PatientID if hasattr(dataset, "PatientID") else ""
+            )
             dataset[tag].value = anon_date
         elif "@round" in operation:
             # TODO: operand is named round but it is age format specific, should be renamed round_age
@@ -386,6 +391,9 @@ class AnonymizerController:
             # TODO: process in AnonymizerModel: Script line: <r en="T" t="privategroups">Remove private groups</r>
             ds.remove_private_tags()  # remove all private elements
             ds.walk(self._anonymize_element)
+            # Handle missing PHI PatientID:
+            if not hasattr(ds, "PatientID") or ds.PatientID == "":
+                ds.PatientID = self.model.default_anon_pt_id
 
             # Handle Global Tags:
             ds.PatientIdentityRemoved = "YES"  # CS: (0012, 0062)
@@ -467,10 +475,10 @@ class AnonymizerController:
 
         # Skip instance if already stored:
         if self.model.get_anon_uid(ds.SOPInstanceUID):
-            return (
-                f"Instance already stored",  #: {file}: {ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}",
-                ds,
+            logger.info(
+                f"Instance already stored:{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}"
             )
+            return (f"Instance already stored", ds)
 
         return self.anonymize(str(file), ds), ds
 
@@ -499,6 +507,9 @@ class AnonymizerController:
                 ):
                     self.save_model()
                     slices_before_save = 0
+                continue
+            except Exception as e:
+                logger.error(f"Anonymizer Worker Error: {e}")
                 continue
 
         logger.info("_anonymize_worker end")
