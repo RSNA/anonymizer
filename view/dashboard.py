@@ -142,18 +142,19 @@ class Dashboard(ctk.CTkFrame):
                 self.after(1000, self._wait_for_aws)
                 self._status.configure(text="Waiting for AWS Authentication...")
                 return
+        else:
+            if not self._controller.echo("EXPORT"):
+                self._export_button.configure(text_color="red")
+                messagebox.showerror(
+                    title=_("Connection Error"),
+                    message=_(
+                        f"Export Server Failed DICOM C-ECHO, check Project Settings/Export Server"
+                        " and ensure server is setup for local server: echo and storage services."
+                    ),
+                    parent=self,
+                )
+                return
 
-        if not self._controller.echo("EXPORT"):
-            self._export_button.configure(text_color="red")
-            messagebox.showerror(
-                title=_("Connection Error"),
-                message=_(
-                    f"Export Server Failed DICOM C-ECHO, check Project Settings/Export Server"
-                    " and ensure server is setup for local server: echo and storage services."
-                ),
-                parent=self,
-            )
-            return
         self._export_button.configure(text_color="light green")
         self._export_callback()
 
