@@ -1,7 +1,6 @@
 # UNIT TESTS for controller/dicom_storage_scp.py
 # use pytest from terminal to show full logging output: pytest --log-cli-level=DEBUG
 import os
-import logging
 import time
 import pytest
 from pydicom.dataset import Dataset
@@ -48,10 +47,6 @@ from tests.controller.dicom_test_files import (
     CT_STUDY_1_SERIES_4_IMAGES,
     MR_STUDY_3_SERIES_11_IMAGES,
 )
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
 
 def test_move_at_study_level_1_CT_file_from_pacs_with_file_to_unknown_AET(temp_dir: str, controller: ProjectController):
     ds: Dataset = send_file_to_scp(ct_small_filename, PACSSimulatorSCP, controller)
@@ -449,7 +444,7 @@ def test_move_at_instance_level_CT_1_Series_4_Images_from_pacs_with_file_to_loca
     assert total_files == 4
 
 
-def test_move_at_study_level_of_3_studies_from_pacs_to_local_storage(temp_dir: str, controller: ProjectController):
+def test_move_at_study_level_3_studies_from_pacs_to_local_storage(temp_dir: str, controller: ProjectController):
     # Send 3 studies to TEST PACS
     ds1: Dataset = send_file_to_scp(cr1_filename, PACSSimulatorSCP, controller)
     ds2: Dataset = send_file_to_scp(ct_small_filename, PACSSimulatorSCP, controller)
@@ -547,7 +542,7 @@ def test_move_at_study_level_of_3_studies_from_pacs_to_local_storage(temp_dir: s
     assert total_files == 13
 
 
-def test_move_at_series_level_of_3_studies_from_pacs_to_local_storage(temp_dir: str, controller: ProjectController):
+def test_move_at_series_level_3_studies_from_pacs_to_local_storage(temp_dir: str, controller: ProjectController):
     # Send 3 studies to TEST PACS
     ds1: Dataset = send_file_to_scp(cr1_filename, PACSSimulatorSCP, controller)
     ds2: Dataset = send_file_to_scp(ct_small_filename, PACSSimulatorSCP, controller)
@@ -876,7 +871,7 @@ def test_move_at_instance_level_of_3_studies_from_orthance_to_local_storage(
 
 
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
-def test_move_3_studies_with_network_timeout_from_orthance_to_local_storage(
+def test_move_at_series_level_3_studies_with_network_timeout_from_orthance_to_local_storage(
     temp_dir: str, controller: ProjectController
 ):
     # Send 3 studies to ORTHANC PACS:
@@ -904,7 +899,7 @@ def test_move_3_studies_with_network_timeout_from_orthance_to_local_storage(
     # Set Network Timeout to 1 second to ensure move timeout occurs:
     controller.model.network_timeouts.network = 1
 
-    # MOVE Study 1,2,3 at STUDY LEVEL:
+    # MOVE Study 1,2,3 at SERIES LEVEL:
     assert request_to_move_studies_from_scp_to_local_scp(
         "SERIES",
         [study1_hierarchy, study2_hierarchy, study3_hierarchy],

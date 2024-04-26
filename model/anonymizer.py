@@ -1,9 +1,9 @@
-from typing import Dict, Tuple, List
+from typing import Dict, List
 from pathlib import Path
 import logging
 from pprint import pformat
 import xml.etree.ElementTree as ET
-from .project import ProjectModel, PHI
+from .project import PHI
 from utils.translate import _
 
 logger = logging.getLogger(__name__)

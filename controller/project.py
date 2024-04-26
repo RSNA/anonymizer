@@ -1092,34 +1092,6 @@ class ProjectController(AE):
         study_uid_hierarchy = StudyUIDHierarchy(uid=study_uid, series={})
         error_msg = None
 
-        # # Export to AWS:
-        # # Get objects in S3 bucket with sub-prefix of study_uid to build StudyUIDHierarchy
-        # if self.model.export_to_AWS or dest_name is "AWS":
-
-        #     s3 = self.AWS_authenticate()  # Raise AuthenticationError on error
-        #     if not s3 or self._aws_user_directory is None:
-        #         raise ValueError("AWS Cognito authentication failed")
-
-        #     if anon_pt_id is None:
-        #         raise ValueError("Anon Pt ID is required for AWS export")
-
-        #     # List the objects in the bucket at the prefix to ensure the file was uploaded
-        #     aws_project_prefix: str = Path(
-        #         self.model.aws_cognito.s3_prefix,
-        #         self._aws_user_directory,
-        #         self.model.project_name,
-        #         anon_pt_id,
-        #         study_uid,
-        #     ).as_posix()
-
-        #     response = s3.list_objects(Bucket=self.model.aws_cognito.s3_bucket, Prefix=aws_project_prefix)
-
-        #     if "Contents" in response:
-        #         aws_files = [obj["Key"] for obj in response["Contents"]]
-        #         logger.info(f"AWS S3 files found for {study_uid}: {len(aws_files)}")
-        #         # TODO: Handle limit of 1000 objects in response["Contents"]
-
-        # Export to DICOM:
         scp = self.model.remote_scps[scp_name]
 
         query_association: Association | None = None

@@ -1,10 +1,10 @@
-from email.mime import base
 import os
 from pathlib import Path
-from turtle import st
+from openpyxl import load_workbook
+from openpyxl.workbook.workbook import Workbook
+from openpyxl.worksheet.worksheet import Worksheet
 from pydicom import Dataset
-
-# TODO: move these to controller or model?
+from dataclasses import dataclass
 
 
 def local_storage_path(base_dir: Path, ds: Dataset) -> Path:
@@ -24,32 +24,6 @@ def local_storage_path(base_dir: Path, ds: Dataset) -> Path:
     # Ensure all directories in the path exist
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)
     return dest_path
-
-
-def get_latest_pkl_file(directory: str, filename_contains: str) -> str | None:
-    """
-    This function finds the latest *.pkl file (by modification time) within a directory
-    that also contains the specified string in its filename.
-
-    Args:
-        directory (str): Path to the directory containing the pickle files.
-        filename_contains (str): String to search for within the filenames.
-
-    Returns:
-        str: Path to the latest *.pkl file matching the criteria, or None if no match is found.
-    """
-    latest_file = None
-    latest_mtime = None
-
-    for filename in os.listdir(path=directory):
-        if filename.endswith(".pkl") and filename_contains in filename:
-            filepath = os.path.join(directory, filename)
-            mtime = os.path.getmtime(filename=filepath)  # Get modification time
-            if latest_mtime is None or mtime > latest_mtime:
-                latest_file = filepath
-                latest_mtime = mtime
-
-    return latest_file
 
 
 def count_studies_series_images(patient_path: str):
@@ -98,3 +72,49 @@ def count_study_images(base_dir: Path, anon_pt_id: str, study_uid: str) -> int:
                 image_count += 1
 
     return image_count
+
+
+@dataclass
+class JavaAnonymizerExportedStudy:
+    ANON_PatientName: str
+    ANON_PatientID: str
+    PHI_PatientName: str
+    PHI_PatientID: str
+    DateOffset: str
+    ANON_StudyDate: str
+    PHI_StudyDate: str
+    ANON_Accession: str
+    PHI_Accession: str
+    ANON_StudyInstanceUID: str
+    PHI_StudyInstanceUID: str
+
+
+def read_java_anonymizer_index_xlsx(filename) -> list[JavaAnonymizerExportedStudy]:
+    """
+    Read data from the Java Anonymizer exported patient index file
+    containing a single workbook & sheet with fields as per the JavaAnonymizerExportedStudy dataclass.
+
+    Args:
+        filename (str): The path to the Excel file.
+
+    Returns:
+        List of JavaAnonymizerExportedStudy dataclass objects.
+
+    If the file is not found or the sheet is empty, an empty list is returned.
+    """
+    try:
+        workbook: Workbook = load_workbook(filename)
+        sheet = workbook.active
+        assert isinstance(sheet, Worksheet)
+        data = []
+
+        if sheet is None:
+            raise ValueError("No active sheet found in the workbook")
+
+        for row in sheet.iter_rows(values_only=True, min_row=2):
+            str_row = [str(item) if item is not None else "" for item in row]
+            data.append(JavaAnonymizerExportedStudy(*str_row))
+
+        return data
+    except Exception as e:
+        return []

@@ -1,6 +1,7 @@
 # Description: Anonymization of DICOM datasets
 # See https://mircwiki.rsna.org/index.php?title=The_CTP_DICOM_Anonymizer for legacy anonymizer documentation
 import os
+from typing import List
 from shutil import copyfile
 from copy import copy
 import re
@@ -15,7 +16,7 @@ from queue import Queue, Empty
 from pydicom import Dataset, Sequence, dcmread
 from pydicom.errors import InvalidDicomError
 from utils.translate import _
-from utils.storage import local_storage_path
+from utils.storage import local_storage_path, JavaAnonymizerExportedStudy
 from model.project import DICOMRuntimeError, DICOMNode, Study, Series, PHI, ProjectModel
 from model.anonymizer import AnonymizerModel
 
@@ -96,12 +97,12 @@ class AnonymizerController:
                 self.save_model()
                 logger.info(f"Anonymizer Model upgraded successfully to version: {self.model._version}")
             else:
-                self.model = file_model
+                self.model: AnonymizerModel = file_model
 
         else:
             # Initialise New Default AnonymizerModel if no pickle file found in project directory:
             self.model = AnonymizerModel(project_model.site_id, project_model.anonymizer_script_path)
-            logger.info(f"New Default Anonymizer Model initialised from: {project_model.anonymizer_script_path}")
+            logger.info(f"New Default Anonymizer Model initialised from script: {project_model.anonymizer_script_path}")
 
         self._anon_Q: Queue = Queue()
 
@@ -121,6 +122,30 @@ class AnonymizerController:
 
     def __del__(self):
         self._active = False
+
+    def process_java_phi_studies(self, java_studies: List[JavaAnonymizerExportedStudy]):
+        logger.info(f"Processing {len(java_studies)} Java PHI Studies")
+        for study in java_studies:
+            self.model.set_anon_patient_id(study.PHI_PatientID, study.ANON_PatientID)
+            self.model.set_anon_acc_no(study.PHI_Accession, study.ANON_Accession)
+            self.model.set_anon_uid(study.PHI_StudyInstanceUID, study.ANON_StudyInstanceUID)
+
+            new_study = Study(
+                study_date=study.PHI_StudyDate,
+                anon_date_delta=int(study.DateOffset),
+                accession_number=study.PHI_Accession,
+                study_uid=study.PHI_StudyInstanceUID,
+                source="Java Index File",
+                series=[],
+            )
+            new_phi = PHI(
+                patient_name=study.PHI_PatientName,
+                patient_id=study.PHI_PatientID,
+                studies=[new_study],
+            )
+            self.model.set_phi(study.ANON_PatientID, new_phi)
+
+        self.save_model()
 
     def stop(self):
         self._active = False

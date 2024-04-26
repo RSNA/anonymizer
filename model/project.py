@@ -1,6 +1,6 @@
 import os
 import time
-import logging
+from  logging import INFO, WARNING
 from pprint import pformat
 from typing import Dict, Tuple, List
 from dataclasses import dataclass, field
@@ -8,8 +8,6 @@ from pathlib import Path
 from pynetdicom._globals import ALL_TRANSFER_SYNTAXES, DEFAULT_TRANSFER_SYNTAXES
 from utils.modalities import MODALITIES
 from utils.translate import _
-
-logger = logging.getLogger(__name__)
 
 
 # Controller Custom Error classes:
@@ -165,7 +163,7 @@ class ProjectModel:
 
     @staticmethod
     def default_logging_levels() -> LoggingLevels:
-        return LoggingLevels(logging.INFO, logging.WARNING, False)
+        return LoggingLevels(INFO, WARNING, False)
 
     version: int = MODEL_VERSION
     site_id: str = field(default_factory=default_site_id)

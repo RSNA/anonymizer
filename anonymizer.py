@@ -10,7 +10,6 @@ from model.project import DICOMRuntimeError, ProjectModel
 
 from utils.translate import _
 from utils.logging import init_logging
-from utils.storage import get_latest_pkl_file
 from __version__ import __version__
 from pydicom._version import __version__ as pydicom_version
 from pydicom import dcmread
@@ -119,7 +118,7 @@ class App(ctk.CTk):
             new_model=True,
             title=_("New Project Settings"),
         )
-        model: ProjectModel | None = dlg.get_input()
+        model, java_phi_studies = dlg.get_input()
 
         if model is None:
             logger.info("New Project Cancelled")
@@ -153,6 +152,9 @@ class App(ctk.CTk):
             self.controller = ProjectController(model)
             if not self.controller:
                 raise RuntimeError("Fatal Internal Error, Project Controller not created")
+
+            if java_phi_studies:
+                self.controller.anonymizer.process_java_phi_studies(java_phi_studies)
 
             self.controller.save_model()
             self.current_open_project_dir = self.controller.model.storage_dir
@@ -627,7 +629,7 @@ class App(ctk.CTk):
             return
 
         dlg = SettingsDialog(self, self.controller.model, title=_("Project Settings"))
-        edited_model = dlg.get_input()
+        (edited_model, null_java_phi) = dlg.get_input()
         if edited_model is None:
             logger.info("Settings Cancelled")
             return

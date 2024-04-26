@@ -1,7 +1,6 @@
 # UNIT TESTS for controller/dicom_storage_scp.py
 # use pytest from terminal to show full logging output: pytest --log-cli-level=DEBUG
 import os
-import logging
 import time
 from pydicom.dataset import Dataset
 from tests.controller.helpers import send_file_to_scp
@@ -11,10 +10,6 @@ from tests.controller.dicom_test_files import (
     mr_small_filename,
 )
 from tests.controller.dicom_test_nodes import TEST_SITEID, TEST_UIDROOT, LocalStorageSCP
-
-
-logger = logging.getLogger(__name__)
-
 
 def test_send_cr1(temp_dir: str, controller):
     ds: Dataset = send_file_to_scp(cr1_filename, LocalStorageSCP, controller)

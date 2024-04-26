@@ -1,15 +1,16 @@
 from pathlib import Path
-from typing import Union
+from typing import List, Tuple
 import tkinter as tk
 import customtkinter as ctk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 import string
 import logging
-from model.project import ProjectModel
+from model.project import ProjectModel, AWSCognito
 from controller.project import DICOMNode
 from utils.translate import _
 from utils.ux_fields import str_entry
 from utils.logging import set_logging_levels
+from utils.storage import read_java_anonymizer_index_xlsx, JavaAnonymizerExportedStudy
 from view.settings.dicom_node_dialog import DICOMNodeDialog
 from view.settings.aws_cognito_dialog import AWSCognitoDialog
 from view.settings.network_timeouts_dialog import NetworkTimeoutsDialog
@@ -31,12 +32,13 @@ class SettingsDialog(tk.Toplevel):
         title: str = _("Project Settings"),
     ):
         super().__init__(master=parent)
-        self.model = model
+        self.model: ProjectModel = model
+        self.java_phi_studies: List[JavaAnonymizerExportedStudy] = []
         self.new_model = new_model  # to restrict editing for existing projects, eg. SITE_ID & storage directory changes
         self.title(title)
         self.resizable(False, False)
         self.grab_set()  # make dialog modal
-        self._user_input: Union[ProjectModel, None] = None
+        self._user_input: Tuple[ProjectModel | None, List[JavaAnonymizerExportedStudy] | None] = (None, None)
         self._create_widgets()
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
@@ -64,7 +66,7 @@ class SettingsDialog(tk.Toplevel):
 
         row = 0
 
-        self.site_id__var = str_entry(
+        self.site_id_var: ctk.StringVar = str_entry(
             view=self._frame,
             label=_("Site ID:"),
             initial_value=self.model.site_id,
@@ -78,9 +80,18 @@ class SettingsDialog(tk.Toplevel):
             sticky="nw",
             enabled=False,  # Site ID is auto generated and cannot be changed
         )
+
+        if self.new_model:
+            self._load_java_index_button = ctk.CTkButton(
+                self._frame,
+                text=_("Load JAVA Index File"),
+                command=self._initialise_project_from_java_index,
+            )
+            self._load_java_index_button.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="ne")
+
         row += 1
 
-        self.project_name_var = str_entry(
+        self.project_name_var: ctk.StringVar = str_entry(
             view=self._frame,
             label=_("Project Name:"),
             initial_value=self.model.project_name,
@@ -96,7 +107,7 @@ class SettingsDialog(tk.Toplevel):
         )
         row += 1
 
-        self.uidroot_var = str_entry(
+        self.uidroot_var: ctk.StringVar = str_entry(
             view=self._frame,
             label=_("UID Root:"),
             initial_value=self.model.uid_root,
@@ -268,7 +279,7 @@ class SettingsDialog(tk.Toplevel):
 
     def _local_server_click(self, event=None):
         dlg = DICOMNodeDialog(self, self.model.scp, title=_("Local Server"))
-        scp = dlg.get_input()
+        scp: DICOMNode | None = dlg.get_input()
         if scp is None:
             logger.info(f"Local Server cancelled")
             return
@@ -305,7 +316,7 @@ class SettingsDialog(tk.Toplevel):
 
     def _aws_cognito_click(self, event=None):
         dlg = AWSCognitoDialog(self, self.model.export_to_AWS, self.model.aws_cognito)
-        input = dlg.get_input()
+        input: tuple[bool, AWSCognito] | None = dlg.get_input()
         if input is None:
             logger.info(f"AWS Cognito cancelled")
             return
@@ -387,15 +398,56 @@ class SettingsDialog(tk.Toplevel):
         logger.info(f"Logging Levels updated: {self.model.logging_levels}")
         set_logging_levels(levels)
 
+    def _initialise_project_from_java_index(self):
+        path: str = filedialog.askopenfilename(
+            parent=self,
+            initialdir="~",
+            title=_("Select Java Anonymizer Index File"),
+            filetypes=[(_("Excel Files"), "*.xlsx")],
+        )
+        if path:
+            logger.info(f"Java Index File: {path}")
+            # Read phi data records from the Java Anonymizer Exported Study Index File:
+            self.java_phi_studies: List[JavaAnonymizerExportedStudy] = read_java_anonymizer_index_xlsx(path)
+            if len(self.java_phi_studies) == 0:
+                msg = _(f"No PHI data records foundin:\n\n{path}")
+                messagebox.showerror(
+                    title=_("Load Java Anonymizer Index File Error"),
+                    message=msg,
+                    parent=self,
+                )
+                return
+            else:
+                messagebox.showinfo(
+                    title=_("Java Index File Loaded"),
+                    message=_(
+                        f"{len(self.java_phi_studies)} Studies from Java Index loaded.\n\n"
+                        "Site ID, UID Root will be inferred from the first PHI record.\n\n"
+                        "Please enter your Project Name and configure all other settings below.\n\n"
+                        "The Java Index data will be processed into the Python Anonymizer database when the project is created."
+                    ),
+                    parent=self,
+                )
+
+            # Infer Site ID from the first record's ANON_PatientID:
+            self.model.site_id = self.java_phi_studies[0].ANON_PatientID.split("-")[0]
+            self.site_id_var.set(self.model.site_id)
+            logger.info(f"Site ID {self.model.site_id} initialised from Java Index File")
+            # Infer UID Root from the first record's ANON_StudyInstanceUID:
+            if self.model.site_id in self.java_phi_studies[0].ANON_StudyInstanceUID:
+                self.model.uid_root = self.java_phi_studies[0].ANON_StudyInstanceUID.split(f".{self.model.site_id}")[0]
+                self.uidroot_var.set(self.model.uid_root)
+                logger.info(f"UID Root {self.model.uid_root} initialised from Java Index File")
+
     def _enter_keypress(self, event):
         logger.info(f"_enter_pressed")
         self._create_project()
 
     def _create_project(self):
-        self.model.site_id = self.site_id__var.get()
+        self.model.site_id = self.site_id_var.get()
         self.model.project_name = self.project_name_var.get()
         self.model.uid_root = self.uidroot_var.get()
-        self._user_input = self.model
+        self._user_input = self.model, self.java_phi_studies
 
         self.grab_release()
         self.destroy()
