@@ -1824,6 +1824,9 @@ class ProjectController(AE):
                         Path(dicom_file_path).relative_to(self.model.images_dir()),
                     ).as_posix()
 
+                    # TODO: use multi-part upload_part method for large files
+                    # which can be aborted via s3.abort_multipart_upload
+                    # or use thread for s3.upload_file and use callback of transferred bytes
                     s3.upload_file(dicom_file_path, self.model.aws_cognito.s3_bucket, object_key)
                     logger.info(f"Uploaded to S3: {object_key}")
 

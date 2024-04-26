@@ -215,7 +215,7 @@ def test_export_2_patients_to_test_pacs(temp_dir: str, controller: ProjectContro
         assert ds.PatientID == patient2_id
         assert ds.StudyInstanceUID == mr_brain_StudyInstanceUID
 
-    time.sleep(0.5)
+    time.sleep(1)
 
     store_dir = controller.model.images_dir()
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
