@@ -39,7 +39,9 @@
   ],
   "python.analysis.exclude": [
     ".vscode",
-    "prototyping"
+    "prototyping",
+    "dist",
+    "build"
   ],
   "python.analysis.addImport.heuristics": false,
   "editor.suggest.showTypeParameters": false,

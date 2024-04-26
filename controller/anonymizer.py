@@ -450,11 +450,12 @@ class AnonymizerController:
             # leave other PHI intact for this patient
             self.model.remove_uid(phi_instance_uid)
             qpath: Path = self.get_quarantine_path().joinpath(self.QUARANTINE_STORAGE_ERROR)
+            os.makedirs(qpath, exist_ok=True)
             filename: Path = local_storage_path(qpath, ds)
             try:
                 error_msg: str = f"Storage error={e}, QUARANTINE {ds.SOPInstanceUID} to {filename}"
                 logger.error(error_msg)
-                ds.save_as(qpath)
+                ds.save_as(filename)
             except:
                 logger.error(f"Error writing incoming dataset to QUARANTINE: {e}")
 
@@ -473,6 +474,7 @@ class AnonymizerController:
         try:
             qpath = self.get_quarantine_path().joinpath(sub_dir, file.name)
             logger.error(f"QUARANTINE {file} to {qpath}")
+            os.makedirs(qpath.parent, exist_ok=True)
             copyfile(file, qpath)
             return True
         except Exception as e:

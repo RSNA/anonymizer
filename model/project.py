@@ -1,9 +1,10 @@
 import os
 import time
-from  logging import INFO, WARNING
+from logging import INFO, WARNING
 from pprint import pformat
+from copy import deepcopy
 from typing import Dict, Tuple, List
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from pynetdicom._globals import ALL_TRANSFER_SYNTAXES, DEFAULT_TRANSFER_SYNTAXES
 from utils.modalities import MODALITIES
@@ -190,7 +191,11 @@ class ProjectModel:
         return self.__class__.__name__
 
     def __repr__(self) -> str:
-        return f"{self.get_class_name()}\n({pformat(self.__dict__)})"
+        d = asdict(self)
+        d["aws_cognito"] = deepcopy(self.aws_cognito)
+        d["aws_cognito"].password = len(d["aws_cognito"].password) * "*"
+        # return pformat(d)
+        return f"{self.get_class_name()}\n({pformat(d)})"
 
     def images_dir(self) -> Path:
         return self.storage_dir.joinpath(self.PUBLIC_DIR)

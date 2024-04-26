@@ -8,8 +8,9 @@ from utils.ux_fields import int_entry
 
 logger = logging.getLogger(__name__)
 
+
 class NetworkTimeoutsDialog(tk.Toplevel):
-#class NetworkTimeoutsDialog(ctk.CTkToplevel):
+    # class NetworkTimeoutsDialog(ctk.CTkToplevel):
     def __init__(
         self,
         parent,
@@ -19,8 +20,8 @@ class NetworkTimeoutsDialog(tk.Toplevel):
         super().__init__(master=parent)
         self.timeouts = timeouts
         self.title(title)
-        self.lift()  
-        self.attributes("-topmost", True)  
+        self.lift()
+        self.attributes("-topmost", True)
         self.resizable(False, False)
         self.grab_set()  # make dialog modal
         self._user_input: Union[NetworkTimeouts, None] = None
@@ -91,7 +92,7 @@ class NetworkTimeoutsDialog(tk.Toplevel):
 
         self.network_var = int_entry(
             view=self._frame,
-            label=_("Close Inactive Connection:"),
+            label=_("Network (Close Inactive Connection):"),
             initial_value=int(self.timeouts.network),
             min=0,
             max=600,
@@ -104,9 +105,7 @@ class NetworkTimeoutsDialog(tk.Toplevel):
 
         row += 1
 
-        self._ok_button = ctk.CTkButton(
-            self._frame, width=100, text=_("Ok"), command=self._ok_event
-        )
+        self._ok_button = ctk.CTkButton(self._frame, width=100, text=_("Ok"), command=self._ok_event)
         self._ok_button.grid(
             row=row,
             column=1,

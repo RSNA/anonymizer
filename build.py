@@ -148,7 +148,7 @@ if __name__ == "__main__":
         # To run this executable after download requires removing the extended attributes via
         # xattr -r -c <path to exe/app>
 
-        # Delete the redundant build folder
+        # Delete the redundant build folder (created by github action workflow)
         app_dir = os.path.join("dist", build_version_name)
         if os.path.exists(app_dir):
             shutil.rmtree(app_dir)

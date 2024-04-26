@@ -200,7 +200,9 @@ class QueryView(tk.Toplevel):
         # Create frame for Query results:
         self._results_frame = ctk.CTkFrame(self)
         self._results_frame.grid(row=1, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")
-        self._results_frame.grid_rowconfigure(0, weight=1)
+
+        results_row = 0
+        self._results_frame.grid_rowconfigure(results_row, weight=1)
         self._results_frame.grid_columnconfigure(9, weight=1)
 
         # Managing C-FIND results Treeview:
@@ -224,11 +226,8 @@ class QueryView(tk.Toplevel):
 
         # Create a Vertical and Horizontal Scrollbar and associate them with the Treeview
         vertical_scrollbar = ttk.Scrollbar(self._results_frame, orient="vertical", command=self._tree.yview)
-        vertical_scrollbar.grid(row=0, column=10, sticky="ns")
+        vertical_scrollbar.grid(row=results_row, column=10, sticky="ns")
         self._tree.configure(yscrollcommand=vertical_scrollbar.set)
-        # horizontal_scrollbar = ttk.Scrollbar(self._results_frame, orient="horizontal", command=self._tree.xview)
-        # horizontal_scrollbar.grid(row=1, column=10, sticky="ew")
-        # self._tree.configure(xscrollcommand=horizontal_scrollbar.set)
 
         # Set tree column width and justification
         for col in self._tree["columns"]:
@@ -249,15 +248,24 @@ class QueryView(tk.Toplevel):
         self._tree.bind("<Up>", lambda e: "break")
         self._tree.bind("<Down>", lambda e: "break")
         self._tree.bind("<<TreeviewSelect>>", self._tree_select)
-        self._tree.grid(row=0, column=0, columnspan=10, sticky="nswe")
+        self._tree.grid(row=results_row, column=0, columnspan=10, sticky="nswe")
+
+        results_row += 1
+
+        # TODO: Fix horizontal scrollbar dissappearing after window resize
+        # horizontal_scrollbar = ttk.Scrollbar(self._results_frame, orient="horizontal", command=self._tree.xview)
+        # horizontal_scrollbar.grid(row=results_row, column=0, columnspan=10, sticky="we")
+        # self._tree.configure(xscrollcommand=horizontal_scrollbar.set)
+
+        # results_row += 1
 
         # Progress bar and status:
         self._status = ctk.CTkLabel(self._results_frame, text=f"Processing 0 of 0 Studies")
-        self._status.grid(row=1, column=0, padx=PAD, pady=0, sticky="w")
+        self._status.grid(row=results_row, column=0, padx=PAD, pady=0, sticky="w")
 
         self._progressbar = ctk.CTkProgressBar(self._results_frame)
         self._progressbar.grid(
-            row=1,
+            row=results_row,
             column=1,
             padx=PAD,
             pady=0,
@@ -271,7 +279,7 @@ class QueryView(tk.Toplevel):
             text=_("Select All"),
             command=self._select_all_button_pressed,
         )
-        self._select_all_button.grid(row=1, column=5, padx=PAD, pady=PAD, sticky="w")
+        self._select_all_button.grid(row=results_row, column=5, padx=PAD, pady=PAD, sticky="w")
 
         self._clear_selection_button = ctk.CTkButton(
             self._results_frame,
@@ -279,10 +287,10 @@ class QueryView(tk.Toplevel):
             text=_("Clear Selection"),
             command=self._clear_selection_button_pressed,
         )
-        self._clear_selection_button.grid(row=1, column=6, padx=PAD, pady=PAD, sticky="w")
+        self._clear_selection_button.grid(row=results_row, column=6, padx=PAD, pady=PAD, sticky="w")
 
         self._studies_selected_label = ctk.CTkLabel(self._results_frame, text=_("Studies Selected: 0"))
-        self._studies_selected_label.grid(row=1, column=7, padx=PAD, pady=PAD, sticky="w")
+        self._studies_selected_label.grid(row=results_row, column=7, padx=PAD, pady=PAD, sticky="w")
 
         self._import_button = ctk.CTkButton(
             self._results_frame,
@@ -290,7 +298,7 @@ class QueryView(tk.Toplevel):
             text=_("Import & Anonymize"),
             command=self._import_button_pressed,
         )
-        self._import_button.grid(row=1, column=9, padx=PAD, pady=PAD, sticky="e")
+        self._import_button.grid(row=results_row, column=9, padx=PAD, pady=PAD, sticky="e")
 
     def busy(self):
         return self._query_active or self._controller.bulk_move_active()
@@ -523,38 +531,12 @@ class QueryView(tk.Toplevel):
         self._tree.delete(*self._tree.get_children())
 
     def _select_all_button_pressed(self):
-        for item in self._tree.get_children():
-            # Only selected studies which have not been fully imported:
-            if not self._tree.tag_has("green", item):
-                self._tree.selection_add(item)
+        self._tree.selection_set(*self._tree.get_children())
         self._studies_selected_label.configure(text=f"Studies Selected: {len(list(self._tree.selection()))}")
 
     def _clear_selection_button_pressed(self):
-        for item in self._tree.selection():
-            self._tree.selection_remove(item)
+        self._tree.selection_set([])
         self._studies_selected_label.configure(text=f"Studies Selected: 0")
-
-    # def _update_imported_count(self, study_uid: str = None):
-    #     def _parse_tree_item(self, study_uid):
-    #         current_values = list(self._tree.item(study_uid, "values"))
-    #         return (
-    #             current_values[self._tree_column_keys.index("PatientID")],
-    #             int(current_values[self._tree_column_keys.index("NumberOfStudyRelatedInstances")]),
-    #         )
-
-    #     uids = self._tree.get_children() if not study_uid else [study_uid]
-    #     for study_uid in uids:
-    #         if study_uid in self._study_uids_to_import:
-    #             current_values = list(self._tree.item(study_uid, "values"))
-    #             pid, instances_to_import = _parse_tree_item(self, study_uid)
-    #             files_imported = self._images_stored_phi_lookup(pid, study_uid)
-    #             current_values[self._tree_column_keys.index("Imported")] = str(files_imported)
-    #             self._tree.item(study_uid, values=current_values)
-    #             if files_imported >= instances_to_import:
-    #                 logging.info(f"Study {study_uid} marked GREEN, all images imported")
-    #                 self._tree.selection_remove(study_uid)
-    #                 self._tree.item(study_uid, tags="green")
-    #                 self._study_uids_to_import.remove(study_uid)
 
     def _display_import_result(self, studies: list[StudyUIDHierarchy]):
         logger.debug("_display_import_result")

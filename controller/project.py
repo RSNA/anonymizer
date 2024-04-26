@@ -1780,6 +1780,7 @@ class ProjectController(AE):
             else:
                 # For DICOM Servers iterate through Study sub-directories for this patient
                 # If a study instance is on the remote server (DICOM or AWS), remove from export_instance_paths dict
+                self._abort_query = False
                 for study_uid in os.listdir(patient_dir):
                     time.sleep(self._export_file_time_slice_interval)
                     if self._abort_export:

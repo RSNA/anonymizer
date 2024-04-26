@@ -273,15 +273,14 @@ class ExportView(tk.Toplevel):
             logger.error(f"Selection disabled, export is active")
             return
         logger.info(f"Select All button pressed")
-        self._tree.selection_set(self._tree.get_children())
+        self._tree.selection_set(*self._tree.get_children())
 
     def _clear_selection_button_pressed(self):
         if self._export_active:
             logger.error(f"Selection disabled, export is active")
             return
         logger.info(f"Clear Selection button pressed")
-        for item in self._tree.selection():
-            self._tree.selection_remove(item)
+        self._tree.selection_set([])
 
     def _create_phi_button_pressed(self):
         logger.info(f"Create PHI button pressed")
