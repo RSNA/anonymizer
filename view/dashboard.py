@@ -1,8 +1,10 @@
 import os
 import logging
+from queue import Queue
+from typing import Any
 import customtkinter as ctk
 from tkinter import messagebox
-from controller.project import ProjectController
+from controller.project import ProjectController, EchoRequest, EchoResponse
 from utils.translate import _
 from utils.storage import count_studies_series_images
 
@@ -11,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class Dashboard(ctk.CTkFrame):
     DASHBOARD_UPDATE_INTERVAL = 1000  # milliseconds
-    AWS_AUTH_TIMEOUT = 10  # seconds
+    AWS_AUTH_TIMEOUT_SECONDS = 10  # must be > 2 secs
 
     # TODO: manage fonts using theme manager
     LABEL_FONT = ("DIN Alternate Italic", 32)
@@ -25,8 +27,10 @@ class Dashboard(ctk.CTkFrame):
         self._latch_max_qsize = 1
         self._query_callback = query_callback
         self._export_callback = export_callback
-        self._controller = controller
+        self._controller: ProjectController = controller
         self._timer = 0
+        self._query_ux_Q: Queue[EchoResponse] = Queue()
+        self._export_ux_Q: Queue[EchoResponse] = Queue()
         self._create_widgets()
         self.grid(row=0, column=0, padx=self.PAD, pady=self.PAD)
         self._update_dashboard()
@@ -113,54 +117,57 @@ class Dashboard(ctk.CTkFrame):
         self._status = ctk.CTkLabel(self._status_frame, text="")
         self._status.grid(row=0, column=3, padx=self.PAD, sticky="e")
 
-    def _query_button_click(self):
-        logger.info(f"_query_button_click")
-        # This blocks for TCP connection timeout
-        if not self._controller.echo("QUERY"):
-            self._query_button.configure(text_color="red")
+    def _wait_for_scp_echo(self, scp_name: str, button: ctk.CTkButton, ux_Q: Queue[EchoResponse], callback: Any):
+        if ux_Q.empty():
+            self.after(500, self._wait_for_scp_echo, scp_name, button, ux_Q, callback)
+            return
+
+        er: EchoResponse = ux_Q.get()
+        logger.info(er)
+        if er.success:
+            button.configure(state="normal", text_color="light green")
+            self._status.configure(text=f"{scp_name} Server online")
+            callback()
+        else:
             messagebox.showerror(
                 title=_("Connection Error"),
                 message=_(
-                    f"Query Server Failed DICOM C-ECHO, check Project Settings/Query Server"
-                    " and ensure server is setup for local server: echo, query & move services."
+                    f"{scp_name} Server Failed DICOM ECHO\n\nCheck Project Settings/{scp_name} Server"
+                    "\n\nEnsure the remote server is setup for to allow the local server for echo and storage services."
                 ),
                 parent=self,
             )
-            return
-        self._query_button.configure(text_color="light green")
-        self._query_callback()
+            self._status.configure(text=f"{scp_name} Server offline")
+            button.configure(state="normal", text_color="red")
+
+    def _query_button_click(self):
+        logger.info(f"_query_button_click")
+        self._query_button.configure(state="disabled")
+        self._controller.echo_ex(EchoRequest(scp="QUERY", ux_Q=self._query_ux_Q))
+        self.after(500, self._wait_for_scp_echo, "Query", self._query_button, self._query_ux_Q, self._query_callback)
+        self._status.configure(text="Checking Query DICOM Server is online...")
 
     def _export_button_click(self):
         logger.info(f"_export_button_click")
-        # This blocks for TCP connection timeout
-        # TODO: create background task for this, how to notify user of status?
+        self._export_button.configure(state="disabled")
+
         if self._controller.model.export_to_AWS:
             if not self._controller.AWS_credentials_valid():
                 self._controller.AWS_authenticate_ex()  # Authenticate to AWS in background
                 # Wait for up to AWS_AUTH_TIMEOUT for AWS response
-                self._timer = self.AWS_AUTH_TIMEOUT
+                self._timer = self.AWS_AUTH_TIMEOUT_SECONDS
                 self.after(1000, self._wait_for_aws)
                 self._status.configure(text="Waiting for AWS Authentication...")
-                return
         else:
-            if not self._controller.echo("EXPORT"):
-                self._export_button.configure(text_color="red")
-                messagebox.showerror(
-                    title=_("Connection Error"),
-                    message=_(
-                        f"Export Server Failed DICOM C-ECHO, check Project Settings/Export Server"
-                        " and ensure server is setup for local server: echo and storage services."
-                    ),
-                    parent=self,
-                )
-                return
-
-        self._export_button.configure(text_color="light green")
-        self._export_callback()
+            self._controller.echo_ex(EchoRequest(scp="EXPORT", ux_Q=self._export_ux_Q))
+            self.after(
+                500, self._wait_for_scp_echo, "Export", self._export_button, self._export_ux_Q, self._export_callback
+            )
+            self._status.configure(text="Checking Export DICOM Server is online...")
 
     def _wait_for_aws(self):
         self._timer -= 1
-        if self._timer == 0:
+        if self._timer == 0:  # TIMEOUT
             self._export_button.configure(text_color="red")
             messagebox.showerror(
                 title=_("Connection Error"),
@@ -171,6 +178,7 @@ class Dashboard(ctk.CTkFrame):
                 parent=self,
             )
             self._status.configure(text="")
+            self._export_button.configure(text_color="red", state="normal")
             return
 
         if self._controller.AWS_credentials_valid():

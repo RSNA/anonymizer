@@ -166,6 +166,18 @@ class StudyUIDHierarchy:
 
 
 @dataclass
+class EchoRequest:
+    scp: str | DICOMNode
+    ux_Q: Queue
+
+
+@dataclass
+class EchoResponse:
+    success: bool
+    error: str | None
+
+
+@dataclass
 class FindStudyRequest:
     scp_name: str
     name: str
@@ -495,29 +507,36 @@ class ProjectController(AE):
 
         return association
 
-    def echo(self, scp: str | DICOMNode) -> bool:
+    def echo(self, scp: str | DICOMNode, ux_Q: Queue | None = None) -> bool:
         logger.info(f"Perform C-ECHO from {self.model.scu} to {scp}")
         association = None
         try:
             association = self._connect_to_scp(scp, [self.get_verification_context()])
-            status = (Dataset)(association.send_c_echo())
+
+            status: Dataset = association.send_c_echo()
             if not status:
                 raise ConnectionError("Connection timed out, was aborted, or received an invalid response")
+
             if status.Status == C_SUCCESS:
                 logger.info(f"C-ECHO Success")
+                if ux_Q:
+                    ux_Q.put(EchoResponse(success=True, error=None))
                 association.release()
                 return True
             else:
-                logger.error(status)
-                logger.error(f"C-ECHO Failed status: {VERIFICATION_SERVICE_CLASS_STATUS[status.Status][1]}")
-                association.release()
-                return False
+                raise DICOMRuntimeError(f"C-ECHO Failed status: {VERIFICATION_SERVICE_CLASS_STATUS[status.Status][1]}")
 
         except Exception as e:
-            logger.error(f"Failed DICOM C-ECHO from from {self.model.scu} to {scp}, Error: {(e)}")
+            error = f"{(e)}"
+            logger.error(error)
+            if ux_Q:
+                ux_Q.put(EchoResponse(success=False, error=error))
             if association:
                 association.release()
             return False
+
+    def echo_ex(self, er: EchoRequest) -> None:
+        threading.Thread(target=self.echo, args=(er.scp, er.ux_Q)).start()
 
     def AWS_credentials_valid(self) -> bool:
         # If AWS credentials are cached and expiration is less than 10 minutes away, return True
@@ -1915,7 +1934,7 @@ class ProjectController(AE):
         # for future in self._move_futures:
         #     future.cancel()
         if self._export_executor:
-            self._export_executor.shutdown(wait=True, cancel_futures=True)
+            self._export_executor.shutdown(wait=False if self.model.export_to_AWS else True, cancel_futures=True)
             logger.info("Move futures cancelled and executor shutdown")
             self._export_executor = None
 

@@ -1,4 +1,4 @@
-import os, sys, json
+import os, sys, json, shutil, time
 from pathlib import Path
 from copy import copy
 import logging
@@ -83,7 +83,7 @@ class App(ctk.CTk):
                     if not os.path.exists(dir):
                         self.recent_project_dirs.remove(dir)
                 self.current_open_project_dir = config_data.get("current_open_project_dir")
-                if not os.path.exists(self.current_open_project_dir):
+                if not os.path.exists(str(self.current_open_project_dir)):
                     self.current_open_project_dir = None
         except FileNotFoundError:
             warn_msg = _(
@@ -137,16 +137,34 @@ class App(ctk.CTk):
             self.enable_file_menu()
             return
 
-        if os.path.exists(model.storage_dir):
+        project_model_path = Path(model.storage_dir, ProjectController.PROJECT_MODEL_FILENAME)
+        if model.storage_dir.exists() and model.storage_dir.is_dir() and project_model_path.exists():
             confirm = messagebox.askyesno(
                 title=_("Confirm Overwrite"),
-                message=_("The project directory already exists. Do you want to overwrite the existing project?"),
+                message=_(
+                    "The project directory already exists.\n\nDo you want to delete the existing project and all its data?"
+                ),
                 parent=self,
             )
             if not confirm:
                 logger.info("New Project Cancelled")
                 self.enable_file_menu()
                 return
+
+            # Delete contents of existing project directory:
+            try:
+                shutil.rmtree(model.storage_dir)
+            except Exception as e:
+                logger.error(f"Error deleting existing project directory: {model.storage_dir}, {str(e)}")
+                messagebox.showerror(
+                    title=_("New Project Error"),
+                    message=_(f"Error deleting existing project directory: {model.storage_dir}\n\n {str(e)}"),
+                    parent=self,
+                )
+                self.enable_file_menu()
+                return
+
+            logger.info(f"Deleted existing project directory: {model.storage_dir}")
 
         try:
             self.controller = ProjectController(model)
@@ -354,22 +372,23 @@ class App(ctk.CTk):
             )
             return
 
+        # Cloning only copies the project settings
+        # Not the anonymized files or lookup tables (ie. AnonymizerModel)
+        self.controller.anonymizer.stop()
         current_project_dir = self.controller.model.storage_dir
 
-        cloned_project_dir = Path(
-            filedialog.askdirectory(
-                initialdir=current_project_dir.parent,
-                title=_("Select Directory for Cloned Project"),
-                mustexist=False,
-                parent=self,
-            )
+        clone_dir_str: str | None = filedialog.askdirectory(
+            initialdir=current_project_dir.parent,
+            title=_("Select Directory for Cloned Project"),
+            mustexist=False,
+            parent=self,
         )
 
-        if not cloned_project_dir:
+        if not clone_dir_str:
             logger.info(f"Clone Project Cancelled")
             return
 
-        assert os.path.exists(cloned_project_dir)
+        cloned_project_dir = Path(clone_dir_str)
 
         if cloned_project_dir == current_project_dir:
             logger.info(f"Clone Project Cancelled, cloned directory same as current project directory")
@@ -380,23 +399,20 @@ class App(ctk.CTk):
             )
             return
 
-        self.controller.save_model(cloned_project_dir)
+        # Change the storage directory to the cloned project directory and regenerate site id
+        # keep all other settings:
+        cloned_model: ProjectModel = copy(self.controller.model)
+        # Close current project
         self.close_project()
-
-        project_pkl_path = Path(cloned_project_dir, ProjectController.PROJECT_MODEL_FILENAME)
-
-        with open(project_pkl_path, "rb") as pkl_file:
-            self.controller.model = pickle.load(pkl_file)
-
-        logger.info(f"Project Model loaded from: {project_pkl_path}")
-
-        # Change storage directory and site_id of cloned model:
-        self.controller.model.storage_dir = cloned_project_dir
-        self.controller.model.regenerate_site_id()
+        time.sleep(1)
+        cloned_model.storage_dir = cloned_project_dir
+        cloned_model.regenerate_site_id()
 
         try:
-            self.controller = ProjectController(self.controller.model)
-            logger.info(f"{self.controller}")
+            # Create New Controller with cloned project model
+            self.controller = ProjectController(cloned_model)
+            self.controller.save_model()
+            logger.info(f"Project cloned successfully: {self.controller}")
         except Exception as e:
             logger.error(f"Error creating Project Controller: {str(e)}")
             messagebox.showerror(
@@ -408,6 +424,7 @@ class App(ctk.CTk):
 
         if not cloned_project_dir in self.recent_project_dirs:
             self.recent_project_dirs.insert(0, cloned_project_dir)
+
         self.current_open_project_dir = cloned_project_dir
         self.save_config()
         self._open_project()
