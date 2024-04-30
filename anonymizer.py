@@ -31,11 +31,13 @@ from view.html_view import HTMLView
 from view.welcome import WelcomeView
 
 from controller.project import ProjectController, ProjectModel
+import os
+from pathlib import Path
 
 logger = logging.getLogger()  # ROOT logger
 
 
-class App(ctk.CTk):
+class Anonymizer(ctk.CTk):
     TITLE = _("RSNA DICOM Anonymizer Version " + __version__)
     THEME_FILE = "assets/themes/rsna_theme.json"
     CONFIG_FILENAME = "config.json"
@@ -57,10 +59,12 @@ class App(ctk.CTk):
         self.controller: ProjectController | None = None
         self.query_view: QueryView | None = None
         self.export_view: ExportView | None = None
+        self.overview_view: HTMLView | None = None
+        self.help_views = {}
         self.instructions_view: HTMLView | None = None
         self.license_view: HTMLView | None = None
         self.dashboard: Dashboard | None = None
-        self.welcome_view = WelcomeView(self)
+        self.welcome_view: WelcomeView = WelcomeView(self)
         self.resizable(False, False)
         self.title(self.TITLE)
         self.recent_project_dirs: list[Path] = []
@@ -213,7 +217,7 @@ class App(ctk.CTk):
         # Get project pkl filename from project directory
         project_model_path = Path(project_dir, ProjectController.PROJECT_MODEL_FILENAME)
 
-        if os.path.exists(project_model_path):
+        if project_model_path.exists() and project_model_path.is_file():
             try:
                 with open(project_model_path, "rb") as pkl_file:
                     file_model = pickle.load(pkl_file)
@@ -658,41 +662,33 @@ class App(ctk.CTk):
         self.controller._post_model_update()
         logger.info(f"{self.controller}")
 
-    def instructions(self):
-        logging.info("OPEN Instructions HTMLView")
+    def show_help_view(self, html_file_path):
+        view_name = html_file_path.stem.split("_", 1)[1].capitalize()
+        if view_name in self.help_views:
+            view = self.help_views[view_name]
+            if view.winfo_exists():
+                logger.info(f"{view.title} already OPEN")
+                view.deiconify()
+                return
 
-        if self.instructions_view and self.instructions_view.winfo_exists():
-            logger.info(f"Instructions HTMLView already OPEN")
-            self.instructions_view.deiconify()
-            return
-
-        self.instructions_view = HTMLView(
-            self,
-            title=_(f"Instructions"),
-            html_file_path="assets/html/instructions.html",
-        )
-        self.instructions_view.focus()
-
-    def view_license(self):
-        logging.info("OPEN License HTMLView")
-
-        if self.license_view and self.license_view.winfo_exists():
-            logger.info(f"License HTMLView already OPEN")
-            self.license_view.deiconify()
-            self.license_view.focus_force()
-            return
-
-        self.license_view = HTMLView(
-            self,
-            title=_(f"License"),
-            html_file_path="assets/html/license.html",
-        )
-        self.license_view.focus()
+        self.help_views[view_name] = HTMLView(self, title=view_name, html_file_path=html_file_path.as_posix())
+        self.help_views[view_name].focus()
 
     def get_help_menu(self):
         help_menu = tk.Menu(self.menu_bar, tearoff=0)
-        help_menu.add_command(label=_("Instructions"), font=self.menu_font, command=self.instructions)
-        help_menu.add_command(label=_("View License"), font=self.menu_font, command=self.view_license)
+        # Get all html files in assets/html/ directory
+        # Sort by filename number prefix
+        html_dir = Path("assets/html/")
+        file_paths = sorted(html_dir.glob("*.html"), key=lambda path: int(path.stem.split("_")[0]))
+
+        for i, file_path in enumerate(file_paths):
+            label = file_path.stem.split("_", 1)[1].capitalize()
+            help_menu.add_command(
+                label=label,
+                font=self.menu_font,
+                command=lambda path=file_path: self.show_help_view(path),
+            )
+
         return help_menu
 
     def set_menu_project_closed(self):
@@ -804,16 +800,17 @@ def main():
     args = str(sys.argv)
     install_dir = os.path.dirname(os.path.realpath(__file__))
     run_as_exe = getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
-    # TODO: enhance cmd line processing using Click library
+    # TODO: command line interface for server side deployments
+    # enhance cmd line processing using Click library
     init_logging(install_dir, run_as_exe)
     os.chdir(install_dir)
 
     logger = logging.getLogger()  # get root logger
     logger.info(f"cmd line args={args}")
     if run_as_exe:
-        logger.info(f"Running as executable (PyInstaller)")
-    logger.info(f"Python Optimization Level: {sys.flags.optimize}")
-    logger.info(f"Starting ANONYMIZER GUI Version {__version__}")
+        logger.info(f"Running as PyInstaller executable")
+    logger.info(f"Python Optimization Level [0,1,2]: {sys.flags.optimize}")
+    logger.info(f"Starting ANONYMIZER Version {__version__}")
     logger.info(f"Running from {os.getcwd()}")
     logger.info(f"Python Version: {sys.version_info.major}.{sys.version_info.minor}")
     logger.info(f"tkinter TkVersion: {tk.TkVersion} TclVersion: {tk.TclVersion}")
@@ -822,7 +819,7 @@ def main():
 
     # GUI
     try:
-        app = App()
+        app = Anonymizer()
         logger.info("ANONYMIZER GUI Initialised successfully.")
     except Exception as e:
         logger.exception(f"Error starting ANONYMIZER GUI, exit: {str(e)}")

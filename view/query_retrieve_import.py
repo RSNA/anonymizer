@@ -74,7 +74,7 @@ class QueryView(tk.Toplevel):
         self.width = 1300
         self.height = 400
         # Try to move query window below the dashboard:
-        self.geometry(f"{self.width}x{self.height}+0+{self.master.winfo_height()+60}")
+        # self.geometry(f"{self.width}x{self.height}+0+{self.master.winfo_height()+60}")
         self.resizable(True, True)
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Return>", self._enter_keypress)

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class Dashboard(ctk.CTkFrame):
     DASHBOARD_UPDATE_INTERVAL = 1000  # milliseconds
-    AWS_AUTH_TIMEOUT_SECONDS = 10  # must be > 2 secs
+    AWS_AUTH_TIMEOUT_SECONDS = 15  # must be > 2 secs
 
     # TODO: manage fonts using theme manager
     LABEL_FONT = ("DIN Alternate Italic", 32)
@@ -111,9 +111,6 @@ class Dashboard(ctk.CTkFrame):
         self._qsize = ctk.CTkLabel(self._status_frame, text="0")
         self._qsize.grid(row=0, column=1, sticky="w")
 
-        # self.label_status = ctk.CTkLabel(self._status_frame, text="Status:")
-        # self.label_status.grid(row=0, column=2, padx=self.PAD, sticky="w")
-
         self._status = ctk.CTkLabel(self._status_frame, text="")
         self._status.grid(row=0, column=3, padx=self.PAD, sticky="e")
 
@@ -126,7 +123,7 @@ class Dashboard(ctk.CTkFrame):
         logger.info(er)
         if er.success:
             button.configure(state="normal", text_color="light green")
-            self._status.configure(text=f"{scp_name} Server online")
+            self._status.configure(text=f"{scp_name} server online")
             callback()
         else:
             messagebox.showerror(
@@ -152,23 +149,22 @@ class Dashboard(ctk.CTkFrame):
         self._export_button.configure(state="disabled")
 
         if self._controller.model.export_to_AWS:
-            if not self._controller.AWS_credentials_valid():
-                self._controller.AWS_authenticate_ex()  # Authenticate to AWS in background
-                # Wait for up to AWS_AUTH_TIMEOUT for AWS response
-                self._timer = self.AWS_AUTH_TIMEOUT_SECONDS
-                self.after(1000, self._wait_for_aws)
-                self._status.configure(text="Waiting for AWS Authentication...")
+            self._controller.AWS_authenticate_ex()  # Authenticate to AWS in background
+            self._timer = self.AWS_AUTH_TIMEOUT_SECONDS
+            self.after(1000, self._wait_for_aws)
+            self._status.configure(text="Waiting for AWS Authentication...")
         else:
             self._controller.echo_ex(EchoRequest(scp="EXPORT", ux_Q=self._export_ux_Q))
             self.after(
-                500, self._wait_for_scp_echo, "Export", self._export_button, self._export_ux_Q, self._export_callback
+                1000, self._wait_for_scp_echo, "Export", self._export_button, self._export_ux_Q, self._export_callback
             )
             self._status.configure(text="Checking Export DICOM Server is online...")
 
     def _wait_for_aws(self):
         self._timer -= 1
-        if self._timer == 0:  # TIMEOUT
-            self._export_button.configure(text_color="red")
+        if self._timer <= 0:  # TIMEOUT
+            if self._controller._aws_last_error is None:
+                self._controller._aws_last_error = "AWS Response Timeout"
             messagebox.showerror(
                 title=_("Connection Error"),
                 message=_(
@@ -178,11 +174,11 @@ class Dashboard(ctk.CTkFrame):
                 parent=self,
             )
             self._status.configure(text="")
-            self._export_button.configure(text_color="red", state="normal")
+            self._export_button.configure(state="normal", text_color="red")
             return
 
         if self._controller.AWS_credentials_valid():
-            self._export_button.configure(text_color="light green")
+            self._export_button.configure(state="normal", text_color="light green")
             self._export_callback()
             self._status.configure(text="AWS Authenticated")
             return

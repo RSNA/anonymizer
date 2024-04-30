@@ -1,4 +1,6 @@
-import sys
+# List of HTML Tags supported by tkhtmlview:
+# see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support
+
 import tkinter as tk
 import customtkinter as ctk
 from tkhtmlview import HTMLScrolledText, RenderHTML
@@ -7,8 +9,9 @@ from utils.translate import _
 
 logger = logging.getLogger(__name__)
 
+
 class HTMLView(tk.Toplevel):
-#class HTMLView(ctk.CTkToplevel):
+    # class HTMLView(ctk.CTkToplevel):
     def __init__(self, parent, title, html_file_path):
         super().__init__(master=parent)
         self._parent = parent
@@ -21,18 +24,21 @@ class HTMLView(tk.Toplevel):
         self._create_widgets()
         # if sys.platform.startswith("win"):
         #     # override CTkTopLevel which sets icon after 200ms
-        #     self.after(250, self._win_post_init) 
+        #     self.after(250, self._win_post_init)
 
     def _win_post_init(self):
         self.iconbitmap("assets\\images\\rsna_icon.ico")
         self.lift()
         self.focus()
-        
+
     def _create_widgets(self):
         logger.info("_create_widgets")
 
         html_widget = HTMLScrolledText(
-            self._frame, html=RenderHTML(self.html_file_path),
+            self._frame,
+            width=130,  # characters
+            height=60,  # lines
+            html=RenderHTML(self.html_file_path),
         )
-    
+
         html_widget.pack(fill="both", expand=True)

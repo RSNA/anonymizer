@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 class AnonymizerController:
     ANONYMIZER_MODEL_FILENAME = "AnonymizerModel.pkl"
-    DEIDENTIFICATION_METHOD = "RSNA DICOM ANONYMIZER"
+    DEIDENTIFICATION_METHOD = "RSNA DICOM ANONYMIZER"  # (0012,0063)
     # Quarantine Errors / Sub-directories:
     QUARANTINE_MISSING_ATTRIBUTES = "Missing_Attributes"
     QUARANTINE_INVALID_DICOM = "Invalid_DICOM"
@@ -35,6 +35,7 @@ class AnonymizerController:
 
     # See docs/RSNA-Covid-19-Deindentification-Protocol.pdf
     # TODO: if user edits default anonymization script these values should be updated accordingly
+    # DeIdentificationMethodCodeSequence (0012,0064)
     DEIDENTIFICATION_METHODS = [
         ("113100", "Basic Application Confidentiality Profile"),
         (
@@ -193,7 +194,7 @@ class AnonymizerController:
         md5_hash = hashlib.md5(patient_id.encode()).hexdigest()
         # Convert MD5 hash to an integer
         hash_integer = int(md5_hash, 16)
-        # Calculate number of days to increment (10 years in days)
+        # Calculate number of days to increment (modulus 10 years in days)
         days_to_increment = hash_integer % 3652
         # Parse the input date as a datetime object
         input_date = datetime.strptime(date, "%Y%m%d")
@@ -366,7 +367,6 @@ class AnonymizerController:
                 anon_uid = f"{self.project_model.uid_root}.{self.project_model.site_id}.{next_uid_ndx}"
                 self.model.set_anon_uid(value, anon_uid)
             dataset[tag].value = anon_uid
-            return
         elif "ptid" in operation:
             anon_pt_id = self.model.get_anon_patient_id(dataset.PatientID if hasattr(dataset, "PatientID") else "")
             if not anon_pt_id:
@@ -379,7 +379,7 @@ class AnonymizerController:
                 anon_acc_no = self.model.get_acc_no_count() + 1
                 self.model.set_anon_acc_no(value, str(anon_acc_no))
             dataset[tag].value = str(anon_acc_no)
-        elif "hashdate" in operation:
+        elif "@hashdate" in operation:
             _, anon_date = self._hash_date(
                 data_element.value, dataset.PatientID if hasattr(dataset, "PatientID") else ""
             )
@@ -399,7 +399,6 @@ class AnonymizerController:
             logger.debug(f"round_age: Age:{value} Width:{width}")
             dataset[tag].value = self._round_age(value, width)
             logger.debug(f"round_age: Result:{dataset[tag].value}")
-        return
 
     def anonymize(self, source: DICOMNode | str, ds: Dataset) -> str | None:
         # Capture PHI and source for new studies:

@@ -23,7 +23,7 @@ class WelcomeView(ctk.CTkFrame):
     def __init__(self, parent: ctk.CTk):
         super().__init__(master=parent)
         self._create_widgets()
-        self.grid(row=0, column=0, padx=self.PAD, pady=self.PAD)
+        self.grid(row=0, column=0)
 
     def _create_widgets(self):
         self.columnconfigure(0, weight=1)

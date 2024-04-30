@@ -16,7 +16,7 @@ class TransferSyntaxesDialog(tk.Toplevel):
         "SyntaxUID": (_("Transfer Syntax UID"), 30, False),
     }
     # description strings added to pynetdicom.globals.ALL_TRANSFER_SYNTAXES
-    ts_lookup = {
+    ts_lookup: dict[str, str] = {
         "1.2.840.10008.1.2": "Implicit VR Little Endian",
         "1.2.840.10008.1.2.1": "Explicit VR Little Endian",
         "1.2.840.10008.1.2.1.99": "Deflated Explicit VR Little Endian",

@@ -21,7 +21,9 @@
   "python.testing.pytestEnabled": true,
   "cSpell.words": [
     "DICOM",
+    "MIRC",
     "RSNA",
+    "tkhtmlview",
     "uids"
   ],
   "python.analysis.typeCheckingMode": "basic",
