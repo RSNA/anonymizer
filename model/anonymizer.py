@@ -3,7 +3,7 @@ from pathlib import Path
 import logging
 from pprint import pformat
 import xml.etree.ElementTree as ET
-from .project import PHI
+from .project import PHI, Study
 from utils.translate import _
 
 logger = logging.getLogger(__name__)
@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 class AnonymizerModel:
     # Model Version Control
-    MODEL_VERSION = 1
+    MODEL_VERSION = 3
     # When PHI PatientID is missing allocate to Anonymized PatientID: 000000
     DEFAULT_ANON_PATIENT_ID_SUFFIX = "-000000"
 
@@ -23,6 +23,7 @@ class AnonymizerModel:
         self._uid_lookup: Dict[str, str] = {}
         self._acc_no_lookup: Dict[str, str] = {}
         self._phi_lookup: Dict[str, PHI] = {self.default_anon_pt_id: PHI()}
+        self._study_imported = set()  # Version 2
         self._script_path = script_path
         self._tag_keep: Dict[str, str] = {}  # DICOM Tag: Operation
         self.load_script(script_path)
@@ -98,6 +99,12 @@ class AnonymizerModel:
 
     def set_phi(self, anon_patient_id: str, phi: PHI):
         self._phi_lookup[anon_patient_id] = phi
+
+    def get_study_imported(self, study_uid: str) -> bool:
+        return study_uid in self._study_imported
+
+    def set_study_imported(self, study_uid: str):
+        self._study_imported.add(study_uid)
 
     def get_anon_patient_id(self, phi_patient_id: str) -> str | None:
         if phi_patient_id not in self._patient_id_lookup:

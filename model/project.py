@@ -1,6 +1,6 @@
 import os
 import time
-from logging import INFO, WARNING
+from logging import INFO, WARNING, getLevelName
 from pprint import pformat
 from copy import deepcopy
 from typing import Dict, Tuple, List
@@ -46,6 +46,9 @@ class LoggingLevels:
     pynetdicom: int  # Logging level
     pydicom: bool  # enable/disable debug config
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}('anonymizer': {getLevelName(self.anonymizer)}, 'pynetdicom': {getLevelName(self.pynetdicom)}, 'pydicom': {self.pydicom}"
+
 
 @dataclass
 class Series:
@@ -61,8 +64,10 @@ class Study:
     anon_date_delta: int
     accession_number: str
     study_uid: str
+    study_desc: str
     source: DICOMNode | str
     series: List[Series]
+    imported: bool = False  # set by
 
 
 @dataclass

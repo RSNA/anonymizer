@@ -399,6 +399,7 @@ class ExportView(tk.Toplevel):
 
         if not self._controller.model.export_to_AWS:
             # Verify echo of export DICOM server
+            # TODO: remove this echo test? Rely on connection error from c-send?
             if not self._controller.echo("EXPORT"):
                 self._export_button.configure(text_color="red")
                 self._parent._export_button.configure(text_color="red")

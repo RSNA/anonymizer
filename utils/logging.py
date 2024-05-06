@@ -17,9 +17,7 @@ LOG_FORMAT = "{asctime} {levelname} {module}.{funcName}.{lineno} {message}"
 def get_logs_dir(run_as_exe: bool, install_dir: str) -> str:
     if run_as_exe:
         if platform.system() == "Windows":
-            return os.path.join(
-                os.path.expanduser("~"), "AppData", "Local", EXE_LOG_DIR
-            )
+            return os.path.join(os.path.expanduser("~"), "AppData", "Local", EXE_LOG_DIR)
         elif platform.system() == "Darwin":
             return os.path.join(os.path.expanduser("~"), "Library", "Logs", EXE_LOG_DIR)
         elif platform.system() == "Linux":

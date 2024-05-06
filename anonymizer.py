@@ -255,7 +255,9 @@ class Anonymizer(ctk.CTk):
                 model = ProjectModel()  # new default model
                 # TODO: Handle 2 level nested classes/dicts copying by attribute
                 # to handle addition or nested fields and deletion of attributes in new model
-                model = copy(file_model)  # copy over corresponding attributes from the old model
+                model.__dict__.update(
+                    file_model.__dict__
+                )  # copy over corresponding attributes from the old model (file_model)
                 model.version = ProjectModel.MODEL_VERSION  # update to latest version
             else:
                 model = file_model

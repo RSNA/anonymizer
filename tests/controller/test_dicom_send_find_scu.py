@@ -1,5 +1,6 @@
 import os
 import time
+import pytest
 from pydicom.dataset import Dataset
 from pydicom.errors import InvalidDicomError
 import tests.controller.dicom_pacs_simulator_scp as pacs_simulator_scp
@@ -333,3 +334,55 @@ def test_find_study_uid_hierarchy(temp_dir: str, controller: ProjectController):
     for ds in ds3:
         assert ds.SeriesInstanceUID in study3_uid_hierarchy.series
     assert study3_uid_hierarchy.get_number_of_instances() == 11
+
+
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
+def test_send_3_studies_to_orthanc_find_with_acc_no_list(temp_dir: str, controller: ProjectController):
+    dset1: list[Dataset] = send_files_to_scp(
+        MR_STUDY_3_SERIES_11_IMAGES,
+        OrthancSCP,
+        controller,
+    )
+    dset2: list[Dataset] = send_files_to_scp(
+        CT_STUDY_1_SERIES_4_IMAGES,
+        OrthancSCP,
+        controller,
+    )
+    dset3: list[Dataset] = send_files_to_scp(
+        CR_STUDY_3_SERIES_3_IMAGES,
+        OrthancSCP,
+        controller,
+    )
+
+    acc1 = dset1[0].AccessionNumber
+    acc2 = dset2[0].AccessionNumber
+    acc3 = dset3[0].AccessionNumber
+
+    results = controller.find_studies_via_acc_nos(
+        scp_name=OrthancSCP.aet,
+        acc_no_list=[acc1, acc2, acc3],
+        ux_Q=None,
+        verify_attributes=False,
+    )
+
+    assert results
+    assert len(results) == 3
+    assert list(set([r.AccessionNumber for r in results])) == list(set([acc1, acc2, acc3]))
+
+    for ds in [dset1[0], dset2[0], dset3[0]]:
+        results: list[Dataset] | None = controller.find_studies(
+            scp_name=OrthancSCP.aet,
+            name="",
+            id="",
+            acc_no=ds.AccessionNumber,
+            study_date="",
+            modality=ds.Modality,
+            ux_Q=None,
+            verify_attributes=False,
+        )
+
+        assert results
+        assert len(results) == 1
+        assert results[0].AccessionNumber == ds.AccessionNumber
+        assert results[0].ModalitiesInStudy == ds.Modality
+        assert results[0].StudyInstanceUID == ds.StudyInstanceUID

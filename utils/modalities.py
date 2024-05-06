@@ -60,6 +60,7 @@ MODALITIES: Dict[str, Tuple[str, list[str]]] = {
             "1.2.840.10008.5.1.4.1.1.88.35",
         ],
     ),
+    "DOC": (_("Encapsulated PDF"), ["1.2.840.10008.5.1.4.1.1.104.1"]),
 }
 
 #     "GM", _("General Microscopy"),
@@ -75,7 +76,9 @@ MODALITIES: Dict[str, Tuple[str, list[str]]] = {
 #     "MTL",
 #     "CAD",
 #     "3D",
-#     "XA",
+#     "XA": _("X-Ray Angiography")
 #     "XRF",
 #     "DOC",
 #     "OT"
+#     "SEG",
+#     "REG",

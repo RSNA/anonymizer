@@ -86,6 +86,7 @@ def controller(temp_dir):
     # Ensure Local Storage is stopped
     # (cleanup of project_controller doesn't happen fast enough)
     project_controller.stop_scp()
+    project_controller.anonymizer.stop()
 
     # Stop PACS Simulator:
     pacs_simulator_scp.stop()

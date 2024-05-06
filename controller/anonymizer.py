@@ -3,7 +3,6 @@
 import os
 from typing import List
 from shutil import copyfile
-from copy import copy
 import re
 import time
 import logging
@@ -47,9 +46,10 @@ class AnonymizerController:
     PRIVATE_BLOCK_NAME = "RSNA"
     DEFAULT_ANON_DATE = "20000101"  # if source date is invalid or before 19000101
 
-    _anonymize_time_slice_interval: float = 0.1  # seconds
-    _anonymizer_model_autosave_interval: int = 60  # seconds
-    # _anonymize_batch_size: int = 40  # number of items to process in a batch
+    # TODO: To allow > 1 worker threads, thread safety for AnonymizerModel operation in _anonymize_worker
+    NUMBER_OF_WORKER_THREADS = 1
+    MODEL_AUTOSAVE_INTERVAL_SECS = 10
+
     _clean_tag_translate_table = str.maketrans("", "", "() ,")
 
     # Required DICOM field attributes for accepting files:
@@ -93,7 +93,9 @@ class AnonymizerController:
                     project_model.site_id, project_model.anonymizer_script_path
                 )  # new default model
                 # TODO: handle new & deleted fields in nested objects
-                self.model = copy(file_model)  # copy over corresponding attributes from the old model (file_model)
+                self.model.__dict__.update(
+                    file_model.__dict__
+                )  # copy over corresponding attributes from the old model (file_model)
                 self.model._version = AnonymizerModel.MODEL_VERSION  # upgrade version
                 self.save_model()
                 logger.info(f"Anonymizer Model upgraded successfully to version: {self.model._version}")
@@ -106,23 +108,52 @@ class AnonymizerController:
             logger.info(f"New Default Anonymizer Model initialised from script: {project_model.anonymizer_script_path}")
 
         self._anon_Q: Queue = Queue()
-
         self._active = False
+        self._worker_threads = []
 
-        self._worker = threading.Thread(
-            target=self._anonymize_worker,
-            args=(self._anon_Q,),
-            daemon=True,
-        ).start()
+        # Spawn Anonymizer worker threads:
+        for _ in range(self.NUMBER_OF_WORKER_THREADS):
+            worker = self._worker = threading.Thread(
+                target=self._anonymize_worker,
+                args=(self._anon_Q,),
+                # daemon=True,
+            )
+            worker.start()
+            self._worker_threads.append(worker)
 
-        time.sleep(0.2)  # Allow worker thread to start
+        # Setup Model Autosave Thread:
+        self._model_change_flag = False
+        self._autosave_event = threading.Event()
+        self._autosave_worker_thread = threading.Thread(target=self._autosave_manager, daemon=True)
+        self._autosave_worker_thread.start()
+
+        self._active = True
+        logger.info("Anonymizer Controller initialised")
+
+    def _stop_worker_threads(self):
+        logger.info("Stopping Anonymizer Worker Threads")
 
         if not self._active:
-            logger.error("AnonymizerController failed to start worker thread")
-            raise RuntimeError("AnonymizerController failed to start worker thread")
+            logger.error("_stop_worker_threads but controller not active")
+            return
+
+        # Send sentinel value to worker threads to terminate:
+        for _ in range(self.NUMBER_OF_WORKER_THREADS):
+            self._anon_Q.put((None, None))
+
+        # Wait for all tasks to be processed
+        self._anon_Q.join()
+
+        # Wait for all worker threads to finish
+        for worker in self._worker_threads:
+            worker.join()
+
+        self._autosave_event.set()
+        self._active = False
 
     def __del__(self):
-        self._active = False
+        if self._active:
+            self._stop_worker_threads()
 
     def process_java_phi_studies(self, java_studies: List[JavaAnonymizerExportedStudy]):
         logger.info(f"Processing {len(java_studies)} Java PHI Studies")
@@ -136,6 +167,7 @@ class AnonymizerController:
                 anon_date_delta=int(study.DateOffset),
                 accession_number=study.PHI_Accession,
                 study_uid=study.PHI_StudyInstanceUID,
+                study_desc="?",
                 source="Java Index File",
                 series=[],
             )
@@ -149,7 +181,7 @@ class AnonymizerController:
         self.save_model()
 
     def stop(self):
-        self._active = False
+        self._stop_worker_threads()
 
     def missing_attributes(self, ds: Dataset) -> list[str]:
         return [
@@ -158,6 +190,17 @@ class AnonymizerController:
 
     def get_quarantine_path(self) -> Path:
         return Path(self.project_model.storage_dir, self.project_model.PRIVATE_DIR, self.project_model.QUARANTINE_DIR)
+
+    def _autosave_manager(self):
+        logger.info(f"thread={threading.current_thread().name} start")
+
+        while self._active:
+            self._autosave_event.wait(timeout=self.MODEL_AUTOSAVE_INTERVAL_SECS)
+            if self._model_change_flag:
+                self.save_model()
+                self._model_change_flag = False
+
+        logger.info(f"thread={threading.current_thread().name} end")
 
     def save_model(self) -> bool:
         try:
@@ -235,20 +278,21 @@ class AnonymizerController:
     def capture_phi_from_new_study(self, phi_ds: Dataset, source: DICOMNode | str):
         def study_from_dataset(ds: Dataset) -> Study:
             return Study(
-                str(ds.StudyDate) if hasattr(phi_ds, "StudyDate") else "?",
+                str(ds.StudyDate) if hasattr(ds, "StudyDate") else "?",
                 (
-                    self._hash_date(ds.StudyDate, phi_ds.PatientID)[0]
-                    if hasattr(phi_ds, "StudyDate") and hasattr(phi_ds, "PatientID")
+                    self._hash_date(ds.StudyDate, ds.PatientID)[0]
+                    if hasattr(ds, "StudyDate") and hasattr(ds, "PatientID")
                     else 0
                 ),
-                str(ds.AccessionNumber) if hasattr(phi_ds, "AccessionNumber") else "?",
-                (str(ds.StudyInstanceUID) if hasattr(phi_ds, "StudyInstanceUID") else "?"),
+                str(ds.AccessionNumber) if hasattr(ds, "AccessionNumber") else "?",
+                (str(ds.StudyInstanceUID) if hasattr(ds, "StudyInstanceUID") else "?"),
+                (str(ds.StudyDescription) if hasattr(ds, "StudyDescription") else "?"),
                 source,
                 [
                     Series(
-                        (ds.SeriesInstanceUID if hasattr(phi_ds, "SeriesInstanceUID") else "?"),
-                        (str(ds.SeriesDescription) if hasattr(phi_ds, "SeriesDescription") else "?"),
-                        str(ds.Modality) if hasattr(phi_ds, "Modality") else "?",
+                        (ds.SeriesInstanceUID if hasattr(ds, "SeriesInstanceUID") else "?"),
+                        (str(ds.SeriesDescription) if hasattr(ds, "SeriesDescription") else "?"),
+                        str(ds.Modality) if hasattr(ds, "Modality") else "?",
                         1,
                     )
                 ],
@@ -261,6 +305,7 @@ class AnonymizerController:
         if anon_patient_id == None:  # New patient
             new_anon_patient_id = self.get_next_anon_patient_id()
             # TODO: write init method for PHI(phi_ds) using introspection for fields to look for in dataset
+            # Merge Study/Series/Instance for PHI with StudyUIDHierarchy of AnonymizerController
             phi = PHI(
                 patient_name=str(phi_ds.PatientName) if hasattr(phi_ds, "PatientSex") else "U",
                 patient_id=str(phi_ds.PatientID),
@@ -337,8 +382,8 @@ class AnonymizerController:
             study.series.append(
                 Series(
                     str(ds.SeriesInstanceUID),
-                    str(ds.SeriesDescription),
-                    str(ds.Modality),
+                    str(ds.SeriesDescription) if hasattr(ds, "SeriesDescription") else "?",
+                    str(ds.Modality) if hasattr(ds, "Modality") else "?",
                     1,
                 )
             )
@@ -401,6 +446,8 @@ class AnonymizerController:
             logger.debug(f"round_age: Result:{dataset[tag].value}")
 
     def anonymize(self, source: DICOMNode | str, ds: Dataset) -> str | None:
+        self._model_change_flag = True  # for autosave manager
+
         # Capture PHI and source for new studies:
         if self.model.get_anon_uid(ds.StudyInstanceUID) == None:
             self.capture_phi_from_new_study(ds, source)
@@ -512,31 +559,15 @@ class AnonymizerController:
         self._anon_Q.put((source, ds))
         return
 
-    # TODO: OPTIMIZE: i/o bound, investigate thread pool for concurrent processing
     def _anonymize_worker(self, ds_Q: Queue) -> None:
-        logger.info("_anonymize_worker start")
+        logger.info(f"thread={threading.current_thread().name} start")
 
-        self._active = True  # Worker thread active flag, signal back to controller constructor
-        slices_before_save = 0
-        while self._active:
-            # timeslice worker thread for UX responsivity:
-            time.sleep(self._anonymize_time_slice_interval)
-            slices_before_save += 1
-            try:
-                source, ds = ds_Q.get(block=False)
-                error_msg = self.anonymize(source, ds)
-                # TODO: track specific anonymization errors of incoming datasets in lookup: [ds.SOPInstanceUID]=error_msg for UX
-            except Empty:
-                # Save Anonymizer Model every _anonymizer_model_autosave_interval seconds:
-                if slices_before_save > (
-                    self._anonymizer_model_autosave_interval / self._anonymize_time_slice_interval
-                ):
-                    self.save_model()
-                    slices_before_save = 0
-                continue
-            except Exception as e:
-                logger.error(f"Anonymizer Worker Error: {e}")
-                continue
+        while True:
+            source, ds = ds_Q.get()  # Blocks by default
+            if ds is None:  # sentinel value
+                ds_Q.task_done()
+                break
+            self.anonymize(source, ds)
+            ds_Q.task_done()
 
-        logger.info("_anonymize_worker end")
-        return
+        logger.info(f"thread={threading.current_thread().name} end")

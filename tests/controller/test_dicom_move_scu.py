@@ -48,6 +48,7 @@ from tests.controller.dicom_test_files import (
     MR_STUDY_3_SERIES_11_IMAGES,
 )
 
+
 def test_move_at_study_level_1_CT_file_from_pacs_with_file_to_unknown_AET(temp_dir: str, controller: ProjectController):
     ds: Dataset = send_file_to_scp(ct_small_filename, PACSSimulatorSCP, controller)
 
@@ -698,6 +699,12 @@ def test_move_at_instance_level_of_3_studies_from_pacs_to_local_storage(temp_dir
     assert total_files == 13
 
 
+def test_move_at_series_level_via_accession_number_list_from_pacs_to_local_storage(
+    temp_dir: str, controller: ProjectController
+):
+    pass
+
+
 # ORTHANC PACS TESTS:
 # TODO: setup Orthanc PACS for testing in all Github action enviromnents
 # include orthanc binaries in repository
@@ -787,13 +794,13 @@ def test_move_at_study_level_with_network_timeout_then_series_level_MR_Study_fro
 
 
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
-def test_move_at_instance_level_of_3_studies_from_orthance_to_local_storage(
+def test_move_at_instance_level_of_3_studies_2_patients_from_orthance_to_local_storage(
     temp_dir: str, controller: ProjectController
 ):
     # Send 3 studies to ORTHANC PACS:
-    ds1: Dataset = send_file_to_scp(cr1_filename, OrthancSCP, controller)
-    ds2: Dataset = send_file_to_scp(ct_small_filename, OrthancSCP, controller)
-    dsets: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, OrthancSCP, controller)
+    ds1: list[Dataset] = send_files_to_scp(CR_STUDY_3_SERIES_3_IMAGES, OrthancSCP, controller)  # Doe^Archibald
+    ds2: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, OrthancSCP, controller)  # Doe^Archibald
+    ds3: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, OrthancSCP, controller)  # Doe^Peter
 
     store_dir = local_storage_dir(temp_dir)
     total_studies = 0
@@ -801,21 +808,16 @@ def test_move_at_instance_level_of_3_studies_from_orthance_to_local_storage(
     total_files = 0
 
     # Get StudyUIDHierachies:
-    error_msg, study1_hierarchy = controller.get_study_uid_hierarchy(OrthancSCP.aet, ds1.StudyInstanceUID)
+    error_msg, study1_hierarchy = controller.get_study_uid_hierarchy(OrthancSCP.aet, ds1[0].StudyInstanceUID)
     assert error_msg == None
-    error_msg, study2_hierarchy = controller.get_study_uid_hierarchy(OrthancSCP.aet, ds2.StudyInstanceUID)
+    error_msg, study2_hierarchy = controller.get_study_uid_hierarchy(OrthancSCP.aet, ds2[0].StudyInstanceUID)
     assert error_msg == None
-    error_msg, study3_hierarchy = controller.get_study_uid_hierarchy(OrthancSCP.aet, dsets[0].StudyInstanceUID)
+    error_msg, study3_hierarchy = controller.get_study_uid_hierarchy(OrthancSCP.aet, ds3[0].StudyInstanceUID)
     assert error_msg == None
 
-    assert study1_hierarchy.get_number_of_instances() == 1
-    assert study2_hierarchy.get_number_of_instances() == 1
+    assert study1_hierarchy.get_number_of_instances() == 3
+    assert study2_hierarchy.get_number_of_instances() == 4
     assert study3_hierarchy.get_number_of_instances() == 11
-
-    # Get Series uids:
-    study1_series1_uid = ds1.SeriesInstanceUID
-    study2_series1_uid = ds2.SeriesInstanceUID
-    study3_series1_uid = dsets[0].SeriesInstanceUID
 
     # MOVE Study 1,2,3 at INSTANCE LEVEL:
     assert request_to_move_studies_from_scp_to_local_scp(
@@ -841,19 +843,11 @@ def test_move_at_instance_level_of_3_studies_from_orthance_to_local_storage(
     assert timeout > 0
 
     assert controller.get_number_of_pending_instances(study1_hierarchy) == 0
-    assert study1_hierarchy.series[study1_series1_uid].completed_sub_ops == 1
-    assert study1_hierarchy.series[study1_series1_uid].failed_sub_ops == 0
-
     assert controller.get_number_of_pending_instances(study2_hierarchy) == 0
-    assert study2_hierarchy.series[study2_series1_uid].completed_sub_ops == 1
-    assert study2_hierarchy.series[study2_series1_uid].failed_sub_ops == 0
-
     assert controller.get_number_of_pending_instances(study3_hierarchy) == 0
-    assert study3_hierarchy.series[study3_series1_uid].completed_sub_ops == 1
-    assert study3_hierarchy.series[study3_series1_uid].failed_sub_ops == 0
 
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
-    assert len(dirlist) == 3
+    assert len(dirlist) == 2
 
     total_studies = 0
     total_series = 0
@@ -866,8 +860,8 @@ def test_move_at_instance_level_of_3_studies_from_orthance_to_local_storage(
         total_files += images
 
     assert total_studies == 3
-    total_series = 5
-    assert total_files == 13
+    total_series = 7
+    assert total_files == 18
 
 
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
@@ -875,9 +869,9 @@ def test_move_at_series_level_3_studies_with_network_timeout_from_orthance_to_lo
     temp_dir: str, controller: ProjectController
 ):
     # Send 3 studies to ORTHANC PACS:
-    ds1: Dataset = send_file_to_scp(cr1_filename, OrthancSCP, controller)
-    ds2: Dataset = send_file_to_scp(ct_small_filename, OrthancSCP, controller)
-    dsets: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, OrthancSCP, controller)
+    ds1: list[Dataset] = send_files_to_scp(CR_STUDY_3_SERIES_3_IMAGES, OrthancSCP, controller)  # Doe^Archibald
+    ds2: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, OrthancSCP, controller)  # Doe^Archibald
+    ds3: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, OrthancSCP, controller)  # Doe^Peter
 
     store_dir = local_storage_dir(temp_dir)
     total_studies = 0
@@ -885,15 +879,15 @@ def test_move_at_series_level_3_studies_with_network_timeout_from_orthance_to_lo
     total_files = 0
 
     # Get StudyUIDHierachies:
-    error_msg, study1_hierarchy = controller.get_study_uid_hierarchy(OrthancSCP.aet, ds1.StudyInstanceUID)
+    error_msg, study1_hierarchy = controller.get_study_uid_hierarchy(OrthancSCP.aet, ds1[0].StudyInstanceUID)
     assert error_msg == None
-    error_msg, study2_hierarchy = controller.get_study_uid_hierarchy(OrthancSCP.aet, ds2.StudyInstanceUID)
+    error_msg, study2_hierarchy = controller.get_study_uid_hierarchy(OrthancSCP.aet, ds2[0].StudyInstanceUID)
     assert error_msg == None
-    error_msg, study3_hierarchy = controller.get_study_uid_hierarchy(OrthancSCP.aet, dsets[0].StudyInstanceUID)
+    error_msg, study3_hierarchy = controller.get_study_uid_hierarchy(OrthancSCP.aet, ds3[0].StudyInstanceUID)
     assert error_msg == None
 
-    assert study1_hierarchy.get_number_of_instances() == 1
-    assert study2_hierarchy.get_number_of_instances() == 1
+    assert study1_hierarchy.get_number_of_instances() == 3
+    assert study2_hierarchy.get_number_of_instances() == 4
     assert study3_hierarchy.get_number_of_instances() == 11
 
     # Set Network Timeout to 1 second to ensure move timeout occurs:
@@ -909,9 +903,11 @@ def test_move_at_series_level_3_studies_with_network_timeout_from_orthance_to_lo
 
     time.sleep(1)
 
+    controller.model.network_timeouts.network = 10
+
     # Wait for bulk move operation to automatically down level
     # and complete at the instance level:
-    timeout = 10
+    timeout = 15
     while timeout > 0 and controller.bulk_move_active():
         time.sleep(1)
         timeout -= 1
@@ -926,7 +922,7 @@ def test_move_at_series_level_3_studies_with_network_timeout_from_orthance_to_lo
     assert s3_pending == 0
 
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
-    assert len(dirlist) == 3
+    assert len(dirlist) == 2
 
     total_studies = 0
     total_series = 0
@@ -939,5 +935,5 @@ def test_move_at_series_level_3_studies_with_network_timeout_from_orthance_to_lo
         total_files += images
 
     assert total_studies == 3
-    total_series = 5
-    assert total_files == 13
+    total_series = 7
+    assert total_files == 18

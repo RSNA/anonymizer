@@ -1,5 +1,6 @@
 import logging
 import string
+import re
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import customtkinter as ctk
@@ -66,7 +67,7 @@ class QueryView(tk.Toplevel):
         scp_aet = project_controller.model.remote_scps["QUERY"].aet
         self.title(f"{title} from {scp_aet}")
         self._query_active = False
-        self._acc_no_list = []
+        self._acc_no_list: list[str] = []
         self._studies_processed = 0
         self._studies_to_process = 0
         self._study_uids_to_import = []
@@ -146,9 +147,9 @@ class QueryView(tk.Toplevel):
             label=_("Study Date:"),
             initial_value="",
             min_chars=dicom_date_chars,
-            max_chars=dicom_date_chars,
-            charset=string.digits + "*",
-            tooltipmsg=None,  # _("Numeric YYYYMMDD, * or ? for wildcard"),
+            max_chars=dicom_date_chars * 2 + 1,  # allow Date Range: YYYYMMDD-YYYYMMDD
+            charset=string.digits + "-",
+            tooltipmsg=None,  # _("Numeric YYYYMMDD, no wildcards for date"),
             row=1,
             col=2,
             pad=PAD,
@@ -346,17 +347,29 @@ class QueryView(tk.Toplevel):
             logger.info(f"Load Accession File cancelled")
             return
 
-        logger.info(f"Load Accession File")
+        logger.info(f"Loading Accession Number File...")
+
         # Clear Accession Number entry field:
         self._accession_no_var.set("")
-        # Read accession numbers from file:
-        with open(self._acc_no_file_path, "r") as file:
-            acc_nos_str = file.read().replace("\n", ",")
 
-        self._acc_no_list = sorted(set(acc_nos_str.split(",")))  # remove duplicates
+        try:
+            with open(self._acc_no_file_path, "r") as file:
+                # acc_nos_str = file.read().replace("\n", ",")
+                file_content = file.read()
+
+                # Extract accession numbers using a regular expression
+                accession_numbers = re.findall(r"[\w\-_\.]+", file_content)
+
+                # Remove leading/trailing whitespaces and convert to uppercase for consistency
+                # Further processing in _query_button_pressed
+                self._acc_no_list = [acc_no.strip().upper() for acc_no in accession_numbers]
+
+        except Exception as e:
+            messagebox.showerror(_(f"File Read Error [{type(e)}]"), _(f"Error reading Accession Number file: {e}"))
+            return
+
         self._cancel_query_button.focus_set()
-        # Trigger the query:
-        # TODO: optimize query using wildcards * and ? to reduce number of queries for blocks/sequences
+
         self._query_button_pressed()
 
     def _monitor_query_response(self, ux_Q: Queue):
@@ -445,6 +458,7 @@ class QueryView(tk.Toplevel):
             logger.error(f"Query disabled, query is active")
             return
 
+        # TODO: remove this echo test? Rely on connection error from query?
         if self._controller.echo("QUERY"):
             self._query_button.configure(text_color="light green")
         else:
@@ -457,18 +471,20 @@ class QueryView(tk.Toplevel):
             return
 
         self._query_active = True
+        self._acc_no_list = []
         self._disable_action_buttons()
         self._clear_results_tree()
 
         # Handle multiple comma delimited accession numbers:
         # Entered by user or loaded from file:
-        if self._accession_no_var.get() and "," in self._accession_no_var.get():
-            self._acc_no_list = self._accession_no_var.get().split(",")
+        accession_no = self._accession_no_var.get().strip()
+        if accession_no and "," in accession_no:
+            self._acc_no_list = [x.strip() for x in self._accession_no_var.get().split(",")]
             self._modalities_optionmenu.set("")
 
         if self._acc_no_list:
-            # Remove null strings and keep unique values
-            filtered_acc_nos = list(filter(None, set(self._acc_no_list)))
+            # Remove empty strings and keep unique values
+            filtered_acc_nos = list(filter(lambda x: x != "", set(self._acc_no_list)))
 
             # Separate numeric and non-numeric strings
             numeric_acc_nos = [x for x in filtered_acc_nos if x.isdigit()]
@@ -477,10 +493,17 @@ class QueryView(tk.Toplevel):
             # Sort numeric strings in ascending order
             sorted_numeric = sorted(numeric_acc_nos, key=lambda x: int(x))
 
+            # TODO: OPTIMIZE query using wildcard character: ? to reduce number of queries for Accession Number blocks/sequences
+
             # Concatenate numeric and non-numeric sorted lists
             self._acc_no_list = sorted_numeric + non_numeric_acc_nos
 
             self._studies_to_process = len(self._acc_no_list)
+            if not messagebox.askyesno(
+                _("Query via Accession Numbers"),
+                _(f"Loaded {self._studies_to_process} Accession Numbers\n\nProceed with Query?"),
+            ):
+                return
         else:
             self._studies_to_process = -1  # unknown
             self._progressbar.configure(mode="indeterminate")
@@ -494,7 +517,7 @@ class QueryView(tk.Toplevel):
             "QUERY",
             self._patient_name_var.get(),
             self._patient_id_var.get(),
-            (self._accession_no_var.get() if not self._acc_no_list else self._acc_no_list),
+            (accession_no if self._acc_no_list == [] else self._acc_no_list),
             self._study_date_var.get(),
             self._modality_var.get(),
             ux_Q,
@@ -543,14 +566,14 @@ class QueryView(tk.Toplevel):
 
         for study in studies:
             current_values = list(self._tree.item(study.uid, "values"))
-            instances_to_import = int(current_values[self._tree_column_keys.index("NumberOfStudyRelatedInstances")])
+            instances_to_import = study.get_number_of_instances()
             patient_id = current_values[self._tree_column_keys.index("PatientID")]
             files_imported = self._images_stored_phi_lookup(patient_id, study.uid)
             current_values[self._tree_column_keys.index("Imported")] = str(files_imported)
             if study.last_error_msg:
                 current_values[self._tree_column_keys.index("Error")] = study.last_error_msg
             self._tree.item(study.uid, values=current_values)
-            if files_imported >= instances_to_import:
+            if instances_to_import > 0 and files_imported >= instances_to_import:
                 self._tree.selection_remove(study.uid)
                 self._tree.item(study.uid, tags="green")
 
@@ -601,7 +624,7 @@ class QueryView(tk.Toplevel):
             anon_study_uid,
         )
 
-    def _update_treeview_data(self, dicom_datasets: list):
+    def _update_treeview_data(self, dicom_datasets: list[Dataset]):
         logger.debug(f"update_treeview_data items: {len(dicom_datasets)}")
 
         for dataset in dicom_datasets:
@@ -613,12 +636,22 @@ class QueryView(tk.Toplevel):
 
             display_values = []
 
+            study_uid = dataset.get("StudyInstanceUID", "")
+
             images_stored_count = self._images_stored_phi_lookup(
                 dataset.get("PatientID", ""),
-                dataset.get("StudyInstanceUID", ""),
+                study_uid,
             )
-            # Do not show Imported Studies if UX switch is on:
-            imported = images_stored_count >= dataset.get("NumberOfStudyRelatedInstances", 0)
+
+            # Do not show Imported Studies if UX switch is on
+            # Determine if PHI Study has already been imported from PHI lookup
+            # because dataset.NumberOfStudyRelatedInstances includes image counts for all modalties in study
+            # not just those modalities requested & imported
+            # The DICOM Study Query Information model does not provide for querying for specific modalities
+            # imported = images_stored_count >= dataset.get("NumberOfStudyRelatedInstances", 0)
+            # TODO: Perform down query series level?
+            # IF there is 1 valid Modality in the study then NumberOfStudyRelatedInstances could be used
+            imported = self._controller.anonymizer.model.get_study_imported(study_uid)
             if imported and not self._show_imported_studies_switch.get():
                 continue
 

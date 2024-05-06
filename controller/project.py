@@ -71,12 +71,14 @@ class SeriesUIDHierarchy:
         uid: str,
         number: int | None = None,
         modality: str | None = None,
+        sop_class_uid: str | None = None,
         description: str | None = None,  # TODO: add BodyPartExamined?
         instances: Dict[str, InstanceUIDHierarchy] = {},
     ):
         self.uid = uid
         self.number = number
         self.modality = modality
+        self.sop_class_uid = sop_class_uid
         self.description = description
         self.instances = instances
         # from send_c_move status response:
@@ -91,7 +93,7 @@ class SeriesUIDHierarchy:
             instances_str = ""
             for instance in self.instances.values():
                 instances_str += "\n----" + str(instance)
-        return f"{self.uid},{self.number or ''},{self.modality or ''},{self.description or ''}{instances_str}"
+        return f"{self.uid},{self.number or ''},{self.modality or ''},{self.description or ''}[{self.completed_sub_ops},{self.failed_sub_ops},{self.remaining_sub_ops},{self.warning_sub_ops}]{instances_str}"
 
     def get_number_of_instances(self) -> int:
         return len(self.instances)
@@ -238,18 +240,12 @@ class ProjectController(AE):
     _patient_export_thread_pool_size = 4
     _study_move_thread_pool_size = 4
     _required_attributes_study_query = [
-        # "PatientID",
-        # "PatientName",
         "StudyInstanceUID",
         "ModalitiesInStudy",
         "NumberOfStudyRelatedSeries",
         "NumberOfStudyRelatedInstances",
     ]
-    _required_attributes_series_query = [
-        "StudyInstanceUID",
-        "SeriesInstanceUID",
-        "Modality",
-    ]
+    _required_attributes_series_query = ["StudyInstanceUID", "SeriesInstanceUID", "Modality", "SOPClassUID"]
     _query_result_fields_to_remove = [
         "QueryRetrieveLevel",
         "RetrieveAETitle",
@@ -953,6 +949,7 @@ class ProjectController(AE):
         assert scp_name in self.model.remote_scps
         scp = self.model.remote_scps[scp_name]
         logger.info(f"C-FIND to {scp} Accession Query: {len(acc_no_list)} accession numbers...")
+        acc_no_list = list(set(acc_no_list))  # remove duplicates
         logger.debug(f"{acc_no_list}")
 
         ds = Dataset()
@@ -984,7 +981,7 @@ class ProjectController(AE):
 
                 responses = query_association.send_c_find(
                     ds,
-                    query_model=self._STUDY_ROOT_QR_CLASSES[0],
+                    query_model=self._STUDY_ROOT_QR_CLASSES[0],  # Find
                 )
 
                 # Process the response(s) received from the peer
@@ -1128,6 +1125,7 @@ class ProjectController(AE):
             ds.SeriesNumber = ""
             ds.SeriesDescription = ""
             ds.Modality = ""
+            ds.SOPClassUID = ""
 
             responses = query_association.send_c_find(
                 ds,
@@ -1146,9 +1144,10 @@ class ProjectController(AE):
                 if status.Status == C_SUCCESS:
                     logger.info("C-FIND[series] query success")
                 if identifier:
-                    if self._missing_attributes(self._required_attributes_series_query, identifier):
+                    missing_attributes = self._missing_attributes(self._required_attributes_series_query, identifier)
+                    if missing_attributes:
                         logger.error(
-                            f"Skip Series:{identifier.SeriesInstanceUID}, Series Level Query result is missing required attributes"
+                            f"Skip Series:{identifier.SeriesInstanceUID}, Series Level Query result is missing required attributes: {missing_attributes}"
                         )
                         logger.error(f"\n{identifier}")
                         continue
@@ -1157,25 +1156,34 @@ class ProjectController(AE):
                             f"Skip Series:{identifier.SeriesInstanceUID} Mismatch: StudyUID:{study_uid}<>{identifier.StudyInstanceUID}"
                         )
                         continue
-                    if identifier.Modality in self.model.modalities:
-                        study_uid_hierarchy.series[identifier.SeriesInstanceUID] = SeriesUIDHierarchy(
-                            uid=identifier.SeriesInstanceUID,
-                            number=identifier.SeriesNumber if hasattr(identifier, "SeriesNumber") else None,
-                            modality=identifier.Modality,
-                            description=(
-                                identifier.SeriesDescription if hasattr(identifier, "SeriesDescription") else "?"
-                            ),
-                            instances={},
-                        )
+                    if identifier.Modality not in self.model.modalities:
                         logger.info(
-                            f"New Series[{identifier.Modality}]: {identifier.SeriesInstanceUID}/{identifier.SeriesNumber}"
+                            f"Skip Series[Modality={identifier.Modality}]:{identifier.SeriesInstanceUID} with mismatched modality"
                         )
-                    else:
+                        continue
+                    if identifier.SOPClassUID not in self.model.storage_classes:
                         logger.info(
-                            f"Skip Series[{identifier.Modality}]:{identifier.SeriesInstanceUID} with mismatched modality"
+                            f"Skip Series[SOPClassUID={identifier.SOPClassUID}]:{identifier.SeriesInstanceUID} with mismatched sop_class_uid"
                         )
+                        continue
+
+                    # New SeriesUIDHierarchy:
+                    series_descr = identifier.SeriesDescription if hasattr(identifier, "SeriesDescription") else "?"
+                    study_uid_hierarchy.series[identifier.SeriesInstanceUID] = SeriesUIDHierarchy(
+                        uid=identifier.SeriesInstanceUID,
+                        number=identifier.SeriesNumber if hasattr(identifier, "SeriesNumber") else None,
+                        modality=identifier.Modality,
+                        sop_class_uid=identifier.SOPClassUID,
+                        description=series_descr,
+                        instances={},
+                    )
+                    logger.info(
+                        f"New Series[Modality={identifier.Modality},SOPClassUID={identifier.SOPClassUID}]: {series_descr}/{identifier.SeriesInstanceUID}/{identifier.SeriesNumber}"
+                    )
 
             logger.info(f"StudyUID={study_uid}, {len(study_uid_hierarchy.series)} Series found")
+            if len(study_uid_hierarchy.series) == 0:
+                raise DICOMRuntimeError(f"C-FIND[series] Failed: No series found in study matching project modalities")
 
             # 3. Get list of Instance UIDs for each Series UID:
             for series in study_uid_hierarchy.series.values():
@@ -1237,6 +1245,7 @@ class ProjectController(AE):
     # Blocking: Get List of StudyUIDHierarchies based on value of study_uid within each element of list
     # last_error_msg is set by get_study_uid_hierarchy:
     # TODO: Optimization: make this multi-threaded using futures & thread executor as for manage_move
+    #       Get UIDs only down to a specified level as required by move_operation
     def get_study_uid_hierarchies(self, scp_name: str, studies: List[StudyUIDHierarchy]) -> None:
         logger.info(f"Get StudyUIDHierarchies for {len(studies)} studies")
         self._abort_query = False
@@ -1346,12 +1355,13 @@ class ProjectController(AE):
                     logger.info(f"C-MOVE@Study[{study.uid}] Response identifier: {identifier}")
 
             logger.info(f"C-MOVE@Study[{study.uid}] Request COMPLETE")
-            logger.info(f">StudyUIDHierarchy={study}")
 
             # 4. If there are no pending instances, return without error:
             pending_instances = self.get_number_of_pending_instances(study)
             if pending_instances == 0:
                 logger.info(f"C-MOVE@Study[{study.uid}] ALL Instances IMPORTED")
+                # Mark Study Imported in Anonymizer Model set, for use by Query result Treeview (Show/Hide Imported Studies)
+                self.anonymizer.model.set_study_imported(study.uid)
             else:
                 # 5. Wait for ALL instances of Study to be Imported,
                 #    Timeout if a pending instance is not received within NetworkTimeout
@@ -1366,6 +1376,7 @@ class ProjectController(AE):
 
                     if pending_instances == 0:
                         logger.info(f"C-MOVE@Study[{study.uid}] ALL Instances IMPORTED")
+                        self.anonymizer.model.set_study_imported(study.uid)
                         break
 
                     # Reset timer if pending instances count changes:
@@ -1421,9 +1432,6 @@ class ProjectController(AE):
                     logger.error(f"No instances in Series: {series.uid} skipping")
                     continue
 
-                # TODO: if any instances of this series have already been received/imported
-                # go straight to retrieivng the remaining instances individually
-
                 ds = Dataset()
                 ds.QueryRetrieveLevel = "SERIES"
                 ds.StudyInstanceUID = study.uid
@@ -1431,8 +1439,9 @@ class ProjectController(AE):
                 if series.number:
                     ds.SeriesNumber = series.number
 
-                logger.info(f"C-MOVE@Series[{study.uid}] Request SeriesUID:{series.uid} SeriesNumber:{series.number}")
-                # logger.debug(ds)
+                logger.info(
+                    f"C-MOVE@Series[{study.uid}] Request: Modality={series.modality} SOPClassUID={series.sop_class_uid} SeriesUID={series.uid} SeriesNumber={series.number}"
+                )
 
                 responses = move_association.send_c_move(
                     dataset=ds,
@@ -1481,12 +1490,13 @@ class ProjectController(AE):
                     series.update_move_stats(status)
 
             logger.info(f"C-MOVE@Series[{study.uid}] ALL Series Requests for Study COMPLETE")
-            logger.info(f">StudyUIDHierarchy=\n{study}")
 
             # 4. If there are no pending instances, return without error:
             pending_instances = self.get_pending_instances(study)
             if pending_instances == []:
                 logger.info(f"C-MOVE@Series[{study.uid}] ALL Instances IMPORTED")
+                # Mark Study Imported in Anonymizer Model set, for use by Query result Treeview (Show/Hide Imported Studies)
+                self.anonymizer.model.set_study_imported(study.uid)
             else:
                 # 5. Wait for ALL instances of Study to be Imported,
                 #    Timeout if a pending instance is not received within NetworkTimeout
@@ -1501,6 +1511,7 @@ class ProjectController(AE):
 
                     if pending_instances == 0:
                         logger.info(f"C-MOVE@Series[{study.uid}] ALL Instances IMPORTED")
+                        self.anonymizer.model.set_study_imported(study.uid)
                         break
 
                     # Reset timer if pending instances count changes:
@@ -1565,7 +1576,7 @@ class ProjectController(AE):
 
                     # Skip already imported instances
                     if self.anonymizer.model.uid_received(instance.uid):
-                        logger.info(f"Instance already imported: {instance.uid}, skipping")
+                        logger.debug(f"Instance already imported: {instance.uid}, skipping")
                         continue
 
                     ds = Dataset()
@@ -1623,18 +1634,18 @@ class ProjectController(AE):
                         series.update_move_stats_instance_level(status)
 
                 logger.info(f"C-MOVE@Instance[{study.uid}/{series.uid}] ALL Instance Requests for Series COMPLETE")
-                logger.info(f">SeriesUIDHierarchy={series}")
 
             logger.info(f"C-MOVE@Instance[{study.uid}] ALL Instance Requests COMPLETE")
-            logger.info(f">StudyUIDHierarchy={study}")
 
             # 4. If there are no pending instances, return without error:
             pending_instances = self.get_pending_instances(study)
             if pending_instances == []:
                 logger.info(f"C-MOVE[{study.uid}] ALL Instances IMPORTED")
+                # Mark Study Imported in Anonymizer Model set, for use by Query result Treeview (Show/Hide Imported Studies)
+                self.anonymizer.model.set_study_imported(study.uid)
             else:
                 # 5. Wait for ALL instances of Study to be Imported,
-                #    Timeout if a pending instance is not received within DIMSE Timeout
+                #    Timeout if a pending instance is not received within Network Timeout
                 #    or abort on user signal:
                 import_timer = self.model.network_timeouts.network
                 prev_pending_instances = pending_instances
@@ -1646,6 +1657,7 @@ class ProjectController(AE):
 
                     if pending_instances == 0:
                         logger.info(f"C-MOVE@Instance[{study.uid}] ALL Instances IMPORTED")
+                        self.anonymizer.model.set_study_imported(study.uid)
                         break
 
                     # Reset timer if pending instances count changes:
@@ -1698,8 +1710,9 @@ class ProjectController(AE):
             for study in req.studies:
 
                 pending_instances = self.get_number_of_pending_instances(study)
-                if not pending_instances:
+                if pending_instances == 0:
                     logger.warning(f"Study[{study.uid}] has no pending instances, skipping")
+                    self.anonymizer.model.set_study_imported(study.uid)
                     continue
 
                 # If ANY Instances have already been received for study
@@ -1920,12 +1933,11 @@ class ProjectController(AE):
     # Non-blocking export_patients:
     def export_patients_ex(self, er: ExportStudyRequest) -> None:
         self._abort_export = False
-        self._export_patients_thread = threading.Thread(
+        threading.Thread(
             target=self._manage_export,
             args=(er,),
             daemon=True,  # daemon threads are abruptly stopped at shutdown
-        )
-        self._export_patients_thread.start()
+        ).start()
 
     def abort_export(self):
         logger.info("Abort Export")
