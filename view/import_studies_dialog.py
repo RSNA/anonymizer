@@ -168,13 +168,18 @@ class ImportStudiesDialog(tk.Toplevel):
                 self._metadata_progress_bar.configure(progress_color="gray60")
                 self._metadata_progress_label.configure(text_color="gray60")
                 self._instances_to_import = sum([study.get_number_of_instances() for study in self.studies])
+                self._create_widgets_2()
+
+                if self._instances_to_import == 0:
+                    self._import_status_label.configure(text=_("No instances to import"))
+                    self._cancel_button.configure(text=_("Close"))
+                    return
 
                 mr: MoveStudiesRequest = MoveStudiesRequest(
                     self._scp_name, self._controller.model.scu.aet, "SERIES", self.studies
                 )
                 self._controller.move_studies_ex(mr)
                 self.after(self.update_interval, self._update_progress_move_studies)
-                self._create_widgets_2()
 
     def _update_progress_move_studies(self):
         # pending_instances = sum([self._controller.get_number_of_pending_instances(study) for study in self.studies])

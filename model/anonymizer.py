@@ -1,50 +1,155 @@
 from typing import Dict, List
 from pathlib import Path
 import logging
+import threading
+from dataclasses import dataclass, field
 from pprint import pformat
 import xml.etree.ElementTree as ET
-from .project import PHI, Study
+from .project import DICOMNode
 from utils.translate import _
 
 logger = logging.getLogger(__name__)
 
 
+class ThreadSafeDict:
+    def __init__(self):
+        self._dict = {}
+        self._lock = threading.Lock()
+
+    def __getitem__(self, key):
+        with self._lock:
+            return self._dict[key]
+
+    def __setitem__(self, key, value):
+        with self._lock:
+            self._dict[key] = value
+
+    def __delitem__(self, key):
+        with self._lock:
+            del self._dict[key]
+
+    def __contains__(self, key):
+        with self._lock:
+            return key in self._dict
+
+    def __len__(self):
+        with self._lock:
+            return len(self._dict)
+
+    def items(self):
+        with self._lock:
+            return list(self._dict.items())
+
+    def keys(self):
+        with self._lock:
+            return list(self._dict.keys())
+
+    def clear(self):
+        with self._lock:
+            self._dict.clear()
+
+
+class ThreadSafeSet:
+    def __init__(self):
+        self._set = set()
+        self._lock = threading.Lock()
+
+    def add(self, item):
+        with self._lock:
+            self._set.add(item)
+
+    def remove(self, item):
+        with self._lock:
+            self._set.remove(item)
+
+    def __contains__(self, item):
+        with self._lock:
+            return item in self._set
+
+    def __len__(self):
+        with self._lock:
+            return len(self._set)
+
+
+@dataclass
+class Series:
+    series_uid: str
+    series_desc: str
+    modality: str
+    instances: int
+
+
+@dataclass
+class Study:
+    study_date: str
+    anon_date_delta: int
+    accession_number: str
+    study_uid: str
+    study_desc: str
+    source: DICOMNode | str
+    series: List[Series]
+
+
+@dataclass
+class PHI:
+    patient_name: str = ""
+    patient_id: str = ""
+    sex: str = "U"
+    dob: str | None = None
+    ethnic_group: str | None = None
+    # TODO: move phi below to Study, even sex could change
+    weight: str | None = None
+    bmi: str | None = None
+    size: str | None = None
+    smoker: str | None = None
+    medical_alerts: str | None = None
+    allergies: str | None = None
+    reason_for_visit: str | None = None
+    admitting_diagnoses: str | None = None
+    history: str | None = None
+    additional_history: str | None = None
+    comments: str | None = None
+    studies: List[Study] = field(default_factory=list)
+
+
 class AnonymizerModel:
     # Model Version Control
-    MODEL_VERSION = 3
+    MODEL_VERSION = 1
     # When PHI PatientID is missing allocate to Anonymized PatientID: 000000
     DEFAULT_ANON_PATIENT_ID_SUFFIX = "-000000"
+
+    _lock = threading.Lock()
 
     def __init__(self, site_id: str, script_path: Path):
         self._version = AnonymizerModel.MODEL_VERSION
         self.default_anon_pt_id: str = site_id + self.DEFAULT_ANON_PATIENT_ID_SUFFIX
+
         # Dynamic attributes:
-        self._patient_id_lookup: Dict[str, str] = {"": self.default_anon_pt_id}
-        self._uid_lookup: Dict[str, str] = {}
-        self._acc_no_lookup: Dict[str, str] = {}
-        self._phi_lookup: Dict[str, PHI] = {self.default_anon_pt_id: PHI()}
-        self._study_imported = set()  # Version 2
+        self._patient_id_lookup = {}
+        self._uid_lookup = {}
+        self._acc_no_lookup = {}
+        self._phi_lookup = {}
+        self._study_imported = set()
+        self.clear_lookups()
         self._script_path = script_path
-        self._tag_keep: Dict[str, str] = {}  # DICOM Tag: Operation
+        self._tag_keep = {}  # DICOM Tag: Operation
         self.load_script(script_path)
 
     def get_class_name(self) -> str:
         return self.__class__.__name__
 
     def __repr__(self) -> str:
-        # Exclude the '_tag_keep' attribute from the dictionary
         filtered_dict = {
-            key: len(value) if isinstance(value, dict) else value
+            key: len(value) if isinstance(value, dict) or isinstance(value, set) else value
             for key, value in (self.__dict__.items())
-            # if key != "_tag_keep"
         }
         return f"{self.get_class_name()}\n({pformat(filtered_dict)})"
 
     def load_script(self, script_path: Path):
         # Parse the anonymize script and create a dict of tags to keep: self._tag_keep["tag"] = "operation"
         # The anonymization function indicated by the script operation will be used to transform source dataset
-        # Open and parse the XML script file
         try:
+            # Open and parse the XML script file
             root = ET.parse(script_path).getroot()
 
             # Extract 'e' tags into _tag_keep dictionary
@@ -82,23 +187,30 @@ class AnonymizerModel:
             raise
 
     def clear_lookups(self):
-        self._patient_id_lookup.clear()
-        self._uid_lookup.clear()
-        self._acc_no_lookup.clear()
-        self._phi_lookup.clear()
+        with self._lock:
+            self._patient_id_lookup.clear()
+            self._patient_id_lookup[""] = self.default_anon_pt_id  # Default Anonymized PatientID
+            self._uid_lookup.clear()
+            self._acc_no_lookup.clear()
+            self._phi_lookup.clear()
+            self._phi_lookup[self.default_anon_pt_id] = PHI()  # Default PHI for Anonymized PatientID
+            self._study_imported.clear()
 
     def get_phi(self, anon_patient_id: str) -> PHI | None:
-        if anon_patient_id not in self._phi_lookup:
-            return None
-        return self._phi_lookup[anon_patient_id]
+        with self._lock:
+            if anon_patient_id not in self._phi_lookup:
+                return None
+            return self._phi_lookup[anon_patient_id]
 
     def get_phi_name(self, anon_pt_id: str) -> str | None:
-        if anon_pt_id not in self._phi_lookup:
-            return None
-        return self._phi_lookup[anon_pt_id].patient_name
+        with self._lock:
+            if anon_pt_id not in self._phi_lookup:
+                return None
+            return self._phi_lookup[anon_pt_id].patient_name
 
     def set_phi(self, anon_patient_id: str, phi: PHI):
-        self._phi_lookup[anon_patient_id] = phi
+        with self._lock:
+            self._phi_lookup[anon_patient_id] = phi
 
     def get_study_imported(self, study_uid: str) -> bool:
         return study_uid in self._study_imported
@@ -107,41 +219,48 @@ class AnonymizerModel:
         self._study_imported.add(study_uid)
 
     def get_anon_patient_id(self, phi_patient_id: str) -> str | None:
-        if phi_patient_id not in self._patient_id_lookup:
-            return None
-        return self._patient_id_lookup[phi_patient_id]
+        with self._lock:
+            if phi_patient_id not in self._patient_id_lookup:
+                return None
+            return self._patient_id_lookup[phi_patient_id]
 
     def get_patient_id_count(self) -> int:
         return len(self._patient_id_lookup)
 
     def set_anon_patient_id(self, phi_patient_id: str, anon_patient_id: str):
-        self._patient_id_lookup[phi_patient_id] = anon_patient_id
+        with self._lock:
+            self._patient_id_lookup[phi_patient_id] = anon_patient_id
 
     def uid_received(self, phi_uid: str) -> bool:
         return phi_uid in self._uid_lookup
 
     def remove_uid(self, phi_uid: str):
-        if phi_uid in self._uid_lookup:
-            del self._uid_lookup[phi_uid]
+        with self._lock:
+            if phi_uid in self._uid_lookup:
+                del self._uid_lookup[phi_uid]
 
     def get_anon_uid(self, phi_uid: str) -> str | None:
-        if phi_uid not in self._uid_lookup:
-            return None
-        return self._uid_lookup[phi_uid]
+        with self._lock:
+            if phi_uid not in self._uid_lookup:
+                return None
+            return self._uid_lookup[phi_uid]
 
     def get_uid_count(self) -> int:
         return len(self._uid_lookup)
 
     def set_anon_uid(self, phi_uid: str, anon_uid: str):
-        self._uid_lookup[phi_uid] = anon_uid
+        with self._lock:
+            self._uid_lookup[phi_uid] = anon_uid
 
     def get_anon_acc_no(self, phi_acc_no: str) -> str | None:
-        if phi_acc_no not in self._acc_no_lookup:
-            return None
-        return self._acc_no_lookup[phi_acc_no]
+        with self._lock:
+            if phi_acc_no not in self._acc_no_lookup:
+                return None
+            return self._acc_no_lookup[phi_acc_no]
+
+    def set_anon_acc_no(self, phi_acc_no: str, anon_acc_no: str):
+        with self._lock:
+            self._acc_no_lookup[phi_acc_no] = anon_acc_no
 
     def get_acc_no_count(self) -> int:
         return len(self._acc_no_lookup)
-
-    def set_anon_acc_no(self, phi_acc_no: str, anon_acc_no: str):
-        self._acc_no_lookup[phi_acc_no] = anon_acc_no

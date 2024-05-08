@@ -51,47 +51,6 @@ class LoggingLevels:
 
 
 @dataclass
-class Series:
-    series_uid: str
-    series_desc: str
-    modality: str
-    instances: int
-
-
-@dataclass
-class Study:
-    study_date: str
-    anon_date_delta: int
-    accession_number: str
-    study_uid: str
-    study_desc: str
-    source: DICOMNode | str
-    series: List[Series]
-    imported: bool = False  # set by
-
-
-@dataclass
-class PHI:
-    patient_name: str = ""
-    patient_id: str = ""
-    sex: str = "U"
-    dob: str | None = None
-    weight: str | None = None
-    bmi: str | None = None
-    size: str | None = None
-    smoker: str | None = None
-    medical_alerts: str | None = None
-    allergies: str | None = None
-    ethnic_group: str | None = None
-    reason_for_visit: str | None = None
-    admitting_diagnoses: str | None = None
-    history: str | None = None
-    additional_history: str | None = None
-    comments: str | None = None
-    studies: List[Study] = field(default_factory=list)
-
-
-@dataclass
 class AWSCognito:
     account_id: str
     region_name: str

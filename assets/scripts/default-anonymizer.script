@@ -9,7 +9,7 @@
  <e en="T" t="00080014" n="InstanceCreatorUID">@remove()</e>
  <e en="T" t="00080015" n="InstanceCoercionDateTime">@remove()</e>
  <e en="F" t="00080016" n="SOPClassUID"></e>
- <e en="T" t="00080018" n="SOPInstanceUID">@param(@UIDROOT).@param(@SITEID).@integer(this,"uid",1)</e>
+ <e en="T" t="00080018" n="SOPInstanceUID">@uid</e>
  <e en="T" t="0008001A" n="RelatedGeneralSOPClassUID">@remove()</e>
  <e en="T" t="0008001B" n="OriginalSpecializedSOPClassUID">@remove()</e>
  <e en="T" t="00080020" n="StudyDate">@hashdate(this,PatientID)</e>
@@ -28,7 +28,7 @@
  <e en="T" t="00080040" n="DataSetTypeRetired">@remove()</e>
  <e en="T" t="00080041" n="DataSetSubtypeRetired">@remove()</e>
  <e en="T" t="00080042" n="NuclearMedicineSeriesTypeRetired">@remove()</e>
- <e en="T" t="00080050" n="AccessionNumber">@integer(this,acc,1)</e>
+ <e en="T" t="00080050" n="AccessionNumber">@acc</e>
  <e en="T" t="00080051" n="IssuerOfAccessionNumberSeq">@remove()</e>
  <e en="T" t="00080052" n="QueryRetrieveLevel">@remove()</e>
  <e en="T" t="00080053" n="QueryRetrieveView">@remove()</e>
@@ -215,8 +215,8 @@
  <e en="T" t="00089458" n="FrameDisplaySeq">@remove()</e>
  <e en="T" t="00089459" n="RecommendedDisplayFrameRateInFloat">@remove()</e>
  <e en="T" t="00089460" n="SkipFrameRangeFlag">@remove()</e>
- <e en="T" t="00100010" n="PatientName">@param(@SITEID)-@integer(PatientID,"ptid",6)</e>
- <e en="T" t="00100020" n="PatientID">@param(@SITEID)-@integer(PatientID,"ptid",6)</e>
+ <e en="T" t="00100010" n="PatientName">@ptid</e>
+ <e en="T" t="00100020" n="PatientID">@ptid</e>
  <e en="T" t="00100021" n="IssuerOfPatientID">@remove()</e>
  <e en="T" t="00100022" n="TypeOfPatientID">@remove()</e>
  <e en="T" t="00100024" n="IssuerOfPatientIDQualifiersSeq">@remove()</e>
@@ -304,8 +304,8 @@
  <e en="F" t="00120053" n="LongitudinalTemporalEventType"></e>
  <e en="T" t="00120060" n="CoordinatingCenterName">@empty()</e>
  <e en="T" t="00120062" n="PatientIdentityRemoved">YES</e>
- <e en="T" t="00120063" n="DeIdentificationMethod">@always()@append(){RSNA Covid-19 Dataset Default}</e>
- <e en="T" t="00120064" n="DeIdentificationMethodCodeSeq">113100/113107/113108</e>
+ <e en="T" t="00120063" n="DeIdentificationMethod">@remove()</e>
+ <e en="T" t="00120064" n="DeIdentificationMethodCodeSeq">@remove()</e>
  <e en="T" t="00120071" n="ClinicalTrialSeriesID">@remove()</e>
  <e en="T" t="00120072" n="ClinicalTrialSeriesDescription">@remove()</e>
  <e en="T" t="00120081" n="ClinicalTrialProtocolEthicsCommitteeName">@empty()</e>
@@ -315,11 +315,6 @@
  <e en="F" t="00120085" n="ConsentForDistributionFlag"></e>
  <e en="T" t="00120086" n="EthicsCommitteeApprovalEffectivenessStartDate">@remove()</e>
  <e en="T" t="00120087" n="EthicsCommitteeApprovalEffectivenessEndDate">@remove()</e>
- <e en="T" t="00130010" n="BlockOwner">@always()CTP</e>
- <e en="T" t="00131010" n="ProjectName">@always()@param(@PROJECTNAME)</e>
- <e en="T" t="00131011" n="TrialName">@always()@param(@TRIALNAME)</e>
- <e en="T" t="00131012" n="SiteName">@always()@param(@SITEID)</e>
- <e en="T" t="00131013" n="SiteID">@always()@param(@SITEID)</e>
  <e en="T" t="00140023" n="CADFileFormat">@remove()</e>
  <e en="T" t="00140024" n="ComponentReferenceSystem">@remove()</e>
  <e en="T" t="00140025" n="ComponentManufacturingProcedure">@remove()</e>
@@ -1468,8 +1463,8 @@
  <e en="F" t="0018A001" n="ContributingEquipmentSeq"></e>
  <e en="T" t="0018A002" n="ContributionDateTime">@remove()</e>
  <e en="T" t="0018A003" n="ContributionDescription">@remove()</e>
- <e en="T" t="0020000D" n="StudyInstanceUID">@param(@UIDROOT).@param(@SITEID).@integer(this,"uid",1)</e>
- <e en="T" t="0020000E" n="SeriesInstanceUID">@param(@UIDROOT).@param(@SITEID).@integer(this,"uid",1)</e>
+ <e en="T" t="0020000D" n="StudyInstanceUID">@uid</e>
+ <e en="T" t="0020000E" n="SeriesInstanceUID">@uid</e>
  <e en="T" t="00200010" n="StudyID">@empty()</e>
  <e en="F" t="00200011" n="SeriesNumber"></e>
  <e en="F" t="00200012" n="AcquisitionNumber"></e>
@@ -1489,7 +1484,7 @@
  <e en="T" t="00200035" n="ImageOrientationRetired">@remove()</e>
  <e en="F" t="00200037" n="ImageOrientation"></e>
  <e en="T" t="00200050" n="LocationRetired">@remove()</e>
- <e en="T" t="00200052" n="FrameOfReferenceUID">@param(@UIDROOT).@param(@SITEID).@integer(this,"uid",1)</e>
+ <e en="T" t="00200052" n="FrameOfReferenceUID">@uid</e>
  <e en="F" t="00200060" n="Laterality"></e>
  <e en="F" t="00200062" n="ImageLaterality"></e>
  <e en="T" t="00200070" n="ImageGeometryTypeRetired">@remove()</e>
@@ -1498,7 +1493,7 @@
  <e en="F" t="00200100" n="TemporalPositionIdentifier"></e>
  <e en="F" t="00200105" n="NumberOfTemporalPositions"></e>
  <e en="F" t="00200110" n="TemporalResolution"></e>
- <e en="T" t="00200200" n="SynchronizationFrameOfReferenceUID">@param(@UIDROOT).@param(@SITEID).@integer(this,"uid",1)</e>
+ <e en="T" t="00200200" n="SynchronizationFrameOfReferenceUID">@uid</e>
  <e en="F" t="00200242" n="SOPInstanceUIDOfConcatenationSource"></e>
  <e en="F" t="00201000" n="SeriesInStudy"></e>
  <e en="T" t="00201001" n="AcquisitionsInSeriesRetired">@remove()</e>
@@ -1540,10 +1535,10 @@
  <e en="F" t="00209156" n="FrameAcquisitionNumber"></e>
  <e en="F" t="00209157" n="DimensionIndexValues"></e>
  <e en="T" t="00209158" n="FrameComments">@remove()</e>
- <e en="T" t="00209161" n="ConcatenationUID">@param(@UIDROOT).@param(@SITEID).@integer(this,"uid",1)</e>
+ <e en="T" t="00209161" n="ConcatenationUID">@uid</e>
  <e en="F" t="00209162" n="InConcatenationNumber"></e>
  <e en="F" t="00209163" n="InConcatenationTotalNumber"></e>
- <e en="T" t="00209164" n="DimensionOrganizationUID">@param(@UIDROOT).@param(@SITEID).@integer(this,"uid",1)</e>
+ <e en="T" t="00209164" n="DimensionOrganizationUID">@uid</e>
  <e en="F" t="00209165" n="DimensionIndexPointer"></e>
  <e en="F" t="00209167" n="FunctionalGroupPointer"></e>
  <e en="F" t="00209170" n="UnassignedSharedConvertedAttributesSeq"></e>
@@ -1961,7 +1956,7 @@
  <e en="F" t="00281111" n="LargeRedPaletteColorLUTDescriptor"></e>
  <e en="F" t="00281112" n="LargeGreenPaletteColorLUTDescriptor"></e>
  <e en="F" t="00281113" n="LargeBluePaletteColorLUTDescriptor"></e>
- <e en="T" t="00281199" n="PaletteColorLUTUID">@param(@UIDROOT).@param(@SITEID).@integer(this,"uid",1)</e>
+ <e en="T" t="00281199" n="PaletteColorLUTUID">@uid</e>
  <e en="F" t="00281200" n="GrayLUTData"></e>
  <e en="F" t="00281201" n="RedPaletteColorLUTData"></e>
  <e en="F" t="00281202" n="GreenPaletteColorLUTData"></e>
@@ -1970,7 +1965,7 @@
  <e en="F" t="00281211" n="LargeRedPaletteColorLUTData"></e>
  <e en="F" t="00281212" n="LargeGreenPaletteColorLUTData"></e>
  <e en="F" t="00281213" n="LargeBluePaletteColorLUTData"></e>
- <e en="T" t="00281214" n="LargePaletteColorLUTUID">@param(@UIDROOT).@param(@SITEID).@integer(this,"uid",1)</e>
+ <e en="T" t="00281214" n="LargePaletteColorLUTUID">@uid</e>
  <e en="F" t="00281221" n="SegmentedRedPaletteColorLUTData"></e>
  <e en="F" t="00281222" n="SegmentedGreenPaletteColorLUTData"></e>
  <e en="F" t="00281223" n="SegmentedBluePaletteColorLUTData"></e>

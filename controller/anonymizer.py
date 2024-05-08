@@ -4,7 +4,6 @@ import os
 from typing import List
 from shutil import copyfile
 import re
-import time
 import logging
 import threading
 import hashlib
@@ -16,8 +15,8 @@ from pydicom import Dataset, Sequence, dcmread
 from pydicom.errors import InvalidDicomError
 from utils.translate import _
 from utils.storage import local_storage_path, JavaAnonymizerExportedStudy
-from model.project import DICOMRuntimeError, DICOMNode, Study, Series, PHI, ProjectModel
-from model.anonymizer import AnonymizerModel
+from model.project import DICOMRuntimeError, DICOMNode, ProjectModel
+from model.anonymizer import AnonymizerModel, Study, Series, PHI
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +45,7 @@ class AnonymizerController:
     PRIVATE_BLOCK_NAME = "RSNA"
     DEFAULT_ANON_DATE = "20000101"  # if source date is invalid or before 19000101
 
-    # TODO: To allow > 1 worker threads, thread safety for AnonymizerModel operation in _anonymize_worker
-    NUMBER_OF_WORKER_THREADS = 1
+    NUMBER_OF_WORKER_THREADS = 2
     MODEL_AUTOSAVE_INTERVAL_SECS = 10
 
     _clean_tag_translate_table = str.maketrans("", "", "() ,")
@@ -61,6 +59,7 @@ class AnonymizerController:
     ]
 
     def __init__(self, project_model: ProjectModel):
+        self._lock = threading.Lock()
         self.project_model = project_model
         # Initialise AnonymizerModel datafile full path:
         self.model_filename = Path(self.project_model.private_dir(), self.ANONYMIZER_MODEL_FILENAME)
@@ -276,7 +275,8 @@ class AnonymizerController:
 
     # Extract PHI from new study and store:
     def capture_phi_from_new_study(self, phi_ds: Dataset, source: DICOMNode | str):
-        def study_from_dataset(ds: Dataset) -> Study:
+        # TODO: constructor Study(ds,source)?
+        def study_from_dataset(ds: Dataset, src: DICOMNode | str) -> Study:
             return Study(
                 str(ds.StudyDate) if hasattr(ds, "StudyDate") else "?",
                 (
@@ -287,7 +287,7 @@ class AnonymizerController:
                 str(ds.AccessionNumber) if hasattr(ds, "AccessionNumber") else "?",
                 (str(ds.StudyInstanceUID) if hasattr(ds, "StudyInstanceUID") else "?"),
                 (str(ds.StudyDescription) if hasattr(ds, "StudyDescription") else "?"),
-                source,
+                src,
                 [
                     Series(
                         (ds.SeriesInstanceUID if hasattr(ds, "SeriesInstanceUID") else "?"),
@@ -298,40 +298,34 @@ class AnonymizerController:
                 ],
             )
 
-        # If PHI PatientID is missing, as per DICOM Standard, pydicom will return ""
+        # If PHI PatientID is missing in dataset, as per DICOM Standard, pydicom will return ""
         # this corresponds to AnonymizerModel.DEFAULT_ANON_PATIENT_ID ("000000") initialised in AnonymizerModel
-        anon_patient_id = self.model.get_anon_patient_id(phi_ds.PatientID if hasattr(phi_ds, "PatientID") else "")
+        anon_patient_id = self.model.get_anon_patient_id(
+            phi_ds.PatientID.strip() if hasattr(phi_ds, "PatientID") else ""
+        )
 
         if anon_patient_id == None:  # New patient
             new_anon_patient_id = self.get_next_anon_patient_id()
             # TODO: write init method for PHI(phi_ds) using introspection for fields to look for in dataset
-            # Merge Study/Series/Instance for PHI with StudyUIDHierarchy of AnonymizerController
+            # Merge Study/Series/Instance for PHI with StudyUIDHierarchy of ProjectController
             phi = PHI(
                 patient_name=str(phi_ds.PatientName) if hasattr(phi_ds, "PatientSex") else "U",
-                patient_id=str(phi_ds.PatientID),
+                patient_id=str(phi_ds.PatientID).strip(),
                 sex=phi_ds.PatientSex if hasattr(phi_ds, "PatientSex") else "U",
-                dob=phi_ds.PatientBirthDate if hasattr(phi_ds, "PatientBirthDate") else None,
-                weight=phi_ds.PatientWeight if hasattr(phi_ds, "PatientWeight") else None,
-                bmi=phi_ds.PatientBodyMassIndex if hasattr(phi_ds, "PatientBodyMassIndex") else None,
-                size=phi_ds.PatientSize if hasattr(phi_ds, "PatientSize") else None,
-                smoker=phi_ds.SmokingStatus if hasattr(phi_ds, "SmokingStatus") else None,
-                medical_alerts=phi_ds.MedicalAlerts if hasattr(phi_ds, "MedicalAlerts") else None,
-                allergies=phi_ds.Allergies if hasattr(phi_ds, "Allergies") else None,
-                ethnic_group=phi_ds.EthnicGroup if hasattr(phi_ds, "EthnicGroup") else None,
-                reason_for_visit=(
-                    phi_ds.ReasonForTheRequestedProcedure if hasattr(phi_ds, "ReasonForTheRequestedProcedure") else None
-                ),
-                admitting_diagnoses=(
-                    phi_ds.AdmittingDiagnosesDescription if hasattr(phi_ds, "AdmittingDiagnosesDescription") else None
-                ),
-                history=phi_ds.PatientHistory if hasattr(phi_ds, "PatientHistory") else None,
-                additional_history=(
-                    phi_ds.AdditionalPatientHistory if hasattr(phi_ds, "AdditionalPatientHistory") else None
-                ),
-                comments=phi_ds.PatientComments if hasattr(phi_ds, "PatientComments") else None,
-                studies=[
-                    study_from_dataset(phi_ds),
-                ],
+                dob=phi_ds.get("PatientBirthDate"),
+                weight=phi_ds.get("PatientWeight"),
+                bmi=phi_ds.get("PatientBodyMassIndex"),
+                size=phi_ds.get("PatientSize"),
+                smoker=phi_ds.get("SmokingStatus"),
+                medical_alerts=phi_ds.get("MedicalAlerts"),
+                allergies=phi_ds.get("Allergies"),
+                ethnic_group=phi_ds.get("EthnicGroup"),
+                reason_for_visit=phi_ds.get("ReasonForTheRequestedProcedure"),
+                admitting_diagnoses=phi_ds.get("AdmittingDiagnosesDescription"),
+                history=phi_ds.get("PatientHistory"),
+                additional_history=phi_ds.get("AdditionalPatientHistory"),
+                comments=phi_ds.get("PatientComments"),
+                studies=[study_from_dataset(phi_ds, source)],
             )
             self.model.set_phi(new_anon_patient_id, phi)
 
@@ -342,13 +336,17 @@ class AnonymizerController:
                 logger.error(msg)
                 raise RuntimeError(msg)
 
-            phi.studies.append(study_from_dataset(phi_ds))
+            phi.studies.append(study_from_dataset(phi_ds, source))
             self.model.set_phi(anon_patient_id, phi)
 
     def update_phi_from_new_instance(self, ds: Dataset, source: DICOMNode | str):
         # Study PHI already captured, update series and instance counts from new instance:
         anon_patient_id = self.model.get_anon_patient_id(ds.PatientID if hasattr(ds, "PatientID") else "")
-        assert anon_patient_id != None
+        if anon_patient_id is None:
+            msg = f"Critical error {ds.PatientID} not found in patient_id_lookup"
+            logger.error(msg)
+            raise RuntimeError(msg)
+
         phi = self.model.get_phi(anon_patient_id)
         if phi == None:
             msg = f"Existing patient {anon_patient_id} not found in phi_lookup"
@@ -403,7 +401,7 @@ class AnonymizerController:
         if operation == "":
             return
         # Anonymize operations:
-        if "@empty" in operation:  # data_element.value:
+        if "@empty" in operation:
             dataset[tag].value = ""
         elif "uid" in operation:
             anon_uid = self.model.get_anon_uid(value)
@@ -449,15 +447,17 @@ class AnonymizerController:
         self._model_change_flag = True  # for autosave manager
 
         # Capture PHI and source for new studies:
-        if self.model.get_anon_uid(ds.StudyInstanceUID) == None:
-            self.capture_phi_from_new_study(ds, source)
-        else:
-            self.update_phi_from_new_instance(ds, source)
-
-        # To minimize computation overhead DO NOT MAKE COPY of source dataset
-        phi_instance_uid = ds.SOPInstanceUID  # if exception, remove this instance from uid_lookup
+        # TODO: this should be done in AnonymizerModel via model.capture_phi(source, ds)
+        with self._lock:
+            if self.model.get_anon_uid(ds.StudyInstanceUID) == None:
+                self.capture_phi_from_new_study(ds, source)
+            else:
+                self.update_phi_from_new_instance(ds, source)
 
         try:
+            # To minimize computation overhead DO NOT MAKE COPY of source dataset
+            phi_instance_uid = ds.SOPInstanceUID  # if exception, remove this instance from uid_lookup
+
             # Anonymize dataset (overwrite phi dataset) (prevents dataset copy)
             # TODO: process in AnonymizerModel: Script line: <r en="T" t="privategroups">Remove private groups</r>
             ds.remove_private_tags()  # remove all private elements

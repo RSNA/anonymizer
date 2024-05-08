@@ -21,12 +21,14 @@
   "python.testing.pytestEnabled": true,
   "cSpell.words": [
     "DICOM",
+    "hashdate",
     "MIRC",
+    "ptid",
     "RSNA",
     "tkhtmlview",
     "uids"
   ],
-  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.typeCheckingMode": "off",
   "editor.defaultFoldingRangeProvider": "ms-python.black-formatter",
   "editor.defaultFormatter": "ms-python.black-formatter",
   "python.analysis.inlayHints.functionReturnTypes": false,
@@ -74,4 +76,5 @@
       "depth": 2
     }
   ],
+  "python.languageServer": "Pylance",
 }

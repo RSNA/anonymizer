@@ -64,7 +64,7 @@ def controller(temp_dir):
         scu=LocalSCU,
         scp=LocalStorageSCP,
         remote_scps=RemoteSCPDict,
-        network_timeouts=NetworkTimeouts(2, 5, 5, 9),
+        network_timeouts=NetworkTimeouts(2, 5, 5, 10),
     )
 
     project_controller = ProjectController(project_model)

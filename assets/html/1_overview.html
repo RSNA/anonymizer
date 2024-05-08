@@ -17,14 +17,18 @@ see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 		<h4>Differences from Java Version</h4>
 		<ol>
 			<li>Written in Python for Version 3.11</li>
-			<li>Implements an operation subset to handle the default anonymizer script: {@remove, @empty, @param, @hashdate, @round, @integer}</li>
+			<li>Implements a simplified operation subset to handle the default anonymizer script: {@remove, @empty, @hashdate, @round, ptid, acc, uid}</li>
+			<li>Fields with ptid in the operation will be replaced by a sequentially generated Patient ID starting at 1</li>
+			<li>Fields with acc in the operation will be replaced by a sequentially generated Accession Number starting at 1</li>
+			<li>Fields with uid in the operation will be replaced by a sequentially generated UID of form {UIDRoot.SiteID.N} where N is the sequence integer starting at 1</li>
 			<li>No in built editor for anonymizer script</li>
-			<li>No filter script, use DICOM association contexts to restrict which storage classes are imported</li>
+			<li>No filter script, uses DICOM association contexts to restrict which storage classes & transfer syntaxes are imported</li>
 			<li>No internal DICOM image viewer</li>
 			<li>No internal log viewer</li>
 			<li>Project based: multiple separate projects with sand boxed settings can be created and managed on same machine</li>
 			<li>Project defined allowed modalities, storage classes, transfer syntaxes, network timeouts and logging levels</li>
 			<li>Simplified DICOM client & server configuration</li>
+			<li>Faster anonymizer</li>
 			<li>Export to AWS S3 Object Store with AWS Cognito user authentication</li>
 			<li>Create Patient Lookup / Index in csv format with Number of Series and Number of Instances appended to each study row</li>
 			<li>Allows concurrent import and export processes</li>
@@ -115,6 +119,7 @@ see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 		<li>Reflect all errors to user, do not rely on log analysis</li>
 		<li>Project based</li>
 		<li>Model, View, Controller (MVC) architecture</li>
+		<li></li>
 	</ol>
 	
 </div>

@@ -42,7 +42,7 @@ class Anonymizer(ctk.CTk):
     THEME_FILE = "assets/themes/rsna_theme.json"
     CONFIG_FILENAME = "config.json"
 
-    project_open_startup_dwell_time = 500  # milliseconds
+    project_open_startup_dwell_time = 100  # milliseconds
     menu_font = ("", 13)
 
     def __init__(self):

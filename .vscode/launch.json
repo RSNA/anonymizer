@@ -12,9 +12,9 @@
       },
       "console": "integratedTerminal",
       "autoReload": {
-        "enable": true
+        "enable": false
       },
-      "justMyCode": false
+      "justMyCode": true
     },
     {
       "name": "Anonymizer GUI Optimized 1",
@@ -28,7 +28,7 @@
       "autoReload": {
         "enable": true
       },
-      "justMyCode": false
+      "justMyCode": true
     },
     {
       "name": "Anonymizer GUI Optimized 2",

@@ -44,12 +44,12 @@ from .dicom_C_codes import (
 )
 from model.project import (
     ProjectModel,
-    PHI,
     DICOMNode,
     NetworkTimeouts,
     DICOMRuntimeError,
     AuthenticationError,
 )
+from model.anonymizer import PHI
 from .anonymizer import AnonymizerController
 from __version__ import __version__
 
@@ -73,12 +73,14 @@ class SeriesUIDHierarchy:
         modality: str | None = None,
         sop_class_uid: str | None = None,
         description: str | None = None,  # TODO: add BodyPartExamined?
+        instance_count: int = 0,  # from NumberOfSeriesRelatedInstances
         instances: Dict[str, InstanceUIDHierarchy] = {},
     ):
         self.uid = uid
         self.number = number
         self.modality = modality
         self.sop_class_uid = sop_class_uid
+        self.instance_count = instance_count
         self.description = description
         self.instances = instances
         # from send_c_move status response:
@@ -235,7 +237,7 @@ class ProjectController(AE):
         "1.2.840.10008.5.1.4.1.2.2.3",  # Get
     ]
     _maximum_pdu_size = 0  # no limit
-    _handle_store_time_slice_interval = 0.1  # seconds
+    _handle_store_time_slice_interval = 0.2  # seconds
     _export_file_time_slice_interval = 0.1  # seconds
     _patient_export_thread_pool_size = 4
     _study_move_thread_pool_size = 4
@@ -245,7 +247,7 @@ class ProjectController(AE):
         "NumberOfStudyRelatedSeries",
         "NumberOfStudyRelatedInstances",
     ]
-    _required_attributes_series_query = ["StudyInstanceUID", "SeriesInstanceUID", "Modality", "SOPClassUID"]
+    _required_attributes_series_query = ["StudyInstanceUID", "SeriesInstanceUID", "Modality"]
     _query_result_fields_to_remove = [
         "QueryRetrieveLevel",
         "RetrieveAETitle",
@@ -398,7 +400,7 @@ class ProjectController(AE):
     def _handle_store(self, event: Event):
         # Throttle incoming requests by adding a delay
         # to ensure UX responsiveness
-        time.sleep(self._handle_store_time_slice_interval)
+        # time.sleep(self._handle_store_time_slice_interval)
         logger.debug("_handle_store")
         # TODO: Validate remote IP & AE Title
         remote = event.assoc.remote
@@ -830,10 +832,10 @@ class ProjectController(AE):
         # Phase 1: Study Level Query
         ds = Dataset()
         ds.QueryRetrieveLevel = "STUDY"
-
         ds.AccessionNumber = acc_no
         ds.StudyDate = study_date
         ds.ModalitiesInStudy = modality
+        ds.SOPClassesInStudy = ""
         ds.PatientName = name
         ds.PatientID = id
         ds.PatientSex = ""
@@ -1126,6 +1128,7 @@ class ProjectController(AE):
             ds.SeriesDescription = ""
             ds.Modality = ""
             ds.SOPClassUID = ""
+            ds.NumberOfSeriesRelatedInstances = ""
 
             responses = query_association.send_c_find(
                 ds,
@@ -1161,7 +1164,8 @@ class ProjectController(AE):
                             f"Skip Series[Modality={identifier.Modality}]:{identifier.SeriesInstanceUID} with mismatched modality"
                         )
                         continue
-                    if identifier.SOPClassUID not in self.model.storage_classes:
+                    sop_class_uid = identifier.get("SOPClassUID")
+                    if sop_class_uid and sop_class_uid not in self.model.storage_classes:
                         logger.info(
                             f"Skip Series[SOPClassUID={identifier.SOPClassUID}]:{identifier.SeriesInstanceUID} with mismatched sop_class_uid"
                         )
@@ -1169,16 +1173,24 @@ class ProjectController(AE):
 
                     # New SeriesUIDHierarchy:
                     series_descr = identifier.SeriesDescription if hasattr(identifier, "SeriesDescription") else "?"
+                    instance_count = (
+                        int(identifier.NumberOfSeriesRelatedInstances)
+                        if hasattr(
+                            identifier, "NumberOfSeriesRelatedInstances"
+                        )  # This is an optional return field as per DICOM Std. (dammit)
+                        else 1
+                    )
                     study_uid_hierarchy.series[identifier.SeriesInstanceUID] = SeriesUIDHierarchy(
                         uid=identifier.SeriesInstanceUID,
                         number=identifier.SeriesNumber if hasattr(identifier, "SeriesNumber") else None,
                         modality=identifier.Modality,
                         sop_class_uid=identifier.SOPClassUID,
                         description=series_descr,
+                        instance_count=instance_count,
                         instances={},
                     )
                     logger.info(
-                        f"New Series[Modality={identifier.Modality},SOPClassUID={identifier.SOPClassUID}]: {series_descr}/{identifier.SeriesInstanceUID}/{identifier.SeriesNumber}"
+                        f"New Series[Modality={identifier.Modality},SOPClassUID={identifier.SOPClassUID}]: {series_descr}/{identifier.SeriesInstanceUID}/{identifier.SeriesNumber} | {instance_count}"
                     )
 
             logger.info(f"StudyUID={study_uid}, {len(study_uid_hierarchy.series)} Series found")
@@ -1187,7 +1199,9 @@ class ProjectController(AE):
 
             # 3. Get list of Instance UIDs for each Series UID:
             for series in study_uid_hierarchy.series.values():
+                ds = Dataset()
                 ds.QueryRetrieveLevel = "IMAGE"
+                ds.StudyInstanceUID = study_uid
                 ds.SeriesInstanceUID = series.uid
                 ds.SOPInstanceUID = ""
                 ds.InstanceNumber = ""
@@ -1339,11 +1353,6 @@ class ProjectController(AE):
                     if identifier:
                         logger.error(f"_Response identifier: {identifier}")
                     continue
-                    # raise (
-                    #     DICOMRuntimeError(
-                    #         f"C-MOVE[{study.uid}] failure, status:{hex(status.Status)}: {QR_MOVE_SERVICE_CLASS_STATUS[status.Status][1]}"
-                    #     )
-                    # )
 
                 if status.Status == C_SUCCESS:
                     logger.info(f"C-MOVE@Study[{study.uid}] Study Request SUCCESS")
@@ -1354,7 +1363,7 @@ class ProjectController(AE):
                 if identifier:
                     logger.info(f"C-MOVE@Study[{study.uid}] Response identifier: {identifier}")
 
-            logger.info(f"C-MOVE@Study[{study.uid}] Request COMPLETE")
+            logger.info(f"C-MOVE@Study Request for Study COMPLETE: StudyUIDHierachy:\n{study}")
 
             # 4. If there are no pending instances, return without error:
             pending_instances = self.get_number_of_pending_instances(study)
@@ -1475,11 +1484,6 @@ class ProjectController(AE):
                         if identifier:
                             logger.error(f"_Response identifier: {identifier}")
                         continue
-                        # raise (
-                        #     DICOMRuntimeError(
-                        #         f"C-MOVE@Series[{study.uid}/{series.uid}] failure, status:{hex(status.Status).upper()}: {QR_MOVE_SERVICE_CLASS_STATUS[status.Status][1]}"
-                        #     )
-                        # )
 
                     if status.Status == C_SUCCESS:
                         logger.info(
@@ -1489,7 +1493,7 @@ class ProjectController(AE):
                     # Update Move stats from status:
                     series.update_move_stats(status)
 
-            logger.info(f"C-MOVE@Series[{study.uid}] ALL Series Requests for Study COMPLETE")
+            logger.info(f"C-MOVE@Series ALL Series Requests for Study COMPLETE: StudyUIDHierachy:\n{study}")
 
             # 4. If there are no pending instances, return without error:
             pending_instances = self.get_pending_instances(study)
@@ -1717,6 +1721,8 @@ class ProjectController(AE):
 
                 # If ANY Instances have already been received for study
                 # Set Move Operation to Instance Level
+                # TODO: Horos does not support Instance Level Move, other PACS?
+                # Implement Project / UX Switch to prevent move at instance level
                 if pending_instances < study.get_number_of_instances():
                     move_op = self._move_study_at_instance_level
 

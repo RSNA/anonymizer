@@ -649,9 +649,13 @@ class QueryView(tk.Toplevel):
             # not just those modalities requested & imported
             # The DICOM Study Query Information model does not provide for querying for specific modalities
             # imported = images_stored_count >= dataset.get("NumberOfStudyRelatedInstances", 0)
+            study_instances_from_scp = dataset.get("NumberOfStudyRelatedInstances", 0)
             # TODO: Perform down query series level?
-            # IF there is 1 valid Modality in the study then NumberOfStudyRelatedInstances could be used
-            imported = self._controller.anonymizer.model.get_study_imported(study_uid)
+            # IF there is 1 valid Modality in the study then NumberOfStudyRelatedInstances can be used
+
+            imported = self._controller.anonymizer.model.get_study_imported(study_uid) or (
+                study_instances_from_scp > 0 and images_stored_count >= study_instances_from_scp
+            )
             if imported and not self._show_imported_studies_switch.get():
                 continue
 
