@@ -1177,7 +1177,7 @@ class ProjectController(AE):
                         int(identifier.NumberOfSeriesRelatedInstances)
                         if hasattr(
                             identifier, "NumberOfSeriesRelatedInstances"
-                        )  # This is an optional return field as per DICOM Std. (dammit)
+                        )  # This is an optional return field as per DICOM Std. PS3.4 C. Additional Q/R Attributes
                         else 1
                     )
                     study_uid_hierarchy.series[identifier.SeriesInstanceUID] = SeriesUIDHierarchy(
@@ -1240,7 +1240,8 @@ class ProjectController(AE):
                                 f"Mismatch: Study:{study_uid}<>{identifier.StudyInstanceUID} and/or Series:{series.uid}<>{identifier.SeriesInstanceUID}"
                             )
 
-                logger.info(f"SeriesUID={series.uid}: {len(series.instances)} Instance UIDs found")
+                series.instance_count = len(series.instances)
+                logger.info(f"SeriesUID={series.uid}: {series.instance_count} Instance UIDs found")
 
         except Exception as e:
             error_msg = str(e)  # latch exception error msg

@@ -423,10 +423,9 @@ class QueryView(tk.Toplevel):
                     with open(not_found_file_path, "w") as file:
                         file.write("\n".join(self._acc_no_list))
 
-                    logger.info(_(f"Accession numbers not found written to: {not_found_file_path}"))
-
-                    # TODO: implement custom message box with title bar and icons
-                    # OSX window manager does not show title bar for messagebox and does not show error icon
+                    logger.info(
+                        _(f"Accession numbers not found [{len(self._acc_no_list)}] written to: {not_found_file_path}")
+                    )
                     messagebox.showwarning(
                         title=_("Accession Numbers not found"),
                         message=_(f"Accession Numbers not found were written to text file:\n {not_found_file_path}"),
@@ -470,11 +469,6 @@ class QueryView(tk.Toplevel):
             )
             return
 
-        self._query_active = True
-        self._acc_no_list = []
-        self._disable_action_buttons()
-        self._clear_results_tree()
-
         # Handle multiple comma delimited accession numbers:
         # Entered by user or loaded from file:
         accession_no = self._accession_no_var.get().strip()
@@ -511,6 +505,10 @@ class QueryView(tk.Toplevel):
 
         self._studies_processed = 0
         self._studies_selected_label.configure(text=f"Studies Selected: 0")
+
+        self._query_active = True
+        self._disable_action_buttons()
+        self._clear_results_tree()
 
         ux_Q = Queue()
         req: FindStudyRequest = FindStudyRequest(
@@ -675,6 +673,8 @@ class QueryView(tk.Toplevel):
                 )
                 if imported:
                     self._tree.item(dataset.get("StudyInstanceUID", ""), tags="green")
+
+                tk.update_idletasks()
             except Exception as e:
                 logger.error(f"Exception: {e}")
                 # _tkinter.TclError: Item {iid} already exists
