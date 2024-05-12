@@ -44,6 +44,7 @@ cr1_SeriesInstanceUID = "1.3.6.1.4.1.5962.1.1.0.0.0.1196527414.5534.0.10"
 patient2_name = "Doe^Peter"
 patient2_id = "98890234"
 mr_brain_StudyInstanceUID = "1.3.6.1.4.1.5962.1.1.0.0.0.1196533885.18148.0.1"
+mr_brain_SeriesInstanceUID = "1.3.6.1.4.1.5962.1.1.0.0.0.1196533885.18148.0.1"
 mr_brain_filename = MR_STUDY_3_SERIES_11_IMAGES[0]
 
 # COMPRESSED Samples

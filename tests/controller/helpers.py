@@ -110,10 +110,12 @@ def verify_files_sent_to_pacs_simulator(dsets: list[Dataset], tempdir: str, cont
     # TODO: read file from pacs directory and check dataset equivalence against the sent dataset
     # TODO: cater for change in SOP class due to compression / transcoding if implemented
 
-    # Check find results (study query model) match sent datasets
+    # Check find results (study query model) match relevant tallys from response
     results = find_all_studies_on_pacs_simulator_scp(controller)
     assert results
-    assert len(results) == len(dsets)
+
+    dset_study_uids = list(set([inst.StudyInstanceUID for inst in dsets if hasattr(inst, "StudyInstanceUID")]))
+    assert len(results) == len(dset_study_uids)
 
     # create result dictionary with key StudyInstanceUID
     result_dict = {result.StudyInstanceUID: result for result in results}
@@ -127,7 +129,7 @@ def verify_files_sent_to_pacs_simulator(dsets: list[Dataset], tempdir: str, cont
         assert result.PatientID == dset.PatientID
         assert result.StudyInstanceUID == dset.StudyInstanceUID
 
-        if hasattr(result, "StudyDescription"):
+        if hasattr(dset, "StudyDescription"):
             assert result.StudyDescription == dset.StudyDescription
         assert result.StudyDate == dset.StudyDate
         if hasattr(result, "ModalitiesInStudy"):

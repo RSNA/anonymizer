@@ -322,13 +322,17 @@ def test_find_study_uid_hierarchy(temp_dir: str, controller: ProjectController):
 
     verify_files_sent_to_pacs_simulator(dsets, temp_dir, controller)
 
-    error_msg, study1_uid_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, ds1.StudyInstanceUID)
+    error_msg, study1_uid_hierarchy = controller.get_study_uid_hierarchy(
+        PACSSimulatorSCP.aet, ds1.StudyInstanceUID, ds1.PatientID
+    )
 
     assert error_msg is None
     assert len(study1_uid_hierarchy.series) == 1
-    assert len(study1_uid_hierarchy.series[ds1.SeriesInstanceUID].instances) == 1
+    assert study1_uid_hierarchy.get_number_of_instances() == 1
 
-    error_msg, study3_uid_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, ds3[0].StudyInstanceUID)
+    error_msg, study3_uid_hierarchy = controller.get_study_uid_hierarchy(
+        PACSSimulatorSCP.aet, ds3[0].StudyInstanceUID, ds3[0].PatientID
+    )
 
     assert error_msg is None
     for ds in ds3:

@@ -2,73 +2,15 @@ from typing import Dict, List
 from pathlib import Path
 import logging
 import threading
+import pickle
 from dataclasses import dataclass, field
 from pprint import pformat
 import xml.etree.ElementTree as ET
+from pydicom import Dataset
 from .project import DICOMNode
 from utils.translate import _
 
 logger = logging.getLogger(__name__)
-
-
-class ThreadSafeDict:
-    def __init__(self):
-        self._dict = {}
-        self._lock = threading.Lock()
-
-    def __getitem__(self, key):
-        with self._lock:
-            return self._dict[key]
-
-    def __setitem__(self, key, value):
-        with self._lock:
-            self._dict[key] = value
-
-    def __delitem__(self, key):
-        with self._lock:
-            del self._dict[key]
-
-    def __contains__(self, key):
-        with self._lock:
-            return key in self._dict
-
-    def __len__(self):
-        with self._lock:
-            return len(self._dict)
-
-    def items(self):
-        with self._lock:
-            return list(self._dict.items())
-
-    def keys(self):
-        with self._lock:
-            return list(self._dict.keys())
-
-    def clear(self):
-        with self._lock:
-            self._dict.clear()
-
-
-class ThreadSafeSet:
-    def __init__(self):
-        self._set = set()
-        self._lock = threading.Lock()
-
-    def add(self, item):
-        with self._lock:
-            self._set.add(item)
-
-    def remove(self, item):
-        with self._lock:
-            self._set.remove(item)
-
-    def __contains__(self, item):
-        with self._lock:
-            return item in self._set
-
-    def __len__(self):
-        with self._lock:
-            return len(self._set)
 
 
 @dataclass
@@ -81,13 +23,26 @@ class Series:
 
 @dataclass
 class Study:
+    source: DICOMNode | str
+    study_uid: str
     study_date: str
     anon_date_delta: int
     accession_number: str
-    study_uid: str
     study_desc: str
-    source: DICOMNode | str
     series: List[Series]
+    target_instance_count: int = 0
+    # TODO: if data curation needs expand:
+    # weight: str | None = None
+    # bmi: str | None = None
+    # size: str | None = None
+    # smoker: str | None = None
+    # medical_alerts: str | None = None
+    # allergies: str | None = None
+    # reason_for_visit: str | None = None
+    # admitting_diagnoses: str | None = None
+    # history: str | None = None
+    # additional_history: str | None = None
+    # comments: str | None = None
 
 
 @dataclass
@@ -97,43 +52,43 @@ class PHI:
     sex: str = "U"
     dob: str | None = None
     ethnic_group: str | None = None
-    # TODO: move phi below to Study, even sex could change
-    weight: str | None = None
-    bmi: str | None = None
-    size: str | None = None
-    smoker: str | None = None
-    medical_alerts: str | None = None
-    allergies: str | None = None
-    reason_for_visit: str | None = None
-    admitting_diagnoses: str | None = None
-    history: str | None = None
-    additional_history: str | None = None
-    comments: str | None = None
     studies: List[Study] = field(default_factory=list)
 
 
 class AnonymizerModel:
     # Model Version Control
     MODEL_VERSION = 1
-    # When PHI PatientID is missing allocate to Anonymized PatientID: 000000
-    DEFAULT_ANON_PATIENT_ID_SUFFIX = "-000000"
+    MAX_PATIENTS = 1000000  # 1 million patients
 
     _lock = threading.Lock()
 
-    def __init__(self, site_id: str, script_path: Path):
+    def __init__(self, site_id: str, uid_root: str, script_path: Path):
         self._version = AnonymizerModel.MODEL_VERSION
-        self.default_anon_pt_id: str = site_id + self.DEFAULT_ANON_PATIENT_ID_SUFFIX
-
+        self._site_id = site_id
+        self._uid_root = uid_root
+        self._uid_prefix = f"{self._uid_root}.{self._site_id}"
+        # When PHI PatientID is missing allocate to Anonymized PatientID: 000000
+        self.default_anon_pt_id: str = site_id + "-" + "".zfill(len(str(self.MAX_PATIENTS)) - 1)
         # Dynamic attributes:
         self._patient_id_lookup = {}
         self._uid_lookup = {}
         self._acc_no_lookup = {}
         self._phi_lookup = {}
-        self._study_imported = set()
         self.clear_lookups()
         self._script_path = script_path
         self._tag_keep = {}  # DICOM Tag: Operation
         self.load_script(script_path)
+
+    def save(self, filepath: Path) -> bool:
+        with self._lock:
+            try:
+                with open(filepath, "wb") as pkl_file:
+                    pickle.dump(self, pkl_file)
+                logger.info(f"Anonymizer Model saved to: {filepath}")
+                return True
+            except Exception as e:
+                logger.error(f"Fatal Error saving AnonymizerModel, error: {e}")
+                return False
 
     def get_class_name(self) -> str:
         return self.__class__.__name__
@@ -194,35 +149,30 @@ class AnonymizerModel:
             self._acc_no_lookup.clear()
             self._phi_lookup.clear()
             self._phi_lookup[self.default_anon_pt_id] = PHI()  # Default PHI for Anonymized PatientID
-            self._study_imported.clear()
 
     def get_phi(self, anon_patient_id: str) -> PHI | None:
         with self._lock:
-            if anon_patient_id not in self._phi_lookup:
-                return None
-            return self._phi_lookup[anon_patient_id]
+            return self._phi_lookup.get(anon_patient_id, None)
 
     def get_phi_name(self, anon_pt_id: str) -> str | None:
         with self._lock:
-            if anon_pt_id not in self._phi_lookup:
+            phi = self._phi_lookup.get(anon_pt_id, None)
+            if phi is None:
                 return None
-            return self._phi_lookup[anon_pt_id].patient_name
+            else:
+                return phi.patient_name
 
     def set_phi(self, anon_patient_id: str, phi: PHI):
         with self._lock:
             self._phi_lookup[anon_patient_id] = phi
 
-    def get_study_imported(self, study_uid: str) -> bool:
-        return study_uid in self._study_imported
-
-    def set_study_imported(self, study_uid: str):
-        self._study_imported.add(study_uid)
-
     def get_anon_patient_id(self, phi_patient_id: str) -> str | None:
         with self._lock:
-            if phi_patient_id not in self._patient_id_lookup:
-                return None
-            return self._patient_id_lookup[phi_patient_id]
+            return self._patient_id_lookup.get(phi_patient_id)
+
+    def get_next_anon_patient_id(self) -> str:
+        with self._lock:
+            return f"{self._site_id}-{str(len(self._patient_id_lookup)).zfill(len(str(self.MAX_PATIENTS - 1)))}"
 
     def get_patient_id_count(self) -> int:
         return len(self._patient_id_lookup)
@@ -241,9 +191,7 @@ class AnonymizerModel:
 
     def get_anon_uid(self, phi_uid: str) -> str | None:
         with self._lock:
-            if phi_uid not in self._uid_lookup:
-                return None
-            return self._uid_lookup[phi_uid]
+            return self._uid_lookup.get(phi_uid, None)
 
     def get_uid_count(self) -> int:
         return len(self._uid_lookup)
@@ -254,9 +202,7 @@ class AnonymizerModel:
 
     def get_anon_acc_no(self, phi_acc_no: str) -> str | None:
         with self._lock:
-            if phi_acc_no not in self._acc_no_lookup:
-                return None
-            return self._acc_no_lookup[phi_acc_no]
+            return self._acc_no_lookup.get(phi_acc_no, None)
 
     def set_anon_acc_no(self, phi_acc_no: str, anon_acc_no: str):
         with self._lock:
@@ -264,3 +210,164 @@ class AnonymizerModel:
 
     def get_acc_no_count(self) -> int:
         return len(self._acc_no_lookup)
+
+    def get_stored_instance_count(
+        self, ptid: str, study_uid: str
+    ) -> int:  # ptid: PHI PatientID, study_uid: PHI StudyUID
+        with self._lock:
+            anon_patient_id = self._patient_id_lookup.get(ptid, None)
+            if anon_patient_id is None:
+                return 0
+            phi = self._phi_lookup.get(anon_patient_id, None)
+            if phi is None:
+                return 0
+            for study in phi.studies:
+                if study.study_uid == study_uid:
+                    return sum(series.instances for series in study.series)
+
+    # This will return difference between stored instances and target_count
+    # When first called for a study it also sets the study.target_instance_count (for future imported state detection)
+    def get_pending_instance_count(self, ptid: str, study_uid: str, target_count: int) -> int:
+        with self._lock:
+            anon_patient_id = self._patient_id_lookup.get(ptid, None)
+            if anon_patient_id is None:
+                return target_count
+            phi = self._phi_lookup.get(anon_patient_id, None)
+            if phi is None:
+                return target_count
+            for study in phi.studies:
+                if study.study_uid == study_uid:
+                    study.target_instance_count = target_count
+                    return target_count - sum(series.instances for series in study.series)
+            return target_count
+
+    # Used by QueryRetrieveView to prevent study re-import
+    def study_imported(self, ptid: str, study_uid: str) -> bool:
+        with self._lock:
+            anon_patient_id = self._patient_id_lookup.get(ptid, None)
+            if anon_patient_id is None:
+                return False
+            phi = self._phi_lookup.get(anon_patient_id, None)
+            if phi is None:
+                return False
+            for study in phi.studies:
+                if study.study_uid == study_uid:
+                    if study.target_instance_count == 0:  # Not set by ProjectController import process yet
+                        return False
+                    return sum(series.instances for series in study.series) >= study.target_instance_count
+            return False
+
+    def new_study_from_dataset(self, ds: Dataset, source: DICOMNode | str, date_delta: str) -> Study:
+        return Study(
+            study_uid=ds.get("StudyInstanceUID", "?"),
+            study_date=ds.get("StudyDate", "?"),
+            anon_date_delta=date_delta,
+            accession_number=ds.get("AccessionNumber", "?"),
+            study_desc=ds.get("StudyDescription", "?"),
+            source=source,
+            series=[
+                Series(
+                    series_uid=ds.get("SeriesInstanceUID", "?"),
+                    series_desc=ds.get("SeriesDescription", "?"),
+                    modality=ds.get("Modality", "?"),
+                    instances=1,
+                )
+            ],
+        )
+
+    def capture_phi(self, source: str, ds: Dataset, date_delta: int):
+        with self._lock:
+            # If PHI PatientID is missing in dataset, as per DICOM Standard, pydicom will return ""
+            # this corresponds to AnonymizerModel.DEFAULT_ANON_PATIENT_ID ("000000") initialised in AnonymizerModel.clear_lookups()
+            phi_ptid = ds.PatientID.strip() if hasattr(ds, "PatientID") else ""
+            anon_patient_id = self._patient_id_lookup.get(phi_ptid, None)
+            phi = self._phi_lookup.get(anon_patient_id, None)
+            next_uid_ndx = self.get_uid_count() + 1
+
+            if self._uid_lookup.get(ds.StudyInstanceUID) == None:
+                # NEW Study associated with dataset if doesn't exist:
+                if anon_patient_id == None:
+                    # NEW patient
+                    new_anon_patient_id = (
+                        f"{self._site_id}-{str(len(self._patient_id_lookup)).zfill(len(str(self.MAX_PATIENTS - 1)))}"
+                    )
+                    phi = PHI(
+                        patient_name=str(ds.PatientName) if hasattr(ds, "PatientName") else "U",
+                        patient_id=str(ds.PatientID).strip(),
+                        sex=ds.PatientSex if hasattr(ds, "PatientSex") else "U",
+                        dob=ds.get("PatientBirthDate"),
+                        ethnic_group=ds.get("EthnicGroup"),
+                        studies=[self.new_study_from_dataset(ds, source, date_delta)],
+                    )
+                    self._phi_lookup[new_anon_patient_id] = phi
+                    self._patient_id_lookup[phi_ptid] = new_anon_patient_id
+
+                else:  # Existing patient now with more than one study
+                    if phi == None:
+                        msg = f"Existing patient, Anon PatientID={anon_patient_id} not found in phi_lookup"
+                        logger.error(msg)
+                        raise RuntimeError(msg)
+
+                # ADD new study to PHI:
+                phi.studies.append(self.new_study_from_dataset(ds, source, date_delta))
+                uids = ["StudyInstanceUID", "SeriesInstanceUID", "SOPInstanceUID"]
+                for uid in uids:
+                    anon_uid = self._uid_prefix + f".{next_uid_ndx}"
+                    self._uid_lookup[getattr(ds, uid)] = anon_uid
+                    next_uid_ndx += 1
+            else:
+                # Existing Study & Patient, PHI already captured, update series and instance counts from new instance:
+                if anon_patient_id is None:
+                    msg = f"Critical error PHI PatientID={phi_ptid} not found in patient_id_lookup"
+                    logger.error(msg)
+                    raise RuntimeError(msg)
+
+                if phi == None:
+                    msg = f"Critial error Existing Anon PatientID={anon_patient_id} not found in phi_lookup"
+                    logger.error(msg)
+                    raise RuntimeError(msg)
+
+                # Find study in PHI:
+                if phi.studies is not None:
+                    study = next(
+                        (study for study in phi.studies if study.study_uid == ds.StudyInstanceUID),
+                        None,
+                    )
+                else:
+                    study = None
+
+                if study == None:
+                    msg = f"Existing study {ds.StudyInstanceUID} not found in phi_lookup"
+                    logger.error(msg)
+                    raise RuntimeError(msg)
+
+                # Find series in study:
+                if study.series is not None:
+                    series = next(
+                        (series for series in study.series if series.series_uid == ds.SeriesInstanceUID),
+                        None,
+                    )
+                else:
+                    series = None
+
+                if series == None:
+                    # NEW Series in exsiting Study:
+                    study.series.append(
+                        Series(
+                            str(ds.SeriesInstanceUID),
+                            str(ds.SeriesDescription) if hasattr(ds, "SeriesDescription") else "?",
+                            str(ds.Modality) if hasattr(ds, "Modality") else "?",
+                            1,
+                        )
+                    )
+                    uids = ["SeriesInstanceUID", "SOPInstanceUID"]
+                    for uid in uids:
+                        anon_uid = self._uid_prefix + f".{next_uid_ndx}"
+                        self._uid_lookup[getattr(ds, uid)] = anon_uid
+                        next_uid_ndx += 1
+                else:
+                    # NEW Instance in existing Series:
+                    logger.error(f"* {series.instances} *")
+                    series.instances += 1
+                    anon_uid = self._uid_prefix + f".{next_uid_ndx}"
+                    self._uid_lookup["SOPInstanceUID"] = anon_uid

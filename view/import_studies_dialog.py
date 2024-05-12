@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 import tkinter as tk
 from tkinter import messagebox
 import customtkinter as ctk
@@ -17,13 +17,14 @@ class ImportStudiesDialog(tk.Toplevel):
         self,
         parent,
         controller: ProjectController,
-        study_uids: List[str],
+        studies: List[StudyUIDHierarchy],
+        move_level: str,
         scp_name: str = "QUERY",
         title: str = _("Importing Studies"),
     ):
         super().__init__(master=parent)
 
-        if len(study_uids) == 1:
+        if len(studies) == 1:
             title = _("Importing Study")
 
         self.title(f"{title} from {controller.model.remote_scps[scp_name].aet}")
@@ -34,9 +35,10 @@ class ImportStudiesDialog(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.resizable(False, False)
         self._controller = controller
+        self._move_level = move_level
 
         # Create StudyUIDHierarchy List from study_uids:
-        self.studies: list[StudyUIDHierarchy] = [StudyUIDHierarchy(uid) for uid in study_uids]
+        self.studies = studies
         self._instances_to_import = 0
         self._study_metadata_retrieved = 0
         self._scp_name = scp_name
@@ -176,7 +178,7 @@ class ImportStudiesDialog(tk.Toplevel):
                     return
 
                 mr: MoveStudiesRequest = MoveStudiesRequest(
-                    self._scp_name, self._controller.model.scu.aet, "SERIES", self.studies
+                    self._scp_name, self._controller.model.scu.aet, self._move_level, self.studies
                 )
                 self._controller.move_studies_ex(mr)
                 self.after(self.update_interval, self._update_progress_move_studies)
@@ -191,7 +193,9 @@ class ImportStudiesDialog(tk.Toplevel):
         imported = self._instances_to_import - total_pending_instances
         self._import_progress_bar.set(imported / self._instances_to_import)
         study_or_studies = "Study" if len(self.studies) == 1 else "Studies"
-        self._import_status_label.configure(text=_(f"Importing {self._study_metadata_retrieved} {study_or_studies}..."))
+        self._import_status_label.configure(
+            text=_(f"Importing {self._study_metadata_retrieved} {study_or_studies} at {self._move_level} level ...")
+        )
         self._import_progress_label.configure(text=f"{imported} of {self._instances_to_import} Images")
 
         if self._controller.bulk_move_active():

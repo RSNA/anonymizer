@@ -55,6 +55,7 @@ class QueryView(tk.Toplevel):
         "StudyInstanceUID": (_("StudyInstanceUID"), 0, False),
     }
     _tree_column_keys = list(_attr_map.keys())[:-1]
+    MOVE_LEVELS = ["STUDY", "SERIES", "INSTANCE"]
 
     def __init__(
         self,
@@ -204,7 +205,7 @@ class QueryView(tk.Toplevel):
 
         results_row = 0
         self._results_frame.grid_rowconfigure(results_row, weight=1)
-        self._results_frame.grid_columnconfigure(9, weight=1)
+        self._results_frame.grid_columnconfigure(7, weight=1)  # @ move_level_label
 
         # Managing C-FIND results Treeview:
 
@@ -257,22 +258,24 @@ class QueryView(tk.Toplevel):
         # horizontal_scrollbar = ttk.Scrollbar(self._results_frame, orient="horizontal", command=self._tree.xview)
         # horizontal_scrollbar.grid(row=results_row, column=0, columnspan=10, sticky="we")
         # self._tree.configure(xscrollcommand=horizontal_scrollbar.set)
-
         # results_row += 1
 
         # Progress bar and status:
+        col = 0
         self._status = ctk.CTkLabel(self._results_frame, text=f"Processing 0 of 0 Studies")
-        self._status.grid(row=results_row, column=0, padx=PAD, pady=0, sticky="w")
+        self._status.grid(row=results_row, column=col, padx=PAD, pady=0, sticky="w")
 
+        col += 1
         self._progressbar = ctk.CTkProgressBar(self._results_frame)
         self._progressbar.grid(
             row=results_row,
-            column=1,
+            column=col,
             padx=PAD,
             pady=0,
             sticky="w",
         )
         self._progressbar.set(0)
+        col += 1
 
         self._select_all_button = ctk.CTkButton(
             self._results_frame,
@@ -280,7 +283,8 @@ class QueryView(tk.Toplevel):
             text=_("Select All"),
             command=self._select_all_button_pressed,
         )
-        self._select_all_button.grid(row=results_row, column=5, padx=PAD, pady=PAD, sticky="w")
+        self._select_all_button.grid(row=results_row, column=col, padx=PAD, pady=PAD, sticky="w")
+        col += 1
 
         self._clear_selection_button = ctk.CTkButton(
             self._results_frame,
@@ -288,10 +292,26 @@ class QueryView(tk.Toplevel):
             text=_("Clear Selection"),
             command=self._clear_selection_button_pressed,
         )
-        self._clear_selection_button.grid(row=results_row, column=6, padx=PAD, pady=PAD, sticky="w")
+        self._clear_selection_button.grid(row=results_row, column=col, padx=PAD, pady=PAD, sticky="w")
+        col += 1
 
         self._studies_selected_label = ctk.CTkLabel(self._results_frame, text=_("Studies Selected: 0"))
-        self._studies_selected_label.grid(row=results_row, column=7, padx=PAD, pady=PAD, sticky="w")
+        self._studies_selected_label.grid(row=results_row, column=col, padx=PAD, pady=PAD, sticky="w")
+        col += 1
+
+        self._move_level_label = ctk.CTkLabel(self._results_frame, text=_("Move Level:"))
+        self._move_level_label.grid(row=results_row, column=7, padx=PAD, pady=PAD, sticky="e")
+
+        self._move_level_var = ctk.StringVar(self._results_frame, value=_("STUDY"))
+        move_levels_optionmenu = ctk.CTkOptionMenu(
+            self._results_frame,
+            width=char_width_px * len(max(self.MOVE_LEVELS, key=len)) + 40,
+            dynamic_resizing=False,
+            values=self.MOVE_LEVELS,
+            variable=self._move_level_var,
+        )
+        move_levels_optionmenu.grid(row=results_row, column=8, padx=PAD, pady=PAD, sticky="e")
+        move_levels_optionmenu.focus_set()
 
         self._import_button = ctk.CTkButton(
             self._results_frame,
@@ -588,7 +608,17 @@ class QueryView(tk.Toplevel):
             logger.info(f"No studies selected to import")
             return
 
+        # Double check if any selected studies are already stored/imported:
         unstored_study_uids = [study_uid for study_uid in study_uids if not self._tree.tag_has("green", study_uid)]
+
+        if len(unstored_study_uids) == 0:
+            logger.info(f"All studies selected are already stored/imported")
+            return
+
+        studies: list[StudyUIDHierarchy] = []
+        for study_uid in unstored_study_uids:
+            patient_id = self._tree.item(study_uid, "values")[self._tree_column_keys.index("PatientID")]
+            studies.append(StudyUIDHierarchy(study_uid, patient_id))
 
         self._studies_to_process = len(unstored_study_uids)
         self._study_uids_to_import = unstored_study_uids.copy()
@@ -599,7 +629,7 @@ class QueryView(tk.Toplevel):
 
         self._disable_action_buttons()
 
-        dlg = ImportStudiesDialog(self, self._controller, unstored_study_uids)
+        dlg = ImportStudiesDialog(self, self._controller, studies, self._move_level_var.get())
         imported_study_hierarchies = dlg.get_input()
 
         self._enable_action_buttons()
@@ -616,6 +646,7 @@ class QueryView(tk.Toplevel):
             logger.error(f"Fatal Lookup Error for anon_patient_id where phi_patient_id={phi_patient_id}")
             return 0
 
+        # Actual file count from file system:
         return count_study_images(
             self._controller.model.images_dir(),
             anon_pt_id,
@@ -634,26 +665,30 @@ class QueryView(tk.Toplevel):
 
             display_values = []
 
-            study_uid = dataset.get("StudyInstanceUID", "")
+            study_uid = dataset.get("StudyInstanceUID", None)
+            if study_uid is None:
+                logger.error(f"Critical Internal error: Query result dataset does not have StudyInstanceUID")
+                continue
 
-            images_stored_count = self._images_stored_phi_lookup(
-                dataset.get("PatientID", ""),
-                study_uid,
-            )
+            patient_id = dataset.get("PatientID", "")
+            images_stored_count = self._controller.anonymizer.model.get_stored_instance_count(patient_id, study_uid)
+            # Actual file count from file system:
+            # self._images_stored_phi_lookup(
+            #     patient_id,
+            #     study_uid,
+            # )
+
+            # Note: dataset.NumberOfStudyRelatedInstances includes image counts for all modalties in study
+            # not just those modalities requested & imported
+            imported = False
+            study_instances_from_scp = dataset.get("NumberOfStudyRelatedInstances")
+            if study_instances_from_scp and images_stored_count >= study_instances_from_scp:
+                imported = True
+            else:
+                # For multi-modality studies query the AnonymizerModel:
+                imported = self._controller.anonymizer.model.study_imported(patient_id, study_uid)
 
             # Do not show Imported Studies if UX switch is on
-            # Determine if PHI Study has already been imported from PHI lookup
-            # because dataset.NumberOfStudyRelatedInstances includes image counts for all modalties in study
-            # not just those modalities requested & imported
-            # The DICOM Study Query Information model does not provide for querying for specific modalities
-            # imported = images_stored_count >= dataset.get("NumberOfStudyRelatedInstances", 0)
-            study_instances_from_scp = dataset.get("NumberOfStudyRelatedInstances", 0)
-            # TODO: Perform down query series level?
-            # IF there is 1 valid Modality in the study then NumberOfStudyRelatedInstances can be used
-
-            imported = self._controller.anonymizer.model.get_study_imported(study_uid) or (
-                study_instances_from_scp > 0 and images_stored_count >= study_instances_from_scp
-            )
             if imported and not self._show_imported_studies_switch.get():
                 continue
 
@@ -674,10 +709,10 @@ class QueryView(tk.Toplevel):
                 if imported:
                     self._tree.item(dataset.get("StudyInstanceUID", ""), tags="green")
 
-                tk.update_idletasks()
             except Exception as e:
                 logger.error(f"Exception: {e}")
-                # _tkinter.TclError: Item {iid} already exists
+
+        self.update_idletasks()
 
     def _escape_keypress(self, event):
         logger.info(f"_escape_pressed")

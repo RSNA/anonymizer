@@ -59,13 +59,12 @@ class AnonymizerController:
     ]
 
     def __init__(self, project_model: ProjectModel):
-        self._lock = threading.Lock()
+        self._active = False
         self.project_model = project_model
         # Initialise AnonymizerModel datafile full path:
         self.model_filename = Path(self.project_model.private_dir(), self.ANONYMIZER_MODEL_FILENAME)
-
         # If present, load pickled AnonymizerModel from project directory:
-        if os.path.exists(self.model_filename):
+        if self.model_filename.exists():
             try:
                 with open(self.model_filename, "rb") as pkl_file:
                     file_model = pickle.load(pkl_file)
@@ -103,11 +102,12 @@ class AnonymizerController:
 
         else:
             # Initialise New Default AnonymizerModel if no pickle file found in project directory:
-            self.model = AnonymizerModel(project_model.site_id, project_model.anonymizer_script_path)
+            self.model = AnonymizerModel(
+                project_model.site_id, project_model.uid_root, project_model.anonymizer_script_path
+            )
             logger.info(f"New Default Anonymizer Model initialised from script: {project_model.anonymizer_script_path}")
 
         self._anon_Q: Queue = Queue()
-        self._active = False
         self._worker_threads = []
 
         # Spawn Anonymizer worker threads:
@@ -202,18 +202,7 @@ class AnonymizerController:
         logger.info(f"thread={threading.current_thread().name} end")
 
     def save_model(self) -> bool:
-        try:
-            with open(self.model_filename, "wb") as pkl_file:
-                pickle.dump(self.model, pkl_file)
-            logger.debug(f"Anonymizer Model saved to: {self.model_filename}")
-            return True
-        except Exception as e:
-            logger.error(f"Fatal Error saving AnonymizerModel  error: {e}")
-            return False
-
-    def get_next_anon_patient_id(self) -> str:
-        next_patient_index = self.model.get_patient_id_count()
-        return f"{self.project_model.site_id}-{next_patient_index:06}"  # TODO: handle more than 999999 patients
+        self.model.save(self.model_filename)
 
     # Date must be YYYYMMDD format and a valid date after 19000101:
     def valid_date(self, date_str: str) -> bool:
@@ -297,6 +286,17 @@ class AnonymizerController:
                     )
                 ],
             )
+            # weight=phi_ds.get("PatientWeight"),
+            # bmi=phi_ds.get("PatientBodyMassIndex"),
+            # size=phi_ds.get("PatientSize"),
+            # smoker=phi_ds.get("SmokingStatus"),
+            # medical_alerts=phi_ds.get("MedicalAlerts"),
+            # allergies=phi_ds.get("Allergies"),
+            # reason_for_visit=phi_ds.get("ReasonForTheRequestedProcedure"),
+            # admitting_diagnoses=phi_ds.get("AdmittingDiagnosesDescription"),
+            # history=phi_ds.get("PatientHistory"),
+            # additional_history=phi_ds.get("AdditionalPatientHistory"),
+            # comments=phi_ds.get("PatientComments")
 
         # If PHI PatientID is missing in dataset, as per DICOM Standard, pydicom will return ""
         # this corresponds to AnonymizerModel.DEFAULT_ANON_PATIENT_ID ("000000") initialised in AnonymizerModel
@@ -313,18 +313,7 @@ class AnonymizerController:
                 patient_id=str(phi_ds.PatientID).strip(),
                 sex=phi_ds.PatientSex if hasattr(phi_ds, "PatientSex") else "U",
                 dob=phi_ds.get("PatientBirthDate"),
-                weight=phi_ds.get("PatientWeight"),
-                bmi=phi_ds.get("PatientBodyMassIndex"),
-                size=phi_ds.get("PatientSize"),
-                smoker=phi_ds.get("SmokingStatus"),
-                medical_alerts=phi_ds.get("MedicalAlerts"),
-                allergies=phi_ds.get("Allergies"),
                 ethnic_group=phi_ds.get("EthnicGroup"),
-                reason_for_visit=phi_ds.get("ReasonForTheRequestedProcedure"),
-                admitting_diagnoses=phi_ds.get("AdmittingDiagnosesDescription"),
-                history=phi_ds.get("PatientHistory"),
-                additional_history=phi_ds.get("AdditionalPatientHistory"),
-                comments=phi_ds.get("PatientComments"),
                 studies=[study_from_dataset(phi_ds, source)],
             )
             self.model.set_phi(new_anon_patient_id, phi)
@@ -386,6 +375,7 @@ class AnonymizerController:
                 )
             )
         else:
+            logger.error(f"* {series.instances} *")
             series.instances += 1
 
     def _anonymize_element(self, dataset, data_element):
@@ -411,9 +401,10 @@ class AnonymizerController:
                 self.model.set_anon_uid(value, anon_uid)
             dataset[tag].value = anon_uid
         elif "ptid" in operation:
-            anon_pt_id = self.model.get_anon_patient_id(dataset.PatientID if hasattr(dataset, "PatientID") else "")
-            if not anon_pt_id:
-                anon_pt_id = self.get_next_anon_patient_id()
+            anon_pt_id = self.model.get_anon_patient_id(dataset.get("PatientID", ""))
+            if not anon_pt_id:  # This should not occur due to capture PHI before walk
+                logger.error(f"PatientID not found in PHI, assigning new anon_patient_id")
+                anon_pt_id = self.model.get_next_anon_patient_id()
                 self.model.set_anon_patient_id(dataset.PatientID, anon_pt_id)
             dataset[tag].value = anon_pt_id
         elif "acc" in operation:
@@ -446,13 +437,13 @@ class AnonymizerController:
     def anonymize(self, source: DICOMNode | str, ds: Dataset) -> str | None:
         self._model_change_flag = True  # for autosave manager
 
-        # Capture PHI and source for new studies:
-        # TODO: this should be done in AnonymizerModel via model.capture_phi(source, ds)
-        with self._lock:
-            if self.model.get_anon_uid(ds.StudyInstanceUID) == None:
-                self.capture_phi_from_new_study(ds, source)
-            else:
-                self.update_phi_from_new_instance(ds, source)
+        # Calculate date delta from StudyDate and PatientID:
+        date_delta = 0
+        if hasattr(ds, "StudyDate") and hasattr(ds, "PatientID"):
+            date_delta = self._hash_date(ds.StudyDate, ds.PatientID)[0]
+
+        # Capture PHI and source:
+        self.model.capture_phi(source, ds, date_delta)
 
         try:
             # To minimize computation overhead DO NOT MAKE COPY of source dataset

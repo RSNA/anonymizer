@@ -43,6 +43,7 @@ from tests.controller.dicom_test_files import (
     mr_small_implicit_filename,
     mr_small_bigendian_filename,
     mr_brain_StudyInstanceUID,
+    mr_brain_SeriesInstanceUID,
     CR_STUDY_3_SERIES_3_IMAGES,
     CT_STUDY_1_SERIES_4_IMAGES,
     MR_STUDY_3_SERIES_11_IMAGES,
@@ -52,12 +53,15 @@ from tests.controller.dicom_test_files import (
 def test_move_at_study_level_1_CT_file_from_pacs_with_file_to_unknown_AET(temp_dir: str, controller: ProjectController):
     ds: Dataset = send_file_to_scp(ct_small_filename, PACSSimulatorSCP, controller)
 
-    error_msg, study_uid_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, ct_small_StudyInstanceUID)
+    error_msg, study_uid_hierarchy = controller.get_study_uid_hierarchy(
+        PACSSimulatorSCP.aet, ct_small_StudyInstanceUID, patient3_id
+    )
     assert error_msg == None
     assert len(study_uid_hierarchy.series) == 1
     series = study_uid_hierarchy.series[ct_small_SeriesInstanceUID]
     assert series
-    assert series.instances[ct_small_SOPInstanceUID]
+    assert series.instance_count == 1
+    assert study_uid_hierarchy.get_number_of_instances() == 1
     error_msg = controller._move_study_at_study_level(PACSSimulatorSCP.aet, "UNKNOWNAE", study_uid_hierarchy)
     assert error_msg
     assert "Import Timeout" in error_msg
@@ -67,12 +71,15 @@ def test_move_at_series_level_1_CT_file_from_pacs_with_file_to_unknown_AET(
     temp_dir: str, controller: ProjectController
 ):
     ds: Dataset = send_file_to_scp(ct_small_filename, PACSSimulatorSCP, controller)
-    error_msg, study_uid_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, ct_small_StudyInstanceUID)
+    error_msg, study_uid_hierarchy = controller.get_study_uid_hierarchy(
+        PACSSimulatorSCP.aet, ct_small_StudyInstanceUID, patient3_id
+    )
     assert error_msg == None
     assert len(study_uid_hierarchy.series) == 1
     series = study_uid_hierarchy.series[ct_small_SeriesInstanceUID]
     assert series
-    assert series.instances[ct_small_SOPInstanceUID]
+    assert series.instance_count == 1
+    assert study_uid_hierarchy.get_number_of_instances() == 1
     error_msg = controller._move_study_at_series_level(PACSSimulatorSCP.aet, "UNKNOWNAE", study_uid_hierarchy)
     assert error_msg
     assert "Import Timeout" in error_msg
@@ -82,11 +89,16 @@ def test_move_at_instance_level_1_CT_file_from_pacs_with_file_to_unknown_AET(
     temp_dir: str, controller: ProjectController
 ):
     ds: Dataset = send_file_to_scp(ct_small_filename, PACSSimulatorSCP, controller)
-    error_msg, study_uid_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, ct_small_StudyInstanceUID)
+    error_msg, study_uid_hierarchy = controller.get_study_uid_hierarchy(
+        PACSSimulatorSCP.aet, ct_small_StudyInstanceUID, patient3_id, True
+    )
     assert error_msg == None
+    assert study_uid_hierarchy.get_number_of_instances() == 1
     assert len(study_uid_hierarchy.series) == 1
     series = study_uid_hierarchy.series[ct_small_SeriesInstanceUID]
     assert series
+    assert series.instance_count == 1
+    assert len(series.instances) == 1
     assert series.instances[ct_small_SOPInstanceUID]
     error_msg = controller._move_study_at_instance_level(PACSSimulatorSCP.aet, "UNKNOWNAE", study_uid_hierarchy)
     assert error_msg
@@ -97,14 +109,14 @@ def test_move_at_study_level_1_file_from_empty_pacs_to_local_storage(temp_dir: s
     dirlist = os.listdir(pacs_storage_dir(temp_dir))
     assert len(dirlist) == 0
     # Request move of bogus study with no series:
-    bogus_study_hierarchy = StudyUIDHierarchy(uid="1.2.3.4.5.6", series={})
+    bogus_study_hierarchy = StudyUIDHierarchy(uid="1.2.3.4.5.6", ptid="99", series={})
     error_msg = controller._move_study_at_study_level(PACSSimulatorSCP.aet, LocalStorageSCP.aet, bogus_study_hierarchy)
     assert error_msg
     assert "No Series" in error_msg
 
     # Request move of bogus study with one series but no instances:
     bogus_series = SeriesUIDHierarchy(uid="1.2.3.4.5.6.1", modality="CT", description="Bogus Series", instances={})
-    bogus_study_hierarchy = StudyUIDHierarchy(uid="1.2.3.4.5.6", series={bogus_series.uid: bogus_series})
+    bogus_study_hierarchy = StudyUIDHierarchy(uid="1.2.3.4.5.6", ptid="99", series={bogus_series.uid: bogus_series})
     error_msg = controller._move_study_at_study_level(PACSSimulatorSCP.aet, LocalStorageSCP.aet, bogus_study_hierarchy)
     assert error_msg
     assert "No Instances" in error_msg
@@ -114,7 +126,7 @@ def test_move_at_study_level_1_file_from_empty_pacs_to_local_storage(temp_dir: s
     bogus_series.instances = {bogus_instance.uid: bogus_instance}
     error_msg = controller._move_study_at_study_level(PACSSimulatorSCP.aet, LocalStorageSCP.aet, bogus_study_hierarchy)
     assert error_msg
-    assert "Import Timeout" in error_msg
+    assert "No Instances" in error_msg
     assert bogus_series.completed_sub_ops == 0  # instance was not on server
 
 
@@ -122,14 +134,14 @@ def test_move_at_series_level_1_file_from_empty_pacs_to_local_storage(temp_dir: 
     dirlist = os.listdir(pacs_storage_dir(temp_dir))
     assert len(dirlist) == 0
     # Request move of bogus study with no series:
-    bogus_study_hierarchy = StudyUIDHierarchy(uid="1.2.3.4.5.6", series={})
+    bogus_study_hierarchy = StudyUIDHierarchy(uid="1.2.3.4.5.6", ptid="99", series={})
     error_msg = controller._move_study_at_series_level(PACSSimulatorSCP.aet, LocalStorageSCP.aet, bogus_study_hierarchy)
     assert error_msg
     assert "No Series" in error_msg
 
     # Request move of bogus study with one series but no instances:
     bogus_series = SeriesUIDHierarchy(uid="1.2.3.4.5.6.1", modality="CT", description="Bogus Series", instances={})
-    bogus_study_hierarchy = StudyUIDHierarchy(uid="1.2.3.4.5.6", series={bogus_series.uid: bogus_series})
+    bogus_study_hierarchy = StudyUIDHierarchy(uid="1.2.3.4.5.6", ptid="99", series={bogus_series.uid: bogus_series})
     error_msg = controller._move_study_at_series_level(PACSSimulatorSCP.aet, LocalStorageSCP.aet, bogus_study_hierarchy)
     assert error_msg
     assert "No Instances" in error_msg
@@ -139,7 +151,7 @@ def test_move_at_series_level_1_file_from_empty_pacs_to_local_storage(temp_dir: 
     bogus_series.instances = {bogus_instance.uid: bogus_instance}
     error_msg = controller._move_study_at_series_level(PACSSimulatorSCP.aet, LocalStorageSCP.aet, bogus_study_hierarchy)
     assert error_msg
-    assert "Import Timeout" in error_msg
+    assert "No Instances" in error_msg
     assert bogus_series.completed_sub_ops == 0  # instance was not on server
 
 
@@ -147,14 +159,14 @@ def test_move_at_instance_level_1_file_from_empty_pacs_to_local_storage(temp_dir
     dirlist = os.listdir(pacs_storage_dir(temp_dir))
     assert len(dirlist) == 0
     # Request move of bogus study with no series:
-    bogus_study_hierarchy = StudyUIDHierarchy(uid="1.2.3.4.5.6", series={})
+    bogus_study_hierarchy = StudyUIDHierarchy(uid="1.2.3.4.5.6", ptid="99", series={})
     error_msg = controller._move_study_at_series_level(PACSSimulatorSCP.aet, LocalStorageSCP.aet, bogus_study_hierarchy)
     assert error_msg
     assert "No Series" in error_msg
 
     # Request move of bogus study with one series but no instances:
     bogus_series = SeriesUIDHierarchy(uid="1.2.3.4.5.6.1", modality="CT", description="Bogus Series", instances={})
-    bogus_study_hierarchy = StudyUIDHierarchy(uid="1.2.3.4.5.6", series={bogus_series.uid: bogus_series})
+    bogus_study_hierarchy = StudyUIDHierarchy(uid="1.2.3.4.5.6", ptid="99", series={bogus_series.uid: bogus_series})
     error_msg = controller._move_study_at_series_level(PACSSimulatorSCP.aet, LocalStorageSCP.aet, bogus_study_hierarchy)
     assert error_msg
     assert "No Instances" in error_msg
@@ -166,7 +178,7 @@ def test_move_at_instance_level_1_file_from_empty_pacs_to_local_storage(temp_dir
         PACSSimulatorSCP.aet, LocalStorageSCP.aet, bogus_study_hierarchy
     )
     assert error_msg
-    assert "Import Timeout" in error_msg
+    assert "No Instances" in error_msg
     assert bogus_series.completed_sub_ops == 0  # instance was not on server
 
 
@@ -180,13 +192,14 @@ def test_move_at_study_level_1_CT_file_from_pacs_with_file_to_local_storage(
 
     # Get study_uid_hierarchy for CT small study:
     error_msg, ct_small_study_hierarchy = controller.get_study_uid_hierarchy(
-        PACSSimulatorSCP.aet, ct_small_StudyInstanceUID
+        PACSSimulatorSCP.aet, ct_small_StudyInstanceUID, patient3_id
     )
     assert error_msg == None
+    assert ct_small_study_hierarchy.get_number_of_instances() == 1
     assert len(ct_small_study_hierarchy.series) == 1
     series = ct_small_study_hierarchy.series[ct_small_SeriesInstanceUID]
     assert series
-    assert series.instances[ct_small_SOPInstanceUID]
+    assert series.instance_count == 1
 
     error_msg = controller._move_study_at_study_level(
         PACSSimulatorSCP.aet, LocalStorageSCP.aet, ct_small_study_hierarchy
@@ -197,8 +210,6 @@ def test_move_at_study_level_1_CT_file_from_pacs_with_file_to_local_storage(
     assert ct_small_study_hierarchy.warning_sub_ops == 0
     assert ct_small_study_hierarchy.remaining_sub_ops == 0
     assert controller.get_number_of_pending_instances(ct_small_study_hierarchy) == 0
-    instance = series.instances[ct_small_SOPInstanceUID]
-    assert instance
 
     time.sleep(1)
     store_dir = local_storage_dir(temp_dir)
@@ -218,13 +229,14 @@ def test_move_at_series_level_1_CT_file_from_pacs_with_file_to_local_storage(
 
     # Get study_uid_hierarchy for CT small study:
     error_msg, ct_small_study_hierarchy = controller.get_study_uid_hierarchy(
-        PACSSimulatorSCP.aet, ct_small_StudyInstanceUID
+        PACSSimulatorSCP.aet, ct_small_StudyInstanceUID, patient3_id
     )
     assert error_msg == None
+    assert ct_small_study_hierarchy.get_number_of_instances() == 1
     assert len(ct_small_study_hierarchy.series) == 1
     series = ct_small_study_hierarchy.series[ct_small_SeriesInstanceUID]
     assert series
-    assert series.instances[ct_small_SOPInstanceUID]
+    assert series.instance_count == 1
 
     error_msg = controller._move_study_at_series_level(
         PACSSimulatorSCP.aet, LocalStorageSCP.aet, ct_small_study_hierarchy
@@ -235,8 +247,6 @@ def test_move_at_series_level_1_CT_file_from_pacs_with_file_to_local_storage(
     assert series.failed_sub_ops == 0
     assert series.warning_sub_ops == 0
     assert series.remaining_sub_ops == 0
-    instance = series.instances[ct_small_SOPInstanceUID]
-    assert instance
 
     time.sleep(1)
     store_dir = local_storage_dir(temp_dir)
@@ -256,12 +266,14 @@ def test_move_at_instance_level_1_CT_file_from_pacs_with_file_to_local_storage(
 
     # Get study_uid_hierarchy for CT small study:
     error_msg, ct_small_study_hierarchy = controller.get_study_uid_hierarchy(
-        PACSSimulatorSCP.aet, ct_small_StudyInstanceUID
+        PACSSimulatorSCP.aet, ct_small_StudyInstanceUID, patient3_id, True
     )
     assert error_msg == None
+    assert ct_small_study_hierarchy.get_number_of_instances() == 1
     assert len(ct_small_study_hierarchy.series) == 1
     series = ct_small_study_hierarchy.series[ct_small_SeriesInstanceUID]
     assert series
+    assert series.instance_count == 1
     assert series.instances[ct_small_SOPInstanceUID]
 
     error_msg = controller._move_study_at_instance_level(
@@ -273,8 +285,6 @@ def test_move_at_instance_level_1_CT_file_from_pacs_with_file_to_local_storage(
     assert series.failed_sub_ops == 0
     assert series.warning_sub_ops == 0
     assert series.remaining_sub_ops == 0
-    instance = series.instances[ct_small_SOPInstanceUID]
-    assert instance
 
 
 def test_move_at_study_level_CT_1_Series_4_Images_from_pacs_with_file_to_local_storage(
@@ -288,12 +298,13 @@ def test_move_at_study_level_CT_1_Series_4_Images_from_pacs_with_file_to_local_s
     series_uid = dsets[0].SeriesInstanceUID
 
     # Get study_uid_hierarchy for CT study:
-    error_msg, ct_study_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, study_uid)
+    error_msg, ct_study_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, study_uid, patient1_id)
     assert error_msg == None
+    assert ct_study_hierarchy.get_number_of_instances() == 4
     assert len(ct_study_hierarchy.series) == 1
     series = ct_study_hierarchy.series[series_uid]
     assert series
-    assert len(series.instances) == 4
+    assert series.instance_count == 4
 
     error_msg = controller._move_study_at_study_level(PACSSimulatorSCP.aet, LocalStorageSCP.aet, ct_study_hierarchy)
     assert error_msg is None
@@ -335,12 +346,13 @@ def test_move_at_series_level_CT_1_Series_4_Images_from_pacs_with_file_to_local_
     series_uid = dsets[0].SeriesInstanceUID
 
     # Get study_uid_hierarchy for CT study:
-    error_msg, ct_study_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, study_uid)
+    error_msg, ct_study_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, study_uid, patient1_id)
     assert error_msg == None
+    assert ct_study_hierarchy.get_number_of_instances() == 4
     assert len(ct_study_hierarchy.series) == 1
     series = ct_study_hierarchy.series[series_uid]
     assert series
-    assert len(series.instances) == 4
+    assert series.instance_count == 4
 
     error_msg = controller._move_study_at_series_level(PACSSimulatorSCP.aet, LocalStorageSCP.aet, ct_study_hierarchy)
     assert error_msg is None
@@ -393,11 +405,15 @@ def test_move_at_instance_level_CT_1_Series_4_Images_from_pacs_with_file_to_loca
     series_uid = dsets[0].SeriesInstanceUID
 
     # Get study_uid_hierarchy for CT study:
-    error_msg, ct_study_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, study_uid)
+    error_msg, ct_study_hierarchy = controller.get_study_uid_hierarchy(
+        PACSSimulatorSCP.aet, study_uid, patient1_id, True
+    )
     assert error_msg == None
+    assert ct_study_hierarchy.get_number_of_instances() == 4
     assert len(ct_study_hierarchy.series) == 1
     series = ct_study_hierarchy.series[series_uid]
     assert series
+    assert series.instance_count == 4
     assert len(series.instances) == 4
     assert controller.get_number_of_pending_instances(ct_study_hierarchy) == 4
 
@@ -420,11 +436,15 @@ def test_move_at_instance_level_CT_1_Series_4_Images_from_pacs_with_file_to_loca
 
     # Do the MOVE AGAIN to verify move of instances is NOT done and files are not duplicated:
     # Update hierarchy to set Imported state:
-    error_msg, ct_study_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, study_uid)
+    error_msg, ct_study_hierarchy = controller.get_study_uid_hierarchy(
+        PACSSimulatorSCP.aet, study_uid, patient1_id, True
+    )
     assert error_msg == None
+    assert ct_study_hierarchy.get_number_of_instances() == 4
     assert len(ct_study_hierarchy.series) == 1
     series = ct_study_hierarchy.series[series_uid]
     assert series
+    assert series.instance_count == 4
     assert len(series.instances) == 4
     assert controller.get_number_of_pending_instances(ct_study_hierarchy) == 0
 
@@ -458,12 +478,23 @@ def test_move_at_study_level_3_studies_from_pacs_to_local_storage(temp_dir: str,
     total_files = 0
 
     # Get StudyUIDHierachies:
-    error_msg, study1_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, ds1.StudyInstanceUID)
+    error_msg, study1_hierarchy = controller.get_study_uid_hierarchy(
+        PACSSimulatorSCP.aet, ds1.StudyInstanceUID, patient1_id
+    )
     assert error_msg == None
-    error_msg, study2_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, ds2.StudyInstanceUID)
+    assert study1_hierarchy.get_number_of_instances() == 1
+
+    error_msg, study2_hierarchy = controller.get_study_uid_hierarchy(
+        PACSSimulatorSCP.aet, ds2.StudyInstanceUID, patient3_id
+    )
     assert error_msg == None
-    error_msg, study3_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, dsets[0].StudyInstanceUID)
+    assert study2_hierarchy.get_number_of_instances() == 1
+
+    error_msg, study3_hierarchy = controller.get_study_uid_hierarchy(
+        PACSSimulatorSCP.aet, dsets[0].StudyInstanceUID, patient2_id
+    )
     assert error_msg == None
+    assert study3_hierarchy.get_number_of_instances() == 11
 
     # MOVE Study 1 at STUDY LEVEL:
     assert request_to_move_studies_from_scp_to_local_scp(
@@ -556,11 +587,17 @@ def test_move_at_series_level_3_studies_from_pacs_to_local_storage(temp_dir: str
     total_files = 0
 
     # Get StudyUIDHierachies:
-    error_msg, study1_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, ds1.StudyInstanceUID)
+    error_msg, study1_hierarchy = controller.get_study_uid_hierarchy(
+        PACSSimulatorSCP.aet, ds1.StudyInstanceUID, patient1_id
+    )
     assert error_msg == None
-    error_msg, study2_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, ds2.StudyInstanceUID)
+    error_msg, study2_hierarchy = controller.get_study_uid_hierarchy(
+        PACSSimulatorSCP.aet, ds2.StudyInstanceUID, patient3_id
+    )
     assert error_msg == None
-    error_msg, study3_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, dsets[0].StudyInstanceUID)
+    error_msg, study3_hierarchy = controller.get_study_uid_hierarchy(
+        PACSSimulatorSCP.aet, dsets[0].StudyInstanceUID, patient2_id
+    )
     assert error_msg == None
 
     # Get Series uids:
@@ -634,11 +671,17 @@ def test_move_at_instance_level_of_3_studies_from_pacs_to_local_storage(temp_dir
     total_files = 0
 
     # Get StudyUIDHierachies:
-    error_msg, study1_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, ds1.StudyInstanceUID)
+    error_msg, study1_hierarchy = controller.get_study_uid_hierarchy(
+        PACSSimulatorSCP.aet, ds1.StudyInstanceUID, patient1_id, True
+    )
     assert error_msg == None
-    error_msg, study2_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, ds2.StudyInstanceUID)
+    error_msg, study2_hierarchy = controller.get_study_uid_hierarchy(
+        PACSSimulatorSCP.aet, ds2.StudyInstanceUID, patient3_id, True
+    )
     assert error_msg == None
-    error_msg, study3_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, dsets[0].StudyInstanceUID)
+    error_msg, study3_hierarchy = controller.get_study_uid_hierarchy(
+        PACSSimulatorSCP.aet, dsets[0].StudyInstanceUID, patient2_id, True
+    )
     assert error_msg == None
 
     # Get Series uids:
@@ -715,18 +758,17 @@ def test_move_at_study_level_1_CT_file_from_orthanc_to_local_storage(temp_dir: s
     ds: Dataset = send_file_to_scp(ct_small_filename, OrthancSCP, controller)
 
     # Get study_uid_hierarchy for CT small study:
-    error_msg, study = controller.get_study_uid_hierarchy(OrthancSCP.aet, ct_small_StudyInstanceUID)
+    error_msg, study = controller.get_study_uid_hierarchy(OrthancSCP.aet, ct_small_StudyInstanceUID, patient3_id)
 
     assert error_msg == None
+    assert study.get_number_of_instances() == 1
     assert study.uid == ct_small_StudyInstanceUID
     assert len(study.series) == 1
     series = study.series[ct_small_SeriesInstanceUID]
     assert series
     assert series.uid == ct_small_SeriesInstanceUID
     assert series.number == 1
-    instance = series.instances[ct_small_SOPInstanceUID]
-    assert instance
-    assert instance.uid == ct_small_SOPInstanceUID
+    assert series.instance_count == 1
 
     # logging.getLogger("pynetdicom").setLevel("DEBUG")
 
@@ -739,7 +781,6 @@ def test_move_at_study_level_1_CT_file_from_orthanc_to_local_storage(temp_dir: s
     assert study.warning_sub_ops == 0
     assert study.remaining_sub_ops == 0
     assert controller.get_number_of_pending_instances(study) == 0
-    assert instance.number == 1
 
     time.sleep(1)
     store_dir = local_storage_dir(temp_dir)
@@ -756,7 +797,7 @@ def test_move_at_study_level_with_network_timeout_then_series_level_MR_Study_fro
     send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, OrthancSCP, controller)
 
     # Get study_uid_hierarchy for MR study:
-    error_msg, study = controller.get_study_uid_hierarchy(OrthancSCP.aet, mr_brain_StudyInstanceUID)
+    error_msg, study = controller.get_study_uid_hierarchy(OrthancSCP.aet, mr_brain_StudyInstanceUID, patient2_id)
 
     assert error_msg == None
     assert study.uid == mr_brain_StudyInstanceUID
@@ -779,10 +820,10 @@ def test_move_at_study_level_with_network_timeout_then_series_level_MR_Study_fro
     error_msg = controller._move_study_at_series_level(OrthancSCP.aet, LocalStorageSCP.aet, study)
 
     assert error_msg is None
-    assert study.completed_sub_ops == 11
-    assert study.failed_sub_ops == 0
-    assert study.warning_sub_ops == 0
-    assert study.remaining_sub_ops == 0
+
+    assert len(study.series) == 3
+    assert sum(series.instance_count for series in study.series.values()) == 11
+    assert sum(series.completed_sub_ops for series in study.series.values()) == 11
     assert controller.get_number_of_pending_instances(study) == 0
 
     time.sleep(1)
@@ -808,15 +849,20 @@ def test_move_at_instance_level_of_3_studies_2_patients_from_orthance_to_local_s
     total_files = 0
 
     # Get StudyUIDHierachies:
-    error_msg, study1_hierarchy = controller.get_study_uid_hierarchy(OrthancSCP.aet, ds1[0].StudyInstanceUID)
+    error_msg, study1_hierarchy = controller.get_study_uid_hierarchy(
+        OrthancSCP.aet, ds1[0].StudyInstanceUID, patient1_id, True
+    )
     assert error_msg == None
-    error_msg, study2_hierarchy = controller.get_study_uid_hierarchy(OrthancSCP.aet, ds2[0].StudyInstanceUID)
-    assert error_msg == None
-    error_msg, study3_hierarchy = controller.get_study_uid_hierarchy(OrthancSCP.aet, ds3[0].StudyInstanceUID)
-    assert error_msg == None
-
     assert study1_hierarchy.get_number_of_instances() == 3
+    error_msg, study2_hierarchy = controller.get_study_uid_hierarchy(
+        OrthancSCP.aet, ds2[0].StudyInstanceUID, patient1_id, True
+    )
+    assert error_msg == None
     assert study2_hierarchy.get_number_of_instances() == 4
+    error_msg, study3_hierarchy = controller.get_study_uid_hierarchy(
+        OrthancSCP.aet, ds3[0].StudyInstanceUID, patient2_id, True
+    )
+    assert error_msg == None
     assert study3_hierarchy.get_number_of_instances() == 11
 
     # MOVE Study 1,2,3 at INSTANCE LEVEL:
@@ -860,12 +906,12 @@ def test_move_at_instance_level_of_3_studies_2_patients_from_orthance_to_local_s
         total_files += images
 
     assert total_studies == 3
-    total_series = 7
+    assert total_series == 7
     assert total_files == 18
 
 
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
-def test_move_at_series_level_3_studies_with_network_timeout_from_orthance_to_local_storage(
+def test_move_at_study_level_3_studies_with_network_timeout_then_series_level_from_orthance_to_local_storage(
     temp_dir: str, controller: ProjectController
 ):
     # Send 3 studies to ORTHANC PACS:
@@ -879,21 +925,44 @@ def test_move_at_series_level_3_studies_with_network_timeout_from_orthance_to_lo
     total_files = 0
 
     # Get StudyUIDHierachies:
-    error_msg, study1_hierarchy = controller.get_study_uid_hierarchy(OrthancSCP.aet, ds1[0].StudyInstanceUID)
+    error_msg, study1_hierarchy = controller.get_study_uid_hierarchy(
+        OrthancSCP.aet, ds1[0].StudyInstanceUID, patient1_id
+    )
     assert error_msg == None
-    error_msg, study2_hierarchy = controller.get_study_uid_hierarchy(OrthancSCP.aet, ds2[0].StudyInstanceUID)
-    assert error_msg == None
-    error_msg, study3_hierarchy = controller.get_study_uid_hierarchy(OrthancSCP.aet, ds3[0].StudyInstanceUID)
-    assert error_msg == None
-
     assert study1_hierarchy.get_number_of_instances() == 3
+
+    error_msg, study2_hierarchy = controller.get_study_uid_hierarchy(
+        OrthancSCP.aet, ds2[0].StudyInstanceUID, patient1_id
+    )
+    assert error_msg == None
     assert study2_hierarchy.get_number_of_instances() == 4
+
+    error_msg, study3_hierarchy = controller.get_study_uid_hierarchy(
+        OrthancSCP.aet, ds3[0].StudyInstanceUID, patient2_id
+    )
+    assert error_msg == None
     assert study3_hierarchy.get_number_of_instances() == 11
 
     # Set Network Timeout to 1 second to ensure move timeout occurs:
     controller.model.network_timeouts.network = 1
 
-    # MOVE Study 1,2,3 at SERIES LEVEL:
+    # MOVE Study 1,2,3 at STUDY LEVEL:
+    assert request_to_move_studies_from_scp_to_local_scp(
+        "STUDY",
+        [study1_hierarchy, study2_hierarchy, study3_hierarchy],
+        OrthancSCP,
+        controller,
+    )
+
+    time.sleep(1)
+
+    while controller.bulk_move_active():
+        time.sleep(1)
+
+    # assert study1_hierarchy.last_error_msg
+
+    controller.model.network_timeouts.network = 10
+
     assert request_to_move_studies_from_scp_to_local_scp(
         "SERIES",
         [study1_hierarchy, study2_hierarchy, study3_hierarchy],
@@ -903,16 +972,8 @@ def test_move_at_series_level_3_studies_with_network_timeout_from_orthance_to_lo
 
     time.sleep(1)
 
-    controller.model.network_timeouts.network = 10
-
-    # Wait for bulk move operation to automatically down level
-    # and complete at the instance level:
-    timeout = 15
-    while timeout > 0 and controller.bulk_move_active():
+    while controller.bulk_move_active():
         time.sleep(1)
-        timeout -= 1
-
-    assert timeout > 0
 
     s1_pending = controller.get_number_of_pending_instances(study1_hierarchy)
     assert s1_pending == 0
@@ -935,5 +996,5 @@ def test_move_at_series_level_3_studies_with_network_timeout_from_orthance_to_lo
         total_files += images
 
     assert total_studies == 3
-    total_series = 7
+    assert total_series == 7
     assert total_files == 18

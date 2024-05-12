@@ -15,6 +15,7 @@ from controller.dicom_C_codes import (
     C_PENDING_A,
     C_CANCEL,
     C_MOVE_UNKNOWN_AE,
+    C_FAILURE,
 )
 
 from model.project import DICOMNode
@@ -138,7 +139,7 @@ def _handle_find(event, storage_dir: str):
     logger.info("_handle_find")
     ds: Dataset = event.identifier
 
-    # Import stored SOP Instances
+    # Get/Read ALL SOP Instances in storage_dir:
     instances = []
     for fpath in os.listdir(storage_dir):
         instances.append(dcmread(os.path.join(storage_dir, fpath)))
@@ -147,56 +148,103 @@ def _handle_find(event, storage_dir: str):
         logger.error("No instances in pacs file system for C-FIND response")
         return
 
-    logger.info(f"Find {len(instances)} instances")
-
     if "QueryRetrieveLevel" not in ds:
         # Failure
         logger.error("Missing QueryRetrieveLevel")
-        yield C_SOP_CLASS_INVALID, None
+        yield C_FAILURE, None
+        return
 
-    # if ds.QueryRetrieveLevel == "STUDY":
-    #     if "StudyInstanceUID" in ds:
-    #         if ds.StudyInstanceUID == "":
-    #             matching = instances
-    #         else:
-    #             matching = [inst for inst in instances if inst.StudyInstanceUID == ds.StudyInstanceUID]
+    # Only Search on StudyInstanceUID/SeriesInstanceUID/SOPInstanceUID
+    # TODO: Add support for other search criteria
 
-    # elif ds.QueryRetrieveLevel == "SERIES":
-    #     if "StudyInstanceUID" in ds and "SeriesInstanceUID" in ds:
-    #         matching = [
-    #             inst
-    #             for inst in instances
-    #             if inst.StudyInstanceUID == ds.StudyInstanceUID and inst.SeriesInstanceUID == ds.SeriesInstanceUID
-    #         ]
+    if ds.QueryRetrieveLevel in ["STUDY", "SERIES"]:
 
-    # elif ds.QueryRetrieveLevel == "IMAGE":
-    #     if "StudyInstanceUID" in ds and "SeriesInstanceUID" in ds and "SOPInstanceUID" in ds:
-    #         matching = [
-    #             inst
-    #             for inst in instances
-    #             if inst.StudyInstanceUID == ds.StudyInstanceUID
-    #             and inst.SeriesInstanceUID == ds.SeriesInstanceUID
-    #             and inst.SOPInstanceUID == ds.SOPInstanceUID
-    #         ]
+        study_uid = ds.get("StudyInstanceUID", "")
+        if study_uid == "":  # return a response for each study
+            study_uids = list(set([inst.StudyInstanceUID for inst in instances if hasattr(inst, "StudyInstanceUID")]))
+        else:
+            study_uids = [study_uid]
 
-    # else:
-    #     logger.error(f"Unsupported QueryRetrieveLevel: {ds.QueryRetrieveLevel}")
-    #     yield 0
-    matching = instances
-    logger.info(f"Matching instances: {len(matching)}")
+        for study_uid in study_uids:
+
+            # Get all instances matching study_uid:
+            matching = [inst for inst in instances if inst.StudyInstanceUID == study_uid]
+
+            if len(matching) == 0:
+                logger.error("No matching instances for C-FIND response")
+                return
+
+            matching_modalities = list(set([inst.Modality for inst in matching if hasattr(inst, "Modality")]))
+            matching_sop_classes = list(set([inst.SOPClassUID for inst in matching if hasattr(inst, "SOPClassUID")]))
+            matching_series_uids = list(
+                set([inst.SeriesInstanceUID for inst in matching if hasattr(inst, "SeriesInstanceUID")])
+            )
+
+            identifier = Dataset()
+            identifier.QueryRetrieveLevel = ds.QueryRetrieveLevel
+            identifier.StudyInstanceUID = study_uid
+
+            m1 = matching[0]
+
+            if hasattr(ds, "PatientName"):
+                identifier.PatientName = m1.get("PatientName", "")
+            if hasattr(ds, "PatientID"):
+                identifier.PatientID = m1.get("PatientID", "")
+            if hasattr(ds, "PatientSex"):
+                identifier.PatientSex = m1.get("PatientSex", "U")
+            if hasattr(ds, "PatientBirthDate"):
+                identifier.PatientBirthDate = m1.get("PatientBirthDate", "")
+            if hasattr(ds, "StudyDate"):
+                identifier.StudyDate = m1.get("StudyDate", "")
+            if hasattr(ds, "StudyDescription"):
+                identifier.StudyDescription = m1.get("StudyDescription", "")
+            if hasattr(ds, "AccessionNumber"):
+                identifier.AccessionNumber = m1.get("AccessionNumber", "")
+
+            if ds.QueryRetrieveLevel == "STUDY":
+                identifier.ModalitiesInStudy = "".join(matching_modalities)
+                identifier.SOPClassesInStudy = "".join(matching_sop_classes)
+                identifier.NumberOfStudyRelatedSeries = len(matching_series_uids)
+                identifier.NumberOfStudyRelatedInstances = len(matching)
+                yield (C_PENDING_A, identifier)
+            else:
+                for series_uid in matching_series_uids:
+                    series_matching = [inst for inst in matching if inst.SeriesInstanceUID == series_uid]
+                    identifier.SeriesInstanceUID = series_uid
+                    identifier.SeriesNumber = series_matching[0].get("SeriesNumber", "")
+                    identifier.Modality = series_matching[0].get("Modality", "")
+                    identifier.SOPClassUID = series_matching[0].get("SOPClassUID", "")
+                    identifier.NumberOfSeriesRelatedInstances = len(series_matching)
+                    yield (C_PENDING_A, identifier)
+        return
+
+    study_uid = ds.get("StudyInstanceUID", "")
+    series_uid = ds.get("SeriesInstanceUID", "")
+    sop_uid = ds.get("SOPInstanceUID", "")
+
+    if sop_uid:
+        matching = [inst for inst in instances if inst.SOPInstanceUID == sop_uid]
+    elif series_uid:
+        matching = [inst for inst in instances if inst.SeriesInstanceUID == series_uid]
+    elif study_uid:
+        matching = [inst for inst in instances if inst.StudyInstanceUID == study_uid]
+    else:
+        matching = instances
+
+    if len(matching) == 0:
+        logger.error("No matching instances for C-FIND response")
+        return
+
+    logger.info(f"Number of matching instances: {len(matching)}")
 
     for instance in matching:
         if event.is_cancelled:
             logger.error("C-CANCEL find operation")
             yield (C_CANCEL, None)
+            return
 
-        if not hasattr(ds, "StudyInstanceUID") or ds.StudyInstanceUID == "":
-            logger.debug(f"Return instance: {instance.SOPInstanceUID}")
-            yield (C_PENDING_A, instance)
-        else:
-            if instance.StudyInstanceUID == ds.StudyInstanceUID:
-                logger.debug(f"Return instance: {instance.SOPInstanceUID}")
-                yield (C_PENDING_A, instance)
+        logger.debug(f"Return instance: {instance.SOPInstanceUID}")
+        yield (C_PENDING_A, instance)
 
     logger.info("Find complete")
 

@@ -14,7 +14,7 @@
       "autoReload": {
         "enable": false
       },
-      "justMyCode": true
+      "justMyCode": false
     },
     {
       "name": "Anonymizer GUI Optimized 1",
