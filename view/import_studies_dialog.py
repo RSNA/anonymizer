@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 class ImportStudiesDialog(tk.Toplevel):
     # class ImportStudiesDialog(ctk.CTkToplevel):
-    update_interval = 300  # milliseconds
+    update_interval = 750  # milliseconds
 
     def __init__(
         self,
@@ -52,7 +52,9 @@ class ImportStudiesDialog(tk.Toplevel):
         self.bind("<Escape>", self._escape_keypress)
 
         # Phase 1: Start background task to get StudyUIDHierarchies:
-        self._controller.get_study_uid_hierarchies_ex(scp_name, self.studies)
+        self._controller.get_study_uid_hierarchies_ex(
+            scp_name, self.studies, instance_level=move_level in ["IMAGE", "INSTANCE"]
+        )
         self._update_progress_get_hierarchies()
 
     def _create_widgets_1(self):
@@ -71,7 +73,9 @@ class ImportStudiesDialog(tk.Toplevel):
 
         row += 1
 
-        self._metadata_status_label = ctk.CTkLabel(self._frame, text=_("Retrieving Study Metadata..."))
+        self._metadata_status_label = ctk.CTkLabel(
+            self._frame, text=_(f"Retrieving Study Metadata at {self._move_level} Level...")
+        )
         self._metadata_status_label.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="w")
 
         row += 1
@@ -222,7 +226,7 @@ class ImportStudiesDialog(tk.Toplevel):
             else:
                 return
         else:
-            self._controller.abort_query()
+            self._controller.abort_move()
         self.grab_release()
         self.destroy()
 

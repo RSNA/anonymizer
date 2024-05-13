@@ -478,16 +478,17 @@ class QueryView(tk.Toplevel):
             return
 
         # TODO: remove this echo test? Rely on connection error from query?
-        if self._controller.echo("QUERY"):
-            self._query_button.configure(text_color="light green")
-        else:
-            self._query_button.configure(text_color="red")
-            messagebox.showerror(
-                title=_("Connection Error"),
-                message=_(f"Query Server Failed DICOM C-ECHO"),
-                parent=self,
-            )
-            return
+        # OR implement using background thread to handle connection or long timeout errors
+        # if self._controller.echo("QUERY"):
+        #     self._query_button.configure(text_color="light green")
+        # else:
+        #     self._query_button.configure(text_color="red")
+        #     messagebox.showerror(
+        #         title=_("Connection Error"),
+        #         message=_(f"Query Server Failed DICOM C-ECHO"),
+        #         parent=self,
+        #     )
+        #     return
 
         # Handle multiple comma delimited accession numbers:
         # Entered by user or loaded from file:
@@ -596,7 +597,7 @@ class QueryView(tk.Toplevel):
                 self._tree.item(study.uid, tags="green")
 
     def _import_button_pressed(self):
-        logger.debug(f"Import button pressed")
+        logger.info(f"Import button pressed")
 
         if self._query_active:
             logger.error(f"Import disabled, query is active")
@@ -681,8 +682,8 @@ class QueryView(tk.Toplevel):
             # Note: dataset.NumberOfStudyRelatedInstances includes image counts for all modalties in study
             # not just those modalities requested & imported
             imported = False
-            study_instances_from_scp = dataset.get("NumberOfStudyRelatedInstances")
-            if study_instances_from_scp and images_stored_count >= study_instances_from_scp:
+            study_instances_from_scp = int(dataset.get("NumberOfStudyRelatedInstances", 0))
+            if study_instances_from_scp and images_stored_count and images_stored_count >= study_instances_from_scp:
                 imported = True
             else:
                 # For multi-modality studies query the AnonymizerModel:

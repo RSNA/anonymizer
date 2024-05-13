@@ -1115,6 +1115,9 @@ class ProjectController(AE):
     def get_study_uid_hierarchy(
         self, scp_name: str, study_uid: str, patient_id: str, instance_level: bool = False
     ) -> Tuple[str | None, StudyUIDHierarchy]:
+        logger.info(
+            f"Get StudyUIDHierarchy from {scp_name} for StudyUID={study_uid}, PatientID={patient_id} instance_level={instance_level}"
+        )
 
         study_uid_hierarchy = StudyUIDHierarchy(uid=study_uid, ptid=patient_id, series={})
         error_msg = None
@@ -1273,27 +1276,28 @@ class ProjectController(AE):
     # last_error_msg is set by get_study_uid_hierarchy:
     # TODO: Optimization: make this multi-threaded using futures & thread executor as for manage_move
     #       Get UIDs only down to a specified level as required by move_operation
-    def get_study_uid_hierarchies(self, scp_name: str, studies: List[StudyUIDHierarchy]) -> None:
-        logger.info(f"Get StudyUIDHierarchies for {len(studies)} studies")
+    def get_study_uid_hierarchies(self, scp_name: str, studies: List[StudyUIDHierarchy], instance_level: bool) -> None:
+        logger.info(f"Get StudyUIDHierarchies for {len(studies)} studies, instance_level: {instance_level}")
         self._abort_query = False
         for study in studies:
             if self._abort_query:
                 logger.info("Query Aborted")
                 break
-            error_msg, study_uid_hierarchy = self.get_study_uid_hierarchy(scp_name, study.uid, study.ptid)
+            error_msg, study_uid_hierarchy = self.get_study_uid_hierarchy(
+                scp_name, study.uid, study.ptid, instance_level
+            )
             study.series = study_uid_hierarchy.series
             study.last_error_msg = error_msg
 
         logger.info(f"Get StudyUIDHierarchies done")
 
     # Non-blocking Get List of StudyUIDHierarchies
-    def get_study_uid_hierarchies_ex(self, scp_name: str, studies: List[StudyUIDHierarchy]) -> None:
+    def get_study_uid_hierarchies_ex(
+        self, scp_name: str, studies: List[StudyUIDHierarchy], instance_level: bool
+    ) -> None:
         threading.Thread(
             target=self.get_study_uid_hierarchies,
-            args=(
-                scp_name,
-                studies,
-            ),
+            args=(scp_name, studies, instance_level),
             daemon=True,  # daemon threads are abruptly stopped at shutdown
         ).start()
 

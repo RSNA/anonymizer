@@ -45,7 +45,7 @@ class AnonymizerController:
     PRIVATE_BLOCK_NAME = "RSNA"
     DEFAULT_ANON_DATE = "20000101"  # if source date is invalid or before 19000101
 
-    NUMBER_OF_WORKER_THREADS = 1
+    NUMBER_OF_WORKER_THREADS = 2
     MODEL_AUTOSAVE_INTERVAL_SECS = 10
 
     _clean_tag_translate_table = str.maketrans("", "", "() ,")
