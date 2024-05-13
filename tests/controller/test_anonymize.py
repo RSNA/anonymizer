@@ -114,9 +114,10 @@ def test_anonymize_dataset_without_PatientID(temp_dir: str, controller):
     assert anon_ds.StudyDate != phi_ds.StudyDate
     assert anon_ds.StudyDate == anonymizer.DEFAULT_ANON_DATE
     assert anon_ds.SOPClassUID == phi_ds.SOPClassUID
-    assert anon_ds.SOPInstanceUID == f"{UIDROOT}.{SITEID}.1"
-    assert anon_ds.StudyInstanceUID == f"{UIDROOT}.{SITEID}.2"
-    assert anon_ds.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.3"
+
+    assert anon_ds.StudyInstanceUID == f"{UIDROOT}.{SITEID}.1"
+    assert anon_ds.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.2"
+    assert anon_ds.SOPInstanceUID == f"{UIDROOT}.{SITEID}.3"
     assert controller.anonymizer.model.get_phi_name(anon_pt_id) == ""
     assert controller.anonymizer.model.get_phi(anon_pt_id).patient_id == ""
 
@@ -164,9 +165,9 @@ def test_anonymize_dataset_with_blank_PatientID_1_study(temp_dir: str, controlle
     assert anon_ds1.StudyDate == anonymizer.DEFAULT_ANON_DATE
     assert anon_ds1.SOPClassUID == phi_ds1.SOPClassUID
     assert anon_ds1.file_meta.TransferSyntaxUID == phi_ds1.file_meta.TransferSyntaxUID
-    assert anon_ds1.SOPInstanceUID == f"{UIDROOT}.{SITEID}.1"
-    assert anon_ds1.StudyInstanceUID == f"{UIDROOT}.{SITEID}.2"
-    assert anon_ds1.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.3"
+    assert anon_ds1.StudyInstanceUID == f"{UIDROOT}.{SITEID}.1"
+    assert anon_ds1.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.2"
+    assert anon_ds1.SOPInstanceUID == f"{UIDROOT}.{SITEID}.3"
 
     anon_filename2 = local_storage_path(local_storage_dir(temp_dir), ds2)
     anon_ds2 = dcmread(anon_filename2)
@@ -178,9 +179,9 @@ def test_anonymize_dataset_with_blank_PatientID_1_study(temp_dir: str, controlle
     assert anon_ds2.StudyDate == anonymizer.DEFAULT_ANON_DATE
     assert anon_ds2.SOPClassUID == phi_ds2.SOPClassUID
     assert anon_ds2.file_meta.TransferSyntaxUID == phi_ds2.file_meta.TransferSyntaxUID
-    assert anon_ds2.SOPInstanceUID == f"{UIDROOT}.{SITEID}.4"
-    assert anon_ds2.StudyInstanceUID == f"{UIDROOT}.{SITEID}.5"
-    assert anon_ds2.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.6"
+    assert anon_ds2.StudyInstanceUID == f"{UIDROOT}.{SITEID}.4"
+    assert anon_ds2.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.5"
+    assert anon_ds2.SOPInstanceUID == f"{UIDROOT}.{SITEID}.6"
 
     anon_pt_dir = Path(store_dir, anon_pt_id).as_posix()
     anon_ptid_dirlist = [d for d in os.listdir(anon_pt_dir) if os.path.isdir(os.path.join(anon_pt_dir, d))]
@@ -222,9 +223,9 @@ def test_anonymize_dataset_with_blank_PatientID_2_studies(temp_dir: str, control
     assert anon_ds.StudyDate != phi_ds.StudyDate
     assert anon_ds.StudyDate == anonymizer.DEFAULT_ANON_DATE
     assert anon_ds.SOPClassUID == phi_ds.SOPClassUID
-    assert anon_ds.SOPInstanceUID == f"{UIDROOT}.{SITEID}.1"
-    assert anon_ds.StudyInstanceUID == f"{UIDROOT}.{SITEID}.2"
-    assert anon_ds.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.3"
+    assert anon_ds.StudyInstanceUID == f"{UIDROOT}.{SITEID}.1"
+    assert anon_ds.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.2"
+    assert anon_ds.SOPInstanceUID == f"{UIDROOT}.{SITEID}.3"
     assert controller.anonymizer.model.get_phi_name(anon_pt_id) == ""
     assert controller.anonymizer.model.get_phi(anon_pt_id).patient_id == ""
 
@@ -258,6 +259,6 @@ def test_anonymize_dataset_with_PatientID(temp_dir: str, controller):
     assert anon_ds.StudyDate != phi_ds.StudyDate
     assert anon_ds.StudyDate == anonymizer._hash_date(phi_ds.StudyDate, phi_ds.PatientID)[1]
     assert anon_ds.SOPClassUID == phi_ds.SOPClassUID
-    assert anon_ds.SOPInstanceUID == f"{UIDROOT}.{SITEID}.1"
-    assert anon_ds.StudyInstanceUID == f"{UIDROOT}.{SITEID}.2"
-    assert anon_ds.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.3"
+    assert anon_ds.StudyInstanceUID == f"{UIDROOT}.{SITEID}.1"
+    assert anon_ds.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.2"
+    assert anon_ds.SOPInstanceUID == f"{UIDROOT}.{SITEID}.3"

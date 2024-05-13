@@ -1297,14 +1297,6 @@ class ProjectController(AE):
             daemon=True,  # daemon threads are abruptly stopped at shutdown
         ).start()
 
-    # def get_pending_instances(self, study: StudyUIDHierarchy) -> List[InstanceUIDHierarchy]:
-    #     pending_instances: List[InstanceUIDHierarchy] = []
-    #     for series in study.series.values():
-    #         for instance in series.instances.values():
-    #             if not self.anonymizer.model.uid_received(instance.uid):
-    #                 pending_instances.append(instance)
-    #     return pending_instances
-
     def get_number_of_pending_instances(self, study: StudyUIDHierarchy) -> int:
         # return len(self.get_pending_instances(study))
         return study.get_number_of_instances() - self.anonymizer.model.get_stored_instance_count(study.ptid, study.uid)
@@ -1360,13 +1352,9 @@ class ProjectController(AE):
                     raise ConnectionError(_(f"Connection timed out or aborted moving study_uid: {study.uid}"))
 
                 if status.Status not in (C_SUCCESS, C_PENDING_A, C_PENDING_B, C_WARNING):
-                    logger.error(
+                    raise DICOMRuntimeError(
                         f"C-MOVE@Study[{study.uid}] failure, status:{hex(status.Status).upper()}: {QR_MOVE_SERVICE_CLASS_STATUS[status.Status][1]}"
                     )
-                    logger.error(f"_Move Request Dataset:\n{ds}")
-                    if identifier:
-                        logger.error(f"_Response identifier: {identifier}")
-                    continue
 
                 if status.Status == C_SUCCESS:
                     logger.info(f"C-MOVE@Study[{study.uid}] Study Request SUCCESS")
@@ -1486,13 +1474,9 @@ class ProjectController(AE):
                         )
 
                     if status.Status not in (C_SUCCESS, C_PENDING_A, C_PENDING_B, C_WARNING):
-                        logger.error(
+                        raise DICOMRuntimeError(
                             f"C-MOVE@Series[{study.uid}/{series.uid}] failure, status:{hex(status.Status).upper()}: {QR_MOVE_SERVICE_CLASS_STATUS[status.Status][1]}"
                         )
-                        logger.error(f"_Move Request Dataset:\n{ds}")
-                        if identifier:
-                            logger.error(f"_Response identifier: {identifier}")
-                        continue
 
                     if status.Status == C_SUCCESS:
                         logger.info(
@@ -1624,18 +1608,14 @@ class ProjectController(AE):
                         logger.debug(f"STATUS: {status}")
 
                         if not status:
-                            raise (
-                                DICOMRuntimeError(f"C-MOVE[{study.uid}] Connection Error, no status returned from scp")
+                            raise DICOMRuntimeError(
+                                f"C-MOVE[{study.uid}] Connection Error, no status returned from scp"
                             )
 
                         if status.Status not in (C_SUCCESS, C_PENDING_A, C_PENDING_B, C_WARNING):
-                            logger.error(
+                            raise DICOMRuntimeError(
                                 f"C-MOVE@Instance[{study.uid}/{series.uid}/{instance.uid}] failure, status:{hex(status.Status)}: {QR_MOVE_SERVICE_CLASS_STATUS[status.Status][1]}"
                             )
-                            logger.error(f"_Move Request Dataset:\n{ds}")
-                            if identifier:
-                                logger.error(f"_Response identifier: {identifier}")
-                            continue
 
                         if status.Status == C_SUCCESS:
                             logger.info(
@@ -1995,7 +1975,7 @@ class ProjectController(AE):
                         self.anonymizer.model._uid_lookup[study.study_uid],
                         study.study_uid,
                         len(study.series),
-                        sum([s.instances for s in study.series]),
+                        sum([s.instance_count for s in study.series]),
                     )
                 )
 

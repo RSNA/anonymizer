@@ -64,7 +64,7 @@ def test_move_at_study_level_1_CT_file_from_pacs_with_file_to_unknown_AET(temp_d
     assert study_uid_hierarchy.get_number_of_instances() == 1
     error_msg = controller._move_study_at_study_level(PACSSimulatorSCP.aet, "UNKNOWNAE", study_uid_hierarchy)
     assert error_msg
-    assert "Import Timeout" in error_msg
+    assert "MOVE DESTINATION UNKNOWN" in error_msg.upper()
 
 
 def test_move_at_series_level_1_CT_file_from_pacs_with_file_to_unknown_AET(
@@ -82,7 +82,7 @@ def test_move_at_series_level_1_CT_file_from_pacs_with_file_to_unknown_AET(
     assert study_uid_hierarchy.get_number_of_instances() == 1
     error_msg = controller._move_study_at_series_level(PACSSimulatorSCP.aet, "UNKNOWNAE", study_uid_hierarchy)
     assert error_msg
-    assert "Import Timeout" in error_msg
+    assert "MOVE DESTINATION UNKNOWN" in error_msg.upper()
 
 
 def test_move_at_instance_level_1_CT_file_from_pacs_with_file_to_unknown_AET(
@@ -102,7 +102,7 @@ def test_move_at_instance_level_1_CT_file_from_pacs_with_file_to_unknown_AET(
     assert series.instances[ct_small_SOPInstanceUID]
     error_msg = controller._move_study_at_instance_level(PACSSimulatorSCP.aet, "UNKNOWNAE", study_uid_hierarchy)
     assert error_msg
-    assert "Import Timeout" in error_msg
+    assert "MOVE DESTINATION UNKNOWN" in error_msg.upper()
 
 
 def test_move_at_study_level_1_file_from_empty_pacs_to_local_storage(temp_dir: str, controller: ProjectController):
@@ -209,9 +209,10 @@ def test_move_at_study_level_1_CT_file_from_pacs_with_file_to_local_storage(
     assert ct_small_study_hierarchy.failed_sub_ops == 0
     assert ct_small_study_hierarchy.warning_sub_ops == 0
     assert ct_small_study_hierarchy.remaining_sub_ops == 0
-    assert controller.get_number_of_pending_instances(ct_small_study_hierarchy) == 0
 
-    time.sleep(1)
+    time.sleep(0.5)
+
+    assert controller.get_number_of_pending_instances(ct_small_study_hierarchy) == 0
     store_dir = local_storage_dir(temp_dir)
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
     assert len(dirlist) == 1

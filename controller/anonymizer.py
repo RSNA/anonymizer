@@ -45,7 +45,7 @@ class AnonymizerController:
     PRIVATE_BLOCK_NAME = "RSNA"
     DEFAULT_ANON_DATE = "20000101"  # if source date is invalid or before 19000101
 
-    NUMBER_OF_WORKER_THREADS = 2
+    NUMBER_OF_WORKER_THREADS = 1
     MODEL_AUTOSAVE_INTERVAL_SECS = 10
 
     _clean_tag_translate_table = str.maketrans("", "", "() ,")
@@ -262,122 +262,6 @@ class AnonymizerController:
 
         return result
 
-    # Extract PHI from new study and store:
-    def capture_phi_from_new_study(self, phi_ds: Dataset, source: DICOMNode | str):
-        # TODO: constructor Study(ds,source)?
-        def study_from_dataset(ds: Dataset, src: DICOMNode | str) -> Study:
-            return Study(
-                str(ds.StudyDate) if hasattr(ds, "StudyDate") else "?",
-                (
-                    self._hash_date(ds.StudyDate, ds.PatientID)[0]
-                    if hasattr(ds, "StudyDate") and hasattr(ds, "PatientID")
-                    else 0
-                ),
-                str(ds.AccessionNumber) if hasattr(ds, "AccessionNumber") else "?",
-                (str(ds.StudyInstanceUID) if hasattr(ds, "StudyInstanceUID") else "?"),
-                (str(ds.StudyDescription) if hasattr(ds, "StudyDescription") else "?"),
-                src,
-                [
-                    Series(
-                        (ds.SeriesInstanceUID if hasattr(ds, "SeriesInstanceUID") else "?"),
-                        (str(ds.SeriesDescription) if hasattr(ds, "SeriesDescription") else "?"),
-                        str(ds.Modality) if hasattr(ds, "Modality") else "?",
-                        1,
-                    )
-                ],
-            )
-            # weight=phi_ds.get("PatientWeight"),
-            # bmi=phi_ds.get("PatientBodyMassIndex"),
-            # size=phi_ds.get("PatientSize"),
-            # smoker=phi_ds.get("SmokingStatus"),
-            # medical_alerts=phi_ds.get("MedicalAlerts"),
-            # allergies=phi_ds.get("Allergies"),
-            # reason_for_visit=phi_ds.get("ReasonForTheRequestedProcedure"),
-            # admitting_diagnoses=phi_ds.get("AdmittingDiagnosesDescription"),
-            # history=phi_ds.get("PatientHistory"),
-            # additional_history=phi_ds.get("AdditionalPatientHistory"),
-            # comments=phi_ds.get("PatientComments")
-
-        # If PHI PatientID is missing in dataset, as per DICOM Standard, pydicom will return ""
-        # this corresponds to AnonymizerModel.DEFAULT_ANON_PATIENT_ID ("000000") initialised in AnonymizerModel
-        anon_patient_id = self.model.get_anon_patient_id(
-            phi_ds.PatientID.strip() if hasattr(phi_ds, "PatientID") else ""
-        )
-
-        if anon_patient_id == None:  # New patient
-            new_anon_patient_id = self.get_next_anon_patient_id()
-            # TODO: write init method for PHI(phi_ds) using introspection for fields to look for in dataset
-            # Merge Study/Series/Instance for PHI with StudyUIDHierarchy of ProjectController
-            phi = PHI(
-                patient_name=str(phi_ds.PatientName) if hasattr(phi_ds, "PatientSex") else "U",
-                patient_id=str(phi_ds.PatientID).strip(),
-                sex=phi_ds.PatientSex if hasattr(phi_ds, "PatientSex") else "U",
-                dob=phi_ds.get("PatientBirthDate"),
-                ethnic_group=phi_ds.get("EthnicGroup"),
-                studies=[study_from_dataset(phi_ds, source)],
-            )
-            self.model.set_phi(new_anon_patient_id, phi)
-
-        else:  # Existing patient now with more than one study
-            phi = self.model.get_phi(anon_patient_id)
-            if phi == None:
-                msg = f"Existing patient {anon_patient_id} not found in phi_lookup"
-                logger.error(msg)
-                raise RuntimeError(msg)
-
-            phi.studies.append(study_from_dataset(phi_ds, source))
-            self.model.set_phi(anon_patient_id, phi)
-
-    def update_phi_from_new_instance(self, ds: Dataset, source: DICOMNode | str):
-        # Study PHI already captured, update series and instance counts from new instance:
-        anon_patient_id = self.model.get_anon_patient_id(ds.PatientID if hasattr(ds, "PatientID") else "")
-        if anon_patient_id is None:
-            msg = f"Critical error {ds.PatientID} not found in patient_id_lookup"
-            logger.error(msg)
-            raise RuntimeError(msg)
-
-        phi = self.model.get_phi(anon_patient_id)
-        if phi == None:
-            msg = f"Existing patient {anon_patient_id} not found in phi_lookup"
-            logger.error(msg)
-            raise RuntimeError(msg)
-
-        # Find study in PHI:
-        if phi.studies is not None and ds.StudyInstanceUID is not None:
-            study = next(
-                (study for study in phi.studies if study.study_uid == ds.StudyInstanceUID),
-                None,
-            )
-        else:
-            study = None
-        if study == None:
-            msg = f"Existing study {ds.StudyInstanceUID} not found in phi_lookup"
-            logger.error(msg)
-            raise RuntimeError(msg)
-
-        # Find series in study:
-        if study.series is not None and ds.SeriesInstanceUID is not None:
-            series = next(
-                (series for series in study.series if series.series_uid == ds.SeriesInstanceUID),
-                None,
-            )
-        else:
-            series = None
-
-        if series == None:
-            # NEW series, add to study:
-            study.series.append(
-                Series(
-                    str(ds.SeriesInstanceUID),
-                    str(ds.SeriesDescription) if hasattr(ds, "SeriesDescription") else "?",
-                    str(ds.Modality) if hasattr(ds, "Modality") else "?",
-                    1,
-                )
-            )
-        else:
-            logger.error(f"* {series.instances} *")
-            series.instances += 1
-
     def _anonymize_element(self, dataset, data_element):
         # removes parentheses, spaces, and commas from tag
         tag = str(data_element.tag).translate(self._clean_tag_translate_table).upper()
@@ -396,27 +280,15 @@ class AnonymizerController:
         elif "uid" in operation:
             anon_uid = self.model.get_anon_uid(value)
             if not anon_uid:
-                next_uid_ndx = self.model.get_uid_count() + 1
-                anon_uid = f"{self.project_model.uid_root}.{self.project_model.site_id}.{next_uid_ndx}"
-                self.model.set_anon_uid(value, anon_uid)
+                anon_uid = self.model.get_next_anon_uid(value)
             dataset[tag].value = anon_uid
-        elif "ptid" in operation:
-            anon_pt_id = self.model.get_anon_patient_id(dataset.get("PatientID", ""))
-            if not anon_pt_id:  # This should not occur due to capture PHI before walk
-                logger.error(f"PatientID not found in PHI, assigning new anon_patient_id")
-                anon_pt_id = self.model.get_next_anon_patient_id()
-                self.model.set_anon_patient_id(dataset.PatientID, anon_pt_id)
-            dataset[tag].value = anon_pt_id
         elif "acc" in operation:
             anon_acc_no = self.model.get_anon_acc_no(value)
             if not anon_acc_no:
-                anon_acc_no = self.model.get_acc_no_count() + 1
-                self.model.set_anon_acc_no(value, str(anon_acc_no))
+                anon_acc_no = self.model.get_next_anon_acc_no(value)
             dataset[tag].value = str(anon_acc_no)
         elif "@hashdate" in operation:
-            _, anon_date = self._hash_date(
-                data_element.value, dataset.PatientID if hasattr(dataset, "PatientID") else ""
-            )
+            _, anon_date = self._hash_date(data_element.value, dataset.get("PatientID", ""))
             dataset[tag].value = anon_date
         elif "@round" in operation:
             # TODO: operand is named round but it is age format specific, should be renamed round_age
@@ -440,7 +312,7 @@ class AnonymizerController:
         # Calculate date delta from StudyDate and PatientID:
         date_delta = 0
         if hasattr(ds, "StudyDate") and hasattr(ds, "PatientID"):
-            date_delta = self._hash_date(ds.StudyDate, ds.PatientID)[0]
+            date_delta, _ = self._hash_date(ds.StudyDate, ds.PatientID)
 
         # Capture PHI and source:
         self.model.capture_phi(source, ds, date_delta)
@@ -450,12 +322,17 @@ class AnonymizerController:
             phi_instance_uid = ds.SOPInstanceUID  # if exception, remove this instance from uid_lookup
 
             # Anonymize dataset (overwrite phi dataset) (prevents dataset copy)
-            # TODO: process in AnonymizerModel: Script line: <r en="T" t="privategroups">Remove private groups</r>
-            ds.remove_private_tags()  # remove all private elements
-            ds.walk(self._anonymize_element)
-            # Handle missing PHI PatientID:
-            if not hasattr(ds, "PatientID") or ds.PatientID == "":
-                ds.PatientID = self.model.default_anon_pt_id
+            ds.remove_private_tags()  # remove all private elements (odd group number)
+            ds.walk(self._anonymize_element)  # recursive by default, recurses into embedded dataset sequences
+            # All elements now anonymized according to script, finally anonymizer PatientID and PatientName elements:
+            anon_ptid = self.model.get_anon_patient_id(ds.get("PatientID", ""))  # created by capture_phi
+            if anon_ptid is None:
+                logger.error(
+                    f"Critical error, PHI Capture did not create anonymized patient id, resort to default: {self.model.default_anon_pt_id}"
+                )
+                anon_ptid = self.model.default_anon_pt_id
+            ds.PatientID = anon_ptid
+            ds.PatientName = anon_ptid
 
             # Handle Global Tags:
             ds.PatientIdentityRemoved = "YES"  # CS: (0012, 0062)
