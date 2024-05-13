@@ -810,7 +810,7 @@ def test_move_at_study_level_with_network_timeout_then_series_level_MR_Study_fro
     # Set Network Timeout to 1 second to ensure move timeout occurs:
     controller.model.network_timeouts.network = 1
 
-    # Move study at STUDY LEVEL from Orthanc to Local Storage:
+    # Move study at STUDY LEVEL from Orthanc to Local Storage: (orthanc must be configured in async mode for this to work)
     error_msg = controller._move_study_at_study_level(OrthancSCP.aet, LocalStorageSCP.aet, study)
 
     assert error_msg

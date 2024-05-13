@@ -408,7 +408,16 @@ class SettingsDialog(tk.Toplevel):
         if path:
             logger.info(f"Java Index File: {path}")
             # Read phi data records from the Java Anonymizer Exported Study Index File:
-            self.java_phi_studies: List[JavaAnonymizerExportedStudy] = read_java_anonymizer_index_xlsx(path)
+            try:
+                self.java_phi_studies: List[JavaAnonymizerExportedStudy] = read_java_anonymizer_index_xlsx(path)
+            except Exception as e:
+                msg = _(f"Error reading Java Anonymizer Index File:\n\n{path}\n\n{e}")
+                messagebox.showerror(
+                    title=_("Load Java Anonymizer Index File Error"),
+                    message=msg,
+                    parent=self,
+                )
+                return
             if len(self.java_phi_studies) == 0:
                 msg = _(f"No PHI data records foundin:\n\n{path}")
                 messagebox.showerror(

@@ -102,19 +102,16 @@ def read_java_anonymizer_index_xlsx(filename) -> list[JavaAnonymizerExportedStud
 
     If the file is not found or the sheet is empty, an empty list is returned.
     """
-    try:
-        workbook: Workbook = load_workbook(filename)
-        sheet = workbook.active
-        assert isinstance(sheet, Worksheet)
-        data = []
 
-        if sheet is None:
-            raise ValueError("No active sheet found in the workbook")
+    workbook: Workbook = load_workbook(filename)
+    sheet = workbook.active
+    data = []
 
-        for row in sheet.iter_rows(values_only=True, min_row=2):
-            str_row = [str(item) if item is not None else "" for item in row]
-            data.append(JavaAnonymizerExportedStudy(*str_row))
+    if sheet is None:
+        raise ValueError("No active sheet found in the workbook")
 
-        return data
-    except Exception as e:
-        return []
+    for row in sheet.iter_rows(values_only=True, min_row=2):
+        str_row = [str(item) if item is not None else "" for item in row]
+        data.append(JavaAnonymizerExportedStudy(*str_row))
+
+    return data
