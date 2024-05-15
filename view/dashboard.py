@@ -137,6 +137,10 @@ class Dashboard(ctk.CTkFrame):
             self._status.configure(text=f"{scp_name} Server offline")
             button.configure(state="normal", text_color="red")
 
+    def set_status(self, text: str):
+        self._status.configure(text=text)
+        self.update()
+
     def _query_button_click(self):
         logger.info(f"_query_button_click")
         self._query_button.configure(state="disabled")

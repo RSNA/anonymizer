@@ -423,7 +423,7 @@ class AnonymizerController:
             return (f"Instance already stored", ds)
 
         # Ensure Storage Class (SOPClassUID which is a required attribute) is present in project storage classes
-        if ds.SOPClassUID not in self.model.storage_classes:
+        if ds.SOPClassUID not in self.project_model.storage_classes:
             self.move_to_quarantine(file, self.QUARANTINE_INVALID_STORAGE_CLASS)
             return f"Storage Class: {ds.SOPClassUID} mismatch", ds
 

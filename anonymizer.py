@@ -12,6 +12,7 @@ from utils.translate import _
 from utils.logging import init_logging
 from __version__ import __version__
 from pydicom._version import __version__ as pydicom_version
+from pydicom.misc import is_dicom
 from pydicom import dcmread
 from pynetdicom._version import __version__ as pynetdicom_version
 
@@ -501,7 +502,9 @@ class Anonymizer(ctk.CTk):
             try:
                 ds = dcmread(fp=dicomdir_file)
                 root_dir = Path(str(ds.filename)).resolve().parent
-                logger.info(f"DICOM DIR Root directory: {root_dir}\n")
+                msg = _(f"Reading DICOMDIR Root directory: {Path(root_dir).stem}...")
+                logger.info(msg)
+                self.dashboard.set_status(msg)
 
                 # Iterate through the PATIENT records
                 for patient in ds.patient_records:
@@ -544,14 +547,22 @@ class Anonymizer(ctk.CTk):
                             file_paths.extend(paths)
 
             except Exception as e:
-                logger.error(f"Error reading DICOMDIR file: {dicomdir_file}, {str(e)}")
+                msg_prefix = _(f"Error reading DICOMDIR file")
+                msg_detail = f"{dicomdir_file}, {str(e)}"
+                logger.error(msg_prefix + ": " + msg_detail)
+                self.dashboard.set_status(msg_prefix)
+
                 messagebox.showerror(
                     title=_("Import Directory Error"),
-                    message=_(f"Error reading DICOMDIR file: {dicomdir_file}, {str(e)}"),
+                    message=msg_prefix + "\n\n" + msg_detail,
                     parent=self,
                 )
                 return
         else:
+            msg = _(f"Reading filenames from {Path(root_dir).stem}...")
+            logger.info(msg)
+            self.dashboard.set_status(msg)
+            # TODO OPTIMIZE: use Python Generator to handle massive directory trees
             file_paths = [
                 os.path.join(root, file)
                 for root, _, files in os.walk(root_dir)
@@ -560,21 +571,32 @@ class Anonymizer(ctk.CTk):
             ]
 
         if len(file_paths) == 0:
-            logger.info(f"No DICOM files found in {root_dir}")
+            msg = _(f"No files found in {root_dir}")
+            logger.info(msg)
             messagebox.showerror(
                 title=_("Import Directory Error"),
-                message=f"No DICOM files found in {root_dir}",
+                message=msg,
                 parent=self,
             )
+            self.dashboard.set_status(msg)
             self.enable_file_menu()
             return
 
-        logger.info(f"Importing {len(file_paths)} {'file' if len(file_paths) == 1 else 'files'}")
+        msg = _(f"{len(file_paths)} filenames read from\n\n{root_dir}\n\nDo you want to initiate import?")
+        if not messagebox.askyesno(
+            title=_("Import Directory"),
+            message=msg,
+            parent=self,
+        ):
+            msg = _("Import Directory Cancelled")
+            logger.info(msg)
+            self.dashboard.set_status(msg)
+            self.enable_file_menu()
+            return
 
-        # TODO: optimize "already imported" by detecting patient/study/series hierarchy
-        # and using uid_lookup table and file counts to determine if already imported
-
-        logging.info(f"File paths load complete, starting Import Files Dialog...")
+        msg = _(f"Importing {len(file_paths)} {'file' if len(file_paths) == 1 else 'files'}")
+        logger.info(msg)
+        self.dashboard.set_status(msg)
 
         dlg = ImportFilesDialog(
             self,
@@ -583,7 +605,10 @@ class Anonymizer(ctk.CTk):
             title=_("Import Directory"),
             sub_title=_(f"Import files from {root_dir}"),
         )
-        dlg.get_input()
+        files_processed = dlg.get_input()
+        msg = _(f"Files processed: {files_processed}")
+        logger.info(msg)
+        self.dashboard.set_status(msg)
         self.enable_file_menu()
 
     def query_retrieve(self):

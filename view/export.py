@@ -28,7 +28,7 @@ class ExportView(tk.Toplevel):
     # Export attributes to display in the results Treeview:
     # Key: column id: (column name, width, centre justify)
     _attr_map = {
-        "Patient_Name": (_("Patient Name"), 10, False),
+        "Patient_Name": (_("Patient Name"), 20, False),
         "Anon_PatientID": (_("Anonymized ID"), 10, True),
         "Studies": (_("Studies"), 7, True),
         "Series": (_("Series"), 7, True),
