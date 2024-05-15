@@ -14,7 +14,7 @@ from typing import List
 from dataclasses import dataclass
 from utils.translate import _
 from utils.logging import set_logging_levels
-from pydicom import Dataset
+from pydicom import Dataset, dcmread
 from pydicom.uid import UID
 from pydicom.dataset import FileMetaDataset
 from pynetdicom.association import Association
@@ -302,12 +302,11 @@ class ProjectController(AE):
         self._move_executor = None
         self.scp = None
 
-    def _post_model_update(self):
+    def post_model_update(self):
         self.stop_scp()
         self.set_dicom_timeouts(self.model.network_timeouts)
         self.set_radiology_storage_contexts()
         self.set_verification_context()
-        self._reset_scp_vars()
         self.save_model()
         self.start_scp()
 
@@ -347,19 +346,17 @@ class ProjectController(AE):
 
     # FOR SCP AE: Set allowed storage and verification contexts and corresponding transfer syntaxes
     def set_verification_context(self):
-        self.add_supported_context(self._VERIFICATION_CLASS, self.model.transfer_syntaxes)
+        self.add_supported_context(self._VERIFICATION_CLASS)  # default transfer syntaxes
         return
 
     def set_radiology_storage_contexts(self) -> None:
         for uid in sorted(self.model.storage_classes):
-            self.add_supported_context(uid, self.model.transfer_syntaxes)
+            self.add_supported_context(uid, self.model.transfer_syntaxes)  # all user set transfer syntaxes for storage
         return
 
     # FOR SCU Association:
     def get_verification_context(self) -> PresentationContext:
-        return build_context(
-            self._VERIFICATION_CLASS, self.model.transfer_syntaxes
-        )  # do not include compressed transfer syntaxes
+        return build_context(self._VERIFICATION_CLASS)  # default transfer syntaxes
 
     def get_radiology_storage_contexts(self) -> List[PresentationContext]:
         return [
@@ -369,7 +366,7 @@ class ProjectController(AE):
 
     def set_study_root_qr_contexts(self) -> None:
         for uid in sorted(self._STUDY_ROOT_QR_CLASSES):
-            self.add_supported_context(uid, self.model.transfer_syntaxes)
+            self.add_supported_context(uid)  # default transfer syntaxes
         return
 
     # For testing:
@@ -483,7 +480,7 @@ class ProjectController(AE):
         self.scp.shutdown()
         self._reset_scp_vars()
 
-    def _connect_to_scp(self, scp: str | DICOMNode, contexts=None) -> Association:
+    def _connect_to_scp(self, scp: str | DICOMNode, contexts: List[PresentationContext] = None) -> Association:
         association = None
         if isinstance(scp, str):
             if scp not in self.model.remote_scps:
@@ -506,6 +503,7 @@ class ProjectController(AE):
             if not association.is_established:
                 raise ConnectionError(f"Connection error to: {remote_scp}")
             logger.debug(f"Association established with {association.acceptor.ae_title}")
+
         except Exception as e:  # (ConnectionError, TimeoutError, RuntimeError) as e:
             logger.error(f"Error establishing association: {e}")
             raise
@@ -719,6 +717,7 @@ class ProjectController(AE):
         if send_contexts is None:
             send_contexts = self.get_radiology_storage_contexts()
         files_sent = 0
+        exception_raised = False
         try:
             association = self._connect_to_scp(scp_name, send_contexts)
             for dicom_file_path in file_paths:
@@ -726,14 +725,15 @@ class ProjectController(AE):
                 if dcm_response.Status != 0:
                     raise DICOMRuntimeError(f"DICOM Response: {STORAGE_SERVICE_CLASS_STATUS[dcm_response.Status][1]}")
                 files_sent += 1
-
         except Exception as e:
             logger.error(f"Send Error: {e}")
+            exception_raised = True
             raise
         finally:
             if association:
                 association.release()
-            return files_sent
+            if not exception_raised:
+                return files_sent
 
     def abort_query(self):
         logger.info("Abort Query")
@@ -977,7 +977,7 @@ class ProjectController(AE):
         query_association = None
         self._abort_query = False
         try:
-            query_association = self._connect_to_scp(scp_name, self.get_study_root_qr_contexts())
+            query_association = self._connect_to_scp(scp_name, self.get_study_root_find_contexts())
 
             for acc_no in acc_no_list:
                 if self._abort_query:
@@ -1302,7 +1302,6 @@ class ProjectController(AE):
         ).start()
 
     def get_number_of_pending_instances(self, study: StudyUIDHierarchy) -> int:
-        # return len(self.get_pending_instances(study))
         return study.get_number_of_instances() - self.anonymizer.model.get_stored_instance_count(study.ptid, study.uid)
 
     # Blocking Move Study at STUDY Level, status updates reflected in study_uid_hierarchy, on exception return error message::
@@ -1777,7 +1776,7 @@ class ProjectController(AE):
         self._abort_move = False
 
     def _export_patient(self, dest_name: str, patient_id: str, ux_Q: Queue) -> None:
-        logger.info(f"_export_patient {patient_id} start to {dest_name}")
+        logger.info(f"_export_patient {patient_id} start, export to :{dest_name}")
 
         export_association = None
         files_sent = 0
@@ -1817,7 +1816,7 @@ class ProjectController(AE):
                         continue
 
                     # Get Study UID Hierarchy:
-                    _, study_hierarchy = self.get_study_uid_hierarchy(dest_name, study_uid, True)
+                    _, study_hierarchy = self.get_study_uid_hierarchy(dest_name, study_uid, patient_id, True)
                     for instance in study_hierarchy.get_instances():
                         if instance.uid in export_instance_paths:
                             del export_instance_paths[instance.uid]
@@ -1860,9 +1859,12 @@ class ProjectController(AE):
 
             else:  # DICOM Export:
 
-                # Connect to remote SCP:
-                export_association = self._connect_to_scp(dest_name, self.get_radiology_storage_contexts())
-
+                # Connect to remote SCP and establish association based on the storage class and transfer syntax of file
+                # Always export using the same storage class and transfer syntax as the original file
+                # TODO: Implement Transcoding here
+                last_sop_class_uid = None
+                last_transfer_synax = None
+                export_association = None
                 for dicom_file_path in export_instance_paths.values():
                     time.sleep(self._export_file_time_slice_interval)
                     if self._abort_export:
@@ -1870,7 +1872,23 @@ class ProjectController(AE):
                         export_association.abort()
                         return
 
-                    dcm_response: Dataset = export_association.send_c_store(dataset=dicom_file_path)
+                    # Load dataset from file:
+                    ds = dcmread(os.fspath(dicom_file_path))
+                    if not hasattr(ds, "SOPClassUID") or not hasattr(ds, "file_meta"):
+                        raise ValueError(f"Invalid DICOM file: {dicom_file_path}")
+                    # Establish a new association if there is a change of SOPClassUID or TransferSyntaxUID:
+                    if last_sop_class_uid != ds.SOPClassUID or last_transfer_synax != ds.file_meta.TransferSyntaxUID:
+                        logger.info(
+                            f"Connect to SCP: {dest_name} for SOPClassUID: {ds.SOPClassUID}, TransferSyntaxUID: {ds.file_meta.TransferSyntaxUID}"
+                        )
+                        if export_association:
+                            export_association = export_association.release()
+                        send_context = build_context(ds.SOPClassUID, ds.file_meta.TransferSyntaxUID)
+                        export_association = self._connect_to_scp(dest_name, [send_context])
+                        last_sop_class_uid = ds.SOPClassUID
+                        last_transfer_synax = ds.file_meta.TransferSyntaxUID
+
+                    dcm_response: Dataset = export_association.send_c_store(dataset=ds)
 
                     if not hasattr(dcm_response, "Status"):
                         raise TimeoutError("send_c_store timeout")

@@ -34,7 +34,6 @@ _STUDY_ROOT_QR_CLASSES = [
 
 _TRANSFER_SYNTAXES = DEFAULT_TRANSFER_SYNTAXES
 
-# TODO: provide UX for these classes and supported transfer syntaxes
 _RADIOLOGY_STORAGE_CLASSES = {
     "Computed Radiography Image Storage": "1.2.840.10008.5.1.4.1.1.1",
     "Computed Tomography Image Storage": "1.2.840.10008.5.1.4.1.1.2",

@@ -30,6 +30,7 @@ class AnonymizerController:
     QUARANTINE_FILE_READ_ERROR = "File_Read_Error"
     QUARANTINE_DICOM_READ_ERROR = "DICOM_Read_Error"
     QUARANTINE_STORAGE_ERROR = "Storage_Error"
+    QUARANTINE_INVALID_STORAGE_CLASS = "Invalid_Storage_Class"
 
     # See docs/RSNA-Covid-19-Deindentification-Protocol.pdf
     # TODO: if user edits default anonymization script these values should be updated accordingly
@@ -420,6 +421,11 @@ class AnonymizerController:
                 f"Instance already stored:{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}"
             )
             return (f"Instance already stored", ds)
+
+        # Ensure Storage Class (SOPClassUID which is a required attribute) is present in project storage classes
+        if ds.SOPClassUID not in self.model.storage_classes:
+            self.move_to_quarantine(file, self.QUARANTINE_INVALID_STORAGE_CLASS)
+            return f"Storage Class: {ds.SOPClassUID} mismatch", ds
 
         return self.anonymize(str(file), ds), ds
 

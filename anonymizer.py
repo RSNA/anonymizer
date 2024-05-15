@@ -661,7 +661,7 @@ class Anonymizer(ctk.CTk):
 
         self.controller.model = edited_model
         self.controller.model = self.controller.model
-        self.controller._post_model_update()
+        self.controller.post_model_update()
         logger.info(f"{self.controller}")
 
     def show_help_view(self, html_file_path):

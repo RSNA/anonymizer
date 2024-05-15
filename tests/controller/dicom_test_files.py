@@ -66,3 +66,16 @@ mr_small_SeriesInstanceUID = "1.3.6.1.4.1.5962.1.3.4.1.20040826185059.5457"
 mr_small_implicit_filename = "MR_small_implicit.dcm"
 # MR_small.dcm image, Explicit VR, LittleEndian
 mr_small_bigendian_filename = "MR_small_bigendian.dcm"
+
+# Compressed Samples:
+# if prefixed by test_files/, then the file is in the test_files directory else part of pydicom test files
+COMPRESSED_TEST_FILES = {
+    "JPEG_Baseline": "SC_jpeg_no_color_transform.dcm",  # ".50"      JPEG Baseline, Lossy, Non-Hierarchial
+    "JPEG_Extended": "JPGExtended.dcm",  # ".51"                     JPEG Extended, Lossy, Non-Hierarchial
+    #    "JPEG_Lossless_P14": "",                       # ".57"      JPEG Lossless Nonhierarchical (Processes 14).
+    "JPEG_Lossless_P14_FOP": "JPEG-LL.dcm",  # ".70"                 JPEG Lossless Nonhierarchical, First-Order Prediction (Processes 14 [Selection Value 1])
+    "JPEG-LS_Lossless": "MR_small_jpeg_ls_lossless.dcm",  # ".80"    JPEG-LS Lossless
+    "JPEG-LS_Lossy": "test_dcm_files/JPEG-LS_Lossy.dcm",  # ".81",   JPEG-LS Lossy
+    "JPEG2000_Lossless": "MR_small_jp2klossless.dcm",  # ".90"       JPEG 2000 Lossless
+    "JPEG2000": "JPEG2000.dcm",  # ".91"                             JPEG 2000
+}

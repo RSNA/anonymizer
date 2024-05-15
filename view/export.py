@@ -30,11 +30,12 @@ class ExportView(tk.Toplevel):
     _attr_map = {
         "Patient_Name": (_("Patient Name"), 10, False),
         "Anon_PatientID": (_("Anonymized ID"), 10, True),
-        "Studies": (_("Studies"), 10, True),
-        "Series": (_("Series"), 10, True),
-        "Files": (_("Images"), 10, True),
+        "Studies": (_("Studies"), 7, True),
+        "Series": (_("Series"), 7, True),
+        "Files": (_("Images"), 7, True),
         "DateTime": (_("Date Time"), 15, True),
-        "FilesSent": (_("Images Sent"), 10, True),
+        "FilesSent": (_("Images Sent"), 7, True),
+        "Error": (_("Last Export Error"), 50, False),
     }
 
     def __init__(
@@ -334,12 +335,13 @@ class ExportView(tk.Toplevel):
 
                 # Update treeview item:
                 current_values = list(self._tree.item(resp.patient_id, "values"))
-                # Ensure there are at least 7 values in the list:
-                while len(current_values) < 7:
+                # Ensure there are strings in all current_values:
+                while len(current_values) < len(self._attr_map):
                     current_values.append("")
                 # Format the date and time as "YYYY-MM-DD HH:MM:SS"
                 current_values[5] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 current_values[6] = str(resp.files_sent)
+                current_values[7] = resp.error if resp.error else ""
                 self._tree.item(resp.patient_id, values=current_values)
                 self._tree.see(resp.patient_id)
 

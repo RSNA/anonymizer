@@ -1,6 +1,6 @@
 import os
 import time
-from logging import INFO, WARNING, getLevelName
+from logging import DEBUG, INFO, WARNING, getLevelName
 from pprint import pformat
 from copy import deepcopy
 from typing import Dict, Tuple, List
@@ -183,3 +183,19 @@ class ProjectModel:
             self.storage_classes.clear()
         for modality in self.modalities:
             self.storage_classes += MODALITIES[modality][1]
+
+    def add_storage_class(self, storage_class: str):
+        if storage_class not in self.storage_classes:
+            self.storage_classes.append(storage_class)
+
+    def remove_storage_class(self, storage_class: str):
+        if storage_class in self.storage_classes:
+            self.storage_classes.remove(storage_class)
+
+    def add_transfer_syntax(self, transfer_syntax: str):
+        if transfer_syntax not in self.transfer_syntaxes:
+            self.transfer_syntaxes.append(transfer_syntax)
+
+    def remove_transfer_syntax(self, transfer_syntax: str):
+        if transfer_syntax in self.transfer_syntaxes:
+            self.transfer_syntaxes.remove(transfer_syntax)

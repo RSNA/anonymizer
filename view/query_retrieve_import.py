@@ -385,7 +385,9 @@ class QueryView(tk.Toplevel):
                 self._acc_no_list = [acc_no.strip().upper() for acc_no in accession_numbers]
 
         except Exception as e:
-            messagebox.showerror(_(f"File Read Error [{type(e)}]"), _(f"Error reading Accession Number file: {e}"))
+            messagebox.showerror(
+                _(f"File Read Error [{type(e)}]"), _(f"Error reading Accession Number file: {e}"), parent=self
+            )
             return
 
         self._cancel_query_button.focus_set()
@@ -457,7 +459,7 @@ class QueryView(tk.Toplevel):
                 self._progressbar.set(1)
 
             self._acc_no_file_path = None
-            self._acc_no_list = []  # reset accession number list
+            self._acc_no_list.clear()  # reset accession number list
         else:
             # Re-trigger monitor_query_response callback:
             self.after(
@@ -490,8 +492,27 @@ class QueryView(tk.Toplevel):
         #     )
         #     return
 
+        # Prevent NULL Query:
+        if not any(
+            [
+                self._patient_name_var.get(),
+                self._patient_id_var.get(),
+                self._accession_no_var.get(),
+                self._study_date_var.get(),
+                self._modality_var.get(),
+            ]
+        ):
+            logger.error(f"Query disabled, no search criteria entered")
+            messagebox.showwarning(
+                title=_("Query Criteria"),
+                message=_(f"\nEnter at least one search criterion"),
+                parent=self,
+            )
+            return
+
         # Handle multiple comma delimited accession numbers:
         # Entered by user or loaded from file:
+        self._acc_no_list.clear()
         accession_no = self._accession_no_var.get().strip()
         if accession_no and "," in accession_no:
             self._acc_no_list = [x.strip() for x in self._accession_no_var.get().split(",")]
@@ -517,6 +538,7 @@ class QueryView(tk.Toplevel):
             if not messagebox.askyesno(
                 _("Query via Accession Numbers"),
                 _(f"Loaded {self._studies_to_process} Accession Numbers\n\nProceed with Query?"),
+                parent=self,
             ):
                 return
         else:
