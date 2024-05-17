@@ -538,7 +538,7 @@ def test_move_at_study_level_3_studies_from_pacs_to_local_storage(temp_dir: str,
     )
 
     # Montior study2_hierarchy & study3_hierarchy:
-    timeout = controller.model.network_timeouts.network - 1
+    timeout = controller.model.network_timeouts.network
     while timeout > 0:
         if (
             controller.get_number_of_pending_instances(study2_hierarchy) == 0
