@@ -440,7 +440,7 @@ class ProjectController(AE):
             return C_STORE_DATASET_ERROR
 
         if self.anonymizer.model.uid_received(ds.SOPInstanceUID):
-            logger.info(
+            logger.debug(
                 f"Instance already stored:{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}"
             )
             return C_SUCCESS
@@ -1481,6 +1481,16 @@ class ProjectController(AE):
 
         try:
             for series in study.series.values():
+                # 0.1 Skip Series with no instances:
+                if series.instance_count == 0:
+                    logger.info(f"C-MOVE@Series Skip Series[{study.uid}/{series.uid}] InstanceCount=0")
+                    continue
+
+                # 0.2 Skip Series if instances all imported:
+                if self.anonymizer.model.series_complete(study.ptid, study.uid, series.uid, series.instance_count):
+                    logger.info(f"C-MOVE@Series Skip Series[{study.uid}/{series.uid}] all instances imported")
+                    continue
+
                 # 1. Establish Association for Series MOVE request:
                 move_association = self._connect_to_scp(scp_name, self.get_study_root_move_contexts())
 

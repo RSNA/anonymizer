@@ -256,6 +256,21 @@ class AnonymizerModel:
                     return target_count - sum(series.instance_count for series in study.series)
         return target_count
 
+    def series_complete(self, ptid: str, study_uid: str, series_uid: str, target_count: int) -> bool:
+        anon_patient_id = self._patient_id_lookup.get(ptid, None)
+        if anon_patient_id is None:
+            return False
+        phi = self._phi_lookup.get(anon_patient_id, None)
+        if phi is None:
+            return False
+        for study in phi.studies:
+            if study.study_uid == study_uid:
+                for series in study.series:
+                    if series.series_uid == series_uid:
+                        return series.instance_count >= target_count
+                return False
+        return False
+
     # Used by QueryRetrieveView to prevent study re-import
     def study_imported(self, ptid: str, study_uid: str) -> bool:
         with self._lock:
