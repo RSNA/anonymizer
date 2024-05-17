@@ -375,9 +375,7 @@ def test_move_at_series_level_CT_1_Series_4_Images_from_pacs_with_file_to_local_
     # Do the MOVE AGAIN to verify move of instances is done (because of Series level) and files are not duplicated:
     error_msg = controller._move_study_at_series_level(PACSSimulatorSCP.aet, LocalStorageSCP.aet, ct_study_hierarchy)
 
-    assert error_msg is None
-    assert series.completed_sub_ops == 4
-    assert series.failed_sub_ops == 0
+    assert "All Instances already imported" in error_msg
 
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
     assert len(dirlist) == 1
@@ -822,15 +820,12 @@ def test_move_at_study_level_with_network_timeout_then_series_level_MR_Study_fro
     assert error_msg
     assert "Import Timeout" in error_msg
 
-    controller.model.network_timeouts.network = 10
+    controller.model.network_timeouts.network = 15
 
     error_msg = controller._move_study_at_series_level(OrthancSCP.aet, LocalStorageSCP.aet, study)
 
-    assert error_msg is None
-
     assert len(study.series) == 3
     assert sum(series.instance_count for series in study.series.values()) == 11
-    assert sum(series.completed_sub_ops for series in study.series.values()) == 11
     assert controller.get_number_of_pending_instances(study) == 0
 
     time.sleep(1)

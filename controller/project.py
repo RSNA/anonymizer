@@ -1368,6 +1368,8 @@ class ProjectController(AE):
             ds.QueryRetrieveLevel = "STUDY"
             ds.StudyInstanceUID = study.uid
 
+            logger.info(f"C-MOVE@Study[{study.uid}] Request: InstanceCount={study.get_number_of_instances()}")
+
             # 2. Use the C-MOVE service to request that the remote SCP move the Study to local storage scp:
             # Send Move Request for Study UID & wait for Move Responses for each instance in study:
             responses = move_association.send_c_move(
@@ -1467,16 +1469,23 @@ class ProjectController(AE):
             error_msg = "No Series in Study"
             return error_msg
 
-        if study.get_number_of_instances() == 0:
+        target_count = study.get_number_of_instances()
+        if target_count == 0:
             error_msg = "No Instances in Study"
             return error_msg
 
-        try:
-            # 1. Establish Association for MOVE request:
-            move_association = self._connect_to_scp(scp_name, self.get_study_root_move_contexts())
+        study.pending_instances = self.anonymizer.model.get_pending_instance_count(study.ptid, study.uid, target_count)
+        if study.pending_instances == 0:
+            error_msg = "All Instances already imported"
+            return error_msg
 
-            # 2. Move Request for each Series UID & wait for Move Response:
+        try:
             for series in study.series.values():
+                # 1. Establish Association for Series MOVE request:
+                move_association = self._connect_to_scp(scp_name, self.get_study_root_move_contexts())
+
+                # 2. Move Request for each Series UID & wait for Move Response:
+                study_pending_instances_before_series_move = study.pending_instances
 
                 ds = Dataset()
                 ds.QueryRetrieveLevel = "SERIES"
@@ -1486,7 +1495,7 @@ class ProjectController(AE):
                     ds.SeriesNumber = series.number
 
                 logger.info(
-                    f"C-MOVE@Series[{study.uid}] Request: Modality={series.modality} SOPClassUID={series.sop_class_uid} SeriesUID={series.uid} SeriesNumber={series.number}"
+                    f"C-MOVE@Series[{study.uid}/{series.uid}] Request: Modality={series.modality} SOPClassUID={series.sop_class_uid} InstanceCount={series.instance_count}"
                 )
 
                 responses = move_association.send_c_move(
@@ -1520,47 +1529,44 @@ class ProjectController(AE):
 
                     if status.Status == C_SUCCESS:
                         logger.info(
-                            f"C-MOVE@Series[{study.uid}] Series Request SUCCESS SeriesUID:{series.uid} SeriesNumber:{series.number}"
+                            f"C-MOVE@Series[{study.uid}/{series.uid}] Series Request SUCCESS SeriesNumber:{series.number}"
                         )
 
                     # Update Move stats from status:
                     series.update_move_stats(status)
 
-                    # Update Pending Instances count from AnonymizerModel, relevant for Syncrhonous Move:
+                # 3. Wait for ALL instances of Series to be Imported by verifying with AnonymizerModel
+                #    Timeout if a pending instance is not received within NetworkTimeout
+                #    or abort on user signal:
+                prev_pending_instances = study.pending_instances
+                import_timer = int(self.model.network_timeouts.network)
+                while import_timer:
+                    if self._abort_move:
+                        raise DICOMRuntimeError(f"C-MOVE@Series[{study.uid}] aborted")
+
                     study.pending_instances = self.anonymizer.model.get_pending_instance_count(
                         study.ptid, study.uid, study.get_number_of_instances()
                     )
 
+                    if study_pending_instances_before_series_move - study.pending_instances >= series.instance_count:
+                        logger.info(f"C-MOVE@Series[{study.uid}/{series.uid}] ALL Instances IMPORTED for Series")
+                        break
+
+                    # Reset timer if pending instances count changes:
+                    if study.pending_instances != prev_pending_instances:
+                        prev_pending_instances = study.pending_instances
+                        import_timer = int(self.model.network_timeouts.network)
+
+                    import_timer -= 1
+                    time.sleep(1)
+
+                # 4. Raise Error if Timeout
+                if import_timer == 0:
+                    raise TimeoutError(f"C-MOVE@Series[{study.uid}/{series.uid}] Import Timeout")
+
+                move_association.release()
+
             logger.info(f"C-MOVE@Series ALL Series Requests for Study COMPLETE: StudyUIDHierachy:\n{study}")
-
-            # 3. Wait for ALL instances of Study to be Imported by verifying with AnonymizerModel
-            #    Timeout if a pending instance is not received within NetworkTimeout
-            #    or abort on user signal:
-            prev_pending_instances = 0
-            import_timer = int(self.model.network_timeouts.network)
-            while import_timer:
-                if self._abort_move:
-                    raise DICOMRuntimeError(f"C-MOVE@Series[{study.uid}] aborted")
-
-                study.pending_instances = self.anonymizer.model.get_pending_instance_count(
-                    study.ptid, study.uid, study.get_number_of_instances()
-                )
-
-                if study.pending_instances == 0:
-                    logger.info(f"C-MOVE@Series[{study.uid}] ALL Instances IMPORTED")
-                    break
-
-                # Reset timer if pending instances count changes:
-                if study.pending_instances != prev_pending_instances:
-                    prev_pending_instances = study.pending_instances
-                    import_timer = int(self.model.network_timeouts.network)
-
-                import_timer -= 1
-                time.sleep(1)
-
-            # 4. Raise Error if Timeout
-            if import_timer == 0:
-                raise TimeoutError(f"C-MOVE@Series[{study.uid}] Import Timeout")
 
         except Exception as e:
             error_msg = str(e)  # latch exception error msg
