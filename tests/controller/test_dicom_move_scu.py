@@ -808,7 +808,7 @@ def test_move_at_study_level_with_network_timeout_then_series_level_MR_Study_fro
     # logging.getLogger("pynetdicom").setLevel("DEBUG")
 
     # Set Network Timeout to 1 second to ensure move timeout occurs:
-    controller.model.network_timeouts.network = 1
+    controller.model.network_timeouts.network = 0.1
 
     # Move study at STUDY LEVEL from Orthanc to Local Storage: (orthanc must be configured in async mode for this to work)
     error_msg = controller._move_study_at_study_level(OrthancSCP.aet, LocalStorageSCP.aet, study)

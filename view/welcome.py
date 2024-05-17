@@ -10,7 +10,7 @@ class WelcomeView(ctk.CTkFrame):
     WELCOME_TEXT = _(
         "The RSNA Anonymizer program is a free open-source tool for collecting and de-identifying DICOM studies to prepare them for submission.\n\n"
         "It may be used to ensure privacy by removing protected health information (PHI) from your DICOM imaging studies.\n\n"
-        "Refer to Help/Instructions for more information.\n\n"
+        "Refer to Help/Overview for a quick overview and Help/Instructions for instructions on how to configure and use the program.\n\n"
         "Select File/New Project to start."
     )
     WELCOME_TEXT_FONT = ("DIN Alternate", 20)

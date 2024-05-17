@@ -6,7 +6,10 @@ from openpyxl.worksheet.worksheet import Worksheet
 from pydicom import Dataset
 from dataclasses import dataclass
 
+DICOM_FILE_SUFFIX = ".dcm"
 
+
+# TODO: move to AnonymizerController
 def local_storage_path(base_dir: Path, ds: Dataset) -> Path:
     assert base_dir
     assert hasattr(ds, "PatientID")
@@ -19,7 +22,7 @@ def local_storage_path(base_dir: Path, ds: Dataset) -> Path:
         ds.PatientID,
         ds.StudyInstanceUID,
         ds.SeriesInstanceUID,
-        ds.SOPInstanceUID + ".dcm",
+        ds.SOPInstanceUID + DICOM_FILE_SUFFIX,
     )
     # Ensure all directories in the path exist
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)
@@ -46,12 +49,13 @@ def count_studies_series_images(patient_path: str):
         else:
             series_count += len(dirs)
         for file in files:
-            if file.endswith(".dcm"):
+            if file.endswith(DICOM_FILE_SUFFIX):
                 image_count += 1
 
     return study_count, series_count, image_count
 
 
+# TODO move to QueryRetrieveView
 def count_study_images(base_dir: Path, anon_pt_id: str, study_uid: str) -> int:
     """
     Counts the number of images stored in a given study directory.
@@ -68,7 +72,7 @@ def count_study_images(base_dir: Path, anon_pt_id: str, study_uid: str) -> int:
 
     for _, _, files in os.walk(study_path):
         for file in files:
-            if file.endswith(".dcm"):
+            if file.endswith(DICOM_FILE_SUFFIX):
                 image_count += 1
 
     return image_count

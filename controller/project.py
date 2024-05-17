@@ -133,6 +133,7 @@ class StudyUIDHierarchy:
         self.ptid = ptid
         self.last_error_msg: str | None = None  # set by GetStudyHierarchy() or Move Operation
         self.series = series if series is not None else {}
+        self.pending_instances = 0  # set by move operation
         # from send_c_move status response:
         self.completed_sub_ops: int = 0
         self.failed_sub_ops: int = 0
@@ -244,10 +245,10 @@ class ProjectController(AE):
         "1.2.840.10008.5.1.4.1.2.2.3",  # Get
     ]
     _maximum_pdu_size = 0  # no limit
-    _handle_store_time_slice_interval = 0.2  # seconds
+    _handle_store_time_slice_interval = 0.05  # seconds
     _export_file_time_slice_interval = 0.1  # seconds
     _patient_export_thread_pool_size = 4
-    _study_move_thread_pool_size = 4
+    _study_move_thread_pool_size = 2
     _required_attributes_study_query = [
         "StudyInstanceUID",
         "ModalitiesInStudy",
@@ -255,6 +256,7 @@ class ProjectController(AE):
         "NumberOfStudyRelatedInstances",
     ]
     _required_attributes_series_query = ["StudyInstanceUID", "SeriesInstanceUID", "Modality"]
+    _required_attributes_instance_query = ["StudyInstanceUID", "SeriesInstanceUID", "SOPInstanceUID"]
     _query_result_fields_to_remove = [
         "QueryRetrieveLevel",
         "RetrieveAETitle",
@@ -292,6 +294,9 @@ class ProjectController(AE):
         self._aws_last_error: str | None = None
         self.anonymizer = AnonymizerController(project_model=model)
 
+    def __str__(self):
+        return super().__str__() + f"\n{self.model}" + f"\n{self.anonymizer.model}"
+
     def _reset_scp_vars(self):
         self._abort_query = False
         self._abort_move = False
@@ -302,16 +307,15 @@ class ProjectController(AE):
         self._move_executor = None
         self.scp = None
 
-    def post_model_update(self):
-        self.stop_scp()
+    def update_model(self, new_model: ProjectModel | None = None):
+        self.stop_scp()  # calls _reset_scp_vars
+        if new_model:
+            self.model = new_model
         self.set_dicom_timeouts(self.model.network_timeouts)
         self.set_radiology_storage_contexts()
         self.set_verification_context()
         self.save_model()
         self.start_scp()
-
-    def __str__(self):
-        return super().__str__() + f"\n{self.model}" + f"\n{self.anonymizer.model}"
 
     def save_model(self, dest_dir: Path | None = None) -> bool:
         if dest_dir is None:
@@ -320,7 +324,7 @@ class ProjectController(AE):
         try:
             with open(project_pkl_path, "wb") as pkl_file:
                 pickle.dump(self.model, pkl_file)
-            logger.info(f"Model saved to: {project_pkl_path}")
+            logger.debug(f"Model saved to: {project_pkl_path}")
             return True
         except Exception as e:
             logger.error(f"Fatal Error saving ProjectModel to {project_pkl_path}: {e}")
@@ -389,8 +393,8 @@ class ProjectController(AE):
         return [build_context(self._STUDY_ROOT_QR_CLASSES[1])]  # default transfer syntaxes
 
     # Handlers:
-    def _handle_abort(self, event: Event):
-        logger.error(f"_handle_abort: {event}")  # TODO: handle remote association async abort/disconnect
+    # def _handle_abort(self, event: Event):
+    #     logger.info(f"_handle_abort")  # TODO: handle remote association async abort/disconnect
 
     # DICOM C-ECHO Verification event handler (EVT_C_ECHO):
     def _handle_echo(self, event: Event):
@@ -404,7 +408,8 @@ class ProjectController(AE):
     def _handle_store(self, event: Event):
         # Throttle incoming requests by adding a delay
         # to ensure UX responsiveness
-        # time.sleep(self._handle_store_time_slice_interval)
+        # TODO: refactor using asyncio
+        time.sleep(self._handle_store_time_slice_interval)
         logger.debug("_handle_store")
         # TODO: Validate remote IP & AE Title
         remote = event.assoc.remote
@@ -440,9 +445,9 @@ class ProjectController(AE):
             )
             return C_SUCCESS
 
-        logger.info(f"=>{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}")
+        logger.debug(f"=>{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}")
 
-        self.anonymizer.anonymize_dataset_and_store(remote_scu, ds)
+        self.anonymizer.anonymize_dataset_ex(remote_scu, ds)
         return C_SUCCESS
 
     def start_scp(self) -> None:
@@ -498,7 +503,7 @@ class ProjectController(AE):
                 contexts=contexts,
                 ae_title=remote_scp.aet,
                 bind_address=(self.model.scu.ip, 0),
-                evt_handlers=[(EVT_ABORTED, self._handle_abort)],
+                # evt_handlers=[(EVT_ABORTED, self._handle_abort)],
             )
             if not association.is_established:
                 raise ConnectionError(f"Connection error to: {remote_scp}")
@@ -1162,7 +1167,7 @@ class ProjectController(AE):
                     missing_attributes = self._missing_attributes(self._required_attributes_series_query, identifier)
                     if missing_attributes:
                         logger.error(
-                            f"Skip Series:{identifier.SeriesInstanceUID}, Series Level Query result is missing required attributes: {missing_attributes}"
+                            f"Skip Series for Study:{study_uid}, Series Level Query result is missing required attributes: {missing_attributes}"
                         )
                         logger.error(f"\n{identifier}")
                         continue
@@ -1195,18 +1200,31 @@ class ProjectController(AE):
                             )
                         )
 
-                    study_uid_hierarchy.series[identifier.SeriesInstanceUID] = SeriesUIDHierarchy(
-                        uid=identifier.SeriesInstanceUID,
-                        number=identifier.get("SeriesNumber"),  # TODO: should this be auto-generated if None?
-                        modality=identifier.Modality,
-                        sop_class_uid=identifier.SOPClassUID,
-                        description=series_descr,
-                        instance_count=instance_count,
-                        instances={},
-                    )
-                    logger.info(
-                        f"New Series[Modality={identifier.Modality},SOPClassUID={identifier.SOPClassUID}]: {series_descr}/{identifier.SeriesInstanceUID}/{identifier.SeriesNumber} | {instance_count}"
-                    )
+                    # IF this Series already exists in the hierarchy,
+                    # assume the scp is sending a query response for each instance and increment the series instance count:
+                    # TODO: is this acceptable? alternatively could force instance level query below
+                    if identifier.SeriesInstanceUID in study_uid_hierarchy.series:
+                        if instance_count != 1:
+                            raise DICOMRuntimeError(
+                                f"SCP Series Query Response for {identifier.SeriesInstanceUID}, inconsistent NumberOfSeriesRelatedInstances: {instance_count}"
+                            )
+                        study_uid_hierarchy.series[identifier.SeriesInstanceUID].instance_count += 1
+                        logger.info(
+                            f"Add instance to existing series: {identifier.SeriesInstanceUID} i{study_uid_hierarchy.series[identifier.SeriesInstanceUID].instance_count}"
+                        )
+                    else:
+                        study_uid_hierarchy.series[identifier.SeriesInstanceUID] = SeriesUIDHierarchy(
+                            uid=identifier.SeriesInstanceUID,
+                            number=identifier.get("SeriesNumber"),  # TODO: should this be auto-generated if None?
+                            modality=identifier.Modality,
+                            sop_class_uid=identifier.SOPClassUID,
+                            description=series_descr,
+                            instance_count=instance_count,
+                            instances={},
+                        )
+                        logger.info(
+                            f"New Series[Modality={identifier.Modality},SOPClassUID={identifier.SOPClassUID}]: {series_descr}/{identifier.SeriesInstanceUID}/{identifier.SeriesNumber} | {instance_count}"
+                        )
 
             logger.info(f"StudyUID={study_uid}, {len(study_uid_hierarchy.series)} Series found")
             if len(study_uid_hierarchy.series) == 0:
@@ -1240,12 +1258,16 @@ class ProjectController(AE):
                         if status.Status == C_SUCCESS:
                             logger.info("C-FIND[instance] query success")
 
-                        if (
-                            identifier
-                            and hasattr(identifier, "StudyInstanceUID")
-                            and hasattr(identifier, "SeriesInstanceUID")
-                            and hasattr(identifier, "SOPInstanceUID")
-                        ):
+                        if identifier:
+                            missing_attributes = self._missing_attributes(
+                                self._required_attributes_instance_query, identifier
+                            )
+                            if missing_attributes:
+                                logger.error(
+                                    f"Skip Instance for Series:{series.uid}, Instance Level Query result is missing required attributes: {missing_attributes}"
+                                )
+                                logger.error(f"\n{identifier}")
+                                continue
                             if identifier.StudyInstanceUID == study_uid and identifier.SeriesInstanceUID == series.uid:
                                 series.instances[identifier.SOPInstanceUID] = InstanceUIDHierarchy(
                                     uid=identifier.SOPInstanceUID,
@@ -1257,6 +1279,11 @@ class ProjectController(AE):
                                 )
 
                     logger.info(f"SeriesUID={series.uid}: {len(series.instances)} Instance UIDs found")
+                    # Overwrite instance_count with actual instance count:
+                    series.instance_count = len(series.instances)
+
+            # Initialise Study pending instances to total instance count:
+            study_uid_hierarchy.pending_instances = study_uid_hierarchy.get_number_of_instances()
 
         except Exception as e:
             error_msg = str(e)  # latch exception error msg
@@ -1288,6 +1315,8 @@ class ProjectController(AE):
             )
             study.series = study_uid_hierarchy.series
             study.last_error_msg = error_msg
+            # Initialise Study pending instances to total instance count:
+            study.pending_instances = study_uid_hierarchy.pending_instances
 
         logger.info(f"Get StudyUIDHierarchies done")
 
@@ -1304,6 +1333,7 @@ class ProjectController(AE):
     def get_number_of_pending_instances(self, study: StudyUIDHierarchy) -> int:
         return study.get_number_of_instances() - self.anonymizer.model.get_stored_instance_count(study.ptid, study.uid)
 
+    # TODO: Refactor: create on version of move_study with move_level parameter
     # Blocking Move Study at STUDY Level, status updates reflected in study_uid_hierarchy, on exception return error message::
     def _move_study_at_study_level(
         self,
@@ -1320,8 +1350,14 @@ class ProjectController(AE):
             error_msg = "No Series in Study"
             return error_msg
 
-        if study.get_number_of_instances() == 0:
+        target_count = study.get_number_of_instances()
+        if target_count == 0:
             error_msg = "No Instances in Study"
+            return error_msg
+
+        study.pending_instances = self.anonymizer.model.get_pending_instance_count(study.ptid, study.uid, target_count)
+        if study.pending_instances == 0:
+            error_msg = "All Instances already imported"
             return error_msg
 
         try:
@@ -1333,7 +1369,7 @@ class ProjectController(AE):
             ds.StudyInstanceUID = study.uid
 
             # 2. Use the C-MOVE service to request that the remote SCP move the Study to local storage scp:
-            # 2. Move Request for Study UID & wait for Move Responses for each instance in study:
+            # Send Move Request for Study UID & wait for Move Responses for each instance in study:
             responses = move_association.send_c_move(
                 dataset=ds,
                 move_aet=dest_scp_ae,
@@ -1348,6 +1384,7 @@ class ProjectController(AE):
             # an (0008,0058) *Failed SOP Instance UID List* element, however as this comes from the peer this is not guaranteed
             # and may instead be an empty ~pydicom.dataset.Dataset.
             for status, identifier in responses:
+                time.sleep(0.1)
                 if self._abort_move:
                     raise (DICOMRuntimeError(f"C-MOVE@Study[{study.uid}] move study aborted"))
 
@@ -1365,44 +1402,44 @@ class ProjectController(AE):
                 # Update Move stats from status:
                 study.update_move_stats(status)
 
+                # Update Pending Instances count from AnonymizerModel, relevant for Syncrhonous Move:
+                study.pending_instances = self.anonymizer.model.get_pending_instance_count(
+                    study.ptid, study.uid, study.get_number_of_instances()
+                )
+
                 if identifier:
                     logger.info(f"C-MOVE@Study[{study.uid}] Response identifier: {identifier}")
 
             logger.info(f"C-MOVE@Study Request for Study COMPLETE: StudyUIDHierachy:\n{study}")
 
-            # 4. If there are no pending instances, return without error:
-            pending_instances = self.anonymizer.model.get_pending_instance_count(
-                study.ptid, study.uid, study.get_number_of_instances()
-            )
-            if pending_instances == 0:
-                logger.info(f"C-MOVE@Study[{study.uid}] ALL Instances IMPORTED")
-            else:
-                # 5. Wait for ALL instances of Study to be Imported,
-                #    Timeout if a pending instance is not received within NetworkTimeout
-                #    or abort on user signal:
-                prev_pending_instances = pending_instances
-                for import_timer in range(int(self.model.network_timeouts.network), -1, -1):
-                    if self._abort_move:
-                        raise DICOMRuntimeError(f"C-MOVE@Study[{study.uid}] aborted")
+            # 3. Wait for ALL instances of Study to be Imported by verifying with AnonymizerModel
+            #    Timeout if a pending instance is not received within NetworkTimeout
+            #    or abort on user signal:
+            prev_pending_instances = study.pending_instances
+            import_timer = int(self.model.network_timeouts.network)
+            while import_timer:
+                if self._abort_move:
+                    raise DICOMRuntimeError(f"C-MOVE@Study[{study.uid}] aborted")
 
-                    pending_instances = self.anonymizer.model.get_pending_instance_count(
-                        study.ptid, study.uid, study.get_number_of_instances()
-                    )
+                study.pending_instances = self.anonymizer.model.get_pending_instance_count(
+                    study.ptid, study.uid, study.get_number_of_instances()
+                )
 
-                    if pending_instances == 0:
-                        logger.info(f"C-MOVE@Study[{study.uid}] ALL Instances IMPORTED")
-                        break
+                if study.pending_instances == 0:
+                    logger.info(f"C-MOVE@Study[{study.uid}] ALL Instances IMPORTED")
+                    break
 
-                    # Reset timer if pending instances count changes:
-                    if pending_instances != prev_pending_instances:
-                        prev_pending_instances = pending_instances
-                        import_timer = int(self.model.network_timeouts.network)
+                # Reset timer if pending instances count changes:
+                if study.pending_instances != prev_pending_instances:
+                    prev_pending_instances = study.pending_instances
+                    import_timer = int(self.model.network_timeouts.network)
 
-                    time.sleep(1)
+                import_timer -= 1
+                time.sleep(1)
 
-                # 6. Raise Error if Timeout
-                if import_timer == 0:
-                    raise TimeoutError(f"C-MOVE@Study[{study.uid}] Import Timeout")
+            # 4. Raise Error if Timeout
+            if import_timer == 0:
+                raise TimeoutError(f"C-MOVE@Study[{study.uid}] Import Timeout")
 
         except Exception as e:
             error_msg = str(e)  # latch exception error msg
@@ -1489,41 +1526,41 @@ class ProjectController(AE):
                     # Update Move stats from status:
                     series.update_move_stats(status)
 
-            logger.info(f"C-MOVE@Series ALL Series Requests for Study COMPLETE: StudyUIDHierachy:\n{study}")
-
-            # 4. If there are no pending instances, return without error:
-            pending_instances = self.anonymizer.model.get_pending_instance_count(
-                study.ptid, study.uid, study.get_number_of_instances()
-            )
-            if pending_instances <= 0:
-                logger.info(f"C-MOVE@Series[{study.uid}] ALL Instances IMPORTED")
-            else:
-                # 5. Wait for ALL instances of Study to be Imported,
-                #    Timeout if a pending instance is not received within NetworkTimeout
-                #    or abort on user signal:
-                prev_pending_instances = pending_instances
-                for import_timer in range(int(self.model.network_timeouts.network), -1, -1):
-                    if self._abort_move:
-                        raise DICOMRuntimeError(f"C-MOVE@Series[{study.uid}] aborted")
-
-                    pending_instances = self.anonymizer.model.get_pending_instance_count(
+                    # Update Pending Instances count from AnonymizerModel, relevant for Syncrhonous Move:
+                    study.pending_instances = self.anonymizer.model.get_pending_instance_count(
                         study.ptid, study.uid, study.get_number_of_instances()
                     )
 
-                    if pending_instances <= 0:
-                        logger.info(f"C-MOVE@Series[{study.uid}] ALL Instances IMPORTED")
-                        break
+            logger.info(f"C-MOVE@Series ALL Series Requests for Study COMPLETE: StudyUIDHierachy:\n{study}")
 
-                    # Reset timer if pending instances count changes:
-                    if pending_instances != prev_pending_instances:
-                        prev_pending_instances = pending_instances
-                        import_timer = int(self.model.network_timeouts.network)
+            # 3. Wait for ALL instances of Study to be Imported by verifying with AnonymizerModel
+            #    Timeout if a pending instance is not received within NetworkTimeout
+            #    or abort on user signal:
+            prev_pending_instances = 0
+            import_timer = int(self.model.network_timeouts.network)
+            while import_timer:
+                if self._abort_move:
+                    raise DICOMRuntimeError(f"C-MOVE@Series[{study.uid}] aborted")
 
-                    time.sleep(1)
+                study.pending_instances = self.anonymizer.model.get_pending_instance_count(
+                    study.ptid, study.uid, study.get_number_of_instances()
+                )
 
-                # 6. Raise Error if Timeout
-                if import_timer == 0:
-                    raise TimeoutError(f"C-MOVE@Series[{study.uid}] Import Timeout")
+                if study.pending_instances == 0:
+                    logger.info(f"C-MOVE@Series[{study.uid}] ALL Instances IMPORTED")
+                    break
+
+                # Reset timer if pending instances count changes:
+                if study.pending_instances != prev_pending_instances:
+                    prev_pending_instances = study.pending_instances
+                    import_timer = int(self.model.network_timeouts.network)
+
+                import_timer -= 1
+                time.sleep(1)
+
+            # 4. Raise Error if Timeout
+            if import_timer == 0:
+                raise TimeoutError(f"C-MOVE@Series[{study.uid}] Import Timeout")
 
         except Exception as e:
             error_msg = str(e)  # latch exception error msg
@@ -1605,6 +1642,7 @@ class ProjectController(AE):
                     # an (0008,0058) *Failed SOP Instance UID List* element, however as this comes from the peer this is not guaranteed
                     # and may instead be an empty ~pydicom.dataset.Dataset.
                     for status, identifier in responses:
+                        time.sleep(0.1)
                         if self._abort_move:
                             raise (DICOMRuntimeError(f"C-MOVE@Instance[{study.uid}] aborted"))
 
@@ -1628,43 +1666,43 @@ class ProjectController(AE):
                         # Update Move stats from status:
                         series.update_move_stats_instance_level(status)
 
+                        # Update Pending Instances count from AnonymizerModel, relevant for Syncrhonous Move:
+                        study.pending_instances = self.anonymizer.model.get_pending_instance_count(
+                            study.ptid, study.uid, study.get_number_of_instances()
+                        )
+
                 logger.info(f"C-MOVE@Instance[{study.uid}/{series.uid}] ALL Instance Requests for Series COMPLETE")
 
             logger.info(f"C-MOVE@Instance[{study.uid}] ALL Instance Requests COMPLETE")
 
-            # 4. If there are no pending instances, return without error:
-            pending_instances = self.anonymizer.model.get_pending_instance_count(
-                study.ptid, study.uid, study.get_number_of_instances()
-            )
-            if pending_instances <= 0:
-                logger.info(f"C-MOVE[{study.uid}] ALL Instances IMPORTED")
-            else:
-                # 5. Wait for ALL instances of Study to be Imported,
-                #    Timeout if a pending instance is not received within Network Timeout
-                #    or abort on user signal:
-                prev_pending_instances = pending_instances
-                for import_timer in range(int(self.model.network_timeouts.network), -1, -1):
-                    if self._abort_move:
-                        raise (DICOMRuntimeError(f"C-MOVE@Instance[{study.uid}] aborted"))
+            # 3. Wait for ALL instances of Study to be Imported by verifying with AnonymizerModel
+            #    Timeout if a pending instance is not received within Network Timeout
+            #    or abort on user signal:
+            prev_pending_instances = 0
+            import_timer = int(self.model.network_timeouts.network)
+            while import_timer:
+                if self._abort_move:
+                    raise (DICOMRuntimeError(f"C-MOVE@Instance[{study.uid}] aborted"))
 
-                    pending_instances = self.anonymizer.model.get_pending_instance_count(
-                        study.ptid, study.uid, study.get_number_of_instances()
-                    )
+                study.pending_instances = self.anonymizer.model.get_pending_instance_count(
+                    study.ptid, study.uid, study.get_number_of_instances()
+                )
 
-                    if pending_instances == 0:
-                        logger.info(f"C-MOVE@Instance[{study.uid}] ALL Instances IMPORTED")
-                        break
+                if study.pending_instances == 0:
+                    logger.info(f"C-MOVE@Instance[{study.uid}] ALL Instances IMPORTED")
+                    break
 
-                    # Reset timer if pending instances count changes:
-                    if pending_instances != prev_pending_instances:
-                        prev_pending_instances = pending_instances
-                        import_timer = int(self.model.network_timeouts.network)
+                # Reset timer if pending instances count changes:
+                if study.pending_instances != prev_pending_instances:
+                    prev_pending_instances = study.pending_instances
+                    import_timer = int(self.model.network_timeouts.network)
 
-                    time.sleep(1)
+                import_timer -= 1
+                time.sleep(1)
 
-                # 6. Raise Error if Timeout
-                if import_timer == 0:
-                    raise (TimeoutError(f"C-MOVE@Instance[{study.uid}] Import Timeout"))
+            # 4. Raise Error if Timeout
+            if import_timer == 0:
+                raise (TimeoutError(f"C-MOVE@Instance[{study.uid}] Import Timeout"))
 
         except Exception as e:
             error_msg = str(e)  # latch exception error msg
@@ -1702,11 +1740,6 @@ class ProjectController(AE):
         with self._move_executor as executor:
 
             for study in req.studies:
-
-                pending_instances = self.get_number_of_pending_instances(study)
-                if pending_instances == 0:
-                    logger.warning(f"Study[{study.uid}] has no pending instances, skipping")
-                    continue
 
                 future = executor.submit(
                     move_op,

@@ -354,7 +354,7 @@ def test_send_JPEG_Baseline(temp_dir: str, controller: ProjectController):
     # Add JPEG Baseline to ProjectModel transfer syntaxes:
     controller.model.add_transfer_syntax(JPEG_BASELINE_TS)
     # Restart LocalStorageSCP to apply new config:
-    controller.post_model_update()
+    controller.update_model()
 
     # Try again to send test file, even though LocalStorageSCP is setup with required context, send_context must be specified:
     try:
@@ -441,7 +441,7 @@ def test_send_JPEG_Extended(temp_dir: str, controller: ProjectController):
 
     controller.model.add_storage_class(SC_SOP_CLASS_UID)
     controller.model.add_transfer_syntax(JPEG_EXTENDED_TS)
-    controller.post_model_update()
+    controller.update_model()
     send_context = build_context(SC_SOP_CLASS_UID, JPEG_EXTENDED_TS)
 
     files_sent = controller.send([dcm_file_path], LocalStorageSCP, [send_context])
@@ -519,7 +519,7 @@ def test_send_JPEG_Lossless_P14_FOP(temp_dir: str, controller: ProjectController
 
     controller.model.add_storage_class(SC_SOP_CLASS_UID)
     controller.model.add_transfer_syntax(JPEG_LOSSLESS_P14_TS)
-    controller.post_model_update()
+    controller.update_model()
     send_context = build_context(SC_SOP_CLASS_UID, JPEG_LOSSLESS_P14_TS)
 
     files_sent = controller.send([dcm_file_path], LocalStorageSCP, [send_context])
@@ -595,7 +595,7 @@ def test_send_JPEG_LS_Lossless(temp_dir: str, controller: ProjectController):
     assert os.path.exists(dcm_file_path)
 
     controller.model.add_transfer_syntax(JPEG_LS_LOSSLESS_TS)
-    controller.post_model_update()
+    controller.update_model()
     send_context = build_context(SC_SOP_CLASS_UID, JPEG_LS_LOSSLESS_TS)
 
     files_sent = controller.send([dcm_file_path], LocalStorageSCP, [send_context])
@@ -680,7 +680,7 @@ def test_send_JPEG_LS_Lossy(temp_dir: str, controller: ProjectController):
 
     controller.model.add_storage_class(SC_SOP_CLASS_UID)
     controller.model.add_transfer_syntax(JPEG_LS_LOSSY_TS)
-    controller.post_model_update()
+    controller.update_model()
     send_context = build_context(SC_SOP_CLASS_UID, JPEG_LS_LOSSY_TS)
 
     files_sent = controller.send([dcm_file_path], LocalStorageSCP, [send_context])
@@ -756,7 +756,7 @@ def test_send_JPEG_2000_Lossless(temp_dir: str, controller: ProjectController):
     assert os.path.exists(dcm_file_path)
 
     controller.model.add_transfer_syntax(JPEG_2000_LOSSLESS_TS)
-    controller.post_model_update()
+    controller.update_model()
     send_context = build_context(SC_SOP_CLASS_UID, JPEG_2000_LOSSLESS_TS)
 
     files_sent = controller.send([dcm_file_path], LocalStorageSCP, [send_context])
@@ -833,7 +833,7 @@ def test_send_JPEG_2000(temp_dir: str, controller: ProjectController):
 
     controller.model.add_storage_class(SC_SOP_CLASS_UID)
     controller.model.add_transfer_syntax(JPEG_2000_TS)
-    controller.post_model_update()
+    controller.update_model()
     send_context = build_context(SC_SOP_CLASS_UID, JPEG_2000_TS)
 
     files_sent = controller.send([dcm_file_path], LocalStorageSCP, [send_context])

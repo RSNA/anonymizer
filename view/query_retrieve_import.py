@@ -481,38 +481,19 @@ class QueryView(tk.Toplevel):
 
         # TODO: remove this echo test? Rely on connection error from query?
         # OR implement using background thread to handle connection or long timeout errors
-        # if self._controller.echo("QUERY"):
-        #     self._query_button.configure(text_color="light green")
-        # else:
-        #     self._query_button.configure(text_color="red")
-        #     messagebox.showerror(
-        #         title=_("Connection Error"),
-        #         message=_(f"Query Server Failed DICOM C-ECHO"),
-        #         parent=self,
-        #     )
-        #     return
-
-        # Prevent NULL Query:
-        if not any(
-            [
-                self._patient_name_var.get(),
-                self._patient_id_var.get(),
-                self._accession_no_var.get(),
-                self._study_date_var.get(),
-                self._modality_var.get(),
-            ]
-        ):
-            logger.error(f"Query disabled, no search criteria entered")
-            messagebox.showwarning(
-                title=_("Query Criteria"),
-                message=_(f"\nEnter at least one search criterion"),
+        if self._controller.echo("QUERY"):
+            self._query_button.configure(text_color="light green")
+        else:
+            self._query_button.configure(text_color="red")
+            messagebox.showerror(
+                title=_("Connection Error"),
+                message=_(f"Query Server Failed DICOM C-ECHO"),
                 parent=self,
             )
             return
 
         # Handle multiple comma delimited accession numbers:
         # Entered by user or loaded from file:
-        self._acc_no_list.clear()
         accession_no = self._accession_no_var.get().strip()
         if accession_no and "," in accession_no:
             self._acc_no_list = [x.strip() for x in self._accession_no_var.get().split(",")]
@@ -542,6 +523,23 @@ class QueryView(tk.Toplevel):
             ):
                 return
         else:
+            # Prevent NULL Query:
+            if not any(
+                [
+                    self._patient_name_var.get(),
+                    self._patient_id_var.get(),
+                    self._accession_no_var.get(),
+                    self._study_date_var.get(),
+                    self._modality_var.get(),
+                ]
+            ):
+                logger.error(f"Query disabled, no search criteria entered")
+                messagebox.showwarning(
+                    title=_("Query Criteria"),
+                    message=_(f"\nEnter at least one search criterion"),
+                    parent=self,
+                )
+                return
             self._studies_to_process = -1  # unknown
             self._progressbar.configure(mode="indeterminate")
             self._progressbar.start()
@@ -609,7 +607,10 @@ class QueryView(tk.Toplevel):
             current_values = list(self._tree.item(study.uid, "values"))
             instances_to_import = study.get_number_of_instances()
             patient_id = current_values[self._tree_column_keys.index("PatientID")]
-            files_imported = self._images_stored_phi_lookup(patient_id, study.uid)
+
+            files_imported = self._images_stored_phi_lookup(patient_id, study.uid)  # reads file system FAT
+            # TODO: optimize, compare to using AnonymizerModel.get_stored_instance_count which uses in memory PHI lookup
+            #       or trust study.pending_instances
             current_values[self._tree_column_keys.index("Imported")] = str(files_imported)
             if study.last_error_msg:
                 current_values[self._tree_column_keys.index("Error")] = study.last_error_msg

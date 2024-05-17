@@ -11,8 +11,26 @@ see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 		When a DICOM file is received it is de-identified and then stored in a user-defined local storage directory.
 		Anonymized images can be exported either to a remote DICOM server or an AWS S3 Object store such as the RSNA Imaging Archive.
 		</p>
+
+	<h3>Design Guidelines</h3>
+	<ol>
+		<li>Open Source</li>
+		<li>Stand-alone GUI written in Python 3</li>
+		<li>No internet connection required</li>
+		<li>Suitable for users with limited DICOM knowledge who are keen to curate and submit medical imaging datasets for AI model development</li>
+		<li>Platforms supported: Windows, OSX (Intel & ARM), Linux platforms</li>
+		<li>Ongoing development, build processes and release distribution via RSNA public github account</li>
+		<li>Backward compatible with Java version</li>
+		<li>PACS, Cloud PACS and VNA compatible</li>
+		<li>Reflect all errors to user, do not rely on log analysis</li>
+		<li>Project based with centralized settings management</li>
+		<li>Model, View, Controller (MVC) software architecture</li>
+		<li>Handle 1 million patients</li>
+		<li>Anonymize 10 files per second</li>
+	</ol>
+
 	<h3>Previous Java Anonymizer</h3>
-		<p>This version of the Anonymizer is based on Medical Imaging Resource Centre (MIRC) Clinical Trial Processor (CTP)
+		<p>This version of the Anonymizer is based on the Medical Imaging Resource Centre (MIRC) Clinical Trial Processor (CTP)
 			<a href="https://mircwiki.rsna.org/index.php?title=The_MIRC_DICOM_Anonymizer">Java Anonymizer V16</a></p>
 		<h4>Differences from Java Version</h4>
 		<ol>
@@ -21,7 +39,7 @@ see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 			<li>Fields with ptid in the operation will be replaced by a sequentially generated Patient ID starting at 1</li>
 			<li>Fields with acc in the operation will be replaced by a sequentially generated Accession Number starting at 1</li>
 			<li>Fields with uid in the operation will be replaced by a sequentially generated UID of form {UIDRoot.SiteID.N} where N is the sequence integer starting at 1</li>
-			<li>No in built editor for anonymizer script</li>
+			<li>No built-in editor for anonymizer script</li>
 			<li>No filter script, uses DICOM association contexts to restrict which storage classes & transfer syntaxes are imported</li>
 			<li>No internal DICOM image viewer</li>
 			<li>No internal log viewer</li>
@@ -36,92 +54,7 @@ see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 			<li>Fast in-memory datastore for Anonymizer Data Model</li>
 		</ol>
 		
-	<h3>DICOM Standard De-identification Protocol</h3>
-		<p>
-		In <a href="https://dicom.nema.org/medical/dicom/2023b/output/chtml/part15/chapter_E.html">PS 3.15 Appendix E</a>, 
-		the DICOM standard specifies a set of de-identification rules for use in various situations. 
-		The rules are grouped into a Basic Application Confidentiality Profile, which removes all protected health information (PHI), 
-		and a set of options which relax certain classes of PHI that may be retained in certain cases. 
-		The sections below describe the de-identification protocol implemented by the Anonymizer with reference to the DICOM Profile and its options.
-		</p>
-		<h4>113100: Basic Application Confidentiality Profile</h4>
-		The RSNA DICOM Anonymizer program implements the Basic Profile.
-		The program either imports the site identifier: SiteID & UIDRoot from an Index excel file exported by the Java Anonymizer or auto-generates a new unique SiteID and uses a default UIDRoot.   
-		The PatientName (0010,0010) and PatientID (0010,0020) elements are modified by assigning sequential integers to unique PHI PatientIDs as they are encountered.
-		The sequential integer is appended to the SiteID parameter, producing a string in the form [SiteID]-[sequential integer] which is used to populate both elements.
-		If the PHI PatientID is missing or blank, the program assigns [SiteID]-000000 to the PatientID and PatientName elements. 
-		The program keeps a database that is used to ensure that all studies of the same patient are de-identified in the same way. 
-		<ol>
-		<li>UIDs are replaced by those generated with the format: [UIDRoot].[SiteID].[sequential integer]</li>
-		<li>All UIDs are removed in groups.</li>
-		<li>All elements in groups 0032 through 4008 are removed.</li>
-		<li>All private groups are removed.</li> 
-		<li>The PatientIdentityRemoved element (0012,0062) is assigned the value “YES”.</li> 
-		<li>The DeIdentificationMethod element (0012,0063) is assigned the value “RSNA DICOM ANONYMIZER”.</li> 
-		<li>113100 is appended to the DeIdentificationMethodCodeSequence element (0012,0064).</li>
-		<li>Private Block: 0x0013 is created and assigned the value "RSNA", the ProjectName and SiteID are added to this block.</li>
-		</ol>
-		<h4>113101: Clean Pixel Data Option</h4>
-		<p>Not implemented.</p>
-		<h4>113102: Clean Recognizable Visual Features Option</h4>
-		<pd>Not implemented</pd>
-		<h4>113103: Clean Graphics Option</h4>
-		<p>Not implemented but curve and overlay groups (5XXX and 6XXX) are removed.</p>
-		<h4>113104: Clean Structured Content Option</h4>
-		<p>Not implemented however project settings can allow/disallow SR (Structured Report) related storage classes.</p>
-		<h4>113105: Clean Descriptors Option</h4>
-		<p>This option is partially implemented. Only the following elements defined by the option are kept:</p> 
-		<ul>
-			<li>(0008,1030) StudyDescription </li> 
-			<li>(0008,103e) SeriesDescription</li>
-		</ul>
-		<h4>113106: Retain Longitudinal Temporal Information Full Dates Option</h4>
-		<p>Not Implemented</p>
-		<h4>113107 Retain Longitudinal Temporal Information Modified Dates Option</h4>
-		<p>This option is partially implemented.</p>
-		<ul>
-			<li>
-			All dates are modified by calculating the MD5 hash of PHI PatientID. 
-			The integer value of the hash is divided by the number of days in 10 years (3652) and the remainder is used to offset the date being modified. 
-			This retains the temporal relationships between studies of a single patient while using different offsets for different patients.
-			</li>
-			<li>Time (time of day) elements are not modified.</li>
-			<li>113107 is appended to the DeIdentificationMethodCodeSequence element (0012,0064).</li>
-		</ul>
-		<h4>113108: Retain Patient Characteristics Option</h4>
-		<p>This option is partially implemented. Only the following elements defined by the option are kept:</p>
-		<ul>
-			<li>(0010,0040) PatientSex</li>
-			<li>(0010,1010) PatientAge</li>
-			<li>(0010,1020) PatientSize</li>
-			<li>(0010,1030) PatientWeight</li>
-			<li>(0010,2160) EthnicGroup</li>
-			<li>(90010,21a0) SmokingStatus</li>
-			<li>113108 is appended to the DeIdentificationMethodCodeSequence element (0012,0064).</li>
-		</ul>
-		<h4>113109: Retain Device Identity Option</h4>
-		<p>This option is partially implemented. Only the following elements defined by the option are kept:</p>
-		<ul>
-			<li>(0008,0070) Manufacturer</li>
-			<li>(0008,1090) ManufacturerModelName</li>
-			<li>113109 is appended to the DeIdentificationMethodCodeSequence element (0012,0064).</li>
-		</ul>
-		<h4>113110: Retain UIDs Option</h4>
-		<p>Not Implemented</p>
-		<h4>113111: Retain Safe Private Option</h4>
-		<p>Not Implemented</p>
 	
-	<h3>Design Guidelines</h3>
-	<ol>
-		<li>Open Source</li>
-		<li>Platforms supported: Windows, OSX (Intel & ARM), Linux platforms</li>
-		<li>Manage development, build processes and distribute releases via RSNA Github account</li>
-		<li>Backward compatible</li>
-		<li>Reflect all errors to user, do not rely on log analysis</li>
-		<li>Project based</li>
-		<li>Model, View, Controller (MVC) architecture</li>
-		<li>Handle 1 million patients</li>
-	</ol>
 	
 </div>
 </body>

@@ -1,6 +1,7 @@
 # Description: Anonymization of DICOM datasets
 # See https://mircwiki.rsna.org/index.php?title=The_CTP_DICOM_Anonymizer for legacy anonymizer documentation
 import os
+import time
 from typing import List
 from shutil import copyfile
 import re
@@ -47,7 +48,7 @@ class AnonymizerController:
     DEFAULT_ANON_DATE = "20000101"  # if source date is invalid or before 19000101
 
     NUMBER_OF_WORKER_THREADS = 2
-    MODEL_AUTOSAVE_INTERVAL_SECS = 10
+    MODEL_AUTOSAVE_INTERVAL_SECS = 30
 
     _clean_tag_translate_table = str.maketrans("", "", "() ,")
 
@@ -218,6 +219,7 @@ class AnonymizerController:
     # Increment date by a number of days determined by MD5 hash of PatientID mod 10 years
     # DICOM Date format: YYYYMMDD
     # Returns tuple of (days incremented, incremented date)
+    # If invalid date or empty PatientID, returns (0, DEFAULT_ANON_DATE)
     def _hash_date(self, date: str, patient_id: str) -> tuple[int, str]:
         if not self.valid_date(date) or not len(patient_id):
             return 0, self.DEFAULT_ANON_DATE
@@ -356,7 +358,7 @@ class AnonymizerController:
 
             # Save ANONYMIZED dataset to dicom file in local storage:
             filename = local_storage_path(self.project_model.images_dir(), ds)
-            logger.info(f"ANON STORE: {source} => {filename}")
+            logger.debug(f"ANON STORE: {source} => {filename}")
             ds.save_as(filename, write_like_original=False)
             return None
 
@@ -429,14 +431,15 @@ class AnonymizerController:
 
         return self.anonymize(str(file), ds), ds
 
-    def anonymize_dataset_and_store(self, source: DICOMNode | str, ds: Dataset | None) -> None:
+    # ds = None is the sentinel value to terminate the worker thread(s)
+    def anonymize_dataset_ex(self, source: DICOMNode | str, ds: Dataset | None) -> None:
         self._anon_Q.put((source, ds))
-        return
 
     def _anonymize_worker(self, ds_Q: Queue) -> None:
         logger.info(f"thread={threading.current_thread().name} start")
 
         while True:
+            time.sleep(0.075)
             source, ds = ds_Q.get()  # Blocks by default
             if ds is None:  # sentinel value
                 ds_Q.task_done()

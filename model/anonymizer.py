@@ -84,7 +84,7 @@ class AnonymizerModel:
             try:
                 with open(filepath, "wb") as pkl_file:
                     pickle.dump(self, pkl_file)
-                logger.info(f"Anonymizer Model saved to: {filepath}")
+                logger.debug(f"Anonymizer Model saved to: {filepath}")
                 return True
             except Exception as e:
                 logger.error(f"Fatal Error saving AnonymizerModel, error: {e}")
@@ -238,22 +238,23 @@ class AnonymizerModel:
             for study in phi.studies:
                 if study.study_uid == study_uid:
                     return sum(series.instance_count for series in study.series)
+            return 0
 
     # This will return difference between stored instances and target_count
     # When first called for a study it also sets the study.target_instance_count (for future imported state detection)
     def get_pending_instance_count(self, ptid: str, study_uid: str, target_count: int) -> int:
-        with self._lock:
-            anon_patient_id = self._patient_id_lookup.get(ptid, None)
-            if anon_patient_id is None:
-                return target_count
-            phi = self._phi_lookup.get(anon_patient_id, None)
-            if phi is None:
-                return target_count
-            for study in phi.studies:
-                if study.study_uid == study_uid:
+        anon_patient_id = self._patient_id_lookup.get(ptid, None)
+        if anon_patient_id is None:
+            return target_count
+        phi = self._phi_lookup.get(anon_patient_id, None)
+        if phi is None:
+            return target_count
+        for study in phi.studies:
+            if study.study_uid == study_uid:
+                with self._lock:
                     study.target_instance_count = target_count
                     return target_count - sum(series.instance_count for series in study.series)
-            return target_count
+        return target_count
 
     # Used by QueryRetrieveView to prevent study re-import
     def study_imported(self, ptid: str, study_uid: str) -> bool:

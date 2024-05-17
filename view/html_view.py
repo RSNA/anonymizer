@@ -1,6 +1,6 @@
 # List of HTML Tags supported by tkhtmlview:
 # see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support
-
+import os
 import tkinter as tk
 import customtkinter as ctk
 from tkhtmlview import HTMLScrolledText, RenderHTML
@@ -36,9 +36,10 @@ class HTMLView(tk.Toplevel):
 
         html_widget = HTMLScrolledText(
             self._frame,
-            width=130,  # characters
+            width=150,  # characters
             height=60,  # lines
+            wrap="word",
             html=RenderHTML(self.html_file_path),
         )
-
-        html_widget.pack(fill="both", expand=True)
+        html_widget.pack(fill="both", padx=10, pady=10, expand=True)
+        html_widget.configure(state="disabled")

@@ -346,6 +346,7 @@ class Anonymizer(ctk.CTk):
             self.dashboard.destroy()
             self.dashboard = None
         if self.controller:
+            self.controller.stop_scp()
             self.controller.shutdown()
             self.controller.save_model()
             self.controller.anonymizer.save_model()
@@ -683,10 +684,7 @@ class Anonymizer(ctk.CTk):
             return
 
         logger.info(f"User Edited ProjectModel")
-
-        self.controller.model = edited_model
-        self.controller.model = self.controller.model
-        self.controller.post_model_update()
+        self.controller.update_model(edited_model)
         logger.info(f"{self.controller}")
 
     def show_help_view(self, html_file_path):

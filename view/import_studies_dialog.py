@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 class ImportStudiesDialog(tk.Toplevel):
     # class ImportStudiesDialog(ctk.CTkToplevel):
-    update_interval = 750  # milliseconds
+    update_interval = 1000  # milliseconds
 
     def __init__(
         self,
@@ -185,21 +185,19 @@ class ImportStudiesDialog(tk.Toplevel):
                     self._scp_name, self._controller.model.scu.aet, self._move_level, self.studies
                 )
                 self._controller.move_studies_ex(mr)
+                study_or_studies = "Study" if len(self.studies) == 1 else "Studies"
+                self._import_status_label.configure(
+                    text=_(
+                        f"Importing {self._study_metadata_retrieved} {study_or_studies} at {self._move_level} level ..."
+                    )
+                )
                 self.after(self.update_interval, self._update_progress_move_studies)
 
     def _update_progress_move_studies(self):
-        # pending_instances = sum([self._controller.get_number_of_pending_instances(study) for study in self.studies])
-        total_pending_instances = 0
-        for study in self.studies:
-            pending_instances = self._controller.get_number_of_pending_instances(study)
-            total_pending_instances += pending_instances
-
+        # TODO: optimize, only necessary to poll studies currently being moved
+        total_pending_instances = sum([study.pending_instances for study in self.studies])
         imported = self._instances_to_import - total_pending_instances
         self._import_progress_bar.set(imported / self._instances_to_import)
-        study_or_studies = "Study" if len(self.studies) == 1 else "Studies"
-        self._import_status_label.configure(
-            text=_(f"Importing {self._study_metadata_retrieved} {study_or_studies} at {self._move_level} level ...")
-        )
         self._import_progress_label.configure(text=f"{imported} of {self._instances_to_import} Images")
 
         if self._controller.bulk_move_active():

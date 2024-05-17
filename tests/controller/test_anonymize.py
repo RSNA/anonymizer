@@ -90,11 +90,10 @@ def test_anonymize_dataset_without_PatientID(temp_dir: str, controller):
     assert isinstance(ds, Dataset)
     assert ds
     assert ds.PatientID
-    # Remove PatientID
+    # Remove PatientID field
     del ds.PatientID
-    ds.PatientID = ""
     phi_ds = deepcopy(ds)
-    anonymizer.anonymize_dataset_and_store(LocalSCU, ds)
+    anonymizer.anonymize_dataset_ex(LocalSCU, ds)
     sleep(0.5)
     store_dir = local_storage_dir(temp_dir)
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
@@ -132,7 +131,7 @@ def test_anonymize_dataset_with_blank_PatientID_1_study(temp_dir: str, controlle
     # Set Blank PatientID
     ds1.PatientID = ""
     phi_ds1 = deepcopy(ds1)
-    anonymizer.anonymize_dataset_and_store(LocalSCU, ds1)
+    anonymizer.anonymize_dataset_ex(LocalSCU, ds1)
 
     ds2 = get_testdata_file(ct_small_filename, read=True)
     assert isinstance(ds2, Dataset)
@@ -141,7 +140,7 @@ def test_anonymize_dataset_with_blank_PatientID_1_study(temp_dir: str, controlle
     # Delete PatientID attribute
     del ds2.PatientID
     phi_ds2 = deepcopy(ds2)
-    anonymizer.anonymize_dataset_and_store(LocalSCU, ds2)
+    anonymizer.anonymize_dataset_ex(LocalSCU, ds2)
 
     sleep(0.5)
     store_dir = local_storage_dir(temp_dir)
@@ -203,7 +202,7 @@ def test_anonymize_dataset_with_blank_PatientID_2_studies(temp_dir: str, control
     # Set Blank PatientID
     ds.PatientID = ""
     phi_ds = deepcopy(ds)
-    anonymizer.anonymize_dataset_and_store(LocalSCU, ds)
+    anonymizer.anonymize_dataset_ex(LocalSCU, ds)
     sleep(0.5)
     store_dir = local_storage_dir(temp_dir)
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
@@ -238,7 +237,7 @@ def test_anonymize_dataset_with_PatientID(temp_dir: str, controller):
     assert ds
     assert ds.PatientID
     phi_ds = deepcopy(ds)
-    anonymizer.anonymize_dataset_and_store(LocalSCU, ds)
+    anonymizer.anonymize_dataset_ex(LocalSCU, ds)
     sleep(0.5)
     store_dir = local_storage_dir(temp_dir)
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
