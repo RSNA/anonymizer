@@ -548,6 +548,8 @@ def test_move_at_study_level_3_studies_from_pacs_to_local_storage(temp_dir: str,
         time.sleep(1)
         timeout -= 1
 
+    time.sleep(1)
+
     assert timeout > 0
 
     assert study2_hierarchy.completed_sub_ops == 1
@@ -628,6 +630,8 @@ def test_move_at_series_level_3_studies_from_pacs_to_local_storage(temp_dir: str
         timeout -= 1
 
     assert timeout > 0
+
+    time.sleep(1)
 
     assert study1_hierarchy.series[study1_series1_uid].completed_sub_ops == 1
     assert study1_hierarchy.series[study1_series1_uid].failed_sub_ops == 0
@@ -712,6 +716,8 @@ def test_move_at_instance_level_of_3_studies_from_pacs_to_local_storage(temp_dir
         timeout -= 1
 
     assert timeout > 0
+
+    time.sleep(1)
 
     assert study1_hierarchy.series[study1_series1_uid].completed_sub_ops == 1
     assert study1_hierarchy.series[study1_series1_uid].failed_sub_ops == 0
