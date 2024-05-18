@@ -424,8 +424,8 @@ class ProjectController(AE):
         ds.file_meta = FileMetaDataset(event.file_meta)
 
         # File Metadata:Implementation Class UID and Version Name:
-        ds.file_meta.ImplementationClassUID = self.project_model.IMPLEMENTATION_CLASS_UID  # UI: (0002,0012)
-        ds.file_meta.ImplementationVersionName = self.project_model.IMPLEMENTATION_VERSION_NAME  # SH: (0002,0013)
+        ds.file_meta.ImplementationClassUID = self.model.IMPLEMENTATION_CLASS_UID  # UI: (0002,0012)
+        ds.file_meta.ImplementationVersionName = self.model.IMPLEMENTATION_VERSION_NAME  # SH: (0002,0013)
 
         remote_scu = DICOMNode(remote["address"], remote["port"], remote["ae_title"], False)
         logger.debug(remote_scu)
