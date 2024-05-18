@@ -417,8 +417,8 @@ def test_send_JPEG_Baseline(temp_dir: str, controller: ProjectController):
     assert ds.file_meta.TransferSyntaxUID == JPEG_BASELINE_TS
     assert ds.PatientID == controller.anonymizer.model.default_anon_pt_id
     assert ds.PatientName == controller.anonymizer.model.default_anon_pt_id
-    assert ds.file_meta.ImplementationVersionName == controller.IMPLEMENTATION_VERSION_NAME
-    assert ds.file_meta.ImplementationClassUID == controller.IMPLEMENTATION_CLASS_UID
+    assert ds.file_meta.ImplementationVersionName == controller.model.IMPLEMENTATION_VERSION_NAME
+    assert ds.file_meta.ImplementationClassUID == controller.model.IMPLEMENTATION_CLASS_UID
     assert ds.DeidentificationMethod == controller.anonymizer.DEIDENTIFICATION_METHOD
 
 
@@ -495,8 +495,8 @@ def test_send_JPEG_Extended(temp_dir: str, controller: ProjectController):
     assert ds.file_meta.TransferSyntaxUID == JPEG_EXTENDED_TS
     assert ds.PatientID == TEST_SITEID + "-000001"
     assert ds.PatientName == TEST_SITEID + "-000001"
-    assert ds.file_meta.ImplementationVersionName == controller.IMPLEMENTATION_VERSION_NAME
-    assert ds.file_meta.ImplementationClassUID == controller.IMPLEMENTATION_CLASS_UID
+    assert ds.file_meta.ImplementationVersionName == controller.model.IMPLEMENTATION_VERSION_NAME
+    assert ds.file_meta.ImplementationClassUID == controller.model.IMPLEMENTATION_CLASS_UID
     assert ds.DeidentificationMethod == controller.anonymizer.DEIDENTIFICATION_METHOD
 
 
@@ -573,8 +573,8 @@ def test_send_JPEG_Lossless_P14_FOP(temp_dir: str, controller: ProjectController
     assert ds.file_meta.TransferSyntaxUID == JPEG_LOSSLESS_P14_TS
     assert ds.PatientID == TEST_SITEID + "-000001"
     assert ds.PatientName == TEST_SITEID + "-000001"
-    assert ds.file_meta.ImplementationVersionName == controller.IMPLEMENTATION_VERSION_NAME
-    assert ds.file_meta.ImplementationClassUID == controller.IMPLEMENTATION_CLASS_UID
+    assert ds.file_meta.ImplementationVersionName == controller.model.IMPLEMENTATION_VERSION_NAME
+    assert ds.file_meta.ImplementationClassUID == controller.model.IMPLEMENTATION_CLASS_UID
     assert ds.DeidentificationMethod == controller.anonymizer.DEIDENTIFICATION_METHOD
 
 
@@ -649,8 +649,8 @@ def test_send_JPEG_LS_Lossless(temp_dir: str, controller: ProjectController):
     assert ds.file_meta.TransferSyntaxUID == JPEG_LS_LOSSLESS_TS
     assert ds.PatientID == TEST_SITEID + "-000001"
     assert ds.PatientName == TEST_SITEID + "-000001"
-    assert ds.file_meta.ImplementationVersionName == controller.IMPLEMENTATION_VERSION_NAME
-    assert ds.file_meta.ImplementationClassUID == controller.IMPLEMENTATION_CLASS_UID
+    assert ds.file_meta.ImplementationVersionName == controller.model.IMPLEMENTATION_VERSION_NAME
+    assert ds.file_meta.ImplementationClassUID == controller.model.IMPLEMENTATION_CLASS_UID
     assert ds.DeidentificationMethod == controller.anonymizer.DEIDENTIFICATION_METHOD
 
 
@@ -734,8 +734,8 @@ def test_send_JPEG_LS_Lossy(temp_dir: str, controller: ProjectController):
     assert ds.file_meta.TransferSyntaxUID == JPEG_LS_LOSSY_TS
     assert ds.PatientID == TEST_SITEID + "-000001"
     assert ds.PatientName == TEST_SITEID + "-000001"
-    assert ds.file_meta.ImplementationVersionName == controller.IMPLEMENTATION_VERSION_NAME
-    assert ds.file_meta.ImplementationClassUID == controller.IMPLEMENTATION_CLASS_UID
+    assert ds.file_meta.ImplementationVersionName == controller.model.IMPLEMENTATION_VERSION_NAME
+    assert ds.file_meta.ImplementationClassUID == controller.model.IMPLEMENTATION_CLASS_UID
     assert ds.DeidentificationMethod == controller.anonymizer.DEIDENTIFICATION_METHOD
 
 
@@ -810,8 +810,8 @@ def test_send_JPEG_2000_Lossless(temp_dir: str, controller: ProjectController):
     assert ds.file_meta.TransferSyntaxUID == JPEG_2000_LOSSLESS_TS
     assert ds.PatientID == TEST_SITEID + "-000001"
     assert ds.PatientName == TEST_SITEID + "-000001"
-    assert ds.file_meta.ImplementationVersionName == controller.IMPLEMENTATION_VERSION_NAME
-    assert ds.file_meta.ImplementationClassUID == controller.IMPLEMENTATION_CLASS_UID
+    assert ds.file_meta.ImplementationVersionName == controller.model.IMPLEMENTATION_VERSION_NAME
+    assert ds.file_meta.ImplementationClassUID == controller.model.IMPLEMENTATION_CLASS_UID
     assert ds.DeidentificationMethod == controller.anonymizer.DEIDENTIFICATION_METHOD
 
 
@@ -887,6 +887,6 @@ def test_send_JPEG_2000(temp_dir: str, controller: ProjectController):
     assert ds.file_meta.TransferSyntaxUID == JPEG_2000_TS
     assert ds.PatientID == TEST_SITEID + "-000001"
     assert ds.PatientName == TEST_SITEID + "-000001"
-    assert ds.file_meta.ImplementationVersionName == controller.IMPLEMENTATION_VERSION_NAME
-    assert ds.file_meta.ImplementationClassUID == controller.IMPLEMENTATION_CLASS_UID
+    assert ds.file_meta.ImplementationVersionName == controller.model.IMPLEMENTATION_VERSION_NAME
+    assert ds.file_meta.ImplementationClassUID == controller.model.IMPLEMENTATION_CLASS_UID
     assert ds.DeidentificationMethod == controller.anonymizer.DEIDENTIFICATION_METHOD

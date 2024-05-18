@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from utils.translate import _
 from utils.logging import set_logging_levels
 from pydicom import Dataset, dcmread
-from pydicom.uid import UID
 from pydicom.dataset import FileMetaDataset
 from pynetdicom.association import Association
 from pynetdicom.ae import ApplicationEntity as AE
@@ -233,10 +232,6 @@ class ProjectController(AE):
 
     PROJECT_MODEL_FILENAME = "ProjectModel.pkl"
 
-    # TODO: GET RSNA ROOT ORGANIZATION UID
-    RSNA_ROOT_ORG_UID = "1.2.826.0.1.3680043"
-    IMPLEMENTATION_CLASS_UID = UID(RSNA_ROOT_ORG_UID)  # UI: (0002,0012)
-    IMPLEMENTATION_VERSION_NAME = "RSNA DICOM Anonymizer" + " " + __version__
     # DICOM service class uids:
     _VERIFICATION_CLASS = "1.2.840.10008.1.1"  # Echo
     _STUDY_ROOT_QR_CLASSES = [
@@ -244,7 +239,6 @@ class ProjectController(AE):
         "1.2.840.10008.5.1.4.1.2.2.2",  # Move
         "1.2.840.10008.5.1.4.1.2.2.3",  # Get
     ]
-    _maximum_pdu_size = 0  # no limit
     _handle_store_time_slice_interval = 0.05  # seconds
     _export_file_time_slice_interval = 0.1  # seconds
     _patient_export_thread_pool_size = 4
@@ -279,8 +273,12 @@ class ProjectController(AE):
         self.model.storage_dir.joinpath(self.model.PRIVATE_DIR).mkdir(parents=True, exist_ok=True)
         self.model.storage_dir.joinpath(self.model.PUBLIC_DIR).mkdir(exist_ok=True)
         self.set_dicom_timeouts(timeouts=model.network_timeouts)
-        # remote clients must provide Anonymizer's AE Title
-        self._require_called_aet = True
+        self._implementation_class_uid = self.model.IMPLEMENTATION_CLASS_UID  # added to association requests
+        self._implementation_version_name = self.model.IMPLEMENTATION_VERSION_NAME  # added to association requests
+        self._maximum_pdu_size = 0  # 0 means no limit
+        # self._maximum_associations = 10 # max simultaneous remote associations, 10 is the default
+        self._require_called_aet = True  # remote clients must provide Anonymizer's AE Title
+        # TODO: project setting for allowed list of calling AETs
         # self._require_calling_aet = ["<list of allowed calling AETs>"] # Default: Allow any calling AE Title
         self.set_radiology_storage_contexts()
         self.set_verification_context()
@@ -408,14 +406,13 @@ class ProjectController(AE):
     def _handle_store(self, event: Event):
         # Throttle incoming requests by adding a delay
         # to ensure UX responsiveness
-        # TODO: refactor using asyncio
+        # TODO: refactor using asyncio/twisted when pynetdicom supports it
         time.sleep(self._handle_store_time_slice_interval)
         logger.debug("_handle_store")
-        # TODO: Validate remote IP & AE Title
         remote = event.assoc.remote
         try:
             ds = Dataset(event.dataset)
-            # Remove any Group 0x0002 elements that may have been included
+            # Remove any File Meta (Group 0x0002 elements) that may have been included
             ds = ds[0x00030000:]
         except Exception as exc:
             logger.error("Unable to decode incoming dataset")
@@ -423,10 +420,12 @@ class ProjectController(AE):
             # Unable to decode dataset
             return C_STORE_DECODE_ERROR
 
-        # Add the File Meta Information
+        # Add the File Meta Information (Group 0x0002 elements)
         ds.file_meta = FileMetaDataset(event.file_meta)
-        ds.file_meta.ImplementationClassUID = self.IMPLEMENTATION_CLASS_UID  # UI: (0002,0012)
-        ds.file_meta.ImplementationVersionName = self.IMPLEMENTATION_VERSION_NAME  # SH: (0002,0013)
+
+        # File Metadata:Implementation Class UID and Version Name:
+        ds.file_meta.ImplementationClassUID = self.project_model.IMPLEMENTATION_CLASS_UID  # UI: (0002,0012)
+        ds.file_meta.ImplementationVersionName = self.project_model.IMPLEMENTATION_VERSION_NAME  # SH: (0002,0013)
 
         remote_scu = DICOMNode(remote["address"], remote["port"], remote["ae_title"], False)
         logger.debug(remote_scu)

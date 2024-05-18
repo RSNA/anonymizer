@@ -7,8 +7,10 @@ from typing import Dict, Tuple, List
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from pynetdicom._globals import ALL_TRANSFER_SYNTAXES, DEFAULT_TRANSFER_SYNTAXES
+from pydicom.uid import UID
 from utils.modalities import MODALITIES
 from utils.translate import _
+from __version__ import __version__
 
 
 # Controller Custom Error classes:
@@ -73,6 +75,11 @@ class ProjectModel:
 
     # Model Version Control
     MODEL_VERSION = 1
+
+    # TODO: GET RSNA ROOT ORGANIZATION UID
+    RSNA_ROOT_ORG_UID = "1.2.826.0.1.3680043"
+    IMPLEMENTATION_CLASS_UID = UID(RSNA_ROOT_ORG_UID)  # UI: (0002,0012)
+    IMPLEMENTATION_VERSION_NAME = "RSNA DICOM Anonymizer " + __version__
 
     @staticmethod
     def default_site_id() -> str:

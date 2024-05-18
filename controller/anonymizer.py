@@ -11,7 +11,7 @@ import hashlib
 import pickle
 from datetime import datetime, timedelta
 from pathlib import Path
-from queue import Queue, Empty
+from queue import Queue
 from pydicom import Dataset, Sequence, dcmread
 from pydicom.errors import InvalidDicomError
 from utils.translate import _
@@ -35,6 +35,7 @@ class AnonymizerController:
 
     # See docs/RSNA-Covid-19-Deindentification-Protocol.pdf
     # TODO: if user edits default anonymization script these values should be updated accordingly
+    # TODO: simpler to provide UX for different de-identification methods
     # DeIdentificationMethodCodeSequence (0012,0064)
     DEIDENTIFICATION_METHODS = [
         ("113100", "Basic Application Confidentiality Profile"),
@@ -48,6 +49,7 @@ class AnonymizerController:
     DEFAULT_ANON_DATE = "20000101"  # if source date is invalid or before 19000101
 
     NUMBER_OF_WORKER_THREADS = 2
+    WORKER_THREAD_SLEEP_SECS = 0.075  # for UX responsiveness
     MODEL_AUTOSAVE_INTERVAL_SECS = 30
 
     _clean_tag_translate_table = str.maketrans("", "", "() ,")
@@ -337,7 +339,7 @@ class AnonymizerController:
             ds.PatientID = anon_ptid
             ds.PatientName = anon_ptid
 
-            # Handle Global Tags:
+            # Handle Anonymization specific Tags:
             ds.PatientIdentityRemoved = "YES"  # CS: (0012, 0062)
             ds.DeidentificationMethod = self.DEIDENTIFICATION_METHOD  # LO: (0012,0063)
             de_ident_seq = Sequence()  # SQ: (0012,0064)
@@ -359,6 +361,7 @@ class AnonymizerController:
             # Save ANONYMIZED dataset to dicom file in local storage:
             filename = local_storage_path(self.project_model.images_dir(), ds)
             logger.debug(f"ANON STORE: {source} => {filename}")
+            # TODO: Optimize / Transcoding / DICOM File Verification - as per extra project options
             ds.save_as(filename, write_like_original=False)
             return None
 
@@ -439,7 +442,7 @@ class AnonymizerController:
         logger.info(f"thread={threading.current_thread().name} start")
 
         while True:
-            time.sleep(0.075)
+            time.sleep(self.WORKER_THREAD_SLEEP_SECS)
             source, ds = ds_Q.get()  # Blocks by default
             if ds is None:  # sentinel value
                 ds_Q.task_done()
