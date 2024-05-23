@@ -403,7 +403,7 @@ class ProjectController(AE):
     def _handle_store(self, event: Event):
         # Throttle incoming requests by adding a delay
         # to ensure UX responsiveness
-        time.sleep(self._handle_store_time_slice_interval)
+        # time.sleep(self._handle_store_time_slice_interval)
         # TODO: back-off if AnonymizerQueue grows beyond specified limit
         # TODO: refactor using asyncio/twisted when pynetdicom supports it
 
