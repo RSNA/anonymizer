@@ -3,6 +3,7 @@ from pathlib import Path
 from copy import copy
 import logging
 import pickle
+from queue import Queue
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import customtkinter as ctk
@@ -44,6 +45,7 @@ class Anonymizer(ctk.CTk):
     CONFIG_FILENAME = "config.json"
 
     project_open_startup_dwell_time = 100  # milliseconds
+    metrics_loop_interval = 1000  # milliseconds
     menu_font = ("", 13)
 
     def __init__(self):
@@ -73,6 +75,19 @@ class Anonymizer(ctk.CTk):
         self.load_config()
         self.set_menu_project_closed()  # creates self.menu_bar, populates Open Recent list
         self.after(self.project_open_startup_dwell_time, self._open_project_startup)
+
+    # Dashboard metrics updates from the main thread
+    def metrics_loop(self):
+        if not self.controller:
+            logger.info("metrics_loop end, no controller")
+            return
+
+        # Update dashboard if anonymizer model has changed:
+        if self.controller.anonymizer.model_changed():
+            self.dashboard.update_anonymizer_queue(self.controller.anonymizer._anon_Q.qsize())
+            self.dashboard.update_totals(self.controller.anonymizer.model.get_totals())
+
+        self.after(self.metrics_loop_interval, self.metrics_loop)
 
     def load_config(self):
         try:
@@ -180,6 +195,9 @@ class Anonymizer(ctk.CTk):
                 self.controller.anonymizer.process_java_phi_studies(java_phi_studies)
 
             self.controller.save_model()
+
+            logger.info(f"{self.controller}")
+
             self.current_open_project_dir = self.controller.model.storage_dir
 
             if self.current_open_project_dir not in self.recent_project_dirs:
@@ -322,7 +340,10 @@ class Anonymizer(ctk.CTk):
         )
         self.protocol("WM_DELETE_WINDOW", self.close_project)
         self.set_menu_project_open()
+        self.dashboard.update_totals(self.controller.anonymizer.model.get_totals())
         self.dashboard.focus_set()
+        logger.info(f"metrics_loop start interval={self.metrics_loop_interval}ms")
+        self.metrics_loop()
 
     def close_project(self, event=None):
         logging.info("Close Project")

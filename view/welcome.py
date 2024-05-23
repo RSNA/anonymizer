@@ -8,9 +8,11 @@ class WelcomeView(ctk.CTkFrame):
     WELCOME_TITLE = _("Welcome")
     WELCOME_TITLE_FONT = ("DIN Alternate", 28)
     WELCOME_TEXT = _(
-        "The RSNA Anonymizer program is a free open-source tool for collecting and de-identifying DICOM studies to prepare them for submission.\n\n"
-        "It may be used to ensure privacy by removing protected health information (PHI) from your DICOM imaging studies.\n\n"
-        "Refer to Help/Overview for a quick overview and Help/Instructions for instructions on how to configure and use the program.\n\n"
+        "The RSNA DICOM Anonymizer program is a free open-source tool for curating and de-identifying DICOM studies.\n\n"
+        "Use it to ensure privacy by removing protected health information (PHI).\n\n"
+        "Go to Help/Overview for a quick overview.\n\n"
+        "Go to Help/Project settings for instructions on how to configure the program.\n\n"
+        "Go to Help/Operation for instructions on how to use the program.\n\n"
         "Select File/New Project to start."
     )
     WELCOME_TEXT_FONT = ("DIN Alternate", 20)
@@ -61,4 +63,4 @@ class WelcomeView(ctk.CTkFrame):
 
         text_box_welcome.insert("0.0", text=self.WELCOME_TEXT)
         text_box_welcome.configure(state="disabled")
-        text_box_welcome.grid(row=2, column=0, padx=self.PAD, pady=self.PAD, sticky="nswe")
+        text_box_welcome.grid(row=2, column=0, padx=self.PAD, pady=self.PAD)

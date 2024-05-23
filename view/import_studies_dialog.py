@@ -181,6 +181,7 @@ class ImportStudiesDialog(tk.Toplevel):
                     self._cancel_button.configure(text=_("Close"))
                     return
 
+                # TODO: offer user Retry option => re-submit move request for unfinished studies
                 mr: MoveStudiesRequest = MoveStudiesRequest(
                     self._scp_name, self._controller.model.scu.aet, self._move_level, self.studies
                 )

@@ -16,8 +16,8 @@ from pydicom import Dataset, Sequence, dcmread
 from pydicom.errors import InvalidDicomError
 from utils.translate import _
 from utils.storage import local_storage_path, JavaAnonymizerExportedStudy
-from model.project import DICOMRuntimeError, DICOMNode, ProjectModel
-from model.anonymizer import AnonymizerModel, Study, Series, PHI
+from model.project import DICOMNode, ProjectModel
+from model.anonymizer import AnonymizerModel, Study, PHI
 
 logger = logging.getLogger(__name__)
 
@@ -28,14 +28,13 @@ class AnonymizerController:
     # Quarantine Errors / Sub-directories:
     QUARANTINE_MISSING_ATTRIBUTES = "Missing_Attributes"
     QUARANTINE_INVALID_DICOM = "Invalid_DICOM"
-    QUARANTINE_FILE_READ_ERROR = "File_Read_Error"
     QUARANTINE_DICOM_READ_ERROR = "DICOM_Read_Error"
     QUARANTINE_STORAGE_ERROR = "Storage_Error"
     QUARANTINE_INVALID_STORAGE_CLASS = "Invalid_Storage_Class"
 
     # See docs/RSNA-Covid-19-Deindentification-Protocol.pdf
     # TODO: if user edits default anonymization script these values should be updated accordingly
-    # TODO: simpler to provide UX for different de-identification methods
+    # TODO: simpler to provide UX for different de-identification methods, esp. enable/disable sub-options
     # DeIdentificationMethodCodeSequence (0012,0064)
     DEIDENTIFICATION_METHODS = [
         ("113100", "Basic Application Confidentiality Profile"),
@@ -115,9 +114,10 @@ class AnonymizerController:
         self._worker_threads = []
 
         # Spawn Anonymizer worker threads:
-        for _ in range(self.NUMBER_OF_WORKER_THREADS):
+        for i in range(self.NUMBER_OF_WORKER_THREADS):
             worker = self._worker = threading.Thread(
                 target=self._anonymize_worker,
+                name=f"AnonWorker_{i+1}",
                 args=(self._anon_Q,),
                 # daemon=True,
             )
@@ -127,11 +127,16 @@ class AnonymizerController:
         # Setup Model Autosave Thread:
         self._model_change_flag = False
         self._autosave_event = threading.Event()
-        self._autosave_worker_thread = threading.Thread(target=self._autosave_manager, daemon=True)
+        self._autosave_worker_thread = threading.Thread(
+            target=self._autosave_manager, name="AnonModelSaver", daemon=True
+        )
         self._autosave_worker_thread.start()
 
         self._active = True
         logger.info("Anonymizer Controller initialised")
+
+    def model_changed(self) -> bool:
+        return self._model_change_flag
 
     def _stop_worker_threads(self):
         logger.info("Stopping Anonymizer Worker Threads")
@@ -160,26 +165,26 @@ class AnonymizerController:
 
     def process_java_phi_studies(self, java_studies: List[JavaAnonymizerExportedStudy]):
         logger.info(f"Processing {len(java_studies)} Java PHI Studies")
-        for study in java_studies:
-            self.model.set_anon_patient_id(study.PHI_PatientID, study.ANON_PatientID)
-            self.model.set_anon_acc_no(study.PHI_Accession, study.ANON_Accession)
-            self.model.set_anon_uid(study.PHI_StudyInstanceUID, study.ANON_StudyInstanceUID)
+        for java_study in java_studies:
+            self.model.set_anon_patient_id(java_study.PHI_PatientID, java_study.ANON_PatientID)
+            self.model.set_anon_acc_no(java_study.PHI_Accession, java_study.ANON_Accession)
+            self.model.set_anon_uid(java_study.PHI_StudyInstanceUID, java_study.ANON_StudyInstanceUID)
 
             new_study = Study(
-                study_date=study.PHI_StudyDate,
-                anon_date_delta=int(study.DateOffset),
-                accession_number=study.PHI_Accession,
-                study_uid=study.PHI_StudyInstanceUID,
+                study_date=java_study.PHI_StudyDate,
+                anon_date_delta=int(java_study.DateOffset),
+                accession_number=java_study.PHI_Accession,
+                study_uid=java_study.PHI_StudyInstanceUID,
                 study_desc="?",
                 source="Java Index File",
                 series=[],
             )
             new_phi = PHI(
-                patient_name=study.PHI_PatientName,
-                patient_id=study.PHI_PatientID,
+                patient_name=java_study.PHI_PatientName,
+                patient_id=java_study.PHI_PatientID,
                 studies=[new_study],
             )
-            self.model.set_phi(study.ANON_PatientID, new_phi)
+            self.model.set_phi(java_study.ANON_PatientID, new_phi)
 
         self.save_model()
 
@@ -323,7 +328,7 @@ class AnonymizerController:
         self.model.capture_phi(source, ds, date_delta)
 
         try:
-            # To minimize computation overhead DO NOT MAKE COPY of source dataset
+            # To minimize memory/computation overhead DO NOT MAKE COPY of source dataset
             phi_instance_uid = ds.SOPInstanceUID  # if exception, remove this instance from uid_lookup
 
             # Anonymize dataset (overwrite phi dataset) (prevents dataset copy)
@@ -332,7 +337,7 @@ class AnonymizerController:
             # All elements now anonymized according to script, finally anonymizer PatientID and PatientName elements:
             anon_ptid = self.model.get_anon_patient_id(ds.get("PatientID", ""))  # created by capture_phi
             if anon_ptid is None:
-                logger.error(
+                logger.critical(
                     f"Critical error, PHI Capture did not create anonymized patient id, resort to default: {self.model.default_anon_pt_id}"
                 )
                 anon_ptid = self.model.default_anon_pt_id
@@ -353,15 +358,14 @@ class AnonymizerController:
 
             ds.DeidentificationMethodCodeSequence = de_ident_seq
             block = ds.private_block(0x0013, self.PRIVATE_BLOCK_NAME, create=True)
-            block.add_new(0x1, "SH", self.project_model.project_name)
-            block.add_new(0x3, "SH", self.project_model.site_id)
-
-            logger.debug(f"ANON:\n{ds}")
+            block.add_new(0x1, "SH", self.project_model.site_id)
+            block.add_new(0x3, "SH", self.project_model.project_name)
 
             # Save ANONYMIZED dataset to dicom file in local storage:
             filename = local_storage_path(self.project_model.images_dir(), ds)
             logger.debug(f"ANON STORE: {source} => {filename}")
-            # TODO: Optimize / Transcoding / DICOM File Verification - as per extra project options
+            # TODO: Optimize / Transcoding / DICOM Compliance File Verification - as per extra project options
+            # see options for write_like_original=True
             ds.save_as(filename, write_like_original=False)
             return None
 
@@ -373,9 +377,9 @@ class AnonymizerController:
             os.makedirs(qpath, exist_ok=True)
             filename: Path = local_storage_path(qpath, ds)
             try:
-                error_msg: str = f"Storage error={e}, QUARANTINE {ds.SOPInstanceUID} to {filename}"
+                error_msg: str = f"Storage Error = {e}, QUARANTINE {ds.SOPInstanceUID} to {filename}"
                 logger.error(error_msg)
-                ds.save_as(filename)
+                ds.save_as(filename, write_like_original=True)
             except:
                 logger.error(f"Error writing incoming dataset to QUARANTINE: {e}")
 
@@ -405,7 +409,7 @@ class AnonymizerController:
         try:
             ds: Dataset = dcmread(file)
         except (FileNotFoundError, IsADirectoryError, PermissionError) as e:
-            self.move_to_quarantine(file, self.QUARANTINE_FILE_READ_ERROR)
+            logger.error(str(e))
             return str(e), None
         except InvalidDicomError as e:
             self.move_to_quarantine(file, self.QUARANTINE_INVALID_DICOM)

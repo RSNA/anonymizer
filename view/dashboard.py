@@ -5,6 +5,7 @@ from typing import Any
 import customtkinter as ctk
 from tkinter import messagebox
 from controller.project import ProjectController, EchoRequest, EchoResponse
+from model.anonymizer import Totals
 from utils.translate import _
 from utils.storage import count_studies_series_images
 
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class Dashboard(ctk.CTkFrame):
-    DASHBOARD_UPDATE_INTERVAL = 1000  # milliseconds
+    # DASHBOARD_UPDATE_INTERVAL = 1000  # milliseconds
     AWS_AUTH_TIMEOUT_SECONDS = 15  # must be > 2 secs
 
     # TODO: manage fonts using theme manager
@@ -31,9 +32,13 @@ class Dashboard(ctk.CTkFrame):
         self._timer = 0
         self._query_ux_Q: Queue[EchoResponse] = Queue()
         self._export_ux_Q: Queue[EchoResponse] = Queue()
+        self._patients = 0
+        self._studies = 0
+        self._series = 0
+        self._images = 0
         self._create_widgets()
         self.grid(row=0, column=0, padx=self.PAD, pady=self.PAD)
-        self._update_dashboard()
+        # self._update_dashboard()
 
     def _create_widgets(self):
         logger.debug(f"_create_widgets")
@@ -73,15 +78,15 @@ class Dashboard(ctk.CTkFrame):
 
         db_row += 1
 
-        self._patients = ctk.CTkLabel(self._databoard, font=self.DATA_FONT, text="0")
-        self._studies = ctk.CTkLabel(self._databoard, font=self.DATA_FONT, text="0")
-        self._series = ctk.CTkLabel(self._databoard, font=self.DATA_FONT, text="0")
-        self._images = ctk.CTkLabel(self._databoard, font=self.DATA_FONT, text="0")
+        self._patients_label = ctk.CTkLabel(self._databoard, font=self.DATA_FONT, text="0")
+        self._studies_label = ctk.CTkLabel(self._databoard, font=self.DATA_FONT, text="0")
+        self._series_label = ctk.CTkLabel(self._databoard, font=self.DATA_FONT, text="0")
+        self._images_label = ctk.CTkLabel(self._databoard, font=self.DATA_FONT, text="0")
 
-        self._patients.grid(row=db_row, column=0, padx=self.PAD, pady=(0, self.PAD))
-        self._studies.grid(row=db_row, column=1, padx=self.PAD, pady=(0, self.PAD))
-        self._series.grid(row=db_row, column=2, padx=self.PAD, pady=(0, self.PAD))
-        self._images.grid(row=db_row, column=3, padx=self.PAD, pady=(0, self.PAD))
+        self._patients_label.grid(row=db_row, column=0, padx=self.PAD, pady=(0, self.PAD))
+        self._studies_label.grid(row=db_row, column=1, padx=self.PAD, pady=(0, self.PAD))
+        self._series_label.grid(row=db_row, column=2, padx=self.PAD, pady=(0, self.PAD))
+        self._images_label.grid(row=db_row, column=3, padx=self.PAD, pady=(0, self.PAD))
 
         self._databoard.grid(
             row=row,
@@ -139,7 +144,6 @@ class Dashboard(ctk.CTkFrame):
 
     def set_status(self, text: str):
         self._status.configure(text=text)
-        self.update()
 
     def _query_button_click(self):
         logger.info(f"_query_button_click")
@@ -189,28 +193,35 @@ class Dashboard(ctk.CTkFrame):
 
         self.after(1000, self._wait_for_aws)
 
-    def _update_dashboard(self):
+    def update_anonymizer_queue(self, queue_size: int):
+        self._qsize.configure(text=f"{queue_size}")
+
+    def update_totals(self, totals: Totals):
+        self._patients_label.configure(text=f"{totals.patients}")
+        self._studies_label.configure(text=f"{totals.studies}")
+        self._series_label.configure(text=f"{totals.series}")
+        self._images_label.configure(text=f"{totals.instances}")
+
+    def _update_dashboard_from_file_system(self):
         if not self._controller:
             return
 
         dir = self._controller.model.images_dir()
         pts = os.listdir(dir)
-        pts = [item for item in pts if os.path.isdir(dir.joinpath(item))]
-        studies = 0
-        series = 0
-        images = 0
+        pts = [item for item in pts if dir.joinpath(item).is_dir()]
+
+        self._patients = len(pts)
+        self._studies = 0
+        self._series = 0
+        self._images = 0
 
         for pt in pts:
             study_count, series_count, file_count = count_studies_series_images(os.path.join(dir, pt))
-            studies += study_count
-            series += series_count
-            images += file_count
+            self._studies += study_count
+            self._series += series_count
+            self._images += file_count
 
-        self._patients.configure(text=f"{len(pts)}")
-        self._studies.configure(text=f"{studies}")
-        self._series.configure(text=f"{series}")
-        self._images.configure(text=f"{images}")
-
-        if self._controller and self._controller.anonymizer:
-            self._qsize.configure(text=f"{self._controller.anonymizer._anon_Q.qsize()}")
-            self.after(self.DASHBOARD_UPDATE_INTERVAL, self._update_dashboard)
+        self._patients_label.configure(text=f"{self._patients}")
+        self._studies_label.configure(text=f"{self._studies}")
+        self._series_label.configure(text=f"{self._series}")
+        self._images_label.configure(text=f"{self._images}")

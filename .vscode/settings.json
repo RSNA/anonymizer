@@ -24,6 +24,8 @@
     "hashdate",
     "MIRC",
     "ptid",
+    "PYDICOM",
+    "PYNETDICOM",
     "RSNA",
     "tkhtmlview",
     "uids"
@@ -44,8 +46,8 @@
   "python.analysis.exclude": [
     ".vscode",
     "prototyping",
-    "dist",
-    "build"
+    "**/dist",
+    "**/build"
   ],
   "python.analysis.addImport.heuristics": false,
   "editor.suggest.showTypeParameters": false,

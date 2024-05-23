@@ -9,6 +9,7 @@ from queue import Queue
 from pydicom import dcmread
 from pydicom.data import get_testdata_file
 from pydicom.dataset import Dataset
+from controller.project import ProjectController
 from controller.anonymizer import AnonymizerController
 
 from tests.controller.helpers import (
@@ -261,3 +262,106 @@ def test_anonymize_dataset_with_PatientID(temp_dir: str, controller):
     assert anon_ds.StudyInstanceUID == f"{UIDROOT}.{SITEID}.1"
     assert anon_ds.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.2"
     assert anon_ds.SOPInstanceUID == f"{UIDROOT}.{SITEID}.3"
+
+
+# QUARANTINE Tests:
+def test_anonymize_file_not_found(temp_dir: str, controller: ProjectController):
+    anonymizer: AnonymizerController = controller.anonymizer
+
+    error_msg, ds = anonymizer.anonymize_file(Path("unknown_file.dcm"))
+
+    assert "No such file" in error_msg
+    assert ds is None
+
+    error_msg, ds = anonymizer.anonymize_file(temp_dir)
+
+    assert "Is a directory" in error_msg
+    assert ds is None
+
+    # TODO: simulate file permission error
+
+
+def test_anonymize_invalid_dicom_file(temp_dir: str, controller: ProjectController):
+    anonymizer: AnonymizerController = controller.anonymizer
+
+    test_filename = "test_file.txt"
+    test_file_path = Path(temp_dir, test_filename)
+    with open(test_file_path, "w") as f:
+        f.write("Testing Anonymizer")
+
+    error_msg, ds = anonymizer.anonymize_file(test_file_path)
+
+    assert "File is missing DICOM File Meta" in error_msg
+    assert ds is None
+
+    # Ensure file is moved to correct quarantine directory:
+    qpath = Path(anonymizer.get_quarantine_path(), anonymizer.QUARANTINE_INVALID_DICOM, test_filename)
+    assert qpath.exists()
+
+
+def test_anonymize_dicom_missing_attributes(temp_dir: str, controller: ProjectController):
+    anonymizer: AnonymizerController = controller.anonymizer
+
+    cr1: Dataset = get_testdata_file(cr1_filename, read=True)
+    assert isinstance(cr1, Dataset)
+    assert cr1
+    assert cr1.SOPClassUID
+    del cr1.SOPClassUID  # remove required attribute
+    test_filename = "test.dcm"
+    test_dcm_file_path = Path(temp_dir, test_filename)
+    cr1.save_as(test_dcm_file_path)
+
+    error_msg, ds = anonymizer.anonymize_file(test_dcm_file_path)
+
+    assert "Missing Attributes" in error_msg
+    assert ds == cr1
+
+    # Ensure file is moved to correct quarantine directory:
+    qpath = Path(anonymizer.get_quarantine_path(), anonymizer.QUARANTINE_MISSING_ATTRIBUTES, test_filename)
+    assert qpath.exists()
+
+
+def test_anonymize_dicom_missing_attributes(temp_dir: str, controller: ProjectController):
+    anonymizer: AnonymizerController = controller.anonymizer
+
+    cr1: Dataset = get_testdata_file(cr1_filename, read=True)
+    assert isinstance(cr1, Dataset)
+    assert cr1
+    assert cr1.SOPClassUID
+    del cr1.SOPClassUID  # remove required attribute
+    test_filename = "test.dcm"
+    test_dcm_file_path = Path(temp_dir, test_filename)
+    cr1.save_as(test_dcm_file_path)
+
+    error_msg, ds = anonymizer.anonymize_file(test_dcm_file_path)
+
+    assert "Missing Attributes" in error_msg
+    assert ds == cr1
+
+    # Ensure file is moved to correct quarantine directory:
+    qpath = Path(anonymizer.get_quarantine_path(), anonymizer.QUARANTINE_MISSING_ATTRIBUTES, test_filename)
+    assert qpath.exists()
+
+
+def test_anonymize_storage_error(temp_dir: str, controller: ProjectController):
+    anonymizer: AnonymizerController = controller.anonymizer
+
+    cr1: Dataset = get_testdata_file(cr1_filename, read=True)
+    assert isinstance(cr1, Dataset)
+    assert cr1
+    assert cr1.SOPClassUID
+    del cr1.file_meta  # remove file_meta
+
+    error_msg = anonymizer.anonymize("Unit Testing", cr1)
+
+    assert "Storage Error" in error_msg
+
+    # Ensure file is moved to correct quarantine directory:
+
+    qpath = Path(anonymizer.get_quarantine_path(), anonymizer.QUARANTINE_STORAGE_ERROR)
+    assert qpath.exists()
+    filename: Path = local_storage_path(qpath, cr1)
+    assert filename.exists()
+
+
+# TODO: Transcoding tests here

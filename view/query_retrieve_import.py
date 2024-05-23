@@ -49,8 +49,8 @@ class QueryView(tk.Toplevel):
         "NumberOfStudyRelatedSeries": (_("Series"), 6, True),
         "NumberOfStudyRelatedInstances": (_("Images"), 6, True),
         # not dicom fields, for display only:
-        "Imported": (_("Imported"), 10, True),
-        "Error": (_("Last Import Error"), 50, False),
+        "imported": (_("Imported"), 10, True),
+        "error": (_("Last Import Error"), 50, False),
         # not for display, for find/move:
         "StudyInstanceUID": (_("StudyInstanceUID"), 0, False),
     }
@@ -75,8 +75,6 @@ class QueryView(tk.Toplevel):
         self._acc_no_file_path = None
         self.width = 1300
         self.height = 400
-        # Try to move query window below the dashboard:
-        # self.geometry(f"{self.width}x{self.height}+0+{self.master.winfo_height()+60}")
         self.resizable(True, True)
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Return>", self._enter_keypress)
@@ -611,9 +609,9 @@ class QueryView(tk.Toplevel):
             files_imported = self._images_stored_phi_lookup(patient_id, study.uid)  # reads file system FAT
             # TODO: optimize, compare to using AnonymizerModel.get_stored_instance_count which uses in memory PHI lookup
             #       or trust study.pending_instances
-            current_values[self._tree_column_keys.index("Imported")] = str(files_imported)
+            current_values[self._tree_column_keys.index("imported")] = str(files_imported)
             if study.last_error_msg:
-                current_values[self._tree_column_keys.index("Error")] = study.last_error_msg
+                current_values[self._tree_column_keys.index("error")] = study.last_error_msg
             self._tree.item(study.uid, values=current_values)
             if instances_to_import > 0 and files_imported >= instances_to_import:
                 self._tree.selection_remove(study.uid)
@@ -691,7 +689,7 @@ class QueryView(tk.Toplevel):
 
             study_uid = dataset.get("StudyInstanceUID", None)
             if study_uid is None:
-                logger.error(f"Critical Internal error: Query result dataset does not have StudyInstanceUID")
+                logger.critical(f"Critical Internal error: Query result dataset does not have StudyInstanceUID")
                 continue
 
             patient_id = dataset.get("PatientID", "")

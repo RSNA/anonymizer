@@ -1,3 +1,5 @@
+# https://www.loekvandenouweland.com/content/python-asyncio-and-tkinter.html
+
 import tkinter as tk
 from tkinter import ttk
 import asyncio

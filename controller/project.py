@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from utils.translate import _
 from utils.logging import set_logging_levels
 from pydicom import Dataset, dcmread
+from pydicom.uid import UID
 from pydicom.dataset import FileMetaDataset
 from pynetdicom.association import Association
 from pynetdicom.ae import ApplicationEntity as AE
@@ -273,12 +274,12 @@ class ProjectController(AE):
         self.model.storage_dir.joinpath(self.model.PRIVATE_DIR).mkdir(parents=True, exist_ok=True)
         self.model.storage_dir.joinpath(self.model.PUBLIC_DIR).mkdir(exist_ok=True)
         self.set_dicom_timeouts(timeouts=model.network_timeouts)
-        self._implementation_class_uid = self.model.IMPLEMENTATION_CLASS_UID  # added to association requests
+        self._implementation_class_uid = UID(self.model.IMPLEMENTATION_CLASS_UID)  # added to association requests
         self._implementation_version_name = self.model.IMPLEMENTATION_VERSION_NAME  # added to association requests
         self._maximum_pdu_size = 0  # 0 means no limit
         # self._maximum_associations = 10 # max simultaneous remote associations, 10 is the default
         self._require_called_aet = True  # remote clients must provide Anonymizer's AE Title
-        # TODO: project setting for allowed list of calling AETs
+        # TODO: project model setting for allowed list of calling AETs
         # self._require_calling_aet = ["<list of allowed calling AETs>"] # Default: Allow any calling AE Title
         self.set_radiology_storage_contexts()
         self.set_verification_context()
@@ -390,10 +391,6 @@ class ProjectController(AE):
     def get_study_root_move_contexts(self) -> List[PresentationContext]:
         return [build_context(self._STUDY_ROOT_QR_CLASSES[1])]  # default transfer syntaxes
 
-    # Handlers:
-    # def _handle_abort(self, event: Event):
-    #     logger.info(f"_handle_abort")  # TODO: handle remote association async abort/disconnect
-
     # DICOM C-ECHO Verification event handler (EVT_C_ECHO):
     def _handle_echo(self, event: Event):
         logger.debug("_handle_echo")
@@ -406,8 +403,10 @@ class ProjectController(AE):
     def _handle_store(self, event: Event):
         # Throttle incoming requests by adding a delay
         # to ensure UX responsiveness
-        # TODO: refactor using asyncio/twisted when pynetdicom supports it
         time.sleep(self._handle_store_time_slice_interval)
+        # TODO: back-off if AnonymizerQueue grows beyond specified limit
+        # TODO: refactor using asyncio/twisted when pynetdicom supports it
+
         logger.debug("_handle_store")
         remote = event.assoc.remote
         try:
@@ -424,7 +423,7 @@ class ProjectController(AE):
         ds.file_meta = FileMetaDataset(event.file_meta)
 
         # File Metadata:Implementation Class UID and Version Name:
-        ds.file_meta.ImplementationClassUID = self.model.IMPLEMENTATION_CLASS_UID  # UI: (0002,0012)
+        ds.file_meta.ImplementationClassUID = UID(self.model.IMPLEMENTATION_CLASS_UID)  # UI: (0002,0012)
         ds.file_meta.ImplementationVersionName = self.model.IMPLEMENTATION_VERSION_NAME  # SH: (0002,0013)
 
         remote_scu = DICOMNode(remote["address"], remote["port"], remote["ae_title"], False)
@@ -543,7 +542,7 @@ class ProjectController(AE):
             return False
 
     def echo_ex(self, er: EchoRequest) -> None:
-        threading.Thread(target=self.echo, args=(er.scp, er.ux_Q)).start()
+        threading.Thread(target=self.echo, name="ECHO", args=(er.scp, er.ux_Q)).start()
 
     def AWS_credentials_valid(self) -> bool:
         # If AWS credentials are cached and expiration is less than 10 minutes away, return True
@@ -1092,6 +1091,7 @@ class ProjectController(AE):
             fr.acc_no = acc_no_list
             threading.Thread(
                 target=self.find_studies_via_acc_nos,
+                name="FindStudiesAccNos",
                 args=(
                     fr.scp_name,
                     fr.acc_no,
@@ -1103,6 +1103,7 @@ class ProjectController(AE):
             logger.info("Find studies from search parameters...")
             threading.Thread(
                 target=self.find_studies,
+                name="FindStudies",
                 args=(
                     fr.scp_name,
                     fr.name,
@@ -1325,6 +1326,7 @@ class ProjectController(AE):
     ) -> None:
         threading.Thread(
             target=self.get_study_uid_hierarchies,
+            name="GetStudyUIDHierarchies",
             args=(scp_name, studies, instance_level),
             daemon=True,  # daemon threads are abruptly stopped at shutdown
         ).start()
@@ -1740,7 +1742,9 @@ class ProjectController(AE):
     def _manage_move(self, req: MoveStudiesRequest) -> None:
         self._move_futures = []
 
-        self._move_executor = ThreadPoolExecutor(max_workers=self._study_move_thread_pool_size)
+        self._move_executor = ThreadPoolExecutor(
+            max_workers=self._study_move_thread_pool_size, thread_name_prefix="MoveStudy"
+        )
 
         # By DEFAULT Move Level is SERIES
         move_op = self._move_study_at_series_level
@@ -1808,6 +1812,7 @@ class ProjectController(AE):
     def move_studies_ex(self, mr: MoveStudiesRequest) -> None:
         threading.Thread(
             target=self._manage_move,
+            name="ManageMove",
             args=(mr,),
             daemon=True,  # daemon threads are abruptly stopped at shutdown
         ).start()
@@ -1968,7 +1973,9 @@ class ProjectController(AE):
     def _manage_export(self, req: ExportStudyRequest) -> None:
         self._export_futures = []
 
-        self._export_executor = ThreadPoolExecutor(max_workers=self._patient_export_thread_pool_size)
+        self._export_executor = ThreadPoolExecutor(
+            max_workers=self._patient_export_thread_pool_size, thread_name_prefix="ExportPatient"
+        )
 
         with self._export_executor as executor:
             for i in range(len(req.patient_ids)):
@@ -1994,6 +2001,7 @@ class ProjectController(AE):
         self._abort_export = False
         threading.Thread(
             target=self._manage_export,
+            name="ManageExport",
             args=(er,),
             daemon=True,  # daemon threads are abruptly stopped at shutdown
         ).start()

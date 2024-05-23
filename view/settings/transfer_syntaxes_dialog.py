@@ -54,7 +54,7 @@ class TransferSyntaxesDialog(tk.Toplevel):
         super().__init__(master=parent)
         self.transfer_syntaxes = transfer_syntaxes
         self.title(title)
-        self.geometry("600x550")
+        self.geometry("600x450")
         self.resizable(False, True)
         self.grab_set()  # make dialog modal
         self._user_input: Union[list, None] = None

@@ -26,17 +26,17 @@ class HTMLView(tk.Toplevel):
         #     # override CTkTopLevel which sets icon after 200ms
         #     self.after(250, self._win_post_init)
 
-    def _win_post_init(self):
-        self.iconbitmap("assets\\images\\rsna_icon.ico")
-        self.lift()
-        self.focus()
+    # def _win_post_init(self):
+    #     self.iconbitmap("assets\\images\\rsna_icon.ico")
+    #     self.lift()
+    #     self.focus()
 
     def _create_widgets(self):
-        logger.info("_create_widgets")
+        logger.debug("_create_widgets")
 
         html_widget = HTMLScrolledText(
             self._frame,
-            width=150,  # characters
+            width=180,  # characters
             height=60,  # lines
             wrap="word",
             html=RenderHTML(self.html_file_path),

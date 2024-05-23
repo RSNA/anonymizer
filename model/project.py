@@ -7,7 +7,6 @@ from typing import Dict, Tuple, List
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from pynetdicom._globals import ALL_TRANSFER_SYNTAXES, DEFAULT_TRANSFER_SYNTAXES
-from pydicom.uid import UID
 from utils.modalities import MODALITIES
 from utils.translate import _
 from __version__ import __version__
@@ -73,13 +72,13 @@ class ProjectModel:
     PHI_EXPORT_DIR = "phi_export"
     QUARANTINE_DIR = "quarantine"
 
-    # Model Version Control
+    # Project Model Version Control
     MODEL_VERSION = 1
 
-    # TODO: GET RSNA ROOT ORGANIZATION UID
-    RSNA_ROOT_ORG_UID = "1.2.826.0.1.3680043"
-    IMPLEMENTATION_CLASS_UID = UID(RSNA_ROOT_ORG_UID)  # UI: (0002,0012)
-    IMPLEMENTATION_VERSION_NAME = "RSNA DICOM Anonymizer " + __version__
+    # As per instructions here: https://www.medicalconnections.co.uk/kb/ImplementationUID-And-ImplementationName
+    RSNA_ROOT_ORG_UID = "1.2.826.0.1.3680043.10.474"  # sub UID from medicalconnections.co.uk as used by JavaAnonymizer
+    IMPLEMENTATION_CLASS_UID = RSNA_ROOT_ORG_UID + ".1"  # UID: (0002,0012)
+    IMPLEMENTATION_VERSION_NAME = "rsna_anon" + __version__  # SH: (0002,0013)
 
     @staticmethod
     def default_site_id() -> str:
@@ -87,6 +86,14 @@ class ProjectModel:
         # Automatically generate a decimal character unique Site ID based on
         # the number of 30 minute intervals since 1 Jan 1970
         return str(int(time.time() / (60 * 30)))
+
+    @staticmethod
+    def default_project_name() -> str:
+        return _("MY_PROJECT")
+
+    @staticmethod
+    def default_uid_root() -> str:
+        return ProjectModel.RSNA_ROOT_ORG_UID + ".2"
 
     @staticmethod
     def default_storage_dir() -> Path:
@@ -139,14 +146,13 @@ class ProjectModel:
 
     version: int = MODEL_VERSION
     site_id: str = field(default_factory=default_site_id)
-    project_name: str = _("MY_PROJECT")
-    uid_root: str = "1.2.826.0.1.3680043.10.188"
+    project_name: str = field(default_factory=default_project_name)
+    uid_root: str = field(default_factory=default_uid_root)
     storage_dir: Path = field(default_factory=default_storage_dir)
     modalities: List[str] = field(default_factory=default_modalities)
     storage_classes: List[str] = field(default_factory=default_storage_classes)  # re-initialised in post_init
     transfer_syntaxes: List[str] = field(default_factory=default_transfer_syntaxes)
     logging_levels: LoggingLevels = field(default_factory=default_logging_levels)
-
     scu: DICOMNode = field(default_factory=default_local_server)
     scp: DICOMNode = field(default_factory=default_local_server)
     remote_scps: Dict[str, DICOMNode] = field(default_factory=default_remote_scps)

@@ -1,4 +1,5 @@
-from typing import Dict, List
+from typing import Tuple, List
+from collections import namedtuple
 from pathlib import Path
 import logging
 import threading
@@ -55,6 +56,9 @@ class PHI:
     studies: List[Study] = field(default_factory=list)
 
 
+Totals = namedtuple("Totals", ["patients", "studies", "series", "instances"])
+
+
 class AnonymizerModel:
     # Model Version Control
     MODEL_VERSION = 1
@@ -77,6 +81,11 @@ class AnonymizerModel:
         self.clear_lookups()
         self._script_path = script_path
         self._tag_keep = {}  # DICOM Tag: Operation
+        # Running totals incremented by capture_phi() method:
+        self._patients = 0
+        self._studies = 0
+        self._series = 0
+        self._instances = 0
         self.load_script(script_path)
 
     def save(self, filepath: Path) -> bool:
@@ -150,13 +159,16 @@ class AnonymizerModel:
             self._phi_lookup.clear()
             self._phi_lookup[self.default_anon_pt_id] = PHI()  # Default PHI for Anonymized PatientID
 
+    def get_totals(self) -> Totals:
+        return Totals(self._patients, self._studies, self._series, self._instances)
+
     def get_phi(self, anon_patient_id: str) -> PHI | None:
         with self._lock:
             return self._phi_lookup.get(anon_patient_id, None)
 
-    def get_phi_name(self, anon_pt_id: str) -> str | None:
+    def get_phi_name(self, anon_patient_id: str) -> str | None:
         with self._lock:
-            phi = self._phi_lookup.get(anon_pt_id, None)
+            phi = self._phi_lookup.get(anon_patient_id, None)
             if phi is None:
                 return None
             else:
@@ -311,7 +323,7 @@ class AnonymizerModel:
             # ds must have attributes: StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID
             req_uids = ["StudyInstanceUID", "SeriesInstanceUID", "SOPInstanceUID"]
             if not all(hasattr(ds, uid) for uid in req_uids):
-                logger.error(f"Critical Error dataset missing primary UIDs: {req_uids}")
+                logger.critical(f"Critical Error dataset missing primary UIDs: {req_uids}")
                 return
             # If PHI PatientID is missing in dataset, as per DICOM Standard, pydicom should return "", handle missing attribute
             # Missing or blank corresponds to AnonymizerModel.DEFAULT_ANON_PATIENT_ID ("000000") initialised in AnonymizerModel.clear_lookups()
@@ -321,7 +333,7 @@ class AnonymizerModel:
             next_uid_ndx = self.get_uid_count() + 1
 
             if self._uid_lookup.get(ds.StudyInstanceUID) == None:
-                # NEW Study associated with dataset if doesn't exist:
+                # NEW Study:
                 if anon_patient_id == None:
                     # NEW patient
                     new_anon_patient_id = (
@@ -337,6 +349,7 @@ class AnonymizerModel:
                     )
                     self._phi_lookup[new_anon_patient_id] = phi
                     self._patient_id_lookup[phi_ptid] = new_anon_patient_id
+                    self._patients += 1
 
                 else:  # Existing patient now with more than one study
                     if phi == None:
@@ -344,22 +357,27 @@ class AnonymizerModel:
                         logger.error(msg)
                         raise RuntimeError(msg)
 
-                # ADD new study to PHI:
+                # ADD new study,series,instance to PHI:
                 phi.studies.append(self.new_study_from_dataset(ds, source, date_delta))
                 for uid in req_uids:
                     anon_uid = self._uid_prefix + f".{next_uid_ndx}"
                     self._uid_lookup[getattr(ds, uid)] = anon_uid
                     next_uid_ndx += 1
+
+                self._studies += 1
+                self._series += 1
+                self._instances += 1
+
             else:
                 # Existing Study & Patient, PHI already captured, update series and instance counts from new instance:
                 if anon_patient_id is None:
                     msg = f"Critical error PHI PatientID={phi_ptid} not found in patient_id_lookup"
-                    logger.error(msg)
+                    logger.critical(msg)
                     raise RuntimeError(msg)
 
                 if phi == None:
                     msg = f"Critial error Existing Anon PatientID={anon_patient_id} not found in phi_lookup"
-                    logger.error(msg)
+                    logger.critical(msg)
                     raise RuntimeError(msg)
 
                 # Find study in PHI:
@@ -399,8 +417,13 @@ class AnonymizerModel:
                         anon_uid = self._uid_prefix + f".{next_uid_ndx}"
                         self._uid_lookup[getattr(ds, uid)] = anon_uid
                         next_uid_ndx += 1
+
+                    self._series += 1
+
                 else:
                     # NEW Instance in existing Series:
                     series.instance_count += 1
                     anon_uid = self._uid_prefix + f".{next_uid_ndx}"
                     self._uid_lookup[ds.SOPInstanceUID] = anon_uid
+
+                self._instances += 1

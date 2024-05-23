@@ -1,4 +1,4 @@
-# © RSNA DICOM Anonymizer
+# © RSNA DICOM Anonymizer V17
 
 ## Pure python implementation of DICOM Anonymizer using Custom TkInter GUI
 

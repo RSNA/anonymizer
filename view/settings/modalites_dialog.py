@@ -26,7 +26,7 @@ class ModalitiesDialog(tk.Toplevel):
         super().__init__(master=parent)
         self.modalities = modalities
         self.title(title)
-        self.geometry("400x280")
+        self.geometry("400x350")
         self.resizable(False, False)
         self.grab_set()  # make dialog modal
         self._user_input: Union[list, None] = None
