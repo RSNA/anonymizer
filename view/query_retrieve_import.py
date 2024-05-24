@@ -105,7 +105,7 @@ class QueryView(tk.Toplevel):
             min_chars=0,
             max_chars=patient_name_max_chars,
             charset=string.ascii_letters + string.digits + "- '^*?" + "À-ÖØ-öø-ÿ" + string.whitespace,
-            tooltipmsg=None,  # "Alphabetic ^ spaces * for wildcard",
+            tooltipmsg=None,  # "Alphabetic ^ spaces * ? for wildcard",
             row=0,
             col=0,
             pad=PAD,

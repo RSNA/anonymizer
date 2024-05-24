@@ -26,11 +26,12 @@ class AnonymizerController:
     ANONYMIZER_MODEL_FILENAME = "AnonymizerModel.pkl"
     DEIDENTIFICATION_METHOD = "RSNA DICOM ANONYMIZER"  # (0012,0063)
     # Quarantine Errors / Sub-directories:
-    QUARANTINE_MISSING_ATTRIBUTES = "Missing_Attributes"
+
     QUARANTINE_INVALID_DICOM = "Invalid_DICOM"
     QUARANTINE_DICOM_READ_ERROR = "DICOM_Read_Error"
-    QUARANTINE_STORAGE_ERROR = "Storage_Error"
+    QUARANTINE_MISSING_ATTRIBUTES = "Missing_Attributes"
     QUARANTINE_INVALID_STORAGE_CLASS = "Invalid_Storage_Class"
+    QUARANTINE_STORAGE_ERROR = "Storage_Error"
 
     # See docs/RSNA-Covid-19-Deindentification-Protocol.pdf
     # TODO: if user edits default anonymization script these values should be updated accordingly
@@ -47,7 +48,7 @@ class AnonymizerController:
     PRIVATE_BLOCK_NAME = "RSNA"
     DEFAULT_ANON_DATE = "20000101"  # if source date is invalid or before 19000101
 
-    NUMBER_OF_WORKER_THREADS = 4
+    NUMBER_OF_WORKER_THREADS = 2
     WORKER_THREAD_SLEEP_SECS = 0.075  # for UX responsiveness
     MODEL_AUTOSAVE_INTERVAL_SECS = 30
 

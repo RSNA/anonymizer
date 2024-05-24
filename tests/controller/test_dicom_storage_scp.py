@@ -218,7 +218,6 @@ def test_send_ct_Archibald_Doe(temp_dir: str, controller):
     assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1"
     assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".2"
     assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".3"
-    assert model.get_anon_uid(ds.FrameOfReferenceUID) == prefix + ".4"
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)

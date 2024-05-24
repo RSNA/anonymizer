@@ -49,11 +49,9 @@ see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 		<h4>113107 Retain Longitudinal Temporal Information Modified Dates Option</h4>
 		<p>This option is partially implemented.</p>
 		<ul>
-			<li>
-			All dates are modified by calculating the MD5 hash of PHI PatientID.<br> 
-			The integer value of the hash is divided by the number of days in 10 years (3652) and the remainder is used to offset the date being modified.<br>
-			This retains the temporal relationships between studies of a single patient while using different offsets for different patients.
-			</li>
+			<li>All dates are modified by calculating the MD5 hash of PHI PatientID.</li>
+			<li>The integer value of the hash is divided by the number of days in 10 years (3652) and the remainder is used to offset the date being modified.</li>
+			<li>This retains the temporal relationships between studies of a single patient while using different offsets for different patients.</li>
 			<li>Time (time of day) elements are not modified.</li>
 			<li>113107 is appended to the DeIdentificationMethodCodeSequence element (0012,0064).</li>
 		</ul>

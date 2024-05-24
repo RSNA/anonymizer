@@ -98,9 +98,9 @@ class Anonymizer(ctk.CTk):
                     logger.error("Config file corrupt, start with no global config set")
                     return
 
-                self.recent_project_dirs = list(set(config_data.get("recent_project_dirs", [])))
+                self.recent_project_dirs = [Path(dir) for dir in list(set(config_data.get("recent_project_dirs", [])))]
                 for dir in self.recent_project_dirs:
-                    if not os.path.exists(dir):
+                    if not dir.exists():
                         self.recent_project_dirs.remove(dir)
                 self.current_open_project_dir = config_data.get("current_open_project_dir")
                 if not os.path.exists(str(self.current_open_project_dir)):
@@ -410,7 +410,7 @@ class Anonymizer(ctk.CTk):
             initialdir=current_project_dir.parent,
             title=_("Select Directory for Cloned Project"),
             mustexist=False,
-            parent=self,
+            parent=None,
         )
 
         if not clone_dir_str:
@@ -428,14 +428,24 @@ class Anonymizer(ctk.CTk):
             )
             return
 
-        # Change the storage directory to the cloned project directory and regenerate site id
-        # keep all other settings:
+        # Change the storage directory to the cloned project directory
+        # keep all other settings, including Site ID:
         cloned_model: ProjectModel = copy(self.controller.model)
+
+        cloned_model.storage_dir = cloned_project_dir
+        cloned_model.project_name = f"{cloned_model.project_name} (Clone)"
+
+        dlg = SettingsDialog(self, cloned_model, new_model=True, title=_("Edit Cloned Project Settings"))
+        (edited_model, null_java_phi) = dlg.get_input()
+        if edited_model is None:
+            logger.info("Edit Cloned Project Settings Cancelled")
+            return
+        else:
+            logger.info(f"User Edited ClonedProjectModel")
+
         # Close current project
         self.close_project()
-        time.sleep(1)
-        cloned_model.storage_dir = cloned_project_dir
-        cloned_model.regenerate_site_id()
+        time.sleep(1)  # wait for project to close
 
         try:
             # Create New Controller with cloned project model
@@ -454,6 +464,7 @@ class Anonymizer(ctk.CTk):
         if not cloned_project_dir in self.recent_project_dirs:
             self.recent_project_dirs.insert(0, cloned_project_dir)
 
+        logger.info(f"{self.controller}")
         self.current_open_project_dir = cloned_project_dir
         self.save_config()
         self._open_project()
@@ -708,8 +719,13 @@ class Anonymizer(ctk.CTk):
         self.controller.update_model(edited_model)
         logger.info(f"{self.controller}")
 
+    def help_filename_to_title(self, filename):
+        words = filename.stem.split("_")[1].split()
+        return " ".join(word.capitalize() for word in words)
+
     def show_help_view(self, html_file_path):
-        view_name = html_file_path.stem.split("_", 1)[1].capitalize()
+        view_name = self.help_filename_to_title(html_file_path)
+
         if view_name in self.help_views:
             view = self.help_views[view_name]
             if view.winfo_exists():
@@ -725,14 +741,14 @@ class Anonymizer(ctk.CTk):
         # Get all html files in assets/html/ directory
         # Sort by filename number prefix
         html_dir = Path("assets/html/")
-        file_paths = sorted(html_dir.glob("*.html"), key=lambda path: int(path.stem.split("_")[0]))
+        html_file_paths = sorted(html_dir.glob("*.html"), key=lambda path: int(path.stem.split("_")[0]))
 
-        for i, file_path in enumerate(file_paths):
-            label = file_path.stem.split("_", 1)[1].capitalize()
+        for i, html_file_path in enumerate(html_file_paths):
+            label = self.help_filename_to_title(html_file_path)
             help_menu.add_command(
                 label=label,
                 font=self.menu_font,
-                command=lambda path=file_path: self.show_help_view(path),
+                command=lambda path=html_file_path: self.show_help_view(path),
             )
 
         return help_menu

@@ -4,8 +4,8 @@ from pathlib import Path
 import shutil
 import tempfile
 import pytest
-import logging
 
+from utils.logging import init_logging
 from model.project import ProjectModel, NetworkTimeouts
 from controller.project import ProjectController
 import tests.controller.dicom_pacs_simulator_scp as pacs_simulator_scp
@@ -19,34 +19,23 @@ from tests.controller.dicom_test_nodes import (
     RemoteSCPDict,
 )
 
-# Configure the logging format
-logging.basicConfig(
-    format="%(asctime)s [%(levelname)s] %(name)s:%(funcName)s[%(lineno)s]: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    level=logging.DEBUG,
-    force=True,
-)
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
 
 def pytest_sessionstart(session):
     """Runs before the test session begins."""
-    logger.info("Starting the test session")
 
 
 @pytest.fixture
 def temp_dir():
     # Create a temporary directory
     temp_path = tempfile.mkdtemp()
-    logger.info(f"Creating temporary directory: {temp_path}")
+
+    # Initialise logging without file handler:
+    init_logging(temp_path, False)
 
     # Yield the directory path to the test function
     yield temp_path
 
     # Remove the temporary directory after the test is done
-    logger.info(f"Removing temporary directory: {temp_path}")
     shutil.rmtree(temp_path)
 
 
@@ -84,7 +73,6 @@ def controller(temp_dir):
     yield project_controller
 
     # Ensure Local Storage is stopped
-    # (cleanup of project_controller doesn't happen fast enough)
     project_controller.stop_scp()
     project_controller.anonymizer.stop()
 

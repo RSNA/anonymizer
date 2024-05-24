@@ -28,18 +28,23 @@ def get_logs_dir(run_as_exe: bool, install_dir: str) -> str:
         return install_dir + PY_DEV_DIR
 
 
-def init_logging(install_dir: str, run_as_exe: bool) -> None:
+def init_logging(install_dir: str, run_as_exe: bool, file_handler: bool = True) -> None:
+
     logs_dir = get_logs_dir(run_as_exe, install_dir)
     os.makedirs(logs_dir, exist_ok=True)
+
     # Get root logger:
     logger = logging.getLogger()
-    # Setup rotating log file:
-    logFormatter = logging.Formatter(LOG_FORMAT, style="{")
-    fileHandler = logging.handlers.RotatingFileHandler(
-        logs_dir + LOG_FILENAME, maxBytes=LOG_SIZE, backupCount=LOG_BACKUP_COUNT
-    )
-    fileHandler.setFormatter(logFormatter)
-    logger.addHandler(fileHandler)
+
+    if file_handler:
+        # Setup rotating log file:
+        logFormatter = logging.Formatter(LOG_FORMAT, style="{")
+        fileHandler = logging.handlers.RotatingFileHandler(
+            logs_dir + LOG_FILENAME, maxBytes=LOG_SIZE, backupCount=LOG_BACKUP_COUNT
+        )
+        fileHandler.setFormatter(logFormatter)
+        logger.addHandler(fileHandler)
+
     # Setup stderr console output:
     consoleHandler = logging.StreamHandler()
     consoleHandler.setFormatter(logFormatter)

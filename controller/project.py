@@ -403,9 +403,8 @@ class ProjectController(AE):
     def _handle_store(self, event: Event):
         # Throttle incoming requests by adding a delay
         # to ensure UX responsiveness
-        # time.sleep(self._handle_store_time_slice_interval)
-        # TODO: back-off if AnonymizerQueue grows beyond specified limit
-        # TODO: refactor using asyncio/twisted when pynetdicom supports it
+        time.sleep(self._handle_store_time_slice_interval)
+        # TODO: back-off if AnonymizerQueue grows to limit determined by available memory
 
         logger.debug("_handle_store")
         remote = event.assoc.remote
@@ -421,6 +420,10 @@ class ProjectController(AE):
 
         # Add the File Meta Information (Group 0x0002 elements)
         ds.file_meta = FileMetaDataset(event.file_meta)
+        # Only one Transfer Syntax is Big Endian (mostly retired)
+        ds.is_little_endian = ds.file_meta.TransferSyntaxUID != "1.2.840.10008.1.2.2"  # Explicit VR Big Endian
+        # Only one Transfer Syntax uses Implicit VR
+        ds.is_implicit_VR = ds.file_meta.TransferSyntaxUID == "1.2.840.10008.1.2"  # Implicit VR Little Endian
 
         # File Metadata:Implementation Class UID and Version Name:
         ds.file_meta.ImplementationClassUID = UID(self.model.IMPLEMENTATION_CLASS_UID)  # UI: (0002,0012)
@@ -443,7 +446,7 @@ class ProjectController(AE):
             )
             return C_SUCCESS
 
-        logger.debug(f"=>{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}")
+        logger.info(f"=>{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}")
 
         self.anonymizer.anonymize_dataset_ex(remote_scu, ds)
         return C_SUCCESS
