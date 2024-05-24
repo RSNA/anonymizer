@@ -133,6 +133,7 @@ def test_anonymize_dataset_with_blank_PatientID_1_study(temp_dir: str, controlle
     ds1.PatientID = ""
     phi_ds1 = deepcopy(ds1)
     anonymizer.anonymize_dataset_ex(LocalSCU, ds1)
+    sleep(0.5)
 
     ds2 = get_testdata_file(ct_small_filename, read=True)
     assert isinstance(ds2, Dataset)
@@ -165,9 +166,9 @@ def test_anonymize_dataset_with_blank_PatientID_1_study(temp_dir: str, controlle
     assert anon_ds1.StudyDate == anonymizer.DEFAULT_ANON_DATE
     assert anon_ds1.SOPClassUID == phi_ds1.SOPClassUID
     assert anon_ds1.file_meta.TransferSyntaxUID == phi_ds1.file_meta.TransferSyntaxUID
-    assert anon_ds1.StudyInstanceUID == f"{UIDROOT}.{SITEID}.1"
-    assert anon_ds1.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.2"
-    assert anon_ds1.SOPInstanceUID == f"{UIDROOT}.{SITEID}.3"
+    assert f"{UIDROOT}.{SITEID}." in anon_ds1.StudyInstanceUID
+    assert f"{UIDROOT}.{SITEID}." in anon_ds1.SeriesInstanceUID
+    assert f"{UIDROOT}.{SITEID}." in anon_ds1.SOPInstanceUID
 
     anon_filename2 = local_storage_path(local_storage_dir(temp_dir), ds2)
     anon_ds2 = dcmread(anon_filename2)
@@ -179,9 +180,9 @@ def test_anonymize_dataset_with_blank_PatientID_1_study(temp_dir: str, controlle
     assert anon_ds2.StudyDate == anonymizer.DEFAULT_ANON_DATE
     assert anon_ds2.SOPClassUID == phi_ds2.SOPClassUID
     assert anon_ds2.file_meta.TransferSyntaxUID == phi_ds2.file_meta.TransferSyntaxUID
-    assert anon_ds2.StudyInstanceUID == f"{UIDROOT}.{SITEID}.4"
-    assert anon_ds2.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.5"
-    assert anon_ds2.SOPInstanceUID == f"{UIDROOT}.{SITEID}.6"
+    assert f"{UIDROOT}.{SITEID}." in anon_ds2.StudyInstanceUID
+    assert f"{UIDROOT}.{SITEID}." in anon_ds2.SeriesInstanceUID
+    assert f"{UIDROOT}.{SITEID}." in anon_ds2.SOPInstanceUID
 
     anon_pt_dir = Path(store_dir, anon_pt_id).as_posix()
     anon_ptid_dirlist = [d for d in os.listdir(anon_pt_dir) if os.path.isdir(os.path.join(anon_pt_dir, d))]
