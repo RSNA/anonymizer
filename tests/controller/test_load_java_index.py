@@ -18,7 +18,7 @@ def test_read_java_anonymizer_index_xlsx(temp_dir: str, controller):
 def test_load_java_index_into_new_project(temp_dir: str, controller):
     index_file = "tests/controller/assets/JavaGeneratedIndex.xlsx"
     studies: list[JavaAnonymizerExportedStudy] = read_java_anonymizer_index_xlsx(index_file)
-    anon_controller: AnonymizerController = controller.anonymizer
-    anon_controller.process_java_phi_studies(studies)
-    assert anon_controller.model.get_patient_id_count() == 83
-    assert anon_controller.model.get_phi_name("527408-000001") == "TEST"
+
+    controller.anonymizer.model.process_java_phi_studies(studies)
+    assert controller.anonymizer.model.get_patient_id_count() == 83
+    assert controller.anonymizer.model.get_phi_name("527408-000001") == "TEST"

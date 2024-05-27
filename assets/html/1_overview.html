@@ -4,8 +4,7 @@ see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 <html>
 <body>
 <div style="font-size: 14px;">
-	<h1 style="text-align: center;">RSNA DICOM Anonymizer Overview</h1>
-	<img src="assets/html/WelcomeView.png"/>
+	<!-- <h1 style="text-align: center;">RSNA DICOM Anonymizer Overview</h1> -->
 
 	<h2>Introduction</h2>
 		<p>
@@ -38,10 +37,10 @@ see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 		<h4>Differences from Java Version</h4>
 		<ol>
 			<li>Written in Python for Version 3.11</li>
-			<li>Implements a simplified operation subset to handle the default anonymizer script: {@remove, @empty, @hashdate, @round, ptid, acc, uid}</li>
+			<li>Implements operation subset to handle the default anonymizer script: {@remove, @empty, @hashdate, @round, ptid, acc, uid}</li>
 			<li>Fields with ptid in the operation will be replaced by a sequentially generated Patient ID starting at 1</li>
 			<li>Fields with acc in the operation will be replaced by a sequentially generated Accession Number starting at 1</li>
-			<li>Fields with uid in the operation will be replaced by a sequentially generated UID of form {UIDRoot.SiteID.N} where N is the sequence integer starting at 1</li>
+			<li>Fields with uid in the operation will be replaced by a sequentially generated UID of form {UIDRoot.SiteID.N} N = 1,2,3...</li>
 			<li>No built-in editor for anonymizer script</li>
 			<li>No filter script, uses DICOM association contexts to restrict which storage classes & transfer syntaxes are imported</li>
 			<li>No internal DICOM image viewer</li>

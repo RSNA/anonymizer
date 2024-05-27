@@ -24,7 +24,6 @@ class AWSCognitoDialog(tk.Toplevel):
         self.export_to_aws = export_to_aws
         self.title(title)
         self.lift()  # lift window on top
-        self.attributes("-topmost", True)  # stay on top
         self.resizable(False, False)
         self.grab_set()  # make dialog modal
         self._user_input = None

@@ -36,8 +36,8 @@ class HTMLView(tk.Toplevel):
 
         html_widget = HTMLScrolledText(
             self._frame,
-            width=180,  # characters
-            height=60,  # lines
+            width=140,  # characters
+            height=40,  # lines
             wrap="word",
             html=RenderHTML(self.html_file_path),
         )

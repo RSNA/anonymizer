@@ -61,8 +61,6 @@ class ExportView(tk.Toplevel):
         self._patient_ids_to_export = []  # dynamically as per export progress
         self.width = 1200
         self.height = 400
-        # Try to move export window to right of the dashboard:
-        # self.geometry(f"{self.width}x{self.height}+{self.master.winfo_width()}+0")
         self.resizable(True, True)
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Return>", self._enter_keypress)
@@ -85,8 +83,7 @@ class ExportView(tk.Toplevel):
         self._export_frame.grid_columnconfigure(3, weight=1)
 
         # Treeview:
-
-        # TODO: see if theme manager can do this and stor in rsna_color_scheme_font.json
+        # TODO: see if theme manager can do this and store in rsna_color_scheme_font.json
         style = ttk.Style()
         style.configure("Treeview", font=self.fixed_width_font)
 

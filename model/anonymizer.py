@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 from pydicom import Dataset
 from .project import DICOMNode
 from utils.translate import _
+from utils.storage import JavaAnonymizerExportedStudy
 
 logger = logging.getLogger(__name__)
 
@@ -355,7 +356,7 @@ class AnonymizerModel:
                     if phi == None:
                         msg = f"Existing patient, Anon PatientID={anon_patient_id} not found in phi_lookup"
                         logger.error(msg)
-                        raise RuntimeError(msg)
+                        raise LookupError(msg)
 
                 # ADD new study,series,instance to PHI:
                 phi.studies.append(self.new_study_from_dataset(ds, source, date_delta))
@@ -373,12 +374,12 @@ class AnonymizerModel:
                 if anon_patient_id is None:
                     msg = f"Critical error PHI PatientID={phi_ptid} not found in patient_id_lookup"
                     logger.critical(msg)
-                    raise RuntimeError(msg)
+                    raise LookupError(msg)
 
                 if phi == None:
                     msg = f"Critial error Existing Anon PatientID={anon_patient_id} not found in phi_lookup"
                     logger.critical(msg)
-                    raise RuntimeError(msg)
+                    raise LookupError(msg)
 
                 # Find study in PHI:
                 if phi.studies is not None:
@@ -392,7 +393,7 @@ class AnonymizerModel:
                 if study == None:
                     msg = f"Existing study {ds.StudyInstanceUID} not found in phi_lookup"
                     logger.error(msg)
-                    raise RuntimeError(msg)
+                    raise LookupError(msg)
 
                 # Find series in study:
                 if study.series is not None:
@@ -427,3 +428,33 @@ class AnonymizerModel:
                     self._uid_lookup[ds.SOPInstanceUID] = anon_uid
 
                 self._instances += 1
+
+    def process_java_phi_studies(self, java_studies: List[JavaAnonymizerExportedStudy]):
+        logger.info(f"Processing {len(java_studies)} Java PHI Studies")
+
+        for java_study in java_studies:
+
+            self.set_anon_acc_no(java_study.PHI_Accession, java_study.ANON_Accession)
+            self.set_anon_uid(java_study.PHI_StudyInstanceUID, java_study.ANON_StudyInstanceUID)
+
+            new_study = Study(
+                study_date=java_study.PHI_StudyDate,
+                anon_date_delta=int(java_study.DateOffset),
+                accession_number=java_study.PHI_Accession,
+                study_uid=java_study.PHI_StudyInstanceUID,
+                study_desc="?",
+                source="Java Index File",
+                series=[],
+            )
+
+            phi = self._phi_lookup.get(java_study.ANON_PatientID, None)
+            if phi is None:
+                new_phi = PHI(
+                    patient_name=java_study.PHI_PatientName,
+                    patient_id=java_study.PHI_PatientID,
+                    studies=[new_study],
+                )
+                self.set_anon_patient_id(java_study.PHI_PatientID, java_study.ANON_PatientID)
+                self.set_phi(java_study.ANON_PatientID, new_phi)
+            else:
+                phi.studies.append(new_study)

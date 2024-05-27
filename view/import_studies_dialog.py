@@ -28,8 +28,6 @@ class ImportStudiesDialog(tk.Toplevel):
             title = _("Importing Study")
 
         self.title(f"{title} from {controller.model.remote_scps[scp_name].aet}")
-
-        self.attributes("-topmost", True)  # stay on top
         self.grab_set()  # make dialog modal
 
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)

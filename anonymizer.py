@@ -70,7 +70,8 @@ class Anonymizer(ctk.CTk):
         self.welcome_view: WelcomeView = WelcomeView(self)
         self.resizable(False, False)
         self.title(self.TITLE)
-        self.recent_project_dirs: list[Path] = []
+        self.menu_bar = tk.Menu(master=self)
+        self.recent_project_dirs: set[Path] = []
         self.current_open_project_dir: Path | None = None
         self.load_config()
         self.set_menu_project_closed()  # creates self.menu_bar, populates Open Recent list
@@ -98,7 +99,7 @@ class Anonymizer(ctk.CTk):
                     logger.error("Config file corrupt, start with no global config set")
                     return
 
-                self.recent_project_dirs = [Path(dir) for dir in list(set(config_data.get("recent_project_dirs", [])))]
+                self.recent_project_dirs = [Path(dir) for dir in config_data.get("recent_project_dirs", [])]
                 for dir in self.recent_project_dirs:
                     if not dir.exists():
                         self.recent_project_dirs.remove(dir)
@@ -127,6 +128,9 @@ class Anonymizer(ctk.CTk):
                 message=err_msg,
                 parent=self,
             )
+
+    def is_recent_directory(self, dir: Path) -> bool:
+        return any(str(dir) in str(path) for path in self.recent_project_dirs)
 
     def new_project(self):
         logging.info("New Project")
@@ -192,7 +196,7 @@ class Anonymizer(ctk.CTk):
                 raise RuntimeError("Fatal Internal Error, Project Controller not created")
 
             if java_phi_studies:
-                self.controller.anonymizer.process_java_phi_studies(java_phi_studies)
+                self.controller.anonymizer.model.process_java_phi_studies(java_phi_studies)
 
             self.controller.save_model()
 
@@ -200,7 +204,7 @@ class Anonymizer(ctk.CTk):
 
             self.current_open_project_dir = self.controller.model.storage_dir
 
-            if self.current_open_project_dir not in self.recent_project_dirs:
+            if not self.is_recent_directory(self.current_open_project_dir):
                 self.recent_project_dirs.insert(0, self.current_open_project_dir)
                 self.save_config()
 
@@ -297,7 +301,7 @@ class Anonymizer(ctk.CTk):
                 return
 
             logger.info(f"{self.controller}")
-            if not project_dir in self.recent_project_dirs:
+            if not self.is_recent_directory(project_dir):
                 self.recent_project_dirs.insert(0, project_dir)
             self.current_open_project_dir = project_dir
             self.save_config()
@@ -308,7 +312,7 @@ class Anonymizer(ctk.CTk):
                 message=_(f"No Project file not found in: \n\n{project_dir}"),
                 parent=self,
             )
-            if project_dir in self.recent_project_dirs:
+            if self.is_recent_directory(project_dir):
                 self.recent_project_dirs.remove(project_dir)
             self.set_menu_project_closed()
             self.save_config()
@@ -461,7 +465,7 @@ class Anonymizer(ctk.CTk):
             )
             return
 
-        if not cloned_project_dir in self.recent_project_dirs:
+        if not self.is_recent_directory(cloned_project_dir):
             self.recent_project_dirs.insert(0, cloned_project_dir)
 
         logger.info(f"{self.controller}")
@@ -754,12 +758,10 @@ class Anonymizer(ctk.CTk):
         return help_menu
 
     def set_menu_project_closed(self):
-        # Setup menu bar:
-        if hasattr(self, "menu_bar"):
-            self.menu_bar.destroy()
+        if self.menu_bar:
+            self.menu_bar.delete(0, tk.END)
 
-        # font does not effect main menu items, only sub-menus on windows
-        self.menu_bar = tk.Menu(master=self)
+        # Font does not effect main menu items, only sub-menus on Windows
 
         # File Menu:
         file_menu = tk.Menu(self, tearoff=0)
@@ -775,7 +777,7 @@ class Anonymizer(ctk.CTk):
         )
 
         if self.recent_project_dirs:
-            # Open Recent menu (cascaded)
+            # Open Recent Menu (cascaded)
             open_recent_menu = tk.Menu(file_menu, tearoff=0, name="open_recent_menu")
             file_menu.add_cascade(label=_("Open Recent"), menu=open_recent_menu)
 
@@ -793,9 +795,8 @@ class Anonymizer(ctk.CTk):
 
     def set_menu_project_open(self):
         # Reset menu bar:
-        if hasattr(self, "menu_bar"):
+        if self.menu_bar:
             self.menu_bar.delete(0, tk.END)
-        self.menu_bar = tk.Menu(self)
 
         # File Menu:
         file_menu = tk.Menu(self, tearoff=0)

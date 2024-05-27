@@ -21,7 +21,6 @@ class NetworkTimeoutsDialog(tk.Toplevel):
         self.timeouts = timeouts
         self.title(title)
         self.lift()
-        self.attributes("-topmost", True)
         self.resizable(False, False)
         self.grab_set()  # make dialog modal
         self._user_input: Union[NetworkTimeouts, None] = None

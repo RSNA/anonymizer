@@ -38,7 +38,6 @@ class Dashboard(ctk.CTkFrame):
         self._images = 0
         self._create_widgets()
         self.grid(row=0, column=0, padx=self.PAD, pady=self.PAD)
-        # self._update_dashboard()
 
     def _create_widgets(self):
         logger.debug(f"_create_widgets")

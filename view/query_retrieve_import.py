@@ -32,8 +32,8 @@ from view.dashboard import Dashboard
 logger = logging.getLogger(__name__)
 
 
-class QueryView(tk.Toplevel):
-    # class QueryView(ctk.CTkToplevel):
+# class QueryView(tk.Toplevel):
+class QueryView(ctk.CTkToplevel):
     ux_poll_find_response_interval = 250  # milli-seconds
 
     fixed_width_font = ("Courier", 10, "bold")

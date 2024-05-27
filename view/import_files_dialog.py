@@ -1,9 +1,9 @@
 import os
-from typing import Dict, Union
+import platform
+from typing import Union
 import tkinter as tk
 import customtkinter as ctk
 from pathlib import Path
-from pydicom import Dataset
 import logging
 from utils.translate import _
 from controller.anonymizer import AnonymizerController
@@ -31,7 +31,8 @@ class ImportFilesDialog(tk.Toplevel):
         self.files_processed = 0
         self.title(title)
         self._sub_title: str = sub_title
-        self.attributes("-topmost", True)  # stay on top
+        if platform.system() == "Darwin":
+            self.attributes("-topmost", True)  # stay on top
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.grab_set()  # make dialog modal
         self.text_box_width = 800

@@ -2,7 +2,6 @@
 # See https://mircwiki.rsna.org/index.php?title=The_CTP_DICOM_Anonymizer for legacy anonymizer documentation
 import os
 import time
-from typing import List
 from shutil import copyfile
 import re
 import logging
@@ -15,9 +14,9 @@ from queue import Queue
 from pydicom import Dataset, Sequence, dcmread
 from pydicom.errors import InvalidDicomError
 from utils.translate import _
-from utils.storage import local_storage_path, JavaAnonymizerExportedStudy
+from utils.storage import local_storage_path
 from model.project import DICOMNode, ProjectModel
-from model.anonymizer import AnonymizerModel, Study, PHI
+from model.anonymizer import AnonymizerModel
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +24,13 @@ logger = logging.getLogger(__name__)
 class AnonymizerController:
     ANONYMIZER_MODEL_FILENAME = "AnonymizerModel.pkl"
     DEIDENTIFICATION_METHOD = "RSNA DICOM ANONYMIZER"  # (0012,0063)
-    # Quarantine Errors / Sub-directories:
 
+    # Quarantine Errors / Sub-directories:
     QUARANTINE_INVALID_DICOM = "Invalid_DICOM"
     QUARANTINE_DICOM_READ_ERROR = "DICOM_Read_Error"
     QUARANTINE_MISSING_ATTRIBUTES = "Missing_Attributes"
     QUARANTINE_INVALID_STORAGE_CLASS = "Invalid_Storage_Class"
+    QUARANTINE_CAPTURE_PHI_ERROR = "Capture_PHI_Error"
     QUARANTINE_STORAGE_ERROR = "Storage_Error"
 
     # See docs/RSNA-Covid-19-Deindentification-Protocol.pdf
@@ -164,31 +164,6 @@ class AnonymizerController:
         if self._active:
             self._stop_worker_threads()
 
-    def process_java_phi_studies(self, java_studies: List[JavaAnonymizerExportedStudy]):
-        logger.info(f"Processing {len(java_studies)} Java PHI Studies")
-        for java_study in java_studies:
-            self.model.set_anon_patient_id(java_study.PHI_PatientID, java_study.ANON_PatientID)
-            self.model.set_anon_acc_no(java_study.PHI_Accession, java_study.ANON_Accession)
-            self.model.set_anon_uid(java_study.PHI_StudyInstanceUID, java_study.ANON_StudyInstanceUID)
-
-            new_study = Study(
-                study_date=java_study.PHI_StudyDate,
-                anon_date_delta=int(java_study.DateOffset),
-                accession_number=java_study.PHI_Accession,
-                study_uid=java_study.PHI_StudyInstanceUID,
-                study_desc="?",
-                source="Java Index File",
-                series=[],
-            )
-            new_phi = PHI(
-                patient_name=java_study.PHI_PatientName,
-                patient_id=java_study.PHI_PatientID,
-                studies=[new_study],
-            )
-            self.model.set_phi(java_study.ANON_PatientID, new_phi)
-
-        self.save_model()
-
     def stop(self):
         self._stop_worker_threads()
 
@@ -199,6 +174,19 @@ class AnonymizerController:
 
     def get_quarantine_path(self) -> Path:
         return Path(self.project_model.storage_dir, self.project_model.PRIVATE_DIR, self.project_model.QUARANTINE_DIR)
+
+    def _write_to_quarantine(self, e: Exception, ds: Dataset, quarantine_error: str) -> str:
+        qpath: Path = self.get_quarantine_path().joinpath(quarantine_error)
+        os.makedirs(qpath, exist_ok=True)
+        filename: Path = local_storage_path(qpath, ds)
+        try:
+            error_msg: str = f"Storage Error = {e}, QUARANTINE {ds.SOPInstanceUID} to {filename}"
+            logger.error(error_msg)
+            ds.save_as(filename, write_like_original=True)
+        except:
+            logger.critical(f"Critical Error writing incoming dataset to QUARANTINE: {e}")
+
+        return error_msg
 
     def _autosave_manager(self):
         logger.info(f"thread={threading.current_thread().name} start")
@@ -326,7 +314,10 @@ class AnonymizerController:
             date_delta, _ = self._hash_date(ds.StudyDate, ds.PatientID)
 
         # Capture PHI and source:
-        self.model.capture_phi(source, ds, date_delta)
+        try:
+            self.model.capture_phi(source, ds, date_delta)  # May raise LookupError
+        except LookupError as e:
+            return self._write_to_quarantine(e, ds, self.QUARANTINE_CAPTURE_PHI_ERROR)
 
         try:
             # To minimize memory/computation overhead DO NOT MAKE COPY of source dataset
@@ -365,26 +356,17 @@ class AnonymizerController:
             # Save ANONYMIZED dataset to dicom file in local storage:
             filename = local_storage_path(self.project_model.images_dir(), ds)
             logger.debug(f"ANON STORE: {source} => {filename}")
+
             # TODO: Optimize / Transcoding / DICOM Compliance File Verification - as per extra project options
             # see options for write_like_original=True
             ds.save_as(filename, write_like_original=False)
             return None
 
         except Exception as e:
-            # remove this phi instance UID from lookup if anonymization or storage fails
-            # leave other PHI intact for this patient
+            # Remove this phi instance UID from lookup if anonymization or storage fails
+            # Leave other PHI intact for this patient
             self.model.remove_uid(phi_instance_uid)
-            qpath: Path = self.get_quarantine_path().joinpath(self.QUARANTINE_STORAGE_ERROR)
-            os.makedirs(qpath, exist_ok=True)
-            filename: Path = local_storage_path(qpath, ds)
-            try:
-                error_msg: str = f"Storage Error = {e}, QUARANTINE {ds.SOPInstanceUID} to {filename}"
-                logger.error(error_msg)
-                ds.save_as(filename, write_like_original=True)
-            except:
-                logger.error(f"Error writing incoming dataset to QUARANTINE: {e}")
-
-            return error_msg
+            return self._write_to_quarantine(e, ds, self.QUARANTINE_STORAGE_ERROR)
 
     def move_to_quarantine(self, file: Path, sub_dir: str):
         """Writes the file to the specified quarantine sub-directory.

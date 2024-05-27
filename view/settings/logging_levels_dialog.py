@@ -51,7 +51,6 @@ class LoggingLevelsDialog(tk.Toplevel):
         self.levels = levels
         self.title(title)
         self.lift()
-        self.attributes("-topmost", True)
         self.resizable(False, False)
         self.grab_set()  # make dialog modal
         self._user_input: Union[LoggingLevels, None] = None
@@ -71,9 +70,7 @@ class LoggingLevelsDialog(tk.Toplevel):
         anonymizer_label = ctk.CTkLabel(self, text="Anonymizer Level:")
         anonymizer_label.grid(row=row, column=0, padx=PAD, pady=PAD, sticky="w")
 
-        self.anonymizer_level_var = ctk.StringVar(
-            value=self.level_to_option(self.levels.anonymizer)
-        )
+        self.anonymizer_level_var = ctk.StringVar(value=self.level_to_option(self.levels.anonymizer))
         self.anonymizer_level = ctk.CTkOptionMenu(
             self,
             values=self.level_options,
@@ -92,9 +89,7 @@ class LoggingLevelsDialog(tk.Toplevel):
         pynetdicom_label = ctk.CTkLabel(self, text="PYNETDICOM Level:")
         pynetdicom_label.grid(row=row, column=0, padx=PAD, pady=PAD, sticky="w")
 
-        self.pynetdicom_level_var = ctk.StringVar(
-            value=self.level_to_option(self.levels.pynetdicom)
-        )
+        self.pynetdicom_level_var = ctk.StringVar(value=self.level_to_option(self.levels.pynetdicom))
         self.pynetdicom_level = ctk.CTkOptionMenu(
             self,
             values=self.level_options,
@@ -132,9 +127,7 @@ class LoggingLevelsDialog(tk.Toplevel):
 
         row += 1
 
-        self._ok_button = ctk.CTkButton(
-            self, width=100, text=_("Ok"), command=self._ok_event
-        )
+        self._ok_button = ctk.CTkButton(self, width=100, text=_("Ok"), command=self._ok_event)
         self._ok_button.grid(
             row=row,
             column=1,

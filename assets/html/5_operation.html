@@ -4,7 +4,7 @@ see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 <html>
 <body>
 <div style="font-size: 14px;">
-	<h1 style="text-align: center;">RSNA DICOM Anonymizer Operation</h1>
+	<!-- <h1 style="text-align: center;">RSNA DICOM Anonymizer Operation</h1> -->
 
 		<h2>Importing files</h2>
 		
@@ -22,18 +22,20 @@ see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 						<li>Contain the attributes:</li> 
 						<ul>
 							<li><i>SOPClassUID</i></li>
-							<li><i>StudyInstanceUID"</i></li>
+							<li><i>StudyInstanceUID</i></li>
 							<li><i>SeriesInstanceUID</i></li>
 							<li><i>SOPInstanceUID</i></li>
 						</ul>
 						<li>Storage class must match one of the storage classes set for the project. (see Modalities & Storage Classes in Help/Project Settings)</li>
+						<li>Successfully have its PHI captured</li>
 						<li>Not imported before, ie. SOPInstanceUID not stored in Anonymizer datastore.</li>
 					</ol>
-				<li>If a file fails the conditions above it will be <b>Quarantined</b> in the storage directory, ie. for the first 3 cases:</li>
+				<li>If a file fails the conditions above it will be <b>Quarantined</b> in the storage directory, ie. for the first 4 cases respectively:</li>
 					<ol>
 						<li><i>/private/quarantine/Invalid_DICOM</i></li>
 						<li><i>/private/quarantine/Missing_Attributes</i></li>
 						<li><i>/private/quarantine/Invalid_Storage_Class</i></li>
+						<li><i>/private/quarantine/Capture_PHI_Error</i></li>
 					</ol>
 				<li>If a file has already been imported it will be ignored.</li>
 				<li>The file import dialog displays the outcome of each file import on each line in its scrollable text box.</li>
@@ -50,13 +52,13 @@ see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 			<ul>
 				<li>A remote DICOM server can be queried to list matching studies in the Query results view using one or a combination of the standard query fields:</li>
 				<ol>
-					<li><i>Patient Name</i>: Alphabetic characters with and without accents, digits, ^ separator, ? for single character wildcard, * for string wildcard</li>
-					<li><i>Patient ID</i>: ASCII characters and digits, ? for single character wildcard, * for string wildcard</li>
-					<li><i>Modality</i>: drop down list box with the modalities as configured in Project Settings</li>
-					<li><i>Study Date</i>: Specific data or date Range with format YYYYMMDD-YYYYMMDD</li>
-					<li><i>Accession No.(s)</i>: ASCII characters, digits and "/-_,." ? for single character wildcard, * for string wildcard</li>
+					<li><i>Patient Name:</i> Alphabetic characters with and without accents, digits, ^ separator, ? for single character wildcard, * for string wildcard</li>
+					<li><i>Patient ID:</i> ASCII characters and digits, ? for single character wildcard, * for string wildcard</li>
+					<li><i>Modality:</i> Drop down list box with the modalities as configured in Project Settings</li>
+					<li><i>Study Date:</i> Specific data or date Range with format YYYYMMDD-YYYYMMDD</li>
+					<li><i>Accession No.(s):</i> ASCII characters, digits and "/-_,." ? for single character wildcard, * for string wildcard</li>
 				</ol>
-				<li>A comma delimited list can be entered into <i>Accession No.(s) to perform multiple searches.</i></li>
+				<li>A comma delimited list can be entered into <i>Accession No.(s)</i> to perform multiple searches.</li>
 				<li>Bulk Accession Number search via the <i>Load Accession Numbers</i> button and a text file with suffix ".txt" or ".csv" containing a comma or carriage return delimited list.</li>
 				<li>The <i>Show Imported Studies</i> switch at the top right controls whether imported studies are included in the search result list.</li>
 				<li>Only studies containing modalities set for the project will be displayed and available for selection.</li>
@@ -69,11 +71,11 @@ see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 				<li>Before importing studies choose which level (Study, Series, Instance) to use for the import process (via DICOM C-MOVE) from the drop down, <i>Move Level</i>.</li>
 				<li>Clicking the <i>Import and Anonymize</i> button will initiate the <i>Import Studies Dialog</i>.</li>
 				<li>The remote server will first be queried for each selected study to compile a Study UID Hierarchy corresponding to the selected move level.</li>
-				<li>The import will then be initiated and the <i>Import Studies Dialog<i> will display a progress bar tracking the number of images imported out of the study hierarchy.</i></li>
+				<li>The import will then be initiated and the <i>Import Studies Dialog</i> will display a progress bar tracking the number of images imported out of the study hierarchy.</li>
 				<li>The import process will finish once all studies have been requested and either all files in a study received or a timeout occurred.</li>
 				<li>If the remote server does not respond within the project's timeout setting: <i>Network Timeout</i> for each file transfer the import process for this study is terminated.</li>	
-				<li>The <i>Import Studies Dialog</li>i> will show the result of the import process when complete as shown in the screenshot below:</i></li>
-				<li>After closing the <i>Import Studies Dialog</li>i> using the <i>Close</i> button</li> the successfully imported studies will be highlighted green in the Query Results view as shown below:</li>
+				<li>The <i>Import Studies Dialog</i> will show the result of the import process when complete as shown in the screenshot below:</li>
+				<li>After closing the <i>Import Studies Dialog</i> using the <i>Close</i> button the successfully imported studies will be highlighted green in the Query Results view as shown below:</li>
 			</ul>
 			<img src="assets/html/ImportStudiesDialog.png"/>
 			<img src="assets/html/ImportStudiesResult.png"/>
@@ -90,7 +92,7 @@ see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 			<h3>The Export View</h3>
 			<img src="assets/html/ExportStudiesAWS.png"/>
 			<ul>
-				<li>The Export view operates in similar way to the Query view, where imported & anonymized <i><b>Patients</b></i>> can be selected for exporting either to a remote DICOM server or an AWS S3 bucket.</li>
+				<li>The Export view operates in similar way to the Query view, where imported & anonymized <i><b>Patients</b></i> can be selected for exporting either to a remote DICOM server or an AWS S3 bucket.</li>
 				<li>Patients may contain multiple studies that were imported independently by the import process.</li>
 				<li>Before sending a file, the Anonymizer will check with the remote server (SCP or AWS) whether it already been sent and not re-send it.</li>
 				<li>The export status will be shown in real-time on the export view.</li>
