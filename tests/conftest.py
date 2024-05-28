@@ -55,7 +55,7 @@ def controller(temp_dir):
         scp=LocalStorageSCP,
         remote_scps=RemoteSCPDict,
         network_timeouts=NetworkTimeouts(2, 5, 5, 15),
-        logging_levels=LoggingLevels(anonymizer=DEBUG, pynetdicom=INFO, pydicom=False),
+        logging_levels=LoggingLevels(anonymizer=INFO, pynetdicom=WARNING, pydicom=False),
     )
 
     project_controller = ProjectController(project_model)

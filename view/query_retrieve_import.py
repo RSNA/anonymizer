@@ -76,6 +76,7 @@ class QueryView(ctk.CTkToplevel):
         self.width = 1300
         self.height = 400
         self.resizable(True, True)
+        self.lift()
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
