@@ -5,8 +5,9 @@ import shutil
 import tempfile
 import pytest
 
+from logging import DEBUG, INFO, WARNING
 from utils.logging import init_logging
-from model.project import ProjectModel, NetworkTimeouts
+from model.project import ProjectModel, NetworkTimeouts, LoggingLevels
 from controller.project import ProjectController
 import tests.controller.dicom_pacs_simulator_scp as pacs_simulator_scp
 from tests.controller.dicom_test_nodes import (
@@ -54,6 +55,7 @@ def controller(temp_dir):
         scp=LocalStorageSCP,
         remote_scps=RemoteSCPDict,
         network_timeouts=NetworkTimeouts(2, 5, 5, 15),
+        logging_levels=LoggingLevels(anonymizer=DEBUG, pynetdicom=INFO, pydicom=False),
     )
 
     project_controller = ProjectController(project_model)

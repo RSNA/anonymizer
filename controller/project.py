@@ -149,6 +149,8 @@ class StudyUIDHierarchy:
         return f"{self.uid},{self.last_error_msg or ''},[{self.completed_sub_ops},{self.failed_sub_ops},{self.remaining_sub_ops},{self.warning_sub_ops}]i{self.get_number_of_instances()}{series_str}"
 
     def get_number_of_instances(self) -> int:
+        if self.series is None:
+            return 0
         return sum(series.instance_count for series in self.series.values())
         # count = 0
         # for series_obj in self.series.values():
@@ -1194,12 +1196,12 @@ class ProjectController(AE):
                     # New SeriesUIDHierarchy:
                     series_descr = identifier.SeriesDescription if hasattr(identifier, "SeriesDescription") else "?"
                     instance_count = identifier.get("NumberOfSeriesRelatedInstances", 0)
-                    if not instance_level and instance_count == 0:
+                    if not instance_level and not instance_count:
                         raise DICOMRuntimeError(
                             _(
                                 f"Unable to retrieve UID Hierarchy for reliable import operation via DICOM C-MOVE.\n\n"
-                                "{scp_name} did not return the number of instances in a series.\n\n"
-                                "Standard DICOM field (0020,1209) NumberOfSeriesRelatedInstances is missing in the query response."
+                                f"{scp_name} did not return the number of instances in a series.\n\n"
+                                f"Standard DICOM field (0020,1209) NumberOfSeriesRelatedInstances is missing in the query response."
                             )
                         )
 

@@ -1,5 +1,5 @@
 # Major.Minor.Patch
 # As per (https://semver.org/spec/v2.0.0.html)
-__version__ = "17.1.0-RC1"
+__version__ = "17.1.0-RC2"
 
 # TODO: version patterning using regex

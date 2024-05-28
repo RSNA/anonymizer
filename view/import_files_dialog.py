@@ -131,6 +131,7 @@ class ImportFilesDialog(tk.Toplevel):
             # TODO: Optimize using multiple file processing threads, either use Anonymizer queue
             # or split the files into chunks and process them in parallel:
             (error_msg, ds) = self._controller.anonymize_file(Path(path))
+
             if error_msg:
                 self._text_box.insert(tk.END, f"{abridged_path}\n=> {error_msg}\n")
             else:

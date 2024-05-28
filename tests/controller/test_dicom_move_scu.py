@@ -763,7 +763,7 @@ def test_move_at_study_level_1_CT_file_from_orthanc_to_local_storage(temp_dir: s
     ds: Dataset = send_file_to_scp(ct_small_filename, OrthancSCP, controller)
 
     # Get study_uid_hierarchy for CT small study:
-    error_msg, study = controller.get_study_uid_hierarchy(OrthancSCP.aet, ct_small_StudyInstanceUID, patient3_id)
+    error_msg, study = controller.get_study_uid_hierarchy(OrthancSCP.aet, ct_small_StudyInstanceUID, patient3_id, True)
 
     assert error_msg == None
     assert study.get_number_of_instances() == 1
@@ -802,7 +802,7 @@ def test_move_at_study_level_with_network_timeout_then_series_level_MR_Study_fro
     send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, OrthancSCP, controller)
 
     # Get study_uid_hierarchy for MR study:
-    error_msg, study = controller.get_study_uid_hierarchy(OrthancSCP.aet, mr_brain_StudyInstanceUID, patient2_id)
+    error_msg, study = controller.get_study_uid_hierarchy(OrthancSCP.aet, mr_brain_StudyInstanceUID, patient2_id, True)
 
     assert error_msg == None
     assert study.uid == mr_brain_StudyInstanceUID
@@ -928,19 +928,19 @@ def test_move_at_study_level_3_studies_with_network_timeout_then_series_level_fr
 
     # Get StudyUIDHierachies:
     error_msg, study1_hierarchy = controller.get_study_uid_hierarchy(
-        OrthancSCP.aet, ds1[0].StudyInstanceUID, patient1_id
+        OrthancSCP.aet, ds1[0].StudyInstanceUID, patient1_id, True
     )
     assert error_msg == None
     assert study1_hierarchy.get_number_of_instances() == 3
 
     error_msg, study2_hierarchy = controller.get_study_uid_hierarchy(
-        OrthancSCP.aet, ds2[0].StudyInstanceUID, patient1_id
+        OrthancSCP.aet, ds2[0].StudyInstanceUID, patient1_id, True
     )
     assert error_msg == None
     assert study2_hierarchy.get_number_of_instances() == 4
 
     error_msg, study3_hierarchy = controller.get_study_uid_hierarchy(
-        OrthancSCP.aet, ds3[0].StudyInstanceUID, patient2_id
+        OrthancSCP.aet, ds3[0].StudyInstanceUID, patient2_id, True
     )
     assert error_msg == None
     assert study3_hierarchy.get_number_of_instances() == 11

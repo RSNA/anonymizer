@@ -28,7 +28,8 @@
     "PYNETDICOM",
     "RSNA",
     "tkhtmlview",
-    "uids"
+    "uids",
+    "VNA's"
   ],
   "python.analysis.typeCheckingMode": "off",
   "editor.defaultFoldingRangeProvider": "ms-python.black-formatter",
