@@ -15,11 +15,11 @@ see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 		</p>
 		<h4>113100: Basic Application Confidentiality Profile</h4>
 		The RSNA DICOM Anonymizer program implements the Basic Profile.
-		The program either imports the site identifier: SiteID & UIDRoot from an Index excel file exported by the Java Anonymizer or auto-generates a new unique SiteID and uses a default UIDRoot.   
+		The program either imports the site identifier (SiteID and UIDRoot) from an Index Excel file exported by the Java Anonymizer or auto-generates a new unique SiteID and uses a default UIDRoot.   
 		The PatientName (0010,0010) and PatientID (0010,0020) elements are modified by assigning sequential integers to unique PHI PatientIDs as they are encountered.
-		The sequential integer is appended to the SiteID parameter, producing a string in the form [SiteID]-[sequential integer] which is used to populate both elements.
+		The sequential integer is appended to the SiteID parameter, producing a string in the form [SiteID]-[sequential integer], which is used to populate both elements.
 		If the PHI PatientID is missing or blank, the program assigns [SiteID]-000000 to the PatientID and PatientName elements. 
-		The program keeps a database that is used to ensure that all studies of the same patient are de-identified in the same way. 
+		The program maintains a database to ensure that all studies of the same patient are de-identified in the same way. 
 		<ol>
 		<li>UIDs are replaced by those generated with the format: [UIDRoot].[SiteID].[sequential integer]</li>
 		<li>All UIDs are removed in groups.</li>

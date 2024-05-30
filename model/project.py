@@ -120,8 +120,8 @@ class ProjectModel:
             identity_pool_id="us-east-1:3c616c9d-58f0-4c89-a412-ea8cf259039a",
             s3_bucket="amplify-datauploader-prodmi-stagingbucketeec2e4de-x4qrvyzen65z",
             s3_prefix="private",
-            username="anonymizer2",
-            password="SpeedFast1967#",
+            username="",
+            password="",
         )
 
     @staticmethod
