@@ -37,9 +37,10 @@ class SettingsDialog(tk.Toplevel):
         self.new_model = new_model  # to restrict editing for existing projects, eg. SITE_ID & storage directory changes
         self.title(title)
         self.resizable(False, False)
-        self.grab_set()  # make dialog modal
         self._user_input: Tuple[ProjectModel | None, List[JavaAnonymizerExportedStudy] | None] = (None, None)
         self._create_widgets()
+        self.wait_visibility()
+        self.grab_set()  # make dialog modal
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
         # if sys.platform.startswith("win"):

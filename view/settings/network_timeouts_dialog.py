@@ -22,9 +22,10 @@ class NetworkTimeoutsDialog(tk.Toplevel):
         self.title(title)
         self.lift()
         self.resizable(False, False)
-        self.grab_set()  # make dialog modal
         self._user_input: Union[NetworkTimeouts, None] = None
         self._create_widgets()
+        self.wait_visibility()
+        self.grab_set()  # make dialog modal
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
 

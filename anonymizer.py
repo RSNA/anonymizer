@@ -779,18 +779,19 @@ class Anonymizer(ctk.CTk):
         if self.recent_project_dirs:
             # Open Recent Menu (cascaded)
             open_recent_menu = tk.Menu(file_menu, tearoff=0, name="open_recent_menu")
-            file_menu.add_cascade(label=_("Open Recent"), menu=open_recent_menu)
+            file_menu.add_cascade(label=_("Open Recent"), font=self.menu_font, menu=open_recent_menu)
 
             for directory in self.recent_project_dirs:
                 open_recent_menu.add_command(
                     label=str(directory),
+                    font=self.menu_font,
                     command=lambda dir=directory: self.open_project(dir),
                 )
 
-        self.menu_bar.add_cascade(label=_("File"), menu=file_menu)
+        self.menu_bar.add_cascade(label=_("File"), font=self.menu_font, menu=file_menu)
 
         # Help Menu:
-        self.menu_bar.add_cascade(label=_("Help"), menu=self.get_help_menu())
+        self.menu_bar.add_cascade(label=_("Help"), font=self.menu_font, menu=self.get_help_menu())
         self.config(menu=self.menu_bar)
 
     def set_menu_project_open(self):
@@ -846,10 +847,10 @@ class Anonymizer(ctk.CTk):
             command=self.settings,
             # accelerator="Command+S",
         )
-        self.menu_bar.add_cascade(label=_("Settings"), menu=view_menu)
+        self.menu_bar.add_cascade(label=_("Settings"), font=self.menu_font, menu=view_menu)
 
         # Help Menu:
-        self.menu_bar.add_cascade(label=_("Help"), menu=self.get_help_menu())
+        self.menu_bar.add_cascade(label=_("Help"), font=self.menu_font, menu=self.get_help_menu())
         self.config(menu=self.menu_bar)
 
     def disable_file_menu(self):

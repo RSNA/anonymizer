@@ -34,7 +34,6 @@ class ImportFilesDialog(tk.Toplevel):
         if platform.system() == "Darwin":
             self.attributes("-topmost", True)  # stay on top
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
-        self.grab_set()  # make dialog modal
         self.text_box_width = 800
         if len(self._paths) > 10:
             self.text_box_height = 400
@@ -42,9 +41,10 @@ class ImportFilesDialog(tk.Toplevel):
             self.text_box_height = 200
         self.resizable(True, True)
         self._user_input: Union[list, None] = None
-
         self.bind("<Escape>", self._escape_keypress)
         self._create_widgets()
+        self.wait_visibility()
+        self.grab_set()  # make dialog modal
         self.after(250, self._anonymize_files)
 
     def _create_widgets(self) -> None:

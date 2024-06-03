@@ -28,13 +28,14 @@ class ModalitiesDialog(tk.Toplevel):
         self.title(title)
         self.geometry("400x350")
         self.resizable(False, False)
-        self.grab_set()  # make dialog modal
         self._user_input: Union[list, None] = None
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
         self._create_widgets()
+        self.wait_visibility()
+        self.grab_set()  # make dialog modal
 
     def _create_widgets(self):
         logger.info(f"_create_widgets")

@@ -58,13 +58,14 @@ class SOPClassesDialog(tk.Toplevel):
         self.title(title)
         self.geometry("750x600")
         self.resizable(False, True)
-        self.grab_set()  # make dialog modal
         self._user_input: Union[list, None] = None
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
         self._create_widgets()
+        self.wait_visibility()
+        self.grab_set()  # make dialog modal
 
     def _create_widgets(self):
         logger.info(f"_create_widgets")
@@ -100,20 +101,16 @@ class SOPClassesDialog(tk.Toplevel):
 
         for class_id in _STORAGE_CLASSES.values():
             class_name = self.sc_lookup[class_id]
-            class_name = insert_space_after_codes(
-                insert_spaces_between_cases(class_name), self.storage_codes
-            ).replace("XRay", "X-Ray")
+            class_name = insert_space_after_codes(insert_spaces_between_cases(class_name), self.storage_codes).replace(
+                "XRay", "X-Ray"
+            )
             tag = ""
             if class_id in self.sop_classes:
                 tag = "green"
             try:
-                self._tree.insert(
-                    "", "end", iid=class_id, values=[class_name, class_id], tags=tag
-                )
+                self._tree.insert("", "end", iid=class_id, values=[class_name, class_id], tags=tag)
             except Exception as e:
-                logger.error(
-                    f"Exception: {e}"
-                )  # _tkinter.TclError: Item {iid} already exists
+                logger.error(f"Exception: {e}")  # _tkinter.TclError: Item {iid} already exists
 
         self._button_frame = ctk.CTkFrame(self)
         self._button_frame.grid(row=1, column=0, sticky="we")
@@ -133,12 +130,8 @@ class SOPClassesDialog(tk.Toplevel):
             text=_("From Modalities"),
             command=self._from_modalities_selection_button_pressed,
         )
-        self._from_modalities_selection_button.grid(
-            row=0, column=1, padx=PAD, pady=PAD, sticky="w"
-        )
-        self._ok_button = ctk.CTkButton(
-            self._button_frame, width=100, text=_("Ok"), command=self._ok_event
-        )
+        self._from_modalities_selection_button.grid(row=0, column=1, padx=PAD, pady=PAD, sticky="w")
+        self._ok_button = ctk.CTkButton(self._button_frame, width=100, text=_("Ok"), command=self._ok_event)
         self._ok_button.grid(
             row=0,
             column=2,

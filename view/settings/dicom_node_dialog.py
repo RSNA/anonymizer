@@ -33,11 +33,12 @@ class DICOMNodeDialog(tk.Toplevel):
         self.address = address
         self.title(title)
         self.resizable(False, False)
-        self.grab_set()  # make dialog modal
         self._user_input: Union[DICOMNode, None] = None
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
         self._create_widgets()
+        self.wait_visibility()
+        self.grab_set()  # make dialog modal
 
     def _create_widgets(self):
         logger.debug(f"_create_widgets")
