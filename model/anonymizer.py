@@ -1,4 +1,4 @@
-from typing import Tuple, List
+from typing import List
 from collections import namedtuple
 from pathlib import Path
 import logging
@@ -61,6 +61,10 @@ Totals = namedtuple("Totals", ["patients", "studies", "series", "instances"])
 
 
 class AnonymizerModel:
+    """
+    The Anonymizer data model class to store PHI (Protected Health Information) and anonymization lookups.
+    """
+
     # Model Version Control
     MODEL_VERSION = 1
     MAX_PATIENTS = 1000000  # 1 million patients
@@ -68,21 +72,43 @@ class AnonymizerModel:
     _lock = threading.Lock()
 
     def __init__(self, site_id: str, uid_root: str, script_path: Path):
+        """
+        Initializes an instance of the AnonymizerModel class.
+
+        Args:
+            site_id (str): The site ID.
+            uid_root (str): The UID root.
+            script_path (Path): The path to the script.
+
+        Attributes:
+            _version (str): The model version.
+            _site_id (str): The site ID.
+            _uid_root (str): The UID root.
+            _uid_prefix (str): The UID prefix.
+            default_anon_pt_id (str): The default anonymized patient ID.
+            _patient_id_lookup (dict): A dictionary to store patient ID lookups.
+            _uid_lookup (dict): A dictionary to store UID lookups.
+            _acc_no_lookup (dict): A dictionary to store accession number lookups.
+            _phi_lookup (dict): A dictionary to store PHI lookups.
+            _script_path (Path): The path to the script.
+            _tag_keep (dict): A dictionary to store DICOM tag operations.
+            _patients (int): The number of patients.
+            _studies (int): The number of studies.
+            _series (int): The number of series.
+            _instances (int): The number of instances.
+        """
         self._version = AnonymizerModel.MODEL_VERSION
         self._site_id = site_id
         self._uid_root = uid_root
         self._uid_prefix = f"{self._uid_root}.{self._site_id}"
-        # When PHI PatientID is missing allocate to Anonymized PatientID: 000000
         self.default_anon_pt_id: str = site_id + "-" + "".zfill(len(str(self.MAX_PATIENTS)) - 1)
-        # Dynamic attributes:
         self._patient_id_lookup = {}
         self._uid_lookup = {}
         self._acc_no_lookup = {}
         self._phi_lookup = {}
         self.clear_lookups()
         self._script_path = script_path
-        self._tag_keep = {}  # DICOM Tag: Operation
-        # Running totals incremented by capture_phi() method:
+        self._tag_keep = {}
         self._patients = 0
         self._studies = 0
         self._series = 0
@@ -111,8 +137,20 @@ class AnonymizerModel:
         return f"{self.get_class_name()}\n({pformat(filtered_dict)})"
 
     def load_script(self, script_path: Path):
-        # Parse the anonymize script and create a dict of tags to keep: self._tag_keep["tag"] = "operation"
-        # The anonymization function indicated by the script operation will be used to transform source dataset
+        """
+        Load and parse an anonymize script file.
+
+        Args:
+            script_path (Path): The path to the script file.
+
+        Raises:
+            FileNotFoundError: If the script file is not found.
+            ET.ParseError: If there is an error parsing the script file.
+            Exception: If there is any other generic exception.
+
+        Returns:
+            None
+        """
         try:
             # Open and parse the XML script file
             root = ET.parse(script_path).getroot()
@@ -152,6 +190,9 @@ class AnonymizerModel:
             raise
 
     def clear_lookups(self):
+        """
+        Clears all the lookup dictionaries used for anonymization.
+        """
         with self._lock:
             self._patient_id_lookup.clear()
             self._patient_id_lookup[""] = self.default_anon_pt_id  # Default Anonymized PatientID
@@ -238,9 +279,18 @@ class AnonymizerModel:
     def get_acc_no_count(self) -> int:
         return len(self._acc_no_lookup)
 
-    def get_stored_instance_count(
-        self, ptid: str, study_uid: str
-    ) -> int:  # ptid: PHI PatientID, study_uid: PHI StudyUID
+    def get_stored_instance_count(self, ptid: str, study_uid: str) -> int:
+        """
+        Retrieves the number of stored instances for a given patient ID and study UID.
+
+        Args:
+            ptid (str): PHI PatientID.
+            study_uid (str): PHI StudyUID.
+
+        Returns:
+            int: The number of stored instances.
+
+        """
         with self._lock:
             anon_patient_id = self._patient_id_lookup.get(ptid, None)
             if anon_patient_id is None:
@@ -253,9 +303,19 @@ class AnonymizerModel:
                     return sum(series.instance_count for series in study.series)
             return 0
 
-    # This will return difference between stored instances and target_count
-    # When first called for a study it also sets the study.target_instance_count (for future imported state detection)
     def get_pending_instance_count(self, ptid: str, study_uid: str, target_count: int) -> int:
+        """
+        This will return difference between stored instances and target_count for a given patient ID & study UID
+        When first called for a study it also sets the study.target_instance_count (for future imported state detection)
+
+        Args:
+            ptid (str): The patient ID.
+            study_uid (str): The study UID.
+            target_count (int): The target count.
+
+        Returns:
+            int: The pending instance count.
+        """
         anon_patient_id = self._patient_id_lookup.get(ptid, None)
         if anon_patient_id is None:
             return target_count
@@ -270,6 +330,18 @@ class AnonymizerModel:
         return target_count
 
     def series_complete(self, ptid: str, study_uid: str, series_uid: str, target_count: int) -> bool:
+        """
+        Check if a series is complete based on the given parameters.
+
+        Args:
+            ptid (str): The patient ID.
+            study_uid (str): The study UID.
+            series_uid (str): The series UID.
+            target_count (int): The target instance count.
+
+        Returns:
+            bool: True if the series is complete, False otherwise.
+        """
         anon_patient_id = self._patient_id_lookup.get(ptid, None)
         if anon_patient_id is None:
             return False
@@ -319,7 +391,24 @@ class AnonymizerModel:
             ],
         )
 
-    def capture_phi(self, source: str, ds: Dataset, date_delta: int):
+    def capture_phi(self, source: str, ds: Dataset, date_delta: int) -> None:
+        """
+        Capture PHI (Protected Health Information) from a dataset and update the PHI lookup.
+
+        Args:
+            source (str): The source of the dataset.
+            ds (Dataset): The dataset containing the PHI.
+            date_delta (int): The time difference in days.
+
+        Raises:
+            LookupError: If the PHI PatientID is not found in the patient_id_lookup or phi_lookup.
+            LookupError: If the existing patient with Anon PatientID is not found in phi_lookup.
+            LookupError: If the existing study is not found in phi_lookup.
+            LookupError: If the existing series is not found in the study.
+
+        Returns:
+            None
+        """
         with self._lock:
             # ds must have attributes: StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID
             req_uids = ["StudyInstanceUID", "SeriesInstanceUID", "SOPInstanceUID"]
@@ -430,6 +519,15 @@ class AnonymizerModel:
                 self._instances += 1
 
     def process_java_phi_studies(self, java_studies: List[JavaAnonymizerExportedStudy]):
+        """
+        Process Java PHI studies and store PHI in the AnonymizerModel.
+
+        Args:
+            java_studies (List[JavaAnonymizerExportedStudy]): List of Java PHI studies.
+
+        Returns:
+            None
+        """
         logger.info(f"Processing {len(java_studies)} Java PHI Studies")
 
         for java_study in java_studies:

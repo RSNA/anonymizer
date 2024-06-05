@@ -6,7 +6,7 @@ from copy import deepcopy
 from typing import Dict, Tuple, List
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from pynetdicom._globals import ALL_TRANSFER_SYNTAXES, DEFAULT_TRANSFER_SYNTAXES
+from pynetdicom._globals import DEFAULT_TRANSFER_SYNTAXES
 from utils.modalities import MODALITIES
 from utils.translate import _
 from __version__ import __version__
@@ -66,6 +66,10 @@ class AWSCognito:
 
 @dataclass
 class ProjectModel:
+    """
+    The Project data model class to store all the project settings and configurations.
+    """
+
     # Sub-directories in the storage directory:
     PRIVATE_DIR = "private"
     PUBLIC_DIR = "public"

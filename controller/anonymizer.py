@@ -14,7 +14,7 @@ from queue import Queue
 from pydicom import Dataset, Sequence, dcmread
 from pydicom.errors import InvalidDicomError
 from utils.translate import _
-from utils.storage import local_storage_path
+from utils.storage import DICOM_FILE_SUFFIX
 from model.project import DICOMNode, ProjectModel
 from model.anonymizer import AnonymizerModel
 
@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 
 
 class AnonymizerController:
+    """
+    The Anonymizer Controller class to handle the anonymization of DICOM datasets and manage the Anonymizer Model.
+    """
+
     ANONYMIZER_MODEL_FILENAME = "AnonymizerModel.pkl"
     DEIDENTIFICATION_METHOD = "RSNA DICOM ANONYMIZER"  # (0012,0063)
 
@@ -33,7 +37,7 @@ class AnonymizerController:
     QUARANTINE_CAPTURE_PHI_ERROR = "Capture_PHI_Error"
     QUARANTINE_STORAGE_ERROR = "Storage_Error"
 
-    # See docs/RSNA-Covid-19-Deindentification-Protocol.pdf
+    # See assets/docs/RSNA-Covid-19-Deindentification-Protocol.pdf
     # TODO: if user edits default anonymization script these values should be updated accordingly
     # TODO: simpler to provide UX for different de-identification methods, esp. enable/disable sub-options
     # DeIdentificationMethodCodeSequence (0012,0064)
@@ -172,13 +176,49 @@ class AnonymizerController:
             attr_name for attr_name in self.required_attributes if attr_name not in ds or getattr(ds, attr_name) == ""
         ]
 
+    def local_storage_path(self, base_dir: Path, ds: Dataset) -> Path:
+        """
+        Generate the local storage path in the anonymizer store for a given anonymized dataset.
+
+        Args:
+            base_dir (Path): The base directory where the dataset will be stored.
+            ds (Dataset): The dataset containing the necessary attributes.
+
+        Returns:
+            Path: The local storage path for the dataset.
+        """
+        if self.missing_attributes(ds):
+            raise ValueError(_("Dataset missing required attributes"))
+
+        dest_path = Path(
+            base_dir,
+            ds.get("PatientID", self.model.default_anon_pt_id),
+            ds.StudyInstanceUID,
+            ds.SeriesInstanceUID,
+            ds.SOPInstanceUID + DICOM_FILE_SUFFIX,
+        )
+        # Ensure all directories in the path exist
+        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+        return dest_path
+
     def get_quarantine_path(self) -> Path:
         return Path(self.project_model.storage_dir, self.project_model.PRIVATE_DIR, self.project_model.QUARANTINE_DIR)
 
     def _write_to_quarantine(self, e: Exception, ds: Dataset, quarantine_error: str) -> str:
+        """
+        Writes the given dataset to the quarantine directory and logs any errors.
+
+        Args:
+            e (Exception): The exception that occurred.
+            ds (Dataset): The dataset to be written to quarantine.
+            quarantine_error (str): The quarantine error directory name.
+
+        Returns:
+            str: The error message indicating the storage error and the path to the saved dataset.
+        """
         qpath: Path = self.get_quarantine_path().joinpath(quarantine_error)
         os.makedirs(qpath, exist_ok=True)
-        filename: Path = local_storage_path(qpath, ds)
+        filename: Path = self.local_storage_path(qpath, ds)
         try:
             error_msg: str = f"Storage Error = {e}, QUARANTINE {ds.SOPInstanceUID} to {filename}"
             logger.error(error_msg)
@@ -202,8 +242,17 @@ class AnonymizerController:
     def save_model(self) -> bool:
         self.model.save(self.model_filename)
 
-    # Date must be YYYYMMDD format and a valid date after 19000101:
     def valid_date(self, date_str: str) -> bool:
+        """
+        Check if a date string is valid.
+        Date must be YYYYMMDD format and a valid date after 19000101:
+
+        Args:
+            date_str (str): The date string to be validated.
+
+        Returns:
+            bool: True if the date string is valid, False otherwise.
+        """
         try:
             date_obj = datetime.strptime(date_str, "%Y%m%d")
             if date_obj < datetime(1900, 1, 1):
@@ -212,11 +261,19 @@ class AnonymizerController:
         except ValueError:
             return False
 
-    # Increment date by a number of days determined by MD5 hash of PatientID mod 10 years
-    # DICOM Date format: YYYYMMDD
-    # Returns tuple of (days incremented, incremented date)
-    # If invalid date or empty PatientID, returns (0, DEFAULT_ANON_DATE)
     def _hash_date(self, date: str, patient_id: str) -> tuple[int, str]:
+        """
+        Hashes the given date based on the patient ID.
+        Increment date by a number of days determined by MD5 hash of PatientID mod 10 years
+
+        Args:
+            date (str): The date to be hashed in the format "YYYYMMDD".
+            patient_id (str): The patient ID used for hashing.
+
+        Returns:
+            tuple[int, str]: A tuple containing the number of days incremented and the formatted hashed date.
+            If invalid date or empty PatientID, returns (0, DEFAULT_ANON_DATE)
+        """
         if not self.valid_date(date) or not len(patient_id):
             return 0, self.DEFAULT_ANON_DATE
 
@@ -230,12 +287,21 @@ class AnonymizerController:
         input_date = datetime.strptime(date, "%Y%m%d")
         # Increment the date by the calculated number of days
         incremented_date = input_date + timedelta(days=days_to_increment)
-        # Format the incremented date as "YYYYMMDD"s
+        # Format the incremented date as "YYYYMMDD"
         formatted_date = incremented_date.strftime("%Y%m%d")
 
         return days_to_increment, formatted_date
 
     def extract_first_digit(self, s: str):
+        """
+        Extracts the first digit from a given string.
+
+        Args:
+            s (str): The input string.
+
+        Returns:
+            str: The first digit found in the string, or None if no digit is found.
+        """
         match = re.search(r"\d", s)
         return match.group(0) if match else None
 
@@ -261,7 +327,17 @@ class AnonymizerController:
 
         return result
 
-    def _anonymize_element(self, dataset, data_element):
+    def _anonymize_element(self, dataset, data_element) -> None:
+        """
+        Anonymizes a data element in the dataset based on the specified operations.
+
+        Args:
+            dataset (dict): The dataset containing the data elements.
+            data_element (DataElement): The data element to be anonymized.
+
+        Returns:
+            None
+        """
         # removes parentheses, spaces, and commas from tag
         tag = str(data_element.tag).translate(self._clean_tag_translate_table).upper()
         # Remove data_element if not in _tag_keep:
@@ -306,6 +382,25 @@ class AnonymizerController:
             logger.debug(f"round_age: Result:{dataset[tag].value}")
 
     def anonymize(self, source: DICOMNode | str, ds: Dataset) -> str | None:
+        """
+        Anonymizes the DICOM dataset by removing PHI (Protected Health Information) and
+        saving the anonymized dataset to a DICOM file.
+
+        Args:
+            source (DICOMNode | str): The source of the DICOM dataset.
+            ds (Dataset): The DICOM dataset to be anonymized.
+
+        Returns:
+            str | None: If an error occurs during the anonymization process, returns the error message.
+                        Otherwise, returns None.
+
+        Raises:
+            LookupError: If an error occurs while capturing PHI from the dataset.
+
+        Notes:
+            - The anonymization process involves removing PHI from the dataset and saving the anonymized dataset to a DICOM file.
+            - If an error occurs during the anonymization process, the dataset is moved to the quarantine for further analysis.
+        """
         self._model_change_flag = True  # for autosave manager
 
         # Calculate date delta from StudyDate and PatientID:
@@ -354,7 +449,7 @@ class AnonymizerController:
             block.add_new(0x3, "SH", self.project_model.project_name)
 
             # Save ANONYMIZED dataset to dicom file in local storage:
-            filename = local_storage_path(self.project_model.images_dir(), ds)
+            filename = self.local_storage_path(self.project_model.images_dir(), ds)
             logger.debug(f"ANON STORE: {source} => {filename}")
 
             # TODO: Optimize / Transcoding / DICOM Compliance File Verification - as per extra project options
@@ -368,15 +463,15 @@ class AnonymizerController:
             self.model.remove_uid(phi_instance_uid)
             return self._write_to_quarantine(e, ds, self.QUARANTINE_STORAGE_ERROR)
 
-    def move_to_quarantine(self, file: Path, sub_dir: str):
+    def move_to_quarantine(self, file: Path, sub_dir: str) -> bool:
         """Writes the file to the specified quarantine sub-directory.
 
         Args:
-            file: file to be quarantined
-            sub_dir: quarantine sub-directory
+            file (Path): The file to be quarantined.
+            sub_dir (str): The quarantine sub-directory.
 
         Returns:
-            True on successful move, False otherwise.
+            bool: True on successful move, False otherwise.
         """
         try:
             qpath = self.get_quarantine_path().joinpath(sub_dir, file.name)
@@ -389,6 +484,24 @@ class AnonymizerController:
             return False
 
     def anonymize_file(self, file: Path) -> tuple[str | None, Dataset | None]:
+        """
+        Anonymizes a DICOM file.
+
+        Args:
+            file (Path): The path to the DICOM file to be anonymized.
+
+        Returns:
+            tuple[str | None, Dataset | None]: A tuple containing an error message (if any) and the anonymized DICOM dataset.
+                - If an error occurs during the anonymization process, the error message will be returned along with None.
+                - If the anonymization is successful, None will be returned as the error message along with the anonymized DICOM dataset.
+
+        Raises:
+            FileNotFoundError: If the specified file is not found.
+            IsADirectoryError: If the specified file is a directory.
+            PermissionError: If there is a permission error while accessing the file.
+            InvalidDicomError: If the DICOM file is invalid.
+            Exception: If any other unexpected exception occurs during the anonymization process.
+        """
         try:
             ds: Dataset = dcmread(file)
         except (FileNotFoundError, IsADirectoryError, PermissionError) as e:
@@ -421,11 +534,30 @@ class AnonymizerController:
 
         return self.anonymize(str(file), ds), ds
 
-    # ds = None is the sentinel value to terminate the worker thread(s)
     def anonymize_dataset_ex(self, source: DICOMNode | str, ds: Dataset | None) -> None:
+        """
+        Schedules a dataset to be anonymized by background worker thread
+
+        Args:
+            source (DICOMNode | str): The source of the dataset.
+            ds (Dataset | None): The dataset to be anonymized.
+                ds = None is the sentinel value to terminate the worker thread(s)
+
+        Returns:
+            None
+        """
         self._anon_Q.put((source, ds))
 
     def _anonymize_worker(self, ds_Q: Queue) -> None:
+        """
+        An internal worker method that performs the anonymization process.
+
+        Args:
+            ds_Q (Queue): The queue containing the data sources to be anonymized.
+
+        Returns:
+            None
+        """
         logger.info(f"thread={threading.current_thread().name} start")
 
         while True:

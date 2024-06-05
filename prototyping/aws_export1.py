@@ -4,11 +4,6 @@ from botocore.exceptions import NoCredentialsError
 # https://www.archerimagine.com/articles/aws/aws-cognito-tutorials.html
 
 # AWS S3 Bucket Details
-# client_id="46ugbt3jat1spc70ulio46btmc"
-# s3_bucket="amplify-datauploader-prodmi-stagingbucketeec2e4de-x4qrvyzen65z"
-# s3_prefix="private/"
-# username="anonymizer"
-# password="P^l-8n+(ha?$6*&3"
 user_pool_id = "us-east-1_cFn3IKLqG"
 identity_pool_id = "us-east-1:3c616c9d-58f0-4c89-a412-ea8cf259039a"
 region_name = "us-east-1"
@@ -16,7 +11,7 @@ client_id = "fgnijvmig42ruvn37mte1p9au"
 s3_bucket_name = "amplify-datauploader-prodmi-stagingbucketeec2e4de-x4qrvyzen65z"
 s3_prefix = "private"
 username = "anonymizer2"
-password = "SpeedFast1967#"
+password = "************"
 # - At least 12 characters
 # - At least one uppercase letter
 # - At least one lowercase letter

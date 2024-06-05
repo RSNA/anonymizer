@@ -15,6 +15,20 @@ LOG_FORMAT = "{asctime} {levelname} {threadName} {name}.{funcName}.{lineno} {mes
 
 
 def get_logs_dir(run_as_exe: bool, install_dir: str) -> str:
+    """
+    Returns the directory path where logs should be stored based on the platform and execution mode.
+
+    Args:
+        run_as_exe (bool): Indicates whether the code is running as an executable.
+        install_dir (str): The installation directory of the application.
+
+    Returns:
+        str: The directory path where logs should be stored.
+
+    Raises:
+        RuntimeError: If the platform is not supported.
+
+    """
     if run_as_exe:
         if platform.system() == "Windows":
             return os.path.join(os.path.expanduser("~"), "AppData", "Local", EXE_LOG_DIR)
@@ -29,7 +43,18 @@ def get_logs_dir(run_as_exe: bool, install_dir: str) -> str:
 
 
 def init_logging(install_dir: str, run_as_exe: bool, file_handler: bool = True) -> None:
+    """
+    Initializes the logging configuration for the application.
 
+    Args:
+        install_dir (str): The installation directory of the application.
+        run_as_exe (bool): Indicates whether the application is running as an executable.
+        file_handler (bool, optional): Indicates whether to set up a rotating log file handler. 
+            Defaults to True.
+
+    Returns:
+        None
+    """
     logs_dir = get_logs_dir(run_as_exe, install_dir)
     os.makedirs(logs_dir, exist_ok=True)
 

@@ -3,7 +3,6 @@ from pathlib import Path
 from copy import copy
 import logging
 import pickle
-from queue import Queue
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import customtkinter as ctk

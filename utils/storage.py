@@ -1,37 +1,17 @@
 import os
+from typing import List
 from pathlib import Path
 from openpyxl import load_workbook
 from openpyxl.workbook.workbook import Workbook
-from openpyxl.worksheet.worksheet import Worksheet
 from pydicom import Dataset
 from dataclasses import dataclass
 
 DICOM_FILE_SUFFIX = ".dcm"
 
 
-# TODO: move to AnonymizerController
-def local_storage_path(base_dir: Path, ds: Dataset) -> Path:
-    assert base_dir
-    assert hasattr(ds, "PatientID")
-    assert hasattr(ds, "StudyInstanceUID")
-    assert hasattr(ds, "SeriesInstanceUID")
-    assert hasattr(ds, "SOPInstanceUID")
-
-    dest_path = Path(
-        base_dir,
-        ds.PatientID,
-        ds.StudyInstanceUID,
-        ds.SeriesInstanceUID,
-        ds.SOPInstanceUID + DICOM_FILE_SUFFIX,
-    )
-    # Ensure all directories in the path exist
-    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-    return dest_path
-
-
 def count_studies_series_images(patient_path: str):
     """
-    Counts the number of studies, series, and images in a given patient directory.
+    Counts the number of studies, series, and images in a given patient directory in the anonymizer store
 
     Args:
         patient_path (str): The path to the patient directory.
@@ -55,7 +35,6 @@ def count_studies_series_images(patient_path: str):
     return study_count, series_count, image_count
 
 
-# TODO move to QueryRetrieveView
 def count_study_images(base_dir: Path, anon_pt_id: str, study_uid: str) -> int:
     """
     Counts the number of images stored in a given study directory.
@@ -93,7 +72,7 @@ class JavaAnonymizerExportedStudy:
     PHI_StudyInstanceUID: str
 
 
-def read_java_anonymizer_index_xlsx(filename) -> list[JavaAnonymizerExportedStudy]:
+def read_java_anonymizer_index_xlsx(filename: str) -> List[JavaAnonymizerExportedStudy]:
     """
     Read data from the Java Anonymizer exported patient index file
     containing a single workbook & sheet with fields as per the JavaAnonymizerExportedStudy dataclass.
@@ -104,7 +83,11 @@ def read_java_anonymizer_index_xlsx(filename) -> list[JavaAnonymizerExportedStud
     Returns:
         List of JavaAnonymizerExportedStudy dataclass objects.
 
-    If the file is not found or the sheet is empty, an empty list is returned.
+    Raises:
+        ValueError: If no active sheet is found in the workbook.
+        FileNotFoundError: If the file is not found.
+
+    If the sheet is empty, an empty list is returned.
     """
 
     workbook: Workbook = load_workbook(filename)

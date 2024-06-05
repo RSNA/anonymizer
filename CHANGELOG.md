@@ -4,7 +4,15 @@ All notable changes to this project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.1.1] -
+- Full code documentation
+- Moved local_storage_path from storage module to ProjectController
+- pstuil module added for platform agnostic method of efficiently getting available memory
+- Available memory and ProjectController backoff threshold used to implement backoff algo in _handle_store
+
 ## [17.1.0] - 2024-05-30
+### Radon raw totals: 
+{'LOC': 8624, 'LLOC': 4846, 'SLOC': 6686, 'Comments': 800, 'Multi': 31, 'Blank': 1309, 'Single comments': 598}
 ### Added
 - Add Default, Select All buttons to Transfer Classes View
 - Creating new project based on existing project settings, ie Clone Current Project Settings

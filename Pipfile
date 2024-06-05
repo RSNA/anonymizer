@@ -14,6 +14,7 @@ boto3 = "*"
 pywin32-ctypes = "*"
 pefile = "*"
 openpyxl = "*"
+psutil = "*"
 
 [dev-packages]
 radon = "*"

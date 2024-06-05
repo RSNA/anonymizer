@@ -1,4 +1,5 @@
 import os
+from psutil import virtual_memory
 from typing import cast, Dict, Optional, List, Tuple, Any
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -152,10 +153,6 @@ class StudyUIDHierarchy:
         if self.series is None:
             return 0
         return sum(series.instance_count for series in self.series.values())
-        # count = 0
-        # for series_obj in self.series.values():
-        #     count += len(series_obj.instances)
-        # return count
 
     def get_instances(self) -> List[InstanceUIDHierarchy]:
         instances = []
@@ -232,6 +229,25 @@ class MoveStudiesRequest:
 
 
 class ProjectController(AE):
+    """
+    ProjectController is a DICOM Application Entity (pynetdicom.ae sub-class)
+
+    It acts as both a Service Class Provider (SCP) and Service Class User (SCU) for DICOM services:
+    scp: C-STORE, C-MOVE
+    scu: C-ECHO, C-FIND, C-SEND
+
+    The Study Root Query/Retrieve Information Model is used for C-FIND and C-MOVE services.
+
+    The DICOM SCP will only respond to association requests which address its configured AE Title.
+    Any remote client is allowed to associate with the Anonymizer.
+    The AE Title of the calling SCU is not checked against a list of permissable client AE Titles.
+    The DICOM SCP will allow a maximum of 10 simultaneous associations, as per the pynetdicom.ae default.
+
+    The C-ECHO, C-FIND and C-MOVE Association contexts are set using the Study Root Query & Retrieve SOP classes and default transfer_syntaxes.
+    The C-STORE and C-SEND Association contexts are set using the ProjectModel's configured Storage classes and Transfer syntaxes.
+
+    The ProjectController also provides export methods to send anonymized studies to AWS S3 and for exporting PHI of the AnonymizerModel to CSV.
+    """
 
     PROJECT_MODEL_FILENAME = "ProjectModel.pkl"
 
@@ -242,10 +258,15 @@ class ProjectController(AE):
         "1.2.840.10008.5.1.4.1.2.2.2",  # Move
         "1.2.840.10008.5.1.4.1.2.2.3",  # Get
     ]
+
+    # The following parameters may become part of ProjectModel in future for advanced user configuration:
     _handle_store_time_slice_interval = 0.05  # seconds
     _export_file_time_slice_interval = 0.1  # seconds
-    _patient_export_thread_pool_size = 4
-    _study_move_thread_pool_size = 2
+    _patient_export_thread_pool_size = 4  # concurrent threads
+    _study_move_thread_pool_size = 2  # concurrent threads
+    _memory_available_backoff_threshold = 1 << 30  # When available memory is less than 1GB, back-off in _handle_store
+
+    # DICOM Data model sanity checking:
     _required_attributes_study_query = [
         "StudyInstanceUID",
         "ModalitiesInStudy",
@@ -260,15 +281,44 @@ class ProjectController(AE):
         "SpecificCharacterSet",
     ]
 
-    def _missing_attributes(self, required_attributes: list[str], ds: Dataset) -> list[str]:
-        return [attr_name for attr_name in required_attributes if attr_name not in ds or getattr(ds, attr_name) == ""]
-
     def _strip_query_result_fields(self, ds: Dataset) -> None:
         for field in self._query_result_fields_to_remove:
             if field in ds:
                 delattr(ds, field)
 
+    def _missing_attributes(self, required_attributes: list[str], ds: Dataset) -> list[str]:
+        """
+        Returns a list of missing attributes from the given dataset.
+
+        Args:
+            required_attributes (list[str]): A list of attribute names that are required.
+            ds (Dataset): The dataset to check for missing attributes.
+
+        Returns:
+            list[str]: A list of attribute names that are missing from the dataset.
+        """
+        return [attr_name for attr_name in required_attributes if attr_name not in ds or getattr(ds, attr_name) == ""]
+
     def __init__(self, model: ProjectModel):
+        """
+        Initializes the ProjectController object.
+
+        Args:
+            model (ProjectModel): The project model object.
+
+        Attributes:
+            model (ProjectModel): The project model object.
+            _implementation_class_uid (UID): The implementation class UID added to association requests.
+            _implementation_version_name (str): The implementation version name added to association requests.
+            _maximum_pdu_size (int): The maximum PDU size. 0 means no limit.
+            _require_called_aet (bool): Flag indicating if remote clients must provide Anonymizer's AE Title.
+            _aws_credentials (dict): The AWS credentials.
+            _s3 (None or S3Client): The S3 client object.
+            _aws_expiration_datetime (None or datetime): The expiration datetime for AWS credentials.
+            _aws_user_directory (None or str): The AWS user directory.
+            _aws_last_error (None or str): The last AWS error.
+            anonymizer (AnonymizerController): The anonymizer controller object.
+        """
         super().__init__(ae_title=model.scu.aet)
         self.model = model
         set_logging_levels(levels=model.logging_levels)
@@ -281,7 +331,7 @@ class ProjectController(AE):
         self._maximum_pdu_size = 0  # 0 means no limit
         # self._maximum_associations = 10 # max simultaneous remote associations, 10 is the default
         self._require_called_aet = True  # remote clients must provide Anonymizer's AE Title
-        # TODO: project model setting for allowed list of calling AETs
+        # TODO: project model optional setting for allowed list of calling AETs
         # self._require_calling_aet = ["<list of allowed calling AETs>"] # Default: Allow any calling AE Title
         self.set_radiology_storage_contexts()
         self.set_verification_context()
@@ -355,11 +405,22 @@ class ProjectController(AE):
         return
 
     def set_radiology_storage_contexts(self) -> None:
+        """
+        Sets the radiology storage contexts by adding supported contexts for each storage class.
+
+        This method iterates over the storage classes in the model and adds supported contexts for each class
+        using the user-set transfer syntaxes for storage.
+
+        Called at initialization and when the model is updated.
+
+        Returns:
+            None
+        """
         for uid in sorted(self.model.storage_classes):
-            self.add_supported_context(uid, self.model.transfer_syntaxes)  # all user set transfer syntaxes for storage
+            self.add_supported_context(uid, self.model.transfer_syntaxes)
         return
 
-    # FOR SCU Association:
+    # Contexts FOR SCU Association:
     def get_verification_context(self) -> PresentationContext:
         return build_context(self._VERIFICATION_CLASS)  # default transfer syntaxes
 
@@ -395,18 +456,37 @@ class ProjectController(AE):
 
     # DICOM C-ECHO Verification event handler (EVT_C_ECHO):
     def _handle_echo(self, event: Event):
+        """
+        Handles the C-ECHO event. Always returns the echo request with success.
+
+        Args:
+            event (Event): The event object containing the C-ECHO request.
+
+        Returns:
+            int: The status code indicating the success of the C-ECHO operation.
+        """
         logger.debug("_handle_echo")
-        # TODO: Validate remote IP & AE Title, set calling/called AET
         remote = event.assoc.remote
         logger.info(f"C-ECHO from: {remote}")
         return C_SUCCESS
 
-    # DICOM C-STORE scp event handler (EVT_C_STORE)):
     def _handle_store(self, event: Event):
-        # Throttle incoming requests by adding a delay
-        # to ensure UX responsiveness
+        """
+        DICOM C-STORE scp event handler (EVT_C_STORE)
+        Event handler called in the thread context of an SCP association. (up to 10 concurrent associations)
+
+        Args:
+            event (Event): The event containing the DICOM dataset to be stored.
+
+        Returns:
+            int: The result code indicating the success or failure of the storage operation.
+        """
+        # Throttle incoming requests by adding a delay to ensure UX responsiveness
         time.sleep(self._handle_store_time_slice_interval)
-        # TODO: back-off if AnonymizerQueue grows to limit determined by available memory
+
+        # Back-off if AnonymizerQueue grows to a limit determined by available memory:
+        if virtual_memory().available < self._memory_available_backoff_threshold:
+            time.sleep(1)
 
         logger.debug("_handle_store")
         remote = event.assoc.remote
@@ -488,7 +568,23 @@ class ProjectController(AE):
         self.scp.shutdown()
         self._reset_scp_vars()
 
-    def _connect_to_scp(self, scp: str | DICOMNode, contexts: List[PresentationContext] = None) -> Association:
+    def _connect_to_scp(self, scp: str | DICOMNode, contexts: List[PresentationContext]) -> Association:
+        """
+        Connects to a remote DICOM SCP and establishes an association.
+
+        Args:
+            scp (str | DICOMNode): The remote SCP to connect to. It can be either a string representing the SCP name
+                or a DICOMNode object.
+            contexts (List[PresentationContext]): List of presentation contexts to negotiate during association.
+
+        Returns:
+            Association: The established association object.
+
+        Raises:
+            ConnectionError: If the remote SCP is not found in the model's remote_scps dictionary.
+            ConnectionError: If there is a connection error to the remote SCP.
+            Exception (likely ConnectionError, TimeoutError, RuntimeError): If there is an error establishing the association.
+        """
         association = None
         if isinstance(scp, str):
             if scp not in self.model.remote_scps:
@@ -497,7 +593,8 @@ class ProjectController(AE):
         else:
             remote_scp = scp
 
-        assert isinstance(remote_scp, DICOMNode)
+        if not isinstance(remote_scp, DICOMNode):
+            raise ConnectionError(f"Invalid DICOMNode: {remote_scp}")
 
         try:
             association = self.associate(
@@ -519,10 +616,21 @@ class ProjectController(AE):
         return association
 
     def echo(self, scp: str | DICOMNode, ux_Q: Queue | None = None) -> bool:
+        """
+        Perform C-ECHO operation to the specified SCP.
+
+        Args:
+            scp (str | DICOMNode): The SCP (Service Class Provider) to send the C-ECHO request to.
+            ux_Q (Queue | None, optional):
+                For asynchronous operation via echo_ex, the optional queue to put the EchoResponse object into. Defaults to None.
+
+        Returns:
+            bool: True if the C-ECHO operation is successful, False otherwise.
+        """
         logger.info(f"Perform C-ECHO from {self.model.scu} to {scp}")
         association = None
         try:
-            association = self._connect_to_scp(scp, [self.get_verification_context()])
+            echo_association = self._connect_to_scp(scp, [self.get_verification_context()])
 
             status: Dataset = association.send_c_echo()
             if not status:
@@ -532,7 +640,7 @@ class ProjectController(AE):
                 logger.info(f"C-ECHO Success")
                 if ux_Q:
                     ux_Q.put(EchoResponse(success=True, error=None))
-                association.release()
+                echo_association.release()
                 return True
             else:
                 raise DICOMRuntimeError(f"C-ECHO Failed status: {VERIFICATION_SERVICE_CLASS_STATUS[status.Status][1]}")
@@ -542,14 +650,26 @@ class ProjectController(AE):
             logger.error(error)
             if ux_Q:
                 ux_Q.put(EchoResponse(success=False, error=error))
-            if association:
-                association.release()
+            if echo_association:
+                echo_association.release()
             return False
 
     def echo_ex(self, er: EchoRequest) -> None:
+        """
+        Executes the echo method in a separate thread.
+
+        Args:
+            er (EchoRequest): The EchoRequest object containing the scp and ux_Q parameters.
+        """
         threading.Thread(target=self.echo, name="ECHO", args=(er.scp, er.ux_Q)).start()
 
     def AWS_credentials_valid(self) -> bool:
+        """
+        Checks if the AWS credentials are valid. The AWS Credentials are set by AWS_authenticate().
+
+        Returns:
+            bool: True if the AWS credentials are valid, False otherwise.
+        """
         # If AWS credentials are cached and expiration is less than 10 minutes away, return True
         # else clear stale credentials and return False
         if not self._aws_credentials or self._aws_expiration_datetime is None:
@@ -562,10 +682,14 @@ class ProjectController(AE):
 
     # Blocking call to AWS to authenticate via boto library:
     def AWS_authenticate(self) -> Any | None:
-        # Authenticates AWS Cognito User and returns AWS s3 client object
-        # to use in creation of S3 client in each export thread
-        # On error raises AuthenticationError with error message or re-raises any other exception thrown by boto3
-        # Cache credentials and return s3 client object if credential expiration is longer than 10 mins
+        """
+        Authenticates AWS Cognito User and returns AWS s3 client object
+        to use in creation of S3 client in each export thread.
+
+        On error, raises AuthenticationError with error message or re-raises any other exception thrown by boto3.
+
+        Cache credentials and return s3 client object if credential expiration is longer than 10 mins.
+        """
         logging.info(f"AWS_authenticate")
         if self.AWS_credentials_valid():
             logger.info(f"Using cached AWS credentials, Expiration:{self._aws_expiration_datetime}")
@@ -686,13 +810,30 @@ class ProjectController(AE):
             self._aws_last_error = str(e)
             raise e
 
-    # Non-blocking call to AWS to authenticate via boto library:
     def AWS_authenticate_ex(self) -> None:
+        """
+        Non-blocking call to AWS to authenticate via boto library:
+        Starts a new thread to authenticate with AWS.
+        """
         threading.Thread(target=self.AWS_authenticate).start()
 
-    # Blocking call to get list of objects in S3 bucket for an anonymized patient_id/study:
-    # returns list of instance uids
     def AWS_get_instances(self, anon_pt_id: str, study_uid: str | None = None) -> list[str]:
+        """
+        Blocking call to get list of objects in S3 bucket
+        Retrieves a list of instance UIDs associated with the specified anonymous patient ID and/or study UID (optional).
+
+        Args:
+            anon_pt_id (str): The anonymous patient ID.
+            study_uid (str, optional): The study UID. Defaults to None.
+
+        Returns:
+            list[str]: A list of instance UIDs.
+
+        Raises:
+            AuthenticationError: If AWS authentication fails.
+            Any other exception thrown by boto3 paginator
+
+        """
         s3 = self.AWS_authenticate()
         if not s3 or not self._aws_user_directory:
             raise AuthenticationError("AWS Authentication failed")
@@ -718,8 +859,23 @@ class ProjectController(AE):
 
         return instance_uids
 
-    # Blocking send
     def send(self, file_paths: list[str], scp_name: str, send_contexts=None):
+        """
+        Blocking call: Sends a list of files to a specified SCP (Service Class Provider).
+
+        Args:
+            file_paths (list[str]): A list of file paths to be sent.
+            scp_name (str): The name of the SCP to send the files to as defined in the model's remote_scps dictionary.
+            send_contexts (Optional): The radiology storage contexts to use for sending.
+                If not provided, the default radiology storage contexts will be used.
+
+        Returns:
+            int: The number of files successfully sent.
+
+        Raises:
+            Any Exception raised by pynetdicom or the underlying transport layer.
+
+        """
         logger.info(f"Send {len(file_paths)} files to {scp_name}")
         association = None
         if send_contexts is None:
@@ -754,11 +910,30 @@ class ProjectController(AE):
         ux_Q=None,
         required_attributes: list[str] | None = None,
     ) -> list[Dataset]:
+        """
+        Executes a query using the provided query_association and dataset.
+
+        Args:
+            query_association (Association): The association used for the query.
+            ds (Dataset): The dataset containing the query parameters.
+            ux_Q (Queue, optional): The queue used for returning results to the UX. Defaults to None.
+            required_attributes (list[str] | None, optional): The list of required attributes in the query result. Defaults to None.
+
+        Returns:
+            list[Dataset]: The list of query results.
+
+        Raises:
+            RuntimeError: If the query is aborted.
+            ConnectionError: If the connection times out, is aborted, or receives an invalid response.
+            DICOMRuntimeError: If the C-FIND operation fails with status not pending or success.
+            Any Exception raised by pynetdicom or the underlying transport layer:
+                ConnectionError, TimeoutError, RuntimeError, ValueError, AttributeError
+        """
         results = []
         error_msg = ""
         self._abort_query = False
         try:
-
+            # Send C-FIND request
             responses = query_association.send_c_find(
                 ds,
                 query_model=self._STUDY_ROOT_QR_CLASSES[0],  # Find
@@ -827,7 +1002,6 @@ class ProjectController(AE):
 
         return results
 
-    # Blocking: Query remote server for studies matching the given query parameters:
     def find_studies(
         self,
         scp_name: str,
@@ -839,33 +1013,53 @@ class ProjectController(AE):
         ux_Q=None,
         verify_attributes=True,
     ) -> list[Dataset] | None:
+        """
+        Blocking: Query remote server for studies matching the given query parameters:
 
-        assert scp_name in self.model.remote_scps
-        scp = self.model.remote_scps[scp_name]
-        logger.info(f"C-FIND[study] to {scp} Study Level Query: {name}, {id}, {acc_no}, {study_date}, {modality}")
+        Args:
+            scp_name (str): The name of the SCP (Service Class Provider) to connect to from the ProjectModel's remote_scps dictionary.
+            name (str): The name of the patient.
+            id (str): The ID of the patient.
+            acc_no (str): The accession number of the study.
+            study_date (str): The date of the study.
+            modality (str): The modality of the study.
+            ux_Q (Queue, optional): The queue to put the find study responses in. Defaults to None.
+            verify_attributes (bool, optional): Flag to indicate whether to verify the attributes of the study results. Defaults to True.
 
-        # Phase 1: Study Level Query
-        ds = Dataset()
-        ds.QueryRetrieveLevel = "STUDY"
-        ds.AccessionNumber = acc_no
-        ds.StudyDate = study_date
-        ds.ModalitiesInStudy = modality
-        ds.SOPClassesInStudy = ""
-        ds.PatientName = name
-        ds.PatientID = id
-        ds.PatientSex = ""
-        ds.PatientBirthDate = ""
+        Returns:
+            list[Dataset] | None: A list of study results as Dataset objects, or None if no results are found
+            On any error: the error message is captured and reflected back to the UX client via a pydicom status dataset within FindStudyResponse placed in ux_Q.
 
-        ds.NumberOfStudyRelatedSeries = ""
-        ds.NumberOfStudyRelatedInstances = ""
-        ds.StudyDescription = ""
-        ds.StudyInstanceUID = ""
-
-        results = []
-        error_msg = ""
-        query_association = None
-        self._abort_query = False
+        """
         try:
+            if scp_name not in self.model.remote_scps:
+                raise ConnectionError(f"Remote SCP {scp_name} not found in ProjectModel remote_scps dictionary")
+
+            scp = self.model.remote_scps[scp_name]
+            logger.info(f"C-FIND[study] to {scp} Study Level Query: {name}, {id}, {acc_no}, {study_date}, {modality}")
+
+            # Phase 1: Study Level Query
+            ds = Dataset()
+            ds.QueryRetrieveLevel = "STUDY"
+            ds.AccessionNumber = acc_no
+            ds.StudyDate = study_date
+            ds.ModalitiesInStudy = modality
+            ds.SOPClassesInStudy = ""
+            ds.PatientName = name
+            ds.PatientID = id
+            ds.PatientSex = ""
+            ds.PatientBirthDate = ""
+
+            ds.NumberOfStudyRelatedSeries = ""
+            ds.NumberOfStudyRelatedInstances = ""
+            ds.StudyDescription = ""
+            ds.StudyInstanceUID = ""
+
+            results = []
+            error_msg = ""
+            query_association = None
+            self._abort_query = False
+
             query_association = self._connect_to_scp(scp_name, self.get_study_root_find_contexts())
 
             study_responses = query_association.send_c_find(
@@ -944,17 +1138,16 @@ class ProjectController(AE):
                     # f"{getattr(result, 'PatientName', 'N/A')}, "
                     # f"{getattr(result, 'PatientID', 'N/A')}, "
                     # f"{getattr(result, 'StudyDate', 'N/A')}, "
+                    # f"{getattr(result, 'AccessionNumber', 'N/A')}, "
+                    # f"{getattr(result, 'StudyInstanceUID', 'N/A')} "
                     f"{getattr(result, 'StudyDescription', 'N/A')}, "
-                    f"{getattr(result, 'AccessionNumber', 'N/A')}, "
                     f"{getattr(result, 'ModalitiesInStudy', 'N/A')}, "
                     f"{getattr(result, 'NumberOfStudyRelatedSeries', 'N/A')}, "
                     f"{getattr(result, 'NumberOfStudyRelatedInstances', 'N/A')}, "
-                    # f"{getattr(result, 'StudyInstanceUID', 'N/A')} "
                 )
 
         return results
 
-    # Blocking: Query remote server for studies corresponding to list of accession numbers:
     def find_studies_via_acc_nos(
         self,
         scp_name: str,
@@ -962,29 +1155,45 @@ class ProjectController(AE):
         ux_Q=None,
         verify_attributes=True,
     ) -> list[Dataset] | None:
+        """
+        Blocking: Query remote server for studies corresponding to list of accession numbers
 
-        assert scp_name in self.model.remote_scps
-        scp = self.model.remote_scps[scp_name]
-        logger.info(f"C-FIND to {scp} Accession Query: {len(acc_no_list)} accession numbers...")
-        acc_no_list = list(set(acc_no_list))  # remove duplicates
-        logger.debug(f"{acc_no_list}")
+        Args:
+            scp_name (str): The name of the SCP (Service Class Provider) to connect to.
+            acc_no_list (list): A list of accession numbers to search for.
+            ux_Q (Queue, optional): A queue to send intermediate results to the user interface. Defaults to None.
+            verify_attributes (bool, optional): Flag to indicate whether to verify the attributes of the query results. Defaults to True.
 
-        ds = Dataset()
-        ds.QueryRetrieveLevel = "STUDY"
-        ds.ModalitiesInStudy = ""
-        ds.NumberOfStudyRelatedSeries = ""
-        ds.NumberOfStudyRelatedInstances = ""
-        ds.StudyDescription = ""
-        ds.StudyInstanceUID = ""
-        ds.PatientName = ""
-        ds.PatientID = ""
-        ds.StudyDate = ""
-
-        results = []
-        error_msg = ""
-        query_association = None
-        self._abort_query = False
+        Returns:
+            list[Dataset] | None: A list of Dataset objects representing the query results, or None if no results were found.
+            If PACS does an implicit wildcard search remove these responses, only accept exact AccessionNumber matches
+            On any error: the error message is captured and reflected back to the UX client via a pydicom status dataset within FindStudyResponse placed in ux_Q.
+        """
         try:
+            if scp_name not in self.model.remote_scps:
+                raise ConnectionError(f"Remote SCP {scp_name} not found")
+
+            scp = self.model.remote_scps[scp_name]
+            logger.info(f"C-FIND to {scp} Accession Query: {len(acc_no_list)} accession numbers...")
+            acc_no_list = list(set(acc_no_list))  # remove duplicates
+            logger.debug(f"{acc_no_list}")
+
+            ds = Dataset()
+            ds.QueryRetrieveLevel = "STUDY"
+            ds.ModalitiesInStudy = ""
+            ds.NumberOfStudyRelatedSeries = ""
+            ds.NumberOfStudyRelatedInstances = ""
+            ds.StudyDescription = ""
+            ds.StudyInstanceUID = ""
+            ds.PatientName = ""
+            ds.PatientID = ""
+            ds.StudyDate = ""
+
+            results = []
+            error_msg = ""
+            query_association = None
+            self._abort_query = False
+
             query_association = self._connect_to_scp(scp_name, self.get_study_root_find_contexts())
 
             for acc_no in acc_no_list:
@@ -1087,8 +1296,16 @@ class ProjectController(AE):
 
         return results
 
-    # Non-blocking Find:
     def find_ex(self, fr: FindStudyRequest) -> None:
+        """
+        Non-blocking: Find studies based on the provided search parameters or accession numbers.
+
+        Args:
+            fr (FindStudyRequest): The FindStudyRequest object containing the search parameters or just accession numbers in the acc_no field.
+
+        Returns:
+            None
+        """
         if isinstance(fr.acc_no, list):
             logger.info("Find studies from list of accession numbers...")
             # Due to client removing numbers as they are found, make a copy of the list:
@@ -1121,10 +1338,25 @@ class ProjectController(AE):
                 daemon=True,  # daemon threads are abruptly stopped at shutdown
             ).start()
 
-    # Blocking: Query remote DICOM server for study/series/instance uid hierarchy (required for iterative move):
     def get_study_uid_hierarchy(
         self, scp_name: str, study_uid: str, patient_id: str, instance_level: bool = False
     ) -> Tuple[str | None, StudyUIDHierarchy]:
+        """
+        Blocking: Query remote DICOM server for study/series/instance uid hierarchy (required for iterative move) for the specified Study UID.
+        Perform a SERIES level query first to get the list of Series UIDs for the Study UID.
+        IF the remote SCP does not respond with NumberOfSeriesRelatedInstances and instance_level is False, raise an exception & catch error message.
+        IF instance_level is True, perform an INSTANCE level query for each Series UID to get the list of Instance UIDs.
+
+        Args:
+            scp_name (str): The name of the SCP.
+            study_uid (str): The Study UID.
+            patient_id (str): The Patient ID. (not used for query, copied to StudyUIDHierarchy object)
+            instance_level (bool, optional): Flag indicating whether to retrieve instance-level information. Defaults to False.
+
+        Returns:
+            Tuple[str | None, StudyUIDHierarchy]: A tuple containing the error message (if any) and the StudyUIDHierarchy object.
+            The error message reflects any exception caught during the query process.
+        """
         logger.info(
             f"Get StudyUIDHierarchy from {scp_name} for StudyUID={study_uid}, PatientID={patient_id} instance_level={instance_level}"
         )
@@ -1304,11 +1536,21 @@ class ProjectController(AE):
 
         return error_msg, study_uid_hierarchy
 
-    # Blocking: Get List of StudyUIDHierarchies based on value of study_uid within each element of list
-    # last_error_msg is set by get_study_uid_hierarchy:
-    # TODO: Optimization: make this multi-threaded using futures & thread executor as for manage_move
-    #       Get UIDs only down to a specified level as required by move_operation
     def get_study_uid_hierarchies(self, scp_name: str, studies: List[StudyUIDHierarchy], instance_level: bool) -> None:
+        """
+        Blocking: Get List of StudyUIDHierarchies based on value of study_uid within each element of list of StudyUIDHierarchy objects.
+        last_error_msg of each StudyUIDHierarch object is set by get_study_uid_hierarchy()
+
+        TODO: Optimization: make this multi-threaded using futures & thread executor as for manage_move
+
+        Args:
+            scp_name (str): The name of the SCP.
+            studies (List[StudyUIDHierarchy]): A list of StudyUIDHierarchy objects representing the studies.
+            instance_level (bool): A flag indicating whether to retrieve instance-level information.
+
+        Returns:
+            None
+        """
         logger.info(f"Get StudyUIDHierarchies for {len(studies)} studies, instance_level: {instance_level}")
         self._abort_query = False
         for study in studies:
@@ -1325,10 +1567,20 @@ class ProjectController(AE):
 
         logger.info(f"Get StudyUIDHierarchies done")
 
-    # Non-blocking Get List of StudyUIDHierarchies
     def get_study_uid_hierarchies_ex(
         self, scp_name: str, studies: List[StudyUIDHierarchy], instance_level: bool
     ) -> None:
+        """
+        Non-blocking Get List of StudyUIDHierarchies
+
+        Args:
+            scp_name (str): The name of the SCP (Service Class Provider).
+            studies (List[StudyUIDHierarchy]): A list of StudyUIDHierarchy objects representing the studies.
+            instance_level (bool): Indicates whether to retrieve instance-level hierarchies.
+
+        Returns:
+            None
+        """
         threading.Thread(
             target=self.get_study_uid_hierarchies,
             name="GetStudyUIDHierarchies",
@@ -1337,16 +1589,33 @@ class ProjectController(AE):
         ).start()
 
     def get_number_of_pending_instances(self, study: StudyUIDHierarchy) -> int:
+        """
+        Calculates the number of pending instances for a given study by subtracting the number of instance in StudyUIDHierarchy
+        from the total number of instances stored in the AnonymizerModel. (not from reading the file system)
+
+        Args:
+            study (StudyUIDHierarchy): The study for which to calculate the number of pending instances.
+
+        Returns:
+            int: The number of pending instances for the study.
+        """
         return study.get_number_of_instances() - self.anonymizer.model.get_stored_instance_count(study.ptid, study.uid)
 
-    # TODO: Refactor: create on version of move_study with move_level parameter
-    # Blocking Move Study at STUDY Level, status updates reflected in study_uid_hierarchy, on exception return error message::
-    def _move_study_at_study_level(
-        self,
-        scp_name: str,
-        dest_scp_ae: str,
-        study: StudyUIDHierarchy,
-    ) -> str | None:
+    # TODO: Refactor: create version of move_study with move_level parameter
+
+    def _move_study_at_study_level(self, scp_name: str, dest_scp_ae: str, study: StudyUIDHierarchy) -> str | None:
+        """
+        Move a study at the study level from one SCP to another.
+
+        Args:
+            scp_name (str): The name of the source SCP.
+            dest_scp_ae (str): The AE title of the move destination SCP.
+            study (StudyUIDHierarchy): The hierarchy of the study to be moved, defined only by Study UID.
+
+        Returns:
+            str | None: An error message if any exception or error occurs during the move, otherwise None.
+            Status updates are reflected in study_uid_hierarchy provided.
+        """
         logger.info(f"C-MOVE@Study[{study.uid}] scp:{scp_name} move to:{dest_scp_ae}")
 
         move_association = None
@@ -1463,9 +1732,19 @@ class ProjectController(AE):
                     move_association.release()
             return error_msg
 
-    # Blocking Move Study at SERIES Level, status updates reflected in study_uid_hierarchy, on exception return error message:
     def _move_study_at_series_level(self, scp_name: str, dest_scp_ae: str, study: StudyUIDHierarchy) -> str | None:
+        """
+        Blocking: Moves a study at the series level from one SCP to another.
 
+        Args:
+            scp_name (str): The name of the source SCP.
+            dest_scp_ae (str): The AE title of the move destination SCP.
+            study (StudyUIDHierarchy): The hierarchy of the study to be moved defined down to the Series level
+
+        Returns:
+            str | None: An error message if any exception or error occurs during the move, otherwise None.
+            Status updates reflected in study_uid_hierarchy provided
+        """
         logger.info(f"C-MOVE@Series[{study.uid}] scp:{scp_name} move to:{dest_scp_ae} ")
 
         move_association = None
@@ -1598,14 +1877,19 @@ class ProjectController(AE):
                     move_association.release()
             return error_msg
 
-    # Blocking Move Study at INSTANCE Level, status updates reflected in study_uid_hierarchy, on exception return error message:
-    def _move_study_at_instance_level(
-        self,
-        scp_name: str,
-        dest_scp_ae: str,
-        study: StudyUIDHierarchy,
-    ) -> str | None:
+    def _move_study_at_instance_level(self, scp_name: str, dest_scp_ae: str, study: StudyUIDHierarchy) -> str | None:
+        """
+        Blocking: Moves a study at the instance level from one SCP to another.
 
+        Args:
+            scp_name (str): The name of the source SCP.
+            dest_scp_ae (str): The AE title of the destination SCP.
+            study (StudyUIDHierarchy): The study to be moved with the hierarchy defined down to instance level.
+
+        Returns:
+            str | None: An error message if any exception or error occurs during the move, otherwise None.
+            Status updates are reflected in the provided study_uid_hierarchy
+        """
         logger.info(f"C-MOVE@Instance[{study.uid}] scp:{scp_name} move to: {dest_scp_ae} ")
 
         move_association = None
@@ -1741,10 +2025,31 @@ class ProjectController(AE):
             return error_msg
 
     def bulk_move_active(self) -> bool:
+        """
+        Check if there are any active move futures.
+
+        Returns:
+            bool: True if there are active move futures, False otherwise.
+        """
         return self._move_futures is not None
 
-    # Blocking manage bulk study move using a thread pool:
     def _manage_move(self, req: MoveStudiesRequest) -> None:
+        """
+        Blocking: Manages a bulk move operation for a list of studies using a thread pool (self._study_move_thread_pool_size).
+
+        Args:
+            req (MoveStudiesRequest): The request dataclass object containing the details of the move operation.
+
+                @dataclass
+                class MoveStudiesRequest:
+                    scp_name: str
+                    dest_scp_ae: str # move destination
+                    level: str  # STUDY, SERIES, IMAGE OR INSTANCE
+                    studies: list[StudyUIDHierarchy]
+
+        Returns:
+            None
+        """
         self._move_futures = []
 
         self._move_executor = ThreadPoolExecutor(
@@ -1813,8 +2118,20 @@ class ProjectController(AE):
         self._move_futures = None
         self._move_executor = None
 
-    # Non-blocking Move Studies:
     def move_studies_ex(self, mr: MoveStudiesRequest) -> None:
+        """
+        Move studies asynchronously.
+
+        Args:
+            mr (MoveStudiesRequest): The request object containing the details of the studies to be moved.
+
+                @dataclass
+                class MoveStudiesRequest:
+                    scp_name: str
+                    dest_scp_ae: str
+                    level: str
+                    studies: list[StudyUIDHierarchy]
+        """
         threading.Thread(
             target=self._manage_move,
             name="ManageMove",
@@ -1823,6 +2140,16 @@ class ProjectController(AE):
         ).start()
 
     def abort_move(self):
+        """
+        Aborts the current move operation.
+
+        This method sets a flag to indicate that the move operation should be aborted.
+        If a move executor is active, it cancels all pending move futures and shuts down the executor.
+        After the move operation is aborted, the flag is reset.
+
+        Returns:
+            None
+        """
         logger.info("Abort Move")
         self._abort_move = True
         if self._move_executor:
@@ -1834,6 +2161,26 @@ class ProjectController(AE):
         self._abort_move = False
 
     def _export_patient(self, dest_name: str, patient_id: str, ux_Q: Queue) -> None:
+        """
+        Blocking: Export the anonymized patient's DICOM files to the specified destination (DICOM server or AWS S3 bucket).
+
+        Args:
+            dest_name (str): The name of the destination.
+            patient_id (str): The anonymized Patient ID.
+            ux_Q (Queue): The UX queue to send ExportStudyResponse to.
+
+                Any exceptions & errors are reflected via the error field of ExportStudyResponse
+
+                @dataclass
+                class ExportStudyResponse:
+                    patient_id: str
+                    files_sent: int  # incremented for each file sent successfully
+                    error: str | None  # error message
+                    complete: bool  # True if all files sent successfully
+
+        Returns:
+            None
+        """
         logger.info(f"_export_patient {patient_id} start, export to :{dest_name}")
 
         export_association = None
@@ -1972,10 +2319,30 @@ class ProjectController(AE):
         return
 
     def bulk_export_active(self) -> bool:
+        """
+        Checks if bulk export is active.
+
+        Returns:
+            bool: True if bulk export is active, False otherwise.
+        """
         return self._export_futures is not None
 
-    # Blocking: Manage bulk patient export using a thread pool:
     def _manage_export(self, req: ExportStudyRequest) -> None:
+        """
+        Blocking: Manage bulk patient export using a thread pool
+
+        Args:
+            req (ExportStudyRequest): The export request containing destination name, patient IDs, and UX_Q.
+
+                @dataclass
+                class ExportStudyRequest:
+                    dest_name: str
+                    patient_ids: list[str]  # list of patient IDs to export
+                    ux_Q: Queue  # queue for UX updates for the full export
+
+        Returns:
+            None
+        """
         self._export_futures = []
 
         self._export_executor = ThreadPoolExecutor(
@@ -2001,8 +2368,22 @@ class ProjectController(AE):
 
         logger.info("_manage_export complete")
 
-    # Non-blocking export_patients:
     def export_patients_ex(self, er: ExportStudyRequest) -> None:
+        """
+        Non-blocking: Export patients based on the given ExportStudyRequest.
+
+        Args:
+            er (ExportStudyRequest): The ExportStudyRequest object containing the export parameters.
+
+                @dataclass
+                class ExportStudyRequest:
+                    dest_name: str
+                    patient_ids: list[str]  # list of patient IDs to export
+                    ux_Q: Queue  # queue for UX updates for the full export
+
+        Returns:
+            None
+        """
         self._abort_export = False
         threading.Thread(
             target=self._manage_export,
@@ -2012,6 +2393,16 @@ class ProjectController(AE):
         ).start()
 
     def abort_export(self):
+        """
+        Aborts the export process.
+
+        This method sets a flag to indicate that the export process should be aborted.
+        It also cancels any pending move futures and shuts down the export executor.
+
+        Note: If the export is being done to AWS, the executor will be shut down with wait=False,
+        allowing any pending move futures to complete before shutting down.
+
+        """
         logger.info("Abort Export")
         self._abort_export = True
         # logger.info("Cancel Futures")
@@ -2023,6 +2414,17 @@ class ProjectController(AE):
             self._export_executor = None
 
     def create_phi_csv(self) -> Path | str:
+        """
+        Create a PHI (Protected Health Information) CSV file.
+
+        This method generates a CSV file containing PHI data from the anonymizer model lookup tables.
+        The CSV file includes fields such as ANON-PatientID, ANON-PatientName, PHI-PatientName, PHI-PatientID,
+        DateOffset, PHI-StudyDate, ANON-Accession, PHI-Accession, ANON-StudyInstanceUID, PHI-StudyInstanceUID,
+        Number of Series, and Number of Instances.
+
+        Returns:
+            Path | str: The path to the generated PHI CSV file if successful, otherwise an error message.
+        """
         logger.info("Create PHI CSV")
         field_names = [
             _("ANON-PatientID"),

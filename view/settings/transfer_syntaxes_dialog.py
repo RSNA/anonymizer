@@ -63,6 +63,7 @@ class TransferSyntaxesDialog(tk.Toplevel):
         self.bind("<Escape>", self._escape_keypress)
         self._create_widgets()
         self.wait_visibility()
+        self.lift()
         self.grab_set()  # make dialog modal
 
     def _create_widgets(self):

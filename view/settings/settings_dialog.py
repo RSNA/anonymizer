@@ -22,6 +22,7 @@ from view.settings.logging_levels_dialog import LoggingLevelsDialog
 logger = logging.getLogger(__name__)
 
 
+# TODO: ctk.CTkToplevel does not handle window icon on Windows
 class SettingsDialog(tk.Toplevel):
     # class SettingsDialog(ctk.CTkToplevel):
     def __init__(
@@ -40,6 +41,7 @@ class SettingsDialog(tk.Toplevel):
         self._user_input: Tuple[ProjectModel | None, List[JavaAnonymizerExportedStudy] | None] = (None, None)
         self._create_widgets()
         self.wait_visibility()
+        self.lift()
         self.grab_set()  # make dialog modal
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)

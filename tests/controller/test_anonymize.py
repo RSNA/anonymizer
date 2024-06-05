@@ -28,7 +28,6 @@ from tests.controller.dicom_test_files import (
     MR_STUDY_3_SERIES_11_IMAGES,
 )
 from tests.controller.dicom_test_nodes import LocalSCU
-from utils.storage import local_storage_path
 
 
 # Test a valid date before 19000101
@@ -105,7 +104,7 @@ def test_anonymize_dataset_without_PatientID(temp_dir: str, controller):
     anon_pt_id = SITEID + "-000000"
     assert len(dirlist) == 1
     assert dirlist[0] == anon_pt_id
-    anon_filename = local_storage_path(local_storage_dir(temp_dir), ds)
+    anon_filename = anonymizer.local_storage_path(local_storage_dir(temp_dir), ds)
     anon_ds = dcmread(anon_filename)
     assert isinstance(anon_ds, Dataset)
     assert anon_ds.PatientID == anon_pt_id
@@ -156,7 +155,7 @@ def test_anonymize_dataset_with_blank_PatientID_1_study(temp_dir: str, controlle
     assert len(dirlist) == 1
     assert dirlist[0] == anon_pt_id
 
-    anon_filename1 = local_storage_path(local_storage_dir(temp_dir), ds1)
+    anon_filename1 = anonymizer.local_storage_path(local_storage_dir(temp_dir), ds1)
     anon_ds1 = dcmread(anon_filename1)
     assert isinstance(anon_ds1, Dataset)
     assert anon_ds1.PatientID == anon_pt_id
@@ -170,7 +169,7 @@ def test_anonymize_dataset_with_blank_PatientID_1_study(temp_dir: str, controlle
     assert f"{UIDROOT}.{SITEID}." in anon_ds1.SeriesInstanceUID
     assert f"{UIDROOT}.{SITEID}." in anon_ds1.SOPInstanceUID
 
-    anon_filename2 = local_storage_path(local_storage_dir(temp_dir), ds2)
+    anon_filename2 = anonymizer.local_storage_path(local_storage_dir(temp_dir), ds2)
     anon_ds2 = dcmread(anon_filename2)
     assert isinstance(anon_ds2, Dataset)
     assert anon_ds2.PatientID == anon_pt_id
@@ -215,7 +214,7 @@ def test_anonymize_dataset_with_blank_PatientID_2_studies(temp_dir: str, control
     anon_pt_id = SITEID + "-000000"
     assert len(dirlist) == 1
     assert dirlist[0] == anon_pt_id
-    anon_filename = local_storage_path(local_storage_dir(temp_dir), ds)
+    anon_filename = anonymizer.local_storage_path(local_storage_dir(temp_dir), ds)
     anon_ds = dcmread(anon_filename)
     assert isinstance(anon_ds, Dataset)
     assert anon_ds.PatientID == anon_pt_id
@@ -250,7 +249,7 @@ def test_anonymize_dataset_with_PatientID(temp_dir: str, controller):
     anon_pt_id = SITEID + "-000001"
     assert len(dirlist) == 1
     assert dirlist[0] == anon_pt_id
-    anon_filename = local_storage_path(local_storage_dir(temp_dir), ds)
+    anon_filename = anonymizer.local_storage_path(local_storage_dir(temp_dir), ds)
     anon_ds = dcmread(anon_filename)
     assert isinstance(anon_ds, Dataset)
     assert anon_ds.PatientID == anon_pt_id
@@ -361,7 +360,7 @@ def test_anonymize_storage_error(temp_dir: str, controller: ProjectController):
 
     qpath = Path(anonymizer.get_quarantine_path(), anonymizer.QUARANTINE_STORAGE_ERROR)
     assert qpath.exists()
-    filename: Path = local_storage_path(qpath, cr1)
+    filename: Path = anonymizer.local_storage_path(qpath, cr1)
     assert filename.exists()
 
 

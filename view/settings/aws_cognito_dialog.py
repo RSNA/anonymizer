@@ -23,11 +23,11 @@ class AWSCognitoDialog(tk.Toplevel):
         self.aws_cognito = aws_cognito
         self.export_to_aws = export_to_aws
         self.title(title)
-        self.lift()  # lift window on top
         self.resizable(False, False)
         self._user_input = None
         self._create_widgets()
         self.wait_visibility()
+        self.lift()  
         self.grab_set()  # make dialog modal
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
