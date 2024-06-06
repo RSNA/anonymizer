@@ -49,7 +49,7 @@ def init_logging(install_dir: str, run_as_exe: bool, file_handler: bool = True) 
     Args:
         install_dir (str): The installation directory of the application.
         run_as_exe (bool): Indicates whether the application is running as an executable.
-        file_handler (bool, optional): Indicates whether to set up a rotating log file handler. 
+        file_handler (bool, optional): Indicates whether to set up a rotating log file handler.
             Defaults to True.
 
     Returns:
@@ -80,6 +80,7 @@ def init_logging(install_dir: str, run_as_exe: bool, file_handler: bool = True) 
 
     set_anonymizer_log_level(LOG_DEFAULT_LEVEL)
     # by default set pynetdicom to WARNING level
+    # (pynetdicom._config.LOG_HANDLER_LEVEL = "none" # disable pynetdicom logging, default is "standard")
     set_pynetdicom_log_level(logging.WARNING)
     # leave pydicom logging at default level, user can enable debug mode if needed
     logger.info("Logging initialized, logs dir: %s", logs_dir)

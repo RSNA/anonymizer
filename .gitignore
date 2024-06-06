@@ -11,4 +11,4 @@ dicom/*
 versionfile.txt
 radon_results.txt
 config.json
-pipfile.lock
+Pipfile.lock

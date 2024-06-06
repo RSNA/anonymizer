@@ -484,6 +484,10 @@ class ProjectController(AE):
         # Throttle incoming requests by adding a delay to ensure UX responsiveness
         time.sleep(self._handle_store_time_slice_interval)
 
+        # TODO: investigate use of pynetdicom temporary storage for large datasets
+        # Instead pass the Event.dataset_path to the Anonymizer workers for processing only metadata, leave pixel data on disk using dcm_read(stop_before_pixels=True)
+        # see: https://pydicom.github.io/pynetdicom/dev/reference/generated/pynetdicom._config.STORE_RECV_CHUNKED_DATASET.html
+
         # Back-off if AnonymizerQueue grows to a limit determined by available memory:
         if virtual_memory().available < self._memory_available_backoff_threshold:
             time.sleep(1)
@@ -628,11 +632,11 @@ class ProjectController(AE):
             bool: True if the C-ECHO operation is successful, False otherwise.
         """
         logger.info(f"Perform C-ECHO from {self.model.scu} to {scp}")
-        association = None
+        echo_association: Association = None
         try:
             echo_association = self._connect_to_scp(scp, [self.get_verification_context()])
 
-            status: Dataset = association.send_c_echo()
+            status: Dataset = echo_association.send_c_echo()
             if not status:
                 raise ConnectionError("Connection timed out, was aborted, or received an invalid response")
 
@@ -874,6 +878,12 @@ class ProjectController(AE):
 
         Raises:
             Any Exception raised by pynetdicom or the underlying transport layer.
+
+        TODO: Memory management, handling large datasets and many concurrent sends
+        Do not decode dataset, send raw chunks no larger than max PDU of peer
+        see: _config.STORE_SEND_CHUNKED_DATASET
+        https://pydicom.github.io/pynetdicom/dev/reference/generated/pynetdicom._config.STORE_SEND_CHUNKED_DATASET.html
+        * exact matching accepted presentation context required *
 
         """
         logger.info(f"Send {len(file_paths)} files to {scp_name}")

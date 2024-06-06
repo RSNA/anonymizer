@@ -18,7 +18,8 @@ from __version__ import __version__
 import pyinstaller_versionfile
 import PyInstaller.__main__
 
-os.environ["PYTHONOPTIMIZE"] = "2"  # range: 0,1,2 (2 is highest level of optimization)
+# V6.6 new option: --optimize 2 option in pyinstaller cmd line determine optimization of exe
+# os.environ["PYTHONOPTIMIZE"] = "2"  # range: 0,1,2 (2 is highest level of optimization)
 os.environ["PIPENV_VERBOSITY"] = "-1"  # to suppress pipenv courtesy notice
 
 env_file = os.getenv("GITHUB_ENV")
@@ -118,6 +119,8 @@ if __name__ == "__main__":
                 "versionfile.txt",
                 "--name",
                 build_version_name,
+                "--optimize",
+                "2",
                 "anonymizer.py",
             ]
         )
@@ -138,6 +141,8 @@ if __name__ == "__main__":
                 "assets/images/rsna_icon.icns",
                 "--name",
                 build_version_name,
+                "--optimize",
+                "2",
                 "anonymizer.py",
             ]
         )
@@ -169,6 +174,8 @@ if __name__ == "__main__":
                 "INFO",
                 "--name",
                 build_version_name,
+                "--optimize",
+                "2",
                 "anonymizer.py",
             ]
         )
