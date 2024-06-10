@@ -27,7 +27,7 @@ jobs:
 
     - name: set env.version
       run: |
-        python set_gha_env.py
+        python src/set_gha_env.py
       
     - name: Create Release
       if: "!contains(env.version, 'RC')"
@@ -48,7 +48,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-2019, macos-11, ubuntu-20.04]
+        os: [windows-2019, macos-12, ubuntu-20.04]
 
     steps:
     - name: Checkout repository
