@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from botocore.exceptions import NoCredentialsError
-from controller.project import ProjectController
+from src.controller.project import ProjectController
 from pydicom.data import get_testdata_file
 
 from tests.controller.dicom_test_files import ct_small_filename

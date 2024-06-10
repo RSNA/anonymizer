@@ -78,6 +78,7 @@ jobs:
         
     - name: PyInstaller - Build for ${{ matrix.os }}
       run: |
+        cd src
         pipenv run python build.py
   
     - name: Create zip file

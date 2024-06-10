@@ -3,15 +3,15 @@ from pathlib import Path
 from queue import Queue
 from pydicom.data import get_testdata_file
 from pydicom import Dataset
-from controller.project import (
+from src.controller.project import (
     ProjectController,
     ExportStudyRequest,
     ExportStudyResponse,
     MoveStudiesRequest,
     StudyUIDHierarchy,
 )
-from model.project import DICOMNode, DICOMRuntimeError
-from controller.dicom_C_codes import C_SUCCESS, C_PENDING_A, C_PENDING_B
+from src.model.project import DICOMNode, DICOMRuntimeError
+from src.controller.dicom_C_codes import C_SUCCESS, C_PENDING_A, C_PENDING_B
 
 # from controller.dicom_send_scu import (
 #     export_patients,
@@ -21,7 +21,7 @@ from controller.dicom_C_codes import C_SUCCESS, C_PENDING_A, C_PENDING_B
 
 # DICOM NODES involved in tests:
 from tests.controller.dicom_test_nodes import LocalStorageSCP, PACSSimulatorSCP, OrthancSCP
-from model.project import ProjectModel
+from src.model.project import ProjectModel
 
 
 # TEST HELPER FUNCTIONS

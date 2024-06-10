@@ -9,8 +9,8 @@ from queue import Queue
 from pydicom import dcmread
 from pydicom.data import get_testdata_file
 from pydicom.dataset import Dataset
-from controller.project import ProjectController
-from controller.anonymizer import AnonymizerController
+from src.controller.project import ProjectController
+from src.controller.anonymizer import AnonymizerController
 
 from tests.controller.helpers import (
     pacs_storage_dir,

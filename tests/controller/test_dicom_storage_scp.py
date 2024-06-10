@@ -17,8 +17,8 @@ from tests.controller.dicom_test_files import (
     COMPRESSED_TEST_FILES,
 )
 from tests.controller.dicom_test_nodes import TEST_SITEID, TEST_UIDROOT, LocalStorageSCP
-from controller.project import ProjectController
-from model.anonymizer import AnonymizerModel
+from src.controller.project import ProjectController
+from src.model.anonymizer import AnonymizerModel
 
 
 def test_send_cr1(temp_dir: str, controller):

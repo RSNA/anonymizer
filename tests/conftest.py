@@ -1,14 +1,18 @@
 # tests/conftest.py
-import os
+import os, sys
+
+# Add the src directory to sys.path dynamically
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+
 from pathlib import Path
 import shutil
 import tempfile
 import pytest
 
 from logging import DEBUG, INFO, WARNING
-from utils.logging import init_logging
-from model.project import ProjectModel, NetworkTimeouts, LoggingLevels
-from controller.project import ProjectController
+from src.utils.logging import init_logging
+from src.model.project import ProjectModel, NetworkTimeouts, LoggingLevels
+from src.controller.project import ProjectController
 import tests.controller.dicom_pacs_simulator_scp as pacs_simulator_scp
 from tests.controller.dicom_test_nodes import (
     TEST_PROJECTNAME,
@@ -55,6 +59,7 @@ def controller(temp_dir):
         scp=LocalStorageSCP,
         remote_scps=RemoteSCPDict,
         network_timeouts=NetworkTimeouts(2, 5, 5, 15),
+        anonymizer_script_path=Path("src/assets/scripts/default-anonymizer.script"),
         logging_levels=LoggingLevels(anonymizer=INFO, pynetdicom=WARNING, pydicom=False),
     )
 

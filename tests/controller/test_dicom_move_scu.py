@@ -4,9 +4,9 @@ import os
 import time
 import pytest
 from pydicom.dataset import Dataset
-from utils.storage import count_studies_series_images
+from src.utils.storage import count_studies_series_images
 
-from controller.project import ProjectController, StudyUIDHierarchy, SeriesUIDHierarchy, InstanceUIDHierarchy
+from src.controller.project import ProjectController, StudyUIDHierarchy, SeriesUIDHierarchy, InstanceUIDHierarchy
 from tests.controller.dicom_test_nodes import LocalStorageSCP, PACSSimulatorSCP, OrthancSCP
 from tests.controller.helpers import (
     send_file_to_scp,
@@ -16,7 +16,7 @@ from tests.controller.helpers import (
     local_storage_dir,
     verify_files_sent_to_pacs_simulator,
 )
-from controller.dicom_C_codes import (
+from src.controller.dicom_C_codes import (
     C_FAILURE,
     C_MOVE_UNKNOWN_AE,
     C_SUCCESS,

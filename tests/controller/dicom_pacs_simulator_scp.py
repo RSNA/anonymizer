@@ -8,7 +8,7 @@ from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.presentation import PresentationContext, build_context
 from pynetdicom._globals import ALL_TRANSFER_SYNTAXES, DEFAULT_TRANSFER_SYNTAXES
 
-from controller.dicom_C_codes import (
+from src.controller.dicom_C_codes import (
     C_SUCCESS,
     C_STORE_OUT_OF_RESOURCES,
     C_SOP_CLASS_INVALID,
@@ -18,7 +18,7 @@ from controller.dicom_C_codes import (
     C_FAILURE,
 )
 
-from model.project import DICOMNode
+from src.model.project import DICOMNode
 
 logger = logging.getLogger(__name__)
 

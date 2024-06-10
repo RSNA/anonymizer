@@ -1,5 +1,5 @@
-from utils.storage import JavaAnonymizerExportedStudy, read_java_anonymizer_index_xlsx
-from controller.anonymizer import AnonymizerController
+from src.utils.storage import JavaAnonymizerExportedStudy, read_java_anonymizer_index_xlsx
+from src.controller.anonymizer import AnonymizerController
 
 
 def test_read_java_anonymizer_index_xlsx(temp_dir: str, controller):

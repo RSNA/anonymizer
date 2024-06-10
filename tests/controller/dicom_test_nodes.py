@@ -1,4 +1,4 @@
-from model.project import DICOMNode
+from src.model.project import DICOMNode
 
 LocalSCU = DICOMNode("127.0.0.1", 0, "ANONYMIZER", True)
 LocalStorageSCP = DICOMNode("127.0.0.1", 1045, "ANONYMIZER", True)

@@ -597,9 +597,6 @@ class ProjectController(AE):
         else:
             remote_scp = scp
 
-        if not isinstance(remote_scp, DICOMNode):
-            raise ConnectionError(f"Invalid DICOMNode: {remote_scp}")
-
         try:
             association = self.associate(
                 remote_scp.ip,
