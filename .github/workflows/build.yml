@@ -84,6 +84,13 @@ jobs:
     # - name: Create zip file
     #   run: |
     #     7z a dist.zip src/dist/
+    
+    - name: Create Artifact Zip OSX (due to symlink issue with upload-artifact)
+      if: "contains(runner.os, 'macos')"
+      uses: actions/archive@v3
+      with:
+        name: dist.zip
+        path: src/dist
       
     - name: Upload Artifact for ${{ matrix.os }}
       uses: actions/upload-artifact@v4
