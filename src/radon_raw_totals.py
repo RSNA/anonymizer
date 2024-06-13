@@ -1,5 +1,7 @@
 # run: radon raw -i "tests,docs,prototyping" . > radon_results.txt
 # then run this script to get totals
+from pprint import pprint
+
 totals = {
     "LOC": 0,  # Lines of Code
     "LLOC": 0,  # Logical Lines of Code
@@ -10,7 +12,7 @@ totals = {
     "Single comments": 0,  # Number of single-line comments
 }
 
-with open("radon_results.txt", "r") as file:
+with open("./radon_results.txt", "r") as file:
     lines = file.readlines()
     for line in lines:
         line = line.strip()  # Remove whitespace
@@ -19,4 +21,4 @@ with open("radon_results.txt", "r") as file:
                 value = int(line.split(":")[1].strip())
                 totals[metric] += value
 
-print(totals)
+pprint(totals)

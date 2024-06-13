@@ -5,10 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [17.1.1] -
+### Radon raw totals:
+{'Blank': 1460, 'Comments': 759,'LLOC': 4918, 'LOC': 9397, 'Multi': 698,
+'SLOC': 6681, Single comments': 558}
 - Full code documentation
 - Moved local_storage_path from storage module to ProjectController
 - pstuil module added for platform agnostic method of efficiently getting available memory
 - Available memory and ProjectController backoff threshold used to implement backoff algo in _handle_store
+- module structure refactor into src/ anticipating pypi module rsna-anonymizer for V18 for server cmd line deployment
 
 ## [17.1.0] - 2024-05-30
 ### Radon raw totals: 

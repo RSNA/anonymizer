@@ -86,6 +86,7 @@ if __name__ == "__main__":
     print(f"Customtkinter path: {customtkinter_path}")
 
     if platform.system() == "Windows":
+        
         # Create versionfile.txt
         print(f"Create Windows Version Resource Text file: versionfile.txt for PyInstaller, new version: {__version__}")
         pyinstaller_versionfile.create_versionfile(
@@ -125,6 +126,7 @@ if __name__ == "__main__":
         )
 
     elif platform.system() == "Darwin":
+
         PyInstaller.__main__.run(
             [
                 "--noconfirm",
@@ -146,11 +148,14 @@ if __name__ == "__main__":
             ]
         )
 
+        bundle_path = f"dist/Anonymizer_{__version__}.app")
+
         # Set the version
         set_macos_version(f"dist/Anonymizer_{__version__}.app", __version__)
 
         # To run this executable after download requires removing the extended attributes via
         # xattr -r -c <path to exe/app>
+        shutil.make_archive("dist", "zip", root_dir=bundle_path)
 
         # Delete the redundant build folder (created by github action workflow)
         app_dir = os.path.join("dist", build_version_name)
@@ -158,6 +163,7 @@ if __name__ == "__main__":
             shutil.rmtree(app_dir)
 
     elif platform.system() == "Linux":
+
         PyInstaller.__main__.run(
             [
                 "--noconfirm",

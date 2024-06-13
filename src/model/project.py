@@ -70,14 +70,14 @@ class ProjectModel:
     The Project data model class to store all the project settings and configurations.
     """
 
+    # Project Model Version Control
+    MODEL_VERSION = 1
+
     # Sub-directories in the storage directory:
     PRIVATE_DIR = "private"
     PUBLIC_DIR = "public"
     PHI_EXPORT_DIR = "phi_export"
     QUARANTINE_DIR = "quarantine"
-
-    # Project Model Version Control
-    MODEL_VERSION = 1
 
     # As per instructions here: https://www.medicalconnections.co.uk/kb/ImplementationUID-And-ImplementationName
     RSNA_ROOT_ORG_UID = "1.2.826.0.1.3680043.10.474"  # sub UID from medicalconnections.co.uk as used by JavaAnonymizer

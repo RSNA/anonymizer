@@ -4,6 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+numpy = "*"
 customtkinter = "*"
 pillow = "*"
 tkhtmlview = "*"
@@ -23,3 +24,4 @@ pyinstaller = "*"
 pyinstaller-versionfile = "*"
 pytest = "*"
 pylint = "*"
+python-dotenv = "*"

@@ -68,6 +68,9 @@ jobs:
           pipenv install --dev
     
     - name: Run Unit Tests within pipenv with pytest and generate coverage report
+      env:
+        AWS_USERNAME: ${{ secrets.AWS_USERNAME }}
+        AWS_PASSWORD: ${{ secrets.AWS_PASSWORD }}
       run: |
         pipenv run coverage run -m pytest tests --log-cli-level=WARN
         pipenv run coverage report --omit="tests/*" --fail-under=60
@@ -80,17 +83,6 @@ jobs:
       run: |
         cd src
         pipenv run python build.py
-  
-    # - name: Create zip file
-    #   run: |
-    #     7z a dist.zip src/dist/
-    
-    - name: Create Artifact Zip OSX (due to symlink issue with upload-artifact)
-      if: "contains(runner.os, 'macos')"
-      uses: actions/archive@v3
-      with:
-        name: dist.zip
-        path: src/dist
       
     - name: Upload Artifact for ${{ matrix.os }}
       uses: actions/upload-artifact@v4

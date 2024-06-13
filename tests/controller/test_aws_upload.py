@@ -1,3 +1,4 @@
+from dotenv import load_dotenv
 import os
 from pathlib import Path
 from botocore.exceptions import NoCredentialsError
@@ -6,6 +7,9 @@ from pydicom.data import get_testdata_file
 
 from tests.controller.dicom_test_files import ct_small_filename
 
+# Load environment variables from .env file (for username/password for AWS upload)
+load_dotenv()
+
 
 def test_send_1_dicomfile_to_AWS_S3_and_list_objects(temp_dir: str, controller: ProjectController):
 
@@ -13,8 +17,8 @@ def test_send_1_dicomfile_to_AWS_S3_and_list_objects(temp_dir: str, controller: 
     assert dcm_file_path
     assert os.path.exists(dcm_file_path)
 
-    controller.model.aws_cognito.username = "anonymizer2"
-    controller.model.aws_cognito.password = "SpeedFast1967#"
+    controller.model.aws_cognito.username = os.getenv("AWS_USERNAME")
+    controller.model.aws_cognito.password = os.getenv("AWS_PASSWORD")
 
     s3 = controller.AWS_authenticate()
     assert s3

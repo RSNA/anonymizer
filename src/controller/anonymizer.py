@@ -292,7 +292,7 @@ class AnonymizerController:
 
         return days_to_increment, formatted_date
 
-    def extract_first_digit(self, s: str):
+    def extract_first_digit(self, s: str) -> str:
         """
         Extracts the first digit from a given string.
 

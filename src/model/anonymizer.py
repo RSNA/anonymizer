@@ -81,7 +81,7 @@ class AnonymizerModel:
             script_path (Path): The path to the script.
 
         Attributes:
-            _version (str): The model version.
+            _version (int): The model version.
             _site_id (str): The site ID.
             _uid_root (str): The UID root.
             _uid_prefix (str): The UID prefix.
@@ -100,19 +100,23 @@ class AnonymizerModel:
         self._version = AnonymizerModel.MODEL_VERSION
         self._site_id = site_id
         self._uid_root = uid_root
+        self._script_path = script_path
+
         self._uid_prefix = f"{self._uid_root}.{self._site_id}"
         self.default_anon_pt_id: str = site_id + "-" + "".zfill(len(str(self.MAX_PATIENTS)) - 1)
+
         self._patient_id_lookup = {}
         self._uid_lookup = {}
         self._acc_no_lookup = {}
         self._phi_lookup = {}
-        self.clear_lookups()
-        self._script_path = script_path
         self._tag_keep = {}
+
         self._patients = 0
         self._studies = 0
         self._series = 0
         self._instances = 0
+
+        self.clear_lookups()  # initialises default patient_id_lookup and phi_lookup
         self.load_script(script_path)
 
     def save(self, filepath: Path) -> bool:
@@ -373,7 +377,7 @@ class AnonymizerModel:
             return False
 
     # Helper function for capture_phi
-    def new_study_from_dataset(self, ds: Dataset, source: DICOMNode | str, date_delta: str) -> Study:
+    def new_study_from_dataset(self, ds: Dataset, source: DICOMNode | str, date_delta: int) -> Study:
         return Study(
             study_uid=ds.get("StudyInstanceUID"),
             study_date=ds.get("StudyDate"),
