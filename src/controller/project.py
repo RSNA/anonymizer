@@ -204,28 +204,26 @@ class FindStudyResponse:
     status: Dataset
     study_result: Dataset | None
 
+@dataclass
+class MoveStudiesRequest:
+    scp_name: str
+    dest_scp_ae: str
+    level: str
+    studies: list[StudyUIDHierarchy] # Move process updates hierarchy, no MoveStudiesResponse
 
 @dataclass
-class ExportStudyRequest:
+class ExportPatientsRequest:
     dest_name: str
     patient_ids: list[str]  # list of patient IDs to export
     ux_Q: Queue  # queue for UX updates for the full export
 
 
 @dataclass
-class ExportStudyResponse:
+class ExportPatientsResponse:
     patient_id: str
     files_sent: int  # incremented for each file sent successfully
     error: str | None  # error message
     complete: bool
-
-
-@dataclass
-class MoveStudiesRequest:
-    scp_name: str
-    dest_scp_ae: str
-    level: str
-    studies: list[StudyUIDHierarchy]
 
 
 class ProjectController(AE):
@@ -910,6 +908,7 @@ class ProjectController(AE):
         logger.info("Abort Query")
         self._abort_query = True
 
+    # TODO: to be implemented as helper for refactoring find routines below
     def _query(
         self,
         query_association: Association,
@@ -2174,12 +2173,12 @@ class ProjectController(AE):
         Args:
             dest_name (str): The name of the destination.
             patient_id (str): The anonymized Patient ID.
-            ux_Q (Queue): The UX queue to send ExportStudyResponse to.
+            ux_Q (Queue): The UX queue to send ExportPatientsResponse to.
 
-                Any exceptions & errors are reflected via the error field of ExportStudyResponse
+                Any exceptions & errors are reflected via the error field of ExportPatientsResponse
 
                 @dataclass
-                class ExportStudyResponse:
+                class ExportPatientsResponse:
                     patient_id: str
                     files_sent: int  # incremented for each file sent successfully
                     error: str | None  # error message
@@ -2236,7 +2235,7 @@ class ProjectController(AE):
             # If NO files to export for this patient, indicate successful export to UX:
             if len(export_instance_paths) == 0:
                 logger.info(f"All studies already exported to {dest_name} for patient: {patient_id}")
-                ux_Q.put(ExportStudyResponse(patient_id, 0, None, True))
+                ux_Q.put(ExportPatientsResponse(patient_id, 0, None, True))
                 return
 
             # EXPORT Files:
@@ -2267,7 +2266,7 @@ class ProjectController(AE):
                     logger.info(f"Uploaded to S3: {object_key}")
 
                     files_sent += 1
-                    ux_Q.put(ExportStudyResponse(patient_id, files_sent, None, False))
+                    ux_Q.put(ExportPatientsResponse(patient_id, files_sent, None, False))
 
             else:  # DICOM Export:
 
@@ -2309,15 +2308,15 @@ class ProjectController(AE):
                         raise DICOMRuntimeError(f"{STORAGE_SERVICE_CLASS_STATUS[dcm_response.Status][1]}")
 
                     files_sent += 1
-                    ux_Q.put(ExportStudyResponse(patient_id, files_sent, None, False))
+                    ux_Q.put(ExportPatientsResponse(patient_id, files_sent, None, False))
 
             # Successful export:
-            ux_Q.put(ExportStudyResponse(patient_id, files_sent, None, True))
+            ux_Q.put(ExportPatientsResponse(patient_id, files_sent, None, True))
 
         except Exception as e:
             if not self._abort_export:
                 logger.error(f"Export Patient {patient_id} Error: {e}")
-            ux_Q.put(ExportStudyResponse(patient_id, files_sent, f"{e}", True))
+            ux_Q.put(ExportPatientsResponse(patient_id, files_sent, f"{e}", True))
 
         finally:
             if export_association:
@@ -2334,15 +2333,15 @@ class ProjectController(AE):
         """
         return self._export_futures is not None
 
-    def _manage_export(self, req: ExportStudyRequest) -> None:
+    def _manage_export(self, req: ExportPatientsRequest) -> None:
         """
         Blocking: Manage bulk patient export using a thread pool
 
         Args:
-            req (ExportStudyRequest): The export request containing destination name, patient IDs, and UX_Q.
+            req (ExportPatientsRequest): The export request containing destination name, patient IDs, and UX_Q.
 
                 @dataclass
-                class ExportStudyRequest:
+                class ExportPatientsRequest:
                     dest_name: str
                     patient_ids: list[str]  # list of patient IDs to export
                     ux_Q: Queue  # queue for UX updates for the full export
@@ -2375,15 +2374,15 @@ class ProjectController(AE):
 
         logger.info("_manage_export complete")
 
-    def export_patients_ex(self, er: ExportStudyRequest) -> None:
+    def export_patients_ex(self, er: ExportPatientsRequest) -> None:
         """
-        Non-blocking: Export patients based on the given ExportStudyRequest.
+        Non-blocking: Export patients based on the given ExportPatientsRequest.
 
         Args:
-            er (ExportStudyRequest): The ExportStudyRequest object containing the export parameters.
+            er (ExportPatientsRequest): The ExportPatientsRequest object containing the export parameters.
 
                 @dataclass
-                class ExportStudyRequest:
+                class ExportPatientsRequest:
                     dest_name: str
                     patient_ids: list[str]  # list of patient IDs to export
                     ux_Q: Queue  # queue for UX updates for the full export

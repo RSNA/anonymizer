@@ -6,7 +6,7 @@
       "name": "Anonymizer GUI Optimzed 0",
       "type": "debugpy",
       "request": "launch",
-      "program": "anonymizer.py",
+      "program": "src/anonymizer.py",
       "env": {
         "PYTHONOPTIMIZE": "0"
       },
@@ -20,7 +20,7 @@
       "name": "Anonymizer GUI Optimized 1",
       "type": "debugpy",
       "request": "launch",
-      "program": "anonymizer.py",
+      "program": "src/anonymizer.py",
       "env": {
         "PYTHONOPTIMIZE": "1"
       },
@@ -34,7 +34,7 @@
       "name": "Anonymizer GUI Optimized 2",
       "type": "debugpy",
       "request": "launch",
-      "program": "anonymizer.py",
+      "program": "src/anonymizer.py",
       "env": {
         "PYTHONOPTIMIZE": "2"
       },

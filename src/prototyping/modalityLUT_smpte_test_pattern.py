@@ -1,5 +1,7 @@
 import pydicom
-import matplotlib.pyplot as plt
+
+# pipenv matplotlib to test this
+import matplotlib.pyplot as plt  # type: ignore
 
 # Load the DICOM file
 ds = pydicom.dcmread(pydicom.data.get_testdata_file("mlut_18.dcm"))

@@ -1,12 +1,13 @@
 import customtkinter as ctk
 from PIL import Image
 from utils.translate import _
+from customtkinter import ThemeManager
 
 
 class WelcomeView(ctk.CTkFrame):
-    PAD = 10
+    PAD = 20
     WELCOME_TITLE = _("Welcome")
-    WELCOME_TITLE_FONT = ("DIN Alternate", 28)
+    WELCOME_TITLE_FONT = ("", 28)
     WELCOME_TEXT = _(
         "The RSNA DICOM Anonymizer program is a free open-source tool for curating and de-identifying DICOM studies.\n\n"
         "Use it to ensure privacy by removing protected health information (PHI).\n\n"
@@ -19,13 +20,15 @@ class WelcomeView(ctk.CTkFrame):
     TITLED_LOGO_FILE = "assets/images/rsna_titled_logo_alpha.png"  # alpha channel  / transparent background
     TITLED_LOGO_WIDTH = 255
     TITLED_LOGO_HEIGHT = 155
-    TEXT_BOX_WIDTH = 800
-    TEXT_BOX_HEIGHT = 400
+    TEXT_BOX_WIDTH = 700
+    TEXT_BOX_HEIGHT = 350
 
     def __init__(self, parent: ctk.CTk):
         super().__init__(master=parent)
         self._create_widgets()
         self.grid(row=0, column=0)
+
+        font_family = ThemeManager.theme["CTkFont"]["family"]
 
     def _create_widgets(self):
         self.columnconfigure(0, weight=1)
@@ -63,4 +66,4 @@ class WelcomeView(ctk.CTkFrame):
 
         text_box_welcome.insert("0.0", text=self.WELCOME_TEXT)
         text_box_welcome.configure(state="disabled")
-        text_box_welcome.grid(row=2, column=0, padx=self.PAD, pady=self.PAD)
+        text_box_welcome.grid(row=2, column=0, padx=self.PAD * 2, pady=self.PAD)

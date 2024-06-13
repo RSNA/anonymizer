@@ -148,7 +148,7 @@ if __name__ == "__main__":
             ]
         )
 
-        bundle_path = f"dist/Anonymizer_{__version__}.app")
+        bundle_path = f"dist/Anonymizer_{__version__}.app"
 
         # Set the version
         set_macos_version(f"dist/Anonymizer_{__version__}.app", __version__)

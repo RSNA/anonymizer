@@ -40,23 +40,27 @@ Double click the application icon to execute.
 ```mermaid
 classDiagram
     class DICOMNode {
+        <<model.project>>
         + ip
         + port
         + aet
         + local
     }
     class NetworkTimeouts {
+        <<model.project>>
         + tcp_connection
         + acse
         + dimse
         + network
     }
     class LoggingLevels {
+        <<model.project>>
         + anonymizer
         + pynetdicom
         + pydicom
     }
     class AWSCognito {
+        <<model.project>>
         + account_id
         + region_name
         + app_client_id
@@ -103,14 +107,15 @@ classDiagram
     ProjectModel --* "1" DICOMNode: scu
     ProjectModel --* "1" DICOMNode: scp
     ProjectModel --* "*" DICOMNode: remote_scps
-    
     class Series {
+        <<model.anonymizer>>
         + series_uid
         + series_desc
         + modality
         + instance_count
     }
-    class Study{
+    class Study {
+        <<model.anonymizer>>
         + source
         + study_uid
         + study_date
@@ -121,6 +126,7 @@ classDiagram
     }
     Study "1" --* "*" Series: series
     class PHI{
+        <<model.anonymizer>>
         + patient_name
         + patient_id
         + sex
@@ -129,12 +135,14 @@ classDiagram
     }
     PHI "1" --* "*" Study: studies
     class Totals {
+        <<model.anonymizer>>
         + patients
         + studies
         + series
         + instances
     }
     class JavaAnonymizerExportedStudy{
+        <<utils.storage>>
         ANON_PatientNamer
         ANON_PatientID
         PHI_PatientName
@@ -151,11 +159,11 @@ classDiagram
         <<model.anonymizer>>
         + MODEL_VERSION
         + MAX_PATIENTS
+        + default_anon_pt_id
         - _version
         - _site_id
         - _uid_root
         - _uid_prefix
-        + default_anon_pt_id
         - _tag_keep
         - _patient_id_lookup
         - _uid_lookup
@@ -207,6 +215,15 @@ classDiagram
     class Dataset {
         <<pydicom.Dataset>>
     }
+    class PresentationContext {
+        <<pynetdicom.presentation>>
+    }
+    class Event {
+        <<pynetdicom.events>>
+    }
+    class Association {
+        <<pynetdicom.association>>
+    }
     class AnonymizerController {
         <<controller.anonymizer>>
         + ANONYMIZER_MODEL_FILENAME
@@ -230,31 +247,36 @@ classDiagram
         - _model_change_flag
         - _autosave_event
         - _autosave_worker_thread
-        + model_changed() bool
+        - _write_to_quarantine(exception, ds, quarantine_error) str
+        - _autosave_manager()
         - _stop_worker_threads()
+        - _hash_date(date, patient_id) (int, str)
+        - _anonymize_element(dataset, data_element) 
+        - _anonymize_worker(ds_Q: Queue)
+        + model_changed() bool
+        + save_model() bool
+        + valid_date(date_str) bool
         + stop()
         + missing_attributes(ds) [str]
         + local_storage_path(base_dir, ds) Path
         + get_quarantine_path() Path
-        - _write_to_quarantine(exception, ds, quarantine_error) str
-        - _autosave_manager()
-        + save_model() bool
-        + valid_date(date_str) bool
-        - _hash_date(date, patient_id) (int, str)
         + _round_age(age_string, width) str
-        - _anonymize_element(dataset, data_element) 
-        + anonymize(source, ds) str
         + move_to_quarantine(file, sub_dir) bool
+        + anonymize(source, ds) str
         + anonymize_file(file) (str, Dataset)
         + anonymize_dataset_ex(source, ds)
-        - _anonymize_worker(ds_Q: Queue)
     }
+    AnonymizerController --* AnonymizerModel
     AnonymizerController --> ProjectModel
+    AnonymizerController "1" ..> "*" Dataset
+    
     class InstanceUIDHierarchy {
+        <<controller.project>>
         + uid
         + number
     }
     class SeriesUIDHierarchy {
+        <<controller.project>>
         + uid
         + number
         + modality
@@ -268,34 +290,189 @@ classDiagram
         + get_number_of_instances() int
         + find_instance(instance_uid) InstanceUIDHierarchy
         + update_move_stats(status: Dataset)
-
     }
     SeriesUIDHierarchy "1" --* "*" InstanceUIDHierarchy: instances
     class StudyUIDHierarchy {
+        <<controller.project>>
         + uid
         + ptid
         + last_error_msg
         + pending_instances
-        completed_sub_ops
-        failed_sub_ops
-        remaining_sub_ops
-        warning_sub_ops
+        + completed_sub_ops
+        + failed_sub_ops
+        + remaining_sub_ops
+        + warning_sub_ops
+        + get_number_of_instances() int
+        + get_instances[InstanceUIDHierarchy]
+        + update_move_states(status: Dataset)
+        + find_instance(instance_uid) InstanceUIDHierarchy
     }
     StudyUIDHierarchy "1" --* "*" SeriesUIDHierarchy: series
+    class EchoRequest {
+        <<controller.project>>
+        + scp
+        + ux_Q
+    }
+    class EchoResponse {
+        <<controller.project>>
+        + success
+        + error
+    }
+    class FindStudyRequest {
+        <<controller.project>>
+        + scp_name
+        + name
+        + id
+        + acc_no
+        + study_date
+        + modality
+        + ux_Q
+    }
+    class FindStudyResponse {
+        <<controller.project>>
+    }
+    FindStudyResponse "1" --* "1" Dataset: status
+    FindStudyResponse "1" --* "1" Dataset: study_result
+    
+    class MoveStudiesRequest {
+        <<controller.project>>
+        scp_name
+        dest_scp_ae
+        level
+    }
+    MoveStudiesRequest "1" --* "*" StudyUIDHierarchy: studies
+    class ExportPatientsRequest {
+        <<controller.project>>
+        dest_name 
+        patient_ids
+        ux_Q
+    }
+    class ExportPatientsResponse {
+        <<controller.project>>
+        patient_id
+        files_sent
+        error
+        complete
+    }
     class ProjectController {
         <<controller.project>>       
-        + attribute1
-        + method1()
+        + PROJECT_MODEL_FILENAME
+        - _VERIFICATION_CLASS
+        - _STUDY_ROOT_QR_CLASSES
+        - _handle_store_time_slice_interval
+        - _export_file_time_slice_interval 
+        - _patient_export_thread_pool_size 
+        - _study_move_thread_pool_size
+        - _memory_available_backoff_threshold
+        - _required_attributes_study_query
+        - _required_attributes_series_query
+        - _required_attributes_instance_query
+        - _query_result_fields_to_remove
+        - _aws_credentials
+        - _s3
+        - _aws_expiration_datetime
+        - _aws_user_directory
+        - _aws_last_error
+        - _strip_query_result_fields(ds)
+        - _missing_attributes(required_attributes, ds)
+        - _reset_scp_vars()
+        - _update_model(new_model)
+        + save_model(dest_dir)
+        + set_dicom_timeouts(timeouts)
+        + get_network_timeouts()
+        + set_verification_context()
+        + get_verification_context()
+        + set_radiology_storage_contexts()
+        + get_radiology_storage_contexts()
+        + get_radiology_storage_contexts_BIGENDIAN()
+        + set_study_root_qr_contexts()
+        + get_study_root_qr_contexts() [PresentationContext]
+        + get_study_root_find_contexts() [PresentationContext]
+        + get_study_root_move_contexts() [PresentationContext]
+        - _handle_echo(event)
+        - _handle_store(event)
+        - _connect_to_scp(scp, contexts) Association
+        - _move_study_at_study_level(scp_name, dest_scp_ae, study: StudyUIDHierarchy) str
+        - _move_study_at_series_level(scp_name, dest_scp_ae, study: StudyUIDHierarchy) str
+        - _move_study_at_instance_level(scp_name, dest_scp_ae, study: StudyUIDHierarchy) str
+        - _manage_move(req: MoveStudiesRequest)
+        - _export_patient(dest_name, patient_id, ux_Q)
+        - _manage_export(req: ExportStudyRequest)
+        + AWS_credentials_valid() bool
+        + AWS_authenticate()
+        + AWS_autenticate_ex()
+        + AWS_get_instances(anon_pt_id, study_uid) [str]
+        + start_scp()
+        + stop_scp()
+        + echo(scp, ux_Q)
+        + echo_ex(er: EchoRequest)
+        + send(file_paths, scp_name, send_contexts)
+        + abort_query()
+        + find_studies(scp_name, name, id, acc_no, study_date, modality, ux_Q) [Dataset]
+        + find_studies_via_acc_nos(scp_name, acc_no_list, ux_Q) [Dataset]
+        + find_ex(fr: FindStudyRequest)
+        + get_study_uid_hierarchy(scp_name, study_uid, patient_id, instance_level) (str, StudyUIDHierarchy)
+        + get_study_uid_hierarchies(scp_name, studies: [StudyUIDHierarchy], instance_level) 
+        + get_study_uid_hierarchies_ex(scp_name, studies: [StudyUIDHierarchy], instance_level)
+        + get_number_of_pending_instances(study: StudyUIDHierarchy) int
+        + bulk_move_active() bool
+        + bulk_export_active() bool
+        + abort_move()
+        + abort_export()
+        + move_studies_ex(mr: MoveStudiesRequest)
+        + export_patients_ex(er: ExportStudyRequest)
+        + create_phi_csv() Path
     }
+    ApplicationEntity <|-- ProjectController
     ProjectController "1" --* "1" ProjectModel
     ProjectController "1" --* "1" AnonymizerController
+    ProjectController "1" ..> "1" NetworkTimeouts
+    ProjectController "1" ..> "*" PresentationContext
+    ProjectController "1" ..> "*" Event
+    ProjectController "1" ..> "*" Dataset
+    ProjectController "1" ..> "*" Association
+    ProjectController "1" ..> "1" EchoRequest
+    ProjectController "1" ..> "1" EchoResponse
+    ProjectController "1" ..> "*" StudyUIDHierarchy
+    ProjectController "1" ..> "1" FindStudyRequest
+    ProjectController "1" ..> "*" FindStudyResponse
+    ProjectController "1" ..> "1" MoveStudiesRequest
+    ProjectController "1" ..> "1" ExportPatientsRequest
+    ProjectController "1" ..> "*" ExportPatientsResponse
+    class Tk {
+        <<tkinter>>
+    }
+    class CTk {
+        <<customtkinter>>
+    }
+    class WelcomeView {
+        <<view.welcome>>
+        + WELCOME_TITLE
+        + WELCOME_TITLE_FONT
+
+    }
+    class QueryView {
+        <<view.query_retrieve_import>>
+    }
+    Tk <|-- CTk
+    class Anonymizer {
+        <<anonymizer>>
+        + TITLE
+        + THEME_FILE
+        + CONFIG_FILENAME
+        + project_open_startup_dwell_time
+        + metric_loop_interval
+        + menu_font
+        
+    }
+    Anonymizer --* ProjectController: controller
 
     
 
     
-    ApplicationEntity <|-- ProjectController
     
-    AnonymizerController --o AnonymizerModel
+    
+    
     
 
 ```

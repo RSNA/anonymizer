@@ -8,8 +8,8 @@ import customtkinter as ctk
 from model.project import ProjectModel
 from controller.project import (
     ProjectController,
-    ExportStudyRequest,
-    ExportStudyResponse,
+    ExportPatientsRequest,
+    ExportPatientsResponse,
 )
 from utils.translate import _
 from utils.storage import count_studies_series_images
@@ -327,7 +327,7 @@ class ExportView(tk.Toplevel):
     def _monitor_export_response(self, ux_Q: Queue):
         while not ux_Q.empty():
             try:
-                resp: ExportStudyResponse = ux_Q.get_nowait()
+                resp: ExportPatientsResponse = ux_Q.get_nowait()
                 logger.debug(f"{resp}")
 
                 # Update treeview item:
@@ -438,7 +438,7 @@ class ExportView(tk.Toplevel):
 
         # Export all selected patients using a background thread pool
         self._controller.export_patients_ex(
-            ExportStudyRequest(
+            ExportPatientsRequest(
                 "AWS" if self._export_to_AWS else "EXPORT",
                 self._patient_ids_to_export.copy(),
                 ux_Q,

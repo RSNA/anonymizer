@@ -52,7 +52,7 @@ see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 			<li>Export to AWS S3 Object Store with AWS Cognito user authentication</li>
 			<li>Create Patient Lookup / Index in csv format with Number of Series and Number of Instances appended to each study row</li>
 			<li>Allows concurrent import and export processes</li>
-			<li>Implements C-MOVE algorithm for DICOM Imports to automatically level down from series to instance level on timeout errors</li>
+			<li>Provides a reliable study retrieval method at all levels (Study, Series, Instance) to handle remote DICOM servers which implement asynchronous C-MOVE (eg. VNA)</li>
 			<li>Fast in-memory datastore for Anonymizer Data Model</li>
 		</ol>
 		
