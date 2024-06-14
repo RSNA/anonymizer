@@ -25,9 +25,10 @@ Double click the application icon to execute.
 ### Unit Testing 
 #### For model and controller with coverage
 ```
-1. pipenv shell
-2. coverage run -m pytest tests
-3. coverage report --omit="tests/*"
+1. Create tests/controller/.env file with your AWS_USERNAME and AWS_PASSWORD
+2. pipenv shell
+3. coverage run -m pytest tests
+4. coverage report --omit="tests/*"
 ```
 ### Code Metrics 
 #### Using radon
@@ -447,9 +448,15 @@ classDiagram
     }
     class WelcomeView {
         <<view.welcome>>
-        + WELCOME_TITLE
-        + WELCOME_TITLE_FONT
-
+        + TITLE
+        + TITLE_FONT_SIZE
+        + WELCOME_TEXT
+        + WELCOME_TEXT_FONT_SIZE
+        + TITLED_LOGO_FILE
+        + TITLED_LOGO_WIDTH
+        + TITLED_LOGO_HEIGHT
+        + TEXT_BOX_WIDTH
+        + TEXT_BOX_HEIGHT
     }
     class QueryView {
         <<view.query_retrieve_import>>
@@ -466,6 +473,8 @@ classDiagram
         
     }
     Anonymizer --* ProjectController: controller
+    Anonymizer --* QueryView: query_view
+    
 
     
 

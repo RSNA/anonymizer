@@ -6,29 +6,29 @@ from customtkinter import ThemeManager
 
 class WelcomeView(ctk.CTkFrame):
     PAD = 20
-    WELCOME_TITLE = _("Welcome")
-    WELCOME_TITLE_FONT = ("", 28)
+    TITLE = _("Welcome")
+    TITLE_FONT_SIZE = 28
     WELCOME_TEXT = _(
         "The RSNA DICOM Anonymizer program is a free open-source tool for curating and de-identifying DICOM studies.\n\n"
+        "Easy to use, DICOM expertise not required!\n\n"
         "Use it to ensure privacy by removing protected health information (PHI).\n\n"
         "Go to Help/Overview for a quick overview.\n\n"
         "Go to Help/Project settings for instructions on how to configure the program.\n\n"
         "Go to Help/Operation for instructions on how to use the program.\n\n"
         "Select File/New Project to start."
     )
-    WELCOME_TEXT_FONT = ("DIN Alternate", 20)
+    WELCOME_TEXT_FONT_SIZE = 20
     TITLED_LOGO_FILE = "assets/images/rsna_titled_logo_alpha.png"  # alpha channel  / transparent background
     TITLED_LOGO_WIDTH = 255
     TITLED_LOGO_HEIGHT = 155
     TEXT_BOX_WIDTH = 700
-    TEXT_BOX_HEIGHT = 350
+    TEXT_BOX_HEIGHT = 400
 
     def __init__(self, parent: ctk.CTk):
         super().__init__(master=parent)
+        self.font_family = ThemeManager.theme["CTkFont"]["family"]
         self._create_widgets()
         self.grid(row=0, column=0)
-
-        font_family = ThemeManager.theme["CTkFont"]["family"]
 
     def _create_widgets(self):
         self.columnconfigure(0, weight=1)
@@ -48,8 +48,8 @@ class WelcomeView(ctk.CTkFrame):
         # Welcome Label:
         label_welcome = ctk.CTkLabel(
             master=self,
-            text=self.WELCOME_TITLE,
-            font=self.WELCOME_TITLE_FONT,
+            text=self.TITLE,
+            font=ctk.CTkFont(family=self.font_family, size=self.TITLE_FONT_SIZE),
         )
         label_welcome.grid(row=1, column=0, pady=self.PAD, sticky="n")
 
@@ -59,8 +59,7 @@ class WelcomeView(ctk.CTkFrame):
             width=self.TEXT_BOX_WIDTH,
             height=self.TEXT_BOX_HEIGHT,
             wrap="word",
-            # fg_color=tuple[str, str](self._fg_color),
-            font=self.WELCOME_TEXT_FONT,
+            font=ctk.CTkFont(family=self.font_family, size=self.WELCOME_TEXT_FONT_SIZE),
             activate_scrollbars=False,
         )
 
