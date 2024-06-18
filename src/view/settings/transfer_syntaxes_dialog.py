@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 class TransferSyntaxesDialog(tk.Toplevel):
-    # class TransferSyntaxesDialog(ctk.CTkToplevel):
     attr_map = {
         "SyntaxName": (_("Transfer Syntax Name"), 35, False),
         "SyntaxUID": (_("Transfer Syntax UID"), 30, False),
@@ -54,7 +53,6 @@ class TransferSyntaxesDialog(tk.Toplevel):
         super().__init__(master=parent)
         self.transfer_syntaxes = transfer_syntaxes
         self.title(title)
-        self.geometry("600x450")
         self.resizable(False, True)
         self._user_input: Union[list, None] = None
         self.rowconfigure(0, weight=1)

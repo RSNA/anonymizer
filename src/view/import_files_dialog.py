@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 class ImportFilesDialog(tk.Toplevel):
-    # class ProgressDialog(ctk.CTkToplevel):
     progress_update_interval = 600
 
     def __init__(

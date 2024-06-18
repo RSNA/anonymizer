@@ -4,7 +4,7 @@ from copy import copy
 import logging
 import pickle
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox
 import customtkinter as ctk
 from model.project import DICOMRuntimeError, ProjectModel
 
@@ -42,10 +42,51 @@ class Anonymizer(ctk.CTk):
     TITLE = _("RSNA DICOM Anonymizer Version " + __version__)
     THEME_FILE = "assets/themes/rsna_theme.json"
     CONFIG_FILENAME = "config.json"
+    DEFAULT_RESULTS_FONT = ("Arial", 15, "bold")
 
     project_open_startup_dwell_time = 100  # milliseconds
     metrics_loop_interval = 1000  # milliseconds
     menu_font = ("", 13)
+
+    def _appearance_mode_change(self, mode):
+        logger.info(f"Appearance Mode Change: {mode}")
+
+        ## ttk Widgets, handling Light/Dark mode using ThemeManager
+        ### Treeview Customisation
+        font = self.DEFAULT_RESULTS_FONT
+        bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
+        text_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkLabel"]["text_color"])
+        selected_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["fg_color"])
+        border_width = 1
+        try:
+            family = ctk.ThemeManager.theme["DataTable"]["font"]["family"]
+            size = ctk.ThemeManager.theme["DataTable"]["font"]["size"]
+            weight = ctk.ThemeManager.theme["DataTable"]["font"]["weight"]
+            font = (family, size, weight)
+            logger.info(f"DataTable font from ThemeManager: {family}, {size}, {weight}")
+            bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["DataTable"]["bg_color"])
+            text_color = self._apply_appearance_mode(ctk.ThemeManager.theme["DataTable"]["text_color"])
+            selected_color = self._apply_appearance_mode(ctk.ThemeManager.theme["DataTable"]["selected_color"])
+            border_width = ctk.ThemeManager.theme["DataTable"]["border_width"]
+        except Exception as e:
+            logger.error(f"Exception reading DataTable from ThemeManager dictionary: {e}")
+
+        treestyle = ttk.Style()
+        treestyle.theme_use("default")
+        treestyle.configure(
+            "Treeview",
+            background=bg_color,
+            foreground=text_color,
+            fieldbackground=bg_color,
+            borderwidth=border_width,
+            font=font,
+        )
+        treestyle.map(
+            "Treeview",
+            background=[("selected", bg_color)],
+            foreground=[("selected", selected_color)],
+            font=[("selected", font)],
+        )
 
     def __init__(self):
         super().__init__()
@@ -55,6 +96,11 @@ class Anonymizer(ctk.CTk):
             logger.error(f"Theme file not found: {theme}, reverting to dark-blue theme")
             theme = "dark-blue"
         ctk.set_default_color_theme(theme)
+
+        ctk.AppearanceModeTracker.add(self._appearance_mode_change)
+
+        self._appearance_mode_change(ctk.get_appearance_mode())
+
         if sys.platform.startswith("win"):
             self.iconbitmap("assets\\images\\rsna_icon.ico", default="assets\\images\\rsna_icon.ico")
 

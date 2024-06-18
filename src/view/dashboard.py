@@ -3,6 +3,7 @@ import logging
 from queue import Queue
 from typing import Any
 import customtkinter as ctk
+from customtkinter import ThemeManager
 from tkinter import messagebox
 from controller.project import ProjectController, EchoRequest, EchoResponse
 from model.anonymizer import Totals
@@ -13,17 +14,17 @@ logger = logging.getLogger(__name__)
 
 
 class Dashboard(ctk.CTkFrame):
-    # DASHBOARD_UPDATE_INTERVAL = 1000  # milliseconds
     AWS_AUTH_TIMEOUT_SECONDS = 15  # must be > 2 secs
-
-    # TODO: manage fonts using theme manager
-    LABEL_FONT = ("DIN Alternate Italic", 32)
-    DATA_FONT = ("DIN Alternate", 48)
+    LABEL_FONT_SIZE = 32
+    DATA_FONT_SIZE = 48
     PAD = 20
-    button_width = 100
+    BUTTON_WIDTH = 100
 
     def __init__(self, parent, query_callback, export_callback, controller: ProjectController):
         super().__init__(master=parent)
+        self._font_family = ThemeManager.theme["CTkFont"]["family"]
+        self._label_font = ctk.CTkFont(family=self._font_family, size=self.LABEL_FONT_SIZE)
+        self._data_font = ctk.CTkFont(family=self._font_family, size=self.DATA_FONT_SIZE)
         self._last_qsize = 0
         self._latch_max_qsize = 1
         self._query_callback = query_callback
@@ -46,7 +47,7 @@ class Dashboard(ctk.CTkFrame):
 
         self._query_button = ctk.CTkButton(
             self,
-            width=self.button_width,
+            width=self.BUTTON_WIDTH,
             text=_("Query"),
             command=self._query_button_click,
         )
@@ -54,7 +55,7 @@ class Dashboard(ctk.CTkFrame):
 
         self._export_button = ctk.CTkButton(
             self,
-            width=self.button_width,
+            width=self.BUTTON_WIDTH,
             text=_("Export"),
             command=self._export_button_click,
         )
@@ -65,10 +66,10 @@ class Dashboard(ctk.CTkFrame):
         self._databoard = ctk.CTkFrame(self)
         db_row = 0
 
-        self._label_patients = ctk.CTkLabel(self._databoard, font=self.LABEL_FONT, text=_("Patients"))
-        self._label_studies = ctk.CTkLabel(self._databoard, font=self.LABEL_FONT, text=_("Studies"))
-        self._label_series = ctk.CTkLabel(self._databoard, font=self.LABEL_FONT, text=_("Series"))
-        self._label_images = ctk.CTkLabel(self._databoard, font=self.LABEL_FONT, text=_("Images"))
+        self._label_patients = ctk.CTkLabel(self._databoard, font=self._label_font, text=_("Patients"))
+        self._label_studies = ctk.CTkLabel(self._databoard, font=self._label_font, text=_("Studies"))
+        self._label_series = ctk.CTkLabel(self._databoard, font=self._label_font, text=_("Series"))
+        self._label_images = ctk.CTkLabel(self._databoard, font=self._label_font, text=_("Images"))
 
         self._label_patients.grid(row=db_row, column=0, padx=self.PAD, pady=(self.PAD, 0))
         self._label_studies.grid(row=db_row, column=1, padx=self.PAD, pady=(self.PAD, 0))
@@ -77,10 +78,10 @@ class Dashboard(ctk.CTkFrame):
 
         db_row += 1
 
-        self._patients_label = ctk.CTkLabel(self._databoard, font=self.DATA_FONT, text="0")
-        self._studies_label = ctk.CTkLabel(self._databoard, font=self.DATA_FONT, text="0")
-        self._series_label = ctk.CTkLabel(self._databoard, font=self.DATA_FONT, text="0")
-        self._images_label = ctk.CTkLabel(self._databoard, font=self.DATA_FONT, text="0")
+        self._patients_label = ctk.CTkLabel(self._databoard, font=self._data_font, text="0")
+        self._studies_label = ctk.CTkLabel(self._databoard, font=self._data_font, text="0")
+        self._series_label = ctk.CTkLabel(self._databoard, font=self._data_font, text="0")
+        self._images_label = ctk.CTkLabel(self._databoard, font=self._data_font, text="0")
 
         self._patients_label.grid(row=db_row, column=0, padx=self.PAD, pady=(0, self.PAD))
         self._studies_label.grid(row=db_row, column=1, padx=self.PAD, pady=(0, self.PAD))

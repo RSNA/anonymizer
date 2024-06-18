@@ -4,6 +4,7 @@ import re
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import customtkinter as ctk
+from customtkinter import ThemeManager
 from pydicom import Dataset
 from queue import Empty, Full, Queue
 from controller.dicom_C_codes import C_FAILURE, C_PENDING_A, C_PENDING_B, C_SUCCESS
@@ -16,12 +17,7 @@ from controller.project import (
 from utils.storage import count_study_images
 from utils.translate import _
 from utils.ux_fields import (
-    accession_no_max_chars,
-)  # disabled on entry to allow for list of acc nos
-from utils.ux_fields import (
     dicom_date_chars,
-    modality_max_chars,
-    modality_min_chars,
     patient_id_max_chars,
     patient_name_max_chars,
     str_entry,
@@ -32,11 +28,9 @@ from view.dashboard import Dashboard
 logger = logging.getLogger(__name__)
 
 
-# class QueryView(tk.Toplevel):
-class QueryView(ctk.CTkToplevel):
+class QueryView(tk.Toplevel):
     ux_poll_find_response_interval = 250  # milli-seconds
 
-    fixed_width_font = ("Courier", 10, "bold")
     # C-FIND DICOM attributes to display in the results Treeview:
     # Key: DICOM field name, Value: (display name, centre justify)
     _attr_map = {
@@ -207,49 +201,37 @@ class QueryView(ctk.CTkToplevel):
         self._results_frame.grid_columnconfigure(7, weight=1)  # @ move_level_label
 
         # Managing C-FIND results Treeview:
-
-        # Create a custom style for the Treeview
-        # TODO: see if theme manager can do this and store in rsna_color_scheme_font.json
-        # # if bg_color=="default":
-        #     self.bg_color = self._apply_appearance_mode(customtkinter.ThemeManager.theme["CTkFrame"]["fg_color"])
-        # else:
-        #     self.bg_color = bg_color
-
-        style = ttk.Style()
-        style.configure("Treeview", font=self.fixed_width_font)
-
-        self._tree = ttk.Treeview(
+        self._query_results = ttk.Treeview(
             self._results_frame,
             show="headings",
-            style="Treeview",
             columns=self._tree_column_keys,
         )
 
         # Create a Vertical and Horizontal Scrollbar and associate them with the Treeview
-        vertical_scrollbar = ttk.Scrollbar(self._results_frame, orient="vertical", command=self._tree.yview)
+        vertical_scrollbar = ttk.Scrollbar(self._results_frame, orient="vertical", command=self._query_results.yview)
         vertical_scrollbar.grid(row=results_row, column=10, sticky="ns")
-        self._tree.configure(yscrollcommand=vertical_scrollbar.set)
+        self._query_results.configure(yscrollcommand=vertical_scrollbar.set)
 
         # Set tree column width and justification
-        for col in self._tree["columns"]:
-            self._tree.heading(col, text=self._attr_map[col][0])
-            self._tree.column(
+        for col in self._query_results["columns"]:
+            self._query_results.heading(col, text=self._attr_map[col][0])
+            self._query_results.column(
                 col,
                 width=self._attr_map[col][1] * char_width_px,
                 anchor="center" if self._attr_map[col][2] else "w",
             )
 
         # Setup display tags:
-        self._tree.tag_configure("green", background="limegreen")
-        self._tree.tag_configure("red", background="red")
+        self._query_results.tag_configure("green", background="limegreen")
+        self._query_results.tag_configure("red", background="red")
 
         # Disable Keyboard selection bindings:
-        self._tree.bind("<Left>", lambda e: "break")
-        self._tree.bind("<Right>", lambda e: "break")
-        self._tree.bind("<Up>", lambda e: "break")
-        self._tree.bind("<Down>", lambda e: "break")
-        self._tree.bind("<<TreeviewSelect>>", self._tree_select)
-        self._tree.grid(row=results_row, column=0, columnspan=10, sticky="nswe")
+        self._query_results.bind("<Left>", lambda e: "break")
+        self._query_results.bind("<Right>", lambda e: "break")
+        self._query_results.bind("<Up>", lambda e: "break")
+        self._query_results.bind("<Down>", lambda e: "break")
+        self._query_results.bind("<<TreeviewSelect>>", self._tree_select)
+        self._query_results.grid(row=results_row, column=0, columnspan=10, sticky="nswe")
 
         results_row += 1
 
@@ -331,11 +313,9 @@ class QueryView(ctk.CTkToplevel):
         self._select_all_button.configure(state="disabled")
         self._clear_selection_button.configure(state="disabled")
         self._import_button.configure(state="disabled")
-
         if self._query_active:
             self._cancel_query_button.configure(state="enabled")
-
-        self._tree.configure(selectmode="none")
+        self._query_results.configure(selectmode="none")
 
     def _enable_action_buttons(self):
         logger.info(f"_enable_action_buttons")
@@ -346,8 +326,7 @@ class QueryView(ctk.CTkToplevel):
         self._clear_selection_button.configure(state="enabled")
         self._import_button.configure(state="enabled")
         self._cancel_query_button.configure(state="disabled")
-
-        self._tree.configure(selectmode="extended")
+        self._query_results.configure(selectmode="extended")
 
     def _load_accession_file_button_pressed(self):
         logger.info(f"Load Accession File button pressed")
@@ -562,7 +541,7 @@ class QueryView(ctk.CTkToplevel):
         )
         self._controller.find_ex(req)
         # Start FindStudyResponse monitor:
-        self._tree.after(
+        self._query_results.after(
             self.ux_poll_find_response_interval,
             self._monitor_query_response,
             ux_Q,
@@ -582,28 +561,28 @@ class QueryView(ctk.CTkToplevel):
 
     def _tree_select(self, event):
         # Ensure no Imported Studies are selected:
-        for item in self._tree.selection():
-            if self._tree.tag_has("green", item):
-                self._tree.selection_remove(item)
+        for item in self._query_results.selection():
+            if self._query_results.tag_has("green", item):
+                self._query_results.selection_remove(item)
         # Update selection count:
-        self._studies_selected_label.configure(text=f"Studies Selected: {len(list(self._tree.selection()))}")
+        self._studies_selected_label.configure(text=f"Studies Selected: {len(list(self._query_results.selection()))}")
 
     def _clear_results_tree(self):
-        self._tree.delete(*self._tree.get_children())
+        self._query_results.delete(*self._query_results.get_children())
 
     def _select_all_button_pressed(self):
-        self._tree.selection_set(*self._tree.get_children())
-        self._studies_selected_label.configure(text=f"Studies Selected: {len(list(self._tree.selection()))}")
+        self._query_results.selection_set(*self._query_results.get_children())
+        self._studies_selected_label.configure(text=f"Studies Selected: {len(list(self._query_results.selection()))}")
 
     def _clear_selection_button_pressed(self):
-        self._tree.selection_set([])
+        self._query_results.selection_set([])
         self._studies_selected_label.configure(text=f"Studies Selected: 0")
 
     def _display_import_result(self, studies: list[StudyUIDHierarchy]):
         logger.debug("_display_import_result")
 
         for study in studies:
-            current_values = list(self._tree.item(study.uid, "values"))
+            current_values = list(self._query_results.item(study.uid, "values"))
             instances_to_import = study.get_number_of_instances()
             patient_id = current_values[self._tree_column_keys.index("PatientID")]
 
@@ -613,10 +592,10 @@ class QueryView(ctk.CTkToplevel):
             current_values[self._tree_column_keys.index("imported")] = str(files_imported)
             if study.last_error_msg:
                 current_values[self._tree_column_keys.index("error")] = study.last_error_msg
-            self._tree.item(study.uid, values=current_values)
+            self._query_results.item(study.uid, values=current_values)
             if instances_to_import > 0 and files_imported >= instances_to_import:
-                self._tree.selection_remove(study.uid)
-                self._tree.item(study.uid, tags="green")
+                self._query_results.selection_remove(study.uid)
+                self._query_results.item(study.uid, tags="green")
 
     def _import_button_pressed(self):
         logger.info(f"Import button pressed")
@@ -625,14 +604,16 @@ class QueryView(ctk.CTkToplevel):
             logger.error(f"Import disabled, query is active")
             return
 
-        study_uids = list(self._tree.selection())
+        study_uids = list(self._query_results.selection())
 
         if len(study_uids) == 0:
             logger.info(f"No studies selected to import")
             return
 
         # Double check if any selected studies are already stored/imported:
-        unstored_study_uids = [study_uid for study_uid in study_uids if not self._tree.tag_has("green", study_uid)]
+        unstored_study_uids = [
+            study_uid for study_uid in study_uids if not self._query_results.tag_has("green", study_uid)
+        ]
 
         if len(unstored_study_uids) == 0:
             logger.info(f"All studies selected are already stored/imported")
@@ -640,7 +621,7 @@ class QueryView(ctk.CTkToplevel):
 
         studies: list[StudyUIDHierarchy] = []
         for study_uid in unstored_study_uids:
-            patient_id = self._tree.item(study_uid, "values")[self._tree_column_keys.index("PatientID")]
+            patient_id = self._query_results.item(study_uid, "values")[self._tree_column_keys.index("PatientID")]
             studies.append(StudyUIDHierarchy(study_uid, patient_id))
 
         self._studies_to_process = len(unstored_study_uids)
@@ -723,14 +704,14 @@ class QueryView(ctk.CTkToplevel):
                 display_values.append(str(value))
 
             try:
-                self._tree.insert(
+                self._query_results.insert(
                     "",
                     "end",
                     iid=dataset.get("StudyInstanceUID", ""),
                     values=display_values,
                 )
                 if imported:
-                    self._tree.item(dataset.get("StudyInstanceUID", ""), tags="green")
+                    self._query_results.item(dataset.get("StudyInstanceUID", ""), tags="green")
 
             except Exception as e:
                 logger.error(f"Exception: {e}")

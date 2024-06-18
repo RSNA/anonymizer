@@ -10,8 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 class ModalitiesDialog(tk.Toplevel):
-    # class ModalitiesDialog(ctk.CTkToplevel):
-
     attr_map = {
         "Code": (_("Code"), 5, True),
         "Modality": (_("Description"), 30, False),
@@ -26,8 +24,7 @@ class ModalitiesDialog(tk.Toplevel):
         super().__init__(master=parent)
         self.modalities = modalities
         self.title(title)
-        self.geometry("400x350")
-        self.resizable(False, False)
+        self.resizable(False, True)
         self._user_input: Union[list, None] = None
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
@@ -47,15 +44,15 @@ class ModalitiesDialog(tk.Toplevel):
         self._tree = ttk.Treeview(
             self,
             show="headings",
-            style="Treeview",
+            # style="Treeview",
             columns=list(self.attr_map.keys()),
             selectmode="browse",  # single selection
         )
         # Bind a callback function to item selection
         self._tree.bind("<<TreeviewSelect>>", self.on_item_select)
         self._tree.tag_configure("green", background="limegreen")
-
         self._tree.grid(row=0, column=0, columnspan=2, sticky="nswe")
+
         # Set tree column headers, width and justifications
         for col in self._tree["columns"]:
             self._tree.heading(col, text=self.attr_map[col][0])
@@ -66,9 +63,9 @@ class ModalitiesDialog(tk.Toplevel):
             )
 
         # Create a Scrollbar and associate it with the Treeview
-        # scrollbar = ttk.Scrollbar(self, orient="vertical", command=self._tree.yview)
-        # scrollbar.grid(row=0, column=2, sticky="ns")
-        # self._tree.configure(yscrollcommand=scrollbar.set)
+        scrollbar = ttk.Scrollbar(self, orient="vertical", command=self._tree.yview)
+        scrollbar.grid(row=0, column=2, sticky="ns")
+        self._tree.configure(yscrollcommand=scrollbar.set)
 
         for code in MODALITIES.keys():
             tag = ""

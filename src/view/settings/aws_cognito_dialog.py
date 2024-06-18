@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 class AWSCognitoDialog(tk.Toplevel):
-    # class AWSCognitoDialog(ctk.CTkToplevel):
     def __init__(
         self,
         parent,
@@ -27,7 +26,7 @@ class AWSCognitoDialog(tk.Toplevel):
         self._user_input = None
         self._create_widgets()
         self.wait_visibility()
-        self.lift()  
+        self.lift()
         self.grab_set()  # make dialog modal
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)

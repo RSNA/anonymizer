@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 
 
 class DICOMNodeDialog(tk.Toplevel):
-    # class DICOMNodeDialog(ctk.CTkToplevel):
     def __init__(
         self,
         parent,

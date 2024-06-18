@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 class LoggingLevelsDialog(tk.Toplevel):
-    # class LoggingLevelsDialog(ctk.CTkToplevel):
     level_options = ["DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"]
 
     def level_to_option(self, level: int) -> str:

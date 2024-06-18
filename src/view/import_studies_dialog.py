@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 class ImportStudiesDialog(tk.Toplevel):
-    # class ImportStudiesDialog(ctk.CTkToplevel):
     update_interval = 1000  # milliseconds
 
     def __init__(

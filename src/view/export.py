@@ -19,11 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class ExportView(tk.Toplevel):
-    # class ExportView(ctk.CTkToplevel):
     ux_poll_export_response_interval = 500  # milli-seconds
-
-    # TODO: manage fonts using theme manager
-    fixed_width_font = ("Courier", 10, "bold")
 
     # Export attributes to display in the results Treeview:
     # Key: column id: (column name, width, centre justify)
@@ -83,10 +79,6 @@ class ExportView(tk.Toplevel):
         self._export_frame.grid_columnconfigure(3, weight=1)
 
         # Treeview:
-        # TODO: see if theme manager can do this and store in rsna_color_scheme_font.json
-        style = ttk.Style()
-        style.configure("Treeview", font=self.fixed_width_font)
-
         self._tree = ttk.Treeview(
             self._export_frame,
             show="headings",

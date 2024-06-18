@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 class NetworkTimeoutsDialog(tk.Toplevel):
-    # class NetworkTimeoutsDialog(ctk.CTkToplevel):
     def __init__(
         self,
         parent,

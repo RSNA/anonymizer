@@ -38,6 +38,27 @@ Double click the application icon to execute.
 3. python src/radon_raw_totals.py
 ```
 ### Software Architecture
+#### Model 
+Two python classes pickled to files in project directory:
+1. ProjectModel => ./ProjectModel.pkl when project settings change
+2. AnonymizerModel => ./private/AnonymizerModel.pkl every 30 secs if files were stored
+#### Controller
+1. ProjectController
+Main control class, descendent of pynetdicom.ApplicationEntity handling all DICOM file and network i/o.
+2. AnonymizerController
+Provides API & worker threads to anonymize queued DICOM files incoming from network or file system.
+#### View
+Python standard library for GUI: Tkinter (interface to Tk toolkit written in C) enhanced using UI library [CustomTkinter](https://customtkinter.tomschimansky.com/)
+1. Anonymizer: main application class (ctk.CTk) with context sensitive menu (project open or closed)
+2. WelcomeDialog: first view on fresh start
+3. HTMLView: render html help files with [simplified tag set](https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support) using tkhtmlview library
+4. SettingsDialog: configures ProjectModel => DICOMNodeDialog, AWSCognitoDialog, NetworkTimeoutsDialog, ModalitiesDialog, SOPClassesDialog, TransferSyntaxesDialog, LoggingLevelsDialog
+5. Dashboard: displays project metrics and provides buttons for QueryView & ExportView
+6. QueryView: query remote scp and import studies using C-MOVE at specified level
+7. ImportStudiesDialog: display status of current C-MOVE import operation triggered from QueryView
+8. ImportFilesDialog: display status of file import operation triggered from menu File/Import Files or File/Import Directory
+9. ExportView: export anonymized studies to remote scp or AWS
+
 ```mermaid
 classDiagram
     class DICOMNode {
@@ -458,8 +479,96 @@ classDiagram
         + TEXT_BOX_WIDTH
         + TEXT_BOX_HEIGHT
     }
+    class HTMLScrolledText {
+        <<tkhtmlview>>
+    }
+    class RenderHTML {
+        <<tkhtmlview>>
+    }
+    class HTMLView {
+        + title
+        + html_file_path
+    }
+    HTMLView "1" --* "1" HTMLScrolledText
+    HTMLView "1" --* "1" RenderHTML
+    class DICOMNodeDialog {
+        <<view.dicom_node_dialog>>
+        + title
+    }
+    DICOMNodeDialog "1" --* "1" DICOMNode
+    class AWSCognitoDialog {
+        <<aws_cognito_dialog>>
+        + title
+        + export_to_aws
+    }
+    AWSCognitoDialog "1" --* "1" AWSCognito
+    class NetworkTimeoutsDialog {
+        <<view.settings.network_timeouts.dialog>>
+        + title
+    }
+    NetworkTimeoutsDialog "1" --* NetworkTimeouts
+    class ModalitiesDialog {
+        <<view.settings.modalities_dialog>>
+        + title
+        + modalities [str]
+    } 
+    class SOPClassesDialog {
+        <<view.settings.sop_classes_dialog>>
+        + title
+        + storage_codes
+        + attr_map
+        + sc_lookup
+        + sop_classes [str]
+    } 
+    class TransferSyntaxesDialog {
+        <<view.settings.transfer_syntaxes_dialog>>
+        + title
+        + ts_lookup
+        + attr_map
+        + transfer_syntaxes [str]
+    } 
+    class LoggingLevelsDialog {
+        <<view.settings.logging_levels_dialog>>
+        + title
+    }
+    LoggingLevelsDialog "1" --* LoggingLevels
+    class SettingsDialog {
+        <<view.settings.settings_dialog>>
+    }
+    SettingsDialog "1" ..> "*" JavaAnonymizerExportedStudy
+    SettingsDialog "1" --* "1" DICOMNodeDialog: local_server
+    SettingsDialog "1" --* "1" DICOMNodeDialog: query_server
+    SettingsDialog "1" --* "1" DICOMNodeDialog: export_server
+    SettingsDialog "1" --* "1" AWSCognitoDialog: aws_cognito
+    SettingsDialog "1" --* "1" NetworkTimeoutsDialog: network_timeouts
+    SettingsDialog "1" --* "1" SOPClassesDialog: sop_classes
+    SettingsDialog "1" --* "1" TransferSyntaxesDialog: transfer_syntaxes
+    SettingsDialog "1" --* "1" LoggingLevelsDialog: logging_levels
+    SettingsDialog "1" ..> "1" ProjectModel
+    class Dashboard {
+        <<view.dashboard>>
+        + AWS_AUTH_TIMEOUT_SECONDS
+        + LABEL_FONT_SIZE
+        + DATA_FONT_SIZE
+        + PAD
+        + BUTTON_WIDTH
+    }
     class QueryView {
         <<view.query_retrieve_import>>
+        + ux_poll_find_response_interval
+        + fixed_width_font
+        + _attr_map
+        + MOVE_LEVELS
+    }
+    QueryView "1" --> "1" ProjectController
+    class ImportStudiesDialog {
+        <<import_studies_dialog>>
+    }
+    class ImportFilesDialog {
+        <<view.import_files_dialog>>
+    }
+    class ExportView {
+        <<view.export>>
     }
     Tk <|-- CTk
     class Anonymizer {

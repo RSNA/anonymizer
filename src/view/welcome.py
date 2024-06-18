@@ -10,7 +10,7 @@ class WelcomeView(ctk.CTkFrame):
     TITLE_FONT_SIZE = 28
     WELCOME_TEXT = _(
         "The RSNA DICOM Anonymizer program is a free open-source tool for curating and de-identifying DICOM studies.\n\n"
-        "Easy to use, DICOM expertise not required!\n\n"
+        "Easy to use, advanced DICOM expertise not required!\n\n"
         "Use it to ensure privacy by removing protected health information (PHI).\n\n"
         "Go to Help/Overview for a quick overview.\n\n"
         "Go to Help/Project settings for instructions on how to configure the program.\n\n"

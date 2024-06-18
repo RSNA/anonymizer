@@ -24,7 +24,6 @@ logger = logging.getLogger(__name__)
 
 # TODO: ctk.CTkToplevel does not handle window icon on Windows
 class SettingsDialog(tk.Toplevel):
-    # class SettingsDialog(ctk.CTkToplevel):
     def __init__(
         self,
         parent,

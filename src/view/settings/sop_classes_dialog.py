@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 class SOPClassesDialog(tk.Toplevel):
-    # class SOPClassesDialog(ctk.CTkToplevel):
     storage_codes = [
         "DX",
         "CR",
@@ -56,8 +55,7 @@ class SOPClassesDialog(tk.Toplevel):
         self.sop_classes = sop_classes
         self.modalities = modalities
         self.title(title)
-        self.geometry("750x600")
-        self.resizable(False, True)
+        self.resizable(True, True)
         self._user_input: Union[list, None] = None
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
