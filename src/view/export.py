@@ -55,8 +55,6 @@ class ExportView(tk.Toplevel):
         self._patients_processed = 0
         self._patients_to_process = 0
         self._patient_ids_to_export = []  # dynamically as per export progress
-        self.width = 1200
-        self.height = 400
         self.resizable(True, True)
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Return>", self._enter_keypress)

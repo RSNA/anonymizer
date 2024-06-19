@@ -44,14 +44,6 @@ class SettingsDialog(tk.Toplevel):
         self.grab_set()  # make dialog modal
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
-        # if sys.platform.startswith("win"):
-        #     # override CTkTopLevel which sets icon after 200ms
-        #     self.after(300, self._win_post_init)
-
-    def _win_post_init(self):
-        self.iconbitmap("assets\\images\\rsna_icon.ico")
-        self.lift()
-        self.focus()
 
     def _create_widgets(self):
         logger.debug(f"_create_widgets")

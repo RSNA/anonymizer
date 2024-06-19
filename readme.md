@@ -40,58 +40,21 @@ Double click the application icon to execute.
 ### Software Architecture
 #### Model 
 Two python classes pickled to files in project directory:
-1. ProjectModel => ./ProjectModel.pkl when project settings change
-2. AnonymizerModel => ./private/AnonymizerModel.pkl every 30 secs if files were stored
-#### Controller
-1. ProjectController
-Main control class, descendent of pynetdicom.ApplicationEntity handling all DICOM file and network i/o.
-2. AnonymizerController
-Provides API & worker threads to anonymize queued DICOM files incoming from network or file system.
-#### View
-Python standard library for GUI: Tkinter (interface to Tk toolkit written in C) enhanced using UI library [CustomTkinter](https://customtkinter.tomschimansky.com/)
-1. Anonymizer: main application class (ctk.CTk) with context sensitive menu (project open or closed)
-2. WelcomeDialog: first view on fresh start
-3. HTMLView: render html help files with [simplified tag set](https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support) using tkhtmlview library
-4. SettingsDialog: configures ProjectModel => DICOMNodeDialog, AWSCognitoDialog, NetworkTimeoutsDialog, ModalitiesDialog, SOPClassesDialog, TransferSyntaxesDialog, LoggingLevelsDialog
-5. Dashboard: displays project metrics and provides buttons for QueryView & ExportView
-6. QueryView: query remote scp and import studies using C-MOVE at specified level
-7. ImportStudiesDialog: display status of current C-MOVE import operation triggered from QueryView
-8. ImportFilesDialog: display status of file import operation triggered from menu File/Import Files or File/Import Directory
-9. ExportView: export anonymized studies to remote scp or AWS
-
+1. ProjectModel => ```./ProjectModel.pkl``` when project settings change
+2. AnonymizerModel => ```./private/AnonymizerModel.pkl``` every 30 secs if files were stored
 ```mermaid
 classDiagram
     class DICOMNode {
         <<model.project>>
-        + ip
-        + port
-        + aet
-        + local
     }
     class NetworkTimeouts {
         <<model.project>>
-        + tcp_connection
-        + acse
-        + dimse
-        + network
     }
     class LoggingLevels {
         <<model.project>>
-        + anonymizer
-        + pynetdicom
-        + pydicom
     }
     class AWSCognito {
         <<model.project>>
-        + account_id
-        + region_name
-        + app_client_id
-        + user_pool_id
-        + identity_pool_id
-        + s3_bucket
-        + s3_prefix
-        + username
-        + password
     }
     class ProjectModel {
         <<model.project>>
@@ -112,16 +75,6 @@ classDiagram
         + transfer_syntaxes
         + anonymizer_script_path
         + export_to_aws
-        + images_dir()
-        + private_dir()
-        + abridged_stored_dir()
-        + phi_export_dir()
-        + regenerate_site_id()
-        + set_storage_classes_from_modalities()
-        + add_storage_class(storage_class)
-        + remove_storage_class(storage_class)
-        + add_transfer_syntax(transfer_syntax)
-        + remove_transfer_syntax(transfer_syntax)
     }
     ProjectModel --* "1" LoggingLevels: logging_levels
     ProjectModel --* "1" NetworkTimeouts: network_timeouts
@@ -131,52 +84,15 @@ classDiagram
     ProjectModel --* "*" DICOMNode: remote_scps
     class Series {
         <<model.anonymizer>>
-        + series_uid
-        + series_desc
-        + modality
-        + instance_count
     }
     class Study {
         <<model.anonymizer>>
-        + source
-        + study_uid
-        + study_date
-        + anon_date_delta
-        + accession_number
-        + study_desc
-        + target_instance_count
     }
     Study "1" --* "*" Series: series
     class PHI{
         <<model.anonymizer>>
-        + patient_name
-        + patient_id
-        + sex
-        + dob
-        + ethnic_group
     }
     PHI "1" --* "*" Study: studies
-    class Totals {
-        <<model.anonymizer>>
-        + patients
-        + studies
-        + series
-        + instances
-    }
-    class JavaAnonymizerExportedStudy{
-        <<utils.storage>>
-        ANON_PatientNamer
-        ANON_PatientID
-        PHI_PatientName
-        PHI_PatientID
-        DateOffset
-        ANON_StudyDate
-        PHI_StudyDate
-        ANON_Accession
-        PHI_Accession
-        ANON_StudyInstanceUID
-        PHI_StudyInstanceUID
-    }
     class AnonymizerModel {
         <<model.anonymizer>>
         + MODEL_VERSION
@@ -194,46 +110,25 @@ classDiagram
         - _studies
         - _series
         - _instances
-        + load_script()
-        + clear_lookups()
-        + get_totals() Totals
-        + get_phi(anon_patient_id) PHI
-        + get_phi_name(anon_patient_id) str
-        + set_phi(anon_patient_id, phi)
-        + get_anon_patient_id(phi_patient_id) str
-        + get_next_anon_patient_id(phi_patient_id) str
-        + get_patient_id_count() int
-        + set_anon_patient_id(phi_patient_id, anon_patient_id)
-        + uid_received(phi_uid) bool
-        + remove_uid(phi_uid)
-        + get_anon_uid(phi_uid) str
-        + get_uid_count() int
-        + set_anon_uid(phi_uid, anon_uid)
-        + get_next_anon_uid(phi_uid) str
-        + get_anon_acc_no(phi_acc_no) str
-        + set_anon_acc_no(phi_acc_no, anon_acc_no)
-        + get_next_anon_acc_no(phi_acc_no) str
-        + get_acc_no_count() int
-        + get_stored_instance_count(ptid, study_uid) int
-        + get_pending_instance_count(ptid, study_uid, target_count) int
-        + series_complete(ptid, study_uid, series_uid, target_count) bool
-        + study_imported(ptid, study_uid) bool
-        + new_study_from_dataset(ds, source, date_delta) Study
-        + capture_phi(source, ds, date_delta) 
-        + process_java_phi_studies(java_studies: [JavaAnonymizerExportedStudy])
     }
     AnonymizerModel "1" --* "*" PHI: _phi_lookup
-    AnonymizerModel "1" ..> "*" JavaAnonymizerExportedStudy
-    AnonymizerModel "1" ..> "1" Totals
-    class ApplicationEntity {
-        <<pynetdicom.ae>> 
-        - _implementation_class_uid
-        - _implementation_version_name 
-        - _connection_timeout
-        - _acse_timeout
-        - _dimse_timeout
-        - _network_timeout      
+```
+#### Controller
+1. ProjectController
+Main control class, descendent of pynetdicom.ApplicationEntity handling all DICOM file and network i/o.
+2. AnonymizerController
+Provides API & worker threads to anonymize queued DICOM files incoming from network or file system.
+```mermaid
+classDiagram
+    class ProjectModel {
+            <<model.project>>
+        }
+    class AnonymizerModel {
+        <<model.anonymizer>>
     }
+    class ApplicationEntity {
+            <<pynetdicom.ae>>    
+        }
     class Dataset {
         <<pydicom.Dataset>>
     }
@@ -248,50 +143,10 @@ classDiagram
     }
     class AnonymizerController {
         <<controller.anonymizer>>
-        + ANONYMIZER_MODEL_FILENAME
-        + DEIDENTIFICATION_METHOD
-        + QUARANTINE_INVALID_DICOM
-        + QUARANTINE_DICOM_READ_ERROR
-        + QUARANTINE_MISSING_ATTRIBUTES
-        + QUARANTINE_INVALID_STORAGE_CLASS
-        + QUARANTINE_CAPTURE_PHI_ERROR
-        + QUARANTINE_STORAGE_ERROR
-        + DEIDENTIFICATION_METHODS
-        + PRIVATE_BLOCK_NAME
-        + DEFAULT_ANON_DATE
-        + NUMBER_OF_WORKER_THREADS
-        + WORKER_THREAD_SLEEP_SECS
-        + MODEL_AUTOSAVE_INTERVAL_SECS
-        + required_attributes
-        - _active
-        - _anon_Q
-        - _worker_threads
-        - _model_change_flag
-        - _autosave_event
-        - _autosave_worker_thread
-        - _write_to_quarantine(exception, ds, quarantine_error) str
-        - _autosave_manager()
-        - _stop_worker_threads()
-        - _hash_date(date, patient_id) (int, str)
-        - _anonymize_element(dataset, data_element) 
-        - _anonymize_worker(ds_Q: Queue)
-        + model_changed() bool
-        + save_model() bool
-        + valid_date(date_str) bool
-        + stop()
-        + missing_attributes(ds) [str]
-        + local_storage_path(base_dir, ds) Path
-        + get_quarantine_path() Path
-        + _round_age(age_string, width) str
-        + move_to_quarantine(file, sub_dir) bool
-        + anonymize(source, ds) str
-        + anonymize_file(file) (str, Dataset)
-        + anonymize_dataset_ex(source, ds)
     }
     AnonymizerController --* AnonymizerModel
     AnonymizerController --> ProjectModel
     AnonymizerController "1" ..> "*" Dataset
-    
     class InstanceUIDHierarchy {
         <<controller.project>>
         + uid
@@ -299,56 +154,20 @@ classDiagram
     }
     class SeriesUIDHierarchy {
         <<controller.project>>
-        + uid
-        + number
-        + modality
-        + sop_class_uid
-        + instance_count
-        + description
-        + completed_sub_ops
-        + failed_sub_ops
-        + remaining_sub_ops
-        + warning_sub_ops
-        + get_number_of_instances() int
-        + find_instance(instance_uid) InstanceUIDHierarchy
-        + update_move_stats(status: Dataset)
     }
     SeriesUIDHierarchy "1" --* "*" InstanceUIDHierarchy: instances
     class StudyUIDHierarchy {
         <<controller.project>>
-        + uid
-        + ptid
-        + last_error_msg
-        + pending_instances
-        + completed_sub_ops
-        + failed_sub_ops
-        + remaining_sub_ops
-        + warning_sub_ops
-        + get_number_of_instances() int
-        + get_instances[InstanceUIDHierarchy]
-        + update_move_states(status: Dataset)
-        + find_instance(instance_uid) InstanceUIDHierarchy
     }
     StudyUIDHierarchy "1" --* "*" SeriesUIDHierarchy: series
     class EchoRequest {
         <<controller.project>>
-        + scp
-        + ux_Q
     }
     class EchoResponse {
         <<controller.project>>
-        + success
-        + error
     }
     class FindStudyRequest {
         <<controller.project>>
-        + scp_name
-        + name
-        + id
-        + acc_no
-        + study_date
-        + modality
-        + ux_Q
     }
     class FindStudyResponse {
         <<controller.project>>
@@ -358,92 +177,16 @@ classDiagram
     
     class MoveStudiesRequest {
         <<controller.project>>
-        scp_name
-        dest_scp_ae
-        level
     }
     MoveStudiesRequest "1" --* "*" StudyUIDHierarchy: studies
     class ExportPatientsRequest {
         <<controller.project>>
-        dest_name 
-        patient_ids
-        ux_Q
     }
     class ExportPatientsResponse {
         <<controller.project>>
-        patient_id
-        files_sent
-        error
-        complete
     }
     class ProjectController {
         <<controller.project>>       
-        + PROJECT_MODEL_FILENAME
-        - _VERIFICATION_CLASS
-        - _STUDY_ROOT_QR_CLASSES
-        - _handle_store_time_slice_interval
-        - _export_file_time_slice_interval 
-        - _patient_export_thread_pool_size 
-        - _study_move_thread_pool_size
-        - _memory_available_backoff_threshold
-        - _required_attributes_study_query
-        - _required_attributes_series_query
-        - _required_attributes_instance_query
-        - _query_result_fields_to_remove
-        - _aws_credentials
-        - _s3
-        - _aws_expiration_datetime
-        - _aws_user_directory
-        - _aws_last_error
-        - _strip_query_result_fields(ds)
-        - _missing_attributes(required_attributes, ds)
-        - _reset_scp_vars()
-        - _update_model(new_model)
-        + save_model(dest_dir)
-        + set_dicom_timeouts(timeouts)
-        + get_network_timeouts()
-        + set_verification_context()
-        + get_verification_context()
-        + set_radiology_storage_contexts()
-        + get_radiology_storage_contexts()
-        + get_radiology_storage_contexts_BIGENDIAN()
-        + set_study_root_qr_contexts()
-        + get_study_root_qr_contexts() [PresentationContext]
-        + get_study_root_find_contexts() [PresentationContext]
-        + get_study_root_move_contexts() [PresentationContext]
-        - _handle_echo(event)
-        - _handle_store(event)
-        - _connect_to_scp(scp, contexts) Association
-        - _move_study_at_study_level(scp_name, dest_scp_ae, study: StudyUIDHierarchy) str
-        - _move_study_at_series_level(scp_name, dest_scp_ae, study: StudyUIDHierarchy) str
-        - _move_study_at_instance_level(scp_name, dest_scp_ae, study: StudyUIDHierarchy) str
-        - _manage_move(req: MoveStudiesRequest)
-        - _export_patient(dest_name, patient_id, ux_Q)
-        - _manage_export(req: ExportStudyRequest)
-        + AWS_credentials_valid() bool
-        + AWS_authenticate()
-        + AWS_autenticate_ex()
-        + AWS_get_instances(anon_pt_id, study_uid) [str]
-        + start_scp()
-        + stop_scp()
-        + echo(scp, ux_Q)
-        + echo_ex(er: EchoRequest)
-        + send(file_paths, scp_name, send_contexts)
-        + abort_query()
-        + find_studies(scp_name, name, id, acc_no, study_date, modality, ux_Q) [Dataset]
-        + find_studies_via_acc_nos(scp_name, acc_no_list, ux_Q) [Dataset]
-        + find_ex(fr: FindStudyRequest)
-        + get_study_uid_hierarchy(scp_name, study_uid, patient_id, instance_level) (str, StudyUIDHierarchy)
-        + get_study_uid_hierarchies(scp_name, studies: [StudyUIDHierarchy], instance_level) 
-        + get_study_uid_hierarchies_ex(scp_name, studies: [StudyUIDHierarchy], instance_level)
-        + get_number_of_pending_instances(study: StudyUIDHierarchy) int
-        + bulk_move_active() bool
-        + bulk_export_active() bool
-        + abort_move()
-        + abort_export()
-        + move_studies_ex(mr: MoveStudiesRequest)
-        + export_patients_ex(er: ExportStudyRequest)
-        + create_phi_csv() Path
     }
     ApplicationEntity <|-- ProjectController
     ProjectController "1" --* "1" ProjectModel
@@ -461,6 +204,27 @@ classDiagram
     ProjectController "1" ..> "1" MoveStudiesRequest
     ProjectController "1" ..> "1" ExportPatientsRequest
     ProjectController "1" ..> "*" ExportPatientsResponse
+```
+#### View
+Python standard library for GUI: Tkinter (interface to Tk toolkit written in C) enhanced using UI library [CustomTkinter](https://customtkinter.tomschimansky.com/)
+UI colors and fonts set by ctk.ThemeManager from ```assets/themes/rsna_theme.json```
+1. Anonymizer: main application class (ctk.CTk) with context sensitive menu (project open or closed)
+2. WelcomeDialog: first view on fresh start
+3. HTMLView: render html help files with [simplified tag set](https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support) using tkhtmlview library
+4. SettingsDialog: configures ProjectModel => DICOMNodeDialog, AWSCognitoDialog, NetworkTimeoutsDialog, ModalitiesDialog, SOPClassesDialog, TransferSyntaxesDialog, LoggingLevelsDialog
+5. Dashboard: displays project metrics and provides buttons for QueryView & ExportView
+6. QueryView: query remote scp and import studies using C-MOVE at specified level
+7. ImportStudiesDialog: display status of current C-MOVE import operation triggered from QueryView
+8. ImportFilesDialog: display status of file import operation triggered from menu File/Import Files or File/Import Directory
+9. ExportView: export anonymized studies to remote scp or AWS
+```mermaid
+classDiagram
+    class ProjectController {
+        <<controller.project>>       
+    }
+    class AnonymizerController {
+        <<controller.anonymizer>>
+    }
     class Tk {
         <<tkinter>>
     }
@@ -469,15 +233,6 @@ classDiagram
     }
     class WelcomeView {
         <<view.welcome>>
-        + TITLE
-        + TITLE_FONT_SIZE
-        + WELCOME_TEXT
-        + WELCOME_TEXT_FONT_SIZE
-        + TITLED_LOGO_FILE
-        + TITLED_LOGO_WIDTH
-        + TITLED_LOGO_HEIGHT
-        + TEXT_BOX_WIDTH
-        + TEXT_BOX_HEIGHT
     }
     class HTMLScrolledText {
         <<tkhtmlview>>
@@ -486,50 +241,32 @@ classDiagram
         <<tkhtmlview>>
     }
     class HTMLView {
-        + title
-        + html_file_path
     }
     HTMLView "1" --* "1" HTMLScrolledText
     HTMLView "1" --* "1" RenderHTML
     class DICOMNodeDialog {
         <<view.dicom_node_dialog>>
-        + title
     }
     DICOMNodeDialog "1" --* "1" DICOMNode
     class AWSCognitoDialog {
         <<aws_cognito_dialog>>
-        + title
-        + export_to_aws
     }
     AWSCognitoDialog "1" --* "1" AWSCognito
     class NetworkTimeoutsDialog {
         <<view.settings.network_timeouts.dialog>>
-        + title
     }
     NetworkTimeoutsDialog "1" --* NetworkTimeouts
     class ModalitiesDialog {
         <<view.settings.modalities_dialog>>
-        + title
-        + modalities [str]
     } 
     class SOPClassesDialog {
         <<view.settings.sop_classes_dialog>>
-        + title
-        + storage_codes
-        + attr_map
-        + sc_lookup
-        + sop_classes [str]
     } 
     class TransferSyntaxesDialog {
         <<view.settings.transfer_syntaxes_dialog>>
-        + title
-        + ts_lookup
-        + attr_map
-        + transfer_syntaxes [str]
     } 
     class LoggingLevelsDialog {
         <<view.settings.logging_levels_dialog>>
-        + title
     }
     LoggingLevelsDialog "1" --* LoggingLevels
     class SettingsDialog {
@@ -547,50 +284,41 @@ classDiagram
     SettingsDialog "1" ..> "1" ProjectModel
     class Dashboard {
         <<view.dashboard>>
-        + AWS_AUTH_TIMEOUT_SECONDS
-        + LABEL_FONT_SIZE
-        + DATA_FONT_SIZE
-        + PAD
-        + BUTTON_WIDTH
     }
+    Dashboard "1" --> "1" ProjectController
+    Dashboard "1" ..> "1" Totals
     class QueryView {
         <<view.query_retrieve_import>>
-        + ux_poll_find_response_interval
-        + fixed_width_font
-        + _attr_map
-        + MOVE_LEVELS
     }
     QueryView "1" --> "1" ProjectController
+    QueryView "1" --> "1" Dashboard
     class ImportStudiesDialog {
         <<import_studies_dialog>>
     }
+    ImportStudiesDialog "1" --> "1" ProjectController
+    ImportStudiesDialog "1" ..> "*" StudyUIDHierarchy
+    ImportStudiesDialog "1" ..> "1" MoveStudiesRequest
     class ImportFilesDialog {
         <<view.import_files_dialog>>
     }
+    ImportStudiesDialog "1" --> "1" AnonymizerController
     class ExportView {
         <<view.export>>
+        + __init__(parent, project_controller, title)
+        + get_input()
     }
+    ExportView "1" --> "1" ProjectController
+    ExportView "1" --> "1" Dashboard
     Tk <|-- CTk
     class Anonymizer {
-        <<anonymizer>>
-        + TITLE
-        + THEME_FILE
-        + CONFIG_FILENAME
-        + project_open_startup_dwell_time
-        + metric_loop_interval
-        + menu_font
-        
+        <<anonymizer>> 
     }
-    Anonymizer --* ProjectController: controller
-    Anonymizer --* QueryView: query_view
-    
-
-    
-
-    
-    
-    
-    
-    
-
+    CTk <|-- Anonymizer
+    Anonymizer "1" --* "1" ProjectController: controller
+    Anonymizer "1" --* "1" WelcomeView: welcome_view
+    Anonymizer "1" --* "1" QueryView: query_view
+    Anonymizer "1" --* "1" ExportView: export_view
+    Anonymizer "1" --* "1" Dashboard: dashboard
+    Anonymizer "1" --* "*" HTMLView: help_views
+    Anonymizer "1" --* "1" SettingsDialog
 ```

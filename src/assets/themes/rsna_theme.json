@@ -137,29 +137,29 @@
   },
   "CTkFont": {
     "macOS": {
-      "family": "DIN Alternate",
+      "family": "San Francisco",
       "size": 13,
       "weight": "normal"
     },
     "Windows": {
-      "family": "DIN Alternate",
+      "family": "Tahoma",
       "size": 13,
       "weight": "normal"
     },
     "Linux": {
-      "family": "DIN Alternate",
-      "size": 16,
+      "family": "DejaVu Sans",
+      "size": 13,
       "weight": "normal"
     }
   },
-  "DataTable" : {
-    "bg_color": ["gray90", "gray20"],
-    "text_color": ["black","white"],
-    "selected_color": ["#3a7ebf", "#1f538d"],
-    "border_width": 2,
+  "Treeview" : {
+    "bg_color": ["gray90", "gray13"],
+    "text_color": ["#014F8F", "#005DA9"],
+    "selected_color": ["#DCE4EE", "#DCE4EE"],
+    "selected_bg_color": ["#3a7ebf", "#1f538d"],
+    "border_width": 1,
     "font" : {
-      "family": "Arial",
-      "size": 12,
+      "size": 11,
       "weight": "normal"
     }
   }

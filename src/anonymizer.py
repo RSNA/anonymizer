@@ -42,7 +42,6 @@ class Anonymizer(ctk.CTk):
     TITLE = _("RSNA DICOM Anonymizer Version " + __version__)
     THEME_FILE = "assets/themes/rsna_theme.json"
     CONFIG_FILENAME = "config.json"
-    DEFAULT_RESULTS_FONT = ("Arial", 15, "bold")
 
     project_open_startup_dwell_time = 100  # milliseconds
     metrics_loop_interval = 1000  # milliseconds
@@ -53,23 +52,33 @@ class Anonymizer(ctk.CTk):
 
         ## ttk Widgets, handling Light/Dark mode using ThemeManager
         ### Treeview Customisation
-        font = self.DEFAULT_RESULTS_FONT
+        # Treeview defaults:
+        font = ctk.CTkFont()
         bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
         text_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkLabel"]["text_color"])
-        selected_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["fg_color"])
+        selected_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["text_color"])
+        selected_bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["fg_color"])
         border_width = 1
-        try:
-            family = ctk.ThemeManager.theme["DataTable"]["font"]["family"]
-            size = ctk.ThemeManager.theme["DataTable"]["font"]["size"]
-            weight = ctk.ThemeManager.theme["DataTable"]["font"]["weight"]
+        # Treeview from ThemeManager:
+        if "Treeview" in ctk.ThemeManager.theme:
+            tv_theme = ctk.ThemeManager.theme["Treeview"]
+            if "font" in tv_theme:
+                tv_theme_font = tv_theme["font"]
+                family = tv_theme_font["family"] if "family" in tv_theme_font else font.cget("family")
+                size = tv_theme_font["size"] if "size" in tv_theme_font else font.cget("size")
+                weight = tv_theme_font["weight"] if "weight" in tv_theme_font else font.cget("weight")
             font = (family, size, weight)
-            logger.info(f"DataTable font from ThemeManager: {family}, {size}, {weight}")
-            bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["DataTable"]["bg_color"])
-            text_color = self._apply_appearance_mode(ctk.ThemeManager.theme["DataTable"]["text_color"])
-            selected_color = self._apply_appearance_mode(ctk.ThemeManager.theme["DataTable"]["selected_color"])
-            border_width = ctk.ThemeManager.theme["DataTable"]["border_width"]
-        except Exception as e:
-            logger.error(f"Exception reading DataTable from ThemeManager dictionary: {e}")
+            logger.info(f"Treeview font from ThemeManager: {family}, {size}, {weight}")
+            if "bg_color" in tv_theme:
+                bg_color = self._apply_appearance_mode(tv_theme["bg_color"])
+            if "text_color" in tv_theme:
+                text_color = self._apply_appearance_mode(tv_theme["text_color"])
+            if "selected_color" in tv_theme:
+                selected_color = self._apply_appearance_mode(tv_theme["selected_color"])
+            if "selected_bg_color" in tv_theme:
+                selected_bg_color = self._apply_appearance_mode(tv_theme["selected_bg_color"])
+            if "border_width" in tv_theme:
+                border_width = tv_theme["border_width"]
 
         treestyle = ttk.Style()
         treestyle.theme_use("default")
@@ -83,7 +92,7 @@ class Anonymizer(ctk.CTk):
         )
         treestyle.map(
             "Treeview",
-            background=[("selected", bg_color)],
+            background=[("selected", selected_bg_color)],
             foreground=[("selected", selected_color)],
             font=[("selected", font)],
         )
@@ -96,23 +105,18 @@ class Anonymizer(ctk.CTk):
             logger.error(f"Theme file not found: {theme}, reverting to dark-blue theme")
             theme = "dark-blue"
         ctk.set_default_color_theme(theme)
-
         ctk.AppearanceModeTracker.add(self._appearance_mode_change)
-
-        self._appearance_mode_change(ctk.get_appearance_mode())
+        self._appearance_mode_change(ctk.get_appearance_mode())  # initialize non-ctk widget styles
 
         if sys.platform.startswith("win"):
             self.iconbitmap("assets\\images\\rsna_icon.ico", default="assets\\images\\rsna_icon.ico")
 
         self.controller: ProjectController | None = None
+        self.welcome_view: WelcomeView = WelcomeView(self)
         self.query_view: QueryView | None = None
         self.export_view: ExportView | None = None
-        self.overview_view: HTMLView | None = None
         self.help_views = {}
-        self.instructions_view: HTMLView | None = None
-        self.license_view: HTMLView | None = None
         self.dashboard: Dashboard | None = None
-        self.welcome_view: WelcomeView = WelcomeView(self)
         self.resizable(False, False)
         self.title(self.TITLE)
         self.menu_bar = tk.Menu(master=self)

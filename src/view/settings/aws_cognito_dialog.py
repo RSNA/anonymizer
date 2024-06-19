@@ -23,7 +23,7 @@ class AWSCognitoDialog(tk.Toplevel):
         self.export_to_aws = export_to_aws
         self.title(title)
         self.resizable(False, False)
-        self._user_input = None
+        self._user_input: Union[Tuple[bool, AWSCognito], None] = None
         self._create_widgets()
         self.wait_visibility()
         self.lift()
@@ -160,7 +160,7 @@ class AWSCognitoDialog(tk.Toplevel):
             sticky="nw",
         )
 
-        # TODO: included check box for private user sub-directory via get_user UserAttributes = "sub" value
+        # TODO: include check box for private user sub-directory via get_user UserAttributes = "sub" value
 
         row += 1
 

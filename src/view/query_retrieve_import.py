@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 class QueryView(tk.Toplevel):
+    MOVE_LEVELS = ["STUDY", "SERIES", "INSTANCE"]
     ux_poll_find_response_interval = 250  # milli-seconds
 
     # C-FIND DICOM attributes to display in the results Treeview:
@@ -49,7 +50,6 @@ class QueryView(tk.Toplevel):
         "StudyInstanceUID": (_("StudyInstanceUID"), 0, False),
     }
     _tree_column_keys = list(_attr_map.keys())[:-1]
-    MOVE_LEVELS = ["STUDY", "SERIES", "INSTANCE"]
 
     def __init__(
         self,
@@ -67,8 +67,6 @@ class QueryView(tk.Toplevel):
         self._studies_to_process = 0
         self._study_uids_to_import = []
         self._acc_no_file_path = None
-        self.width = 1300
-        self.height = 400
         self.resizable(True, True)
         self.lift()
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)

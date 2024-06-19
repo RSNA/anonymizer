@@ -80,7 +80,7 @@ class SOPClassesDialog(tk.Toplevel):
             selectmode="browse",  # single selection
         )
         # Bind a callback function to item selection
-        self._tree.bind("<<TreeviewSelect>>", self.on_item_select)
+        self._tree.bind("<<TreeviewSelect>>", self._on_item_select)
         self._tree.tag_configure("green", background="limegreen")
 
         self._tree.grid(row=0, column=0, columnspan=2, sticky="nswe")
@@ -139,7 +139,7 @@ class SOPClassesDialog(tk.Toplevel):
             sticky="e",
         )
 
-    def on_item_select(self, event):
+    def _on_item_select(self, event):
         selected_items = self._tree.selection()
         if len(selected_items) == 0:
             return
