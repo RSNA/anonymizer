@@ -9,7 +9,7 @@ class WelcomeView(ctk.CTkFrame):
     TITLE = _("Welcome")
     TITLE_FONT_SIZE = 28
     WELCOME_TEXT = _(
-        "The RSNA DICOM Anonymizer program is a free open-source tool for curating and de-identifying DICOM studies.\n\n"
+        "The RSNA DICOM Anonymizer program is a free open-source tool for curating\nand de-identifying DICOM studies.\n\n"
         "Easy to use, advanced DICOM expertise not required!\n\n"
         "Use it to ensure privacy by removing protected health information (PHI).\n\n"
         "Go to Help/Overview for a quick overview.\n\n"
@@ -21,8 +21,6 @@ class WelcomeView(ctk.CTkFrame):
     TITLED_LOGO_FILE = "assets/images/rsna_titled_logo_alpha.png"  # alpha channel  / transparent background
     TITLED_LOGO_WIDTH = 255
     TITLED_LOGO_HEIGHT = 155
-    TEXT_BOX_WIDTH = 700
-    TEXT_BOX_HEIGHT = 400
 
     def __init__(self, parent: ctk.CTk):
         super().__init__(master=parent)
@@ -54,15 +52,11 @@ class WelcomeView(ctk.CTkFrame):
         label_welcome.grid(row=1, column=0, pady=self.PAD, sticky="n")
 
         # Welcome Text:
-        text_box_welcome = ctk.CTkTextbox(
-            master=self,
-            width=self.TEXT_BOX_WIDTH,
-            height=self.TEXT_BOX_HEIGHT,
-            wrap="word",
-            font=ctk.CTkFont(family=self.font_family, size=self.WELCOME_TEXT_FONT_SIZE),
-            activate_scrollbars=False,
-        )
 
-        text_box_welcome.insert("0.0", text=self.WELCOME_TEXT)
-        text_box_welcome.configure(state="disabled")
-        text_box_welcome.grid(row=2, column=0, padx=self.PAD * 2, pady=self.PAD)
+        label_welcome_text = ctk.CTkLabel(
+            master=self,
+            text=self.WELCOME_TEXT,
+            font=ctk.CTkFont(family=self.font_family, size=self.WELCOME_TEXT_FONT_SIZE),
+            justify="left",
+        )
+        label_welcome_text.grid(row=2, column=0, padx=self.PAD * 2, pady=(self.PAD, self.PAD * 2))

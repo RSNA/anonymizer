@@ -415,8 +415,6 @@ classDiagram
         + TITLED_LOGO_FILE
         + TITLED_LOGO_WIDTH
         + TITLED_LOGO_HEIGHT
-        + TEXT_BOX_WIDTH
-        + TEXT_BOX_HEIGHT
         + __init__(parent)
     }
     class HTMLScrolledText {

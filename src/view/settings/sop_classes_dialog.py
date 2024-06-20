@@ -1,6 +1,7 @@
 from typing import Union
 import tkinter as tk
 import customtkinter as ctk
+from customtkinter import ThemeManager
 from tkinter import ttk
 import logging
 from pynetdicom.sop_class import _STORAGE_CLASSES
@@ -52,6 +53,7 @@ class SOPClassesDialog(tk.Toplevel):
         title: str = _("Select Storage Classes"),
     ):
         super().__init__(master=parent)
+        self.root: ctk.CTk = parent.master
         self.sop_classes = sop_classes
         self.modalities = modalities
         self.title(title)
@@ -81,7 +83,9 @@ class SOPClassesDialog(tk.Toplevel):
         )
         # Bind a callback function to item selection
         self._tree.bind("<<TreeviewSelect>>", self._on_item_select)
-        self._tree.tag_configure("green", background="limegreen")
+        selected_bg_color = self.root._apply_appearance_mode(ThemeManager.theme["Treeview"]["selected_bg_color"])
+        selected_color = self.root._apply_appearance_mode(ThemeManager.theme["Treeview"]["selected_color"])
+        self._tree.tag_configure("green", foreground=selected_color, background=selected_bg_color)
 
         self._tree.grid(row=0, column=0, columnspan=2, sticky="nswe")
         # Set tree column headers, width and justifications

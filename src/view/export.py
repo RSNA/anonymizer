@@ -103,7 +103,7 @@ class ExportView(tk.Toplevel):
 
         # Create a Scrollbar and associate it with the Treeview
         scrollbar = ttk.Scrollbar(self._export_frame, orient="vertical", command=self._tree.yview)
-        scrollbar.grid(row=0, column=11, pady=(PAD, 0), sticky="ns")
+        scrollbar.grid(row=0, column=11, sticky="ns")
         self._tree.configure(yscrollcommand=scrollbar.set)
 
         # Disable Keyboard selection bindings:

@@ -38,23 +38,45 @@ Double click the application icon to execute.
 3. python src/radon_raw_totals.py
 ```
 ### Software Architecture
-#### Model 
+### Model 
 Two python classes pickled to files in project directory:
-1. ProjectModel => ```./ProjectModel.pkl``` when project settings change
-2. AnonymizerModel => ```./private/AnonymizerModel.pkl``` every 30 secs if files were stored
+#### 1. ProjectModel
+```./ProjectModel.pkl``` when project settings change
+#### 2. AnonymizerModel 
+```./private/AnonymizerModel.pkl``` every 30 secs if files were stored
 ```mermaid
 classDiagram
     class DICOMNode {
         <<model.project>>
+        + ip
+        + port
+        + aet
+        + local
     }
     class NetworkTimeouts {
         <<model.project>>
+        + tcp_connection
+        + acse
+        + dimse
+        + network
     }
     class LoggingLevels {
         <<model.project>>
+        + anonymizer
+        + pynetdicom
+        + pydicom
     }
     class AWSCognito {
         <<model.project>>
+        + account_id
+        + region_name
+        + app_client_id
+        + user_pool_id
+        + identity_pool_id
+        + s3_bucket
+        + s3_prefix
+        + username
+        + password
     }
     class ProjectModel {
         <<model.project>>
@@ -84,13 +106,29 @@ classDiagram
     ProjectModel --* "*" DICOMNode: remote_scps
     class Series {
         <<model.anonymizer>>
+        + series_uid
+        + series_desc
+        + modality
+        + instance_count
     }
     class Study {
         <<model.anonymizer>>
+        + source
+        + study_uid
+        + study_date
+        + anon_date_delta
+        + accession_number
+        + study_desc
+        + target_instance_count
     }
     Study "1" --* "*" Series: series
     class PHI{
         <<model.anonymizer>>
+        + patient_name
+        + patient_id
+        + sex
+        + dob
+        + ethnic_group
     }
     PHI "1" --* "*" Study: studies
     class AnonymizerModel {
@@ -113,10 +151,10 @@ classDiagram
     }
     AnonymizerModel "1" --* "*" PHI: _phi_lookup
 ```
-#### Controller
-1. ProjectController
+### Controller
+#### 1. ProjectController
 Main control class, descendent of pynetdicom.ApplicationEntity handling all DICOM file and network i/o.
-2. AnonymizerController
+#### 2. AnonymizerController
 Provides API & worker threads to anonymize queued DICOM files incoming from network or file system.
 ```mermaid
 classDiagram
@@ -205,18 +243,27 @@ classDiagram
     ProjectController "1" ..> "1" ExportPatientsRequest
     ProjectController "1" ..> "*" ExportPatientsResponse
 ```
-#### View
-Python standard library for GUI: Tkinter (interface to Tk toolkit written in C) enhanced using UI library [CustomTkinter](https://customtkinter.tomschimansky.com/)
-UI colors and fonts set by ctk.ThemeManager from ```assets/themes/rsna_theme.json```
-1. Anonymizer: main application class (ctk.CTk) with context sensitive menu (project open or closed)
-2. WelcomeDialog: first view on fresh start
-3. HTMLView: render html help files with [simplified tag set](https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support) using tkhtmlview library
-4. SettingsDialog: configures ProjectModel => DICOMNodeDialog, AWSCognitoDialog, NetworkTimeoutsDialog, ModalitiesDialog, SOPClassesDialog, TransferSyntaxesDialog, LoggingLevelsDialog
-5. Dashboard: displays project metrics and provides buttons for QueryView & ExportView
-6. QueryView: query remote scp and import studies using C-MOVE at specified level
-7. ImportStudiesDialog: display status of current C-MOVE import operation triggered from QueryView
-8. ImportFilesDialog: display status of file import operation triggered from menu File/Import Files or File/Import Directory
-9. ExportView: export anonymized studies to remote scp or AWS
+### View
+Python standard library for GUI: Tkinter (interface to Tk toolkit written in C) enhanced using UI library [CustomTkinter](https://customtkinter.tomschimansky.com/).
+UI colors and fonts are set by ctk.ThemeManager from ```assets/themes/rsna_theme.json``` which handles appearance modes: System, Light & Dark.
+#### 1. Anonymizer
+Main application class (ctk.CTk) with context sensitive menu (project open or closed)
+#### 2. WelcomeDialog
+First view on fresh program start when no project open
+#### 3. HTMLView
+Render html help files with [simplified tag set](https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support) using tkhtmlview library
+#### 4. SettingsDialog
+Configures ProjectModel => DICOMNodeDialog, AWSCognitoDialog, NetworkTimeoutsDialog, ModalitiesDialog, SOPClassesDialog, TransferSyntaxesDialog, LoggingLevelsDialog
+#### 5. Dashboard 
+Displays project metrics and provides buttons for QueryView & ExportView
+#### 6. QueryView 
+Query remote scp and import studies using C-MOVE at specified level
+#### 7. ImportStudiesDialog 
+Display status of current C-MOVE import operation triggered from QueryView
+#### 8. ImportFilesDialog
+Display status of file import operation triggered from menu File/Import Files or File/Import Directory
+#### 9. ExportView
+Export anonymized studies to remote scp or AWS
 ```mermaid
 classDiagram
     class ProjectController {

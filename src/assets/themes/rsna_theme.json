@@ -121,7 +121,7 @@
   "CTkTextbox": {
     "corner_radius": 6,
     "border_width": 0,
-    "fg_color": ["gray90", "gray20"],
+    "fg_color": ["gray90", "gray13"],
     "border_color": ["#979DA2", "#565B5E"],
     "text_color": ["#014F8F", "#005DA9"],
     "scrollbar_button_color": ["gray55", "gray41"],
@@ -154,7 +154,7 @@
   },
   "Treeview" : {
     "bg_color": ["gray90", "gray13"],
-    "text_color": ["#014F8F", "#005DA9"],
+    "text_color": ["#014F8F", "#1E7BC7"],
     "selected_color": ["#DCE4EE", "#DCE4EE"],
     "selected_bg_color": ["#3a7ebf", "#1f538d"],
     "border_width": 1,

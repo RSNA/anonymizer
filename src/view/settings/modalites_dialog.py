@@ -1,10 +1,12 @@
 from typing import Union
 import tkinter as tk
 import customtkinter as ctk
+from customtkinter import ThemeManager
 from tkinter import ttk
 import logging
 from utils.translate import _
 from utils.modalities import MODALITIES
+from model.project import ProjectModel
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +24,7 @@ class ModalitiesDialog(tk.Toplevel):
         title: str = _("Select Modalities"),
     ):
         super().__init__(master=parent)
+        self.root: ctk.CTk = parent.master
         self.modalities = modalities
         self.title(title)
         self.resizable(False, True)
@@ -44,13 +47,14 @@ class ModalitiesDialog(tk.Toplevel):
         self._tree = ttk.Treeview(
             self,
             show="headings",
-            # style="Treeview",
             columns=list(self.attr_map.keys()),
             selectmode="browse",  # single selection
         )
         # Bind a callback function to item selection
         self._tree.bind("<<TreeviewSelect>>", self.on_item_select)
-        self._tree.tag_configure("green", background="limegreen")
+        selected_bg_color = self.root._apply_appearance_mode(ThemeManager.theme["Treeview"]["selected_bg_color"])
+        selected_color = self.root._apply_appearance_mode(ThemeManager.theme["Treeview"]["selected_color"])
+        self._tree.tag_configure("green", foreground=selected_color, background=selected_bg_color)
         self._tree.grid(row=0, column=0, columnspan=2, sticky="nswe")
 
         # Set tree column headers, width and justifications
@@ -94,6 +98,14 @@ class ModalitiesDialog(tk.Toplevel):
         )
         self._select_all_button.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="w")
 
+        self._default_selection_button = ctk.CTkButton(
+            self._button_frame,
+            width=ButtonWidth,
+            text=_("Default"),
+            command=self._default_selection_button_pressed,
+        )
+        self._default_selection_button.grid(row=0, column=1, padx=PAD, pady=PAD, sticky="w")
+
         self._ok_button = ctk.CTkButton(self._button_frame, width=100, text=_("Ok"), command=self._ok_event)
         self._ok_button.grid(
             row=0,
@@ -117,6 +129,15 @@ class ModalitiesDialog(tk.Toplevel):
             logger.info(f"ADD {selected_item} to modalities")
             self.modalities.append(selected_item)
             self._tree.item(selected_item, tags="green")
+
+    def _default_selection_button_pressed(self):
+        logger.info("_default_selection_button_pressed")
+        self.modalities.clear()
+        self.modalities = [mod for mod in ProjectModel.default_modalities()]
+        for item in self._tree.get_children():
+            self._tree.item(item, tags="")
+            if item in self.modalities:
+                self._tree.item(item, tags="green")
 
     def _select_all_button_pressed(self):
         logger.info("_select_all_button_pressed")
