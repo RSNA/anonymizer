@@ -23,7 +23,6 @@ from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.presentation import PresentationContext, build_context
 from pynetdicom.events import (
     Event,
-    EVT_ABORTED,
     EVT_C_STORE,
     EVT_C_ECHO,
     EventHandlerType,
@@ -204,12 +203,14 @@ class FindStudyResponse:
     status: Dataset
     study_result: Dataset | None
 
+
 @dataclass
 class MoveStudiesRequest:
     scp_name: str
     dest_scp_ae: str
     level: str
-    studies: list[StudyUIDHierarchy] # Move process updates hierarchy, no MoveStudiesResponse
+    studies: list[StudyUIDHierarchy]  # Move process updates hierarchy, no MoveStudiesResponse
+
 
 @dataclass
 class ExportPatientsRequest:

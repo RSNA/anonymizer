@@ -7,10 +7,8 @@ Download and extract zip to desired application directory.
 Execute Anonymizer.exe and override User Account Control to allow the program to "Run anyway".
 ### 2. Mac OSX
 Download and extract zip file to desired application directory.
-Open a Terminal at the dist sub-directory and run the following commmand to remove the extended atrributes from the application: 
-```
-xattr -r -c Anonymizer_17.*.*.app 
-```
+Mount the disk by clicking the Anonymizer*.dmg file.
+Drag icon to Applications folder.
 Double click the application icon to execute.
 ### 3. Ubuntu
 
@@ -19,9 +17,9 @@ Double click the application icon to execute.
 ## Development
 ### Setup
 1. Setup python enviroment (>3.10), recommend using pyenv
-2. ```pip install pipenv```
+2. `pip install pipenv`
 3. Clone repository
-4. Setup virtual enviroment and install all  dependencies listed in Pipfile: ```pipenv install --dev```
+4. Setup virtual enviroment and install all  dependencies listed in Pipfile: `pipenv install --dev`
 ### Unit Testing 
 #### For model and controller with coverage
 ```
@@ -41,9 +39,9 @@ Double click the application icon to execute.
 ### Model 
 Two python classes pickled to files in project directory:
 #### 1. ProjectModel
-```./ProjectModel.pkl``` when project settings change
+`./ProjectModel.pkl` when project settings change
 #### 2. AnonymizerModel 
-```./private/AnonymizerModel.pkl``` every 30 secs if files were stored
+`./private/AnonymizerModel.pkl` every 30 secs if files were stored
 ```mermaid
 classDiagram
     class DICOMNode {
@@ -176,9 +174,11 @@ classDiagram
     class Event {
         <<pynetdicom.events>>
     }
+    Event "1" ..> "1" Dataset
     class Association {
         <<pynetdicom.association>>
     }
+    Association "1" ..> "*" Dataset
     class AnonymizerController {
         <<controller.anonymizer>>
     }
@@ -212,7 +212,6 @@ classDiagram
     }
     FindStudyResponse "1" --* "1" Dataset: status
     FindStudyResponse "1" --* "1" Dataset: study_result
-    
     class MoveStudiesRequest {
         <<controller.project>>
     }
@@ -229,10 +228,9 @@ classDiagram
     ApplicationEntity <|-- ProjectController
     ProjectController "1" --* "1" ProjectModel
     ProjectController "1" --* "1" AnonymizerController
-    ProjectController "1" ..> "1" NetworkTimeouts
+    ProjectController "1" ..> "*" Dataset
     ProjectController "1" ..> "*" PresentationContext
     ProjectController "1" ..> "*" Event
-    ProjectController "1" ..> "*" Dataset
     ProjectController "1" ..> "*" Association
     ProjectController "1" ..> "1" EchoRequest
     ProjectController "1" ..> "1" EchoResponse
@@ -245,7 +243,7 @@ classDiagram
 ```
 ### View
 Python standard library for GUI: Tkinter (interface to Tk toolkit written in C) enhanced using UI library [CustomTkinter](https://customtkinter.tomschimansky.com/).
-UI colors and fonts are set by ctk.ThemeManager from ```assets/themes/rsna_theme.json``` which handles appearance modes: System, Light & Dark.
+UI colors and fonts are set by ctk.ThemeManager from `assets/themes/rsna_theme.json` which handles appearance modes: System, Light & Dark.
 #### 1. Anonymizer
 Main application class (ctk.CTk) with context sensitive menu (project open or closed)
 #### 2. WelcomeDialog

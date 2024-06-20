@@ -1,11 +1,12 @@
+*.dmg
 *.DS_Store
 *.pyc
 *.log
 *.env
 *.spec
 *.coverage
-build/*
-dist/*
+src/build/*
+src/dist/*
 logs/*
 dicom/*
 src/versionfile.txt

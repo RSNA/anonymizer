@@ -7,7 +7,7 @@
 # pipenv shell
 # python build.py
 
-import os
+import os, sys
 import shutil
 import subprocess
 import platform
@@ -15,6 +15,7 @@ import plistlib
 
 from __version__ import __version__
 import pyinstaller_versionfile
+import os
 import PyInstaller.__main__
 
 # V6.6 new option: --optimize 2 option in pyinstaller cmd line determine optimization of exe
@@ -86,7 +87,7 @@ if __name__ == "__main__":
     print(f"Customtkinter path: {customtkinter_path}")
 
     if platform.system() == "Windows":
-        
+
         # Create versionfile.txt
         print(f"Create Windows Version Resource Text file: versionfile.txt for PyInstaller, new version: {__version__}")
         pyinstaller_versionfile.create_versionfile(
@@ -148,19 +149,44 @@ if __name__ == "__main__":
             ]
         )
 
-        bundle_path = f"dist/Anonymizer_{__version__}.app"
+        bundle_path = f"dist/{build_version_name}.app"
 
         # Set the version
-        set_macos_version(f"dist/Anonymizer_{__version__}.app", __version__)
+        set_macos_version(bundle_path, __version__)
 
         # To run this executable after download requires removing the extended attributes via
-        # xattr -r -c <path to exe/app>
-        shutil.make_archive("dist", "zip", root_dir=bundle_path)
+        print(f"Removing extended attributes from {bundle_path}")
+        result = subprocess.run(["xattr", "-rc", bundle_path], capture_output=True, text=True)
+        print(f"Output: {result.stdout}")
 
-        # Delete the redundant build folder (created by github action workflow)
-        app_dir = os.path.join("dist", build_version_name)
-        if os.path.exists(app_dir):
-            shutil.rmtree(app_dir)
+        if result.returncode != 0:
+            print(f"Command failed with error code {result.returncode}")
+            print(f"Error: {result.stderr}")
+            sys.exit(1)
+
+        # Create the "dmg" directory
+        os.makedirs("dmg", exist_ok=True)
+
+        # Run create-dmg command
+        print(f"Creating DMG file for {build_version_name}")
+        dmg_path = f"dmg/{build_version_name}.dmg"
+        result = subprocess.run(
+            ["create-dmg", "--app-drop-link", "600", "185", "--skip-jenkins", "--hdiutil-quiet", dmg_path, bundle_path],
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            print(f"create-dmg command failed with error code {result.returncode}")
+            print(f"Error: {result.stderr}")
+            sys.exit(1)
+
+        # Delete the dist folder
+        print(f"Deleting dist folder")
+        shutil.rmtree("dist")
+
+        # Rename the "dmg" directory to "dist"
+        os.rename("dmg", "dist")
 
     elif platform.system() == "Linux":
 
