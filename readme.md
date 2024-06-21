@@ -7,11 +7,13 @@ Download and extract zip to desired application directory.
 Execute Anonymizer.exe and override User Account Control to allow the program to "Run anyway".
 ### 2. Mac OSX
 Download and extract zip file to desired application directory.
-Mount the disk by clicking the Anonymizer*.dmg file.
+Mount the disk by clicking the Anonymizer_17.*.dmg file where * is the relevant version.
 Drag icon to Applications folder.
 Double click the application icon to execute.
 ### 3. Ubuntu
-
+Download and extract zip file to desired application directory.
+`chmod +x Anonymizer_17.*` where * is the relevant version
+`sudo Anonymizer_17.*`
 ## Documentation
 [Help files](https://mdevans.github.io/anonymizer/index.html)
 ## Development
@@ -157,14 +159,14 @@ Provides API & worker threads to anonymize queued DICOM files incoming from netw
 ```mermaid
 classDiagram
     class ProjectModel {
-            <<model.project>>
-        }
+        <<model.project>>
+    }
     class AnonymizerModel {
         <<model.anonymizer>>
     }
     class ApplicationEntity {
-            <<pynetdicom.ae>>    
-        }
+        <<pynetdicom.ae>>    
+    }
     class Dataset {
         <<pydicom.Dataset>>
     }
@@ -326,7 +328,6 @@ classDiagram
     SettingsDialog "1" --* "1" SOPClassesDialog: sop_classes
     SettingsDialog "1" --* "1" TransferSyntaxesDialog: transfer_syntaxes
     SettingsDialog "1" --* "1" LoggingLevelsDialog: logging_levels
-    SettingsDialog "1" ..> "1" ProjectModel
     class Dashboard {
         <<view.dashboard>>
     }
@@ -366,4 +367,6 @@ classDiagram
     Anonymizer "1" --* "1" Dashboard: dashboard
     Anonymizer "1" --* "*" HTMLView: help_views
     Anonymizer "1" --* "1" SettingsDialog
+    Anonymizer "1" --* "1" ImportStudiesDialog
+    Anonymizer "1" --* "1" ImportFilesDialog
 ```

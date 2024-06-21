@@ -22,9 +22,8 @@ class Dashboard(ctk.CTkFrame):
 
     def __init__(self, parent, query_callback, export_callback, controller: ProjectController):
         super().__init__(master=parent)
-        self._font_family = ThemeManager.theme["CTkFont"]["family"]
-        self._label_font = ctk.CTkFont(family=self._font_family, size=self.LABEL_FONT_SIZE)
-        self._data_font = ctk.CTkFont(family=self._font_family, size=self.DATA_FONT_SIZE)
+        self._label_font = ctk.CTkFont(family=ThemeManager.theme["CTkFont"]["family"], size=self.LABEL_FONT_SIZE)
+        self._data_font = ctk.CTkFont(family=ThemeManager.theme["Treeview"]["font"]["family"], size=self.DATA_FONT_SIZE)
         self._last_qsize = 0
         self._latch_max_qsize = 1
         self._query_callback = query_callback
@@ -135,7 +134,7 @@ class Dashboard(ctk.CTkFrame):
                 title=_("Connection Error"),
                 message=_(
                     f"{scp_name} Server Failed DICOM ECHO\n\nCheck Project Settings/{scp_name} Server"
-                    "\n\nEnsure the remote server is setup for to allow the local server for echo and storage services."
+                    "\n\nEnsure the remote server is setup to allow the local server for echo and storage services."
                 ),
                 parent=self,
             )

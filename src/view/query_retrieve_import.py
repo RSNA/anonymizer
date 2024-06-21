@@ -220,7 +220,7 @@ class QueryView(tk.Toplevel):
             )
 
         # Setup display tags:
-        self._query_results.tag_configure("green", background="limegreen")
+        self._query_results.tag_configure("green", background="limegreen", foreground="white")
         self._query_results.tag_configure("red", background="red")
 
         # Disable Keyboard selection bindings:
@@ -282,15 +282,15 @@ class QueryView(tk.Toplevel):
         self._move_level_label.grid(row=results_row, column=7, padx=PAD, pady=PAD, sticky="e")
 
         self._move_level_var = ctk.StringVar(self._results_frame, value=_("STUDY"))
-        move_levels_optionmenu = ctk.CTkOptionMenu(
+        self._move_levels_optionmenu = ctk.CTkOptionMenu(
             self._results_frame,
             width=char_width_px * len(max(self.MOVE_LEVELS, key=len)) + 40,
             dynamic_resizing=False,
             values=self.MOVE_LEVELS,
             variable=self._move_level_var,
         )
-        move_levels_optionmenu.grid(row=results_row, column=8, padx=PAD, pady=PAD, sticky="e")
-        move_levels_optionmenu.focus_set()
+        self._move_levels_optionmenu.grid(row=results_row, column=8, padx=PAD, pady=PAD, sticky="e")
+        self._move_levels_optionmenu.focus_set()
 
         self._import_button = ctk.CTkButton(
             self._results_frame,
@@ -311,6 +311,7 @@ class QueryView(tk.Toplevel):
         self._select_all_button.configure(state="disabled")
         self._clear_selection_button.configure(state="disabled")
         self._import_button.configure(state="disabled")
+        self._move_levels_optionmenu.configure(state="disabled")
         if self._query_active:
             self._cancel_query_button.configure(state="enabled")
         self._query_results.configure(selectmode="none")
@@ -324,6 +325,7 @@ class QueryView(tk.Toplevel):
         self._clear_selection_button.configure(state="enabled")
         self._import_button.configure(state="enabled")
         self._cancel_query_button.configure(state="disabled")
+        self._move_levels_optionmenu.configure(state="enabled")
         self._query_results.configure(selectmode="extended")
 
     def _load_accession_file_button_pressed(self):

@@ -159,6 +159,7 @@
     "selected_bg_color": ["#3a7ebf", "#1f538d"],
     "border_width": 1,
     "font" : {
+      "family": "Courier New",
       "size": 11,
       "weight": "normal"
     }

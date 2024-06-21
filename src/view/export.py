@@ -95,7 +95,7 @@ class ExportView(tk.Toplevel):
             )
 
         # Setup display tags:
-        self._tree.tag_configure("green", background="limegreen")
+        self._tree.tag_configure("green", background="limegreen", foreground="white")
         self._tree.tag_configure("red", background="red")
 
         # Populate treeview with existing patients

@@ -3,6 +3,7 @@ import platform
 from typing import Union
 import tkinter as tk
 import customtkinter as ctk
+from customtkinter import ThemeManager
 from pathlib import Path
 import logging
 from utils.translate import _
@@ -88,6 +89,7 @@ class ImportFilesDialog(tk.Toplevel):
             width=self.text_box_width,
             height=self.text_box_height,
             wrap="none",
+            font=(ThemeManager.theme["Treeview"]["font"]["family"], ThemeManager.theme["Treeview"]["font"]["size"]),
         )
 
         self._text_box.grid(row=row, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")
