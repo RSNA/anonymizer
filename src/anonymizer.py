@@ -1,4 +1,4 @@
-import os, sys, json, shutil, time
+import os, sys, json, shutil, time, platform
 from pathlib import Path
 from copy import copy
 import logging
@@ -12,7 +12,6 @@ from utils.translate import _
 from utils.logging import init_logging
 from __version__ import __version__
 from pydicom._version import __version__ as pydicom_version
-from pydicom.misc import is_dicom
 from pydicom import dcmread
 from pynetdicom._version import __version__ as pynetdicom_version
 
@@ -47,56 +46,6 @@ class Anonymizer(ctk.CTk):
     metrics_loop_interval = 1000  # milliseconds
     menu_font = ("", 13)
 
-    def _appearance_mode_change(self, mode):
-        logger.info(f"Appearance Mode Change: {mode}")
-
-        ## ttk Widgets, handling Light/Dark mode using ThemeManager
-        ### Treeview Customisation
-        # Treeview defaults:
-        font = ctk.CTkFont()
-        bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
-        text_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkLabel"]["text_color"])
-        selected_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["text_color"])
-        selected_bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["fg_color"])
-        border_width = 1
-        # Treeview from ThemeManager:
-        if "Treeview" in ctk.ThemeManager.theme:
-            tv_theme = ctk.ThemeManager.theme["Treeview"]
-            if "font" in tv_theme:
-                tv_theme_font = tv_theme["font"]
-                family = tv_theme_font["family"] if "family" in tv_theme_font else font.cget("family")
-                size = tv_theme_font["size"] if "size" in tv_theme_font else font.cget("size")
-                weight = tv_theme_font["weight"] if "weight" in tv_theme_font else font.cget("weight")
-            font = (family, size, weight)
-            logger.info(f"Treeview font from ThemeManager: {family}, {size}, {weight}")
-            if "bg_color" in tv_theme:
-                bg_color = self._apply_appearance_mode(tv_theme["bg_color"])
-            if "text_color" in tv_theme:
-                text_color = self._apply_appearance_mode(tv_theme["text_color"])
-            if "selected_color" in tv_theme:
-                selected_color = self._apply_appearance_mode(tv_theme["selected_color"])
-            if "selected_bg_color" in tv_theme:
-                selected_bg_color = self._apply_appearance_mode(tv_theme["selected_bg_color"])
-            if "border_width" in tv_theme:
-                border_width = tv_theme["border_width"]
-
-        treestyle = ttk.Style()
-        treestyle.theme_use("default")
-        treestyle.configure(
-            "Treeview",
-            background=bg_color,
-            foreground=text_color,
-            fieldbackground=bg_color,
-            borderwidth=border_width,
-            font=font,
-        )
-        treestyle.map(
-            "Treeview",
-            background=[("selected", selected_bg_color)],
-            foreground=[("selected", selected_color)],
-            font=[("selected", font)],
-        )
-
     def __init__(self):
         super().__init__()
         ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
@@ -105,6 +54,7 @@ class Anonymizer(ctk.CTk):
             logger.error(f"Theme file not found: {theme}, reverting to dark-blue theme")
             theme = "dark-blue"
         ctk.set_default_color_theme(theme)
+        self.mono_font = self._init_mono_font()
         ctk.AppearanceModeTracker.add(self._appearance_mode_change)
         self._appearance_mode_change(ctk.get_appearance_mode())  # initialize non-ctk widget styles
 
@@ -125,6 +75,74 @@ class Anonymizer(ctk.CTk):
         self.load_config()
         self.set_menu_project_closed()  # creates self.menu_bar, populates Open Recent list
         self.after(self.project_open_startup_dwell_time, self._open_project_startup)
+
+    def _init_mono_font(self) -> ctk.CTkFont:
+        # Monospace font defaults:
+        family = "Courier New"
+        size = 12
+        weight = "normal"
+        if "Treeview" in ctk.ThemeManager.theme:
+            os_map = {"Darwin": "macOS", "Windows": "Windows", "Linux": "Linux"}
+            tv_theme = ctk.ThemeManager.theme["Treeview"]
+            if platform.system() not in os_map:
+                logger.error(f"Unsupported OS: {platform.system()}")
+                return (family, size, weight)
+            if "font" in tv_theme:
+                if os_map[platform.system()] not in tv_theme["font"]:
+                    logger.error(f"invalid font OS specified for Treeview theme: {tv_theme}")
+                    return (family, size, weight)
+                tv_theme_font = tv_theme["font"][os_map[platform.system()]]
+                if "family" in tv_theme_font:
+                    family = tv_theme_font["family"]
+                if "size" in tv_theme_font:
+                    size = tv_theme_font["size"]
+                if "weight" in tv_theme_font:
+                    weight = tv_theme_font["weight"]
+
+        logger.info(f"Initialised Monospace Font: {family}, {size}, {weight}")
+        return ctk.CTkFont(family, size, weight)
+
+    def _appearance_mode_change(self, mode):
+        logger.info(f"Appearance Mode Change: {mode}")
+        # ttk Widgets, handling Light/Dark mode using ThemeManager
+        # Treeview Customisation
+        # Treeview defaults:
+        bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
+        text_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkLabel"]["text_color"])
+        selected_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["text_color"])
+        selected_bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["fg_color"])
+        border_width = 1
+        # Treeview from ThemeManager:
+        if "Treeview" in ctk.ThemeManager.theme:
+            tv_theme = ctk.ThemeManager.theme["Treeview"]
+            if "bg_color" in tv_theme:
+                bg_color = self._apply_appearance_mode(tv_theme["bg_color"])
+            if "text_color" in tv_theme:
+                text_color = self._apply_appearance_mode(tv_theme["text_color"])
+            if "selected_color" in tv_theme:
+                selected_color = self._apply_appearance_mode(tv_theme["selected_color"])
+            if "selected_bg_color" in tv_theme:
+                selected_bg_color = self._apply_appearance_mode(tv_theme["selected_bg_color"])
+            if "border_width" in tv_theme:
+                border_width = tv_theme["border_width"]
+
+        treestyle = ttk.Style()
+        treestyle.theme_use("default")
+        treestyle.configure(
+            "Treeview",
+            background=bg_color,
+            foreground=text_color,
+            fieldbackground=bg_color,
+            borderwidth=border_width,
+            font=str(self.mono_font),
+        )
+        treestyle.map(
+            "Treeview",
+            background=[("selected", selected_bg_color)],
+            foreground=[("selected", selected_color)],
+            font=[("selected", str(self.mono_font))],
+        )
+        treestyle.configure("Treeview.Heading", background=bg_color, foreground=text_color, font=ctk.CTkFont())
 
     # Dashboard metrics updates from the main thread
     def metrics_loop(self):

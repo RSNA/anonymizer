@@ -24,6 +24,7 @@ class ImportFilesDialog(tk.Toplevel):
         sub_title: str = _("Please wait..."),
     ) -> None:
         super().__init__(master=parent)
+        self._data_font = parent.mono_font
         self._controller: AnonymizerController = controller
         self._paths: list[str] | tuple[str, ...] = paths
         self._cancelled = False
@@ -31,8 +32,6 @@ class ImportFilesDialog(tk.Toplevel):
         self.files_processed = 0
         self.title(title)
         self._sub_title: str = sub_title
-        if platform.system() == "Darwin":
-            self.attributes("-topmost", True)  # stay on top
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.text_box_width = 800
         if len(self._paths) > 10:
@@ -78,7 +77,7 @@ class ImportFilesDialog(tk.Toplevel):
 
         self._progressbar.set(0)
 
-        self._progress_label = ctk.CTkLabel(self._frame, text=f"Process 0 of {len(self._paths)}")
+        self._progress_label = ctk.CTkLabel(self._frame, text=f"Process 0 of {len(self._paths)}", font=self._data_font)
         self._progress_label.grid(row=row, column=0, padx=PAD, pady=(0, PAD), sticky="nw")
 
         row += 1
@@ -89,7 +88,7 @@ class ImportFilesDialog(tk.Toplevel):
             width=self.text_box_width,
             height=self.text_box_height,
             wrap="none",
-            font=(ThemeManager.theme["Treeview"]["font"]["family"], ThemeManager.theme["Treeview"]["font"]["size"]),
+            font=self._data_font,
         )
 
         self._text_box.grid(row=row, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")

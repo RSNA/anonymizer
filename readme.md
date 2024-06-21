@@ -9,6 +9,7 @@ Execute Anonymizer.exe and override User Account Control to allow the program to
 Download and extract zip file to desired application directory.
 Mount the disk by clicking the Anonymizer_17.*.dmg file where * is the relevant version.
 Drag icon to Applications folder.
+Open a terminal and execute `xattr -rc /Applications/Anonymizer_17.*.app.
 Double click the application icon to execute.
 ### 3. Ubuntu
 Download and extract zip file to desired application directory.

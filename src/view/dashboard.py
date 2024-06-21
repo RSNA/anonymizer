@@ -2,6 +2,8 @@ import os
 import logging
 from queue import Queue
 from typing import Any
+import tkinter as tk
+from tkinter import ttk
 import customtkinter as ctk
 from customtkinter import ThemeManager
 from tkinter import messagebox
@@ -22,8 +24,8 @@ class Dashboard(ctk.CTkFrame):
 
     def __init__(self, parent, query_callback, export_callback, controller: ProjectController):
         super().__init__(master=parent)
-        self._label_font = ctk.CTkFont(family=ThemeManager.theme["CTkFont"]["family"], size=self.LABEL_FONT_SIZE)
-        self._data_font = ctk.CTkFont(family=ThemeManager.theme["Treeview"]["font"]["family"], size=self.DATA_FONT_SIZE)
+        self._label_font = ctk.CTkFont(family=ctk.CTkFont().cget("family"), size=self.LABEL_FONT_SIZE, weight="normal")
+        self._data_font = ctk.CTkFont(family=parent.mono_font.cget("family"), size=self.DATA_FONT_SIZE, weight="normal")
         self._last_qsize = 0
         self._latch_max_qsize = 1
         self._query_callback = query_callback

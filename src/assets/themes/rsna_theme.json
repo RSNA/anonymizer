@@ -158,10 +158,22 @@
     "selected_color": ["#DCE4EE", "#DCE4EE"],
     "selected_bg_color": ["#3a7ebf", "#1f538d"],
     "border_width": 1,
-    "font" : {
-      "family": "Courier New",
-      "size": 11,
-      "weight": "normal"
+    "font" : { 
+      "macOS": {
+        "family": "Menlo",
+        "size": 12,
+        "weight": "normal"
+      },
+      "Windows": {
+        "family": "Consolas",
+        "size": 12,
+        "weight": "normal"
+      },
+      "Linux": {
+        "family": "DejaVu Sans Mono",
+        "size": 12,
+        "weight": "normal"
+      }
     }
   }
 }
