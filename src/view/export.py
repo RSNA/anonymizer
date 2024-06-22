@@ -25,12 +25,12 @@ class ExportView(tk.Toplevel):
     # Key: column id: (column name, width, centre justify)
     _attr_map = {
         "Patient_Name": (_("Patient Name"), 20, False),
-        "Anon_PatientID": (_("Anonymized ID"), 10, True),
+        "Anon_PatientID": (_("Anonymized ID"), 15, True),
         "Studies": (_("Studies"), 7, True),
         "Series": (_("Series"), 7, True),
         "Files": (_("Images"), 7, True),
         "DateTime": (_("Date Time"), 15, True),
-        "FilesSent": (_("Images Sent"), 7, True),
+        "FilesSent": (_("Images Sent"), 12, True),
         "Error": (_("Last Export Error"), 50, False),
     }
 
@@ -38,7 +38,7 @@ class ExportView(tk.Toplevel):
         self,
         parent: Dashboard,
         project_controller: ProjectController,
-        title: str = _(f"Export Studies"),
+        title: str = _("Export Studies"),
     ):
         super().__init__(master=parent)
         self._parent = parent
@@ -360,7 +360,7 @@ class ExportView(tk.Toplevel):
                 logger.error(f"Failed to export {len(self._patient_ids_to_export)} patients")
                 if messagebox.askretrycancel(
                     title=_("Export Error"),
-                    message=_(f"Failed to export {len(self._patient_ids_to_export)} patient(s)"),
+                    message=_("Failed to export") + f" {len(self._patient_ids_to_export)}" + _("patient(s)"),
                     parent=self,
                 ):
                     # Select failed patients in treeview to retry export:
@@ -394,7 +394,7 @@ class ExportView(tk.Toplevel):
                 self._parent._export_button.configure(text_color="red")
                 messagebox.showerror(
                     title=_("Connection Error"),
-                    message=_(f"Export Server Failed DICOM C-ECHO"),
+                    message=_("Export Server Failed DICOM C-ECHO"),
                     parent=self,
                 )
                 return
@@ -409,10 +409,9 @@ class ExportView(tk.Toplevel):
             logger.error(f"No patients selected for export")
             messagebox.showerror(
                 title=_("Export Error"),
-                message=_(
-                    f"No patients selected for export."
-                    " Use SHIFT+Click and/or CMD/CTRL+Click to select multiple patients."
-                ),
+                message=_("No patients selected for export.")
+                + "\n\n"
+                + _("Use SHIFT+Click and/or CMD/CTRL+Click to select multiple patients."),
                 parent=self,
             )
             return

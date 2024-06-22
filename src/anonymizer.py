@@ -38,7 +38,7 @@ logger = logging.getLogger()  # ROOT logger
 
 
 class Anonymizer(ctk.CTk):
-    TITLE = _("RSNA DICOM Anonymizer Version " + __version__)
+    TITLE = _("RSNA DICOM Anonymizer Version") + " " + __version__
     THEME_FILE = "assets/themes/rsna_theme.json"
     CONFIG_FILENAME = "config.json"
 
@@ -174,8 +174,8 @@ class Anonymizer(ctk.CTk):
                 if not os.path.exists(str(self.current_open_project_dir)):
                     self.current_open_project_dir = None
         except FileNotFoundError:
-            warn_msg = _(
-                f"Config file not found: {self.CONFIG_FILENAME}, no recent project list or current project set"
+            warn_msg = (
+                _("Config file not found: ") + self.CONFIG_FILENAME + _("no recent project list or current project set")
             )
             logger.warning(warn_msg)
 
@@ -188,7 +188,7 @@ class Anonymizer(ctk.CTk):
             with open(self.CONFIG_FILENAME, "w") as config_file:
                 json.dump(config_data, config_file, indent=2)
         except Exception as e:
-            err_msg = _(f"Error writing json config file: {self.CONFIG_FILENAME} {repr(e)}")
+            err_msg = _("Error writing json config file: ") + f"{self.CONFIG_FILENAME} : {repr(e)}"
             logger.error(err_msg)
             messagebox.showerror(
                 title=_("Configuration File Write Error"),
@@ -222,7 +222,7 @@ class Anonymizer(ctk.CTk):
             logger.info("New Project Cancelled, storage directory not set")
             messagebox.showerror(
                 title=_("New Project Error"),
-                message=_(f"Storage Directory not set, please set a valid directory in project settings."),
+                message=_("Storage Directory not set, please set a valid directory in project settings."),
                 parent=self,
             )
             self.enable_file_menu()
@@ -232,9 +232,9 @@ class Anonymizer(ctk.CTk):
         if model.storage_dir.exists() and model.storage_dir.is_dir() and project_model_path.exists():
             confirm = messagebox.askyesno(
                 title=_("Confirm Overwrite"),
-                message=_(
-                    "The project directory already exists.\n\nDo you want to delete the existing project and all its data?"
-                ),
+                message=_("The project directory already exists.")
+                + "\n\n"
+                + _("Do you want to delete the existing project and all its data?"),
                 parent=self,
             )
             if not confirm:
@@ -249,7 +249,7 @@ class Anonymizer(ctk.CTk):
                 logger.error(f"Error deleting existing project directory: {model.storage_dir}, {str(e)}")
                 messagebox.showerror(
                     title=_("New Project Error"),
-                    message=_(f"Error deleting existing project directory: {model.storage_dir}\n\n {str(e)}"),
+                    message=_("Error deleting existing project directory") + f": {model.storage_dir}\n\n {str(e)}",
                     parent=self,
                 )
                 self.enable_file_menu()
@@ -260,7 +260,7 @@ class Anonymizer(ctk.CTk):
         try:
             self.controller = ProjectController(model)
             if not self.controller:
-                raise RuntimeError("Fatal Internal Error, Project Controller not created")
+                raise RuntimeError(_("Fatal Internal Error, Project Controller not created"))
 
             if java_phi_studies:
                 self.controller.anonymizer.model.process_java_phi_studies(java_phi_studies)
@@ -279,7 +279,7 @@ class Anonymizer(ctk.CTk):
             logger.error(f"Error creating Project Controller: {str(e)}")
             messagebox.showerror(
                 title=_("New Project Error"),
-                message=_(f"Error creating Project Controller:\n\n{str(e)}"),
+                message=_("Error creating Project Controller" + f"\n\n{str(e)}"),
                 parent=self,
             )
         finally:
@@ -312,13 +312,13 @@ class Anonymizer(ctk.CTk):
                 with open(project_model_path, "rb") as pkl_file:
                     file_model = pickle.load(pkl_file)
                     if not isinstance(file_model, ProjectModel):
-                        raise TypeError("Corruption detected: Loaded model is not an instance of ProjectModel")
+                        raise TypeError(_("Corruption detected: Loaded model is not an instance of ProjectModel"))
             except Exception as e:
                 logger.error(f"Error loading Project Model: {str(e)}")
                 # TODO: load from last backup
                 messagebox.showerror(
                     title=_("Open Project Error"),
-                    message=_(f"Error loading Project Model from data file: {project_model_path}\n\n{str(e)}"),
+                    message=_("Error loading Project Model from data file") + f": {project_model_path}\n\n{str(e)}",
                     parent=self,
                 )
                 self.enable_file_menu()
@@ -330,7 +330,7 @@ class Anonymizer(ctk.CTk):
                 logger.error(f"Project Model missing version")
                 messagebox.showerror(
                     title=_("Open Project Error"),
-                    message=_(f"Project File corrupted, missing version information."),
+                    message=_("Project File corrupted, missing version information."),
                     parent=self,
                 )
                 self.enable_file_menu()
@@ -361,7 +361,7 @@ class Anonymizer(ctk.CTk):
                 logger.error(f"Error creating Project Controller: {str(e)}")
                 messagebox.showerror(
                     title=_("Open Project Error"),
-                    message=_(f"Error creating Project Controller:\n\n{str(e)}"),
+                    message=_("Error creating Project Controller") + f"\n\n{str(e)}",
                     parent=self,
                 )
                 self.enable_file_menu()
@@ -376,7 +376,7 @@ class Anonymizer(ctk.CTk):
         else:
             messagebox.showerror(
                 title=_("Open Project Error"),
-                message=_(f"No Project file not found in: \n\n{project_dir}"),
+                message=_("No Project file not found in") + f":\n\n{project_dir}",
                 parent=self,
             )
             if self.is_recent_directory(project_dir):
@@ -422,7 +422,7 @@ class Anonymizer(ctk.CTk):
             logger.info(f"QueryView busy, cannot close project")
             messagebox.showerror(
                 title=_("Query Busy"),
-                message=_(f"Query is busy, please wait for query to complete before closing project."),
+                message=_("Query is busy, please wait for query to complete before closing project."),
                 parent=self,
             )
             return
@@ -430,7 +430,7 @@ class Anonymizer(ctk.CTk):
             logger.info(f"ExportView busy, cannot close project")
             messagebox.showerror(
                 title=_("Export Busy"),
-                message=_(f"Export is busy, please wait for export to complete before closing project."),
+                message=_("Export is busy, please wait for export to complete before closing project."),
                 parent=self,
             )
             return
@@ -467,7 +467,7 @@ class Anonymizer(ctk.CTk):
             logger.info(f"Clone Project Cancelled, no project open")
             messagebox.showerror(
                 title=_("Clone Project Error"),
-                message=_(f"No project open to clone."),
+                message=_("No project open to clone."),
                 parent=self,
             )
             return
@@ -494,7 +494,7 @@ class Anonymizer(ctk.CTk):
             logger.info(f"Clone Project Cancelled, cloned directory same as current project directory")
             messagebox.showerror(
                 title=_("Clone Project Error"),
-                message=_(f"Cloned directory cannot be the same as the current project directory."),
+                message=_("Cloned directory cannot be the same as the current project directory."),
                 parent=self,
             )
             return
@@ -527,7 +527,7 @@ class Anonymizer(ctk.CTk):
             logger.error(f"Error creating Project Controller: {str(e)}")
             messagebox.showerror(
                 title=_("Clone Project Error"),
-                message=_(f"Error creating Project Controller:\n\n{str(e)}"),
+                message=_("Error creating Project Controller") + f"\n\n{str(e)}",
                 parent=self,
             )
             return
@@ -572,7 +572,7 @@ class Anonymizer(ctk.CTk):
             self.controller.anonymizer,
             file_paths,
             title=_("Import Files"),
-            sub_title=_(f"Importing {len(file_paths)} {'file' if len(file_paths) == 1 else 'files'}"),
+            sub_title=_("Importing" + f"{len(file_paths)} {_('file') if len(file_paths) == 1 else _('files')}"),
         )
         dlg.get_input()
         self.enable_file_menu()
@@ -595,7 +595,7 @@ class Anonymizer(ctk.CTk):
         logger.info(root_dir)
 
         if not root_dir:
-            logger.info(f"Import Directory Cancelled")
+            logger.info("Import Directory Cancelled")
             self.enable_file_menu()
             return
 
@@ -606,7 +606,7 @@ class Anonymizer(ctk.CTk):
             try:
                 ds = dcmread(fp=dicomdir_file)
                 root_dir = Path(str(ds.filename)).resolve().parent
-                msg = _(f"Reading DICOMDIR Root directory: {Path(root_dir).stem}...")
+                msg = _("Reading DICOMDIR Root directory" + f": {Path(root_dir).stem}...")
                 logger.info(msg)
                 self.dashboard.set_status(msg)
 
@@ -651,7 +651,7 @@ class Anonymizer(ctk.CTk):
                             file_paths.extend(paths)
 
             except Exception as e:
-                msg_prefix = _(f"Error reading DICOMDIR file")
+                msg_prefix = _("Error reading DICOMDIR file")
                 msg_detail = f"{dicomdir_file}, {str(e)}"
                 logger.error(msg_prefix + ": " + msg_detail)
                 self.dashboard.set_status(msg_prefix)
@@ -663,7 +663,7 @@ class Anonymizer(ctk.CTk):
                 )
                 return
         else:
-            msg = _(f"Reading filenames from {Path(root_dir).stem}...")
+            msg = _("Reading filenames from") + f" {Path(root_dir).stem}..."
             logger.info(msg)
             self.dashboard.set_status(msg)
             # TODO OPTIMIZE: use Python Generator to handle massive directory trees
@@ -675,7 +675,7 @@ class Anonymizer(ctk.CTk):
             ]
 
         if len(file_paths) == 0:
-            msg = _(f"No files found in {root_dir}")
+            msg = _("No files found in") + f" {root_dir}"
             logger.info(msg)
             messagebox.showerror(
                 title=_("Import Directory Error"),
@@ -686,7 +686,12 @@ class Anonymizer(ctk.CTk):
             self.enable_file_menu()
             return
 
-        msg = _(f"{len(file_paths)} filenames read from\n\n{root_dir}\n\nDo you want to initiate import?")
+        msg = (
+            f"{len(file_paths)} "
+            + _("filenames read from")
+            + f"\n\n{root_dir}\n\n"
+            + _("Do you want to initiate import?")
+        )
         if not messagebox.askyesno(
             title=_("Import Directory"),
             message=msg,
@@ -698,7 +703,7 @@ class Anonymizer(ctk.CTk):
             self.enable_file_menu()
             return
 
-        msg = _(f"Importing {len(file_paths)} {'file' if len(file_paths) == 1 else 'files'}")
+        msg = _("Importing") + f" {len(file_paths)} {_('file') if len(file_paths) == 1 else _('files')}"
         logger.info(msg)
         self.dashboard.set_status(msg)
 
@@ -707,10 +712,10 @@ class Anonymizer(ctk.CTk):
             self.controller.anonymizer,
             sorted(file_paths),
             title=_("Import Directory"),
-            sub_title=_(f"Import files from {root_dir}"),
+            sub_title=_("Import files from") + f" {root_dir}",
         )
         files_processed = dlg.get_input()
-        msg = _(f"Files processed: {files_processed}")
+        msg = _("Files processed") + f": {files_processed}"
         logger.info(msg)
         self.dashboard.set_status(msg)
         self.enable_file_menu()
@@ -766,16 +771,16 @@ class Anonymizer(ctk.CTk):
             logger.info(f"QueryView busy, cannot open SettingsDialog")
             messagebox.showerror(
                 title=_("Query Busy"),
-                message=_(f"Query is busy, please wait for query to complete before changing settings."),
+                message=_("Query is busy, please wait for query to complete before changing settings."),
                 parent=self,
             )
             return
 
         if self.export_view and self.export_view.busy():
-            logger.info(f"ExportView busy, cannot open SettingsDialog")
+            logger.info("ExportView busy, cannot open SettingsDialog")
             messagebox.showerror(
                 title=_("Export Busy"),
-                message=_(f"Export is busy, please wait for export to complete before changing settings."),
+                message=_("Export is busy, please wait for export to complete before changing settings."),
                 parent=self,
             )
             return
@@ -879,17 +884,6 @@ class Anonymizer(ctk.CTk):
             command=self.import_directory,
             # accelerator="Command+D",
         )
-
-        # file_menu.add_command(
-        #     label=_("Query & Retrieve"),
-        #     command=self.query_retrieve,
-        #     # accelerator="Command+R",
-        # )
-        # file_menu.add_command(
-        #     label=_("Export"),
-        #     command=self.export,
-        #     # accelerator="Command+E",
-        # )
 
         file_menu.add_separator()
         file_menu.add_command(

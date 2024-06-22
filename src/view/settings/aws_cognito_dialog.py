@@ -52,7 +52,7 @@ class AWSCognitoDialog(tk.Toplevel):
 
         self.account_id_var = str_entry(
             view=self._frame,
-            label=_("AWS Account ID:"),
+            label=_("AWS Account ID") + ":",
             initial_value=self.aws_cognito.account_id,
             min_chars=1,
             max_chars=64,
@@ -68,7 +68,7 @@ class AWSCognitoDialog(tk.Toplevel):
 
         self.region_name_var = str_entry(
             view=self._frame,
-            label=_("Region Name:"),
+            label=_("Region Name") + ":",
             initial_value=self.aws_cognito.region_name,
             min_chars=5,
             max_chars=64,
@@ -84,7 +84,7 @@ class AWSCognitoDialog(tk.Toplevel):
 
         self.app_client_id_var = str_entry(
             view=self._frame,
-            label=_("Cognito Application Client ID:"),
+            label=_("Cognito Application Client ID")+":",
             initial_value=self.aws_cognito.app_client_id,
             min_chars=5,
             max_chars=64,
@@ -100,7 +100,7 @@ class AWSCognitoDialog(tk.Toplevel):
 
         self.user_pool_id_var = str_entry(
             view=self._frame,
-            label=_("Cognito User Pool ID:"),
+            label=_("Cognito User Pool ID")+":",
             initial_value=self.aws_cognito.user_pool_id,
             min_chars=5,
             max_chars=64,
@@ -116,7 +116,7 @@ class AWSCognitoDialog(tk.Toplevel):
 
         self.identity_pool_id_var = str_entry(
             view=self._frame,
-            label=_("Cognito Identity Pool ID:"),
+            label=_("Cognito Identity Pool ID")+":",
             initial_value=self.aws_cognito.identity_pool_id,
             min_chars=5,
             max_chars=64,
@@ -132,7 +132,7 @@ class AWSCognitoDialog(tk.Toplevel):
 
         self.s3_bucket_var = str_entry(
             view=self._frame,
-            label=_("S3 Bucket:"),
+            label=_("S3 Bucket")+":",
             initial_value=self.aws_cognito.s3_bucket,
             min_chars=5,
             max_chars=64,
@@ -148,7 +148,7 @@ class AWSCognitoDialog(tk.Toplevel):
 
         self.s3_prefix_var = str_entry(
             view=self._frame,
-            label=_("S3 Prefix:"),
+            label=_("S3 Prefix")+":",
             initial_value=self.aws_cognito.s3_prefix,
             min_chars=1,
             max_chars=64,
@@ -166,7 +166,7 @@ class AWSCognitoDialog(tk.Toplevel):
 
         self.username_var = str_entry(
             view=self._frame,
-            label=_("Username:"),
+            label=_("Username")+":",
             initial_value=self.aws_cognito.username,
             min_chars=3,
             max_chars=64,
@@ -182,7 +182,7 @@ class AWSCognitoDialog(tk.Toplevel):
 
         self.password_var = str_entry(
             view=self._frame,
-            label=_("Password:"),
+            label=_("Password")+":",
             initial_value=self.aws_cognito.password,
             min_chars=6,
             max_chars=64,

@@ -140,11 +140,10 @@ class LoggingLevelsDialog(tk.Toplevel):
         logger.info(f"_pydicom_debug_event")
         if self.pydicom_debug_var.get():
             if not messagebox.askyesno(
-                _("Warning"),
-                _(
-                    "Enabling debug mode in pydicom will cause PHI to be written to the log file. "
-                    "Are you sure you want to enable pydicom debug mode?"
-                ),
+                title=_("Warning"),
+                message=_("Enabling debug mode in pydicom will cause PHI to be written to the log file.")
+                + "\n\n"
+                + _("Are you sure you want to enable pydicom debug mode?"),
             ):
                 self.pydicom_debug_var.set(False)
 

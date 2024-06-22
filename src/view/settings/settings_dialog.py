@@ -62,7 +62,7 @@ class SettingsDialog(tk.Toplevel):
 
         self.site_id_var: ctk.StringVar = str_entry(
             view=self._frame,
-            label=_("Site ID:"),
+            label=_("Site ID:") + ":",
             initial_value=self.model.site_id,
             min_chars=min_chars,
             max_chars=max_chars,
@@ -87,7 +87,7 @@ class SettingsDialog(tk.Toplevel):
 
         self.project_name_var: ctk.StringVar = str_entry(
             view=self._frame,
-            label=_("Project Name:"),
+            label=_("Project Name") + ":",
             initial_value=self.model.project_name,
             min_chars=min_chars,
             max_chars=max_chars,
@@ -103,7 +103,7 @@ class SettingsDialog(tk.Toplevel):
 
         self.uidroot_var: ctk.StringVar = str_entry(
             view=self._frame,
-            label=_("UID Root:"),
+            label=_("UID Root") + ":",
             initial_value=self.model.uid_root,
             min_chars=min_chars,
             max_chars=uid_max_chars,
@@ -117,7 +117,7 @@ class SettingsDialog(tk.Toplevel):
         )
         row += 1
 
-        servers_label = ctk.CTkLabel(self._frame, text=_("DICOM Servers:"))
+        servers_label = ctk.CTkLabel(self._frame, text=_("DICOM Servers") + ":")
         servers_label.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="nw")
 
         self._local_server_button = ctk.CTkButton(
@@ -150,7 +150,7 @@ class SettingsDialog(tk.Toplevel):
 
         row += 1
 
-        servers_label = ctk.CTkLabel(self._frame, text=_("AWS S3 Server:"))
+        servers_label = ctk.CTkLabel(self._frame, text=_("AWS S3 Server") + ":")
         servers_label.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="nw")
 
         self._export_server_button = ctk.CTkButton(
@@ -164,7 +164,7 @@ class SettingsDialog(tk.Toplevel):
         row += 1
 
         # TODO: None for timeout means no timeout, implement checkbox for enable/disable timeout
-        network_timeouts_label = ctk.CTkLabel(self._frame, text=_("Network Timeouts:"))
+        network_timeouts_label = ctk.CTkLabel(self._frame, text=_("Network Timeouts") + ":")
         network_timeouts_label.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="nw")
         self.network_timeout_button = ctk.CTkButton(
             self._frame,
@@ -176,7 +176,7 @@ class SettingsDialog(tk.Toplevel):
 
         row += 1
 
-        self._storage_directory_label = ctk.CTkLabel(self._frame, text=_("Storage Directory:"))
+        self._storage_directory_label = ctk.CTkLabel(self._frame, text=_("Storage Directory") + ":")
         self._storage_directory_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
 
         # Only allow setting of storage directory for NEW project:
@@ -194,7 +194,7 @@ class SettingsDialog(tk.Toplevel):
 
         row += 1
 
-        self._modalities_label = ctk.CTkLabel(self._frame, text=_("Modalities:"))
+        self._modalities_label = ctk.CTkLabel(self._frame, text=_("Modalities") + ":")
         self._modalities_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
 
         self._modalities_button = ctk.CTkButton(
@@ -207,7 +207,7 @@ class SettingsDialog(tk.Toplevel):
 
         row += 1
 
-        self._storage_classes_label = ctk.CTkLabel(self._frame, text=_("Storage Classes:"))
+        self._storage_classes_label = ctk.CTkLabel(self._frame, text=_("Storage Classes") + ":")
         self._storage_classes_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
 
         self._storage_classes_button = ctk.CTkButton(
@@ -219,7 +219,7 @@ class SettingsDialog(tk.Toplevel):
 
         row += 1
 
-        self._transfer_syntaxes_label = ctk.CTkLabel(self._frame, text=_("Transfer Syntaxes:"))
+        self._transfer_syntaxes_label = ctk.CTkLabel(self._frame, text=_("Transfer Syntaxes") + ":")
         self._transfer_syntaxes_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
 
         self._transfer_syntaxes_button = ctk.CTkButton(
@@ -234,7 +234,7 @@ class SettingsDialog(tk.Toplevel):
         # Script File is selectable ONLY for NEW projects
         # On project creation the script file is parsed and saved to the Anonymizer model
         if self.new_model:
-            self._script_file_label = ctk.CTkLabel(self._frame, text=str("Script File:"))
+            self._script_file_label = ctk.CTkLabel(self._frame, text=str("Script File") + ":")
             self._script_file_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
 
             self._script_file_button = ctk.CTkButton(
@@ -247,7 +247,7 @@ class SettingsDialog(tk.Toplevel):
             row += 1
 
         # Logging Levels:
-        self._logging_levels_label = ctk.CTkLabel(self._frame, text=_("Logging Levels:"))
+        self._logging_levels_label = ctk.CTkLabel(self._frame, text=_("Logging Levels") + ":")
         self._logging_levels_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
         self._logging_levels_button = ctk.CTkButton(
             self._frame,
@@ -405,7 +405,7 @@ class SettingsDialog(tk.Toplevel):
             try:
                 self.java_phi_studies: List[JavaAnonymizerExportedStudy] = read_java_anonymizer_index_xlsx(path)
             except Exception as e:
-                msg = _(f"Error reading Java Anonymizer Index File:\n\n{path}\n\n{e}")
+                msg = _("Error reading Java Anonymizer Index File") + f":\n\n{path}\n\n{e}"
                 messagebox.showerror(
                     title=_("Load Java Anonymizer Index File Error"),
                     message=msg,
@@ -413,7 +413,7 @@ class SettingsDialog(tk.Toplevel):
                 )
                 return
             if len(self.java_phi_studies) == 0:
-                msg = _(f"No PHI data records foundin:\n\n{path}")
+                msg = _("No PHI data records found in:") + f"\n\n{path}"
                 messagebox.showerror(
                     title=_("Load Java Anonymizer Index File Error"),
                     message=msg,
@@ -423,10 +423,14 @@ class SettingsDialog(tk.Toplevel):
             else:
                 messagebox.showinfo(
                     title=_("Java Index File Loaded"),
-                    message=_(
-                        f"{len(self.java_phi_studies)} Studies from Java Index loaded.\n\n"
-                        "Site ID, UID Root will be inferred from the first PHI record.\n\n"
-                        "Please enter your Project Name and configure all other settings below.\n\n"
+                    message=f"{len(self.java_phi_studies)} "
+                    + _("Studies from Java Index loaded.")
+                    + "\n\n"
+                    + _("Site ID, UID Root will be inferred from the first PHI record.")
+                    + "\n\n"
+                    + _("Please enter your Project Name and configure all other settings below.")
+                    + "\n\n"
+                    + _(
                         "The Java Index data will be processed into the Python Anonymizer database when the project is created."
                     ),
                     parent=self,

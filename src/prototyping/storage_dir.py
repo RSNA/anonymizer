@@ -1,11 +1,6 @@
-# Purpose: Create a view for the user to select a storage directory for the
-#          application to use.
-
-import os
 import customtkinter as ctk
 from tkinter import filedialog
 import logging
-from utils.translate import _
 import prototyping.config as config
 
 logger = logging.getLogger(__name__)

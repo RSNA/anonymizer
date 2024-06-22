@@ -540,7 +540,7 @@ class ProjectController(AE):
         logger.info(f"start {self.model.scp}, {self.model.storage_dir}...")
 
         if self.scp:
-            msg = _(f"DICOM C-STORE scp is already running on {self.model.scp}")
+            msg = _("DICOM C-STORE scp is already running on") + f" {self.model.scp}"
             logger.error(msg)
             raise DICOMRuntimeError(msg)
 
@@ -555,7 +555,7 @@ class ProjectController(AE):
                 evt_handlers=cast(List[EventHandlerType], handlers),
             )
         except Exception as e:
-            msg = _(f"Failed to start DICOM C-STORE scp on {self.model.scp}, Error: {str(e)}")
+            msg = _("Failed to start DICOM C-STORE scp on") + f" {self.model.scp}, Error: {str(e)}"
             logger.error(msg)
             raise DICOMRuntimeError(msg)
 
@@ -606,7 +606,7 @@ class ProjectController(AE):
                 # evt_handlers=[(EVT_ABORTED, self._handle_abort)],
             )
             if not association.is_established:
-                raise ConnectionError(f"Connection error to: {remote_scp}")
+                raise ConnectionError(_("Connection error to") + f": {remote_scp}")
             logger.debug(f"Association established with {association.acceptor.ae_title}")
 
         except Exception as e:  # (ConnectionError, TimeoutError, RuntimeError) as e:
@@ -634,7 +634,7 @@ class ProjectController(AE):
 
             status: Dataset = echo_association.send_c_echo()
             if not status:
-                raise ConnectionError("Connection timed out, was aborted, or received an invalid response")
+                raise ConnectionError(_("Connection timed out, was aborted, or received an invalid response"))
 
             if status.Status == C_SUCCESS:
                 logger.info(f"C-ECHO Success")
@@ -724,25 +724,19 @@ class ProjectController(AE):
                 )
 
             if "ChallengeName" in response:
-                raise AuthenticationError(_(f"Unexpected Authorisation Challenge : {response['ChallengeName']}"))
+                raise AuthenticationError(_("Unexpected Authorisation Challenge") + f": {response['ChallengeName']}")
 
+            err_msg = None
             if "AuthenticationResult" not in response:
+                err_msg = _("Authentication Result & Access Token not in response")
+            elif "IdToken" not in response["AuthenticationResult"]:
+                err_msg = _("IdToken not in Authentication Result")
+            elif "AccessToken" not in response["AuthenticationResult"]:
+                err_msg = _("AccessToken Token not in Authentication Result")
+
+            if err_msg:
                 logging.error(f"AuthenticationResult not in response: {response}")
-                raise AuthenticationError(
-                    _("AWS Cognito IDP authorisation failed\n\nAuthentication Result & Access Token not in response")
-                )
-
-            if "IdToken" not in response["AuthenticationResult"]:
-                logging.error(f"IdToken not in response: {response}")
-                raise AuthenticationError(
-                    _("AWS Cognito authorisation failed\n\nIdToken Token not in Authentication Result")
-                )
-
-            if "AccessToken" not in response["AuthenticationResult"]:
-                logging.error(f"AccessToken not in response: {response}")
-                raise AuthenticationError(
-                    _("AWS Cognito authorisation failed\n\nAccessToken Token not in Authentication Result")
-                )
+                raise AuthenticationError(_("AWS Cognito IDP authorisation failed") + "\n\n" + err_msg)
 
             cognito_identity_token = response["AuthenticationResult"]["IdToken"]
 
@@ -752,7 +746,9 @@ class ProjectController(AE):
             if "UserAttributes" not in response:
                 logging.error(f"UserAttributes not in response: {response}")
                 raise AuthenticationError(
-                    _("AWS Cognito Get User Attributes failed\n\nUserAttributes Token not in get_user response")
+                    _("AWS Cognito Get User Attributes failed")
+                    + "\n\n"
+                    + _("UserAttributes Token not in get_user response")
                 )
 
             user_attribute_1 = response["UserAttributes"][0]
@@ -760,7 +756,9 @@ class ProjectController(AE):
             if not user_attribute_1 or "Name" not in user_attribute_1 or user_attribute_1["Name"] != "sub":
                 logging.error(f"User Attribute 'sub' not in response: {response}")
                 raise AuthenticationError(
-                    _("AWS Cognito Get User Attributes failed\n\nUser Attribute 'sub' not in get_user response")
+                    _("AWS Cognito Get User Attributes failed")
+                    + "\n\n"
+                    + _("User Attribute 'sub' not in get_user response")
                 )
 
             self._aws_user_directory = user_attribute_1["Value"]
@@ -777,7 +775,9 @@ class ProjectController(AE):
 
             if "IdentityId" not in response:
                 logging.error(f"IdentityId not in response: {response}")
-                raise AuthenticationError(_("AWS Cognito authorisation failed\n IdentityId Token not in response"))
+                raise AuthenticationError(
+                    _("AWS Cognito-identity authorisation failed") + "\n\n" + _("IdentityId Token not in response")
+                )
 
             identity_id = response["IdentityId"]
 
@@ -1437,10 +1437,12 @@ class ProjectController(AE):
                     instance_count = identifier.get("NumberOfSeriesRelatedInstances", 0)
                     if not instance_level and not instance_count:
                         raise DICOMRuntimeError(
-                            _(
-                                f"Unable to retrieve UID Hierarchy for reliable import operation via DICOM C-MOVE.\n\n"
-                                f"{scp_name} did not return the number of instances in a series.\n\n"
-                                f"Standard DICOM field (0020,1209) NumberOfSeriesRelatedInstances is missing in the query response."
+                            _("Unable to retrieve UID Hierarchy for reliable import operation via DICOM C-MOVE.")
+                            + f"\n\n{scp_name}"
+                            + _("did not return the number of instances in a series.")
+                            + "\n\n"
+                            + _(
+                                "Standard DICOM field (0020,1209) NumberOfSeriesRelatedInstances is missing in the query response."
                             )
                         )
 
@@ -1673,7 +1675,7 @@ class ProjectController(AE):
                     raise (DICOMRuntimeError(f"C-MOVE@Study[{study.uid}] move study aborted"))
 
                 if not status:
-                    raise ConnectionError(_(f"Connection timed out or aborted moving study_uid: {study.uid}"))
+                    raise ConnectionError(_("Connection timed out or aborted moving study_uid:") + f" {study.uid}")
 
                 if status.Status not in (C_SUCCESS, C_PENDING_A, C_PENDING_B, C_WARNING):
                     raise DICOMRuntimeError(

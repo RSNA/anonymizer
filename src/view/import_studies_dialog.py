@@ -65,14 +65,14 @@ class ImportStudiesDialog(tk.Toplevel):
         row = 0
 
         self._source_label = ctk.CTkLabel(
-            self._frame, text=_(f"Import from {self._controller.model.remote_scps[self._scp_name]}")
+            self._frame, text=_("Import from") + f" {self._controller.model.remote_scps[self._scp_name]}"
         )
         self._source_label.grid(row=row, column=0, padx=PAD, pady=PAD, sticky="w")
 
         row += 1
 
         self._metadata_status_label = ctk.CTkLabel(
-            self._frame, text=_(f"Retrieving Study Metadata at {self._move_level} Level...")
+            self._frame, text=_("Retrieving Study Metadata at") + f" {self._move_level} Level..."
         )
         self._metadata_status_label.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="w")
 
@@ -113,7 +113,7 @@ class ImportStudiesDialog(tk.Toplevel):
 
         row = self._last_grid_row
 
-        self._import_status_label = ctk.CTkLabel(self._frame, text=_(""))
+        self._import_status_label = ctk.CTkLabel(self._frame, text="")
         self._import_status_label.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="w")
 
         row += 1
@@ -186,9 +186,12 @@ class ImportStudiesDialog(tk.Toplevel):
                 self._controller.move_studies_ex(mr)
                 study_or_studies = "Study" if len(self.studies) == 1 else "Studies"
                 self._import_status_label.configure(
-                    text=_(
-                        f"Importing {self._study_metadata_retrieved} {study_or_studies} at {self._move_level} level ..."
-                    )
+                    text=_("Importing")
+                    + f"{self._study_metadata_retrieved} {study_or_studies}"
+                    + _("at")
+                    + f" {self._move_level}"
+                    + _("level")
+                    + "..."
                 )
                 self.after(self.update_interval, self._update_progress_move_studies)
 
@@ -197,7 +200,9 @@ class ImportStudiesDialog(tk.Toplevel):
         total_pending_instances = sum([study.pending_instances for study in self.studies])
         imported = self._instances_to_import - total_pending_instances
         self._import_progress_bar.set(imported / self._instances_to_import)
-        self._import_progress_label.configure(text=f"{imported} of {self._instances_to_import} Images")
+        self._import_progress_label.configure(
+            text=f"{imported} " + _("of") + f" {self._instances_to_import}" + _("Images")
+        )
 
         if self._controller.bulk_move_active():
             self.after(self.update_interval, self._update_progress_move_studies)
@@ -214,10 +219,9 @@ class ImportStudiesDialog(tk.Toplevel):
         if self._controller.bulk_move_active():
             if messagebox.askyesno(
                 _("Warning"),
-                _(
-                    "Cancelling the move operation may not stop transfers from the remote server.\n\n"
-                    "Are you sure you want to continue?"
-                ),
+                _("Cancelling the move operation may not stop transfers from the remote server.")
+                + "\n\n"
+                + _("Are you sure you want to continue?"),
             ):
                 self._controller.abort_move()
             else:

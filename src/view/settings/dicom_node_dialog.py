@@ -62,7 +62,7 @@ class DICOMNodeDialog(tk.Toplevel):
                 local_ips = [_("No local IP addresses found.")]
                 logger.error(local_ips[0])
 
-            scp_label = ctk.CTkLabel(self._frame, text=_("Address:"))
+            scp_label = ctk.CTkLabel(self._frame, text=_("Address") + ":")
             scp_label.grid(row=0, column=0, padx=PAD, pady=(PAD, 0), sticky="nw")
 
             self.ip_var = ctk.StringVar(self._frame, value=self.address.ip)
@@ -77,7 +77,7 @@ class DICOMNodeDialog(tk.Toplevel):
         else:
             self.domain_name_var = str_entry(
                 view=self._frame,
-                label=_("Domain Name:"),
+                label=_("Domain Name") + ":",
                 initial_value="",
                 min_chars=3,
                 max_chars=30,
@@ -107,7 +107,7 @@ class DICOMNodeDialog(tk.Toplevel):
 
             self.ip_var = str_entry(
                 view=self._frame,
-                label=_("IP Address:"),
+                label=_("IP Address") + ":",
                 initial_value=self.address.ip,
                 min_chars=ip_min_chars,
                 max_chars=ip_max_chars,
@@ -123,7 +123,7 @@ class DICOMNodeDialog(tk.Toplevel):
 
         self.port_var = int_entry(
             view=self._frame,
-            label=_("Port:"),
+            label=_("Port") + ":",
             initial_value=self.address.port,
             min=ip_port_min,
             max=ip_port_max,
@@ -138,7 +138,7 @@ class DICOMNodeDialog(tk.Toplevel):
 
         self.aet_var = str_entry(
             view=self._frame,
-            label=_("AE Title:"),
+            label=_("AE Title") + ":",
             initial_value=self.address.aet,
             min_chars=aet_min_chars,
             max_chars=aet_max_chars,

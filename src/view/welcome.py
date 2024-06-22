@@ -8,14 +8,22 @@ class WelcomeView(ctk.CTkFrame):
     PAD = 20
     TITLE = _("Welcome")
     TITLE_FONT_SIZE = 28
-    WELCOME_TEXT = _(
-        "The RSNA DICOM Anonymizer program is a free open-source tool for curating\nand de-identifying DICOM studies.\n\n"
-        "Easy to use, advanced DICOM expertise not required!\n\n"
-        "Use it to ensure privacy by removing protected health information (PHI).\n\n"
-        "Go to Help/Overview for a quick overview.\n\n"
-        "Go to Help/Project settings for instructions on how to configure the program.\n\n"
-        "Go to Help/Operation for instructions on how to use the program.\n\n"
-        "Select File/New Project to start."
+    WELCOME_TEXT = (
+        _("The RSNA DICOM Anonymizer program is a free open-source tool for curating")
+        + "\n"
+        + _("and de-identifying DICOM studies.")
+        + "\n\n"
+        + _("Easy to use, advanced DICOM expertise not required!")
+        + "\n\n"
+        + _("Use it to ensure privacy by removing protected health information (PHI).")
+        + "\n\n"
+        + _("Go to Help/Overview for a quick overview.")
+        + "\n\n"
+        + _("Go to Help/Project settings for instructions on how to configure the program.")
+        + "\n\n"
+        + _("Go to Help/Operation for instructions on how to use the program.")
+        + "\n\n"
+        + _("Select File/New Project to start.")
     )
     WELCOME_TEXT_FONT_SIZE = 20
     TITLED_LOGO_FILE = "assets/images/rsna_titled_logo_alpha.png"  # alpha channel  / transparent background

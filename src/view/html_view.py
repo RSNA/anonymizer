@@ -3,7 +3,6 @@
 import tkinter as tk
 import customtkinter as ctk
 from tkhtmlview import HTMLScrolledText, RenderHTML
-from utils.translate import _
 
 
 class HTMLView(tk.Toplevel):

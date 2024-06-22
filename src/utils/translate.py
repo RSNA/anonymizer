@@ -3,11 +3,17 @@ import os
 import gettext
 import re
 
-domain = "anonymizer"
-localedir = os.path.join(os.path.dirname(__file__), "assets", "langpacks")
-language_translations = gettext.translation(domain, localedir, fallback=True)
-language_translations.install()
-_ = language_translations.gettext
+# localedir = os.path.join(os.path.dirname(__file__), "assets", "locale")
+# language_translations = gettext.translation("messages", localedir, fallback=True)
+# language_translations.install()
+# _ = language_translations.gettext
+
+# Set the LANG environment variable to specify a locale (example: Spanish)
+os.environ["LANG"] = "es_ES.UTF-8"
+
+gettext.bindtextdomain("messages", "src/assets/locales")
+gettext.textdomain("messages")
+_ = gettext.gettext
 
 
 def insert_spaces_between_cases(input_string):

@@ -2,7 +2,6 @@
 import string
 import tkinter as tk
 import customtkinter as ctk
-from utils.translate import _
 import logging
 
 # Entry Limits:

@@ -9,7 +9,6 @@ from pprint import pformat
 import xml.etree.ElementTree as ET
 from pydicom import Dataset
 from .project import DICOMNode
-from utils.translate import _
 from utils.storage import JavaAnonymizerExportedStudy
 
 logger = logging.getLogger(__name__)

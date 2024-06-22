@@ -45,7 +45,7 @@ class NetworkTimeoutsDialog(tk.Toplevel):
 
         self.connection_var = int_entry(
             view=self._frame,
-            label=_("TCP Connection:"),
+            label=_("TCP Connection") + ":",
             initial_value=int(self.timeouts.tcp_connection),
             min=0,
             max=15,
@@ -61,7 +61,7 @@ class NetworkTimeoutsDialog(tk.Toplevel):
 
         self.acse_var = int_entry(
             view=self._frame,
-            label=_("DICOM Association Messages (ACSE):"),
+            label=_("DICOM Association Messages (ACSE)") + ":",
             initial_value=int(self.timeouts.acse),
             min=0,
             max=120,
@@ -76,7 +76,7 @@ class NetworkTimeoutsDialog(tk.Toplevel):
 
         self.dimse_var = int_entry(
             view=self._frame,
-            label=_("DICOM Service Element Messages (DIMSE):"),
+            label=_("DICOM Service Element Messages (DIMSE)") + ":",
             initial_value=int(self.timeouts.dimse),
             min=0,
             max=120,
@@ -91,7 +91,7 @@ class NetworkTimeoutsDialog(tk.Toplevel):
 
         self.network_var = int_entry(
             view=self._frame,
-            label=_("Network (Close Inactive Connection):"),
+            label=_("Network (Close Inactive Connection)") + ":",
             initial_value=int(self.timeouts.network),
             min=0,
             max=600,

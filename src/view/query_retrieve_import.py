@@ -93,7 +93,7 @@ class QueryView(tk.Toplevel):
         # Patient Name
         self._patient_name_var = str_entry(
             view=self._query_frame,
-            label=_("Patient Name:"),
+            label=_("Patient Name") + ":",
             initial_value="",
             min_chars=0,
             max_chars=patient_name_max_chars,
@@ -108,7 +108,7 @@ class QueryView(tk.Toplevel):
         self._patient_id_var = ctk.StringVar(self)
         self._patient_id_var = str_entry(
             self._query_frame,
-            label=_("Patient ID:"),
+            label=_("Patient ID") + ":",
             initial_value="",
             min_chars=0,
             max_chars=patient_id_max_chars,
@@ -122,7 +122,7 @@ class QueryView(tk.Toplevel):
         # Accession No.
         self._accession_no_var = str_entry(
             view=self._query_frame,
-            label=_("Accession No.(s):"),
+            label=_("Accession No.(s)") + ":",
             initial_value="",
             min_chars=0,
             max_chars=None,
@@ -136,7 +136,7 @@ class QueryView(tk.Toplevel):
         # Study Date:
         self._study_date_var = str_entry(
             view=self._query_frame,
-            label=_("Study Date:"),
+            label=_("Study Date") + ":",
             initial_value="",
             min_chars=dicom_date_chars,
             max_chars=dicom_date_chars * 2 + 1,  # allow Date Range: YYYYMMDD-YYYYMMDD
@@ -148,7 +148,7 @@ class QueryView(tk.Toplevel):
             sticky="nw",
         )
         # Modality:
-        _modality_label = ctk.CTkLabel(self._query_frame, text=_("Modality:"))
+        _modality_label = ctk.CTkLabel(self._query_frame, text=_("Modality") + ":")
         _modality_label.grid(row=0, column=2, padx=PAD, pady=(PAD, 0), sticky="nw")
         self._modality_var = ctk.StringVar(self._query_frame)
 
@@ -241,7 +241,7 @@ class QueryView(tk.Toplevel):
 
         # Progress bar and status:
         col = 0
-        self._status = ctk.CTkLabel(self._results_frame, text=f"Processing 0 of 0 Studies")
+        self._status = ctk.CTkLabel(self._results_frame, text=_("Processing") + " 0" + _("of") + " 0 " + _("Studies"))
         self._status.grid(row=results_row, column=col, padx=PAD, pady=0, sticky="w")
 
         col += 1
@@ -274,11 +274,11 @@ class QueryView(tk.Toplevel):
         self._clear_selection_button.grid(row=results_row, column=col, padx=PAD, pady=PAD, sticky="w")
         col += 1
 
-        self._studies_selected_label = ctk.CTkLabel(self._results_frame, text=_("Studies Selected: 0"))
+        self._studies_selected_label = ctk.CTkLabel(self._results_frame, text=_("Studies Selected") + ": 0")
         self._studies_selected_label.grid(row=results_row, column=col, padx=PAD, pady=PAD, sticky="w")
         col += 1
 
-        self._move_level_label = ctk.CTkLabel(self._results_frame, text=_("Move Level:"))
+        self._move_level_label = ctk.CTkLabel(self._results_frame, text=_("Move Level") + ":")
         self._move_level_label.grid(row=results_row, column=7, padx=PAD, pady=PAD, sticky="e")
 
         self._move_level_var = ctk.StringVar(self._results_frame, value=_("STUDY"))
@@ -364,7 +364,9 @@ class QueryView(tk.Toplevel):
 
         except Exception as e:
             messagebox.showerror(
-                _(f"File Read Error [{type(e)}]"), _(f"Error reading Accession Number file: {e}"), parent=self
+                title=_("File Read Error") + f"[{type(e)}]",
+                message=_("Error reading Accession Number file") + f": {e}",
+                parent=self,
             )
             return
 
@@ -428,7 +430,8 @@ class QueryView(tk.Toplevel):
                     )
                     messagebox.showwarning(
                         title=_("Accession Numbers not found"),
-                        message=_(f"Accession Numbers not found were written to text file:\n {not_found_file_path}"),
+                        message=_("Accession Numbers not found were written to text file")
+                        + ":\n {not_found_file_path}",
                         parent=self,
                     )
             else:
@@ -465,7 +468,7 @@ class QueryView(tk.Toplevel):
             self._query_button.configure(text_color="red")
             messagebox.showerror(
                 title=_("Connection Error"),
-                message=_(f"Query Server Failed DICOM C-ECHO"),
+                message=_("Query Server Failed DICOM C-ECHO"),
                 parent=self,
             )
             return
@@ -495,8 +498,12 @@ class QueryView(tk.Toplevel):
 
             self._studies_to_process = len(self._acc_no_list)
             if not messagebox.askyesno(
-                _("Query via Accession Numbers"),
-                _(f"Loaded {self._studies_to_process} Accession Numbers\n\nProceed with Query?"),
+                title=_("Query via Accession Numbers"),
+                message=_("Loaded")
+                + f"{self._studies_to_process} "
+                + _("Accession Numbers")
+                + "\n\n"
+                + _("Proceed with Query?"),
                 parent=self,
             ):
                 return
@@ -514,7 +521,7 @@ class QueryView(tk.Toplevel):
                 logger.error(f"Query disabled, no search criteria entered")
                 messagebox.showwarning(
                     title=_("Query Criteria"),
-                    message=_(f"\nEnter at least one search criterion"),
+                    message=_("Enter at least one search criterion"),
                     parent=self,
                 )
                 return
@@ -523,7 +530,7 @@ class QueryView(tk.Toplevel):
             self._progressbar.start()
 
         self._studies_processed = 0
-        self._studies_selected_label.configure(text=f"Studies Selected: 0")
+        self._studies_selected_label.configure(text=_("Studies Selected") + ": 0")
 
         self._query_active = True
         self._disable_action_buttons()
@@ -553,11 +560,17 @@ class QueryView(tk.Toplevel):
 
     def _update_query_progress(self):
         if self._studies_to_process == -1:
-            self._status.configure(text=f"Found {self._studies_processed} Studies")
+            self._status.configure(text=_("Found") + f" {self._studies_processed} " + _("Studies"))
         else:
             studies_to_process = self._studies_to_process
             self._progressbar.set(self._studies_processed / self._studies_to_process)
-            self._status.configure(text=f"Found {self._studies_processed} of {studies_to_process} Studies")
+            self._status.configure(
+                text=
+                    _("Found") 
+                    + f" {self._studies_processed} " 
+                    + _("of") 
+                    + f" {studies_to_process}" + _(" Studies")
+            )
 
     def _tree_select(self, event):
         # Ensure no Imported Studies are selected:
@@ -565,18 +578,18 @@ class QueryView(tk.Toplevel):
             if self._query_results.tag_has("green", item):
                 self._query_results.selection_remove(item)
         # Update selection count:
-        self._studies_selected_label.configure(text=f"Studies Selected: {len(list(self._query_results.selection()))}")
+        self._studies_selected_label.configure(text=_("Studies Selected") + f": {len(list(self._query_results.selection()))}")
 
     def _clear_results_tree(self):
         self._query_results.delete(*self._query_results.get_children())
 
     def _select_all_button_pressed(self):
         self._query_results.selection_set(*self._query_results.get_children())
-        self._studies_selected_label.configure(text=f"Studies Selected: {len(list(self._query_results.selection()))}")
+        self._studies_selected_label.configure(text=_("Studies Selected") + f": {len(list(self._query_results.selection()))}")
 
     def _clear_selection_button_pressed(self):
         self._query_results.selection_set([])
-        self._studies_selected_label.configure(text=f"Studies Selected: 0")
+        self._studies_selected_label.configure(text=_("Studies Selected") + ": 0")
 
     def _display_import_result(self, studies: list[StudyUIDHierarchy]):
         logger.debug("_display_import_result")

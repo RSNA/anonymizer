@@ -2,10 +2,7 @@ import os
 import logging
 from queue import Queue
 from typing import Any
-import tkinter as tk
-from tkinter import ttk
 import customtkinter as ctk
-from customtkinter import ThemeManager
 from tkinter import messagebox
 from controller.project import ProjectController, EchoRequest, EchoResponse
 from model.anonymizer import Totals
@@ -111,7 +108,7 @@ class Dashboard(ctk.CTkFrame):
             pady=(self.PAD, 0),
         )
 
-        self.label_queue = ctk.CTkLabel(self._status_frame, text="Anonymizer Queue:")
+        self.label_queue = ctk.CTkLabel(self._status_frame, text=_("Anonymizer Queue:"))
         self.label_queue.grid(row=0, column=0, padx=self.PAD, sticky="w")
 
         self._qsize = ctk.CTkLabel(self._status_frame, text="0")
@@ -134,13 +131,17 @@ class Dashboard(ctk.CTkFrame):
         else:
             messagebox.showerror(
                 title=_("Connection Error"),
-                message=_(
-                    f"{scp_name} Server Failed DICOM ECHO\n\nCheck Project Settings/{scp_name} Server"
-                    "\n\nEnsure the remote server is setup to allow the local server for echo and storage services."
-                ),
+                message=f"{scp_name} "
+                + _("Server Failed DICOM ECHO")
+                + "\n\n"
+                + _("Check Project Settings")
+                + f"/{scp_name} "
+                + _("Server")
+                + "\n\n"
+                + _("Ensure the remote server is setup to allow the local server for echo and storage services."),
                 parent=self,
             )
-            self._status.configure(text=f"{scp_name} Server offline")
+            self._status.configure(text=f"{scp_name} " + _("Server offline"))
             button.configure(state="normal", text_color="red")
 
     def set_status(self, text: str):
@@ -151,7 +152,7 @@ class Dashboard(ctk.CTkFrame):
         self._query_button.configure(state="disabled")
         self._controller.echo_ex(EchoRequest(scp="QUERY", ux_Q=self._query_ux_Q))
         self.after(500, self._wait_for_scp_echo, "Query", self._query_button, self._query_ux_Q, self._query_callback)
-        self._status.configure(text="Checking Query DICOM Server is online...")
+        self._status.configure(text=_("Checking Query DICOM Server is online..."))
 
     def _export_button_click(self):
         logger.info(f"_export_button_click")
@@ -161,13 +162,13 @@ class Dashboard(ctk.CTkFrame):
             self._controller.AWS_authenticate_ex()  # Authenticate to AWS in background
             self._timer = self.AWS_AUTH_TIMEOUT_SECONDS
             self.after(1000, self._wait_for_aws)
-            self._status.configure(text="Waiting for AWS Authentication...")
+            self._status.configure(text=_("Waiting for AWS Authentication..."))
         else:
             self._controller.echo_ex(EchoRequest(scp="EXPORT", ux_Q=self._export_ux_Q))
             self.after(
                 1000, self._wait_for_scp_echo, "Export", self._export_button, self._export_ux_Q, self._export_callback
             )
-            self._status.configure(text="Checking Export DICOM Server is online...")
+            self._status.configure(text=_("Checking Export DICOM Server is online..."))
 
     def _wait_for_aws(self):
         self._timer -= 1
@@ -176,10 +177,10 @@ class Dashboard(ctk.CTkFrame):
                 self._controller._aws_last_error = "AWS Response Timeout"
             messagebox.showerror(
                 title=_("Connection Error"),
-                message=_(
-                    f"AWS Authentication Failed:\n\n{self._controller._aws_last_error}"
-                    "\n\nCheck Project Settings/AWS Cognito and ensure all parameters are correct."
-                ),
+                message=_("AWS Authentication Failed:")
+                + f"\n\n{self._controller._aws_last_error}"
+                + "\n\n"
+                + "Check Project Settings/AWS Cognito and ensure all parameters are correct.",
                 parent=self,
             )
             self._status.configure(text="")
@@ -189,7 +190,7 @@ class Dashboard(ctk.CTkFrame):
         if self._controller.AWS_credentials_valid():
             self._export_button.configure(state="normal", text_color="light green")
             self._export_callback()
-            self._status.configure(text="AWS Authenticated")
+            self._status.configure(text=_("AWS Authenticated"))
             return
 
         self.after(1000, self._wait_for_aws)

@@ -60,7 +60,7 @@ class ImportFilesDialog(tk.Toplevel):
 
         row = 0
 
-        self._sub_title_label = ctk.CTkLabel(self._frame, text=_(self._sub_title))
+        self._sub_title_label = ctk.CTkLabel(self._frame, text=self._sub_title)
         self._sub_title_label.grid(row=row, column=0, padx=PAD, pady=PAD, sticky="nw")
 
         row += 1
