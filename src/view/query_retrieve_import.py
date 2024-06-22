@@ -426,7 +426,7 @@ class QueryView(tk.Toplevel):
                         file.write("\n".join(self._acc_no_list))
 
                     logger.info(
-                        _(f"Accession numbers not found [{len(self._acc_no_list)}] written to: {not_found_file_path}")
+                        f"Accession numbers not found [{len(self._acc_no_list)}] written to: {not_found_file_path}"
                     )
                     messagebox.showwarning(
                         title=_("Accession Numbers not found"),
@@ -565,11 +565,7 @@ class QueryView(tk.Toplevel):
             studies_to_process = self._studies_to_process
             self._progressbar.set(self._studies_processed / self._studies_to_process)
             self._status.configure(
-                text=
-                    _("Found") 
-                    + f" {self._studies_processed} " 
-                    + _("of") 
-                    + f" {studies_to_process}" + _(" Studies")
+                text=_("Found") + f" {self._studies_processed} " + _("of") + f" {studies_to_process}" + _(" Studies")
             )
 
     def _tree_select(self, event):
@@ -578,14 +574,18 @@ class QueryView(tk.Toplevel):
             if self._query_results.tag_has("green", item):
                 self._query_results.selection_remove(item)
         # Update selection count:
-        self._studies_selected_label.configure(text=_("Studies Selected") + f": {len(list(self._query_results.selection()))}")
+        self._studies_selected_label.configure(
+            text=_("Studies Selected") + f": {len(list(self._query_results.selection()))}"
+        )
 
     def _clear_results_tree(self):
         self._query_results.delete(*self._query_results.get_children())
 
     def _select_all_button_pressed(self):
         self._query_results.selection_set(*self._query_results.get_children())
-        self._studies_selected_label.configure(text=_("Studies Selected") + f": {len(list(self._query_results.selection()))}")
+        self._studies_selected_label.configure(
+            text=_("Studies Selected") + f": {len(list(self._query_results.selection()))}"
+        )
 
     def _clear_selection_button_pressed(self):
         self._query_results.selection_set([])

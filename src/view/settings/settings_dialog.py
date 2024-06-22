@@ -62,7 +62,7 @@ class SettingsDialog(tk.Toplevel):
 
         self.site_id_var: ctk.StringVar = str_entry(
             view=self._frame,
-            label=_("Site ID:") + ":",
+            label=_("Site ID") + ":",
             initial_value=self.model.site_id,
             min_chars=min_chars,
             max_chars=max_chars,
@@ -234,7 +234,7 @@ class SettingsDialog(tk.Toplevel):
         # Script File is selectable ONLY for NEW projects
         # On project creation the script file is parsed and saved to the Anonymizer model
         if self.new_model:
-            self._script_file_label = ctk.CTkLabel(self._frame, text=str("Script File") + ":")
+            self._script_file_label = ctk.CTkLabel(self._frame, text=_("Script File") + ":")
             self._script_file_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
 
             self._script_file_button = ctk.CTkButton(

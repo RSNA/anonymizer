@@ -1675,7 +1675,7 @@ class ProjectController(AE):
                     raise (DICOMRuntimeError(f"C-MOVE@Study[{study.uid}] move study aborted"))
 
                 if not status:
-                    raise ConnectionError(_("Connection timed out or aborted moving study_uid:") + f" {study.uid}")
+                    raise ConnectionError(_("Connection timed out or aborted moving study_uid") + f": {study.uid}")
 
                 if status.Status not in (C_SUCCESS, C_PENDING_A, C_PENDING_B, C_WARNING):
                     raise DICOMRuntimeError(

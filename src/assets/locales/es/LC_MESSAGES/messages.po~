@@ -1,0 +1,838 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "RSNA DICOM Anonymizer Version"
+msgstr "Versión del Anonimizador DICOM RSNA"
+
+msgid "Config file not found: "
+msgstr "Archivo de configuración no encontrado: "
+
+msgid "no recent project list or current project set"
+msgstr "no hay lista reciente de proyectos o proyecto actual configurado"
+
+msgid "Error writing json config file: "
+msgstr "Error al escribir archivo de configuración json: "
+
+msgid "Configuration File Write Error"
+msgstr "Error al escribir archivo de configuración"
+
+msgid "New Project Settings"
+msgstr "Configuración de Nuevo Proyecto"
+
+msgid "New Project Error"
+msgstr "Error en Nuevo Proyecto"
+
+msgid "Storage Directory not set, please set a valid directory in project settings."
+msgstr "Directorio de almacenamiento no configurado, por favor configure un directorio válido en los ajustes del proyecto."
+
+msgid "Confirm Overwrite"
+msgstr "Confirmar Sobrescritura"
+
+msgid "The project directory already exists."
+msgstr "El directorio del proyecto ya existe."
+
+msgid "Do you want to delete the existing project and all its data?"
+msgstr "¿Desea eliminar el proyecto existente y todos sus datos?"
+
+msgid "Error deleting existing project directory"
+msgstr "Error al eliminar el directorio del proyecto existente"
+
+msgid "Fatal Internal Error, Project Controller not created"
+msgstr "Error interno fatal, el controlador del proyecto no fue creado"
+
+msgid "Error creating Project Controller"
+msgstr "Error al crear el controlador del proyecto"
+
+msgid "Select Anonymizer Storage Directory"
+msgstr "Seleccione el Directorio de Almacenamiento del Anonimizador"
+
+msgid "Corruption detected: Loaded model is not an instance of ProjectModel"
+msgstr "Corrupción detectada: El modelo cargado no es una instancia de ProjectModel"
+
+msgid "Open Project Error"
+msgstr "Error al Abrir Proyecto"
+
+msgid "Error loading Project Model from data file"
+msgstr "Error al cargar el modelo de proyecto desde el archivo de datos"
+
+msgid "Project File corrupted, missing version information."
+msgstr "Archivo de proyecto corrupto, falta información de versión."
+
+msgid "No Project file not found in"
+msgstr "Archivo de proyecto no encontrado en"
+
+msgid "Local DICOM Server Error"
+msgstr "Error de Servidor DICOM Local"
+
+msgid "Query Busy"
+msgstr "Consulta Ocupada"
+
+msgid "Query is busy, please wait for query to complete before closing project."
+msgstr "La consulta está ocupada, por favor espere a que la consulta se complete antes de cerrar el proyecto."
+
+msgid "Export Busy"
+msgstr "Exportación Ocupada"
+
+msgid "Export is busy, please wait for export to complete before closing project."
+msgstr "La exportación está ocupada, por favor espere a que la exportación se complete antes de cerrar el proyecto."
+
+msgid "Clone Project Error"
+msgstr "Error al Clonar Proyecto"
+
+msgid "No project open to clone."
+msgstr "No hay proyecto abierto para clonar."
+
+msgid "Select Directory for Cloned Project"
+msgstr "Seleccione el Directorio para el Proyecto Clonado"
+
+msgid "Cloned directory cannot be the same as the current project directory."
+msgstr "El directorio clonado no puede ser el mismo que el directorio actual del proyecto."
+
+msgid "Edit Cloned Project Settings"
+msgstr "Editar Ajustes del Proyecto Clonado"
+
+msgid "Select DICOM Files to Import & Anonymize"
+msgstr "Seleccione Archivos DICOM para Importar y Anonimizar"
+
+msgid "Import Files"
+msgstr "Importar Archivos"
+
+msgid "Importing"
+msgstr "Importando"
+
+msgid "Select DICOM Directory to Impport & Anonymize"
+msgstr "Seleccione Directorio DICOM para Importar y Anonimizar"
+
+msgid "Reading DICOMDIR Root directory"
+msgstr "Leyendo directorio raíz DICOMDIR"
+
+msgid "Error reading DICOMDIR file"
+msgstr "Error al leer archivo DICOMDIR"
+
+msgid "Import Directory Error"
+msgstr "Error de Directorio de Importación"
+
+msgid "Reading filenames from"
+msgstr "Leyendo nombres de archivo desde"
+
+msgid "No files found in"
+msgstr "No se encontraron archivos en"
+
+msgid "filenames read from"
+msgstr "nombres de archivo leídos desde"
+
+msgid "Do you want to initiate import?"
+msgstr "¿Desea iniciar la importación?"
+
+msgid "Import Directory"
+msgstr "Directorio de Importación"
+
+msgid "Import Directory Cancelled"
+msgstr "Directorio de Importación Cancelado"
+
+msgid "Import files from"
+msgstr "Importar archivos desde"
+
+msgid "Files processed"
+msgstr "Archivos procesados"
+
+msgid "Query is busy, please wait for query to complete before changing settings."
+msgstr "La consulta está ocupada, por favor espere a que la consulta se complete antes de cambiar los ajustes."
+
+msgid "Export is busy, please wait for export to complete before changing settings."
+msgstr "La exportación está ocupada, por favor espere a que la exportación se complete antes de cambiar los ajustes."
+
+msgid "Project Settings"
+msgstr "Ajustes del Proyecto"
+
+msgid "New Project"
+msgstr "Nuevo Proyecto"
+
+msgid "Open Project"
+msgstr "Abrir Proyecto"
+
+msgid "Open Recent"
+msgstr "Abrir Reciente"
+
+msgid "File"
+msgstr "Archivo"
+
+msgid "Help"
+msgstr "Ayuda"
+
+msgid "Clone Project"
+msgstr "Clonar Proyecto"
+
+msgid "Close Project"
+msgstr "Cerrar Proyecto"
+
+msgid "Project"
+msgstr "Proyecto"
+
+msgid "Settings"
+msgstr "Ajustes"
+
+msgid "Dataset missing required attributes"
+msgstr "Conjunto de datos falta atributos requeridos"
+
+msgid "DICOM C-STORE scp is already running on"
+msgstr "El scp DICOM C-STORE ya está en ejecución en"
+
+msgid "Failed to start DICOM C-STORE scp on"
+msgstr "Error al iniciar DICOM C-STORE scp en"
+
+msgid "Connection error to"
+msgstr "Error de conexión a"
+
+msgid "Connection timed out, was aborted, or received an invalid response"
+msgstr "Tiempo de conexión agotado, abortado o recibió una respuesta inválida"
+
+msgid "Unexpected Authorisation Challenge"
+msgstr "Desafío de autorización inesperado"
+
+msgid "Authentication Result & Access Token not in response"
+msgstr "Resultado de autenticación y token de acceso no están en la respuesta"
+
+msgid "IdToken not in Authentication Result"
+msgstr "IdToken no está en el resultado de autenticación"
+
+msgid "AccessToken Token not in Authentication Result"
+msgstr "Token AccessToken no está en el resultado de autenticación"
+
+msgid "AWS Cognito IDP authorisation failed"
+msgstr "Falló la autorización del proveedor de identidad AWS Cognito IDP"
+
+msgid "AWS Cognito Get User Attributes failed"
+msgstr "Falló la obtención de atributos de usuario de AWS Cognito"
+
+msgid "UserAttributes Token not in get_user response"
+msgstr "Token de UserAttributes no está en la respuesta get_user"
+
+msgid "User Attribute 'sub' not in get_user response"
+msgstr "Atributo de usuario 'sub' no está en la respuesta get_user"
+
+msgid "AWS Cognito-identity authorisation failed"
+msgstr "Falló la autorización de identidad AWS Cognito"
+
+msgid "IdentityId Token not in response"
+msgstr "Token de IdentityId no está en la respuesta"
+
+msgid "Unable to retrieve UID Hierarchy for reliable import operation via DICOM C-MOVE."
+msgstr "No se pudo recuperar la jerarquía de UID para una operación de importación confiable mediante DICOM C-MOVE."
+
+msgid "did not return the number of instances in a series."
+msgstr "no devolvió el número de instancias en una serie."
+
+msgid "Standard DICOM field (0020,1209) NumberOfSeriesRelatedInstances is missing in the query response."
+msgstr "El campo DICOM estándar (0020,1209) NumberOfSeriesRelatedInstances falta en la respuesta de consulta."
+
+msgid "Connection timed out or aborted moving study_uid"
+msgstr "Tiempo de conexión agotado o abortado moviendo study_uid"
+
+msgid "ANON-PatientID"
+msgstr "ANON-IDPaciente"
+
+msgid "ANON-PatientName"
+msgstr "ANON-NombrePaciente"
+
+msgid "PHI-PatientName"
+msgstr "PHI-NombrePaciente"
+
+msgid "PHI-PatientID"
+msgstr "PHI-IDPaciente"
+
+msgid "DateOffset"
+msgstr "DesplazamientoFecha"
+
+msgid "PHI-StudyDate"
+msgstr "PHI-FechaEstudio"
+
+msgid "ANON-Accession"
+msgstr "ANON-Acceso"
+
+msgid "PHI-Accession"
+msgstr "PHI-Acceso"
+
+msgid "ANON-StudyInstanceUID"
+msgstr "ANON-UIDInstanciaEstudio"
+
+msgid "PHI-StudyInstanceUID"
+msgstr "PHI-UIDInstanciaEstudio"
+
+msgid "Number of Series"
+msgstr "Número de Series"
+
+msgid "Number of Instances"
+msgstr "Número de Instancias"
+
+msgid "MY_PROJECT"
+msgstr "MI_PROYECTO"
+
+msgid "ANONYMIZER_STORE"
+msgstr "ALMACEN_ANONIMIZADOR"
+
+msgid "ANONYMIZER"
+msgstr "ANONIMIZADOR"
+
+msgid "Progress Dialog"
+msgstr "Diálogo de Progreso"
+
+msgid "Please wait..."
+msgstr "Por favor, espere..."
+
+msgid "Cancel"
+msgstr "Cancelar"
+
+msgid "Computed Radiography"
+msgstr "Radiografía Computarizada"
+
+msgid "Digital X-Ray"
+msgstr "Radiografía Digital"
+
+msgid "Intra-oral Radiography"
+msgstr "Radiografía Intraoral"
+
+msgid "Mammography"
+msgstr "Mamografía"
+
+msgid "Computer Tomography"
+msgstr "Tomografía Computarizada"
+
+msgid "Magnetic Resonance"
+msgstr "Resonancia Magnética"
+
+msgid "Ultrasound"
+msgstr "Ultrasonido"
+
+msgid "Positron Emission Tomography"
+msgstr "Tomografía por Emisión de Positrones"
+
+msgid "Nuclear Medicine"
+msgstr "Medicina Nuclear"
+
+msgid "Secondary Capture"
+msgstr "Captura Secundaria"
+
+msgid "Structured Report"
+msgstr "Informe Estructurado"
+
+msgid "Presentation State"
+msgstr "Estado de Presentación"
+
+msgid "Encapsulated PDF"
+msgstr "PDF Encapsulado"
+
+msgid "Other"
+msgstr "Otro"
+
+msgid "Document"
+msgstr "Documento"
+
+msgid "Query"
+msgstr "Consulta"
+
+msgid "Export"
+msgstr "Exportar"
+
+msgid "Patients"
+msgstr "Pacientes"
+
+msgid "Studies"
+msgstr "Estudios"
+
+msgid "Series"
+msgstr "Series"
+
+msgid "Images"
+msgstr "Imágenes"
+
+msgid "Anonymizer Queue"
+msgstr "Cola de Anonimizador"
+
+msgid "Connection Error"
+msgstr "Error de Conexión"
+
+msgid "Server Failed DICOM ECHO"
+msgstr "Error del Servidor DICOM ECHO"
+
+msgid "Check Project Settings"
+msgstr "Verificar Configuración del Proyecto"
+
+msgid "Server"
+msgstr "Servidor"
+
+msgid "Ensure the remote server is setup to allow the local server for echo and storage services."
+msgstr "Asegúrese de que el servidor remoto esté configurado para permitir el servidor local para servicios de eco y almacenamiento."
+
+msgid "Server offline"
+msgstr "Servidor fuera de línea"
+
+msgid "Checking Query DICOM Server is online"
+msgstr "Comprobando que el servidor DICOM de consulta esté en línea"
+
+msgid "Waiting for AWS Authentication"
+msgstr "Esperando autenticación de AWS"
+
+msgid "Checking Export DICOM Server is online"
+msgstr "Comprobando que el servidor DICOM de exportación esté en línea"
+
+msgid "AWS Authentication Failed"
+msgstr "Falló la autenticación de AWS"
+
+msgid "AWS Authenticated"
+msgstr "Autenticación AWS"
+
+msgid "Patient Name"
+msgstr "Nombre del Paciente"
+
+msgid "Anonymized ID"
+msgstr "ID Anonimizado"
+
+msgid "Date Time"
+msgstr "Fecha Hora"
+
+msgid "Images Sent"
+msgstr "Imágenes Enviadas"
+
+msgid "Last Export Error"
+msgstr "Último Error de Exportación"
+
+msgid "Export Studies"
+msgstr "Exportar Estudios"
+
+msgid "Cancel Export"
+msgstr "Cancelar Exportación"
+
+msgid "Create Patient Lookup"
+msgstr "Crear Búsqueda de Pacientes"
+
+msgid "Refresh"
+msgstr "Actualizar"
+
+msgid "Select All"
+msgstr "Seleccionar Todo"
+
+msgid "Clear Selection"
+msgstr "Limpiar Selección"
+
+msgid "Error Creating PHI CSV File"
+msgstr "Error al Crear Archivo CSV de PHI"
+
+msgid "PHI CSV File Created"
+msgstr "Archivo CSV de PHI Creado"
+
+msgid "Export Error"
+msgstr "Error de Exportación"
+
+msgid "Failed to export"
+msgstr "Error al exportar"
+
+msgid "patient(s)"
+msgstr "paciente(s)"
+
+msgid "Export Server Failed DICOM C-ECHO"
+msgstr "El servidor de exportación falló en DICOM C-ECHO"
+
+msgid "No patients selected for export."
+msgstr "No se han seleccionado pacientes para exportar."
+
+msgid "Use SHIFT+Click and/or CMD/CTRL+Click to select multiple patients."
+msgstr "Use SHIFT+Click y/o CMD/CTRL+Click para seleccionar múltiples pacientes."
+
+msgid "Cancel active export?"
+msgstr "¿Cancelar la exportación activa?"
+
+msgid "Close"
+msgstr "Cerrar"
+
+msgid "Importing Studies"
+msgstr "Importando Estudios"
+
+msgid "Importing Study"
+msgstr "Importando Estudio"
+
+msgid "Import from"
+msgstr "Importar desde"
+
+msgid "Retrieving Study Metadata at"
+msgstr "Recuperando Metadatos del Estudio en"
+
+msgid "No studies to retrieve"
+msgstr "No hay estudios para recuperar"
+
+msgid "Error retrieving ANY Study Metadata"
+msgstr "Error al recuperar CUALQUIER Metadato del Estudio"
+
+msgid "Finished retrieving Study Metadata"
+msgstr "Se completó la recuperación de Metadatos del Estudio"
+
+msgid "No instances to import"
+msgstr "No hay instancias para importar"
+
+msgid "at"
+msgstr "en"
+
+msgid "level"
+msgstr "nivel"
+
+msgid "of"
+msgstr "de"
+
+msgid "Import Finished"
+msgstr "Importación Finalizada"
+
+msgid "Warning"
+msgstr "Advertencia"
+
+msgid "Cancelling the move operation may not stop transfers from the remote server."
+msgstr "Cancelar la operación de movimiento puede que no detenga las transferencias desde el servidor remoto."
+
+msgid "Are you sure you want to continue?"
+msgstr "¿Está seguro de que desea continuar?"
+
+msgid "Patient ID"
+msgstr "ID del Paciente"
+
+msgid "Date"
+msgstr "Fecha"
+
+msgid "Study Description"
+msgstr "Descripción del Estudio"
+
+msgid "Accession No."
+msgstr "Número de Acceso"
+
+msgid "Modalities"
+msgstr "Modalidades"
+
+msgid "Imported"
+msgstr "Importado"
+
+msgid "Last Import Error"
+msgstr "Último Error de Importación"
+
+msgid "StudyInstanceUID"
+msgstr "UID de Instancia de Estudio"
+
+msgid "Query, Retrieve & Import Studies"
+msgstr "Consultar, Recuperar e Importar Estudios"
+
+msgid "Accession No.(s)"
+msgstr "Número(s) de Acceso"
+
+msgid "Study Date"
+msgstr "Fecha del Estudio"
+
+msgid "Modality"
+msgstr "Modalidad"
+
+msgid "Load Accession Numbers"
+msgstr "Cargar Números de Acceso"
+
+msgid "Show Imported Studies"
+msgstr "Mostrar Estudios Importados"
+
+msgid "Cancel Query"
+msgstr "Cancelar Consulta"
+
+msgid "Processing"
+msgstr "Procesando"
+
+msgid "Studies Selected"
+msgstr "Estudios Seleccionados"
+
+msgid "Move Level"
+msgstr "Nivel de Movimiento"
+
+msgid "STUDY"
+msgstr "ESTUDIO"
+
+msgid "Import & Anonymize"
+msgstr "Importar y Anonimizar"
+
+msgid "Select text or csv file with list of accession numbers to retrieve"
+msgstr "Seleccione archivo de texto o CSV con lista de números de acceso para recuperar"
+
+msgid "File Read Error"
+msgstr "Error al Leer Archivo"
+
+msgid "Error reading Accession Number file"
+msgstr "Error al leer archivo de Número de Acceso"
+
+msgid "Accession Numbers not found"
+msgstr "No se encontraron Números de Acceso"
+
+msgid "Accession Numbers not found were written to text file"
+msgstr "Los Números de Acceso no encontrados fueron escritos en un archivo de texto"
+
+msgid "Query Server Failed DICOM C-ECHO"
+msgstr "Falló el servidor de consulta DICOM C-ECHO"
+
+msgid "Query via Accession Numbers"
+msgstr "Consulta a través de Números de Acceso"
+
+msgid "Loaded"
+msgstr "Cargado"
+
+msgid "Accession Numbers"
+msgstr "Números de Acceso"
+
+msgid "Proceed with Query?"
+msgstr "¿Continuar con la consulta?"
+
+msgid "Query Criteria"
+msgstr "Criterios de Consulta"
+
+msgid "Enter at least one search criterion"
+msgstr "Ingrese al menos un criterio de búsqueda"
+
+msgid "Found"
+msgstr "Encontrados"
+
+msgid " Studies"
+msgstr " Estudios"
+
+msgid "Cancel active Query?"
+msgstr "¿Cancelar la consulta activa?"
+
+msgid "AWS Cognito Credentials for Export to S3"
+msgstr "Credenciales de AWS Cognito para Exportación a S3"
+
+msgid "AWS Account ID"
+msgstr "ID de Cuenta de AWS"
+
+msgid "Region Name"
+msgstr "Nombre de la Región"
+
+msgid "Cognito Application Client ID"
+msgstr "ID de Cliente de Aplicación de Cognito"
+
+msgid "Cognito User Pool ID"
+msgstr "ID de Pool de Usuarios de Cognito"
+
+msgid "Cognito Identity Pool ID"
+msgstr "ID de Pool de Identidades de Cognito"
+
+msgid "S3 Bucket"
+msgstr "Bucket de S3"
+
+msgid "S3 Prefix"
+msgstr "Prefijo de S3"
+
+msgid "Username"
+msgstr "Nombre de Usuario"
+
+msgid "Password"
+msgstr "Contraseña"
+
+msgid "Export to AWS"
+msgstr "Exportar a AWS"
+
+msgid "Ok"
+msgstr "Aceptar"
+
+msgid "DICOM Node"
+msgstr "Nodo DICOM"
+
+msgid "No local IP addresses found."
+msgstr "No se encontraron direcciones IP locales."
+
+msgid "Address"
+msgstr "Dirección"
+
+msgid "Domain Name"
+msgstr "Nombre de Dominio"
+
+msgid "DNS Lookup"
+msgstr "Búsqueda de DNS"
+
+msgid "IP Address"
+msgstr "Dirección IP"
+
+msgid "Port"
+msgstr "Puerto"
+
+msgid "AE Title"
+msgstr "Título AE"
+
+msgid "Logging Levels"
+msgstr "Niveles de Registro"
+
+msgid "Enabling debug mode in pydicom will cause PHI to be written to the log file."
+msgstr "Habilitar el modo de depuración en pydicom hará que la información PHI se escriba en el archivo de registro."
+
+msgid "Are you sure you want to enable pydicom debug mode?"
+msgstr "¿Está seguro de que desea habilitar el modo de depuración de pydicom?"
+
+msgid "Code"
+msgstr "Código"
+
+msgid "Description"
+msgstr "Descripción"
+
+msgid "Select Modalities"
+msgstr "Seleccionar Modalidades"
+
+msgid "Default"
+msgstr "Predeterminado"
+
+msgid "Network Timeouts in SECONDS"
+msgstr "Tiempo de espera de red en SEGUNDOS"
+
+msgid "TCP Connection"
+msgstr "Conexión TCP"
+
+msgid "DICOM Association Messages (ACSE)"
+msgstr "Mensajes de Asociación DICOM (ACSE)"
+
+msgid "DICOM Service Element Messages (DIMSE)"
+msgstr "Mensajes de Elemento de Servicio DICOM (DIMSE)"
+
+msgid "Network (Close Inactive Connection)"
+msgstr "Red (Cerrar Conexión Inactiva)"
+
+msgid "Site ID:"
+msgstr "ID del Sitio:"
+
+msgid "Load JAVA Index File"
+msgstr "Cargar Archivo de Índice JAVA"
+
+msgid "Project Name"
+msgstr "Nombre del Proyecto"
+
+msgid "UID Root"
+msgstr "Raíz UID"
+
+msgid "DICOM Servers"
+msgstr "Servidores DICOM"
+
+msgid "Local Server"
+msgstr "Servidor Local"
+
+msgid "Query Server"
+msgstr "Servidor de Consulta"
+
+msgid "Export Server"
+msgstr "Servidor de Exportación"
+
+msgid "AWS S3 Server"
+msgstr "Servidor AWS S3"
+
+msgid "AWS Cognito Credentials"
+msgstr "Credenciales AWS Cognito"
+
+msgid "Network Timeouts"
+msgstr "Tiempos de Espera de Red"
+
+msgid "Storage Directory"
+msgstr "Directorio de Almacenamiento"
+
+msgid "Storage Classes"
+msgstr "Clases de Almacenamiento"
+
+msgid "Select Storage Classes"
+msgstr "Seleccionar Clases de Almacenamiento"
+
+msgid "Transfer Syntaxes"
+msgstr "Sintaxis de Transferencia"
+
+msgid "Select Transfer Syntaxes"
+msgstr "Seleccionar Sintaxis de Transferencia"
+
+msgid "Set Logging Levels"
+msgstr "Establecer Niveles de Registro"
+
+msgid "Create Project"
+msgstr "Crear Proyecto"
+
+msgid "Update Project"
+msgstr "Actualizar Proyecto"
+
+msgid "Select Storage Directory"
+msgstr "Seleccionar Directorio de Almacenamiento"
+
+msgid "Anonymizer Script Files"
+msgstr "Archivos de Script de Anonimizador"
+
+msgid "All Files"
+msgstr "Todos los Archivos"
+
+msgid "Select Java Anonymizer Index File"
+msgstr "Seleccionar Archivo de Índice de Anonimizador Java"
+
+msgid "Excel Files"
+msgstr "Archivos de Excel"
+
+msgid "Error reading Java Anonymizer Index File"
+msgstr "Error al leer el Archivo de Índice de Anonimizador Java"
+
+msgid "Load Java Anonymizer Index File Error"
+msgstr "Error al Cargar el Archivo de Índice de Anonimizador Java"
+
+msgid "No PHI data records found in:"
+msgstr "No se encontraron registros de datos PHI en:"
+
+msgid "Java Index File Loaded"
+msgstr "Archivo de Índice Java Cargado"
+
+msgid "Studies from Java Index loaded."
+msgstr "Estudios cargados desde el índice Java."
+
+msgid "Site ID, UID Root will be inferred from the first PHI record."
+msgstr "El ID del Sitio y la Raíz UID se inferirán del primer registro PHI."
+
+msgid "Please enter your Project Name and configure all other settings below."
+msgstr "Por favor, ingrese el Nombre de su Proyecto y configure todas las demás configuraciones a continuación."
+
+msgid "The Java Index data will be processed into the Python Anonymizer database when the project is created."
+msgstr "Los datos del Índice Java se procesarán en la base de datos de Anonimizador de Python cuando se cree el proyecto."
+
+msgid "Class Name"
+msgstr "Nombre de la Clase"
+
+msgid "Class UID"
+msgstr "UID de la Clase"
+
+msgid "From Modalities"
+msgstr "Desde Modalidades"
+
+msgid "Transfer Syntax Name"
+msgstr "Nombre de la Sintaxis de Transferencia"
+
+msgid "Transfer Syntax UID"
+msgstr "UID de la Sintaxis de Transferencia"
+
+msgid "Welcome"
+msgstr "Bienvenido"
+
+msgid "The RSNA DICOM Anonymizer program is a free open-source tool for curating"
+msgstr "El programa de Anonimización DICOM de RSNA es una herramienta de código abierto gratuita para curar"
+
+msgid "and de-identifying DICOM studies."
+msgstr "y desidentificar estudios DICOM."
+
+msgid "Easy to use, advanced DICOM expertise not required!"
+msgstr "¡Fácil de usar, no se requiere experiencia avanzada en DICOM!"
+
+msgid "Use it to ensure privacy by removing protected health information (PHI)."
+msgstr "Úselo para garantizar la privacidad eliminando la información de salud protegida (PHI)."
+
+msgid "Go to Help/Overview for a quick overview."
+msgstr "Vaya a Ayuda/Resumen para obtener una descripción general rápida."
+
+msgid "Go to Help/Project settings for instructions on how to configure the program."
+msgstr "Vaya a Ayuda/Configuración del proyecto para obtener instrucciones sobre cómo configurar el programa."
+
+msgid "Go to Help/Operation for instructions on how to use the program."
+msgstr "Vaya a Ayuda/Operación para obtener instrucciones sobre cómo usar el programa."
+
+msgid "Select File/New Project to start."
+msgstr "Seleccione Archivo/Nuevo Proyecto para comenzar."

@@ -8,12 +8,13 @@ import re
 # language_translations.install()
 # _ = language_translations.gettext
 
-# Set the LANG environment variable to specify a locale (example: Spanish)
-os.environ["LANG"] = "es_ES.UTF-8"
-
-gettext.bindtextdomain("messages", "src/assets/locales")
-gettext.textdomain("messages")
-_ = gettext.gettext
+# Load the compiled MO file
+domain = "messages"
+localedir = "src/assets/locales"
+lang = "es"
+lang_translations = gettext.translation(domain, localedir, languages=[lang])
+lang_translations.install()
+_ = lang_translations.gettext
 
 
 def insert_spaces_between_cases(input_string):

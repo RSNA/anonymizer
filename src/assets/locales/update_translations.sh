@@ -5,7 +5,7 @@
 SRC_DIR="../.."
 POT_FILE="messages.pot"
 # Find all .py files in the source directory and extract translatable strings
-find $SRC_DIR -name '*.py' | xargs xgettext -d messages --join-existing -o $POT_FILE --from-code UTF-8
+# find $SRC_DIR -name '*.py' | xargs xgettext -d messages --join-existing -o $POT_FILE --from-code UTF-8
 
 # Step 2: Loop through each language directory in the locale directory
 for lang_dir in */LC_MESSAGES; do
@@ -15,11 +15,11 @@ for lang_dir in */LC_MESSAGES; do
 
     # Step 3: Merge the updated .pot file with the existing .po file
     if [ -f "$PO_FILE" ]; then
-        msgmerge -U $PO_FILE messages.pot
+        msgmerge -U $PO_FILE messages.pot 
     fi
 
     # Step 4: Compile the .po file to a .mo file
     if [ -f "$PO_FILE" ]; then
-        msgfmt $PO_FILE -o $MO_FILE
+        msgfmt -cv $PO_FILE -o $MO_FILE
     fi
 done
