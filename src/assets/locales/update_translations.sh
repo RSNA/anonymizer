@@ -14,9 +14,9 @@ for lang_dir in */LC_MESSAGES; do
     MO_FILE="$lang_dir/messages.mo"
 
     # Step 3: Merge the updated .pot file with the existing .po file
-    if [ -f "$PO_FILE" ]; then
-        msgmerge -U $PO_FILE messages.pot 
-    fi
+    # if [ -f "$PO_FILE" ]; then
+    #     msgmerge -U $PO_FILE messages.pot 
+    # fi
 
     # Step 4: Compile the .po file to a .mo file
     if [ -f "$PO_FILE" ]; then

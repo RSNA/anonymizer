@@ -828,3 +828,4 @@ msgstr "Vaya a Ayuda/Operación para obtener instrucciones sobre cómo usar el p
 
 msgid "Select File/New Project to start."
 msgstr "Seleccione Archivo/Nuevo Proyecto para comenzar."
+

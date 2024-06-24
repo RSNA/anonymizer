@@ -15,3 +15,4 @@ POT_FILE="messages.pot"
 echo "$xgettext_output"
 # To initialise a new language translation file, run the following command:
 msginit -l es_ES.UTF8 -o es/LC_MESSAGES/messages.po -i messages.pot --no-translator --no-wrap
+#msginit -l es_DE.UTF8 -o de/LC_MESSAGES/messages.po -i messages.pot --no-translator --no-wrap

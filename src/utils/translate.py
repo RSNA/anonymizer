@@ -11,7 +11,7 @@ import re
 # Load the compiled MO file
 domain = "messages"
 localedir = "src/assets/locales"
-lang = "es"
+lang = "de"
 lang_translations = gettext.translation(domain, localedir, languages=[lang])
 lang_translations.install()
 _ = lang_translations.gettext
