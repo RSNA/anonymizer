@@ -1,16 +1,9 @@
-import os, sys, json, shutil, time, platform
+import os, sys, json, shutil, time, platform, locale
 from pathlib import Path
 from copy import copy
 import logging
 import pickle
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
-import customtkinter as ctk
-from model.project import DICOMRuntimeError, ProjectModel
 
-from utils.translate import _
-from utils.logging import init_logging
-from __version__ import __version__
 from pydicom._version import __version__ as pydicom_version
 from pydicom import dcmread
 from pynetdicom._version import __version__ as pynetdicom_version
@@ -22,6 +15,15 @@ from pydicom.encoders import (
     gdcm,
 )
 
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+import customtkinter as ctk
+
+from __version__ import __version__
+from utils.translate import _, get_language_code
+from utils.logging import init_logging
+from model.project import DICOMRuntimeError, ProjectModel
+from controller.project import ProjectController
 from view.settings.settings_dialog import SettingsDialog
 from view.dashboard import Dashboard
 from view.import_files_dialog import ImportFilesDialog
@@ -30,21 +32,17 @@ from view.export import ExportView
 from view.html_view import HTMLView
 from view.welcome import WelcomeView
 
-from controller.project import ProjectController, ProjectModel
-import os
-from pathlib import Path
-
 logger = logging.getLogger()  # ROOT logger
 
 
 class Anonymizer(ctk.CTk):
     TITLE = _("RSNA DICOM Anonymizer Version") + " " + __version__
     THEME_FILE = "assets/themes/rsna_theme.json"
-    CONFIG_FILENAME = "config.json"
+    CONFIG_FILENAME = "config.json"  # global state, eg. recent projects
 
     project_open_startup_dwell_time = 100  # milliseconds
     metrics_loop_interval = 1000  # milliseconds
-    menu_font = ("", 13)
+    menu_font = ("", 13)  # Font for main menu items, not consisetent across platforms
 
     def __init__(self):
         super().__init__()
@@ -59,7 +57,7 @@ class Anonymizer(ctk.CTk):
         self._appearance_mode_change(ctk.get_appearance_mode())  # initialize non-ctk widget styles
 
         if sys.platform.startswith("win"):
-            self.iconbitmap("assets\\images\\rsna_icon.ico", default="assets\\images\\rsna_icon.ico")
+            self.iconbitmap("assets\\images\\icons\\rsna_icon.ico", default="assets\\images\\icons\\rsna_icon.ico")
 
         self.controller: ProjectController | None = None
         self.welcome_view: WelcomeView = WelcomeView(self)
@@ -814,9 +812,9 @@ class Anonymizer(ctk.CTk):
 
     def get_help_menu(self):
         help_menu = tk.Menu(self.menu_bar, tearoff=0)
-        # Get all html files in assets/html/ directory
+        # Get all html files in assets/locale/*/html/ directory
         # Sort by filename number prefix
-        html_dir = Path("assets/html/")
+        html_dir = Path("assets/locales/" + get_language_code() + "/html/")
         html_file_paths = sorted(html_dir.glob("*.html"), key=lambda path: int(path.stem.split("_")[0]))
 
         for i, html_file_path in enumerate(html_file_paths):
@@ -934,6 +932,7 @@ def main():
     logger.info(f"cmd line args={args}")
     if run_as_exe:
         logger.info(f"Running as PyInstaller executable")
+    logger.info(f"Locale: {locale.getlocale()}")
     logger.info(f"Python Optimization Level [0,1,2]: {sys.flags.optimize}")
     logger.info(f"Starting ANONYMIZER Version {__version__}")
     logger.info(f"Running from {os.getcwd()}")

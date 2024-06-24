@@ -1,5 +1,5 @@
 # RSNA DICOM Anonymizer V17
-![WelcomeView](src/assets/html/WelcomeView.png)
+![WelcomeView](src/assets/locales/en/html/images/WelcomeView_Light_Dark_EN_FR.png)
 ## Installation 
 Select the correct binary download for your platform from the available [releases](https://github.com/mdevans/anonymizer/releases)
 ### 1. Windows

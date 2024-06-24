@@ -2,19 +2,30 @@
 import os
 import gettext
 import re
+import os
+import locale
 
-# localedir = os.path.join(os.path.dirname(__file__), "assets", "locale")
-# language_translations = gettext.translation("messages", localedir, fallback=True)
-# language_translations.install()
-# _ = language_translations.gettext
+# Set environment var: LANG for testing
+# os.environ["LANG"] = "es"
+
+language_code = locale.getdefaultlocale()[0]
 
 # Load the compiled MO file
 domain = "messages"
 localedir = "src/assets/locales"
-lang = "de"
-lang_translations = gettext.translation(domain, localedir, languages=[lang])
+lang_translations = gettext.translation(domain, localedir, languages=[language_code], fallback=True)
 lang_translations.install()
 _ = lang_translations.gettext
+
+
+def get_language_code():
+    """
+    Returns the language code for the current locale.
+
+    Returns:
+        str: The language code for the current locale.
+    """
+    return language_code.split("_")[0]
 
 
 def insert_spaces_between_cases(input_string):
