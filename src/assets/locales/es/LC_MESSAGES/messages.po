@@ -1,6 +1,7 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: PACKAGE VERSION\n"
+"Project-Id-Version: 17.1\n"
+"PO-Revision-Date: 2024-06-24 10:30+0200\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
 "Language: es\n"
@@ -108,7 +109,7 @@ msgstr "Importar Archivos"
 msgid "Importing"
 msgstr "Importando"
 
-msgid "Select DICOM Directory to Impport & Anonymize"
+msgid "Select DICOM Directory to Import & Anonymize"
 msgstr "Seleccione Directorio DICOM para Importar y Anonimizar"
 
 msgid "Reading DICOMDIR Root directory"
@@ -741,14 +742,14 @@ msgstr "Clases de Almacenamiento"
 msgid "Select Storage Classes"
 msgstr "Seleccionar Clases de Almacenamiento"
 
-msgid "Script File"
-msgstr "Archivo de Script"
-
 msgid "Transfer Syntaxes"
 msgstr "Sintaxis de Transferencia"
 
 msgid "Select Transfer Syntaxes"
 msgstr "Seleccionar Sintaxis de Transferencia"
+
+msgid "Script File"
+msgstr "Archivo de Script"
 
 msgid "Set Logging Levels"
 msgstr "Establecer Niveles de Registro"

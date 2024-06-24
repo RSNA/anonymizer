@@ -4,56 +4,53 @@ see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 <html>
 <body>
 <div style="color: #014F8F; font-size: 14px;">
-	<!-- <h1 style="text-align: center;">RSNA DICOM Anonymizer Overview</h1> -->
-
-	<h2>Introduction</h2>
+	<h2>Einführung</h2>
 		<p>
-		The RSNA DICOM Anonymizer is a cross platform, stand-alone de-identification utility.
-		DICOM image files are imported either via network transfers or directly from the local file system.
-		When a DICOM file is received, it is de-identified and then stored in a user-defined local storage directory.
-		Anonymized images can be exported either to a remote DICOM server or an AWS S3 Object store such as the RSNA Imaging Archive.
+		Der RSNA DICOM Anonymizer ist ein plattformübergreifendes, eigenständiges De-Identifikations-Werkzeug.
+		DICOM-Bilddateien werden entweder über Netzwerkübertragungen oder direkt aus dem lokalen Dateisystem importiert.
+		Wenn eine DICOM-Datei empfangen wird, erfolgt die De-Identifikation und anschließend wird sie in einem benutzerdefinierten lokalen Speicherverzeichnis gespeichert.
+		Anonymisierte Bilder können entweder auf einen entfernten DICOM-Server oder in ein AWS S3-Objektspeicher wie das RSNA Imaging Archive exportiert werden.
 		</p>
 
-	<h2>Design Guidelines</h2>
+	<h2>Designrichtlinien</h2>
 	<ol>
 		<li>Open Source</li>
-		<li>Stand-alone GUI written in Python 3</li>
-		<li>No internet connection required</li>
-		<li>Suitable for users with limited DICOM knowledge who are keen to curate and submit medical imaging datasets for AI model development</li>
-		<li>Platforms supported: Windows, OSX (Intel & ARM), Linux platforms</li>
-		<li>Ongoing development, build processes and release distribution via RSNA public github account</li>
-		<li>Backward compatible with Java version</li>
-		<li>PACS, Cloud PACS and VNA compatible</li>
-		<li>Reflect all errors to user, do not rely on log analysis</li>
-		<li>Project based with centralized settings management</li>
-		<li>Model, View, Controller (MVC) software architecture</li>
-		<li>Handle 1 million patients</li>
-		<li>Anonymize 10 files per second</li>
+		<li>Eigenständig GUI in Python 3 geschrieben</li>
+		<li>Keine Internetverbindung erforderlich</li>
+		<li>Geeignet für Benutzer mit begrenztem DICOM-Wissen, die medizinische Bildgebungssätze für die Entwicklung von KI-Modellen kuratieren und einreichen möchten</li>
+		<li>Unterstützte Plattformen: Windows, OSX (Intel & ARM), Linux-Plattformen</li>
+		<li>Fortlaufende Entwicklung, Build-Prozesse und Veröffentlichungsverteilung über das öffentliche RSNA-GitHub-Konto</li>
+		<li>Rückwärtskompatibel mit Java-Version</li>
+		<li>PACS, Cloud PACS und VNA kompatibel</li>
+		<li>Alle Fehler dem Benutzer anzeigen, nicht auf Log-Analyse verlassen</li>
+		<li>Projektbasiert mit zentralisierter Einstellungsverwaltung</li>
+		<li>Modell-Präsentation-Steuerung (MVC) Softwarearchitektur</li>
+		<li>Verarbeitung von 1 Million Patienten</li>
+		<li>Anonymisierung von 10 Dateien pro Sekunde</li>
 	</ol>
 
-	<h2>Previous Java Anonymizer</h2>
-		<p>This version of the Anonymizer is based on the Medical Imaging Resource Centre (MIRC) Clinical Trial Processor (CTP)
+	<h2>Vorherige Java-Anonymizer Version</h2>
+		<p>Diese Version des Anonymizers basiert auf dem Clinical Trial Processor (CTP) des Medical Imaging Resource Centre (MIRC)
 			<a href="https://mircwiki.rsna.org/index.php?title=The_MIRC_DICOM_Anonymizer">Java Anonymizer V16</a></p>
-		<h4>Differences from Java Version</h4>
+		<h4>Unterschiede zur Java-Version</h4>
 		<ol>
-			<li>Written in Python for Version 3.11</li>
-			<li>Implements operation subset to handle the default anonymizer script: {@remove, @empty, @hashdate, @round, ptid, acc, uid}</li>
-			<li>Fields with ptid in the operation will be replaced by a sequentially generated Patient ID starting at 1</li>
-			<li>Fields with acc in the operation will be replaced by a sequentially generated Accession Number starting at 1</li>
-			<li>Fields with uid in the operation will be replaced by a sequentially generated UID of form {UIDRoot.SiteID.N} N = 1,2,3...</li>
-			<li>No built-in editor for anonymizer script</li>
-			<li>No filter script, uses DICOM association contexts to restrict which storage classes & transfer syntaxes are imported</li>
-			<li>No internal DICOM image viewer</li>
-			<li>No internal log viewer</li>
-			<li>Project based: multiple separate projects with sand boxed settings can be created and managed on same machine</li>
-			<li>Project defines allowed modalities, storage classes, transfer syntaxes, network timeouts and logging levels</li>
-			<li>Simplified DICOM client & server configuration</li>
-			<li>Incoming files are not written to a temporary local disk directory for delayed processing; instead they are kept in memory queue.</li>
-			<li>Export to AWS S3 Object Store with AWS Cognito user authentication</li>
-			<li>Create Patient Lookup / Index in csv format with Number of Series and Number of Instances appended to each study row</li>
-			<li>Allows concurrent import and export processes</li>
-			<li>Provides a reliable study retrieval method at all levels (Study, Series, Instance) to handle remote DICOM servers which implement asynchronous C-MOVE (eg. VNA)</li>
-			<li>Fast in-memory datastore for Anonymizer Data Model</li>
+			<li>Geschrieben in Python für Version 3.11</li>
+			<li>Implementiert eine Betriebsuntermenge zur Handhabung des Standard-Anonymisierungsskripts: {@remove, @empty, @hashdate, @round, ptid, acc, uid}</li>
+			<li>Felder mit ptid in der Operation werden durch eine sequenziell generierte Patienten-ID ab 1 ersetzt</li>
+			<li>Felder mit acc in der Operation werden durch eine sequenziell generierte Zugangsnummer ab 1 ersetzt</li>
+			<li>Felder mit uid in der Operation werden durch eine sequenziell generierte UID der Form {UIDRoot.SiteID.N} N = 1,2,3... ersetzt</li>
+			<li>Kein integrierter Editor für Anonymisierungsskript</li>
+			<li>Kein Filter-Skript, verwendet DICOM-Assoziationskontexte, um zu beschränken, welche Speicherklassen und Übertragungssyntaxe importiert werden</li>
+			<li>Kein interner DICOM-Bildbetrachter</li>
+			<li>Projektbasiert: Mehrere separate Projekte mit gesandboxten Einstellungen können auf derselben Maschine erstellt und verwaltet werden</li>
+			<li>Das Projekt definiert erlaubte Modalitäten, Speicherklassen, Übertragungssyntaxe, Netzwerk-Timeouts und Protokollierungsstufen</li>
+			<li>Vereinfachte Konfiguration von DICOM-Client & Server</li>
+			<li>Eingehende Dateien werden nicht in ein temporäres lokales Disk-Verzeichnis geschrieben, sondern in einer Speicherwarteschlange gehalten</li>
+			<li>Export in AWS S3-Objektspeicher mit AWS Cognito-Benutzerauthentifizierung</li>
+			<li>Erstellen eines Patienten-Lookups / Index im CSV-Format mit Anzahl der Serien und Anzahl der Instanzen, die jeder Studienzeile angehängt sind</li>
+			<li>Ermöglicht gleichzeitige Import- und Exportprozesse</li>
+			<li>Bietet eine zuverlässige Studienabrufmethode auf allen Ebenen (Studie, Serie, Instanz), um mit entfernten DICOM-Servern umzugehen, die asynchrone C-MOVE implementieren (z. B. VNA)</li>
+			<li>Schneller In-Memory-Datenspeicher für Anonymizer-Datenmodell</li>
 		</ol>
 		
 </div>

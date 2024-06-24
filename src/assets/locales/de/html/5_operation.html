@@ -1,122 +1,122 @@
 <!DOCTYPE html>
-<!-- List of HTML Tags supported by tkhtmlview:
-see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support -->
+<!-- Liste der von tkhtmlview unterstützten HTML-Tags:
+siehe https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support -->
 <html>
 <body>
 <div style="color: #014F8F; font-size: 14px;">
 	<!-- <h1 style="text-align: center;">RSNA DICOM Anonymizer Operation</h1> -->
 
-		<h2>Importing files</h2>
+		<h2>Dateien importieren</h2>
 		
-			<h3>Import from local file system</h3>
-			<img src="assets/html/ImportFilesMenu.png"/>
+			<h3>Import aus dem lokalen Dateisystem</h3>
+			<img src="assets/locales/en_US/html/images/ImportFilesMenu.png"/>
 			<ul>
-				<li>Import DICOM Files either individually or as a directory.</li>
-				<li>When selecting individual files, the default suffix is <i>.dcm</i> but this can be changed using the file selection dialog options.</li>
-				<img src="assets/html/SelectFiles.png"/>
-				<li>When selecting a directory, <b>all</b> files in that directory and it's sub-directories will attempt to be imported.</li>
-				<img src="assets/html/SelectDirectory.png"/>
-				<li>For a file to be <b>accepted and imported</b> it must:</li>
+				<li>Importieren Sie DICOM-Dateien entweder einzeln oder als Verzeichnis.</li>
+				<li>Beim Auswählen einzelner Dateien ist das Standard-Suffix <i>.dcm</i>, dies kann jedoch in den Dateiauswahloptionen geändert werden.</li>
+				<img src="assets/locales/en_US/html/images/SelectFiles.png"/>
+				<li>Beim Auswählen eines Verzeichnisses werden <b>alle</b> Dateien in diesem Verzeichnis und dessen Unterverzeichnissen versucht zu importieren.</li>
+				<img src="assets/locales/en_US/html/images/SelectDirectory.png"/>
+				<li>Damit eine Datei <b>akzeptiert und importiert</b> wird, muss sie:</li>
 					<ol>
-						<li>Be a valid DICOM file (as per the <a href=https://dicom.nema.org/medical/dicom/current/output/chtml/part10/chapter_7.html>DICOM standard</a>) with valid File Meta Information including DICOM preamble in file header.</li>
-						<li>Contain the attributes:</li> 
+						<li>Eine gültige DICOM-Datei sein (gemäß dem <a href=https://dicom.nema.org/medical/dicom/current/output/chtml/part10/chapter_7.html>DICOM-Standard</a>) mit gültigen Dateimetainformationen einschließlich DICOM-Präambel im Dateikopf.</li>
+						<li>Die Attribute enthalten:</li> 
 						<ul>
 							<li><i>SOPClassUID</i></li>
 							<li><i>StudyInstanceUID</i></li>
 							<li><i>SeriesInstanceUID</i></li>
 							<li><i>SOPInstanceUID</i></li>
 						</ul>
-						<li>Storage class must match one of the storage classes set for the project. (see Modalities & Storage Classes in Help/Project Settings)</li>
-						<li>Successfully have its PHI captured</li>
-						<li>Not imported before, ie. SOPInstanceUID not stored in Anonymizer datastore.</li>
+						<li>Die Speicherklasse muss eine der im Projekt festgelegten Speicherklassen sein. (siehe Modalitäten & Speicherklassen in Hilfe/Projekteinstellungen)</li>
+						<li>Erfolgreich sein PHI erfasst haben</li>
+						<li>Nicht vorher importiert worden sein, d. h. SOPInstanceUID ist nicht im Anonymizer-Datenspeicher gespeichert.</li>
 					</ol>
-				<li>If a file fails the conditions above it will be <b>Quarantined</b> in the storage directory, ie. for the first 4 cases respectively:</li>
+				<li>Wenn eine Datei die obigen Bedingungen nicht erfüllt, wird sie im Speicherverzeichnis <b>quarantänisiert</b>, d. h. für die ersten 4 Fälle jeweils:</li>
 					<ol>
 						<li><i>/private/quarantine/Invalid_DICOM</i></li>
 						<li><i>/private/quarantine/Missing_Attributes</i></li>
 						<li><i>/private/quarantine/Invalid_Storage_Class</i></li>
 						<li><i>/private/quarantine/Capture_PHI_Error</i></li>
 					</ol>
-				<li>If a file has already been imported it will be ignored.</li>
-				<li>The file import dialog displays the outcome of each file import on each line in its scrollable text box.</li>
-				<li>If a file is successfully imported it will show an abridged file path followed by <i>PHI Patient ID => Anonymized Patient ID</i> as shown in screenshot below.</li>
-				<li>If there is any error it will display an abridged file path followed by a suitable error message on the next line, as shown in screenshot below.</li>
-				<img src="assets/html/ImportFilesDialog.png"/>
+				<li>Wenn eine Datei bereits importiert wurde, wird sie ignoriert.</li>
+				<li>Der Dateiimportdialog zeigt das Ergebnis jedes Dateiimports in jeder Zeile in seinem scrollbaren Textfeld an.</li>
+				<li>Wenn eine Datei erfolgreich importiert wird, zeigt sie einen gekürzten Dateipfad gefolgt von <i>PHI-Patienten-ID => Anonymisierte Patienten-ID</i> wie im folgenden Screenshot gezeigt.</li>
+				<li>Bei einem Fehler wird ein gekürzter Dateipfad gefolgt von einer passenden Fehlermeldung in der nächsten Zeile angezeigt, wie im Screenshot unten gezeigt.</li>
+				<img src="assets/locales/en_US/html/images/ImportFilesDialog.png"/>
 			</ul>
 				
-		<h2>Import from remote DICOM Server</h2>
-			On the dashboard click the Query button to first send a DICOM echo to the remote server and if successful, open the Query, Retrieve & Import View.
-			<h3>The Query, Retrieve & Import View</h3>
-			<img src="assets/html/QueryRetrieveImport.png"/>
-			<h4>Searching for Studies</h4>
+		<h2>Import vom Remote-DICOM-Server</h2>
+			Klicken Sie im Dashboard auf die Schaltfläche Abfragen, um zuerst ein DICOM-Echo an den Remote-Server zu senden und bei Erfolg die Ansicht Abfragen, Abrufen & Importieren zu öffnen.
+			<h3>Die Ansicht Abfragen, Abrufen & Importieren</h3>
+			<img src="assets/locales/en_US/html/images/QueryRetrieveImport.png"/>
+			<h4>Suche nach Studien</h4>
 			<ul>
-				<li>A remote DICOM server can be queried to list matching studies in the Query results view using one or a combination of the standard query fields:</li>
+				<li>Ein Remote-DICOM-Server kann abgefragt werden, um passende Studien in der Ansicht Abfrageergebnisse aufzulisten, indem eines oder eine Kombination der Standardabfragefelder verwendet wird:</li>
 				<ol>
-					<li><i>Patient Name:</i> Alphabetic characters with and without accents, digits, ^ separator, ? for single character wildcard, * for string wildcard</li>
-					<li><i>Patient ID:</i> ASCII characters and digits, ? for single character wildcard, * for string wildcard</li>
-					<li><i>Modality:</i> Drop down list box with the modalities as configured in Project Settings</li>
-					<li><i>Study Date:</i> Specific data or date Range with format YYYYMMDD-YYYYMMDD</li>
-					<li><i>Accession No.(s):</i> ASCII characters, digits and "/-_,." ? for single character wildcard, * for string wildcard</li>
+					<li><i>Patientenname:</i> Alphabetische Zeichen mit und ohne Akzente, Ziffern, ^-Trennzeichen, ? für Einzelzeichen-Platzhalter, * für Zeichenfolgen-Platzhalter</li>
+					<li><i>Patienten-ID:</i> ASCII-Zeichen und Ziffern, ? für Einzelzeichen-Platzhalter, * für Zeichenfolgen-Platzhalter</li>
+					<li><i>Modalität:</i> Dropdown-Liste mit den in den Projekteinstellungen konfigurierten Modalitäten</li>
+					<li><i>Studien-Datum:</i> Bestimmtes Datum oder Datumsbereich im Format JJJJMMTT-JJJJMMTT</li>
+					<li><i>Zugangsnummer(n):</i> ASCII-Zeichen, Ziffern und "/-_,." ? für Einzelzeichen-Platzhalter, * für Zeichenfolgen-Platzhalter</li>
 				</ol>
-				<li>A comma delimited list can be entered into <i>Accession No.(s)</i> to perform multiple searches.</li>
-				<li>Bulk Accession Number search via the <i>Load Accession Numbers</i> button and a text file with suffix ".txt" or ".csv" containing a comma or carriage return delimited list.</li>
-				<li>The <i>Show Imported Studies</i> switch at the top right controls whether imported studies are included in the search result list.</li>
-				<li>Only studies containing modalities set for the project will be displayed and available for selection.</li>
+				<li>Eine durch Kommas getrennte Liste kann in <i>Zugangsnummer(n)</i> eingegeben werden, um mehrere Suchvorgänge durchzuführen.</li>
+				<li>Mehrfach-Zugangsnummernsuche über die Schaltfläche <i>Zugangsnummern laden</i> und eine Textdatei mit dem Suffix ".txt" oder ".csv", die eine durch Kommas oder Zeilenumbrüche getrennte Liste enthält.</li>
+				<li>Der Schalter <i>Importierte Studien anzeigen</i> oben rechts steuert, ob importierte Studien in der Suchergebnisliste enthalten sind.</li>
+				<li>Nur Studien, die Modalitäten enthalten, die für das Projekt festgelegt sind, werden angezeigt und zur Auswahl verfügbar gemacht.</li>
 			</ul>
-			<h4>Selecting Studies and Importing</h4>
-			<img src="assets/html/SelectQuery.png"/>
+			<h4>Auswählen und Importieren von Studien</h4>
+			<img src="assets/locales/en_US/html/images/SelectQuery.png"/>
 			<ul>
-				<li>Studies can be selected individually (mouse click), in groups (hold down CMD or CTRL key) or in bulk using the <i>Select All</i> button.</li>
-				<li>De-select studies by individual clicking or using the <i>Clear Selection</i> button.</li>
-				<li>Before importing studies choose which level (Study, Series, Instance) to use for the import process (via DICOM C-MOVE) from the drop down, <i>Move Level</i>.</li>
-				<li>Clicking the <i>Import and Anonymize</i> button will initiate the <i>Import Studies Dialog</i>.</li>
-				<li>The remote server will first be queried for each selected study to compile a Study UID Hierarchy corresponding to the selected move level.</li>
-				<li>The import will then be initiated and the <i>Import Studies Dialog</i> will display a progress bar tracking the number of images imported out of the study hierarchy.</li>
-				<li>The import process will finish once all studies have been requested and either all files in a study received or a timeout occurred.</li>
-				<li>If the remote server does not respond within the project's timeout setting: <i>Network Timeout</i> for each file transfer the import process for this study is terminated.</li>	
-				<li>The <i>Import Studies Dialog</i> will show the result of the import process when complete as shown in the screenshot below:</li>
-				<li>After closing the <i>Import Studies Dialog</i> using the <i>Close</i> button the successfully imported studies will be highlighted green in the Query Results view as shown below:</li>
+				<li>Studien können einzeln (Mausklick), in Gruppen (CMD- oder CTRL-Taste gedrückt halten) oder in großen Mengen mit der Schaltfläche <i>Alle auswählen</i> ausgewählt werden.</li>
+				<li>Studien durch einzelnes Klicken oder mit der Schaltfläche <i>Auswahl löschen</i> abwählen.</li>
+				<li>Wählen Sie vor dem Importieren von Studien die Ebene (Studie, Serie, Instanz) aus, die für den Importvorgang (über DICOM C-MOVE) verwendet werden soll, aus dem Dropdown-Menü <i>Bewegungsebene</i>.</li>
+				<li>Durch Klicken auf die Schaltfläche <i>Importieren und Anonymisieren</i> wird der <i>Importstudien-Dialog</i> gestartet.</li>
+				<li>Der Remote-Server wird zuerst für jede ausgewählte Studie abgefragt, um eine Study-UID-Hierarchie entsprechend der ausgewählten Bewegungsebene zu erstellen.</li>
+				<li>Der Import wird dann gestartet und der <i>Importstudien-Dialog</i> zeigt eine Fortschrittsanzeige, die die Anzahl der importierten Bilder aus der Studienhierarchie verfolgt.</li>
+				<li>Der Importvorgang endet, sobald alle Studien angefordert wurden und entweder alle Dateien in einer Studie empfangen wurden oder ein Timeout aufgetreten ist.</li>
+				<li>Wenn der Remote-Server innerhalb der Projekt-Timeout-Einstellung nicht antwortet: <i>Netzwerk-Timeout</i> für jede Dateiübertragung wird der Importvorgang für diese Studie abgebrochen.</li>	
+				<li>Der <i>Importstudien-Dialog</i> zeigt das Ergebnis des Importvorgangs bei Abschluss wie im untenstehenden Screenshot:</li>
+				<li>Nach dem Schließen des <i>Importstudien-Dialogs</i> mit der Schaltfläche <i>Schließen</i> werden die erfolgreich importierten Studien im Abfrageergebnisfenster grün hervorgehoben, wie unten gezeigt:</li>
 			</ul>
-			<img src="assets/html/ImportStudiesDialog.png"/>
-			<img src="assets/html/ImportStudiesResult.png"/>
+			<img src="assets/locales/en_US/html/images/ImportStudiesDialog.png"/>
+			<img src="assets/locales/en_US/html/images/ImportStudiesResult.png"/>
 
-			<h4>Handling DICOM Move Issues</h4>
+			<h4>Umgang mit DICOM-Bewegungsproblemen</h4>
 			<ul>
-				<li>If the import process fails to import all the studies successfully, adjust the Network Timeout and Move Level and try again by clicking the import button.</li>
-				<li>The Anonymizer has been designed to handle C-MOVE non-compliant DICOM servers, especially VNAs which operate in asynchronous mode with unknown priority and timeout settings.</li>
+				<li>Wenn der Importvorgang nicht alle Studien erfolgreich importiert, passen Sie das Netzwerk-Timeout und die Bewegungsebene an und versuchen Sie es erneut, indem Sie auf die Schaltfläche Importieren klicken.</li>
+				<li>Der Anonymizer wurde entwickelt, um C-MOVE nicht konforme DICOM-Server zu unterstützen, insbesondere VNAs, die im asynchronen Modus mit unbekannten Prioritäts- und Timeout-Einstellungen arbeiten.</li>
 			</ul>
 
-		<h2>Exporting files</h2>
-		On the dashboard click the Export button to first send a DICOM echo to the remote server and if successful, open the Export View.
+		<h2>Dateien exportieren</h2>
+		Klicken Sie im Dashboard auf die Schaltfläche Exportieren, um zuerst ein DICOM-Echo an den Remote-Server zu senden und bei Erfolg die Exportansicht zu öffnen.
 			
-			<h3>The Export View</h3>
-			<img src="assets/html/ExportStudiesAWS.png"/>
+			<h3>Die Exportansicht</h3>
+			<img src="assets/locales/en_US/html/images/ExportStudiesAWS.png"/>
 			<ul>
-				<li>The Export view operates in similar way to the Query view, where imported & anonymized <i><b>Patients</b></i> can be selected for exporting either to a remote DICOM server or an AWS S3 bucket.</li>
-				<li>Patients may contain multiple studies that were imported independently by the import process.</li>
-				<li>Before sending a file, the Anonymizer will check with the remote server (SCP or AWS) whether it already been sent and not re-send it.</li>
-				<li>The export status will be shown in real-time on the export view.</li>
-				<li>The Date & Time of a successful Patient export and a progress bar is displayed as shown in the screenshot below:</li>
+				<li>Die Exportansicht funktioniert ähnlich wie die Abfrageansicht, in der importierte und anonymisierte <i><b>Patienten</b></i> zur Übertragung an einen Remote-DICOM-Server oder einen AWS S3-Bucket ausgewählt werden können.</li>
+				<li>Patienten können mehrere Studien enthalten, die unabhängig vom Importvorgang importiert wurden.</li>
+				<li>Vor dem Senden einer Datei prüft der Anonymizer beim Remote-Server (SCP oder AWS), ob sie bereits gesendet wurde und sendet sie nicht erneut.</li>
+				<li>Der Exportstatus wird in Echtzeit in der Exportansicht angezeigt.</li>
+				<li>Das Datum und die Uhrzeit eines erfolgreichen Patientenexports und eine Fortschrittsanzeige werden wie im untenstehenden Screenshot angezeigt:</li>
 			</ul>
-			<img src="assets/html/ExportStudiesStatus.png"/>
+			<img src="assets/locales/en_US/html/images/ExportStudiesStatus.png"/>
 			
-			<h4>Export Patient Lookup CSV File</h4>
-			<img src="assets/html/PatientLookupSave.png"/>
+			<h4>Exportieren der Patienten-Such-CSV-Datei</h4>
+			<img src="assets/locales/en_US/html/images/PatientLookupSave.png"/>
 			<ul>
-				<li>A patient lookup file which contains the project's PHI data can be created at anytime during a project using the <i>Create Patient Lookup</i> button on the Export View.</li>
-				<li>The PHI data file is saved in CSV format to the storage directories private sub-directory here:</li>
+				<li>Eine Patienten-Suchdatei, die die PHI-Daten des Projekts enthält, kann jederzeit während eines Projekts mit der Schaltfläche <i>Patienten-Suche erstellen</i> in der Exportansicht erstellt werden.</li>
+				<li>Die PHI-Datendatei wird im CSV-Format im privaten Unterverzeichnis des Speicherverzeichnisses hier gespeichert:</li>
 				<li><i><b>/private/phi_export/</b></i></li>
-				<li>The format of the lookup file follows the JAVA Anonymizer index file with the following fields appended to each study row: Number of Series, Number of Instances</li>
+				<li>Das Format der Suchdatei folgt der JAVA-Anonymizer-Indexdatei mit den folgenden Feldern, die jeder Studienzeile hinzugefügt werden: Anzahl der Serien, Anzahl der Instanzen</li>
 			</ul>
-			<img src="assets/html/PatientLookupData.png"/>
+			<img src="assets/locales/en_US/html/images/PatientLookupData.png"/>
 
 		<h2>Dashboard</h2>
-		<img src="assets/html/Dashboard.png"/>
+		<img src="assets/locales/en_US/html/images/Dashboard.png"/>
 		<ul>
-			<li>The project dashboard displays relevant project metrics related to the currently curated dataset in the storage directory.</li>
-			<li>The Query and Export Views are launched from the dashboard using the corresponding buttons.</li>
-			<li>The number of files waiting in the Anonymizer queue to be anonymized by an anonymizer worker thread is shown at the bottom left of the dashboard.</li>
-			<li>The status of an operation initiated from the menu or dashboard is shown at the bottom right of the dashboard.</li>
+			<li>Das Projekt-Dashboard zeigt relevante Projektmetriken in Bezug auf den aktuell kuratierten Datensatz im Speicherverzeichnis an.</li>
+			<li>Die Abfrage- und Exportansichten werden über die entsprechenden Schaltflächen vom Dashboard aus gestartet.</li>
+			<li>Die Anzahl der Dateien, die in der Anonymisierungswarteschlange auf die Anonymisierung durch einen Anonymisierungs-Worker-Thread warten, wird unten links im Dashboard angezeigt.</li>
+			<li>Der Status eines Vorgangs, der über das Menü oder das Dashboard initiiert wurde, wird unten rechts im Dashboard angezeigt.</li>
 		</ul>
 </div>
 </body>

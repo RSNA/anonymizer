@@ -8,7 +8,12 @@ import locale
 # Set environment var: LANG for testing
 # os.environ["LANG"] = "es"
 
-language_code = locale.getdefaultlocale()[0]
+language_code = locale.getlocale()[0]
+
+if not language_code:
+    language_code = "en_US"
+
+language_code = "de"
 
 # Load the compiled MO file
 domain = "messages"
@@ -25,7 +30,7 @@ def get_language_code():
     Returns:
         str: The language code for the current locale.
     """
-    return language_code.split("_")[0]
+    return language_code
 
 
 def insert_spaces_between_cases(input_string):

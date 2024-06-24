@@ -20,9 +20,17 @@
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
   "cSpell.words": [
+    "anonimización",
+    "anonimizadas",
+    "Anonimizador",
+    "Anonymiseur",
+    "désidentification",
+    "désidentifié",
     "DICOM",
     "hashdate",
+    "l'Anonymiseur",
     "MIRC",
+    "multiplateforme",
     "ptid",
     "PYDICOM",
     "PYNETDICOM",
@@ -80,4 +88,5 @@
     }
   ],
   "python.languageServer": "Pylance",
+  "cSpell.language": "en-US,fr,de,es",
 }

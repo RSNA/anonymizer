@@ -26,7 +26,7 @@ class WelcomeView(ctk.CTkFrame):
         + _("Select File/New Project to start.")
     )
     WELCOME_TEXT_FONT_SIZE = 20
-    TITLED_LOGO_FILE = "assets/images/icons/rsna_titled_logo_alpha.png"  # alpha channel  / transparent background
+    TITLED_LOGO_FILE = "assets/icons/rsna_titled_logo_alpha.png"  # alpha channel  / transparent background
     TITLED_LOGO_WIDTH = 255
     TITLED_LOGO_HEIGHT = 155
 

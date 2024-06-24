@@ -1,3 +1,14 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
 msgid "RSNA DICOM Anonymizer Version"
 msgstr "Versión del Anonimizador DICOM RSNA"
 
@@ -730,14 +741,14 @@ msgstr "Clases de Almacenamiento"
 msgid "Select Storage Classes"
 msgstr "Seleccionar Clases de Almacenamiento"
 
-msgid "Script File"
-msgstr "Archivo de Script"
-
 msgid "Transfer Syntaxes"
 msgstr "Sintaxis de Transferencia"
 
 msgid "Select Transfer Syntaxes"
 msgstr "Seleccionar Sintaxis de Transferencia"
+
+msgid "Script File"
+msgstr "Archivo de Script"
 
 msgid "Set Logging Levels"
 msgstr "Establecer Niveles de Registro"

@@ -57,7 +57,7 @@ class Anonymizer(ctk.CTk):
         self._appearance_mode_change(ctk.get_appearance_mode())  # initialize non-ctk widget styles
 
         if sys.platform.startswith("win"):
-            self.iconbitmap("assets\\images\\icons\\rsna_icon.ico", default="assets\\images\\icons\\rsna_icon.ico")
+            self.iconbitmap("assets\\icons\\rsna_icon.ico", default="assets\\icons\\rsna_icon.ico")
 
         self.controller: ProjectController | None = None
         self.welcome_view: WelcomeView = WelcomeView(self)
@@ -584,7 +584,7 @@ class Anonymizer(ctk.CTk):
 
         self.disable_file_menu()
 
-        msg = _("Select DICOM Directory to Impport & Anonymize")
+        msg = _("Select DICOM Directory to Import & Anonymize")
         root_dir = filedialog.askdirectory(
             title=msg,
             mustexist=True,

@@ -1,20 +1,22 @@
 # RSNA DICOM Anonymizer V17
-![WelcomeView](src/assets/locales/en/html/images/WelcomeView_Light_Dark_EN_FR.png)
+![WelcomeView](src/assets/locales/en_US/html/images//WelcomeView_Light_Dark_EN_FR.png)
 ## Installation 
 Select the correct binary download for your platform from the available [releases](https://github.com/mdevans/anonymizer/releases)
-### 1. Windows
-Download and extract zip to desired application directory.
-Execute Anonymizer.exe and override User Account Control to allow the program to "Run anyway".
-### 2. Mac OSX
-Download and extract zip file to desired application directory.
-Mount the disk by clicking the Anonymizer_17.*.dmg file where * is the relevant version.
-Drag icon to Applications folder.
-Open a terminal and execute `xattr -rc /Applications/Anonymizer_17.*.app.
-Double click the application icon to execute.
-### 3. Ubuntu
-Download and extract zip file to desired application directory.
-`chmod +x Anonymizer_17.*` where * is the relevant version
-`sudo Anonymizer_17.*`
+### Windows
+1. Download and extract zip to desired application directory.
+2. Execute Anonymizer.exe and override User Account Control to allow the program to "Run anyway".
+### Mac OSX
+1. Download and extract zip file to desired application directory.
+2. Mount the disk by clicking the `Anonymizer_17.*.dmg` file where * is the relevant version.
+3. In the finder window presented, drag the Anonymzier icon to Applications folder.
+4. Wait for the Application to be decompressed and copied.
+4. Open a terminal (`/Applications/Utilities/Terminal`) 
+5. To remove extended attributes, in the terminal, execute the command: `xattr -rc /Applications/Anonymizer_17.*.app`.
+5. Double click the application icon to execute.
+### Linux
+1. Download and extract zip file to desired application directory.
+2. `chmod +x Anonymizer_17.*` where * is the relevant version
+3. Execute `Anonymizer_17.*` 
 ## Documentation
 [Help files](https://mdevans.github.io/anonymizer/index.html)
 ## Development
@@ -38,6 +40,16 @@ Download and extract zip file to desired application directory.
 2. radon raw -i "tests,docs,prototyping" . > radon_results.txt
 3. python src/radon_raw_totals.py
 ```
+### Translations
+Languages for 17.1: `en_US, de, es, fr`
+#### Ensure gettext is installed:
+1. Windows: [Install instructions](https://mlocati.github.io/articles/gettext-iconv-windows.html) or `choco install gettext`
+2. Mac OSX: `brew install gettext`
+3. Linux: `sudo apt-get install gettext`
+#### Extracting messages from source files:
+Execute `assets/locales/extract_translations.sh`
+#### Updating translations:
+Execute `assets/locales/update_translations.sh`
 ### Software Architecture
 ### Model 
 Two python classes pickled to files in project directory:

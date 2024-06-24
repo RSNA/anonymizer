@@ -115,7 +115,7 @@ if __name__ == "__main__":
                 "--log-level",
                 "INFO",
                 "--icon",
-                "assets\\images\\icons\\rsna_icon.ico",
+                "assets\\icons\\rsna_icon.ico",
                 "--version-file",
                 "versionfile.txt",
                 "--name",
@@ -140,7 +140,7 @@ if __name__ == "__main__":
                 "--log-level",
                 "INFO",
                 "--icon",
-                "assets/images/icons/rsna_icon.icns",
+                "assets/icons/rsna_icon.icns",
                 "--name",
                 build_version_name,
                 "--optimize",
@@ -218,7 +218,7 @@ if __name__ == "__main__":
         # Name=My Application
         # Comment=My Application
         # Exec={Path(os.getcwd()) / 'dist' / 'Anonymizer_{__version__}'}
-        # Icon={Path(os.getcwd()) / 'assets' / 'images' / 'icon.png'}
+        # Icon={Path(os.getcwd()) / 'assets' / 'icons' / 'icon.png'}
         # Terminal=false
         # Type=Application
         # Categories=Utility;Application;

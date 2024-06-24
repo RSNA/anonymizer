@@ -1,7 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: 17.1\n"
-"PO-Revision-Date: 2024-06-24 10:30+0200\n"
+"Project-Id-Version: PACKAGE VERSION\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
 "Language: de\n"
@@ -109,7 +108,8 @@ msgstr "Dateien importieren"
 msgid "Importing"
 msgstr "Importieren"
 
-msgid "Select DICOM Directory to Import & Anonymize"
+#, fuzzy
+msgid "Select DICOM Directory to Impport & Anonymize"
 msgstr "DICOM-Verzeichnis zum Importieren und Anonymisieren auswählen"
 
 msgid "Reading DICOMDIR Root directory"
@@ -700,8 +700,9 @@ msgstr "DICOM-Dienstelementnachrichten (DIMSE)"
 msgid "Network (Close Inactive Connection)"
 msgstr "Netzwerk (inaktive Verbindung schließen)"
 
+#, fuzzy
 msgid "Site ID"
-msgstr "Standort-ID"
+msgstr "Standort-ID:"
 
 msgid "Load JAVA Index File"
 msgstr "JAVA-Indexdatei laden"
