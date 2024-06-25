@@ -1,6 +1,7 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: PACKAGE VERSION\n"
+"Project-Id-Version: 17.1\n"
+"PO-Revision-Date: 2024-06-24 10:30+0200\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
 "Language: en\n"
@@ -15,7 +16,8 @@ msgstr "RSNA DICOM Anonymizer Version"
 msgid "Config file not found: "
 msgstr "Config file not found: "
 
-msgid "no recent project list or current project set"
+#, fuzzy
+msgid "default language set, recent project list or current project set"
 msgstr "no recent project list or current project set"
 
 msgid "Error writing json config file: "
@@ -108,8 +110,8 @@ msgstr "Import Files"
 msgid "Importing"
 msgstr "Importing"
 
-msgid "Select DICOM Directory to Impport & Anonymize"
-msgstr "Select DICOM Directory to Impport & Anonymize"
+msgid "Select DICOM Directory to Import & Anonymize"
+msgstr "Select DICOM Directory to Import & Anonymize"
 
 msgid "Reading DICOMDIR Root directory"
 msgstr "Reading DICOMDIR Root directory"
@@ -816,11 +818,8 @@ msgstr "Transfer Syntax UID"
 msgid "Welcome"
 msgstr "Welcome"
 
-msgid "The RSNA DICOM Anonymizer program is a free open-source tool for curating"
-msgstr "The RSNA DICOM Anonymizer program is a free open-source tool for curating"
-
-msgid "and de-identifying DICOM studies."
-msgstr "and de-identifying DICOM studies."
+msgid "The RSNA DICOM Anonymizer program is a free open-source tool for curating and de-identifying DICOM studies."
+msgstr "The RSNA DICOM Anonymizer program is a free open-source tool for curating and de-identifying DICOM studies."
 
 msgid "Easy to use, advanced DICOM expertise not required!"
 msgstr "Easy to use, advanced DICOM expertise not required!"

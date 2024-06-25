@@ -7,7 +7,7 @@ from typing import Dict, Tuple, List
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from pynetdicom._globals import DEFAULT_TRANSFER_SYNTAXES
-from utils.modalities import MODALITIES
+from utils.modalities import get_modalities
 from utils.translate import _
 from __version__ import __version__
 
@@ -199,7 +199,7 @@ class ProjectModel:
         else:
             self.storage_classes.clear()
         for modality in self.modalities:
-            self.storage_classes += MODALITIES[modality][1]
+            self.storage_classes += get_modalities()[modality][1]
 
     def add_storage_class(self, storage_class: str):
         if storage_class not in self.storage_classes:

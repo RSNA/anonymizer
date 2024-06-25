@@ -6,7 +6,7 @@ from tkinter import ttk
 import logging
 from pynetdicom.sop_class import _STORAGE_CLASSES
 from utils.translate import _, insert_spaces_between_cases, insert_space_after_codes
-from utils.modalities import MODALITIES
+from utils.modalities import get_modalities
 from model.project import ProjectModel
 
 logger = logging.getLogger(__name__)
@@ -169,7 +169,7 @@ class SOPClassesDialog(tk.Toplevel):
         logger.info("_from_modalities_selection_button_pressed")
         self.sop_classes.clear()
         for modality in self.modalities:
-            self.sop_classes += MODALITIES[modality][1]
+            self.sop_classes += get_modalities()[modality][1]
         for item in self._tree.get_children():
             self._tree.item(item, tags="")
             if item in self.sop_classes:

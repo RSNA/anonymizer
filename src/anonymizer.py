@@ -1,4 +1,4 @@
-import os, sys, json, shutil, time, platform, locale
+import os, sys, json, shutil, time, platform
 from pathlib import Path
 from copy import copy
 import logging
@@ -19,9 +19,9 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import customtkinter as ctk
 
-from __version__ import __version__
-from utils.translate import _, get_language_code
 from utils.logging import init_logging
+from __version__ import __version__
+from utils.translate import _, get_current_language, get_current_language_code, set_language
 from model.project import DICOMRuntimeError, ProjectModel
 from controller.project import ProjectController
 from view.settings.settings_dialog import SettingsDialog
@@ -36,13 +36,15 @@ logger = logging.getLogger()  # ROOT logger
 
 
 class Anonymizer(ctk.CTk):
-    TITLE = _("RSNA DICOM Anonymizer Version") + " " + __version__
     THEME_FILE = "assets/themes/rsna_theme.json"
     CONFIG_FILENAME = "config.json"  # global state, eg. recent projects
 
     project_open_startup_dwell_time = 100  # milliseconds
     metrics_loop_interval = 1000  # milliseconds
     menu_font = ("", 13)  # Font for main menu items, not consisetent across platforms
+
+    def get_title(self):
+        return _("RSNA DICOM Anonymizer Version") + " " + __version__
 
     def __init__(self):
         super().__init__()
@@ -59,19 +61,19 @@ class Anonymizer(ctk.CTk):
         if sys.platform.startswith("win"):
             self.iconbitmap("assets\\icons\\rsna_icon.ico", default="assets\\icons\\rsna_icon.ico")
 
+        self.load_config()  # may set language
         self.controller: ProjectController | None = None
-        self.welcome_view: WelcomeView = WelcomeView(self)
+        self.welcome_view: WelcomeView = WelcomeView(self, self.change_language)
         self.query_view: QueryView | None = None
         self.export_view: ExportView | None = None
         self.help_views = {}
         self.dashboard: Dashboard | None = None
         self.resizable(False, False)
-        self.title(self.TITLE)
+        self.title(self.get_title())
         self.menu_bar = tk.Menu(master=self)
         self.recent_project_dirs: set[Path] = []
         self.current_open_project_dir: Path | None = None
-        self.load_config()
-        self.set_menu_project_closed()  # creates self.menu_bar, populates Open Recent list
+        self.set_menu_project_closed()  # creates self.menu_bar, populates Open Recent list & Help Menu
         self.after(self.project_open_startup_dwell_time, self._open_project_startup)
 
     def _init_mono_font(self) -> ctk.CTkFont:
@@ -142,6 +144,17 @@ class Anonymizer(ctk.CTk):
         )
         treestyle.configure("Treeview.Heading", background=bg_color, foreground=text_color, font=ctk.CTkFont())
 
+    # Callback from WelcomeView
+    def change_language(self, language):
+        logger.info(f"Change Language to: {language}")
+        set_language(language)
+        self.help_views = {}
+        self.title(self.get_title())
+        self.set_menu_project_closed()  # resets Help Menu
+        self.save_config()
+        self.welcome_view.destroy()
+        self.welcome_view = WelcomeView(self, self.change_language)
+
     # Dashboard metrics updates from the main thread
     def metrics_loop(self):
         if not self.controller:
@@ -164,6 +177,13 @@ class Anonymizer(ctk.CTk):
                     logger.error("Config file corrupt, start with no global config set")
                     return
 
+                if "language" in config_data:
+                    config_lang = config_data["language"]
+                    set_language(config_lang)
+                    logger.info(f"language: '{config_lang}' set from config file")
+                else:
+                    logger.info("language not found in config file, resort to default")
+
                 self.recent_project_dirs = [Path(dir) for dir in config_data.get("recent_project_dirs", [])]
                 for dir in self.recent_project_dirs:
                     if not dir.exists():
@@ -173,13 +193,16 @@ class Anonymizer(ctk.CTk):
                     self.current_open_project_dir = None
         except FileNotFoundError:
             warn_msg = (
-                _("Config file not found: ") + self.CONFIG_FILENAME + _("no recent project list or current project set")
+                "Config file not found: "
+                + self.CONFIG_FILENAME
+                + "default language set, recent project list or current project set"
             )
             logger.warning(warn_msg)
 
     def save_config(self):
         try:
             config_data = {
+                "language": get_current_language(),
                 "recent_project_dirs": [str(path) for path in self.recent_project_dirs],
                 "current_open_project_dir": str(self.current_open_project_dir) or "",
             }
@@ -448,14 +471,14 @@ class Anonymizer(ctk.CTk):
                 self.export_view.destroy()
                 self.export_view = None
 
-            self.welcome_view = WelcomeView(self)
+            self.welcome_view = WelcomeView(self, self.change_language)
             self.protocol("WM_DELETE_WINDOW", self.quit)
             self.focus_force()
 
         self.current_open_project_dir = None
         self.controller = None
         self.set_menu_project_closed()
-        self.title(self.TITLE)
+        self.title(self.get_title())
         self.save_config()
 
     def clone_project(self, event=None):
@@ -570,7 +593,7 @@ class Anonymizer(ctk.CTk):
             self.controller.anonymizer,
             file_paths,
             title=_("Import Files"),
-            sub_title=_("Importing" + f"{len(file_paths)} {_('file') if len(file_paths) == 1 else _('files')}"),
+            sub_title=_("Importing" + f" {len(file_paths)} {_('file') if len(file_paths) == 1 else _('files')}"),
         )
         dlg.get_input()
         self.enable_file_menu()
@@ -814,7 +837,7 @@ class Anonymizer(ctk.CTk):
         help_menu = tk.Menu(self.menu_bar, tearoff=0)
         # Get all html files in assets/locale/*/html/ directory
         # Sort by filename number prefix
-        html_dir = Path("assets/locales/" + get_language_code() + "/html/")
+        html_dir = Path("assets/locales/" + get_current_language_code() + "/html/")
         html_file_paths = sorted(html_dir.glob("*.html"), key=lambda path: int(path.stem.split("_")[0]))
 
         for i, html_file_path in enumerate(html_file_paths):
@@ -932,7 +955,7 @@ def main():
     logger.info(f"cmd line args={args}")
     if run_as_exe:
         logger.info(f"Running as PyInstaller executable")
-    logger.info(f"Locale: {locale.getlocale()}")
+
     logger.info(f"Python Optimization Level [0,1,2]: {sys.flags.optimize}")
     logger.info(f"Starting ANONYMIZER Version {__version__}")
     logger.info(f"Running from {os.getcwd()}")

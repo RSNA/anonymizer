@@ -1,36 +1,86 @@
-# translate.py: Set the locale and path for .mo translation files
-import os
+# translate.py: Set the path for .mo translation files and language code for the html help system
+# Do not use python locale module, manage language settings within the application
+# Numerics and Dates are based on en_US / DICOM std for all languages
 import gettext
 import re
-import os
-import locale
+import logging
+from pprint import pformat
 
-# Set environment var: LANG for testing
-# os.environ["LANG"] = "es"
+# Language name to locale sub-directory name mapping (assets/locales/*)
+language_to_code = {"English": "en_US", "Deutsch": "de", "Español": "es", "Français": "fr"}
+code_to_language = {v: k for k, v in language_to_code.items()}
 
-language_code = locale.getlocale()[0]
+_current_language_code: str = None
+_current_translations = None
 
-if not language_code:
-    language_code = "en_US"
-
-language_code = "de"
-
-# Load the compiled MO file
-domain = "messages"
-localedir = "src/assets/locales"
-lang_translations = gettext.translation(domain, localedir, languages=[language_code], fallback=True)
-lang_translations.install()
-_ = lang_translations.gettext
+logger = logging.getLogger(__name__)
 
 
-def get_language_code():
+def _(msg: str) -> str:
+    return _current_translations.gettext(msg)
+
+
+def set_language_code(lang_code: str):
+    """
+    Sets the language code for the application.
+
+    Args:
+        language_code (str): The language code to set.
+    """
+    global _current_language_code
+    global _current_translations
+
+    if lang_code not in language_to_code.values():
+        raise ValueError(f"Invalid language code: {lang_code}")
+
+    logger.info(f"Setting language code to '{lang_code}'")
+
+    # Latch the language code
+    _current_language_code = lang_code
+
+    # Load the compiled MO file
+    domain = "messages"
+    localedir = "assets/locales"
+    # Load the compiled MO file
+    _current_translations = gettext.translation(domain, localedir, languages=[lang_code], fallback=True)
+    logger.info(f"_current_translations:\n{pformat(_current_translations._info)}")
+
+
+# Default to US English: en_US
+set_language_code("en_US")
+
+
+def set_language(language: str):
+    """
+    Sets the language for the application.
+
+    Args:
+        language (str): The language to set.
+    """
+    if language not in language_to_code:
+        raise ValueError(f"Invalid language: {language}")
+
+    set_language_code(language_to_code[language])
+
+
+def get_current_language_code():
     """
     Returns the language code for the current locale.
 
     Returns:
         str: The language code for the current locale.
     """
-    return language_code
+    return _current_language_code
+
+
+def get_current_language():
+    """
+    Returns the language for the current locale.
+
+    Returns:
+        str: The language for the current locale.
+    """
+    return code_to_language[_current_language_code]
 
 
 def insert_spaces_between_cases(input_string):

@@ -1,12 +1,6 @@
 msgid "RSNA DICOM Anonymizer Version"
 msgstr ""
 
-msgid "Config file not found: "
-msgstr ""
-
-msgid "no recent project list or current project set"
-msgstr ""
-
 msgid "Error writing json config file: "
 msgstr ""
 
@@ -278,6 +272,9 @@ msgid "Please wait..."
 msgstr ""
 
 msgid "Cancel"
+msgstr ""
+
+msgid "Config file not found: "
 msgstr ""
 
 msgid "Computed Radiography"
@@ -805,10 +802,7 @@ msgstr ""
 msgid "Welcome"
 msgstr ""
 
-msgid "The RSNA DICOM Anonymizer program is a free open-source tool for curating"
-msgstr ""
-
-msgid "and de-identifying DICOM studies."
+msgid "The RSNA DICOM Anonymizer program is a free open-source tool for curating and de-identifying DICOM studies."
 msgstr ""
 
 msgid "Easy to use, advanced DICOM expertise not required!"

@@ -106,7 +106,7 @@ if __name__ == "__main__":
                 "--noconfirm",
                 "--onedir",
                 "--splash",
-                "assets\\images\\rsna_logo_head_profile.png",
+                "assets\\icons\\rsna_logo_head_profile.png",
                 "--windowed",
                 "--add-data",
                 f"{customtkinter_path};customtkinter\\",
