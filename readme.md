@@ -1,7 +1,7 @@
 # RSNA DICOM Anonymizer V17
-[![de](https://img.shields.io/badge/lang-de-blue.svg)](README.de.md)
-[![es](https://img.shields.io/badge/lang-es-blue.svg)](README.es.md)
-[![fr](https://img.shields.io/badge/lang-fr-blue.svg)](README.fr.md)
+[![de](https://img.shields.io/badge/lang-de-blue.svg)](readme.de.md)
+[![es](https://img.shields.io/badge/lang-es-blue.svg)](readme.es.md)
+[![fr](https://img.shields.io/badge/lang-fr-blue.svg)](readme.fr.md)
 [![ci](https://github.com/mdevans/anonymizer/actions/workflows/build.yml/badge.svg)](https://github.com/mdevans/anonymizer/actions/workflows/build.yml)
 
 ![WelcomeView](src/assets/locales/en_US/html/images/Welcome_en_light.png)
