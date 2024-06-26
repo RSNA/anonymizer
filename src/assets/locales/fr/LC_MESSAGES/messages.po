@@ -818,7 +818,7 @@ msgid "The RSNA DICOM Anonymizer program is a free open-source tool for curating
 msgstr "Le programme RSNA DICOM Anonymizer est un outil open-source gratuit pour la curation et la dé-identification des études DICOM."
 
 msgid "Easy to use, advanced DICOM expertise not required!"
-msgstr "Facile à utiliser, pas besoin de compétences avancées en DICOM !"
+msgstr "Facile à utiliser, pas besoin de compétences avancées en DICOM!"
 
 msgid "Use it to ensure privacy by removing protected health information (PHI)."
 msgstr "Utilisez-le pour garantir la confidentialité en supprimant les informations de santé protégées (PHI)."

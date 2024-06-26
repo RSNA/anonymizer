@@ -195,7 +195,7 @@ class Anonymizer(ctk.CTk):
             warn_msg = (
                 "Config file not found: "
                 + self.CONFIG_FILENAME
-                + "default language set, recent project list or current project set"
+                + " default language set, recent project list or current project set"
             )
             logger.warning(warn_msg)
 

@@ -203,6 +203,8 @@ if __name__ == "__main__":
                 "PIL._tkinter_finder",
                 "--log-level",
                 "INFO",
+                "--icon",
+                "assets\\icons\\rsna_icon.png",
                 "--name",
                 build_version_name,
                 "--optimize",
@@ -211,7 +213,7 @@ if __name__ == "__main__":
             ]
         )
 
-        # TOODO: Add icon files to Linux build
+        # TOODO: Add icon files to Linux build, for future installer creation
         # Create the .desktop file
         # desktop_file_content = f"""[Desktop Entry]
         # Version={__version__}

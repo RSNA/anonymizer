@@ -35,7 +35,7 @@ def get_logs_dir(run_as_exe: bool, install_dir: str) -> str:
         elif platform.system() == "Darwin":
             return os.path.join(os.path.expanduser("~"), "Library", "Logs", EXE_LOG_DIR)
         elif platform.system() == "Linux":
-            return os.path.join("/var/log", EXE_LOG_DIR)
+            return os.path.join(os.path.expanduser("~"), "Logs", EXE_LOG_DIR)
         else:
             raise RuntimeError("Unsupported platform")
     else:

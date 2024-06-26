@@ -1,27 +1,31 @@
 # RSNA DICOM Anonymizer V17
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="src/assets/locales/en_US/html/images//Welcome_en_dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="src/assets/locales/en_US/html/images/Welcome_en_light.png">
-  <img alt="Welcome View" src="src/assets/locales/en_US/html/images/Welcome_en_light.png">
-</picture>
-![WelcomeView](src/assets/locales/en_US/html/images//Welcome_en.png)
+[![de](https://img.shields.io/badge/lang-de-blue.svg)](README.de.md)
+[![es](https://img.shields.io/badge/lang-es-blue.svg)](README.es.md)
+[![fr](https://img.shields.io/badge/lang-fr-blue.svg)](README.fr.md)
+[![ci](https://github.com/mdevans/anonymizer/actions/workflows/build.yml/badge.svg)](https://github.com/mdevans/anonymizer/actions/workflows/build.yml)
+
+![WelcomeView](src/assets/locales/en_US/html/images/Welcome_en_light.png)
 ## Installation 
 Select the correct binary download for your platform from the available [releases](https://github.com/mdevans/anonymizer/releases)
 ### Windows
 1. Download and extract zip to desired application directory.
 2. Execute Anonymizer.exe and override User Account Control to allow the program to "Run anyway".
+3. Logs will be written to `~/AppData/Local/Anonymizer`
 ### Mac OSX
 1. Download and extract zip file to desired application directory.
 2. Mount the disk by clicking the `Anonymizer_17.*.dmg` file where * is the relevant version.
 3. In the finder window presented, drag the Anonymzier icon to Applications folder.
 4. Wait for the Application to be decompressed and copied.
-4. Open a terminal (`/Applications/Utilities/Terminal`) 
-5. To remove extended attributes, in the terminal, execute the command: `xattr -rc /Applications/Anonymizer_17.*.app`.
-5. Double click the application icon to execute.
+5. Open a terminal (`/Applications/Utilities/Terminal`) 
+6. To remove extended attributes, in the terminal, execute the command: `xattr -rc /Applications/Anonymizer_17.*.app`.
+7. Double click the application icon to execute.
+8. Logs will be written to `~/Library/Logs/Anonymizer/anonymizer.log`
 ### Linux
 1. Download and extract zip file to desired application directory.
-2. `chmod +x Anonymizer_17.*` where * is the relevant version
-3. Execute `Anonymizer_17.*` 
+2. Open terminal cd to application directory
+3. `chmod +x Anonymizer_17.*` where * is the relevant version
+4. Execute `./Anonymizer_17.*` 
+5. Logs will be written to `~/Logs/Anonymizer/anonymizer.log`
 ## Documentation
 [Help files](https://mdevans.github.io/anonymizer/index.html)
 ## Development
@@ -39,13 +43,15 @@ Select the correct binary download for your platform from the available [release
 4. coverage report --omit="tests/*"
 ```
 ### Build executables
-1. If building on OSX ensure create-dmg is installed via brew: `brew install create-dmg`
+1. If building on OSX ensure create-dmg is installed: `brew install create-dmg`
 2. `pipenv shell` 
 3. `cd src`
 4. `python build.py`
-### CI/CD
-1. Github Actions controls CI/CD via: `.github/workflows/build.yml`
+5. Executable will be in `src/dist` 
+### Github Actions CI/CD
+1. See: `.github/workflows/build.yml`
 2. Triggered by push and pull request on master branch
+3. Includes executable build step using `build.py`
 3. If `__version__` contains 'RC' (aka Release Candidate) then build artifacts not automatically released.
 ### Code Metrics 
 #### Using radon
