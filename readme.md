@@ -1,4 +1,9 @@
 # RSNA DICOM Anonymizer V17
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="src/assets/locales/en_US/html/images//Welcome_en_dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="src/assets/locales/en_US/html/images/Welcome_en_light.png">
+  <img alt="Welcome View" src="src/assets/locales/en_US/html/images/Welcome_en_light.png">
+</picture>
 ![WelcomeView](src/assets/locales/en_US/html/images//Welcome_en.png)
 ## Installation 
 Select the correct binary download for your platform from the available [releases](https://github.com/mdevans/anonymizer/releases)
@@ -33,6 +38,15 @@ Select the correct binary download for your platform from the available [release
 3. coverage run -m pytest tests
 4. coverage report --omit="tests/*"
 ```
+### Build executables
+1. If building on OSX ensure create-dmg is installed via brew: `brew install create-dmg`
+2. `pipenv shell` 
+3. `cd src`
+4. `python build.py`
+### CI/CD
+1. Github Actions controls CI/CD via: `.github/workflows/build.yml`
+2. Triggered by push and pull request on master branch
+3. If `__version__` contains 'RC' (aka Release Candidate) then build artifacts not automatically released.
 ### Code Metrics 
 #### Using radon
 ```
@@ -51,6 +65,7 @@ Execute `assets/locales/extract_translations.sh`
 #### Updating translations:
 Execute `assets/locales/update_translations.sh`
 ### Software Architecture
+Full class diagram [here](class_diagram.md)
 ### Model 
 Two python classes pickled to files in project directory:
 #### 1. ProjectModel

@@ -6,20 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [17.1.1] -
 ### Radon raw totals:
-{'Blank': 1460, 'Comments': 759,'LLOC': 4918, 'LOC': 9397, 'Multi': 698,
-'SLOC': 6681, Single comments': 558}
-- Refactored source into src sub-directory
-- Full code documentation
-- Mermaid class diagrams, full: class_diagram.md, abridged in readme.md for Model, Controller, View
-- ThemeManager controls all UI colors, Treeview added, appearance mode tested
+{'LOC': 9597,
+ **'LLOC': 5038**,
+ 'SLOC': 6852,
+ 'Comments': 734,
+ 'Multi': 718,
+ 'Blank': 1498,
+ 'Single comments': 529}
+### Changed
+- Module structure refactor into src/ anticipating pypi module rsna-anonymizer for V18 for server cmd line deployment
 - Moved local_storage_path from storage module to ProjectController
+- OSX build process now createds dmg using create-dmg
+### Added
+- Full code documentation including mermaid class diagram
+- Translation infrastructure using gettext subsystem
+- German, Spanish, French translations for messages and html help files
+- Mermaid class diagrams, full: class_diagram.md, abridged in readme.md for Model, Controller, View
+- ThemeManager controls all UI colors, ttk.Treeview customized, appearance mode tested
 - pstuil module added for platform agnostic method of efficiently getting available memory
 - Available memory and ProjectController backoff threshold used to implement backoff algo in _handle_store
-- module structure refactor into src/ anticipating pypi module rsna-anonymizer for V18 for server cmd line deployment
+
 
 ## [17.1.0] - 2024-05-30
 ### Radon raw totals: 
-{'LOC': 8624, 'LLOC': 4846, 'SLOC': 6686, 'Comments': 800, 'Multi': 31, 'Blank': 1309, 'Single comments': 598}
+{'LOC': 8624, **'LLOC': 4846**, 'SLOC': 6686, 'Comments': 800, 'Multi': 31, 'Blank': 1309, 'Single comments': 598}
 ### Added
 - Add Default, Select All buttons to Transfer Classes View
 - Creating new project based on existing project settings, ie Clone Current Project Settings

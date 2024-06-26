@@ -504,6 +504,7 @@ classDiagram
     SettingsDialog "1" --* "1" DICOMNodeDialog: query_server
     SettingsDialog "1" --* "1" DICOMNodeDialog: export_server
     SettingsDialog "1" --* "1" AWSCognitoDialog: aws_cognito
+    SettingsDialog "1" --* "1" ModalitiesDialog: modalities
     SettingsDialog "1" --* "1" NetworkTimeoutsDialog: network_timeouts
     SettingsDialog "1" --* "1" SOPClassesDialog: sop_classes
     SettingsDialog "1" --* "1" TransferSyntaxesDialog: transfer_syntaxes
@@ -592,7 +593,8 @@ classDiagram
     Anonymizer "1" --* "1" ExportView: export_view
     Anonymizer "1" --* "1" Dashboard: dashboard
     Anonymizer "1" --* "*" HTMLView: help_views
-    Anonymizer "1" --* "1" SettingsDialog
+    Anonymizer "1" --* "1" SettingsDialog: settings
+    Anonymizer "1" --* "1" ImportFilesDialog: import_files
 
 
 

@@ -4,13 +4,14 @@
 *.log
 *.env
 *.spec
+*.zip
 *.coverage
 src/build/*
 src/dist/*
 logs/*
 dicom/*
-src/versionfile.txt
-src/radon_results.txt
-config.json
+**/versionfile.txt
+**/radon_results.txt
+**/config.json
 Pipfile.lock
 

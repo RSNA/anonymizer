@@ -21,4 +21,4 @@ with open("./radon_results.txt", "r") as file:
                 value = int(line.split(":")[1].strip())
                 totals[metric] += value
 
-pprint(totals)
+pprint(totals, sort_dicts=False)
