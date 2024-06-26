@@ -1,4 +1,4 @@
-: # RSNA DICOM Anonimizador V17
+# RSNA DICOM Anonimizador V17
 [![en](https://img.shields.io/badge/lang-en-blue.svg)](readme.md)
 [![de](https://img.shields.io/badge/lang-de-blue.svg)](readme.de.md)
 [![fr](https://img.shields.io/badge/lang-fr-blue.svg)](readme.fr.md)
