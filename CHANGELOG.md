@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Full code documentation including mermaid class diagram
 - Translation infrastructure using gettext subsystem
+- readme.md for each language
+- language and build status badges in readme
 - German, Spanish, French translations for messages and html help files
 - Mermaid class diagrams, full: class_diagram.md, abridged in readme.md for Model, Controller, View
 - ThemeManager controls all UI colors, ttk.Treeview customized, appearance mode tested

@@ -881,7 +881,6 @@ class Anonymizer(ctk.CTk):
             font=self.menu_font,
             command=self.open_project,  # accelerator="Command+O"
         )
-
         if self.recent_project_dirs:
             # Open Recent Menu (cascaded)
             open_recent_menu = tk.Menu(file_menu, tearoff=0, name="open_recent_menu")
@@ -893,15 +892,13 @@ class Anonymizer(ctk.CTk):
                     font=self.menu_font,
                     command=lambda dir=directory: self.open_project(dir),
                 )
-
-        if platform.system() == "Darwin":
-            file_menu.add_separator()
-            file_menu.add_command(
-                label=_("Exit"),
-                font=self.menu_font,
-                command=self.quit,
-                # accelerator="Command+Q",
-            )
+        file_menu.add_separator()
+        file_menu.add_command(
+            label=_("Exit"),
+            font=self.menu_font,
+            command=self.quit,
+            # accelerator="Command+Q",
+        )
         self.menu_bar.add_cascade(label=_("File"), font=self.menu_font, menu=file_menu)
 
         # Help Menu:
@@ -940,14 +937,13 @@ class Anonymizer(ctk.CTk):
             command=self.close_project,
             # accelerator="Command+P",
         )
-        if platform.system() == "Darwin":
-            file_menu.add_separator()
-            file_menu.add_command(
-                label=_("Exit"),
-                font=self.menu_font,
-                command=self.quit,
-                # accelerator="Command+Q",
-            )
+        file_menu.add_separator()
+        file_menu.add_command(
+            label=_("Exit"),
+            font=self.menu_font,
+            command=self.quit,
+            # accelerator="Command+Q",
+        )
         self.menu_bar.add_cascade(label=_("File"), font=self.menu_font, menu=file_menu)
 
         # View Menu:

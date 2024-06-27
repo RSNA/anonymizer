@@ -32,34 +32,35 @@ class QueryView(tk.Toplevel):
     MOVE_LEVELS = ["STUDY", "SERIES", "INSTANCE"]
     ux_poll_find_response_interval = 250  # milli-seconds
 
-    # C-FIND DICOM attributes to display in the results Treeview:
-    # Key: DICOM field name, Value: (display name, centre justify)
-    _attr_map = {
-        "PatientName": (_("Patient Name"), 20, False),
-        "PatientID": (_("Patient ID"), 15, True),
-        "StudyDate": (_("Date"), 10, True),
-        "StudyDescription": (_("Study Description"), 30, False),
-        "AccessionNumber": (_("Accession No."), 15, True),
-        "ModalitiesInStudy": (_("Modalities"), 12, True),
-        "NumberOfStudyRelatedSeries": (_("Series"), 10, True),
-        "NumberOfStudyRelatedInstances": (_("Images"), 10, True),
-        # not dicom fields, for display only:
-        "imported": (_("Imported"), 10, True),
-        "error": (_("Last Import Error"), 50, False),
-        # not for display, for find/move:
-        "StudyInstanceUID": (_("StudyInstanceUID"), 0, False),
-    }
-    _tree_column_keys = list(_attr_map.keys())[:-1]
-
     def __init__(
         self,
         parent: Dashboard,
         project_controller: ProjectController,
-        title: str = _(f"Query, Retrieve & Import Studies"),
+        title: str | None = None,
     ):
         super().__init__(master=parent)
+        # C-FIND DICOM attributes to display in the results Treeview:
+        # Key: DICOM field name, Value: (display name, centre justify)
+        self._attr_map = {
+            "PatientName": (_("Patient Name"), 20, False),
+            "PatientID": (_("Patient ID"), 15, True),
+            "StudyDate": (_("Date"), 10, True),
+            "StudyDescription": (_("Study Description"), 30, False),
+            "AccessionNumber": (_("Accession No."), 15, True),
+            "ModalitiesInStudy": (_("Modalities"), 12, True),
+            "NumberOfStudyRelatedSeries": (_("Series"), 10, True),
+            "NumberOfStudyRelatedInstances": (_("Images"), 10, True),
+            # not dicom fields, for display only:
+            "imported": (_("Imported"), 10, True),
+            "error": (_("Last Import Error"), 50, False),
+            # not for display, for find/move:
+            "StudyInstanceUID": (_("StudyInstanceUID"), 0, False),
+        }
+        self._tree_column_keys = list(self._attr_map.keys())[:-1]
         self._controller = project_controller
         scp_aet = project_controller.model.remote_scps["QUERY"].aet
+        if title is None:
+            title = _("Query, Retrieve & Import Studies")
         self.title(f"{title} from {scp_aet}")
         self._query_active = False
         self._acc_no_list: list[str] = []

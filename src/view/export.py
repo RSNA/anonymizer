@@ -21,26 +21,25 @@ logger = logging.getLogger(__name__)
 class ExportView(tk.Toplevel):
     ux_poll_export_response_interval = 500  # milli-seconds
 
-    # Export attributes to display in the results Treeview:
-    # Key: column id: (column name, width, centre justify)
-    _attr_map = {
-        "Patient_Name": (_("Patient Name"), 20, False),
-        "Anon_PatientID": (_("Anonymized ID"), 15, True),
-        "Studies": (_("Studies"), 7, True),
-        "Series": (_("Series"), 7, True),
-        "Files": (_("Images"), 7, True),
-        "DateTime": (_("Date Time"), 15, True),
-        "FilesSent": (_("Images Sent"), 12, True),
-        "Error": (_("Last Export Error"), 50, False),
-    }
-
     def __init__(
         self,
         parent: Dashboard,
         project_controller: ProjectController,
-        title: str = _("Export Studies"),
+        title: str | None = None,
     ):
         super().__init__(master=parent)
+        # Export attributes to display in the results Treeview:
+        # Key: column id: (column name, width, centre justify)
+        self._attr_map = {
+            "Patient_Name": (_("Patient Name"), 20, False),
+            "Anon_PatientID": (_("Anonymized ID"), 15, True),
+            "Studies": (_("Studies"), 7, True),
+            "Series": (_("Series"), 7, True),
+            "Files": (_("Images"), 7, True),
+            "DateTime": (_("Date Time"), 15, True),
+            "FilesSent": (_("Images Sent"), 12, True),
+            "Error": (_("Last Export Error"), 50, False),
+        }
         self._parent = parent
         self._controller = project_controller
         self._project_model: ProjectModel = project_controller.model
@@ -49,6 +48,9 @@ class ExportView(tk.Toplevel):
             dest = self._project_model.remote_scps["EXPORT"].aet
         else:
             dest = f"{self._project_model.aws_cognito.username}@AWS/{self._project_model.project_name}"
+
+        if title is None:
+            title = _("Export") + " " + _("Studies")
 
         self.title(f"{title} to {dest}")
         self._export_active = False
@@ -113,7 +115,7 @@ class ExportView(tk.Toplevel):
         self._tree.bind("<Down>", lambda e: "break")
 
         # Progress bar and status:
-        self._status = ctk.CTkLabel(self._export_frame, text=f"Processing 0 of 0 Patients")
+        self._status = ctk.CTkLabel(self._export_frame, text=_("Processing") + " _ " + _("of") + " _ " + _("Patients"))
         self._status.grid(row=1, column=0, padx=PAD, pady=0, sticky="w")
 
         self._progressbar = ctk.CTkProgressBar(
@@ -287,7 +289,7 @@ class ExportView(tk.Toplevel):
             logger.info(f"PHI CSV file created: {csv_path}")
             messagebox.showinfo(
                 title=_("PHI CSV File Created"),
-                message=f"PHI Lookup Data saved to:\n\n{csv_path}",
+                message=_("PHI Lookup Data saved to") + f":\n\n{csv_path}",
                 parent=self,
             )
 
@@ -299,12 +301,12 @@ class ExportView(tk.Toplevel):
             return
         self._progressbar.set(self._patients_processed / self._patients_to_process)
         if self._patients_processed == self._patients_to_process:
-            self._status.configure(text=f"Processed {self._patients_to_process} Patients")
+            self._status.configure(text=_("Processed") + f" {self._patients_to_process} Patients")
         else:
             if self._patients_to_process == 1:
-                msg = f"Processing {self._patients_processed+1}" + " Patient"
+                msg = _("Processing") + f" {self._patients_processed+1} " + _("Patient")
             else:
-                msg = f"Processing {self._patients_processed+1} of {self._patients_to_process} Patients"
+                msg = _("Processing") + f" {self._patients_processed+1} " + _("of") + f" {self._patients_to_process} " + _("Patients")
             self._status.configure(text=msg)
 
     def _cancel_export_button_pressed(self):
@@ -360,7 +362,7 @@ class ExportView(tk.Toplevel):
                 logger.error(f"Failed to export {len(self._patient_ids_to_export)} patients")
                 if messagebox.askretrycancel(
                     title=_("Export Error"),
-                    message=_("Failed to export") + f" {len(self._patient_ids_to_export)}" + _("patient(s)"),
+                    message=_("Failed to export") + f" {len(self._patient_ids_to_export)} " + _("patient(s)"),
                     parent=self,
                 ):
                     # Select failed patients in treeview to retry export:

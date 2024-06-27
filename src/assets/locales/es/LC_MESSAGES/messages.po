@@ -157,6 +157,9 @@ msgstr "Abrir Proyecto"
 msgid "Open Recent"
 msgstr "Abrir Reciente"
 
+msgid "Exit"
+msgstr "Salir"
+
 msgid "File"
 msgstr "Archivo"
 
@@ -355,6 +358,9 @@ msgstr "Imágenes"
 msgid "Anonymizer Queue"
 msgstr "Cola de Anonimizador"
 
+msgid "server online"
+msgstr "servidor en línea"
+
 msgid "Connection Error"
 msgstr "Error de Conexión"
 
@@ -385,6 +391,9 @@ msgstr "Comprobando que el servidor DICOM de exportación esté en línea"
 msgid "AWS Authentication Failed"
 msgstr "Falló la autenticación de AWS"
 
+msgid "Check Project Settings/AWS Cognito and ensure all parameters are correct."
+msgstr "Verifique la configuración del proyecto/AWS Cognito y asegúrese de que todos los parámetros sean correctos."
+
 msgid "AWS Authenticated"
 msgstr "Autenticación AWS"
 
@@ -403,8 +412,11 @@ msgstr "Imágenes Enviadas"
 msgid "Last Export Error"
 msgstr "Último Error de Exportación"
 
-msgid "Export Studies"
-msgstr "Exportar Estudios"
+msgid "Processing"
+msgstr "Procesando"
+
+msgid "of"
+msgstr "de"
 
 msgid "Cancel Export"
 msgstr "Cancelar Exportación"
@@ -426,6 +438,15 @@ msgstr "Error al Crear Archivo CSV de PHI"
 
 msgid "PHI CSV File Created"
 msgstr "Archivo CSV de PHI Creado"
+
+msgid "PHI Lookup Data saved to"
+msgstr "Datos de búsqueda PHI guardados en"
+
+msgid "Processed"
+msgstr "Procesado"
+
+msgid "Patient"
+msgstr "Pacientes"
 
 msgid "Export Error"
 msgstr "Error de Exportación"
@@ -480,9 +501,6 @@ msgstr "en"
 
 msgid "level"
 msgstr "nivel"
-
-msgid "of"
-msgstr "de"
 
 msgid "Import Finished"
 msgstr "Importación Finalizada"
@@ -541,8 +559,8 @@ msgstr "Mostrar Estudios Importados"
 msgid "Cancel Query"
 msgstr "Cancelar Consulta"
 
-msgid "Processing"
-msgstr "Procesando"
+msgid "Found"
+msgstr "Encontrados"
 
 msgid "Studies Selected"
 msgstr "Estudios Seleccionados"
@@ -591,9 +609,6 @@ msgstr "Criterios de Consulta"
 
 msgid "Enter at least one search criterion"
 msgstr "Ingrese al menos un criterio de búsqueda"
-
-msgid "Found"
-msgstr "Encontrados"
 
 msgid " Studies"
 msgstr " Estudios"
@@ -834,3 +849,6 @@ msgstr "Vaya a Ayuda/Operación para obtener instrucciones sobre cómo usar el p
 
 msgid "Select File/New Project to start."
 msgstr "Seleccione Archivo/Nuevo Proyecto para comenzar."
+
+#~ msgid "Export Studies"
+#~ msgstr "Exportar Estudios"

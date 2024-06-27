@@ -126,7 +126,7 @@ class Dashboard(ctk.CTkFrame):
         logger.info(er)
         if er.success:
             button.configure(state="normal", text_color="light green")
-            self._status.configure(text=f"{scp_name} server online")
+            self._status.configure(text=f"{scp_name} " + _("server online"))
             callback()
         else:
             messagebox.showerror(
@@ -181,7 +181,7 @@ class Dashboard(ctk.CTkFrame):
                 + ":"
                 + f"\n\n{self._controller._aws_last_error}"
                 + "\n\n"
-                + "Check Project Settings/AWS Cognito and ensure all parameters are correct.",
+                + _("Check Project Settings/AWS Cognito and ensure all parameters are correct."),
                 parent=self,
             )
             self._status.configure(text="")

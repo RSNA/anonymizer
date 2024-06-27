@@ -772,11 +772,11 @@ msgstr "Java-Anonymisierer-Indexdatei auswählen"
 msgid "Excel Files"
 msgstr "Excel-Dateien"
 
-msgid "Error reading Java Anonymisierer Index File"
-msgstr "Fehler beim Lesen der Java-Anonymisierer-Indexdatei"
+msgid "Error reading Java Anonymizer Index File"
+msgstr "Fehler beim Lesen der Java Anonymisierer Indexdatei"
 
-msgid "Load Java Anonymisierer Index File Error"
-msgstr "Fehler beim Laden der Java-Anonymisierer-Indexdatei"
+msgid "Load Java Anonymizer Index File Error"
+msgstr "Fehler beim Laden der Java Anonymisierer Indexdatei"
 
 msgid "No PHI data records found in:"
 msgstr "Keine PHI-Datensätze gefunden in:"
@@ -793,7 +793,7 @@ msgstr "Standort-ID, UID-Wurzel wird aus dem ersten PHI-Datensatz abgeleitet."
 msgid "Please enter your Project Name and configure all other settings below."
 msgstr "Bitte geben Sie Ihren Projektnamen ein und konfigurieren Sie alle weiteren Einstellungen unten."
 
-msgid "The Java Index data will be processed into the Python Anonymisierer database when the project is created."
+msgid "The Java Index data will be processed into the Python Anonymizer database when the project is created."
 msgstr "Die Java Indexdaten werden in die Python Anonymisierer Datenbank verarbeitet, wenn das Projekt erstellt wird."
 
 msgid "Class Name"

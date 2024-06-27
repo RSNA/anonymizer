@@ -13,13 +13,6 @@ msgstr ""
 msgid "RSNA DICOM Anonymizer Version"
 msgstr "RSNA DICOM Anonymizer Version"
 
-msgid "Config file not found: "
-msgstr "Config file not found: "
-
-#, fuzzy
-msgid "default language set, recent project list or current project set"
-msgstr "no recent project list or current project set"
-
 msgid "Error writing json config file: "
 msgstr "Error writing json config file: "
 
@@ -292,6 +285,9 @@ msgstr "Please wait..."
 
 msgid "Cancel"
 msgstr "Cancel"
+
+msgid "Config file not found: "
+msgstr "Config file not found: "
 
 msgid "Computed Radiography"
 msgstr "Computed Radiography"
@@ -838,6 +834,3 @@ msgstr "Go to Help/Operation for instructions on how to use the program."
 
 msgid "Select File/New Project to start."
 msgstr "Select File/New Project to start."
-
-#~ msgid "THIS IS A MY NEW MESSAGE TO TRANSLATE"
-#~ msgstr "THIS IS A MY NEW MESSAGE TO TRANSLATE"
