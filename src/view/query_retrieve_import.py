@@ -41,8 +41,8 @@ class QueryView(tk.Toplevel):
         "StudyDescription": (_("Study Description"), 30, False),
         "AccessionNumber": (_("Accession No."), 15, True),
         "ModalitiesInStudy": (_("Modalities"), 12, True),
-        "NumberOfStudyRelatedSeries": (_("Series"), 6, True),
-        "NumberOfStudyRelatedInstances": (_("Images"), 6, True),
+        "NumberOfStudyRelatedSeries": (_("Series"), 10, True),
+        "NumberOfStudyRelatedInstances": (_("Images"), 10, True),
         # not dicom fields, for display only:
         "imported": (_("Imported"), 10, True),
         "error": (_("Last Import Error"), 50, False),
@@ -241,7 +241,10 @@ class QueryView(tk.Toplevel):
 
         # Progress bar and status:
         col = 0
-        self._status = ctk.CTkLabel(self._results_frame, text=_("Processing") + " 0" + _("of") + " 0 " + _("Studies"))
+        self._status = ctk.CTkLabel(
+            self._results_frame, font=self.master.master.mono_font, text=_("Found") + " __ " + _("Studies")
+        )
+
         self._status.grid(row=results_row, column=col, padx=PAD, pady=0, sticky="w")
 
         col += 1
@@ -737,6 +740,9 @@ class QueryView(tk.Toplevel):
 
     def _on_cancel(self):
         logger.info(f"_on_cancel")
+
+        if self._controller.bulk_move_active():
+            return
 
         if self._query_active and not messagebox.askokcancel(
             title=_("Cancel"), message=_("Cancel active Query?"), parent=self

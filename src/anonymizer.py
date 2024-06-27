@@ -1,5 +1,6 @@
 import os, sys, json, shutil, time, platform
 from pathlib import Path
+from pprint import pformat
 from copy import copy
 import logging
 import pickle
@@ -18,6 +19,7 @@ from pydicom.encoders import (
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import customtkinter as ctk
+from customtkinter import ThemeManager
 
 from utils.logging import init_logging
 from __version__ import __version__
@@ -37,11 +39,15 @@ logger = logging.getLogger()  # ROOT logger
 
 class Anonymizer(ctk.CTk):
     THEME_FILE = "assets/themes/rsna_theme.json"
-    CONFIG_FILENAME = "config.json"  # global state, eg. recent projects
+    APP_STATE_PATH = Path.home() / ".anonymizer_state.json"  # language/recent projects/current project
 
     project_open_startup_dwell_time = 100  # milliseconds
     metrics_loop_interval = 1000  # milliseconds
-    menu_font = ("", 13)  # Font for main menu items, not consisetent across platforms
+    # Font for main menu items, size is not consistent across platforms
+    if platform.system() == "Darwin":
+        menu_font = ("", 13)
+    else:
+        menu_font = ("", 10)
 
     def get_title(self):
         return _("RSNA DICOM Anonymizer Version") + " " + __version__
@@ -54,12 +60,16 @@ class Anonymizer(ctk.CTk):
             logger.error(f"Theme file not found: {theme}, reverting to dark-blue theme")
             theme = "dark-blue"
         ctk.set_default_color_theme(theme)
+        logging.info(f"ctk.ThemeManager.theme:\n{pformat(ThemeManager.theme)}")
         self.mono_font = self._init_mono_font()
         ctk.AppearanceModeTracker.add(self._appearance_mode_change)
         self._appearance_mode_change(ctk.get_appearance_mode())  # initialize non-ctk widget styles
 
         if sys.platform.startswith("win"):
             self.iconbitmap("assets\\icons\\rsna_icon.ico", default="assets\\icons\\rsna_icon.ico")
+
+        self.recent_project_dirs: set[Path] = []
+        self.current_open_project_dir: Path | None = None
 
         self.load_config()  # may set language
         self.controller: ProjectController | None = None
@@ -71,8 +81,6 @@ class Anonymizer(ctk.CTk):
         self.resizable(False, False)
         self.title(self.get_title())
         self.menu_bar = tk.Menu(master=self)
-        self.recent_project_dirs: set[Path] = []
-        self.current_open_project_dir: Path | None = None
         self.set_menu_project_closed()  # creates self.menu_bar, populates Open Recent list & Help Menu
         self.after(self.project_open_startup_dwell_time, self._open_project_startup)
 
@@ -142,7 +150,9 @@ class Anonymizer(ctk.CTk):
             foreground=[("selected", selected_color)],
             font=[("selected", str(self.mono_font))],
         )
-        treestyle.configure("Treeview.Heading", background=bg_color, foreground=text_color, font=ctk.CTkFont())
+        treestyle.configure(
+            "Treeview.Heading", background=bg_color, foreground=text_color, font=ctk.CTkFont()
+        )  # size is larger on windows?
 
     # Callback from WelcomeView
     def change_language(self, language):
@@ -169,13 +179,10 @@ class Anonymizer(ctk.CTk):
         self.after(self.metrics_loop_interval, self.metrics_loop)
 
     def load_config(self):
+        logger.info(f"Load Config: {self.APP_STATE_PATH}")
         try:
-            with open(self.CONFIG_FILENAME, "r") as config_file:
-                try:
-                    config_data = json.load(config_file)
-                except Exception as e:
-                    logger.error("Config file corrupt, start with no global config set")
-                    return
+            with open(self.APP_STATE_PATH.as_posix(), "r") as config_file:
+                config_data = json.load(config_file)
 
                 if "language" in config_data:
                     config_lang = config_data["language"]
@@ -194,22 +201,23 @@ class Anonymizer(ctk.CTk):
         except FileNotFoundError:
             warn_msg = (
                 "Config file not found: "
-                + self.CONFIG_FILENAME
+                + str(self.APP_STATE_PATH)
                 + " default language set, recent project list or current project set"
             )
             logger.warning(warn_msg)
 
     def save_config(self):
+        logger.info(f"Save Config: {self.APP_STATE_PATH}")
         try:
             config_data = {
                 "language": get_current_language(),
                 "recent_project_dirs": [str(path) for path in self.recent_project_dirs],
                 "current_open_project_dir": str(self.current_open_project_dir) or "",
             }
-            with open(self.CONFIG_FILENAME, "w") as config_file:
+            with open(self.APP_STATE_PATH.as_posix(), "w") as config_file:
                 json.dump(config_data, config_file, indent=2)
         except Exception as e:
-            err_msg = _("Error writing json config file: ") + f"{self.CONFIG_FILENAME} : {repr(e)}"
+            err_msg = _("Error writing json config file: ") + f"{str(self.APP_STATE_PATH)} : {repr(e)}"
             logger.error(err_msg)
             messagebox.showerror(
                 title=_("Configuration File Write Error"),
@@ -437,6 +445,24 @@ class Anonymizer(ctk.CTk):
         logger.info(f"metrics_loop start interval={self.metrics_loop_interval}ms")
         self.metrics_loop()
 
+    def shutdown_controller(self):
+        logger.info("shutdown_controller")
+        if self.dashboard:
+            self.dashboard.destroy()
+            self.dashboard = None
+        if self.controller:
+            self.controller.stop_scp()
+            self.controller.shutdown()
+            self.controller.save_model()
+            self.controller.anonymizer.save_model()
+            self.controller.anonymizer.stop()
+            if self.query_view:
+                self.query_view.destroy()
+                self.query_view = None
+            if self.export_view:
+                self.export_view.destroy()
+                self.export_view = None
+
     def close_project(self, event=None):
         logging.info("Close Project")
         if self.query_view and self.query_view.busy():
@@ -455,25 +481,12 @@ class Anonymizer(ctk.CTk):
                 parent=self,
             )
             return
-        if self.dashboard:
-            self.dashboard.destroy()
-            self.dashboard = None
-        if self.controller:
-            self.controller.stop_scp()
-            self.controller.shutdown()
-            self.controller.save_model()
-            self.controller.anonymizer.save_model()
-            self.controller.anonymizer.stop()
-            if self.query_view:
-                self.query_view.destroy()
-                self.query_view = None
-            if self.export_view:
-                self.export_view.destroy()
-                self.export_view = None
 
-            self.welcome_view = WelcomeView(self, self.change_language)
-            self.protocol("WM_DELETE_WINDOW", self.quit)
-            self.focus_force()
+        self.shutdown_controller()
+
+        self.welcome_view = WelcomeView(self, self.change_language)
+        self.protocol("WM_DELETE_WINDOW", self.quit)
+        self.focus_force()
 
         self.current_open_project_dir = None
         self.controller = None
@@ -881,6 +894,14 @@ class Anonymizer(ctk.CTk):
                     command=lambda dir=directory: self.open_project(dir),
                 )
 
+        if platform.system() == "Darwin":
+            file_menu.add_separator()
+            file_menu.add_command(
+                label=_("Exit"),
+                font=self.menu_font,
+                command=self.quit,
+                # accelerator="Command+Q",
+            )
         self.menu_bar.add_cascade(label=_("File"), font=self.menu_font, menu=file_menu)
 
         # Help Menu:
@@ -919,6 +940,14 @@ class Anonymizer(ctk.CTk):
             command=self.close_project,
             # accelerator="Command+P",
         )
+        if platform.system() == "Darwin":
+            file_menu.add_separator()
+            file_menu.add_command(
+                label=_("Exit"),
+                font=self.menu_font,
+                command=self.quit,
+                # accelerator="Command+Q",
+            )
         self.menu_bar.add_cascade(label=_("File"), font=self.menu_font, menu=file_menu)
 
         # View Menu:
@@ -982,6 +1011,8 @@ def main():
             pass
 
     app.mainloop()
+
+    app.shutdown_controller()
 
     logger.info("ANONYMIZER GUI Stop.")
 

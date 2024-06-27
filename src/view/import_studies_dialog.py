@@ -187,9 +187,9 @@ class ImportStudiesDialog(tk.Toplevel):
                 study_or_studies = "Study" if len(self.studies) == 1 else "Studies"
                 self._import_status_label.configure(
                     text=_("Importing")
-                    + f"{self._study_metadata_retrieved} {study_or_studies}"
+                    + f" {self._study_metadata_retrieved} {study_or_studies} "
                     + _("at")
-                    + f" {self._move_level}"
+                    + f" {self._move_level} "
                     + _("level")
                     + "..."
                 )
@@ -201,7 +201,7 @@ class ImportStudiesDialog(tk.Toplevel):
         imported = self._instances_to_import - total_pending_instances
         self._import_progress_bar.set(imported / self._instances_to_import)
         self._import_progress_label.configure(
-            text=f"{imported} " + _("of") + f" {self._instances_to_import}" + _("Images")
+            text=f"{imported} " + _("of") + f" {self._instances_to_import} " + _("Images")
         )
 
         if self._controller.bulk_move_active():
@@ -218,8 +218,8 @@ class ImportStudiesDialog(tk.Toplevel):
         logger.info(f"_on_cancel")
         if self._controller.bulk_move_active():
             if messagebox.askyesno(
-                _("Warning"),
-                _("Cancelling the move operation may not stop transfers from the remote server.")
+                title=_("Warning"),
+                message=_("Cancelling the move operation may not stop transfers from the remote server.")
                 + "\n\n"
                 + _("Are you sure you want to continue?"),
             ):
