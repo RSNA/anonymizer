@@ -29,14 +29,6 @@ class AnonymizerController:
     ANONYMIZER_MODEL_FILENAME = "AnonymizerModel.pkl"
     DEIDENTIFICATION_METHOD = "RSNA DICOM ANONYMIZER"  # (0012,0063)
 
-    # Quarantine Errors / Sub-directories:
-    QUARANTINE_INVALID_DICOM = "Invalid_DICOM"
-    QUARANTINE_DICOM_READ_ERROR = "DICOM_Read_Error"
-    QUARANTINE_MISSING_ATTRIBUTES = "Missing_Attributes"
-    QUARANTINE_INVALID_STORAGE_CLASS = "Invalid_Storage_Class"
-    QUARANTINE_CAPTURE_PHI_ERROR = "Capture_PHI_Error"
-    QUARANTINE_STORAGE_ERROR = "Storage_Error"
-
     # See assets/docs/RSNA-Covid-19-Deindentification-Protocol.pdf
     # TODO: if user edits default anonymization script these values should be updated accordingly
     # TODO: simpler to provide UX for different de-identification methods, esp. enable/disable sub-options
@@ -67,6 +59,13 @@ class AnonymizerController:
     ]
 
     def __init__(self, project_model: ProjectModel):
+        # Quarantine Errors / Sub-directories:
+        self.QUARANTINE_INVALID_DICOM = _("Invalid_DICOM")
+        self.QUARANTINE_DICOM_READ_ERROR = _("DICOM_Read_Error")
+        self.QUARANTINE_MISSING_ATTRIBUTES = _("Missing_Attributes")
+        self.QUARANTINE_INVALID_STORAGE_CLASS = _("Invalid_Storage_Class")
+        self.QUARANTINE_CAPTURE_PHI_ERROR = _("Capture_PHI_Error")
+        self.QUARANTINE_STORAGE_ERROR = _("Storage_Error")
         self._active = False
         self.project_model = project_model
         # Initialise AnonymizerModel datafile full path:

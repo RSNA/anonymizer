@@ -157,6 +157,9 @@ msgstr "Open Project"
 msgid "Open Recent"
 msgstr "Open Recent"
 
+msgid "Exit"
+msgstr "Exit"
+
 msgid "File"
 msgstr "File"
 
@@ -355,6 +358,9 @@ msgstr "Images"
 msgid "Anonymizer Queue"
 msgstr "Anonymizer Queue"
 
+msgid "server online"
+msgstr "server online"
+
 msgid "Connection Error"
 msgstr "Connection Error"
 
@@ -385,6 +391,9 @@ msgstr "Checking Export DICOM Server is online"
 msgid "AWS Authentication Failed"
 msgstr "AWS Authentication Failed"
 
+msgid "Check Project Settings/AWS Cognito and ensure all parameters are correct."
+msgstr "Check Project Settings/AWS Cognito and ensure all parameters are correct."
+
 msgid "AWS Authenticated"
 msgstr "AWS Authenticated"
 
@@ -403,8 +412,11 @@ msgstr "Images Sent"
 msgid "Last Export Error"
 msgstr "Last Export Error"
 
-msgid "Export Studies"
-msgstr "Export Studies"
+msgid "Processing"
+msgstr "Processing"
+
+msgid "of"
+msgstr "of"
 
 msgid "Cancel Export"
 msgstr "Cancel Export"
@@ -426,6 +438,15 @@ msgstr "Error Creating PHI CSV File"
 
 msgid "PHI CSV File Created"
 msgstr "PHI CSV File Created"
+
+msgid "PHI Lookup Data saved to"
+msgstr "PHI Lookup Data saved to"
+
+msgid "Processed"
+msgstr "Processed"
+
+msgid "Patient"
+msgstr "Patient"
 
 msgid "Export Error"
 msgstr "Export Error"
@@ -480,9 +501,6 @@ msgstr "at"
 
 msgid "level"
 msgstr "level"
-
-msgid "of"
-msgstr "of"
 
 msgid "Import Finished"
 msgstr "Import Finished"
@@ -541,8 +559,8 @@ msgstr "Show Imported Studies"
 msgid "Cancel Query"
 msgstr "Cancel Query"
 
-msgid "Processing"
-msgstr "Processing"
+msgid "Found"
+msgstr "Found"
 
 msgid "Studies Selected"
 msgstr "Studies Selected"
@@ -591,9 +609,6 @@ msgstr "Query Criteria"
 
 msgid "Enter at least one search criterion"
 msgstr "Enter at least one search criterion"
-
-msgid "Found"
-msgstr "Found"
 
 msgid " Studies"
 msgstr " Studies"
@@ -834,3 +849,6 @@ msgstr "Go to Help/Operation for instructions on how to use the program."
 
 msgid "Select File/New Project to start."
 msgstr "Select File/New Project to start."
+
+#~ msgid "Export Studies"
+#~ msgstr "Export Studies"

@@ -166,6 +166,24 @@ msgstr ""
 msgid "Settings"
 msgstr ""
 
+msgid "Invalid_DICOM"
+msgstr ""
+
+msgid "DICOM_Read_Error"
+msgstr ""
+
+msgid "Missing_Attributes"
+msgstr ""
+
+msgid "Invalid_Storage_Class"
+msgstr ""
+
+msgid "Capture_PHI_Error"
+msgstr ""
+
+msgid "Storage_Error"
+msgstr ""
+
 msgid "Dataset missing required attributes"
 msgstr ""
 
@@ -214,6 +232,9 @@ msgstr ""
 msgid "Unable to retrieve UID Hierarchy for reliable import operation via DICOM C-MOVE."
 msgstr ""
 
+msgid "Server"
+msgstr ""
+
 msgid "did not return the number of instances in a series."
 msgstr ""
 
@@ -259,6 +280,18 @@ msgstr ""
 msgid "Number of Instances"
 msgstr ""
 
+msgid "private"
+msgstr ""
+
+msgid "public"
+msgstr ""
+
+msgid "phi_export"
+msgstr ""
+
+msgid "quarantine"
+msgstr ""
+
 msgid "MY_PROJECT"
 msgstr ""
 
@@ -266,6 +299,12 @@ msgid "ANONYMIZER_STORE"
 msgstr ""
 
 msgid "ANONYMIZER"
+msgstr ""
+
+msgid "QUERY"
+msgstr ""
+
+msgid "EXPORT"
 msgstr ""
 
 msgid "Progress Dialog"
@@ -356,9 +395,6 @@ msgid "Server Failed DICOM ECHO"
 msgstr ""
 
 msgid "Check Project Settings"
-msgstr ""
-
-msgid "Server"
 msgstr ""
 
 msgid "Ensure the remote server is setup to allow the local server for echo and storage services."
@@ -526,6 +562,15 @@ msgstr ""
 msgid "StudyInstanceUID"
 msgstr ""
 
+msgid "STUDY"
+msgstr ""
+
+msgid "SERIES"
+msgstr ""
+
+msgid "INSTANCE"
+msgstr ""
+
 msgid "Query, Retrieve & Import Studies"
 msgstr ""
 
@@ -554,9 +599,6 @@ msgid "Studies Selected"
 msgstr ""
 
 msgid "Move Level"
-msgstr ""
-
-msgid "STUDY"
 msgstr ""
 
 msgid "Import & Anonymize"

@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 class QueryView(tk.Toplevel):
-    MOVE_LEVELS = ["STUDY", "SERIES", "INSTANCE"]
+
     ux_poll_find_response_interval = 250  # milli-seconds
 
     def __init__(
@@ -56,9 +56,10 @@ class QueryView(tk.Toplevel):
             # not for display, for find/move:
             "StudyInstanceUID": (_("StudyInstanceUID"), 0, False),
         }
+        self.MOVE_LEVELS = [_("STUDY"), _("SERIES"), _("INSTANCE")]
         self._tree_column_keys = list(self._attr_map.keys())[:-1]
         self._controller = project_controller
-        scp_aet = project_controller.model.remote_scps["QUERY"].aet
+        scp_aet = project_controller.model.remote_scps[_("QUERY")].aet
         if title is None:
             title = _("Query, Retrieve & Import Studies")
         self.title(f"{title} from {scp_aet}")
@@ -466,7 +467,7 @@ class QueryView(tk.Toplevel):
 
         # TODO: remove this echo test? Rely on connection error from query?
         # OR implement using background thread to handle connection or long timeout errors
-        if self._controller.echo("QUERY"):
+        if self._controller.echo(_("QUERY")):
             self._query_button.configure(text_color="light green")
         else:
             self._query_button.configure(text_color="red")
@@ -542,7 +543,7 @@ class QueryView(tk.Toplevel):
 
         ux_Q = Queue()
         req: FindStudyRequest = FindStudyRequest(
-            "QUERY",
+            _("QUERY"),
             self._patient_name_var.get(),
             self._patient_id_var.get(),
             (accession_no if self._acc_no_list == [] else self._acc_no_list),

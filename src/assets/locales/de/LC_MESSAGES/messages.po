@@ -178,6 +178,24 @@ msgstr "Projekt"
 msgid "Settings"
 msgstr "Einstellungen"
 
+msgid "Invalid_DICOM"
+msgstr "Ungültiges_DICOM"
+
+msgid "DICOM_Read_Error"
+msgstr "DICOM_Lese_Fehler"
+
+msgid "Missing_Attributes"
+msgstr "Fehlende_Attribute"
+
+msgid "Invalid_Storage_Class"
+msgstr "Ungültige_Speicherklasse"
+
+msgid "Capture_PHI_Error"
+msgstr "PHI_Erfassungs_Fehler"
+
+msgid "Storage_Error"
+msgstr "Speicher_Fehler"
+
 msgid "Dataset missing required attributes"
 msgstr "Datensatz fehlt erforderliche Attribute"
 
@@ -226,6 +244,9 @@ msgstr "IdentityId Token nicht in der Antwort"
 msgid "Unable to retrieve UID Hierarchy for reliable import operation via DICOM C-MOVE."
 msgstr "UID-Hierarchie für zuverlässigen Importvorgang über DICOM C-MOVE kann nicht abgerufen werden."
 
+msgid "Server"
+msgstr "Server"
+
 msgid "did not return the number of instances in a series."
 msgstr "hat die Anzahl der Instanzen in einer Serie nicht zurückgegeben."
 
@@ -271,6 +292,18 @@ msgstr "Anzahl der Serien"
 msgid "Number of Instances"
 msgstr "Anzahl der Instanzen"
 
+msgid "private"
+msgstr "privat"
+
+msgid "public"
+msgstr "öffentlich"
+
+msgid "phi_export"
+msgstr "phi_export"
+
+msgid "quarantine"
+msgstr "quarantäne"
+
 msgid "MY_PROJECT"
 msgstr "MEIN_PROJEKT"
 
@@ -279,6 +312,12 @@ msgstr "ANONYMISIERER-SPEICHER"
 
 msgid "ANONYMIZER"
 msgstr "ANONYMISIERER"
+
+msgid "QUERY"
+msgstr ""
+
+msgid "EXPORT"
+msgstr ""
 
 msgid "Progress Dialog"
 msgstr "Fortschrittsdialog"
@@ -369,9 +408,6 @@ msgstr "Server hat DICOM ECHO fehlgeschlagen"
 
 msgid "Check Project Settings"
 msgstr "Projekteinstellungen prüfen"
-
-msgid "Server"
-msgstr "Server"
 
 msgid "Ensure the remote server is setup to allow the local server for echo and storage services."
 msgstr "Stellen Sie sicher, dass der Remote-Server so eingerichtet ist, dass der lokale Server für Echo- und Speicherdienste zugelassen wird."
@@ -538,6 +574,15 @@ msgstr "Letzter Importfehler"
 msgid "StudyInstanceUID"
 msgstr "Studieninstanz-UID"
 
+msgid "STUDY"
+msgstr "STUDIE"
+
+msgid "SERIES"
+msgstr ""
+
+msgid "INSTANCE"
+msgstr ""
+
 msgid "Query, Retrieve & Import Studies"
 msgstr "Studien abfragen, abrufen und importieren"
 
@@ -567,9 +612,6 @@ msgstr "Ausgewählte Studien"
 
 msgid "Move Level"
 msgstr "Verschiebe-Ebene"
-
-msgid "STUDY"
-msgstr "STUDIE"
 
 msgid "Import & Anonymize"
 msgstr "Importieren und anonymisieren"

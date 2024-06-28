@@ -1438,9 +1438,11 @@ class ProjectController(AE):
                     if not instance_level and not instance_count:
                         raise DICOMRuntimeError(
                             _("Unable to retrieve UID Hierarchy for reliable import operation via DICOM C-MOVE.")
-                            + f"\n\n{scp_name}"
+                            + f" {scp_name} "
+                            + _("Server")
+                            + " "
                             + _("did not return the number of instances in a series.")
-                            + "\n\n"
+                            + " "
                             + _(
                                 "Standard DICOM field (0020,1209) NumberOfSeriesRelatedInstances is missing in the query response."
                             )

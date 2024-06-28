@@ -45,7 +45,7 @@ class ExportView(tk.Toplevel):
         self._project_model: ProjectModel = project_controller.model
         self._export_to_AWS = self._project_model.export_to_AWS
         if not self._export_to_AWS:
-            dest = self._project_model.remote_scps["EXPORT"].aet
+            dest = self._project_model.remote_scps[_("EXPORT")].aet
         else:
             dest = f"{self._project_model.aws_cognito.username}@AWS/{self._project_model.project_name}"
 
@@ -306,7 +306,13 @@ class ExportView(tk.Toplevel):
             if self._patients_to_process == 1:
                 msg = _("Processing") + f" {self._patients_processed+1} " + _("Patient")
             else:
-                msg = _("Processing") + f" {self._patients_processed+1} " + _("of") + f" {self._patients_to_process} " + _("Patients")
+                msg = (
+                    _("Processing")
+                    + f" {self._patients_processed+1} "
+                    + _("of")
+                    + f" {self._patients_to_process} "
+                    + _("Patients")
+                )
             self._status.configure(text=msg)
 
     def _cancel_export_button_pressed(self):
@@ -391,7 +397,7 @@ class ExportView(tk.Toplevel):
         if not self._controller.model.export_to_AWS:
             # Verify echo of export DICOM server
             # TODO: remove this echo test? Rely on connection error from c-send?
-            if not self._controller.echo("EXPORT"):
+            if not self._controller.echo(_("EXPORT")):
                 self._export_button.configure(text_color="red")
                 self._parent._export_button.configure(text_color="red")
                 messagebox.showerror(
@@ -430,7 +436,7 @@ class ExportView(tk.Toplevel):
         # Export all selected patients using a background thread pool
         self._controller.export_patients_ex(
             ExportPatientsRequest(
-                "AWS" if self._export_to_AWS else "EXPORT",
+                "AWS" if self._export_to_AWS else _("EXPORT"),
                 self._patient_ids_to_export.copy(),
                 ux_Q,
             )

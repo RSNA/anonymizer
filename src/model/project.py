@@ -74,10 +74,10 @@ class ProjectModel:
     MODEL_VERSION = 1
 
     # Sub-directories in the storage directory:
-    PRIVATE_DIR = "private"
-    PUBLIC_DIR = "public"
-    PHI_EXPORT_DIR = "phi_export"
-    QUARANTINE_DIR = "quarantine"
+    PRIVATE_DIR = _("private")
+    PUBLIC_DIR = _("public")
+    PHI_EXPORT_DIR = _("phi_export")
+    QUARANTINE_DIR = _("quarantine")
 
     # As per instructions here: https://www.medicalconnections.co.uk/kb/ImplementationUID-And-ImplementationName
     RSNA_ROOT_ORG_UID = "1.2.826.0.1.3680043.10.474"  # sub UID from medicalconnections.co.uk as used by JavaAnonymizer
@@ -110,8 +110,8 @@ class ProjectModel:
     @staticmethod
     def default_remote_scps() -> Dict[str, DICOMNode]:
         return {
-            "QUERY": DICOMNode("127.0.0.1", 4242, "ORTHANC", False),
-            "EXPORT": DICOMNode("127.0.0.1", 11112, "EXPORTAE", False),
+            _("QUERY"): DICOMNode("127.0.0.1", 4242, "ORTHANC", False),
+            _("EXPORT"): DICOMNode("127.0.0.1", 11112, "EXPORTAE", False),
         }
 
     @staticmethod
