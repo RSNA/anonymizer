@@ -28,7 +28,7 @@ from view.dashboard import Dashboard
 logger = logging.getLogger(__name__)
 
 
-class QueryView(tk.Toplevel):
+class QueryView(ctk.CTkToplevel):
 
     ux_poll_find_response_interval = 250  # milli-seconds
 
@@ -74,8 +74,69 @@ class QueryView(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
-        self._create_widgets()
-        self._enable_action_buttons()
+        # self._create_widgets()
+        # self._enable_action_buttons()
+        self.create_treeview()
+
+    def create_treeview(self):
+        # Create a frame to hold the Treeview and the scrollbars
+        frame = ctk.CTkFrame(self)
+        frame.grid(row=0, column=0, sticky="nsew")
+        # Configure the grid to expand with the window
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+        # Create the Treeview widget
+        columns = ("col1", "col2", "col3", "col4", "col5")
+        tree = ttk.Treeview(frame, columns=columns, show="headings")
+
+        # Define the column headings
+        for col in columns:
+            tree.heading(col, text=col.capitalize())
+            tree.column(col, width=100, stretch=False)
+
+        # Adjust the width of the last column
+        tree.column("col5", width=2000, stretch=False)
+
+        # Create the vertical scrollbar
+        vsb = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
+        vsb.grid(row=0, column=1, sticky="ns")
+
+        # Create the horizontal scrollbar
+        hsb = ttk.Scrollbar(frame, orient="horizontal", command=tree.xview)
+        hsb.grid(row=1, column=0, sticky="ew")
+
+        # Configure the Treeview to use the scrollbars
+        tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+
+        # Place the Treeview in the grid
+        tree.grid(row=0, column=0, sticky="nsew")
+
+        # Configure the grid to expand with the window
+        frame.grid_rowconfigure(0, weight=1)
+        frame.grid_columnconfigure(0, weight=1)
+
+        # Add some test data, including one very wide item in the last column
+        for i in range(100):
+            if i == 50:
+                # Insert a long string into the last column to ensure horizontal scrolling is required
+                tree.insert(
+                    "",
+                    "end",
+                    values=(
+                        f"Item {i+1}-1",
+                        f"Item {i+1}-2",
+                        f"Item {i+1}-3",
+                        f"Item {i+1}-4",
+                        "A very long string that exceeds the column width \nand should require horizontal scrolling to view completely.\n This is to ensure that the horizontal scrollbar appears correctly.",
+                    ),
+                )
+            else:
+                tree.insert(
+                    "",
+                    "end",
+                    values=(f"Item {i+1}-1", f"Item {i+1}-2", f"Item {i+1}-3", f"Item {i+1}-4", f"Item {i+1}-5"),
+                )
 
     def _create_widgets(self):
         logger.info(f"_create_widgets")
@@ -208,9 +269,16 @@ class QueryView(tk.Toplevel):
         )
 
         # Create a Vertical and Horizontal Scrollbar and associate them with the Treeview
+        # horizontal_scrollbar = ttk.Scrollbar(
+        #     self._results_frame, orient="horizontal", command=self._query_results.xview
+        # )
+        # horizontal_scrollbar.grid(row=results_row, column=0, sticky="we")
+
         vertical_scrollbar = ttk.Scrollbar(self._results_frame, orient="vertical", command=self._query_results.yview)
         vertical_scrollbar.grid(row=results_row, column=10, sticky="ns")
-        self._query_results.configure(yscrollcommand=vertical_scrollbar.set)
+        self._query_results.configure(
+            yscrollcommand=vertical_scrollbar.set
+        )  # , xscrollcommand=horizontal_scrollbar.set)
 
         # Set tree column width and justification
         for col in self._query_results["columns"]:

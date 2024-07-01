@@ -135,7 +135,6 @@ class Anonymizer(ctk.CTk):
                 border_width = tv_theme["border_width"]
 
         treestyle = ttk.Style()
-        treestyle.theme_use("default")
         treestyle.configure(
             "Treeview",
             background=bg_color,
