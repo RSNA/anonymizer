@@ -11,10 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class TransferSyntaxesDialog(tk.Toplevel):
-    attr_map = {
-        "SyntaxName": (_("Transfer Syntax Name"), 35, False),
-        "SyntaxUID": (_("Transfer Syntax UID"), 30, False),
-    }
+    
     # description strings added to pynetdicom.globals.ALL_TRANSFER_SYNTAXES
     ts_lookup: dict[str, str] = {
         "1.2.840.10008.1.2": "Implicit VR Little Endian",
@@ -49,12 +46,15 @@ class TransferSyntaxesDialog(tk.Toplevel):
         self,
         parent,
         transfer_syntaxes: list[str],
-        title: str = _("Select Transfer Syntaxes"),
     ):
         super().__init__(master=parent)
+        self.attr_map = {
+            "SyntaxName": (_("Transfer Syntax Name"), 35, False),
+            "SyntaxUID": (_("Transfer Syntax UID"), 30, False),
+        }   
         self.root: ctk.CTk = parent.master
         self.transfer_syntaxes = transfer_syntaxes
-        self.title(title)
+        self.title(_("Select Transfer Syntaxes"))
         self.resizable(False, True)
         self._user_input: Union[list, None] = None
         self.rowconfigure(0, weight=1)

@@ -13,7 +13,6 @@ from tests.controller.helpers import (
     send_files_to_scp,
     request_to_move_studies_from_scp_to_local_scp,
     pacs_storage_dir,
-    local_storage_dir,
     verify_files_sent_to_pacs_simulator,
 )
 from src.controller.dicom_C_codes import (
@@ -213,7 +212,7 @@ def test_move_at_study_level_1_CT_file_from_pacs_with_file_to_local_storage(
     time.sleep(0.5)
 
     assert controller.get_number_of_pending_instances(ct_small_study_hierarchy) == 0
-    store_dir = local_storage_dir(temp_dir)
+    store_dir = controller.model.images_dir()
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
     assert len(dirlist) == 1
     assert dirlist[0] == controller.model.site_id + "-000001"
@@ -250,7 +249,7 @@ def test_move_at_series_level_1_CT_file_from_pacs_with_file_to_local_storage(
     assert series.remaining_sub_ops == 0
 
     time.sleep(1)
-    store_dir = local_storage_dir(temp_dir)
+    store_dir = controller.model.images_dir()
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
     assert len(dirlist) == 1
     assert dirlist[0] == controller.model.site_id + "-000001"
@@ -312,7 +311,7 @@ def test_move_at_study_level_CT_1_Series_4_Images_from_pacs_with_file_to_local_s
     assert ct_study_hierarchy.completed_sub_ops == 4
     assert ct_study_hierarchy.failed_sub_ops == 0
 
-    store_dir = local_storage_dir(temp_dir)
+    store_dir = controller.model.images_dir()
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
     assert len(dirlist) == 1
 
@@ -322,7 +321,7 @@ def test_move_at_study_level_CT_1_Series_4_Images_from_pacs_with_file_to_local_s
     total_series = 0
     total_files = 0
     for i in range(len(dirlist)):
-        studies, series, images = count_studies_series_images(os.path.join(local_storage_dir(temp_dir), dirlist[i]))
+        studies, series, images = count_studies_series_images(os.path.join(store_dir, dirlist[i]))
         total_studies += studies
         total_series += series
         total_files += images
@@ -338,7 +337,7 @@ def test_move_at_series_level_CT_1_Series_4_Images_from_pacs_with_file_to_local_
     dsets: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, PACSSimulatorSCP, controller)
     verify_files_sent_to_pacs_simulator(dsets, temp_dir, controller)
 
-    store_dir = local_storage_dir(temp_dir)
+    store_dir = controller.model.images_dir()
     total_studies = 0
     total_series = 0
     total_files = 0
@@ -365,9 +364,7 @@ def test_move_at_series_level_CT_1_Series_4_Images_from_pacs_with_file_to_local_
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
     assert len(dirlist) == 1
 
-    total_studies, total_series, total_files = count_studies_series_images(
-        os.path.join(local_storage_dir(temp_dir), dirlist[0])
-    )
+    total_studies, total_series, total_files = count_studies_series_images(os.path.join(store_dir, dirlist[0]))
     assert total_studies == 1
     assert total_series == 1
     assert total_files == 4
@@ -381,7 +378,7 @@ def test_move_at_series_level_CT_1_Series_4_Images_from_pacs_with_file_to_local_
     assert len(dirlist) == 1
 
     total_studies, total_series, total_images = count_studies_series_images(
-        os.path.join(local_storage_dir(temp_dir), dirlist[0])
+        os.path.join(controller.model.images_dir(), dirlist[0])
     )
     assert total_studies == 1
     assert total_series == 1
@@ -395,7 +392,7 @@ def test_move_at_instance_level_CT_1_Series_4_Images_from_pacs_with_file_to_loca
     dsets: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, PACSSimulatorSCP, controller)
     verify_files_sent_to_pacs_simulator(dsets, temp_dir, controller)
 
-    store_dir = local_storage_dir(temp_dir)
+    store_dir = controller.model.images_dir()
     total_studies = 0
     total_series = 0
     total_files = 0
@@ -427,7 +424,7 @@ def test_move_at_instance_level_CT_1_Series_4_Images_from_pacs_with_file_to_loca
     assert len(dirlist) == 1
 
     total_studies, total_series, total_files = count_studies_series_images(
-        os.path.join(local_storage_dir(temp_dir), dirlist[0])
+        os.path.join(controller.model.images_dir(), dirlist[0])
     )
     assert total_studies == 1
     assert total_series == 1
@@ -456,9 +453,9 @@ def test_move_at_instance_level_CT_1_Series_4_Images_from_pacs_with_file_to_loca
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
     assert len(dirlist) == 1
 
-    total_studies, total_series, total_images = count_studies_series_images(
-        os.path.join(local_storage_dir(temp_dir), dirlist[0])
-    )
+    store_dir = controller.model.images_dir()
+
+    total_studies, total_series, total_images = count_studies_series_images(os.path.join(store_dir, dirlist[0]))
     assert total_studies == 1
     assert total_series == 1
     assert total_files == 4
@@ -471,7 +468,7 @@ def test_move_at_study_level_3_studies_from_pacs_to_local_storage(temp_dir: str,
     dsets: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, PACSSimulatorSCP, controller)
     verify_files_sent_to_pacs_simulator([ds1, ds2] + dsets, temp_dir, controller)
 
-    store_dir = local_storage_dir(temp_dir)
+    store_dir = controller.model.images_dir()
     total_studies = 0
     total_series = 0
     total_files = 0
@@ -520,9 +517,8 @@ def test_move_at_study_level_3_studies_from_pacs_to_local_storage(temp_dir: str,
 
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
     assert len(dirlist) == 1
-    total_studies, total_series, total_files = count_studies_series_images(
-        os.path.join(local_storage_dir(temp_dir), dirlist[0])
-    )
+    store_dir = controller.model.images_dir()
+    total_studies, total_series, total_files = count_studies_series_images(os.path.join(store_dir, dirlist[0]))
     assert total_studies == 1
     assert total_series == 1
     assert total_files == 1
@@ -566,7 +562,7 @@ def test_move_at_study_level_3_studies_from_pacs_to_local_storage(temp_dir: str,
     total_files = 0
 
     for i in range(len(dirlist)):
-        studies, series, images = count_studies_series_images(os.path.join(local_storage_dir(temp_dir), dirlist[i]))
+        studies, series, images = count_studies_series_images(os.path.join(store_dir, dirlist[i]))
         total_studies += studies
         total_series += series
         total_files += images
@@ -582,7 +578,7 @@ def test_move_at_series_level_3_studies_from_pacs_to_local_storage(temp_dir: str
     dsets: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, PACSSimulatorSCP, controller)
     verify_files_sent_to_pacs_simulator([ds1, ds2] + dsets, temp_dir, controller)
 
-    store_dir = local_storage_dir(temp_dir)
+    store_dir = controller.model.images_dir()
     total_studies = 0
     total_series = 0
     total_files = 0
@@ -651,7 +647,7 @@ def test_move_at_series_level_3_studies_from_pacs_to_local_storage(temp_dir: str
     total_files = 0
 
     for i in range(len(dirlist)):
-        studies, series, images = count_studies_series_images(os.path.join(local_storage_dir(temp_dir), dirlist[i]))
+        studies, series, images = count_studies_series_images(os.path.join(store_dir, dirlist[i]))
         total_studies += studies
         total_series += series
         total_files += images
@@ -668,7 +664,7 @@ def test_move_at_instance_level_of_3_studies_from_pacs_to_local_storage(temp_dir
     dsets: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, PACSSimulatorSCP, controller)
     verify_files_sent_to_pacs_simulator([ds1, ds2] + dsets, temp_dir, controller)
 
-    store_dir = local_storage_dir(temp_dir)
+    store_dir = controller.model.images_dir()
     total_studies = 0
     total_series = 0
     total_files = 0
@@ -737,7 +733,7 @@ def test_move_at_instance_level_of_3_studies_from_pacs_to_local_storage(temp_dir
     total_files = 0
 
     for i in range(len(dirlist)):
-        studies, series, images = count_studies_series_images(os.path.join(local_storage_dir(temp_dir), dirlist[i]))
+        studies, series, images = count_studies_series_images(os.path.join(store_dir, dirlist[i]))
         total_studies += studies
         total_series += series
         total_files += images
@@ -788,11 +784,11 @@ def test_move_at_study_level_1_CT_file_from_orthanc_to_local_storage(temp_dir: s
     assert controller.get_number_of_pending_instances(study) == 0
 
     time.sleep(1)
-    store_dir = local_storage_dir(temp_dir)
+    store_dir = controller.model.images_dir()
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
     assert len(dirlist) == 1
     assert dirlist[0] == controller.model.site_id + "-000001"
-    assert count_studies_series_images(os.path.join(local_storage_dir(temp_dir), dirlist[0])) == (1, 1, 1)
+    assert count_studies_series_images(os.path.join(store_dir, dirlist[0])) == (1, 1, 1)
 
 
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
@@ -829,11 +825,11 @@ def test_move_at_study_level_with_network_timeout_then_series_level_MR_Study_fro
     assert controller.get_number_of_pending_instances(study) == 0
 
     time.sleep(1)
-    store_dir = local_storage_dir(temp_dir)
+    store_dir = controller.model.images_dir()
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
     assert len(dirlist) == 1
     assert dirlist[0] == controller.model.site_id + "-000001"
-    assert count_studies_series_images(os.path.join(local_storage_dir(temp_dir), dirlist[0])) == (1, 3, 11)
+    assert count_studies_series_images(os.path.join(store_dir, dirlist[0])) == (1, 3, 11)
 
 
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
@@ -845,7 +841,7 @@ def test_move_at_instance_level_of_3_studies_2_patients_from_orthance_to_local_s
     ds2: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, OrthancSCP, controller)  # Doe^Archibald
     ds3: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, OrthancSCP, controller)  # Doe^Peter
 
-    store_dir = local_storage_dir(temp_dir)
+    store_dir = controller.model.images_dir()
     total_studies = 0
     total_series = 0
     total_files = 0
@@ -901,8 +897,10 @@ def test_move_at_instance_level_of_3_studies_2_patients_from_orthance_to_local_s
     total_series = 0
     total_files = 0
 
+    store_dir = controller.model.images_dir()
+
     for i in range(len(dirlist)):
-        studies, series, images = count_studies_series_images(os.path.join(local_storage_dir(temp_dir), dirlist[i]))
+        studies, series, images = count_studies_series_images(os.path.join(store_dir, dirlist[i]))
         total_studies += studies
         total_series += series
         total_files += images
@@ -921,7 +919,7 @@ def test_move_at_study_level_3_studies_with_network_timeout_then_series_level_fr
     ds2: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, OrthancSCP, controller)  # Doe^Archibald
     ds3: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, OrthancSCP, controller)  # Doe^Peter
 
-    store_dir = local_storage_dir(temp_dir)
+    store_dir = controller.model.images_dir()
     total_studies = 0
     total_series = 0
     total_files = 0
@@ -992,7 +990,7 @@ def test_move_at_study_level_3_studies_with_network_timeout_then_series_level_fr
     total_files = 0
 
     for i in range(len(dirlist)):
-        studies, series, images = count_studies_series_images(os.path.join(local_storage_dir(temp_dir), dirlist[i]))
+        studies, series, images = count_studies_series_images(os.path.join(store_dir, dirlist[i]))
         total_studies += studies
         total_series += series
         total_files += images

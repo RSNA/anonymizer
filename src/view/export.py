@@ -29,16 +29,16 @@ class ExportView(tk.Toplevel):
     ):
         super().__init__(master=parent)
         # Export attributes to display in the results Treeview:
-        # Key: column id: (column name, width, centre justify)
+        # Key: column id: (column name, width, centre justify, stretch column of resize)
         self._attr_map = {
-            "Patient_Name": (_("Patient Name"), 20, False),
-            "Anon_PatientID": (_("Anonymized ID"), 15, True),
-            "Studies": (_("Studies"), 7, True),
-            "Series": (_("Series"), 7, True),
-            "Files": (_("Images"), 7, True),
-            "DateTime": (_("Date Time"), 15, True),
-            "FilesSent": (_("Images Sent"), 12, True),
-            "Error": (_("Last Export Error"), 50, False),
+            "Patient_Name": (_("Patient Name"), 20, False, False),
+            "Anon_PatientID": (_("Anonymized ID"), 15, True, False),
+            "Studies": (_("Studies"), 7, True, False),
+            "Series": (_("Series"), 7, True, False),
+            "Files": (_("Images"), 7, True, False),
+            "DateTime": (_("Date Time"), 15, True, False),
+            "FilesSent": (_("Images Sent"), 12, True, False),
+            "Error": (_("Last Export Error"), 30, False, True),
         }
         self._parent = parent
         self._controller = project_controller
@@ -52,7 +52,7 @@ class ExportView(tk.Toplevel):
         if title is None:
             title = _("Export") + " " + _("Studies")
 
-        self.title(f"{title} to {dest}")
+        self.title(f"{title} -> {dest}")
         self._export_active = False
         self._patients_processed = 0
         self._patients_to_process = 0
@@ -69,12 +69,12 @@ class ExportView(tk.Toplevel):
         PAD = 10
         ButtonWidth = 100
         char_width_px = ctk.CTkFont().measure("A")
-        self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        # Create frame for file treeview:
+        # 1. Export Frame for file treeview:
         self._export_frame = ctk.CTkFrame(self)
-        self._export_frame.grid(row=1, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")
+        self._export_frame.grid(row=0, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")
         self._export_frame.grid_rowconfigure(0, weight=1)
         self._export_frame.grid_columnconfigure(3, weight=1)
 
@@ -85,6 +85,7 @@ class ExportView(tk.Toplevel):
             style="Treeview",
             columns=list(self._attr_map.keys()),
         )
+        self._tree.bind("<<TreeviewSelect>>", self._tree_select)
         self._tree.grid(row=0, column=0, columnspan=11, sticky="nswe")
 
         # Set tree column headers, width and justification
@@ -94,6 +95,7 @@ class ExportView(tk.Toplevel):
                 col,
                 width=self._attr_map[col][1] * char_width_px,
                 anchor="center" if self._attr_map[col][2] else "w",
+                stretch=self._attr_map[col][3],
             )
 
         # Setup display tags:
@@ -114,15 +116,29 @@ class ExportView(tk.Toplevel):
         self._tree.bind("<Up>", lambda e: "break")
         self._tree.bind("<Down>", lambda e: "break")
 
-        # Progress bar and status:
-        self._status = ctk.CTkLabel(self._export_frame, text=_("Processing") + " _ " + _("of") + " _ " + _("Patients"))
-        self._status.grid(row=1, column=0, padx=PAD, pady=0, sticky="w")
+        # 3. ERROR FRAME:
+        self._error_frame = ctk.CTkFrame(self)
+        self._error_frame.grid(row=1, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")
+        self._error_frame.grid_columnconfigure(0, weight=1)
+
+        self._error_label = ctk.CTkLabel(self._error_frame, anchor="w", justify="left")
+        self._error_label.grid(row=0, column=0, padx=PAD, sticky="w")
+        self._error_frame.grid_remove()
+
+        # 4. STATUS Frame:
+        self._status_frame = ctk.CTkFrame(self)
+        self._status_frame.grid(row=2, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")
+        self._status_frame.grid_columnconfigure(3, weight=1)
+
+        # Status and progress bar:
+        self._status = ctk.CTkLabel(self._status_frame, text=_("Processing") + " _ " + _("of") + " _ " + _("Patients"))
+        self._status.grid(row=0, column=0, padx=PAD, pady=0, sticky="w")
 
         self._progressbar = ctk.CTkProgressBar(
-            self._export_frame,
+            self._status_frame,
         )
         self._progressbar.grid(
-            row=1,
+            row=0,
             column=1,
             padx=PAD,
             pady=0,
@@ -131,51 +147,51 @@ class ExportView(tk.Toplevel):
         self._progressbar.set(0)
 
         self._cancel_export_button = ctk.CTkButton(
-            self._export_frame,
+            self._status_frame,
             width=ButtonWidth,
             text=_("Cancel Export"),
             command=self._cancel_export_button_pressed,
         )
-        self._cancel_export_button.grid(row=1, column=2, padx=PAD, pady=PAD, sticky="w")
+        self._cancel_export_button.grid(row=0, column=2, padx=PAD, pady=PAD, sticky="w")
 
         self._create_phi_button = ctk.CTkButton(
-            self._export_frame,
+            self._status_frame,
             width=ButtonWidth,
             text=_("Create Patient Lookup"),
             command=self._create_phi_button_pressed,
         )
-        self._create_phi_button.grid(row=1, column=5, padx=PAD, pady=PAD, sticky="w")
+        self._create_phi_button.grid(row=0, column=5, padx=PAD, pady=PAD, sticky="w")
 
         self._refresh_button = ctk.CTkButton(
-            self._export_frame,
+            self._status_frame,
             width=ButtonWidth,
             text=_("Refresh"),
             command=self._refresh_button_pressed,
         )
-        self._refresh_button.grid(row=1, column=7, padx=PAD, pady=PAD, sticky="we")
+        self._refresh_button.grid(row=0, column=7, padx=PAD, pady=PAD, sticky="we")
         self._select_all_button = ctk.CTkButton(
-            self._export_frame,
+            self._status_frame,
             width=ButtonWidth,
             text=_("Select All"),
             command=self._select_all_button_pressed,
         )
-        self._select_all_button.grid(row=1, column=8, padx=PAD, pady=PAD, sticky="w")
+        self._select_all_button.grid(row=0, column=8, padx=PAD, pady=PAD, sticky="w")
 
         self._clear_selection_button = ctk.CTkButton(
-            self._export_frame,
+            self._status_frame,
             width=ButtonWidth,
             text=_("Clear Selection"),
             command=self._clear_selection_button_pressed,
         )
-        self._clear_selection_button.grid(row=1, column=9, padx=PAD, pady=PAD, sticky="w")
+        self._clear_selection_button.grid(row=0, column=9, padx=PAD, pady=PAD, sticky="w")
 
         self._export_button = ctk.CTkButton(
-            self._export_frame,
+            self._status_frame,
             width=ButtonWidth,
             text=_("Export"),
             command=self._export_button_pressed,
         )
-        self._export_button.grid(row=1, column=10, padx=PAD, pady=PAD, sticky="e")
+        self._export_button.grid(row=0, column=10, padx=PAD, pady=PAD, sticky="e")
         self._export_button.focus_set()
 
     def busy(self):
@@ -247,6 +263,23 @@ class ExportView(tk.Toplevel):
             current_values[3] = str(series_count)
             current_values[4] = str(file_count)
             self._tree.item(anon_pt_id, values=current_values)
+
+    def _tree_select(self, event):
+        selected = self._tree.selection()
+        # Display Last Import Error in Error Frame if selected item has error:
+        if len(selected) == 1:
+            item = selected[0]
+            values = self._tree.item(item, "values")
+            if len(values) > 7:
+                error_msg = values[7]
+                window_width = self.winfo_width()
+                if error_msg:
+                    self._error_label.configure(text=error_msg, wraplength=window_width)
+                    self._error_frame.grid()
+            else:
+                self._error_frame.grid_remove()
+        else:
+            self._error_frame.grid_remove()
 
     def _refresh_button_pressed(self):
         if self._export_active:
@@ -393,6 +426,8 @@ class ExportView(tk.Toplevel):
         if self._export_active:
             logger.error(f"Selection disabled, export is active")
             return
+
+        self._error_frame.grid_remove()
 
         if not self._controller.model.export_to_AWS:
             # Verify echo of export DICOM server

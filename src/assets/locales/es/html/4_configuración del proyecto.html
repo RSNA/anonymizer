@@ -36,6 +36,8 @@ ver https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 	<ul>
 		<li>El nombre del proyecto debe tener menos de 16 caracteres.</li> 
 		<li>El nombre del proyecto se escribe como la segunda entrada en el bloque privado (0013,1003) de cada archivo DICOM anonimizado.</li>
+		<li>El nombre del proyecto se utiliza como el nombre del directorio predeterminado para la tienda del Anonimizador, vea la configuración del Directorio de Almacenamiento a continuación.</li>
+
 		<li>El nombre del proyecto aparece en la barra de título del panel de control de un proyecto abierto seguido del ID del Sitio entre corchetes.</li>
 		<li>El nombre del proyecto <b>no puede cambiarse</b> después de la creación del proyecto.</li>
 	</ul>
@@ -114,7 +116,7 @@ ver https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 		<li>El archivo de datos del proyecto: <b><i>ProjectModel.pkl</i></b> se almacena en la raíz del directorio de almacenamiento.</li>
 		<li>Se crean dos subdirectorios fuera de la raíz del directorio de almacenamiento: <b><i>/privado</i></b> y <b><i>/público</i></b>.</li>
 		<li>El subdirectorio <b><i>/privado</i></b> contiene Información de Salud Privada (PHI) extraída de archivos DICOM entrantes.</li>
-		<li>El archivo de datos del anonimizador: <b><i>/privado/AnonymizerModel.pkl</i></b> almacena los datos PHI en forma comprimida.</li>
+		<li>El archivo de datos del Anonimizador: <b><i>/privado/AnonymizerModel.pkl</i></b> almacena los datos PHI en forma comprimida.</li>
 		<li>Se crean varios subdirectorios <b><i>/privado/cuarentena</i></b> a medida que se detectan errores en los archivos entrantes.</li>
 		<li>El subdirectorio <b><i>/privado/phi_export</i></b> almacena todos los archivos de búsqueda de pacientes PHI creados desde la Vista de Exportación haciendo clic en <i>Crear Búsqueda de Pacientes</i></li>
 		<li>El subdirectorio <b><i>/público</i></b> contiene los archivos anonimizados con la estructura: <b><i>/público/[id_paciente_anonimizado]/[UID_estudio]/[UID_serie]/[UID_instancia].dcm</i></b></li>

@@ -2,8 +2,8 @@ import os
 import time
 from logging import DEBUG, INFO, WARNING, getLevelName
 from pprint import pformat
-from copy import deepcopy
-from typing import Dict, Tuple, List
+from copy import copy, deepcopy
+from typing import Dict, List
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from pynetdicom._globals import DEFAULT_TRANSFER_SYNTAXES
@@ -63,6 +63,11 @@ class AWSCognito:
     username: str
     password: str
 
+    def __repr__(self) -> str:
+        d_copy = copy(self)
+        d_copy.password = len(self.password) * "*"
+        return f"\nAWSCognito\n({pformat(asdict(d_copy),sort_dicts=False)})"
+
 
 @dataclass
 class ProjectModel:
@@ -71,13 +76,7 @@ class ProjectModel:
     """
 
     # Project Model Version Control
-    MODEL_VERSION = 1
-
-    # Sub-directories in the storage directory:
-    PRIVATE_DIR = _("private")
-    PUBLIC_DIR = _("public")
-    PHI_EXPORT_DIR = _("phi_export")
-    QUARANTINE_DIR = _("quarantine")
+    MODEL_VERSION = 2
 
     # As per instructions here: https://www.medicalconnections.co.uk/kb/ImplementationUID-And-ImplementationName
     RSNA_ROOT_ORG_UID = "1.2.826.0.1.3680043.10.474"  # sub UID from medicalconnections.co.uk as used by JavaAnonymizer
@@ -92,6 +91,10 @@ class ProjectModel:
         return str(int(time.time() / (60 * 30)))
 
     @staticmethod
+    def default_language_code() -> str:
+        return "en_US"
+
+    @staticmethod
     def default_project_name() -> str:
         return _("MY_PROJECT")
 
@@ -101,7 +104,7 @@ class ProjectModel:
 
     @staticmethod
     def default_storage_dir() -> Path:
-        return Path(os.path.expanduser("~"), _("ANONYMIZER_STORE"))
+        return Path(Path.home(), _("Documents"), _("RSNA Anonymizer"), ProjectModel.default_project_name())
 
     @staticmethod
     def default_local_server() -> DICOMNode:
@@ -149,6 +152,7 @@ class ProjectModel:
         return LoggingLevels(INFO, WARNING, False)
 
     version: int = MODEL_VERSION
+    language_code: str = field(default_factory=default_language_code)
     site_id: str = field(default_factory=default_site_id)
     project_name: str = field(default_factory=default_project_name)
     uid_root: str = field(default_factory=default_uid_root)
@@ -166,17 +170,20 @@ class ProjectModel:
     anonymizer_script_path: Path = Path("assets/scripts/default-anonymizer.script")
 
     def __post_init__(self):
+        # Sub-directories in the storage directory:
+        self.PRIVATE_DIR = _("private")
+        self.PUBLIC_DIR = _("public")
+        self.PHI_EXPORT_DIR = _("phi_export")
+        self.QUARANTINE_DIR = _("quarantine")
         self.set_storage_classes_from_modalities()
 
     def get_class_name(self) -> str:
         return self.__class__.__name__
 
     def __repr__(self) -> str:
-        d = asdict(self)
-        d["aws_cognito"] = deepcopy(self.aws_cognito)
-        d["aws_cognito"].password = len(d["aws_cognito"].password) * "*"
-        # return pformat(d)
-        return f"{self.get_class_name()}\n({pformat(d)})"
+        cpy = deepcopy(self)
+        cpy.aws_cognito.password = len(cpy.aws_cognito.password) * "*"
+        return f"{self.get_class_name()}\n({pformat(asdict(cpy), sort_dicts=False)})"
 
     def images_dir(self) -> Path:
         return self.storage_dir.joinpath(self.PUBLIC_DIR)

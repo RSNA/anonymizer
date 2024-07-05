@@ -686,7 +686,7 @@ class ProjectController(AE):
         Authenticates AWS Cognito User and returns AWS s3 client object
         to use in creation of S3 client in each export thread.
 
-        On error, raises AuthenticationError with error message or re-raises any other exception thrown by boto3.
+        On error, returns None and sets self_aws_last_error to AuthenticationError with error message or any other exception thrown by boto3.
 
         Cache credentials and return s3 client object if credential expiration is longer than 10 mins.
         """
@@ -695,6 +695,8 @@ class ProjectController(AE):
             logger.info(f"Using cached AWS credentials, Expiration:{self._aws_expiration_datetime}")
             self._aws_last_error = None
             return self._s3
+
+        self._aws_last_error = None
 
         try:
             cognito_idp_client = boto3.client("cognito-idp", region_name=self.model.aws_cognito.region_name)
@@ -808,7 +810,8 @@ class ProjectController(AE):
         except Exception as e:
             # Latch error message for UX:
             self._aws_last_error = str(e)
-            raise e
+            logger.error(self._aws_last_error)
+            return None
 
     def AWS_authenticate_ex(self) -> None:
         """
@@ -1566,7 +1569,7 @@ class ProjectController(AE):
         self._abort_query = False
         for study in studies:
             if self._abort_query:
-                logger.info("Query Aborted")
+                logger.info("GetStudyUIDHierarchies Aborted")
                 break
             error_msg, study_uid_hierarchy = self.get_study_uid_hierarchy(
                 scp_name, study.uid, study.ptid, instance_level

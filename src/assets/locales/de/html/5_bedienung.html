@@ -4,18 +4,17 @@ siehe https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support 
 <html>
 <body>
 <div style="color: #014F8F; font-size: 14px;">
-	<!-- <h1 style="text-align: center;">RSNA DICOM Anonymizer Operation</h1> -->
-
+	
 		<h2>Dateien importieren</h2>
 		
 			<h3>Import aus dem lokalen Dateisystem</h3>
-			<img src="assets/locales/en_US/html/images/ImportFilesMenu.png"/>
+			<img src="assets/locales/de/html/images/ImportlokalenDateisystem.png"/>
 			<ul>
 				<li>Importieren Sie DICOM-Dateien entweder einzeln oder als Verzeichnis.</li>
 				<li>Beim Auswählen einzelner Dateien ist das Standard-Suffix <i>.dcm</i>, dies kann jedoch in den Dateiauswahloptionen geändert werden.</li>
-				<img src="assets/locales/en_US/html/images/SelectFiles.png"/>
+				<img src="assets/locales/de/html/images/Dateiauswahloptionen.png"/>
 				<li>Beim Auswählen eines Verzeichnisses werden <b>alle</b> Dateien in diesem Verzeichnis und dessen Unterverzeichnissen versucht zu importieren.</li>
-				<img src="assets/locales/en_US/html/images/SelectDirectory.png"/>
+				<img src="assets/locales/de/html/images/VerzeichnisAuswählen.png"/>
 				<li>Damit eine Datei <b>akzeptiert und importiert</b> wird, muss sie:</li>
 					<ol>
 						<li>Eine gültige DICOM-Datei sein (gemäß dem <a href=https://dicom.nema.org/medical/dicom/current/output/chtml/part10/chapter_7.html>DICOM-Standard</a>) mit gültigen Dateimetainformationen einschließlich DICOM-Präambel im Dateikopf.</li>
@@ -32,22 +31,22 @@ siehe https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support 
 					</ol>
 				<li>Wenn eine Datei die obigen Bedingungen nicht erfüllt, wird sie im Speicherverzeichnis <b>quarantänisiert</b>, d. h. für die ersten 4 Fälle jeweils:</li>
 					<ol>
-						<li><i>/private/quarantine/Invalid_DICOM</i></li>
-						<li><i>/private/quarantine/Missing_Attributes</i></li>
-						<li><i>/private/quarantine/Invalid_Storage_Class</i></li>
-						<li><i>/private/quarantine/Capture_PHI_Error</i></li>
+						<li><i>/privat/quarantäne/Ungültiges_DICOM</i></li>
+						<li><i>/privat/quarantäne/Fehlende_Attribute</i></li>
+						<li><i>/privat/quarantäne/Ungültige_Speicherklasse</i></li>
+						<li><i>/privat/quarantäne/PHI_Erfassungs_Fehler</i></li>
 					</ol>
 				<li>Wenn eine Datei bereits importiert wurde, wird sie ignoriert.</li>
 				<li>Der Dateiimportdialog zeigt das Ergebnis jedes Dateiimports in jeder Zeile in seinem scrollbaren Textfeld an.</li>
 				<li>Wenn eine Datei erfolgreich importiert wird, zeigt sie einen gekürzten Dateipfad gefolgt von <i>PHI-Patienten-ID => Anonymisierte Patienten-ID</i> wie im folgenden Screenshot gezeigt.</li>
 				<li>Bei einem Fehler wird ein gekürzter Dateipfad gefolgt von einer passenden Fehlermeldung in der nächsten Zeile angezeigt, wie im Screenshot unten gezeigt.</li>
-				<img src="assets/locales/en_US/html/images/ImportFilesDialog.png"/>
+				<img src="assets/locales/de/html/images/DateienImportieren.png"/>
 			</ul>
 				
 		<h2>Import vom Remote-DICOM-Server</h2>
 			Klicken Sie im Dashboard auf die Schaltfläche Abfragen, um zuerst ein DICOM-Echo an den Remote-Server zu senden und bei Erfolg die Ansicht Abfragen, Abrufen & Importieren zu öffnen.
 			<h3>Die Ansicht Abfragen, Abrufen & Importieren</h3>
-			<img src="assets/locales/en_US/html/images/QueryRetrieveImport.png"/>
+			<img src="assets/locales/de/html/images/AbfrageAbrufenImportieren.png"/>
 			<h4>Suche nach Studien</h4>
 			<ul>
 				<li>Ein Remote-DICOM-Server kann abgefragt werden, um passende Studien in der Ansicht Abfrageergebnisse aufzulisten, indem eines oder eine Kombination der Standardabfragefelder verwendet wird:</li>
@@ -64,7 +63,7 @@ siehe https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support 
 				<li>Nur Studien, die Modalitäten enthalten, die für das Projekt festgelegt sind, werden angezeigt und zur Auswahl verfügbar gemacht.</li>
 			</ul>
 			<h4>Auswählen und Importieren von Studien</h4>
-			<img src="assets/locales/en_US/html/images/SelectQuery.png"/>
+			<img src="assets/locales/de/html/images/Auswahlabfrage.png"/>
 			<ul>
 				<li>Studien können einzeln (Mausklick), in Gruppen (CMD- oder CTRL-Taste gedrückt halten) oder in großen Mengen mit der Schaltfläche <i>Alle auswählen</i> ausgewählt werden.</li>
 				<li>Studien durch einzelnes Klicken oder mit der Schaltfläche <i>Auswahl löschen</i> abwählen.</li>
@@ -77,10 +76,10 @@ siehe https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support 
 				<li>Der <i>Importstudien-Dialog</i> zeigt das Ergebnis des Importvorgangs bei Abschluss wie im untenstehenden Screenshot:</li>
 				<li>Nach dem Schließen des <i>Importstudien-Dialogs</i> mit der Schaltfläche <i>Schließen</i> werden die erfolgreich importierten Studien im Abfrageergebnisfenster grün hervorgehoben, wie unten gezeigt:</li>
 			</ul>
-			<img src="assets/locales/en_US/html/images/ImportStudiesDialog.png"/>
-			<img src="assets/locales/en_US/html/images/ImportStudiesResult.png"/>
+			<img src="assets/locales/de/html/images/ImportStudiesDialog.png"/>
+			<img src="assets/locales/de/html/images/ImportStudiesResult.png"/>
 
-			<h4>Umgang mit DICOM-Bewegungsproblemen</h4>
+			<h4>Probleme mit dem Download (Retrieve) von DICOM-Daten</h4>
 			<ul>
 				<li>Wenn der Importvorgang nicht alle Studien erfolgreich importiert, passen Sie das Netzwerk-Timeout und die Bewegungsebene an und versuchen Sie es erneut, indem Sie auf die Schaltfläche Importieren klicken.</li>
 				<li>Der Anonymizer wurde entwickelt, um C-MOVE nicht konforme DICOM-Server zu unterstützen, insbesondere VNAs, die im asynchronen Modus mit unbekannten Prioritäts- und Timeout-Einstellungen arbeiten.</li>
@@ -90,7 +89,7 @@ siehe https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support 
 		Klicken Sie im Dashboard auf die Schaltfläche Exportieren, um zuerst ein DICOM-Echo an den Remote-Server zu senden und bei Erfolg die Exportansicht zu öffnen.
 			
 			<h3>Die Exportansicht</h3>
-			<img src="assets/locales/en_US/html/images/ExportStudiesAWS.png"/>
+			<img src="assets/locales/de/html/images/ExportStudienAWS.png"/>
 			<ul>
 				<li>Die Exportansicht funktioniert ähnlich wie die Abfrageansicht, in der importierte und anonymisierte <i><b>Patienten</b></i> zur Übertragung an einen Remote-DICOM-Server oder einen AWS S3-Bucket ausgewählt werden können.</li>
 				<li>Patienten können mehrere Studien enthalten, die unabhängig vom Importvorgang importiert wurden.</li>
@@ -98,20 +97,20 @@ siehe https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support 
 				<li>Der Exportstatus wird in Echtzeit in der Exportansicht angezeigt.</li>
 				<li>Das Datum und die Uhrzeit eines erfolgreichen Patientenexports und eine Fortschrittsanzeige werden wie im untenstehenden Screenshot angezeigt:</li>
 			</ul>
-			<img src="assets/locales/en_US/html/images/ExportStudiesStatus.png"/>
+			<img src="assets/locales/de/html/images/ExportStudienStatus.png"/>
 			
 			<h4>Exportieren der Patienten-Such-CSV-Datei</h4>
-			<img src="assets/locales/en_US/html/images/PatientLookupSave.png"/>
+			<img src="assets/locales/de/html/images/Patienten-Such-CSV-Datei.png"/>
 			<ul>
 				<li>Eine Patienten-Suchdatei, die die PHI-Daten des Projekts enthält, kann jederzeit während eines Projekts mit der Schaltfläche <i>Patienten-Suche erstellen</i> in der Exportansicht erstellt werden.</li>
 				<li>Die PHI-Datendatei wird im CSV-Format im privaten Unterverzeichnis des Speicherverzeichnisses hier gespeichert:</li>
-				<li><i><b>/private/phi_export/</b></i></li>
+				<li><i><b>/privat/phi_export/</b></i></li>
 				<li>Das Format der Suchdatei folgt der JAVA-Anonymizer-Indexdatei mit den folgenden Feldern, die jeder Studienzeile hinzugefügt werden: Anzahl der Serien, Anzahl der Instanzen</li>
 			</ul>
-			<img src="assets/locales/en_US/html/images/PatientLookupData.png"/>
+			<img src="assets/locales/de/html/images/PatientenPHI.png"/>
 
 		<h2>Dashboard</h2>
-		<img src="assets/locales/en_US/html/images/Dashboard.png"/>
+		<img src="assets/locales/de/html/images/Dashboard.png"/>
 		<ul>
 			<li>Das Projekt-Dashboard zeigt relevante Projektmetriken in Bezug auf den aktuell kuratierten Datensatz im Speicherverzeichnis an.</li>
 			<li>Die Abfrage- und Exportansichten werden über die entsprechenden Schaltflächen vom Dashboard aus gestartet.</li>

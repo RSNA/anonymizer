@@ -3,6 +3,7 @@ import string
 import tkinter as tk
 import customtkinter as ctk
 import logging
+from utils.translate import _
 
 # Entry Limits:
 
@@ -113,6 +114,7 @@ def str_entry(
     enabled: bool = True,
     width_chars: int = 20,
     focus_set=False,
+    password=False,
 ) -> ctk.StringVar:
     """
     Creates a string entry field in the specified view.
@@ -137,7 +139,7 @@ def str_entry(
         ctk.StringVar: The string variable associated with the string entry field.
     """
     str_var = ctk.StringVar(view, value=initial_value)
-    char_width_px = ctk.CTkFont().measure("_")
+    char_width_px = ctk.CTkFont().measure("A")
     ctk_label = ctk.CTkLabel(view, text=label)
     ctk_label.grid(row=row, column=col, padx=pad, pady=(pad, 0), sticky=sticky)
     # TO DO: using char width in pixels approach is not accurate
@@ -158,7 +160,7 @@ def str_entry(
             ),
         )
 
-        if "password" in label.lower():
+        if password:
             ctk_entry.configure(show="*")
 
         entry_callback = lambda event: str_entry_change(

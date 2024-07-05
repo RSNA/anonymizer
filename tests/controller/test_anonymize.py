@@ -12,11 +12,6 @@ from pydicom.dataset import Dataset
 from src.controller.project import ProjectController
 from src.controller.anonymizer import AnonymizerController
 
-from tests.controller.helpers import (
-    pacs_storage_dir,
-    local_storage_dir,
-)
-
 from tests.controller.dicom_test_files import (
     cr1_filename,
     ct_small_filename,
@@ -95,7 +90,7 @@ def test_anonymize_dataset_without_PatientID(temp_dir: str, controller):
     phi_ds = deepcopy(ds)
     anonymizer.anonymize_dataset_ex(LocalSCU, ds)
     sleep(0.5)
-    store_dir = local_storage_dir(temp_dir)
+    store_dir = controller.model.images_dir()
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
 
     SITEID = controller.model.site_id
@@ -104,7 +99,7 @@ def test_anonymize_dataset_without_PatientID(temp_dir: str, controller):
     anon_pt_id = SITEID + "-000000"
     assert len(dirlist) == 1
     assert dirlist[0] == anon_pt_id
-    anon_filename = anonymizer.local_storage_path(local_storage_dir(temp_dir), ds)
+    anon_filename = anonymizer.local_storage_path(store_dir, ds)
     anon_ds = dcmread(anon_filename)
     assert isinstance(anon_ds, Dataset)
     assert anon_ds.PatientID == anon_pt_id
@@ -144,7 +139,7 @@ def test_anonymize_dataset_with_blank_PatientID_1_study(temp_dir: str, controlle
     anonymizer.anonymize_dataset_ex(LocalSCU, ds2)
 
     sleep(0.5)
-    store_dir = local_storage_dir(temp_dir)
+    store_dir = controller.model.images_dir()
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
 
     SITEID = controller.model.site_id
@@ -155,7 +150,7 @@ def test_anonymize_dataset_with_blank_PatientID_1_study(temp_dir: str, controlle
     assert len(dirlist) == 1
     assert dirlist[0] == anon_pt_id
 
-    anon_filename1 = anonymizer.local_storage_path(local_storage_dir(temp_dir), ds1)
+    anon_filename1 = anonymizer.local_storage_path(store_dir, ds1)
     anon_ds1 = dcmread(anon_filename1)
     assert isinstance(anon_ds1, Dataset)
     assert anon_ds1.PatientID == anon_pt_id
@@ -169,7 +164,7 @@ def test_anonymize_dataset_with_blank_PatientID_1_study(temp_dir: str, controlle
     assert f"{UIDROOT}.{SITEID}." in anon_ds1.SeriesInstanceUID
     assert f"{UIDROOT}.{SITEID}." in anon_ds1.SOPInstanceUID
 
-    anon_filename2 = anonymizer.local_storage_path(local_storage_dir(temp_dir), ds2)
+    anon_filename2 = anonymizer.local_storage_path(store_dir, ds2)
     anon_ds2 = dcmread(anon_filename2)
     assert isinstance(anon_ds2, Dataset)
     assert anon_ds2.PatientID == anon_pt_id
@@ -205,7 +200,7 @@ def test_anonymize_dataset_with_blank_PatientID_2_studies(temp_dir: str, control
     phi_ds = deepcopy(ds)
     anonymizer.anonymize_dataset_ex(LocalSCU, ds)
     sleep(0.5)
-    store_dir = local_storage_dir(temp_dir)
+    store_dir = controller.model.images_dir()
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
 
     SITEID = controller.model.site_id
@@ -214,7 +209,7 @@ def test_anonymize_dataset_with_blank_PatientID_2_studies(temp_dir: str, control
     anon_pt_id = SITEID + "-000000"
     assert len(dirlist) == 1
     assert dirlist[0] == anon_pt_id
-    anon_filename = anonymizer.local_storage_path(local_storage_dir(temp_dir), ds)
+    anon_filename = anonymizer.local_storage_path(store_dir, ds)
     anon_ds = dcmread(anon_filename)
     assert isinstance(anon_ds, Dataset)
     assert anon_ds.PatientID == anon_pt_id
@@ -240,7 +235,7 @@ def test_anonymize_dataset_with_PatientID(temp_dir: str, controller):
     phi_ds = deepcopy(ds)
     anonymizer.anonymize_dataset_ex(LocalSCU, ds)
     sleep(0.5)
-    store_dir = local_storage_dir(temp_dir)
+    store_dir = controller.model.images_dir()
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
 
     SITEID = controller.model.site_id
@@ -249,7 +244,7 @@ def test_anonymize_dataset_with_PatientID(temp_dir: str, controller):
     anon_pt_id = SITEID + "-000001"
     assert len(dirlist) == 1
     assert dirlist[0] == anon_pt_id
-    anon_filename = anonymizer.local_storage_path(local_storage_dir(temp_dir), ds)
+    anon_filename = anonymizer.local_storage_path(store_dir, ds)
     anon_ds = dcmread(anon_filename)
     assert isinstance(anon_ds, Dataset)
     assert anon_ds.PatientID == anon_pt_id

@@ -61,6 +61,9 @@ msgstr "Erreur lors du chargement du modèle de projet à partir du fichier de d
 msgid "Project File corrupted, missing version information."
 msgstr "Fichier de projet corrompu, information de version manquante."
 
+msgid "Project language mismatch"
+msgstr "Incompatibilité de langue du projet"
+
 msgid "No Project file not found in"
 msgstr "Aucun fichier de projet trouvé dans"
 
@@ -97,12 +100,6 @@ msgstr "Modifier les paramètres du projet cloné"
 msgid "Select DICOM Files to Import & Anonymize"
 msgstr "Sélectionnez les fichiers DICOM à importer et à anonymiser"
 
-msgid "Import Files"
-msgstr "Importer des fichiers"
-
-msgid "Importing"
-msgstr "Importation"
-
 msgid "Select DICOM Directory to Import & Anonymize"
 msgstr "Sélectionnez le répertoire DICOM à importer et à anonymiser"
 
@@ -133,8 +130,8 @@ msgstr "Répertoire d'importation"
 msgid "Import Directory Cancelled"
 msgstr "Répertoire d'importation annulé"
 
-msgid "Import files from"
-msgstr "Importer des fichiers depuis"
+msgid "Importing"
+msgstr "Importation"
 
 msgid "Files processed"
 msgstr "Fichiers traités"
@@ -165,6 +162,9 @@ msgstr "Fichier"
 
 msgid "Help"
 msgstr "Aide"
+
+msgid "Import Files"
+msgstr "Importer des fichiers"
 
 msgid "Clone Project"
 msgstr "Cloner le projet"
@@ -292,6 +292,24 @@ msgstr "Nombre de Séries"
 msgid "Number of Instances"
 msgstr "Nombre d'Instances"
 
+msgid "MY_PROJECT"
+msgstr "MON_PROJET"
+
+msgid "Documents"
+msgstr "Documents"
+
+msgid "RSNA Anonymizer"
+msgstr "RSNA Anonymiseur "
+
+msgid "ANONYMIZER"
+msgstr "ANONYMISEUR"
+
+msgid "QUERY"
+msgstr "REQUÊTE"
+
+msgid "EXPORT"
+msgstr "EXPORTER"
+
 msgid "private"
 msgstr "privé"
 
@@ -303,21 +321,6 @@ msgstr "phi_export"
 
 msgid "quarantine"
 msgstr "quarantaine"
-
-msgid "MY_PROJECT"
-msgstr "MON_PROJET"
-
-msgid "ANONYMIZER_STORE"
-msgstr "MAGASIN_D'ANONYMISATEUR"
-
-msgid "ANONYMIZER"
-msgstr "ANONYMISEUR"
-
-msgid "QUERY"
-msgstr ""
-
-msgid "EXPORT"
-msgstr ""
 
 msgid "Progress Dialog"
 msgstr "Dialogue de Progression"
@@ -397,8 +400,8 @@ msgstr "Images"
 msgid "Anonymizer Queue"
 msgstr "File d'Attente de l'Anonymiseur"
 
-msgid "server online"
-msgstr "serveur en ligne"
+msgid "online"
+msgstr "en ligne"
 
 msgid "Connection Error"
 msgstr "Erreur de Connexion"
@@ -412,14 +415,20 @@ msgstr "Vérifier les Paramètres du Projet"
 msgid "Ensure the remote server is setup to allow the local server for echo and storage services."
 msgstr "Assurez-vous que le serveur distant est configuré pour permettre au serveur local d'utiliser les services d'écho et de stockage."
 
-msgid "Server offline"
-msgstr "Serveur hors ligne"
+msgid "offline"
+msgstr "hors ligne"
+
+msgid "Query Server"
+msgstr "Serveur de requête"
 
 msgid "Checking Query DICOM Server is online"
 msgstr "Vérification que le serveur DICOM de requête est en ligne"
 
 msgid "Waiting for AWS Authentication"
 msgstr "En attente de l'authentification AWS"
+
+msgid "Export Server"
+msgstr "Serveur d'exportation"
 
 msgid "Checking Export DICOM Server is online"
 msgstr "Vérification que le serveur DICOM d'exportation est en ligne"
@@ -514,6 +523,12 @@ msgstr "Importation des Études"
 msgid "Importing Study"
 msgstr "Importation de l'Étude"
 
+msgid "IMAGE"
+msgstr "IMAGE"
+
+msgid "INSTANCE"
+msgstr "INSTANCE"
+
 msgid "Import from"
 msgstr "Importer de"
 
@@ -578,10 +593,7 @@ msgid "STUDY"
 msgstr "ÉTUDE"
 
 msgid "SERIES"
-msgstr ""
-
-msgid "INSTANCE"
-msgstr ""
+msgstr "SÉRIE"
 
 msgid "Query, Retrieve & Import Studies"
 msgstr "Interroger, récupérer et importer des études"
@@ -772,12 +784,6 @@ msgstr "Serveurs DICOM"
 msgid "Local Server"
 msgstr "Serveur local"
 
-msgid "Query Server"
-msgstr "Serveur de requête"
-
-msgid "Export Server"
-msgstr "Serveur d'exportation"
-
 msgid "AWS S3 Server"
 msgstr "Serveur AWS S3"
 
@@ -891,6 +897,12 @@ msgstr "Accédez à Aide/Opération pour des instructions sur l'utilisation du p
 
 msgid "Select File/New Project to start."
 msgstr "Sélectionnez Fichier/Nouveau projet pour commencer."
+
+#~ msgid "Import files from"
+#~ msgstr "Importer des fichiers depuis"
+
+#~ msgid "ANONYMIZER_STORE"
+#~ msgstr "MAGASIN_D'ANONYMISATEUR"
 
 #~ msgid "Export Studies"
 #~ msgstr "Exporter les Études"

@@ -12,21 +12,16 @@ logger = logging.getLogger(__name__)
 
 
 class ModalitiesDialog(tk.Toplevel):
-    attr_map = {
-        "Code": (_("Code"), 5, True),
-        "Modality": (_("Description"), 30, False),
-    }
 
-    def __init__(
-        self,
-        parent,
-        modalities: list[str],
-        title: str = _("Select Modalities"),
-    ):
+    def __init__(self, parent, modalities: list[str]):
         super().__init__(master=parent)
+        self.attr_map = {
+            "Code": (_("Code"), 5, True),
+            "Modality": (_("Description"), 30, False),
+        }
         self.root: ctk.CTk = parent.master
         self.modalities = modalities
-        self.title(title)
+        self.title(_("Select Modalities"))
         self.resizable(False, True)
         self._user_input: Union[list, None] = None
         self.rowconfigure(0, weight=1)

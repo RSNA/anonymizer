@@ -69,7 +69,6 @@ class WelcomeView(ctk.CTkFrame):
         label_welcome.grid(row=2, column=0, pady=self.PAD, sticky="n")
 
         # Welcome Text:
-
         label_welcome_text = ctk.CTkLabel(
             master=self,
             text=self.welcome_text,

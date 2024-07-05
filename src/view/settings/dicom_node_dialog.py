@@ -22,14 +22,11 @@ logger = logging.getLogger(__name__)
 
 
 class DICOMNodeDialog(tk.Toplevel):
-    def __init__(
-        self,
-        parent,
-        address: DICOMNode,
-        title: str = _("DICOM Node"),
-    ):
+    def __init__(self, parent, address: DICOMNode, title: str = None):
         super().__init__(master=parent)
         self.address = address
+        if title is None:
+            title = _("DICOM Node")
         self.title(title)
         self.resizable(False, False)
         self._user_input: Union[DICOMNode, None] = None

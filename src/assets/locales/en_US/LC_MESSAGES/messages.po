@@ -61,6 +61,9 @@ msgstr "Error loading Project Model from data file"
 msgid "Project File corrupted, missing version information."
 msgstr "Project File corrupted, missing version information."
 
+msgid "Project language mismatch"
+msgstr "Project language mismatch"
+
 msgid "No Project file not found in"
 msgstr "No Project file not found in"
 
@@ -97,12 +100,6 @@ msgstr "Edit Cloned Project Settings"
 msgid "Select DICOM Files to Import & Anonymize"
 msgstr "Select DICOM Files to Import & Anonymize"
 
-msgid "Import Files"
-msgstr "Import Files"
-
-msgid "Importing"
-msgstr "Importing"
-
 msgid "Select DICOM Directory to Import & Anonymize"
 msgstr "Select DICOM Directory to Import & Anonymize"
 
@@ -133,8 +130,8 @@ msgstr "Import Directory"
 msgid "Import Directory Cancelled"
 msgstr "Import Directory Cancelled"
 
-msgid "Import files from"
-msgstr "Import files from"
+msgid "Importing"
+msgstr "Importing"
 
 msgid "Files processed"
 msgstr "Files processed"
@@ -165,6 +162,9 @@ msgstr "File"
 
 msgid "Help"
 msgstr "Help"
+
+msgid "Import Files"
+msgstr "Import Files"
 
 msgid "Clone Project"
 msgstr "Clone Project"
@@ -292,6 +292,24 @@ msgstr "Number of Series"
 msgid "Number of Instances"
 msgstr "Number of Instances"
 
+msgid "MY_PROJECT"
+msgstr "MY_PROJECT"
+
+msgid "Documents"
+msgstr "Documents"
+
+msgid "RSNA Anonymizer"
+msgstr "RSNA Anonymizer"
+
+msgid "ANONYMIZER"
+msgstr "ANONYMIZER"
+
+msgid "QUERY"
+msgstr "QUERY"
+
+msgid "EXPORT"
+msgstr "EXPORT"
+
 msgid "private"
 msgstr "private"
 
@@ -303,21 +321,6 @@ msgstr "phi_export"
 
 msgid "quarantine"
 msgstr "quarantine"
-
-msgid "MY_PROJECT"
-msgstr "MY_PROJECT"
-
-msgid "ANONYMIZER_STORE"
-msgstr "ANONYMIZER_STORE"
-
-msgid "ANONYMIZER"
-msgstr "ANONYMIZER"
-
-msgid "QUERY"
-msgstr ""
-
-msgid "EXPORT"
-msgstr ""
 
 msgid "Progress Dialog"
 msgstr "Progress Dialog"
@@ -397,8 +400,8 @@ msgstr "Images"
 msgid "Anonymizer Queue"
 msgstr "Anonymizer Queue"
 
-msgid "server online"
-msgstr "server online"
+msgid "online"
+msgstr "online"
 
 msgid "Connection Error"
 msgstr "Connection Error"
@@ -412,14 +415,20 @@ msgstr "Check Project Settings"
 msgid "Ensure the remote server is setup to allow the local server for echo and storage services."
 msgstr "Ensure the remote server is setup to allow the local server for echo and storage services."
 
-msgid "Server offline"
-msgstr "Server offline"
+msgid "offline"
+msgstr "offline"
+
+msgid "Query Server"
+msgstr "Query Server"
 
 msgid "Checking Query DICOM Server is online"
 msgstr "Checking Query DICOM Server is online"
 
 msgid "Waiting for AWS Authentication"
 msgstr "Waiting for AWS Authentication"
+
+msgid "Export Server"
+msgstr "Export Server"
 
 msgid "Checking Export DICOM Server is online"
 msgstr "Checking Export DICOM Server is online"
@@ -514,6 +523,12 @@ msgstr "Importing Studies"
 msgid "Importing Study"
 msgstr "Importing Study"
 
+msgid "IMAGE"
+msgstr "IMAGE"
+
+msgid "INSTANCE"
+msgstr "INSTANCE"
+
 msgid "Import from"
 msgstr "Import from"
 
@@ -578,10 +593,7 @@ msgid "STUDY"
 msgstr "STUDY"
 
 msgid "SERIES"
-msgstr ""
-
-msgid "INSTANCE"
-msgstr ""
+msgstr "SERIES"
 
 msgid "Query, Retrieve & Import Studies"
 msgstr "Query, Retrieve & Import Studies"
@@ -772,12 +784,6 @@ msgstr "DICOM Servers"
 msgid "Local Server"
 msgstr "Local Server"
 
-msgid "Query Server"
-msgstr "Query Server"
-
-msgid "Export Server"
-msgstr "Export Server"
-
 msgid "AWS S3 Server"
 msgstr "AWS S3 Server"
 
@@ -891,6 +897,12 @@ msgstr "Go to Help/Operation for instructions on how to use the program."
 
 msgid "Select File/New Project to start."
 msgstr "Select File/New Project to start."
+
+#~ msgid "Import files from"
+#~ msgstr "Import files from"
+
+#~ msgid "ANONYMIZER_STORE"
+#~ msgstr "ANONYMIZER_STORE"
 
 #~ msgid "Export Studies"
 #~ msgstr "Export Studies"

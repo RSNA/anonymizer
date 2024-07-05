@@ -10,29 +10,14 @@ from src.controller.project import (
     MoveStudiesRequest,
     StudyUIDHierarchy,
 )
-from src.model.project import DICOMNode, DICOMRuntimeError
-from src.controller.dicom_C_codes import C_SUCCESS, C_PENDING_A, C_PENDING_B
-
-# from controller.dicom_send_scu import (
-#     export_patients,
-#     ExportRequest,
-#     ExportResponse,
-# )
+from src.model.project import DICOMNode
 
 # DICOM NODES involved in tests:
 from tests.controller.dicom_test_nodes import LocalStorageSCP, PACSSimulatorSCP, OrthancSCP
 from src.model.project import ProjectModel
 
 
-# TEST HELPER FUNCTIONS
-def local_storage_dir(temp_dir: str):
-    return Path(
-        temp_dir,
-        LocalStorageSCP.aet,
-        ProjectModel.PUBLIC_DIR,
-    )
-
-
+# TEST HELPER FUNCTION
 def pacs_storage_dir(temp_dir: str):
     return Path(temp_dir, PACSSimulatorSCP.aet)
 

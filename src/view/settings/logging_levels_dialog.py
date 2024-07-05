@@ -44,11 +44,10 @@ class LoggingLevelsDialog(tk.Toplevel):
         self,
         parent,
         levels: LoggingLevels,
-        title: str = _("Logging Levels"),
     ):
         super().__init__(master=parent)
         self.levels = levels
-        self.title(title)
+        self.title(_("Logging Levels"))
         self.resizable(False, False)
         self._user_input: Union[LoggingLevels, None] = None
         self._create_widgets()

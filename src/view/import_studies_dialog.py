@@ -18,15 +18,16 @@ class ImportStudiesDialog(tk.Toplevel):
         controller: ProjectController,
         studies: List[StudyUIDHierarchy],
         move_level: str,
-        scp_name: str = "QUERY",
-        title: str = _("Importing Studies"),
     ):
         super().__init__(master=parent)
+        self._data_font = parent._data_font
+        self._scp_name = _("QUERY")
 
+        title = _("Importing Studies")
         if len(studies) == 1:
             title = _("Importing Study")
 
-        self.title(f"{title} from {controller.model.remote_scps[scp_name].aet}")
+        self.title(f"{title} from {controller.model.remote_scps[self._scp_name].aet}")
 
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.resizable(False, False)
@@ -37,8 +38,7 @@ class ImportStudiesDialog(tk.Toplevel):
         self.studies = studies
         self._instances_to_import = 0
         self._study_metadata_retrieved = 0
-        self._scp_name = scp_name
-
+        
         self.rowconfigure(0, weight=1)
         self.columnconfigure(1, weight=1)
         self._last_grid_row = 0
@@ -51,7 +51,7 @@ class ImportStudiesDialog(tk.Toplevel):
 
         # Phase 1: Start background task to get StudyUIDHierarchies:
         self._controller.get_study_uid_hierarchies_ex(
-            scp_name, self.studies, instance_level=move_level in ["IMAGE", "INSTANCE"]
+            self._scp_name, self.studies, instance_level=move_level in [_("IMAGE"), _("INSTANCE")]
         )
         self._update_progress_get_hierarchies()
 
@@ -89,7 +89,7 @@ class ImportStudiesDialog(tk.Toplevel):
 
         row += 1
 
-        self._metadata_progress_label = ctk.CTkLabel(self._frame, text="")
+        self._metadata_progress_label = ctk.CTkLabel(self._frame, text="", font=self._data_font)
         self._metadata_progress_label.grid(row=row, column=0, padx=PAD, pady=(0, PAD), sticky="w")
 
         row += 1
@@ -129,7 +129,7 @@ class ImportStudiesDialog(tk.Toplevel):
 
         row += 1
 
-        self._import_progress_label = ctk.CTkLabel(self._frame, text="")
+        self._import_progress_label = ctk.CTkLabel(self._frame, text="", font=self._data_font)
         self._import_progress_label.grid(row=row, column=0, padx=PAD, pady=(0, PAD), sticky="w")
 
         row += 1
@@ -227,7 +227,7 @@ class ImportStudiesDialog(tk.Toplevel):
             else:
                 return
         else:
-            self._controller.abort_move()
+            self._controller.abort_query()
         self.grab_release()
         self.destroy()
 

@@ -49,14 +49,13 @@ class SOPClassesDialog(tk.Toplevel):
         self,
         parent,
         sop_classes: list[str],
-        modalities: list[str],
-        title: str = _("Select Storage Classes"),
+        modalities: list[str]
     ):
         super().__init__(master=parent)
         self.root: ctk.CTk = parent.master
         self.sop_classes = sop_classes
         self.modalities = modalities
-        self.title(title)
+        self.title(_("Select Storage Classes"))
         self.resizable(True, True)
         self._user_input: Union[list, None] = None
         self.rowconfigure(0, weight=1)

@@ -20,18 +20,20 @@ class ImportFilesDialog(tk.Toplevel):
         parent,
         controller: AnonymizerController,
         paths: list[str] | tuple[str, ...],
-        title: str = _("Import Files"),
-        sub_title: str = _("Please wait..."),
     ) -> None:
         super().__init__(master=parent)
+        title = _("Import Files")
+        sub_title = _("Importing") + f" {len(paths)} {_('file') if len(paths) == 1 else _('files')}"
+
+        self.title(title)
+        self._sub_title: str = sub_title
         self._data_font = parent.mono_font
         self._controller: AnonymizerController = controller
         self._paths: list[str] | tuple[str, ...] = paths
         self._cancelled = False
         self._scrolled_to_bottom = False
         self.files_processed = 0
-        self.title(title)
-        self._sub_title: str = sub_title
+
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.text_box_width = 800
         if len(self._paths) > 10:
@@ -77,7 +79,7 @@ class ImportFilesDialog(tk.Toplevel):
 
         self._progressbar.set(0)
 
-        self._progress_label = ctk.CTkLabel(self._frame, text=f"Process 0 of {len(self._paths)}", font=self._data_font)
+        self._progress_label = ctk.CTkLabel(self._frame, text="", font=self._data_font)
         self._progress_label.grid(row=row, column=0, padx=PAD, pady=(0, PAD), sticky="nw")
 
         row += 1
@@ -126,7 +128,7 @@ class ImportFilesDialog(tk.Toplevel):
                 self._text_box.see(tk.END)
                 self._text_box.yview_moveto(1.0)
 
-            self._progress_label.configure(text=f"Processing {file_index} of {files_to_process}")
+            self._progress_label.configure(text=_("Processing") + f" {file_index} " + _("of") + f" {files_to_process}")
 
             # TODO: Optimize using multiple file processing threads, either use Anonymizer queue
             # or split the files into chunks and process them in parallel:

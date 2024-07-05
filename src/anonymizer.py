@@ -119,7 +119,6 @@ class Anonymizer(ctk.CTk):
         text_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkLabel"]["text_color"])
         selected_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["text_color"])
         selected_bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["fg_color"])
-        border_width = 1
         # Treeview from ThemeManager:
         if "Treeview" in ctk.ThemeManager.theme:
             tv_theme = ctk.ThemeManager.theme["Treeview"]
@@ -131,16 +130,16 @@ class Anonymizer(ctk.CTk):
                 selected_color = self._apply_appearance_mode(tv_theme["selected_color"])
             if "selected_bg_color" in tv_theme:
                 selected_bg_color = self._apply_appearance_mode(tv_theme["selected_bg_color"])
-            if "border_width" in tv_theme:
-                border_width = tv_theme["border_width"]
 
         treestyle = ttk.Style()
+        treestyle.configure(
+            "Treeview.Heading", background=bg_color, foreground=text_color, font=ctk.CTkFont()
+        )  # size is larger on windows?
         treestyle.configure(
             "Treeview",
             background=bg_color,
             foreground=text_color,
             fieldbackground=bg_color,
-            borderwidth=border_width,
             font=str(self.mono_font),
         )
         treestyle.map(
@@ -149,9 +148,6 @@ class Anonymizer(ctk.CTk):
             foreground=[("selected", selected_color)],
             font=[("selected", str(self.mono_font))],
         )
-        treestyle.configure(
-            "Treeview.Heading", background=bg_color, foreground=text_color, font=ctk.CTkFont()
-        )  # size is larger on windows?
 
     # Callback from WelcomeView
     def change_language(self, language):
@@ -380,6 +376,17 @@ class Anonymizer(ctk.CTk):
             else:
                 model = file_model
 
+            # Ensure Current Language matches Project Language:
+            if model.language_code != get_current_language_code():
+                logger.error(f"Project Model language mismatch {model.language_code} != {get_current_language_code()}")
+                messagebox.showerror(
+                    title=_("Open Project Error"),
+                    message=_("Project language mismatch") + f": {model.language_code}",
+                    parent=self,
+                )
+                self.enable_file_menu()
+                return
+
             try:
                 self.controller = ProjectController(model)
                 if file_model.version != ProjectModel.MODEL_VERSION:
@@ -600,13 +607,7 @@ class Anonymizer(ctk.CTk):
             self.enable_file_menu()
             return
 
-        dlg = ImportFilesDialog(
-            self,
-            self.controller.anonymizer,
-            file_paths,
-            title=_("Import Files"),
-            sub_title=_("Importing" + f" {len(file_paths)} {_('file') if len(file_paths) == 1 else _('files')}"),
-        )
+        dlg = ImportFilesDialog(self, self.controller.anonymizer, file_paths)
         dlg.get_input()
         self.enable_file_menu()
 
@@ -740,13 +741,7 @@ class Anonymizer(ctk.CTk):
         logger.info(msg)
         self.dashboard.set_status(msg)
 
-        dlg = ImportFilesDialog(
-            self,
-            self.controller.anonymizer,
-            sorted(file_paths),
-            title=_("Import Directory"),
-            sub_title=_("Import files from") + f" {root_dir}",
-        )
+        dlg = ImportFilesDialog(self, self.controller.anonymizer, sorted(file_paths))
         files_processed = dlg.get_input()
         msg = _("Files processed") + f": {files_processed}"
         logger.info(msg)

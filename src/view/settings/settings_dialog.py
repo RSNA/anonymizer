@@ -7,7 +7,7 @@ import string
 import logging
 from model.project import ProjectModel, AWSCognito
 from controller.project import DICOMNode
-from utils.translate import _
+from utils.translate import _, get_current_language_code
 from utils.ux_fields import str_entry
 from utils.logging import set_logging_levels
 from utils.storage import read_java_anonymizer_index_xlsx, JavaAnonymizerExportedStudy
@@ -24,17 +24,13 @@ logger = logging.getLogger(__name__)
 
 # TODO: ctk.CTkToplevel does not handle window icon on Windows
 class SettingsDialog(tk.Toplevel):
-    def __init__(
-        self,
-        parent,
-        model: ProjectModel,
-        new_model: bool = False,
-        title: str = _("Project Settings"),
-    ):
+    def __init__(self, parent, model: ProjectModel, new_model: bool = False, title: str = None):
         super().__init__(master=parent)
         self.model: ProjectModel = model
         self.java_phi_studies: List[JavaAnonymizerExportedStudy] = []
         self.new_model = new_model  # to restrict editing for existing projects, eg. SITE_ID & storage directory changes
+        if title is None:
+            title = _("Project Settings")
         self.title(title)
         self.resizable(False, False)
         self._user_input: Tuple[ProjectModel | None, List[JavaAnonymizerExportedStudy] | None] = (None, None)
@@ -99,6 +95,8 @@ class SettingsDialog(tk.Toplevel):
             sticky="nw",
             enabled=self.new_model,
         )
+        self.project_name_var.trace_add("write", self._project_name_change)
+
         row += 1
 
         self.uidroot_var: ctk.StringVar = str_entry(
@@ -271,6 +269,14 @@ class SettingsDialog(tk.Toplevel):
             sticky="e",
         )
 
+    def _project_name_change(self, name, index, mode):
+        logger.info(f"_project_name_change")
+        self.model.project_name = self.project_name_var.get()
+        logger.info(f"Project Name updated: {self.model.project_name}")
+        self.model.storage_dir = self.model.storage_dir.parent / self.model.project_name
+        self._storage_dir_button.configure(text=self.model.abridged_storage_dir())
+        logger.info(f"Storage Directory updated: {self.model.storage_dir}")
+
     def _local_server_click(self, event=None):
         dlg = DICOMNodeDialog(self, self.model.scp, title=_("Local Server"))
         scp: DICOMNode | None = dlg.get_input()
@@ -283,8 +289,8 @@ class SettingsDialog(tk.Toplevel):
         # TODO: prevent local server from being a remote server / same address/port
 
     def _query_server_click(self, event=None):
-        if "QUERY" in self.model.remote_scps:
-            scp = self.model.remote_scps["QUERY"]
+        if _("QUERY") in self.model.remote_scps:
+            scp = self.model.remote_scps[_("QUERY")]
         else:
             scp = DICOMNode("127.0.0.1", 104, "", False)
         dlg = DICOMNodeDialog(self, scp, title=_("Query Server"))
@@ -292,12 +298,12 @@ class SettingsDialog(tk.Toplevel):
         if scp is None:
             logger.info(f"Query Server cancelled")
             return
-        self.model.remote_scps["QUERY"] = scp
+        self.model.remote_scps[_("QUERY")] = scp
         logger.info(f"Remote Servers: {self.model.remote_scps}")
 
     def _export_server_click(self, event=None):
-        if "EXPORT" in self.model.remote_scps:
-            scp = self.model.remote_scps["EXPORT"]
+        if _("EXPORT") in self.model.remote_scps:
+            scp = self.model.remote_scps[_("EXPORT")]
         else:
             scp = DICOMNode("127.0.0.1", 104, "", False)
         dlg = DICOMNodeDialog(self, scp, title=_("Export Server"))
@@ -305,7 +311,7 @@ class SettingsDialog(tk.Toplevel):
         if scp is None:
             logger.info(f"Export Server cancelled")
             return
-        self.model.remote_scps["EXPORT"] = scp
+        self.model.remote_scps[_("EXPORT")] = scp
         logger.info(f"Remote Servers: {self.model.remote_scps}")
 
     def _aws_cognito_click(self, event=None):
@@ -452,6 +458,7 @@ class SettingsDialog(tk.Toplevel):
 
     def _create_project(self):
         self.model.site_id = self.site_id_var.get()
+        self.model.language_code = get_current_language_code()
         self.model.project_name = self.project_name_var.get()
         self.model.uid_root = self.uidroot_var.get()
         self._user_input = self.model, self.java_phi_studies

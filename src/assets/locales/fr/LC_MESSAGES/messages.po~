@@ -178,6 +178,24 @@ msgstr "Projet"
 msgid "Settings"
 msgstr "Paramètres"
 
+msgid "Invalid_DICOM"
+msgstr "DICOM_Invalide"
+
+msgid "DICOM_Read_Error"
+msgstr "Erreur_Lecture_DICOM"
+
+msgid "Missing_Attributes"
+msgstr "Attributs_Manquants"
+
+msgid "Invalid_Storage_Class"
+msgstr "Classe_Stockage_Invalide"
+
+msgid "Capture_PHI_Error"
+msgstr "Erreur_Capture_PHI"
+
+msgid "Storage_Error"
+msgstr "Erreur_Stockage"
+
 msgid "Dataset missing required attributes"
 msgstr "Ensemble de données manquant d'attributs requis"
 
@@ -226,6 +244,9 @@ msgstr "Jeton IdentityId non présent dans la réponse"
 msgid "Unable to retrieve UID Hierarchy for reliable import operation via DICOM C-MOVE."
 msgstr "Impossible de récupérer la hiérarchie UID pour une opération d'importation fiable via DICOM C-MOVE."
 
+msgid "Server"
+msgstr "Serveur"
+
 msgid "did not return the number of instances in a series."
 msgstr "n'a pas retourné le nombre d'instances dans une série."
 
@@ -271,14 +292,37 @@ msgstr "Nombre de Séries"
 msgid "Number of Instances"
 msgstr "Nombre d'Instances"
 
+msgid "private"
+msgstr "privé"
+
+msgid "public"
+msgstr "public"
+
+msgid "phi_export"
+msgstr "phi_export"
+
+msgid "quarantine"
+msgstr "quarantaine"
+
 msgid "MY_PROJECT"
 msgstr "MON_PROJET"
 
-msgid "ANONYMIZER_STORE"
-msgstr "MAGASIN_D'ANONYMISATEUR"
+#, fuzzy
+msgid "Documents"
+msgstr "Document"
+
+#, fuzzy
+msgid "RSNA Anonymizer"
+msgstr "Version de l'Anonymiseur DICOM RSNA"
 
 msgid "ANONYMIZER"
 msgstr "ANONYMISEUR"
+
+msgid "QUERY"
+msgstr ""
+
+msgid "EXPORT"
+msgstr ""
 
 msgid "Progress Dialog"
 msgstr "Dialogue de Progression"
@@ -358,7 +402,8 @@ msgstr "Images"
 msgid "Anonymizer Queue"
 msgstr "File d'Attente de l'Anonymiseur"
 
-msgid "server online"
+#, fuzzy
+msgid "Server online"
 msgstr "serveur en ligne"
 
 msgid "Connection Error"
@@ -369,9 +414,6 @@ msgstr "Échec du Serveur DICOM ECHO"
 
 msgid "Check Project Settings"
 msgstr "Vérifier les Paramètres du Projet"
-
-msgid "Server"
-msgstr "Serveur"
 
 msgid "Ensure the remote server is setup to allow the local server for echo and storage services."
 msgstr "Assurez-vous que le serveur distant est configuré pour permettre au serveur local d'utiliser les services d'écho et de stockage."
@@ -538,6 +580,15 @@ msgstr "Dernière erreur d'importation"
 msgid "StudyInstanceUID"
 msgstr "UID de l'instance d'étude"
 
+msgid "STUDY"
+msgstr "ÉTUDE"
+
+msgid "SERIES"
+msgstr ""
+
+msgid "INSTANCE"
+msgstr ""
+
 msgid "Query, Retrieve & Import Studies"
 msgstr "Interroger, récupérer et importer des études"
 
@@ -567,9 +618,6 @@ msgstr "Études sélectionnées"
 
 msgid "Move Level"
 msgstr "Niveau de déplacement"
-
-msgid "STUDY"
-msgstr "ÉTUDE"
 
 msgid "Import & Anonymize"
 msgstr "Importer et anonymiser"
@@ -849,6 +897,9 @@ msgstr "Accédez à Aide/Opération pour des instructions sur l'utilisation du p
 
 msgid "Select File/New Project to start."
 msgstr "Sélectionnez Fichier/Nouveau projet pour commencer."
+
+#~ msgid "ANONYMIZER_STORE"
+#~ msgstr "MAGASIN_D'ANONYMISATEUR"
 
 #~ msgid "Export Studies"
 #~ msgstr "Exporter les Études"

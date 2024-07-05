@@ -12,7 +12,7 @@ siehe https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support 
 			<li>Die meisten Einstellungen können durch Klicken auf den entsprechenden blauen Button konfiguriert werden.</li>
 			<li>Jede Einstellung wird unten beschrieben:</li>
 		</ul>
-		<img src="assets/locales/en_US/html/images/NewProjectSettings.png"/>
+		<img src="assets/locales/de/html/images/NeueProjekteinstellungen.png"/>
 
 			<h3>Standort-ID</h3>
 			<ul>
@@ -36,6 +36,7 @@ siehe https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support 
 			<ul>
 				<li>Der Projektname muss weniger als 16 Zeichen lang sein.</li> 
 				<li>Der Projektname wird als zweiter Eintrag im privaten Block (0013,1003) jeder anonymisierten DICOM-Datei geschrieben.</li>
+				<li>Das Projektname wird als Standardverzeichnisname für den Anonymisierungs-Speicher verwendet, siehe die Einstellung des Speicherverzeichnisses unten.</li>
 				<li>Der Projektname erscheint in der Titelleiste des Dashboards eines geöffneten Projekts gefolgt von der Standort-ID in eckigen Klammern.</li>
 				<li>Der Projektname <b>kann nach der Projekt-Erstellung nicht geändert werden</b>.</li>
 			</ul>
@@ -50,7 +51,7 @@ siehe https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support 
 
 			<h3>DICOM-Server</h3>
 				<h4>Lokaler Server</h4>
-				<img src="assets/locales/en_US/html/images/LocalServer.png"/>
+				<img src="assets/locales/de/html/images/LokalerServer.png"/>
 				<ul>
 					<li>Der lokale Server fungiert sowohl als DICOM Service Class Provider (SCP) als auch als Service Class User (SCU) für den Anonymizer.</li>
 					<li>Die Dropdown-Liste Adresse wird mit den IP-Adressen der Netzwerk-Schnittstellen des lokalen Rechners gefüllt.</li>
@@ -60,22 +61,22 @@ siehe https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support 
 					<li>Der lokale Server SCU erhält Ports vom Betriebssystem für ausgehende DICOM-Assoziationen, verwendet aber die gleiche Adresse und den gleichen AE-Titel wie der SCP.</li>
 				</ul>
 
-				<h4>Abfrage-Server</h4>
-				<img src="assets/locales/en_US/html/images/QueryServer.png"/>
+				<h4>DICOM Bildarchiv (Query/Retrieve-Server)</h4>
+				<img src="assets/locales/de/html/images/BildarchivQRServer.png"/>
 				<ul>	
-					<li>Der Abfrage-Server ist der entfernte DICOM Service Class Provider (SCP), den der Anonymizer abfragen und DICOM-Dateien abrufen wird.</li>
+					<li>Der DICOM Bildarchiv (Query/Retrieve-Server) ist der entfernte DICOM Service Class Provider (SCP), den der Anonymizer abfragen und DICOM-Dateien abrufen wird.</li>
 					<li>Wenn nötig und unterstützt durch die Netzwerkarchitektur, kann die Abfrage-Server-Adresse über seinen Domainnamen über eine DNS-Suche gefunden werden.</li>
 					<li>Die Abfrage-Server-Adresse, der Port und der AE-Titel geben an, wie der Abfrage-SCP auf eingehende DICOM-Assoziationen hört.</li> 
 					<li>Die lokalen SCU-Details des Anonymizers müssen typischerweise den erlaubten DICOM-SCU-Tabellen des entfernten Servers hinzugefügt werden, um den Zugriff zu ermöglichen.</li>
-					<li>Der Abfrage-Server muss konfiguriert sein, um dem Anonymizer SCU zu erlauben, C-ECHO-, C-FIND- und C-MOVE-Anforderungen auszuführen.</li>
-					<li>Der Abfrage-Server muss mit den Zielinformationen des Anonymizer SCP (Adresse, Port, AE-Titel) konfiguriert sein.</li>
+					<li>Der DICOM Bildarchiv (Query/Retrieve-Server) muss konfiguriert sein, um dem Anonymizer SCU zu erlauben, C-ECHO-, C-FIND- und C-MOVE-Anforderungen auszuführen.</li>
+					<li>Der DICOM Bildarchiv (Query/Retrieve-Server) muss mit den Zielinformationen des Anonymizer SCP (Adresse, Port, AE-Titel) konfiguriert sein.</li>
 					<li>Der Anonymizer lokale SCU ruft DICOM-Studien und deren zugehörige Dateien vom Abfrage-Server ab, indem er DICOM C-MOVE-Anforderungen auf einer benutzerdefinierten Ebene ausführt.</li>
 					<li>Der Anonymizer lokale SCP empfängt die Dateien vom Abfrage-Server über eine separate Assoziation, von der die Anforderung gemacht wurde (gemäß dem C-MOVE-Protokoll).</li>
 					<li>Die Details des Abfrage- und Importprozesses finden Sie im Abschnitt <i>Abfrage-, Abruf- und Importansicht</i> unten.</li>
 				</ul>
 
 				<h4>Export-Server</h4>
-				<img src="assets/locales/en_US/html/images/ExportServer.png"/>
+				<img src="assets/locales/de/html/images/ExportServer.png"/>
 				<ul>	
 					<li>Der Export-Server ist der entfernte DICOM Service Class Provider (SCP), an den der Anonymizer DICOM-Dateien sendet.</li>
 					<li>Wenn nötig und unterstützt durch die Netzwerkarchitektur, kann die Export-Server-Adresse über seinen Domainnamen über eine DNS-Suche gefunden werden.</li>
@@ -87,7 +88,7 @@ siehe https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support 
 				</ul>
 				
 			<h3>AWS S3-Server</h3>
-			<img src="assets/locales/en_US/html/images/AWSCognitoCredentials.png"/>
+			<img src="assets/locales/de/html/images/AWSCognitoCredentials.png"/>
 			<ul>
 				<li>Der AWS Cognito Credentials-Dialog erfasst die Parameter, die der Anonymizer benötigt, um anonymisierte Studien als AWS Cognito-Anwendungsbenutzer an einen AWS S3-Speicherbucket zu senden.</li>
 				<li>Die Standardwerte außer Benutzername und Passwort sind die Werte, die für das RSNA Imaging Archive gesendet werden müssen.</li>
@@ -97,34 +98,34 @@ siehe https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support 
 				<li>Die Details des Exportprozesses zu AWS S3 finden Sie im Abschnitt <i>Exportansicht</i> unten.</li></li>
 			</ul>
 
-			<h3>Netzwerk-Timeouts</h3>
-			<img src="assets/locales/en_US/html/images/NetworkTimeouts.png"/>
+			<h3>Netzwerk-Zeitüberschreitungen</h3>
+			<img src="assets/locales/de/html/images/Netzwerk-Zeitüberschreitungen.png"/>
 			<ul>
-				<li>Die Netzwerk-Timeouts sind die maximale Zeit, die der Anonymizer auf eine Antwort von einem entfernten DICOM-Server wartet, bevor er abbricht.</li>
-				<li>Es gibt 4 verschiedene Timeouts, die in Sekunden eingestellt werden können und an die Netzwerkbedingungen angepasst werden können.</li>
+				<li>Die Netzwerk-Zeitüberschreitungen sind die maximale Zeit, die der Anonymizer auf eine Antwort von einem entfernten DICOM-Server wartet, bevor er abbricht.</li>
+				<li>Es gibt 4 verschiedene Zeitüberschreitungen, die in Sekunden eingestellt werden können und an die Netzwerkbedingungen angepasst werden können.</li>
 				<li>Die Standardwerte sind auf vernünftige Werte gesetzt, die die meisten Server berücksichtigen sollten.</li>
-				<li>Der Netzwerk-Timeout wird abgebrochen, wenn von dem entfernten Server keine erwartete Aktivität festgestellt wurde.</li>
-				<li>Der Netzwerk-Timeout ist der wahrscheinlichste Timeout, der möglicherweise angepasst werden muss.</li>
+				<li>Der Netzwerk-Zeitüberschreitung wird abgebrochen, wenn von dem entfernten Server keine erwartete Aktivität festgestellt wurde.</li>
+				<li>Der Netzwerk-Zeitüberschreitung ist der wahrscheinlichste Timeout, der möglicherweise angepasst werden muss.</li>
 			</ul>
 
 			<h3>Speicherverzeichnis</h3>
-			<img src="assets/locales/en_US/html/images/StorageDirectory.png"/>
+			<img src="assets/locales/de/html/images/Speicherverzeichnis.png"/>
 			<ul>
 				<li>Das Speicherverzeichnis ist ein lokaler Dateisystemstandort, an dem der Anonymizer die anonymisierten Dateien und alle Projektdaten speichert.</li>
 				<li>Die Projektdatei: <b><i>ProjectModel.pkl</i></b> speichert die Projekteinstellungen im Stammverzeichnis des Speicherverzeichnisses.</li>
-				<li>Zwei Unterordner werden aus dem Speicherverzeichnis-Stamm erstellt: <b><i>/private</i></b> und <b><i>/public</i></b>.</li>
-				<li>Der <b><i>/private</i></b> Unterordner enthält <i>Private Health Information (PHI)</i>, die aus eingehenden DICOM-Dateien extrahiert wurde.</li>
-				<li>Die Anonymizer-Datendatei: <b><i>/private/AnonymizerModel.pkl</i></b> speichert die PHI-Daten in komprimierter Form.</li>
-				<li>Verschiedene <b><i>/private/quarantine</i></b> Unterordner werden erstellt, wenn Fehler in eingehenden Dateien erkannt werden.</li>
-				<li>Der <b><i>/private/phi_export</i></b> Unterordner speichert alle PHI-Patienten-Lookup-Dateien, die aus der Exportansicht durch Klicken auf <i>Patient Lookup erstellen</i> erstellt wurden.</li>
-				<li>Der <b><i>/public</i></b> Unterordner enthält die anonymisierten Dateien mit der Struktur: <b><i>/public/[anonymized_patient_id]/[study_uid]/[series_uid]/[instance_uid].dcm</i></b></li>
+				<li>Zwei Unterordner werden aus dem Speicherverzeichnis-Stamm erstellt: <b><i>/privat</i></b> und <b><i>/öffentlich</i></b>.</li>
+				<li>Der <b><i>/privat</i></b> Unterordner enthält <i>Private Health Information (PHI)</i>, die aus eingehenden DICOM-Dateien extrahiert wurde.</li>
+				<li>Die Anonymizer-Datendatei: <b><i>/privat/AnonymizerModel.pkl</i></b> speichert die PHI-Daten in komprimierter Form.</li>
+				<li>Verschiedene <b><i>/privat/quarantäne</i></b> Unterordner werden erstellt, wenn Fehler in eingehenden Dateien erkannt werden.</li>
+				<li>Der <b><i>/privat/phi_export</i></b> Unterordner speichert alle PHI-Patienten-Lookup-Dateien, die aus der Exportansicht durch Klicken auf <i>Patient Lookup erstellen</i> erstellt wurden.</li>
+				<li>Der <b><i>/öffentlich</i></b> Unterordner enthält die anonymisierten Dateien mit der Struktur: <b><i>/öffentlich/[anonymized_patient_id]/[study_uid]/[series_uid]/[instance_uid].dcm</i></b></li>
 				<li>Das Speicherverzeichnis <b>kann nach der Projekt-Erstellung nicht geändert werden</b>.</li>
 			</ul>
 
 			<h3>Modalitäten</h3>
-			<img src="assets/locales/en_US/html/images/Modalities.png"/>
+			<img src="assets/locales/de/html/images/Modalitäten.png"/>
 			<ul>
-				<li>Der Modalitäten-Dialog listet die Bildgebungsmethoden auf, die typischerweise in der Radiologie zu finden sind.</li>
+				<li>Der Modalitäten-Dialog listet die Bildgebirgsmethoden auf, die typischerweise in der Radiologie zu finden sind.</li>
 				<li>Klicken Sie auf einen Eintrag, um eine Modalität auszuwählen/abzuwählen. Eine ausgewählte Modalität wird grün hervorgehoben.</li>
 				<li>Der Anonymizer akzeptiert nur Dateien mit Modalitäten, die hier ausgewählt sind.</li>
 				<li>Es besteht eine eins-zu-viele-Beziehung zwischen einer Modalität und der Speicherklasse.</li>
@@ -133,7 +134,7 @@ siehe https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support 
 			</ul>
 
 			<h3>Speicherklassen</h3>
-			<img src="assets/locales/en_US/html/images/StorageClasses.png"/>
+			<img src="assets/locales/de/html/images/Speicherklassen.png"/>
 			<ul>
 				<li>Der Speicherklassen-Dialog listet alle aktuellen DICOM-Speicherklassen auf, die durch den Standard definiert sind.</li>
 				<li>Die Liste der Speicherklassen, die durch die oben ausgewählten Modalitäten impliziert werden, kann hier bestätigt und/oder bearbeitet werden.</li>
@@ -142,13 +143,13 @@ siehe https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support 
 			</ul>
 
 			<h3>Übertragungssyntaxen</h3>
-			<img src="assets/locales/en_US/html/images/TransferSyntaxes.png"/>
+			<img src="assets/locales/de/html/images/TransferSyntaxen.png"/>
 			<ul>
-				<li>Der Übertragungssyntaxen-Dialog listet die Datenformate auf, die derzeit vom Anonymizer unterstützt werden.</li>
-				<li>Die ersten 4 Übertragungssyntaxen verwenden keine Bildkompression und sind standardmäßig ausgewählt.</li>
-				<li>Die anderen Übertragungssyntaxen bieten Unterstützung für die JPEG-Bildkompression mit unterschiedlichen Algorithmen.</li>
-				<li>Die ausgewählten Speicherklassen in Kombination mit den ausgewählten Übertragungssyntaxen bestimmen, welche DICOM-Dateien vom Anonymizer akzeptiert werden.</li>
-				<li>Die Präsentations- und Speicherkontexte, die durch die ausgewählten Speicherklassen und Übertragungssyntaxen bestimmt werden, werden bei der Verhandlung von Assoziationen verwendet, wenn der Anonymizer als SCU und SCP fungiert.</li>
+				<li>Der Transfersyntaxen-Dialog listet die Datenformate auf, die derzeit vom Anonymizer unterstützt werden.</li>
+				<li>Die ersten 4 Transfersyntaxen verwenden keine Bildkompression und sind standardmäßig ausgewählt.</li>
+				<li>Die anderen Transfersyntaxen bieten Unterstützung für die JPEG-Bildkompression mit unterschiedlichen Algorithmen.</li>
+				<li>Die ausgewählten Speicherklassen in Kombination mit den ausgewählten Transfersyntaxen bestimmen, welche DICOM-Dateien vom Anonymizer akzeptiert werden.</li>
+				<li>Die Präsentation- und Speicherkontexte, die durch die ausgewählten Speicherklassen und Transfersyntaxen bestimmt werden, werden bei der Verhandlung von Assoziationen verwendet, wenn der Anonymizer als SCU und SCP fungiert.</li>
 				<li>Der Anonymizer transkodiert keine DICOM-Dateien von einer Übertragungssyntax in eine andere.</li>
 				<li>Die Übertragungssyntax der von dem Anonymizer empfangenen DICOM-Dateien wird in der entsprechenden anonymisierten Datei beibehalten.</li>
 
@@ -162,7 +163,7 @@ siehe https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support 
 			</ul>
 
 			<h3>Logging-Level</h3>
-			<img src="assets/locales/en_US/html/images/LoggingLevels.png"/>
+			<img src="assets/locales/de/html/images/Protokollierungsstufen.png"/>
 			<ul>
 				<li>Der Anonymizer generiert detaillierte Protokollinformationen, erfasst Programmaktivitäten auf Debug-, Info-, Warnungs-, Fehler- und Kritische-Ebenen und speichert sie in einer Datei.</li>
 				<li>Es gibt bis zu 10 Logdateien (maximale Größe: 100MB) in einer rotierenden Liste.</li>

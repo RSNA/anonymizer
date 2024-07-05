@@ -49,6 +49,9 @@ msgstr ""
 msgid "Project File corrupted, missing version information."
 msgstr ""
 
+msgid "Project language mismatch"
+msgstr ""
+
 msgid "No Project file not found in"
 msgstr ""
 
@@ -85,12 +88,6 @@ msgstr ""
 msgid "Select DICOM Files to Import & Anonymize"
 msgstr ""
 
-msgid "Import Files"
-msgstr ""
-
-msgid "Importing"
-msgstr ""
-
 msgid "Select DICOM Directory to Import & Anonymize"
 msgstr ""
 
@@ -121,7 +118,7 @@ msgstr ""
 msgid "Import Directory Cancelled"
 msgstr ""
 
-msgid "Import files from"
+msgid "Importing"
 msgstr ""
 
 msgid "Files processed"
@@ -152,6 +149,9 @@ msgid "File"
 msgstr ""
 
 msgid "Help"
+msgstr ""
+
+msgid "Import Files"
 msgstr ""
 
 msgid "Clone Project"
@@ -280,6 +280,24 @@ msgstr ""
 msgid "Number of Instances"
 msgstr ""
 
+msgid "MY_PROJECT"
+msgstr ""
+
+msgid "Documents"
+msgstr ""
+
+msgid "RSNA Anonymizer"
+msgstr ""
+
+msgid "ANONYMIZER"
+msgstr ""
+
+msgid "QUERY"
+msgstr ""
+
+msgid "EXPORT"
+msgstr ""
+
 msgid "private"
 msgstr ""
 
@@ -290,21 +308,6 @@ msgid "phi_export"
 msgstr ""
 
 msgid "quarantine"
-msgstr ""
-
-msgid "MY_PROJECT"
-msgstr ""
-
-msgid "ANONYMIZER_STORE"
-msgstr ""
-
-msgid "ANONYMIZER"
-msgstr ""
-
-msgid "QUERY"
-msgstr ""
-
-msgid "EXPORT"
 msgstr ""
 
 msgid "Progress Dialog"
@@ -385,7 +388,7 @@ msgstr ""
 msgid "Anonymizer Queue"
 msgstr ""
 
-msgid "server online"
+msgid "online"
 msgstr ""
 
 msgid "Connection Error"
@@ -400,13 +403,19 @@ msgstr ""
 msgid "Ensure the remote server is setup to allow the local server for echo and storage services."
 msgstr ""
 
-msgid "Server offline"
+msgid "offline"
+msgstr ""
+
+msgid "Query Server"
 msgstr ""
 
 msgid "Checking Query DICOM Server is online"
 msgstr ""
 
 msgid "Waiting for AWS Authentication"
+msgstr ""
+
+msgid "Export Server"
 msgstr ""
 
 msgid "Checking Export DICOM Server is online"
@@ -502,6 +511,12 @@ msgstr ""
 msgid "Importing Study"
 msgstr ""
 
+msgid "IMAGE"
+msgstr ""
+
+msgid "INSTANCE"
+msgstr ""
+
 msgid "Import from"
 msgstr ""
 
@@ -566,9 +581,6 @@ msgid "STUDY"
 msgstr ""
 
 msgid "SERIES"
-msgstr ""
-
-msgid "INSTANCE"
 msgstr ""
 
 msgid "Query, Retrieve & Import Studies"
@@ -758,12 +770,6 @@ msgid "DICOM Servers"
 msgstr ""
 
 msgid "Local Server"
-msgstr ""
-
-msgid "Query Server"
-msgstr ""
-
-msgid "Export Server"
 msgstr ""
 
 msgid "AWS S3 Server"

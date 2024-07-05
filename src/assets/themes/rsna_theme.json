@@ -157,7 +157,6 @@
     "text_color": ["#014F8F", "#1E7BC7"],
     "selected_color": ["#DCE4EE", "#DCE4EE"],
     "selected_bg_color": ["#3a7ebf", "#1f538d"],
-    "border_width": 1,
     "font" : { 
       "macOS": {
         "family": "Menlo",

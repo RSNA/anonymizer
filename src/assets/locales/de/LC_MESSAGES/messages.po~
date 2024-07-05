@@ -113,7 +113,7 @@ msgid "Error reading DICOMDIR file"
 msgstr "Fehler beim Lesen der DICOMDIR-Datei"
 
 msgid "Import Directory Error"
-msgstr "Fehler beim Importverzeichnis"
+msgstr "Verzeichnis importieren Fehler"
 
 msgid "Reading filenames from"
 msgstr "Dateinamen lesen von"
@@ -128,10 +128,10 @@ msgid "Do you want to initiate import?"
 msgstr "Möchten Sie den Import starten?"
 
 msgid "Import Directory"
-msgstr "Importverzeichnis"
+msgstr "Verzeichnis importieren"
 
 msgid "Import Directory Cancelled"
-msgstr "Importverzeichnis abgebrochen"
+msgstr "Verzeichnis importieren abgebrochen"
 
 msgid "Import files from"
 msgstr "Dateien importieren von"
@@ -177,6 +177,24 @@ msgstr "Projekt"
 
 msgid "Settings"
 msgstr "Einstellungen"
+
+msgid "Invalid_DICOM"
+msgstr "Ungültiges_DICOM"
+
+msgid "DICOM_Read_Error"
+msgstr "DICOM_Lese_Fehler"
+
+msgid "Missing_Attributes"
+msgstr "Fehlende_Attribute"
+
+msgid "Invalid_Storage_Class"
+msgstr "Ungültige_Speicherklasse"
+
+msgid "Capture_PHI_Error"
+msgstr "PHI_Erfassungs_Fehler"
+
+msgid "Storage_Error"
+msgstr "Speicher_Fehler"
 
 msgid "Dataset missing required attributes"
 msgstr "Datensatz fehlt erforderliche Attribute"
@@ -226,6 +244,9 @@ msgstr "IdentityId Token nicht in der Antwort"
 msgid "Unable to retrieve UID Hierarchy for reliable import operation via DICOM C-MOVE."
 msgstr "UID-Hierarchie für zuverlässigen Importvorgang über DICOM C-MOVE kann nicht abgerufen werden."
 
+msgid "Server"
+msgstr "Server"
+
 msgid "did not return the number of instances in a series."
 msgstr "hat die Anzahl der Instanzen in einer Serie nicht zurückgegeben."
 
@@ -271,14 +292,35 @@ msgstr "Anzahl der Serien"
 msgid "Number of Instances"
 msgstr "Anzahl der Instanzen"
 
+msgid "private"
+msgstr "privat"
+
+msgid "public"
+msgstr "öffentlich"
+
+msgid "phi_export"
+msgstr "phi_export"
+
+msgid "quarantine"
+msgstr "quarantäne"
+
 msgid "MY_PROJECT"
 msgstr "MEIN_PROJEKT"
 
-msgid "ANONYMIZER_STORE"
-msgstr "ANONYMISIERER-SPEICHER"
+msgid "Documents"
+msgstr "Dokumente"
+
+msgid "RSNA Anonymizer"
+msgstr "RSNA Anonymisierer"
 
 msgid "ANONYMIZER"
 msgstr "ANONYMISIERER"
+
+msgid "QUERY"
+msgstr "ABFRAGE"
+
+msgid "EXPORT"
+msgstr "EXPORT"
 
 msgid "Progress Dialog"
 msgstr "Fortschrittsdialog"
@@ -358,8 +400,8 @@ msgstr "Bilder"
 msgid "Anonymizer Queue"
 msgstr "Anonymisierungswarteschlange"
 
-msgid "server online"
-msgstr "server online"
+msgid "Server online"
+msgstr "Server online"
 
 msgid "Connection Error"
 msgstr "Verbindungsfehler"
@@ -370,9 +412,6 @@ msgstr "Server hat DICOM ECHO fehlgeschlagen"
 msgid "Check Project Settings"
 msgstr "Projekteinstellungen prüfen"
 
-msgid "Server"
-msgstr "Server"
-
 msgid "Ensure the remote server is setup to allow the local server for echo and storage services."
 msgstr "Stellen Sie sicher, dass der Remote-Server so eingerichtet ist, dass der lokale Server für Echo- und Speicherdienste zugelassen wird."
 
@@ -380,7 +419,7 @@ msgid "Server offline"
 msgstr "Server offline"
 
 msgid "Checking Query DICOM Server is online"
-msgstr "Prüfen, ob der Abfrage-DICOM-Server online ist"
+msgstr "Prüfen, ob der DICOM-Bildarchiv (Q/R-Server) online ist"
 
 msgid "Waiting for AWS Authentication"
 msgstr "Warten auf AWS-Authentifizierung"
@@ -538,6 +577,15 @@ msgstr "Letzter Importfehler"
 msgid "StudyInstanceUID"
 msgstr "Studieninstanz-UID"
 
+msgid "STUDY"
+msgstr "STUDIE"
+
+msgid "SERIES"
+msgstr "SERIE"
+
+msgid "INSTANCE"
+msgstr "INSTANZ"
+
 msgid "Query, Retrieve & Import Studies"
 msgstr "Studien abfragen, abrufen und importieren"
 
@@ -568,9 +616,6 @@ msgstr "Ausgewählte Studien"
 msgid "Move Level"
 msgstr "Verschiebe-Ebene"
 
-msgid "STUDY"
-msgstr "STUDIE"
-
 msgid "Import & Anonymize"
 msgstr "Importieren und anonymisieren"
 
@@ -590,7 +635,7 @@ msgid "Accession Numbers not found were written to text file"
 msgstr "Nicht gefundene Zugangsnummern wurden in Textdatei geschrieben"
 
 msgid "Query Server Failed DICOM C-ECHO"
-msgstr "Abfrage-Server hat DICOM C-ECHO fehlgeschlagen"
+msgstr "DICOM-Bildarchiv (Query/Retrieve-Server) hat C-ECHO fehlgeschlagen"
 
 msgid "Query via Accession Numbers"
 msgstr "Abfrage über Zugangsnummern"
@@ -731,7 +776,7 @@ msgid "Local Server"
 msgstr "Lokaler Server"
 
 msgid "Query Server"
-msgstr "Abfrage-Server"
+msgstr "DICOM-Bildarchiv (Query/Retrieve-Server)"
 
 msgid "Export Server"
 msgstr "Export-Server"
@@ -755,10 +800,10 @@ msgid "Select Storage Classes"
 msgstr "Speicherklassen auswählen"
 
 msgid "Transfer Syntaxes"
-msgstr "Übertragungssyntaxen"
+msgstr "Transfersyntaxen"
 
 msgid "Select Transfer Syntaxes"
-msgstr "Übertragungssyntaxen auswählen"
+msgstr "Transfersyntaxen auswählen"
 
 msgid "Script File"
 msgstr "Skriptdatei"
@@ -821,10 +866,10 @@ msgid "From Modalities"
 msgstr "Von Modalitäten"
 
 msgid "Transfer Syntax Name"
-msgstr "Übertragungssyntaxname"
+msgstr "Transfersyntaxname"
 
 msgid "Transfer Syntax UID"
-msgstr "Übertragungssyntax-UID"
+msgstr "Transfersyntax-UID"
 
 msgid "Welcome"
 msgstr "Willkommen"
@@ -849,6 +894,9 @@ msgstr "Gehen Sie zu Hilfe/Bedienung für Anweisungen zur Verwendung des Program
 
 msgid "Select File/New Project to start."
 msgstr "Wählen Sie Datei/Neues Projekt, um zu starten."
+
+#~ msgid "ANONYMIZER_STORE"
+#~ msgstr "ANONYMISIERER-SPEICHER"
 
 #~ msgid "Export Studies"
 #~ msgstr "Studien exportieren"

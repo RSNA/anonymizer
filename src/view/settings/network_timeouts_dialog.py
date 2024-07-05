@@ -2,9 +2,9 @@ from typing import Union
 import tkinter as tk
 import customtkinter as ctk
 import logging
-from model.project import NetworkTimeouts
 from utils.translate import _
 from utils.ux_fields import int_entry
+from model.project import NetworkTimeouts
 
 logger = logging.getLogger(__name__)
 
@@ -14,11 +14,10 @@ class NetworkTimeoutsDialog(tk.Toplevel):
         self,
         parent,
         timeouts: NetworkTimeouts,
-        title: str = _("Network Timeouts in SECONDS"),
     ):
         super().__init__(master=parent)
         self.timeouts = timeouts
-        self.title(title)
+        self.title(_("Network Timeouts in SECONDS"))
         self.resizable(False, False)
         self._user_input: Union[NetworkTimeouts, None] = None
         self._create_widgets()

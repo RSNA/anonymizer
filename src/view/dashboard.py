@@ -126,7 +126,7 @@ class Dashboard(ctk.CTkFrame):
         logger.info(er)
         if er.success:
             button.configure(state="normal", text_color="light green")
-            self._status.configure(text=f"{scp_name} " + _("server online"))
+            self._status.configure(text=f"{scp_name} " + _("online"))
             callback()
         else:
             messagebox.showerror(
@@ -141,7 +141,7 @@ class Dashboard(ctk.CTkFrame):
                 + _("Ensure the remote server is setup to allow the local server for echo and storage services."),
                 parent=self,
             )
-            self._status.configure(text=f"{scp_name} " + _("Server offline"))
+            self._status.configure(text=f"{scp_name} " + _("offline"))
             button.configure(state="normal", text_color="red")
 
     def set_status(self, text: str):
@@ -150,8 +150,10 @@ class Dashboard(ctk.CTkFrame):
     def _query_button_click(self):
         logger.info(f"_query_button_click")
         self._query_button.configure(state="disabled")
-        self._controller.echo_ex(EchoRequest(scp="QUERY", ux_Q=self._query_ux_Q))
-        self.after(500, self._wait_for_scp_echo, "Query", self._query_button, self._query_ux_Q, self._query_callback)
+        self._controller.echo_ex(EchoRequest(scp=_("QUERY"), ux_Q=self._query_ux_Q))
+        self.after(
+            500, self._wait_for_scp_echo, _("Query Server"), self._query_button, self._query_ux_Q, self._query_callback
+        )
         self._status.configure(text=_("Checking Query DICOM Server is online") + "...")
 
     def _export_button_click(self):
@@ -166,13 +168,18 @@ class Dashboard(ctk.CTkFrame):
         else:
             self._controller.echo_ex(EchoRequest(scp="EXPORT", ux_Q=self._export_ux_Q))
             self.after(
-                1000, self._wait_for_scp_echo, "Export", self._export_button, self._export_ux_Q, self._export_callback
+                1000,
+                self._wait_for_scp_echo,
+                _("Export Server"),
+                self._export_button,
+                self._export_ux_Q,
+                self._export_callback,
             )
             self._status.configure(text=_("Checking Export DICOM Server is online") + "...")
 
     def _wait_for_aws(self):
         self._timer -= 1
-        if self._timer <= 0:  # TIMEOUT
+        if self._timer <= 0 or self._controller._aws_last_error:  # Error or TIMEOUT
             if self._controller._aws_last_error is None:
                 self._controller._aws_last_error = "AWS Response Timeout"
             messagebox.showerror(

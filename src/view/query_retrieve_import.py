@@ -4,7 +4,6 @@ import re
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import customtkinter as ctk
-from customtkinter import ThemeManager
 from pydicom import Dataset
 from queue import Empty, Full, Queue
 from controller.dicom_C_codes import C_FAILURE, C_PENDING_A, C_PENDING_B, C_SUCCESS
@@ -28,40 +27,36 @@ from view.dashboard import Dashboard
 logger = logging.getLogger(__name__)
 
 
-class QueryView(ctk.CTkToplevel):
+class QueryView(tk.Toplevel):
 
     ux_poll_find_response_interval = 250  # milli-seconds
 
-    def __init__(
-        self,
-        parent: Dashboard,
-        project_controller: ProjectController,
-        title: str | None = None,
-    ):
+    def __init__(self, parent: Dashboard, project_controller: ProjectController):
         super().__init__(master=parent)
+        self._data_font = parent.master.mono_font  # get mono font from app
         # C-FIND DICOM attributes to display in the results Treeview:
-        # Key: DICOM field name, Value: (display name, centre justify)
+        # Key: DICOM field name, Value: (display name, centre justify, stretch column of resize)
         self._attr_map = {
-            "PatientName": (_("Patient Name"), 20, False),
-            "PatientID": (_("Patient ID"), 15, True),
-            "StudyDate": (_("Date"), 10, True),
-            "StudyDescription": (_("Study Description"), 30, False),
-            "AccessionNumber": (_("Accession No."), 15, True),
-            "ModalitiesInStudy": (_("Modalities"), 12, True),
-            "NumberOfStudyRelatedSeries": (_("Series"), 10, True),
-            "NumberOfStudyRelatedInstances": (_("Images"), 10, True),
+            "PatientName": (_("Patient Name"), 20, False, False),
+            "PatientID": (_("Patient ID"), 15, True, False),
+            "StudyDate": (_("Date"), 10, True, False),
+            "StudyDescription": (_("Study Description"), 30, False, False),
+            "AccessionNumber": (_("Accession No."), 15, True, False),
+            "ModalitiesInStudy": (_("Modalities"), 12, True, False),
+            "NumberOfStudyRelatedSeries": (_("Series"), 10, True, False),
+            "NumberOfStudyRelatedInstances": (_("Images"), 10, True, False),
             # not dicom fields, for display only:
-            "imported": (_("Imported"), 10, True),
-            "error": (_("Last Import Error"), 50, False),
+            "imported": (_("Imported"), 10, True, False),
+            "error": (_("Last Import Error"), 30, False, True),
             # not for display, for find/move:
-            "StudyInstanceUID": (_("StudyInstanceUID"), 0, False),
+            "StudyInstanceUID": (_("StudyInstanceUID"), 0, False, False),
         }
         self.MOVE_LEVELS = [_("STUDY"), _("SERIES"), _("INSTANCE")]
-        self._tree_column_keys = list(self._attr_map.keys())[:-1]
+        self._query_results_column_keys = list(self._attr_map.keys())[:-1]
         self._controller = project_controller
         scp_aet = project_controller.model.remote_scps[_("QUERY")].aet
-        if title is None:
-            title = _("Query, Retrieve & Import Studies")
+
+        title = _("Query, Retrieve & Import Studies")
         self.title(f"{title} from {scp_aet}")
         self._query_active = False
         self._acc_no_list: list[str] = []
@@ -74,9 +69,9 @@ class QueryView(ctk.CTkToplevel):
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
-        # self._create_widgets()
-        # self._enable_action_buttons()
-        self.create_treeview()
+        self._create_widgets()
+        self._enable_action_buttons()
+        # self.create_treeview()
 
     def create_treeview(self):
         # Create a frame to hold the Treeview and the scrollbars
@@ -96,7 +91,7 @@ class QueryView(ctk.CTkToplevel):
             tree.column(col, width=100, stretch=False)
 
         # Adjust the width of the last column
-        tree.column("col5", width=2000, stretch=False)
+        tree.column("col5", width=1000, minwidth=1000, stretch=False)
 
         # Create the vertical scrollbar
         vsb = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
@@ -128,7 +123,7 @@ class QueryView(ctk.CTkToplevel):
                         f"Item {i+1}-2",
                         f"Item {i+1}-3",
                         f"Item {i+1}-4",
-                        "A very long string that exceeds the column width \nand should require horizontal scrolling to view completely.\n This is to ensure that the horizontal scrollbar appears correctly.",
+                        "A very long string that exceeds the column width and should require horizontal scrolling to view completely. This is to ensure that the horizontal scrollbar appears correctly.",
                     ),
                 )
             else:
@@ -148,7 +143,7 @@ class QueryView(ctk.CTkToplevel):
         char_width_px = ctk.CTkFont().measure("A")
 
         # QUERY PARAMETERS:
-        # Create frame for Query Input:
+        # 1. QUERY FRAME for Query Input:
         self._query_frame = ctk.CTkFrame(self)
         self._query_frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nswe")
         self._query_frame.grid_columnconfigure(7, weight=1)
@@ -253,29 +248,22 @@ class QueryView(ctk.CTkToplevel):
         )
         self._cancel_query_button.grid(row=1, column=5, padx=PAD, pady=PAD, sticky="w")
 
-        # Create frame for Query results:
+        # 2. RESULTS FRAME for Query Results:
         self._results_frame = ctk.CTkFrame(self)
         self._results_frame.grid(row=1, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")
 
-        results_row = 0
-        self._results_frame.grid_rowconfigure(results_row, weight=1)
-        self._results_frame.grid_columnconfigure(7, weight=1)  # @ move_level_label
+        self._results_frame.grid_rowconfigure(0, weight=1)
+        self._results_frame.grid_columnconfigure(0, weight=1)
 
         # Managing C-FIND results Treeview:
         self._query_results = ttk.Treeview(
             self._results_frame,
             show="headings",
-            columns=self._tree_column_keys,
+            columns=self._query_results_column_keys,
         )
 
-        # Create a Vertical and Horizontal Scrollbar and associate them with the Treeview
-        # horizontal_scrollbar = ttk.Scrollbar(
-        #     self._results_frame, orient="horizontal", command=self._query_results.xview
-        # )
-        # horizontal_scrollbar.grid(row=results_row, column=0, sticky="we")
-
         vertical_scrollbar = ttk.Scrollbar(self._results_frame, orient="vertical", command=self._query_results.yview)
-        vertical_scrollbar.grid(row=results_row, column=10, sticky="ns")
+        vertical_scrollbar.grid(row=0, column=10, sticky="ns")
         self._query_results.configure(
             yscrollcommand=vertical_scrollbar.set
         )  # , xscrollcommand=horizontal_scrollbar.set)
@@ -287,9 +275,10 @@ class QueryView(ctk.CTkToplevel):
                 col,
                 width=self._attr_map[col][1] * char_width_px,
                 anchor="center" if self._attr_map[col][2] else "w",
+                stretch=self._attr_map[col][3],
             )
 
-        # Setup display tags:
+        # Setup treeview item (study import status) display tags:
         self._query_results.tag_configure("green", background="limegreen", foreground="white")
         self._query_results.tag_configure("red", background="red")
 
@@ -299,28 +288,32 @@ class QueryView(ctk.CTkToplevel):
         self._query_results.bind("<Up>", lambda e: "break")
         self._query_results.bind("<Down>", lambda e: "break")
         self._query_results.bind("<<TreeviewSelect>>", self._tree_select)
-        self._query_results.grid(row=results_row, column=0, columnspan=10, sticky="nswe")
+        self._query_results.grid(row=0, column=0, columnspan=10, sticky="nswe")
 
-        results_row += 1
+        # 3. ERROR FRAME:
+        self._error_frame = ctk.CTkFrame(self)
+        self._error_frame.grid(row=2, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")
+        self._error_frame.grid_columnconfigure(0, weight=1)
 
-        # TODO: Fix horizontal scrollbar dissappearing after window resize
-        # horizontal_scrollbar = ttk.Scrollbar(self._results_frame, orient="horizontal", command=self._tree.xview)
-        # horizontal_scrollbar.grid(row=results_row, column=0, columnspan=10, sticky="we")
-        # self._tree.configure(xscrollcommand=horizontal_scrollbar.set)
-        # results_row += 1
+        self._error_label = ctk.CTkLabel(self._error_frame, anchor="w", justify="left")
+        self._error_label.grid(row=0, column=0, padx=PAD, sticky="w")
+        self._error_frame.grid_remove()
+
+        # 4. STATUS Frame:
+        self._status_frame = ctk.CTkFrame(self)
+        self._status_frame.grid(row=3, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")
+        self._status_frame.grid_columnconfigure(7, weight=1)  # @ move_level_label
 
         # Progress bar and status:
         col = 0
-        self._status = ctk.CTkLabel(
-            self._results_frame, font=self.master.master.mono_font, text=_("Found") + " __ " + _("Studies")
-        )
+        self._status = ctk.CTkLabel(self._status_frame, font=self._data_font, text=_("Found") + " __ " + _("Studies"))
 
-        self._status.grid(row=results_row, column=col, padx=PAD, pady=0, sticky="w")
+        self._status.grid(row=0, column=col, padx=PAD, pady=PAD, sticky="w")
 
         col += 1
-        self._progressbar = ctk.CTkProgressBar(self._results_frame)
+        self._progressbar = ctk.CTkProgressBar(self._status_frame)
         self._progressbar.grid(
-            row=results_row,
+            row=0,
             column=col,
             padx=PAD,
             pady=0,
@@ -330,48 +323,48 @@ class QueryView(ctk.CTkToplevel):
         col += 1
 
         self._select_all_button = ctk.CTkButton(
-            self._results_frame,
+            self._status_frame,
             width=ButtonWidth,
             text=_("Select All"),
             command=self._select_all_button_pressed,
         )
-        self._select_all_button.grid(row=results_row, column=col, padx=PAD, pady=PAD, sticky="w")
+        self._select_all_button.grid(row=0, column=col, padx=PAD, pady=PAD, sticky="w")
         col += 1
 
         self._clear_selection_button = ctk.CTkButton(
-            self._results_frame,
+            self._status_frame,
             width=ButtonWidth,
             text=_("Clear Selection"),
             command=self._clear_selection_button_pressed,
         )
-        self._clear_selection_button.grid(row=results_row, column=col, padx=PAD, pady=PAD, sticky="w")
+        self._clear_selection_button.grid(row=0, column=col, padx=PAD, pady=PAD, sticky="w")
         col += 1
 
-        self._studies_selected_label = ctk.CTkLabel(self._results_frame, text=_("Studies Selected") + ": 0")
-        self._studies_selected_label.grid(row=results_row, column=col, padx=PAD, pady=PAD, sticky="w")
+        self._studies_selected_label = ctk.CTkLabel(self._status_frame, text=_("Studies Selected") + ": 0")
+        self._studies_selected_label.grid(row=0, column=col, padx=PAD, pady=PAD, sticky="w")
         col += 1
 
-        self._move_level_label = ctk.CTkLabel(self._results_frame, text=_("Move Level") + ":")
-        self._move_level_label.grid(row=results_row, column=7, padx=PAD, pady=PAD, sticky="e")
+        self._move_level_label = ctk.CTkLabel(self._status_frame, text=_("Move Level") + ":")
+        self._move_level_label.grid(row=0, column=7, padx=PAD, pady=PAD, sticky="e")
 
-        self._move_level_var = ctk.StringVar(self._results_frame, value=_("STUDY"))
+        self._move_level_var = ctk.StringVar(self._status_frame, value=_("STUDY"))
         self._move_levels_optionmenu = ctk.CTkOptionMenu(
-            self._results_frame,
+            self._status_frame,
             width=char_width_px * len(max(self.MOVE_LEVELS, key=len)) + 40,
             dynamic_resizing=False,
             values=self.MOVE_LEVELS,
             variable=self._move_level_var,
         )
-        self._move_levels_optionmenu.grid(row=results_row, column=8, padx=PAD, pady=PAD, sticky="e")
+        self._move_levels_optionmenu.grid(row=0, column=8, padx=PAD, pady=PAD, sticky="e")
         self._move_levels_optionmenu.focus_set()
 
         self._import_button = ctk.CTkButton(
-            self._results_frame,
+            self._status_frame,
             width=ButtonWidth,
             text=_("Import & Anonymize"),
             command=self._import_button_pressed,
         )
-        self._import_button.grid(row=results_row, column=9, padx=PAD, pady=PAD, sticky="e")
+        self._import_button.grid(row=0, column=9, padx=PAD, pady=PAD, sticky="e")
 
     def busy(self):
         return self._query_active or self._controller.bulk_move_active()
@@ -533,6 +526,8 @@ class QueryView(ctk.CTkToplevel):
             logger.error(f"Query disabled, query is active")
             return
 
+        self._error_frame.grid_remove()
+
         # TODO: remove this echo test? Rely on connection error from query?
         # OR implement using background thread to handle connection or long timeout errors
         if self._controller.echo(_("QUERY")):
@@ -642,14 +637,28 @@ class QueryView(ctk.CTkToplevel):
             )
 
     def _tree_select(self, event):
+        selected = self._query_results.selection()
         # Ensure no Imported Studies are selected:
-        for item in self._query_results.selection():
+        for item in selected:
             if self._query_results.tag_has("green", item):
                 self._query_results.selection_remove(item)
         # Update selection count:
         self._studies_selected_label.configure(
             text=_("Studies Selected") + f": {len(list(self._query_results.selection()))}"
         )
+        # Display Last Import Error in Error Frame if selected item has an associatd error:
+        if len(selected) == 1:
+            item = selected[0]
+            values = self._query_results.item(item, "values")
+            error_msg = values[-2]
+            window_width = self.winfo_width()
+            if error_msg:
+                self._error_label.configure(text=error_msg, wraplength=window_width)
+                self._error_frame.grid()
+            else:
+                self._error_frame.grid_remove()
+        else:
+            self._error_frame.grid_remove()
 
     def _clear_results_tree(self):
         self._query_results.delete(*self._query_results.get_children())
@@ -661,6 +670,7 @@ class QueryView(ctk.CTkToplevel):
         )
 
     def _clear_selection_button_pressed(self):
+        self._error_frame.grid_remove()
         self._query_results.selection_set([])
         self._studies_selected_label.configure(text=_("Studies Selected") + ": 0")
 
@@ -670,18 +680,26 @@ class QueryView(ctk.CTkToplevel):
         for study in studies:
             current_values = list(self._query_results.item(study.uid, "values"))
             instances_to_import = study.get_number_of_instances()
-            patient_id = current_values[self._tree_column_keys.index("PatientID")]
+            patient_id = current_values[self._query_results_column_keys.index("PatientID")]
 
             files_imported = self._images_stored_phi_lookup(patient_id, study.uid)  # reads file system FAT
             # TODO: optimize, compare to using AnonymizerModel.get_stored_instance_count which uses in memory PHI lookup
             #       or trust study.pending_instances
-            current_values[self._tree_column_keys.index("imported")] = str(files_imported)
+            current_values[self._query_results_column_keys.index("imported")] = str(files_imported)
             if study.last_error_msg:
-                current_values[self._tree_column_keys.index("error")] = study.last_error_msg
+                current_values[self._query_results_column_keys.index("error")] = study.last_error_msg
             self._query_results.item(study.uid, values=current_values)
             if instances_to_import > 0 and files_imported >= instances_to_import:
                 self._query_results.selection_remove(study.uid)
                 self._query_results.item(study.uid, tags="green")
+            else:
+                # highlight study in red if not due to timeout or abort
+                error_uc = study.last_error_msg.upper()
+                if study.last_error_msg and ("TIMEOUT" not in error_uc or "ABORT" not in error_uc):
+                    self._query_results.item(study.uid, tags="red")
+
+        if len(studies) == 1:
+            self._tree_select(None)  # update Error Frame if one study was imported
 
     def _import_button_pressed(self):
         logger.info(f"Import button pressed")
@@ -690,6 +708,7 @@ class QueryView(ctk.CTkToplevel):
             logger.error(f"Import disabled, query is active")
             return
 
+        self._error_frame.grid_remove()
         study_uids = list(self._query_results.selection())
 
         if len(study_uids) == 0:
@@ -707,7 +726,9 @@ class QueryView(ctk.CTkToplevel):
 
         studies: list[StudyUIDHierarchy] = []
         for study_uid in unstored_study_uids:
-            patient_id = self._query_results.item(study_uid, "values")[self._tree_column_keys.index("PatientID")]
+            patient_id = self._query_results.item(study_uid, "values")[
+                self._query_results_column_keys.index("PatientID")
+            ]
             studies.append(StudyUIDHierarchy(study_uid, patient_id))
 
         self._studies_to_process = len(unstored_study_uids)
@@ -782,10 +803,10 @@ class QueryView(ctk.CTkToplevel):
             if imported and not self._show_imported_studies_switch.get():
                 continue
 
-            attr_name = self._tree_column_keys[-2]
+            attr_name = self._query_results_column_keys[-2]
             setattr(dataset, attr_name, images_stored_count)
 
-            for field, (display_name, _, _) in self._attr_map.items():
+            for field, _ in self._attr_map.items():
                 value = getattr(dataset, field, "")
                 display_values.append(str(value))
 
