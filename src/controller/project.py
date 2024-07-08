@@ -2075,7 +2075,7 @@ class ProjectController(AE):
         if req.level:
             if "STUDY" in req.level.upper():
                 move_op = self._move_study_at_study_level
-            elif req.level.upper() in ["IMAGE", "INSTANCE"]:
+            elif req.level.upper() in [_("IMAGE"), _("INSTANCE")]:
                 move_op = self._move_study_at_instance_level
 
         logger.info(f"Move Operation: {move_op.__name__}")

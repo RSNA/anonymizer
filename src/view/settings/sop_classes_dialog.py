@@ -7,7 +7,6 @@ import logging
 from pynetdicom.sop_class import _STORAGE_CLASSES
 from utils.translate import _, insert_spaces_between_cases, insert_space_after_codes
 from utils.modalities import get_modalities
-from model.project import ProjectModel
 
 logger = logging.getLogger(__name__)
 
@@ -39,19 +38,15 @@ class SOPClassesDialog(tk.Toplevel):
         "XA",
         "XRF",
     ]
-    attr_map = {
-        "ClassName": (_("Class Name"), 45, False),
-        "ClassID": (_("Class UID"), 30, False),
-    }
+
     sc_lookup = {value: key for key, value in _STORAGE_CLASSES.items()}
 
-    def __init__(
-        self,
-        parent,
-        sop_classes: list[str],
-        modalities: list[str]
-    ):
+    def __init__(self, parent, sop_classes: list[str], modalities: list[str]):
         super().__init__(master=parent)
+        self.attr_map = {
+            "ClassName": (_("Class Name"), 45, False),
+            "ClassID": (_("Class UID"), 30, False),
+        }
         self.root: ctk.CTk = parent.master
         self.sop_classes = sop_classes
         self.modalities = modalities

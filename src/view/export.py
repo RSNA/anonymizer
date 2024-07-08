@@ -28,16 +28,17 @@ class ExportView(tk.Toplevel):
         title: str | None = None,
     ):
         super().__init__(master=parent)
+        self._data_font = parent.master.mono_font  # get mono font from app
         # Export attributes to display in the results Treeview:
-        # Key: column id: (column name, width, centre justify, stretch column of resize)
+        # Key: column id: (column name, width (in chars), centre justify, stretch column of resize)
         self._attr_map = {
             "Patient_Name": (_("Patient Name"), 20, False, False),
             "Anon_PatientID": (_("Anonymized ID"), 15, True, False),
-            "Studies": (_("Studies"), 7, True, False),
-            "Series": (_("Series"), 7, True, False),
-            "Files": (_("Images"), 7, True, False),
-            "DateTime": (_("Date Time"), 15, True, False),
-            "FilesSent": (_("Images Sent"), 12, True, False),
+            "Studies": (_("Studies"), 10, True, False),
+            "Series": (_("Series"), 10, True, False),
+            "Files": (_("Images"), 10, True, False),
+            "DateTime": (_("Date Time"), 20, True, False),
+            "FilesSent": (_("Images Sent"), 5, True, False),
             "Error": (_("Last Export Error"), 30, False, True),
         }
         self._parent = parent
@@ -90,10 +91,14 @@ class ExportView(tk.Toplevel):
 
         # Set tree column headers, width and justification
         for col in self._tree["columns"]:
-            self._tree.heading(col, text=self._attr_map[col][0])
+            col_name = self._attr_map[col][0]
+            self._tree.heading(col, text=col_name)
+            col_width_chars = self._attr_map[col][1]
+            if len(col_name) > col_width_chars:
+                col_width_chars = len(col_name) + 2
             self._tree.column(
                 col,
-                width=self._attr_map[col][1] * char_width_px,
+                width=col_width_chars * char_width_px,
                 anchor="center" if self._attr_map[col][2] else "w",
                 stretch=self._attr_map[col][3],
             )
@@ -131,7 +136,9 @@ class ExportView(tk.Toplevel):
         self._status_frame.grid_columnconfigure(3, weight=1)
 
         # Status and progress bar:
-        self._status = ctk.CTkLabel(self._status_frame, text=_("Processing") + " _ " + _("of") + " _ " + _("Patients"))
+        self._status = ctk.CTkLabel(
+            self._status_frame, font=self._data_font, text=_("Processing") + " _ " + _("of") + " _ " + _("Patients")
+        )
         self._status.grid(row=0, column=0, padx=PAD, pady=0, sticky="w")
 
         self._progressbar = ctk.CTkProgressBar(
@@ -327,26 +334,13 @@ class ExportView(tk.Toplevel):
             )
 
     def _update_export_progress(self, cancel: bool = False):
-        if cancel:
-            self._status.configure(
-                text=f"Export cancelled: Processed {self._patients_processed} of {self._patients_to_process} Patients"
-            )
-            return
         self._progressbar.set(self._patients_processed / self._patients_to_process)
+        state_label = _("Processing")
+        entity_label = _("Patients")
         if self._patients_processed == self._patients_to_process:
-            self._status.configure(text=_("Processed") + f" {self._patients_to_process} Patients")
-        else:
-            if self._patients_to_process == 1:
-                msg = _("Processing") + f" {self._patients_processed+1} " + _("Patient")
-            else:
-                msg = (
-                    _("Processing")
-                    + f" {self._patients_processed+1} "
-                    + _("of")
-                    + f" {self._patients_to_process} "
-                    + _("Patients")
-                )
-            self._status.configure(text=msg)
+            state_label = _("Processed") + " "
+        msg = state_label + f" {self._patients_processed} " + _("of") + f" {self._patients_to_process} " + entity_label
+        self._status.configure(text=msg)
 
     def _cancel_export_button_pressed(self):
         logger.info(f"Cancel Export button pressed")

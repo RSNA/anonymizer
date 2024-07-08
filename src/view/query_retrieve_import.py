@@ -71,67 +71,6 @@ class QueryView(tk.Toplevel):
         self.bind("<Escape>", self._escape_keypress)
         self._create_widgets()
         self._enable_action_buttons()
-        # self.create_treeview()
-
-    def create_treeview(self):
-        # Create a frame to hold the Treeview and the scrollbars
-        frame = ctk.CTkFrame(self)
-        frame.grid(row=0, column=0, sticky="nsew")
-        # Configure the grid to expand with the window
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(0, weight=1)
-
-        # Create the Treeview widget
-        columns = ("col1", "col2", "col3", "col4", "col5")
-        tree = ttk.Treeview(frame, columns=columns, show="headings")
-
-        # Define the column headings
-        for col in columns:
-            tree.heading(col, text=col.capitalize())
-            tree.column(col, width=100, stretch=False)
-
-        # Adjust the width of the last column
-        tree.column("col5", width=1000, minwidth=1000, stretch=False)
-
-        # Create the vertical scrollbar
-        vsb = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
-        vsb.grid(row=0, column=1, sticky="ns")
-
-        # Create the horizontal scrollbar
-        hsb = ttk.Scrollbar(frame, orient="horizontal", command=tree.xview)
-        hsb.grid(row=1, column=0, sticky="ew")
-
-        # Configure the Treeview to use the scrollbars
-        tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-
-        # Place the Treeview in the grid
-        tree.grid(row=0, column=0, sticky="nsew")
-
-        # Configure the grid to expand with the window
-        frame.grid_rowconfigure(0, weight=1)
-        frame.grid_columnconfigure(0, weight=1)
-
-        # Add some test data, including one very wide item in the last column
-        for i in range(100):
-            if i == 50:
-                # Insert a long string into the last column to ensure horizontal scrolling is required
-                tree.insert(
-                    "",
-                    "end",
-                    values=(
-                        f"Item {i+1}-1",
-                        f"Item {i+1}-2",
-                        f"Item {i+1}-3",
-                        f"Item {i+1}-4",
-                        "A very long string that exceeds the column width and should require horizontal scrolling to view completely. This is to ensure that the horizontal scrollbar appears correctly.",
-                    ),
-                )
-            else:
-                tree.insert(
-                    "",
-                    "end",
-                    values=(f"Item {i+1}-1", f"Item {i+1}-2", f"Item {i+1}-3", f"Item {i+1}-4", f"Item {i+1}-5"),
-                )
 
     def _create_widgets(self):
         logger.info(f"_create_widgets")
@@ -270,10 +209,14 @@ class QueryView(tk.Toplevel):
 
         # Set tree column width and justification
         for col in self._query_results["columns"]:
-            self._query_results.heading(col, text=self._attr_map[col][0])
+            col_name = self._attr_map[col][0]
+            col_width_chars = self._attr_map[col][1]
+            self._query_results.heading(col, text=col_name)
+            if len(col_name) > col_width_chars:
+                col_width_chars = len(col_name)
             self._query_results.column(
                 col,
-                width=self._attr_map[col][1] * char_width_px,
+                width=col_width_chars * char_width_px,
                 anchor="center" if self._attr_map[col][2] else "w",
                 stretch=self._attr_map[col][3],
             )
@@ -460,12 +403,8 @@ class QueryView(tk.Toplevel):
 
                 ux_Q.task_done()
 
-            except Empty:
-                logger.info("Queue is empty")
-            except Full:
-                logger.error("Queue is full")
-            # except Exception as e:
-            #     logger.error(f"Exception: {e}")
+            except Exception as e:
+                logger.error(f"Exception: {e}")
 
         # Display results in Treeview:
         if results:
@@ -692,10 +631,11 @@ class QueryView(tk.Toplevel):
             if instances_to_import > 0 and files_imported >= instances_to_import:
                 self._query_results.selection_remove(study.uid)
                 self._query_results.item(study.uid, tags="green")
-            else:
+            elif study.last_error_msg:
                 # highlight study in red if not due to timeout or abort
                 error_uc = study.last_error_msg.upper()
-                if study.last_error_msg and ("TIMEOUT" not in error_uc or "ABORT" not in error_uc):
+                if "TIMEOUT" not in error_uc or "ABORT" not in error_uc:
+                    self._query_results.selection_remove(study.uid)
                     self._query_results.item(study.uid, tags="red")
 
         if len(studies) == 1:
@@ -730,6 +670,10 @@ class QueryView(tk.Toplevel):
                 self._query_results_column_keys.index("PatientID")
             ]
             studies.append(StudyUIDHierarchy(study_uid, patient_id))
+            # Clear Last Import Error for selected studies:
+            current_values = list(self._query_results.item(study_uid, "values"))
+            current_values[self._query_results_column_keys.index("error")] = ""
+            self._query_results.item(study_uid, values=current_values)
 
         self._studies_to_process = len(unstored_study_uids)
         self._study_uids_to_import = unstored_study_uids.copy()

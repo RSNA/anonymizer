@@ -299,7 +299,7 @@ msgid "Documents"
 msgstr "Documents"
 
 msgid "RSNA Anonymizer"
-msgstr "RSNA Anonymiseur "
+msgstr "RSNA Anonymiseur"
 
 msgid "ANONYMIZER"
 msgstr "ANONYMISEUR"

@@ -4,7 +4,7 @@ from pprint import pformat
 from copy import copy
 import logging
 import pickle
-
+from __version__ import __version__
 from pydicom._version import __version__ as pydicom_version
 from pydicom import dcmread
 from pynetdicom._version import __version__ as pynetdicom_version
@@ -22,7 +22,6 @@ import customtkinter as ctk
 from customtkinter import ThemeManager
 
 from utils.logging import init_logging
-from __version__ import __version__
 from utils.translate import _, get_current_language, get_current_language_code, set_language
 from model.project import DICOMRuntimeError, ProjectModel
 from controller.project import ProjectController
@@ -39,7 +38,6 @@ logger = logging.getLogger()  # ROOT logger
 
 class Anonymizer(ctk.CTk):
     THEME_FILE = "assets/themes/rsna_theme.json"
-    APP_STATE_PATH = Path.home() / ".anonymizer_state.json"  # language/recent projects/current project
 
     project_open_startup_dwell_time = 100  # milliseconds
     metrics_loop_interval = 1000  # milliseconds
@@ -47,13 +45,17 @@ class Anonymizer(ctk.CTk):
     if platform.system() == "Darwin":
         menu_font = ("", 13)
     else:
-        menu_font = ("", 10)
+        menu_font = ("", 11)
 
     def get_title(self):
-        return _("RSNA DICOM Anonymizer Version") + " " + __version__
+        return _("RSNA DICOM Anonymizer Version").strip() + " " + __version__
 
-    def __init__(self):
+    def get_app_state_path(self) -> Path:
+        return self.logs_dir / ".anonymizer_state.json"
+
+    def __init__(self, logs_dir: Path):
         super().__init__()
+        self.logs_dir: Path = logs_dir
         ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
         theme = self.THEME_FILE
         if not os.path.exists(theme):
@@ -132,9 +134,7 @@ class Anonymizer(ctk.CTk):
                 selected_bg_color = self._apply_appearance_mode(tv_theme["selected_bg_color"])
 
         treestyle = ttk.Style()
-        treestyle.configure(
-            "Treeview.Heading", background=bg_color, foreground=text_color, font=ctk.CTkFont()
-        )  # size is larger on windows?
+        treestyle.configure("Treeview.Heading", background=bg_color, foreground=text_color, font=str(self.mono_font))
         treestyle.configure(
             "Treeview",
             background=bg_color,
@@ -155,6 +155,7 @@ class Anonymizer(ctk.CTk):
         set_language(language)
         self.help_views = {}
         self.title(self.get_title())
+        self.recent_project_dirs = []
         self.set_menu_project_closed()  # resets Help Menu
         self.save_config()
         self.welcome_view.destroy()
@@ -174,9 +175,9 @@ class Anonymizer(ctk.CTk):
         self.after(self.metrics_loop_interval, self.metrics_loop)
 
     def load_config(self):
-        logger.info(f"Load Config: {self.APP_STATE_PATH}")
+        logger.info(f"Load Config (App State): {self.get_app_state_path()}")
         try:
-            with open(self.APP_STATE_PATH.as_posix(), "r") as config_file:
+            with open(self.get_app_state_path().as_posix(), "r") as config_file:
                 config_data = json.load(config_file)
 
                 if "language" in config_data:
@@ -196,23 +197,26 @@ class Anonymizer(ctk.CTk):
         except FileNotFoundError:
             warn_msg = (
                 "Config file not found: "
-                + str(self.APP_STATE_PATH)
+                + str(self.get_app_state_path())
                 + " default language set, recent project list or current project set"
             )
             logger.warning(warn_msg)
 
     def save_config(self):
-        logger.info(f"Save Config: {self.APP_STATE_PATH}")
+        logger.info(f"Save Config (App State): {self.get_app_state_path()}")
         try:
             config_data = {
                 "language": get_current_language(),
                 "recent_project_dirs": [str(path) for path in self.recent_project_dirs],
                 "current_open_project_dir": str(self.current_open_project_dir) or "",
             }
-            with open(self.APP_STATE_PATH.as_posix(), "w") as config_file:
+            app_state_path = self.get_app_state_path()
+            app_state_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(app_state_path.as_posix(), "w") as config_file:
                 json.dump(config_data, config_file, indent=2)
+
         except Exception as e:
-            err_msg = _("Error writing json config file: ") + f"{str(self.APP_STATE_PATH)} : {repr(e)}"
+            err_msg = _("Error writing json config file: ") + f"{str(app_state_path)} : {repr(e)}"
             logger.error(err_msg)
             messagebox.showerror(
                 title=_("Configuration File Write Error"),
@@ -453,6 +457,7 @@ class Anonymizer(ctk.CTk):
 
     def shutdown_controller(self):
         logger.info("shutdown_controller")
+
         if self.dashboard:
             self.dashboard.destroy()
             self.dashboard = None
@@ -468,6 +473,8 @@ class Anonymizer(ctk.CTk):
             if self.export_view:
                 self.export_view.destroy()
                 self.export_view = None
+
+        self.save_config()
 
     def close_project(self, event=None):
         logging.info("Close Project")
@@ -965,13 +972,14 @@ def main():
     args = str(sys.argv)
     install_dir = os.path.dirname(os.path.realpath(__file__))
     run_as_exe = getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
-    # TODO: command line interface for server side deployments
-    # enhance cmd line processing using Click library
-    init_logging(install_dir, run_as_exe)
+    logs_dir = init_logging(install_dir, run_as_exe)
     os.chdir(install_dir)
 
     logger = logging.getLogger()  # get root logger
     logger.info(f"cmd line args={args}")
+    # TODO: command line interface for server side deployments
+    # enhance cmd line processing using Click library
+
     if run_as_exe:
         logger.info(f"Running as PyInstaller executable")
 
@@ -985,13 +993,13 @@ def main():
 
     # GUI
     try:
-        app = Anonymizer()
+        app = Anonymizer(Path(logs_dir))
         logger.info("ANONYMIZER GUI Initialised successfully.")
     except Exception as e:
         logger.exception(f"Error starting ANONYMIZER GUI, exit: {str(e)}")
         sys.exit(1)
 
-    # Pyinstaller splash page on Windows close
+    # Close Pyinstaller startup splash image on Windows
     if sys.platform.startswith("win"):
         try:
             import pyi_splash  # type: ignore
@@ -1000,6 +1008,7 @@ def main():
         except Exception:
             pass
 
+    logger.info("ANONYMIZER GUI MAINLOOP...")
     app.mainloop()
 
     app.shutdown_controller()

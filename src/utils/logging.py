@@ -5,8 +5,7 @@ import logging.handlers
 from pydicom import config as pydicom_config
 from model.project import LoggingLevels
 
-EXE_LOG_DIR = "Anonymizer/"
-PY_DEV_DIR = "/logs/"
+EXE_LOG_DIR = "Anonymizer"
 LOG_FILENAME = "anonymizer.log"
 LOG_SIZE = 1024 * 1024 * 100  # 100 MB
 LOG_BACKUP_COUNT = 10
@@ -14,7 +13,7 @@ LOG_DEFAULT_LEVEL = logging.INFO
 LOG_FORMAT = "{asctime} {levelname} {threadName} {name}.{funcName}.{lineno} {message}"
 
 
-def get_logs_dir(run_as_exe: bool, install_dir: str) -> str:
+def _get_logs_dir(run_as_exe: bool, install_dir: str) -> str:
     """
     Returns the directory path where logs should be stored based on the platform and execution mode.
 
@@ -31,7 +30,7 @@ def get_logs_dir(run_as_exe: bool, install_dir: str) -> str:
     """
     if run_as_exe:
         if platform.system() == "Windows":
-            return os.path.join(os.path.expanduser("~"), "AppData", "Local", EXE_LOG_DIR)
+            return os.path.join(os.path.expanduser("~"), "AppData", "Local", EXE_LOG_DIR, "Logs")
         elif platform.system() == "Darwin":
             return os.path.join(os.path.expanduser("~"), "Library", "Logs", EXE_LOG_DIR)
         elif platform.system() == "Linux":
@@ -39,10 +38,10 @@ def get_logs_dir(run_as_exe: bool, install_dir: str) -> str:
         else:
             raise RuntimeError("Unsupported platform")
     else:
-        return install_dir + PY_DEV_DIR
+        return os.path.join(install_dir, "Logs")
 
 
-def init_logging(install_dir: str, run_as_exe: bool, file_handler: bool = True) -> None:
+def init_logging(install_dir: str, run_as_exe: bool, file_handler: bool = True) -> str:
     """
     Initializes the logging configuration for the application.
 
@@ -55,7 +54,7 @@ def init_logging(install_dir: str, run_as_exe: bool, file_handler: bool = True) 
     Returns:
         None
     """
-    logs_dir = get_logs_dir(run_as_exe, install_dir)
+    logs_dir = _get_logs_dir(run_as_exe, install_dir)
     os.makedirs(logs_dir, exist_ok=True)
 
     # Get root logger:
@@ -84,6 +83,7 @@ def init_logging(install_dir: str, run_as_exe: bool, file_handler: bool = True) 
     set_pynetdicom_log_level(logging.WARNING)
     # leave pydicom logging at default level, user can enable debug mode if needed
     logger.info("Logging initialized, logs dir: %s", logs_dir)
+    return logs_dir
 
 
 def set_logging_levels(levels: LoggingLevels):

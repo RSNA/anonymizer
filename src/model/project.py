@@ -96,15 +96,19 @@ class ProjectModel:
 
     @staticmethod
     def default_project_name() -> str:
-        return _("MY_PROJECT")
+        return _("MY_PROJECT").strip()
 
     @staticmethod
     def default_uid_root() -> str:
         return ProjectModel.RSNA_ROOT_ORG_UID + ".2"
 
     @staticmethod
+    def base_dir() -> Path:
+        return Path.home() / _("Documents").strip() / _("RSNA Anonymizer").strip()
+
+    @staticmethod
     def default_storage_dir() -> Path:
-        return Path(Path.home(), _("Documents"), _("RSNA Anonymizer"), ProjectModel.default_project_name())
+        return ProjectModel.base_dir() / ProjectModel.default_project_name()
 
     @staticmethod
     def default_local_server() -> DICOMNode:
@@ -192,7 +196,7 @@ class ProjectModel:
         return self.storage_dir.joinpath(self.PRIVATE_DIR)
 
     def abridged_storage_dir(self) -> str:
-        return f".../{self.storage_dir.parts[-2]}/{self.storage_dir.parts[-1]}"
+        return f".../{self.storage_dir.parts[-3]}/{self.storage_dir.parts[-2]}/{self.storage_dir.parts[-1]}"
 
     def phi_export_dir(self) -> Path:
         return self.storage_dir.joinpath(self.PRIVATE_DIR, self.PHI_EXPORT_DIR)

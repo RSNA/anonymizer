@@ -7,6 +7,10 @@ import re
 
 
 class HTMLView(tk.Toplevel):
+    MIN_WIDTH_px = 100
+    MAX_WIDTH_px = 180
+    HEIGHT_LINES = 40
+
     def __init__(self, parent, title, html_file_path):
         super().__init__(master=parent)
         self._parent = parent
@@ -28,11 +32,13 @@ class HTMLView(tk.Toplevel):
         li_texts = [re.sub(r"<.*?>", "", li).strip() for li in li_elements]  # Remove any nested HTML tags
         longest_li = max(li_texts, key=len, default="")
         required_width = len(longest_li) + 2  # Add some padding
+        # Clip to max/min width
+        required_width = max(self.MIN_WIDTH_px, min(required_width, self.MAX_WIDTH_px))
 
         html_widget = HTMLScrolledText(
             self._frame,
-            width=required_width,  # characters
-            height=40,  # lines
+            width=required_width,
+            height=self.HEIGHT_LINES,
             wrap="word",
             html=RenderHTML(self.html_file_path),
         )
