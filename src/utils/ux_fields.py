@@ -132,24 +132,28 @@ def str_entry(
         pad (int): The padding value for the string entry field.
         sticky (str): The sticky value for the string entry field.
         enabled (bool, optional): Whether the string entry field is enabled or disabled. Defaults to True.
-        width_chars (int, optional): The width of the string entry field in characters. Defaults to 20.
+        width_chars (int, optional): The width of the string entry field in characters. Defaults to 20. If this is left at default then max_chars is used if specified.
         focus_set (bool, optional): Whether the string entry field should have focus. Defaults to False.
 
     Returns:
         ctk.StringVar: The string variable associated with the string entry field.
     """
     str_var = ctk.StringVar(view, value=initial_value)
-    char_width_px = ctk.CTkFont().measure("A")
+
     ctk_label = ctk.CTkLabel(view, text=label)
     ctk_label.grid(row=row, column=col, padx=pad, pady=(pad, 0), sticky=sticky)
-    # TO DO: using char width in pixels approach is not accurate
-    width = (max_chars + 3) * char_width_px if max_chars else width_chars * char_width_px
+
+    char_width_px = ctk.CTkFont().measure("A")
+    if width_chars == 20 and max_chars:
+        width_px = (max_chars + 3) * char_width_px
+    else:
+        width_px = (width_chars + 3) * char_width_px
     if not enabled:
         ctk_entry = ctk.CTkLabel(view, textvariable=str_var)
     else:
         ctk_entry = ctk.CTkEntry(
             view,
-            width=width,
+            width=width_px,
             textvariable=str_var,
             validate="key",
             validatecommand=(
