@@ -11,8 +11,9 @@ class HTMLView(tk.Toplevel):
     MAX_WIDTH_px = 180
     HEIGHT_LINES = 40
 
-    def __init__(self, parent, title, html_file_path):
+    def __init__(self, parent: ctk.CTk, title: str, html_file_path):
         super().__init__(master=parent)
+        self._bg_color = parent._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
         self._parent = parent
         self.title(title)
         self.html_file_path = html_file_path
@@ -40,6 +41,7 @@ class HTMLView(tk.Toplevel):
             width=required_width,
             height=self.HEIGHT_LINES,
             wrap="word",
+            background=self._bg_color,
             html=RenderHTML(self.html_file_path),
         )
         html_widget.pack(fill="both", padx=10, pady=10, expand=True)

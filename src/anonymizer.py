@@ -977,6 +977,7 @@ def main():
 
     logger = logging.getLogger()  # get root logger
     logger.info(f"cmd line args={args}")
+
     # TODO: command line interface for server side deployments
     # enhance cmd line processing using Click library
 
@@ -994,9 +995,9 @@ def main():
     # GUI
     try:
         app = Anonymizer(Path(logs_dir))
-        logger.info("ANONYMIZER GUI Initialised successfully.")
+        logger.info("ANONYMIZER GUI initialised successfully.")
     except Exception as e:
-        logger.exception(f"Error starting ANONYMIZER GUI, exit: {str(e)}")
+        logger.exception(f"Error initialising ANONYMIZER GUI, exiting: {str(e)}")
         sys.exit(1)
 
     # Close Pyinstaller startup splash image on Windows
@@ -1009,9 +1010,12 @@ def main():
             pass
 
     logger.info("ANONYMIZER GUI MAINLOOP...")
-    app.mainloop()
-
-    app.shutdown_controller()
+    try:
+        app.mainloop()
+    except Exception as e:
+        logger.exception(f"Error in ANONYMIZER GUI MAINLOOP: {str(e)}")
+    finally:
+        app.shutdown_controller()
 
     logger.info("ANONYMIZER GUI Stop.")
 

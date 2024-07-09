@@ -28,23 +28,23 @@ siehe https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support 
 		<li>113100 wird dem Element DeIdentificationMethodCodeSequence (0012,0064) angehängt.</li>
 		<li>Ein privater Block: 0x0013 wird erstellt und der Wert "RSNA" zugewiesen, der Projektname und die SiteID werden zu diesem Block hinzugefügt.</li>
 		</ol>
-		<h4>113101: Clean Pixel Data Option</h4>
+		<h4>113101: Option zur Bereinigung von Pixeldaten</h4>
 		<p>Nicht implementiert.</p>
-		<h4>113102: Clean Recognizable Visual Features Option</h4>
+		<h4>113102: Option zur Bereinigung erkennbarer visueller Merkmale</h4>
 		<p>Nicht implementiert.</p>
-		<h4>113103: Clean Graphics Option</h4>
+		<h4>113103: Option zur Bereinigung von Grafiken</h4>
 		<p>Nicht implementiert, aber Kurven- und Overlay-Gruppen (5XXX und 6XXX) werden entfernt.</p>
-		<h4>113104: Clean Structured Content Option</h4>
+		<h4>113104: Option zur Bereinigung strukturierter Inhalte</h4>
 		<p>Nicht implementiert, jedoch können Projekteinstellungen SR (Structured Report)-bezogene Speicherklassen erlauben/verbieten.</p>
-		<h4>113105: Clean Descriptors Option</h4>
+		<h4>113105: Option zur Bereinigung von Beschreibungen</h4>
 		<p>Diese Option ist teilweise implementiert. Es werden nur die folgenden durch die Option definierten Elemente behalten:</p> 
 		<ul>
 			<li>(0008,1030) StudyDescription </li> 
 			<li>(0008,103e) SeriesDescription</li>
 		</ul>
-		<h4>113106: Retain Longitudinal Temporal Information Full Dates Option</h4>
+		<h4>113106: Option zum Beibehalten der longitudinalen zeitlichen Informationen (vollständige Daten)</h4>
 		<p>Nicht implementiert.</p>
-		<h4>113107: Retain Longitudinal Temporal Information Modified Dates Option</h4>
+		<h4>113107: Option zum Beibehalten der longitudinalen zeitlichen Informationen (modifizierte Daten)</h4>
 		<p>Diese Option ist teilweise implementiert.</p>
 		<ul>
 			<li>Alle Datumsangaben werden durch Berechnen des MD5-Hashs von PHI-Patienten-ID modifiziert.</li>
@@ -53,7 +53,7 @@ siehe https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support 
 			<li>Zeit (Tageszeit)-Elemente werden nicht modifiziert.</li>
 			<li>113107 wird dem Element DeIdentificationMethodCodeSequence (0012,0064) angehängt.</li>
 		</ul>
-		<h4>113108: Retain Patient Characteristics Option</h4>
+		<h4>113108: Option zum Beibehalten von Patienteneigenschaften</h4>
 		<p>Diese Option ist teilweise implementiert. Es werden nur die folgenden durch die Option definierten Elemente behalten:</p>
 		<ul>
 			<li>(0010,0040) PatientSex</li>
@@ -64,16 +64,16 @@ siehe https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support 
 			<li>(90010,21a0) SmokingStatus</li>
 			<li>113108 wird dem Element DeIdentificationMethodCodeSequence (0012,0064) angehängt.</li>
 		</ul>
-		<h4>113109: Retain Device Identity Option</h4>
+		<h4>113109: Option zum Beibehalten der Geräteidentität</h4>
 		<p>Diese Option ist teilweise implementiert. Es werden nur die folgenden durch die Option definierten Elemente behalten:</p>
 		<ul>
 			<li>(0008,0070) Manufacturer</li>
 			<li>(0008,1090) ManufacturerModelName</li>
 			<li>113109 wird dem Element DeIdentificationMethodCodeSequence (0012,0064) angehängt.</li>
 		</ul>
-		<h4>113110: Retain UIDs Option</h4>
+		<h4>113110: Option zum Beibehalten von UIDs</h4>
 		<p>Nicht implementiert.</p>
-		<h4>113111: Retain Safe Private Option</h4>
+		<h4>113111: Option zum Beibehalten sicherer privater Daten</h4>
 		<p>Nicht implementiert.</p>
 	
 </div>

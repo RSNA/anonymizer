@@ -9,9 +9,9 @@
 *.json
 src/build/*
 src/dist/*
-logs/*
+src/logs/*
+src/logs/.anonymizer_state.json
 dicom/*
 **/versionfile.txt
 **/radon_results.txt
 Pipfile.lock
-

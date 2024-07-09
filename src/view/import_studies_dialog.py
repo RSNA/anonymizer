@@ -23,9 +23,7 @@ class ImportStudiesDialog(tk.Toplevel):
         self._data_font = parent._data_font
         self._scp_name = _("QUERY")
 
-        title = _("Importing Studies")
-        if len(studies) == 1:
-            title = _("Importing Study")
+        title = _("Importing Study") if len(studies) == 1 else _("Importing Studies")
 
         self.title(f"{title} from {controller.model.remote_scps[self._scp_name].aet}")
 
@@ -38,7 +36,7 @@ class ImportStudiesDialog(tk.Toplevel):
         self.studies = studies
         self._instances_to_import = 0
         self._study_metadata_retrieved = 0
-        
+
         self.rowconfigure(0, weight=1)
         self.columnconfigure(1, weight=1)
         self._last_grid_row = 0
@@ -151,13 +149,13 @@ class ImportStudiesDialog(tk.Toplevel):
 
         errors = sum(1 for study in self.studies if study.last_error_msg)
         self._study_metadata_retrieved = sum(1 for study in self.studies if study.series)
-        pending_studies = len(self.studies) - errors - self._study_metadata_retrieved
+        pending_studies = len(self.studies) - self._study_metadata_retrieved - errors
 
-        self._metadata_progress_bar.set((self._study_metadata_retrieved + errors) / len(self.studies))
+        self._metadata_progress_bar.set(self._study_metadata_retrieved / len(self.studies))
 
-        text = f"{self._study_metadata_retrieved+errors} of {len(self.studies)} Study Metadata"
+        text = f"{self._study_metadata_retrieved} " + _("of") + f" {len(self.studies)} " + _("Study Metadata")
         if errors:
-            text += f" ({errors} Errors)"
+            text += f" ({errors} " + _("Error") + ")" if errors == 1 else _("Errors") + ")"
         self._metadata_progress_label.configure(text=text)
 
         if pending_studies > 0:
@@ -184,7 +182,7 @@ class ImportStudiesDialog(tk.Toplevel):
                     self._scp_name, self._controller.model.scu.aet, self._move_level, self.studies
                 )
                 self._controller.move_studies_ex(mr)
-                study_or_studies = "Study" if len(self.studies) == 1 else "Studies"
+                study_or_studies = _("Study") if len(self.studies) == 1 else _("Studies")
                 self._import_status_label.configure(
                     text=_("Importing")
                     + f" {self._study_metadata_retrieved} {study_or_studies} "

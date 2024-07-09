@@ -178,63 +178,6 @@ msgstr "Project"
 msgid "Settings"
 msgstr "Settings"
 
-msgid "Computed Radiography"
-msgstr "Computed Radiography"
-
-msgid "Digital X-Ray"
-msgstr "Digital X-Ray"
-
-msgid "Intra-oral Radiography"
-msgstr "Intra-oral Radiography"
-
-msgid "Mammography"
-msgstr "Mammography"
-
-msgid "Computer Tomography"
-msgstr "Computer Tomography"
-
-msgid "Magnetic Resonance"
-msgstr "Magnetic Resonance"
-
-msgid "Ultrasound"
-msgstr "Ultrasound"
-
-msgid "Positron Emission Tomography"
-msgstr "Positron Emission Tomography"
-
-msgid "Nuclear Medicine"
-msgstr "Nuclear Medicine"
-
-msgid "Secondary Capture"
-msgstr "Secondary Capture"
-
-msgid "Structured Report"
-msgstr "Structured Report"
-
-msgid "Presentation State"
-msgstr "Presentation State"
-
-msgid "Encapsulated PDF"
-msgstr "Encapsulated PDF"
-
-msgid "Other"
-msgstr "Other"
-
-msgid "Document"
-msgstr "Document"
-
-msgid "Progress Dialog"
-msgstr "Progress Dialog"
-
-msgid "Please wait..."
-msgstr "Please wait..."
-
-msgid "Cancel"
-msgstr "Cancel"
-
-msgid "Config file not found: "
-msgstr "Config file not found: "
-
 msgid "Invalid_DICOM"
 msgstr "Invalid_DICOM"
 
@@ -385,284 +328,131 @@ msgstr "phi_export"
 msgid "quarantine"
 msgstr "quarantine"
 
-msgid "Logging Levels"
-msgstr "Logging Levels"
+msgid "Progress Dialog"
+msgstr "Progress Dialog"
 
-msgid "Ok"
-msgstr "Ok"
+msgid "Please wait..."
+msgstr "Please wait..."
 
-msgid "Warning"
-msgstr "Warning"
+msgid "Cancel"
+msgstr "Cancel"
 
-msgid "Enabling debug mode in pydicom will cause PHI to be written to the log file."
-msgstr "Enabling debug mode in pydicom will cause PHI to be written to the log file."
+msgid "Config file not found: "
+msgstr "Config file not found: "
 
-msgid "Are you sure you want to enable pydicom debug mode?"
-msgstr "Are you sure you want to enable pydicom debug mode?"
+msgid "Computed Radiography"
+msgstr "Computed Radiography"
 
-msgid "Transfer Syntax Name"
-msgstr "Transfer Syntax Name"
+msgid "Digital X-Ray"
+msgstr "Digital X-Ray"
 
-msgid "Transfer Syntax UID"
-msgstr "Transfer Syntax UID"
+msgid "Intra-oral Radiography"
+msgstr "Intra-oral Radiography"
 
-msgid "Select Transfer Syntaxes"
-msgstr "Select Transfer Syntaxes"
+msgid "Mammography"
+msgstr "Mammography"
 
-msgid "Select All"
-msgstr "Select All"
+msgid "Computer Tomography"
+msgstr "Computer Tomography"
 
-msgid "Default"
-msgstr "Default"
+msgid "Magnetic Resonance"
+msgstr "Magnetic Resonance"
 
-msgid "DICOM Node"
-msgstr "DICOM Node"
+msgid "Ultrasound"
+msgstr "Ultrasound"
 
-msgid "No local IP addresses found."
-msgstr "No local IP addresses found."
+msgid "Positron Emission Tomography"
+msgstr "Positron Emission Tomography"
 
-msgid "Address"
-msgstr "Address"
+msgid "Nuclear Medicine"
+msgstr "Nuclear Medicine"
 
-msgid "Domain Name"
-msgstr "Domain Name"
+msgid "Secondary Capture"
+msgstr "Secondary Capture"
 
-msgid "DNS Lookup"
-msgstr "DNS Lookup"
+msgid "Structured Report"
+msgstr "Structured Report"
 
-msgid "IP Address"
-msgstr "IP Address"
+msgid "Presentation State"
+msgstr "Presentation State"
 
-msgid "Port"
-msgstr "Port"
+msgid "Encapsulated PDF"
+msgstr "Encapsulated PDF"
 
-msgid "AE Title"
-msgstr "AE Title"
+msgid "Other"
+msgstr "Other"
 
-msgid "Code"
-msgstr "Code"
+msgid "Document"
+msgstr "Document"
 
-msgid "Description"
-msgstr "Description"
+msgid "Query"
+msgstr "Query"
 
-msgid "Select Modalities"
-msgstr "Select Modalities"
+msgid "Export"
+msgstr "Export"
 
-msgid "Class Name"
-msgstr "Class Name"
-
-msgid "Class UID"
-msgstr "Class UID"
-
-msgid "Select Storage Classes"
-msgstr "Select Storage Classes"
-
-msgid "From Modalities"
-msgstr "From Modalities"
-
-msgid "Network Timeouts in SECONDS"
-msgstr "Network Timeouts in SECONDS"
-
-msgid "TCP Connection"
-msgstr "TCP Connection"
-
-msgid "DICOM Association Messages (ACSE)"
-msgstr "DICOM Association Messages (ACSE)"
-
-msgid "DICOM Service Element Messages (DIMSE)"
-msgstr "DICOM Service Element Messages (DIMSE)"
-
-msgid "Network (Close Inactive Connection)"
-msgstr "Network (Close Inactive Connection)"
-
-msgid "AWS Cognito Credentials for Export to S3"
-msgstr "AWS Cognito Credentials for Export to S3"
-
-msgid "AWS Account ID"
-msgstr "AWS Account ID"
-
-msgid "Region Name"
-msgstr "Region Name"
-
-msgid "Cognito Application Client ID"
-msgstr "Cognito Application Client ID"
-
-msgid "Cognito User Pool ID"
-msgstr "Cognito User Pool ID"
-
-msgid "Cognito Identity Pool ID"
-msgstr "Cognito Identity Pool ID"
-
-msgid "S3 Bucket"
-msgstr "S3 Bucket"
-
-msgid "S3 Prefix"
-msgstr "S3 Prefix"
-
-msgid "Username"
-msgstr "Username"
-
-msgid "Password"
-msgstr "Password"
-
-msgid "Export to AWS"
-msgstr "Export to AWS"
-
-msgid "Site ID"
-msgstr "Site ID"
-
-msgid "Load JAVA Index File"
-msgstr "Load JAVA Index File"
-
-msgid "Project Name"
-msgstr "Project Name"
-
-msgid "UID Root"
-msgstr "UID Root"
-
-msgid "DICOM Servers"
-msgstr "DICOM Servers"
-
-msgid "Local Server"
-msgstr "Local Server"
-
-msgid "Query Server"
-msgstr "Query Server"
-
-msgid "Export Server"
-msgstr "Export Server"
-
-msgid "AWS S3 Server"
-msgstr "AWS S3 Server"
-
-msgid "AWS Cognito Credentials"
-msgstr "AWS Cognito Credentials"
-
-msgid "Network Timeouts"
-msgstr "Network Timeouts"
-
-msgid "Storage Directory"
-msgstr "Storage Directory"
-
-msgid "Modalities"
-msgstr "Modalities"
-
-msgid "Storage Classes"
-msgstr "Storage Classes"
-
-msgid "Transfer Syntaxes"
-msgstr "Transfer Syntaxes"
-
-msgid "Script File"
-msgstr "Script File"
-
-msgid "Set Logging Levels"
-msgstr "Set Logging Levels"
-
-msgid "Create Project"
-msgstr "Create Project"
-
-msgid "Update Project"
-msgstr "Update Project"
-
-msgid "Select Storage Directory"
-msgstr "Select Storage Directory"
-
-msgid "Anonymizer Script Files"
-msgstr "Anonymizer Script Files"
-
-msgid "All Files"
-msgstr "All Files"
-
-msgid "Select Java Anonymizer Index File"
-msgstr "Select Java Anonymizer Index File"
-
-msgid "Excel Files"
-msgstr "Excel Files"
-
-msgid "Error reading Java Anonymizer Index File"
-msgstr "Error reading Java Anonymizer Index File"
-
-msgid "Load Java Anonymizer Index File Error"
-msgstr "Load Java Anonymizer Index File Error"
-
-msgid "No PHI data records found in:"
-msgstr "No PHI data records found in:"
-
-msgid "Java Index File Loaded"
-msgstr "Java Index File Loaded"
-
-msgid "Studies from Java Index loaded."
-msgstr "Studies from Java Index loaded."
-
-msgid "Site ID, UID Root will be inferred from the first PHI record."
-msgstr "Site ID, UID Root will be inferred from the first PHI record."
-
-msgid "Please enter your Project Name and configure all other settings below."
-msgstr "Please enter your Project Name and configure all other settings below."
-
-msgid "The Java Index data will be processed into the Python Anonymizer database when the project is created."
-msgstr "The Java Index data will be processed into the Python Anonymizer database when the project is created."
-
-msgid "Importing Studies"
-msgstr "Importing Studies"
-
-msgid "Importing Study"
-msgstr "Importing Study"
-
-msgid "Import from"
-msgstr "Import from"
-
-msgid "Retrieving Study Metadata at"
-msgstr "Retrieving Study Metadata at"
-
-msgid "No studies to retrieve"
-msgstr "No studies to retrieve"
-
-msgid "Close"
-msgstr "Close"
-
-msgid "Error retrieving ANY Study Metadata"
-msgstr "Error retrieving ANY Study Metadata"
-
-msgid "Finished retrieving Study Metadata"
-msgstr "Finished retrieving Study Metadata"
-
-msgid "No instances to import"
-msgstr "No instances to import"
-
-msgid "at"
-msgstr "at"
-
-msgid "level"
-msgstr "level"
-
-msgid "of"
-msgstr "of"
-
-msgid "Images"
-msgstr "Images"
-
-msgid "Import Finished"
-msgstr "Import Finished"
-
-msgid "Cancelling the move operation may not stop transfers from the remote server."
-msgstr "Cancelling the move operation may not stop transfers from the remote server."
-
-msgid "Are you sure you want to continue?"
-msgstr "Are you sure you want to continue?"
-
-msgid "Patient Name"
-msgstr "Patient Name"
-
-msgid "Anonymized ID"
-msgstr "Anonymized ID"
+msgid "Patients"
+msgstr "Patients"
 
 msgid "Studies"
 msgstr "Studies"
 
 msgid "Series"
 msgstr "Series"
+
+msgid "Images"
+msgstr "Images"
+
+msgid "Anonymizer Queue"
+msgstr "Anonymizer Queue"
+
+msgid "online"
+msgstr "online"
+
+msgid "Connection Error"
+msgstr "Connection Error"
+
+msgid "Server Failed DICOM ECHO"
+msgstr "Server Failed DICOM ECHO"
+
+msgid "Check Project Settings"
+msgstr "Check Project Settings"
+
+msgid "Ensure the remote server is setup to allow the local server for echo and storage services."
+msgstr "Ensure the remote server is setup to allow the local server for echo and storage services."
+
+msgid "offline"
+msgstr "offline"
+
+msgid "Query Server"
+msgstr "Query Server"
+
+msgid "Checking Query DICOM Server is online"
+msgstr "Checking Query DICOM Server is online"
+
+msgid "Waiting for AWS Authentication"
+msgstr "Waiting for AWS Authentication"
+
+msgid "Export Server"
+msgstr "Export Server"
+
+msgid "Checking Export DICOM Server is online"
+msgstr "Checking Export DICOM Server is online"
+
+msgid "AWS Authentication Failed"
+msgstr "AWS Authentication Failed"
+
+msgid "Check Project Settings/AWS Cognito and ensure all parameters are correct."
+msgstr "Check Project Settings/AWS Cognito and ensure all parameters are correct."
+
+msgid "AWS Authenticated"
+msgstr "AWS Authenticated"
+
+msgid "Patient Name"
+msgstr "Patient Name"
+
+msgid "Anonymized ID"
+msgstr "Anonymized ID"
 
 msgid "Date Time"
 msgstr "Date Time"
@@ -673,14 +463,11 @@ msgstr "Images Sent"
 msgid "Last Export Error"
 msgstr "Last Export Error"
 
-msgid "Export"
-msgstr "Export"
-
 msgid "Processing"
 msgstr "Processing"
 
-msgid "Patients"
-msgstr "Patients"
+msgid "of"
+msgstr "of"
 
 msgid "Cancel Export"
 msgstr "Cancel Export"
@@ -690,6 +477,9 @@ msgstr "Create Patient Lookup"
 
 msgid "Refresh"
 msgstr "Refresh"
+
+msgid "Select All"
+msgstr "Select All"
 
 msgid "Clear Selection"
 msgstr "Clear Selection"
@@ -715,9 +505,6 @@ msgstr "Failed to export"
 msgid "patient(s)"
 msgstr "patient(s)"
 
-msgid "Connection Error"
-msgstr "Connection Error"
-
 msgid "Export Server Failed DICOM C-ECHO"
 msgstr "Export Server Failed DICOM C-ECHO"
 
@@ -730,6 +517,63 @@ msgstr "Use SHIFT+Click and/or CMD/CTRL+Click to select multiple patients."
 msgid "Cancel active export?"
 msgstr "Cancel active export?"
 
+msgid "Close"
+msgstr "Close"
+
+msgid "Importing Study"
+msgstr "Importing Study"
+
+msgid "Importing Studies"
+msgstr "Importing Studies"
+
+msgid "Import from"
+msgstr "Import from"
+
+msgid "Retrieving Study Metadata at"
+msgstr "Retrieving Study Metadata at"
+
+msgid "No studies to retrieve"
+msgstr "No studies to retrieve"
+
+msgid "Study Metadata"
+msgstr "Study Metadata"
+
+msgid "Error"
+msgstr "Error"
+
+msgid "Errors"
+msgstr "Errors"
+
+msgid "Error retrieving ANY Study Metadata"
+msgstr "Error retrieving ANY Study Metadata"
+
+msgid "Finished retrieving Study Metadata"
+msgstr "Finished retrieving Study Metadata"
+
+msgid "No instances to import"
+msgstr "No instances to import"
+
+msgid "Study"
+msgstr "Study"
+
+msgid "at"
+msgstr "at"
+
+msgid "level"
+msgstr "level"
+
+msgid "Import Finished"
+msgstr "Import Finished"
+
+msgid "Warning"
+msgstr "Warning"
+
+msgid "Cancelling the move operation may not stop transfers from the remote server."
+msgstr "Cancelling the move operation may not stop transfers from the remote server."
+
+msgid "Are you sure you want to continue?"
+msgstr "Are you sure you want to continue?"
+
 msgid "Patient ID"
 msgstr "Patient ID"
 
@@ -741,6 +585,9 @@ msgstr "Study Description"
 
 msgid "Accession No."
 msgstr "Accession No."
+
+msgid "Modalities"
+msgstr "Modalities"
 
 msgid "Imported"
 msgstr "Imported"
@@ -774,9 +621,6 @@ msgstr "Load Accession Numbers"
 
 msgid "Show Imported Studies"
 msgstr "Show Imported Studies"
-
-msgid "Query"
-msgstr "Query"
 
 msgid "Cancel Query"
 msgstr "Cancel Query"
@@ -835,41 +679,209 @@ msgstr " Studies"
 msgid "Cancel active Query?"
 msgstr "Cancel active Query?"
 
-msgid "Anonymizer Queue"
-msgstr "Anonymizer Queue"
+msgid "AWS Cognito Credentials for Export to S3"
+msgstr "AWS Cognito Credentials for Export to S3"
 
-msgid "online"
-msgstr "online"
+msgid "AWS Account ID"
+msgstr "AWS Account ID"
 
-msgid "Server Failed DICOM ECHO"
-msgstr "Server Failed DICOM ECHO"
+msgid "Region Name"
+msgstr "Region Name"
 
-msgid "Check Project Settings"
-msgstr "Check Project Settings"
+msgid "Cognito Application Client ID"
+msgstr "Cognito Application Client ID"
 
-msgid "Ensure the remote server is setup to allow the local server for echo and storage services."
-msgstr "Ensure the remote server is setup to allow the local server for echo and storage services."
+msgid "Cognito User Pool ID"
+msgstr "Cognito User Pool ID"
 
-msgid "offline"
-msgstr "offline"
+msgid "Cognito Identity Pool ID"
+msgstr "Cognito Identity Pool ID"
 
-msgid "Checking Query DICOM Server is online"
-msgstr "Checking Query DICOM Server is online"
+msgid "S3 Bucket"
+msgstr "S3 Bucket"
 
-msgid "Waiting for AWS Authentication"
-msgstr "Waiting for AWS Authentication"
+msgid "S3 Prefix"
+msgstr "S3 Prefix"
 
-msgid "Checking Export DICOM Server is online"
-msgstr "Checking Export DICOM Server is online"
+msgid "Username"
+msgstr "Username"
 
-msgid "AWS Authentication Failed"
-msgstr "AWS Authentication Failed"
+msgid "Password"
+msgstr "Password"
 
-msgid "Check Project Settings/AWS Cognito and ensure all parameters are correct."
-msgstr "Check Project Settings/AWS Cognito and ensure all parameters are correct."
+msgid "Export to AWS"
+msgstr "Export to AWS"
 
-msgid "AWS Authenticated"
-msgstr "AWS Authenticated"
+msgid "Ok"
+msgstr "Ok"
+
+msgid "DICOM Node"
+msgstr "DICOM Node"
+
+msgid "No local IP addresses found."
+msgstr "No local IP addresses found."
+
+msgid "Address"
+msgstr "Address"
+
+msgid "Domain Name"
+msgstr "Domain Name"
+
+msgid "DNS Lookup"
+msgstr "DNS Lookup"
+
+msgid "IP Address"
+msgstr "IP Address"
+
+msgid "Port"
+msgstr "Port"
+
+msgid "AE Title"
+msgstr "AE Title"
+
+msgid "Logging Levels"
+msgstr "Logging Levels"
+
+msgid "Enabling debug mode in pydicom will cause PHI to be written to the log file."
+msgstr "Enabling debug mode in pydicom will cause PHI to be written to the log file."
+
+msgid "Are you sure you want to enable pydicom debug mode?"
+msgstr "Are you sure you want to enable pydicom debug mode?"
+
+msgid "Code"
+msgstr "Code"
+
+msgid "Description"
+msgstr "Description"
+
+msgid "Select Modalities"
+msgstr "Select Modalities"
+
+msgid "Default"
+msgstr "Default"
+
+msgid "Network Timeouts in SECONDS"
+msgstr "Network Timeouts in SECONDS"
+
+msgid "TCP Connection"
+msgstr "TCP Connection"
+
+msgid "DICOM Association Messages (ACSE)"
+msgstr "DICOM Association Messages (ACSE)"
+
+msgid "DICOM Service Element Messages (DIMSE)"
+msgstr "DICOM Service Element Messages (DIMSE)"
+
+msgid "Network (Close Inactive Connection)"
+msgstr "Network (Close Inactive Connection)"
+
+msgid "Site ID"
+msgstr "Site ID"
+
+msgid "Load JAVA Index File"
+msgstr "Load JAVA Index File"
+
+msgid "Project Name"
+msgstr "Project Name"
+
+msgid "UID Root"
+msgstr "UID Root"
+
+msgid "DICOM Servers"
+msgstr "DICOM Servers"
+
+msgid "Local Server"
+msgstr "Local Server"
+
+msgid "AWS S3 Server"
+msgstr "AWS S3 Server"
+
+msgid "AWS Cognito Credentials"
+msgstr "AWS Cognito Credentials"
+
+msgid "Network Timeouts"
+msgstr "Network Timeouts"
+
+msgid "Storage Directory"
+msgstr "Storage Directory"
+
+msgid "Storage Classes"
+msgstr "Storage Classes"
+
+msgid "Select Storage Classes"
+msgstr "Select Storage Classes"
+
+msgid "Transfer Syntaxes"
+msgstr "Transfer Syntaxes"
+
+msgid "Select Transfer Syntaxes"
+msgstr "Select Transfer Syntaxes"
+
+msgid "Script File"
+msgstr "Script File"
+
+msgid "Set Logging Levels"
+msgstr "Set Logging Levels"
+
+msgid "Create Project"
+msgstr "Create Project"
+
+msgid "Update Project"
+msgstr "Update Project"
+
+msgid "Select Storage Directory"
+msgstr "Select Storage Directory"
+
+msgid "Anonymizer Script Files"
+msgstr "Anonymizer Script Files"
+
+msgid "All Files"
+msgstr "All Files"
+
+msgid "Select Java Anonymizer Index File"
+msgstr "Select Java Anonymizer Index File"
+
+msgid "Excel Files"
+msgstr "Excel Files"
+
+msgid "Error reading Java Anonymizer Index File"
+msgstr "Error reading Java Anonymizer Index File"
+
+msgid "Load Java Anonymizer Index File Error"
+msgstr "Load Java Anonymizer Index File Error"
+
+msgid "No PHI data records found in:"
+msgstr "No PHI data records found in:"
+
+msgid "Java Index File Loaded"
+msgstr "Java Index File Loaded"
+
+msgid "Studies from Java Index loaded."
+msgstr "Studies from Java Index loaded."
+
+msgid "Site ID, UID Root will be inferred from the first PHI record."
+msgstr "Site ID, UID Root will be inferred from the first PHI record."
+
+msgid "Please enter your Project Name and configure all other settings below."
+msgstr "Please enter your Project Name and configure all other settings below."
+
+msgid "The Java Index data will be processed into the Python Anonymizer database when the project is created."
+msgstr "The Java Index data will be processed into the Python Anonymizer database when the project is created."
+
+msgid "Class Name"
+msgstr "Class Name"
+
+msgid "Class UID"
+msgstr "Class UID"
+
+msgid "From Modalities"
+msgstr "From Modalities"
+
+msgid "Transfer Syntax Name"
+msgstr "Transfer Syntax Name"
+
+msgid "Transfer Syntax UID"
+msgstr "Transfer Syntax UID"
 
 msgid "Welcome"
 msgstr "Welcome"

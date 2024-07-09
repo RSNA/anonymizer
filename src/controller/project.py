@@ -1457,7 +1457,7 @@ class ProjectController(AE):
                     if identifier.SeriesInstanceUID in study_uid_hierarchy.series:
                         if instance_count != 1:
                             raise DICOMRuntimeError(
-                                f"SCP Series Query Response for {identifier.SeriesInstanceUID}, inconsistent NumberOfSeriesRelatedInstances: {instance_count}"
+                                f"SCP Series Query Response for series:{identifier.SeriesInstanceUID}, inconsistent NumberOfSeriesRelatedInstances: {instance_count}"
                             )
                         study_uid_hierarchy.series[identifier.SeriesInstanceUID].instance_count += 1
                         logger.info(

@@ -178,63 +178,6 @@ msgstr "Projet"
 msgid "Settings"
 msgstr "Paramètres"
 
-msgid "Computed Radiography"
-msgstr "Radiographie Numérisée"
-
-msgid "Digital X-Ray"
-msgstr "Radiographie Numérique"
-
-msgid "Intra-oral Radiography"
-msgstr "Radiographie Intra-orale"
-
-msgid "Mammography"
-msgstr "Mammographie"
-
-msgid "Computer Tomography"
-msgstr "Tomographie Informatisée"
-
-msgid "Magnetic Resonance"
-msgstr "Résonance Magnétique"
-
-msgid "Ultrasound"
-msgstr "Échographie"
-
-msgid "Positron Emission Tomography"
-msgstr "Tomographie par Émission de Positrons"
-
-msgid "Nuclear Medicine"
-msgstr "Médecine Nucléaire"
-
-msgid "Secondary Capture"
-msgstr "Capture Secondaire"
-
-msgid "Structured Report"
-msgstr "Rapport Structuré"
-
-msgid "Presentation State"
-msgstr "État de Présentation"
-
-msgid "Encapsulated PDF"
-msgstr "PDF Encapsulé"
-
-msgid "Other"
-msgstr "Autre"
-
-msgid "Document"
-msgstr "Document"
-
-msgid "Progress Dialog"
-msgstr "Dialogue de Progression"
-
-msgid "Please wait..."
-msgstr "Veuillez patienter..."
-
-msgid "Cancel"
-msgstr "Annuler"
-
-msgid "Config file not found: "
-msgstr "Fichier de configuration non trouvé : "
-
 msgid "Invalid_DICOM"
 msgstr "DICOM_Invalide"
 
@@ -385,284 +328,131 @@ msgstr "phi_export"
 msgid "quarantine"
 msgstr "quarantaine"
 
-msgid "Logging Levels"
-msgstr "Niveaux de journalisation"
+msgid "Progress Dialog"
+msgstr "Dialogue de Progression"
 
-msgid "Ok"
-msgstr "Ok"
+msgid "Please wait..."
+msgstr "Veuillez patienter..."
 
-msgid "Warning"
-msgstr "Avertissement"
+msgid "Cancel"
+msgstr "Annuler"
 
-msgid "Enabling debug mode in pydicom will cause PHI to be written to the log file."
-msgstr "Activer le mode debug dans pydicom entraînera l'écriture de PHI dans le fichier journal."
+msgid "Config file not found: "
+msgstr "Fichier de configuration non trouvé : "
 
-msgid "Are you sure you want to enable pydicom debug mode?"
-msgstr "Êtes-vous sûr de vouloir activer le mode debug de pydicom ?"
+msgid "Computed Radiography"
+msgstr "Radiographie Numérisée"
 
-msgid "Transfer Syntax Name"
-msgstr "Nom de la syntaxe de transfert"
+msgid "Digital X-Ray"
+msgstr "Radiographie Numérique"
 
-msgid "Transfer Syntax UID"
-msgstr "UID de la syntaxe de transfert"
+msgid "Intra-oral Radiography"
+msgstr "Radiographie Intra-orale"
 
-msgid "Select Transfer Syntaxes"
-msgstr "Sélectionner les syntaxes de transfert"
+msgid "Mammography"
+msgstr "Mammographie"
 
-msgid "Select All"
-msgstr "Tout Sélectionner"
+msgid "Computer Tomography"
+msgstr "Tomographie Informatisée"
 
-msgid "Default"
-msgstr "Défaut"
+msgid "Magnetic Resonance"
+msgstr "Résonance Magnétique"
 
-msgid "DICOM Node"
-msgstr "Nœud DICOM"
+msgid "Ultrasound"
+msgstr "Échographie"
 
-msgid "No local IP addresses found."
-msgstr "Aucune adresse IP locale trouvée."
+msgid "Positron Emission Tomography"
+msgstr "Tomographie par Émission de Positrons"
 
-msgid "Address"
-msgstr "Adresse"
+msgid "Nuclear Medicine"
+msgstr "Médecine Nucléaire"
 
-msgid "Domain Name"
-msgstr "Nom de domaine"
+msgid "Secondary Capture"
+msgstr "Capture Secondaire"
 
-msgid "DNS Lookup"
-msgstr "Recherche DNS"
+msgid "Structured Report"
+msgstr "Rapport Structuré"
 
-msgid "IP Address"
-msgstr "Adresse IP"
+msgid "Presentation State"
+msgstr "État de Présentation"
 
-msgid "Port"
-msgstr "Port"
+msgid "Encapsulated PDF"
+msgstr "PDF Encapsulé"
 
-msgid "AE Title"
-msgstr "Titre AE"
+msgid "Other"
+msgstr "Autre"
 
-msgid "Code"
-msgstr "Code"
+msgid "Document"
+msgstr "Document"
 
-msgid "Description"
-msgstr "Description"
+msgid "Query"
+msgstr "Requête"
 
-msgid "Select Modalities"
-msgstr "Sélectionner les modalités"
+msgid "Export"
+msgstr "Exportation"
 
-msgid "Class Name"
-msgstr "Nom de la classe"
-
-msgid "Class UID"
-msgstr "UID de la classe"
-
-msgid "Select Storage Classes"
-msgstr "Sélectionner les classes de stockage"
-
-msgid "From Modalities"
-msgstr "Depuis les modalités"
-
-msgid "Network Timeouts in SECONDS"
-msgstr "Délais réseau en secondes"
-
-msgid "TCP Connection"
-msgstr "Connexion TCP"
-
-msgid "DICOM Association Messages (ACSE)"
-msgstr "Messages d'association DICOM (ACSE)"
-
-msgid "DICOM Service Element Messages (DIMSE)"
-msgstr "Messages d'élément de service DICOM (DIMSE)"
-
-msgid "Network (Close Inactive Connection)"
-msgstr "Réseau (fermer la connexion inactive)"
-
-msgid "AWS Cognito Credentials for Export to S3"
-msgstr "Informations d'identification AWS Cognito pour l'exportation vers S3"
-
-msgid "AWS Account ID"
-msgstr "ID du compte AWS"
-
-msgid "Region Name"
-msgstr "Nom de la région"
-
-msgid "Cognito Application Client ID"
-msgstr "ID client de l'application Cognito"
-
-msgid "Cognito User Pool ID"
-msgstr "ID du pool d'utilisateurs Cognito"
-
-msgid "Cognito Identity Pool ID"
-msgstr "ID du pool d'identités Cognito"
-
-msgid "S3 Bucket"
-msgstr "Bucket S3"
-
-msgid "S3 Prefix"
-msgstr "Préfixe S3"
-
-msgid "Username"
-msgstr "Nom d'utilisateur"
-
-msgid "Password"
-msgstr "Mot de passe"
-
-msgid "Export to AWS"
-msgstr "Exporter vers AWS"
-
-msgid "Site ID"
-msgstr "ID du site"
-
-msgid "Load JAVA Index File"
-msgstr "Charger le fichier d'index JAVA"
-
-msgid "Project Name"
-msgstr "Nom du projet"
-
-msgid "UID Root"
-msgstr "Racine UID"
-
-msgid "DICOM Servers"
-msgstr "Serveurs DICOM"
-
-msgid "Local Server"
-msgstr "Serveur local"
-
-msgid "Query Server"
-msgstr "Serveur de requête"
-
-msgid "Export Server"
-msgstr "Serveur d'exportation"
-
-msgid "AWS S3 Server"
-msgstr "Serveur AWS S3"
-
-msgid "AWS Cognito Credentials"
-msgstr "Informations d'identification AWS Cognito"
-
-msgid "Network Timeouts"
-msgstr "Délais réseau"
-
-msgid "Storage Directory"
-msgstr "Répertoire de stockage"
-
-msgid "Modalities"
-msgstr "Modalités"
-
-msgid "Storage Classes"
-msgstr "Classes de stockage"
-
-msgid "Transfer Syntaxes"
-msgstr "Syntaxes de transfert"
-
-msgid "Script File"
-msgstr "Fichier de script"
-
-msgid "Set Logging Levels"
-msgstr "Définir les niveaux de journalisation"
-
-msgid "Create Project"
-msgstr "Créer le projet"
-
-msgid "Update Project"
-msgstr "Mettre à jour le projet"
-
-msgid "Select Storage Directory"
-msgstr "Sélectionner le répertoire de stockage"
-
-msgid "Anonymizer Script Files"
-msgstr "Fichiers de script d'anonymisation"
-
-msgid "All Files"
-msgstr "Tous les fichiers"
-
-msgid "Select Java Anonymizer Index File"
-msgstr "Sélectionner le fichier d'index Java pour l'anonymiseur"
-
-msgid "Excel Files"
-msgstr "Fichiers Excel"
-
-msgid "Error reading Java Anonymizer Index File"
-msgstr "Erreur lors de la lecture du fichier d'index Java pour l'anonymiseur"
-
-msgid "Load Java Anonymizer Index File Error"
-msgstr "Erreur lors du chargement du fichier d'index Java pour l'anonymiseur"
-
-msgid "No PHI data records found in:"
-msgstr "Aucun enregistrement de données PHI trouvé dans :"
-
-msgid "Java Index File Loaded"
-msgstr "Fichier d'index Java chargé"
-
-msgid "Studies from Java Index loaded."
-msgstr "Études chargées depuis l'index Java."
-
-msgid "Site ID, UID Root will be inferred from the first PHI record."
-msgstr "L'ID du site, la racine UID seront déduits du premier enregistrement PHI."
-
-msgid "Please enter your Project Name and configure all other settings below."
-msgstr "Veuillez saisir le nom de votre projet et configurer tous les autres paramètres ci-dessous."
-
-msgid "The Java Index data will be processed into the Python Anonymizer database when the project is created."
-msgstr "Les données de l'index Java seront traitées dans la base de données de l'anonymiseur Python lors de la création du projet."
-
-msgid "Importing Studies"
-msgstr "Importation des Études"
-
-msgid "Importing Study"
-msgstr "Importation de l'Étude"
-
-msgid "Import from"
-msgstr "Importer de"
-
-msgid "Retrieving Study Metadata at"
-msgstr "Récupération des Métadonnées de l'Étude à"
-
-msgid "No studies to retrieve"
-msgstr "Aucune étude à récupérer"
-
-msgid "Close"
-msgstr "Fermer"
-
-msgid "Error retrieving ANY Study Metadata"
-msgstr "Erreur lors de la Récupération des Métadonnées de l'Étude"
-
-msgid "Finished retrieving Study Metadata"
-msgstr "Récupération des Métadonnées de l'Étude terminée"
-
-msgid "No instances to import"
-msgstr "Aucune instance à importer"
-
-msgid "at"
-msgstr "à"
-
-msgid "level"
-msgstr "niveau"
-
-msgid "of"
-msgstr "de"
-
-msgid "Images"
-msgstr "Images"
-
-msgid "Import Finished"
-msgstr "Importation terminée"
-
-msgid "Cancelling the move operation may not stop transfers from the remote server."
-msgstr "L'annulation de l'opération de déplacement peut ne pas arrêter les transferts du serveur."
-
-msgid "Are you sure you want to continue?"
-msgstr "Êtes-vous sûr de vouloir continuer ?"
-
-msgid "Patient Name"
-msgstr "Nom du Patient"
-
-msgid "Anonymized ID"
-msgstr "ID Anonymisée"
+msgid "Patients"
+msgstr "Patients"
 
 msgid "Studies"
 msgstr "Études"
 
 msgid "Series"
 msgstr "Séries"
+
+msgid "Images"
+msgstr "Images"
+
+msgid "Anonymizer Queue"
+msgstr "File d'Attente de l'Anonymiseur"
+
+msgid "online"
+msgstr "en ligne"
+
+msgid "Connection Error"
+msgstr "Erreur de Connexion"
+
+msgid "Server Failed DICOM ECHO"
+msgstr "Échec du Serveur DICOM ECHO"
+
+msgid "Check Project Settings"
+msgstr "Vérifier les Paramètres du Projet"
+
+msgid "Ensure the remote server is setup to allow the local server for echo and storage services."
+msgstr "Assurez-vous que le serveur distant est configuré pour permettre au serveur local d'utiliser les services d'écho et de stockage."
+
+msgid "offline"
+msgstr "hors ligne"
+
+msgid "Query Server"
+msgstr "Serveur de requête"
+
+msgid "Checking Query DICOM Server is online"
+msgstr "Vérification que le serveur DICOM de requête est en ligne"
+
+msgid "Waiting for AWS Authentication"
+msgstr "En attente de l'authentification AWS"
+
+msgid "Export Server"
+msgstr "Serveur d'exportation"
+
+msgid "Checking Export DICOM Server is online"
+msgstr "Vérification que le serveur DICOM d'exportation est en ligne"
+
+msgid "AWS Authentication Failed"
+msgstr "Échec de l'authentification AWS"
+
+msgid "Check Project Settings/AWS Cognito and ensure all parameters are correct."
+msgstr "Vérifiez les paramètres du projet/AWS Cognito et assurez-vous que tous les paramètres sont corrects."
+
+msgid "AWS Authenticated"
+msgstr "AWS authentifié"
+
+msgid "Patient Name"
+msgstr "Nom du Patient"
+
+msgid "Anonymized ID"
+msgstr "ID Anonymisée"
 
 msgid "Date Time"
 msgstr "Date Heure"
@@ -673,14 +463,11 @@ msgstr "Images Envoyées"
 msgid "Last Export Error"
 msgstr "Dernière Erreur d'Exportation"
 
-msgid "Export"
-msgstr "Exportation"
-
 msgid "Processing"
 msgstr "Traitement"
 
-msgid "Patients"
-msgstr "Patients"
+msgid "of"
+msgstr "de"
 
 msgid "Cancel Export"
 msgstr "Annuler l'Exportation"
@@ -690,6 +477,9 @@ msgstr "Créer une Recherche de Patient"
 
 msgid "Refresh"
 msgstr "Actualiser"
+
+msgid "Select All"
+msgstr "Tout Sélectionner"
 
 msgid "Clear Selection"
 msgstr "Effacer la Sélection"
@@ -715,9 +505,6 @@ msgstr "Échec de l'exportation"
 msgid "patient(s)"
 msgstr "patient(s)"
 
-msgid "Connection Error"
-msgstr "Erreur de Connexion"
-
 msgid "Export Server Failed DICOM C-ECHO"
 msgstr "Échec du Serveur d'Exportation DICOM C-ECHO"
 
@@ -730,6 +517,63 @@ msgstr "Utilisez SHIFT+Clic et/ou CMD/CTRL+Clic pour sélectionner plusieurs pat
 msgid "Cancel active export?"
 msgstr "Annuler l'exportation active?"
 
+msgid "Close"
+msgstr "Fermer"
+
+msgid "Importing Study"
+msgstr "Importation de l'Étude"
+
+msgid "Importing Studies"
+msgstr "Importation des Études"
+
+msgid "Import from"
+msgstr "Importer de"
+
+msgid "Retrieving Study Metadata at"
+msgstr "Récupération des Métadonnées de l'Étude à"
+
+msgid "No studies to retrieve"
+msgstr "Aucune étude à récupérer"
+
+msgid "Study Metadata"
+msgstr "Métadonnées de l'Étude"
+
+msgid "Error"
+msgstr "Erreur"
+
+msgid "Errors"
+msgstr "Erreurs"
+
+msgid "Error retrieving ANY Study Metadata"
+msgstr "Erreur lors de la Récupération des Métadonnées de l'Étude"
+
+msgid "Finished retrieving Study Metadata"
+msgstr "Récupération des Métadonnées de l'Étude terminée"
+
+msgid "No instances to import"
+msgstr "Aucune instance à importer"
+
+msgid "Study"
+msgstr "Étude"
+
+msgid "at"
+msgstr "à"
+
+msgid "level"
+msgstr "niveau"
+
+msgid "Import Finished"
+msgstr "Importation terminée"
+
+msgid "Warning"
+msgstr "Avertissement"
+
+msgid "Cancelling the move operation may not stop transfers from the remote server."
+msgstr "L'annulation de l'opération de déplacement peut ne pas arrêter les transferts du serveur."
+
+msgid "Are you sure you want to continue?"
+msgstr "Êtes-vous sûr de vouloir continuer ?"
+
 msgid "Patient ID"
 msgstr "Identifiant du patient"
 
@@ -741,6 +585,9 @@ msgstr "Description de l'étude"
 
 msgid "Accession No."
 msgstr "Numéro d'accession"
+
+msgid "Modalities"
+msgstr "Modalités"
 
 msgid "Imported"
 msgstr "Importé"
@@ -774,9 +621,6 @@ msgstr "Charger les numéros d'accession"
 
 msgid "Show Imported Studies"
 msgstr "Afficher les études importées"
-
-msgid "Query"
-msgstr "Requête"
 
 msgid "Cancel Query"
 msgstr "Annuler la requête"
@@ -835,41 +679,209 @@ msgstr " Études"
 msgid "Cancel active Query?"
 msgstr "Annuler la requête active ?"
 
-msgid "Anonymizer Queue"
-msgstr "File d'Attente de l'Anonymiseur"
+msgid "AWS Cognito Credentials for Export to S3"
+msgstr "Informations d'identification AWS Cognito pour l'exportation vers S3"
 
-msgid "online"
-msgstr "en ligne"
+msgid "AWS Account ID"
+msgstr "ID du compte AWS"
 
-msgid "Server Failed DICOM ECHO"
-msgstr "Échec du Serveur DICOM ECHO"
+msgid "Region Name"
+msgstr "Nom de la région"
 
-msgid "Check Project Settings"
-msgstr "Vérifier les Paramètres du Projet"
+msgid "Cognito Application Client ID"
+msgstr "ID client de l'application Cognito"
 
-msgid "Ensure the remote server is setup to allow the local server for echo and storage services."
-msgstr "Assurez-vous que le serveur distant est configuré pour permettre au serveur local d'utiliser les services d'écho et de stockage."
+msgid "Cognito User Pool ID"
+msgstr "ID du pool d'utilisateurs Cognito"
 
-msgid "offline"
-msgstr "hors ligne"
+msgid "Cognito Identity Pool ID"
+msgstr "ID du pool d'identités Cognito"
 
-msgid "Checking Query DICOM Server is online"
-msgstr "Vérification que le serveur DICOM de requête est en ligne"
+msgid "S3 Bucket"
+msgstr "Bucket S3"
 
-msgid "Waiting for AWS Authentication"
-msgstr "En attente de l'authentification AWS"
+msgid "S3 Prefix"
+msgstr "Préfixe S3"
 
-msgid "Checking Export DICOM Server is online"
-msgstr "Vérification que le serveur DICOM d'exportation est en ligne"
+msgid "Username"
+msgstr "Nom d'utilisateur"
 
-msgid "AWS Authentication Failed"
-msgstr "Échec de l'authentification AWS"
+msgid "Password"
+msgstr "Mot de passe"
 
-msgid "Check Project Settings/AWS Cognito and ensure all parameters are correct."
-msgstr "Vérifiez les paramètres du projet/AWS Cognito et assurez-vous que tous les paramètres sont corrects."
+msgid "Export to AWS"
+msgstr "Exporter vers AWS"
 
-msgid "AWS Authenticated"
-msgstr "AWS authentifié"
+msgid "Ok"
+msgstr "Ok"
+
+msgid "DICOM Node"
+msgstr "Nœud DICOM"
+
+msgid "No local IP addresses found."
+msgstr "Aucune adresse IP locale trouvée."
+
+msgid "Address"
+msgstr "Adresse"
+
+msgid "Domain Name"
+msgstr "Nom de domaine"
+
+msgid "DNS Lookup"
+msgstr "Recherche DNS"
+
+msgid "IP Address"
+msgstr "Adresse IP"
+
+msgid "Port"
+msgstr "Port"
+
+msgid "AE Title"
+msgstr "Titre AE"
+
+msgid "Logging Levels"
+msgstr "Niveaux de journalisation"
+
+msgid "Enabling debug mode in pydicom will cause PHI to be written to the log file."
+msgstr "Activer le mode debug dans pydicom entraînera l'écriture de PHI dans le fichier journal."
+
+msgid "Are you sure you want to enable pydicom debug mode?"
+msgstr "Êtes-vous sûr de vouloir activer le mode debug de pydicom ?"
+
+msgid "Code"
+msgstr "Code"
+
+msgid "Description"
+msgstr "Description"
+
+msgid "Select Modalities"
+msgstr "Sélectionner les modalités"
+
+msgid "Default"
+msgstr "Défaut"
+
+msgid "Network Timeouts in SECONDS"
+msgstr "Délais réseau en secondes"
+
+msgid "TCP Connection"
+msgstr "Connexion TCP"
+
+msgid "DICOM Association Messages (ACSE)"
+msgstr "Messages d'association DICOM (ACSE)"
+
+msgid "DICOM Service Element Messages (DIMSE)"
+msgstr "Messages d'élément de service DICOM (DIMSE)"
+
+msgid "Network (Close Inactive Connection)"
+msgstr "Réseau (fermer la connexion inactive)"
+
+msgid "Site ID"
+msgstr "ID du site"
+
+msgid "Load JAVA Index File"
+msgstr "Charger le fichier d'index JAVA"
+
+msgid "Project Name"
+msgstr "Nom du projet"
+
+msgid "UID Root"
+msgstr "Racine UID"
+
+msgid "DICOM Servers"
+msgstr "Serveurs DICOM"
+
+msgid "Local Server"
+msgstr "Serveur local"
+
+msgid "AWS S3 Server"
+msgstr "Serveur AWS S3"
+
+msgid "AWS Cognito Credentials"
+msgstr "Informations d'identification AWS Cognito"
+
+msgid "Network Timeouts"
+msgstr "Délais réseau"
+
+msgid "Storage Directory"
+msgstr "Répertoire de stockage"
+
+msgid "Storage Classes"
+msgstr "Classes de stockage"
+
+msgid "Select Storage Classes"
+msgstr "Sélectionner les classes de stockage"
+
+msgid "Transfer Syntaxes"
+msgstr "Syntaxes de transfert"
+
+msgid "Select Transfer Syntaxes"
+msgstr "Sélectionner les syntaxes de transfert"
+
+msgid "Script File"
+msgstr "Fichier de script"
+
+msgid "Set Logging Levels"
+msgstr "Définir les niveaux de journalisation"
+
+msgid "Create Project"
+msgstr "Créer le projet"
+
+msgid "Update Project"
+msgstr "Mettre à jour le projet"
+
+msgid "Select Storage Directory"
+msgstr "Sélectionner le répertoire de stockage"
+
+msgid "Anonymizer Script Files"
+msgstr "Fichiers de script d'anonymisation"
+
+msgid "All Files"
+msgstr "Tous les fichiers"
+
+msgid "Select Java Anonymizer Index File"
+msgstr "Sélectionner le fichier d'index Java pour l'anonymiseur"
+
+msgid "Excel Files"
+msgstr "Fichiers Excel"
+
+msgid "Error reading Java Anonymizer Index File"
+msgstr "Erreur lors de la lecture du fichier d'index Java pour l'anonymiseur"
+
+msgid "Load Java Anonymizer Index File Error"
+msgstr "Erreur lors du chargement du fichier d'index Java pour l'anonymiseur"
+
+msgid "No PHI data records found in:"
+msgstr "Aucun enregistrement de données PHI trouvé dans :"
+
+msgid "Java Index File Loaded"
+msgstr "Fichier d'index Java chargé"
+
+msgid "Studies from Java Index loaded."
+msgstr "Études chargées depuis l'index Java."
+
+msgid "Site ID, UID Root will be inferred from the first PHI record."
+msgstr "L'ID du site, la racine UID seront déduits du premier enregistrement PHI."
+
+msgid "Please enter your Project Name and configure all other settings below."
+msgstr "Veuillez saisir le nom de votre projet et configurer tous les autres paramètres ci-dessous."
+
+msgid "The Java Index data will be processed into the Python Anonymizer database when the project is created."
+msgstr "Les données de l'index Java seront traitées dans la base de données de l'anonymiseur Python lors de la création du projet."
+
+msgid "Class Name"
+msgstr "Nom de la classe"
+
+msgid "Class UID"
+msgstr "UID de la classe"
+
+msgid "From Modalities"
+msgstr "Depuis les modalités"
+
+msgid "Transfer Syntax Name"
+msgstr "Nom de la syntaxe de transfert"
+
+msgid "Transfer Syntax UID"
+msgstr "UID de la syntaxe de transfert"
 
 msgid "Welcome"
 msgstr "Bienvenue"

@@ -5,7 +5,6 @@ import logging.handlers
 from pydicom import config as pydicom_config
 from model.project import LoggingLevels
 
-EXE_LOG_DIR = "Anonymizer"
 LOG_FILENAME = "anonymizer.log"
 LOG_SIZE = 1024 * 1024 * 100  # 100 MB
 LOG_BACKUP_COUNT = 10
@@ -30,15 +29,15 @@ def _get_logs_dir(run_as_exe: bool, install_dir: str) -> str:
     """
     if run_as_exe:
         if platform.system() == "Windows":
-            return os.path.join(os.path.expanduser("~"), "AppData", "Local", EXE_LOG_DIR, "Logs")
+            return os.path.join(os.path.expanduser("~"), "AppData", "Local", "Anonymizer", "Logs")
         elif platform.system() == "Darwin":
-            return os.path.join(os.path.expanduser("~"), "Library", "Logs", EXE_LOG_DIR)
+            return os.path.join(os.path.expanduser("~"), "Library", "Logs", "Anonymizer")
         elif platform.system() == "Linux":
-            return os.path.join(os.path.expanduser("~"), "Logs", EXE_LOG_DIR)
+            return os.path.join(os.path.expanduser("~"), "Anonymizer", "Logs")
         else:
             raise RuntimeError("Unsupported platform")
     else:
-        return os.path.join(install_dir, "Logs")
+        return os.path.join(install_dir, "logs")
 
 
 def init_logging(install_dir: str, run_as_exe: bool, file_handler: bool = True) -> str:
