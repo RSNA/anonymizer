@@ -64,7 +64,7 @@ def init_logging(install_dir: str, run_as_exe: bool, file_handler: bool = True) 
         # Setup rotating log file:
         logFormatter = logging.Formatter(LOG_FORMAT, style="{")
         fileHandler = logging.handlers.RotatingFileHandler(
-            logs_dir + LOG_FILENAME, maxBytes=LOG_SIZE, backupCount=LOG_BACKUP_COUNT
+            os.path.join(logs_dir, LOG_FILENAME), maxBytes=LOG_SIZE, backupCount=LOG_BACKUP_COUNT
         )
         fileHandler.setFormatter(logFormatter)
         logger.addHandler(fileHandler)

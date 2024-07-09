@@ -6,12 +6,12 @@
 *.spec
 *.zip
 *.coverage
+*.json
 src/build/*
 src/dist/*
 logs/*
 dicom/*
 **/versionfile.txt
 **/radon_results.txt
-**/config.json
 Pipfile.lock
 
