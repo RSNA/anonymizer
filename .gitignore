@@ -6,11 +6,10 @@
 *.spec
 *.zip
 *.coverage
-*.json
+*.anonymizer_state.json
 src/build/*
 src/dist/*
 src/logs/*
-src/logs/.anonymizer_state.json
 dicom/*
 **/versionfile.txt
 **/radon_results.txt

@@ -155,7 +155,8 @@ class ImportStudiesDialog(tk.Toplevel):
 
         text = f"{self._study_metadata_retrieved} " + _("of") + f" {len(self.studies)} " + _("Study Metadata")
         if errors:
-            text += f" ({errors} " + _("Error") + ")" if errors == 1 else _("Errors") + ")"
+            error_tag = _("Error") if errors == 1 else _("Errors")
+            text += f" ({errors} " + error_tag + ")"
         self._metadata_progress_label.configure(text=text)
 
         if pending_studies > 0:
