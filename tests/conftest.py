@@ -1,5 +1,6 @@
 # tests/conftest.py
 import os, sys
+import pytest
 
 # Add the src directory to sys.path dynamically
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
@@ -7,9 +8,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../s
 from pathlib import Path
 import shutil
 import tempfile
-import pytest
-
 from logging import DEBUG, INFO, WARNING
+
 from src.utils.logging import init_logging
 from src.model.project import ProjectModel, NetworkTimeouts, LoggingLevels
 from src.controller.project import ProjectController

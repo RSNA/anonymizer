@@ -10,9 +10,45 @@ logger = logging.getLogger(__name__)
 
 
 class LoggingLevelsDialog(tk.Toplevel):
+    """
+    A dialog window for selecting logging levels.
+
+    Args:
+        parent: The parent window.
+        levels: An instance of LoggingLevels class.
+
+    Attributes:
+        level_options (list): A list of available logging level options.
+        _user_input (LoggingLevels or None): The user-selected logging levels.
+
+    Methods:
+        level_to_option(level: int) -> str: Converts a logging level to its corresponding option.
+        option_to_level(option: str) -> int: Converts an option to its corresponding logging level.
+        _create_widgets(): Creates the widgets for the dialog window.
+        _pydicom_debug_event(): Event handler for the pydicom debug switch.
+        _enter_keypress(event): Event handler for the Enter key press.
+        _ok_event(event): Event handler for the Ok button click.
+        _escape_keypress(event): Event handler for the Escape key press.
+        _on_cancel(): Event handler for canceling the dialog.
+        get_input() -> LoggingLevels: Gets the user-selected logging levels.
+
+    """
+
     level_options = ["DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"]
 
     def level_to_option(self, level: int) -> str:
+        """
+        Converts a logging level to its corresponding option.
+
+        Args:
+            level: The logging level.
+
+        Returns:
+            str: The corresponding option.
+
+        Raises:
+            ValueError: If the logging level is invalid.
+        """
         if level == logging.DEBUG:
             return "DEBUG"
         elif level == logging.INFO:
@@ -27,6 +63,18 @@ class LoggingLevelsDialog(tk.Toplevel):
             raise ValueError(f"Invalid logging level: {level}")
 
     def option_to_level(self, option: str) -> int:
+        """
+        Converts an option to its corresponding logging level.
+
+        Args:
+            option: The option.
+
+        Returns:
+            int: The corresponding logging level.
+
+        Raises:
+            ValueError: If the option is invalid.
+        """
         if option == "DEBUG":
             return logging.DEBUG
         elif option == "INFO":
@@ -169,6 +217,12 @@ class LoggingLevelsDialog(tk.Toplevel):
         self.destroy()
 
     def get_input(self):
+        """
+        Gets the user-selected logging levels.
+
+        Returns:
+            LoggingLevels: The user-selected logging levels.
+        """
         self.focus()
         self.master.wait_window(self)
         return self._user_input

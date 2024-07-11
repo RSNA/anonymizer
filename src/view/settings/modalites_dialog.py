@@ -12,7 +12,36 @@ logger = logging.getLogger(__name__)
 
 
 class ModalitiesDialog(tk.Toplevel):
+    """
+    A dialog window for selecting modalities.
 
+    Args:
+        parent (tk.Tk): The parent window.
+        modalities (list[str]): The list of modalities.
+
+    Attributes:
+        attr_map (dict): A dictionary mapping attribute names to their display names, width, and justification.
+        root (ctk.CTk): The root window.
+        modalities (list[str]): The list of modalities.
+        _user_input (Union[list, None]): The user-selected modalities.
+        _tree (ttk.Treeview): The treeview widget for displaying modalities.
+        _button_frame (ctk.CTkFrame): The frame for buttons.
+        _select_all_button (ctk.CTkButton): The button for selecting all modalities.
+        _default_selection_button (ctk.CTkButton): The button for selecting default modalities.
+        _ok_button (ctk.CTkButton): The button for confirming the selection.
+
+    Methods:
+        _create_widgets(): Create the widgets for the dialog.
+        on_item_select(event): Callback function for item selection in the treeview.
+        _default_selection_button_pressed(): Event handler for the default selection button.
+        _select_all_button_pressed(): Event handler for the select all button.
+        _enter_keypress(event): Event handler for the Enter key press.
+        _ok_event(event): Event handler for the OK button press.
+        _escape_keypress(event): Event handler for the Escape key press.
+        _on_cancel(): Event handler for canceling the dialog.
+        get_input(): Get the user-selected modalities.
+
+    """
     def __init__(self, parent, modalities: list[str]):
         super().__init__(master=parent)
         self.attr_map = {

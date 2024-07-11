@@ -5,79 +5,40 @@ voir https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support -
 <body>
 <div style="color: #014F8F;font-size: 14px;">
 
-	<h3>Protocole standard de désidentification DICOM</h3>
-		<p>
-		Dans <a href="https://dicom.nema.org/medical/dicom/2023b/output/chtml/part15/chapter_E.html">PS 3.15 Annexe E</a>, 
-		le standard DICOM spécifie un ensemble de règles de désidentification à utiliser dans diverses situations. 
-		Les règles sont regroupées dans un Profil de Confidentialité de Base d'Application, qui supprime toutes les informations de santé protégées (PHI), 
-		et un ensemble d'options qui assouplissent certaines classes de PHI pouvant être conservées dans certains cas. 
-		Les sections ci-dessous décrivent le protocole de désidentification mis en œuvre par l'Anonymiseur en référence au Profil DICOM et à ses options.
-		</p>
-		<h4>113100: Profil de Confidentialité de Base d'Application</h4>
-		Le programme Anonymiseur DICOM de RSNA implémente le Profil de Base.
-		Le programme importe l'identifiant du site (SiteID et UIDRoot) à partir d'un fichier Excel d'index exporté par l'Anonymiseur Java ou génère automatiquement un nouveau SiteID unique et utilise un UIDRoot par défaut.
-		Les éléments PatientName (0010,0010) et PatientID (0010,0020) sont modifiés en attribuant des entiers séquentiels aux identifications de patients PHI uniques au fur et à mesure de leur rencontre.
-		L'entier séquentiel est ajouté au paramètre SiteID, produisant une chaîne sous la forme [SiteID]-[entier séquentiel], qui est utilisée pour peupler les deux éléments.
-		Si l'identifiant de patient PHI est manquant ou vide, le programme attribue [SiteID]-000000 aux éléments PatientID et PatientName. 
-		Le programme maintient une base de données pour garantir que toutes les études du même patient sont dé-identifiées de la même manière. 
-		<ol>
-		<li>Les UIDs sont remplacés par ceux générés avec le format : [UIDRoot].[SiteID].[entier séquentiel]</li>
-		<li>Tous les UIDs sont supprimés en groupes.</li>
-		<li>Tous les éléments dans les groupes 0032 à 4008 sont supprimés.</li>
-		<li>Tous les groupes privés sont supprimés.</li> 
-		<li>L'élément PatientIdentityRemoved (0012,0062) est attribué avec la valeur "YES".</li> 
-		<li>L'élément DeIdentificationMethod (0012,0063) est attribué avec la valeur "RSNA DICOM ANONYMIZER".</li> 
-		<li>113100 est ajouté à l'élément DeIdentificationMethodCodeSequence (0012,0064).</li>
-		<li>Un Bloc Privé: 0x0013 est créé et attribué avec la valeur "RSNA", le Nom du Projet et SiteID sont ajoutés à ce bloc.</li>
-		</ol>
-		<h4>113101: Option de Nettoyage des Données de Pixel</h4>
-		<p>Non implémenté.</p>
-		<h4>113102: Option de Nettoyage des Caractéristiques Visuelles Reconnaissables</h4>
-		<p>Non implémenté.</p>
-		<h4>113103: Option de Nettoyage des Graphiques</h4>
-		<p>Non implémenté, mais les groupes de courbes et de superpositions (5XXX et 6XXX) sont supprimés.</p>
-		<h4>113104: Option de Nettoyage du Contenu Structuré</h4>
-		<p>Non implémenté, cependant, les paramètres du projet peuvent permettre/désactiver les classes de stockage liées aux SR (Rapport Structuré).</p>
-		<h4>113105: Option de Nettoyage des Descripteurs</h4>
-		<p>Cette option est partiellement implémentée. Seuls les éléments suivants définis par l'option sont conservés :</p> 
-		<ul>
-			<li>(0008,1030) StudyDescription </li> 
-			<li>(0008,103e) SeriesDescription</li>
-		</ul>
-		<h4>113106: Option de Conservation des Informations Temporelles Longitudinales Dates Complètes</h4>
-		<p>Non implémenté.</p>
-		<h4>113107: Option de Conservation des Informations Temporelles Longitudinales Dates Modifiées</h4>
-		<p>Cette option est partiellement implémentée.</p>
-		<ul>
-			<li>Toutes les dates sont modifiées en calculant le hash MD5 de PHI PatientID.</li>
-			<li>La valeur entière du hash est divisée par le nombre de jours en 10 ans (3652) et le reste est utilisé pour décaler la date en cours de modification.</li>
-			<li>Cela conserve les relations temporelles entre les études d'un seul patient tout en utilisant des décalages différents pour différents patients.</li>
-			<li>Les éléments de l'heure (heure du jour) ne sont pas modifiés.</li>
-			<li>113107 est ajouté à l'élément DeIdentificationMethodCodeSequence (0012,0064).</li>
-		</ul>
-		<h4>113108: Option de Conservation des Caractéristiques du Patient</h4>
-		<p>Cette option est partiellement implémentée. Seuls les éléments suivants définis par l'option sont conservés :</p>
-		<ul>
-			<li>(0010,0040) PatientSex</li>
-			<li>(0010,1010) PatientAge</li>
-			<li>(0010,1020) PatientSize</li>
-			<li>(0010,1030) PatientWeight</li>
-			<li>(0010,2160) EthnicGroup</li>
-			<li>(90010,21a0) SmokingStatus</li>
-			<li>113108 est ajouté à l'élément DeIdentificationMethodCodeSequence (0012,0064).</li>
-		</ul>
-		<h4>113109: Option de Conservation de l'Identité du Dispositif</h4>
-		<p>Cette option est partiellement implémentée. Seuls les éléments suivants définis par l'option sont conservés :</p>
-		<ul>
-			<li>(0008,0070) Manufacturer</li>
-			<li>(0008,1090) ManufacturerModelName</li>
-			<li>113109 est ajouté à l'élément DeIdentificationMethodCodeSequence (0012,0064).</li>
-		</ul>
-		<h4>113110: Option de Conservation des UIDs</h4>
-		<p>Non implémenté.</p>
-		<h4>113111: Option de Conservation Sécurisée des Données Privées</h4>
-		<p>Non implémenté.</p>
-	
+		<h2>Gestion des Projets d'Anonymisation</h2>
+
+			<h3>Création d'un Nouveau Projet</h3>
+			<img src="assets/locales/en_US/html/images/NewProject.png"/>
+			<ul>
+				<li>Dans le menu, sélectionnez <i>Fichier/Nouveau Projet</i> et la boîte de dialogue <i>Paramètres du Nouveau Projet</i> apparaîtra.</li> 
+				<li>Référez-vous à <i>Aide/Paramètres du Projet</i> pour plus de détails.</li>
+			</ul>
+			
+			<h3>Fermeture d'un Projet</h3>
+			<img src="assets/locales/en_US/html/images/CloseProject.png"/>
+			<ul>
+				<li>Dans le menu, sélectionnez <i>Fichier/Fermer le Projet</i> ou fermez simplement la fenêtre avec le bouton <b>X</b>.</li>
+			</ul>
+
+			<h3>Réouverture d'un Projet</h3>
+			<img src="assets/locales/en_US/html/images/OpenRecent.png"/>
+			<ul>
+				<li>Dans le menu, sélectionnez <i>Fichier/Ouvrir Récent</i> pour voir une liste des projets ouverts précédemment.</li>
+				<li>Cliquez sur le nom du projet pour le rouvrir.</li>
+				<li>Au démarrage, l'Anonymiseur rouvrira le dernier projet s'il n'a pas été fermé lors de l'arrêt de l'Anonymiseur.</li>
+			</ul>
+
+			<h3>Clonage d'un Projet</h3>
+			<img src="assets/locales/en_US/html/images/CloneProject.png"/>
+			<ul>
+				<li>Dans le menu, sélectionnez <i>Fichier/Cloner</i> pour cloner les paramètres du projet actuel dans un nouveau projet propre.</li>
+				<li>Sélectionnez le nouveau répertoire de stockage pour le clone.</li>
+				<li>Une boîte de dialogue <i>Paramètres du Nouveau Projet</i> est alors présentée, permettant de modifier tous les paramètres, y compris le nouveau nom du projet et la Racine UID.</li>
+				<li>Seuls les paramètres du projet actuel via le fichier <i>Project.pkl</i> seront copiés, aucun fichier image ne sera copié.</li>
+				<li>L'ID du site sera préservé.</li>
+				<li><b>Attention :</b> assurez-vous que la Racine UID est unique pour tous vos projets afin d'éviter les conflits de UID.</li>
+			</ul>
+
 </div>
 </body>
 </html>

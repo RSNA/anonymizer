@@ -10,6 +10,27 @@ logger = logging.getLogger(__name__)
 
 
 class NetworkTimeoutsDialog(tk.Toplevel):
+    """
+    A dialog window for configuring network timeouts.
+
+    Args:
+        parent: The parent widget.
+        timeouts: An instance of NetworkTimeouts containing the initial timeout values.
+
+    Attributes:
+        timeouts (NetworkTimeouts): The network timeouts.
+        _user_input (Union[NetworkTimeouts, None]): The user input for network timeouts.
+
+    Methods:
+        _create_widgets: Create the widgets for the dialog.
+        _enter_keypress: Event handler for the Enter key press.
+        _ok_event: Event handler for the OK button click.
+        _escape_keypress: Event handler for the Escape key press.
+        _on_cancel: Event handler for the Cancel button click.
+        get_input: Get the user input for network timeouts.
+
+    """
+
     def __init__(
         self,
         parent,

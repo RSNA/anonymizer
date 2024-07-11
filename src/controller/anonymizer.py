@@ -1,5 +1,19 @@
-# Description: Anonymization of DICOM datasets
-# See https://mircwiki.rsna.org/index.php?title=The_CTP_DICOM_Anonymizer for legacy anonymizer documentation
+"""
+Anonymization of DICOM datasets.
+
+This module provides the AnonymizerController class, which handles the anonymization of DICOM datasets and manages the Anonymizer Model.
+
+The AnonymizerController class performs the following tasks:
+- Loading and saving the Anonymizer Model from/to a pickle file.
+- Handling the anonymization of DICOM datasets using worker threads.
+- Managing the quarantine of invalid or incomplete DICOM datasets.
+- Generating the local storage path for anonymized datasets.
+- Validating date strings.
+- Hashing dates based on patient ID.
+
+For more information, refer to the legacy anonymizer documentation: https://mircwiki.rsna.org/index.php?title=The_CTP_DICOM_Anonymizer
+"""
+
 import os
 import time
 from shutil import copyfile
@@ -95,7 +109,9 @@ class AnonymizerController:
                     f"Anonymizer Model version mismatch: {file_model._version} != {AnonymizerModel.MODEL_VERSION} upgrading accordingly"
                 )
                 self.model = AnonymizerModel(
-                    project_model.site_id, project_model.anonymizer_script_path
+                    site_id=project_model.site_id,
+                    uid_root=project_model.uid_root,
+                    script_path=project_model.anonymizer_script_path,
                 )  # new default model
                 # TODO: handle new & deleted fields in nested objects
                 self.model.__dict__.update(
@@ -239,7 +255,7 @@ class AnonymizerController:
         logger.info(f"thread={threading.current_thread().name} end")
 
     def save_model(self) -> bool:
-        self.model.save(self.model_filename)
+        return self.model.save(self.model_filename)
 
     def valid_date(self, date_str: str) -> bool:
         """
@@ -291,7 +307,7 @@ class AnonymizerController:
 
         return days_to_increment, formatted_date
 
-    def extract_first_digit(self, s: str) -> str:
+    def extract_first_digit(self, s: str) -> str | None:
         """
         Extracts the first digit from a given string.
 
@@ -409,14 +425,13 @@ class AnonymizerController:
 
         # Capture PHI and source:
         try:
-            self.model.capture_phi(source, ds, date_delta)  # May raise LookupError
+            self.model.capture_phi(str(source), ds, date_delta)  # May raise LookupError
         except LookupError as e:
             return self._write_to_quarantine(e, ds, self.QUARANTINE_CAPTURE_PHI_ERROR)
 
+        phi_instance_uid = ds.SOPInstanceUID  # if exception, remove this instance from uid_lookup
         try:
             # To minimize memory/computation overhead DO NOT MAKE COPY of source dataset
-            phi_instance_uid = ds.SOPInstanceUID  # if exception, remove this instance from uid_lookup
-
             # Anonymize dataset (overwrite phi dataset) (prevents dataset copy)
             ds.remove_private_tags()  # remove all private elements (odd group number)
             ds.walk(self._anonymize_element)  # recursive by default, recurses into embedded dataset sequences

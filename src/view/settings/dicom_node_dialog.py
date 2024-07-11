@@ -1,8 +1,8 @@
 from typing import Union
-import tkinter as tk
-import customtkinter as ctk
 import string
 import logging
+import tkinter as tk
+import customtkinter as ctk
 from model.project import DICOMNode
 from utils.translate import _
 from utils.network import get_local_ip_addresses, dns_lookup
@@ -22,7 +22,16 @@ logger = logging.getLogger(__name__)
 
 
 class DICOMNodeDialog(tk.Toplevel):
-    def __init__(self, parent, address: DICOMNode, title: str = None):
+    """
+    A dialog window for configuring a DICOM node.
+
+    Args:
+        parent (tk.Widget): The parent widget.
+        address (DICOMNode): The initial DICOM node address.
+        title (str | None): The title of the dialog window. If None, the default title "DICOM Node" is used.
+    """
+
+    def __init__(self, parent, address: DICOMNode, title: str | None = None):
         super().__init__(master=parent)
         self.address = address
         if title is None:
@@ -37,6 +46,9 @@ class DICOMNodeDialog(tk.Toplevel):
         self.grab_set()  # make dialog modal
 
     def _create_widgets(self):
+        """
+        Create the widgets for the DICOMNodeDialog.
+        """
         logger.debug(f"_create_widgets")
         PAD = 10
 
@@ -159,13 +171,31 @@ class DICOMNodeDialog(tk.Toplevel):
         )
 
     def _dns_lookup_event(self, event=None):
+        """
+        Event handler for the DNS Lookup button click.
+
+        Args:
+            event: The event object. (default: None)
+        """
         self.ip_var.set(dns_lookup(self.domain_name_var.get()))
 
     def _enter_keypress(self, event):
+        """
+        Event handler for the Enter key press.
+
+        Args:
+            event: The event object.
+        """
         logger.info(f"_enter_pressed")
         self._ok_event()
 
     def _ok_event(self, event=None):
+        """
+        Event handler for the Ok button click.
+
+        Args:
+            event: The event object. (default: None)
+        """
         self._user_input = DICOMNode(
             self.ip_var.get(),
             int(self.port_var.get()),
@@ -176,14 +206,29 @@ class DICOMNodeDialog(tk.Toplevel):
         self.destroy()
 
     def _escape_keypress(self, event):
+        """
+        Event handler for the Escape key press.
+
+        Args:
+            event: The event object.
+        """
         logger.info(f"_escape_pressed")
         self._on_cancel()
 
     def _on_cancel(self):
+        """
+        Event handler for the Cancel button click.
+        """
         self.grab_release()
         self.destroy()
 
     def get_input(self):
+        """
+        Get the user input from the dialog.
+
+        Returns:
+            DICOMNode: The user input as a DICOMNode object.
+        """
         self.focus()
         self.master.wait_window(self)
         return self._user_input

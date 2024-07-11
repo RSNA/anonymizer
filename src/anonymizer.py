@@ -70,7 +70,7 @@ class Anonymizer(ctk.CTk):
         if sys.platform.startswith("win"):
             self.iconbitmap("assets\\icons\\rsna_icon.ico", default="assets\\icons\\rsna_icon.ico")
 
-        self.recent_project_dirs: set[Path] = []
+        self.recent_project_dirs: list[Path] = []
         self.current_open_project_dir: Path | None = None
 
         self.load_config()  # may set language
@@ -96,11 +96,11 @@ class Anonymizer(ctk.CTk):
             tv_theme = ctk.ThemeManager.theme["Treeview"]
             if platform.system() not in os_map:
                 logger.error(f"Unsupported OS: {platform.system()}")
-                return (family, size, weight)
+                return ctk.CTkFont(family, size, weight)
             if "font" in tv_theme:
                 if os_map[platform.system()] not in tv_theme["font"]:
                     logger.error(f"invalid font OS specified for Treeview theme: {tv_theme}")
-                    return (family, size, weight)
+                    return ctk.CTkFont(family, size, weight)
                 tv_theme_font = tv_theme["font"][os_map[platform.system()]]
                 if "family" in tv_theme_font:
                     family = tv_theme_font["family"]
@@ -168,7 +168,7 @@ class Anonymizer(ctk.CTk):
             return
 
         # Update dashboard if anonymizer model has changed:
-        if self.controller.anonymizer.model_changed():
+        if self.dashboard and self.controller.anonymizer.model_changed():
             self.dashboard.update_anonymizer_queue(self.controller.anonymizer._anon_Q.qsize())
             self.dashboard.update_totals(self.controller.anonymizer.model.get_totals())
 
@@ -559,7 +559,7 @@ class Anonymizer(ctk.CTk):
             logger.info("Edit Cloned Project Settings Cancelled")
             return
         else:
-            logger.info(f"User Edited ClonedProjectModel")
+            logger.info("User Edited ClonedProjectModel")
 
         # Close current project
         self.close_project()
@@ -623,6 +623,10 @@ class Anonymizer(ctk.CTk):
 
         if not self.controller:
             logger.error("Internal Error: no ProjectController")
+            return
+
+        if not self.dashboard:
+            logger.error("Internal Error: no Dashboard")
             return
 
         self.disable_file_menu()
@@ -772,7 +776,7 @@ class Anonymizer(ctk.CTk):
             logger.error("Internal Error: no Dashboard")
             return
 
-        self.query_view = QueryView(self.dashboard, self.controller)
+        self.query_view = QueryView(self.dashboard, self.controller, self.mono_font)
         self.query_view.focus()
 
     def export(self):
@@ -792,7 +796,7 @@ class Anonymizer(ctk.CTk):
             logger.error("Internal Error: no Dashboard")
             return
 
-        self.export_view = ExportView(self.dashboard, self.controller)
+        self.export_view = ExportView(self.dashboard, self.controller, self.mono_font)
         self.export_view.focus()
 
     def settings(self):
@@ -851,7 +855,7 @@ class Anonymizer(ctk.CTk):
         help_menu = tk.Menu(self.menu_bar, tearoff=0)
         # Get all html files in assets/locale/*/html/ directory
         # Sort by filename number prefix
-        html_dir = Path("assets/locales/" + get_current_language_code() + "/html/")
+        html_dir = Path("assets/locales/" + str(get_current_language_code() or "en_US") + "/html/")
         html_file_paths = sorted(html_dir.glob("*.html"), key=lambda path: int(path.stem.split("_")[0]))
 
         for i, html_file_path in enumerate(html_file_paths):

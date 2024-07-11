@@ -1,9 +1,7 @@
 import os
-import platform
 from typing import Union
 import tkinter as tk
 import customtkinter as ctk
-from customtkinter import ThemeManager
 from pathlib import Path
 import logging
 from utils.translate import _
@@ -13,7 +11,27 @@ logger = logging.getLogger(__name__)
 
 
 class ImportFilesDialog(tk.Toplevel):
-    progress_update_interval = 600
+    """
+    A dialog window for importing files and performing anonymization.
+
+    Args:
+        parent: The parent widget.
+        controller (AnonymizerController): The controller for the anonymizer.
+        paths (list[str] | tuple[str, ...]): The paths of the files to import.
+
+    Attributes:
+        progress_update_interval (int): The interval in milliseconds for updating the progress.
+        _sub_title (str): The sub-title of the dialog.
+        _data_font: The font for displaying data.
+        _controller (AnonymizerController): The controller for the anonymizer.
+        _paths (list[str] | tuple[str, ...]): The paths of the files to import.
+        _cancelled (bool): Flag indicating if the import was cancelled.
+        _scrolled_to_bottom (bool): Flag indicating if the text box is scrolled to the bottom.
+        files_processed (int): The number of files processed.
+        text_box_width (int): The width of the text box.
+        text_box_height (int): The height of the text box.
+        _user_input (list | None): The user input.
+    """
 
     def __init__(
         self,
@@ -21,6 +39,14 @@ class ImportFilesDialog(tk.Toplevel):
         controller: AnonymizerController,
         paths: list[str] | tuple[str, ...],
     ) -> None:
+        """
+        Initialize the ImportFilesDialog.
+
+        Args:
+            parent: The parent widget.
+            controller (AnonymizerController): The controller for the anonymizer.
+            paths (list[str] | tuple[str, ...]): The paths of the files to import.
+        """
         super().__init__(master=parent)
         title = _("Import Files")
         sub_title = _("Importing") + f" {len(paths)} {_('file') if len(paths) == 1 else _('files')}"
@@ -49,6 +75,9 @@ class ImportFilesDialog(tk.Toplevel):
         self.after(250, self._anonymize_files)
 
     def _create_widgets(self) -> None:
+        """
+        Create the widgets for the dialog.
+        """
         logger.info(f"_create_widgets")
         PAD = 10
 
@@ -107,6 +136,9 @@ class ImportFilesDialog(tk.Toplevel):
         )
 
     def _anonymize_files(self) -> None:
+        """
+        Anonymize the files.
+        """
         logger.info(f"_anonymize_files")
 
         files_to_process: int = len(self._paths)
@@ -154,15 +186,27 @@ class ImportFilesDialog(tk.Toplevel):
         self._cancel_button.configure(text=_("Close"))
 
     def _escape_keypress(self, event) -> None:
+        """
+        Handle the escape keypress event.
+        """
         logger.info(f"_escape_pressed")
         self._on_cancel()
 
     def _on_cancel(self) -> None:
+        """
+        Handle the cancel event.
+        """
         self.grab_release()
         self.destroy()
         self._cancelled = True
 
     def get_input(self) -> int:
+        """
+        Get the user input.
+
+        Returns:
+            int: The number of files processed.
+        """
         self.focus()
         self.master.wait_window(self)
         return self.files_processed

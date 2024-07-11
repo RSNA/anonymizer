@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<!-- Lista de etiquetas HTML compatibles con tkhtmlview:
+ver https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support -->
+<html>
+<body>
+<div style="color: #014F8F; font-size: 14px;">
+	<!-- <h1 style="text-align: center;">RSNA DICOM Anonymizer Operation</h1> -->
+
+		<h2>Importar archivos</h2>
+		
+			<h3>Importar desde el sistema de archivos local</h3>
+			<img src="assets/locales/en_US/html/images/ImportFilesMenu.png"/>
+			<ul>
+				<li>Importar archivos DICOM individualmente o como un directorio.</li>
+				<li>Al seleccionar archivos individuales, el sufijo predeterminado es <i>.dcm</i>, pero esto se puede cambiar utilizando las opciones del cuadro de diálogo de selección de archivos.</li>
+				<img src="assets/locales/en_US/html/images/SelectFiles.png"/>
+				<li>Al seleccionar un directorio, se intentarán importar <b>todos</b> los archivos en ese directorio y sus subdirectorios.</li>
+				<img src="assets/locales/en_US/html/images/SelectDirectory.png"/>
+				<li>Para que un archivo sea <b>aceptado e importado</b>, debe:</li>
+					<ol>
+						<li>Ser un archivo DICOM válido (según el <a href=https://dicom.nema.org/medical/dicom/current/output/chtml/part10/chapter_7.html>estándar DICOM</a>) con información de metadatos válida, incluida la prelación DICOM en el encabezado del archivo.</li>
+						<li>Contener los atributos:</li> 
+						<ul>
+							<li><i>SOPClassUID</i></li>
+							<li><i>StudyInstanceUID</i></li>
+							<li><i>SeriesInstanceUID</i></li>
+							<li><i>SOPInstanceUID</i></li>
+						</ul>
+						<li>La clase de almacenamiento debe coincidir con una de las clases de almacenamiento establecidas para el proyecto. (ver Modalidades y Clases de Almacenamiento en Ayuda/Configuración del Proyecto)</li>
+						<li>Tener capturada con éxito su PHI</li>
+						<li>No haber sido importado antes, es decir, el SOPInstanceUID no está almacenado en el almacén de datos del Anonimizador.</li>
+					</ol>
+				<li>Si un archivo no cumple con las condiciones anteriores, será <b>cuarentenado</b> en el directorio de almacenamiento, es decir, para los primeros 4 casos respectivamente:</li>
+					<ol>
+						<li><i>/private/quarantine/Invalid_DICOM</i></li>
+						<li><i>/private/quarantine/Missing_Attributes</i></li>
+						<li><i>/private/quarantine/Invalid_Storage_Class</i></li>
+						<li><i>/private/quarantine/Capture_PHI_Error</i></li>
+					</ol>
+				<li>Si un archivo ya ha sido importado, será ignorado.</li>
+				<li>El cuadro de diálogo de importación de archivos muestra el resultado de cada importación de archivo en cada línea en su cuadro de texto desplazable.</li>
+				<li>Si un archivo se importa con éxito, mostrará una ruta de archivo abreviada seguida de <i>ID del paciente PHI => ID del paciente anonimizado</i> como se muestra en la captura de pantalla a continuación.</li>
+				<li>Si hay algún error, mostrará una ruta de archivo abreviada seguida de un mensaje de error adecuado en la siguiente línea, como se muestra en la captura de pantalla a continuación.</li>
+				<img src="assets/locales/en_US/html/images/ImportFilesDialog.png"/>
+			</ul>
+				
+		<h2>Importar desde el servidor DICOM remoto</h2>
+			En el panel de control, haga clic en el botón Consultar para primero enviar un eco DICOM al servidor remoto y, si tiene éxito, abrir la vista Consultar, Recuperar e Importar.
+			<h3>La vista Consultar, Recuperar e Importar</h3>
+			<img src="assets/locales/en_US/html/images/QueryRetrieveImport.png"/>
+			<h4>Buscar estudios</h4>
+			<ul>
+				<li>Se puede consultar un servidor DICOM remoto para listar estudios coincidentes en la vista de resultados de la consulta usando uno o una combinación de los campos de consulta estándar:</li>
+				<ol>
+					<li><i>Nombre del paciente:</i> Caracteres alfabéticos con y sin acentos, dígitos, separador ^, ? para comodín de un solo carácter, * para comodín de cadena</li>
+					<li><i>ID del paciente:</i> Caracteres ASCII y dígitos, ? para comodín de un solo carácter, * para comodín de cadena</li>
+					<li><i>Modalidad:</i> Cuadro de lista desplegable con las modalidades configuradas en la Configuración del Proyecto</li>
+					<li><i>Fecha del estudio:</i> Fecha específica o rango de fechas con formato AAAAMMDD-AAAAMMDD</li>
+					<li><i>Número(s) de acceso:</i> Caracteres ASCII, dígitos y "/-_,." ? para comodín de un solo carácter, * para comodín de cadena</li>
+				</ol>
+				<li>Se puede ingresar una lista delimitada por comas en <i>Número(s) de acceso</i> para realizar múltiples búsquedas.</li>
+				<li>Búsqueda de número de acceso masivo a través del botón <i>Cargar números de acceso</i> y un archivo de texto con el sufijo ".txt" o ".csv" que contenga una lista delimitada por comas o retornos de carro.</li>
+				<li>El interruptor <i>Mostrar estudios importados</i> en la parte superior derecha controla si los estudios importados se incluyen en la lista de resultados de la búsqueda.</li>
+				<li>Solo se mostrarán y estarán disponibles para selección los estudios que contengan modalidades establecidas para el proyecto.</li>
+			</ul>
+			<h4>Seleccionar estudios e importar</h4>
+			<img src="assets/locales/en_US/html/images/SelectQuery.png"/>
+			<ul>
+				<li>Los estudios se pueden seleccionar individualmente (clic del ratón), en grupos (manteniendo presionada la tecla CMD o CTRL) o en bloque usando el botón <i>Seleccionar todo</i>.</li>
+				<li>Deseleccione estudios haciendo clic individualmente o usando el botón <i>Borrar selección</i>.</li>
+				<li>Antes de importar estudios, elija qué nivel (Estudio, Serie, Instancia) usar para el proceso de importación (a través de DICOM C-MOVE) desde el menú desplegable, <i>Nivel de movimiento</i>.</li>
+				<li>Hacer clic en el botón <i>Importar y anonimizar</i> iniciará el <i>Diálogo de importación de estudios</i>.</li>
+				<li>Primero se consultará el servidor remoto para cada estudio seleccionado para compilar una jerarquía de UID del estudio correspondiente al nivel de movimiento seleccionado.</li>
+				<li>Luego se iniciará la importación y el <i>Diálogo de importación de estudios</i> mostrará una barra de progreso que rastrea el número de imágenes importadas de la jerarquía del estudio.</li>
+				<li>El proceso de importación finalizará una vez que se hayan solicitado todos los estudios y se hayan recibido todos los archivos en un estudio o se haya producido un tiempo de espera.</li>
+				<li>Si el servidor remoto no responde dentro de la configuración de tiempo de espera del proyecto: <i>Tiempo de espera de la red</i> para cada transferencia de archivos, el proceso de importación de este estudio se interrumpe.</li>	
+				<li>El <i>Diálogo de importación de estudios</i> mostrará el resultado del proceso de importación cuando se complete, como se muestra en la captura de pantalla a continuación:</li>
+				<li>Después de cerrar el <i>Diálogo de importación de estudios</i> usando el botón <i>Cerrar</i>, los estudios importados con éxito se resaltarán en verde en la vista de resultados de la consulta como se muestra a continuación:</li>
+			</ul>
+			<img src="assets/locales/en_US/html/images/ImportStudiesDialog.png"/>
+			<img src="assets/locales/en_US/html/images/ImportStudiesResult.png"/>
+
+			<h4>Manejo de problemas de movimiento DICOM</h4>
+			<ul>
+				<li>Si el proceso de importación no importa todos los estudios con éxito, ajuste el tiempo de espera de la red y el nivel de movimiento e inténtelo de nuevo haciendo clic en el botón de importación.</li>
+				<li>El Anonimizador ha sido diseñado para manejar servidores DICOM no compatibles con C-MOVE, especialmente VNAs que operan en modo asincrónico con configuraciones de prioridad y tiempo de espera desconocidas.</li>
+			</ul>
+
+		<h2>Exportar archivos</h2>
+		En el panel de control, haga clic en el botón Exportar para primero enviar un eco DICOM al servidor remoto y, si tiene éxito, abrir la vista de exportación.
+			
+			<h3>La vista de exportación</h3>
+			<img src="assets/locales/en_US/html/images/ExportStudiesAWS.png"/>
+			<ul>
+				<li>La vista de exportación funciona de manera similar a la vista de consulta, donde los <i><b>pacientes</b></i> importados y anonimizados se pueden seleccionar para exportar a un servidor DICOM remoto o a un bucket AWS S3.</li>
+				<li>Los pacientes pueden contener múltiples estudios que fueron importados independientemente por el proceso de importación.</li>
+				<li>Antes de enviar un archivo, el Anonimizador verificará con el servidor remoto (SCP o AWS) si ya se ha enviado y no lo volverá a enviar.</li>
+				<li>El estado de la exportación se mostrará en tiempo real en la vista de exportación.</li>
+				<li>La fecha y hora de una exportación de paciente exitosa y una barra de progreso se mostrarán como se muestra en la captura de pantalla a continuación:</li>
+			</ul>
+			<img src="assets/locales/en_US/html/images/ExportStudiesStatus.png"/>
+			
+			<h4>Exportar archivo CSV de búsqueda de pacientes</h4>
+			<img src="assets/locales/en_US/html/images/PatientLookupSave.png"/>
+			<ul>
+				<li>Se puede crear un archivo de búsqueda de pacientes que contiene los datos PHI del proyecto en cualquier momento durante un proyecto utilizando el botón <i>Crear búsqueda de pacientes</i> en la vista de exportación.</li>
+				<li>El archivo de datos PHI se guarda en formato CSV en el subdirectorio privado de los directorios de almacenamiento aquí:</li>
+				<li><i><b>/private/phi_export/</b></i></li>
+				<li>El formato del archivo de búsqueda sigue el archivo de índice del Anonimizador JAVA con los siguientes campos agregados a cada fila de estudio: Número de series, Número de instancias</li>
+			</ul>
+			<img src="assets/locales/en_US/html/images/PatientLookupData.png"/>
+
+		<h2>Panel de control</h2>
+		<img src="assets/locales/en_US/html/images/Dashboard.png"/>
+		<ul>
+			<li>El panel de control del proyecto muestra métricas relevantes del proyecto relacionadas con el conjunto de datos actualmente curado en el directorio de almacenamiento.</li>
+			<li>Las vistas de consulta y exportación se inician desde el panel de control utilizando los botones correspondientes.</li>
+			<li>El número de archivos que esperan en la cola del Anonimizador para ser anonimizados por un hilo de trabajo del anonimizador se muestra en la parte inferior izquierda del panel de control.</li>
+			<li>El estado de una operación iniciada desde el menú o el panel de control se muestra en la parte inferior derecha del panel de control.</li>
+		</ul>
+</div>
+</body>
+</html>

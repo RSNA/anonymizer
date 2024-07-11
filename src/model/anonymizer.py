@@ -1,3 +1,7 @@
+"""
+This module contains the AnonymizerModel class, which is responsible for storing PHI (Protected Health Information)
+and anonymization lookups. It also includes data classes for Series, Study, and PHI, as well as a Totals namedtuple.
+"""
 from typing import List
 from collections import namedtuple
 from pathlib import Path
@@ -277,7 +281,7 @@ class AnonymizerModel:
             anon_acc_no = len(self._acc_no_lookup) + 1
             # TODO: include PHI PatientID with phi_acc_no for uniqueness
             self._acc_no_lookup[phi_acc_no] = str(anon_acc_no)
-            return anon_acc_no
+            return str(anon_acc_no)
 
     def get_acc_no_count(self) -> int:
         return len(self._acc_no_lookup)
@@ -468,7 +472,7 @@ class AnonymizerModel:
                     logger.critical(msg)
                     raise LookupError(msg)
 
-                if phi == None:
+                if phi is None:
                     msg = f"Critial error Existing Anon PatientID={anon_patient_id} not found in phi_lookup"
                     logger.critical(msg)
                     raise LookupError(msg)
@@ -482,21 +486,21 @@ class AnonymizerModel:
                 else:
                     study = None
 
-                if study == None:
+                if study is None:
                     msg = f"Existing study {ds.StudyInstanceUID} not found in phi_lookup"
                     logger.error(msg)
                     raise LookupError(msg)
 
                 # Find series in study:
                 if study.series is not None:
-                    series: Series = next(
+                    series: Series | None = next(
                         (series for series in study.series if series.series_uid == ds.SeriesInstanceUID),
                         None,
                     )
                 else:
                     series = None
 
-                if series == None:
+                if series is None:
                     # NEW Series in exsiting Study:
                     study.series.append(
                         Series(

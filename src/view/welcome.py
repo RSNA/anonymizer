@@ -5,6 +5,26 @@ from customtkinter import ThemeManager
 
 
 class WelcomeView(ctk.CTkFrame):
+    """
+    A class representing the welcome view of the RSNA DICOM Anonymizer program.
+
+    This view displays a welcome message and provides options for language selection.
+
+    Args:
+        parent (ctk.CTk): The parent widget.
+        change_language_callback (callable): A callback function to handle language change.
+
+    Attributes:
+        PAD (int): The padding value.
+        TITLE_FONT_SIZE (int): The font size for the title.
+        WELCOME_TEXT_FONT_SIZE (int): The font size for the welcome text.
+        TITLED_LOGO_FILE (str): The file path of the titled RSNA logo.
+        TITLED_LOGO_WIDTH (int): The width of the titled RSNA logo.
+        TITLED_LOGO_HEIGHT (int): The height of the titled RSNA logo.
+        WELCOME_TEXT_WRAP_LENGTH (int): The wrap length for the welcome text.
+
+    """
+
     PAD = 20
     TITLE_FONT_SIZE = 28
     WELCOME_TEXT_FONT_SIZE = 20
@@ -14,6 +34,14 @@ class WelcomeView(ctk.CTkFrame):
     WELCOME_TEXT_WRAP_LENGTH = 650
 
     def __init__(self, parent: ctk.CTk, change_language_callback):
+        """
+        Initialize the WelcomeView.
+
+        Args:
+            parent (ctk.CTk): The parent widget.
+            change_language_callback (callable): A callback function to handle language change.
+
+        """
         super().__init__(master=parent)
         self.title = _("Welcome")
         self.welcome_text = (
@@ -39,6 +67,10 @@ class WelcomeView(ctk.CTkFrame):
         self.grid(row=0, column=0)
 
     def _create_widgets(self):
+        """
+        Create the widgets for the WelcomeView.
+
+        """
         self.rowconfigure(3, weight=1)
 
         # Languages:

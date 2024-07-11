@@ -11,6 +11,26 @@ logger = logging.getLogger(__name__)
 
 
 class AWSCognitoDialog(tk.Toplevel):
+    """
+    A dialog window for entering AWS Cognito credentials for exporting to S3.
+
+    Args:
+        parent: The parent widget.
+        export_to_aws (bool): Flag indicating whether to export to AWS.
+        aws_cognito (AWSCognito): An instance of the AWSCognito class.
+
+    Attributes:
+        user_input (Union[Tuple[bool, AWSCognito], None]): The user input containing the export flag and AWSCognito instance.
+
+    Methods:
+        _create_widgets: Create the widgets for the dialog.
+        _enter_keypress: Event handler for the Enter key press.
+        _ok_event: Event handler for the Ok button click.
+        _escape_keypress: Event handler for the Escape key press.
+        _on_cancel: Event handler for canceling the dialog.
+        get_input: Get the user input from the dialog.
+    """
+
     def __init__(
         self,
         parent,

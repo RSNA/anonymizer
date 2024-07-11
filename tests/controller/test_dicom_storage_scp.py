@@ -36,7 +36,9 @@ def test_send_cr1(temp_dir: str, controller):
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
+    assert anon_ptid
     phi = model.get_phi(anon_ptid)
+    assert phi
     assert phi.patient_id == ds.PatientID
     assert phi.patient_name == ds.PatientName
     assert phi.dob == ds.get("PatientBirthDate")
@@ -73,7 +75,9 @@ def test_send_ct_small(temp_dir: str, controller):
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
+    assert anon_ptid
     phi = model.get_phi(anon_ptid)
+    assert phi
     assert phi.patient_id == ds.PatientID
     assert phi.patient_name == ds.PatientName
     assert phi.dob == ds.get("PatientBirthDate")
@@ -111,7 +115,9 @@ def test_send_mr_small(temp_dir: str, controller):
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
+    assert anon_ptid
     phi = model.get_phi(anon_ptid)
+    assert phi
     assert phi.patient_id == ds.PatientID
     assert phi.patient_name == ds.PatientName
     assert phi.dob == ds.get("PatientBirthDate")
@@ -150,7 +156,9 @@ def test_send_ct_small_AND_mr_small(temp_dir: str, controller):
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
+    assert anon_ptid
     phi = model.get_phi(anon_ptid)
+    assert phi
     assert phi.patient_id == ds.PatientID
     assert phi.patient_name == ds.PatientName
     assert phi.dob == ds.get("PatientBirthDate")
@@ -184,7 +192,9 @@ def test_send_ct_small_AND_mr_small(temp_dir: str, controller):
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
+    assert anon_ptid
     phi = model.get_phi(anon_ptid)
+    assert phi
     assert phi.patient_id == ds.PatientID
     assert phi.patient_name == ds.PatientName
     assert phi.dob == ds.get("PatientBirthDate")
@@ -206,7 +216,7 @@ def test_send_ct_small_AND_mr_small(temp_dir: str, controller):
 
 
 def test_send_ct_Archibald_Doe(temp_dir: str, controller):
-    dsets: Dataset = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, LocalStorageSCP, controller)
+    dsets: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, LocalStorageSCP, controller)
     time.sleep(0.5)
     store_dir = controller.model.images_dir()
     model: AnonymizerModel = controller.anonymizer.model
@@ -221,7 +231,9 @@ def test_send_ct_Archibald_Doe(temp_dir: str, controller):
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
+    assert anon_ptid
     phi = model.get_phi(anon_ptid)
+    assert phi
     assert phi.patient_id == ds.PatientID
     assert phi.patient_name == ds.PatientName
     assert phi.dob == ds.get("PatientBirthDate")
@@ -260,7 +272,9 @@ def test_send_cr_and_ct_Archibald_Doe(temp_dir: str, controller):
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
+    assert anon_ptid
     phi = model.get_phi(anon_ptid)
+    assert phi
     assert phi.patient_id == ds.PatientID
     assert phi.patient_name == ds.PatientName
     assert phi.dob == ds.get("PatientBirthDate")
@@ -297,7 +311,9 @@ def test_send_cr_and_ct_Archibald_Doe(temp_dir: str, controller):
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
+    assert anon_ptid
     phi = model.get_phi(anon_ptid)
+    assert phi
     assert phi.patient_id == ds.PatientID
     assert phi.patient_name == ds.PatientName
     assert phi.dob == ds.get("PatientBirthDate")
@@ -332,6 +348,7 @@ def test_send_JPEG_Baseline(temp_dir: str, controller: ProjectController):
     JPEG_BASELINE_TS = "1.2.840.10008.1.2.4.50"
     # Ensure test file is present from pydicom data:
     ds = get_testdata_file(filename, read=True)
+    assert isinstance(ds, Dataset)
     assert ds.SOPClassUID == SC_SOP_CLASS_UID
     assert ds.file_meta.TransferSyntaxUID == JPEG_BASELINE_TS
 
@@ -342,7 +359,7 @@ def test_send_JPEG_Baseline(temp_dir: str, controller: ProjectController):
     # Try and send this Secondary Capture to LocalStorageSCP, default config of does not include SC
     # This should fail to establish an association due to no matching presentation contexts:
     try:
-        files_sent = controller.send([dcm_file_path], LocalStorageSCP)
+        files_sent = controller.send([dcm_file_path], LocalStorageSCP.aet)
     except Exception as e:
         assert "No presentation context" in str(e)
 
@@ -357,7 +374,7 @@ def test_send_JPEG_Baseline(temp_dir: str, controller: ProjectController):
 
     # Try again to send test file, even though LocalStorageSCP is setup with required context, send_context must be specified:
     try:
-        files_sent = controller.send([dcm_file_path], LocalStorageSCP)
+        files_sent = controller.send([dcm_file_path], LocalStorageSCP.aet)
     except Exception as e:
         assert "No presentation context" in str(e)
 
@@ -367,7 +384,7 @@ def test_send_JPEG_Baseline(temp_dir: str, controller: ProjectController):
     send_context = build_context(SC_SOP_CLASS_UID, JPEG_BASELINE_TS)
 
     # Try again to send test file to LocalStorageSCP, this should now succeed
-    files_sent = controller.send([dcm_file_path], LocalStorageSCP, [send_context])
+    files_sent = controller.send([dcm_file_path], LocalStorageSCP.aet, [send_context])
 
     assert files_sent == 1
 
@@ -386,6 +403,7 @@ def test_send_JPEG_Baseline(temp_dir: str, controller: ProjectController):
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
+    assert anon_ptid
     phi = model.get_phi(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
@@ -429,7 +447,7 @@ def test_send_JPEG_Extended(temp_dir: str, controller: ProjectController):
     JPEG_EXTENDED_TS = "1.2.840.10008.1.2.4.51"
     # Ensure test file is present from pydicom data:
     ds = get_testdata_file(filename, read=True)
-    assert ds
+    assert isinstance(ds, Dataset)
 
     assert ds.SOPClassUID == SC_SOP_CLASS_UID
     assert ds.file_meta.TransferSyntaxUID == JPEG_EXTENDED_TS
@@ -443,7 +461,7 @@ def test_send_JPEG_Extended(temp_dir: str, controller: ProjectController):
     controller.update_model()
     send_context = build_context(SC_SOP_CLASS_UID, JPEG_EXTENDED_TS)
 
-    files_sent = controller.send([dcm_file_path], LocalStorageSCP, [send_context])
+    files_sent = controller.send([dcm_file_path], LocalStorageSCP.aet, [send_context])
 
     assert files_sent == 1
 
@@ -461,6 +479,7 @@ def test_send_JPEG_Extended(temp_dir: str, controller: ProjectController):
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
+    assert anon_ptid
     phi = model.get_phi(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
@@ -507,8 +526,7 @@ def test_send_JPEG_Lossless_P14_FOP(temp_dir: str, controller: ProjectController
     JPEG_LOSSLESS_P14_TS = "1.2.840.10008.1.2.4.70"
     # Ensure test file is present from pydicom data:
     ds = get_testdata_file(filename, read=True)
-    assert ds
-
+    assert isinstance(ds, Dataset)
     assert ds.SOPClassUID == SC_SOP_CLASS_UID
     assert ds.file_meta.TransferSyntaxUID == JPEG_LOSSLESS_P14_TS
 
@@ -521,7 +539,7 @@ def test_send_JPEG_Lossless_P14_FOP(temp_dir: str, controller: ProjectController
     controller.update_model()
     send_context = build_context(SC_SOP_CLASS_UID, JPEG_LOSSLESS_P14_TS)
 
-    files_sent = controller.send([dcm_file_path], LocalStorageSCP, [send_context])
+    files_sent = controller.send([dcm_file_path], LocalStorageSCP.aet, [send_context])
 
     assert files_sent == 1
 
@@ -539,6 +557,7 @@ def test_send_JPEG_Lossless_P14_FOP(temp_dir: str, controller: ProjectController
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
+    assert anon_ptid
     phi = model.get_phi(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
@@ -585,7 +604,7 @@ def test_send_JPEG_LS_Lossless(temp_dir: str, controller: ProjectController):
     JPEG_LS_LOSSLESS_TS = "1.2.840.10008.1.2.4.80"
     # Ensure test file is present from assets/test_files:
     ds = get_testdata_file(filename, read=True)
-    assert ds
+    assert isinstance(ds, Dataset)
     assert ds.SOPClassUID == SC_SOP_CLASS_UID
     assert ds.file_meta.TransferSyntaxUID == JPEG_LS_LOSSLESS_TS
 
@@ -597,7 +616,7 @@ def test_send_JPEG_LS_Lossless(temp_dir: str, controller: ProjectController):
     controller.update_model()
     send_context = build_context(SC_SOP_CLASS_UID, JPEG_LS_LOSSLESS_TS)
 
-    files_sent = controller.send([dcm_file_path], LocalStorageSCP, [send_context])
+    files_sent = controller.send([dcm_file_path], LocalStorageSCP.aet, [send_context])
 
     assert files_sent == 1
 
@@ -615,6 +634,7 @@ def test_send_JPEG_LS_Lossless(temp_dir: str, controller: ProjectController):
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
+    assert anon_ptid
     phi = model.get_phi(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
@@ -670,7 +690,7 @@ def test_send_JPEG_LS_Lossy(temp_dir: str, controller: ProjectController):
         ds = get_testdata_file(filename, read=True)
         dcm_file_path = str(get_testdata_file(filename))
 
-    assert ds
+    assert isinstance(ds, Dataset)
     assert ds.SOPClassUID == SC_SOP_CLASS_UID
     assert ds.file_meta.TransferSyntaxUID == JPEG_LS_LOSSY_TS
 
@@ -682,7 +702,7 @@ def test_send_JPEG_LS_Lossy(temp_dir: str, controller: ProjectController):
     controller.update_model()
     send_context = build_context(SC_SOP_CLASS_UID, JPEG_LS_LOSSY_TS)
 
-    files_sent = controller.send([dcm_file_path], LocalStorageSCP, [send_context])
+    files_sent = controller.send([str(dcm_file_path)], LocalStorageSCP.aet, [send_context])
 
     assert files_sent == 1
 
@@ -700,6 +720,7 @@ def test_send_JPEG_LS_Lossy(temp_dir: str, controller: ProjectController):
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
+    assert anon_ptid
     phi = model.get_phi(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
@@ -746,7 +767,7 @@ def test_send_JPEG_2000_Lossless(temp_dir: str, controller: ProjectController):
     JPEG_2000_LOSSLESS_TS = "1.2.840.10008.1.2.4.90"
     # Ensure test file is present from pydicom data:
     ds = get_testdata_file(filename, read=True)
-    assert ds
+    assert isinstance(ds, Dataset)
     assert ds.SOPClassUID == SC_SOP_CLASS_UID
     assert ds.file_meta.TransferSyntaxUID == JPEG_2000_LOSSLESS_TS
 
@@ -758,7 +779,7 @@ def test_send_JPEG_2000_Lossless(temp_dir: str, controller: ProjectController):
     controller.update_model()
     send_context = build_context(SC_SOP_CLASS_UID, JPEG_2000_LOSSLESS_TS)
 
-    files_sent = controller.send([dcm_file_path], LocalStorageSCP, [send_context])
+    files_sent = controller.send([dcm_file_path], LocalStorageSCP.aet, [send_context])
 
     assert files_sent == 1
 
@@ -776,6 +797,7 @@ def test_send_JPEG_2000_Lossless(temp_dir: str, controller: ProjectController):
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
+    assert anon_ptid
     phi = model.get_phi(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
@@ -822,7 +844,7 @@ def test_send_JPEG_2000(temp_dir: str, controller: ProjectController):
     JPEG_2000_TS = "1.2.840.10008.1.2.4.91"
     # Ensure test file is present from pydicom data:
     ds = get_testdata_file(filename, read=True)
-    assert ds
+    assert isinstance(ds, Dataset)
     assert ds.SOPClassUID == SC_SOP_CLASS_UID
     assert ds.file_meta.TransferSyntaxUID == JPEG_2000_TS
 
@@ -835,7 +857,7 @@ def test_send_JPEG_2000(temp_dir: str, controller: ProjectController):
     controller.update_model()
     send_context = build_context(SC_SOP_CLASS_UID, JPEG_2000_TS)
 
-    files_sent = controller.send([dcm_file_path], LocalStorageSCP, [send_context])
+    files_sent = controller.send([dcm_file_path], LocalStorageSCP.aet, [send_context])
 
     assert files_sent == 1
 
@@ -853,6 +875,7 @@ def test_send_JPEG_2000(temp_dir: str, controller: ProjectController):
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
+    assert anon_ptid
     phi = model.get_phi(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID

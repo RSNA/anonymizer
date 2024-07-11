@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List
 import tkinter as tk
 from tkinter import messagebox
 import customtkinter as ctk
@@ -10,6 +10,34 @@ logger = logging.getLogger(__name__)
 
 
 class ImportStudiesDialog(tk.Toplevel):
+    """
+    A dialog window for importing studies.
+
+    Args:
+        parent: The parent window.
+        controller: The project controller.
+        studies: A list of StudyUIDHierarchy objects representing the studies to import.
+        move_level: The move level for importing the studies.
+
+    Attributes:
+        update_interval (int): The interval in milliseconds for updating the progress.
+        _data_font: The font for displaying data.
+        _scp_name (str): The name of the remote SCP.
+        studies (List[StudyUIDHierarchy]): The list of studies to import.
+        _instances_to_import (int): The total number of instances to import.
+        _study_metadata_retrieved (int): The number of study metadata retrieved.
+        _last_grid_row (int): The last grid row used for widget placement.
+
+    Methods:
+        _create_widgets_1: Create widgets for phase 1 (study metadata retrieval).
+        _create_widgets_2: Create widgets for phase 2 (moving studies).
+        _update_progress_get_hierarchies: Update the progress of study metadata retrieval.
+        _update_progress_move_studies: Update the progress of moving studies.
+        _escape_keypress: Handle the escape key press event.
+        _on_cancel: Handle the cancel button click event.
+        get_input: Get the input from the dialog.
+    """
+
     update_interval = 1000  # milliseconds
 
     def __init__(

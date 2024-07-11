@@ -8,11 +8,11 @@ ver https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 
 	<h2>Configuración del Proyecto</h2>
 	<ul>
-		<li>Los nombres de configuración se enumeran en la columna izquierda y los valores u opciones correspondientes están en la columna derecha.</li> 
+		<li>Los nombres de configuración se enumeran en la columna izquierda y los valores o opciones correspondientes están en la columna derecha.</li> 
 		<li>La mayoría de las configuraciones se pueden ajustar haciendo clic en el botón azul correspondiente.</li>
 		<li>Cada configuración se describe a continuación:</li>
 	</ul>
-	<img src="assets/locales/en_US/html/images/NewProjectSettings.png"/>
+	<img src="assets/locales/es/html/images/ConfiguraciónDelProyecto.png"/>
 
 	<h3>ID del Sitio</h3>
 	<ul>
@@ -36,8 +36,6 @@ ver https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 	<ul>
 		<li>El nombre del proyecto debe tener menos de 16 caracteres.</li> 
 		<li>El nombre del proyecto se escribe como la segunda entrada en el bloque privado (0013,1003) de cada archivo DICOM anonimizado.</li>
-		<li>El nombre del proyecto se utiliza como el nombre del directorio predeterminado para la tienda del Anonimizador, vea la configuración del Directorio de Almacenamiento a continuación.</li>
-
 		<li>El nombre del proyecto aparece en la barra de título del panel de control de un proyecto abierto seguido del ID del Sitio entre corchetes.</li>
 		<li>El nombre del proyecto <b>no puede cambiarse</b> después de la creación del proyecto.</li>
 	</ul>
@@ -52,7 +50,7 @@ ver https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 
 	<h3>Servidores DICOM</h3>
 	<h4>Servidor Local</h4>
-	<img src="assets/locales/en_US/html/images/LocalServer.png"/>
+	<img src="assets/locales/es/html/images/ServidorLocal.png"/>
 	<ul>
 		<li>El servidor local actúa como Proveedor de Clase de Servicio DICOM (SCP) y como Usuario de Clase de Servicio (SCU) para el Anonimizador.</li>
 		<li>La lista desplegable de Direcciones se llena con las direcciones IP de las interfaces de red de la máquina local.</li>
@@ -63,7 +61,7 @@ ver https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 	</ul>
 
 	<h4>Servidor de Consulta</h4>
-	<img src="assets/locales/en_US/html/images/QueryServer.png"/>
+	<img src="assets/locales/es/html/images/ServidorDeConsulta.png"/>
 	<ul>	
 		<li>El servidor de consulta es el Proveedor de Clase de Servicio DICOM (SCP) remoto al que el Anonimizador consultará y recuperará archivos DICOM.</li>
 		<li>Si es necesario y es compatible con la arquitectura de red, la dirección del servidor de consulta se puede encontrar usando su nombre de dominio a través de una búsqueda DNS.</li>
@@ -77,7 +75,7 @@ ver https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 	</ul>
 
 	<h4>Servidor de Exportación</h4>
-	<img src="assets/locales/en_US/html/images/ExportServer.png"/>
+	<img src="assets/locales/es/html/images/ServidorDeExportación.png"/>
 	<ul>	
 		<li>El servidor de exportación es el Proveedor de Clase de Servicio DICOM (SCP) remoto al que el Anonimizador enviará archivos DICOM.</li>
 		<li>Si es necesario y es compatible con la arquitectura de red, la dirección del servidor de exportación se puede encontrar usando su nombre de dominio a través de una búsqueda DNS.</li>
@@ -89,7 +87,7 @@ ver https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 	</ul>
 				
 	<h3>Servidor AWS S3</h3>
-	<img src="assets/locales/en_US/html/images/AWSCognitoCredentials.png"/>
+	<img src="assets/locales/es/html/images/AWSCognitoCredenciales.png"/>
 	<ul>
 		<li>El diálogo de Credenciales de AWS Cognito captura los parámetros necesarios para que el Anonimizador envíe estudios anonimizados a un cubo de almacenamiento AWS S3 como usuario de aplicación AWS Cognito.</li>
 		<li>Los valores predeterminados, excepto Usuario y Contraseña, son los valores necesarios para enviar al Archivo de Imágenes de RSNA.</li>
@@ -100,7 +98,7 @@ ver https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 	</ul>
 
 	<h3>Timeouts de Red</h3>
-	<img src="assets/locales/en_US/html/images/NetworkTimeouts.png"/>
+	<img src="assets/locales/es/html/images/TimeoutsDeRed.png"/>
 	<ul>
 		<li>Los timeouts de red son el tiempo máximo que el Anonimizador esperará por una respuesta de un servidor DICOM remoto antes de agotar el tiempo.</li>
 		<li>Hay 4 timeouts diferentes que se establecen en segundos y se pueden ajustar para adaptarse a las condiciones de la red.</li>
@@ -110,13 +108,13 @@ ver https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 	</ul>
 
 	<h3>Directorio de Almacenamiento</h3>
-	<img src="assets/locales/en_US/html/images/StorageDirectory.png"/>
+	<img src="assets/locales/es/html/images/DirectorioDeAlmacenamiento.png"/>
 	<ul>
 		<li>El directorio de almacenamiento es una ubicación del sistema de archivos local donde el Anonimizador guarda los archivos anonimizados y todos los datos del proyecto.</li>
 		<li>El archivo de datos del proyecto: <b><i>ProjectModel.pkl</i></b> se almacena en la raíz del directorio de almacenamiento.</li>
 		<li>Se crean dos subdirectorios fuera de la raíz del directorio de almacenamiento: <b><i>/privado</i></b> y <b><i>/público</i></b>.</li>
 		<li>El subdirectorio <b><i>/privado</i></b> contiene Información de Salud Privada (PHI) extraída de archivos DICOM entrantes.</li>
-		<li>El archivo de datos del Anonimizador: <b><i>/privado/AnonymizerModel.pkl</i></b> almacena los datos PHI en forma comprimida.</li>
+		<li>El archivo de datos del anonimizador: <b><i>/privado/AnonymizerModel.pkl</i></b> almacena los datos PHI en forma comprimida.</li>
 		<li>Se crean varios subdirectorios <b><i>/privado/cuarentena</i></b> a medida que se detectan errores en los archivos entrantes.</li>
 		<li>El subdirectorio <b><i>/privado/phi_export</i></b> almacena todos los archivos de búsqueda de pacientes PHI creados desde la Vista de Exportación haciendo clic en <i>Crear Búsqueda de Pacientes</i></li>
 		<li>El subdirectorio <b><i>/público</i></b> contiene los archivos anonimizados con la estructura: <b><i>/público/[id_paciente_anonimizado]/[UID_estudio]/[UID_serie]/[UID_instancia].dcm</i></b></li>
@@ -124,7 +122,7 @@ ver https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 	</ul>
 
 	<h3>Modalidades</h3>
-	<img src="assets/locales/en_US/html/images/Modalities.png"/>
+	<img src="assets/locales/es/html/images/Modalidades.png"/>
 	<ul>
 		<li>El diálogo de Modalidades enumera las modalidades de imágenes que se encuentran típicamente en radiología.</li>
 		<li>Haga clic en un elemento de línea para seleccionar/deseleccionar una modalidad. Una modalidad seleccionada se resaltará en verde.</li>
@@ -135,7 +133,7 @@ ver https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 	</ul>
 
 	<h3>Clases de Almacenamiento</h3>
-	<img src="assets/locales/en_US/html/images/StorageClasses.png"/>
+	<img src="assets/locales/es/html/images/ClasesDeAlmacenamiento.png"/>
 	<ul>
 		<li>El diálogo de clases de almacenamiento enumera todas las clases de almacenamiento DICOM actuales definidas por el estándar.</li>
 		<li>Se pueden confirmar y/o editar la lista de clases de almacenamiento implicadas por la selección de modalidades arriba.</li>
@@ -144,7 +142,7 @@ ver https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 	</ul>
 
 	<h3>Sintaxis de Transferencia</h3>
-	<img src="assets/locales/en_US/html/images/TransferSyntaxes.png"/>
+	<img src="assets/locales/es/html/images/SintaxisDeTransferencia.png"/>
 	<ul>
 		<li>El diálogo de Sintaxis de Transferencia enumera los formatos de datos actualmente admitidos por el Anonimizador.</li>
 		<li>Las primeras 4 sintaxis de transferencia no utilizan compresión de imágenes y están seleccionadas de forma predeterminada.</li>
@@ -163,7 +161,7 @@ ver https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 	</ul>
 
 	<h3>Niveles de Registro</h3>
-	<img src="assets/locales/en_US/html/images/LoggingLevels.png"/>
+	<img src="assets/locales/es/html/images/NivelesDeRegistro.png"/>
 	<ul>
 		<li>El Anonimizador genera información detallada de registro, capturando la actividad del programa en niveles Debug, Info, Warning, Error y Critical, y la almacena en archivo.</li>
 		<li>Hay hasta 10 archivos de registro (tamaño máximo: 100MB) en una lista giratoria.</li>

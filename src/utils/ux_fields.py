@@ -1,4 +1,16 @@
-# User Interface Field Validation & Utilities
+"""
+User Interface Field Validation & Utilities
+
+This module provides utility functions and classes for validating and manipulating user interface fields in a graphical user interface (GUI) application.
+
+Functions:
+- validate_entry() -> bool: Validates the final_value based on the allowed_chars and max length.
+- int_entry_change() -> None: Updates the value of an IntVar based on the user input in an entry widget.
+- str_entry_change() -> None: Updates the value of a StringVar based on the length constraints.
+- str_entry() -> ctk.StringVar: Creates a string entry field in the specified view.
+- int_entry() -> ctk.IntVar: Creates an integer entry field with label, initial value, and range.
+"""
+
 import string
 import tkinter as tk
 import customtkinter as ctk

@@ -265,11 +265,13 @@ def test_anonymize_file_not_found(temp_dir: str, controller: ProjectController):
 
     error_msg, ds = anonymizer.anonymize_file(Path("unknown_file.dcm"))
 
+    assert error_msg
     assert "No such file" in error_msg
     assert ds is None
 
-    error_msg, ds = anonymizer.anonymize_file(temp_dir)
+    error_msg, ds = anonymizer.anonymize_file(Path(temp_dir))
 
+    assert error_msg
     assert "Is a directory" in error_msg
     assert ds is None
 
@@ -286,6 +288,7 @@ def test_anonymize_invalid_dicom_file(temp_dir: str, controller: ProjectControll
 
     error_msg, ds = anonymizer.anonymize_file(test_file_path)
 
+    assert error_msg
     assert "File is missing DICOM File Meta" in error_msg
     assert ds is None
 
@@ -297,7 +300,7 @@ def test_anonymize_invalid_dicom_file(temp_dir: str, controller: ProjectControll
 def test_anonymize_dicom_missing_attributes(temp_dir: str, controller: ProjectController):
     anonymizer: AnonymizerController = controller.anonymizer
 
-    cr1: Dataset = get_testdata_file(cr1_filename, read=True)
+    cr1 = get_testdata_file(cr1_filename, read=True)
     assert isinstance(cr1, Dataset)
     assert cr1
     assert cr1.SOPClassUID
@@ -308,40 +311,18 @@ def test_anonymize_dicom_missing_attributes(temp_dir: str, controller: ProjectCo
 
     error_msg, ds = anonymizer.anonymize_file(test_dcm_file_path)
 
+    assert error_msg
     assert "Missing Attributes" in error_msg
     assert ds == cr1
 
     # Ensure file is moved to correct quarantine directory:
     qpath = Path(anonymizer.get_quarantine_path(), anonymizer.QUARANTINE_MISSING_ATTRIBUTES, test_filename)
     assert qpath.exists()
-
-
-def test_anonymize_dicom_missing_attributes(temp_dir: str, controller: ProjectController):
-    anonymizer: AnonymizerController = controller.anonymizer
-
-    cr1: Dataset = get_testdata_file(cr1_filename, read=True)
-    assert isinstance(cr1, Dataset)
-    assert cr1
-    assert cr1.SOPClassUID
-    del cr1.SOPClassUID  # remove required attribute
-    test_filename = "test.dcm"
-    test_dcm_file_path = Path(temp_dir, test_filename)
-    cr1.save_as(test_dcm_file_path)
-
-    error_msg, ds = anonymizer.anonymize_file(test_dcm_file_path)
-
-    assert "Missing Attributes" in error_msg
-    assert ds == cr1
-
-    # Ensure file is moved to correct quarantine directory:
-    qpath = Path(anonymizer.get_quarantine_path(), anonymizer.QUARANTINE_MISSING_ATTRIBUTES, test_filename)
-    assert qpath.exists()
-
 
 def test_anonymize_storage_error(temp_dir: str, controller: ProjectController):
     anonymizer: AnonymizerController = controller.anonymizer
 
-    cr1: Dataset = get_testdata_file(cr1_filename, read=True)
+    cr1 = get_testdata_file(cr1_filename, read=True)
     assert isinstance(cr1, Dataset)
     assert cr1
     assert cr1.SOPClassUID
@@ -349,6 +330,7 @@ def test_anonymize_storage_error(temp_dir: str, controller: ProjectController):
 
     error_msg = anonymizer.anonymize("Unit Testing", cr1)
 
+    assert error_msg
     assert "Storage Error" in error_msg
 
     # Ensure file is moved to correct quarantine directory:

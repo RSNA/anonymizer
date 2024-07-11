@@ -1,10 +1,24 @@
+"""
+This module provides utility functions for working with storage in the anonymizer application.
+
+Functions:
+- count_studies_series_images(patient_path: str) -> Tuple[int, int, int]: Counts the number of studies, series, and images in a given patient directory.
+- count_study_images(base_dir: Path, anon_pt_id: str, study_uid: str) -> int: Counts the number of images stored in a given study directory.
+- read_java_anonymizer_index_xlsx(filename: str) -> List[JavaAnonymizerExportedStudy]: Read data from the Java Anonymizer exported patient index file.
+
+Classes:
+- JavaAnonymizerExportedStudy: Represents the data structure for a single exported study from the Java Anonymizer.
+
+"""
+
 import os
-from typing import List
-from pathlib import Path
-from openpyxl import load_workbook
-from openpyxl.workbook.workbook import Workbook
-from pydicom import Dataset
+from typing import List, Union
 from dataclasses import dataclass
+from pathlib import Path
+from openpyxl import Workbook, load_workbook
+from openpyxl.worksheet.worksheet import Worksheet
+from openpyxl.workbook.child import _WorkbookChild
+
 
 DICOM_FILE_SUFFIX = ".dcm"
 
@@ -91,10 +105,10 @@ def read_java_anonymizer_index_xlsx(filename: str) -> List[JavaAnonymizerExporte
     """
 
     workbook: Workbook = load_workbook(filename)
-    sheet = workbook.active
-    data = []
+    sheet: Union[_WorkbookChild, None] = workbook.active
+    data: List[JavaAnonymizerExportedStudy] = []
 
-    if sheet is None:
+    if sheet is None or not isinstance(sheet, Worksheet):
         raise ValueError("No active sheet found in the workbook")
 
     for row in sheet.iter_rows(values_only=True, min_row=2):

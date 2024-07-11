@@ -11,13 +11,13 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 msgid "RSNA DICOM Anonymizer Version"
-msgstr "Versión del Anonimizador DICOM RSNA"
+msgstr "Versión del Anonimizador DICOM de RSNA"
 
 msgid "Error writing json config file: "
-msgstr "Error al escribir archivo de configuración json: "
+msgstr "Error al escribir el archivo de configuración JSON: "
 
 msgid "Configuration File Write Error"
-msgstr "Error al escribir archivo de configuración"
+msgstr "Error al escribir el archivo de configuración"
 
 msgid "New Project Settings"
 msgstr "Configuración de Nuevo Proyecto"
@@ -26,7 +26,7 @@ msgid "New Project Error"
 msgstr "Error en Nuevo Proyecto"
 
 msgid "Storage Directory not set, please set a valid directory in project settings."
-msgstr "Directorio de almacenamiento no configurado, por favor configure un directorio válido en los ajustes del proyecto."
+msgstr "Directorio de almacenamiento no configurado. Por favor, configure un directorio válido en los ajustes del proyecto."
 
 msgid "Confirm Overwrite"
 msgstr "Confirmar Sobrescritura"
@@ -41,7 +41,7 @@ msgid "Error deleting existing project directory"
 msgstr "Error al eliminar el directorio del proyecto existente"
 
 msgid "Fatal Internal Error, Project Controller not created"
-msgstr "Error interno fatal, el controlador del proyecto no fue creado"
+msgstr "Error interno fatal: el controlador del proyecto no fue creado"
 
 msgid "Error creating Project Controller"
 msgstr "Error al crear el controlador del proyecto"
@@ -74,13 +74,13 @@ msgid "Query Busy"
 msgstr "Consulta Ocupada"
 
 msgid "Query is busy, please wait for query to complete before closing project."
-msgstr "La consulta está ocupada, por favor espere a que la consulta se complete antes de cerrar el proyecto."
+msgstr "La consulta está ocupada, por favor espere a que se complete antes de cerrar el proyecto."
 
 msgid "Export Busy"
 msgstr "Exportación Ocupada"
 
 msgid "Export is busy, please wait for export to complete before closing project."
-msgstr "La exportación está ocupada, por favor espere a que la exportación se complete antes de cerrar el proyecto."
+msgstr "La exportación está ocupada, por favor espere a que se complete antes de cerrar el proyecto."
 
 msgid "Clone Project Error"
 msgstr "Error al Clonar Proyecto"
@@ -92,7 +92,7 @@ msgid "Select Directory for Cloned Project"
 msgstr "Seleccione el Directorio para el Proyecto Clonado"
 
 msgid "Cloned directory cannot be the same as the current project directory."
-msgstr "El directorio clonado no puede ser el mismo que el directorio actual del proyecto."
+msgstr "El directorio clonado no puede ser el mismo que el directorio del proyecto actual."
 
 msgid "Edit Cloned Project Settings"
 msgstr "Editar Ajustes del Proyecto Clonado"
@@ -107,7 +107,7 @@ msgid "Reading DICOMDIR Root directory"
 msgstr "Leyendo directorio raíz DICOMDIR"
 
 msgid "Error reading DICOMDIR file"
-msgstr "Error al leer archivo DICOMDIR"
+msgstr "Error al leer el archivo DICOMDIR"
 
 msgid "Import Directory Error"
 msgstr "Error de Directorio de Importación"
@@ -656,7 +656,7 @@ msgid "Query Server Failed DICOM C-ECHO"
 msgstr "Falló el servidor de consulta DICOM C-ECHO"
 
 msgid "Query via Accession Numbers"
-msgstr "Consulta a través de Números de Acceso"
+msgstr "Consulta por Números de Acceso"
 
 msgid "Loaded"
 msgstr "Cargado"
@@ -907,14 +907,8 @@ msgstr "Vaya a Ayuda/Operación para obtener instrucciones sobre cómo usar el p
 msgid "Select File/New Project to start."
 msgstr "Seleccione Archivo/Nuevo Proyecto para comenzar."
 
-#~ msgid "Patient"
-#~ msgstr "Pacientes"
-
 #~ msgid "Import files from"
 #~ msgstr "Importar archivos desde"
 
 #~ msgid "ANONYMIZER_STORE"
 #~ msgstr "ALMACEN_ANONIMIZADOR"
-
-#~ msgid "Export Studies"
-#~ msgstr "Exportar Estudios"

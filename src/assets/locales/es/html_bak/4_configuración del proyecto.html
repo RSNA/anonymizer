@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<!-- Lista de etiquetas HTML admitidas por tkhtmlview:
+ver https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support -->
+<html>
+<body>
+<div style="color: #014F8F; font-size: 14px;">
+	<!-- <h1 style="text-align: center;">Configuración del Proyecto Anonimizador DICOM RSNA</h1> -->
+
+	<h2>Configuración del Proyecto</h2>
+	<ul>
+		<li>Los nombres de configuración se enumeran en la columna izquierda y los valores u opciones correspondientes están en la columna derecha.</li> 
+		<li>La mayoría de las configuraciones se pueden ajustar haciendo clic en el botón azul correspondiente.</li>
+		<li>Cada configuración se describe a continuación:</li>
+	</ul>
+	<img src="assets/locales/en_US/html/images/NewProjectSettings.png"/>
+
+	<h3>ID del Sitio</h3>
+	<ul>
+		<li>El ID del Sitio se genera automáticamente o se extrae de un Archivo de Índice del Anonimizador Java (Index.xlsx).</li>
+		<li>El ID del Sitio <b>no puede cambiarse</b> después de la creación del proyecto.</li>
+		<li>El ID del Sitio se escribe como la primera entrada en el bloque privado (0013,1001) de cada archivo DICOM anonimizado.</li>
+		<li>El ID del Sitio aparece entre corchetes en la barra de título del panel de control, después del nombre del proyecto cuando un proyecto está abierto.</li>
+	</ul>
+	<h4>Auto-generación</h4>
+	<ul>
+		<li>El ID del Sitio se genera automáticamente cuando se crea un nuevo proyecto en el Anonimizador.</li>
+		<li>Para garantizar la unicidad, se basa en el tiempo y es igual al número de intervalos de 30 minutos desde el 1 de enero de 1970.</li>
+	</ul>
+	<h4>Configurar proyecto importando Archivo de Índice del Anonimizador Java (Index.xlsx)</h4>
+	<ul>
+		<li>Si el usuario hace clic en el botón <i>Cargar Archivo de Índice Java</i> e importa el contenido de un archivo de índice del Anonimizador Java, el ID del Sitio se extraerá de la primera fila de estudio leída del archivo de índice.</li>
+		<li>Los datos de todos los estudios en el archivo de índice se importarán a la base de datos del Anonimizador para garantizar que se sigan generando UIDs únicos para el proyecto.</li>
+	</ul>
+
+	<h3>Nombre del Proyecto</h3>
+	<ul>
+		<li>El nombre del proyecto debe tener menos de 16 caracteres.</li> 
+		<li>El nombre del proyecto se escribe como la segunda entrada en el bloque privado (0013,1003) de cada archivo DICOM anonimizado.</li>
+		<li>El nombre del proyecto se utiliza como el nombre del directorio predeterminado para la tienda del Anonimizador, vea la configuración del Directorio de Almacenamiento a continuación.</li>
+
+		<li>El nombre del proyecto aparece en la barra de título del panel de control de un proyecto abierto seguido del ID del Sitio entre corchetes.</li>
+		<li>El nombre del proyecto <b>no puede cambiarse</b> después de la creación del proyecto.</li>
+	</ul>
+
+	<h3>Root de UID</h3>
+	<ul>
+		<li>El Root de UID forma el prefijo de todos los UIDs DICOM generados por el Anonimizador para este proyecto.</li>
+		<li>Por defecto, está configurado con el Root de UID de RSNA.</li> 
+		<li>El Root de UID <b>no puede cambiarse</b> después de la creación del proyecto.</li>
+		<li>El Anonimizador genera UIDs secuenciales para un proyecto con el formato: <i>"[Root de UID].[ID del Sitio].[N]"</i> donde N es el número entero de secuencia.</li>
+	</ul>
+
+	<h3>Servidores DICOM</h3>
+	<h4>Servidor Local</h4>
+	<img src="assets/locales/en_US/html/images/LocalServer.png"/>
+	<ul>
+		<li>El servidor local actúa como Proveedor de Clase de Servicio DICOM (SCP) y como Usuario de Clase de Servicio (SCU) para el Anonimizador.</li>
+		<li>La lista desplegable de Direcciones se llena con las direcciones IP de las interfaces de red de la máquina local.</li>
+		<li>Cuando se abre un proyecto, se inicia el SCP local y escucha las asociaciones DICOM entrantes en la dirección seleccionada, puerto especificado y Título AE.</li>
+		<li>El SCP local aceptará asociaciones desde <b><i>cualquier</i></b> SCU remoto que llame al Título AE especificado.</li>
+		<li>Cuando se cierra un proyecto, se detiene el SCP del servidor local.</li>
+		<li>El SCU del servidor local se asigna puertos desde el sistema operativo para asociaciones DICOM salientes, pero utiliza la misma dirección y Título AE que el SCP.</li>
+	</ul>
+
+	<h4>Servidor de Consulta</h4>
+	<img src="assets/locales/en_US/html/images/QueryServer.png"/>
+	<ul>	
+		<li>El servidor de consulta es el Proveedor de Clase de Servicio DICOM (SCP) remoto al que el Anonimizador consultará y recuperará archivos DICOM.</li>
+		<li>Si es necesario y es compatible con la arquitectura de red, la dirección del servidor de consulta se puede encontrar usando su nombre de dominio a través de una búsqueda DNS.</li>
+		<li>La dirección del servidor de consulta, puerto y Título AE especifica cómo el SCP de consulta escucha las asociaciones DICOM entrantes.</li> 
+		<li>Los detalles del SCU local del Anonimizador probablemente necesitarán ser agregados a las tablas de SCU DICOM permitidos del servidor remoto para permitir el acceso.</li>
+		<li>El servidor de consulta debe estar configurado para permitir que el SCU del Anonimizador realice solicitudes C-ECHO, C-FIND y C-MOVE.</li>
+		<li>El servidor de consulta debe estar configurado con los detalles de destino del SCP del Anonimizador (dirección, puerto, Título AE).</li>
+		<li>El SCU local del Anonimizador recupera estudios DICOM y sus archivos asociados del servidor de consulta mediante solicitudes C-MOVE DICOM en un nivel especificado por el usuario.</li>
+		<li>El SCP local del Anonimizador recibe los archivos del servidor de consulta en una asociación separada de la que se realizó la solicitud (según el protocolo C-MOVE).</li>
+		<li>Los detalles del proceso de consulta e importación se pueden encontrar en la sección <i>Vista de Consulta, Recuperación e Importación</i> más abajo.</li>
+	</ul>
+
+	<h4>Servidor de Exportación</h4>
+	<img src="assets/locales/en_US/html/images/ExportServer.png"/>
+	<ul>	
+		<li>El servidor de exportación es el Proveedor de Clase de Servicio DICOM (SCP) remoto al que el Anonimizador enviará archivos DICOM.</li>
+		<li>Si es necesario y es compatible con la arquitectura de red, la dirección del servidor de exportación se puede encontrar usando su nombre de dominio a través de una búsqueda DNS.</li>
+		<li>La dirección del servidor de exportación, puerto y Título AE especifica cómo el SCP de exportación escucha las asociaciones DICOM entrantes.</li> 
+		<li>Los detalles del SCU local del Anonimizador probablemente necesitarán ser agregados a las tablas de SCU DICOM permitidos del servidor de exportación remoto para permitir el acceso.</li>
+		<li>El servidor de exportación debe estar configurado para permitir que el SCU del Anonimizador realice solicitudes C-ECHO, C-FIND y C-SEND.</li>
+		<li>El SCU del Anonimizador envía estudios DICOM y sus archivos asociados al servidor de exportación mediante solicitudes C-SEND DICOM en un nivel especificado por el usuario.</li>
+		<li>Los detalles del proceso de exportación se pueden encontrar en la sección <i>Vista de Exportación</i> más abajo.</li>
+	</ul>
+				
+	<h3>Servidor AWS S3</h3>
+	<img src="assets/locales/en_US/html/images/AWSCognitoCredentials.png"/>
+	<ul>
+		<li>El diálogo de Credenciales de AWS Cognito captura los parámetros necesarios para que el Anonimizador envíe estudios anonimizados a un cubo de almacenamiento AWS S3 como usuario de aplicación AWS Cognito.</li>
+		<li>Los valores predeterminados, excepto Usuario y Contraseña, son los valores necesarios para enviar al Archivo de Imágenes de RSNA.</li>
+		<li>Contacte al departamento de Informática de RSNA para registrar su ID de Sitio y Proyecto y recibir un Usuario y Contraseña para la exportación a su archivo.</li>
+		<li>Para configurar una instalación personalizada de AWS S3, se requiere la configuración de una aplicación Cognito, usuario y grupo de identidades con permisos ListBucket y PutObject.</li>
+		<li>La casilla de verificación <i>Exportar a AWS</i> debe estar marcada para habilitar la Exportación a AWS S3 en lugar del Servidor de Exportación DICOM.</li>
+		<li>Los detalles del proceso de exportación a AWS S3 se pueden encontrar en la sección <i>Vista de Exportación</i> más abajo.</li>
+	</ul>
+
+	<h3>Timeouts de Red</h3>
+	<img src="assets/locales/en_US/html/images/NetworkTimeouts.png"/>
+	<ul>
+		<li>Los timeouts de red son el tiempo máximo que el Anonimizador esperará por una respuesta de un servidor DICOM remoto antes de agotar el tiempo.</li>
+		<li>Hay 4 timeouts diferentes que se establecen en segundos y se pueden ajustar para adaptarse a las condiciones de la red.</li>
+		<li>Los valores predeterminados están configurados con valores sensatos que deberían funcionar bien con la mayoría de los servidores.</li>
+		<li>El Timeout de Red se agotará si no se detecta actividad esperada desde el servidor remoto.</li>
+		<li>El Timeout de Red es el timeout más probable que puede requerir ajustes.</li>
+	</ul>
+
+	<h3>Directorio de Almacenamiento</h3>
+	<img src="assets/locales/en_US/html/images/StorageDirectory.png"/>
+	<ul>
+		<li>El directorio de almacenamiento es una ubicación del sistema de archivos local donde el Anonimizador guarda los archivos anonimizados y todos los datos del proyecto.</li>
+		<li>El archivo de datos del proyecto: <b><i>ProjectModel.pkl</i></b> se almacena en la raíz del directorio de almacenamiento.</li>
+		<li>Se crean dos subdirectorios fuera de la raíz del directorio de almacenamiento: <b><i>/privado</i></b> y <b><i>/público</i></b>.</li>
+		<li>El subdirectorio <b><i>/privado</i></b> contiene Información de Salud Privada (PHI) extraída de archivos DICOM entrantes.</li>
+		<li>El archivo de datos del Anonimizador: <b><i>/privado/AnonymizerModel.pkl</i></b> almacena los datos PHI en forma comprimida.</li>
+		<li>Se crean varios subdirectorios <b><i>/privado/cuarentena</i></b> a medida que se detectan errores en los archivos entrantes.</li>
+		<li>El subdirectorio <b><i>/privado/phi_export</i></b> almacena todos los archivos de búsqueda de pacientes PHI creados desde la Vista de Exportación haciendo clic en <i>Crear Búsqueda de Pacientes</i></li>
+		<li>El subdirectorio <b><i>/público</i></b> contiene los archivos anonimizados con la estructura: <b><i>/público/[id_paciente_anonimizado]/[UID_estudio]/[UID_serie]/[UID_instancia].dcm</i></b></li>
+		<li>El directorio de almacenamiento <b>no puede cambiarse</b> después de la creación del proyecto.</li>
+	</ul>
+
+	<h3>Modalidades</h3>
+	<img src="assets/locales/en_US/html/images/Modalities.png"/>
+	<ul>
+		<li>El diálogo de Modalidades enumera las modalidades de imágenes que se encuentran típicamente en radiología.</li>
+		<li>Haga clic en un elemento de línea para seleccionar/deseleccionar una modalidad. Una modalidad seleccionada se resaltará en verde.</li>
+		<li>El Anonimizador solo aceptará archivos con modalidades que coincidan con las seleccionadas aquí.</li>
+		<li>Hay una relación uno a muchos entre una modalidad y una clase de almacenamiento.</li>
+		<li>El Anonimizador creará automáticamente una lista de clases de almacenamiento permitidas que correspondan a las modalidades actualmente seleccionadas.</li>
+		<li>Las clases de almacenamiento se pueden editar mediante el diálogo de Clases de Almacenamiento más abajo.</li>
+	</ul>
+
+	<h3>Clases de Almacenamiento</h3>
+	<img src="assets/locales/en_US/html/images/StorageClasses.png"/>
+	<ul>
+		<li>El diálogo de clases de almacenamiento enumera todas las clases de almacenamiento DICOM actuales definidas por el estándar.</li>
+		<li>Se pueden confirmar y/o editar la lista de clases de almacenamiento implicadas por la selección de modalidades arriba.</li>
+		<li>Haga clic en un elemento de línea para seleccionar/deseleccionar una clase de almacenamiento. Una clase de almacenamiento seleccionada se resaltará en verde.</li>
+		<li>Después de cualquier edición, hacer clic en el botón <b><i>Desde Modalidades</b></i> restablecerá la lista de clases de almacenamiento implicadas por las modalidades seleccionadas actualmente.</li>
+	</ul>
+
+	<h3>Sintaxis de Transferencia</h3>
+	<img src="assets/locales/en_US/html/images/TransferSyntaxes.png"/>
+	<ul>
+		<li>El diálogo de Sintaxis de Transferencia enumera los formatos de datos actualmente admitidos por el Anonimizador.</li>
+		<li>Las primeras 4 sintaxis de transferencia no utilizan compresión de imágenes y están seleccionadas de forma predeterminada.</li>
+		<li>Otras sintaxis de transferencia proporcionan soporte para la compresión de imágenes JPEG con diferentes algoritmos.</li>
+		<li>Las clases de almacenamiento seleccionadas combinadas con las sintaxis de transferencia seleccionadas determinan qué archivos DICOM son aceptados por el Anonimizador.</li>
+		<li>Los contextos de presentación y almacenamiento, determinados por las clases de almacenamiento y las sintaxis de transferencia seleccionadas, se utilizan en la negociación de asociaciones cuando el Anonimizador actúa como SCU y SCP.</li>
+		<li>El Anonimizador no transcodifica archivos DICOM de una sintaxis de transferencia a otra.</li>
+		<li>La sintaxis de transferencia de archivos DICOM recibidos por el Anonimizador se conserva en el archivo anonimizado correspondiente.</li>
+	</ul>
+
+	<h3>Archivo de Script</h3>
+	<ul>
+		<li>El archivo de script predeterminado que viene con este Anonimizador contiene las instrucciones para cumplir con el protocolo de desidentificación estándar DICOM descrito en el menú de ayuda correspondiente.</li>
+		<li>Archivos de script alternativos se pueden cargar usando este botón para soportar proyectos más complejos o heredados.</li>
+		<li>Si se carga un archivo de script de anonimizador diferente, tenga en cuenta las limitaciones descritas en la sección de visión general: diferencias con la versión Java.</li>	
+	</ul>
+
+	<h3>Niveles de Registro</h3>
+	<img src="assets/locales/en_US/html/images/LoggingLevels.png"/>
+	<ul>
+		<li>El Anonimizador genera información detallada de registro, capturando la actividad del programa en niveles Debug, Info, Warning, Error y Critical, y la almacena en archivo.</li>
+		<li>Hay hasta 10 archivos de registro (tamaño máximo: 100MB) en una lista giratoria.</li>
+		<li>Ruta de los registros en Windows: <i>[directorio de usuario]\AppData\Local\Anonymizer</i></li>
+		<li>Ruta de los registros en OSX: <i>[directorio de usuario]/Library/Logs/Anonymizer/</i></li>
+		<li>La salida de registro de las bibliotecas DICOM PYDICOM y PYNETDICOM utilizadas por el Anonimizador se puede controlar mediante este diálogo.</li>
+		<li><b>Advertencia: </b>cuando se habilita la salida de depuración para PYDICOM, los datos PHI se escribirán en los registros.</li>
+		<li><a href=https://github.com/tmoreno/open-log-viewer/releases>Open Log Viewer</a> es una excelente herramienta gratuita multiplataforma para ver archivos de registro, ideal para usuarios avanzados.</li>
+	</ul>
+	<img src="assets/locales/en_US/html/images/OpenLogViewer.png"/>
+
+</div>
+</body>
+</html>

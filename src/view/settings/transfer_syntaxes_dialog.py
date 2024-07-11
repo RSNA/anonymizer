@@ -11,6 +11,37 @@ logger = logging.getLogger(__name__)
 
 
 class TransferSyntaxesDialog(tk.Toplevel):
+    """
+    A dialog window for selecting transfer syntaxes.
+
+    Args:
+        parent: The parent widget.
+        transfer_syntaxes: A list of transfer syntaxes.
+
+    Attributes:
+        ts_lookup (dict[str, str]): A dictionary mapping transfer syntax UIDs to their descriptions.
+        attr_map (dict[str, Tuple[str, int, bool]]): A dictionary mapping attribute names to their display properties.
+        root (ctk.CTk): The root widget.
+        transfer_syntaxes (list[str]): The list of selected transfer syntaxes.
+        _user_input (Union[list, None]): The user-selected transfer syntaxes.
+        _tree (ttk.Treeview): The treeview widget for displaying transfer syntaxes.
+        _button_frame (ctk.CTkFrame): The frame widget for buttons.
+        _select_all_button (ctk.CTkButton): The button for selecting all transfer syntaxes.
+        _default_selection_button (ctk.CTkButton): The button for selecting default transfer syntaxes.
+        _ok_button (ctk.CTkButton): The button for confirming the selection.
+
+    Methods:
+        _create_widgets(): Create the widgets for the dialog.
+        _on_item_select(event): Handle the selection of a transfer syntax.
+        _select_all_button_pressed(): Handle the press of the "Select All" button.
+        _default_selection_button_pressed(): Handle the press of the "Default" button.
+        _enter_keypress(event): Handle the press of the Enter key.
+        _ok_event(event): Handle the press of the OK button.
+        _escape_keypress(event): Handle the press of the Escape key.
+        _on_cancel(): Handle the cancellation of the dialog.
+        get_input(): Get the user-selected transfer syntaxes.
+
+    """
     
     # description strings added to pynetdicom.globals.ALL_TRANSFER_SYNTAXES
     ts_lookup: dict[str, str] = {

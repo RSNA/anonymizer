@@ -1,3 +1,4 @@
+
 # List of HTML Tags supported by tkhtmlview:
 # see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support
 import tkinter as tk
@@ -7,6 +8,21 @@ import re
 
 
 class HTMLView(tk.Toplevel):
+    """
+    A custom Tkinter Toplevel window for displaying HTML content.
+
+    Args:
+        parent (ctk.CTk): The parent CTk object.
+        title (str): The title of the HTMLView window.
+        html_file_path (str): The file path to the HTML content.
+
+    Attributes:
+        MIN_WIDTH_px (int): The minimum width of the HTMLView window in pixels.
+        MAX_WIDTH_px (int): The maximum width of the HTMLView window in pixels.
+        HEIGHT_LINES (int): The number of lines for the HTMLScrolledText widget.
+
+    """
+
     MIN_WIDTH_px = 100
     MAX_WIDTH_px = 180
     HEIGHT_LINES = 40
@@ -24,6 +40,15 @@ class HTMLView(tk.Toplevel):
         self._create_widgets()
 
     def _create_widgets(self):
+        """
+        Create the widgets for the HTMLView window.
+
+        Reads the HTML content from the file, finds all <li> elements and their content,
+        determines the required width based on the longest <li> element, and creates
+        an HTMLScrolledText widget to display the HTML content.
+
+        """
+
         # Read the HTML content from the file
         with open(self.html_file_path, "r") as file:
             html_content = file.read()

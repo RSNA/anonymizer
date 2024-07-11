@@ -13,6 +13,37 @@ logger = logging.getLogger(__name__)
 
 
 class Dashboard(ctk.CTkFrame):
+    """
+    A class representing the dashboard view of the anonymizer application.
+
+    Args:
+        parent: The parent widget.
+        query_callback: The callback function for the query button.
+        export_callback: The callback function for the export button.
+        controller: The project controller.
+
+    Attributes:
+        AWS_AUTH_TIMEOUT_SECONDS (int): The timeout duration for AWS authentication.
+        LABEL_FONT_SIZE (int): The font size for labels.
+        DATA_FONT_SIZE (int): The font size for data.
+        PAD (int): The padding value.
+        BUTTON_WIDTH (int): The width of buttons.
+        _label_font (ctk.CTkFont): The font for labels.
+        _data_font (ctk.CTkFont): The font for data.
+        _last_qsize (int): The previous size of the queue.
+        _latch_max_qsize (int): The maximum size of the queue.
+        _query_callback (Any): The callback function for the query button.
+        _export_callback (Any): The callback function for the export button.
+        _controller (ProjectController): The project controller.
+        _timer (int): The timer for AWS authentication.
+        _query_ux_Q (Queue[EchoResponse]): The queue for query responses.
+        _export_ux_Q (Queue[EchoResponse]): The queue for export responses.
+        _patients (int): The number of patients.
+        _studies (int): The number of studies.
+        _series (int): The number of series.
+        _images (int): The number of images.
+    """
+
     AWS_AUTH_TIMEOUT_SECONDS = 15  # must be > 2 secs
     LABEL_FONT_SIZE = 32
     DATA_FONT_SIZE = 48

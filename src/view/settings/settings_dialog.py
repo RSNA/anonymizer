@@ -1,3 +1,7 @@
+"""
+This module contains the SettingsDialog class, which is a dialog window for managing project settings.
+"""
+
 from pathlib import Path
 from typing import List, Tuple
 import tkinter as tk
@@ -24,7 +28,16 @@ logger = logging.getLogger(__name__)
 
 # TODO: ctk.CTkToplevel does not handle window icon on Windows
 class SettingsDialog(tk.Toplevel):
-    def __init__(self, parent, model: ProjectModel, new_model: bool = False, title: str = None):
+    """
+    A dialog window for managing project settings.
+
+    Args:
+        parent (tk.Tk): The parent window.
+        model (ProjectModel): The project model.
+        new_model (bool, optional): Indicates whether it is a new project model. Defaults to False.
+        title (str | None, optional): The title of the dialog window. Defaults to None.
+    """
+    def __init__(self, parent, model: ProjectModel, new_model: bool = False, title: str | None = None):
         super().__init__(master=parent)
         self.model: ProjectModel = model
         self.java_phi_studies: List[JavaAnonymizerExportedStudy] = []
@@ -270,6 +283,7 @@ class SettingsDialog(tk.Toplevel):
         )
 
     def _project_name_change(self, name, index, mode):
+        pass
         logger.info(f"_project_name_change")
         self.model.project_name = self.project_name_var.get()
         logger.info(f"Project Name updated: {self.model.project_name}")

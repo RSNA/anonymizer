@@ -193,7 +193,7 @@ def test_move_at_study_level_1_CT_file_from_pacs_with_file_to_local_storage(
     error_msg, ct_small_study_hierarchy = controller.get_study_uid_hierarchy(
         PACSSimulatorSCP.aet, ct_small_StudyInstanceUID, patient3_id
     )
-    assert error_msg == None
+    assert error_msg is None
     assert ct_small_study_hierarchy.get_number_of_instances() == 1
     assert len(ct_small_study_hierarchy.series) == 1
     series = ct_small_study_hierarchy.series[ct_small_SeriesInstanceUID]
@@ -231,7 +231,7 @@ def test_move_at_series_level_1_CT_file_from_pacs_with_file_to_local_storage(
     error_msg, ct_small_study_hierarchy = controller.get_study_uid_hierarchy(
         PACSSimulatorSCP.aet, ct_small_StudyInstanceUID, patient3_id
     )
-    assert error_msg == None
+    assert error_msg is None
     assert ct_small_study_hierarchy.get_number_of_instances() == 1
     assert len(ct_small_study_hierarchy.series) == 1
     series = ct_small_study_hierarchy.series[ct_small_SeriesInstanceUID]
@@ -299,7 +299,7 @@ def test_move_at_study_level_CT_1_Series_4_Images_from_pacs_with_file_to_local_s
 
     # Get study_uid_hierarchy for CT study:
     error_msg, ct_study_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, study_uid, patient1_id)
-    assert error_msg == None
+    assert error_msg is None
     assert ct_study_hierarchy.get_number_of_instances() == 4
     assert len(ct_study_hierarchy.series) == 1
     series = ct_study_hierarchy.series[series_uid]
@@ -347,7 +347,7 @@ def test_move_at_series_level_CT_1_Series_4_Images_from_pacs_with_file_to_local_
 
     # Get study_uid_hierarchy for CT study:
     error_msg, ct_study_hierarchy = controller.get_study_uid_hierarchy(PACSSimulatorSCP.aet, study_uid, patient1_id)
-    assert error_msg == None
+    assert error_msg is None
     assert ct_study_hierarchy.get_number_of_instances() == 4
     assert len(ct_study_hierarchy.series) == 1
     series = ct_study_hierarchy.series[series_uid]
@@ -372,6 +372,7 @@ def test_move_at_series_level_CT_1_Series_4_Images_from_pacs_with_file_to_local_
     # Do the MOVE AGAIN to verify move of instances is done (because of Series level) and files are not duplicated:
     error_msg = controller._move_study_at_series_level(PACSSimulatorSCP.aet, LocalStorageSCP.aet, ct_study_hierarchy)
 
+    assert error_msg
     assert "All Instances already imported" in error_msg
 
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
@@ -761,7 +762,7 @@ def test_move_at_study_level_1_CT_file_from_orthanc_to_local_storage(temp_dir: s
     # Get study_uid_hierarchy for CT small study:
     error_msg, study = controller.get_study_uid_hierarchy(OrthancSCP.aet, ct_small_StudyInstanceUID, patient3_id, True)
 
-    assert error_msg == None
+    assert error_msg is None
     assert study.get_number_of_instances() == 1
     assert study.uid == ct_small_StudyInstanceUID
     assert len(study.series) == 1
@@ -800,7 +801,7 @@ def test_move_at_study_level_with_network_timeout_then_series_level_MR_Study_fro
     # Get study_uid_hierarchy for MR study:
     error_msg, study = controller.get_study_uid_hierarchy(OrthancSCP.aet, mr_brain_StudyInstanceUID, patient2_id, True)
 
-    assert error_msg == None
+    assert error_msg is None
     assert study.uid == mr_brain_StudyInstanceUID
     assert len(study.series) == 3
     assert study.get_number_of_instances() == 11

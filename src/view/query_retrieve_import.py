@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import customtkinter as ctk
 from pydicom import Dataset
-from queue import Empty, Full, Queue
+from queue import Queue
 from controller.dicom_C_codes import C_FAILURE, C_PENDING_A, C_PENDING_B, C_SUCCESS
 from controller.project import (
     FindStudyRequest,
@@ -28,12 +28,33 @@ logger = logging.getLogger(__name__)
 
 
 class QueryView(tk.Toplevel):
+    """
+    A class representing the QueryView window for querying, retrieving, and importing studies.
+
+    Attributes:
+        ux_poll_find_response_interval (int): The interval in milliseconds for polling find responses.
+
+    Args:
+        parent (Dashboard): The parent window.
+        project_controller (ProjectController): The project controller.
+        mono_font (ctk.CTkFont): The monospaced font.
+
+    """
 
     ux_poll_find_response_interval = 250  # milli-seconds
 
-    def __init__(self, parent: Dashboard, project_controller: ProjectController):
+    def __init__(self, parent: Dashboard, project_controller: ProjectController, mono_font: ctk.CTkFont):
+        """
+        Initialize the QueryView.
+
+        Args:
+            parent (Dashboard): The parent window.
+            project_controller (ProjectController): The project controller.
+            mono_font (ctk.CTkFont): The monospaced font.
+
+        """
         super().__init__(master=parent)
-        self._data_font = parent.master.mono_font  # get mono font from app
+        self._data_font = mono_font  # get mono font from app
         # C-FIND DICOM attributes to display in the results Treeview:
         # Key: DICOM field name, Value: (display name, centre justify, stretch column of resize)
         self._attr_map = {
@@ -73,6 +94,10 @@ class QueryView(tk.Toplevel):
         self._enable_action_buttons()
 
     def _create_widgets(self):
+        """
+        Create the widgets for the QueryView window.
+
+        """
         logger.info(f"_create_widgets")
         PAD = 10
         ButtonWidth = 100
@@ -496,7 +521,7 @@ class QueryView(tk.Toplevel):
             non_numeric_acc_nos = [x for x in filtered_acc_nos if not x.isdigit()]
 
             # Sort numeric strings in ascending order
-            sorted_numeric = sorted(numeric_acc_nos, key=lambda x: int(x))
+            sorted_numeric = sorted(numeric_acc_nos, key=int)
 
             # TODO: OPTIMIZE query using wildcard character: ? to reduce number of queries for Accession Number blocks/sequences
 

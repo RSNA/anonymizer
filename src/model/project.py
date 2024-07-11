@@ -1,4 +1,7 @@
-import os
+"""
+This module contains the ProjectModel class and related data classes for storing project settings and configurations.
+"""
+
 import time
 from logging import DEBUG, INFO, WARNING, getLevelName
 from pprint import pformat

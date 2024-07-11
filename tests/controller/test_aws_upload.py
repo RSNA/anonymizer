@@ -17,8 +17,14 @@ def test_send_1_dicomfile_to_AWS_S3_and_list_objects(temp_dir: str, controller: 
     assert dcm_file_path
     assert os.path.exists(dcm_file_path)
 
-    controller.model.aws_cognito.username = os.getenv("AWS_USERNAME")
-    controller.model.aws_cognito.password = os.getenv("AWS_PASSWORD")
+    username = os.getenv("AWS_USERNAME")
+    pw = os.getenv("AWS_PASSWORD")
+    
+    assert username
+    assert pw
+
+    controller.model.aws_cognito.username = username
+    controller.model.aws_cognito.password = pw
 
     s3 = controller.AWS_authenticate()
     assert s3

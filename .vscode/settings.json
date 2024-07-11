@@ -43,7 +43,7 @@
     "uids",
     "VNA's"
   ],
-  "python.analysis.typeCheckingMode": "off",
+  "python.analysis.typeCheckingMode": "basic",
   "editor.defaultFoldingRangeProvider": "ms-python.black-formatter",
   "editor.defaultFormatter": "ms-python.black-formatter",
   "python.analysis.inlayHints.functionReturnTypes": false,
@@ -58,7 +58,7 @@
   ],
   "python.analysis.exclude": [
     ".vscode",
-    "prototyping",
+    "src/prototyping",
     "**/dist",
     "**/build"
   ],

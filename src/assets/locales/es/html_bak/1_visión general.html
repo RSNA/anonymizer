@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<!-- Lista de etiquetas HTML soportadas por tkhtmlview:
+ver https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support -->
+<html>
+<body>
+<div style="color: #014F8F; font-size: 14px;">
+	<!-- <h1 style="text-align: center;">Visión general del Anonimizador DICOM de RSNA</h1> -->
+
+	<h2>Introducción</h2>
+		<p>
+		El Anonimizador DICOM de RSNA es una utilidad de desidentificación independiente y multiplataforma.
+		Los archivos de imágenes DICOM se importan ya sea mediante transferencias de red o directamente desde el sistema de archivos local.
+		Cuando se recibe un archivo DICOM, se desidentifica y luego se almacena en un directorio de almacenamiento local definido por el usuario.
+		Las imágenes anonimizadas se pueden exportar a un servidor DICOM remoto o a un almacén de objetos AWS S3 como el Archivo de Imágenes RSNA.
+		</p>
+
+	<h2>Directrices de diseño</h2>
+	<ol>
+		<li>Código abierto</li>
+		<li>Interfaz gráfica de usuario independiente escrita en Python 3</li>
+		<li>No se requiere conexión a internet</li>
+		<li>Adecuado para usuarios con conocimientos limitados de DICOM que desean curar y enviar conjuntos de imágenes médicas para el desarrollo de modelos de IA</li>
+		<li>Plataformas soportadas: Windows, OSX (Intel y ARM), plataformas Linux</li>
+		<li>Desarrollo continuo, procesos de compilación y distribución de versiones a través de la cuenta pública de GitHub de RSNA</li>
+		<li>Compatible con versiones anteriores de Java</li>
+		<li>Compatible con PACS, Cloud PACS y VNA</li>
+		<li>Reflejar todos los errores al usuario, no depender del análisis de registros</li>
+		<li>Basado en proyectos con gestión centralizada de configuraciones</li>
+		<li>Arquitectura de software Modelo-Vista-Controlador (MVC)</li>
+		<li>Manejo de 1 millón de pacientes</li>
+		<li>Anonimización de 10 archivos por segundo</li>
+	</ol>
+
+	<h2>Anonimizador anterior en Java</h2>
+		<p>Esta versión del Anonimizador se basa en el Procesador de Ensayos Clínicos (CTP) del Centro de Recursos de Imágenes Médicas (MIRC)
+			<a href="https://mircwiki.rsna.org/index.php?title=The_MIRC_DICOM_Anonymizer">Java Anonimizador V16</a></p>
+		<h4>Diferencias respecto a la versión en Java</h4>
+		<ol>
+			<li>Escrito en Python para la versión 3.11</li>
+			<li>Implementa un subconjunto de operaciones para manejar el script predeterminado de anonimización: {@remove, @empty, @hashdate, @round, ptid, acc, uid}</li>
+			<li>Los campos con ptid en la operación se reemplazarán por una ID de paciente generada secuencialmente comenzando en 1</li>
+			<li>Los campos con acc en la operación se reemplazarán por un número de acceso generado secuencialmente comenzando en 1</li>
+			<li>Los campos con uid en la operación se reemplazarán por un UID generado secuencialmente de la forma {UIDRaíz.IDSitio.N} N = 1,2,3...</li>
+			<li>No hay un editor integrado para el script de anonimización</li>
+			<li>No hay un script de filtro, utiliza contextos de asociación DICOM para restringir las clases de almacenamiento y sintaxis de transferencia importadas</li>
+			<li>No hay visor interno de imágenes DICOM</li>
+			<li>No hay visor interno de registros</li>
+			<li>Basado en proyectos: múltiples proyectos separados con configuraciones de caja de arena pueden ser creados y gestionados en la misma máquina</li>
+			<li>El proyecto define modalidades permitidas, clases de almacenamiento, sintaxis de transferencia, tiempos de espera de red y niveles de registro</li>
+			<li>Configuración simplificada de cliente y servidor DICOM</li>
+			<li>Los archivos entrantes no se escriben en un directorio temporal en disco local para procesamiento diferido; en su lugar, se mantienen en una cola de memoria</li>
+			<li>Exportación a AWS S3 Object Store con autenticación de usuario AWS Cognito</li>
+			<li>Creación de Búsqueda de Pacientes / Índice en formato CSV con el número de series y el número de instancias adjuntas a cada fila de estudio</li>
+			<li>Permite procesos concurrentes de importación y exportación</li>
+			<li>Proporciona un método fiable de recuperación de estudios en todos los niveles (Estudio, Serie, Instancia) para manejar servidores DICOM remotos que implementan C-MOVE asincrónico (por ejemplo, VNA)</li>
+			<li>Almacén de datos rápido en memoria para el Modelo de Datos del Anonimizador</li>
+		</ol>
+		
+</div>
+</body>
+</html>

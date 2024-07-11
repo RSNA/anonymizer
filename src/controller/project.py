@@ -1,3 +1,11 @@
+"""
+This module defines the ProjectController class, which acts as a DICOM Application Entity (AE) and provides various DICOM services such as C-STORE, C-MOVE, C-ECHO, C-FIND, and C-SEND.
+
+The ProjectController class handles association requests, performs DICOM queries and retrievals, and provides export methods for sending anonymized studies to AWS S3 and exporting PHI (Protected Health Information) to CSV.
+
+The module also defines several data classes used for request and response objects, as well as data structures for organizing DICOM hierarchy.
+"""
+
 import os
 from psutil import virtual_memory
 from typing import cast, Dict, Optional, List, Tuple, Any
@@ -628,7 +636,7 @@ class ProjectController(AE):
             bool: True if the C-ECHO operation is successful, False otherwise.
         """
         logger.info(f"Perform C-ECHO from {self.model.scu} to {scp}")
-        echo_association: Association = None
+        echo_association: Association | None = None
         try:
             echo_association = self._connect_to_scp(scp, [self.get_verification_context()])
 
@@ -1844,6 +1852,11 @@ class ProjectController(AE):
                     # Update Move stats from status:
                     series.update_move_stats(status)
 
+                    # Update Pending Instances count from AnonymizerModel, relevant for Syncrhonous Move:
+                    study.pending_instances = self.anonymizer.model.get_pending_instance_count(
+                        study.ptid, study.uid, study.get_number_of_instances()
+                    )
+
                 # 3. Wait for ALL instances of Series to be Imported by verifying with AnonymizerModel
                 #    Timeout if a pending instance is not received within NetworkTimeout
                 #    or abort on user signal:
@@ -2197,7 +2210,7 @@ class ProjectController(AE):
         """
         logger.info(f"_export_patient {patient_id} start, export to :{dest_name}")
 
-        export_association = None
+        export_association: Association | None = None
         files_sent = 0
         try:
             # Load DICOM files to send from active local storage directory for this patient:
@@ -2283,12 +2296,12 @@ class ProjectController(AE):
                 # TODO: Implement Transcoding here
                 last_sop_class_uid = None
                 last_transfer_synax = None
-                export_association = None
                 for dicom_file_path in export_instance_paths.values():
                     time.sleep(self._export_file_time_slice_interval)
                     if self._abort_export:
                         logger.error(f"_export_patient patient_id: {patient_id} aborted")
-                        export_association.abort()
+                        if export_association:
+                            export_association.abort()
                         return
 
                     # Load dataset from file:
@@ -2307,7 +2320,12 @@ class ProjectController(AE):
                         last_sop_class_uid = ds.SOPClassUID
                         last_transfer_synax = ds.file_meta.TransferSyntaxUID
 
-                    dcm_response: Dataset = export_association.send_c_store(dataset=ds)
+                    if export_association:
+                        dcm_response: Dataset = export_association.send_c_store(dataset=ds)
+                    else:
+                        logging.error(
+                            f"Internal error, _connect_to_scp did not establish association and did not raise corrresponding exception"
+                        )
 
                     if not hasattr(dcm_response, "Status"):
                         raise TimeoutError("send_c_store timeout")

@@ -12,6 +12,41 @@ logger = logging.getLogger(__name__)
 
 
 class SOPClassesDialog(tk.Toplevel):
+    """
+    A dialog window for selecting storage classes.
+
+    Args:
+        parent (tk.Tk): The parent window.
+        sop_classes (list[str]): The list of selected storage classes.
+        modalities (list[str]): The list of modalities.
+
+    Attributes:
+        storage_codes (list[str]): The list of storage codes.
+        sc_lookup (dict): A dictionary mapping storage class values to keys.
+        attr_map (dict): A dictionary mapping attribute names to their display names, width, and justification.
+        root (ctk.CTk): The root window.
+        sop_classes (list[str]): The list of selected storage classes.
+        modalities (list[str]): The list of modalities.
+        _user_input (Union[list, None]): The user input (selected storage classes).
+        _tree (ttk.Treeview): The treeview widget for displaying storage classes.
+        _button_frame (ctk.CTkFrame): The frame for buttons.
+        _select_all_button (ctk.CTkButton): The button for selecting all storage classes.
+        _from_modalities_selection_button (ctk.CTkButton): The button for selecting storage classes from modalities.
+        _ok_button (ctk.CTkButton): The button for confirming the selection.
+
+    Methods:
+        _create_widgets(): Create the widgets for the dialog.
+        _on_item_select(event): Callback function for item selection in the treeview.
+        _select_all_button_pressed(): Event handler for the "Select All" button.
+        _from_modalities_selection_button_pressed(): Event handler for the "From Modalities" button.
+        _enter_keypress(event): Event handler for the Enter key press.
+        _ok_event(event): Event handler for the Ok button.
+        _escape_keypress(event): Event handler for the Escape key press.
+        _on_cancel(): Event handler for canceling the dialog.
+        get_input(): Get the user input (selected storage classes).
+
+    """
+
     storage_codes = [
         "DX",
         "CR",

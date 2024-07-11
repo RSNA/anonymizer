@@ -1,3 +1,7 @@
+"""
+This module provides utility functions related to network operations.
+"""
+
 import ifaddr
 import socket
 import ipaddress

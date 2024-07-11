@@ -1,3 +1,8 @@
+
+"""
+This module contains the ExportView class, which is a tkinter Toplevel window for exporting studies.
+The ExportView class provides a user interface for selecting and exporting studies from a project.
+"""
 import os
 from datetime import datetime
 import logging
@@ -19,16 +24,52 @@ logger = logging.getLogger(__name__)
 
 
 class ExportView(tk.Toplevel):
+    """
+    Represents a view for exporting data.
+
+    Args:
+        parent (Dashboard): The parent dashboard.
+        project_controller (ProjectController): The project controller.
+        mono_font (ctk.CTkFont): The mono font.
+        title (str | None): The title of the view.
+
+    Attributes:
+        ux_poll_export_response_interval (int): The interval for polling export response in milliseconds.
+        _data_font (ctk.CTkFont): The mono font.
+        _attr_map (dict): A dictionary mapping column ids to column attributes.
+        _parent (Dashboard): The parent dashboard.
+        _controller (ProjectController): The project controller.
+        _project_model (ProjectModel): The project model.
+        _export_to_AWS (bool): Flag indicating whether to export to AWS.
+        _export_active (bool): Flag indicating whether an export is active.
+        _patients_processed (int): The number of patients processed.
+        _patients_to_process (int): The number of patients to process.
+        _patient_ids_to_export (list): The list of patient IDs to export.
+        _export_frame (ctk.CTkFrame): The export frame.
+        _tree (ttk.Treeview): The treeview for displaying export attributes.
+        _error_frame (ctk.CTkFrame): The error frame.
+        _error_label (ctk.CTkLabel): The label for displaying error messages.
+        _status_frame (ctk.CTkFrame): The status frame.
+        _status (ctk.CTkLabel): The label for displaying export status.
+        _progressbar (ctk.CTkProgressBar): The progress bar for export.
+        _cancel_export_button (ctk.CTkButton): The button for canceling export.
+        _create_phi_button (ctk.CTkButton): The button for creating patient lookup.
+        _refresh_button (ctk.CTkButton): The button for refreshing the view.
+        _select_all_button (ctk.CTkButton): The button for selecting all patients.
+        _clear_selection_button (ctk.CTkButton): The button for clearing the selection.
+        _export_button (ctk.CTkButton): The button for initiating export.
+    """
     ux_poll_export_response_interval = 500  # milli-seconds
 
     def __init__(
         self,
         parent: Dashboard,
         project_controller: ProjectController,
+        mono_font: ctk.CTkFont,
         title: str | None = None,
     ):
         super().__init__(master=parent)
-        self._data_font = parent.master.mono_font  # get mono font from app
+        self._data_font = mono_font  # get mono font from app
         # Export attributes to display in the results Treeview:
         # Key: column id: (column name, width (in chars), centre justify, stretch column of resize)
         self._attr_map = {
