@@ -1,5 +1,5 @@
 # Deployment Notes:
-# For OSX: To run executable after download requires removing the extended attributes via xattr -r -c <path to exe/app>
+# For MacOS: To run executable after download requires removing the extended attributes via xattr -r -c <path to exe/app>
 
 name: anonymizer-test-build-upload
 
@@ -14,37 +14,7 @@ permissions:
 
 jobs:
 
-  release:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-
-    - name: Set up Python
-      uses: actions/setup-python@v3
-      with:
-          python-version: "3.11"
-
-    - name: set env.version
-      run: |
-        python src/set_gha_env.py
-      
-    - name: Create Release
-      if: "!contains(env.version, 'RC')"
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }} 
-      with:
-        tag_name: ${{ env.version }}
-        release_name: Release ${{ env.version }}
-        draft: false
-        prerelease: true
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-  
   build:
-    needs: release
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -97,20 +67,5 @@ jobs:
         if-no-files-found: error
         retention-days: 1
 
-    - name: Print upload_url
-      run:  |
-        echo "Upload URL: ${{ needs.release.outputs.upload_url }}"
-  
-
-    - name: Upload Release Asset 
-      if: "!contains(env.version, 'RC')"
-      uses: actions/upload-release-asset@v1
-      # continue-on-error: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.release.outputs.upload_url }}
-        asset_path: ${{ runner.os == 'macOS' && 'src/dist/dist.dmg' || 'src/dist/dist.zip' }}
-        asset_name: anonymizer-${{ matrix.os }}-${{ env.version }}.zip
-        asset_content_type: application/zip
-
+    
+    
