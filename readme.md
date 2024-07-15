@@ -6,7 +6,7 @@
 
 ![WelcomeView](src/assets/locales/en_US/html/images/Welcome_en_win_light.png)
 ## Installation 
-Select the correct binary download for your platform from the available [releases](https://github.com/mdevans/anonymizer/releases)
+Select the correct binary download for your platform from the available [releases](https://github.com/rsna/anonymizer/releases)
 ### Windows
 1. Download and extract zip to desired application directory.
 2. Execute Anonymizer.exe and override User Account Control to allow the program to "Run anyway".
@@ -27,7 +27,7 @@ Select the correct binary download for your platform from the available [release
 4. Execute `./Anonymizer_17.*` 
 5. Logs will be written to `~/Logs/Anonymizer/anonymizer.log`
 ## Documentation
-[Help files](https://mdevans.github.io/anonymizer/index.html)
+[Help files](https://rsna.github.io/anonymizer)
 ## Development
 ### Setup
 1. Setup python enviroment (>3.10), recommend using pyenv
