@@ -6,17 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [17.1.1] -
 ### Radon raw totals:
-{'LOC': 9597,
- **'LLOC': 5038**,
- 'SLOC': 6852,
- 'Comments': 734,
- 'Multi': 718,
- 'Blank': 1498,
- 'Single comments': 529}
+{'LOC': 10367,
+ **'LLOC': 5237**,
+ 'SLOC': 6990,
+ 'Comments': 737,
+ 'Multi': 1212,
+ 'Blank': 1638,
+ 'Single comments': 527}
 ### Changed
 - Module structure refactor into src/ anticipating pypi module rsna-anonymizer for V18 for server cmd line deployment
 - Moved local_storage_path from storage module to ProjectController
 - OSX build process now createds dmg using create-dmg
+- utils.ux_fields string entry width mods
+- DICOMNode DNS lookup width increased to 255, entry display width 40 chars
+- Storage directory location default: user home folder / Documents / RSNA Anonymizer / ProjectName
 ### Added
 - Full code documentation including mermaid class diagram
 - Translation infrastructure using gettext subsystem
