@@ -52,7 +52,6 @@ Select the correct binary download for your platform from the available [release
 1. See: `.github/workflows/build.yml`
 2. Triggered by push and pull request on master branch
 3. Includes executable build step using `build.py`
-3. If `__version__` contains 'RC' (aka Release Candidate) then build artifacts not automatically released.
 ### Code Metrics 
 #### Using radon
 ```
