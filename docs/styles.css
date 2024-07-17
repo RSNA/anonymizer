@@ -1,0 +1,13 @@
+body {
+    background-color: #f0f0f0;
+    color: #014F8F; 
+    font-family:Tahoma; 
+    font-size: 1.25em;
+    .image-list-container {
+        display: flex;
+        align-items: center;
+    }
+    .image-list-container img {
+        margin-right: 10px;
+    }
+}
