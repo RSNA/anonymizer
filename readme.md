@@ -327,15 +327,12 @@ classDiagram
     class DICOMNodeDialog {
         <<view.dicom_node_dialog>>
     }
-    DICOMNodeDialog "1" --* "1" DICOMNode
     class AWSCognitoDialog {
         <<aws_cognito_dialog>>
     }
-    AWSCognitoDialog "1" --* "1" AWSCognito
     class NetworkTimeoutsDialog {
         <<view.settings.network_timeouts.dialog>>
     }
-    NetworkTimeoutsDialog "1" --* NetworkTimeouts
     class ModalitiesDialog {
         <<view.settings.modalities_dialog>>
     } 
@@ -348,7 +345,6 @@ classDiagram
     class LoggingLevelsDialog {
         <<view.settings.logging_levels_dialog>>
     }
-    LoggingLevelsDialog "1" --* LoggingLevels
     class SettingsDialog {
         <<view.settings.settings_dialog>>
     }
@@ -357,6 +353,7 @@ classDiagram
     SettingsDialog "1" --* "1" DICOMNodeDialog: query_server
     SettingsDialog "1" --* "1" DICOMNodeDialog: export_server
     SettingsDialog "1" --* "1" AWSCognitoDialog: aws_cognito
+    SettingsDialog "1" --* "1" ModalitiesDialog: modalities
     SettingsDialog "1" --* "1" NetworkTimeoutsDialog: network_timeouts
     SettingsDialog "1" --* "1" SOPClassesDialog: sop_classes
     SettingsDialog "1" --* "1" TransferSyntaxesDialog: transfer_syntaxes
@@ -365,7 +362,6 @@ classDiagram
         <<view.dashboard>>
     }
     Dashboard "1" --> "1" ProjectController
-    Dashboard "1" ..> "1" Totals
     class QueryView {
         <<view.query_retrieve_import>>
     }
@@ -375,16 +371,12 @@ classDiagram
         <<import_studies_dialog>>
     }
     ImportStudiesDialog "1" --> "1" ProjectController
-    ImportStudiesDialog "1" ..> "*" StudyUIDHierarchy
-    ImportStudiesDialog "1" ..> "1" MoveStudiesRequest
     class ImportFilesDialog {
         <<view.import_files_dialog>>
     }
-    ImportStudiesDialog "1" --> "1" AnonymizerController
+    ImportFilesDialog "1" --> "1" AnonymizerController
     class ExportView {
         <<view.export>>
-        + __init__(parent, project_controller, title)
-        + get_input()
     }
     ExportView "1" --> "1" ProjectController
     ExportView "1" --> "1" Dashboard
