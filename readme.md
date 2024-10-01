@@ -30,10 +30,11 @@ Select the correct binary download for your platform from the available [release
 [Help files](https://rsna.github.io/anonymizer)
 ## Development
 ### Setup
-1. Setup python enviroment (>3.10), recommend using pyenv
-2. `pip install pipenv`
-3. Clone repository
-4. Setup virtual enviroment and install all  dependencies listed in Pipfile: `pipenv install --dev`
+1. Setup python enviroment (>3.10) which includes Tkinter, recommend using pyenv with MacOS & Linux
+2. Ensure python is installed with Tkinter: `python -m tkinter`, a small GUI window should open
+3. Install virtual environment & package manager: `pip install pipenv`
+4. Clone repository
+5. Setup virtual enviroment and install all dependencies listed in Pipfile: `pipenv install --dev`
 ### Unit Testing 
 #### For model and controller with coverage
 ```

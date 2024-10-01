@@ -11,10 +11,7 @@ from pynetdicom._version import __version__ as pynetdicom_version
 
 # The following unused imports are for pyinstaller
 # TODO: pyinstaller cmd line special import doesn't work
-from pydicom.encoders import (
-    pylibjpeg,
-    gdcm,
-)
+# from pydicom.encoders import pylibjpeg
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -41,13 +38,8 @@ class Anonymizer(ctk.CTk):
 
     project_open_startup_dwell_time = 100  # milliseconds
     metrics_loop_interval = 1000  # milliseconds
-    # Font for main menu items, size is not consistent across platforms
-    if platform.system() == "Darwin":
-        menu_font = ("", 13)
-    else:
-        menu_font = ("", 11)
 
-    def get_title(self):
+    def get_title(self) -> str:
         return _("RSNA DICOM Anonymizer Version").strip() + " " + __version__
 
     def get_app_state_path(self) -> Path:
@@ -64,6 +56,9 @@ class Anonymizer(ctk.CTk):
         ctk.set_default_color_theme(theme)
         logging.info(f"ctk.ThemeManager.theme:\n{pformat(ThemeManager.theme)}")
         self.mono_font = self._init_mono_font()
+        # Font for main menu items, size is not consistent across platforms
+        self.menu_font = None  # tkFont.Font(size=13 if platform.system() == "Darwin" else 11)
+
         ctk.AppearanceModeTracker.add(self._appearance_mode_change)
         self._appearance_mode_change(ctk.get_appearance_mode())  # initialize non-ctk widget styles
 
@@ -82,8 +77,7 @@ class Anonymizer(ctk.CTk):
         self.dashboard: Dashboard | None = None
         self.resizable(False, False)
         self.title(self.get_title())
-        self.menu_bar = tk.Menu(master=self)
-        self.set_menu_project_closed()  # creates self.menu_bar, populates Open Recent list & Help Menu
+        self.menu_bar = self.create_project_closed_menu_bar()
         self.after(self.project_open_startup_dwell_time, self._open_project_startup)
 
     def _init_mono_font(self) -> ctk.CTkFont:
@@ -303,6 +297,8 @@ class Anonymizer(ctk.CTk):
                 self.recent_project_dirs.insert(0, self.current_open_project_dir)
                 self.save_config()
 
+            self._open_project()
+
         except Exception as e:
             logger.error(f"Error creating Project Controller: {str(e)}")
             messagebox.showerror(
@@ -311,10 +307,11 @@ class Anonymizer(ctk.CTk):
                 parent=self,
             )
         finally:
-            self._open_project()
             self.enable_file_menu()
 
     def open_project(self, project_dir: Path | None = None):
+        logger.debug("open_project")
+
         self.disable_file_menu()
 
         logging.info(f"Open Project project_dir={project_dir}")
@@ -430,6 +427,7 @@ class Anonymizer(ctk.CTk):
             self.open_project(self.current_open_project_dir)
 
     def _open_project(self):
+        logger.debug("_open_project")
 
         if not self.controller:
             logger.info(f"Open Project Cancelled, no controller")
@@ -445,13 +443,15 @@ class Anonymizer(ctk.CTk):
         )
 
         self.welcome_view.destroy()
+        self.protocol("WM_DELETE_WINDOW", self.close_project)
+        self.menu_bar = self.create_project_open_menu_bar()
+
         self.dashboard = Dashboard(
             self, query_callback=self.query_retrieve, export_callback=self.export, controller=self.controller
         )
-        self.protocol("WM_DELETE_WINDOW", self.close_project)
-        self.set_menu_project_open()
         self.dashboard.update_totals(self.controller.anonymizer.model.get_totals())
         self.dashboard.focus_set()
+
         logger.info(f"metrics_loop start interval={self.metrics_loop_interval}ms")
         self.metrics_loop()
 
@@ -503,7 +503,7 @@ class Anonymizer(ctk.CTk):
 
         self.current_open_project_dir = None
         self.controller = None
-        self.set_menu_project_closed()
+        self.menu_bar = self.create_project_closed_menu_bar()
         self.title(self.get_title())
         self.save_config()
 
@@ -851,125 +851,90 @@ class Anonymizer(ctk.CTk):
         self.help_views[view_name] = HTMLView(self, title=view_name, html_file_path=html_file_path.as_posix())
         self.help_views[view_name].focus()
 
-    def get_help_menu(self):
-        help_menu = tk.Menu(self.menu_bar, tearoff=0)
+    def get_help_menu(self, menu_bar: tk.Menu):
+        help_menu = tk.Menu(menu_bar, tearoff=0)
         # Get all html files in assets/locale/*/html/ directory
         # Sort by filename number prefix
         html_dir = Path("assets/locales/" + str(get_current_language_code() or "en_US") + "/html/")
         html_file_paths = sorted(html_dir.glob("*.html"), key=lambda path: int(path.stem.split("_")[0]))
 
-        for i, html_file_path in enumerate(html_file_paths):
+        for _, html_file_path in enumerate(html_file_paths):
             label = self.help_filename_to_title(html_file_path)
-            help_menu.add_command(
-                label=label,
-                font=self.menu_font,
-                command=lambda path=html_file_path: self.show_help_view(path),
-            )
+            help_menu.add_command(label=label, command=lambda path=html_file_path: self.show_help_view(path))
 
         return help_menu
 
-    def set_menu_project_closed(self):
-        if self.menu_bar:
-            self.menu_bar.delete(0, tk.END)
-
-        # Font does not effect main menu items, only sub-menus on Windows
+    def create_project_closed_menu_bar(self) -> tk.Menu:
+        logger.debug("create_project_closed_menu_bar")
+        menu_bar = tk.Menu(master=self)
 
         # File Menu:
         file_menu = tk.Menu(self, tearoff=0)
-        file_menu.add_command(
-            label=_("New Project"),
-            font=self.menu_font,
-            command=self.new_project,  # accelerator="Command+N"
-        )
-        file_menu.add_command(
-            label=_("Open Project"),
-            font=self.menu_font,
-            command=self.open_project,  # accelerator="Command+O"
-        )
+        file_menu.add_command(label=_("New Project"), command=self.new_project)
+        file_menu.add_command(label=_("Open Project"), command=self.open_project)
         if self.recent_project_dirs:
             # Open Recent Menu (cascaded)
             open_recent_menu = tk.Menu(file_menu, tearoff=0, name="open_recent_menu")
-            file_menu.add_cascade(label=_("Open Recent"), font=self.menu_font, menu=open_recent_menu)
-
+            file_menu.add_cascade(label=_("Open Recent"), menu=open_recent_menu)
             for directory in self.recent_project_dirs:
-                open_recent_menu.add_command(
-                    label=str(directory),
-                    font=self.menu_font,
-                    command=lambda dir=directory: self.open_project(dir),
-                )
+                open_recent_menu.add_command(label=str(directory), command=lambda dir=directory: self.open_project(dir))
+
         file_menu.add_separator()
-        file_menu.add_command(
-            label=_("Exit"),
-            font=self.menu_font,
-            command=self.quit,
-            # accelerator="Command+Q",
-        )
-        self.menu_bar.add_cascade(label=_("File"), font=self.menu_font, menu=file_menu)
+
+        file_menu.add_command(label=_("Exit"), command=self.quit)
+
+        menu_bar.add_cascade(label=_("File"), menu=file_menu)
 
         # Help Menu:
-        self.menu_bar.add_cascade(label=_("Help"), font=self.menu_font, menu=self.get_help_menu())
-        self.config(menu=self.menu_bar)
+        menu_bar.add_cascade(label=_("Help"), menu=self.get_help_menu(menu_bar))
 
-    def set_menu_project_open(self):
-        # Reset menu bar:
-        if self.menu_bar:
-            self.menu_bar.delete(0, tk.END)
+        # Attach new menu bar:
+        self.config(menu=menu_bar)
+        return menu_bar
+
+    def create_project_open_menu_bar(self) -> tk.Menu:
+        logger.debug("create_project_open_menu_bar")
+        menu_bar = tk.Menu(master=self)
 
         # File Menu:
         file_menu = tk.Menu(self, tearoff=0)
-        file_menu.add_command(
-            label=_("Import Files"),
-            font=self.menu_font,
-            command=self.import_files,  # accelerator="Command+F"
-        )
-        file_menu.add_command(
-            label=_("Import Directory"),
-            font=self.menu_font,
-            command=self.import_directory,
-            # accelerator="Command+D",
-        )
+        file_menu.add_command(label=_("Import Files"), command=self.import_files)
+        file_menu.add_command(label=_("Import Directory"), command=self.import_directory)
 
         file_menu.add_separator()
-        file_menu.add_command(
-            label=_("Clone Project"),
-            font=self.menu_font,
-            command=self.clone_project,
-            # accelerator="Command+C",
-        )
-        file_menu.add_command(
-            label=_("Close Project"),
-            font=self.menu_font,
-            command=self.close_project,
-            # accelerator="Command+P",
-        )
+
+        file_menu.add_command(label=_("Clone Project"), command=self.clone_project)
+        file_menu.add_command(label=_("Close Project"), command=self.close_project)
+
         file_menu.add_separator()
-        file_menu.add_command(
-            label=_("Exit"),
-            font=self.menu_font,
-            command=self.quit,
-            # accelerator="Command+Q",
-        )
-        self.menu_bar.add_cascade(label=_("File"), font=self.menu_font, menu=file_menu)
+        file_menu.add_command(label=_("Exit"), command=self.quit)
+
+        menu_bar.add_cascade(label=_("File"), menu=file_menu)
 
         # View Menu:
         view_menu = tk.Menu(self, tearoff=0)
-        view_menu.add_command(
-            label=_("Project"),
-            font=self.menu_font,
-            command=self.settings,
-            # accelerator="Command+S",
-        )
-        self.menu_bar.add_cascade(label=_("Settings"), font=self.menu_font, menu=view_menu)
+        view_menu.add_command(label=_("Project"), command=self.settings)
+
+        menu_bar.add_cascade(label=_("Settings"), menu=view_menu)
 
         # Help Menu:
-        self.menu_bar.add_cascade(label=_("Help"), font=self.menu_font, menu=self.get_help_menu())
-        self.config(menu=self.menu_bar)
+        menu_bar.add_cascade(label=_("Help"), menu=self.get_help_menu(menu_bar))
+
+        # Attach new menu bar:
+        self.config(menu=menu_bar)
+        return menu_bar
 
     def disable_file_menu(self):
-        self.menu_bar.entryconfig(_("File"), state="disabled")
+        logger.debug("disable_file_menu")
+
+        if self.menu_bar:
+            self.menu_bar.entryconfig(_("File"), state="disabled")
 
     def enable_file_menu(self):
-        self.menu_bar.entryconfig(_("File"), state="normal")
+        logger.debug("enable_file_menu")
+
+        if self.menu_bar:
+            self.menu_bar.entryconfig(_("File"), state="normal")
 
 
 def main():

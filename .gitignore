@@ -14,3 +14,4 @@ dicom/*
 **/versionfile.txt
 **/radon_results.txt
 Pipfile.lock
+.python-version
