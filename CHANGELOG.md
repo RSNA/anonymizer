@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Release Candidate
+## [17.2.1] -
+### Changed
+- anonymizer.py menu bar handling, resolve issue [#14](https://github.com/RSNA/anonymizer/issues/14), 
+- anonymizer.py remove menu font - * to verify on windows platforms
+- Fix build.yml badge to point to correct github action build result in readme.md
+
+## Added
+- Add tcl/tk install and test to development setup in readme.md
+
+
 ## [17.1.1] -
 ### Radon raw totals:
 {'LOC': 10367,

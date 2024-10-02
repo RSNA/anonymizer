@@ -150,7 +150,7 @@ class Anonymizer(ctk.CTk):
         self.help_views = {}
         self.title(self.get_title())
         self.recent_project_dirs = []
-        self.set_menu_project_closed()  # resets Help Menu
+        self.menu_bar = self.create_project_closed_menu_bar()  # resets Help Menu
         self.save_config()
         self.welcome_view.destroy()
         self.welcome_view = WelcomeView(self, self.change_language)
@@ -417,7 +417,7 @@ class Anonymizer(ctk.CTk):
             )
             if self.is_recent_directory(project_dir):
                 self.recent_project_dirs.remove(project_dir)
-            self.set_menu_project_closed()
+            self.menu_bar = self.create_project_closed_menu_bar()
             self.save_config()
 
         self.enable_file_menu()
