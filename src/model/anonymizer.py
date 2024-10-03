@@ -2,6 +2,7 @@
 This module contains the AnonymizerModel class, which is responsible for storing PHI (Protected Health Information)
 and anonymization lookups. It also includes data classes for Series, Study, and PHI, as well as a Totals namedtuple.
 """
+
 from typing import List
 from collections import namedtuple
 from pathlib import Path
@@ -60,7 +61,7 @@ class PHI:
     studies: List[Study] = field(default_factory=list)
 
 
-Totals = namedtuple("Totals", ["patients", "studies", "series", "instances"])
+Totals = namedtuple("Totals", ["patients", "studies", "series", "instances", "quarantined"])
 
 
 class AnonymizerModel:
@@ -69,7 +70,7 @@ class AnonymizerModel:
     """
 
     # Model Version Control
-    MODEL_VERSION = 1
+    MODEL_VERSION = 2
     MAX_PATIENTS = 1000000  # 1 million patients
 
     _lock = threading.Lock()
@@ -99,6 +100,7 @@ class AnonymizerModel:
             _studies (int): The number of studies.
             _series (int): The number of series.
             _instances (int): The number of instances.
+            _quarantined (int): The number of instances quarantined. [V2]
         """
         self._version = AnonymizerModel.MODEL_VERSION
         self._site_id = site_id
@@ -118,6 +120,7 @@ class AnonymizerModel:
         self._studies = 0
         self._series = 0
         self._instances = 0
+        self._quarantined = 0  # [V2]
 
         self.clear_lookups()  # initialises default patient_id_lookup and phi_lookup
         self.load_script(script_path)
@@ -209,7 +212,7 @@ class AnonymizerModel:
             self._phi_lookup[self.default_anon_pt_id] = PHI()  # Default PHI for Anonymized PatientID
 
     def get_totals(self) -> Totals:
-        return Totals(self._patients, self._studies, self._series, self._instances)
+        return Totals(self._patients, self._studies, self._series, self._instances, self._quarantined)
 
     def get_phi(self, anon_patient_id: str) -> PHI | None:
         with self._lock:
@@ -226,6 +229,9 @@ class AnonymizerModel:
     def set_phi(self, anon_patient_id: str, phi: PHI):
         with self._lock:
             self._phi_lookup[anon_patient_id] = phi
+
+    def increment_quarantined(self):
+        self._quarantined += 1
 
     def get_anon_patient_id(self, phi_patient_id: str) -> str | None:
         return self._patient_id_lookup.get(phi_patient_id)
@@ -400,7 +406,7 @@ class AnonymizerModel:
 
     def capture_phi(self, source: str, ds: Dataset, date_delta: int) -> None:
         """
-        Capture PHI (Protected Health Information) from a dataset and update the PHI lookup.
+        Capture PHI (Protected Health Information) from a dataset, update the PHI lookup and the dataset statistics (patients,studies,series,instances)
 
         Args:
             source (str): The source of the dataset.
@@ -408,6 +414,7 @@ class AnonymizerModel:
             date_delta (int): The time difference in days.
 
         Raises:
+            ValueError:  If any of StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID are not present in dataset
             LookupError: If the PHI PatientID is not found in the patient_id_lookup or phi_lookup.
             LookupError: If the existing patient with Anon PatientID is not found in phi_lookup.
             LookupError: If the existing study is not found in phi_lookup.
@@ -420,8 +427,10 @@ class AnonymizerModel:
             # ds must have attributes: StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID
             req_uids = ["StudyInstanceUID", "SeriesInstanceUID", "SOPInstanceUID"]
             if not all(hasattr(ds, uid) for uid in req_uids):
-                logger.critical(f"Critical Error dataset missing primary UIDs: {req_uids}")
-                return
+                msg = f"Critical Error dataset missing primary UIDs: {req_uids}"
+                logger.error(msg)
+                raise ValueError(msg)
+
             # If PHI PatientID is missing in dataset, as per DICOM Standard, pydicom should return "", handle missing attribute
             # Missing or blank corresponds to AnonymizerModel.DEFAULT_ANON_PATIENT_ID ("000000") initialised in AnonymizerModel.clear_lookups()
             phi_ptid = ds.PatientID.strip() if hasattr(ds, "PatientID") else ""

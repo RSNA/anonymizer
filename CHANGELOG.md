@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Release Candidate
 ## [17.2.1] -
 ### Changed
-- anonymizer.py menu bar handling, resolve issue [#14](https://github.com/RSNA/anonymizer/issues/14), 
+- anonymizer.py menu bar handling refactored, resolve issue [#14](https://github.com/RSNA/anonymizer/issues/14), 
 - anonymizer.py remove menu font - * to verify on windows platforms
 - Fix build.yml badge to point to correct github action build result in readme.md
+- github action: build.yml change from python 3.11 to 3.12
+- resolve issue [#4](https://github.com/RSNA/anonymizer/issues/4):
+    - model/project.py default_local_server changed IP from 127.0.0.1 to 0.0.0.0
+    - view/settings/dicom_node_dialog ensure "0.0.0.0" is provided to IP address dropdown
 
 ## Added
 - Add tcl/tk install and test to development setup in readme.md

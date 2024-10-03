@@ -1,4 +1,4 @@
-# Run from github actions to set the version in the environment file to be accessed in from build.yml release step
+# Run from github actions to set the version in the environment file to be accessed from build.yml release step
 
 import os
 

@@ -115,7 +115,7 @@ class ProjectModel:
 
     @staticmethod
     def default_local_server() -> DICOMNode:
-        return DICOMNode("127.0.0.1", 1045, _("ANONYMIZER"), True)
+        return DICOMNode("0.0.0.0", 1045, _("ANONYMIZER"), True)
 
     @staticmethod
     def default_remote_scps() -> Dict[str, DICOMNode]:

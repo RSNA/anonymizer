@@ -16,6 +16,7 @@ For more information, refer to the legacy anonymizer documentation: https://mirc
 
 import os
 import time
+from enum import Enum
 from shutil import copyfile
 import re
 import logging
@@ -33,6 +34,15 @@ from model.project import DICOMNode, ProjectModel
 from model.anonymizer import AnonymizerModel
 
 logger = logging.getLogger(__name__)
+
+
+class QuarantineDirectories(Enum):
+    INVALID_DICOM = _("Invalid_DICOM")
+    DICOM_READ_ERROR = _("DICOM_Read_Error")
+    MISSING_ATTRIBUTES = _("Missing_Attributes")
+    INVALID_STORAGE_CLASS = _("Invalid_Storage_Class")
+    CAPTURE_PHI_ERROR = _("Capture_PHI_Error")
+    STORAGE_ERROR = _("Storage_Error")
 
 
 class AnonymizerController:
@@ -73,13 +83,6 @@ class AnonymizerController:
     ]
 
     def __init__(self, project_model: ProjectModel):
-        # Quarantine Errors / Sub-directories:
-        self.QUARANTINE_INVALID_DICOM = _("Invalid_DICOM")
-        self.QUARANTINE_DICOM_READ_ERROR = _("DICOM_Read_Error")
-        self.QUARANTINE_MISSING_ATTRIBUTES = _("Missing_Attributes")
-        self.QUARANTINE_INVALID_STORAGE_CLASS = _("Invalid_Storage_Class")
-        self.QUARANTINE_CAPTURE_PHI_ERROR = _("Capture_PHI_Error")
-        self.QUARANTINE_STORAGE_ERROR = _("Storage_Error")
         self._active = False
         self.project_model = project_model
         # Initialise AnonymizerModel datafile full path:
@@ -219,7 +222,31 @@ class AnonymizerController:
     def get_quarantine_path(self) -> Path:
         return Path(self.project_model.storage_dir, self.project_model.PRIVATE_DIR, self.project_model.QUARANTINE_DIR)
 
-    def _write_to_quarantine(self, e: Exception, ds: Dataset, quarantine_error: str) -> str:
+    def _move_file_to_quarantine(self, file: Path, quarantine: QuarantineDirectories) -> bool:
+        """Writes the file to the specified quarantine sub-directory.
+
+        Args:
+            file (Path): The file to be quarantined.
+            sub_dir (str): The quarantine sub-directory.
+
+        Returns:
+            bool: True on successful move, False otherwise.
+        """
+        try:
+            qpath = self.get_quarantine_path().joinpath(quarantine.value, f"{file.name}.{time.strftime('%H%M%S')}")
+            logger.error(f"QUARANTINE {file} to {qpath}")
+            if qpath.exists():
+                logger.error(f"File {file} already exists")
+                return False
+            os.makedirs(qpath.parent, exist_ok=True)
+            copyfile(file, qpath)
+            self.model.increment_quarantined()
+            return True
+        except Exception as e:
+            logger.error(f"Error Copying to QUARANTINE: {e}")
+            return False
+
+    def _write_dataset_to_quarantine(self, e: Exception, ds: Dataset, quarantine_error: QuarantineDirectories) -> str:
         """
         Writes the given dataset to the quarantine directory and logs any errors.
 
@@ -231,13 +258,14 @@ class AnonymizerController:
         Returns:
             str: The error message indicating the storage error and the path to the saved dataset.
         """
-        qpath: Path = self.get_quarantine_path().joinpath(quarantine_error)
+        qpath: Path = self.get_quarantine_path().joinpath(quarantine_error.value)
         os.makedirs(qpath, exist_ok=True)
         filename: Path = self.local_storage_path(qpath, ds)
         try:
             error_msg: str = f"Storage Error = {e}, QUARANTINE {ds.SOPInstanceUID} to {filename}"
             logger.error(error_msg)
             ds.save_as(filename, write_like_original=True)
+            self.model.increment_quarantined()
         except:
             logger.critical(f"Critical Error writing incoming dataset to QUARANTINE: {e}")
 
@@ -409,12 +437,9 @@ class AnonymizerController:
             str | None: If an error occurs during the anonymization process, returns the error message.
                         Otherwise, returns None.
 
-        Raises:
-            LookupError: If an error occurs while capturing PHI from the dataset.
-
         Notes:
-            - The anonymization process involves removing PHI from the dataset and saving the anonymized dataset to a DICOM file.
-            - If an error occurs during the anonymization process, the dataset is moved to the quarantine for further analysis.
+            - The anonymization process involves removing PHI from the dataset and saving the anonymized dataset to a DICOM file in project's storage directory.
+            - If an error occurs capturing PHI or storing the anonymized file, the dataset is moved to the quarantine for further analysis.
         """
         self._model_change_flag = True  # for autosave manager
 
@@ -425,9 +450,11 @@ class AnonymizerController:
 
         # Capture PHI and source:
         try:
-            self.model.capture_phi(str(source), ds, date_delta)  # May raise LookupError
-        except LookupError as e:
-            return self._write_to_quarantine(e, ds, self.QUARANTINE_CAPTURE_PHI_ERROR)
+            self.model.capture_phi(str(source), ds, date_delta)
+        except ValueError as e:
+            return self._write_dataset_to_quarantine(e, ds, QuarantineDirectories.INVALID_DICOM)
+        except Exception as e:
+            return self._write_dataset_to_quarantine(e, ds, QuarantineDirectories.CAPTURE_PHI_ERROR)
 
         phi_instance_uid = ds.SOPInstanceUID  # if exception, remove this instance from uid_lookup
         try:
@@ -475,27 +502,7 @@ class AnonymizerController:
             # Remove this phi instance UID from lookup if anonymization or storage fails
             # Leave other PHI intact for this patient
             self.model.remove_uid(phi_instance_uid)
-            return self._write_to_quarantine(e, ds, self.QUARANTINE_STORAGE_ERROR)
-
-    def move_to_quarantine(self, file: Path, sub_dir: str) -> bool:
-        """Writes the file to the specified quarantine sub-directory.
-
-        Args:
-            file (Path): The file to be quarantined.
-            sub_dir (str): The quarantine sub-directory.
-
-        Returns:
-            bool: True on successful move, False otherwise.
-        """
-        try:
-            qpath = self.get_quarantine_path().joinpath(sub_dir, file.name)
-            logger.error(f"QUARANTINE {file} to {qpath}")
-            os.makedirs(qpath.parent, exist_ok=True)
-            copyfile(file, qpath)
-            return True
-        except Exception as e:
-            logger.error(f"Error Copying to QUARANTINE: {e}")
-            return False
+            return self._write_dataset_to_quarantine(e, ds, QuarantineDirectories.STORAGE_ERROR)
 
     def anonymize_file(self, file: Path) -> tuple[str | None, Dataset | None]:
         """
@@ -516,35 +523,37 @@ class AnonymizerController:
             InvalidDicomError: If the DICOM file is invalid.
             Exception: If any other unexpected exception occurs during the anonymization process.
         """
+        self._model_change_flag = True  # for autosave manager
+
         try:
             ds: Dataset = dcmread(file)
         except (FileNotFoundError, IsADirectoryError, PermissionError) as e:
             logger.error(str(e))
             return str(e), None
         except InvalidDicomError as e:
-            self.move_to_quarantine(file, self.QUARANTINE_INVALID_DICOM)
-            return str(e), None
+            self._move_file_to_quarantine(file, QuarantineDirectories.INVALID_DICOM)
+            return str(e) + " -> " + _("Quarantined"), None
         except Exception as e:
-            self.move_to_quarantine(file, self.QUARANTINE_DICOM_READ_ERROR)
-            return str(e), None
+            self._move_file_to_quarantine(file, QuarantineDirectories.DICOM_READ_ERROR)
+            return str(e) + " -> " + _("Quarantined"), None
 
         # DICOM Dataset integrity checking:
         missing_attributes: list[str] = self.missing_attributes(ds)
         if missing_attributes != []:
-            self.move_to_quarantine(file, self.QUARANTINE_MISSING_ATTRIBUTES)
-            return f"Missing Attributes: {missing_attributes}", ds
+            self._move_file_to_quarantine(file, QuarantineDirectories.MISSING_ATTRIBUTES)
+            return _("Missing Attributes") + f": {missing_attributes}" + " -> " + _("Quarantined"), ds
 
         # Skip instance if already stored:
         if self.model.get_anon_uid(ds.SOPInstanceUID):
             logger.info(
                 f"Instance already stored:{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}"
             )
-            return (f"Instance already stored", ds)
+            return (_("Instance already stored"), ds)
 
         # Ensure Storage Class (SOPClassUID which is a required attribute) is present in project storage classes
         if ds.SOPClassUID not in self.project_model.storage_classes:
-            self.move_to_quarantine(file, self.QUARANTINE_INVALID_STORAGE_CLASS)
-            return f"Storage Class: {ds.SOPClassUID} mismatch", ds
+            self._move_file_to_quarantine(file, QuarantineDirectories.INVALID_STORAGE_CLASS)
+            return _("Storage Class mismatch") + f": {ds.SOPClassUID}" + " -> " + _("Quarantined"), ds
 
         return self.anonymize(str(file), ds), ds
 

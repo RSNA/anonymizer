@@ -99,11 +99,13 @@ class Dashboard(ctk.CTkFrame):
         self._label_studies = ctk.CTkLabel(self._databoard, font=self._label_font, text=_("Studies"))
         self._label_series = ctk.CTkLabel(self._databoard, font=self._label_font, text=_("Series"))
         self._label_images = ctk.CTkLabel(self._databoard, font=self._label_font, text=_("Images"))
+        self._label_quarantine = ctk.CTkLabel(self._databoard, font=self._label_font, text=_("Quarantine"))
 
         self._label_patients.grid(row=db_row, column=0, padx=self.PAD, pady=(self.PAD, 0))
         self._label_studies.grid(row=db_row, column=1, padx=self.PAD, pady=(self.PAD, 0))
         self._label_series.grid(row=db_row, column=2, padx=self.PAD, pady=(self.PAD, 0))
         self._label_images.grid(row=db_row, column=3, padx=self.PAD, pady=(self.PAD, 0))
+        self._label_quarantine.grid(row=db_row, column=4, padx=self.PAD, pady=(self.PAD, 0))
 
         db_row += 1
 
@@ -111,11 +113,13 @@ class Dashboard(ctk.CTkFrame):
         self._studies_label = ctk.CTkLabel(self._databoard, font=self._data_font, text="0")
         self._series_label = ctk.CTkLabel(self._databoard, font=self._data_font, text="0")
         self._images_label = ctk.CTkLabel(self._databoard, font=self._data_font, text="0")
+        self._quarantined_label = ctk.CTkLabel(self._databoard, font=self._data_font, text="0")
 
         self._patients_label.grid(row=db_row, column=0, padx=self.PAD, pady=(0, self.PAD))
         self._studies_label.grid(row=db_row, column=1, padx=self.PAD, pady=(0, self.PAD))
         self._series_label.grid(row=db_row, column=2, padx=self.PAD, pady=(0, self.PAD))
         self._images_label.grid(row=db_row, column=3, padx=self.PAD, pady=(0, self.PAD))
+        self._quarantined_label.grid(row=db_row, column=4, padx=self.PAD, pady=(0, self.PAD))
 
         self._databoard.grid(
             row=row,
@@ -242,6 +246,7 @@ class Dashboard(ctk.CTkFrame):
         self._studies_label.configure(text=f"{totals.studies}")
         self._series_label.configure(text=f"{totals.series}")
         self._images_label.configure(text=f"{totals.instances}")
+        self._quarantined_label.configure(text=f"{totals.quarantined}")
 
     def _update_dashboard_from_file_system(self):
         if not self._controller:

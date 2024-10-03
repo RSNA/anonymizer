@@ -10,7 +10,7 @@ from pydicom import dcmread
 from pydicom.data import get_testdata_file
 from pydicom.dataset import Dataset
 from src.controller.project import ProjectController
-from src.controller.anonymizer import AnonymizerController
+from src.controller.anonymizer import AnonymizerController, QuarantineDirectories
 
 from tests.controller.dicom_test_files import (
     cr1_filename,
@@ -293,7 +293,7 @@ def test_anonymize_invalid_dicom_file(temp_dir: str, controller: ProjectControll
     assert ds is None
 
     # Ensure file is moved to correct quarantine directory:
-    qpath = Path(anonymizer.get_quarantine_path(), anonymizer.QUARANTINE_INVALID_DICOM, test_filename)
+    qpath = Path(anonymizer.get_quarantine_path(), QuarantineDirectories.INVALID_DICOM.value, test_filename)
     assert qpath.exists()
 
 
@@ -316,8 +316,9 @@ def test_anonymize_dicom_missing_attributes(temp_dir: str, controller: ProjectCo
     assert ds == cr1
 
     # Ensure file is moved to correct quarantine directory:
-    qpath = Path(anonymizer.get_quarantine_path(), anonymizer.QUARANTINE_MISSING_ATTRIBUTES, test_filename)
+    qpath = Path(anonymizer.get_quarantine_path(), QuarantineDirectories.MISSING_ATTRIBUTES.value, test_filename)
     assert qpath.exists()
+
 
 def test_anonymize_storage_error(temp_dir: str, controller: ProjectController):
     anonymizer: AnonymizerController = controller.anonymizer
@@ -334,8 +335,7 @@ def test_anonymize_storage_error(temp_dir: str, controller: ProjectController):
     assert "Storage Error" in error_msg
 
     # Ensure file is moved to correct quarantine directory:
-
-    qpath = Path(anonymizer.get_quarantine_path(), anonymizer.QUARANTINE_STORAGE_ERROR)
+    qpath = Path(anonymizer.get_quarantine_path(), QuarantineDirectories.STORAGE_ERROR.value)
     assert qpath.exists()
     filename: Path = anonymizer.local_storage_path(qpath, cr1)
     assert filename.exists()

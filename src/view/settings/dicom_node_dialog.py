@@ -71,6 +71,10 @@ class DICOMNodeDialog(tk.Toplevel):
                 local_ips = [_("No local IP addresses found.")]
                 logger.error(local_ips[0])
 
+            all_ips = "0.0.0.0"
+            if all_ips not in local_ips:
+                local_ips.append(all_ips)
+
             scp_label = ctk.CTkLabel(self._frame, text=_("Address") + ":")
             scp_label.grid(row=0, column=0, padx=PAD, pady=(PAD, 0), sticky="nw")
 
@@ -78,7 +82,7 @@ class DICOMNodeDialog(tk.Toplevel):
             local_ips_optionmenu = ctk.CTkOptionMenu(
                 self._frame,
                 dynamic_resizing=False,
-                values=local_ips,
+                values=sorted(local_ips),
                 variable=self.ip_var,
             )
             local_ips_optionmenu.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw")
