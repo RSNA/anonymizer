@@ -16,9 +16,9 @@ pywin32-ctypes = "*"
 pefile = "*"
 openpyxl = "*"
 psutil = "*"
+pylibjpeg = {extras = ["all"], version = "*"}
 opencv-python-headless = "*"
 easyocr = "*"
-pylibjpeg = {extras = ["all"], version = "*"}
 
 [dev-packages]
 radon = "*"

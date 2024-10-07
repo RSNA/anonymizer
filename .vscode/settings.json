@@ -43,7 +43,7 @@
     "uids",
     "VNA's"
   ],
-  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.typeCheckingMode": "off",
   "editor.defaultFoldingRangeProvider": "ms-python.black-formatter",
   "editor.defaultFormatter": "ms-python.black-formatter",
   "python.analysis.inlayHints.functionReturnTypes": false,

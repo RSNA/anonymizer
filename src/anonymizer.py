@@ -1,4 +1,5 @@
 import os, sys, json, shutil, time, platform
+
 from pathlib import Path
 from pprint import pformat
 from copy import copy
@@ -12,10 +13,13 @@ from pynetdicom._version import __version__ as pynetdicom_version
 # The following unused imports are for pyinstaller
 # TODO: pyinstaller cmd line special import doesn't work
 # from pydicom.encoders import pylibjpeg
+# pylibjpeg = {extras = ["all"], version = "*"}
 
 import tkinter as tk
+
 from tkinter import ttk, filedialog, messagebox
 import customtkinter as ctk
+
 from customtkinter import ThemeManager
 
 from utils.logging import init_logging
@@ -162,9 +166,10 @@ class Anonymizer(ctk.CTk):
             return
 
         # Update dashboard if anonymizer model has changed:
-        if self.dashboard and self.controller.anonymizer.model_changed():
-            self.dashboard.update_anonymizer_queue(self.controller.anonymizer._anon_Q.qsize())
-            self.dashboard.update_totals(self.controller.anonymizer.model.get_totals())
+        if self.dashboard:
+            self.dashboard.update_anonymizer_queues(*self.controller.anonymizer.queued())
+            if self.controller.anonymizer.model_changed():
+                self.dashboard.update_totals(self.controller.anonymizer.model.get_totals())
 
         self.after(self.metrics_loop_interval, self.metrics_loop)
 
@@ -474,10 +479,8 @@ class Anonymizer(ctk.CTk):
                 self.export_view.destroy()
                 self.export_view = None
 
-        self.save_config()
-
     def close_project(self, event=None):
-        logging.info("Close Project")
+        logger.info("Close Project")
         if self.query_view and self.query_view.busy():
             logger.info(f"QueryView busy, cannot close project")
             messagebox.showerror(
@@ -495,6 +498,19 @@ class Anonymizer(ctk.CTk):
             )
             return
 
+        if not self.controller.anonymizer.idle():
+            logger.info(f"Anonymizer busy, cannot close project")
+            messagebox.showerror(
+                title=_("Anonymizer Workers Busy"),
+                message=_(
+                    "Anonymizer queues are not empty, please wait for workers to process files before closing project."
+                ),
+                parent=self,
+            )
+            return
+
+        # TODO: Do not allow project close if Import Files/Import Directory is busy
+
         self.shutdown_controller()
 
         self.welcome_view = WelcomeView(self, self.change_language)
@@ -508,7 +524,7 @@ class Anonymizer(ctk.CTk):
         self.save_config()
 
     def clone_project(self, event=None):
-        logging.info("Clone Project")
+        logger.info("Clone Project")
 
         if not self.controller:
             logger.info(f"Clone Project Cancelled, no project open")
@@ -567,7 +583,9 @@ class Anonymizer(ctk.CTk):
 
         try:
             # Create New Controller with cloned project model
-            self.controller = ProjectController(cloned_model)
+            self.controller = ProjectController(
+                cloned_model
+            )  # this will recreate AnonymizerController and restart associated worker threads
             self.controller.save_model()
             logger.info(f"Project cloned successfully: {self.controller}")
         except Exception as e:
@@ -800,7 +818,7 @@ class Anonymizer(ctk.CTk):
         self.export_view.focus()
 
     def settings(self):
-        logging.info("Settings")
+        logger.info("Settings")
 
         if not self.controller:
             logger.error("Internal Error: no ProjectController")
@@ -831,7 +849,18 @@ class Anonymizer(ctk.CTk):
             return
 
         logger.info(f"User Edited ProjectModel")
+
+        # Some settings change require the project to be closed and re-opened:
+        # TODO: elegantly open and close project, see clone project above
+        if self.controller.model.remove_pixel_phi != edited_model.remove_pixel_phi:
+            messagebox.showwarning(
+                title=_("Project restart"),
+                message=_("The settings change will take effect when the project is next opened."),
+                parent=self,
+            )
+
         self.controller.update_model(edited_model)
+
         logger.info(f"{self.controller}")
 
     def help_filename_to_title(self, filename):
@@ -944,7 +973,6 @@ def main():
     logs_dir = init_logging(install_dir, run_as_exe)
     os.chdir(install_dir)
 
-    logger = logging.getLogger()  # get root logger
     logger.info(f"cmd line args={args}")
 
     # TODO: command line interface for server side deployments

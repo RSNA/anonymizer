@@ -79,7 +79,7 @@ class ProjectModel:
     """
 
     # Project Model Version Control
-    MODEL_VERSION = 2
+    MODEL_VERSION = 3
 
     # As per instructions here: https://www.medicalconnections.co.uk/kb/ImplementationUID-And-ImplementationName
     RSNA_ROOT_ORG_UID = "1.2.826.0.1.3680043.10.474"  # sub UID from medicalconnections.co.uk as used by JavaAnonymizer
@@ -163,6 +163,7 @@ class ProjectModel:
     site_id: str = field(default_factory=default_site_id)
     project_name: str = field(default_factory=default_project_name)
     uid_root: str = field(default_factory=default_uid_root)
+    remove_pixel_phi: bool = False
     storage_dir: Path = field(default_factory=default_storage_dir)
     modalities: List[str] = field(default_factory=default_modalities)
     storage_classes: List[str] = field(default_factory=default_storage_classes)  # re-initialised in post_init

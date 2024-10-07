@@ -216,13 +216,16 @@ class AWSCognitoDialog(tk.Toplevel):
 
         row += 1
 
-        self._export_to_aws_checkbox = ctk.CTkCheckBox(self._frame, text=_("Export to AWS"))
+        export_to_aws_label = ctk.CTkLabel(self._frame, text=_("Export to AWS") + ":")
+        export_to_aws_label.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="nw")
+
+        self._export_to_aws_checkbox = ctk.CTkCheckBox(self._frame, text="")
         if self.export_to_aws:
             self._export_to_aws_checkbox.select()
 
         self._export_to_aws_checkbox.grid(
             row=row,
-            column=0,
+            column=1,
             padx=PAD,
             pady=PAD,
             sticky="w",

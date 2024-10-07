@@ -4,6 +4,7 @@ This module contains the SettingsDialog class, which is a dialog window for mana
 
 from pathlib import Path
 from typing import List, Tuple
+from copy import copy
 import tkinter as tk
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
@@ -37,9 +38,10 @@ class SettingsDialog(tk.Toplevel):
         new_model (bool, optional): Indicates whether it is a new project model. Defaults to False.
         title (str | None, optional): The title of the dialog window. Defaults to None.
     """
+
     def __init__(self, parent, model: ProjectModel, new_model: bool = False, title: str | None = None):
         super().__init__(master=parent)
-        self.model: ProjectModel = model
+        self.model: ProjectModel = copy(model)
         self.java_phi_studies: List[JavaAnonymizerExportedStudy] = []
         self.new_model = new_model  # to restrict editing for existing projects, eg. SITE_ID & storage directory changes
         if title is None:
@@ -126,6 +128,23 @@ class SettingsDialog(tk.Toplevel):
             sticky="nw",
             enabled=self.new_model,
         )
+        row += 1
+
+        remove_pixel_phi_label = ctk.CTkLabel(self._frame, text=_("Remove Pixel PHI") + ":")
+        remove_pixel_phi_label.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="nw")
+
+        self._remove_pixel_phi_checkbox = ctk.CTkCheckBox(self._frame, text="")
+        if self.model.remove_pixel_phi:
+            self._remove_pixel_phi_checkbox.select()
+
+        self._remove_pixel_phi_checkbox.grid(
+            row=row,
+            column=1,
+            padx=PAD,
+            pady=PAD,
+            sticky="nw",
+        )
+
         row += 1
 
         servers_label = ctk.CTkLabel(self._frame, text=_("DICOM Servers") + ":")
@@ -475,6 +494,7 @@ class SettingsDialog(tk.Toplevel):
         self.model.language_code = get_current_language_code()
         self.model.project_name = self.project_name_var.get()
         self.model.uid_root = self.uidroot_var.get()
+        self.model.remove_pixel_phi = self._remove_pixel_phi_checkbox.get() == 1
         self._user_input = self.model, self.java_phi_studies
 
         self.grab_release()

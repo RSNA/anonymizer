@@ -143,14 +143,21 @@ class Dashboard(ctk.CTkFrame):
             pady=(self.PAD, 0),
         )
 
-        self.label_queue = ctk.CTkLabel(self._status_frame, text=_("Anonymizer Queue") + ":")
-        self.label_queue.grid(row=0, column=0, padx=self.PAD, sticky="w")
+        self.label_metadata_queue = ctk.CTkLabel(self._status_frame, text=_("Metadata Queue") + ":")
+        self.label_metadata_queue.grid(row=0, column=0, padx=self.PAD, sticky="w")
 
-        self._qsize = ctk.CTkLabel(self._status_frame, text="0")
-        self._qsize.grid(row=0, column=1, sticky="w")
+        self._meta_qsize = ctk.CTkLabel(self._status_frame, text="0")
+        self._meta_qsize.grid(row=0, column=1, sticky="w")
+
+        if self._controller.model.remove_pixel_phi:
+            self.label_pixel_queue = ctk.CTkLabel(self._status_frame, text=_("Pixel PHI Queue") + ":")
+            self.label_pixel_queue.grid(row=0, column=2, padx=self.PAD, sticky="w")
+
+            self._pixel_qsize = ctk.CTkLabel(self._status_frame, text="0")
+            self._pixel_qsize.grid(row=0, column=3, sticky="w")
 
         self._status = ctk.CTkLabel(self._status_frame, text="")
-        self._status.grid(row=0, column=3, padx=self.PAD, sticky="e")
+        self._status.grid(row=0, column=4, padx=self.PAD, sticky="e")
 
     def _wait_for_scp_echo(self, scp_name: str, button: ctk.CTkButton, ux_Q: Queue[EchoResponse], callback: Any):
         if ux_Q.empty():
@@ -238,8 +245,9 @@ class Dashboard(ctk.CTkFrame):
 
         self.after(1000, self._wait_for_aws)
 
-    def update_anonymizer_queue(self, queue_size: int):
-        self._qsize.configure(text=f"{queue_size}")
+    def update_anonymizer_queues(self, ds_Q_size: int, px_Q_size: int):
+        self._meta_qsize.configure(text=f"{ds_Q_size}")
+        self._pixel_qsize.configure(text=f"{px_Q_size}")
 
     def update_totals(self, totals: Totals):
         self._patients_label.configure(text=f"{totals.patients}")

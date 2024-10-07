@@ -293,7 +293,7 @@ def test_anonymize_invalid_dicom_file(temp_dir: str, controller: ProjectControll
     assert ds is None
 
     # Ensure file is moved to correct quarantine directory:
-    qpath = Path(anonymizer.get_quarantine_path(), QuarantineDirectories.INVALID_DICOM.value, test_filename)
+    qpath = Path(anonymizer.get_quarantine_path(), QuarantineDirectories.INVALID_DICOM.value)
     assert qpath.exists()
 
 
@@ -316,7 +316,7 @@ def test_anonymize_dicom_missing_attributes(temp_dir: str, controller: ProjectCo
     assert ds == cr1
 
     # Ensure file is moved to correct quarantine directory:
-    qpath = Path(anonymizer.get_quarantine_path(), QuarantineDirectories.MISSING_ATTRIBUTES.value, test_filename)
+    qpath = Path(anonymizer.get_quarantine_path(), QuarantineDirectories.MISSING_ATTRIBUTES.value)
     assert qpath.exists()
 
 

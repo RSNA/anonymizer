@@ -1,8 +1,7 @@
-# For Burnt-IN PHI Removal:
+# For Burnt-IN Pixel PHI Removal:
 import os
 import time
 import logging
-import threading
 
 import numpy as np
 from numpy import ndarray
@@ -208,12 +207,12 @@ def process_grayscale_image(self, ds: Dataset, nlp, reader: Reader):
 
     # To improve OCR processing speed:
     # TODO: Work out more precisely using readable text size, pixel spacing (not always present), mask blur kernel size & inpainting radius
-    # Downscale the image if its width exceeds the widht_threshold
-    widht_threshold = 1200
+    # Downscale the image if its width exceeds the width_threshold
+    width_threshold = 1200
     scale_factor = 1
-    downscale = cols > widht_threshold
+    downscale = cols > width_threshold
     if downscale:
-        scale_factor = widht_threshold / cols
+        scale_factor = width_threshold / cols
 
     border_size = 40  # pixels
 
@@ -242,11 +241,11 @@ def process_grayscale_image(self, ds: Dataset, nlp, reader: Reader):
         logger.info(f"After normalization: pixels.value.range:[{pixels.min(), pixels.max()}]")
 
         if downscale:
-            new_size = (widht_threshold, int(rows * scale_factor))
+            new_size = (width_threshold, int(rows * scale_factor))
             pixels = resize(pixels, new_size, interpolation=INTER_LINEAR)
             logger.info(f"Downscaled image, new pixels.shape: {pixels.shape}")
         else:
-            logger.info(f"Image width < {widht_threshold}, no downscaling required.")
+            logger.info(f"Image width < {width_threshold}, no downscaling required.")
 
         # Add a border to the resized image
         pixels = copyMakeBorder(

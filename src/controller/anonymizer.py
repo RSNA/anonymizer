@@ -33,6 +33,8 @@ from utils.storage import DICOM_FILE_SUFFIX
 from model.project import DICOMNode, ProjectModel
 from model.anonymizer import AnonymizerModel
 
+# from .remove_pixel_phi import process_grayscale_image
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,7 +70,7 @@ class AnonymizerController:
     PRIVATE_BLOCK_NAME = "RSNA"
     DEFAULT_ANON_DATE = "20000101"  # if source date is invalid or before 19000101
 
-    NUMBER_OF_WORKER_THREADS = 2
+    NUMBER_OF_DATASET_WORKER_THREADS = 2
     WORKER_THREAD_SLEEP_SECS = 0.075  # for UX responsiveness
     MODEL_AUTOSAVE_INTERVAL_SECS = 30
 
@@ -133,21 +135,31 @@ class AnonymizerController:
             )
             logger.info(f"New Default Anonymizer Model initialised from script: {project_model.anonymizer_script_path}")
 
-        self._anon_Q: Queue = Queue()
+        self._anon_ds_Q: Queue = Queue()  # queue for dataset workers
+        self._anon_px_Q: Queue = Queue()  # queue for pixel phi workers
         self._worker_threads = []
 
-        # Spawn Anonymizer worker threads:
-        for i in range(self.NUMBER_OF_WORKER_THREADS):
-            worker = self._worker = threading.Thread(
-                target=self._anonymize_worker,
-                name=f"AnonWorker_{i+1}",
-                args=(self._anon_Q,),
-                # daemon=True,
+        # Spawn Anonymizer DATASET worker threads:
+        for i in range(self.NUMBER_OF_DATASET_WORKER_THREADS):
+            ds_worker = self._worker = threading.Thread(
+                target=self._anonymize_dataset_worker,
+                name=f"AnonDatasetWorker_{i+1}",
+                args=(self._anon_ds_Q,),
             )
-            worker.start()
-            self._worker_threads.append(worker)
+            ds_worker.start()
+            self._worker_threads.append(ds_worker)
 
-        # Setup Model Autosave Thread:
+        # Spawn Remove Pixel PHI Thread:
+        if self.project_model.remove_pixel_phi:
+            px_worker = self._worker = threading.Thread(
+                target=self._anonymizer_pixel_phi_worker,
+                name=f"AnonPixelWorker_1",
+                args=(self._anon_px_Q,),
+            )
+            px_worker.start()
+            self._worker_threads.append(px_worker)
+
+        # Spawn Model Autosave Thread:
         self._model_change_flag = False
         self._autosave_event = threading.Event()
         self._autosave_worker_thread = threading.Thread(
@@ -161,19 +173,29 @@ class AnonymizerController:
     def model_changed(self) -> bool:
         return self._model_change_flag
 
+    def idle(self) -> bool:
+        return self._anon_ds_Q.empty() and self._anon_px_Q.empty()
+
+    def queued(self) -> tuple[int, int]:
+        return (self._anon_ds_Q.qsize(), self._anon_px_Q.qsize())
+
     def _stop_worker_threads(self):
         logger.info("Stopping Anonymizer Worker Threads")
 
         if not self._active:
-            logger.error("_stop_worker_threads but controller not active")
+            logger.error("_stop_worker_threads but AnonymizerController not active")
             return
 
         # Send sentinel value to worker threads to terminate:
-        for _ in range(self.NUMBER_OF_WORKER_THREADS):
-            self._anon_Q.put((None, None))
+        for _ in range(self.NUMBER_OF_DATASET_WORKER_THREADS):
+            self._anon_ds_Q.put((None, None))
 
-        # Wait for all tasks to be processed
-        self._anon_Q.join()
+        # Wait for all sentinal values to be processed
+        self._anon_ds_Q.join()
+
+        if self.project_model.remove_pixel_phi:
+            self._anon_px_Q.put(None)
+            self._anon_px_Q.join()
 
         # Wait for all worker threads to finish
         for worker in self._worker_threads:
@@ -496,6 +518,10 @@ class AnonymizerController:
             # TODO: Optimize / Transcoding / DICOM Compliance File Verification - as per extra project options
             # see options for write_like_original=True
             ds.save_as(filename, write_like_original=False)
+
+            # If enabled for project, queue this file for pixel PHI scanning and removal:
+            if self.project_model.remove_pixel_phi:
+                self._anon_px_Q.put(filename)
             return None
 
         except Exception as e:
@@ -569,9 +595,9 @@ class AnonymizerController:
         Returns:
             None
         """
-        self._anon_Q.put((source, ds))
+        self._anon_ds_Q.put((source, ds))
 
-    def _anonymize_worker(self, ds_Q: Queue) -> None:
+    def _anonymize_dataset_worker(self, ds_Q: Queue) -> None:
         """
         An internal worker method that performs the anonymization process.
 
@@ -591,5 +617,28 @@ class AnonymizerController:
                 break
             self.anonymize(source, ds)
             ds_Q.task_done()
+
+        logger.info(f"thread={threading.current_thread().name} end")
+
+    def _anonymizer_pixel_phi_worker(self, px_Q: Queue) -> None:
+
+        logger.info(f"thread={threading.current_thread().name} start")
+
+        while True:
+            time.sleep(self.WORKER_THREAD_SLEEP_SECS)
+
+            path = px_Q.get()  # Blocks by default
+            if path is None:  # sentinel value set by _stop_worker_threads
+                px_Q.task_done()
+                break
+
+            logger.info(f"Remove Pixel PHI from: {path}")
+            result = 0
+            for i in range(1000000):
+                result += i * (i % 3)
+
+            logger.info("*PHI GONE*")
+
+            px_Q.task_done()
 
         logger.info(f"thread={threading.current_thread().name} end")
