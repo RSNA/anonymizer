@@ -4,7 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-numpy = "*"
+numpy = "<2.0.0"
 customtkinter = "*"
 pillow = "*"
 tkhtmlview = "*"
