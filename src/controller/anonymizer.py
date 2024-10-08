@@ -32,6 +32,7 @@ from utils.translate import _
 from utils.storage import DICOM_FILE_SUFFIX
 from model.project import DICOMNode, ProjectModel
 from model.anonymizer import AnonymizerModel
+
 import torch
 from easyocr import Reader
 from .remove_pixel_phi import remove_pixel_phi
@@ -620,6 +621,10 @@ class AnonymizerController:
             ds_Q.task_done()
 
         logger.info(f"thread={threading.current_thread().name} end")
+
+    # def _anonymizer_pixel_phi_worker(self, px_Q: Queue) -> None:
+
+    #     logger.info(f"thread={threading.current_thread().name} start")
 
     def _anonymizer_pixel_phi_worker(self, px_Q: Queue) -> None:
 

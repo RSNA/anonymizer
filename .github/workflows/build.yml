@@ -27,7 +27,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v3
       with:
-          python-version: "3.12"
+          python-version: "3.12.6"
 
     - name: Install pipenv for virtual environment
       run: |
