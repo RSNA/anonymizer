@@ -12,7 +12,8 @@ from pynetdicom._version import __version__ as pynetdicom_version
 
 # The following unused imports are for pyinstaller
 # TODO: pyinstaller cmd line special import doesn't work
-# from pydicom.encoders import pylibjpeg
+from pydicom.encoders import pylibjpeg
+
 # pylibjpeg = {extras = ["all"], version = "*"}
 
 import tkinter as tk
