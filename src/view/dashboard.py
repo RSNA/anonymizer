@@ -247,7 +247,8 @@ class Dashboard(ctk.CTkFrame):
 
     def update_anonymizer_queues(self, ds_Q_size: int, px_Q_size: int):
         self._meta_qsize.configure(text=f"{ds_Q_size}")
-        self._pixel_qsize.configure(text=f"{px_Q_size}")
+        if hasattr(self, "_pixel_qsize"):
+            self._pixel_qsize.configure(text=f"{px_Q_size}")
 
     def update_totals(self, totals: Totals):
         self._patients_label.configure(text=f"{totals.patients}")

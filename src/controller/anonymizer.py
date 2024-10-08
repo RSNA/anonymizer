@@ -32,8 +32,9 @@ from utils.translate import _
 from utils.storage import DICOM_FILE_SUFFIX
 from model.project import DICOMNode, ProjectModel
 from model.anonymizer import AnonymizerModel
-
-# from .remove_pixel_phi import process_grayscale_image
+import torch
+from easyocr import Reader
+from .remove_pixel_phi import remove_pixel_phi
 
 logger = logging.getLogger(__name__)
 
@@ -624,6 +625,25 @@ class AnonymizerController:
 
         logger.info(f"thread={threading.current_thread().name} start")
 
+        # Once-off initialisation of easyocr.Reader (and underlying pytorch model):
+        # if pytorch models not downloaded yet, they will be when Reader initializes
+        model_dir = Path("assets") / "ocr" / "model"  # Default is: Path("~/.EasyOCR/model").expanduser()
+        if not model_dir.exists():
+            logger.warning(
+                f"EasyOCR model directory: {model_dir}, does not exist, EasyOCR will create it, models still to be downloaded..."
+            )
+        else:
+            logger.info(f"EasyOCR downloaded models: {os.listdir(model_dir)}")
+
+        # Initialize the EasyOCR reader with the desired language(s)
+        ocr_reader = Reader(lang_list=["en", "de", "fr", "es"], model_storage_directory=model_dir, verbose=False)
+
+        logging.info("OCR Reader initialised successfully")
+
+        # Check if GPU available
+        logger.info(f"Apple MPS (Metal) GPU Available: {torch.backends.mps.is_available()}")
+        logger.info(f"CUDA GPU Available: {torch.cuda.is_available()}")
+
         while True:
             time.sleep(self.WORKER_THREAD_SLEEP_SECS)
 
@@ -633,11 +653,11 @@ class AnonymizerController:
                 break
 
             logger.info(f"Remove Pixel PHI from: {path}")
-            result = 0
-            for i in range(1000000):
-                result += i * (i % 3)
 
-            logger.info("*PHI GONE*")
+            try:
+                remove_pixel_phi(path, ocr_reader)
+            except Exception as e:
+                logger.error(repr(e))
 
             px_Q.task_done()
 
