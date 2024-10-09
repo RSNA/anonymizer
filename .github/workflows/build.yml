@@ -43,7 +43,7 @@ jobs:
         AWS_PASSWORD: ${{ secrets.AWS_PASSWORD }}
       run: |
         pipenv run coverage run -m pytest tests --log-cli-level=WARN
-        pipenv run coverage -i report --omit="tests/*" --fail-under=60
+        pipenv run coverage report -i --omit="tests/*" --fail-under=60
 
     - name: List site-packages
       run: |
