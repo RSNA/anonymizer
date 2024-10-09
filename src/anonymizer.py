@@ -1,5 +1,4 @@
 import os, sys, json, shutil, time, platform
-
 from pathlib import Path
 from pprint import pformat
 from copy import copy
@@ -10,17 +9,9 @@ from pydicom._version import __version__ as pydicom_version
 from pydicom import dcmread
 from pynetdicom._version import __version__ as pynetdicom_version
 
-# The following unused imports are for pyinstaller
-# TODO: pyinstaller cmd line special import doesn't work
-from pydicom.encoders import pylibjpeg
-
-# pylibjpeg = {extras = ["all"], version = "*"}
-
 import tkinter as tk
-
 from tkinter import ttk, filedialog, messagebox
 import customtkinter as ctk
-
 from customtkinter import ThemeManager
 
 from utils.logging import init_logging
@@ -511,7 +502,7 @@ class Anonymizer(ctk.CTk):
             return
 
         # TODO: Do not allow project close if Import Files/Import Directory is busy
-
+        # TODO: Shutdowncontroller asynchronously using Dashboard Status to provide shutdown updates (especially Anonymizer worker threads)
         self.shutdown_controller()
 
         self.welcome_view = WelcomeView(self, self.change_language)

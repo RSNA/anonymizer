@@ -11,6 +11,7 @@ src/build/*
 src/dist/*
 src/logs/*
 dicom/*
+phi_imgs/*
 **/versionfile.txt
 **/radon_results.txt
 Pipfile.lock

@@ -1,6 +1,4 @@
 # For Burnt-IN Pixel PHI Removal:
-import os
-import time
 from pathlib import Path
 import logging
 
@@ -35,9 +33,10 @@ color_spaces = [
     "YBR_RCT",
     "PALETTE COLOR",
 ]
-downscale_dimension_threshold = 1000
-border_size = 30
+downscale_dimension_threshold = 800
+border_size = 20
 
+logging.getLogger("openjpeg").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
@@ -135,9 +134,7 @@ def _process_grayscale_image(ds: Dataset, ocr: Reader):
         If successful the ds dataset pixel_array will be modified via inpainting to remove all detected text
 
     """
-    logger.info(
-        f"Processing Grayscale Image, Modality: {ds.Modality} PtID/SOPInstanceUID: {ds.PatientID}/{ds.SOPInstanceUID}"
-    )
+    logger.info(f"Processing Grayscale Image, SOPClassUID: {ds.SOPClassUID} AnonPatientID: {ds.PatientID}")
     # Extract relevant attributes for pixel data processing:
     # Mandatory:
     pi = ds.get("PhotometricInterpretation", None)
@@ -258,7 +255,7 @@ def _process_grayscale_image(ds: Dataset, ocr: Reader):
 
     # To improve OCR processing speed:
     # TODO: Work out more precisely using readable text size, pixel spacing (not always present), mask blur kernel size & inpainting radius
-    # Downscale the image if its width exceeds the width_threshold
+    # Downscale the image if its width exceeds the downscale_dimension_threshold
     scale_factor = 1
     if cols > downscale_dimension_threshold:
         scale_factor = downscale_dimension_threshold / cols
@@ -270,7 +267,7 @@ def _process_grayscale_image(ds: Dataset, ocr: Reader):
     for frame in range(no_of_frames):
 
         if no_of_frames > 1:
-            logging.info(f"Processing Frame {frame}...")
+            logging.debug(f"Processing Frame {frame}...")
 
         pixels = pixels_stack[frame]
 
@@ -312,8 +309,8 @@ def _process_grayscale_image(ds: Dataset, ocr: Reader):
         # Perform OCR on the bordered image
         # for word-level detection: width_ths=0.1, paragraph=False
         results = ocr.readtext(
-            pixels, add_margin=0.0
-        )  #  rotation_info=[90])  # , 180, 270]) #TODO: add to global config?
+            pixels
+        )  #  ,add_margin=0.0, rotation_info=[90])  # , 180, 270]) #TODO: add to global config?
 
         if not results:
             logger.info("No text found in frame")
@@ -371,6 +368,7 @@ def _process_grayscale_image(ds: Dataset, ocr: Reader):
 
     # Save processed stack to PixelData:
     if ds.file_meta.TransferSyntaxUID.is_compressed:
+        logger.debug("Encapsulate source_pixels_deid_stack")
         ds.PixelData = encapsulate(source_pixels_deid_stack)
         ds["PixelData"].is_undefined_length = True
         ds.file_meta.TransferSyntaxUID = JPEG2000Lossless

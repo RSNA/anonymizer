@@ -521,8 +521,8 @@ class AnonymizerController:
             # see options for write_like_original=True
             ds.save_as(filename, write_like_original=False)
 
-            # If enabled for project, queue this file for pixel PHI scanning and removal:
-            if self.project_model.remove_pixel_phi:
+            # If enabled for project, and this file contains pixeldata, queue this file for pixel PHI scanning and removal:
+            if self.project_model.remove_pixel_phi and "PixelData" in ds:
                 self._anon_px_Q.put(filename)
             return None
 
