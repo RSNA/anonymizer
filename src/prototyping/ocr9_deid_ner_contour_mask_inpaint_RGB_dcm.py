@@ -240,7 +240,7 @@ def process_rgb_image(dcm_path: Path, nlp, reader):
                 f"Pixel values out of range for signed BitsStored ({bits_stored}): Found range [{pixels.min()}, {pixels.max()}]."
             )
 
-    # DICOM grayscale image validated
+    # DICOM color image validated
 
     logging.info(f"Header and pixel array valid, now processing...")
     logger.info(f"Transfer Syntax: {source_ds.file_meta.TransferSyntaxUID}")

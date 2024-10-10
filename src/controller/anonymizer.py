@@ -657,8 +657,6 @@ class AnonymizerController:
                 px_Q.task_done()
                 break
 
-            logger.info(f"Remove Pixel PHI from: {path}")
-
             try:
                 remove_pixel_phi(path, ocr_reader)
             except Exception as e:

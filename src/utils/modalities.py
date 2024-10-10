@@ -103,4 +103,4 @@ def get_modalities() -> Dict[str, Tuple[str, list[str]]]:
     #     "XRF",
     #     "SEG",
     #     "REG",
-    #     "KO",
+    #     "KO", _("Key Object Selection")

@@ -7,7 +7,7 @@ from numpy import ndarray
 from cv2 import threshold, findContours, drawContours, normalize, copyMakeBorder, resize, dilate, inpaint, cvtColor
 from cv2 import (
     THRESH_OTSU,
-    COLOR_BGR2GRAY,
+    COLOR_RGB2GRAY,
     RETR_TREE,
     CHAIN_APPROX_SIMPLE,
     NORM_MINMAX,
@@ -18,64 +18,28 @@ from cv2 import (
 
 from easyocr import Reader
 from pydicom import Dataset, dcmread
-from pydicom.pixel_data_handlers.util import apply_voi_lut, apply_modality_lut
+from pydicom.pixel_data_handlers.util import apply_voi_lut, apply_modality_lut, apply_color_lut, convert_color_space
 from pydicom.encaps import encapsulate
 from pydicom.uid import JPEG2000Lossless
-from openjpeg.utils import encode_array  # JPG2000Lossless
+from openjpeg.utils import encode_array  # JPEG2000Lossless
 
-grayscale_spaces = ["MONOCHROME1", "MONOCHROME2"]
-color_spaces = [
+VALID_COLOR_SPACES = [
+    "MONOCHROME1",
+    "MONOCHROME2",
     "RGB",
-    "RGBA",
+    # "RGBA", TODO: provide support for Alpha channel?
     "YBR_FULL",
     "YBR_FULL_422",
     "YBR_ICT",
     "YBR_RCT",
     "PALETTE COLOR",
 ]
-downscale_dimension_threshold = 800
-border_size = 20
 
 logging.getLogger("openjpeg").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-def remove_pixel_phi(dcm_path: Path, ocr_reader: Reader) -> None:
-    """
-    Removes the PHI in the pixel data of a DICOM file with 1...N frames
-    If the incoming ds pixel array was compressed, burnt-in annotation is detected and pixel_array modified
-    then the pixel_array is re-compressed with JPG2000Lossless compression and the ds transfer syntax changed accordingly
-
-    Args:
-        dcm_path (Path): path to source DICOM file [*Mutable*] TODO: immutable & keep source file?
-
-    Raises:
-        InvalidDicomError: if dcm_path not a valid DICOM file
-        TypeError: if dcm_path is none or unsupported type
-        ValueError:
-            - If any essential pixel attribute is missing or invalid.
-            - If group 2 elements are in dataset rather than dataset.file_meta, or if a preamble is given but is not 128 bytes long,
-              or if Transfer Syntax is a compressed type and pixel data is not compressed.
-        AttributeError If either ds.is_implicit_VR or ds.is_little_endian have not been set.
-    """
-    # Read the DICOM image file using pydicom which will perform any decompression required
-    ds = dcmread(dcm_path)
-
-    # Process Grayscale and Color Images with different functions:
-    pi = ds.get("PhotometricInterpretation", None)
-    if not pi:
-        raise ValueError("PhotometricInterpretation attribute missing.")
-    if pi in grayscale_spaces:
-        _process_grayscale_image(ds, ocr_reader)
-    else:
-        if pi not in color_spaces:
-            raise ValueError(f"Invalid Photometric Interpretation: {pi}. Expected one of {color_spaces}.")
-        raise NotImplementedError(f"Remove PHI from Color Images not implemented")
-
-    ds.save_as(dcm_path)
-
-
-def _draw_text_contours_on_mask(image, top_left, bottom_right, mask: ndarray) -> None:
+def _draw_text_contours_on_mask(image: ndarray, rgb: bool, top_left: tuple, bottom_right: tuple, mask: ndarray) -> None:
     """
     Draws text contours onto the provided mask (mutates the input mask).
 
@@ -94,8 +58,9 @@ def _draw_text_contours_on_mask(image, top_left, bottom_right, mask: ndarray) ->
         return
     # Constructing sub-image
     sub_image = image[y1:y2, x1:x2]
-    # Convert sub_image to grayscale for contour detection
-    # sub_image = cvtColor(sub_image, COLOR_BGR2GRAY)
+    # If RGB image, then convert sub_image to grayscale for contour detection
+    if rgb:
+        sub_image = cvtColor(sub_image, COLOR_RGB2GRAY)
     # Threshold the grayscale sub-image:
     _, thresh = threshold(sub_image, 0, 255, THRESH_OTSU)
     # Find contours within the sub-image
@@ -118,23 +83,43 @@ def _has_voi_lut(ds: Dataset) -> bool:
 
 
 # TODO: split this process up into sub-alogirthms for pluggable functional pipeline:
-# after pixel attribute validation:  [apply LUT > normalize > add border > downscaling > OCR > upscaling > inpainting > compression]
-def _process_grayscale_image(ds: Dataset, ocr: Reader):
+# [pixel attribute validation > apply LUT > normalize > add border > downscaling > OCR > upscaling > inpainting > compression]
+def remove_pixel_phi(
+    dcm_path: Path, ocr_reader: Reader, downscale_dimension_threshold: int = 800, border_size: int = 20
+) -> bool:
     """
-    Processes a grayscale image by validating pixel-related attributes, performing necessary checks, and applying OCR processing.
+    - Removes the PHI in the pixel data of a DICOM file with 1...N frames
+    - If the incoming pixel array was compressed, burnt-in annotation is detected and pixel_array modified
+      then the pixel_array is re-compressed with JPG2000Lossless compression and the ds transfer syntax changed accordingly.
 
     Args:
-        ds (Dataset): pydicom Dataset [*Mutable*]
+         dcm_path (Path): path to source DICOM file [*Mutable*] TODO: immutable & keep source file? add backup parameter?
+         ocr_reader (easyOCR.Reader): initialised OCR Reader object from easyocr
+         downscale_dimension_threshold: if either dimension (rows or cols) of pixel frame is larger than this threshold
+                                        the image will be downscaled to decrease OCR speed
+         border_size: size in pixels added to the pixel frame to enable text detection at the edges
 
     Raises:
-        ValueError: If any essential pixel attribute in ds is missing or invalid.
+        InvalidDicomError: if dcm_path not a valid DICOM file
+        TypeError: if dcm_path is none or unsupported type
+        ValueError:
+            - If any essential pixel attribute is missing or invalid.
+            - If group 2 elements are in dataset rather than dataset.file_meta, or if a preamble is given but is not 128 bytes long,
+              or if Transfer Syntax is a compressed type and pixel data is not compressed.
+            - thrown by ds.save_as / dcmwrite
+        ValueError: If any essential pixel attribute is missing or invalid.
 
     Returns:
-        None
-        If successful the ds dataset pixel_array will be modified via inpainting to remove all detected text
-
+        If text is detected and file modified with text removed, return True
+        If no text is detected, file is not modified, return False
     """
-    logger.info(f"Processing Grayscale Image, SOPClassUID: {ds.SOPClassUID} AnonPatientID: {ds.PatientID}")
+    logger.info(f"Attempt to remove burnt-in PHI from pixel data of: {dcm_path}")
+
+    # Read the DICOM image file using pydicom which will perform any decompression required
+    ds = dcmread(dcm_path)
+
+    logger.debug(f"Processing Image, SOPClassUID: {ds.SOPClassUID} AnonPatientID: {ds.PatientID}")
+
     # Extract relevant attributes for pixel data processing:
     # Mandatory:
     pi = ds.get("PhotometricInterpretation", None)
@@ -153,11 +138,16 @@ def _process_grayscale_image(ds: Dataset, ocr: Reader):
     if not pi:
         raise ValueError("PhotometricInterpretation attribute missing.")
 
-    if pi not in ["MONOCHROME1", "MONOCHROME2"]:
-        raise ValueError(f"Invalid Photometric Interpretation: {pi}. Expected 'MONOCHROME1' or 'MONOCHROME2'.")
+    if pi not in VALID_COLOR_SPACES:
+        raise ValueError(f"Invalid Photometric Interpretation: {pi}. Support Color Spaces: {VALID_COLOR_SPACES}")
 
-    if samples_per_pixel != 1:
-        raise ValueError(f"Samples per pixel = {samples_per_pixel} which should be 1 for grayscale images.")
+    grayscale = False
+    if pi in ["MONOCHROME1", "MONOCHROME2"]:
+        grayscale = True
+        if samples_per_pixel != 1:
+            raise ValueError(f"Samples per pixel = {samples_per_pixel} which should be 1 for grayscale images.")
+    elif samples_per_pixel > 4:
+        raise ValueError(f"Samples per pixel = {samples_per_pixel} which should be < 4 for multichannel images.")
 
     if not rows or not cols:
         raise ValueError("Missing image dimensions: Rows & Columns")
@@ -188,7 +178,8 @@ def _process_grayscale_image(ds: Dataset, ocr: Reader):
 
     # Decompress source pixel array:
     source_pixels_decompressed = ds.pixel_array
-    # Copy the decompressed source pixel array:
+
+    # Make a COPY the decompressed source pixel array for processing:
     pixels = source_pixels_decompressed.copy()
 
     # Validate Pixel Array:
@@ -224,7 +215,7 @@ def _process_grayscale_image(ds: Dataset, ocr: Reader):
             )
 
     # DICOM grayscale image is now validated
-    logger.debug(f"Header and pixel array valid, now processing...")
+    logger.debug(f"Header and pixel array valid, now processing copy of pixel array...")
     logger.debug(f"Transfer Syntax: {ds.file_meta.TransferSyntaxUID}")
     logger.debug(f"Compressed: {ds.file_meta.TransferSyntaxUID.is_compressed}")
     logger.debug(f"PhotometricInterpretation: {pi}")
@@ -239,12 +230,22 @@ def _process_grayscale_image(ds: Dataset, ocr: Reader):
     logger.debug(f"Number of Frames: {no_of_frames}")
 
     # *BEGIN PROCESSING*:
-    # GET REDCACTION CONTOURS TO APPLY TO SOURCE PIXELS
+    # GET TEXT REDCACTION CONTOURS TO APPLY TO SOURCE PIXELS
 
     # Invert pixel values if necessary
     if pi == "MONOCHROME1":  # 0 = white
-        logger.info("Convert from MONOCHROME1 to MONOCHROME2")
+        logger.debug("Convert from MONOCHROME1 to MONOCHROME2 (invert pixel values)")
         pixels = np.max(pixels) - pixels
+
+    # Apply Color LUT if photometric interpretation is PALETTE COLOR
+    elif pi == "PALETTE COLOR" and "PaletteColorLookupTableData" in ds:
+        logger.debug("Applying Palette Color Lookup Table")
+        pixels = apply_color_lut(pixels, ds)  # will return RGB or RGBA
+
+    # # Convert color space if needed (e.g., from YBR to RGB)
+    elif pi in ["YBR_FULL", "YBR_FULL_422"]:
+        logger.debug(f"Convert color space from {pi} to RGB")
+        pixels = convert_color_space(arr=pixels, current=pi, desired="RGB", per_frame=True)
 
     if no_of_frames == 1:
         pixels_stack = [pixels]
@@ -255,7 +256,7 @@ def _process_grayscale_image(ds: Dataset, ocr: Reader):
 
     # To improve OCR processing speed:
     # TODO: Work out more precisely using readable text size, pixel spacing (not always present), mask blur kernel size & inpainting radius
-    # Downscale the image if its width exceeds the downscale_dimension_threshold
+    # Downscale the image if its rows or cols exceeds the downscale_dimension_threshold
     scale_factor = 1
     if cols > downscale_dimension_threshold:
         scale_factor = downscale_dimension_threshold / cols
@@ -271,15 +272,16 @@ def _process_grayscale_image(ds: Dataset, ocr: Reader):
 
         pixels = pixels_stack[frame]
 
-        # Apply Modality LUT if present
-        if "ModalityLUTSequence" in ds:
-            pixels = apply_modality_lut(pixels, ds)
-            logger.debug(f"Applied Modality LUT: new pixels.value.range:[{int(pixels.min())}..{int(pixels.max())}]")
-        elif _has_voi_lut(ds):
-            # Apply Value of Interest Lookup (Windowing) if present:
-            # TODO: is this necessary?
-            pixels = apply_voi_lut(pixels, ds)
-            logger.debug(f"Applied VOI LUT: new pixels.value.range:[{int(pixels.min())}..{int(pixels.max())}]")
+        if grayscale:
+            # Apply Modality LUT if present
+            if "ModalityLUTSequence" in ds:
+                pixels = apply_modality_lut(pixels, ds)
+                logger.debug(f"Applied Modality LUT: new pixels.value.range:[{int(pixels.min())}..{int(pixels.max())}]")
+            elif _has_voi_lut(ds):
+                # Apply Value of Interest Lookup (Windowing) if present:
+                # TODO: is this necessary?
+                pixels = apply_voi_lut(pixels, ds)
+                logger.debug(f"Applied VOI LUT: new pixels.value.range:[{int(pixels.min())}..{int(pixels.max())}]")
 
         # Normalize the pixel array to the range 0-255
         normalize(src=pixels, dst=pixels, alpha=0, beta=255, norm_type=NORM_MINMAX, dtype=-1, mask=None)
@@ -308,12 +310,11 @@ def _process_grayscale_image(ds: Dataset, ocr: Reader):
 
         # Perform OCR on the bordered image
         # for word-level detection: width_ths=0.1, paragraph=False
-        results = ocr.readtext(
-            pixels
-        )  #  ,add_margin=0.0, rotation_info=[90])  # , 180, 270]) #TODO: add to global config?
+        # tuning params: add_margin=0.0, rotation_info=[90])  # , 180, 270]) #TODO: add to global config?
+        results = ocr_reader.readtext(pixels)
 
         if not results:
-            logger.info("No text found in frame")
+            logger.debug("No text found in frame")
             continue
 
         logger.info(f"Text boxes detected in frame: {len(results)}")
@@ -331,9 +332,7 @@ def _process_grayscale_image(ds: Dataset, ocr: Reader):
             bottom_right = tuple(map(int, bottom_right))
 
             # Peform full anonymization, remove all detected text from image:
-            _draw_text_contours_on_mask(pixels, top_left, bottom_right, mask)
-
-        # CHANGE SOURCE PIXELS:
+            _draw_text_contours_on_mask(pixels, not grayscale, top_left, bottom_right, mask)
 
         # Remove border from mask
         mask = mask[border_size:-border_size, border_size : mask.shape[1] - border_size]
@@ -347,7 +346,11 @@ def _process_grayscale_image(ds: Dataset, ocr: Reader):
         kernel = np.ones((3, 3), np.uint8)
         dilated_mask = dilate(src=mask, kernel=kernel, iterations=1)
 
+        # CHANGE SOURCE PIXELS:
         # Apply inpainting mask to source pixel array:
+        logger.debug(
+            "Change source pixels array using mask from OCR and cv2.inpaint with radius = 5 & INPAINT_TELEA (Poisson PDE) algorithm"
+        )
         source_pixels_deid = inpaint(
             src=source_pixels_decompressed_stack[frame],
             inpaintMask=dilated_mask,
@@ -355,16 +358,25 @@ def _process_grayscale_image(ds: Dataset, ocr: Reader):
             flags=INPAINT_TELEA,
         )
 
-        # if source pixels were compressed then re-compress to JPG2000Lossless:
+        # if source pixels were compressed then re-compress using JPEG2000Lossless:
         if ds.file_meta.TransferSyntaxUID.is_compressed:
             logger.debug("Re-compress deidentified source frame")
-            source_pixels_deid = encode_array(arr=source_pixels_deid, photometric_interpretation=2, use_mct=False)
+            if not grayscale and pi != "RGB":
+                logger.debug("Convert source frame to RGB")
+                source_pixels_deid = convert_color_space(
+                    arr=source_pixels_deid, current=pi, desired="RGB", per_frame=True
+                )
+                ds.PhotometricInterpretation = "RGB"
+
+            source_pixels_deid = encode_array(
+                arr=source_pixels_deid, photometric_interpretation=2 if grayscale else 1, use_mct=False
+            )
 
         source_pixels_deid_stack.append(source_pixels_deid)
 
     if not source_pixels_deid_stack:
         logging.info("No changes made to pixel data")
-        return
+        return False
 
     # Save processed stack to PixelData:
     if ds.file_meta.TransferSyntaxUID.is_compressed:
@@ -374,3 +386,6 @@ def _process_grayscale_image(ds: Dataset, ocr: Reader):
         ds.file_meta.TransferSyntaxUID = JPEG2000Lossless
     else:
         ds.PixelData = np.stack(source_pixels_deid_stack, axis=0).tobytes()
+
+    ds.save_as(dcm_path)
+    return True
