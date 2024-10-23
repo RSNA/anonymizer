@@ -19,7 +19,7 @@ psutil = "*"
 pylibjpeg = {extras = ["all"], version = "*"}
 opencv-python-headless = "*"
 easyocr = "*"
-coverage = "*"
+cryptography = "*"
 
 [dev-packages]
 radon = "*"

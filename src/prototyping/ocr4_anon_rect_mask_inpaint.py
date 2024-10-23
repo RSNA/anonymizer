@@ -75,7 +75,7 @@ for image_file in image_files:
 
     # Perform OCR on the bordered image
     # for word-level detection: width_ths=0.1, paragraph=False
-    results = reader.readtext(image, add_margin=0.0)
+    results = reader.readtext(image)  # , add_margin=0.0)
 
     # Create a mask for in-painting
     mask = np.zeros(image.shape[:2], dtype=np.uint8)

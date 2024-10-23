@@ -622,10 +622,6 @@ class AnonymizerController:
 
         logger.info(f"thread={threading.current_thread().name} end")
 
-    # def _anonymizer_pixel_phi_worker(self, px_Q: Queue) -> None:
-
-    #     logger.info(f"thread={threading.current_thread().name} start")
-
     def _anonymizer_pixel_phi_worker(self, px_Q: Queue) -> None:
 
         logger.info(f"thread={threading.current_thread().name} start")
@@ -660,6 +656,7 @@ class AnonymizerController:
             try:
                 remove_pixel_phi(path, ocr_reader)
             except Exception as e:
+                # TODO: move to quarantine on exception?
                 logger.error(repr(e))
 
             px_Q.task_done()

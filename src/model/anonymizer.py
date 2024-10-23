@@ -406,19 +406,20 @@ class AnonymizerModel:
 
     def capture_phi(self, source: str, ds: Dataset, date_delta: int) -> None:
         """
-        Capture PHI (Protected Health Information) from a dataset, update the PHI lookup and the dataset statistics (patients,studies,series,instances)
+        Capture PHI (Protected Health Information) from a dataset,
+        Update the UID & PHI lookups and the dataset statistics (patients,studies,series,instances)
 
         Args:
             source (str): The source of the dataset.
             ds (Dataset): The dataset containing the PHI.
             date_delta (int): The time difference in days.
 
-        Raises:
-            ValueError:  If any of StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID are not present in dataset
-            LookupError: If the PHI PatientID is not found in the patient_id_lookup or phi_lookup.
-            LookupError: If the existing patient with Anon PatientID is not found in phi_lookup.
-            LookupError: If the existing study is not found in phi_lookup.
-            LookupError: If the existing series is not found in the study.
+        Raises following Critical Errors:
+            1. ValueError:  If any of StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID are not present in dataset
+            2. LookupError: If the PHI PatientID is not found in the patient_id_lookup or phi_lookup.
+            3. LookupError: If the existing patient with Anon PatientID is not found in phi_lookup.
+            4. LookupError: If the existing study is not found in phi_lookup.
+            5. LookupError: If the existing series is not found in the study.
 
         Returns:
             None
@@ -427,7 +428,7 @@ class AnonymizerModel:
             # ds must have attributes: StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID
             req_uids = ["StudyInstanceUID", "SeriesInstanceUID", "SOPInstanceUID"]
             if not all(hasattr(ds, uid) for uid in req_uids):
-                msg = f"Critical Error dataset missing primary UIDs: {req_uids}"
+                msg = f"Critical Error 1: Dataset missing primary UIDs: {req_uids}"
                 logger.error(msg)
                 raise ValueError(msg)
 
@@ -437,8 +438,9 @@ class AnonymizerModel:
             anon_patient_id = self._patient_id_lookup.get(phi_ptid, None)
             phi = self._phi_lookup.get(anon_patient_id, None)
             next_uid_ndx = self.get_uid_count() + 1
+            anon_study_uid = self._uid_lookup.get(ds.StudyInstanceUID)
 
-            if self._uid_lookup.get(ds.StudyInstanceUID) == None:
+            if anon_study_uid == None:
                 # NEW Study:
                 if anon_patient_id == None:
                     # NEW patient
@@ -459,7 +461,7 @@ class AnonymizerModel:
 
                 else:  # Existing patient now with more than one study
                     if phi == None:
-                        msg = f"Existing patient, Anon PatientID={anon_patient_id} not found in phi_lookup"
+                        msg = f"Critical Error 2: Existing patient, Anon PatientID={anon_patient_id} not found in phi_lookup"
                         logger.error(msg)
                         raise LookupError(msg)
 
@@ -475,14 +477,18 @@ class AnonymizerModel:
                 self._instances += 1
 
             else:
-                # Existing Study & Patient, PHI already captured, update series and instance counts from new instance:
+                # Existing Study
+                # Assume Existing Patient and PHI already captured
+                # If so, update series and instance counts from new instance:
                 if anon_patient_id is None:
-                    msg = f"Critical error PHI PatientID={phi_ptid} not found in patient_id_lookup"
+                    # TODO: Different PatientID for SAME Study detected:
+                    # Look through PHI lookup for this study to determine which PatientID has already been associated with it
+                    msg = f"Critical Error 3: Existing study Anon StudyUID={anon_study_uid}, incoming file has different PHI PatientID"
                     logger.critical(msg)
                     raise LookupError(msg)
 
                 if phi is None:
-                    msg = f"Critial error Existing Anon PatientID={anon_patient_id} not found in phi_lookup"
+                    msg = f"Critial Error 4: Existing Anon PatientID={anon_patient_id} not found in phi_lookup"
                     logger.critical(msg)
                     raise LookupError(msg)
 
@@ -496,7 +502,9 @@ class AnonymizerModel:
                     study = None
 
                 if study is None:
-                    msg = f"Existing study {ds.StudyInstanceUID} not found in phi_lookup"
+                    msg = (
+                        f"Critical Error 5: Existing study for Anon PatientID={anon_patient_id} not found in phi_lookup"
+                    )
                     logger.error(msg)
                     raise LookupError(msg)
 

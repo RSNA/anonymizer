@@ -1,7 +1,6 @@
 # For Burnt-IN Pixel PHI Removal:
 from pathlib import Path
 import logging
-
 import numpy as np
 from numpy import ndarray
 from cv2 import threshold, findContours, drawContours, normalize, copyMakeBorder, resize, dilate, inpaint, cvtColor
@@ -14,6 +13,7 @@ from cv2 import (
     INTER_LINEAR,
     BORDER_CONSTANT,
     INPAINT_TELEA,
+    CV_16U,
 )
 
 from easyocr import Reader
@@ -84,36 +84,39 @@ def _has_voi_lut(ds: Dataset) -> bool:
 
 # TODO: split this process up into sub-alogirthms for pluggable functional pipeline:
 # [pixel attribute validation > apply LUT > normalize > add border > downscaling > OCR > upscaling > inpainting > compression]
+# TODO: make source file immutable & keep source file? add backup parameter?
 def remove_pixel_phi(
     dcm_path: Path, ocr_reader: Reader, downscale_dimension_threshold: int = 800, border_size: int = 20
 ) -> bool:
     """
-    - Removes the PHI in the pixel data of a DICOM file with 1...N frames
-    - If the incoming pixel array was compressed, burnt-in annotation is detected and pixel_array modified
-      then the pixel_array is re-compressed with JPG2000Lossless compression and the ds transfer syntax changed accordingly.
+    Description:
+        Removes the PHI in the pixel data of a DICOM file with 1...N frames
+        If the incoming pixel array was compressed, burnt-in annotation is detected and pixel_array modified
+        then the pixel_array is re-compressed with JPG2000Lossless compression and the ds transfer syntax changed accordingly
 
     Args:
-         dcm_path (Path): path to source DICOM file [*Mutable*] TODO: immutable & keep source file? add backup parameter?
+         dcm_path (Path): path to source DICOM file [*Mutable*]
          ocr_reader (easyOCR.Reader): initialised OCR Reader object from easyocr
-         downscale_dimension_threshold: if either dimension (rows or cols) of pixel frame is larger than this threshold
-                                        the image will be downscaled to decrease OCR speed
+         downscale_dimension_threshold:
+            if either dimension (rows or cols) of pixel frame is larger than this threshold
+            the image will be downscaled to decrease OCR speed
          border_size: size in pixels added to the pixel frame to enable text detection at the edges
+
+    Returns:
+        If text is detected and file modified with text removed, return True
+        If no text is detected, file is not modified, return False
 
     Raises:
         InvalidDicomError: if dcm_path not a valid DICOM file
         TypeError: if dcm_path is none or unsupported type
         ValueError:
-            - If any essential pixel attribute is missing or invalid.
-            - If group 2 elements are in dataset rather than dataset.file_meta, or if a preamble is given but is not 128 bytes long,
-              or if Transfer Syntax is a compressed type and pixel data is not compressed.
-            - thrown by ds.save_as / dcmwrite
-        ValueError: If any essential pixel attribute is missing or invalid.
-
-    Returns:
-        If text is detected and file modified with text removed, return True
-        If no text is detected, file is not modified, return False
+            If any essential pixel attribute is missing or invalid
+            If group 2 elements are in dataset rather than dataset.file_meta, or if a preamble is given but is not 128 bytes long, or if Transfer Syntax is a compressed type and pixel data is not compressed
+            If thrown by ds.save_as / dcmwrite
+        General Exception from OpenCV.inpaint
+        Runtime Exception from OpenJPEG.encode_array
     """
-    logger.info(f"Attempt to remove burnt-in PHI from pixel data of: {dcm_path}")
+    logger.info(f"Remove burnt-in PHI from pixel data of: {dcm_path}")
 
     # Read the DICOM image file using pydicom which will perform any decompression required
     ds = dcmread(dcm_path)
@@ -222,7 +225,7 @@ def remove_pixel_phi(
     logger.debug(f"SamplePerPixel: {samples_per_pixel}")
     logger.debug(f"Rows={rows} Columns={cols}")
     logger.debug(
-        f"BitsAllocated={bits_allocated} BitStored={bits_stored} HighBit={high_bit} Signed={pixel_representation!=0}"
+        f"BitsAllocated={bits_allocated} BitsStored={bits_stored} HighBit={high_bit} Signed={pixel_representation!=0}"
     )
     logger.debug(f"pixels.shape: {pixels.shape}")
     logger.debug(f"pixels.value.range:[{pixels.min()}..{pixels.max()}]")
@@ -232,13 +235,8 @@ def remove_pixel_phi(
     # *BEGIN PROCESSING*:
     # GET TEXT REDCACTION CONTOURS TO APPLY TO SOURCE PIXELS
 
-    # Invert pixel values if necessary
-    if pi == "MONOCHROME1":  # 0 = white
-        logger.debug("Convert from MONOCHROME1 to MONOCHROME2 (invert pixel values)")
-        pixels = np.max(pixels) - pixels
-
     # Apply Color LUT if photometric interpretation is PALETTE COLOR
-    elif pi == "PALETTE COLOR" and "PaletteColorLookupTableData" in ds:
+    if pi == "PALETTE COLOR" and "PaletteColorLookupTableData" in ds:
         logger.debug("Applying Palette Color Lookup Table")
         pixels = apply_color_lut(pixels, ds)  # will return RGB or RGBA
 
@@ -255,8 +253,8 @@ def remove_pixel_phi(
         source_pixels_decompressed_stack = source_pixels_decompressed
 
     # To improve OCR processing speed:
-    # TODO: Work out more precisely using readable text size, pixel spacing (not always present), mask blur kernel size & inpainting radius
-    # Downscale the image if its rows or cols exceeds the downscale_dimension_threshold
+    # TODO: Work out more precisely using "readable" text size, pixel spacing (not always present), mask blur kernel size & inpainting radius
+    # Downscale the image if its rows or cols exceeds the downscale_dimension_threshold (for now, empirically determined to 800 pixels)
     scale_factor = 1
     if cols > downscale_dimension_threshold:
         scale_factor = downscale_dimension_threshold / cols
@@ -264,6 +262,7 @@ def remove_pixel_phi(
         scale_factor = downscale_dimension_threshold / rows
 
     source_pixels_deid_stack = []
+    source_pixels_changed = False
 
     for frame in range(no_of_frames):
 
@@ -273,19 +272,18 @@ def remove_pixel_phi(
         pixels = pixels_stack[frame]
 
         if grayscale:
-            # Apply Modality LUT if present
-            if "ModalityLUTSequence" in ds:
-                pixels = apply_modality_lut(pixels, ds)
-                logger.debug(f"Applied Modality LUT: new pixels.value.range:[{int(pixels.min())}..{int(pixels.max())}]")
-            elif _has_voi_lut(ds):
-                # Apply Value of Interest Lookup (Windowing) if present:
-                # TODO: is this necessary?
-                pixels = apply_voi_lut(pixels, ds)
-                logger.debug(f"Applied VOI LUT: new pixels.value.range:[{int(pixels.min())}..{int(pixels.max())}]")
+            # Apply any modality LUT then VOI LUT & Windowing indicated by metadata:
+            # do this here, on every frame to avoid potential memory issues for large number of frames:
+            pixels = apply_voi_lut(apply_modality_lut(pixels, ds), ds)
 
         # Normalize the pixel array to the range 0-255
         normalize(src=pixels, dst=pixels, alpha=0, beta=255, norm_type=NORM_MINMAX, dtype=-1, mask=None)
         pixels = pixels.astype(np.uint8)
+
+        if pi == "MONOCHROME1":  # 0 = white
+            logger.debug("Convert from MONOCHROME1 to MONOCHROME2 (invert pixel values)")
+            pixels = np.invert(pixels)
+
         logger.debug(f"After normalization: pixels.value.range:[{pixels.min()}..{pixels.max()}]")
 
         # DOWNSCALE if necessary:
@@ -317,9 +315,9 @@ def remove_pixel_phi(
             logger.debug("No text found in frame")
             continue
 
-        logger.info(f"Text boxes detected in frame: {len(results)}")
+        logger.debug(f"Text boxes detected in frame: {len(results)}")
 
-        # Create a mask for in-painting
+        # Create an 8 bit mask for in-painting
         mask = np.zeros(pixels.shape[:2], dtype=np.uint8)
 
         # Draw bounding boxes around each detected word
@@ -331,7 +329,7 @@ def remove_pixel_phi(
             top_left = tuple(map(int, top_left))
             bottom_right = tuple(map(int, bottom_right))
 
-            # Peform full anonymization, remove all detected text from image:
+            # Perform full anonymization, remove all detected text from image:
             _draw_text_contours_on_mask(pixels, not grayscale, top_left, bottom_right, mask)
 
         # Remove border from mask
@@ -347,16 +345,34 @@ def remove_pixel_phi(
         dilated_mask = dilate(src=mask, kernel=kernel, iterations=1)
 
         # CHANGE SOURCE PIXELS:
+        source_pixels_changed = True
+
         # Apply inpainting mask to source pixel array:
         logger.debug(
             "Change source pixels array using mask from OCR and cv2.inpaint with radius = 5 & INPAINT_TELEA (Poisson PDE) algorithm"
         )
-        source_pixels_deid = inpaint(
-            src=source_pixels_decompressed_stack[frame],
-            inpaintMask=dilated_mask,
-            inpaintRadius=5,
-            flags=INPAINT_TELEA,
-        )
+
+        if bits_allocated == 16 and pixel_representation == 1:
+            frame_pixels = source_pixels_decompressed_stack[frame]
+            # Inpaint function only supports 8-bit, 16-bit UNSIGNED or 32-bit float 1-channel and 8-bit 3-channel input/output images
+            # Mask must be 8-bit, 1 channel
+            # Up Shift and Convert to UNSIGNED 16 bit:
+            frame_pixels = (frame_pixels + 32768).astype(np.uint16)
+            source_pixels_deid = inpaint(
+                src=frame_pixels,
+                inpaintMask=dilated_mask,
+                inpaintRadius=5,
+                flags=INPAINT_TELEA,
+            )
+            # Downshift and convert back to SIGNED 16 bit:
+            source_pixels_deid = (source_pixels_deid - 32768).astype(np.int16)
+        else:
+            source_pixels_deid = inpaint(
+                src=source_pixels_decompressed_stack[frame],
+                inpaintMask=dilated_mask,
+                inpaintRadius=5,
+                flags=INPAINT_TELEA,
+            )
 
         # if source pixels were compressed then re-compress using JPEG2000Lossless:
         if ds.file_meta.TransferSyntaxUID.is_compressed:
@@ -374,7 +390,7 @@ def remove_pixel_phi(
 
         source_pixels_deid_stack.append(source_pixels_deid)
 
-    if not source_pixels_deid_stack:
+    if not source_pixels_changed:
         logging.info("No changes made to pixel data")
         return False
 

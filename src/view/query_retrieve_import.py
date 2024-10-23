@@ -315,7 +315,9 @@ class QueryView(tk.Toplevel):
         self._move_level_label = ctk.CTkLabel(self._status_frame, text=_("Move Level") + ":")
         self._move_level_label.grid(row=0, column=7, padx=PAD, pady=PAD, sticky="e")
 
-        self._move_level_var = ctk.StringVar(self._status_frame, value=_("STUDY"))
+        self._move_level_var = ctk.StringVar(
+            self._status_frame, value=self.MOVE_LEVELS[1]
+        )  # set default move level to SERIES
         self._move_levels_optionmenu = ctk.CTkOptionMenu(
             self._status_frame,
             width=char_width_px * len(max(self.MOVE_LEVELS, key=len)) + 40,
@@ -597,7 +599,7 @@ class QueryView(tk.Toplevel):
             studies_to_process = self._studies_to_process
             self._progressbar.set(self._studies_processed / self._studies_to_process)
             self._status.configure(
-                text=_("Found") + f" {self._studies_processed} " + _("of") + f" {studies_to_process}" + _(" Studies")
+                text=_("Found") + f" {self._studies_processed} " + _("of") + f" {studies_to_process}" + _("AccNos")
             )
 
     def _tree_select(self, event):

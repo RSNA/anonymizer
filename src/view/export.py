@@ -1,8 +1,8 @@
-
 """
 This module contains the ExportView class, which is a tkinter Toplevel window for exporting studies.
 The ExportView class provides a user interface for selecting and exporting studies from a project.
 """
+
 import os
 from datetime import datetime
 import logging
@@ -19,6 +19,7 @@ from controller.project import (
 from utils.translate import _
 from utils.storage import count_studies_series_images
 from view.dashboard import Dashboard
+from view.contact_sheet import ContactSheet
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,7 @@ class ExportView(tk.Toplevel):
         _clear_selection_button (ctk.CTkButton): The button for clearing the selection.
         _export_button (ctk.CTkButton): The button for initiating export.
     """
+
     ux_poll_export_response_interval = 500  # milli-seconds
 
     def __init__(
@@ -149,7 +151,7 @@ class ExportView(tk.Toplevel):
         self._tree.tag_configure("red", background="red")
 
         # Populate treeview with existing patients
-        self._update_tree_from_images_direcctory()
+        self._update_tree_from_images_directory()
 
         # Create a Scrollbar and associate it with the Treeview
         scrollbar = ttk.Scrollbar(self._export_frame, orient="vertical", command=self._tree.yview)
@@ -201,6 +203,14 @@ class ExportView(tk.Toplevel):
             command=self._cancel_export_button_pressed,
         )
         self._cancel_export_button.grid(row=0, column=2, padx=PAD, pady=PAD, sticky="w")
+
+        self._contact_sheet_button = ctk.CTkButton(
+            self._status_frame,
+            width=ButtonWidth,
+            text=_("Contact Sheet"),
+            command=self._contact_sheet_button_pressed,
+        )
+        self._contact_sheet_button.grid(row=0, column=4, padx=PAD, pady=PAD, sticky="w")
 
         self._create_phi_button = ctk.CTkButton(
             self._status_frame,
@@ -268,7 +278,7 @@ class ExportView(tk.Toplevel):
         self._cancel_export_button.configure(state="disabled")
         self._tree.configure(selectmode="extended")
 
-    def _update_tree_from_images_direcctory(self):
+    def _update_tree_from_images_directory(self):
         # Images Directory Sub-directory Names = Patient IDs
         # Sequentially added
         anon_pt_ids = [
@@ -329,6 +339,12 @@ class ExportView(tk.Toplevel):
         else:
             self._error_frame.grid_remove()
 
+    def _contact_sheet_button_pressed(self):
+        pts_selected = list(self._tree.selection())
+        if len(pts_selected):
+            contact_sheet = ContactSheet(pts_selected, self._controller.model.images_dir())
+            contact_sheet.focus()
+
     def _refresh_button_pressed(self):
         if self._export_active:
             logger.error(f"Refresh disabled, export is active")
@@ -336,7 +352,7 @@ class ExportView(tk.Toplevel):
         logger.info(f"Refresh button pressed, uodate tree from images directory...")
         # Clear tree to ensure all items are removed before re-populating:
         self._tree.delete(*self._tree.get_children())
-        self._update_tree_from_images_direcctory()
+        self._update_tree_from_images_directory()
         self._enable_action_buttons()
 
     def _select_all_button_pressed(self):

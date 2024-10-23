@@ -84,7 +84,7 @@ class ProjectModel:
     # As per instructions here: https://www.medicalconnections.co.uk/kb/ImplementationUID-And-ImplementationName
     RSNA_ROOT_ORG_UID = "1.2.826.0.1.3680043.10.474"  # sub UID from medicalconnections.co.uk as used by JavaAnonymizer
     IMPLEMENTATION_CLASS_UID = RSNA_ROOT_ORG_UID + ".1"  # UID: (0002,0012)
-    IMPLEMENTATION_VERSION_NAME = "rsna_anon" + __version__  # SH: (0002,0013)
+    IMPLEMENTATION_VERSION_NAME = "rsna_anon_" + __version__  # SH: (0002,0013)
 
     @staticmethod
     def default_site_id() -> str:
@@ -156,14 +156,14 @@ class ProjectModel:
 
     @staticmethod
     def default_logging_levels() -> LoggingLevels:
-        return LoggingLevels(INFO, WARNING, False)
+        return LoggingLevels(DEBUG, WARNING, False)
 
     version: int = MODEL_VERSION
     language_code: str = field(default_factory=default_language_code)
     site_id: str = field(default_factory=default_site_id)
     project_name: str = field(default_factory=default_project_name)
     uid_root: str = field(default_factory=default_uid_root)
-    remove_pixel_phi: bool = False
+    remove_pixel_phi: bool = True
     storage_dir: Path = field(default_factory=default_storage_dir)
     modalities: List[str] = field(default_factory=default_modalities)
     storage_classes: List[str] = field(default_factory=default_storage_classes)  # re-initialised in post_init

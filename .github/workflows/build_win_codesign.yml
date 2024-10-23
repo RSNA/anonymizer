@@ -18,7 +18,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-2022, windows-latest, macos-13, macos-latest, ubuntu-latest]
+        os: [windows-latest]
 
     steps:
     - name: Checkout repository
@@ -36,23 +36,6 @@ jobs:
     - name: Install dependencies including development dependencies
       run: |
           pipenv install --dev
-    
-    - name: Run Unit Tests within pipenv with pytest and generate coverage report
-      env:
-        AWS_USERNAME: ${{ secrets.AWS_USERNAME }}
-        AWS_PASSWORD: ${{ secrets.AWS_PASSWORD }}
-      run: |
-        pipenv run coverage run -m pytest tests --log-cli-level=WARN
-        pipenv run coverage report -i --omit="tests/*" --fail-under=60
-
-    - name: List site-packages
-      run: |
-        pipenv run python -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())"
-
-    - name: Install create-dmg for macos
-      if: runner.os == 'macOS'
-      run: |
-        brew install create-dmg
 
     - name: PyInstaller - Build for ${{ matrix.os }}
       run: |
@@ -66,6 +49,16 @@ jobs:
         path: src/dist
         if-no-files-found: error
         retention-days: 14
+
+    - name: Sign Windows executable
+      uses: signpath/github-action-submit-signing-request@v1
+      with:
+        api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
+        organization-id: '<SignPath organization id>'
+        project-slug: '<SignPath project slug>'
+        signing-policy-slug: '<SignPath policy slug>'
+        github-artifact-id: '${{steps.<upload-artifact-step-id>.outputs.artifact-id}}'
+        wait-for-completion: false
 
     
     

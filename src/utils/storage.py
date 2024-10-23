@@ -12,7 +12,7 @@ Classes:
 """
 
 import os
-from typing import List, Union
+from typing import Union
 from dataclasses import dataclass
 from pathlib import Path
 from openpyxl import Workbook, load_workbook
@@ -23,7 +23,7 @@ from openpyxl.workbook.child import _WorkbookChild
 DICOM_FILE_SUFFIX = ".dcm"
 
 
-def count_studies_series_images(patient_path: str):
+def count_studies_series_images(patient_path: str) -> tuple[int, int, int]:
     """
     Counts the number of studies, series, and images in a given patient directory in the anonymizer store
 
@@ -47,6 +47,25 @@ def count_studies_series_images(patient_path: str):
                 image_count += 1
 
     return study_count, series_count, image_count
+
+
+def patient_dcm_files(patient_path: str) -> list[Path]:
+    """
+    Retrieves paths for each dicom file for a patient
+
+    Args:
+        patient_path (str): The path to the patient directory.
+
+    Returns:
+        List of Path objects
+    """
+
+    return [
+        Path(root) / file
+        for root, _, files in os.walk(patient_path)
+        for file in files
+        if file.endswith(DICOM_FILE_SUFFIX)
+    ]
 
 
 def count_study_images(base_dir: Path, anon_pt_id: str, study_uid: str) -> int:
@@ -86,7 +105,7 @@ class JavaAnonymizerExportedStudy:
     PHI_StudyInstanceUID: str
 
 
-def read_java_anonymizer_index_xlsx(filename: str) -> List[JavaAnonymizerExportedStudy]:
+def read_java_anonymizer_index_xlsx(filename: str) -> list[JavaAnonymizerExportedStudy]:
     """
     Read data from the Java Anonymizer exported patient index file
     containing a single workbook & sheet with fields as per the JavaAnonymizerExportedStudy dataclass.
@@ -106,7 +125,7 @@ def read_java_anonymizer_index_xlsx(filename: str) -> List[JavaAnonymizerExporte
 
     workbook: Workbook = load_workbook(filename)
     sheet: Union[_WorkbookChild, None] = workbook.active
-    data: List[JavaAnonymizerExportedStudy] = []
+    data: list[JavaAnonymizerExportedStudy] = []
 
     if sheet is None or not isinstance(sheet, Worksheet):
         raise ValueError("No active sheet found in the workbook")
