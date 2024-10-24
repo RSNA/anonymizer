@@ -1,0 +1,64 @@
+# Deployment Notes:
+# For MacOS: To run executable after download requires removing the extended attributes via xattr -r -c <path to exe/app>
+
+name: anonymizer-test-build-upload
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+permissions:
+  contents: read
+
+jobs:
+
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+          python-version: "3.11.3"
+
+    - name: Install pipenv for virtual environment
+      run: |
+          pip install pipenv
+
+    - name: Install dependencies including development dependencies
+      run: |
+          pipenv install --dev
+
+    - name: PyInstaller - Build for ${{ matrix.os }}
+      run: |
+        cd src
+        pipenv run python build.py
+      
+    - name: Upload Artifact for ${{ matrix.os }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: anonymizer-${{ matrix.os }}-${{ env.version }}
+        path: src/dist
+        if-no-files-found: error
+        retention-days: 14
+
+    - name: Sign Windows executable
+      uses: signpath/github-action-submit-signing-request@v1
+      with:
+        api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
+        organization-id: '<SignPath organization id>'
+        project-slug: '<SignPath project slug>'
+        signing-policy-slug: '<SignPath policy slug>'
+        github-artifact-id: '${{steps.<upload-artifact-step-id>.outputs.artifact-id}}'
+        wait-for-completion: false
+
+    
+    
