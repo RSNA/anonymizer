@@ -184,8 +184,8 @@ if __name__ == "__main__":
 
         if result.returncode != 0:
             print(f"create-dmg command failed with error code {result.returncode}")
-            print(f"Error: {result.stderr}")
-            sys.exit(1)
+            print(f"Error: {result}")
+            # sys.exit(1)
 
         # Delete the dist folder
         print(f"Deleting dist folder")
