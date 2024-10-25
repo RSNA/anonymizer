@@ -467,6 +467,16 @@ class AnonymizerController:
         """
         self._model_change_flag = True  # for autosave manager
 
+        # If pydicom logging is on, trace phi UIDs and store incoming phi file in private/source
+        if self.model.logging_levels.pydicom:
+            logger.debug(f"=>{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}")
+            filename = self.local_storage_path(self.model.private_dir(), ds)
+            logger.debug(f"SOURCE STORE: {source} => {filename}")
+            try:
+                ds.save_as(filename)
+            except Exception as e:
+                logger.error(f"Error storing source file: {repr(e)}")
+
         # Calculate date delta from StudyDate and PatientID:
         date_delta = 0
         if hasattr(ds, "StudyDate") and hasattr(ds, "PatientID"):

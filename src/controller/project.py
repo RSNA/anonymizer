@@ -539,8 +539,6 @@ class ProjectController(AE):
             )
             return C_SUCCESS
 
-        logger.info(f"=>{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}")
-
         self.anonymizer.anonymize_dataset_ex(remote_scu, ds)
         return C_SUCCESS
 
