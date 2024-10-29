@@ -54,6 +54,7 @@ def controller(temp_dir):
         site_id=TEST_SITEID,
         project_name=TEST_PROJECTNAME,
         uid_root=TEST_UIDROOT,
+        remove_pixel_phi=False,
         storage_dir=anon_store,
         scu=LocalSCU,
         scp=LocalStorageSCP,

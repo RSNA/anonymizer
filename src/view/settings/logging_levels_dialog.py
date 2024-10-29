@@ -189,6 +189,9 @@ class LoggingLevelsDialog(tk.Toplevel):
             if not messagebox.askyesno(
                 title=_("Warning"),
                 message=_("Enabling debug mode in pydicom will cause PHI to be written to the log file.")
+                + _(
+                    "All incoming datasets, via network or file import, will also be written to the private subdirectory of storage folder."
+                )
                 + "\n\n"
                 + _("Are you sure you want to enable pydicom debug mode?"),
             ):
