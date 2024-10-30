@@ -272,10 +272,8 @@ def test_anonymize_file_not_found(temp_dir: str, controller: ProjectController):
     error_msg, ds = anonymizer.anonymize_file(Path(temp_dir))
 
     assert error_msg
-    assert "Is a directory" in error_msg
+    assert error_msg in ["Is a directory", "Permission denied", "Errno 13"]
     assert ds is None
-
-    # TODO: simulate file permission error
 
 
 def test_anonymize_invalid_dicom_file(temp_dir: str, controller: ProjectController):

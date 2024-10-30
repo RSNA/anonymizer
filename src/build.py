@@ -7,7 +7,7 @@
 # pipenv shell
 # python build.py
 
-import os, sys
+import os, sys, time
 import shutil
 import subprocess
 import platform
@@ -131,6 +131,16 @@ if __name__ == "__main__":
 
     elif platform.system() == "Darwin":
 
+        if os.path.exists("dist"):
+            print(f"Deleting dist folder")
+            shutil.rmtree("dist")
+            time.sleep(1)
+
+        if os.path.exists("dmg"):
+            print(f"Deleting dmg folder")
+            shutil.rmtree("dmg")
+            time.sleep(1)
+
         PyInstaller.__main__.run(
             [
                 "--noconfirm",
@@ -142,7 +152,7 @@ if __name__ == "__main__":
                 "assets:assets",
                 "--collect-all",
                 "easyocr",
-                "--strip",
+                # "--strip",
                 "--log-level",
                 "INFO",
                 "--icon",
@@ -177,7 +187,15 @@ if __name__ == "__main__":
         print(f"Creating DMG file for {build_version_name}")
         dmg_path = f"dmg/{build_version_name}.dmg"
         result = subprocess.run(
-            ["create-dmg", "--app-drop-link", "600", "185", "--skip-jenkins", "--hdiutil-quiet", dmg_path, bundle_path],
+            [
+                "create-dmg",
+                "--app-drop-link",
+                "600",
+                "185",
+                "--skip-jenkins",
+                dmg_path,
+                bundle_path,
+            ],  #  "--hdiutil-quiet", dmg_path, bundle_path],
             capture_output=True,
             text=True,
         )
@@ -185,11 +203,15 @@ if __name__ == "__main__":
         if result.returncode != 0:
             print(f"create-dmg command failed with error code {result.returncode}")
             print(f"Error: {result}")
-            # sys.exit(1)
+            sys.exit(1)
+
+        time.sleep(1)
 
         # Delete the dist folder
         print(f"Deleting dist folder")
         shutil.rmtree("dist")
+
+        time.sleep(1)
 
         # Rename the "dmg" directory to "dist"
         os.rename("dmg", "dist")
