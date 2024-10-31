@@ -70,12 +70,6 @@ msgstr ""
 msgid "Export is busy, please wait for export to complete before closing project."
 msgstr ""
 
-msgid "Anonymizer Workers Busy"
-msgstr ""
-
-msgid "Anonymizer queues are not empty, please wait for workers to process files before closing project."
-msgstr ""
-
 msgid "Clone Project Error"
 msgstr ""
 
@@ -137,12 +131,6 @@ msgid "Export is busy, please wait for export to complete before changing settin
 msgstr ""
 
 msgid "Project Settings"
-msgstr ""
-
-msgid "Project restart"
-msgstr ""
-
-msgid "The settings change will take effect when the project is next opened."
 msgstr ""
 
 msgid "New Project"
@@ -254,18 +242,6 @@ msgid "Storage_Error"
 msgstr ""
 
 msgid "Dataset missing required attributes"
-msgstr ""
-
-msgid "Quarantined"
-msgstr ""
-
-msgid "Missing Attributes"
-msgstr ""
-
-msgid "Instance already stored"
-msgstr ""
-
-msgid "Storage Class mismatch"
 msgstr ""
 
 msgid "DICOM C-STORE scp is already running on"
@@ -397,12 +373,6 @@ msgstr ""
 msgid "quarantine"
 msgstr ""
 
-msgid "Contact sheet for"
-msgstr ""
-
-msgid "selected patient(s)"
-msgstr ""
-
 msgid "Logging Levels"
 msgstr ""
 
@@ -413,9 +383,6 @@ msgid "Warning"
 msgstr ""
 
 msgid "Enabling debug mode in pydicom will cause PHI to be written to the log file."
-msgstr ""
-
-msgid "All incoming datasets, via network or file import, will also be written to the private subdirectory of storage folder."
 msgstr ""
 
 msgid "Are you sure you want to enable pydicom debug mode?"
@@ -541,9 +508,6 @@ msgstr ""
 msgid "UID Root"
 msgstr ""
 
-msgid "Remove Pixel PHI"
-msgstr ""
-
 msgid "DICOM Servers"
 msgstr ""
 
@@ -628,10 +592,10 @@ msgstr ""
 msgid "The Java Index data will be processed into the Python Anonymizer database when the project is created."
 msgstr ""
 
-msgid "Importing Study"
+msgid "Importing Studies"
 msgstr ""
 
-msgid "Importing Studies"
+msgid "Importing Study"
 msgstr ""
 
 msgid "Import from"
@@ -646,18 +610,6 @@ msgstr ""
 msgid "Close"
 msgstr ""
 
-msgid "of"
-msgstr ""
-
-msgid "Study Metadata"
-msgstr ""
-
-msgid "Error"
-msgstr ""
-
-msgid "Errors"
-msgstr ""
-
 msgid "Error retrieving ANY Study Metadata"
 msgstr ""
 
@@ -667,16 +619,13 @@ msgstr ""
 msgid "No instances to import"
 msgstr ""
 
-msgid "Study"
-msgstr ""
-
-msgid "Studies"
-msgstr ""
-
 msgid "at"
 msgstr ""
 
 msgid "level"
+msgstr ""
+
+msgid "of"
 msgstr ""
 
 msgid "Images"
@@ -695,6 +644,9 @@ msgid "Patient Name"
 msgstr ""
 
 msgid "Anonymized ID"
+msgstr ""
+
+msgid "Studies"
 msgstr ""
 
 msgid "Series"
@@ -719,9 +671,6 @@ msgid "Patients"
 msgstr ""
 
 msgid "Cancel Export"
-msgstr ""
-
-msgid "Contact Sheet"
 msgstr ""
 
 msgid "Create Patient Lookup"
@@ -868,19 +817,13 @@ msgstr ""
 msgid "Enter at least one search criterion"
 msgstr ""
 
-msgid "AccNos"
+msgid " Studies"
 msgstr ""
 
 msgid "Cancel active Query?"
 msgstr ""
 
-msgid "Quarantine"
-msgstr ""
-
-msgid "Metadata Queue"
-msgstr ""
-
-msgid "Pixel PHI Queue"
+msgid "Anonymizer Queue"
 msgstr ""
 
 msgid "online"
@@ -925,7 +868,7 @@ msgstr ""
 msgid "Easy to use, advanced DICOM expertise not required!"
 msgstr ""
 
-msgid "Use it to ensure privacy by removing protected identity & health information (PHI/PII) from both metadata and burnt into pixel data."
+msgid "Use it to ensure privacy by removing protected health information (PHI)."
 msgstr ""
 
 msgid "Go to Help/Overview for a quick overview."
@@ -938,4 +881,70 @@ msgid "Go to Help/Operation for instructions on how to use the program."
 msgstr ""
 
 msgid "Select File/New Project to start."
+msgstr ""
+
+msgid "Study Metadata"
+msgstr ""
+
+msgid "Error"
+msgstr ""
+
+msgid "Errors"
+msgstr ""
+
+msgid "Study"
+msgstr ""
+
+msgid "Anonymizer Workers Busy"
+msgstr ""
+
+msgid "Anonymizer queues are not empty, please wait for workers to process files before closing project."
+msgstr ""
+
+msgid "Project restart"
+msgstr ""
+
+msgid "The settings change will take effect when the project is next opened."
+msgstr ""
+
+msgid "Quarantined"
+msgstr ""
+
+msgid "Missing Attributes"
+msgstr ""
+
+msgid "Instance already stored"
+msgstr ""
+
+msgid "Storage Class mismatch"
+msgstr ""
+
+msgid "Contact sheet for"
+msgstr ""
+
+msgid "selected patient(s)"
+msgstr ""
+
+msgid "All incoming datasets, via network or file import, will also be written to the private subdirectory of storage folder."
+msgstr ""
+
+msgid "Remove Pixel PHI"
+msgstr ""
+
+msgid "Contact Sheet"
+msgstr ""
+
+msgid "AccNos"
+msgstr ""
+
+msgid "Quarantine"
+msgstr ""
+
+msgid "Metadata Queue"
+msgstr ""
+
+msgid "Pixel PHI Queue"
+msgstr ""
+
+msgid "Use it to ensure privacy by removing protected identity & health information (PHI/PII) from both metadata and burnt into pixel data."
 msgstr ""

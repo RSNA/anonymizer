@@ -51,7 +51,9 @@ class WelcomeView(ctk.CTkFrame):
             + "\n\n"
             + _("Easy to use, advanced DICOM expertise not required!")
             + "\n\n"
-            + _("Use it to ensure privacy by removing protected health information (PHI).")
+            + _(
+                "Use it to ensure privacy by removing protected identity & health information (PHI/PII) from both metadata and burnt into pixel data."
+            )
             + "\n\n"
             + _("Go to Help/Overview for a quick overview.")
             + "\n\n"

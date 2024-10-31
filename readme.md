@@ -67,9 +67,11 @@ Languages for 17.1: `en_US, de, es, fr`
 2. Mac OSX: `brew install gettext`
 3. Linux: `sudo apt-get install gettext`
 #### Extracting messages from source files:
-Execute `assets/locales/extract_translations.sh`
+cd src/assets/locales/
+./extract_translations.sh
 #### Updating translations:
-Execute `assets/locales/update_translations.sh`
+cd src/assets/locales/
+./update_translations.sh
 ### Software Architecture
 Full class diagram [here](class_diagram.md)
 ### Model 
