@@ -18,7 +18,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-latest]
 
     steps:
     - name: Checkout repository
@@ -58,7 +58,37 @@ jobs:
       run: |
         cd src
         pipenv run python build.py
-      
+
+    - name: Upload Windows EXE artifact only
+      id: upload-win-exe
+      if: runner.os == 'windows'
+      uses: actions/upload-artifact@v4
+      with:
+        name: anonymizer-${{ matrix.os }}-${{ env.version }}
+        path: src/dist/Anonymizer_${{ env.version }}.exe
+        if-no-files-found: error
+        retention-days: 1
+
+    - name: Sign Windows executable using SignPath
+      if: runner.os == 'windows'
+      uses: signpath/github-action-submit-signing-request@v1
+      with:
+        api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
+        organization-id: '4e519f49-439f-43aa-8fc1-e1f19225e705'
+        project-slug: 'anonymizer'
+        signing-policy-slug: 'test-signing'
+        github-artifact-id: '${{steps.upload-win-exe.outputs.artifact-id}}'
+        wait-for-completion: true
+        output-artifact-directory: 'src/dist/signed'
+        parameters: |
+          Version: ${{ env.version }}
+          Release_Tag: ${{ env.version }}
+
+    - name: Overwrite Unsigned Executable
+      if: runner.os == 'windows'
+      run: |
+        mv src/dist/signed/Anonymizer_${{ env.version }}.exe src/dist/Anonymizer_${{ env.version }}.exe
+          
     - name: Upload Artifact for ${{ matrix.os }}
       uses: actions/upload-artifact@v4
       with:
@@ -66,6 +96,8 @@ jobs:
         path: src/dist
         if-no-files-found: error
         retention-days: 14
+
+    
 
     
     
