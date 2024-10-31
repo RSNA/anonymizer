@@ -81,7 +81,7 @@ jobs:
         wait-for-completion: true
         output-artifact-directory: 'src/dist/signed'
         parameters: |
-          Version: ${{ env.version }}
+          Version: ${{ toJSON(env.version) }}
           Release_Tag: ${{ env.version }}
 
     - name: Overwrite Unsigned Executable
