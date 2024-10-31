@@ -80,10 +80,7 @@ jobs:
         github-artifact-id: '${{steps.upload-win-exe.outputs.artifact-id}}'
         wait-for-completion: true
         output-artifact-directory: 'src/dist/signed'
-        parameters: |
-          Version: ${{ toJSON(env.version) }}
-          Release_Tag: ${{ env.version }}
-
+        
     - name: Overwrite Unsigned Executable
       if: runner.os == 'windows'
       run: |
