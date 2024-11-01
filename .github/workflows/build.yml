@@ -74,7 +74,7 @@ jobs:
       uses: signpath/github-action-submit-signing-request@v1
       with:
         api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
-        organization-id: '4e519f49-439f-43aa-8fc1-e1f19225e705'
+        organization-id: 'AIgeQAFDsuu6qtlJV/2ZR6ZdXKcy0SeAOqqnyVl3FKYY'
         project-slug: 'anonymizer'
         signing-policy-slug: 'test-signing'
         github-artifact-id: '${{steps.upload-win-exe.outputs.artifact-id}}'
