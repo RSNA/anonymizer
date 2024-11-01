@@ -64,7 +64,7 @@ jobs:
       if: runner.os == 'windows'
       uses: actions/upload-artifact@v4
       with:
-        name: anonymizer-${{ matrix.os }}-${{ env.version }}
+        name: anonymizer_exe_only-${{ matrix.os }}-${{ env.version }}
         path: src/dist/Anonymizer_${{ env.version }}/Anonymizer_${{ env.version }}.exe
         if-no-files-found: error
         retention-days: 1
