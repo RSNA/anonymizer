@@ -62,13 +62,13 @@ jobs:
     - name: Upload Windows EXE artifact only
       id: upload-win-exe
       if: runner.os == 'windows'
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: anonymizer-${{ matrix.os }}-${{ env.version }}
         path: src/dist/Anonymizer_${{ env.version }}/Anonymizer_${{ env.version }}.exe
         if-no-files-found: error
         retention-days: 1
-        archive: false 
+        archive: false
 
     - name: Sign Windows executable using SignPath
       if: runner.os == 'windows'
