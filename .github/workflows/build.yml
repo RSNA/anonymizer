@@ -62,19 +62,20 @@ jobs:
     - name: Upload Windows EXE artifact only
       id: upload-win-exe
       if: runner.os == 'windows'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3
       with:
         name: anonymizer-${{ matrix.os }}-${{ env.version }}
         path: src/dist/Anonymizer_${{ env.version }}/Anonymizer_${{ env.version }}.exe
         if-no-files-found: error
         retention-days: 1
+        archive: false 
 
     - name: Sign Windows executable using SignPath
       if: runner.os == 'windows'
       uses: signpath/github-action-submit-signing-request@v1
       with:
         api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
-        organization-id: 'AIgeQAFDsuu6qtlJV/2ZR6ZdXKcy0SeAOqqnyVl3FKYY'
+        organization-id: '4e519f49-439f-43aa-8fc1-e1f19225e705'
         project-slug: 'anonymizer'
         signing-policy-slug: 'test-signing'
         github-artifact-id: '${{steps.upload-win-exe.outputs.artifact-id}}'
