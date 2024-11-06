@@ -105,6 +105,8 @@ if __name__ == "__main__":
             [
                 "--noconfirm",
                 "--onedir",
+                "--paths",
+                "./_internal",
                 "--splash",
                 "assets\\icons\\rsna_logo_head_profile_titled.png",
                 "--windowed",
