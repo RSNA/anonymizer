@@ -85,8 +85,9 @@ jobs:
     - name: Overwrite Unsigned Executable
       if: runner.os == 'windows'
       run: |
-        mv src/dist/signed/Anonymizer_${{ env.version }}.exe src/dist/Anonymizer_${{ env.version }}.exe
-          
+        if exist src\dist\Anonymizer_${{ env.version }}\Anonymizer_${{ env.version }}.exe del src\dist\Anonymizer_${{ env.version }}\Anonymizer_${{ env.version }}.exe
+        move src\dist\signed\Anonymizer_${{ env.version }}.exe src\dist\Anonymizer_${{ env.version }}\Anonymizer_${{ env.version }}.exe
+              
     - name: Upload Artifact for ${{ matrix.os }}
       uses: actions/upload-artifact@v4
       with:
