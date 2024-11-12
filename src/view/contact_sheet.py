@@ -1,15 +1,14 @@
 from pathlib import Path
 import logging
-import pydicom
+from pydicom import dcmread
 from pydicom.pixel_data_handlers.util import apply_voi_lut, apply_modality_lut
 import numpy as np
 from PIL import Image
-from cv2 import normalize, NORM_MINMAX, equalizeHist
+from cv2 import normalize, NORM_MINMAX, CV_8U
 import customtkinter as ctk
 from utils.storage import get_dcm_files
 from utils.translate import _
-from io import BytesIO
-import tempfile
+
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +49,7 @@ class ContactSheet(ctk.CTkToplevel):
         # Loop through all dicom files for these patient(s):
         for dcm_path in dcm_paths:
 
-            ds = pydicom.dcmread(dcm_path)
+            ds = dcmread(dcm_path)
 
             pixels = ds.pixel_array
             pi = ds.get("PhotometricInterpretation", None)
@@ -93,7 +92,6 @@ class ContactSheet(ctk.CTkToplevel):
 
         total_thumbnails = 0
 
-        # Process patients sequentially & display each series belonging to patient as a kaleidoscope:
         for patient_id in patient_ids:
 
             patient_path = Path(self._base_dir / patient_id)
@@ -109,7 +107,7 @@ class ContactSheet(ctk.CTkToplevel):
                         all_pixels = []
 
                         for dcm_path in dcm_paths:
-                            ds = pydicom.dcmread(dcm_path)
+                            ds = dcmread(dcm_path)
                             pixels = ds.pixel_array
                             pi = ds.get("PhotometricInterpretation", None)
                             if pi is None:
@@ -123,7 +121,7 @@ class ContactSheet(ctk.CTkToplevel):
                                     alpha=0,
                                     beta=255,
                                     norm_type=NORM_MINMAX,
-                                    dtype=-1,
+                                    dtype=CV_8U,
                                     mask=None,
                                 )
                                 pixels = pixels.astype(np.uint8)
@@ -132,10 +130,12 @@ class ContactSheet(ctk.CTkToplevel):
 
                             no_of_frames = ds.get("NumberOfFrames", 1)
                             if no_of_frames == 1:
-                                all_pixels.append(pixels)
+                                all_pixels.append(pixels[..., np.newaxis] if pixels.ndim == 2 else pixels)
                             else:
                                 for frame in range(no_of_frames):
-                                    all_pixels.append(pixels[frame])
+                                    all_pixels.append(
+                                        pixels[frame][..., np.newaxis] if pixels.ndim == 2 else pixels[frame]
+                                    )
 
                             # Create low, mid, and high contrast images
                             if all_pixels:

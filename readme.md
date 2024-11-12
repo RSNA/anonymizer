@@ -28,6 +28,13 @@ Select the correct binary download for your platform from the available [release
 5. Logs will be written to `~/Logs/Anonymizer/anonymizer.log`
 ## Documentation
 [Help files](https://rsna.github.io/anonymizer)
+## Sponsors
+
+<div style="display: flex; align-items: center;">
+  <img src="src/assets/icons/signpath_logo.svg" alt="SignPath Logo" style="max-height: 40px; margin-right: 10px;">
+  <p style="margin: 0;">Free code signing on Windows provided by <a href="https://about.signpath.io/">SignPath.io</a>, certificate by <a href="https://signpath.org/">SignPath Foundation</a></p>
+</div>
+
 ## Development
 ### Setup
 1. Setup python enviroment (>3.10) which includes Tkinter, recommend using pyenv with MacOS & Linux
