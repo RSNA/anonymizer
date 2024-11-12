@@ -32,7 +32,7 @@ Select the correct binary download for your platform from the available [release
 
 <div style="display: flex; align-items: center;">
   <img src="src/assets/icons/signpath_logo.svg" alt="SignPath Logo" style="max-height: 40px; margin-right: 10px;">
-  <p style="margin: 0;">Free code signing on Windows provided by <a href="https://about.signpath.io/">SignPath.io</a>, certificate by <a href="https://signpath.org/">SignPath Foundation</a></p>
+  <p>Free code signing on Windows provided by <a href="https://about.signpath.io/">SignPath.io</a>, certificate by <a href="https://signpath.org/">SignPath Foundation</a></p>
 </div>
 
 ## Development
