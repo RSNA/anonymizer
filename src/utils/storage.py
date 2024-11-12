@@ -49,22 +49,19 @@ def count_studies_series_images(patient_path: str) -> tuple[int, int, int]:
     return study_count, series_count, image_count
 
 
-def patient_dcm_files(patient_path: str) -> list[Path]:
+def get_dcm_files(root_path: str) -> list[Path]:
     """
-    Retrieves paths for each dicom file for a patient
+    Retrieves paths of each dicom file from a root path which could be at patient, study or series level
 
     Args:
-        patient_path (str): The path to the patient directory.
+        root_path (str): The root path to start the search for dicom files.
 
     Returns:
         List of Path objects
     """
 
     return [
-        Path(root) / file
-        for root, _, files in os.walk(patient_path)
-        for file in files
-        if file.endswith(DICOM_FILE_SUFFIX)
+        Path(root) / file for root, _, files in os.walk(root_path) for file in files if file.endswith(DICOM_FILE_SUFFIX)
     ]
 
 

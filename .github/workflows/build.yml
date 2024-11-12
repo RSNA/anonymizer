@@ -77,7 +77,7 @@ jobs:
         api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
         organization-id: '4e519f49-439f-43aa-8fc1-e1f19225e705'
         project-slug: 'anonymizer'
-        signing-policy-slug: 'test-signing'
+        signing-policy-slug: 'release-signing'
         github-artifact-id: '${{steps.upload-win-exe.outputs.artifact-id}}'
         wait-for-completion: true
         output-artifact-directory: 'src/dist/signed'
