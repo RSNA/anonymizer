@@ -302,9 +302,11 @@ class SettingsDialog(tk.Toplevel):
         )
 
     def _project_name_change(self, name, index, mode):
-        pass
         logger.info(f"_project_name_change")
-        self.model.project_name = self.project_name_var.get()
+        new_project_name = self.project_name_var.get()
+        if not new_project_name:
+            return
+        self.model.project_name = new_project_name
         logger.info(f"Project Name updated: {self.model.project_name}")
         self.model.storage_dir = self.model.storage_dir.parent / self.model.project_name
         self._storage_dir_button.configure(text=self.model.abridged_storage_dir())

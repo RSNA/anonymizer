@@ -67,6 +67,7 @@ class Anonymizer(ctk.CTk):
         self.load_config()  # may set language
         self.controller: ProjectController | None = None
         self.welcome_view: WelcomeView = WelcomeView(self, self.change_language)
+        self.welcome_view.focus()
         self.query_view: QueryView | None = None
         self.export_view: ExportView | None = None
         self.help_views = {}

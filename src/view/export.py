@@ -19,7 +19,7 @@ from controller.project import (
 from utils.translate import _
 from utils.storage import count_studies_series_images
 from view.dashboard import Dashboard
-from view.contact_sheet import ContactSheet
+from view.kaleidoscope import KaleidoscopeView
 
 logger = logging.getLogger(__name__)
 
@@ -207,8 +207,8 @@ class ExportView(tk.Toplevel):
         self._contact_sheet_button = ctk.CTkButton(
             self._status_frame,
             width=ButtonWidth,
-            text=_("Contact Sheet"),
-            command=self._contact_sheet_button_pressed,
+            text=_("Kaleidoscope"),
+            command=self._kaleidoscope_button_pressed,
         )
         self._contact_sheet_button.grid(row=0, column=4, padx=PAD, pady=PAD, sticky="w")
 
@@ -339,11 +339,11 @@ class ExportView(tk.Toplevel):
         else:
             self._error_frame.grid_remove()
 
-    def _contact_sheet_button_pressed(self):
+    def _kaleidoscope_button_pressed(self):
         pts_selected = list(self._tree.selection())
         if len(pts_selected):
-            contact_sheet = ContactSheet(pts_selected, self._controller.model.images_dir())
-            contact_sheet.focus()
+            kaleidoscope_view = KaleidoscopeView(pts_selected, self._controller.model.images_dir())
+            kaleidoscope_view.focus()
 
     def _refresh_button_pressed(self):
         if self._export_active:
