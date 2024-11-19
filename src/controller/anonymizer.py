@@ -143,7 +143,7 @@ class AnonymizerController:
 
         # Spawn Anonymizer DATASET worker threads:
         for i in range(self.NUMBER_OF_DATASET_WORKER_THREADS):
-            ds_worker = self._worker = threading.Thread(
+            ds_worker = threading.Thread(
                 target=self._anonymize_dataset_worker,
                 name=f"AnonDatasetWorker_{i+1}",
                 args=(self._anon_ds_Q,),
@@ -153,7 +153,7 @@ class AnonymizerController:
 
         # Spawn Remove Pixel PHI Thread:
         if self.project_model.remove_pixel_phi:
-            px_worker = self._worker = threading.Thread(
+            px_worker = threading.Thread(
                 target=self._anonymizer_pixel_phi_worker,
                 name=f"AnonPixelWorker_1",
                 args=(self._anon_px_Q,),
@@ -670,5 +670,12 @@ class AnonymizerController:
                 logger.error(repr(e))
 
             px_Q.task_done()
+
+        # Cleanup resources used for Pixel PHI Neural back-end
+        del ocr_reader
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()  # Clear GPU memory cache
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
 
         logger.info(f"thread={threading.current_thread().name} end")

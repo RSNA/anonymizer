@@ -28,6 +28,7 @@ class WelcomeView(ctk.CTkFrame):
     PAD = 20
     TITLE_FONT_SIZE = 28
     WELCOME_TEXT_FONT_SIZE = 20
+    SPONSOR_TEXT_FONT_SIZE = 12
     TITLED_LOGO_FILE = "assets/icons/rsna_titled_logo_alpha.png"  # alpha channel  / transparent background
     TITLED_LOGO_WIDTH = 255
     TITLED_LOGO_HEIGHT = 155
@@ -62,6 +63,9 @@ class WelcomeView(ctk.CTkFrame):
             + _("Go to Help/Operation for instructions on how to use the program.")
             + "\n\n"
             + _("Select File/New Project to start.")
+        )
+        self.sponsor_text = _(
+            "Development of Anonymizer has been supported under the Medical Imaging and Data Resource Center (MIDRC) project, funded by the National Institute of Biomedical Imaging and Bioengineering (NIBIB) of the National Institutes of Health under contract 75N92020D00021 and through The Advanced Research Projects Agency for Health (ARPA-H)."
         )
         self.change_language_callback = change_language_callback
         self.font_family = ThemeManager.theme["CTkFont"]["family"]
@@ -111,3 +115,13 @@ class WelcomeView(ctk.CTkFrame):
             wraplength=self.WELCOME_TEXT_WRAP_LENGTH,
         )
         label_welcome_text.grid(row=3, column=0, padx=self.PAD * 2, pady=(self.PAD, self.PAD * 2))
+
+        # Sponsor Text:
+        label_sponsor_text = ctk.CTkLabel(
+            master=self,
+            text=self.sponsor_text,
+            font=ctk.CTkFont(family=self.font_family, size=self.SPONSOR_TEXT_FONT_SIZE),
+            justify="left",
+            wraplength=self.WELCOME_TEXT_WRAP_LENGTH,
+        )
+        label_sponsor_text.grid(row=4, column=0, padx=self.PAD * 2, pady=(self.PAD, self.PAD * 2))

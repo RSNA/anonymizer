@@ -985,6 +985,8 @@ def main():
     # GUI
     try:
         app = Anonymizer(Path(logs_dir))
+        app.lift()
+        app.focus_force()
         logger.info("ANONYMIZER GUI initialised successfully.")
     except Exception as e:
         logger.exception(f"Error initialising ANONYMIZER GUI, exiting: {str(e)}")

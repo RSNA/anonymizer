@@ -1,5 +1,6 @@
 from pathlib import Path
 import logging
+import threading
 from dataclasses import dataclass
 from pydicom import dcmread, Dataset
 from pydicom.pixel_data_handlers.util import apply_voi_lut, apply_modality_lut
@@ -30,7 +31,7 @@ from cv2 import (
 )
 
 import customtkinter as ctk
-from utils.storage import get_dcm_files
+from utils.storage import get_dcm_files, count_series
 from utils.translate import _
 
 
@@ -49,25 +50,98 @@ class kaleidoscope:
 class KaleidoscopeView(ctk.CTkToplevel):
     THUMBNAIL_SIZE = (400, 400)  # width x height pixels
 
-    def __init__(self, patient_ids: list[str], base_dir: Path):
+    def __init__(self, mono_font: ctk.CTkFont, patient_ids: list[str], base_dir: Path):
         super().__init__()
+        self._data_font = mono_font  # get mono font from app
         self._patient_ids = patient_ids
         self._base_dir = base_dir
-        self.geometry("1250x900")
+        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+
         self.title(_("Kaleidoscope for") + f" {len(patient_ids)} " + _("selected patient(s)"))
+        self.geometry("1250x900")
+        # TODO: set geometry of kaleidoscope window according to screen dimensions
         # screen_width = self.winfo_screenwidth()
         # screen_height = self.winfo_screenheight()
-        self._frame = ctk.CTkScrollableFrame(self, fg_color="black")
-        self._frame.pack(fill="both", expand=True)
-        self._columns = 3  # max(800 // self.THUMBNAIL_SIZE[0], 1)
-        logger.info(f"KaleidoscopeView for Patients={len(patient_ids)}, Columns={self._columns}")
-        self._create_kaleidoscopes()
-        self._create_sheet()
+        self._columns = 3
+        self._kaleidoscopes: list[kaleidoscope] = []
+        self._series_to_process = count_series(base_dir, patient_ids)
+        self._create_widgets()
+        self._stop_event = threading.Event()
+        self._ks_worker = threading.Thread(
+            target=self._load_kaleidoscopes_worker, args=(self._stop_event,), name="Load_Kaleidoscopes"
+        )
+        self._ks_worker.start()
 
-    def _on_image_click(self, event, kaleidoscope):
+        logger.info(
+            f"KaleidoscopeView for Patients={len(self._patient_ids)}, Total Series={self._series_to_process}, Columns={self._columns}"
+        )
+
+    def _create_widgets(self):
+        logger.info(f"_create_widgets")
+        PAD = 5
+        ButtonWidth = 100
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+        # 1. Kaleidoscope Frame:
+        self._ks_frame = ctk.CTkScrollableFrame(self, fg_color="black")
+        self._ks_frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nswe")
+        self._ks_frame.grid_rowconfigure(0, weight=1)
+
+        # 2. STATUS Frame:
+        self._status_frame = ctk.CTkFrame(self)
+        self._status_frame.grid(row=1, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")
+
+        # Status and progress bar:
+        self._status = ctk.CTkLabel(self._status_frame, font=self._data_font, text="")
+        self._status.grid(row=0, column=0, padx=PAD, pady=0, sticky="w")
+
+        self._progressbar = ctk.CTkProgressBar(
+            self._status_frame,
+        )
+        self._progressbar.grid(
+            row=0,
+            column=1,
+            padx=PAD,
+            pady=0,
+            sticky="w",
+        )
+        self._update_load_progress(0)
+
+    def _update_load_progress(self, series_processed):
+        self._progressbar.set(series_processed / self._series_to_process)
+        state_label = _("Loading")
+        entity_label = _("Series")
+        if series_processed == self._series_to_process:
+            state_label = _("Loaded") + " "
+        msg = state_label + f" {series_processed} " + _("of") + f" {self._series_to_process} " + entity_label
+        self._status.configure(text=msg)
+
+    def _on_cancel(self):
+        logger.info(f"_on_cancel")
+        if self._ks_worker and self._ks_worker.is_alive():
+            self._stop_event.set()
+            self._ks_worker.join()
+
+        # Clear the _kaleidoscopes list to release image references
+        for kaleidoscope in self._kaleidoscopes:
+            kaleidoscope.images.clear()
+        self._kaleidoscopes.clear()
+
+        # Unbind events and destroy widgets
+        # TODO: check if this is necessary
+        for widget in self._ks_frame.winfo_children():
+            widget.unbind("<Button-1>")  # Unbind events
+            widget.destroy()  # Explicitly destroy widget
+
+        self._ks_frame.destroy()
+        self._status_frame.destroy()
+        self.destroy()
+
+    def _on_image_click(self, event, kaleidoscope: kaleidoscope):
         logger.info(f"Image clicked: kaleidoscope: {kaleidoscope}")
 
-    def _load_patient_image_frames(self, patient_ids):
+    def _load_patient_image_frames(self, patient_ids: list[str]):
 
         # Anonymizer allocates UIDs sequentially as they arrive, sort in this order:
         # TODO: work out an efficient way to sort according to series.InstanceNumber
@@ -122,7 +196,7 @@ class KaleidoscopeView(ctk.CTkToplevel):
                     lambda event, path=dcm_path, frame_number=frame: self._on_image_click(event, path, frame_number),
                 )
 
-    def _resize_or_pad_image(self, image, target_size):
+    def _resize_or_pad_image(self, image: Image.Image, target_size: tuple[int, int]):
         """Resize or pad an image to match the target size (height, width)."""
         target_height, target_width = target_size
         logger.info(f"Resize image in series from {image.shape[1]}x{image.shape[0]} to {target_width}x{target_height}")
@@ -217,128 +291,118 @@ class KaleidoscopeView(ctk.CTkToplevel):
             )
         )
 
-    def _create_kaleidoscopes(self):
+    def _process_series(self, dcm_paths: list[str], patient_id: str):
+        """Process DICOM series and create a kaleidoscope object."""
+        ds = dcmread(dcm_paths[0])
+        pi = ds.get("PhotometricInterpretation", None)
+        if pi is None:
+            raise ValueError("No PhotometricInterpretation")
 
-        self._kaleidoscopes: list[kaleidoscope] = []
+        grayscale = pi in ["MONOCHROME1", "MONOCHROME2"]
+        no_of_frames = ds.get("NumberOfFrames", 1)
+
+        if len(dcm_paths) == 1 and no_of_frames == 1:
+            self._single_frame_kaleidoscope(ds)
+            return
+
+        target_size = (ds.get("Rows", None), ds.get("Columns", None))
+        all_series_frames = []
+
+        for dcm_path in dcm_paths:
+            if all_series_frames:
+                ds = dcmread(dcm_path)
+            pixels = ds.pixel_array
+
+            if grayscale:
+                pixels = apply_voi_lut(apply_modality_lut(pixels, ds), ds)
+                if pi == "MONOCHROME1":
+                    pixels = np.invert(pixels.astype(np.uint16))
+                pixels = np.stack([pixels] * 3, axis=-1)
+
+            if pixels.ndim == 4:
+                all_series_frames.append(pixels)
+            elif pixels.ndim == 3:
+                if pixels.shape[:2] != target_size:
+                    pixels = self._resize_or_pad_image(pixels, target_size)
+                all_series_frames.append(np.expand_dims(pixels, axis=0))
+            else:
+                raise ValueError("Unexpected pixel array shape")
+
+        all_series_frames = np.concatenate(all_series_frames, axis=0)
+
+        min_pixels = np.min(all_series_frames, axis=0)
+        min_projection = normalize(
+            src=min_pixels, dst=None, alpha=0, beta=255, norm_type=NORM_MINMAX, dtype=CV_8U
+        ).astype(np.uint8)
+        mean_pixels = np.mean(all_series_frames, axis=0)
+        mean_projection = normalize(
+            src=mean_pixels, dst=None, alpha=0, beta=255, norm_type=NORM_MINMAX, dtype=CV_8U
+        ).astype(np.uint8)
+        max_pixels = np.max(all_series_frames, axis=0)
+        max_projection = normalize(
+            src=max_pixels, dst=None, alpha=0, beta=255, norm_type=NORM_MINMAX, dtype=CV_8U
+        ).astype(np.uint8)
+
+        thumbnails = [
+            Image.fromarray(img).resize(tuple(dim * 2 for dim in self.THUMBNAIL_SIZE), Image.Resampling.NEAREST)
+            for img in [min_projection, mean_projection, max_projection]
+        ]
+
+        self._kaleidoscopes.append(
+            kaleidoscope(
+                patient_id=patient_id,
+                study_uid=ds.StudyInstanceUID,
+                series_uid=ds.SeriesInstanceUID,
+                series_description=ds.get("SeriesDescription", "?"),
+                images=thumbnails,
+            )
+        )
+
+    def _update_sheet(self, kaleidoscope: kaleidoscope):
+        series_processed = len(self._kaleidoscopes)
+        total_thumbnails = 3 * series_processed - 3
+
+        for image in kaleidoscope.images:
+            ctk_image = ctk.CTkImage(light_image=image, size=self.THUMBNAIL_SIZE)
+            label = ctk.CTkLabel(self._ks_frame, image=ctk_image, text="")
+            row = int(total_thumbnails // self._columns)
+            col = int(total_thumbnails % self._columns)
+            label.grid(row=row, column=col, padx=2, pady=10, sticky="nsew")
+            total_thumbnails += 1
+            label.bind("<Button-1>", lambda event, kaleidoscope=kaleidoscope: self._on_image_click(event, kaleidoscope))
+
+        self._update_load_progress(series_processed)
+
+    def _load_kaleidoscopes_worker(self, stop_event: threading.Event):
+
+        logger.info("_load_kaleidoscopes_worker start")
 
         for patient_id in self._patient_ids:
-
             patient_path = self._base_dir / Path(patient_id)
+            if not patient_path.is_dir():
+                continue
 
             for study_path in patient_path.iterdir():
-
                 if not study_path.is_dir():
                     continue
 
                 for series_path in study_path.iterdir():
+                    if stop_event.is_set():
+                        break
 
                     if not series_path.is_dir():
                         continue
 
                     dcm_paths = sorted(get_dcm_files(series_path))
-
                     logger.info(f"Processing series in {series_path} with {len(dcm_paths)} DICOM file(s)")
 
-                    # Get the target size from the first DICOM file
-                    ds = dcmread(dcm_paths[0])
-                    pi = ds.get("PhotometricInterpretation", None)
-                    if pi is None:
-                        raise ValueError("No PhotometricInterpretation ")
-                    grayscale = pi in ["MONOCHROME1", "MONOCHROME2"]
-                    no_of_frames = ds.get("NumberOfFrames", 1)
-
-                    # Handle Single Image/Frame in Series: image processing for text enhancement:
-                    if len(dcm_paths) == 1 and no_of_frames == 1:
-                        self._single_frame_kaleidoscope(ds)
+                    if len(dcm_paths) == 0:
                         continue
 
-                    # For series with more than one frame do min, mean, max intensity projections:
-                    target_size = (ds.get("Rows", None), ds.get("Columns", None))
-                    all_series_frames = []
+                    # Process the series for projections or single-frame enhancement
+                    self._process_series(dcm_paths, patient_id)
 
-                    # Loop through all dicom files in the series:
-                    for dcm_path in dcm_paths:
+                    # Update the sheet with the latest kaleidoscope
+                    self._update_sheet(self._kaleidoscopes[-1])
 
-                        if all_series_frames:
-                            ds = dcmread(dcm_path)
-
-                        pixels = ds.pixel_array
-
-                        if grayscale:
-                            pixels = apply_voi_lut(apply_modality_lut(pixels, ds), ds)
-                            if pi == "MONOCHROME1":
-                                pixels = np.invert(pixels.astype(np.uint16))
-                            # Convert Grayscale (1 channel) to RGB
-                            pixels = np.stack([pixels] * 3, axis=-1)
-
-                        if pixels.ndim == 4:  # [frame, height, width, channels]
-                            # Multiple Frames:
-                            # ADD these frames to the all_series_frames list
-                            all_series_frames.append(pixels)
-                        elif pixels.ndim == 3:  # [height, width, channels]
-                            # Single Frame:
-                            if pixels.shape[:2] != target_size:
-                                pixels = self._resize_or_pad_image(pixels, target_size)
-                            all_series_frames.append(np.expand_dims(pixels, axis=0))  # Convert to 4D shape
-                        else:
-                            raise ValueError("Unexpected pixel array shape")
-
-                    # After collecting all frames, compute the projections:
-                    # Convert list of frames to a 4D numpy array (frames, height, width, channels)
-                    all_series_frames = np.concatenate(all_series_frames, axis=0)
-
-                    # Calculate min, mean, and max projections along the frame axis (axis=0)
-                    min_pixels = np.min(all_series_frames, axis=0)
-                    min_projection = normalize(
-                        src=min_pixels, dst=None, alpha=0, beta=255, norm_type=NORM_MINMAX, dtype=CV_8U
-                    ).astype(np.uint8)
-                    mean_pixels = np.mean(all_series_frames, axis=0)
-                    mean_projection = normalize(
-                        src=mean_pixels, dst=None, alpha=0, beta=255, norm_type=NORM_MINMAX, dtype=CV_8U
-                    ).astype(np.uint8)
-                    max_pixels = np.max(all_series_frames, axis=0)
-                    max_projection = normalize(
-                        src=max_pixels, dst=None, alpha=0, beta=255, norm_type=NORM_MINMAX, dtype=CV_8U
-                    ).astype(np.uint8)
-
-                    thumbnails = [
-                        Image.fromarray(img)
-                        # .convert("RGB")
-                        .resize(tuple(dim * 2 for dim in self.THUMBNAIL_SIZE), Image.Resampling.NEAREST)
-                        for img in [min_projection, mean_projection, max_projection]
-                    ]
-
-                    self._kaleidoscopes.append(
-                        kaleidoscope(
-                            patient_id=patient_id,
-                            study_uid=ds.StudyInstanceUID,
-                            series_uid=ds.SeriesInstanceUID,
-                            series_description=ds.get("SeriesDescription", "?"),
-                            images=thumbnails,
-                        )
-                    )
-
-    def _create_sheet(self):
-        total_thumbnails = 0
-
-        for kaleidoscope in self._kaleidoscopes:
-            for image in kaleidoscope.images:
-                ctk_image = ctk.CTkImage(light_image=image, size=self.THUMBNAIL_SIZE)
-                label = ctk.CTkLabel(self._frame, image=ctk_image, text="")
-                row = int(total_thumbnails // self._columns)
-                col = int(total_thumbnails % self._columns)
-                label.grid(row=row, column=col, padx=1, pady=1, sticky="nsew")
-                total_thumbnails += 1
-                label.bind(
-                    "<Button-1>",
-                    lambda event, kaleidoscope=kaleidoscope: self._on_image_click(event, kaleidoscope),
-                )
-
-        # # Add rotation logic
-        # def rotate_images():
-        #     index = 0
-        #     while True:
-        #         ctk_image.configure(light_image=thumbnails[index])
-        #         self._frame.update_idletasks()
-        #         self._frame.after(500)  # Wait for 0.5 seconds
-        #         index = (index + 1) % len(thumbnails)
+        logger.info("_load_kaleidoscopes_worker end")

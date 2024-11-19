@@ -49,6 +49,31 @@ def count_studies_series_images(patient_path: str) -> tuple[int, int, int]:
     return study_count, series_count, image_count
 
 
+def count_series(base_dir: str, patient_ids: list[str]) -> int:
+    """
+    Counts the total number of series across multiple patients in the anonymizer store.
+
+    Args:
+        base_dir (str): The base directory containing patient folders.
+        patient_ids (list[str]): A list of patient IDs.
+
+    Returns:
+        The total number of series across all patient directories in patient_id list
+    """
+    total_series = 0
+
+    for patient_id in patient_ids:
+        patient_path = Path(base_dir) / patient_id
+        if not patient_path.exists():
+            continue  # Skip if the patient directory does not exist
+
+        for root, dirs, _ in os.walk(patient_path):
+            if root != str(patient_path):  # Count series in subdirectories only
+                total_series += len(dirs)
+
+    return total_series
+
+
 def get_dcm_files(root_path: str) -> list[Path]:
     """
     Retrieves paths of each dicom file from a root path which could be at patient, study or series level

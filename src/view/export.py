@@ -342,7 +342,7 @@ class ExportView(tk.Toplevel):
     def _kaleidoscope_button_pressed(self):
         pts_selected = list(self._tree.selection())
         if len(pts_selected):
-            kaleidoscope_view = KaleidoscopeView(pts_selected, self._controller.model.images_dir())
+            kaleidoscope_view = KaleidoscopeView(self._data_font, pts_selected, self._controller.model.images_dir())
             kaleidoscope_view.focus()
 
     def _refresh_button_pressed(self):
