@@ -64,9 +64,7 @@ class WelcomeView(ctk.CTkFrame):
             + "\n\n"
             + _("Select File/New Project to start.")
         )
-        self.sponsor_text = _(
-            "Development of Anonymizer has been supported under the Medical Imaging and Data Resource Center (MIDRC) project, funded by the National Institute of Biomedical Imaging and Bioengineering (NIBIB) of the National Institutes of Health under contract 75N92020D00021 and through The Advanced Research Projects Agency for Health (ARPA-H)."
-        )
+        self.sponsor_text = _("SPONSOR MESSAGE")
         self.change_language_callback = change_language_callback
         self.font_family = ThemeManager.theme["CTkFont"]["family"]
         self._create_widgets()

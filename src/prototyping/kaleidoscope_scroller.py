@@ -1,6 +1,7 @@
 from pathlib import Path
+import time
 import logging
-from math import ceil
+import threading
 from dataclasses import dataclass
 from pydicom import dcmread, Dataset
 from pydicom.pixel_data_handlers.util import apply_voi_lut, apply_modality_lut
@@ -29,8 +30,9 @@ from cv2 import (
     CHAIN_APPROX_SIMPLE,
     FILLED,
 )
+
 import customtkinter as ctk
-from utils.storage import get_dcm_files
+from utils.storage import get_dcm_files, count_series
 from utils.translate import _
 
 
@@ -46,59 +48,11 @@ class kaleidoscope:
     images: list[Image.Image]
 
 
-from enum import Enum
-
-
-class KaleidoscopeImageSize(Enum):
-    # rect size in pixels (width, height)
-    SMALL = (100, 100)
-    MEDIUM = (200, 200)
-    LARGE = (300, 300)
-
-    def width(self):
-        return self.value[0]
-
-    def height(self):
-        return self.value[1]
-
-
-class KaleidoscopePAD(Enum):
-    # padx, pady in pixels
-    SMALL = (2, 4)
-    MEDIUM = (3, 6)
-    LARGE = (5, 10)
-
-    def width(self):
-        return self.value[0]
-
-    def height(self):
-        return self.value[1]
-
-
-PAD_MAP = {
-    KaleidoscopeImageSize.SMALL: KaleidoscopePAD.SMALL,
-    KaleidoscopeImageSize.MEDIUM: KaleidoscopePAD.MEDIUM,
-    KaleidoscopeImageSize.LARGE: KaleidoscopePAD.LARGE,
-}
-
-
-def get_pad(size):
-    return PAD_MAP[size]
-
-
 class KaleidoscopeView(ctk.CTkToplevel):
-    KS_FRAME_RELATIVE_SIZE = (0.9, 0.9)  # fraction of screen size (width, height)
-    IMAGE_PAD = 2  # pixels between the kaleidoscopes images when combined
-
-    def _get_series_paths(self) -> list[str]:
-        return [
-            series_path
-            for patient_id in self._patient_ids
-            for study_path in (self._base_dir / Path(patient_id)).iterdir()
-            if study_path.is_dir()
-            for series_path in study_path.iterdir()
-            if series_path.is_dir()
-        ]
+    WORKER_THREAD_SLEEP_SECS = 0.075  # for UX responsiveness
+    THUMBNAIL_SIZE = (100, 100)  # width x height pixels
+    MAX_ROWS = 1000
+    PAD = 5
 
     def __init__(self, mono_font: ctk.CTkFont, base_dir: Path, patient_ids: list[str] = None):
         super().__init__()
@@ -107,204 +61,142 @@ class KaleidoscopeView(ctk.CTkToplevel):
         if not base_dir.is_dir():
             raise ValueError(f"{base_dir} is not a valid directory")
 
-        # If patient_ids is not specified, iterate through ALL patient sub-directories to compile patient_ids:
+        # If patient_ids not specified, iterate through ALL patient sub-directories to compile patient_ids:
         if patient_ids is None:
             patient_ids = [p for p in base_dir.iterdir() if p.is_dir()]
 
         if not patient_ids:
-            raise ValueError("No patients for KaleidoscopeView")
+            raise ValueError("No patients for kaleidoscope")
 
         self._patient_ids = patient_ids
         self._base_dir = base_dir
-
-        self._series_paths = self._get_series_paths()
-        if not self._series_paths:
-            raise ValueError(f"No series paths found for patient list")
-
-        self._total_series = len(self._series_paths)
-        self._image_size = KaleidoscopeImageSize.MEDIUM
-
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
-        self.resizable(width=False, height=False)
+        self.resizable(width=True, height=True)
+        self._columns = 3
+        self._rows = 0
         self._create_widgets()
-        self._page_number = 0
-        self._loading_page = False
-        self._ks_labels = {}
-
-        title = (
+        self._kaleidoscopes: list[kaleidoscope] = []
+        self._total_series = count_series(base_dir, patient_ids)
+        self.title(
             _("View")
             + f" {len(patient_ids)} "
             + (_("Patients") if len(patient_ids) > 1 else _("Patient"))
-            + " "
-            + _("with")
             + f" {self._total_series} "
             + _("Series")
         )
-
-        if self._pages > 1:
-            title = title + " " + _("over") + f" {self._pages} " + _("Pages")
-
-        self.title(title)
-
+        self._update_load_progress(1)
+        self._stop_event = threading.Event()
+        self._ks_worker = threading.Thread(target=self._load_kaleidoscopes_worker, name="Load_Kaleidoscopes")
+        self._ks_worker.start()
+        self.after(250, self._populate_ks_frame)
         logger.info(
-            f"KaleidoscopeView for Patients={len(self._patient_ids)}, Total Series={self._total_series}, Total Pages={self._pages}"
+            f"KaleidoscopeView for Patients={len(self._patient_ids)}, Total Series={self._total_series}, Columns={self._columns}"
         )
 
-        # Bind Arrow buttons to page control
-        self.bind("<Left>", lambda e: self._populate_ks_frame(max(0, self._current_page - 1)))
-        self.bind("<Right>", lambda e: self._populate_ks_frame(min(self._pages - 1, self._current_page + 1)))
-
-        self._populate_ks_frame(0)
+        self.after(500, self)
 
     def _create_widgets(self):
         logger.info(f"_create_widgets")
-        PAD = 10
-
-        ks_frame_width = int(self.KS_FRAME_RELATIVE_SIZE[0] * self.winfo_screenwidth())
-        ks_frame_height = int(self.KS_FRAME_RELATIVE_SIZE[1] * self.winfo_screenheight())
-        padded_combined_width = (
-            3 * self._image_size.width() + 2 * self.IMAGE_PAD + 2 * get_pad(self._image_size).width()
-        )
-        padded_combined_height = self._image_size.height() + get_pad(self._image_size).height()
-
-        self._cols = ks_frame_width // padded_combined_width
-        self._rows = ks_frame_height // padded_combined_height
-
-        self._pages = ceil(self._total_series / (self._rows * self._cols))
-
+        PAD = self.PAD
+        ButtonWidth = 100
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
         # 1. Kaleidoscope Frame:
-        self._ks_frame = ctk.CTkFrame(
+        self._ks_frame = ctk.CTkScrollableFrame(
             self,
-            width=ks_frame_width,
-            height=ks_frame_height,
+            width=(self.THUMBNAIL_SIZE[0] + PAD) * 3,
+            height=3 * self.winfo_screenheight() // 4,
             fg_color="black",
         )
         self._ks_frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nswe")
 
-        # 2. Paging Frame:
-        self._paging_frame = ctk.CTkFrame(self)
-        self._paging_frame.grid(row=1, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")
+        self.canvas = self._ks_frame._parent_canvas
 
-        if self._pages > 1:
-            self._page_slider = ctk.CTkSlider(
-                self._paging_frame,
-                from_=0,
-                to=self._pages - 1,
-                number_of_steps=self._pages - 1,
-                command=self.page_slider_event,
-            )
-            self._page_slider.grid(row=0, column=0, padx=PAD, pady=0, sticky="w")
-            self._page_slider.set(0)
+        # 2. STATUS Frame:
+        self._status_frame = ctk.CTkFrame(self)
+        self._status_frame.grid(row=1, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")
 
-    def page_slider_event(self, value):
-        if self._loading_page:
-            return
+        # Status and progress bar:
+        self._status = ctk.CTkLabel(self._status_frame, font=self._data_font, text="")
+        self._status.grid(row=0, column=0, padx=PAD, pady=0, sticky="w")
 
-        logger.info(f"value: {value}, current_page: {self._page_number}")
+        self._progressbar = ctk.CTkProgressBar(
+            self._status_frame,
+        )
+        self._progressbar.grid(
+            row=0,
+            column=1,
+            padx=PAD,
+            pady=0,
+            sticky="w",
+        )
 
-        if abs(value - self._page_number) < 1:
-            if value > self._page_number:
-                self._page_number += 1
-            else:
-                self._page_number -= 1
+    def _update_load_progress(self, series_loaded):
+        if not self._total_series:
+            self._progressbar.set(1)
         else:
-            self._page_number = round(value)
+            self._progressbar.set(series_loaded / self._total_series)
+        state_label = _("Loading")
+        entity_label = _("Series")
+        if series_loaded == self._total_series:
+            state_label = _("Loaded") + " "
+        msg = state_label + f" {series_loaded} " + _("of") + f" {self._total_series} " + entity_label
+        self._status.configure(text=msg)
 
-        try:
-            self._loading_page = True  # prevent re-entry, use lock instead?
-            self._page_slider.configure(state="disabled")
-            self._populate_ks_frame(self._page_number)
-        finally:
-            self._page_slider.configure(state="normal")
-            self._page_slider.set(self._page_number)
-            self._loading_page = False
+    def _update_sheet(self, kaleidoscope: kaleidoscope):
 
-    def _populate_ks_frame(self, page_number: int):
-        """Populate the Kaleidoscope frame with images for the given page number."""
-        logger.info(f"Populate ks_frame page={page_number}")
+        for i, image in enumerate(kaleidoscope.images):
+            ctk_image = ctk.CTkImage(light_image=image, size=self.THUMBNAIL_SIZE)
+            label = ctk.CTkLabel(self._ks_frame, image=ctk_image, text="")
+            label.grid(row=self._rows, column=i, padx=self.PAD, pady=self.PAD * 2, sticky="w")
+            # label.bind("<Button-1>", lambda event, kaleidoscope=kaleidoscope: self._on_image_click(event, kaleidoscope))
 
-        if not hasattr(self, "_ks_labels"):
-            self._ks_labels = {}  # Initialize labels dictionary if not present
+    def _populate_ks_frame(self):
+        if self._rows < self.MAX_ROWS and len(self._kaleidoscopes) > self._rows:
+            self._update_sheet(self._kaleidoscopes[self._rows])
+            self._rows += 1
+            self._update_load_progress(len(self._kaleidoscopes))
 
-        def create_or_update_label(row, col, image, kaleidoscope=None):
-            """Create or update a label at the given grid position."""
-            label_key = (row, col)
+        if self._rows < self.MAX_ROWS:
+            self.after(500, self._populate_ks_frame)
+        else:
+            logger.info("ks_frame populated")
+            self._ks_frame.bind("<Configure>", self._on_scroll)
 
-            # Create or fetch the label
-            if label_key not in self._ks_labels:
-                label = ctk.CTkLabel(self._ks_frame, text="")
-                label.grid(
-                    row=row,
-                    column=col,
-                    padx=(0, get_pad(self._image_size).value[0]),
-                    pady=(0, get_pad(self._image_size).value[1]),
-                    sticky="nsew",
-                )
-                self._ks_labels[label_key] = label
-            else:
-                label = self._ks_labels[label_key]
+    def _on_scroll(self, event):
+        top, bottom = self.canvas.yview()
 
-            # Clear previous image and bind new event if applicable
-            old_image = getattr(label, "image", None)
-            if old_image:
-                del old_image  # Explicitly delete the old image reference
-            label.configure(image=image)
-            # label.image = image  # Keep reference to avoid garbage collection
+        if top < 0.05:
+            logger.info("TOP")
+        elif bottom > 0.95:
+            logger.info("BOTTOM")
 
-            label.unbind("<Button-1>")
-            if kaleidoscope:
-                label.bind("<Button-1>", lambda event, k=kaleidoscope: self._on_image_click(event, k))
-
-        def generate_black_image():
-            """Generate a black placeholder image."""
-            size = (3 * self._image_size.width() + 2 * self.IMAGE_PAD, self._image_size.height())
-            black_image = Image.new(mode="RGB", size=size, color="black")
-            return ctk.CTkImage(light_image=black_image, size=size)
-
-        def generate_combined_image(series_path):
-            """Generate a combined image from the series."""
-            kaleidoscope = self._create_kaleidoscope_from_series(series_path)
-            combined_width = 3 * self._image_size.width() + 2 * self.IMAGE_PAD
-            combined_image = Image.new(
-                mode="RGB",
-                size=(combined_width, self._image_size.height()),
-                color="black",
-            )
-            for i, image in enumerate(kaleidoscope.images):
-                resized_image = image.resize(self._image_size.value)
-                combined_image.paste(resized_image, (i * (self._image_size.width() + self.IMAGE_PAD), 0))
-            return (
-                ctk.CTkImage(light_image=combined_image, size=(combined_width, self._image_size.height())),
-                kaleidoscope,
-            )
-
-        # Populate the grid
-        start_index = page_number * self._rows * self._cols
-        ks_index = start_index
-
-        for row in range(self._rows):
-            for col in range(self._cols):
-                if ks_index < self._total_series:
-                    # Generate and display the combined image for the series
-                    series_path = self._series_paths[ks_index]
-                    ctk_image, kaleidoscope = generate_combined_image(series_path)
-                    create_or_update_label(row, col, ctk_image, kaleidoscope)
-                else:
-                    # Display a black image for unused grid cells
-                    create_or_update_label(row, col, generate_black_image())
-
-                ks_index += 1
-                self._ks_frame.update()
+        # Need to latch transition ie edge
 
     def _on_cancel(self):
         logger.info(f"_on_cancel")
+        if self._ks_worker and self._ks_worker.is_alive():
+            self._stop_event.set()
+            self._ks_worker.join()
+
+        # Clear the _kaleidoscopes list to release image references
+        for kaleidoscope in self._kaleidoscopes:
+            kaleidoscope.images.clear()
+        self._kaleidoscopes.clear()
+
+        # Unbind events and destroy widgets
+        # TODO: check if this is necessary
+        # for widget in self._ks_frame.winfo_children():
+        #     widget.unbind("<Button-1>")  # Unbind events
+        #     widget.destroy()  # Explicitly destroy widget
+
+        self._ks_frame.destroy()
+        self._status_frame.destroy()
         self.destroy()
 
     def _on_image_click(self, event, kaleidoscope: kaleidoscope):
-        logger.info(f"Kaleidoscope clicked: kaleidoscope: {kaleidoscope}")
+        logger.info(f"Image clicked: kaleidoscope: {kaleidoscope}")
 
     def _resize_or_pad_image(self, image: Image.Image, target_size: tuple[int, int]):
         """Resize or pad an image to match the target size (height, width)."""
@@ -387,7 +279,7 @@ class KaleidoscopeView(ctk.CTkToplevel):
         thumbnails = [
             Image.fromarray(img)
             .convert("RGB")
-            .resize(tuple(x * 2 for x in KaleidoscopeImageSize.LARGE.value), Image.Resampling.NEAREST)
+            .resize(tuple(dim * 2 for dim in self.THUMBNAIL_SIZE), Image.Resampling.NEAREST)
             for img in [medium_contrast, gray_clahe, edges_dilated]
         ]
 
@@ -452,21 +344,17 @@ class KaleidoscopeView(ctk.CTkToplevel):
         min_projection = normalize(
             src=min_pixels, dst=None, alpha=0, beta=255, norm_type=NORM_MINMAX, dtype=CV_8U
         ).astype(np.uint8)
-
         mean_pixels = np.mean(all_series_frames, axis=0)
         mean_projection = normalize(
             src=mean_pixels, dst=None, alpha=0, beta=255, norm_type=NORM_MINMAX, dtype=CV_8U
         ).astype(np.uint8)
-
         max_pixels = np.max(all_series_frames, axis=0)
         max_projection = normalize(
             src=max_pixels, dst=None, alpha=0, beta=255, norm_type=NORM_MINMAX, dtype=CV_8U
         ).astype(np.uint8)
 
         thumbnails = [
-            Image.fromarray(img).resize(
-                tuple(x * 2 for x in KaleidoscopeImageSize.LARGE.value), Image.Resampling.NEAREST
-            )
+            Image.fromarray(img).resize(tuple(dim * 2 for dim in self.THUMBNAIL_SIZE), Image.Resampling.NEAREST)
             for img in [min_projection, mean_projection, max_projection]
         ]
 
@@ -477,3 +365,37 @@ class KaleidoscopeView(ctk.CTkToplevel):
             series_description=ds.get("SeriesDescription", "?"),
             images=thumbnails,
         )
+
+    def _load_kaleidoscopes_worker(self):
+
+        logger.info("_load_kaleidoscopes_worker start")
+
+        # TODO: load all kaleidoscopes from pickle file if it exists
+
+        # Create Kaleidoscopes from DICOM files from local disk storage:
+        for patient_id in self._patient_ids:
+            patient_path = self._base_dir / Path(patient_id)
+            if not patient_path.is_dir():
+                continue
+
+            for study_path in patient_path.iterdir():
+                if not study_path.is_dir():
+                    continue
+
+                for series_path in study_path.iterdir():
+                    time.sleep(self.WORKER_THREAD_SLEEP_SECS)
+                    if not series_path.is_dir():
+                        continue
+
+                    try:
+                        kaleidoscope = self._create_kaleidoscope_from_series(series_path)
+                    except Exception as e:
+                        logger.error(repr(e))
+
+                    if kaleidoscope is None:  # stop_event signalled
+                        logger.info("_load_kaleidoscopes_worker cancelled")
+                        return
+
+                    self._kaleidoscopes.append(kaleidoscope)
+
+        logger.info("_load_kaleidoscopes_worker end")

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="120" viewBox="0 0 320 120">
+  <!-- Black rectangle and shadows -->
+  <rect x="-4" y="4" width="100" height="100" fill="rgba(0, 0, 0, 0.3)" />
+  <rect x="-8" y="8" width="100" height="100" fill="rgba(0, 0, 0, 0.2)" />
+  <rect x="0" y="0" width="100" height="100" fill="black" />
+
+  <!-- Grey rectangle and shadows -->
+  <rect x="106" y="4" width="100" height="100" fill="rgba(0, 0, 0, 0.3)" />
+  <rect x="102" y="8" width="100" height="100" fill="rgba(0, 0, 0, 0.2)" />
+  <rect x="110" y="0" width="100" height="100" fill="grey" />
+
+  <!-- White rectangle and shadows -->
+  <rect x="216" y="4" width="100" height="100" fill="rgba(0, 0, 0, 0.3)" />
+  <rect x="212" y="8" width="100" height="100" fill="rgba(0, 0, 0, 0.2)" />
+  <rect x="220" y="0" width="100" height="100" fill="white" stroke="black" stroke-width="1" />
+</svg>

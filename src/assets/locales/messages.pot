@@ -232,7 +232,34 @@ msgstr ""
 msgid "Cancel"
 msgstr ""
 
+msgid "View"
+msgstr ""
+
+msgid "Patients"
+msgstr ""
+
+msgid "Patient"
+msgstr ""
+
+msgid "Series"
+msgstr ""
+
+msgid "Loading"
+msgstr ""
+
+msgid "Loaded"
+msgstr ""
+
+msgid "of"
+msgstr ""
+
 msgid "Config file not found: "
+msgstr ""
+
+msgid "Kaleidoscope"
+msgstr ""
+
+msgid "selected patient(s)"
 msgstr ""
 
 msgid "Invalid_DICOM"
@@ -395,12 +422,6 @@ msgid "phi_export"
 msgstr ""
 
 msgid "quarantine"
-msgstr ""
-
-msgid "Contact sheet for"
-msgstr ""
-
-msgid "selected patient(s)"
 msgstr ""
 
 msgid "Logging Levels"
@@ -628,6 +649,15 @@ msgstr ""
 msgid "The Java Index data will be processed into the Python Anonymizer database when the project is created."
 msgstr ""
 
+msgid "with"
+msgstr ""
+
+msgid "over"
+msgstr ""
+
+msgid "Pages"
+msgstr ""
+
 msgid "Importing Study"
 msgstr ""
 
@@ -644,9 +674,6 @@ msgid "No studies to retrieve"
 msgstr ""
 
 msgid "Close"
-msgstr ""
-
-msgid "of"
 msgstr ""
 
 msgid "Study Metadata"
@@ -697,9 +724,6 @@ msgstr ""
 msgid "Anonymized ID"
 msgstr ""
 
-msgid "Series"
-msgstr ""
-
 msgid "Date Time"
 msgstr ""
 
@@ -715,13 +739,7 @@ msgstr ""
 msgid "Processing"
 msgstr ""
 
-msgid "Patients"
-msgstr ""
-
 msgid "Cancel Export"
-msgstr ""
-
-msgid "Contact Sheet"
 msgstr ""
 
 msgid "Create Patient Lookup"
@@ -853,9 +871,6 @@ msgstr ""
 msgid "Query via Accession Numbers"
 msgstr ""
 
-msgid "Loaded"
-msgstr ""
-
 msgid "Accession Numbers"
 msgstr ""
 
@@ -872,6 +887,12 @@ msgid "AccNos"
 msgstr ""
 
 msgid "Cancel active Query?"
+msgstr ""
+
+msgid "Search"
+msgstr ""
+
+msgid "Send"
 msgstr ""
 
 msgid "Quarantine"
@@ -938,4 +959,7 @@ msgid "Go to Help/Operation for instructions on how to use the program."
 msgstr ""
 
 msgid "Select File/New Project to start."
+msgstr ""
+
+msgid "SPONSOR MESSAGE"
 msgstr ""

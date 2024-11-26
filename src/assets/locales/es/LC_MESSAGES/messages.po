@@ -244,8 +244,35 @@ msgstr "Por favor, espere..."
 msgid "Cancel"
 msgstr "Cancelar"
 
+msgid "View"
+msgstr "Vista"
+
+msgid "Patients"
+msgstr "Pacientes"
+
+msgid "Patient"
+msgstr "Paciente"
+
+msgid "Series"
+msgstr "Series"
+
+msgid "Loading"
+msgstr "Cargando"
+
+msgid "Loaded"
+msgstr "Cargado"
+
+msgid "of"
+msgstr "de"
+
 msgid "Config file not found: "
 msgstr "Archivo de configuración no encontrado: "
+
+msgid "Kaleidoscope"
+msgstr "Caleidoscopio"
+
+msgid "selected patient(s)"
+msgstr "seleccionado paciente(s)"
 
 msgid "Invalid_DICOM"
 msgstr "DICOM_No_Válido"
@@ -408,12 +435,6 @@ msgstr "phi_export"
 
 msgid "quarantine"
 msgstr "cuarentena"
-
-msgid "Contact sheet for"
-msgstr "Hoja de contacto para"
-
-msgid "selected patient(s)"
-msgstr "seleccionado paciente(s)"
 
 msgid "Logging Levels"
 msgstr "Niveles de Registro"
@@ -640,6 +661,15 @@ msgstr "Por favor, ingrese el Nombre de su Proyecto y configure todas las demás
 msgid "The Java Index data will be processed into the Python Anonymizer database when the project is created."
 msgstr "Los datos del Índice Java se procesarán en la base de datos de Anonimizador de Python cuando se cree el proyecto."
 
+msgid "with"
+msgstr "con"
+
+msgid "over"
+msgstr "sobre"
+
+msgid "Pages"
+msgstr "Páginas"
+
 msgid "Importing Study"
 msgstr "Importando Estudio"
 
@@ -657,9 +687,6 @@ msgstr "No hay estudios para recuperar"
 
 msgid "Close"
 msgstr "Cerrar"
-
-msgid "of"
-msgstr "de"
 
 msgid "Study Metadata"
 msgstr "Metadatos del Estudio"
@@ -709,9 +736,6 @@ msgstr "Nombre del Paciente"
 msgid "Anonymized ID"
 msgstr "ID Anonimizado"
 
-msgid "Series"
-msgstr "Series"
-
 msgid "Date Time"
 msgstr "Fecha Hora"
 
@@ -727,14 +751,8 @@ msgstr "Exportar"
 msgid "Processing"
 msgstr "Procesando"
 
-msgid "Patients"
-msgstr "Pacientes"
-
 msgid "Cancel Export"
 msgstr "Cancelar Exportación"
-
-msgid "Contact Sheet"
-msgstr "Hoja de contacto"
 
 msgid "Create Patient Lookup"
 msgstr "Crear Búsqueda de Pacientes"
@@ -865,9 +883,6 @@ msgstr "Falló el servidor de consulta DICOM C-ECHO"
 msgid "Query via Accession Numbers"
 msgstr "Consulta por Números de Acceso"
 
-msgid "Loaded"
-msgstr "Cargado"
-
 msgid "Accession Numbers"
 msgstr "Números de Acceso"
 
@@ -885,6 +900,12 @@ msgstr "AccNos"
 
 msgid "Cancel active Query?"
 msgstr "¿Cancelar la consulta activa?"
+
+msgid "Search"
+msgstr "Buscar"
+
+msgid "Send"
+msgstr "Enviar"
 
 msgid "Quarantine"
 msgstr "Quarentena"
@@ -952,11 +973,5 @@ msgstr "Vaya a Ayuda/Operación para obtener instrucciones sobre cómo usar el p
 msgid "Select File/New Project to start."
 msgstr "Seleccione Archivo/Nuevo Proyecto para comenzar."
 
-#~ msgid " Studies"
-#~ msgstr " Estudios"
-
-#~ msgid "Import files from"
-#~ msgstr "Importar archivos desde"
-
-#~ msgid "ANONYMIZER_STORE"
-#~ msgstr "ALMACEN_ANONIMIZADOR"
+msgid "SPONSOR MESSAGE"
+msgstr "El desarrollo de Anonymzer ha sido respaldado bajo el proyecto Medical Imaging and Data Resource Center (MIDRC), financiado por el National Institute of Biomedical Imaging and Bioengineering (NIBIB) de los National Institutes of Health bajo el contrato 75N92020D00021 y a través de la Advanced Research Projects Agency for Health (ARPA-H)."

@@ -2,12 +2,14 @@ import os
 import logging
 from queue import Queue
 from typing import Any
+from PIL import Image
 import customtkinter as ctk
 from tkinter import messagebox
 from controller.project import ProjectController, EchoRequest, EchoResponse
 from model.anonymizer import Totals
 from utils.translate import _
 from utils.storage import count_studies_series_images
+from view.kaleidoscope import KaleidoscopeView
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,7 @@ class Dashboard(ctk.CTkFrame):
         super().__init__(master=parent)
         self._label_font = ctk.CTkFont(family=ctk.CTkFont().cget("family"), size=self.LABEL_FONT_SIZE, weight="normal")
         self._data_font = ctk.CTkFont(family=parent.mono_font.cget("family"), size=self.DATA_FONT_SIZE, weight="normal")
+        self._mono_font = parent.mono_font
         self._last_qsize = 0
         self._latch_max_qsize = 1
         self._query_callback = query_callback
@@ -77,15 +80,25 @@ class Dashboard(ctk.CTkFrame):
         self._query_button = ctk.CTkButton(
             self,
             width=self.BUTTON_WIDTH,
-            text=_("Query"),
+            text=_("Search"),
             command=self._query_button_click,
         )
         self._query_button.grid(row=row, column=0, padx=self.PAD, pady=(self.PAD, 0), sticky="w")
 
+        # kaleidoscope_image = ctk.CTkImage(light_image=Image.open("assets/icons/kaleidoscope.png"), size=(24, 24))
+        self._patient_kaleidoscope_button = ctk.CTkButton(
+            self,
+            width=self.BUTTON_WIDTH,
+            text=_("View"),
+            # image=kaleidoscope_image,
+            command=self._patient_kaleidoscope_button_click,
+        )
+        self._patient_kaleidoscope_button.grid(row=row, column=1, padx=self.PAD, pady=(self.PAD, 0), sticky="w")
+
         self._export_button = ctk.CTkButton(
             self,
             width=self.BUTTON_WIDTH,
-            text=_("Export"),
+            text=_("Send"),
             command=self._export_button_click,
         )
         self._export_button.grid(row=row, column=3, padx=self.PAD, pady=(self.PAD, 0), sticky="e")
@@ -120,6 +133,8 @@ class Dashboard(ctk.CTkFrame):
         self._series_label.grid(row=db_row, column=2, padx=self.PAD, pady=(0, self.PAD))
         self._images_label.grid(row=db_row, column=3, padx=self.PAD, pady=(0, self.PAD))
         self._quarantined_label.grid(row=db_row, column=4, padx=self.PAD, pady=(0, self.PAD))
+
+        db_row += 1
 
         self._databoard.grid(
             row=row,
@@ -218,6 +233,11 @@ class Dashboard(ctk.CTkFrame):
                 self._export_callback,
             )
             self._status.configure(text=_("Checking Export DICOM Server is online") + "...")
+
+    def _patient_kaleidoscope_button_click(self):
+        logger.info(f"_patient_kaleidoscope_button_click")
+        kaleidoscope_view = KaleidoscopeView(self._mono_font, self._controller.model.images_dir())
+        kaleidoscope_view.focus()
 
     def _wait_for_aws(self):
         self._timer -= 1

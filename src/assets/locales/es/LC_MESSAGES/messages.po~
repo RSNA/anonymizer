@@ -82,6 +82,12 @@ msgstr "Exportación Ocupada"
 msgid "Export is busy, please wait for export to complete before closing project."
 msgstr "La exportación está ocupada, por favor espere a que se complete antes de cerrar el proyecto."
 
+msgid "Anonymizer Workers Busy"
+msgstr "Trabajadores de Anonimizador ocupados"
+
+msgid "Anonymizer queues are not empty, please wait for workers to process files before closing project."
+msgstr "Las colas de anonimización no están vacías, espere a que los trabajadores procesen los archivos antes de cerrar el proyecto."
+
 msgid "Clone Project Error"
 msgstr "Error al Clonar Proyecto"
 
@@ -145,6 +151,12 @@ msgstr "La exportación está ocupada, por favor espere a que la exportación se
 msgid "Project Settings"
 msgstr "Ajustes del Proyecto"
 
+msgid "Project restart"
+msgstr "Reinicio del proyecto"
+
+msgid "The settings change will take effect when the project is next opened."
+msgstr "El cambio de configuración entrará en vigor la próxima vez que se abra el proyecto."
+
 msgid "New Project"
 msgstr "Nuevo Proyecto"
 
@@ -178,6 +190,63 @@ msgstr "Proyecto"
 msgid "Settings"
 msgstr "Ajustes"
 
+msgid "Computed Radiography"
+msgstr "Radiografía Computarizada"
+
+msgid "Digital X-Ray"
+msgstr "Radiografía Digital"
+
+msgid "Intra-oral Radiography"
+msgstr "Radiografía Intraoral"
+
+msgid "Mammography"
+msgstr "Mamografía"
+
+msgid "Computer Tomography"
+msgstr "Tomografía Computarizada"
+
+msgid "Magnetic Resonance"
+msgstr "Resonancia Magnética"
+
+msgid "Ultrasound"
+msgstr "Ultrasonido"
+
+msgid "Positron Emission Tomography"
+msgstr "Tomografía por Emisión de Positrones"
+
+msgid "Nuclear Medicine"
+msgstr "Medicina Nuclear"
+
+msgid "Secondary Capture"
+msgstr "Captura Secundaria"
+
+msgid "Structured Report"
+msgstr "Informe Estructurado"
+
+msgid "Presentation State"
+msgstr "Estado de Presentación"
+
+msgid "Encapsulated PDF"
+msgstr "PDF Encapsulado"
+
+msgid "Other"
+msgstr "Otro"
+
+msgid "Document"
+msgstr "Documento"
+
+msgid "Progress Dialog"
+msgstr "Diálogo de Progreso"
+
+msgid "Please wait..."
+msgstr "Por favor, espere..."
+
+msgid "Cancel"
+msgstr "Cancelar"
+
+msgid "Config file not found: "
+msgstr "Archivo de configuración no encontrado: "
+
 msgid "Invalid_DICOM"
 msgstr "DICOM_No_Válido"
 
@@ -198,6 +267,18 @@ msgstr "Error_Almacenamiento"
 
 msgid "Dataset missing required attributes"
 msgstr "Conjunto de datos falta atributos requeridos"
+
+msgid "Quarantined"
+msgstr "Quarentena"
+
+msgid "Missing Attributes"
+msgstr "Faltan Atributos"
+
+msgid "Instance already stored"
+msgstr "Instancia ya almacenada"
+
+msgid "Storage Class mismatch"
+msgstr "Desajuste de clase de Almacenamiento"
 
 msgid "DICOM C-STORE scp is already running on"
 msgstr "El scp DICOM C-STORE ya está en ejecución en"
@@ -328,356 +409,98 @@ msgstr "phi_export"
 msgid "quarantine"
 msgstr "cuarentena"
 
-msgid "Progress Dialog"
-msgstr "Diálogo de Progreso"
-
-msgid "Please wait..."
-msgstr "Por favor, espere..."
-
-msgid "Cancel"
-msgstr "Cancelar"
-
-msgid "Config file not found: "
-msgstr "Archivo de configuración no encontrado: "
-
-msgid "Computed Radiography"
-msgstr "Radiografía Computarizada"
-
-msgid "Digital X-Ray"
-msgstr "Radiografía Digital"
-
-msgid "Intra-oral Radiography"
-msgstr "Radiografía Intraoral"
-
-msgid "Mammography"
-msgstr "Mamografía"
-
-msgid "Computer Tomography"
-msgstr "Tomografía Computarizada"
-
-msgid "Magnetic Resonance"
-msgstr "Resonancia Magnética"
-
-msgid "Ultrasound"
-msgstr "Ultrasonido"
-
-msgid "Positron Emission Tomography"
-msgstr "Tomografía por Emisión de Positrones"
-
-msgid "Nuclear Medicine"
-msgstr "Medicina Nuclear"
-
-msgid "Secondary Capture"
-msgstr "Captura Secundaria"
-
-msgid "Structured Report"
-msgstr "Informe Estructurado"
-
-msgid "Presentation State"
-msgstr "Estado de Presentación"
-
-msgid "Encapsulated PDF"
-msgstr "PDF Encapsulado"
-
-msgid "Other"
-msgstr "Otro"
-
-msgid "Document"
-msgstr "Documento"
-
-msgid "Query"
-msgstr "Consulta"
-
-msgid "Export"
-msgstr "Exportar"
-
-msgid "Patients"
-msgstr "Pacientes"
-
-msgid "Studies"
-msgstr "Estudios"
-
-msgid "Series"
-msgstr "Series"
-
-msgid "Images"
-msgstr "Imágenes"
-
-msgid "Anonymizer Queue"
-msgstr "Cola de Anonimizador"
-
-msgid "online"
-msgstr "en línea"
-
-msgid "Connection Error"
-msgstr "Error de Conexión"
-
-msgid "Server Failed DICOM ECHO"
-msgstr "Error del Servidor DICOM ECHO"
-
-msgid "Check Project Settings"
-msgstr "Verificar Configuración del Proyecto"
-
-msgid "Ensure the remote server is setup to allow the local server for echo and storage services."
-msgstr "Asegúrese de que el servidor remoto esté configurado para permitir el servidor local para servicios de eco y almacenamiento."
-
-msgid "offline"
-msgstr "desconectado"
-
-msgid "Query Server"
-msgstr "Servidor de Consulta"
-
-msgid "Checking Query DICOM Server is online"
-msgstr "Comprobando que el servidor DICOM de consulta esté en línea"
-
-msgid "Waiting for AWS Authentication"
-msgstr "Esperando autenticación de AWS"
-
-msgid "Export Server"
-msgstr "Servidor de Exportación"
-
-msgid "Checking Export DICOM Server is online"
-msgstr "Comprobando que el servidor DICOM de exportación esté en línea"
-
-msgid "AWS Authentication Failed"
-msgstr "Falló la autenticación de AWS"
-
-msgid "Check Project Settings/AWS Cognito and ensure all parameters are correct."
-msgstr "Verifique la configuración del proyecto/AWS Cognito y asegúrese de que todos los parámetros sean correctos."
-
-msgid "AWS Authenticated"
-msgstr "Autenticación AWS"
-
-msgid "Patient Name"
-msgstr "Nombre del Paciente"
-
-msgid "Anonymized ID"
-msgstr "ID Anonimizado"
-
-msgid "Date Time"
-msgstr "Fecha Hora"
-
-msgid "Images Sent"
-msgstr "Imágenes Enviadas"
-
-msgid "Last Export Error"
-msgstr "Último Error de Exportación"
-
-msgid "Processing"
-msgstr "Procesando"
-
-msgid "of"
-msgstr "de"
-
-msgid "Cancel Export"
-msgstr "Cancelar Exportación"
-
-msgid "Create Patient Lookup"
-msgstr "Crear Búsqueda de Pacientes"
-
-msgid "Refresh"
-msgstr "Actualizar"
-
-msgid "Select All"
-msgstr "Seleccionar Todo"
-
-msgid "Clear Selection"
-msgstr "Limpiar Selección"
-
-msgid "Error Creating PHI CSV File"
-msgstr "Error al Crear Archivo CSV de PHI"
-
-msgid "PHI CSV File Created"
-msgstr "Archivo CSV de PHI Creado"
-
-msgid "PHI Lookup Data saved to"
-msgstr "Datos de búsqueda PHI guardados en"
-
-msgid "Processed"
-msgstr "Procesado"
-
-msgid "Export Error"
-msgstr "Error de Exportación"
-
-msgid "Failed to export"
-msgstr "Error al exportar"
-
-msgid "patient(s)"
-msgstr "paciente(s)"
-
-msgid "Export Server Failed DICOM C-ECHO"
-msgstr "El servidor de exportación falló en DICOM C-ECHO"
-
-msgid "No patients selected for export."
-msgstr "No se han seleccionado pacientes para exportar."
-
-msgid "Use SHIFT+Click and/or CMD/CTRL+Click to select multiple patients."
-msgstr "Use SHIFT+Click y/o CMD/CTRL+Click para seleccionar múltiples pacientes."
-
-msgid "Cancel active export?"
-msgstr "¿Cancelar la exportación activa?"
-
-msgid "Close"
-msgstr "Cerrar"
-
-msgid "Importing Study"
-msgstr "Importando Estudio"
-
-msgid "Importing Studies"
-msgstr "Importando Estudios"
-
-msgid "Import from"
-msgstr "Importar desde"
-
-msgid "Retrieving Study Metadata at"
-msgstr "Recuperando Metadatos del Estudio en"
-
-msgid "No studies to retrieve"
-msgstr "No hay estudios para recuperar"
-
-msgid "Study Metadata"
-msgstr "Metadatos del Estudio"
-
-msgid "Error"
-msgstr "Error"
-
-msgid "Errors"
-msgstr "Errores"
-
-msgid "Error retrieving ANY Study Metadata"
-msgstr "Error al recuperar CUALQUIER Metadato del Estudio"
-
-msgid "Finished retrieving Study Metadata"
-msgstr "Se completó la recuperación de Metadatos del Estudio"
-
-msgid "No instances to import"
-msgstr "No hay instancias para importar"
-
-msgid "Study"
-msgstr "Estudio"
-
-msgid "at"
-msgstr "en"
-
-msgid "level"
-msgstr "nivel"
-
-msgid "Import Finished"
-msgstr "Importación Finalizada"
+msgid "Logging Levels"
+msgstr "Niveles de Registro"
+
+msgid "Ok"
+msgstr "Aceptar"
 
 msgid "Warning"
 msgstr "Advertencia"
 
-msgid "Cancelling the move operation may not stop transfers from the remote server."
-msgstr "Cancelar la operación de movimiento puede que no detenga las transferencias desde el servidor remoto."
+msgid "Enabling debug mode in pydicom will cause PHI to be written to the log file."
+msgstr "Habilitar el modo de depuración en pydicom hará que la información PHI se escriba en el archivo de registro."
 
-msgid "Are you sure you want to continue?"
-msgstr "¿Está seguro de que desea continuar?"
+msgid "All incoming datasets, via network or file import, will also be written to the private subdirectory of storage folder."
+msgstr "Todos los conjuntos de datos entrantes, tanto a través de la red como de la importación de archivos, también se escribirán en el subdirectorio privado de la carpeta de almacenamiento."
 
-msgid "Patient ID"
-msgstr "ID del Paciente"
+msgid "Are you sure you want to enable pydicom debug mode?"
+msgstr "¿Está seguro de que desea habilitar el modo de depuración de pydicom?"
 
-msgid "Date"
-msgstr "Fecha"
+msgid "Transfer Syntax Name"
+msgstr "Nombre de la Sintaxis de Transferencia"
 
-msgid "Study Description"
-msgstr "Descripción del Estudio"
+msgid "Transfer Syntax UID"
+msgstr "UID de la Sintaxis de Transferencia"
 
-msgid "Accession No."
-msgstr "Número de Acceso"
+msgid "Select Transfer Syntaxes"
+msgstr "Seleccionar Sintaxis de Transferencia"
 
-msgid "Modalities"
-msgstr "Modalidades"
+msgid "Select All"
+msgstr "Seleccionar Todo"
 
-msgid "Imported"
-msgstr "Importado"
+msgid "Default"
+msgstr "Predeterminado"
 
-msgid "Last Import Error"
-msgstr "Último Error de Importación"
+msgid "DICOM Node"
+msgstr "Nodo DICOM"
 
-msgid "StudyInstanceUID"
-msgstr "UID de Instancia de Estudio"
+msgid "No local IP addresses found."
+msgstr "No se encontraron direcciones IP locales."
 
-msgid "STUDY"
-msgstr "ESTUDIO"
+msgid "Address"
+msgstr "Dirección"
 
-msgid "SERIES"
-msgstr "SERIE"
+msgid "Domain Name"
+msgstr "Nombre de Dominio"
 
-msgid "Query, Retrieve & Import Studies"
-msgstr "Consultar, Recuperar e Importar Estudios"
+msgid "DNS Lookup"
+msgstr "Búsqueda de DNS"
 
-msgid "Accession No.(s)"
-msgstr "Número(s) de Acceso"
+msgid "IP Address"
+msgstr "Dirección IP"
 
-msgid "Study Date"
-msgstr "Fecha del Estudio"
+msgid "Port"
+msgstr "Puerto"
 
-msgid "Modality"
-msgstr "Modalidad"
+msgid "AE Title"
+msgstr "Título AE"
 
-msgid "Load Accession Numbers"
-msgstr "Cargar Números de Acceso"
+msgid "Code"
+msgstr "Código"
 
-msgid "Show Imported Studies"
-msgstr "Mostrar Estudios Importados"
+msgid "Description"
+msgstr "Descripción"
 
-msgid "Cancel Query"
-msgstr "Cancelar Consulta"
+msgid "Select Modalities"
+msgstr "Seleccionar Modalidades"
 
-msgid "Found"
-msgstr "Encontrados"
+msgid "Class Name"
+msgstr "Nombre de la Clase"
 
-msgid "Studies Selected"
-msgstr "Estudios Seleccionados"
+msgid "Class UID"
+msgstr "UID de la Clase"
 
-msgid "Move Level"
-msgstr "Nivel de Movimiento"
+msgid "Select Storage Classes"
+msgstr "Seleccionar Clases de Almacenamiento"
 
-msgid "Import & Anonymize"
-msgstr "Importar y Anonimizar"
+msgid "From Modalities"
+msgstr "Desde Modalidades"
 
-msgid "Select text or csv file with list of accession numbers to retrieve"
-msgstr "Seleccione archivo de texto o CSV con lista de números de acceso para recuperar"
+msgid "Network Timeouts in SECONDS"
+msgstr "Tiempo de espera de red en SEGUNDOS"
 
-msgid "File Read Error"
-msgstr "Error al Leer Archivo"
+msgid "TCP Connection"
+msgstr "Conexión TCP"
 
-msgid "Error reading Accession Number file"
-msgstr "Error al leer archivo de Número de Acceso"
+msgid "DICOM Association Messages (ACSE)"
+msgstr "Mensajes de Asociación DICOM (ACSE)"
 
-msgid "Accession Numbers not found"
-msgstr "No se encontraron Números de Acceso"
+msgid "DICOM Service Element Messages (DIMSE)"
+msgstr "Mensajes de Elemento de Servicio DICOM (DIMSE)"
 
-msgid "Accession Numbers not found were written to text file"
-msgstr "Los Números de Acceso no encontrados fueron escritos en un archivo de texto"
-
-msgid "Query Server Failed DICOM C-ECHO"
-msgstr "Falló el servidor de consulta DICOM C-ECHO"
-
-msgid "Query via Accession Numbers"
-msgstr "Consulta por Números de Acceso"
-
-msgid "Loaded"
-msgstr "Cargado"
-
-msgid "Accession Numbers"
-msgstr "Números de Acceso"
-
-msgid "Proceed with Query?"
-msgstr "¿Continuar con la consulta?"
-
-msgid "Query Criteria"
-msgstr "Criterios de Consulta"
-
-msgid "Enter at least one search criterion"
-msgstr "Ingrese al menos un criterio de búsqueda"
-
-msgid " Studies"
-msgstr " Estudios"
-
-msgid "Cancel active Query?"
-msgstr "¿Cancelar la consulta activa?"
+msgid "Network (Close Inactive Connection)"
+msgstr "Red (Cerrar Conexión Inactiva)"
 
 msgid "AWS Cognito Credentials for Export to S3"
 msgstr "Credenciales de AWS Cognito para Exportación a S3"
@@ -712,69 +535,6 @@ msgstr "Contraseña"
 msgid "Export to AWS"
 msgstr "Exportar a AWS"
 
-msgid "Ok"
-msgstr "Aceptar"
-
-msgid "DICOM Node"
-msgstr "Nodo DICOM"
-
-msgid "No local IP addresses found."
-msgstr "No se encontraron direcciones IP locales."
-
-msgid "Address"
-msgstr "Dirección"
-
-msgid "Domain Name"
-msgstr "Nombre de Dominio"
-
-msgid "DNS Lookup"
-msgstr "Búsqueda de DNS"
-
-msgid "IP Address"
-msgstr "Dirección IP"
-
-msgid "Port"
-msgstr "Puerto"
-
-msgid "AE Title"
-msgstr "Título AE"
-
-msgid "Logging Levels"
-msgstr "Niveles de Registro"
-
-msgid "Enabling debug mode in pydicom will cause PHI to be written to the log file."
-msgstr "Habilitar el modo de depuración en pydicom hará que la información PHI se escriba en el archivo de registro."
-
-msgid "Are you sure you want to enable pydicom debug mode?"
-msgstr "¿Está seguro de que desea habilitar el modo de depuración de pydicom?"
-
-msgid "Code"
-msgstr "Código"
-
-msgid "Description"
-msgstr "Descripción"
-
-msgid "Select Modalities"
-msgstr "Seleccionar Modalidades"
-
-msgid "Default"
-msgstr "Predeterminado"
-
-msgid "Network Timeouts in SECONDS"
-msgstr "Tiempo de espera de red en SEGUNDOS"
-
-msgid "TCP Connection"
-msgstr "Conexión TCP"
-
-msgid "DICOM Association Messages (ACSE)"
-msgstr "Mensajes de Asociación DICOM (ACSE)"
-
-msgid "DICOM Service Element Messages (DIMSE)"
-msgstr "Mensajes de Elemento de Servicio DICOM (DIMSE)"
-
-msgid "Network (Close Inactive Connection)"
-msgstr "Red (Cerrar Conexión Inactiva)"
-
 msgid "Site ID"
 msgstr "ID del Sitio"
 
@@ -787,11 +547,20 @@ msgstr "Nombre del Proyecto"
 msgid "UID Root"
 msgstr "Raíz UID"
 
+msgid "Remove Pixel PHI"
+msgstr "Eliminar PHI de píxel"
+
 msgid "DICOM Servers"
 msgstr "Servidores DICOM"
 
 msgid "Local Server"
 msgstr "Servidor Local"
+
+msgid "Query Server"
+msgstr "Servidor de Consulta"
+
+msgid "Export Server"
+msgstr "Servidor de Exportación"
 
 msgid "AWS S3 Server"
 msgstr "Servidor AWS S3"
@@ -805,17 +574,14 @@ msgstr "Tiempos de Espera de Red"
 msgid "Storage Directory"
 msgstr "Directorio de Almacenamiento"
 
+msgid "Modalities"
+msgstr "Modalidades"
+
 msgid "Storage Classes"
 msgstr "Clases de Almacenamiento"
 
-msgid "Select Storage Classes"
-msgstr "Seleccionar Clases de Almacenamiento"
-
 msgid "Transfer Syntaxes"
 msgstr "Sintaxis de Transferencia"
-
-msgid "Select Transfer Syntaxes"
-msgstr "Seleccionar Sintaxis de Transferencia"
 
 msgid "Script File"
 msgstr "Archivo de Script"
@@ -868,20 +634,299 @@ msgstr "Por favor, ingrese el Nombre de su Proyecto y configure todas las demás
 msgid "The Java Index data will be processed into the Python Anonymizer database when the project is created."
 msgstr "Los datos del Índice Java se procesarán en la base de datos de Anonimizador de Python cuando se cree el proyecto."
 
-msgid "Class Name"
-msgstr "Nombre de la Clase"
+msgid "Kaleidoscope"
+msgstr "Caleidoscopio"
 
-msgid "Class UID"
-msgstr "UID de la Clase"
+msgid "selected patient(s)"
+msgstr "seleccionado paciente(s)"
 
-msgid "From Modalities"
-msgstr "Desde Modalidades"
+msgid "Loading"
+msgstr "Cargando"
 
-msgid "Transfer Syntax Name"
-msgstr "Nombre de la Sintaxis de Transferencia"
+msgid "Series"
+msgstr "Series"
 
-msgid "Transfer Syntax UID"
-msgstr "UID de la Sintaxis de Transferencia"
+msgid "Loaded"
+msgstr "Cargado"
+
+msgid "of"
+msgstr "de"
+
+msgid "Importing Study"
+msgstr "Importando Estudio"
+
+msgid "Importing Studies"
+msgstr "Importando Estudios"
+
+msgid "Import from"
+msgstr "Importar desde"
+
+msgid "Retrieving Study Metadata at"
+msgstr "Recuperando Metadatos del Estudio en"
+
+msgid "No studies to retrieve"
+msgstr "No hay estudios para recuperar"
+
+msgid "Close"
+msgstr "Cerrar"
+
+msgid "Study Metadata"
+msgstr "Metadatos del Estudio"
+
+msgid "Error"
+msgstr "Error"
+
+msgid "Errors"
+msgstr "Errores"
+
+msgid "Error retrieving ANY Study Metadata"
+msgstr "Error al recuperar CUALQUIER Metadato del Estudio"
+
+msgid "Finished retrieving Study Metadata"
+msgstr "Se completó la recuperación de Metadatos del Estudio"
+
+msgid "No instances to import"
+msgstr "No hay instancias para importar"
+
+msgid "Study"
+msgstr "Estudio"
+
+msgid "Studies"
+msgstr "Estudios"
+
+msgid "at"
+msgstr "en"
+
+msgid "level"
+msgstr "nivel"
+
+msgid "Images"
+msgstr "Imágenes"
+
+msgid "Import Finished"
+msgstr "Importación Finalizada"
+
+msgid "Cancelling the move operation may not stop transfers from the remote server."
+msgstr "Cancelar la operación de movimiento puede que no detenga las transferencias desde el servidor remoto."
+
+msgid "Are you sure you want to continue?"
+msgstr "¿Está seguro de que desea continuar?"
+
+msgid "Patient Name"
+msgstr "Nombre del Paciente"
+
+msgid "Anonymized ID"
+msgstr "ID Anonimizado"
+
+msgid "Date Time"
+msgstr "Fecha Hora"
+
+msgid "Images Sent"
+msgstr "Imágenes Enviadas"
+
+msgid "Last Export Error"
+msgstr "Último Error de Exportación"
+
+msgid "Export"
+msgstr "Exportar"
+
+msgid "Processing"
+msgstr "Procesando"
+
+msgid "Patients"
+msgstr "Pacientes"
+
+msgid "Cancel Export"
+msgstr "Cancelar Exportación"
+
+msgid "Create Patient Lookup"
+msgstr "Crear Búsqueda de Pacientes"
+
+msgid "Refresh"
+msgstr "Actualizar"
+
+msgid "Clear Selection"
+msgstr "Limpiar Selección"
+
+msgid "Error Creating PHI CSV File"
+msgstr "Error al Crear Archivo CSV de PHI"
+
+msgid "PHI CSV File Created"
+msgstr "Archivo CSV de PHI Creado"
+
+msgid "PHI Lookup Data saved to"
+msgstr "Datos de búsqueda PHI guardados en"
+
+msgid "Processed"
+msgstr "Procesado"
+
+msgid "Export Error"
+msgstr "Error de Exportación"
+
+msgid "Failed to export"
+msgstr "Error al exportar"
+
+msgid "patient(s)"
+msgstr "paciente(s)"
+
+msgid "Connection Error"
+msgstr "Error de Conexión"
+
+msgid "Export Server Failed DICOM C-ECHO"
+msgstr "El servidor de exportación falló en DICOM C-ECHO"
+
+msgid "No patients selected for export."
+msgstr "No se han seleccionado pacientes para exportar."
+
+msgid "Use SHIFT+Click and/or CMD/CTRL+Click to select multiple patients."
+msgstr "Use SHIFT+Click y/o CMD/CTRL+Click para seleccionar múltiples pacientes."
+
+msgid "Cancel active export?"
+msgstr "¿Cancelar la exportación activa?"
+
+msgid "Patient ID"
+msgstr "ID del Paciente"
+
+msgid "Date"
+msgstr "Fecha"
+
+msgid "Study Description"
+msgstr "Descripción del Estudio"
+
+msgid "Accession No."
+msgstr "Número de Acceso"
+
+msgid "Imported"
+msgstr "Importado"
+
+msgid "Last Import Error"
+msgstr "Último Error de Importación"
+
+msgid "StudyInstanceUID"
+msgstr "UID de Instancia de Estudio"
+
+msgid "STUDY"
+msgstr "ESTUDIO"
+
+msgid "SERIES"
+msgstr "SERIE"
+
+msgid "Query, Retrieve & Import Studies"
+msgstr "Consultar, Recuperar e Importar Estudios"
+
+msgid "Accession No.(s)"
+msgstr "Número(s) de Acceso"
+
+msgid "Study Date"
+msgstr "Fecha del Estudio"
+
+msgid "Modality"
+msgstr "Modalidad"
+
+msgid "Load Accession Numbers"
+msgstr "Cargar Números de Acceso"
+
+msgid "Show Imported Studies"
+msgstr "Mostrar Estudios Importados"
+
+msgid "Query"
+msgstr "Consulta"
+
+msgid "Cancel Query"
+msgstr "Cancelar Consulta"
+
+msgid "Found"
+msgstr "Encontrados"
+
+msgid "Studies Selected"
+msgstr "Estudios Seleccionados"
+
+msgid "Move Level"
+msgstr "Nivel de Movimiento"
+
+msgid "Import & Anonymize"
+msgstr "Importar y Anonimizar"
+
+msgid "Select text or csv file with list of accession numbers to retrieve"
+msgstr "Seleccione archivo de texto o CSV con lista de números de acceso para recuperar"
+
+msgid "File Read Error"
+msgstr "Error al Leer Archivo"
+
+msgid "Error reading Accession Number file"
+msgstr "Error al leer archivo de Número de Acceso"
+
+msgid "Accession Numbers not found"
+msgstr "No se encontraron Números de Acceso"
+
+msgid "Accession Numbers not found were written to text file"
+msgstr "Los Números de Acceso no encontrados fueron escritos en un archivo de texto"
+
+msgid "Query Server Failed DICOM C-ECHO"
+msgstr "Falló el servidor de consulta DICOM C-ECHO"
+
+msgid "Query via Accession Numbers"
+msgstr "Consulta por Números de Acceso"
+
+msgid "Accession Numbers"
+msgstr "Números de Acceso"
+
+msgid "Proceed with Query?"
+msgstr "¿Continuar con la consulta?"
+
+msgid "Query Criteria"
+msgstr "Criterios de Consulta"
+
+msgid "Enter at least one search criterion"
+msgstr "Ingrese al menos un criterio de búsqueda"
+
+msgid "AccNos"
+msgstr "AccNos"
+
+msgid "Cancel active Query?"
+msgstr "¿Cancelar la consulta activa?"
+
+msgid "Quarantine"
+msgstr "Quarentena"
+
+msgid "Metadata Queue"
+msgstr "Cola de metadatos"
+
+msgid "Pixel PHI Queue"
+msgstr "Pixel-PHI-Warteschlange"
+
+msgid "online"
+msgstr "en línea"
+
+msgid "Server Failed DICOM ECHO"
+msgstr "Error del Servidor DICOM ECHO"
+
+msgid "Check Project Settings"
+msgstr "Verificar Configuración del Proyecto"
+
+msgid "Ensure the remote server is setup to allow the local server for echo and storage services."
+msgstr "Asegúrese de que el servidor remoto esté configurado para permitir el servidor local para servicios de eco y almacenamiento."
+
+msgid "offline"
+msgstr "desconectado"
+
+msgid "Checking Query DICOM Server is online"
+msgstr "Comprobando que el servidor DICOM de consulta esté en línea"
+
+msgid "Waiting for AWS Authentication"
+msgstr "Esperando autenticación de AWS"
+
+msgid "Checking Export DICOM Server is online"
+msgstr "Comprobando que el servidor DICOM de exportación esté en línea"
+
+msgid "AWS Authentication Failed"
+msgstr "Falló la autenticación de AWS"
+
+msgid "Check Project Settings/AWS Cognito and ensure all parameters are correct."
+msgstr "Verifique la configuración del proyecto/AWS Cognito y asegúrese de que todos los parámetros sean correctos."
+
+msgid "AWS Authenticated"
+msgstr "Autenticación AWS"
 
 msgid "Welcome"
 msgstr "Bienvenido"
@@ -892,7 +937,7 @@ msgstr "El programa de Anonimización DICOM de RSNA es una herramienta de códig
 msgid "Easy to use, advanced DICOM expertise not required!"
 msgstr "¡Fácil de usar, no se requiere experiencia avanzada en DICOM!"
 
-msgid "Use it to ensure privacy by removing protected health information (PHI)."
+msgid "Use it to ensure privacy by removing protected identity & health information (PHI/PII) from both metadata and burnt into pixel data."
 msgstr "Usalo per garantire la privacy rimuovendo informazioni protette sull'identità e sulla salute (PHI/PII) sia dai metadati che dai dati pixel incorporati."
 
 msgid "Go to Help/Overview for a quick overview."
@@ -907,8 +952,6 @@ msgstr "Vaya a Ayuda/Operación para obtener instrucciones sobre cómo usar el p
 msgid "Select File/New Project to start."
 msgstr "Seleccione Archivo/Nuevo Proyecto para comenzar."
 
-#~ msgid "Import files from"
-#~ msgstr "Importar archivos desde"
+msgid "SPONSOR MESSAGE"
+msgstr "El desarrollo de Anonymzer ha sido respaldado bajo el proyecto Medical Imaging and Data Resource Center (MIDRC), financiado por el National Institute of Biomedical Imaging and Bioengineering (NIBIB) de los National Institutes of Health bajo el contrato 75N92020D00021 y a través de la Advanced Research Projects Agency for Health (ARPA-H)."
 
-#~ msgid "ANONYMIZER_STORE"
-#~ msgstr "ALMACEN_ANONIMIZADOR"

@@ -49,23 +49,31 @@ def count_studies_series_images(patient_path: str) -> tuple[int, int, int]:
     return study_count, series_count, image_count
 
 
-def count_series(base_dir: str, patient_ids: list[str]) -> int:
+def count_series(base_dir: str, patient_ids: list[str] = None) -> int:
     """
     Counts the total number of series across multiple patients in the anonymizer store.
 
     Args:
         base_dir (str): The base directory containing patient folders.
-        patient_ids (list[str]): A list of patient IDs.
+        patient_ids (list[str]): A list of patient IDs, if None count number of series for ALL patients
 
     Returns:
         The total number of series across all patient directories in patient_id list
     """
     total_series = 0
 
+    base_path = Path(base_dir)
+    if not base_path.is_dir():
+        raise ValueError(f"{base_dir} is not a valid directory")
+
+    # If patient_ids not specified, iterate through ALL patients
+    if patient_ids is None:
+        patient_ids = [p for p in base_path.iterdir() if p.is_dir()]
+
     for patient_id in patient_ids:
-        patient_path = Path(base_dir) / patient_id
+        patient_path = base_path / patient_id
         if not patient_path.exists():
-            continue  # Skip if the patient directory does not exist
+            continue
 
         for root, dirs, _ in os.walk(patient_path):
             if root != str(patient_path):  # Count series in subdirectories only
