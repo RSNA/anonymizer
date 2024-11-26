@@ -424,8 +424,6 @@ class KaleidoscopeView(ctk.CTkToplevel):
         all_series_frames = []
 
         for dcm_path in dcm_paths:
-            if self._stop_event.is_set():
-                return None
 
             if all_series_frames:
                 ds = dcmread(dcm_path)

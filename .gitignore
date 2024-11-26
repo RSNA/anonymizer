@@ -1,3 +1,4 @@
+*.dcm
 *.dmg
 *.DS_Store
 *.pyc
