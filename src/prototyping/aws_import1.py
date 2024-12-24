@@ -19,6 +19,9 @@ aws_tag = ""
 # - At least one number
 # - At least one special character
 
+# RCLONE
+# rclone mount storage.midrc:storage.midrc X: --vfs-cache-mode=full
+
 
 def authenticate_user():
     # Authenticate the user against the Cognito User Pool

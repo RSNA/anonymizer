@@ -1,51 +1,22 @@
 {
   "workbench.editor.labelFormat": "medium", // short,medium,long
-  "[python]": {
-    "editor.defaultFormatter": "ms-python.black-formatter",
-    "editor.formatOnSave": true
-  },
-  "cSpell.enableFiletypes": [
-    "!json",
-    "!jsonc",
-    "!jupyter",
-    "!markdown",
-    "!plaintext",
-    "!python",
-    "!script",
-    "!yaml"
-  ],
   "python.testing.pytestArgs": [
     "tests"
   ],
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
-  "cSpell.words": [
-    "anonimización",
-    "anonimizadas",
-    "Anonimizador",
-    "Anonymiseur",
-    "Anonymisierer",
-    "Anonymisierers",
-    "Anonymization",
-    "désidentification",
-    "désidentifié",
-    "DICOM",
-    "hashdate",
-    "l'Anonymiseur",
-    "MIRC",
-    "multiplateforme",
-    "ptid",
-    "PYDICOM",
-    "PYNETDICOM",
-    "RSNA",
-    "tkhtmlview",
-    "Transfersyntaxen",
-    "uids",
-    "VNA's"
-  ],
+  "ruff.importStrategy": "useBundled",
+  "[python]": {
+    
+    "editor.defaultFormatter": "charliermarsh.ruff", // ms-python.black-formatter",
+    "editor.formatOnPaste": true,
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "file",
+
+  },
   "python.analysis.typeCheckingMode": "off",
-  "editor.defaultFoldingRangeProvider": "ms-python.black-formatter",
-  "editor.defaultFormatter": "ms-python.black-formatter",
+  // "editor.defaultFoldingRangeProvider": "ms-python.black-formatter",
+  // "editor.defaultFormatter": "ms-python.black-formatter",
   "python.analysis.inlayHints.functionReturnTypes": false,
   "python.analysis.inlayHints.variableTypes": false,
   "python.analysis.inlayHints.pytestParameters": false,
@@ -62,35 +33,8 @@
     "**/dist",
     "**/build"
   ],
-  "python.analysis.addImport.heuristics": false,
-  "editor.suggest.showTypeParameters": false,
-  "python.analysis.packageIndexDepths": [
-
-    {
-      "name": "sklearn",
-      "depth": 2
-    },
-    {
-      "name": "matplotlib",
-      "depth": 2
-    },
-    {
-      "name": "scipy",
-      "depth": 2
-    },
-    {
-      "name": "django",
-      "depth": 2
-    },
-    {
-      "name": "flask",
-      "depth": 2
-    },
-    {
-      "name": "fastapi",
-      "depth": 2
-    }
-  ],
+  
+  "editor.suggest.showTypeParameters": false,  
   "python.languageServer": "Pylance",
-  "cSpell.language": "en-US,fr,de,es",
+
 }

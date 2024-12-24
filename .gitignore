@@ -1,6 +1,7 @@
 *.dcm
 *.dmg
 *.DS_Store
+*.pem
 *.pyc
 *.log
 *.env
@@ -11,6 +12,7 @@
 src/build/*
 src/dist/*
 src/logs/*
+src/certs/*
 dicom/*
 phi_imgs/*
 **/versionfile.txt

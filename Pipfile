@@ -20,6 +20,8 @@ pylibjpeg = {extras = ["all"], version = "*"}
 opencv-python-headless = "*"
 easyocr = "*"
 cryptography = "*"
+requests = "*"
+requests-oauthlib = "*"
 
 [dev-packages]
 radon = "*"

@@ -88,7 +88,14 @@ def get_pad(size):
 
 class KaleidoscopeView(ctk.CTkToplevel):
     KS_FRAME_RELATIVE_SIZE = (0.9, 0.9)  # fraction of screen size (width, height)
+    WIDGET_PAD = 10
     IMAGE_PAD = 2  # pixels between the kaleidoscopes images when combined
+    key_to_image_size_mapping = {
+        "S": KaleidoscopeImageSize.SMALL,
+        "M": KaleidoscopeImageSize.MEDIUM,
+        "L": KaleidoscopeImageSize.LARGE,
+    }
+    DEFAULT_SIZE = "S"
 
     def _get_series_paths(self) -> list[str]:
         return [
@@ -122,19 +129,40 @@ class KaleidoscopeView(ctk.CTkToplevel):
             raise ValueError(f"No series paths found for patient list")
 
         self._total_series = len(self._series_paths)
-        self._image_size = KaleidoscopeImageSize.MEDIUM
+        self._image_size = KaleidoscopeImageSize.SMALL
 
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.resizable(width=False, height=False)
-        self._create_widgets()
+
+        self._ks_frame_width = int(self.KS_FRAME_RELATIVE_SIZE[0] * self.winfo_screenwidth())
+        self._ks_frame_height = int(self.KS_FRAME_RELATIVE_SIZE[1] * self.winfo_screenheight())
+
         self._page_number = 0
+        self._rows = 0
+        self._cols = 0
+        self._pages = 0
         self._loading_page = False
         self._ks_labels = {}
+        self._calc_layout()
+        self._update_title()
+        self._create_widgets()
 
+        logger.info(
+            f"KaleidoscopeView for Patients={len(self._patient_ids)}, Total Series={self._total_series}, Total Pages={self._pages}"
+        )
+
+        # Bind Arrow buttons to page control
+        self.bind("<Left>", lambda e: self._on_page_slider(max(0, self._page_number - 1)))
+        self.bind("<Right>", lambda e: self._on_page_slider(min(self._pages - 1, self._page_number + 1)))
+        self.bind("<MouseWheel>", self._mouse_wheel)
+
+        self._update_image_size(self.DEFAULT_SIZE)
+
+    def _update_title(self):
         title = (
             _("View")
-            + f" {len(patient_ids)} "
-            + (_("Patients") if len(patient_ids) > 1 else _("Patient"))
+            + f" {len(self._patient_ids)} "
+            + (_("Patients") if len(self._patient_ids) > 1 else _("Patient"))
             + " "
             + _("with")
             + f" {self._total_series} "
@@ -146,31 +174,19 @@ class KaleidoscopeView(ctk.CTkToplevel):
 
         self.title(title)
 
-        logger.info(
-            f"KaleidoscopeView for Patients={len(self._patient_ids)}, Total Series={self._total_series}, Total Pages={self._pages}"
-        )
-
-        # Bind Arrow buttons to page control
-        self.bind("<Left>", lambda e: self._populate_ks_frame(max(0, self._current_page - 1)))
-        self.bind("<Right>", lambda e: self._populate_ks_frame(min(self._pages - 1, self._current_page + 1)))
-
-        self._populate_ks_frame(0)
-
-    def _create_widgets(self):
-        logger.info(f"_create_widgets")
-        PAD = 10
-
-        ks_frame_width = int(self.KS_FRAME_RELATIVE_SIZE[0] * self.winfo_screenwidth())
-        ks_frame_height = int(self.KS_FRAME_RELATIVE_SIZE[1] * self.winfo_screenheight())
+    def _calc_layout(self):
         padded_combined_width = (
             3 * self._image_size.width() + 2 * self.IMAGE_PAD + 2 * get_pad(self._image_size).width()
         )
         padded_combined_height = self._image_size.height() + get_pad(self._image_size).height()
 
-        self._cols = ks_frame_width // padded_combined_width
-        self._rows = ks_frame_height // padded_combined_height
-
+        self._rows = self._ks_frame_height // padded_combined_height
+        self._cols = self._ks_frame_width // padded_combined_width
         self._pages = ceil(self._total_series / (self._rows * self._cols))
+
+    def _create_widgets(self):
+        logger.info(f"_create_widgets")
+        PAD = self.WIDGET_PAD
 
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -178,28 +194,66 @@ class KaleidoscopeView(ctk.CTkToplevel):
         # 1. Kaleidoscope Frame:
         self._ks_frame = ctk.CTkFrame(
             self,
-            width=ks_frame_width,
-            height=ks_frame_height,
+            width=self._ks_frame_width,
+            height=self._ks_frame_height,
             fg_color="black",
         )
-        self._ks_frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nswe")
+        self._ks_frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nsew")
 
-        # 2. Paging Frame:
+        # 2. Bottom Frame for paging & image sizing:
         self._paging_frame = ctk.CTkFrame(self)
-        self._paging_frame.grid(row=1, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")
+        self._paging_frame.grid(row=1, column=0, padx=PAD, pady=(0, PAD), sticky="ew")
+        self._paging_frame.grid_columnconfigure(0, weight=1)
 
-        if self._pages > 1:
-            self._page_slider = ctk.CTkSlider(
-                self._paging_frame,
-                from_=0,
-                to=self._pages - 1,
-                number_of_steps=self._pages - 1,
-                command=self.page_slider_event,
-            )
-            self._page_slider.grid(row=0, column=0, padx=PAD, pady=0, sticky="w")
-            self._page_slider.set(0)
+        self._page_slider = ctk.CTkSlider(
+            self._paging_frame,
+            from_=0,
+            to=1,
+            number_of_steps=1,
+            command=self._on_page_slider,
+        )
+        self._page_slider.grid(row=0, column=0, padx=PAD, pady=0, sticky="we")
+        self._page_slider.set(0)
 
-    def page_slider_event(self, value):
+        self._page_label = ctk.CTkLabel(self._paging_frame, text="Page ...")
+        self._page_label.grid(row=0, column=1, padx=PAD, pady=0, sticky="e")
+
+        # Segmented Button for kaleidoscope image size selection
+        self._image_size_button = ctk.CTkSegmentedButton(
+            self._paging_frame, values=["S", "M", "L"], command=self._update_image_size
+        )
+        self._image_size_button.set(self.DEFAULT_SIZE)
+        self._image_size_button.grid(row=0, column=2)
+
+    def _mouse_wheel(self, event):
+        if event.delta > 0:  # Scroll up
+            next_page_number = self._page_number + 1
+            if next_page_number >= self._pages:
+                return
+        elif event.delta < 0:
+            next_page_number = self._page_number - 1
+            if next_page_number < 0:
+                return
+
+        self._on_page_slider(next_page_number)
+
+    def _update_image_size(self, value):
+        logger.info(f"Updating image size to {value}")
+
+        self._image_size = self.key_to_image_size_mapping[value]
+        self._calc_layout()
+
+        for widget in self._ks_frame.winfo_children():
+            widget.destroy()
+        self._ks_frame.update()
+        self._ks_labels.clear()
+
+        self._page_slider.configure(to=self._pages - 1, number_of_steps=self._pages)
+
+        # Redraw the kaleidoscope frame with new size
+        self._populate_ks_frame(self._page_number)
+
+    def _on_page_slider(self, value):
         if self._loading_page:
             return
 
@@ -207,24 +261,30 @@ class KaleidoscopeView(ctk.CTkToplevel):
 
         if abs(value - self._page_number) < 1:
             if value > self._page_number:
-                self._page_number += 1
+                next_page_number = self._page_number + 1
             else:
-                self._page_number -= 1
+                next_page_number = self._page_number - 1
         else:
-            self._page_number = round(value)
+            next_page_number = round(value)
+
+        if next_page_number == self._page_number:
+            logger.warning("page event to update to same page number")
+            return
 
         try:
             self._loading_page = True  # prevent re-entry, use lock instead?
             self._page_slider.configure(state="disabled")
-            self._populate_ks_frame(self._page_number)
+            self._populate_ks_frame(next_page_number)
         finally:
             self._page_slider.configure(state="normal")
-            self._page_slider.set(self._page_number)
+            self._page_slider.set(next_page_number)
             self._loading_page = False
 
     def _populate_ks_frame(self, page_number: int):
         """Populate the Kaleidoscope frame with images for the given page number."""
         logger.info(f"Populate ks_frame page={page_number}")
+        self._page_number = page_number
+        self._page_label.configure(text=_("Page") + f" {self._page_number+1} " + _("of") + f" {self._pages}")
 
         if not hasattr(self, "_ks_labels"):
             self._ks_labels = {}  # Initialize labels dictionary if not present
