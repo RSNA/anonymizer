@@ -32,6 +32,9 @@
   "python.analysis.ignore": [
     "builtins.pyi"
   ],
+  "python.analysis.extraPaths": [
+    "src"
+  ],
   "python.analysis.exclude": [
     ".vscode",
     "tests",
