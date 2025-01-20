@@ -1,18 +1,19 @@
 # tests/conftest.py
-import os, sys
+import os
+from typing import Any, Generator
 import pytest
 
 # Add the src directory to sys.path dynamically
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+#  sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from pathlib import Path
 import shutil
 import tempfile
-from logging import DEBUG, INFO, WARNING
+from logging import INFO, WARNING
 
-from src.utils.logging import init_logging
-from src.model.project import ProjectModel, NetworkTimeouts, LoggingLevels
-from src.controller.project import ProjectController
+from anonymizer.utils.logging import init_logging
+from anonymizer.model.project import ProjectModel, NetworkTimeouts, LoggingLevels
+from anonymizer.controller.project import ProjectController
 import tests.controller.dicom_pacs_simulator_scp as pacs_simulator_scp
 from tests.controller.dicom_test_nodes import (
     TEST_PROJECTNAME,
@@ -25,12 +26,12 @@ from tests.controller.dicom_test_nodes import (
 )
 
 
-def pytest_sessionstart(session):
-    """Runs before the test session begins."""
+# def pytest_sessionstart(session):
+#     """Runs before the test session begins."""
 
 
 @pytest.fixture
-def temp_dir():
+def temp_dir() -> Generator[str, Any, None]:
     # Create a temporary directory
     temp_path = tempfile.mkdtemp()
 
@@ -45,7 +46,7 @@ def temp_dir():
 
 
 @pytest.fixture
-def controller(temp_dir):
+def controller(temp_dir: str) -> Generator[ProjectController, Any, None]:
     anon_store = Path(temp_dir, LocalSCU.aet)
     # Make sure storage directory exists:
     os.makedirs(anon_store, exist_ok=True)
@@ -60,7 +61,7 @@ def controller(temp_dir):
         scp=LocalStorageSCP,
         remote_scps=RemoteSCPDict,
         network_timeouts=NetworkTimeouts(2, 5, 5, 15),
-        anonymizer_script_path=Path("src/assets/scripts/default-anonymizer.script"),
+        anonymizer_script_path=Path("src/anonymizer/assets/scripts/default-anonymizer.script"),
         logging_levels=LoggingLevels(anonymizer=INFO, pynetdicom=WARNING, pydicom=False),
     )
 

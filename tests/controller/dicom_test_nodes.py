@@ -1,11 +1,11 @@
-from src.model.project import DICOMNode
+from anonymizer.model.project import DICOMNode
 
 LocalSCU = DICOMNode("127.0.0.1", 0, "ANONYMIZER", True)
 LocalStorageSCP = DICOMNode("127.0.0.1", 1045, "ANONYMIZER", True)
 PACSSimulatorSCP = DICOMNode("127.0.0.1", 1046, "TESTPACS", False)
 OrthancSCP = DICOMNode("127.0.0.1", 4242, "ORTHANC", False)
 
-RemoteSCPDict = {
+RemoteSCPDict: dict[str, DICOMNode] = {
     PACSSimulatorSCP.aet: PACSSimulatorSCP,
     OrthancSCP.aet: OrthancSCP,
     LocalStorageSCP.aet: LocalStorageSCP,

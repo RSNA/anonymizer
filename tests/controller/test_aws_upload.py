@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 import os
 from pathlib import Path
 from botocore.exceptions import NoCredentialsError
-from src.controller.project import ProjectController
+from anonymizer.controller.project import ProjectController
 from pydicom.data import get_testdata_file
 
 from tests.controller.dicom_test_files import ct_small_filename
@@ -19,7 +19,7 @@ def test_send_1_dicomfile_to_AWS_S3_and_list_objects(temp_dir: str, controller: 
 
     username = os.getenv("AWS_USERNAME")
     pw = os.getenv("AWS_PASSWORD")
-    
+
     assert username
     assert pw
 
@@ -44,7 +44,7 @@ def test_send_1_dicomfile_to_AWS_S3_and_list_objects(temp_dir: str, controller: 
     except NoCredentialsError:
         assert False
 
-    except Exception as e:
+    except Exception:
         assert False
 
     # Ensure cached credentials are returned from next call to AWS_authenticate()

@@ -3,18 +3,19 @@ from pathlib import Path
 from queue import Queue
 from pydicom.data import get_testdata_file
 from pydicom import Dataset
-from src.controller.project import (
+from anonymizer.controller.project import (
     ProjectController,
     ExportPatientsRequest,
     ExportPatientsResponse,
     MoveStudiesRequest,
     StudyUIDHierarchy,
 )
-from src.model.project import DICOMNode
+from anonymizer.model.project import DICOMNode
 
 # DICOM NODES involved in tests:
-from tests.controller.dicom_test_nodes import LocalStorageSCP, PACSSimulatorSCP, OrthancSCP
-from src.model.project import ProjectModel
+from tests.controller.dicom_test_nodes import LocalStorageSCP, PACSSimulatorSCP  # , OrthancSCP
+
+# from anonymizer.model.project import ProjectModel
 
 
 # TEST HELPER FUNCTION
@@ -134,7 +135,7 @@ def export_patients_from_local_storage_to_test_pacs(patient_ids: list[str], cont
             if resp.complete:
                 export_count += 1
 
-        except Exception as e:  # timeout reading ux_Q
+        except Exception:  # timeout reading ux_Q
             assert False
 
     return True

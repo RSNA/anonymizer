@@ -1,14 +1,13 @@
 import os
 import logging
 from typing import List
-from dataclasses import dataclass
 from pydicom import dcmread, Dataset
 from pynetdicom.events import Event, EVT_C_ECHO, EVT_C_FIND, EVT_C_STORE, EVT_C_MOVE
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.presentation import PresentationContext, build_context
-from pynetdicom._globals import ALL_TRANSFER_SYNTAXES, DEFAULT_TRANSFER_SYNTAXES
+from pynetdicom._globals import DEFAULT_TRANSFER_SYNTAXES  # ,ALL_TRANSFER_SYNTAXES
 
-from src.controller.dicom_C_codes import (
+from anonymizer.controller.dicom_C_codes import (
     C_SUCCESS,
     C_STORE_OUT_OF_RESOURCES,
     C_SOP_CLASS_INVALID,
@@ -18,7 +17,7 @@ from src.controller.dicom_C_codes import (
     C_FAILURE,
 )
 
-from src.model.project import DICOMNode
+from anonymizer.model.project import DICOMNode
 
 logger = logging.getLogger(__name__)
 

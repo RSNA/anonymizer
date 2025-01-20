@@ -9,18 +9,18 @@ from queue import Queue
 from pydicom import dcmread
 from pydicom.data import get_testdata_file
 from pydicom.dataset import Dataset
-from src.controller.project import ProjectController
-from src.controller.anonymizer import AnonymizerController, QuarantineDirectories
+from anonymizer.controller.project import ProjectController
+from anonymizer.controller.anonymizer import AnonymizerController, QuarantineDirectories
 
 from tests.controller.dicom_test_files import (
     cr1_filename,
     ct_small_filename,
-    mr_small_filename,
-    mr_small_implicit_filename,
-    mr_small_bigendian_filename,
-    CR_STUDY_3_SERIES_3_IMAGES,
-    CT_STUDY_1_SERIES_4_IMAGES,
-    MR_STUDY_3_SERIES_11_IMAGES,
+    # mr_small_filename,
+    # mr_small_implicit_filename,
+    # mr_small_bigendian_filename,
+    # CR_STUDY_3_SERIES_3_IMAGES,
+    # CT_STUDY_1_SERIES_4_IMAGES,
+    # MR_STUDY_3_SERIES_11_IMAGES,
 )
 from tests.controller.dicom_test_nodes import LocalSCU
 
@@ -80,7 +80,6 @@ def test_valid_date_hash_patient_id_range(controller):
 
 def test_anonymize_dataset_without_PatientID(temp_dir: str, controller):
     anonymizer: AnonymizerController = controller.anonymizer
-    anon_Q = Queue()
     ds = get_testdata_file(cr1_filename, read=True)
     assert isinstance(ds, Dataset)
     assert ds
@@ -118,7 +117,6 @@ def test_anonymize_dataset_without_PatientID(temp_dir: str, controller):
 
 def test_anonymize_dataset_with_blank_PatientID_1_study(temp_dir: str, controller):
     anonymizer: AnonymizerController = controller.anonymizer
-    anon_Q = Queue()
     ds1 = get_testdata_file(cr1_filename, read=True)
     assert isinstance(ds1, Dataset)
     assert ds1
@@ -190,7 +188,6 @@ def test_anonymize_dataset_with_blank_PatientID_1_study(temp_dir: str, controlle
 
 def test_anonymize_dataset_with_blank_PatientID_2_studies(temp_dir: str, controller):
     anonymizer: AnonymizerController = controller.anonymizer
-    anon_Q = Queue()
     ds = get_testdata_file(cr1_filename, read=True)
     assert isinstance(ds, Dataset)
     assert ds
@@ -227,7 +224,6 @@ def test_anonymize_dataset_with_blank_PatientID_2_studies(temp_dir: str, control
 
 def test_anonymize_dataset_with_PatientID(temp_dir: str, controller):
     anonymizer: AnonymizerController = controller.anonymizer
-    anon_Q = Queue()
     ds = get_testdata_file(cr1_filename, read=True)
     assert isinstance(ds, Dataset)
     assert ds

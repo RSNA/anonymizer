@@ -4,9 +4,9 @@ import pytest
 from pydicom.dataset import Dataset
 from pydicom.errors import InvalidDicomError
 import tests.controller.dicom_pacs_simulator_scp as pacs_simulator_scp
-from src.controller.project import ProjectController
+from anonymizer.controller.project import ProjectController
 
-from src.utils.storage import count_studies_series_images
+from anonymizer.utils.storage import count_studies_series_images
 from pydicom.data import get_testdata_file
 
 # DICOM NODES involved in tests:

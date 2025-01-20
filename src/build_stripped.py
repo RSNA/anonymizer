@@ -7,15 +7,16 @@
 # pipenv shell
 # python build.py
 
-import os, sys, time
+import os
+import sys
+import time
 import shutil
 import subprocess
 import platform
 import plistlib
+import importlib.metadata
 
-from __version__ import __version__
 import pyinstaller_versionfile
-import os
 import PyInstaller.__main__
 
 # V6.6 new option: --optimize 2 option in pyinstaller cmd line determine optimization of exe
@@ -27,7 +28,7 @@ env_file = os.getenv("GITHUB_ENV")
 if env_file:
     print("Running in GitHub Actions, writing version to env file")
     with open(env_file, "a") as f:
-        f.write(f"version={__version__}")
+        f.write(f"version={importlib.metadata.version("anonymizer")}")
 
 # customtkinter may not be installed in standard python library directory, get path in virtual environment:
 venv_path = subprocess.check_output(["pipenv", "--venv"]).strip().decode()
@@ -35,7 +36,12 @@ venv_path = subprocess.check_output(["pipenv", "--venv"]).strip().decode()
 print("build.py execute...")
 
 # Get the Python version
-python_version = "python" + platform.python_version_tuple()[0] + "." + platform.python_version_tuple()[1]
+python_version = (
+    "python"
+    + platform.python_version_tuple()[0]
+    + "."
+    + platform.python_version_tuple()[1]
+)
 print(f"Python version tuple: {platform.python_version_tuple()}")
 
 if os.name == "nt":  # Windows
@@ -46,7 +52,9 @@ else:  # Unix-based systems
 
 
 # Path to the customtkinter directory
-customtkinter_path = os.path.join(venv_path, lib_dir, python_version, "site-packages", "customtkinter")
+customtkinter_path = os.path.join(
+    venv_path, lib_dir, python_version, "site-packages", "customtkinter"
+)
 
 if not os.path.exists(customtkinter_path):
     raise Exception(
@@ -81,18 +89,22 @@ def set_macos_version(bundle_path, version):
 
 
 if __name__ == "__main__":
-    build_version_name = f"Anonymizer_{__version__}"
+    project_version = importlib.metadata.version("anonymizer")
+    build_version_name = f"Anonymizer_{project_version}"
 
-    print(f"Build Current version: {build_version_name} on {platform.system()} platform using PyInstaller")
+    print(
+        f"Build Current version: {build_version_name} on {platform.system()} platform using PyInstaller"
+    )
     print(f"Customtkinter path: {customtkinter_path}")
 
     if platform.system() == "Windows":
-
         # Create versionfile.txt
-        print(f"Create Windows Version Resource Text file: versionfile.txt for PyInstaller, new version: {__version__}")
+        print(
+            f"Create Windows Version Resource Text file: versionfile.txt for PyInstaller, new version: {project_version}"
+        )
         pyinstaller_versionfile.create_versionfile(
             output_file="versionfile.txt",
-            version=__version__.split("-")[0],
+            version=project_version.split("-")[0],
             company_name="Radiology Society of North America",
             file_description="RSNA DICOM Anonymizer",
             internal_name="anonymizer",
@@ -137,14 +149,13 @@ if __name__ == "__main__":
         )
 
     elif platform.system() == "Darwin":
-
         if os.path.exists("dist"):
-            print(f"Deleting dist folder")
+            print("Deleting dist folder")
             shutil.rmtree("dist")
             time.sleep(1)
 
         if os.path.exists("dmg"):
-            print(f"Deleting dmg folder")
+            print("Deleting dmg folder")
             shutil.rmtree("dmg")
             time.sleep(1)
 
@@ -175,11 +186,13 @@ if __name__ == "__main__":
         bundle_path = f"dist/{build_version_name}.app"
 
         # Set the version
-        set_macos_version(bundle_path, __version__)
+        set_macos_version(bundle_path, project_version)
 
         # To run this executable after download requires removing the extended attributes via
         print(f"Removing extended attributes from {bundle_path}")
-        result = subprocess.run(["xattr", "-rc", bundle_path], capture_output=True, text=True)
+        result = subprocess.run(
+            ["xattr", "-rc", bundle_path], capture_output=True, text=True
+        )
         print(f"Output: {result.stdout}")
 
         if result.returncode != 0:
@@ -215,7 +228,7 @@ if __name__ == "__main__":
         time.sleep(1)
 
         # Delete the dist folder
-        print(f"Deleting dist folder")
+        print("Deleting dist folder")
         shutil.rmtree("dist")
 
         time.sleep(1)
@@ -224,7 +237,6 @@ if __name__ == "__main__":
         os.rename("dmg", "dist")
 
     elif platform.system() == "Linux":
-
         PyInstaller.__main__.run(
             [
                 "--noconfirm",

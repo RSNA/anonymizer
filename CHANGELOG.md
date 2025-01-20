@@ -4,8 +4,10 @@ All notable changes to this project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+
 ## Release Candidate
-## [17.2.1] -
+## [17.2.1] 
 ### Changed
 - anonymizer.py menu bar handling refactored, resolve issue [#14](https://github.com/RSNA/anonymizer/issues/14), 
 - anonymizer.py remove menu font - * to verify on windows platforms
@@ -15,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - model/project.py default_local_server changed IP from 127.0.0.1 to 0.0.0.0
     - view/settings/dicom_node_dialog ensure "0.0.0.0" is provided to IP address dropdown
 - Moved logger.info trace of incoming file in ProjectController._handle_store to AnonymizeController.anonymize_dataset in pydicom logging true clause
+- resturctured src directory for pypi: src/anonymizer/...
+- release.yaml github action for managing pypi releases
+
 
 ## Added
 - Add tcl/tk install and test to development setup in readme.md
@@ -23,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Classify all critial errors in AnonmyizerModel.capture_phi so logger output is clearer
 
 
-## [17.1.1] -
+## [17.1.1] - July 15, 2024
 ### Radon raw totals:
 {'LOC': 10367,
  **'LLOC': 5237**,

@@ -1,8 +1,11 @@
-from src.utils.storage import JavaAnonymizerExportedStudy, read_java_anonymizer_index_xlsx
-from src.controller.anonymizer import AnonymizerController
+from anonymizer.controller.project import ProjectController
+from anonymizer.utils.storage import (
+    JavaAnonymizerExportedStudy,
+    read_java_anonymizer_index_xlsx,
+)
 
 
-def test_read_java_anonymizer_index_xlsx(temp_dir: str, controller):
+def test_read_java_anonymizer_index_xlsx(temp_dir: str, controller: ProjectController) -> None:
     index_file = "tests/controller/assets/JavaGeneratedIndex.xlsx"
     studies: list[JavaAnonymizerExportedStudy] = read_java_anonymizer_index_xlsx(index_file)
     assert studies
@@ -15,7 +18,7 @@ def test_read_java_anonymizer_index_xlsx(temp_dir: str, controller):
     assert studies[69].PHI_PatientID == "574856-000200"
 
 
-def test_load_java_index_into_new_project(temp_dir: str, controller):
+def test_load_java_index_into_new_project(temp_dir: str, controller: ProjectController) -> None:
     index_file = "tests/controller/assets/JavaGeneratedIndex.xlsx"
     studies: list[JavaAnonymizerExportedStudy] = read_java_anonymizer_index_xlsx(index_file)
 

@@ -4,9 +4,9 @@ import os
 import time
 import pytest
 from pydicom.dataset import Dataset
-from src.utils.storage import count_studies_series_images
+from anonymizer.utils.storage import count_studies_series_images
 
-from src.controller.project import ProjectController, StudyUIDHierarchy, SeriesUIDHierarchy, InstanceUIDHierarchy
+from anonymizer.controller.project import ProjectController, StudyUIDHierarchy, SeriesUIDHierarchy, InstanceUIDHierarchy
 from tests.controller.dicom_test_nodes import LocalStorageSCP, PACSSimulatorSCP, OrthancSCP
 from tests.controller.helpers import (
     send_file_to_scp,
@@ -15,7 +15,7 @@ from tests.controller.helpers import (
     pacs_storage_dir,
     verify_files_sent_to_pacs_simulator,
 )
-from src.controller.dicom_C_codes import (
+from anonymizer.controller.dicom_C_codes import (
     C_FAILURE,
     C_MOVE_UNKNOWN_AE,
     C_SUCCESS,
@@ -91,7 +91,7 @@ def test_move_at_instance_level_1_CT_file_from_pacs_with_file_to_unknown_AET(
     error_msg, study_uid_hierarchy = controller.get_study_uid_hierarchy(
         PACSSimulatorSCP.aet, ct_small_StudyInstanceUID, patient3_id, True
     )
-    assert error_msg == None
+    assert error_msg is None
     assert study_uid_hierarchy.get_number_of_instances() == 1
     assert len(study_uid_hierarchy.series) == 1
     series = study_uid_hierarchy.series[ct_small_SeriesInstanceUID]

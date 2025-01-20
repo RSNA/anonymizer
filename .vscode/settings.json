@@ -1,25 +1,30 @@
 {
   "workbench.editor.labelFormat": "medium", // short,medium,long
+  "workbench.editor.showTabs": "multiple",
+  "python.envFile": "${workspaceFolder}/.env",
+  "python.experiments.optOutFrom": ["pythonTestAdapter"],
   "python.testing.pytestArgs": [
-    "tests"
+      "tests",
+      "--cov=src/anonymizer/controller",
+      "--cov=src/anonymizer/controller",
+      "--cov=src/anonymizer/utils",
+      "--cov-report=html",
+      "--rootdir=.",
   ],
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
   "ruff.importStrategy": "useBundled",
   "[python]": {
-    
-    "editor.defaultFormatter": "charliermarsh.ruff", // ms-python.black-formatter",
+    "editor.defaultFormatter": "ms-python.black-formatter", // "charliermarsh.ruff"
     "editor.formatOnPaste": true,
     "editor.formatOnSave": true,
     "editor.formatOnSaveMode": "file",
-
+    "editor.suggest.showTypeParameters": true,
   },
-  "python.analysis.typeCheckingMode": "off",
-  // "editor.defaultFoldingRangeProvider": "ms-python.black-formatter",
-  // "editor.defaultFormatter": "ms-python.black-formatter",
-  "python.analysis.inlayHints.functionReturnTypes": false,
-  "python.analysis.inlayHints.variableTypes": false,
-  "python.analysis.inlayHints.pytestParameters": false,
+  "python.analysis.typeCheckingMode": "basic", // Options: off, basic, strict
+  "python.analysis.inlayHints.functionReturnTypes": true,
+  "python.analysis.inlayHints.variableTypes": true,
+  "python.analysis.inlayHints.pytestParameters": true,
   "python.analysis.inlayHints.callArgumentNames": "off",
   "python.analysis.diagnosticMode": "workspace",
   "python.analysis.autoFormatStrings": true,
@@ -29,12 +34,14 @@
   ],
   "python.analysis.exclude": [
     ".vscode",
-    "src/prototyping",
+    "tests",
     "**/dist",
-    "**/build"
-  ],
-  
-  "editor.suggest.showTypeParameters": false,  
+    "**/build",
+    "**/venv",
+    "**/.venv",
+    "**/__pycache__",
+    "**/node_modules",
+    "src/anonymizer/prototyping"
+  ], 
   "python.languageServer": "Pylance",
-
 }
