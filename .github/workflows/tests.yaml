@@ -10,7 +10,7 @@ on:
       - main
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
 
     steps:
@@ -28,7 +28,9 @@ jobs:
         echo "$HOME/.local/bin" >> $GITHUB_PATH
 
     - name: Install dependencies
-      run: poetry install --with dev --sync 
+      run: |
+        poetry config virtualenvs.create true
+        poetry install --with dev --no-root
 
     - name: Run Unit Tests
       run: poetry run test
