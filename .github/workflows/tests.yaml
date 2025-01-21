@@ -46,19 +46,19 @@ jobs:
         AWS_USERNAME: ${{ secrets.AWS_USERNAME }}
         AWS_PASSWORD: ${{ secrets.AWS_PASSWORD }}
       run: |
-
+      
         # Run tests with text coverage report
-        poetry run test --cov=src/anonymizer --cov-report=term-missing
+        poetry run pytest --cov=src/anonymizer/controller --cov=src/anonymizer/model --cov=src/anonymizer/utils --cov-report=term-missing > coverage_output.txt
 
         # Get the coverage percentage from the output
-        coverage_percentage=$(poetry run test --cov=src/anonymizer/controller --cov=src/anonymizer/model --cov=src/anonymizer/utils --cov-report=term-missing | grep "TOTAL" | awk '{print $4}' | tr -d '%')
+        coverage_percentage=$(grep "TOTAL" coverage_output.txt | awk '{print $4}' | tr -d '%')
 
         # Calculate total lines of code
         total_lines=$(grep "TOTAL" coverage_output.txt | awk '{print $2}')
 
         # Print total lines of code
         echo "Total lines of code: $total_lines"
-        
+
         # Define your desired threshold
         threshold=50
 
