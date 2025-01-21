@@ -4,7 +4,7 @@ version = "17.2.1rc7"
 description = "RSNA DICOM Anonymizer"
 authors = ["Algorhythm Software <michael@dx.life>"]
 license = "RSNA-MIRC Public License"
-readme = "README.md"
+readme = "readme.md"
 homepage = "https://github.com/RSNA/anonymizer"
 packages = [{ include = "anonymizer", from = "src"}]
 
