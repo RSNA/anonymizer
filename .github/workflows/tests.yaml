@@ -51,8 +51,14 @@ jobs:
         poetry run test --cov=src/anonymizer --cov-report=term-missing
 
         # Get the coverage percentage from the output
-        coverage_percentage=$(poetry run test --cov=src/anonymizer --cov-report=term-missing | grep "TOTAL" | awk '{print $4}' | tr -d '%')
+        coverage_percentage=$(poetry run test --cov=src/anonymizer/controller --cov=src/anonymizer/model --cov=src/anonymizer/utils --cov-report=term-missing | grep "TOTAL" | awk '{print $4}' | tr -d '%')
 
+        # Calculate total lines of code
+        total_lines=$(grep "TOTAL" coverage_output.txt | awk '{print $2}')
+
+        # Print total lines of code
+        echo "Total lines of code: $total_lines"
+        
         # Define your desired threshold
         threshold=50
 
