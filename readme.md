@@ -4,7 +4,7 @@
 [![fr](https://img.shields.io/badge/lang-fr-blue.svg)](readme.fr.md)
 [![ci](https://github.com/RSNA/anonymizer/actions/workflows/build.yml/badge.svg)](https://github.com/RSNA/anonymizer/actions/workflows/build.yml)
 
-![WelcomeView](src/assets/locales/en_US/html/images/Welcome_en_win_light.png)
+![WelcomeView](src/anonymizer/assets/locales/en_US/html/images/Welcome_en_win_light.png)
 ## Installation 
 Select the correct binary download for your platform from the available [releases](https://github.com/rsna/anonymizer/releases)
 ### Windows
@@ -31,7 +31,7 @@ Select the correct binary download for your platform from the available [release
 ## Sponsors
 
 <div style="display: flex; align-items: center;">
-  <img src="src/assets/icons/signpath_logo.svg" alt="SignPath Logo" style="max-height: 40px; margin-right: 10px;">
+  <img src="src/anonymizer/assets/icons/signpath_logo.svg" alt="SignPath Logo" style="max-height: 40px; margin-right: 10px;">
   <p>Free code signing on Windows provided by <a href="https://about.signpath.io/">SignPath.io</a>, certificate by <a href="https://signpath.org/">SignPath Foundation</a></p>
 </div>
 
@@ -74,10 +74,10 @@ Languages for 17.1: `en_US, de, es, fr`
 2. Mac OSX: `brew install gettext`
 3. Linux: `sudo apt-get install gettext`
 #### Extracting messages from source files:
-cd src/assets/locales/
+cd src/anonymizer/assets/locales/
 ./extract_translations.sh
 #### Updating translations:
-cd src/assets/locales/
+cd src/anonymizer/assets/locales/
 ./update_translations.sh
 ### Software Architecture
 Full class diagram [here](class_diagram.md)

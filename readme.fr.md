@@ -4,7 +4,7 @@
 [![es](https://img.shields.io/badge/lang-es-blue.svg)](readme.es.md)
 [![ci](https://github.com/mdevans/anonymizer/actions/workflows/build.yml/badge.svg)](https://github.com/mdevans/anonymizer/actions/workflows/build.yml)
 
-![WelcomeView](src/assets/locales/fr/html/images/Welcome_fr_win_light.png)
+![WelcomeView](src/anonymizer/assets/locales/fr/html/images/Welcome_fr_win_light.png)
 ## Installation 
 Sélectionnez le téléchargement binaire correct pour votre plateforme parmi les [versions disponibles](https://github.com/mdevans/anonymizer/releases)
 ### Windows
