@@ -4,10 +4,10 @@ on:
   workflow_dispatch:  # Enables manual trigger
   pull_request:
     branches:
-      - main
+      - master
   push: 
     branches:
-      - main
+      - master
 
 jobs:
   test:
@@ -30,9 +30,11 @@ jobs:
     - name: Install dependencies
       run: |
         poetry config virtualenvs.create true
-        poetry install --with dev --no-root
+        poetry install --with dev
 
     - name: Run Unit Tests
+      env:
+        PYTHONPATH: ${{ github.workspace }}/src
       run: poetry run test
 
   
