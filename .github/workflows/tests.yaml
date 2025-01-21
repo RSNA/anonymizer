@@ -46,7 +46,22 @@ jobs:
         AWS_USERNAME: ${{ secrets.AWS_USERNAME }}
         AWS_PASSWORD: ${{ secrets.AWS_PASSWORD }}
       run: |
-        pwd  # Print working directory before running tests
-        poetry run test
 
+        # Run tests with text coverage report
+        poetry run test --cov=src/anonymizer --cov-report=term-missing
+
+        # Get the coverage percentage from the output
+        coverage_percentage=$(poetry run test --cov=src/anonymizer --cov-report=term-missing | grep "TOTAL" | awk '{print $4}' | tr -d '%')
+
+        # Define your desired threshold
+        threshold=50
+
+        # Check if coverage meets the threshold
+        if (( $(echo "$coverage_percentage >= $threshold" | bc -l) )); then
+          echo "Coverage is above $threshold%: $coverage_percentage%"
+          exit 0  # Exit with success
+        else
+          echo "Coverage is below $threshold%: $coverage_percentage%. Tests failed."
+          exit 1  # Exit with failure
+        fi
   
