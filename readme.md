@@ -2,7 +2,7 @@
 [![de](https://img.shields.io/badge/lang-de-blue.svg)](readme.de.md)
 [![es](https://img.shields.io/badge/lang-es-blue.svg)](readme.es.md)
 [![fr](https://img.shields.io/badge/lang-fr-blue.svg)](readme.fr.md)
-[![ci](https://github.com/RSNA/anonymizer/actions/workflows/build.yml/badge.svg)](https://github.com/RSNA/anonymizer/actions/workflows/build.yml)
+[![ci](https://github.com/RSNA/anonymizer/actions/workflows/build.yaml/badge.svg)](https://github.com/RSNA/anonymizer/actions/workflows/build.yaml)
 
 ![WelcomeView](src/anonymizer/assets/locales/en_US/html/images/Welcome_en_win_light.png)
 ## Installation 
