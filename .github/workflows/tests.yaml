@@ -29,7 +29,6 @@ jobs:
 
     - name: Install dependencies
       run: |
-        poetry config virtualenvs.create true
         poetry install --with dev
 
     - name: Run Unit Tests
