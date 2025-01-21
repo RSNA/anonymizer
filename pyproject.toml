@@ -28,17 +28,14 @@ easyocr = "*"
 cryptography = "*"
 requests = "*"
 requests-oauthlib = "*"
+poetry = "^2.0.1"
 
 [tool.poetry.group.dev.dependencies]
-radon = "*"
-coverage = "*"
-pyinstaller = "*"
-pyinstaller-versionfile = "*"
+ruff = "*"
+black = "*"
 pytest = "*"
 pytest-cov = "^6.0.0"
 python-dotenv = "*"
-ruff = "*"
-black = "*"
 
 [tool.ruff]
 line-length = 88
@@ -62,7 +59,15 @@ exclude = '''
   | dist
 )/
 '''
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=src/anonymizer --cov-report=html"
+
+[tool.poetry.scripts]
+test = "pytest:main"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+

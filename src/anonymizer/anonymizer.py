@@ -1035,14 +1035,14 @@ def main():
         logger.exception(f"Error initialising ANONYMIZER GUI, exiting: {str(e)}")
         sys.exit(1)
 
-    # Close Pyinstaller startup splash image on Windows
-    if sys.platform.startswith("win"):
-        try:
-            import pyi_splash  # type: ignore
+    # # Close Pyinstaller startup splash image on Windows
+    # if sys.platform.startswith("win"):
+    #     try:
+    #         import pyi_splash  # type: ignore
 
-            pyi_splash.close()  # type: ignore
-        except Exception:
-            pass
+    #         pyi_splash.close()  # type: ignore
+    #     except Exception:
+    #         pass
 
     logger.info("ANONYMIZER GUI MAINLOOP...")
     try:

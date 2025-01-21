@@ -1,4 +1,3 @@
-import requests
 import webbrowser
 from urllib.parse import urlencode
 

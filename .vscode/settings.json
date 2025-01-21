@@ -5,9 +5,8 @@
   "python.experiments.optOutFrom": ["pythonTestAdapter"],
   "python.testing.pytestArgs": [
       "tests",
+      "--cov=src/anonymizer",
       "--cov=src/anonymizer/controller",
-      "--cov=src/anonymizer/controller",
-      "--cov=src/anonymizer/utils",
       "--cov-report=html",
       "--rootdir=.",
   ],
@@ -44,7 +43,7 @@
     "**/.venv",
     "**/__pycache__",
     "**/node_modules",
-    "src/anonymizer/prototyping"
+    "src/prototyping"
   ], 
   "python.languageServer": "Pylance",
 }

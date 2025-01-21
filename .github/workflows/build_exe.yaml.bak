@@ -4,9 +4,9 @@
 name: anonymizer-test-build-upload
 
 on:
-  push:
-    tags:
-      - "[0-9]+.[0-9]+.[0-9]+rc[0-9]+"
+  # push:
+  #   tags:
+  #     - "[0-9]+.[0-9]+.[0-9]+rc[0-9]+"
   
 permissions:
   contents: read

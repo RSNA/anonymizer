@@ -1,4 +1,4 @@
-# run: radon raw -i "tests,docs,prototyping" . > radon_results.txt
+# run: radon raw -i "tests,docs,src/anonymizer/prototyping" . > radon_results.txt
 # then run this script to get totals
 from pprint import pprint
 

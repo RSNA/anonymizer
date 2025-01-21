@@ -33,7 +33,7 @@ with open("/Users/michaelevans/Downloads/anonymizer_query.log", "r") as f:
             operations = int(line.split("completed:")[1].split(",")[0].strip())
             completed[study_uid] = operations
 
-        if "=> E:\Anonymizer2_5" in line:
+        if "=> E:\\Anonymizer2_5" in line:
             path = line.split("=>")[1].strip()
             components = path.split("\\")[2:]
             anon_patient_ids.append(components[0])
@@ -97,11 +97,7 @@ with open("/Users/michaelevans/Downloads/anonymizer_query.log", "r") as f:
             num_instances = None
             if "[" in line and "]" in line:
                 num_instances = int(line.split("[")[1].split("]")[0].strip())
-            if (
-                study_uid is not None
-                and num_series is not None
-                and num_instances is not None
-            ):
+            if study_uid is not None and num_series is not None and num_instances is not None:
                 query_result_dict[study_uid] = (num_series, num_instances)
 
 query_result_study_uids = set(query_result_dict.keys())
