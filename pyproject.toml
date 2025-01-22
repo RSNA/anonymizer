@@ -61,10 +61,7 @@ exclude = '''
 '''
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=src/anonymizer --cov-report=html"
-
-[tool.poetry.scripts]
-test = "pytest:main"
+addopts = "--verbose --show-capture=all --cov=src/anonymizer --cov-report=term-missing"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
