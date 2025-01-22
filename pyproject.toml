@@ -29,6 +29,7 @@ cryptography = "*"
 requests = "*"
 requests-oauthlib = "*"
 poetry = "^2.0.1"
+toml = "^0.10.2"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "*"

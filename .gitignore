@@ -1,4 +1,5 @@
 *.dcm
+*.pth
 *.dmg
 *.log
 *.tmp
@@ -19,6 +20,7 @@ src/build/*
 src/dist/*
 src/logs/*
 src/certs/*
+src/assets/ocr/*
 dicom/*
 phi_imgs/*
 **/versionfile.txt

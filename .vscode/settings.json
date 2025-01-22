@@ -23,7 +23,7 @@
   },
   "python.analysis.typeCheckingMode": "basic", // Options: off, basic, strict
   "python.analysis.inlayHints.functionReturnTypes": true,
-  "python.analysis.inlayHints.variableTypes": true,
+  "python.analysis.inlayHints.variableTypes": false,
   "python.analysis.inlayHints.pytestParameters": true,
   "python.analysis.inlayHints.callArgumentNames": "off",
   "python.analysis.diagnosticMode": "workspace",

@@ -9,7 +9,6 @@ from pprint import pformat
 from copy import copy
 import logging
 import pickle
-import importlib.metadata
 from pydicom._version import __version__ as pydicom_version
 from pydicom import dcmread
 from pynetdicom._version import __version__ as pynetdicom_version
@@ -19,6 +18,7 @@ from tkinter import ttk, filedialog, messagebox
 import customtkinter as ctk
 from customtkinter import ThemeManager
 
+from anonymizer.utils.version import get_version
 from anonymizer.utils.logging import init_logging
 from anonymizer.utils.translate import (
     _,
@@ -46,7 +46,7 @@ class Anonymizer(ctk.CTk):
     metrics_loop_interval = 1000  # milliseconds
 
     def get_title(self) -> str:
-        return _("RSNA DICOM Anonymizer Version").strip() + " " + importlib.metadata.version("rsna-anonymizer")
+        return _("RSNA DICOM Anonymizer Version").strip() + " " + get_version()
 
     def get_app_state_path(self) -> Path:
         return self.logs_dir / ".anonymizer_state.json"
@@ -1018,7 +1018,7 @@ def main():
         logger.info("Running as PyInstaller executable")
 
     logger.info(f"Python Optimization Level [0,1,2]: {sys.flags.optimize}")
-    logger.info(f"Starting ANONYMIZER Version {importlib.metadata.version("rsna-anonymizer")}")
+    logger.info(f"Starting ANONYMIZER Version {get_version()}")
     logger.info(f"Running from {os.getcwd()}")
     logger.info(f"Python Version: {sys.version_info.major}.{sys.version_info.minor}")
     logger.info(f"tkinter TkVersion: {tk.TkVersion} TclVersion: {tk.TclVersion}")

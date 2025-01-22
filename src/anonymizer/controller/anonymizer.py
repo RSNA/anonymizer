@@ -651,7 +651,7 @@ class AnonymizerController:
         else:
             logger.info(f"EasyOCR downloaded models: {os.listdir(model_dir)}")
 
-        # Initialize the EasyOCR reader with the desired language(s)
+        # Initialize the EasyOCR reader with the desired language(s), if models are not in model_dir, they will be downloaded
         ocr_reader = Reader(
             lang_list=["en", "de", "fr", "es"],
             model_storage_directory=model_dir,
@@ -681,7 +681,8 @@ class AnonymizerController:
             px_Q.task_done()
 
         # Cleanup resources used for Pixel PHI Neural back-end
-        del ocr_reader
+        if ocr_reader:
+            del ocr_reader
         if torch.cuda.is_available():
             torch.cuda.empty_cache()  # Clear GPU memory cache
         if torch.backends.mps.is_available():
