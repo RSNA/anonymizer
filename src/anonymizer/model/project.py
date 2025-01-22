@@ -84,7 +84,7 @@ class ProjectModel:
     # As per instructions here: https://www.medicalconnections.co.uk/kb/ImplementationUID-And-ImplementationName
     RSNA_ROOT_ORG_UID = "1.2.826.0.1.3680043.10.474"  # sub UID from medicalconnections.co.uk as used by JavaAnonymizer
     IMPLEMENTATION_CLASS_UID = RSNA_ROOT_ORG_UID + ".1"  # UID: (0002,0012)
-    IMPLEMENTATION_VERSION_NAME = "rsna_anon_" + importlib.metadata.version("anonymizer")  # SH: (0002,0013)
+    IMPLEMENTATION_VERSION_NAME = "rsna_anon_" + importlib.metadata.version("rsna-anonymizer")  # SH: (0002,0013)
 
     @staticmethod
     def default_site_id() -> str:

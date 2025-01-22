@@ -46,7 +46,7 @@ class Anonymizer(ctk.CTk):
     metrics_loop_interval = 1000  # milliseconds
 
     def get_title(self) -> str:
-        return _("RSNA DICOM Anonymizer Version").strip() + " " + importlib.metadata.version("anonymizer")
+        return _("RSNA DICOM Anonymizer Version").strip() + " " + importlib.metadata.version("rsna-anonymizer")
 
     def get_app_state_path(self) -> Path:
         return self.logs_dir / ".anonymizer_state.json"
@@ -1018,7 +1018,7 @@ def main():
         logger.info("Running as PyInstaller executable")
 
     logger.info(f"Python Optimization Level [0,1,2]: {sys.flags.optimize}")
-    logger.info(f"Starting ANONYMIZER Version {importlib.metadata.version("anonymizer")}")
+    logger.info(f"Starting ANONYMIZER Version {importlib.metadata.version("rsna-anonymizer")}")
     logger.info(f"Running from {os.getcwd()}")
     logger.info(f"Python Version: {sys.version_info.major}.{sys.version_info.minor}")
     logger.info(f"tkinter TkVersion: {tk.TkVersion} TclVersion: {tk.TclVersion}")
