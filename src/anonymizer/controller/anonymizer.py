@@ -28,14 +28,15 @@ from pathlib import Path
 from queue import Queue
 from pydicom import Dataset, Sequence, dcmread
 from pydicom.errors import InvalidDicomError
+import torch
+from easyocr import Reader
+
 from anonymizer.utils.translate import _
 from anonymizer.utils.storage import DICOM_FILE_SUFFIX
 from anonymizer.model.project import DICOMNode, ProjectModel
 from anonymizer.model.anonymizer import AnonymizerModel
+from anonymizer.controller.remove_pixel_phi import remove_pixel_phi
 
-import torch
-from easyocr import Reader
-from .remove_pixel_phi import remove_pixel_phi
 
 logger = logging.getLogger(__name__)
 

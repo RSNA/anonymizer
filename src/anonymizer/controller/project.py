@@ -40,7 +40,7 @@ from pynetdicom.status import (
     QR_FIND_SERVICE_CLASS_STATUS,
     QR_MOVE_SERVICE_CLASS_STATUS,
 )
-from .dicom_C_codes import (
+from anonymizer.controller.dicom_C_codes import (
     C_SUCCESS,
     C_PENDING_A,
     C_PENDING_B,
@@ -57,7 +57,7 @@ from anonymizer.model.project import (
     AuthenticationError,
 )
 from anonymizer.model.anonymizer import PHI
-from .anonymizer import AnonymizerController
+from anonymizer.controller.anonymizer import AnonymizerController
 
 logger = logging.getLogger(__name__)
 

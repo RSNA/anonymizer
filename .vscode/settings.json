@@ -13,38 +13,11 @@
   ],
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
-  "ruff.importStrategy": "useBundled",
   "[python]": {
-    "editor.defaultFormatter": "ms-python.black-formatter", // "charliermarsh.ruff"
-    "editor.formatOnPaste": true,
+    "editor.defaultFormatter": "ms-python.black-formatter", 
     "editor.formatOnSave": true,
-    "editor.formatOnSaveMode": "file",
-    "editor.suggest.showTypeParameters": true,
   },
-  "python.analysis.typeCheckingMode": "basic", // Options: off, basic, strict
-  "python.analysis.inlayHints.functionReturnTypes": true,
-  "python.analysis.inlayHints.variableTypes": false,
-  "python.analysis.inlayHints.pytestParameters": true,
-  "python.analysis.inlayHints.callArgumentNames": "off",
-  "python.analysis.diagnosticMode": "workspace",
-  "python.analysis.autoFormatStrings": true,
-  "python.analysis.completeFunctionParens": true,
-  "python.analysis.ignore": [
-    "builtins.pyi"
-  ],
-  "python.analysis.extraPaths": [
-    "src"
-  ],
-  "python.analysis.exclude": [
-    ".vscode",
-    "tests",
-    "**/dist",
-    "**/build",
-    "**/venv",
-    "**/.venv",
-    "**/__pycache__",
-    "**/node_modules",
-    "src/prototyping"
-  ], 
+ 
   "python.languageServer": "Pylance",
+  
 }

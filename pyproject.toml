@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "rsna-anonymizer"
-version = "17.2.1a0"
+version = "17.3.0a0"
 description = "RSNA DICOM Anonymizer"
 authors = ["Algorhythm Software <michael@dx.life>"]
 license = "RSNA-MIRC Public License"
@@ -9,7 +9,7 @@ homepage = "https://github.com/RSNA/anonymizer"
 packages = [{ include = "anonymizer", from = "src"}]
 
 [tool.poetry.dependencies]
-python = "^3.12.7"
+python = ">=3.12.0,<4.0.0"
 numpy = "<2.0.0"
 customtkinter = "*"
 pillow = "*"
@@ -18,8 +18,6 @@ pydicom = ">=2.4,<2.5"
 pynetdicom = "*"
 ifaddr = "*"
 boto3 = "*"
-pywin32-ctypes = "*"
-pefile = "*"
 openpyxl = "*"
 psutil = "*"
 pylibjpeg = {extras = ["all"], version = "*"}
@@ -28,10 +26,10 @@ easyocr = "*"
 cryptography = "*"
 requests = "*"
 requests-oauthlib = "*"
-poetry = "^2.0.1"
 toml = "^0.10.2"
 
 [tool.poetry.group.dev.dependencies]
+poetry = "^2.0.1"
 ruff = "*"
 black = "*"
 pytest = "*"
