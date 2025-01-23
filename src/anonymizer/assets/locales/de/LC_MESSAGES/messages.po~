@@ -244,8 +244,35 @@ msgstr "Bitte warten..."
 msgid "Cancel"
 msgstr "Abbrechen"
 
+msgid "View"
+msgstr "Ansicht"
+
+msgid "Patients"
+msgstr "Patienten"
+
+msgid "Patient"
+msgstr "Patient"
+
+msgid "Series"
+msgstr "Serien"
+
+msgid "Loading"
+msgstr "Laden"
+
+msgid "Loaded"
+msgstr "Geladen"
+
+msgid "of"
+msgstr "von"
+
 msgid "Config file not found: "
 msgstr "Konfigurationsdatei nicht gefunden: "
+
+msgid "Kaleidoscope"
+msgstr "Kaleidoskop"
+
+msgid "selected patient(s)"
+msgstr "ausgewählte Patient(en)"
 
 msgid "Invalid_DICOM"
 msgstr "Ungültiges_DICOM"
@@ -634,23 +661,14 @@ msgstr "Bitte geben Sie Ihren Projektnamen ein und konfigurieren Sie alle weiter
 msgid "The Java Index data will be processed into the Python Anonymizer database when the project is created."
 msgstr "Die Java Indexdaten werden in die Python Anonymisierer Datenbank verarbeitet, wenn das Projekt erstellt wird."
 
-msgid "Kaleidoscope"
-msgstr "Kaleidoskop"
+msgid "with"
+msgstr "mit"
 
-msgid "selected patient(s)"
-msgstr "ausgewählte Patient(en)"
+msgid "over"
+msgstr "über"
 
-msgid "Loading"
-msgstr "Laden"
-
-msgid "Series"
-msgstr "Serien"
-
-msgid "Loaded"
-msgstr "Geladen"
-
-msgid "of"
-msgstr "von"
+msgid "Pages"
+msgstr "Seiten"
 
 msgid "Importing Study"
 msgstr "Studie importieren"
@@ -732,9 +750,6 @@ msgstr "Export"
 
 msgid "Processing"
 msgstr "Verarbeitung"
-
-msgid "Patients"
-msgstr "Patienten"
 
 msgid "Cancel Export"
 msgstr "Export abbrechen"
@@ -886,6 +901,12 @@ msgstr "AccNos"
 msgid "Cancel active Query?"
 msgstr "Aktive Abfrage abbrechen?"
 
+msgid "Search"
+msgstr "Suchen"
+
+msgid "Send"
+msgstr "Senden"
+
 msgid "Quarantine"
 msgstr "Quarantäne"
 
@@ -954,5 +975,3 @@ msgstr "Wählen Sie Datei/Neues Projekt, um zu starten."
 
 msgid "SPONSOR MESSAGE"
 msgstr "Die Entwicklung von Anonymzer wurde im Rahmen des Projekts „Medical Imaging and Data Resource Center (MIDRC)“ unterstützt, das vom National Institute of Biomedical Imaging and Bioengineering (NIBIB) der National Institutes of Health unter Vertrag 75N92020D00021 sowie durch die Advanced Research Projects Agency for Health (ARPA-H) finanziert wird."
-
-

@@ -139,6 +139,12 @@ msgstr "Import Directory Cancelled"
 msgid "Importing"
 msgstr "Importing"
 
+msgid "file"
+msgstr "file"
+
+msgid "files"
+msgstr "files"
+
 msgid "Files processed"
 msgstr "Files processed"
 
@@ -190,6 +196,15 @@ msgstr "Project"
 msgid "Settings"
 msgstr "Settings"
 
+msgid "Documents"
+msgstr "Documents"
+
+msgid "RSNA Anonymizer"
+msgstr "RSNA Anonymizer"
+
+msgid "logs"
+msgstr "logs"
+
 msgid "Computed Radiography"
 msgstr "Computed Radiography"
 
@@ -234,45 +249,6 @@ msgstr "Other"
 
 msgid "Document"
 msgstr "Document"
-
-msgid "Progress Dialog"
-msgstr "Progress Dialog"
-
-msgid "Please wait..."
-msgstr "Please wait..."
-
-msgid "Cancel"
-msgstr "Cancel"
-
-msgid "View"
-msgstr "View"
-
-msgid "Patients"
-msgstr "Patients"
-
-msgid "Patient"
-msgstr "Patient"
-
-msgid "Series"
-msgstr "Series"
-
-msgid "Loading"
-msgstr "Loading"
-
-msgid "Loaded"
-msgstr "Loaded"
-
-msgid "of"
-msgstr "of"
-
-msgid "Config file not found: "
-msgstr "Config file not found: "
-
-msgid "Kaleidoscope"
-msgstr "Kaleidoscope"
-
-msgid "selected patient(s)"
-msgstr "selected patient(s)"
 
 msgid "Invalid_DICOM"
 msgstr "Invalid_DICOM"
@@ -408,12 +384,6 @@ msgstr "Number of Instances"
 
 msgid "MY_PROJECT"
 msgstr "MY_PROJECT"
-
-msgid "Documents"
-msgstr "Documents"
-
-msgid "RSNA Anonymizer"
-msgstr "RSNA Anonymizer"
 
 msgid "ANONYMIZER"
 msgstr "ANONYMIZER"
@@ -661,14 +631,32 @@ msgstr "Please enter your Project Name and configure all other settings below."
 msgid "The Java Index data will be processed into the Python Anonymizer database when the project is created."
 msgstr "The Java Index data will be processed into the Python Anonymizer database when the project is created."
 
+msgid "View"
+msgstr "View"
+
+msgid "Patients"
+msgstr "Patients"
+
+msgid "Patient"
+msgstr "Patient"
+
 msgid "with"
 msgstr "with"
+
+msgid "Series"
+msgstr "Series"
 
 msgid "over"
 msgstr "over"
 
 msgid "Pages"
 msgstr "Pages"
+
+msgid "Page"
+msgstr "Page"
+
+msgid "of"
+msgstr "of"
 
 msgid "Importing Study"
 msgstr "Importing Study"
@@ -681,6 +669,9 @@ msgstr "Import from"
 
 msgid "Retrieving Study Metadata at"
 msgstr "Retrieving Study Metadata at"
+
+msgid "Cancel"
+msgstr "Cancel"
 
 msgid "No studies to retrieve"
 msgstr "No studies to retrieve"
@@ -753,6 +744,9 @@ msgstr "Processing"
 
 msgid "Cancel Export"
 msgstr "Cancel Export"
+
+msgid "Kaleidoscope"
+msgstr "Kaleidoscope"
 
 msgid "Create Patient Lookup"
 msgstr "Create Patient Lookup"
@@ -883,6 +877,9 @@ msgstr "Query Server Failed DICOM C-ECHO"
 msgid "Query via Accession Numbers"
 msgstr "Query via Accession Numbers"
 
+msgid "Loaded"
+msgstr "Loaded"
+
 msgid "Accession Numbers"
 msgstr "Accession Numbers"
 
@@ -975,3 +972,18 @@ msgstr "Select File/New Project to start."
 
 msgid "SPONSOR MESSAGE"
 msgstr "Development of Anonymizer has been supported under the Medical Imaging and Data Resource Center (MIDRC) project, funded by the National Institute of Biomedical Imaging and Bioengineering (NIBIB) of the National Institutes of Health under contract 75N92020D00021 and through The Advanced Research Projects Agency for Health (ARPA-H)."
+
+#~ msgid "Progress Dialog"
+#~ msgstr "Progress Dialog"
+
+#~ msgid "Please wait..."
+#~ msgstr "Please wait..."
+
+#~ msgid "Loading"
+#~ msgstr "Loading"
+
+#~ msgid "Config file not found: "
+#~ msgstr "Config file not found: "
+
+#~ msgid "selected patient(s)"
+#~ msgstr "selected patient(s)"

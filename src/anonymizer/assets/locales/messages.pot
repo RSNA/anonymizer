@@ -127,6 +127,12 @@ msgstr ""
 msgid "Importing"
 msgstr ""
 
+msgid "file"
+msgstr ""
+
+msgid "files"
+msgstr ""
+
 msgid "Files processed"
 msgstr ""
 
@@ -178,6 +184,15 @@ msgstr ""
 msgid "Settings"
 msgstr ""
 
+msgid "Documents"
+msgstr ""
+
+msgid "RSNA Anonymizer"
+msgstr ""
+
+msgid "logs"
+msgstr ""
+
 msgid "Computed Radiography"
 msgstr ""
 
@@ -221,45 +236,6 @@ msgid "Other"
 msgstr ""
 
 msgid "Document"
-msgstr ""
-
-msgid "Progress Dialog"
-msgstr ""
-
-msgid "Please wait..."
-msgstr ""
-
-msgid "Cancel"
-msgstr ""
-
-msgid "View"
-msgstr ""
-
-msgid "Patients"
-msgstr ""
-
-msgid "Patient"
-msgstr ""
-
-msgid "Series"
-msgstr ""
-
-msgid "Loading"
-msgstr ""
-
-msgid "Loaded"
-msgstr ""
-
-msgid "of"
-msgstr ""
-
-msgid "Config file not found: "
-msgstr ""
-
-msgid "Kaleidoscope"
-msgstr ""
-
-msgid "selected patient(s)"
 msgstr ""
 
 msgid "Invalid_DICOM"
@@ -395,12 +371,6 @@ msgid "Number of Instances"
 msgstr ""
 
 msgid "MY_PROJECT"
-msgstr ""
-
-msgid "Documents"
-msgstr ""
-
-msgid "RSNA Anonymizer"
 msgstr ""
 
 msgid "ANONYMIZER"
@@ -649,13 +619,31 @@ msgstr ""
 msgid "The Java Index data will be processed into the Python Anonymizer database when the project is created."
 msgstr ""
 
+msgid "View"
+msgstr ""
+
+msgid "Patients"
+msgstr ""
+
+msgid "Patient"
+msgstr ""
+
 msgid "with"
+msgstr ""
+
+msgid "Series"
 msgstr ""
 
 msgid "over"
 msgstr ""
 
 msgid "Pages"
+msgstr ""
+
+msgid "Page"
+msgstr ""
+
+msgid "of"
 msgstr ""
 
 msgid "Importing Study"
@@ -668,6 +656,9 @@ msgid "Import from"
 msgstr ""
 
 msgid "Retrieving Study Metadata at"
+msgstr ""
+
+msgid "Cancel"
 msgstr ""
 
 msgid "No studies to retrieve"
@@ -740,6 +731,9 @@ msgid "Processing"
 msgstr ""
 
 msgid "Cancel Export"
+msgstr ""
+
+msgid "Kaleidoscope"
 msgstr ""
 
 msgid "Create Patient Lookup"
@@ -869,6 +863,9 @@ msgid "Query Server Failed DICOM C-ECHO"
 msgstr ""
 
 msgid "Query via Accession Numbers"
+msgstr ""
+
+msgid "Loaded"
 msgstr ""
 
 msgid "Accession Numbers"

@@ -113,6 +113,7 @@
 		<img src="images/StorageDirectory.png"/>
 		<ul>
 			<li>The storage directory is a local file system location where the Anonymizer stores the anonymized files and all project data.</li>
+			<li>By default the storage directory is created off the user home directory: <b><i>/Documents/RSNA Anonymizer/ProjectName (see above)</i></b></li>
 			<li>The project data file: <b><i>ProjectModel.pkl</i></b> stores the project settings is stored in the root of the storage directory.</li>
 			<li>Two sub-directories are created off the storage directory root: <b><i>/private</i></b> and <b><i>/public</i></b>.</li>
 			<li>The <b><i>/private</i></b> sub-directory contains <i>Private Health Information (PHI)</i> extracted from incoming DICOM files.</li>
@@ -168,9 +169,7 @@
 		<ul>
 			<li>The Anonymizer generates detailed logging information, capturing program activity at Debug, Info, Warning, Error and Critical levels, and stores it to file.</li>
 			<li>There are up to 10 log files (max size: 100MB) in a rotating list.</li>
-			<li>Logs path on Windows: <i>[user directory]\AppData\Local\Anonymizer\Logs</i></li>
-			<li>Logs path on MacOS: <i>[user directory]/Library/Logs/Anonymizer/</i></li>
-			<li>Logs path on Linux: <i>[user directory]/Logs/Anonymizer/</i></li>
+			<li>By default the storage directory is created off the user home directory: <b><i>/Documents/RSNA Anonymizer/logs</i></b></li>
 			<li>The log output of both DICOM libraries PYDICOM and PYNETDICOM used by the Anonymizer can be controlled using this dialog.</li>
 			<li><b>Warning: </b> when debug output is enabled for PYDICOM, PHI data will be written to the logs.</li>
 			<li><a href=https://github.com/tmoreno/open-log-viewer/releases>Open Log Viewer</a> is an excellent free multi-platform for viewing log files for more advanced users.</li>

@@ -1,30 +1,40 @@
-# RSNA DICOM Anonymisierer V17
+# RSNA DICOM Anonymisierer V17.3
 [![en](https://img.shields.io/badge/lang-en-blue.svg)](readme.md)
 [![es](https://img.shields.io/badge/lang-es-blue.svg)](readme.es.md)
 [![fr](https://img.shields.io/badge/lang-fr-blue.svg)](readme.fr.md)
-[![ci](https://github.com/mdevans/anonymizer/actions/workflows/build.yml/badge.svg)](https://github.com/mdevans/anonymizer/actions/workflows/build.yml)
-
-![WelcomeView](src/anonymizer/assets/locales/de/html/images/Welcome_de_win_light.png)
-## Installation 
-Wählen Sie den richtigen Binärdownload für Ihre Plattform aus den verfügbaren [Versionen](https://github.com/mdevans/anonymizer/releases) aus.
+[![Tests](https://github.com/RSNA/anonymizer/actions/workflows/tests.yaml/badge.svg)](https://github.com/RSNA/anonymizer/actions/workflows/tests.yaml)
+## Python mit tkinter (GUI-Bibliothek) installieren
 ### Windows
-1. Laden Sie die ZIP-Datei herunter und extrahieren Sie sie in das gewünschte Anwendungsverzeichnis.
-2. Führen Sie Anonymizer.exe aus und überschreiben Sie die Benutzerkontensteuerung, um dem Programm das Ausführen zu ermöglichen.
-3. Die Protokolle werden in `~/AppData/Local/Anonymizer` geschrieben.
-### Mac OSX
-1. Laden Sie die ZIP-Datei herunter und extrahieren Sie sie in das gewünschte Anwendungsverzeichnis.
-2. Klicken Sie auf die Datei `Anonymizer_17.*.dmg`, um das Laufwerk zu mounten, wobei * die entsprechende Version ist.
-3. Ziehen Sie das Anonymzier-Symbol in den Ordner "Applications", wenn das Finder-Fenster angezeigt wird.
-4. Warten Sie, bis die Anwendung dekomprimiert und kopiert wurde.
-5. Öffnen Sie ein Terminal (`/Applications/Utilities/Terminal`) 
-6. Um erweiterte Attribute zu entfernen, führen Sie im Terminal den Befehl aus: `xattr -rc /Applications/Anonymizer_17.*.app`.
-7. Doppelklicken Sie auf das Anwendungssymbol, um es auszuführen.
-8. Die Protokolle werden in `~/Library/Logs/Anonymizer/anonymizer.log` geschrieben.
-### Linux
-1. Laden Sie die ZIP-Datei herunter und extrahieren Sie sie in das gewünschte Anwendungsverzeichnis.
-2. Öffnen Sie ein Terminal und wechseln Sie zum Anwendungsverzeichnis.
-3. Geben Sie `chmod +x Anonymizer_17.*` ein, wobei * die entsprechende Version ist.
-4. Führen Sie `./Anonymizer_17.*` aus.
-5. Die Protokolle werden in `~/Logs/Anonymizer/anonymizer.log` geschrieben.
+1. Laden Sie Python 3.12+ von [python.org](https://www.python.org/downloads/) herunter
+2. Führen Sie das Installationsprogramm aus
+    - Wählen Sie "Add python.exe to PATH"
+    - Aktivieren Sie "tcl/tk und IDLE"
+### macOS
+1. Installieren Sie Homebrew, falls nicht vorhanden: `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)`
+2. Installieren Sie Python 3.12 mit Tcl/Tk:
+```
+brew install python@3.12
+brew install tcl-tk
+```
+### Linux (Ubuntu/Debian)
+1. Installieren Sie die erforderlichen Pakete:
+```
+sudo apt update
+sudo apt install software-properties-common
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt install python3.12 python3.12-tk
+```
+## Installation überprüfen
+```
+python --version
+python -m tkinter
+```
+Wenn Python + tkinter erfolgreich installiert wurde, sollte ein kleines GUI-Fenster geöffnet werden
+## rsna-anonymizer Paket von PyPI installieren
+`pip install rsna-anonymizer`
+## Ausführung
+`rsna-anonymizer`
+## Aktualisierung
+`pip install --upgrade rsna-anonymizer`
 ## Dokumentation
 [Hilfedateien](https://mdevans.github.io/anonymizer/index.html)

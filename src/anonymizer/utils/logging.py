@@ -12,10 +12,11 @@ Functions:
 """
 
 import os
-import platform
+from pathlib import Path
 import logging
 import logging.handlers
 from pydicom import config as pydicom_config
+from anonymizer.utils.translate import _
 from anonymizer.model.project import LoggingLevels
 
 LOG_FILENAME = "anonymizer.log"
@@ -40,17 +41,18 @@ def _get_logs_dir(run_as_exe: bool, install_dir: str) -> str:
         RuntimeError: If the platform is not supported.
 
     """
-    if run_as_exe:
-        if platform.system() == "Windows":
-            return os.path.join(os.path.expanduser("~"), "AppData", "Local", "Anonymizer", "Logs")
-        elif platform.system() == "Darwin":
-            return os.path.join(os.path.expanduser("~"), "Library", "Logs", "Anonymizer")
-        elif platform.system() == "Linux":
-            return os.path.join(os.path.expanduser("~"), "Anonymizer", "Logs")
-        else:
-            raise RuntimeError("Unsupported platform")
-    else:
-        return os.path.join(install_dir, "logs")
+    return Path.home() / _("Documents").strip() / _("RSNA Anonymizer").strip() / _("logs").strip()
+    # if run_as_exe:
+    #     if platform.system() == "Windows":
+    #         return os.path.join(os.path.expanduser("~"), "AppData", "Local", "Anonymizer", "Logs")
+    #     elif platform.system() == "Darwin":
+    #         return os.path.join(os.path.expanduser("~"), "Library", "Logs", "Anonymizer")
+    #     elif platform.system() == "Linux":
+    #         return os.path.join(os.path.expanduser("~"), "Anonymizer", "Logs")
+    #     else:
+    #         raise RuntimeError("Unsupported platform")
+    # else:
+    #     return os.path.join(install_dir, "logs")
 
 
 def init_logging(install_dir: str, run_as_exe: bool, file_handler: bool = True) -> str:

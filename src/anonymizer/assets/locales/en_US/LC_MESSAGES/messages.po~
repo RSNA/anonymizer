@@ -244,8 +244,35 @@ msgstr "Please wait..."
 msgid "Cancel"
 msgstr "Cancel"
 
+msgid "View"
+msgstr "View"
+
+msgid "Patients"
+msgstr "Patients"
+
+msgid "Patient"
+msgstr "Patient"
+
+msgid "Series"
+msgstr "Series"
+
+msgid "Loading"
+msgstr "Loading"
+
+msgid "Loaded"
+msgstr "Loaded"
+
+msgid "of"
+msgstr "of"
+
 msgid "Config file not found: "
 msgstr "Config file not found: "
+
+msgid "Kaleidoscope"
+msgstr "Kaleidoscope"
+
+msgid "selected patient(s)"
+msgstr "selected patient(s)"
 
 msgid "Invalid_DICOM"
 msgstr "Invalid_DICOM"
@@ -634,23 +661,14 @@ msgstr "Please enter your Project Name and configure all other settings below."
 msgid "The Java Index data will be processed into the Python Anonymizer database when the project is created."
 msgstr "The Java Index data will be processed into the Python Anonymizer database when the project is created."
 
-msgid "Kaleidoscope"
-msgstr "Kaleidoscope"
+msgid "with"
+msgstr "with"
 
-msgid "selected patient(s)"
-msgstr "selected patient(s)"
+msgid "over"
+msgstr "over"
 
-msgid "Loading"
-msgstr "Loading"
-
-msgid "Series"
-msgstr "Series"
-
-msgid "Loaded"
-msgstr "Loaded"
-
-msgid "of"
-msgstr "of"
+msgid "Pages"
+msgstr "Pages"
 
 msgid "Importing Study"
 msgstr "Importing Study"
@@ -732,9 +750,6 @@ msgstr "Export"
 
 msgid "Processing"
 msgstr "Processing"
-
-msgid "Patients"
-msgstr "Patients"
 
 msgid "Cancel Export"
 msgstr "Cancel Export"
@@ -885,6 +900,12 @@ msgstr "AccNos"
 
 msgid "Cancel active Query?"
 msgstr "Cancel active Query?"
+
+msgid "Search"
+msgstr "Search"
+
+msgid "Send"
+msgstr "Send"
 
 msgid "Quarantine"
 msgstr "Quarantine"
