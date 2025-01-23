@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "rsna-anonymizer"
-version = "17.3.0a0"
+version = "17.3.2"
 description = "RSNA DICOM Anonymizer"
 authors = ["Algorhythm Software <michael@dx.life>"]
 license = "RSNA-MIRC Public License"
@@ -35,6 +35,9 @@ black = "*"
 pytest = "*"
 pytest-cov = "^6.0.0"
 python-dotenv = "*"
+
+[tool.poetry.scripts]
+rsna-anonymizer = "anonymizer.anonymizer:main"
 
 [tool.ruff]
 line-length = 88
