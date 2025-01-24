@@ -64,10 +64,10 @@ def init_logging(file_handler: bool = True) -> str:
 
     # Get root logger:
     logger = logging.getLogger()
+    logFormatter = logging.Formatter(LOG_FORMAT, style="{")
 
     if file_handler:
         # Setup rotating log file:
-        logFormatter = logging.Formatter(LOG_FORMAT, style="{")
         fileHandler = logging.handlers.RotatingFileHandler(
             os.path.join(logs_dir, LOG_FILENAME), maxBytes=LOG_SIZE, backupCount=LOG_BACKUP_COUNT
         )
