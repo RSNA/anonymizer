@@ -9,7 +9,7 @@ import pytest
 from pathlib import Path
 import shutil
 import tempfile
-from logging import INFO, WARNING
+from logging import WARNING
 
 from anonymizer.utils.logging import init_logging
 from anonymizer.model.project import ProjectModel, NetworkTimeouts, LoggingLevels
@@ -62,7 +62,7 @@ def controller(temp_dir: str) -> Generator[ProjectController, Any, None]:
         remote_scps=RemoteSCPDict,
         network_timeouts=NetworkTimeouts(2, 5, 5, 15),
         anonymizer_script_path=Path("src/anonymizer/assets/scripts/default-anonymizer.script"),
-        logging_levels=LoggingLevels(anonymizer=INFO, pynetdicom=WARNING, pydicom=False),
+        logging_levels=LoggingLevels(anonymizer=WARNING, pynetdicom=WARNING, pydicom=False),
     )
 
     project_controller = ProjectController(project_model)

@@ -65,4 +65,4 @@ cd src/anonymizer/assets/locales/
 cd src/anonymizer/assets/locales/
 ./update_translations.sh
 ### Software Architecture
-Full class diagram [here](class_diagram.md)
+Full class diagram [here](https://github.com/RSNA/anonymizer/blob/master/class_diagram.md)
