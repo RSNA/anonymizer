@@ -2,8 +2,10 @@ import os
 import sys
 import json
 import shutil
+import signal
 import time
 import platform
+import click
 from pathlib import Path
 from pprint import pformat
 from copy import copy
@@ -1002,30 +1004,7 @@ class Anonymizer(ctk.CTk):
             self.menu_bar.entryconfig(_("File"), state="normal")
 
 
-def main():
-    args = str(sys.argv)
-    install_dir = os.path.dirname(os.path.realpath(__file__))
-    run_as_exe = getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
-    logs_dir = init_logging(install_dir, run_as_exe)
-    os.chdir(install_dir)
-
-    logger.info(f"cmd line args={args}")
-
-    # TODO: command line interface for server side deployments
-    # enhance cmd line processing using Click library
-
-    if run_as_exe:
-        logger.info("Running as PyInstaller executable")
-
-    logger.info(f"Python Optimization Level [0,1,2]: {sys.flags.optimize}")
-    logger.info(f"Starting ANONYMIZER Version {get_version()}")
-    logger.info(f"Running from {os.getcwd()}")
-    logger.info(f"Python Version: {sys.version_info.major}.{sys.version_info.minor}")
-    logger.info(f"tkinter TkVersion: {tk.TkVersion} TclVersion: {tk.TclVersion}")
-    logger.info(f"Customtkinter Version: {ctk.__version__}")
-    logger.info(f"pydicom Version: {pydicom_version}, pynetdicom Version: {pynetdicom_version}")
-
-    # GUI
+def run_GUI(logs_dir):
     try:
         app = Anonymizer(Path(logs_dir))
         app.lift()
@@ -1034,15 +1013,6 @@ def main():
     except Exception as e:
         logger.exception(f"Error initialising ANONYMIZER GUI, exiting: {str(e)}")
         sys.exit(1)
-
-    # # Close Pyinstaller startup splash image on Windows
-    # if sys.platform.startswith("win"):
-    #     try:
-    #         import pyi_splash  # type: ignore
-
-    #         pyi_splash.close()  # type: ignore
-    #     except Exception:
-    #         pass
 
     logger.info("ANONYMIZER GUI MAINLOOP...")
     try:
@@ -1053,6 +1023,134 @@ def main():
         app.shutdown_controller()
 
     logger.info("ANONYMIZER GUI Stop.")
+
+
+def signal_handler(signum, frame):
+    """
+    Handles signals to gracefully stop the application in headless mode.
+    """
+    global keep_running
+    keep_running = False
+    print("Signal received, shutting down...")
+
+
+def run_HEADLESS(project_model_path: Path):
+
+    if not project_model_path.exists():
+        logger.error(_("Project Model file not found") + f": {project_model_path}")
+        return
+
+    if not project_model_path.is_file():
+        logger.error(_("Project Model path is not a file") + f": {project_model_path}")
+        return
+
+    try:
+        with open(project_model_path, "rb") as pkl_file:
+            file_model = pickle.load(pkl_file)
+            if not isinstance(file_model, ProjectModel):
+                raise TypeError(_("Corruption detected: Loaded model is not an instance of ProjectModel"))
+    except Exception as e:
+        logger.error(f"Error loading Project Model: {str(e)}")
+        return
+
+    logger.info(f"Project Model succesfully loaded from: {project_model_path}")
+
+    if not hasattr(file_model, "version"):
+        logger.error("Project Model missing version")
+        return
+
+    logger.info(_("Project Model loaded successfully, version") + f": {file_model.version}")
+
+    if file_model.version != ProjectModel.MODEL_VERSION:
+        logger.info(
+            _("Project Model version mismatch")
+            + f": {file_model.version} != {ProjectModel.MODEL_VERSION} "
+            + _("upgrading accordingly")
+        )
+        model = ProjectModel()  # new default model
+        # TODO: Handle 2 level nested classes/dicts copying by attribute
+        # to handle addition or nested fields and deletion of attributes in new model
+        model.__dict__.update(file_model.__dict__)  # copy over corresponding attributes from the old model (file_model)
+        model.version = ProjectModel.MODEL_VERSION  # update to latest version
+    else:
+        model = file_model
+
+    try:
+        controller = ProjectController(model)
+        if not controller:
+            raise RuntimeError(_("Fatal Internal Error, Project Controller not created"))
+
+        if file_model.version != ProjectModel.MODEL_VERSION:
+            controller.save_model()
+            logger.info(_("Project Model upgraded successfully to version" + f": {controller.model.version}"))
+
+    except Exception as e:
+        logger.error(f"Error creating Project Controller: {str(e)}")
+        return
+
+    logger.info(f"{controller}")
+
+    try:
+        controller.start_scp()
+    except DICOMRuntimeError as e:
+        logger.error(_("Local DICOM Server Error") + f": {e}")
+        return
+
+    logger.info(
+        f"{controller.model.project_name}[{controller.model.site_id}] => {controller.model.abridged_storage_dir()}"
+    )
+    logger.info("ANONYMIZER HEADLESS MAINLOOP start...")
+
+    global keep_running
+    keep_running = True
+
+    # Register signal handlers
+    signal.signal(signal.SIGINT, signal_handler)  # Handle Ctrl+C (SIGINT)
+    signal.signal(signal.SIGTERM, signal_handler)  # Handle termination signal (SIGTERM)
+
+    try:
+        while keep_running:
+            time.sleep(1)
+
+    except KeyboardInterrupt:
+        logger.info("Exiting from Keyboard Interrupt")
+
+    logger.info("ANONYMIZER HEADLESS MAINLOOP end.")
+
+    controller.stop_scp()
+    controller.shutdown()
+    controller.save_model()
+    controller.anonymizer.save_model()
+    controller.anonymizer.stop()
+
+
+@click.command()
+@click.option(
+    "--config",
+    "-c",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=Path),
+    help=_("Path to the configuration file. If not provided, the GUI will be launched."),
+)
+def main(config: Path = None):
+    """
+    This application reads a configuration file if provided and runs headless or launches a GUI.
+    """
+    install_dir = os.path.dirname(os.path.realpath(__file__))
+    logs_dir = init_logging()
+    os.chdir(install_dir)
+    logger.info(f"Running from {install_dir}")
+    logger.info(f"Python Optimization Level [0,1,2]: {sys.flags.optimize}")
+    logger.info(f"Starting ANONYMIZER Version {get_version()}")
+    logger.info(f"Running from {os.getcwd()}")
+    logger.info(f"Python Version: {sys.version_info.major}.{sys.version_info.minor}")
+    logger.info(f"tkinter TkVersion: {tk.TkVersion} TclVersion: {tk.TclVersion}")
+    logger.info(f"Customtkinter Version: {ctk.__version__}")
+    logger.info(f"pydicom Version: {pydicom_version}, pynetdicom Version: {pynetdicom_version}")
+
+    if config:
+        run_HEADLESS(config)
+    else:
+        run_GUI(logs_dir)
 
 
 if __name__ == "__main__":

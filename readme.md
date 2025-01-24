@@ -41,11 +41,12 @@ If python + tkinter has been installed successfully a small GUI window should op
 [Help files](https://rsna.github.io/anonymizer)
 ## Development
 ### Setup
-1. Setup python enviroment (>3.10) which includes Tkinter, recommend using pyenv with MacOS & Linux
+1. Setup python environment (>3.10) which includes Tkinter, recommend using pyenv with MacOS & Linux
 2. Ensure python is installed with Tkinter: `python -m tkinter`, a small GUI window should open
-3. Install poetry: `curl -sSL https://install.python-poetry.org | python3 -`
+3. Install poetry: `pip install poetry`
+4. Set virtual environment within project: `poetry config virtualenvs.in-project true`
 4. Clone repository
-5. Setup virtual enviroment and install all dependencies listed in pyproject.toml: `poetry install --with dev`
+5. Setup virtual environment and install all dependencies listed in pyproject.toml: `poetry install --with dev`
 ### Unit Testing 
 #### For model and controller with coverage
 ```

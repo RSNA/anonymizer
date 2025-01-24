@@ -36,7 +36,7 @@ def temp_dir() -> Generator[str, Any, None]:
     temp_path = tempfile.mkdtemp()
 
     # Initialise logging without file handler:
-    init_logging(temp_path, False)
+    init_logging(file_handler=False)
 
     # Yield the directory path to the test function
     yield temp_path

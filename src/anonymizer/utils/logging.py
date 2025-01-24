@@ -26,19 +26,12 @@ LOG_DEFAULT_LEVEL = logging.INFO
 LOG_FORMAT = "{asctime} {levelname} {threadName} {name}.{funcName}.{lineno} {message}"
 
 
-def _get_logs_dir(run_as_exe: bool, install_dir: str) -> str:
+def _get_logs_dir() -> str:
     """
     Returns the directory path where logs should be stored based on the platform and execution mode.
 
-    Args:
-        run_as_exe (bool): Indicates whether the code is running as an executable.
-        install_dir (str): The installation directory of the application.
-
     Returns:
         str: The directory path where logs should be stored.
-
-    Raises:
-        RuntimeError: If the platform is not supported.
 
     """
     return Path.home() / _("Documents").strip() / _("RSNA Anonymizer").strip() / _("logs").strip()
@@ -55,20 +48,18 @@ def _get_logs_dir(run_as_exe: bool, install_dir: str) -> str:
     #     return os.path.join(install_dir, "logs")
 
 
-def init_logging(install_dir: str, run_as_exe: bool, file_handler: bool = True) -> str:
+def init_logging(file_handler: bool = True) -> str:
     """
     Initializes the logging configuration for the application.
 
     Args:
-        install_dir (str): The installation directory of the application.
-        run_as_exe (bool): Indicates whether the application is running as an executable.
         file_handler (bool, optional): Indicates whether to set up a rotating log file handler.
             Defaults to True.
 
     Returns:
-        None
+        logs_dir (str): The directory path where logs are stored.
     """
-    logs_dir = _get_logs_dir(run_as_exe, install_dir)
+    logs_dir = _get_logs_dir()
     os.makedirs(logs_dir, exist_ok=True)
 
     # Get root logger:
