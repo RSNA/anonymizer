@@ -15,8 +15,9 @@ from queue import Queue
 import logging
 import time
 from datetime import datetime, timedelta
-import pickle
 import csv
+import shutil
+import json
 import boto3
 from pathlib import Path
 from dataclasses import dataclass
@@ -254,7 +255,8 @@ class ProjectController(AE):
     The ProjectController also provides export methods to send anonymized studies to AWS S3 and for exporting PHI of the AnonymizerModel to CSV.
     """
 
-    PROJECT_MODEL_FILENAME = "ProjectModel.pkl"
+    PROJECT_MODEL_FILENAME_PKL = "ProjectModel.pkl"
+    PROJECT_MODEL_FILENAME_JSON = "ProjectModel.json"
 
     # DICOM service class uids:
     _VERIFICATION_CLASS = "1.2.840.10008.1.1"  # Echo
@@ -384,14 +386,16 @@ class ProjectController(AE):
     def save_model(self, dest_dir: Path | None = None) -> bool:
         if dest_dir is None:
             dest_dir = self.model.storage_dir
-        project_pkl_path = Path(dest_dir, self.PROJECT_MODEL_FILENAME)
+        filepath = dest_dir / self.PROJECT_MODEL_FILENAME_JSON
         try:
-            with open(project_pkl_path, "wb") as pkl_file:
-                pickle.dump(self.model, pkl_file)
-            logger.debug(f"Model saved to: {project_pkl_path}")
+            with open(filepath, "w") as f:
+                f.write(self.model.to_json(indent=4))
+            # Backup to [filepath].bak
+            shutil.copy2(filepath, filepath.with_suffix(filepath.suffix + ".bak"))
+            logger.debug(f"Model saved to: {filepath}")
             return True
         except Exception as e:
-            logger.error(f"Fatal Error saving ProjectModel to {project_pkl_path}: {e}")
+            logger.error(f"Fatal Error saving ProjectModel to {filepath}: {e}")
             return False
 
     # Value of None means no timeout

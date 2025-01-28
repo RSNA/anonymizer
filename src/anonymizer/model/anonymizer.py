@@ -9,11 +9,12 @@ from pathlib import Path
 import logging
 import threading
 import pickle
+import shutil
 from dataclasses import dataclass, field
 from pprint import pformat
 import xml.etree.ElementTree as ET
 from pydicom import Dataset
-from .project import DICOMNode
+from anonymizer.model.project import DICOMNode
 from anonymizer.utils.storage import JavaAnonymizerExportedStudy
 
 logger = logging.getLogger(__name__)
@@ -128,8 +129,12 @@ class AnonymizerModel:
     def save(self, filepath: Path) -> bool:
         with self._lock:
             try:
+                serialized_data = pickle.dumps(self, protocol=pickle.HIGHEST_PROTOCOL)
                 with open(filepath, "wb") as pkl_file:
-                    pickle.dump(self, pkl_file)
+                    pkl_file.write(serialized_data)
+                shutil.copy2(
+                    filepath, filepath.with_suffix(filepath.suffix + ".bak")
+                )  # backup <filepath>.pkl to <filepath>.pkl.bak
                 logger.debug(f"Anonymizer Model saved to: {filepath}")
                 return True
             except Exception as e:

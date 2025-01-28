@@ -87,6 +87,36 @@ class AnonymizerController:
         "SeriesInstanceUID",
     ]
 
+    def load_model(self) -> AnonymizerModel:
+        try:
+            with open(self.model_filename, "rb") as pkl_file:
+                serialized_data = pkl_file.read()
+            file_model = pickle.loads(serialized_data)
+            if not isinstance(file_model, AnonymizerModel):
+                raise TypeError("Loaded object is not an instance of AnonymizerModel")
+            logger.info(f"Anonymizer Model successfully loaded from: {self.model_filename}")
+            return file_model
+        except Exception as e:
+            # Attempt to load backup file
+            backup_filename = self.model_filename + ".bak"
+            if os.path.exists(backup_filename):
+                try:
+                    with open(backup_filename, "rb") as pkl_file:
+                        serialized_data = pkl_file.read()
+                    file_model = pickle.loads(serialized_data)
+                    if not isinstance(file_model, AnonymizerModel):
+                        raise TypeError("Loaded backup object is not an instance of AnonymizerModel")
+                    logger.warning(f"Loaded Anonymizer Model from backup file: {backup_filename}")
+                    return file_model
+                except Exception as e:
+                    logger.error(f"Backup Anonymizer Model datafile corrupt: {e}")
+                    raise RuntimeError(
+                        f"Anonymizer datafile: {self.model_filename} and backup file corrupt\n\n{str(e)}"
+                    )
+            else:
+                logger.error(f"Anonymizer Model datafile corrupt: {e}")
+                raise RuntimeError(f"Anonymizer datafile: {self.model_filename} corrupt\n\n{str(e)}")
+
     def __init__(self, project_model: ProjectModel):
         self._active = False
         self.project_model = project_model
@@ -94,23 +124,8 @@ class AnonymizerController:
         self.model_filename = Path(self.project_model.private_dir(), self.ANONYMIZER_MODEL_FILENAME)
         # If present, load pickled AnonymizerModel from project directory:
         if self.model_filename.exists():
-            try:
-                with open(self.model_filename, "rb") as pkl_file:
-                    file_model = pickle.load(pkl_file)
-                    if not isinstance(file_model, AnonymizerModel):
-                        raise TypeError("Loaded object is not an instance of AnonymizerModel")
-            except Exception as e:
-                # TODO: Try and open last backup file
-                logger.error(f"Anonymizer Model datafile corrupt: {e}")
-                raise RuntimeError(f"Anonymizer datafile: {self.model_filename} corrupt\n\n{str(e)}")
 
-            logger.info(f"Anonymizer Model successfully loaded from: {self.model_filename}")
-
-            if not hasattr(file_model, "_version"):
-                logger.error("Anonymizer Model datafile corrupt: version missing")
-                raise RuntimeError(f"Anonymizer datafile: {self.model_filename} corrupt")
-
-            logger.info(f"Anonymizer Model loaded successfully, version: {file_model._version}")
+            file_model = self.load_model()
 
             if file_model._version != AnonymizerModel.MODEL_VERSION:
                 logger.info(

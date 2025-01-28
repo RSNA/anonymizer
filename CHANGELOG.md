@@ -5,9 +5,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [17.3.*] 
+### Changed
+- Changed virual environment & build tool from pipenv to poetry, pyproject.toml replace pipfile
+- Documentation readmes, html 
+- Removed build.yml for creating platform executables
+- refactored source directory structure to fit pyPI package: src/anonymizer/*
+- replaced coverage module with pytest-cov dev dependency
+- more efficient AnonymizerModel serialization using pickle.dumps with highest protocol
+- changed ProjectModel serialization from pickle to json using dataclass_json package
 
-## Release Candidate
-## [17.2.1] 
+## Added
+- Distribution via pyPI, github action: release.yaml
+- Unit testing via github action: tests.yaml
+- src/utiliy unit testing
+- Headless / Server mode via, start via rsna-anonmyizer <"path to ProjectModel.pkl">
+
+
+## [17.2.*] Release Candidate
 ### Changed
 - anonymizer.py menu bar handling refactored, resolve issue [#14](https://github.com/RSNA/anonymizer/issues/14), 
 - anonymizer.py remove menu font - * to verify on windows platforms

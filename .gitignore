@@ -13,6 +13,7 @@ __pycache__/
 *.zip
 *.coverage
 *.anonymizer_state.json
+ProjectModel.json
 htmlcov/*
 dist/*
 build/*

@@ -265,7 +265,7 @@ class Anonymizer(ctk.CTk):
             self.enable_file_menu()
             return
 
-        project_model_path = Path(model.storage_dir, ProjectController.PROJECT_MODEL_FILENAME)
+        project_model_path = Path(model.storage_dir, ProjectController.PROJECT_MODEL_FILENAME_JSON)
         if model.storage_dir.exists() and model.storage_dir.is_dir() and project_model_path.exists():
             confirm = messagebox.askyesno(
                 title=_("Confirm Overwrite"),
@@ -324,6 +324,32 @@ class Anonymizer(ctk.CTk):
         finally:
             self.enable_file_menu()
 
+    def load_model(self, json_filepath: Path) -> ProjectModel:
+        try:
+            with open(json_filepath, "r") as f:
+                file_model = ProjectModel.from_json(f.read())
+            if not isinstance(file_model, ProjectModel):
+                raise TypeError("Loaded object is not an instance of ProjectModel")
+            logger.info(f"Project Model successfully loaded from: {json_filepath}")
+            return file_model
+        except Exception as e:
+            # Attempt to load backup file
+            backup_filepath = json_filepath + ".bak"
+            if os.path.exists(backup_filepath):
+                try:
+                    with open(backup_filepath, "r") as f:
+                        file_model = ProjectModel.from_json(f.read())
+                    if not isinstance(file_model, ProjectModel):
+                        raise TypeError("Loaded backup object is not an instance of ProjectModel")
+                    logger.warning(f"Loaded Project Model from backup file: {backup_filepath}")
+                    return file_model
+                except Exception as e:
+                    logger.error(f"Backup Project Model datafile corrupt: {e}")
+                    raise RuntimeError(f"Project datafile: {backup_filepath} and backup file corrupt\n\n{str(e)}")
+            else:
+                logger.error(f"Project Model datafile corrupt: {e}")
+                raise RuntimeError(f"Project Model datafile: {json_filepath} corrupt\n\n{str(e)}")
+
     def open_project(self, project_dir: Path | None = None):
         logger.debug("open_project")
 
@@ -344,100 +370,117 @@ class Anonymizer(ctk.CTk):
 
             project_dir = Path(selected_dir)
 
+        # For backward compatibilty load pickle file format of ProjectModel if it exists:
         # Get project pkl filename from project directory
-        project_model_path = Path(project_dir, ProjectController.PROJECT_MODEL_FILENAME)
-
+        project_model_path = Path(project_dir, ProjectController.PROJECT_MODEL_FILENAME_PKL)
         if project_model_path.exists() and project_model_path.is_file():
             try:
                 with open(project_model_path, "rb") as pkl_file:
+                    logger.warning(f"Loading Project Model from legacy pickle file: {project_model_path}")
                     file_model = pickle.load(pkl_file)
                     if not isinstance(file_model, ProjectModel):
                         raise TypeError(_("Corruption detected: Loaded model is not an instance of ProjectModel"))
+                    # DELETE the pickle file after successful loading, saving will be in json from now on:
+                    os.remove(project_model_path)
             except Exception as e:
                 logger.error(f"Error loading Project Model: {str(e)}")
-                # TODO: load from last backup
                 messagebox.showerror(
                     title=_("Open Project Error"),
-                    message=_("Error loading Project Model from data file") + f": {project_model_path}\n\n{str(e)}",
+                    message=_("Error loading Project Model from legacy pickle data file")
+                    + f": {project_model_path}\n\n{str(e)}",
                     parent=self,
                 )
                 self.enable_file_menu()
                 return
-
-            logger.info(f"Project Model succesfully loaded from: {project_model_path}")
-
-            if not hasattr(file_model, "version"):
-                logger.error("Project Model missing version")
-                messagebox.showerror(
-                    title=_("Open Project Error"),
-                    message=_("Project File corrupted, missing version information."),
-                    parent=self,
-                )
-                self.enable_file_menu()
-                return
-
-            logger.info(f"Project Model loaded successfully, version: {file_model.version}")
-
-            if file_model.version != ProjectModel.MODEL_VERSION:
-                logger.info(
-                    f"Project Model version mismatch: {file_model.version} != {ProjectModel.MODEL_VERSION} upgrading accordingly"
-                )
-                model = ProjectModel()  # new default model
-                # TODO: Handle 2 level nested classes/dicts copying by attribute
-                # to handle addition or nested fields and deletion of attributes in new model
-                model.__dict__.update(
-                    file_model.__dict__
-                )  # copy over corresponding attributes from the old model (file_model)
-                model.version = ProjectModel.MODEL_VERSION  # update to latest version
-            else:
-                model = file_model
-
-            # Ensure Current Language matches Project Language:
-            if model.language_code != get_current_language_code():
-                logger.error(f"Project Model language mismatch {model.language_code} != {get_current_language_code()}")
-                messagebox.showerror(
-                    title=_("Open Project Error"),
-                    message=_("Project language mismatch") + f": {model.language_code}",
-                    parent=self,
-                )
-                self.enable_file_menu()
-                return
-
-            try:
-                self.controller = ProjectController(model)
-                if not self.controller:
-                    raise RuntimeError(_("Fatal Internal Error, Project Controller not created"))
-
-                if file_model.version != ProjectModel.MODEL_VERSION:
-                    self.controller.save_model()
-                    logger.info(f"Project Model upgraded successfully to version: {self.controller.model.version}")
-            except Exception as e:
-                logger.error(f"Error creating Project Controller: {str(e)}")
-                messagebox.showerror(
-                    title=_("Open Project Error"),
-                    message=_("Error creating Project Controller") + f"\n\n{str(e)}",
-                    parent=self,
-                )
-                self.enable_file_menu()
-                return
-
-            logger.info(f"{self.controller}")
-            if not self.is_recent_directory(project_dir):
-                self.recent_project_dirs.insert(0, project_dir)
-            self.current_open_project_dir = project_dir
-            self.save_config()
-            self._open_project()
         else:
+            project_model_path = Path(project_dir, ProjectController.PROJECT_MODEL_FILENAME_JSON)
+            if project_model_path.exists() and project_model_path.is_file():
+
+                try:
+                    file_model = self.load_model(project_model_path)
+                except Exception as e:
+                    logger.error(f"Error loading Project Model: {str(e)}")
+                    messagebox.showerror(
+                        title=_("Open Project Error"),
+                        message=_("Error loading Project Model from data file") + f": {project_model_path}\n\n{str(e)}",
+                        parent=self,
+                    )
+                    self.enable_file_menu()
+                    return
+            else:
+                messagebox.showerror(
+                    title=_("Open Project Error"),
+                    message=_("No Project file not found in") + f":\n\n{project_dir}",
+                    parent=self,
+                )
+                if self.is_recent_directory(project_dir):
+                    self.recent_project_dirs.remove(project_dir)
+                self.menu_bar = self.create_project_closed_menu_bar()
+                self.save_config()
+                return
+
+        if not hasattr(file_model, "version"):
+            logger.error("Project Model missing version")
             messagebox.showerror(
                 title=_("Open Project Error"),
-                message=_("No Project file not found in") + f":\n\n{project_dir}",
+                message=_("Project File corrupted, missing version information."),
                 parent=self,
             )
-            if self.is_recent_directory(project_dir):
-                self.recent_project_dirs.remove(project_dir)
-            self.menu_bar = self.create_project_closed_menu_bar()
-            self.save_config()
+            self.enable_file_menu()
+            return
 
+        logger.info(f"Project Model loaded successfully, version: {file_model.version}")
+
+        if file_model.version != ProjectModel.MODEL_VERSION:
+            logger.info(
+                f"Project Model version mismatch: {file_model.version} != {ProjectModel.MODEL_VERSION} upgrading accordingly"
+            )
+            model = ProjectModel()  # new default model
+            # TODO: Handle 2 level nested classes/dicts copying by attribute
+            # to handle addition or nested fields and deletion of attributes in new model
+            model.__dict__.update(
+                file_model.__dict__
+            )  # copy over corresponding attributes from the old model (file_model)
+            model.version = ProjectModel.MODEL_VERSION  # update to latest version
+        else:
+            model = file_model
+
+        # Ensure Current Language matches Project Language:
+        if model.language_code != get_current_language_code():
+            logger.error(f"Project Model language mismatch {model.language_code} != {get_current_language_code()}")
+            messagebox.showerror(
+                title=_("Open Project Error"),
+                message=_("Project language mismatch") + f": {model.language_code}",
+                parent=self,
+            )
+            self.enable_file_menu()
+            return
+
+        try:
+            self.controller = ProjectController(model)
+            if not self.controller:
+                raise RuntimeError(_("Fatal Internal Error, Project Controller not created"))
+
+            if file_model.version != ProjectModel.MODEL_VERSION:
+                logger.warning(f"Project Model upgraded successfully to version: {self.controller.model.version}")
+
+            self.controller.save_model()
+        except Exception as e:
+            logger.error(f"Error creating Project Controller: {str(e)}")
+            messagebox.showerror(
+                title=_("Open Project Error"),
+                message=_("Error creating Project Controller") + f"\n\n{str(e)}",
+                parent=self,
+            )
+            self.enable_file_menu()
+            return
+
+        logger.info(f"{self.controller}")
+        if not self.is_recent_directory(project_dir):
+            self.recent_project_dirs.insert(0, project_dir)
+        self.current_open_project_dir = project_dir
+        self.save_config()
+        self._open_project()
         self.enable_file_menu()
 
     def _open_project_startup(self):

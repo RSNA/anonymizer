@@ -8,6 +8,7 @@ from pprint import pformat
 from copy import copy, deepcopy
 from typing import Dict, List
 from dataclasses import dataclass, field, asdict
+from dataclasses_json import dataclass_json, config
 from pathlib import Path
 from pynetdicom._globals import DEFAULT_TRANSFER_SYNTAXES
 from anonymizer.utils.modalities import get_modalities
@@ -72,6 +73,7 @@ class AWSCognito:
         return f"\nAWSCognito\n({pformat(asdict(d_copy),sort_dicts=False)})"
 
 
+@dataclass_json()
 @dataclass
 class ProjectModel:
     """
@@ -158,13 +160,16 @@ class ProjectModel:
     def default_logging_levels() -> LoggingLevels:
         return LoggingLevels(DEBUG, WARNING, False)
 
+    # Custom encoder and decoder for Path objects
+    path_field = config(encoder=str, decoder=Path)  # Encode Path as string, Decode string to Path
+
     version: int = MODEL_VERSION
     language_code: str = field(default_factory=default_language_code)
     site_id: str = field(default_factory=default_site_id)
     project_name: str = field(default_factory=default_project_name)
     uid_root: str = field(default_factory=default_uid_root)
     remove_pixel_phi: bool = True
-    storage_dir: Path = field(default_factory=default_storage_dir)
+    storage_dir: Path = field(default_factory=default_storage_dir, metadata=path_field)
     modalities: List[str] = field(default_factory=default_modalities)
     storage_classes: List[str] = field(default_factory=default_storage_classes)  # re-initialised in post_init
     transfer_syntaxes: List[str] = field(default_factory=default_transfer_syntaxes)
@@ -175,7 +180,7 @@ class ProjectModel:
     export_to_AWS: bool = False
     aws_cognito: AWSCognito = field(default_factory=default_aws_cognito)
     network_timeouts: NetworkTimeouts = field(default_factory=default_timeouts)
-    anonymizer_script_path: Path = Path("assets/scripts/default-anonymizer.script")
+    anonymizer_script_path: Path = field(default=Path("assets/scripts/default-anonymizer.script"), metadata=path_field)
 
     def __post_init__(self):
         # Sub-directories in the storage directory:
