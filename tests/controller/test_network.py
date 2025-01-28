@@ -65,7 +65,7 @@ def test_is_valid_ip_none_input() -> None:
     """Test IP validation with None input"""
     assert is_valid_ip(None) == False
 
-def test_dns_lookup_empty_domain() -> None:
+def test_dns_lookup_not_domain() -> None:
     """Test DNS lookup with an empty domain string"""
-    result = dns_lookup(" ")
+    result = dns_lookup("not.a.domain")
     assert result == "_DNS Lookup Failed"

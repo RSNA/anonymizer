@@ -7,27 +7,15 @@ from src.anonymizer.utils.storage import (
     JavaAnonymizerExportedStudy,
 )
 import tempfile
-from typing import Any, Generator, Tuple
+from typing import Any, Generator, Tuple    
 from openpyxl import Workbook
 import pytest
 from unittest.mock import patch, MagicMock
 import shutil
 from pathlib import Path
-from unittest.mock import patch, mock_open, Mock
 import os
 import random
 
-@pytest.fixture
-def temp_dir() -> Generator[str, Any, None]:
-    """
-    Creates a temporary directory for testing and yields its path.
-
-    Yields:
-        str: The path to the temporary directory.
-    """
-    temp_path = tempfile.mkdtemp()
-    yield temp_path
-    shutil.rmtree(temp_path)
 
 #Basic tests
 def test_count_studies_series_images(temp_dir: str):
@@ -278,7 +266,7 @@ def test_count_studies_random_series_images(temp_dicom_dir_one_patient):
         temp_dicom_dir_one_patient: A tuple containing the temporary directory path and counts.
     """
     temp_dir, expected_patients, expected_studies, expected_series, expected_images = temp_dicom_dir_one_patient
-    actual_studies, actual_series, actual_images = count_studies_series_images(f"{temp_dir}\\patient_0") 
+    actual_studies, actual_series, actual_images = count_studies_series_images(f"{temp_dir}/patient_0/") 
     assert actual_studies == expected_studies
     assert actual_series == expected_series
     assert actual_images == expected_images
@@ -293,6 +281,7 @@ def test_count_studies_random_count_series(temp_dicom_dir_50_patient):
     temp_dir, expected_patients, expected_studies, expected_series, expected_images = temp_dicom_dir_50_patient
     actual_series = count_series(f"{temp_dir}") 
     assert actual_series == expected_series
+
 
 #read_java_anonymizer_index_xlsx
 def test_load_data_from_existing_excel():
