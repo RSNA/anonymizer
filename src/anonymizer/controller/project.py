@@ -17,7 +17,6 @@ import time
 from datetime import datetime, timedelta
 import csv
 import shutil
-import json
 import boto3
 from pathlib import Path
 from dataclasses import dataclass
@@ -2470,6 +2469,53 @@ class ProjectController(AE):
             self._export_executor.shutdown(wait=False if self.model.export_to_AWS else True, cancel_futures=True)
             logger.info("Move futures cancelled and executor shutdown")
             self._export_executor = None
+
+    def delete_study(self, anon_pt_id: str, anon_study_uid: str) -> bool:
+        """
+        Delete a study from the local storage and remove assoicated PHI data from the anonymizer model.
+
+        Args:
+            anon_pt_id (str): The Anonymized Patient ID of the study to be deleted.
+            anon_study_uid (str): The Anonymized Study Instance UID of the study to be deleted.
+
+        Returns:
+            bool: True if the study was deleted successfully, False otherwise.
+        """
+        logger.info(f"Delete Anon StudyUID:{anon_study_uid} for Anon PatientID: {anon_pt_id}")
+        patient_dir = Path(self.model.images_dir(), anon_pt_id)
+        study_dir = Path(self.model.images_dir(), anon_pt_id, anon_study_uid)
+        if study_dir.exists():
+            try:
+                # Compile list of all SOPInstanceUIDs in the study by reading the instance filename from storage directory:
+                anon_instance_uids = []
+                for root, _, files in os.walk(study_dir):
+                    for file in files:
+                        if file.endswith(".dcm"):
+                            anon_instance_uids.append(Path(root, file).stem)
+
+                # Iterate through all SOPInstanceUIDs and remove from AnonymizerModel uid_lookup using bidict inverse lookup:
+                for anon_instance_uid in anon_instance_uids:
+                    self.anonymizer.model.remove_uid_inverse(anon_instance_uid)
+
+                # Remove PHI data from anonymizer model:
+                self.anonymizer.model.remove_phi(anon_pt_id, anon_study_uid)
+
+                # Remove files from local storage directory:
+                shutil.rmtree(study_dir)
+                logger.info(f"Study directory: {study_dir} deleted successfully")
+
+                # If no more studies in patient directory, remove the patient directory:
+                if not any(patient_dir.iterdir()):
+                    shutil.rmtree(patient_dir)
+                    logger.warning(
+                        f"{patient_dir} empty => Patient {anon_pt_id} directory removed following study deletion"
+                    )
+
+                return True
+            except Exception as e:
+                # TODO: rollback?
+                logger.error(f"Error deleting study: {e}")
+        return False
 
     def create_phi_csv(self) -> Path | str:
         """

@@ -198,6 +198,32 @@ class ProjectModel:
         cpy.aws_cognito.password = len(cpy.aws_cognito.password) * "*"
         return f"{self.get_class_name()}\n({pformat(asdict(cpy), sort_dicts=False)})"
 
+    def abridged_path(self, path_obj: Path, depth: int = 4, include_filename: bool = False) -> str:
+        """
+        Returns an abridged representation of a path.
+
+        Args:
+            path_obj (Path): The Path object to abridge.
+            depth (int): The number of trailing directory levels to include.
+            include_filename (bool): Whether to include the filename in the output.
+
+        Returns:
+            str: The abridged path.
+        """
+        if depth <= 0:
+            raise ValueError("Depth must be a positive integer.")
+
+        parts = path_obj.parts
+        if len(parts) <= depth + int(include_filename):  # Add 1 to depth if including filename
+            return str(path_obj)  # Return the full path if it's short enough
+        else:
+            if include_filename:
+                abridged_dir = f".../{'/'.join(parts[-(depth+1):-1])}"  # Exclude filename from parts
+                return f"{abridged_dir}/{path_obj.name}"
+            else:
+                abridged_dir = f".../{'/'.join(parts[-depth:])}"
+                return abridged_dir
+
     def images_dir(self) -> Path:
         return self.storage_dir.joinpath(self.PUBLIC_DIR)
 
@@ -205,7 +231,10 @@ class ProjectModel:
         return self.storage_dir.joinpath(self.PRIVATE_DIR)
 
     def abridged_storage_dir(self) -> str:
-        return f".../{self.storage_dir.parts[-3]}/{self.storage_dir.parts[-2]}/{self.storage_dir.parts[-1]}"
+        return self.abridged_path(self.storage_dir)
+
+    def abridged_script_path(self) -> str:
+        return self.abridged_path(self.anonymizer_script_path, include_filename=True)
 
     def phi_export_dir(self) -> Path:
         return self.storage_dir.joinpath(self.PRIVATE_DIR, self.PHI_EXPORT_DIR)

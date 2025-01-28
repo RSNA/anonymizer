@@ -261,20 +261,24 @@ class SettingsDialog(tk.Toplevel):
 
         row += 1
 
+        self._script_file_label = ctk.CTkLabel(self._frame, text=_("Script File") + ":")
+        self._script_file_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
+
         # Script File is selectable ONLY for NEW projects
         # On project creation the script file is parsed and saved to the Anonymizer model
         if self.new_model:
-            self._script_file_label = ctk.CTkLabel(self._frame, text=_("Script File") + ":")
-            self._script_file_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
-
             self._script_file_button = ctk.CTkButton(
                 self._frame,
-                text=str(self.model.anonymizer_script_path),
+                text=str(self.model.abridged_script_path()),
                 command=self._script_file_dialog,
+                state=ctk.NORMAL if self.new_model else ctk.DISABLED,
             )
             self._script_file_button.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw")
+        else:
+            self._storage_dir_label = ctk.CTkLabel(self._frame, text=self.model.abridged_script_path())
+            self._storage_dir_label.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw")
 
-            row += 1
+        row += 1
 
         # Logging Levels:
         self._logging_levels_label = ctk.CTkLabel(self._frame, text=_("Logging Levels") + ":")

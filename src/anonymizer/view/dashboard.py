@@ -8,7 +8,7 @@ from anonymizer.controller.project import ProjectController, EchoRequest, EchoRe
 from anonymizer.model.anonymizer import Totals
 from anonymizer.utils.translate import _
 from anonymizer.utils.storage import count_studies_series_images
-from anonymizer.view.kaleidoscope import KaleidoscopeView
+from anonymizer.view.pixels import PixelsView
 
 logger = logging.getLogger(__name__)
 
@@ -84,15 +84,21 @@ class Dashboard(ctk.CTkFrame):
         )
         self._query_button.grid(row=row, column=0, padx=self.PAD, pady=(self.PAD, 0), sticky="w")
 
-        # kaleidoscope_image = ctk.CTkImage(light_image=Image.open("assets/icons/kaleidoscope.png"), size=(24, 24))
-        self._patient_kaleidoscope_button = ctk.CTkButton(
+        self._view_pixels_button = ctk.CTkButton(
             self,
             width=self.BUTTON_WIDTH,
-            text=_("View"),
-            # image=kaleidoscope_image,
-            command=self._patient_kaleidoscope_button_click,
+            text=_("View Pixels"),
+            command=self._view_pixels_button_click,
         )
-        self._patient_kaleidoscope_button.grid(row=row, column=1, padx=self.PAD, pady=(self.PAD, 0), sticky="w")
+        self._view_pixels_button.grid(row=row, column=1, padx=self.PAD, pady=(self.PAD, 0))
+
+        self._view_index_button = ctk.CTkButton(
+            self,
+            width=self.BUTTON_WIDTH,
+            text=_("View Index"),
+            command=self._view_index_button_click,
+        )
+        self._view_index_button.grid(row=row, column=2, padx=self.PAD, pady=(self.PAD, 0))
 
         self._export_button = ctk.CTkButton(
             self,
@@ -233,10 +239,11 @@ class Dashboard(ctk.CTkFrame):
             )
             self._status.configure(text=_("Checking Export DICOM Server is online") + "...")
 
-    def _patient_kaleidoscope_button_click(self):
-        logger.info("_patient_kaleidoscope_button_click")
-        kaleidoscope_view = KaleidoscopeView(self._mono_font, self._controller.model.images_dir())
-        kaleidoscope_view.focus()
+    def _view_pixels_button_click(self):
+        logger.info("_view_pixels_button_click")
+
+    def _view_index_button_click(self):
+        logger.info("_view_index_button_click")
 
     def _wait_for_aws(self):
         self._timer -= 1

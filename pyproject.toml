@@ -29,6 +29,7 @@ requests-oauthlib = "*"
 toml = "^0.10.2"
 click = "^8.1.8"
 dataclasses-json = "^0.6.7"
+bidict = "^0.23.1"
 
 [tool.poetry.group.dev.dependencies]
 poetry = "^2.0.1"

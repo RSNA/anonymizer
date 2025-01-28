@@ -84,7 +84,7 @@ def get_pad(size):
     return PAD_MAP[size]
 
 
-class KaleidoscopeView(ctk.CTkToplevel):
+class PixelsView(ctk.CTkToplevel):
     KS_FRAME_RELATIVE_SIZE = (0.9, 0.9)  # fraction of screen size (width, height)
     WIDGET_PAD = 10
     IMAGE_PAD = 2  # pixels between the kaleidoscopes images when combined
@@ -117,7 +117,7 @@ class KaleidoscopeView(ctk.CTkToplevel):
             patient_ids = [p for p in base_dir.iterdir() if p.is_dir()]
 
         if not patient_ids:
-            raise ValueError("No patients for KaleidoscopeView")
+            raise ValueError("No patients for PixelsView")
 
         self._patient_ids = patient_ids
         self._base_dir = base_dir
@@ -146,7 +146,7 @@ class KaleidoscopeView(ctk.CTkToplevel):
         self._create_widgets()
 
         logger.info(
-            f"KaleidoscopeView for Patients={len(self._patient_ids)}, Total Series={self._total_series}, Total Pages={self._pages}"
+            f"PixelsView for Patients={len(self._patient_ids)}, Total Series={self._total_series}, Total Pages={self._pages}"
         )
 
         # Bind Arrow buttons to page control

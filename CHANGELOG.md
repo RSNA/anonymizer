@@ -12,15 +12,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed build.yml for creating platform executables
 - refactored source directory structure to fit pyPI package: src/anonymizer/*
 - replaced coverage module with pytest-cov dev dependency
-- more efficient AnonymizerModel serialization using pickle.dumps with highest protocol
+- more efficient AnonymizerModel serialization using pickle.dumps with highest protocol 
 - changed ProjectModel serialization from pickle to json using dataclass_json package
+- display script file path in project settings after project created
+- ProjectModel.abridged_path to handle display of storage directory and script path to depth of 4
+- change Query => Search and Export => Send
 
 ## Added
 - Distribution via pyPI, github action: release.yaml
 - Unit testing via github action: tests.yaml
-- src/utiliy unit testing
+- src/utility unit testing
 - Headless / Server mode via, start via rsna-anonmyizer <"path to ProjectModel.pkl">
-
+- "View Pixels" and "View Index" buttons on dashboard with associated views
 
 ## [17.2.*] Release Candidate
 ### Changed

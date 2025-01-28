@@ -6,7 +6,7 @@ from pathlib import Path
 from pydicom import dcmread
 from pydicom.dataset import Dataset
 from pydicom.data import get_testdata_file
-from pynetdicom.presentation import PresentationContext, build_context
+from pynetdicom.presentation import build_context
 from tests.controller.helpers import send_file_to_scp, send_files_to_scp
 from tests.controller.dicom_test_files import (
     cr1_filename,
@@ -73,7 +73,7 @@ def test_send_ct_small(temp_dir: str, controller):
     assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".3"
     assert model.get_anon_uid(ds.FrameOfReferenceUID) == prefix + ".4"
 
-    # Verify PHI / Study / Series stored correctly in AnonmyizerModel
+    # Verify PHI / Study / Series stored correctly in AnonymizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
     assert anon_ptid
     phi = model.get_phi(anon_ptid)
@@ -332,6 +332,122 @@ def test_send_cr_and_ct_Archibald_Doe(temp_dir: str, controller):
     assert phi.studies[1].series[0].series_desc == ds.get("SeriesDescription")
     assert phi.studies[1].series[0].modality == ds.get("Modality")
     assert phi.studies[1].series[0].instance_count == 4
+
+
+def test_send_ct_small_then_delete_study(temp_dir: str, controller):
+    ds: Dataset = send_file_to_scp(ct_small_filename, LocalStorageSCP, controller)
+    time.sleep(0.5)
+    store_dir = controller.model.images_dir()
+    model: AnonymizerModel = controller.anonymizer.model
+    dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
+    assert len(dirlist) == 1
+    assert dirlist[0] == TEST_SITEID + "-000001"
+    prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
+    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1"
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".2"
+    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".3"
+    assert model.get_anon_uid(ds.FrameOfReferenceUID) == prefix + ".4"
+
+    # Verify PHI / Study / Series stored correctly in AnonymizerModel
+    anon_ptid = model.get_anon_patient_id(ds.PatientID)
+    assert anon_ptid
+    phi = model.get_phi(anon_ptid)
+    assert phi
+    assert phi.patient_id == ds.PatientID
+    assert phi.patient_name == ds.PatientName
+    assert phi.dob == ds.get("PatientBirthDate")
+    assert phi.sex == ds.get("PatientSex")
+    assert phi.ethnic_group == ds.get("EthnicGroup")
+    assert len(phi.studies) == 1
+    assert len(phi.studies[0].series) == 1
+    assert phi.studies[0].study_uid == ds.StudyInstanceUID
+    assert phi.studies[0].study_date == ds.get("StudyDate")
+    date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
+    assert phi.studies[0].anon_date_delta == date_delta
+    assert phi.studies[0].study_desc == ds.get("StudyDescription")
+    assert phi.studies[0].accession_number == ds.get("AccessionNumber")
+    assert phi.studies[0].target_instance_count == 0  # Set by controller move operation
+    assert phi.studies[0].series[0].series_uid == ds.get("SeriesInstanceUID")
+    assert phi.studies[0].series[0].series_desc == ds.get("SeriesDescription")
+    assert phi.studies[0].series[0].modality == ds.get("Modality")
+    assert phi.studies[0].series[0].instance_count == 1
+
+    # DELETE STUDY:
+    assert controller.delete_study(anon_ptid, model.get_anon_uid(ds.StudyInstanceUID))
+    # Patient without any studies should have directory removed from storage directory:
+    dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
+    assert len(dirlist) == 0
+
+    # Patient without any studies should be removed from AnonymizerModel:
+    anon_ptid = model.get_anon_patient_id(ds.PatientID)
+    assert anon_ptid is None
+
+    # Check AmoynizerModel patients, studies, series, instances, quarantine counts are 0:
+    totals = model.get_totals()
+    assert totals == (0, 0, 0, 0, 0)
+
+
+def test_send_cr_and_ct_Archibald_Doe_then_delete_studies(temp_dir: str, controller):
+    # Send CR_STUDY_3_SERIES_3_IMAGES:
+    dsets1: list[Dataset] = send_files_to_scp(CR_STUDY_3_SERIES_3_IMAGES, LocalStorageSCP, controller)
+    time.sleep(1)
+    store_dir = controller.model.images_dir()
+    model: AnonymizerModel = controller.anonymizer.model
+    dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
+    assert len(dirlist) == 1
+    assert dirlist[0] == TEST_SITEID + "-000001"
+    study1_uid = dsets1[0].StudyInstanceUID
+
+    # Send CT_STUDY_1_SERIES_4_IMAGES:
+    dsets2: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, LocalStorageSCP, controller)
+    time.sleep(1)
+    dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
+    assert len(dirlist) == 1
+    assert dirlist[0] == TEST_SITEID + "-000001"  # Same Patient
+    study2_uid = dsets2[0].StudyInstanceUID
+
+    phi_ptid = dsets1[0].PatientID
+
+    # Verify PHI / Study / Series stored correctly in AnonmyizerModel
+    anon_ptid = model.get_anon_patient_id(phi_ptid)
+    assert anon_ptid
+    phi = model.get_phi(anon_ptid)
+    assert phi
+    assert phi.patient_id == phi_ptid
+    assert len(phi.studies) == 2
+
+    totals = model.get_totals()
+    assert totals == (1, 2, 4, 7, 0)
+
+    # DELETE STUDIES:
+    # Delete Study 1:
+    assert controller.delete_study(anon_ptid, model.get_anon_uid(study1_uid))
+    # Patient with only Study 2 should still have directory in storage directory:
+    dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
+    assert len(dirlist) == 1
+    assert dirlist[0] == TEST_SITEID + "-000001"
+    # Patient with only Study 2 should still be in AnonymizerModel:
+    anon_ptid = model.get_anon_patient_id(phi_ptid)
+    assert anon_ptid
+    phi = model.get_phi(anon_ptid)
+    assert phi
+    assert phi.patient_id == phi_ptid
+    assert len(phi.studies) == 1
+
+    totals = model.get_totals()
+    assert totals == (1, 1, 1, 4, 0)
+
+    # Delete Study 2:
+    assert controller.delete_study(anon_ptid, model.get_anon_uid(study2_uid))
+    # Patient without any studies should have directory removed from storage directory:
+    dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
+    assert len(dirlist) == 0
+    # Patient without any studies should be removed from AnonymizerModel:
+    anon_ptid = model.get_anon_patient_id(phi_ptid)
+    assert anon_ptid is None
+
+    totals = model.get_totals()
+    assert totals == (0, 0, 0, 0, 0)
 
 
 # Test sending compressed syntaxes to local storage SCP:

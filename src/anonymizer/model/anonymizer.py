@@ -6,6 +6,7 @@ and anonymization lookups. It also includes data classes for Series, Study, and 
 from typing import List
 from collections import namedtuple
 from pathlib import Path
+from bidict import bidict
 import logging
 import threading
 import pickle
@@ -36,7 +37,7 @@ class Study:
     anon_date_delta: int
     accession_number: str
     study_desc: str
-    series: List[Series]
+    series: List[Series]  # TODO: make dictionary with key = series_uid
     target_instance_count: int = 0
     # TODO: if data curation needs expand:
     # weight: str | None = None
@@ -59,7 +60,7 @@ class PHI:
     sex: str | None = None
     dob: str | None = None
     ethnic_group: str | None = None
-    studies: List[Study] = field(default_factory=list)
+    studies: List[Study] = field(default_factory=list)  # TODO: make dictionary with key = study_uid
 
 
 Totals = namedtuple("Totals", ["patients", "studies", "series", "instances", "quarantined"])
@@ -112,7 +113,7 @@ class AnonymizerModel:
         self.default_anon_pt_id: str = site_id + "-" + "".zfill(len(str(self.MAX_PATIENTS)) - 1)
 
         self._patient_id_lookup = {}
-        self._uid_lookup = {}
+        self._uid_lookup: bidict = bidict()
         self._acc_no_lookup = {}
         self._phi_lookup = {}
         self._tag_keep = {}
@@ -263,6 +264,11 @@ class AnonymizerModel:
         with self._lock:
             if phi_uid in self._uid_lookup:
                 del self._uid_lookup[phi_uid]
+
+    def remove_uid_inverse(self, anon_uid: str):
+        with self._lock:
+            if anon_uid in self._uid_lookup.inverse:
+                del self._uid_lookup.inverse[anon_uid]
 
     def get_anon_uid(self, phi_uid: str) -> str | None:
         return self._uid_lookup.get(phi_uid, None)
@@ -546,6 +552,64 @@ class AnonymizerModel:
                     self._uid_lookup[ds.SOPInstanceUID] = anon_uid
 
                 self._instances += 1
+
+    def remove_phi(self, anon_pt_id: str, anon_study_uid: str) -> bool:
+        """
+        Remove PHI data for a given Anonymizer patient ID and study UID.
+
+        If the patient does not have anymore studies after removing the study, the patient is removed from the both patient_id_lookup and phi_lookup.
+
+        Args:
+            anon_pt_id (str): The anonymized patient ID.
+            anon_study_uid (str): The anonymized study UID.
+
+        Returns:
+            bool: True if the PHI data was removed successfully, False otherwise.
+        """
+        with self._lock:
+            phi: PHI = self._phi_lookup.get(anon_pt_id, None)
+            if phi is None:
+                logger.error(f"Anon PatientID={anon_pt_id} not found in phi_lookup")
+                return False
+            phi_study_uid = self._uid_lookup.inverse.get(anon_study_uid, None)
+            if phi_study_uid is None:
+                logger.error(f"Anon StudyUID={anon_study_uid} not found in uid_lookup")
+                return False
+            if not phi.studies:
+                logger.error(f"No studies in PHI.studies for Anon PatientID={anon_pt_id}")
+                return False
+
+            match = None
+            for study in phi.studies:
+                if study.study_uid == phi_study_uid:
+                    match = study
+                    break
+
+            if match is None:
+                logger.error(f"Anon StudyUID={anon_study_uid} not found in PHI.studies for Anon PatientID={anon_pt_id}")
+                return False
+
+            # Remove the series_uids of this study from the uid_lookup:
+
+            for series in match.series:
+                if series.series_uid in self._uid_lookup:
+                    del self._uid_lookup[series.series_uid]
+                self._instances -= series.instance_count
+                self._series -= 1
+
+            # Remove the matched study from phi.studies list:
+            phi.studies.remove(match)
+
+            # Remove the study_uid from the uid_lookup:
+            if phi_study_uid in self._uid_lookup:
+                del self._uid_lookup[phi_study_uid]
+            self._studies -= 1
+
+            # Remove the patient if no more studies:
+            if not phi.studies:
+                del self._phi_lookup[anon_pt_id]
+                del self._patient_id_lookup[phi.patient_id]
+                self._patients -= 1
 
     def process_java_phi_studies(self, java_studies: List[JavaAnonymizerExportedStudy]):
         """

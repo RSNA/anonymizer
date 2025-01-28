@@ -4,11 +4,9 @@ from src.anonymizer.utils.storage import (
     get_dcm_files,
     count_study_images,
     read_java_anonymizer_index_xlsx,
-    JavaAnonymizerExportedStudy,
 )
 import tempfile
-from typing import Any, Generator, Tuple    
-from openpyxl import Workbook
+from typing import Generator, Tuple
 import pytest
 from unittest.mock import patch, MagicMock
 import shutil
@@ -17,7 +15,7 @@ import os
 import random
 
 
-#Basic tests
+# Basic tests
 def test_count_studies_series_images(temp_dir: str):
     """
     Tests the count_studies_series_images function with various scenarios.
@@ -34,8 +32,8 @@ def test_count_studies_series_images(temp_dir: str):
     # Scenario 2: Single study, single series, single image
     os.makedirs(os.path.join(temp_dir, "study1", "series1"))
     with open(os.path.join(temp_dir, "study1", "series1", "image1.dcm"), "w") as _:
-        pass  # Create an empty DICOM file 
-    assert count_studies_series_images(temp_dir) == (1, 1, 1) 
+        pass  # Create an empty DICOM file
+    assert count_studies_series_images(temp_dir) == (1, 1, 1)
 
     # Scenario 3: Multiple studies, series, and images
     os.makedirs(os.path.join(temp_dir, "study2", "series1"))
@@ -50,12 +48,13 @@ def test_count_studies_series_images(temp_dir: str):
 
     # Scenario 4: Empty series
     os.makedirs(os.path.join(temp_dir, "study3", "empty_series"))
-    assert count_studies_series_images(temp_dir) == (3, 4, 4) 
+    assert count_studies_series_images(temp_dir) == (3, 4, 4)
 
     # Scenario 5: Non-DICOM files
     with open(os.path.join(temp_dir, "study1", "series1", "not_dicom.txt"), "w") as _:
-        pass 
-    assert count_studies_series_images(temp_dir) == (3, 4, 4)  
+        pass
+    assert count_studies_series_images(temp_dir) == (3, 4, 4)
+
 
 def test_count_series(temp_dir: str):
     """
@@ -78,7 +77,7 @@ def test_count_series(temp_dir: str):
     # Scenario 3: Multiple patients, one study each, multiple series
     os.makedirs(os.path.join(temp_dir, "patient1", "study1", "series2"))
     os.makedirs(os.path.join(temp_dir, "patient2", "study1", "series1"))
-    assert count_series(temp_dir) == 3 
+    assert count_series(temp_dir) == 3
     assert count_series(temp_dir, patient_ids=["patient1"]) == 2
 
     # Scenario 4: Patient not found
@@ -87,11 +86,12 @@ def test_count_series(temp_dir: str):
     # Scenario 5: Empty patient directory
     os.makedirs(os.path.join(temp_dir, "empty_patient"))
     assert count_series(temp_dir) == 3
-    assert count_series(temp_dir, patient_ids=["empty_patient"]) == 0 
+    assert count_series(temp_dir, patient_ids=["empty_patient"]) == 0
 
     # Scenario 6: Invalid base directory (not a directory)
     with pytest.raises(ValueError, match="is not a valid directory"):
-        count_series("/path/that/does/not/exist") 
+        count_series("/path/that/does/not/exist")
+
 
 def test_get_dcm_files(temp_dir: str):
     """
@@ -139,6 +139,7 @@ def test_get_dcm_files(temp_dir: str):
         ]
     )
 
+
 def test_count_study_images(temp_dir: str):
     """
     Tests the count_study_images function with various scenarios.
@@ -175,8 +176,8 @@ def test_count_study_images(temp_dir: str):
     assert count_study_images(base_dir, "non_existent_patient", "non_existent_study") == 0
 
 
-#Random number of subsiquent folders
-def generate_random_dicom_structure(temp_dir: str, num_patients = 1) -> Tuple[int, int, int, int]:
+# Random number of subsiquent folders
+def generate_random_dicom_structure(temp_dir: str, num_patients=1) -> Tuple[int, int, int, int]:
     """
     Generates a random DICOM structure within the given temporary directory.
 
@@ -212,7 +213,7 @@ def generate_random_dicom_structure(temp_dir: str, num_patients = 1) -> Tuple[in
                 for l in range(num_patient_study_series_images):
                     image_path = os.path.join(series_dir, f"image_{l}.dcm")
                     with open(image_path, "w") as _:
-                        pass  # Create an empty DICOM file 
+                        pass  # Create an empty DICOM file
 
                     num_images += 1
                 num_series += 1
@@ -220,10 +221,11 @@ def generate_random_dicom_structure(temp_dir: str, num_patients = 1) -> Tuple[in
 
     return num_patients, num_studies, num_series, num_images
 
+
 @pytest.fixture
 def temp_dicom_dir_one_patient() -> Generator[Tuple[str, int, int, int, int], None, None]:
     """
-    Creates a temporary directory with a random DICOM structure and yields its path 
+    Creates a temporary directory with a random DICOM structure and yields its path
     along with the counts of patients, studies, series, and images.
 
     Yields:
@@ -239,10 +241,11 @@ def temp_dicom_dir_one_patient() -> Generator[Tuple[str, int, int, int, int], No
     yield temp_path, num_patients, num_studies, num_series, num_images
     shutil.rmtree(temp_path)
 
+
 @pytest.fixture
 def temp_dicom_dir_50_patient() -> Generator[Tuple[str, int, int, int, int], None, None]:
     """
-    Creates a temporary directory with a random DICOM structure and yields its path 
+    Creates a temporary directory with a random DICOM structure and yields its path
     along with the counts of patients, studies, series, and images.
 
     Yields:
@@ -258,6 +261,7 @@ def temp_dicom_dir_50_patient() -> Generator[Tuple[str, int, int, int, int], Non
     yield temp_path, num_patients, num_studies, num_series, num_images
     shutil.rmtree(temp_path)
 
+
 def test_count_studies_random_series_images(temp_dicom_dir_one_patient):
     """
     Tests the count_studies_series_images function with a single patient with a random number of subsiquent folders.
@@ -266,10 +270,11 @@ def test_count_studies_random_series_images(temp_dicom_dir_one_patient):
         temp_dicom_dir_one_patient: A tuple containing the temporary directory path and counts.
     """
     temp_dir, expected_patients, expected_studies, expected_series, expected_images = temp_dicom_dir_one_patient
-    actual_studies, actual_series, actual_images = count_studies_series_images(f"{temp_dir}/patient_0/") 
+    actual_studies, actual_series, actual_images = count_studies_series_images(f"{temp_dir}/patient_0/")
     assert actual_studies == expected_studies
     assert actual_series == expected_series
     assert actual_images == expected_images
+
 
 def test_count_studies_random_count_series(temp_dicom_dir_50_patient):
     """
@@ -279,17 +284,17 @@ def test_count_studies_random_count_series(temp_dicom_dir_50_patient):
         temp_dicom_dir_50_patient: A tuple containing the temporary directory path and counts.
     """
     temp_dir, expected_patients, expected_studies, expected_series, expected_images = temp_dicom_dir_50_patient
-    actual_series = count_series(f"{temp_dir}") 
+    actual_series = count_series(f"{temp_dir}")
     assert actual_series == expected_series
 
 
-#read_java_anonymizer_index_xlsx
+# read_java_anonymizer_index_xlsx
 def test_load_data_from_existing_excel():
     """
-    Tests if the function can load data from an existing Excel file and verifies 
+    Tests if the function can load data from an existing Excel file and verifies
     the number of entries and the IDs of the first few entries.
     """
-    filename = 'tests/controller/assets/JavaGeneratedIndex.xlsx' 
+    filename = "tests/controller/assets/JavaGeneratedIndex.xlsx"
     data = read_java_anonymizer_index_xlsx(filename)
 
     # Expected number of entries (replace with actual value)
@@ -299,7 +304,7 @@ def test_load_data_from_existing_excel():
     assert len(data) == expected_num_entries
 
     # Expected IDs for the first few entries (replace with actual values)
-    expected_first_ids = ["527408-000001", "527408-000002", "527408-000003"] 
+    expected_first_ids = ["527408-000001", "527408-000002", "527408-000003"]
 
     # Assert IDs of the first few entries
     for i, expected_id in enumerate(expected_first_ids):

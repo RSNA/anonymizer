@@ -1,6 +1,6 @@
 """
-This module contains the ExportView class, which is a tkinter Toplevel window for exporting studies.
-The ExportView class provides a user interface for selecting and exporting studies from a project.
+This module contains the IndexView class, which is a tkinter Toplevel window for viewing the study index.
+The IndexView class provides a user interface for viewing the study index, deleting studies and exporting the patient lookup table to file.
 """
 
 import os
@@ -24,9 +24,9 @@ from anonymizer.view.pixels import PixelsView
 logger = logging.getLogger(__name__)
 
 
-class ExportView(tk.Toplevel):
+class IndexView(tk.Toplevel):
     """
-    Represents a view for exporting data.
+    Represents a view of the study index.
 
     Args:
         parent (Dashboard): The parent dashboard.
@@ -35,7 +35,6 @@ class ExportView(tk.Toplevel):
         title (str | None): The title of the view.
 
     Attributes:
-        ux_poll_export_response_interval (int): The interval for polling export response in milliseconds.
         _data_font (ctk.CTkFont): The mono font.
         _attr_map (dict): A dictionary mapping column ids to column attributes.
         _parent (Dashboard): The parent dashboard.
@@ -60,8 +59,6 @@ class ExportView(tk.Toplevel):
         _clear_selection_button (ctk.CTkButton): The button for clearing the selection.
         _export_button (ctk.CTkButton): The button for initiating export.
     """
-
-    ux_poll_export_response_interval = 500  # milli-seconds
 
     def __init__(
         self,
@@ -243,32 +240,49 @@ class ExportView(tk.Toplevel):
         )
         self._clear_selection_button.grid(row=0, column=9, padx=PAD, pady=PAD, sticky="w")
 
-        self._export_button = ctk.CTkButton(
+        self._delete_button = ctk.CTkButton(
             self._status_frame,
             width=ButtonWidth,
             text=_("Export"),
             command=self._export_button_pressed,
         )
-        self._export_button.grid(row=0, column=10, padx=PAD, pady=PAD, sticky="e")
-        self._export_button.focus_set()
+        self._delete_button.grid(row=0, column=10, padx=PAD, pady=PAD, sticky="e")
+        self._delete_button.focus_set()
 
-    def busy(self):
-        return self._export_active
+    def _create_phi_button_pressed(self):
+        logger.info("Create PHI button pressed")
+        # TODO: error handling
+        csv_path = self._controller.create_phi_csv()
+        if isinstance(csv_path, str):
+            logger.error(f"Failed to create PHI CSV file: {csv_path}")
+            messagebox.showerror(
+                master=self,
+                title=_("Error Creating PHI CSV File"),
+                message=csv_path,
+                parent=self,
+            )
+            return
+        else:
+            logger.info(f"PHI CSV file created: {csv_path}")
+            messagebox.showinfo(
+                title=_("PHI CSV File Created"),
+                message=_("PHI Lookup Data saved to") + f":\n\n{csv_path}",
+                parent=self,
+            )
 
     def _disable_action_buttons(self):
         logger.info("_disable_action_buttons")
         self._refresh_button.configure(state="disabled")
-        self._export_button.configure(state="disabled")
+        self._delete_button.configure(state="disabled")
         self._select_all_button.configure(state="disabled")
         self._clear_selection_button.configure(state="disabled")
         self._create_phi_button.configure(state="disabled")
-        self._cancel_export_button.configure(state="enabled")
         self._tree.configure(selectmode="none")
 
     def _enable_action_buttons(self):
         logger.info("_enable_action_buttons")
         self._refresh_button.configure(state="enabled")
-        self._export_button.configure(state="enabled")
+        self._delete_button.configure(state="enabled")
         self._select_all_button.configure(state="enabled")
         self._clear_selection_button.configure(state="enabled")
         if not self._tree.get_children():
@@ -369,6 +383,27 @@ class ExportView(tk.Toplevel):
         logger.info("Clear Selection button pressed")
         self._tree.selection_set([])
 
+    def _create_phi_button_pressed(self):
+        logger.info("Create PHI button pressed")
+        # TODO: error handling
+        csv_path = self._controller.create_phi_csv()
+        if isinstance(csv_path, str):
+            logger.error(f"Failed to create PHI CSV file: {csv_path}")
+            messagebox.showerror(
+                master=self,
+                title=_("Error Creating PHI CSV File"),
+                message=csv_path,
+                parent=self,
+            )
+            return
+        else:
+            logger.info(f"PHI CSV file created: {csv_path}")
+            messagebox.showinfo(
+                title=_("PHI CSV File Created"),
+                message=_("PHI Lookup Data saved to") + f":\n\n{csv_path}",
+                parent=self,
+            )
+
     def _update_export_progress(self, cancel: bool = False):
         self._progressbar.set(self._patients_processed / self._patients_to_process)
         state_label = _("Processing")
@@ -463,7 +498,7 @@ class ExportView(tk.Toplevel):
             # Verify echo of export DICOM server
             # TODO: remove this echo test? Rely on connection error from c-send?
             if not self._controller.echo(_("EXPORT")):
-                self._export_button.configure(text_color="red")
+                self._delete_button.configure(text_color="red")
                 self._parent._export_button.configure(text_color="red")
                 messagebox.showerror(
                     title=_("Connection Error"),
@@ -472,7 +507,7 @@ class ExportView(tk.Toplevel):
                 )
                 return
 
-        self._export_button.configure(text_color="light green")
+        self._delete_button.configure(text_color="light green")
         self._parent._export_button.configure(text_color="light green")
 
         self._patient_ids_to_export = list(self._tree.selection())
