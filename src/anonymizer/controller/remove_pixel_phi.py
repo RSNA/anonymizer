@@ -1,27 +1,39 @@
 # For Burnt-IN Pixel PHI Removal:
-from pathlib import Path
 import logging
-import numpy as np
-from numpy import ndarray
-from cv2 import threshold, findContours, drawContours, normalize, copyMakeBorder, resize, dilate, inpaint, cvtColor
-from cv2 import (
-    THRESH_OTSU,
-    COLOR_RGB2GRAY,
-    RETR_TREE,
-    CHAIN_APPROX_SIMPLE,
-    NORM_MINMAX,
-    INTER_LINEAR,
-    BORDER_CONSTANT,
-    INPAINT_TELEA,
-    CV_16U,
-)
+from pathlib import Path
 
+import numpy as np
+from cv2 import (
+    BORDER_CONSTANT,
+    CHAIN_APPROX_SIMPLE,
+    COLOR_RGB2GRAY,
+    INPAINT_TELEA,
+    INTER_LINEAR,
+    NORM_MINMAX,
+    RETR_TREE,
+    THRESH_OTSU,
+    copyMakeBorder,
+    cvtColor,
+    dilate,
+    drawContours,
+    findContours,
+    inpaint,
+    normalize,
+    resize,
+    threshold,
+)
 from easyocr import Reader
-from pydicom import Dataset, dcmread
-from pydicom.pixel_data_handlers.util import apply_voi_lut, apply_modality_lut, apply_color_lut, convert_color_space
-from pydicom.encaps import encapsulate
-from pydicom.uid import JPEG2000Lossless
+from numpy import ndarray
 from openjpeg.utils import encode_array  # JPEG2000Lossless
+from pydicom import Dataset, dcmread
+from pydicom.encaps import encapsulate
+from pydicom.pixel_data_handlers.util import (
+    apply_color_lut,
+    apply_modality_lut,
+    apply_voi_lut,
+    convert_color_space,
+)
+from pydicom.uid import JPEG2000Lossless
 
 VALID_COLOR_SPACES = [
     "MONOCHROME1",

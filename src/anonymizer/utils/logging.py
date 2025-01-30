@@ -11,13 +11,15 @@ Functions:
 - disable_pydicom_debug() -> None: Disables debug mode for pydicom.
 """
 
-import os
-from pathlib import Path
 import logging
 import logging.handlers
+import os
+from pathlib import Path
+
 from pydicom import config as pydicom_config
-from anonymizer.utils.translate import _
+
 from anonymizer.model.project import LoggingLevels
+from anonymizer.utils.translate import _
 
 LOG_FILENAME = "anonymizer.log"
 LOG_SIZE = 1024 * 1024 * 100  # 100 MB

@@ -1,10 +1,16 @@
-from typing import List
+import logging
 import tkinter as tk
 from tkinter import messagebox
+from typing import List
+
 import customtkinter as ctk
-import logging
+
+from anonymizer.controller.project import (
+    MoveStudiesRequest,
+    ProjectController,
+    StudyUIDHierarchy,
+)
 from anonymizer.utils.translate import _
-from anonymizer.controller.project import ProjectController, MoveStudiesRequest, StudyUIDHierarchy
 
 logger = logging.getLogger(__name__)
 

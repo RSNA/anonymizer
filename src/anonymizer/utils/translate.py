@@ -19,8 +19,8 @@ Example usage:
 """
 
 import gettext
-import re
 import logging
+import re
 from pprint import pformat
 
 # Language name to locale sub-directory name mapping (assets/locales/*)

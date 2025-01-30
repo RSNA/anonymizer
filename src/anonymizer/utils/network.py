@@ -2,9 +2,10 @@
 This module provides utility functions related to network operations.
 """
 
-import ifaddr
-import socket
 import ipaddress
+import socket
+
+import ifaddr
 
 
 def get_local_ip_addresses() -> list[str]:

@@ -1,26 +1,27 @@
-import os
-import sys
 import json
+import logging
+import os
+import pickle
+import platform
 import shutil
 import signal
+import sys
 import time
-import platform
-import click
+import tkinter as tk
+from copy import copy
 from pathlib import Path
 from pprint import pformat
-from copy import copy
-import logging
-import pickle
-from pydicom._version import __version__ as pydicom_version
-from pydicom import dcmread
-from pynetdicom._version import __version__ as pynetdicom_version
+from tkinter import filedialog, messagebox, ttk
 
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+import click
 import customtkinter as ctk
 from customtkinter import ThemeManager
+from pydicom import dcmread
+from pydicom._version import __version__ as pydicom_version
+from pynetdicom._version import __version__ as pynetdicom_version
 
-from anonymizer.utils.version import get_version
+from anonymizer.controller.project import ProjectController
+from anonymizer.model.project import DICOMRuntimeError, ProjectModel
 from anonymizer.utils.logging import init_logging
 from anonymizer.utils.translate import (
     _,
@@ -28,14 +29,13 @@ from anonymizer.utils.translate import (
     get_current_language_code,
     set_language,
 )
-from anonymizer.model.project import DICOMRuntimeError, ProjectModel
-from anonymizer.controller.project import ProjectController
-from anonymizer.view.settings.settings_dialog import SettingsDialog
+from anonymizer.utils.version import get_version
 from anonymizer.view.dashboard import Dashboard
-from anonymizer.view.import_files_dialog import ImportFilesDialog
-from anonymizer.view.query_retrieve_import import QueryView
 from anonymizer.view.export import ExportView
 from anonymizer.view.html_view import HTMLView
+from anonymizer.view.import_files_dialog import ImportFilesDialog
+from anonymizer.view.query_retrieve_import import QueryView
+from anonymizer.view.settings.settings_dialog import SettingsDialog
 from anonymizer.view.welcome import WelcomeView
 
 logger = logging.getLogger()  # ROOT logger

@@ -2,27 +2,32 @@
 This module contains the SettingsDialog class, which is a dialog window for managing project settings.
 """
 
-from pathlib import Path
-from typing import List, Tuple
-from copy import copy
-import tkinter as tk
-import customtkinter as ctk
-from tkinter import filedialog, messagebox
-import string
 import logging
-from anonymizer.model.project import ProjectModel, AWSCognito
+import string
+import tkinter as tk
+from copy import copy
+from pathlib import Path
+from tkinter import filedialog, messagebox
+from typing import List, Tuple
+
+import customtkinter as ctk
+
 from anonymizer.controller.project import DICOMNode
+from anonymizer.model.project import AWSCognito, ProjectModel
+from anonymizer.utils.logging import set_logging_levels
+from anonymizer.utils.storage import (
+    JavaAnonymizerExportedStudy,
+    read_java_anonymizer_index_xlsx,
+)
 from anonymizer.utils.translate import _, get_current_language_code
 from anonymizer.utils.ux_fields import str_entry
-from anonymizer.utils.logging import set_logging_levels
-from anonymizer.utils.storage import read_java_anonymizer_index_xlsx, JavaAnonymizerExportedStudy
-from anonymizer.view.settings.dicom_node_dialog import DICOMNodeDialog
 from anonymizer.view.settings.aws_cognito_dialog import AWSCognitoDialog
-from anonymizer.view.settings.network_timeouts_dialog import NetworkTimeoutsDialog
+from anonymizer.view.settings.dicom_node_dialog import DICOMNodeDialog
+from anonymizer.view.settings.logging_levels_dialog import LoggingLevelsDialog
 from anonymizer.view.settings.modalites_dialog import ModalitiesDialog
+from anonymizer.view.settings.network_timeouts_dialog import NetworkTimeoutsDialog
 from anonymizer.view.settings.sop_classes_dialog import SOPClassesDialog
 from anonymizer.view.settings.transfer_syntaxes_dialog import TransferSyntaxesDialog
-from anonymizer.view.settings.logging_levels_dialog import LoggingLevelsDialog
 
 logger = logging.getLogger(__name__)
 

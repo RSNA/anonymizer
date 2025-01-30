@@ -1,10 +1,11 @@
 
 # List of HTML Tags supported by tkhtmlview:
 # see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support
+import re
 import tkinter as tk
+
 import customtkinter as ctk
 from tkhtmlview import HTMLScrolledText, RenderHTML
-import re
 
 
 class HTMLView(tk.Toplevel):

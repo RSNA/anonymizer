@@ -40,6 +40,9 @@ jobs:
       run: |
         poetry install --with dev --verbose
 
+    # - name: Ruff Linting and Formatting Check  
+    #   run: ruff check .src/anonymizer/ #Add --fix to the end to have it change the code.
+
     - name: Run Unit Tests
       env:
         PYTHONPATH: ${{ github.workspace }}/src

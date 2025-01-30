@@ -1,39 +1,40 @@
-from pathlib import Path
 import logging
-from math import ceil
-from enum import Enum
 from dataclasses import dataclass
-from pydicom import dcmread, Dataset
-from pydicom.pixel_data_handlers.util import apply_voi_lut, apply_modality_lut
+from enum import Enum
+from math import ceil
+from pathlib import Path
+
+import customtkinter as ctk
 import numpy as np
-from PIL import Image
 from cv2 import (
-    resize,
-    normalize,
-    # equalizeHist,
-    Canny,
-    cvtColor,
-    createCLAHE,
-    GaussianBlur,
-    dilate,
-    # morphologyEx,
-    # findContours,
-    # drawContours,
-    getStructuringElement,
-    INTER_AREA,
-    NORM_MINMAX,
-    CV_8U,
     COLOR_RGB2GRAY,
+    CV_8U,
+    INTER_AREA,
     MORPH_RECT,
     # MORPH_CLOSE,
     # RETR_EXTERNAL,
     # CHAIN_APPROX_SIMPLE,
     # FILLED,
+    NORM_MINMAX,
+    # equalizeHist,
+    Canny,
+    GaussianBlur,
+    createCLAHE,
+    cvtColor,
+    dilate,
+    # morphologyEx,
+    # findContours,
+    # drawContours,
+    getStructuringElement,
+    normalize,
+    resize,
 )
-import customtkinter as ctk
+from PIL import Image
+from pydicom import Dataset, dcmread
+from pydicom.pixel_data_handlers.util import apply_modality_lut, apply_voi_lut
+
 from anonymizer.utils.storage import get_dcm_files
 from anonymizer.utils.translate import _
-
 
 logger = logging.getLogger(__name__)
 

@@ -1,12 +1,14 @@
-from typing import Union
+import logging
 import tkinter as tk
+from tkinter import ttk
+from typing import Union
+
 import customtkinter as ctk
 from customtkinter import ThemeManager
-from tkinter import ttk
-import logging
-from anonymizer.utils.translate import _
-from anonymizer.utils.modalities import get_modalities
+
 from anonymizer.model.project import ProjectModel
+from anonymizer.utils.modalities import get_modalities
+from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 

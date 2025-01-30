@@ -14,29 +14,29 @@ The AnonymizerController class performs the following tasks:
 For more information, refer to the legacy anonymizer documentation: https://mircwiki.rsna.org/index.php?title=The_CTP_DICOM_Anonymizer
 """
 
-import os
-import time
-from enum import Enum
-from shutil import copyfile
-import re
-import logging
-import threading
 import hashlib
+import logging
+import os
 import pickle
+import re
+import threading
+import time
 from datetime import datetime, timedelta
+from enum import Enum
 from pathlib import Path
 from queue import Queue
-from pydicom import Dataset, Sequence, dcmread
-from pydicom.errors import InvalidDicomError
+from shutil import copyfile
+
 import torch
 from easyocr import Reader
+from pydicom import Dataset, Sequence, dcmread
+from pydicom.errors import InvalidDicomError
 
-from anonymizer.utils.translate import _
-from anonymizer.utils.storage import DICOM_FILE_SUFFIX
-from anonymizer.model.project import DICOMNode, ProjectModel
-from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.controller.remove_pixel_phi import remove_pixel_phi
-
+from anonymizer.model.anonymizer import AnonymizerModel
+from anonymizer.model.project import DICOMNode, ProjectModel
+from anonymizer.utils.storage import DICOM_FILE_SUFFIX
+from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 

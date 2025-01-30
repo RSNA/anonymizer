@@ -43,27 +43,31 @@ python-dotenv = "*"
 rsna-anonymizer = "anonymizer.anonymizer:main"
 
 [tool.ruff]
+target-version = "py312"
 line-length = 88
-select = ["E", "F", "W", "C90"]
-ignore = ["E501"]
+lint.select = [ # https://docs.astral.sh/ruff/linter/#rule-selection
+  "E",    # PyCodeStyle
+  "F",    # PyFlakes
+  "W",    # PyCodeStyle
+  "I",    # iSort
+  "B",    # flake8-bugbear
+  "SIM",  # flake8-simplify
+  "C90",  # mccabe
+  ] 
 
-[tool.black]
-line-length = 88
-target-version = ['py311', 'py312']
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | _build
-  | build
-  | dist
-)/
-'''
+lint.fixable = [
+  "I001", # Import block is un-sorted or un-formatted
+  "W292", # No newline at end of file
+  "W293", # Blank line contains whitespace
+  "W291", # Trailing whitespace
+  "F401", # Imported but unused
+  ]
+
+lint.ignore = [
+  "E501",   # Line too long
+  "SIM102"  # Nested if statements
+  ]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--verbose --show-capture=all --cov=src/anonymizer --cov-report=term-missing"

@@ -1,8 +1,10 @@
-from typing import Union, Tuple
-import tkinter as tk
-import customtkinter as ctk
-import string
 import logging
+import string
+import tkinter as tk
+from typing import Tuple, Union
+
+import customtkinter as ctk
+
 from anonymizer.model.project import AWSCognito
 from anonymizer.utils.translate import _
 from anonymizer.utils.ux_fields import str_entry

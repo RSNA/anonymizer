@@ -1,7 +1,8 @@
 import customtkinter as ctk
-from PIL import Image
-from anonymizer.utils.translate import _, language_to_code, get_current_language
 from customtkinter import ThemeManager
+from PIL import Image
+
+from anonymizer.utils.translate import _, get_current_language, language_to_code
 
 
 class WelcomeView(ctk.CTkFrame):

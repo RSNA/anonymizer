@@ -3,18 +3,20 @@ This module contains the AnonymizerModel class, which is responsible for storing
 and anonymization lookups. It also includes data classes for Series, Study, and PHI, as well as a Totals namedtuple.
 """
 
-from typing import List
-from collections import namedtuple
-from pathlib import Path
-from bidict import bidict
 import logging
-import threading
 import pickle
 import shutil
-from dataclasses import dataclass, field
-from pprint import pformat
+import threading
 import xml.etree.ElementTree as ET
+from collections import namedtuple
+from dataclasses import dataclass, field
+from pathlib import Path
+from pprint import pformat
+from typing import List
+
+from bidict import bidict
 from pydicom import Dataset
+
 from anonymizer.model.project import DICOMNode
 from anonymizer.utils.storage import JavaAnonymizerExportedStudy
 

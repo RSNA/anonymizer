@@ -3,21 +3,23 @@ This module contains the ExportView class, which is a tkinter Toplevel window fo
 The ExportView class provides a user interface for selecting and exporting studies from a project.
 """
 
-import os
-from datetime import datetime
 import logging
-from queue import Queue, Empty, Full
+import os
 import tkinter as tk
-from tkinter import ttk, messagebox
+from datetime import datetime
+from queue import Empty, Full, Queue
+from tkinter import messagebox, ttk
+
 import customtkinter as ctk
-from anonymizer.model.project import ProjectModel
+
 from anonymizer.controller.project import (
-    ProjectController,
     ExportPatientsRequest,
     ExportPatientsResponse,
+    ProjectController,
 )
-from anonymizer.utils.translate import _
+from anonymizer.model.project import ProjectModel
 from anonymizer.utils.storage import count_studies_series_images
+from anonymizer.utils.translate import _
 from anonymizer.view.dashboard import Dashboard
 from anonymizer.view.pixels import PixelsView
 

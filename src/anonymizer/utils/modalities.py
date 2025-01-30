@@ -1,4 +1,5 @@
 from typing import Dict, Tuple
+
 from anonymizer.utils.translate import _
 
 # List of supported Modalities

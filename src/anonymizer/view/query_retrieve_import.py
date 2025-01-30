@@ -1,17 +1,24 @@
 import logging
-import string
 import re
+import string
 import tkinter as tk
+from queue import Queue
 from tkinter import filedialog, messagebox, ttk
+
 import customtkinter as ctk
 from pydicom import Dataset
-from queue import Queue
-from anonymizer.controller.dicom_C_codes import C_FAILURE, C_PENDING_A, C_PENDING_B, C_SUCCESS
+
+from anonymizer.controller.dicom_C_codes import (
+    C_FAILURE,
+    C_PENDING_A,
+    C_PENDING_B,
+    C_SUCCESS,
+)
 from anonymizer.controller.project import (
     FindStudyRequest,
     FindStudyResponse,
-    StudyUIDHierarchy,
     ProjectController,
+    StudyUIDHierarchy,
 )
 from anonymizer.utils.storage import count_study_images
 from anonymizer.utils.translate import _
@@ -21,8 +28,8 @@ from anonymizer.utils.ux_fields import (
     patient_name_max_chars,
     str_entry,
 )
-from anonymizer.view.import_studies_dialog import ImportStudiesDialog
 from anonymizer.view.dashboard import Dashboard
+from anonymizer.view.import_studies_dialog import ImportStudiesDialog
 
 logger = logging.getLogger(__name__)
 

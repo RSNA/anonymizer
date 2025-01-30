@@ -11,10 +11,11 @@ Functions:
 - int_entry() -> ctk.IntVar: Creates an integer entry field with label, initial value, and range.
 """
 
+import logging
 import string
 import tkinter as tk
+
 import customtkinter as ctk
-import logging
 
 # Entry Limits:
 

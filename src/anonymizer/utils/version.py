@@ -1,6 +1,7 @@
 import importlib.metadata
-import toml
 from pathlib import Path
+
+import toml
 
 # poetry version [command]:
 

@@ -12,13 +12,13 @@ Classes:
 """
 
 import os
-from typing import Union, Optional
 from dataclasses import dataclass
 from pathlib import Path
-from openpyxl import Workbook, load_workbook
-from openpyxl.worksheet.worksheet import Worksheet
-from openpyxl.workbook.child import _WorkbookChild
+from typing import Optional, Union
 
+from openpyxl import Workbook, load_workbook
+from openpyxl.workbook.child import _WorkbookChild
+from openpyxl.worksheet.worksheet import Worksheet
 
 DICOM_FILE_SUFFIX = ".dcm"
 

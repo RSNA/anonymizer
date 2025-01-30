@@ -3,14 +3,16 @@ This module contains the ProjectModel class and related data classes for storing
 """
 
 import time
-from logging import DEBUG, WARNING, getLevelName
-from pprint import pformat
 from copy import copy, deepcopy
-from typing import Dict, List
-from dataclasses import dataclass, field, asdict
-from dataclasses_json import dataclass_json, config
+from dataclasses import asdict, dataclass, field
+from logging import DEBUG, WARNING, getLevelName
 from pathlib import Path
+from pprint import pformat
+from typing import Dict, List
+
+from dataclasses_json import config, dataclass_json
 from pynetdicom._globals import DEFAULT_TRANSFER_SYNTAXES
+
 from anonymizer.utils.modalities import get_modalities
 from anonymizer.utils.translate import _
 from anonymizer.utils.version import get_version

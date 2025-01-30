@@ -1,10 +1,12 @@
-from typing import Union
-import tkinter as tk
-import customtkinter as ctk
 import logging
+import tkinter as tk
+from typing import Union
+
+import customtkinter as ctk
+
+from anonymizer.model.project import NetworkTimeouts
 from anonymizer.utils.translate import _
 from anonymizer.utils.ux_fields import int_entry
-from anonymizer.model.project import NetworkTimeouts
 
 logger = logging.getLogger(__name__)
 
