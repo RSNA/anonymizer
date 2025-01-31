@@ -45,6 +45,7 @@ rsna-anonymizer = "anonymizer.anonymizer:main"
 [tool.ruff]
 target-version = "py312"
 line-length = 88
+
 lint.select = [ # https://docs.astral.sh/ruff/linter/#rule-selection
   "E",    # PyCodeStyle
   "F",    # PyFlakes
@@ -65,8 +66,12 @@ lint.fixable = [
 
 lint.ignore = [
   "E501",   # Line too long
-  "SIM102"  # Nested if statements
+  "SIM102",  # Nested if statements
+  "C901", #TEMP
   ]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 15 
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

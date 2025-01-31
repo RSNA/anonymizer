@@ -19,10 +19,12 @@ def get_version() -> str:
     try:
         # Try to get the version from the installed package metadata
         return importlib.metadata.version("rsna-anonymizer")
-    except importlib.metadata.PackageNotFoundError:
+    except importlib.metadata.PackageNotFoundError as e:
         # Fallback to reading the version from pyproject.toml
-        pyproject_path = Path(__file__).resolve().parent.parent.parent.parent / "pyproject.toml"
+        pyproject_path = (
+            Path(__file__).resolve().parent.parent.parent.parent / "pyproject.toml"
+        )
         if not pyproject_path.exists():
-            raise FileNotFoundError("pyproject.toml not found")
+            raise FileNotFoundError("pyproject.toml not found") from e
         pyproject_data = toml.load(pyproject_path)
         return pyproject_data["tool"]["poetry"]["version"]

@@ -65,13 +65,19 @@ class Anonymizer(ctk.CTk):
         logging.info(f"ctk.ThemeManager.theme:\n{pformat(ThemeManager.theme)}")
         self.mono_font = self._init_mono_font()
         # Font for main menu items, size is not consistent across platforms
-        self.menu_font = None  # tkFont.Font(size=13 if platform.system() == "Darwin" else 11)
+        self.menu_font = (
+            None  # tkFont.Font(size=13 if platform.system() == "Darwin" else 11)
+        )
 
         ctk.AppearanceModeTracker.add(self._appearance_mode_change)
-        self._appearance_mode_change(ctk.get_appearance_mode())  # initialize non-ctk widget styles
+        self._appearance_mode_change(
+            ctk.get_appearance_mode()
+        )  # initialize non-ctk widget styles
 
         if sys.platform.startswith("win"):
-            self.iconbitmap("assets\\icons\\rsna_icon.ico", default="assets\\icons\\rsna_icon.ico")
+            self.iconbitmap(
+                "assets\\icons\\rsna_icon.ico", default="assets\\icons\\rsna_icon.ico"
+            )
 
         self.recent_project_dirs: list[Path] = []
         self.current_open_project_dir: Path | None = None
@@ -102,7 +108,9 @@ class Anonymizer(ctk.CTk):
                 return ctk.CTkFont(family, size, weight)
             if "font" in tv_theme:
                 if os_map[platform.system()] not in tv_theme["font"]:
-                    logger.error(f"invalid font OS specified for Treeview theme: {tv_theme}")
+                    logger.error(
+                        f"invalid font OS specified for Treeview theme: {tv_theme}"
+                    )
                     return ctk.CTkFont(family, size, weight)
                 tv_theme_font = tv_theme["font"][os_map[platform.system()]]
                 if "family" in tv_theme_font:
@@ -120,10 +128,18 @@ class Anonymizer(ctk.CTk):
         # ttk Widgets, handling Light/Dark mode using ThemeManager
         # Treeview Customisation
         # Treeview defaults:
-        bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
-        text_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkLabel"]["text_color"])
-        selected_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["text_color"])
-        selected_bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["fg_color"])
+        bg_color = self._apply_appearance_mode(
+            ctk.ThemeManager.theme["CTkFrame"]["fg_color"]
+        )
+        text_color = self._apply_appearance_mode(
+            ctk.ThemeManager.theme["CTkLabel"]["text_color"]
+        )
+        selected_color = self._apply_appearance_mode(
+            ctk.ThemeManager.theme["CTkButton"]["text_color"]
+        )
+        selected_bg_color = self._apply_appearance_mode(
+            ctk.ThemeManager.theme["CTkButton"]["fg_color"]
+        )
         # Treeview from ThemeManager:
         if "Treeview" in ctk.ThemeManager.theme:
             tv_theme = ctk.ThemeManager.theme["Treeview"]
@@ -134,7 +150,9 @@ class Anonymizer(ctk.CTk):
             if "selected_color" in tv_theme:
                 selected_color = self._apply_appearance_mode(tv_theme["selected_color"])
             if "selected_bg_color" in tv_theme:
-                selected_bg_color = self._apply_appearance_mode(tv_theme["selected_bg_color"])
+                selected_bg_color = self._apply_appearance_mode(
+                    tv_theme["selected_bg_color"]
+                )
 
         treestyle = ttk.Style()
         treestyle.configure(
@@ -177,9 +195,13 @@ class Anonymizer(ctk.CTk):
 
         # Update dashboard if anonymizer model has changed:
         if self.dashboard:
-            self.dashboard.update_anonymizer_queues(*self.controller.anonymizer.queued())
+            self.dashboard.update_anonymizer_queues(
+                *self.controller.anonymizer.queued()
+            )
             if self.controller.anonymizer.model_changed():
-                self.dashboard.update_totals(self.controller.anonymizer.model.get_totals())
+                self.dashboard.update_totals(
+                    self.controller.anonymizer.model.get_totals()
+                )
 
         self.after(self.metrics_loop_interval, self.metrics_loop)
 
@@ -196,11 +218,15 @@ class Anonymizer(ctk.CTk):
                 else:
                     logger.info("language not found in config file, resort to default")
 
-                self.recent_project_dirs = [Path(dir) for dir in config_data.get("recent_project_dirs", [])]
+                self.recent_project_dirs = [
+                    Path(dir) for dir in config_data.get("recent_project_dirs", [])
+                ]
                 for dir in self.recent_project_dirs:
                     if not dir.exists():
                         self.recent_project_dirs.remove(dir)
-                self.current_open_project_dir = config_data.get("current_open_project_dir")
+                self.current_open_project_dir = config_data.get(
+                    "current_open_project_dir"
+                )
                 if not os.path.exists(str(self.current_open_project_dir)):
                     self.current_open_project_dir = None
         except FileNotFoundError:
@@ -225,7 +251,10 @@ class Anonymizer(ctk.CTk):
                 json.dump(config_data, config_file, indent=2)
 
         except Exception as e:
-            err_msg = _("Error writing json config file: ") + f"{str(app_state_path)} : {repr(e)}"
+            err_msg = (
+                _("Error writing json config file: ")
+                + f"{str(app_state_path)} : {repr(e)}"
+            )
             logger.error(err_msg)
             messagebox.showerror(
                 title=_("Configuration File Write Error"),
@@ -259,14 +288,22 @@ class Anonymizer(ctk.CTk):
             logger.info("New Project Cancelled, storage directory not set")
             messagebox.showerror(
                 title=_("New Project Error"),
-                message=_("Storage Directory not set, please set a valid directory in project settings."),
+                message=_(
+                    "Storage Directory not set, please set a valid directory in project settings."
+                ),
                 parent=self,
             )
             self.enable_file_menu()
             return
 
-        project_model_path = Path(model.storage_dir, ProjectController.PROJECT_MODEL_FILENAME_JSON)
-        if model.storage_dir.exists() and model.storage_dir.is_dir() and project_model_path.exists():
+        project_model_path = Path(
+            model.storage_dir, ProjectController.PROJECT_MODEL_FILENAME_JSON
+        )
+        if (
+            model.storage_dir.exists()
+            and model.storage_dir.is_dir()
+            and project_model_path.exists()
+        ):
             confirm = messagebox.askyesno(
                 title=_("Confirm Overwrite"),
                 message=_("The project directory already exists.")
@@ -283,10 +320,13 @@ class Anonymizer(ctk.CTk):
             try:
                 shutil.rmtree(model.storage_dir)
             except Exception as e:
-                logger.error(f"Error deleting existing project directory: {model.storage_dir}, {str(e)}")
+                logger.error(
+                    f"Error deleting existing project directory: {model.storage_dir}, {str(e)}"
+                )
                 messagebox.showerror(
                     title=_("New Project Error"),
-                    message=_("Error deleting existing project directory") + f": {model.storage_dir}\n\n {str(e)}",
+                    message=_("Error deleting existing project directory")
+                    + f": {model.storage_dir}\n\n {str(e)}",
                     parent=self,
                 )
                 self.enable_file_menu()
@@ -297,10 +337,14 @@ class Anonymizer(ctk.CTk):
         try:
             self.controller = ProjectController(model)
             if not self.controller:
-                raise RuntimeError(_("Fatal Internal Error, Project Controller not created"))
+                raise RuntimeError(
+                    _("Fatal Internal Error, Project Controller not created")
+                )
 
             if java_phi_studies:
-                self.controller.anonymizer.model.process_java_phi_studies(java_phi_studies)
+                self.controller.anonymizer.model.process_java_phi_studies(
+                    java_phi_studies
+                )
 
             self.controller.save_model()
 
@@ -308,7 +352,9 @@ class Anonymizer(ctk.CTk):
 
             self.current_open_project_dir = self.controller.model.storage_dir
 
-            if self.current_open_project_dir and not self.is_recent_directory(self.current_open_project_dir):
+            if self.current_open_project_dir and not self.is_recent_directory(
+                self.current_open_project_dir
+            ):
                 self.recent_project_dirs.insert(0, self.current_open_project_dir)
                 self.save_config()
 
@@ -340,15 +386,23 @@ class Anonymizer(ctk.CTk):
                     with open(backup_filepath, "r") as f:
                         file_model = ProjectModel.from_json(f.read())
                     if not isinstance(file_model, ProjectModel):
-                        raise TypeError("Loaded backup object is not an instance of ProjectModel")
-                    logger.warning(f"Loaded Project Model from backup file: {backup_filepath}")
+                        raise TypeError(
+                            "Loaded backup object is not an instance of ProjectModel"
+                        )
+                    logger.warning(
+                        f"Loaded Project Model from backup file: {backup_filepath}"
+                    )
                     return file_model
                 except Exception as e:
                     logger.error(f"Backup Project Model datafile corrupt: {e}")
-                    raise RuntimeError(f"Project datafile: {backup_filepath} and backup file corrupt\n\n{str(e)}")
+                    raise RuntimeError(
+                        f"Project datafile: {backup_filepath} and backup file corrupt\n\n{str(e)}"
+                    ) from e
             else:
                 logger.error(f"Project Model datafile corrupt: {e}")
-                raise RuntimeError(f"Project Model datafile: {json_filepath} corrupt\n\n{str(e)}")
+                raise RuntimeError(
+                    f"Project Model datafile: {json_filepath} corrupt\n\n{str(e)}"
+                ) from e
 
     def open_project(self, project_dir: Path | None = None):
         logger.debug("open_project")
@@ -372,37 +426,49 @@ class Anonymizer(ctk.CTk):
 
         # For backward compatibilty load pickle file format of ProjectModel if it exists:
         # Get project pkl filename from project directory
-        project_model_path = Path(project_dir, ProjectController.PROJECT_MODEL_FILENAME_PKL)
+        project_model_path = Path(
+            project_dir, ProjectController.PROJECT_MODEL_FILENAME_PKL
+        )
         if project_model_path.exists() and project_model_path.is_file():
             try:
                 with open(project_model_path, "rb") as pkl_file:
-                    logger.warning(f"Loading Project Model from legacy pickle file: {project_model_path}")
+                    logger.warning(
+                        f"Loading Project Model from legacy pickle file: {project_model_path}"
+                    )
                     file_model = pickle.load(pkl_file)
                     if not isinstance(file_model, ProjectModel):
-                        raise TypeError(_("Corruption detected: Loaded model is not an instance of ProjectModel"))
+                        raise TypeError(
+                            _(
+                                "Corruption detected: Loaded model is not an instance of ProjectModel"
+                            )
+                        )
                     # DELETE the pickle file after successful loading, saving will be in json from now on:
                     os.remove(project_model_path)
             except Exception as e:
                 logger.error(f"Error loading Project Model: {str(e)}")
                 messagebox.showerror(
                     title=_("Open Project Error"),
-                    message=_("Error loading Project Model from legacy pickle data file")
+                    message=_(
+                        "Error loading Project Model from legacy pickle data file"
+                    )
                     + f": {project_model_path}\n\n{str(e)}",
                     parent=self,
                 )
                 self.enable_file_menu()
                 return
         else:
-            project_model_path = Path(project_dir, ProjectController.PROJECT_MODEL_FILENAME_JSON)
+            project_model_path = Path(
+                project_dir, ProjectController.PROJECT_MODEL_FILENAME_JSON
+            )
             if project_model_path.exists() and project_model_path.is_file():
-
                 try:
                     file_model = self.load_model(project_model_path)
                 except Exception as e:
                     logger.error(f"Error loading Project Model: {str(e)}")
                     messagebox.showerror(
                         title=_("Open Project Error"),
-                        message=_("Error loading Project Model from data file") + f": {project_model_path}\n\n{str(e)}",
+                        message=_("Error loading Project Model from data file")
+                        + f": {project_model_path}\n\n{str(e)}",
                         parent=self,
                     )
                     self.enable_file_menu()
@@ -447,7 +513,9 @@ class Anonymizer(ctk.CTk):
 
         # Ensure Current Language matches Project Language:
         if model.language_code != get_current_language_code():
-            logger.error(f"Project Model language mismatch {model.language_code} != {get_current_language_code()}")
+            logger.error(
+                f"Project Model language mismatch {model.language_code} != {get_current_language_code()}"
+            )
             messagebox.showerror(
                 title=_("Open Project Error"),
                 message=_("Project language mismatch") + f": {model.language_code}",
@@ -459,10 +527,14 @@ class Anonymizer(ctk.CTk):
         try:
             self.controller = ProjectController(model)
             if not self.controller:
-                raise RuntimeError(_("Fatal Internal Error, Project Controller not created"))
+                raise RuntimeError(
+                    _("Fatal Internal Error, Project Controller not created")
+                )
 
             if file_model.version != ProjectModel.MODEL_VERSION:
-                logger.warning(f"Project Model upgraded successfully to version: {self.controller.model.version}")
+                logger.warning(
+                    f"Project Model upgraded successfully to version: {self.controller.model.version}"
+                )
 
             self.controller.save_model()
         except Exception as e:
@@ -497,7 +569,9 @@ class Anonymizer(ctk.CTk):
         try:
             self.controller.start_scp()
         except DICOMRuntimeError as e:
-            messagebox.showerror(title=_("Local DICOM Server Error"), message=str(e), parent=self)
+            messagebox.showerror(
+                title=_("Local DICOM Server Error"), message=str(e), parent=self
+            )
 
         self.title(
             f"{self.controller.model.project_name}[{self.controller.model.site_id}] => {self.controller.model.abridged_storage_dir()}"
@@ -549,7 +623,9 @@ class Anonymizer(ctk.CTk):
             logger.info("QueryView busy, cannot close project")
             messagebox.showerror(
                 title=_("Query Busy"),
-                message=_("Query is busy, please wait for query to complete before closing project."),
+                message=_(
+                    "Query is busy, please wait for query to complete before closing project."
+                ),
                 parent=self,
             )
             return
@@ -557,7 +633,9 @@ class Anonymizer(ctk.CTk):
             logger.info("ExportView busy, cannot close project")
             messagebox.showerror(
                 title=_("Export Busy"),
-                message=_("Export is busy, please wait for export to complete before closing project."),
+                message=_(
+                    "Export is busy, please wait for export to complete before closing project."
+                ),
                 parent=self,
             )
             return
@@ -618,10 +696,14 @@ class Anonymizer(ctk.CTk):
         cloned_project_dir = Path(clone_dir_str)
 
         if cloned_project_dir == current_project_dir:
-            logger.info("Clone Project Cancelled, cloned directory same as current project directory")
+            logger.info(
+                "Clone Project Cancelled, cloned directory same as current project directory"
+            )
             messagebox.showerror(
                 title=_("Clone Project Error"),
-                message=_("Cloned directory cannot be the same as the current project directory."),
+                message=_(
+                    "Cloned directory cannot be the same as the current project directory."
+                ),
                 parent=self,
             )
             return
@@ -633,7 +715,9 @@ class Anonymizer(ctk.CTk):
         cloned_model.storage_dir = cloned_project_dir
         cloned_model.project_name = f"{cloned_model.project_name} (Clone)"
 
-        dlg = SettingsDialog(self, cloned_model, new_model=True, title=_("Edit Cloned Project Settings"))
+        dlg = SettingsDialog(
+            self, cloned_model, new_model=True, title=_("Edit Cloned Project Settings")
+        )
         (edited_model, null_java_phi) = dlg.get_input()
         if edited_model is None:
             logger.info("Edit Cloned Project Settings Cancelled")
@@ -652,7 +736,9 @@ class Anonymizer(ctk.CTk):
             )  # this will recreate AnonymizerController and restart associated worker threads
 
             if not self.controller:
-                raise RuntimeError(_("Fatal Internal Error, Project Controller not created"))
+                raise RuntimeError(
+                    _("Fatal Internal Error, Project Controller not created")
+                )
 
             self.controller.save_model()
             logger.info(f"Project cloned successfully: {self.controller}")
@@ -737,16 +823,25 @@ class Anonymizer(ctk.CTk):
             try:
                 ds = dcmread(fp=dicomdir_file)
                 root_dir = Path(str(ds.filename)).resolve().parent
-                msg = _("Reading DICOMDIR Root directory" + f": {Path(root_dir).stem}...")
+                msg = _(
+                    "Reading DICOMDIR Root directory" + f": {Path(root_dir).stem}..."
+                )
                 logger.info(msg)
                 self.dashboard.set_status(msg)
 
                 # Iterate through the PATIENT records
                 for patient in ds.patient_records:
-                    logger.info(f"PATIENT: PatientID={patient.PatientID}, " f"PatientName={patient.PatientName}")
+                    logger.info(
+                        f"PATIENT: PatientID={patient.PatientID}, "
+                        f"PatientName={patient.PatientName}"
+                    )
 
                     # Find all the STUDY records for the patient
-                    studies = [ii for ii in patient.children if ii.DirectoryRecordType == "STUDY"]
+                    studies = [
+                        ii
+                        for ii in patient.children
+                        if ii.DirectoryRecordType == "STUDY"
+                    ]
                     for study in studies:
                         descr = study.StudyDescription or "(no value available)"
                         logging.info(
@@ -755,13 +850,23 @@ class Anonymizer(ctk.CTk):
                         )
 
                         # Find all the SERIES records in the study
-                        all_series = [ii for ii in study.children if ii.DirectoryRecordType == "SERIES"]
+                        all_series = [
+                            ii
+                            for ii in study.children
+                            if ii.DirectoryRecordType == "SERIES"
+                        ]
                         for series in all_series:
                             # Find all the IMAGE records in the series
-                            images = [ii for ii in series.children if ii.DirectoryRecordType == "IMAGE"]
+                            images = [
+                                ii
+                                for ii in series.children
+                                if ii.DirectoryRecordType == "IMAGE"
+                            ]
                             plural = ("", "s")[len(images) > 1]
 
-                            descr = getattr(series, "SeriesDescription", "(no value available)")
+                            descr = getattr(
+                                series, "SeriesDescription", "(no value available)"
+                            )
                             logging.info(
                                 f"{'  ' * 2}SERIES: SeriesNumber={series.SeriesNumber}, "
                                 f"Modality={series.Modality}, SeriesDescription={descr} - "
@@ -772,7 +877,9 @@ class Anonymizer(ctk.CTk):
                             # Each IMAGE contains a relative file path to the root directory
                             elems = [ii["ReferencedFileID"] for ii in images]
                             # Make sure the relative file path is always a list of str
-                            paths = [[ee.value] if ee.VM == 1 else ee.value for ee in elems]
+                            paths = [
+                                [ee.value] if ee.VM == 1 else ee.value for ee in elems
+                            ]
                             paths = [f"{root_dir}/{Path(*fp)}" for fp in paths]
 
                             # List the instance file paths for this series
@@ -834,7 +941,10 @@ class Anonymizer(ctk.CTk):
             self.enable_file_menu()
             return
 
-        msg = _("Importing") + f" {len(file_paths)} {_('file') if len(file_paths) == 1 else _('files')}"
+        msg = (
+            _("Importing")
+            + f" {len(file_paths)} {_('file') if len(file_paths) == 1 else _('files')}"
+        )
         logger.info(msg)
         self.dashboard.set_status(msg)
 
@@ -903,7 +1013,9 @@ class Anonymizer(ctk.CTk):
             logger.info("QueryView busy, cannot open SettingsDialog")
             messagebox.showerror(
                 title=_("Query Busy"),
-                message=_("Query is busy, please wait for query to complete before changing settings."),
+                message=_(
+                    "Query is busy, please wait for query to complete before changing settings."
+                ),
                 parent=self,
             )
             return
@@ -912,7 +1024,9 @@ class Anonymizer(ctk.CTk):
             logger.info("ExportView busy, cannot open SettingsDialog")
             messagebox.showerror(
                 title=_("Export Busy"),
-                message=_("Export is busy, please wait for export to complete before changing settings."),
+                message=_(
+                    "Export is busy, please wait for export to complete before changing settings."
+                ),
                 parent=self,
             )
             return
@@ -930,7 +1044,9 @@ class Anonymizer(ctk.CTk):
         if self.controller.model.remove_pixel_phi != edited_model.remove_pixel_phi:
             messagebox.showwarning(
                 title=_("Project restart"),
-                message=_("The settings change will take effect when the project is next opened."),
+                message=_(
+                    "The settings change will take effect when the project is next opened."
+                ),
                 parent=self,
             )
 
@@ -952,17 +1068,23 @@ class Anonymizer(ctk.CTk):
                 view.deiconify()
                 return
 
-        self.help_views[view_name] = HTMLView(self, title=view_name, html_file_path=html_file_path.as_posix())
+        self.help_views[view_name] = HTMLView(
+            self, title=view_name, html_file_path=html_file_path.as_posix()
+        )
         self.help_views[view_name].focus()
 
     def get_help_menu(self, menu_bar: tk.Menu):
         help_menu = tk.Menu(menu_bar, tearoff=0)
         # Get all html files in assets/locale/*/html/ directory
         # Sort by filename number prefix
-        html_dir = Path("assets/locales/" + str(get_current_language_code() or "en_US") + "/html/")
-        html_file_paths = sorted(html_dir.glob("*.html"), key=lambda path: int(path.stem.split("_")[0]))
+        html_dir = Path(
+            "assets/locales/" + str(get_current_language_code() or "en_US") + "/html/"
+        )
+        html_file_paths = sorted(
+            html_dir.glob("*.html"), key=lambda path: int(path.stem.split("_")[0])
+        )
 
-        for index, html_file_path in enumerate(html_file_paths):
+        for _index, html_file_path in enumerate(html_file_paths):
             label = self.help_filename_to_title(html_file_path)
             help_menu.add_command(
                 label=label,
@@ -1009,7 +1131,9 @@ class Anonymizer(ctk.CTk):
         # File Menu:
         file_menu = tk.Menu(self, tearoff=0)
         file_menu.add_command(label=_("Import Files"), command=self.import_files)
-        file_menu.add_command(label=_("Import Directory"), command=self.import_directory)
+        file_menu.add_command(
+            label=_("Import Directory"), command=self.import_directory
+        )
 
         file_menu.add_separator()
 
@@ -1078,7 +1202,6 @@ def signal_handler(signum, frame):
 
 
 def run_HEADLESS(project_model_path: Path):
-
     if not project_model_path.exists():
         logger.error(_("Project Model file not found") + f": {project_model_path}")
         return
@@ -1091,7 +1214,11 @@ def run_HEADLESS(project_model_path: Path):
         with open(project_model_path, "rb") as pkl_file:
             file_model = pickle.load(pkl_file)
             if not isinstance(file_model, ProjectModel):
-                raise TypeError(_("Corruption detected: Loaded model is not an instance of ProjectModel"))
+                raise TypeError(
+                    _(
+                        "Corruption detected: Loaded model is not an instance of ProjectModel"
+                    )
+                )
     except Exception as e:
         logger.error(f"Error loading Project Model: {str(e)}")
         return
@@ -1102,7 +1229,9 @@ def run_HEADLESS(project_model_path: Path):
         logger.error("Project Model missing version")
         return
 
-    logger.info(_("Project Model loaded successfully, version") + f": {file_model.version}")
+    logger.info(
+        _("Project Model loaded successfully, version") + f": {file_model.version}"
+    )
 
     if file_model.version != ProjectModel.MODEL_VERSION:
         logger.info(
@@ -1113,7 +1242,9 @@ def run_HEADLESS(project_model_path: Path):
         model = ProjectModel()  # new default model
         # TODO: Handle 2 level nested classes/dicts copying by attribute
         # to handle addition or nested fields and deletion of attributes in new model
-        model.__dict__.update(file_model.__dict__)  # copy over corresponding attributes from the old model (file_model)
+        model.__dict__.update(
+            file_model.__dict__
+        )  # copy over corresponding attributes from the old model (file_model)
         model.version = ProjectModel.MODEL_VERSION  # update to latest version
     else:
         model = file_model
@@ -1121,11 +1252,18 @@ def run_HEADLESS(project_model_path: Path):
     try:
         controller = ProjectController(model)
         if not controller:
-            raise RuntimeError(_("Fatal Internal Error, Project Controller not created"))
+            raise RuntimeError(
+                _("Fatal Internal Error, Project Controller not created")
+            )
 
         if file_model.version != ProjectModel.MODEL_VERSION:
             controller.save_model()
-            logger.info(_("Project Model upgraded successfully to version" + f": {controller.model.version}"))
+            logger.info(
+                _(
+                    "Project Model upgraded successfully to version"
+                    + f": {controller.model.version}"
+                )
+            )
 
     except Exception as e:
         logger.error(f"Error creating Project Controller: {str(e)}")
@@ -1171,8 +1309,12 @@ def run_HEADLESS(project_model_path: Path):
 @click.option(
     "--config",
     "-c",
-    type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=Path),
-    help=_("Path to the configuration file. If not provided, the GUI will be launched."),
+    type=click.Path(
+        exists=True, file_okay=True, dir_okay=False, readable=True, path_type=Path
+    ),
+    help=_(
+        "Path to the configuration file. If not provided, the GUI will be launched."
+    ),
 )
 def main(config: Path = None):
     """
@@ -1188,7 +1330,9 @@ def main(config: Path = None):
     logger.info(f"Python Version: {sys.version_info.major}.{sys.version_info.minor}")
     logger.info(f"tkinter TkVersion: {tk.TkVersion} TclVersion: {tk.TclVersion}")
     logger.info(f"Customtkinter Version: {ctk.__version__}")
-    logger.info(f"pydicom Version: {pydicom_version}, pynetdicom Version: {pynetdicom_version}")
+    logger.info(
+        f"pydicom Version: {pydicom_version}, pynetdicom Version: {pynetdicom_version}"
+    )
 
     if config:
         run_HEADLESS(config)

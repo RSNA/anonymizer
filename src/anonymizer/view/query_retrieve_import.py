@@ -50,7 +50,12 @@ class QueryView(tk.Toplevel):
 
     ux_poll_find_response_interval = 250  # milli-seconds
 
-    def __init__(self, parent: Dashboard, project_controller: ProjectController, mono_font: ctk.CTkFont):
+    def __init__(
+        self,
+        parent: Dashboard,
+        project_controller: ProjectController,
+        mono_font: ctk.CTkFont,
+    ):
         """
         Initialize the QueryView.
 
@@ -126,7 +131,11 @@ class QueryView(tk.Toplevel):
             initial_value="",
             min_chars=0,
             max_chars=patient_name_max_chars,
-            charset=string.ascii_letters + string.digits + "- '^*?" + "À-ÖØ-öø-ÿ" + string.whitespace,
+            charset=string.ascii_letters
+            + string.digits
+            + "- '^*?"
+            + "À-ÖØ-öø-ÿ"
+            + string.whitespace,
             tooltipmsg=None,  # "Alphabetic ^ spaces * ? for wildcard",
             row=0,
             col=0,
@@ -188,7 +197,9 @@ class QueryView(tk.Toplevel):
             values=[""] + self._controller.model.modalities,
             variable=self._modality_var,
         )
-        self._modalities_optionmenu.grid(row=0, column=3, padx=PAD, pady=(PAD, 0), sticky="nw")
+        self._modalities_optionmenu.grid(
+            row=0, column=3, padx=PAD, pady=(PAD, 0), sticky="nw"
+        )
 
         self._load_accession_file_button = ctk.CTkButton(
             self._query_frame,
@@ -196,12 +207,19 @@ class QueryView(tk.Toplevel):
             text=_("Load Accession Numbers"),
             command=self._load_accession_file_button_pressed,
         )
-        self._load_accession_file_button.grid(row=0, column=6, padx=PAD, pady=(PAD, 0), sticky="w")
+        self._load_accession_file_button.grid(
+            row=0, column=6, padx=PAD, pady=(PAD, 0), sticky="w"
+        )
 
         self._show_imported_studies_switch = ctk.CTkSwitch(
-            self._query_frame, text=_("Show Imported Studies")  # ,command=self._show_imported_studies_switch_pressed
+            self._query_frame,
+            text=_(
+                "Show Imported Studies"
+            ),  # ,command=self._show_imported_studies_switch_pressed
         )
-        self._show_imported_studies_switch.grid(row=0, column=7, padx=PAD, pady=(PAD, 0), sticky="e")
+        self._show_imported_studies_switch.grid(
+            row=0, column=7, padx=PAD, pady=(PAD, 0), sticky="e"
+        )
 
         self._query_button = ctk.CTkButton(
             self._query_frame,
@@ -221,7 +239,9 @@ class QueryView(tk.Toplevel):
 
         # 2. RESULTS FRAME for Query Results:
         self._results_frame = ctk.CTkFrame(self)
-        self._results_frame.grid(row=1, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")
+        self._results_frame.grid(
+            row=1, column=0, padx=PAD, pady=(0, PAD), sticky="nswe"
+        )
 
         self._results_frame.grid_rowconfigure(0, weight=1)
         self._results_frame.grid_columnconfigure(0, weight=1)
@@ -233,7 +253,9 @@ class QueryView(tk.Toplevel):
             columns=self._query_results_column_keys,
         )
 
-        vertical_scrollbar = ttk.Scrollbar(self._results_frame, orient="vertical", command=self._query_results.yview)
+        vertical_scrollbar = ttk.Scrollbar(
+            self._results_frame, orient="vertical", command=self._query_results.yview
+        )
         vertical_scrollbar.grid(row=0, column=10, sticky="ns")
         self._query_results.configure(
             yscrollcommand=vertical_scrollbar.set
@@ -254,7 +276,9 @@ class QueryView(tk.Toplevel):
             )
 
         # Setup treeview item (study import status) display tags:
-        self._query_results.tag_configure("green", background="limegreen", foreground="white")
+        self._query_results.tag_configure(
+            "green", background="limegreen", foreground="white"
+        )
         self._query_results.tag_configure("red", background="red")
 
         # Disable Keyboard selection bindings:
@@ -281,7 +305,11 @@ class QueryView(tk.Toplevel):
 
         # Progress bar and status:
         col = 0
-        self._status = ctk.CTkLabel(self._status_frame, font=self._data_font, text=_("Found") + " __ " + _("Studies"))
+        self._status = ctk.CTkLabel(
+            self._status_frame,
+            font=self._data_font,
+            text=_("Found") + " __ " + _("Studies"),
+        )
 
         self._status.grid(row=0, column=col, padx=PAD, pady=PAD, sticky="w")
 
@@ -312,14 +340,22 @@ class QueryView(tk.Toplevel):
             text=_("Clear Selection"),
             command=self._clear_selection_button_pressed,
         )
-        self._clear_selection_button.grid(row=0, column=col, padx=PAD, pady=PAD, sticky="w")
+        self._clear_selection_button.grid(
+            row=0, column=col, padx=PAD, pady=PAD, sticky="w"
+        )
         col += 1
 
-        self._studies_selected_label = ctk.CTkLabel(self._status_frame, text=_("Studies Selected") + ": 0")
-        self._studies_selected_label.grid(row=0, column=col, padx=PAD, pady=PAD, sticky="w")
+        self._studies_selected_label = ctk.CTkLabel(
+            self._status_frame, text=_("Studies Selected") + ": 0"
+        )
+        self._studies_selected_label.grid(
+            row=0, column=col, padx=PAD, pady=PAD, sticky="w"
+        )
         col += 1
 
-        self._move_level_label = ctk.CTkLabel(self._status_frame, text=_("Move Level") + ":")
+        self._move_level_label = ctk.CTkLabel(
+            self._status_frame, text=_("Move Level") + ":"
+        )
         self._move_level_label.grid(row=0, column=7, padx=PAD, pady=PAD, sticky="e")
 
         self._move_level_var = ctk.StringVar(
@@ -332,7 +368,9 @@ class QueryView(tk.Toplevel):
             values=self.MOVE_LEVELS,
             variable=self._move_level_var,
         )
-        self._move_levels_optionmenu.grid(row=0, column=8, padx=PAD, pady=PAD, sticky="e")
+        self._move_levels_optionmenu.grid(
+            row=0, column=8, padx=PAD, pady=PAD, sticky="e"
+        )
         self._move_levels_optionmenu.focus_set()
 
         self._import_button = ctk.CTkButton(
@@ -377,7 +415,9 @@ class QueryView(tk.Toplevel):
             logger.info("Load Accession File disabled, query active")
             return
         self._acc_no_file_path = filedialog.askopenfilename(
-            title=_("Select text or csv file with list of accession numbers to retrieve"),
+            title=_(
+                "Select text or csv file with list of accession numbers to retrieve"
+            ),
             defaultextension=".txt",
             filetypes=[
                 ("Text Files", "*.txt"),
@@ -403,7 +443,9 @@ class QueryView(tk.Toplevel):
 
                 # Remove leading/trailing whitespaces and convert to uppercase for consistency
                 # Further processing in _query_button_pressed
-                self._acc_no_list = [acc_no.strip().upper() for acc_no in accession_numbers]
+                self._acc_no_list = [
+                    acc_no.strip().upper() for acc_no in accession_numbers
+                ]
 
         except Exception as e:
             messagebox.showerror(
@@ -456,11 +498,15 @@ class QueryView(tk.Toplevel):
             self._query_active = False
             self._enable_action_buttons()
             if self._acc_no_list:
-                logger.debug(f"- {len(self._acc_no_list)} NOT found: {self._acc_no_list}")
+                logger.debug(
+                    f"- {len(self._acc_no_list)} NOT found: {self._acc_no_list}"
+                )
                 # If processing accession numbers from file,
                 # write any not found to file based on input file name with "_not_found" appended:
                 if self._acc_no_file_path:
-                    not_found_file_path = f"{self._acc_no_file_path.split('.')[0]}_not_found.txt"
+                    not_found_file_path = (
+                        f"{self._acc_no_file_path.split('.')[0]}_not_found.txt"
+                    )
                     with open(not_found_file_path, "w") as file:
                         file.write("\n".join(self._acc_no_list))
 
@@ -469,7 +515,9 @@ class QueryView(tk.Toplevel):
                     )
                     messagebox.showwarning(
                         title=_("Accession Numbers not found"),
-                        message=_("Accession Numbers not found were written to text file")
+                        message=_(
+                            "Accession Numbers not found were written to text file"
+                        )
                         + ":\n {not_found_file_path}",
                         parent=self,
                     )
@@ -518,7 +566,9 @@ class QueryView(tk.Toplevel):
         # Entered by user or loaded from file:
         accession_no = self._accession_no_var.get().strip()
         if accession_no and "," in accession_no:
-            self._acc_no_list = [x.strip() for x in self._accession_no_var.get().split(",")]
+            self._acc_no_list = [
+                x.strip() for x in self._accession_no_var.get().split(",")
+            ]
             self._modalities_optionmenu.set("")
 
         if self._acc_no_list:
@@ -601,12 +651,18 @@ class QueryView(tk.Toplevel):
 
     def _update_query_progress(self):
         if self._studies_to_process == -1:
-            self._status.configure(text=_("Found") + f" {self._studies_processed} " + _("Studies"))
+            self._status.configure(
+                text=_("Found") + f" {self._studies_processed} " + _("Studies")
+            )
         else:
             studies_to_process = self._studies_to_process
             self._progressbar.set(self._studies_processed / self._studies_to_process)
             self._status.configure(
-                text=_("Found") + f" {self._studies_processed} " + _("of") + f" {studies_to_process}" + _("AccNos")
+                text=_("Found")
+                + f" {self._studies_processed} "
+                + _("of")
+                + f" {studies_to_process}"
+                + _("AccNos")
             )
 
     def _tree_select(self, event):
@@ -617,7 +673,8 @@ class QueryView(tk.Toplevel):
                 self._query_results.selection_remove(item)
         # Update selection count:
         self._studies_selected_label.configure(
-            text=_("Studies Selected") + f": {len(list(self._query_results.selection()))}"
+            text=_("Studies Selected")
+            + f": {len(list(self._query_results.selection()))}"
         )
         # Display Last Import Error in Error Frame if selected item has an associatd error:
         if len(selected) == 1:
@@ -639,7 +696,8 @@ class QueryView(tk.Toplevel):
     def _select_all_button_pressed(self):
         self._query_results.selection_set(*self._query_results.get_children())
         self._studies_selected_label.configure(
-            text=_("Studies Selected") + f": {len(list(self._query_results.selection()))}"
+            text=_("Studies Selected")
+            + f": {len(list(self._query_results.selection()))}"
         )
 
     def _clear_selection_button_pressed(self):
@@ -653,14 +711,22 @@ class QueryView(tk.Toplevel):
         for study in studies:
             current_values = list(self._query_results.item(study.uid, "values"))
             instances_to_import = study.get_number_of_instances()
-            patient_id = current_values[self._query_results_column_keys.index("PatientID")]
+            patient_id = current_values[
+                self._query_results_column_keys.index("PatientID")
+            ]
 
-            files_imported = self._images_stored_phi_lookup(patient_id, study.uid)  # reads file system FAT
+            files_imported = self._images_stored_phi_lookup(
+                patient_id, study.uid
+            )  # reads file system FAT
             # TODO: optimize, compare to using AnonymizerModel.get_stored_instance_count which uses in memory PHI lookup
             #       or trust study.pending_instances
-            current_values[self._query_results_column_keys.index("imported")] = str(files_imported)
+            current_values[self._query_results_column_keys.index("imported")] = str(
+                files_imported
+            )
             if study.last_error_msg:
-                current_values[self._query_results_column_keys.index("error")] = study.last_error_msg
+                current_values[self._query_results_column_keys.index("error")] = (
+                    study.last_error_msg
+                )
             self._query_results.item(study.uid, values=current_values)
             if instances_to_import > 0 and files_imported >= instances_to_import:
                 self._query_results.selection_remove(study.uid)
@@ -691,7 +757,9 @@ class QueryView(tk.Toplevel):
 
         # Double check if any selected studies are already stored/imported:
         unstored_study_uids = [
-            study_uid for study_uid in study_uids if not self._query_results.tag_has("green", study_uid)
+            study_uid
+            for study_uid in study_uids
+            if not self._query_results.tag_has("green", study_uid)
         ]
 
         if len(unstored_study_uids) == 0:
@@ -718,7 +786,9 @@ class QueryView(tk.Toplevel):
 
         self._disable_action_buttons()
 
-        dlg = ImportStudiesDialog(self, self._controller, studies, self._move_level_var.get())
+        dlg = ImportStudiesDialog(
+            self, self._controller, studies, self._move_level_var.get()
+        )
         imported_study_hierarchies = dlg.get_input()
 
         self._enable_action_buttons()
@@ -730,9 +800,13 @@ class QueryView(tk.Toplevel):
         if not anon_study_uid:
             return 0
 
-        anon_pt_id = self._controller.anonymizer.model.get_anon_patient_id(phi_patient_id)
+        anon_pt_id = self._controller.anonymizer.model.get_anon_patient_id(
+            phi_patient_id
+        )
         if anon_pt_id is None:
-            logger.error(f"Fatal Lookup Error for anon_patient_id where phi_patient_id={phi_patient_id}")
+            logger.error(
+                f"Fatal Lookup Error for anon_patient_id where phi_patient_id={phi_patient_id}"
+            )
             return 0
 
         # Actual file count from file system:
@@ -756,11 +830,17 @@ class QueryView(tk.Toplevel):
 
             study_uid = dataset.get("StudyInstanceUID", None)
             if study_uid is None:
-                logger.critical("Critical Internal error: Query result dataset does not have StudyInstanceUID")
+                logger.critical(
+                    "Critical Internal error: Query result dataset does not have StudyInstanceUID"
+                )
                 continue
 
             patient_id = dataset.get("PatientID", "")
-            images_stored_count = self._controller.anonymizer.model.get_stored_instance_count(patient_id, study_uid)
+            images_stored_count = (
+                self._controller.anonymizer.model.get_stored_instance_count(
+                    patient_id, study_uid
+                )
+            )
             # Actual file count from file system:
             # self._images_stored_phi_lookup(
             #     patient_id,
@@ -770,12 +850,20 @@ class QueryView(tk.Toplevel):
             # Note: dataset.NumberOfStudyRelatedInstances includes image counts for all modalties in study
             # not just those modalities requested & imported
             imported = False
-            study_instances_from_scp = int(dataset.get("NumberOfStudyRelatedInstances", 0))
-            if study_instances_from_scp and images_stored_count and images_stored_count >= study_instances_from_scp:
+            study_instances_from_scp = int(
+                dataset.get("NumberOfStudyRelatedInstances", 0)
+            )
+            if (
+                study_instances_from_scp
+                and images_stored_count
+                and images_stored_count >= study_instances_from_scp
+            ):
                 imported = True
             else:
                 # For multi-modality studies query the AnonymizerModel:
-                imported = self._controller.anonymizer.model.study_imported(patient_id, study_uid)
+                imported = self._controller.anonymizer.model.study_imported(
+                    patient_id, study_uid
+                )
 
             # Do not show Imported Studies if UX switch is on
             if imported and not self._show_imported_studies_switch.get():
@@ -784,7 +872,7 @@ class QueryView(tk.Toplevel):
             attr_name = self._query_results_column_keys[-2]
             setattr(dataset, attr_name, images_stored_count)
 
-            for field, attr in self._attr_map.items():
+            for field, _attr in self._attr_map.items():
                 value = getattr(dataset, field, "")
                 display_values.append(str(value))
 
@@ -796,7 +884,9 @@ class QueryView(tk.Toplevel):
                     values=display_values,
                 )
                 if imported:
-                    self._query_results.item(dataset.get("StudyInstanceUID", ""), tags="green")
+                    self._query_results.item(
+                        dataset.get("StudyInstanceUID", ""), tags="green"
+                    )
 
             except Exception as e:
                 logger.error(f"Exception: {e}")
