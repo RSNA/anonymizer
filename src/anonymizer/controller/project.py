@@ -82,7 +82,7 @@ class SeriesUIDHierarchy:
         sop_class_uid: str | None = None,
         description: str | None = None,  # TODO: add BodyPartExamined?
         instance_count: int = 0,  # from NumberOfSeriesRelatedInstances
-        instances: Dict[str, InstanceUIDHierarchy] = {},
+        instances: Dict[str, InstanceUIDHierarchy] = None,
     ):
         self.uid = uid
         self.number = number
@@ -90,7 +90,10 @@ class SeriesUIDHierarchy:
         self.sop_class_uid = sop_class_uid
         self.instance_count = instance_count
         self.description = description
-        self.instances = instances
+        if instances is None:
+            self.instances: Dict[str, InstanceUIDHierarchy] = {}
+        else:
+            self.instances = instances
         # from send_c_move status response:
         self.completed_sub_ops = 0
         self.failed_sub_ops = 0
@@ -1976,7 +1979,8 @@ class ProjectController(AE):
                     move_association.abort()
                 else:
                     move_association.release()
-            return error_msg
+
+        return error_msg
 
     def _move_study_at_series_level(
         self, scp_name: str, dest_scp_ae: str, study: StudyUIDHierarchy
@@ -2161,7 +2165,8 @@ class ProjectController(AE):
                     move_association.abort()
                 else:
                     move_association.release()
-            return error_msg
+
+        return error_msg
 
     def _move_study_at_instance_level(
         self, scp_name: str, dest_scp_ae: str, study: StudyUIDHierarchy
@@ -2329,7 +2334,8 @@ class ProjectController(AE):
                     move_association.abort()
                 else:
                     move_association.release()
-            return error_msg
+
+        return error_msg
 
     def bulk_move_active(self) -> bool:
         """

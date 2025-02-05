@@ -56,7 +56,7 @@ lint.select = [ # https://docs.astral.sh/ruff/linter/#rule-selection
   "C90",  # mccabe
   ] 
 
-lint.fixable = [
+lint.fixable = [ #All the errors that are fixed with --fix, SAFE only
   "I001", # Import block is un-sorted or un-formatted
   "W292", # No newline at end of file
   "W293", # Blank line contains whitespace
@@ -67,11 +67,11 @@ lint.fixable = [
 lint.ignore = [
   "E501",   # Line too long
   "SIM102",  # Nested if statements
-  "C901", #TEMP
+  "C901", # Mccabe complexity
   ]
 
 [tool.ruff.lint.mccabe]
-max-complexity = 15 
+max-complexity = 15 # Default is 10
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
