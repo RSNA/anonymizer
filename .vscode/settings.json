@@ -14,11 +14,11 @@
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
   "[python]": {
-    "editor.defaultFormatter": "ms-python.black-formatter", 
+    "editor.defaultFormatter": "charliermarsh.ruff", 
     "editor.formatOnSave": true,
   },
  
   "python.languageServer": "Pylance",
-  "cSpell.enabled": false,
+  "python.analysis.typeCheckingMode": "basic",
   
 }

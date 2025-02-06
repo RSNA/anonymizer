@@ -3,7 +3,7 @@ This module contains the AnonymizerModel class, which is responsible for storing
 and anonymization lookups. It also includes data classes for Series, Study, and PHI, as well as a Totals namedtuple.
 """
 
-from typing import List
+from typing import List, Dict, Tuple, ClassVar
 from collections import namedtuple
 from pathlib import Path
 from bidict import bidict
@@ -11,7 +11,7 @@ import logging
 import threading
 import pickle
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pprint import pformat
 import xml.etree.ElementTree as ET
 from pydicom import Dataset
@@ -60,10 +60,56 @@ class PHI:
     sex: str | None = None
     dob: str | None = None
     ethnic_group: str | None = None
-    studies: List[Study] = field(default_factory=list)  # TODO: make dictionary with key = study_uid
+    studies: List[Study] = field(
+        default_factory=list
+    )  # TODO: make dictionary with key = study_uid
 
 
-Totals = namedtuple("Totals", ["patients", "studies", "series", "instances", "quarantined"])
+@dataclass
+class PHI_IndexRecord:
+    anon_patient_id: str
+    anon_patient_name: str
+    phi_patient_name: str
+    phi_patient_id: str
+    date_offset: int
+    phi_study_date: str
+    anon_accession: str
+    phi_accession: str
+    anon_study_uid: str
+    phi_study_uid: str
+    num_series: int
+    num_instances: int
+
+    field_titles: ClassVar[Dict[str, str]] = {
+        "anon_patient_id": "ANON-PatientID",
+        "anon_patient_name": "ANON-PatientName",
+        "phi_patient_name": "PHI-PatientName",
+        "phi_patient_id": "PHI-PatientID",
+        "date_offset": "DateOffset",
+        "phi_study_date": "PHI-StudyDate",
+        "anon_accession": "ANON-Accession",
+        "phi_accession": "PHI-Accession",
+        "anon_study_uid": "ANON-StudyInstanceUID",
+        "phi_study_uid": "PHI-StudyInstanceUID",
+        "num_series": "Number of Series",
+        "num_instances": "Number of Instances",
+    }
+
+    @classmethod
+    def get_field_titles(cls) -> list:
+        return [cls.field_titles.get(field.name) for field in fields(cls)]
+
+    def flatten(self) -> Tuple:
+        return tuple(getattr(self, field.name) for field in fields(self))
+
+    @classmethod
+    def get_field_names(cls) -> list:
+        return [field.name for field in fields(cls)]
+
+
+Totals = namedtuple(
+    "Totals", ["patients", "studies", "series", "instances", "quarantined"]
+)
 
 
 class AnonymizerModel:
@@ -110,10 +156,13 @@ class AnonymizerModel:
         self._script_path = script_path
 
         self._uid_prefix = f"{self._uid_root}.{self._site_id}"
-        self.default_anon_pt_id: str = site_id + "-" + "".zfill(len(str(self.MAX_PATIENTS)) - 1)
+        self.default_anon_pt_id: str = (
+            site_id + "-" + "".zfill(len(str(self.MAX_PATIENTS)) - 1)
+        )
 
+        # Initialise Lookup Tables:
         self._patient_id_lookup = {}
-        self._uid_lookup: bidict = bidict()
+        self._uid_lookup: bidict[str, str] = bidict()
         self._acc_no_lookup = {}
         self._phi_lookup = {}
         self._tag_keep = {}
@@ -147,7 +196,9 @@ class AnonymizerModel:
 
     def __repr__(self) -> str:
         filtered_dict = {
-            key: len(value) if isinstance(value, dict) or isinstance(value, set) else value
+            key: len(value)
+            if isinstance(value, dict) or isinstance(value, set)
+            else value
             for key, value in (self.__dict__.items())
         }
         return f"{self.get_class_name()}\n({pformat(filtered_dict)})"
@@ -188,7 +239,9 @@ class AnonymizerModel:
             # <r en="F" t="unspecifiedelements">Remove unchecked elements</r>
 
             filtered_tag_keep = {k: v for k, v in self._tag_keep.items() if v != ""}
-            logger.info(f"_tag_keep has {len(self._tag_keep)} entries with {len(filtered_tag_keep)} operations")
+            logger.info(
+                f"_tag_keep has {len(self._tag_keep)} entries with {len(filtered_tag_keep)} operations"
+            )
             logger.info(f"_tag_keep operations:\n{pformat(filtered_tag_keep)}")
             return
 
@@ -197,7 +250,9 @@ class AnonymizerModel:
             raise
 
         except ET.ParseError:
-            logger.error(f"Error parsing the script file {script_path}. Ensure it is valid XML.")
+            logger.error(
+                f"Error parsing the script file {script_path}. Ensure it is valid XML."
+            )
             raise
 
         except Exception as e:
@@ -211,14 +266,24 @@ class AnonymizerModel:
         """
         with self._lock:
             self._patient_id_lookup.clear()
-            self._patient_id_lookup[""] = self.default_anon_pt_id  # Default Anonymized PatientID
+            self._patient_id_lookup[""] = (
+                self.default_anon_pt_id
+            )  # Default Anonymized PatientID
             self._uid_lookup.clear()
             self._acc_no_lookup.clear()
             self._phi_lookup.clear()
-            self._phi_lookup[self.default_anon_pt_id] = PHI()  # Default PHI for Anonymized PatientID
+            self._phi_lookup[self.default_anon_pt_id] = (
+                PHI()
+            )  # Default PHI for Anonymized PatientID
 
     def get_totals(self) -> Totals:
-        return Totals(self._patients, self._studies, self._series, self._instances, self._quarantined)
+        return Totals(
+            self._patients,
+            self._studies,
+            self._series,
+            self._instances,
+            self._quarantined,
+        )
 
     def get_phi(self, anon_patient_id: str) -> PHI | None:
         with self._lock:
@@ -244,9 +309,7 @@ class AnonymizerModel:
 
     def get_next_anon_patient_id(self, phi_patient_id: str) -> str:
         with self._lock:
-            anon_patient_id = (
-                f"{self._site_id}-{str(len(self._patient_id_lookup)).zfill(len(str(self.MAX_PATIENTS - 1)))}"
-            )
+            anon_patient_id = f"{self._site_id}-{str(len(self._patient_id_lookup)).zfill(len(str(self.MAX_PATIENTS - 1)))}"
             self._patient_id_lookup[phi_patient_id] = anon_patient_id
             return anon_patient_id
 
@@ -327,7 +390,9 @@ class AnonymizerModel:
                     return sum(series.instance_count for series in study.series)
             return 0
 
-    def get_pending_instance_count(self, ptid: str, study_uid: str, target_count: int) -> int:
+    def get_pending_instance_count(
+        self, ptid: str, study_uid: str, target_count: int
+    ) -> int:
         """
         This will return difference between stored instances and target_count for a given patient ID & study UID
         When first called for a study it also sets the study.target_instance_count (for future imported state detection)
@@ -350,10 +415,14 @@ class AnonymizerModel:
             if study.study_uid == study_uid:
                 with self._lock:
                     study.target_instance_count = target_count
-                    return target_count - sum(series.instance_count for series in study.series)
+                    return target_count - sum(
+                        series.instance_count for series in study.series
+                    )
         return target_count
 
-    def series_complete(self, ptid: str, study_uid: str, series_uid: str, target_count: int) -> bool:
+    def series_complete(
+        self, ptid: str, study_uid: str, series_uid: str, target_count: int
+    ) -> bool:
         """
         Check if a series is complete based on the given parameters.
 
@@ -380,6 +449,32 @@ class AnonymizerModel:
                 return False
         return False
 
+    def get_phi_index(self) -> List[PHI_IndexRecord] | None:
+        if self.get_patient_id_count() == 0:
+            return None
+
+        phi_index = []
+        for anon_pt_id in self._phi_lookup.keys():
+            phi: PHI = self._phi_lookup[anon_pt_id]
+            for study in phi.studies:
+                phi_index_record = PHI_IndexRecord(
+                    anon_patient_id=anon_pt_id,
+                    anon_patient_name=anon_pt_id,
+                    phi_patient_id=anon_pt_id,
+                    phi_patient_name=phi.patient_name,
+                    date_offset=study.anon_date_delta,
+                    phi_study_date=study.study_date,
+                    # TODO: Handle missing accession numbers
+                    anon_accession=self._acc_no_lookup[study.accession_number],
+                    phi_accession=study.accession_number,
+                    anon_study_uid=self._uid_lookup[study.study_uid],
+                    phi_study_uid=study.study_uid,
+                    num_series=len(study.series),
+                    num_instances=sum([s.instance_count for s in study.series]),
+                )
+                phi_index.append(phi_index_record)
+        return phi_index
+
     # Used by QueryRetrieveView to prevent study re-import
     def study_imported(self, ptid: str, study_uid: str) -> bool:
         with self._lock:
@@ -391,13 +486,20 @@ class AnonymizerModel:
                 return False
             for study in phi.studies:
                 if study.study_uid == study_uid:
-                    if study.target_instance_count == 0:  # Not set by ProjectController import process yet
+                    if (
+                        study.target_instance_count == 0
+                    ):  # Not set by ProjectController import process yet
                         return False
-                    return sum(series.instance_count for series in study.series) >= study.target_instance_count
+                    return (
+                        sum(series.instance_count for series in study.series)
+                        >= study.target_instance_count
+                    )
             return False
 
     # Helper function for capture_phi
-    def new_study_from_dataset(self, ds: Dataset, source: DICOMNode | str, date_delta: int) -> Study:
+    def new_study_from_dataset(
+        self, ds: Dataset, source: DICOMNode | str, date_delta: int
+    ) -> Study:
         return Study(
             study_uid=ds.get("StudyInstanceUID"),
             study_date=ds.get("StudyDate"),
@@ -455,9 +557,7 @@ class AnonymizerModel:
                 # NEW Study:
                 if anon_patient_id is None:
                     # NEW patient
-                    new_anon_patient_id = (
-                        f"{self._site_id}-{str(len(self._patient_id_lookup)).zfill(len(str(self.MAX_PATIENTS - 1)))}"
-                    )
+                    new_anon_patient_id = f"{self._site_id}-{str(len(self._patient_id_lookup)).zfill(len(str(self.MAX_PATIENTS - 1)))}"
                     phi = PHI(
                         patient_name=ds.get("PatientName"),
                         patient_id=phi_ptid,
@@ -506,23 +606,29 @@ class AnonymizerModel:
                 # Find study in PHI:
                 if phi.studies is not None:
                     study = next(
-                        (study for study in phi.studies if study.study_uid == ds.StudyInstanceUID),
+                        (
+                            study
+                            for study in phi.studies
+                            if study.study_uid == ds.StudyInstanceUID
+                        ),
                         None,
                     )
                 else:
                     study = None
 
                 if study is None:
-                    msg = (
-                        f"Critical Error 5: Existing study for Anon PatientID={anon_patient_id} not found in phi_lookup"
-                    )
+                    msg = f"Critical Error 5: Existing study for Anon PatientID={anon_patient_id} not found in phi_lookup"
                     logger.error(msg)
                     raise LookupError(msg)
 
                 # Find series in study:
                 if study.series is not None:
                     series: Series | None = next(
-                        (series for series in study.series if series.series_uid == ds.SeriesInstanceUID),
+                        (
+                            series
+                            for series in study.series
+                            if series.series_uid == ds.SeriesInstanceUID
+                        ),
                         None,
                     )
                 else:
@@ -576,7 +682,9 @@ class AnonymizerModel:
                 logger.error(f"Anon StudyUID={anon_study_uid} not found in uid_lookup")
                 return False
             if not phi.studies:
-                logger.error(f"No studies in PHI.studies for Anon PatientID={anon_pt_id}")
+                logger.error(
+                    f"No studies in PHI.studies for Anon PatientID={anon_pt_id}"
+                )
                 return False
 
             match = None
@@ -586,7 +694,9 @@ class AnonymizerModel:
                     break
 
             if match is None:
-                logger.error(f"Anon StudyUID={anon_study_uid} not found in PHI.studies for Anon PatientID={anon_pt_id}")
+                logger.error(
+                    f"Anon StudyUID={anon_study_uid} not found in PHI.studies for Anon PatientID={anon_pt_id}"
+                )
                 return False
 
             # Remove the series_uids of this study from the uid_lookup:
@@ -611,6 +721,8 @@ class AnonymizerModel:
                 del self._patient_id_lookup[phi.patient_id]
                 self._patients -= 1
 
+            return True
+
     def process_java_phi_studies(self, java_studies: List[JavaAnonymizerExportedStudy]):
         """
         Process Java PHI studies and store PHI in the AnonymizerModel.
@@ -624,9 +736,10 @@ class AnonymizerModel:
         logger.info(f"Processing {len(java_studies)} Java PHI Studies")
 
         for java_study in java_studies:
-
             self.set_anon_acc_no(java_study.PHI_Accession, java_study.ANON_Accession)
-            self.set_anon_uid(java_study.PHI_StudyInstanceUID, java_study.ANON_StudyInstanceUID)
+            self.set_anon_uid(
+                java_study.PHI_StudyInstanceUID, java_study.ANON_StudyInstanceUID
+            )
 
             new_study = Study(
                 study_date=java_study.PHI_StudyDate,
@@ -645,7 +758,9 @@ class AnonymizerModel:
                     patient_id=java_study.PHI_PatientID,
                     studies=[new_study],
                 )
-                self.set_anon_patient_id(java_study.PHI_PatientID, java_study.ANON_PatientID)
+                self.set_anon_patient_id(
+                    java_study.PHI_PatientID, java_study.ANON_PatientID
+                )
                 self.set_phi(java_study.ANON_PatientID, new_phi)
             else:
                 phi.studies.append(new_study)
