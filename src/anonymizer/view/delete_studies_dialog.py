@@ -1,9 +1,11 @@
-from typing import Union
-import tkinter as tk
-import customtkinter as ctk
 import logging
-from anonymizer.utils.translate import _
+import tkinter as tk
+from typing import Union
+
+import customtkinter as ctk
+
 from anonymizer.controller.project import ProjectController
+from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 

@@ -1,21 +1,22 @@
-from typing import Union
-import string
 import logging
+import string
 import tkinter as tk
-import customtkinter as ctk
-from anonymizer.model.project import DICOMNode
-from anonymizer.utils.translate import _
-from anonymizer.utils.network import get_local_ip_addresses, dns_lookup
+from typing import Union
 
+import customtkinter as ctk
+
+from anonymizer.model.project import DICOMNode
+from anonymizer.utils.network import dns_lookup, get_local_ip_addresses
+from anonymizer.utils.translate import _
 from anonymizer.utils.ux_fields import (
-    str_entry,
-    int_entry,
-    ip_min_chars,
-    ip_max_chars,
     aet_max_chars,
     aet_min_chars,
+    int_entry,
+    ip_max_chars,
+    ip_min_chars,
     ip_port_max,
     ip_port_min,
+    str_entry,
 )
 
 logger = logging.getLogger(__name__)

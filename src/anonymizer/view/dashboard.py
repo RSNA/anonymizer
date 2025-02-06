@@ -1,14 +1,15 @@
-import os
 import logging
+import os
 from queue import Queue
-from typing import Any
-import customtkinter as ctk
 from tkinter import messagebox
-from anonymizer.controller.project import ProjectController, EchoRequest, EchoResponse
+from typing import Any
+
+import customtkinter as ctk
+
+from anonymizer.controller.project import EchoRequest, EchoResponse, ProjectController
 from anonymizer.model.anonymizer import Totals
-from anonymizer.utils.translate import _
 from anonymizer.utils.storage import count_studies_series_images
-from anonymizer.view.pixels import PixelsView
+from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 

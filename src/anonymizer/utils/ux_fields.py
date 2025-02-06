@@ -11,10 +11,11 @@ Functions:
 - int_entry() -> ctk.IntVar: Creates an integer entry field with label, initial value, and range.
 """
 
+import logging
 import string
 import tkinter as tk
+
 import customtkinter as ctk
-import logging
 
 # Entry Limits:
 
@@ -49,10 +50,8 @@ def validate_entry(final_value: str, allowed_chars: str, max: str | None) -> boo
     """
     if max and max != "None" and len(final_value) > int(max):
         return False
-    for char in final_value:
-        if char not in allowed_chars:
-            return False
-    return True
+
+    return all(char in allowed_chars for char in final_value)
 
 
 def int_entry_change(

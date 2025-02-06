@@ -6,58 +6,60 @@ The ProjectController class handles association requests, performs DICOM queries
 The module also defines several data classes used for request and response objects, as well as data structures for organizing DICOM hierarchy.
 """
 
-import os
-from psutil import virtual_memory
-from typing import cast, Dict, Optional, List, Tuple, Any
-import threading
-from concurrent.futures import ThreadPoolExecutor
-from queue import Queue
-import logging
-import time
-from datetime import datetime, timedelta
 import csv
+import logging
+import os
 import shutil
-import boto3
-from pathlib import Path
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from anonymizer.utils.translate import _
-from anonymizer.utils.logging import set_logging_levels
+from datetime import datetime, timedelta
+from pathlib import Path
+from queue import Queue
+from typing import Any, Dict, List, Optional, Tuple, cast
+
+import boto3
+from psutil import virtual_memory
 from pydicom import Dataset, dcmread
-from pydicom.uid import UID
 from pydicom.dataset import FileMetaDataset
-from pynetdicom.association import Association
+from pydicom.uid import UID
 from pynetdicom.ae import ApplicationEntity as AE
-from pynetdicom.presentation import PresentationContext, build_context
+from pynetdicom.association import Association
 from pynetdicom.events import (
-    Event,
-    EVT_C_STORE,
     EVT_C_ECHO,
+    EVT_C_STORE,
+    Event,
     EventHandlerType,
 )
+from pynetdicom.presentation import PresentationContext, build_context
 from pynetdicom.status import (
-    VERIFICATION_SERVICE_CLASS_STATUS,
-    STORAGE_SERVICE_CLASS_STATUS,
     QR_FIND_SERVICE_CLASS_STATUS,
     QR_MOVE_SERVICE_CLASS_STATUS,
+    STORAGE_SERVICE_CLASS_STATUS,
+    VERIFICATION_SERVICE_CLASS_STATUS,
 )
+
+from anonymizer.controller.anonymizer import AnonymizerController
 from anonymizer.controller.dicom_C_codes import (
-    C_SUCCESS,
+    C_FAILURE,
     C_PENDING_A,
     C_PENDING_B,
-    C_WARNING,
-    C_FAILURE,
     C_STORE_DATASET_ERROR,
     C_STORE_DECODE_ERROR,
-)
-from anonymizer.model.project import (
-    ProjectModel,
-    DICOMNode,
-    NetworkTimeouts,
-    DICOMRuntimeError,
-    AuthenticationError,
+    C_SUCCESS,
+    C_WARNING,
 )
 from anonymizer.model.anonymizer import PHI_IndexRecord
-from anonymizer.controller.anonymizer import AnonymizerController
+from anonymizer.model.project import (
+    AuthenticationError,
+    DICOMNode,
+    DICOMRuntimeError,
+    NetworkTimeouts,
+    ProjectModel,
+)
+from anonymizer.utils.logging import set_logging_levels
+from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +82,7 @@ class SeriesUIDHierarchy:
         sop_class_uid: str | None = None,
         description: str | None = None,  # TODO: add BodyPartExamined?
         instance_count: int = 0,  # from NumberOfSeriesRelatedInstances
-        instances: Dict[str, InstanceUIDHierarchy] = {},
+        instances: Optional[Dict[str, InstanceUIDHierarchy]] = None,
     ):
         self.uid = uid
         self.number = number
@@ -88,7 +90,7 @@ class SeriesUIDHierarchy:
         self.sop_class_uid = sop_class_uid
         self.instance_count = instance_count
         self.description = description
-        self.instances = instances
+        self.instances = instances if instances is not None else {}
         # from send_c_move status response:
         self.completed_sub_ops = 0
         self.failed_sub_ops = 0
@@ -616,7 +618,7 @@ class ProjectController(AE):
                 + f" {self.model.scp}, Error: {str(e)}"
             )
             logger.error(msg)
-            raise DICOMRuntimeError(msg)
+            raise DICOMRuntimeError(msg) from e
 
         logger.info(
             f"DICOM C-STORE scp listening on {self.model.scp}, storing files in {self.model.storage_dir}, timeouts: {self.model.network_timeouts}"
@@ -971,7 +973,7 @@ class ProjectController(AE):
 
         return instance_uids
 
-    def send(self, file_paths: list[str], scp_name: str, send_contexts=None):
+    def send(self, file_paths: list[str], scp_name: str, send_contexts=None) -> int:
         """
         Blocking call: Sends a list of files to a specified SCP (Service Class Provider).
 
@@ -996,10 +998,11 @@ class ProjectController(AE):
         """
         logger.info(f"Send {len(file_paths)} files to {scp_name}")
         association = None
+        files_sent = 0
+
         if send_contexts is None:
             send_contexts = self.get_radiology_storage_contexts()
-        files_sent = 0
-        exception_raised = False
+
         try:
             association = self._connect_to_scp(scp_name, send_contexts)
             for dicom_file_path in file_paths:
@@ -1013,13 +1016,12 @@ class ProjectController(AE):
                 files_sent += 1
         except Exception as e:
             logger.error(f"Send Error: {e}")
-            exception_raised = True
             raise
         finally:
             if association:
                 association.release()
-            if not exception_raised:
-                return files_sent
+
+        return files_sent
 
     def abort_query(self):
         logger.info("Abort Query")
@@ -1972,7 +1974,7 @@ class ProjectController(AE):
                     move_association.abort()
                 else:
                     move_association.release()
-            return error_msg
+        return error_msg
 
     def _move_study_at_series_level(
         self, scp_name: str, dest_scp_ae: str, study: StudyUIDHierarchy
@@ -2060,7 +2062,7 @@ class ProjectController(AE):
                 # If the status category is 'Warning', 'Failure' or 'Cancel' then yields a ~pydicom.dataset.Dataset which should contain
                 # an (0008,0058) *Failed SOP Instance UID List* element, however as this comes from the peer this is not guaranteed
                 # and may instead be an empty ~pydicom.dataset.Dataset.
-                for status, identifier in responses:
+                for status, __ in responses:
                     if self._abort_move:
                         raise (
                             DICOMRuntimeError(
@@ -2157,7 +2159,7 @@ class ProjectController(AE):
                     move_association.abort()
                 else:
                     move_association.release()
-            return error_msg
+        return error_msg
 
     def _move_study_at_instance_level(
         self, scp_name: str, dest_scp_ae: str, study: StudyUIDHierarchy
@@ -2235,7 +2237,7 @@ class ProjectController(AE):
                     # If the status category is 'Warning', 'Failure' or 'Cancel' then yields a ~pydicom.dataset.Dataset which should contain
                     # an (0008,0058) *Failed SOP Instance UID List* element, however as this comes from the peer this is not guaranteed
                     # and may instead be an empty ~pydicom.dataset.Dataset.
-                    for status, identifier in responses:
+                    for status, __ in responses:
                         time.sleep(0.1)
                         if self._abort_move:
                             raise (
@@ -2325,7 +2327,8 @@ class ProjectController(AE):
                     move_association.abort()
                 else:
                     move_association.release()
-            return error_msg
+
+        return error_msg
 
     def bulk_move_active(self) -> bool:
         """
@@ -2382,7 +2385,7 @@ class ProjectController(AE):
 
             logger.info(f"Move Futures: {len(self._move_futures)}")
 
-            for future, move_op, study in self._move_futures:
+            for future, __, study in self._move_futures:
                 try:
                     error_msg = (
                         future.result()
@@ -2753,7 +2756,7 @@ class ProjectController(AE):
         #     future.cancel()
         if self._export_executor:
             self._export_executor.shutdown(
-                wait=False if self.model.export_to_AWS else True, cancel_futures=True
+                wait=not self.model.export_to_AWS, cancel_futures=True
             )
             logger.info("Move futures cancelled and executor shutdown")
             self._export_executor = None

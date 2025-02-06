@@ -14,29 +14,29 @@ The AnonymizerController class performs the following tasks:
 For more information, refer to the legacy anonymizer documentation: https://mircwiki.rsna.org/index.php?title=The_CTP_DICOM_Anonymizer
 """
 
-import os
-import time
-from enum import Enum
-from shutil import copyfile
-import re
-import logging
-import threading
 import hashlib
+import logging
+import os
 import pickle
+import re
+import threading
+import time
 from datetime import datetime, timedelta
+from enum import Enum
 from pathlib import Path
 from queue import Queue
-from pydicom import Dataset, Sequence, dcmread
-from pydicom.errors import InvalidDicomError
+from shutil import copyfile
+
 import torch
 from easyocr import Reader
+from pydicom import Dataset, Sequence, dcmread
+from pydicom.errors import InvalidDicomError
 
-from anonymizer.utils.translate import _
-from anonymizer.utils.storage import DICOM_FILE_SUFFIX
-from anonymizer.model.project import DICOMNode, ProjectModel
-from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.controller.remove_pixel_phi import remove_pixel_phi
-
+from anonymizer.model.anonymizer import AnonymizerModel
+from anonymizer.model.project import DICOMNode, ProjectModel
+from anonymizer.utils.storage import DICOM_FILE_SUFFIX
+from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ class AnonymizerController:
                 f"Anonymizer Model successfully loaded from: {self.model_filename}"
             )
             return file_model
-        except Exception as e:
+        except Exception as e1:
             # Attempt to load backup file
             backup_filename = str(self.model_filename) + ".bak"
             if os.path.exists(backup_filename):
@@ -114,16 +114,16 @@ class AnonymizerController:
                         f"Loaded Anonymizer Model from backup file: {backup_filename}"
                     )
                     return file_model
-                except Exception as e:
-                    logger.error(f"Backup Anonymizer Model datafile corrupt: {e}")
+                except Exception as e2:
+                    logger.error(f"Backup Anonymizer Model datafile corrupt: {e2}")
                     raise RuntimeError(
-                        f"Anonymizer datafile: {self.model_filename} and backup file corrupt\n\n{str(e)}"
-                    )
+                        f"Anonymizer datafile: {self.model_filename} and backup file corrupt\n\n{str(e2)}"
+                    ) from e2
             else:
-                logger.error(f"Anonymizer Model datafile corrupt: {e}")
+                logger.error(f"Anonymizer Model datafile corrupt: {e1}")
                 raise RuntimeError(
-                    f"Anonymizer datafile: {self.model_filename} corrupt\n\n{str(e)}"
-                )
+                    f"Anonymizer datafile: {self.model_filename} corrupt\n\n{str(e1)}"
+                ) from e1
 
     def __init__(self, project_model: ProjectModel):
         self._active = False
@@ -220,7 +220,7 @@ class AnonymizerController:
             return
 
         # Send sentinel value to worker threads to terminate:
-        for index in range(self.NUMBER_OF_DATASET_WORKER_THREADS):
+        for __ in range(self.NUMBER_OF_DATASET_WORKER_THREADS):
             self._anon_ds_Q.put((None, None))
 
         # Wait for all sentinal values to be processed
@@ -369,9 +369,7 @@ class AnonymizerController:
         """
         try:
             date_obj = datetime.strptime(date_str, "%Y%m%d")
-            if date_obj < datetime(1900, 1, 1):
-                return False
-            return True
+            return not (date_obj < datetime(1900, 1, 1))
         except ValueError:
             return False
 

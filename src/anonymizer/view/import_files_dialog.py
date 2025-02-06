@@ -1,11 +1,13 @@
-import os
-from typing import Union
-import tkinter as tk
-import customtkinter as ctk
-from pathlib import Path
 import logging
-from anonymizer.utils.translate import _
+import os
+import tkinter as tk
+from pathlib import Path
+from typing import Union
+
+import customtkinter as ctk
+
 from anonymizer.controller.anonymizer import AnonymizerController
+from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 

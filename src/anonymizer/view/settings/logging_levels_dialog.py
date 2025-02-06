@@ -1,8 +1,10 @@
-from typing import Union
+import logging
 import tkinter as tk
 from tkinter import messagebox
+from typing import Union
+
 import customtkinter as ctk
-import logging
+
 from anonymizer.model.project import LoggingLevels
 from anonymizer.utils.translate import _
 

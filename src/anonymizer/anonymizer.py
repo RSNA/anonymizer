@@ -1,26 +1,27 @@
-import os
-import sys
 import json
+import logging
+import os
+import pickle
+import platform
 import shutil
 import signal
+import sys
 import time
-import platform
-import click
+import tkinter as tk
+from copy import copy
 from pathlib import Path
 from pprint import pformat
-from copy import copy
-import logging
-import pickle
-from pydicom._version import __version__ as pydicom_version
-from pydicom import dcmread
-from pynetdicom._version import __version__ as pynetdicom_version
+from tkinter import filedialog, messagebox, ttk
 
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+import click
 import customtkinter as ctk
 from customtkinter import ThemeManager
+from pydicom import dcmread
+from pydicom._version import __version__ as pydicom_version
+from pynetdicom._version import __version__ as pynetdicom_version
 
-from anonymizer.utils.version import get_version
+from anonymizer.controller.project import ProjectController
+from anonymizer.model.project import DICOMRuntimeError, ProjectModel
 from anonymizer.utils.logging import init_logging
 from anonymizer.utils.translate import (
     _,
@@ -28,14 +29,13 @@ from anonymizer.utils.translate import (
     get_current_language_code,
     set_language,
 )
-from anonymizer.model.project import DICOMRuntimeError, ProjectModel
-from anonymizer.controller.project import ProjectController
-from anonymizer.view.settings.settings_dialog import SettingsDialog
+from anonymizer.utils.version import get_version
 from anonymizer.view.dashboard import Dashboard
-from anonymizer.view.import_files_dialog import ImportFilesDialog
-from anonymizer.view.query_retrieve_import import QueryView
 from anonymizer.view.export import ExportView
 from anonymizer.view.html_view import HTMLView
+from anonymizer.view.import_files_dialog import ImportFilesDialog
+from anonymizer.view.query_retrieve_import import QueryView
+from anonymizer.view.settings.settings_dialog import SettingsDialog
 from anonymizer.view.welcome import WelcomeView
 
 logger = logging.getLogger()  # ROOT logger
@@ -378,7 +378,7 @@ class Anonymizer(ctk.CTk):
                 raise TypeError("Loaded object is not an instance of ProjectModel")
             logger.info(f"Project Model successfully loaded from: {json_filepath}")
             return file_model
-        except Exception as e:
+        except Exception as e1:
             # Attempt to load backup file
             backup_filepath = str(json_filepath) + ".bak"
             if os.path.exists(backup_filepath):
@@ -393,16 +393,16 @@ class Anonymizer(ctk.CTk):
                         f"Loaded Project Model from backup file: {backup_filepath}"
                     )
                     return file_model
-                except Exception as e:
-                    logger.error(f"Backup Project Model datafile corrupt: {e}")
+                except Exception as e2:
+                    logger.error(f"Backup Project Model datafile corrupt: {e2}")
                     raise RuntimeError(
-                        f"Project datafile: {backup_filepath} and backup file corrupt\n\n{str(e)}"
-                    )
+                        f"Project datafile: {backup_filepath} and backup file corrupt\n\n{str(e2)}"
+                    ) from e2
             else:
-                logger.error(f"Project Model datafile corrupt: {e}")
+                logger.error(f"Project Model datafile corrupt: {e1}")
                 raise RuntimeError(
-                    f"Project Model datafile: {json_filepath} corrupt\n\n{str(e)}"
-                )
+                    f"Project Model datafile: {json_filepath} corrupt\n\n{str(e1)}"
+                ) from e1
 
     def open_project(self, project_dir: Path | None = None):
         logger.debug("open_project")
@@ -1084,7 +1084,7 @@ class Anonymizer(ctk.CTk):
             html_dir.glob("*.html"), key=lambda path: int(path.stem.split("_")[0])
         )
 
-        for index, html_file_path in enumerate(html_file_paths):
+        for __, html_file_path in enumerate(html_file_paths):
             label = self.help_filename_to_title(html_file_path)
             help_menu.add_command(
                 label=label,

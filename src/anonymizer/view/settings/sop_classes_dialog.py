@@ -1,12 +1,18 @@
-from typing import Union
+import logging
 import tkinter as tk
+from tkinter import ttk
+from typing import Union
+
 import customtkinter as ctk
 from customtkinter import ThemeManager
-from tkinter import ttk
-import logging
 from pynetdicom.sop_class import _STORAGE_CLASSES
-from anonymizer.utils.translate import _, insert_spaces_between_cases, insert_space_after_codes
+
 from anonymizer.utils.modalities import get_modalities
+from anonymizer.utils.translate import (
+    _,
+    insert_space_after_codes,
+    insert_spaces_between_cases,
+)
 
 logger = logging.getLogger(__name__)
 

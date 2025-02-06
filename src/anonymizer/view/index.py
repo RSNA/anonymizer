@@ -3,17 +3,17 @@ This module contains the IndexView class, which is a tkinter Toplevel window for
 The IndexView class provides a user interface for viewing the study index, deleting studies and exporting the patient lookup table to file.
 """
 
-import os
-from typing import List
 import logging
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox, ttk
+from typing import List
+
 import customtkinter as ctk
-from anonymizer.model.anonymizer import AnonymizerModel, PHI_IndexRecord
+
 from anonymizer.controller.project import ProjectController
+from anonymizer.model.anonymizer import AnonymizerModel, PHI_IndexRecord
 from anonymizer.utils.translate import _
 from anonymizer.view.dashboard import Dashboard
-from anonymizer.view.pixels import PixelsView
 from anonymizer.view.delete_studies_dialog import DeleteStudiesDialog
 
 logger = logging.getLogger(__name__)

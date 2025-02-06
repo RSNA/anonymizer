@@ -1,39 +1,40 @@
-from pathlib import Path
 import logging
-from math import ceil
-from enum import Enum
 from dataclasses import dataclass
-from pydicom import dcmread, Dataset
-from pydicom.pixel_data_handlers.util import apply_voi_lut, apply_modality_lut
+from enum import Enum
+from math import ceil
+from pathlib import Path
+
+import customtkinter as ctk
 import numpy as np
-from PIL import Image
 from cv2 import (
-    resize,
-    normalize,
-    # equalizeHist,
-    Canny,
-    cvtColor,
-    createCLAHE,
-    GaussianBlur,
-    dilate,
-    # morphologyEx,
-    # findContours,
-    # drawContours,
-    getStructuringElement,
-    INTER_AREA,
-    NORM_MINMAX,
-    CV_8U,
     COLOR_RGB2GRAY,
+    CV_8U,
+    INTER_AREA,
     MORPH_RECT,
     # MORPH_CLOSE,
     # RETR_EXTERNAL,
     # CHAIN_APPROX_SIMPLE,
     # FILLED,
+    NORM_MINMAX,
+    # equalizeHist,
+    Canny,
+    GaussianBlur,
+    createCLAHE,
+    cvtColor,
+    dilate,
+    # morphologyEx,
+    # findContours,
+    # drawContours,
+    getStructuringElement,
+    normalize,
+    resize,
 )
-import customtkinter as ctk
+from PIL import Image
+from pydicom import Dataset, dcmread
+from pydicom.pixel_data_handlers.util import apply_modality_lut, apply_voi_lut
+
 from anonymizer.utils.storage import get_dcm_files
 from anonymizer.utils.translate import _
-
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +106,12 @@ class PixelsView(ctk.CTkToplevel):
             if series_path.is_dir()
         ]
 
-    def __init__(self, mono_font: ctk.CTkFont, base_dir: Path, patient_ids: list[str] = []):
+    def __init__(
+        self,
+        mono_font: ctk.CTkFont,
+        base_dir: Path,
+        patient_ids: list[str] | None = None,
+    ):
         super().__init__()
         self._data_font = mono_font  # get mono font from app
 
@@ -114,7 +120,7 @@ class PixelsView(ctk.CTkToplevel):
 
         # If patient_ids is not specified, iterate through ALL patient sub-directories to compile patient_ids:
         if patient_ids is None:
-            patient_ids = [p for p in base_dir.iterdir() if p.is_dir()]
+            patient_ids = [str(p) for p in base_dir.iterdir() if p.is_dir()]
 
         if not patient_ids:
             raise ValueError("No patients for PixelsView")
@@ -132,8 +138,12 @@ class PixelsView(ctk.CTkToplevel):
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.resizable(width=False, height=False)
 
-        self._ks_frame_width = int(self.KS_FRAME_RELATIVE_SIZE[0] * self.winfo_screenwidth())
-        self._ks_frame_height = int(self.KS_FRAME_RELATIVE_SIZE[1] * self.winfo_screenheight())
+        self._ks_frame_width = int(
+            self.KS_FRAME_RELATIVE_SIZE[0] * self.winfo_screenwidth()
+        )
+        self._ks_frame_height = int(
+            self.KS_FRAME_RELATIVE_SIZE[1] * self.winfo_screenheight()
+        )
 
         self._page_number = 0
         self._rows = 0
@@ -150,7 +160,9 @@ class PixelsView(ctk.CTkToplevel):
         )
 
         # Bind Arrow buttons to page control
-        self.bind("<Left>", lambda e: self._on_page_slider(max(0, self._page_number - 1)))
+        self.bind(
+            "<Left>", lambda e: self._on_page_slider(max(0, self._page_number - 1))
+        )
         self.bind(
             "<Right>",
             lambda e: self._on_page_slider(min(self._pages - 1, self._page_number + 1)),
@@ -177,9 +189,13 @@ class PixelsView(ctk.CTkToplevel):
 
     def _calc_layout(self):
         padded_combined_width = (
-            3 * self._image_size.width() + 2 * self.IMAGE_PAD + 2 * get_pad(self._image_size).width()
+            3 * self._image_size.width()
+            + 2 * self.IMAGE_PAD
+            + 2 * get_pad(self._image_size).width()
         )
-        padded_combined_height = self._image_size.height() + get_pad(self._image_size).height()
+        padded_combined_height = (
+            self._image_size.height() + get_pad(self._image_size).height()
+        )
 
         self._rows = self._ks_frame_height // padded_combined_height
         self._cols = self._ks_frame_width // padded_combined_width
@@ -285,7 +301,9 @@ class PixelsView(ctk.CTkToplevel):
         """Populate the Kaleidoscope frame with images for the given page number."""
         logger.info(f"Populate ks_frame page={page_number}")
         self._page_number = page_number
-        self._page_label.configure(text=_("Page") + f" {self._page_number+1} " + _("of") + f" {self._pages}")
+        self._page_label.configure(
+            text=_("Page") + f" {self._page_number + 1} " + _("of") + f" {self._pages}"
+        )
 
         if not hasattr(self, "_ks_labels"):
             self._ks_labels = {}  # Initialize labels dictionary if not present
@@ -342,7 +360,9 @@ class PixelsView(ctk.CTkToplevel):
             )
             for i, image in enumerate(kaleidoscope.images):
                 resized_image = image.resize(self._image_size.value)
-                combined_image.paste(resized_image, (i * (self._image_size.width() + self.IMAGE_PAD), 0))
+                combined_image.paste(
+                    resized_image, (i * (self._image_size.width() + self.IMAGE_PAD), 0)
+                )
             return (
                 ctk.CTkImage(
                     light_image=combined_image,
@@ -376,7 +396,9 @@ class PixelsView(ctk.CTkToplevel):
     def _on_image_click(self, event, kaleidoscope: kaleidoscope):
         logger.info(f"Kaleidoscope clicked: kaleidoscope: {kaleidoscope}")
 
-    def _resize_or_pad_image(self, image_np: np.ndarray, target_size: tuple[int, int]) -> np.ndarray:
+    def _resize_or_pad_image(
+        self, image_np: np.ndarray, target_size: tuple[int, int]
+    ) -> np.ndarray:
         """Resize or pad an image to match the target size (height, width)."""
         target_height, target_width = target_size
         logger.info(
@@ -502,7 +524,9 @@ class PixelsView(ctk.CTkToplevel):
         if len(dcm_paths) == 0:
             raise ValueError(f"No DICOM files found in {series_path}")
 
-        logger.info(f"Create Kaleidoscope from {series_path.name} from {len(dcm_paths)} DICOM files")
+        logger.info(
+            f"Create Kaleidoscope from {series_path.name} from {len(dcm_paths)} DICOM files"
+        )
 
         ds = dcmread(dcm_paths[0])
         pi = ds.get("PhotometricInterpretation", None)

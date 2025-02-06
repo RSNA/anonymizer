@@ -1,27 +1,39 @@
 # For Burnt-IN Pixel PHI Removal:
-from pathlib import Path
 import logging
-import numpy as np
-from numpy import ndarray
-from cv2 import threshold, findContours, drawContours, normalize, copyMakeBorder, resize, dilate, inpaint, cvtColor
-from cv2 import (
-    THRESH_OTSU,
-    COLOR_RGB2GRAY,
-    RETR_TREE,
-    CHAIN_APPROX_SIMPLE,
-    NORM_MINMAX,
-    INTER_LINEAR,
-    BORDER_CONSTANT,
-    INPAINT_TELEA,
-    CV_16U,
-)
+from pathlib import Path
 
+import numpy as np
+from cv2 import (
+    BORDER_CONSTANT,
+    CHAIN_APPROX_SIMPLE,
+    COLOR_RGB2GRAY,
+    INPAINT_TELEA,
+    INTER_LINEAR,
+    NORM_MINMAX,
+    RETR_TREE,
+    THRESH_OTSU,
+    copyMakeBorder,
+    cvtColor,
+    dilate,
+    drawContours,
+    findContours,
+    inpaint,
+    normalize,
+    resize,
+    threshold,
+)
 from easyocr import Reader
-from pydicom import Dataset, dcmread
-from pydicom.pixel_data_handlers.util import apply_voi_lut, apply_modality_lut, apply_color_lut, convert_color_space
-from pydicom.encaps import encapsulate
-from pydicom.uid import JPEG2000Lossless
+from numpy import ndarray
 from openjpeg.utils import encode_array  # JPEG2000Lossless
+from pydicom import Dataset, dcmread
+from pydicom.encaps import encapsulate
+from pydicom.pixel_data_handlers.util import (
+    apply_color_lut,
+    apply_modality_lut,
+    apply_voi_lut,
+    convert_color_space,
+)
+from pydicom.uid import JPEG2000Lossless
 
 VALID_COLOR_SPACES = [
     "MONOCHROME1",
@@ -39,7 +51,9 @@ logging.getLogger("openjpeg").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-def _draw_text_contours_on_mask(image: ndarray, rgb: bool, top_left: tuple, bottom_right: tuple, mask: ndarray) -> None:
+def _draw_text_contours_on_mask(
+    image: ndarray, rgb: bool, top_left: tuple, bottom_right: tuple, mask: ndarray
+) -> None:
     """
     Draws text contours onto the provided mask (mutates the input mask).
 
@@ -77,16 +91,17 @@ def _has_voi_lut(ds: Dataset) -> bool:
     if "VOILUTSequence" in ds:
         return True
     # Check for WindowCenter and WindowWidth
-    if "WindowCenter" in ds and "WindowWidth" in ds:
-        return True
-    return False
+    return bool("WindowCenter" in ds and "WindowWidth" in ds)
 
 
 # TODO: split this process up into sub-alogirthms for pluggable functional pipeline:
 # [pixel attribute validation > apply LUT > normalize > add border > downscaling > OCR > upscaling > inpainting > compression]
 # TODO: make source file immutable & keep source file? add backup parameter?
 def remove_pixel_phi(
-    dcm_path: Path, ocr_reader: Reader, downscale_dimension_threshold: int = 800, border_size: int = 20
+    dcm_path: Path,
+    ocr_reader: Reader,
+    downscale_dimension_threshold: int = 800,
+    border_size: int = 20,
 ) -> bool:
     """
     Description:
@@ -121,7 +136,9 @@ def remove_pixel_phi(
     # Read the DICOM image file using pydicom which will perform any decompression required
     ds = dcmread(dcm_path)
 
-    logger.debug(f"Processing Image, SOPClassUID: {ds.SOPClassUID} AnonPatientID: {ds.PatientID}")
+    logger.debug(
+        f"Processing Image, SOPClassUID: {ds.SOPClassUID} AnonPatientID: {ds.PatientID}"
+    )
 
     # Extract relevant attributes for pixel data processing:
     # Mandatory:
@@ -142,35 +159,52 @@ def remove_pixel_phi(
         raise ValueError("PhotometricInterpretation attribute missing.")
 
     if pi not in VALID_COLOR_SPACES:
-        raise ValueError(f"Invalid Photometric Interpretation: {pi}. Support Color Spaces: {VALID_COLOR_SPACES}")
+        raise ValueError(
+            f"Invalid Photometric Interpretation: {pi}. Support Color Spaces: {VALID_COLOR_SPACES}"
+        )
 
     grayscale = False
     if pi in ["MONOCHROME1", "MONOCHROME2"]:
         grayscale = True
         if samples_per_pixel != 1:
-            raise ValueError(f"Samples per pixel = {samples_per_pixel} which should be 1 for grayscale images.")
+            raise ValueError(
+                f"Samples per pixel = {samples_per_pixel} which should be 1 for grayscale images."
+            )
     elif samples_per_pixel > 4:
-        raise ValueError(f"Samples per pixel = {samples_per_pixel} which should be < 4 for multichannel images.")
+        raise ValueError(
+            f"Samples per pixel = {samples_per_pixel} which should be < 4 for multichannel images."
+        )
 
     if not rows or not cols:
         raise ValueError("Missing image dimensions: Rows & Columns")
 
-    if bits_allocated is None or bits_stored is None or high_bit is None or pixel_representation is None:
+    if (
+        bits_allocated is None
+        or bits_stored is None
+        or high_bit is None
+        or pixel_representation is None
+    ):
         raise ValueError(
             "Missing essential pixel attributes (BitsAllocated, BitsStored, HighBit, PixelRepresentation)."
         )
 
     # Validate if bits stored is less than or equal to bits allocated
     if bits_stored > bits_allocated:
-        raise ValueError(f"BitsStored ({bits_stored}) cannot be greater than BitsAllocated ({bits_allocated}).")
+        raise ValueError(
+            f"BitsStored ({bits_stored}) cannot be greater than BitsAllocated ({bits_allocated})."
+        )
 
     # Validate the HighBit value
     if high_bit != bits_stored - 1:
-        raise ValueError(f"HighBit ({high_bit}) should be equal to BitsStored - 1 ({bits_stored - 1}).")
+        raise ValueError(
+            f"HighBit ({high_bit}) should be equal to BitsStored - 1 ({bits_stored - 1})."
+        )
 
     # Validate pixel representation: 0 = unsigned, 1 = signed
     if pixel_representation not in [0, 1]:
-        raise ValueError(f"Invalid Pixel Representation: {pixel_representation}. Expected 0 (unsigned) or 1 (signed).")
+        raise ValueError(
+            f"Invalid Pixel Representation: {pixel_representation}. Expected 0 (unsigned) or 1 (signed)."
+        )
 
     # Check that pixel data exists
     if not hasattr(ds, "PixelData"):
@@ -189,7 +223,9 @@ def remove_pixel_phi(
     # Validate the shape of the Pixel Array
     frame1 = pixels[0] if no_of_frames > 1 else pixels
     if frame1.shape[0] != rows or frame1.shape[1] != cols:
-        raise ValueError(f"Pixel array shape {pixels.shape} does not match Rows and Columns ({rows}, {cols}).")
+        raise ValueError(
+            f"Pixel array shape {pixels.shape} does not match Rows and Columns ({rows}, {cols})."
+        )
 
     # Validate the data type
     if bits_allocated == 8:
@@ -197,10 +233,14 @@ def remove_pixel_phi(
     elif bits_allocated == 16:
         expected_dtype = np.uint16 if pixel_representation == 0 else np.int16
     else:
-        raise ValueError("Unsupported BitsAllocated value. Only 8 and 16 bits are supported.")
+        raise ValueError(
+            "Unsupported BitsAllocated value. Only 8 and 16 bits are supported."
+        )
 
     if pixels.dtype != expected_dtype:
-        raise ValueError(f"Pixel data type {pixels.dtype} does not match expected type {expected_dtype}.")
+        raise ValueError(
+            f"Pixel data type {pixels.dtype} does not match expected type {expected_dtype}."
+        )
 
     # Validate pixel value range according to BitsStored
     max_valid_value = (1 << bits_stored) - 1
@@ -225,7 +265,7 @@ def remove_pixel_phi(
     logger.debug(f"SamplePerPixel: {samples_per_pixel}")
     logger.debug(f"Rows={rows} Columns={cols}")
     logger.debug(
-        f"BitsAllocated={bits_allocated} BitsStored={bits_stored} HighBit={high_bit} Signed={pixel_representation!=0}"
+        f"BitsAllocated={bits_allocated} BitsStored={bits_stored} HighBit={high_bit} Signed={pixel_representation != 0}"
     )
     logger.debug(f"pixels.shape: {pixels.shape}")
     logger.debug(f"pixels.value.range:[{pixels.min()}..{pixels.max()}]")
@@ -243,7 +283,9 @@ def remove_pixel_phi(
     # # Convert color space if needed (e.g., from YBR to RGB)
     elif pi in ["YBR_FULL", "YBR_FULL_422"]:
         logger.debug(f"Convert color space from {pi} to RGB")
-        pixels = convert_color_space(arr=pixels, current=pi, desired="RGB", per_frame=True)
+        pixels = convert_color_space(
+            arr=pixels, current=pi, desired="RGB", per_frame=True
+        )
 
     if no_of_frames == 1:
         pixels_stack = [pixels]
@@ -265,7 +307,6 @@ def remove_pixel_phi(
     source_pixels_changed = False
 
     for frame in range(no_of_frames):
-
         if no_of_frames > 1:
             logging.debug(f"Processing Frame {frame}...")
 
@@ -277,22 +318,38 @@ def remove_pixel_phi(
             pixels = apply_voi_lut(apply_modality_lut(pixels, ds), ds)
 
         # Normalize the pixel array to the range 0-255
-        normalize(src=pixels, dst=pixels, alpha=0, beta=255, norm_type=NORM_MINMAX, dtype=-1, mask=None)
+        normalize(
+            src=pixels,
+            dst=pixels,
+            alpha=0,
+            beta=255,
+            norm_type=NORM_MINMAX,
+            dtype=-1,
+            mask=None,
+        )
         pixels = pixels.astype(np.uint8)
 
         if pi == "MONOCHROME1":  # 0 = white
-            logger.debug("Convert from MONOCHROME1 to MONOCHROME2 (invert pixel values)")
+            logger.debug(
+                "Convert from MONOCHROME1 to MONOCHROME2 (invert pixel values)"
+            )
             pixels = np.invert(pixels)
 
-        logger.debug(f"After normalization: pixels.value.range:[{pixels.min()}..{pixels.max()}]")
+        logger.debug(
+            f"After normalization: pixels.value.range:[{pixels.min()}..{pixels.max()}]"
+        )
 
         # DOWNSCALE if necessary:
         if scale_factor < 1:
             new_size = (int(cols * scale_factor), int(rows * scale_factor))
             pixels = resize(pixels, new_size, interpolation=INTER_LINEAR)
-            logger.debug(f"Downscaled image with scaling factor={scale_factor:.2f}, new pixels.shape: {pixels.shape}")
+            logger.debug(
+                f"Downscaled image with scaling factor={scale_factor:.2f}, new pixels.shape: {pixels.shape}"
+            )
         else:
-            logger.debug(f"Max Image Dimension < {downscale_dimension_threshold}, no downscaling required.")
+            logger.debug(
+                f"Max Image Dimension < {downscale_dimension_threshold}, no downscaling required."
+            )
 
         # Add a border to the resized image
         pixels = copyMakeBorder(
@@ -304,7 +361,9 @@ def remove_pixel_phi(
             BORDER_CONSTANT,
             value=[0, 0, 0],  # Black border
         )
-        logger.debug(f"Black Border of {border_size}px added, new pixels.shape: {pixels.shape}")
+        logger.debug(
+            f"Black Border of {border_size}px added, new pixels.shape: {pixels.shape}"
+        )
 
         # Perform OCR on the bordered image
         # for word-level detection: width_ths=0.1, paragraph=False
@@ -321,8 +380,7 @@ def remove_pixel_phi(
         mask = np.zeros(pixels.shape[:2], dtype=np.uint8)
 
         # Draw bounding boxes around each detected word
-        for bbox, text, prob in results:
-
+        for bbox, __, __ in results:
             # Unpack the bounding box
             (top_left, top_right, bottom_right, bottom_left) = bbox
 
@@ -330,7 +388,9 @@ def remove_pixel_phi(
             bottom_right = tuple(map(int, bottom_right))
 
             # Perform full anonymization, remove all detected text from image:
-            _draw_text_contours_on_mask(pixels, not grayscale, top_left, bottom_right, mask)
+            _draw_text_contours_on_mask(
+                pixels, not grayscale, top_left, bottom_right, mask
+            )
 
         # Remove border from mask
         mask = mask[border_size:-border_size, border_size : mask.shape[1] - border_size]
@@ -339,7 +399,9 @@ def remove_pixel_phi(
         # Upscale mask if downscaling was applied to source image:
         if scale_factor < 1:
             mask = resize(src=mask, dsize=(cols, rows), interpolation=INTER_LINEAR)
-            logger.debug(f"Upscale mask back to original source image size, new mask.shape: {mask.shape}")
+            logger.debug(
+                f"Upscale mask back to original source image size, new mask.shape: {mask.shape}"
+            )
 
         kernel = np.ones((3, 3), np.uint8)
         dilated_mask = dilate(src=mask, kernel=kernel, iterations=1)
@@ -385,7 +447,9 @@ def remove_pixel_phi(
                 ds.PhotometricInterpretation = "RGB"
 
             source_pixels_deid = encode_array(
-                arr=source_pixels_deid, photometric_interpretation=2 if grayscale else 1, use_mct=False
+                arr=source_pixels_deid,
+                photometric_interpretation=2 if grayscale else 1,
+                use_mct=False,
             )
 
         source_pixels_deid_stack.append(source_pixels_deid)
