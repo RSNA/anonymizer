@@ -1316,7 +1316,7 @@ def run_HEADLESS(project_model_path: Path):
         "Path to the configuration file. If not provided, the GUI will be launched."
     ),
 )
-def main(config: Path = None):
+def main(config: Path | None = None):
     """
     This application reads a configuration file if provided and runs headless or launches a GUI.
     """
