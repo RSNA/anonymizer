@@ -33,8 +33,7 @@ jobs:
       run: ls -l readme.md
 
     - name: Install dependencies
-      run: |
-        poetry install --with dev --verbose
+      run: poetry install --with dev --verbose
 
     - name: Ruff Linting and Formatting Check  
       run: poetry run ruff check ./src/anonymizer/ --fix
