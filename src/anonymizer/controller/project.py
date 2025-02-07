@@ -1017,6 +1017,7 @@ class ProjectController(AE):
         except Exception as e:
             logger.error(f"Send Error: {e}")
             raise
+
         finally:
             if association:
                 association.release()

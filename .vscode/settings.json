@@ -17,7 +17,6 @@
     "editor.defaultFormatter": "charliermarsh.ruff", 
     "editor.formatOnSave": true,
   },
- 
   "python.languageServer": "Pylance",
   "python.analysis.typeCheckingMode": "basic",
   

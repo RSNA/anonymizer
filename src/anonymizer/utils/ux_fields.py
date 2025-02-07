@@ -50,7 +50,6 @@ def validate_entry(final_value: str, allowed_chars: str, max: str | None) -> boo
     """
     if max and max != "None" and len(final_value) > int(max):
         return False
-
     return all(char in allowed_chars for char in final_value)
 
 

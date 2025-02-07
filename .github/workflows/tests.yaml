@@ -3,11 +3,7 @@ name: Tests
 on:
   workflow_dispatch:  # Enables manual trigger
   pull_request:
-    branches:
-      - master
-  push: 
-    branches:
-      - master
+  push:
 
 jobs:
   test:
@@ -37,12 +33,10 @@ jobs:
       run: ls -l readme.md
 
     - name: Install dependencies
-      run: |
-        poetry install --with dev --verbose
+      run: poetry install --with dev --verbose
 
-    - name: Ruff Linting and Formatting
-      run: |
-        poetry run ruff check src/anonymizer      
+    - name: Ruff Linting and Formatting Check  
+      run: poetry run ruff check ./src/anonymizer/ --fix
 
     - name: Run Unit Tests
       env:
