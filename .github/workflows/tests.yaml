@@ -37,7 +37,7 @@ jobs:
         poetry install --with dev --verbose
 
     - name: Ruff Linting and Formatting Check  
-      run: ruff check ./src/anonymizer/ --fix
+      run: poetry run ruff check ./src/anonymizer/ --fix
 
     - name: Run Unit Tests
       env:
