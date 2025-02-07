@@ -40,6 +40,10 @@ jobs:
       run: |
         poetry install --with dev --verbose
 
+    - name: Ruff Linting and Formatting
+      run: |
+        poetry run ruff check src/anonymizer      
+
     - name: Run Unit Tests
       env:
         PYTHONPATH: ${{ github.workspace }}/src
