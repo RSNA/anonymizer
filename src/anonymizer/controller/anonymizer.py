@@ -98,9 +98,9 @@ class AnonymizerController:
                 f"Anonymizer Model successfully loaded from: {self.model_filename}"
             )
             return file_model
-        except Exception as e:
+        except Exception as e1:
             # Attempt to load backup file
-            backup_filename = self.model_filename + ".bak"
+            backup_filename = str(self.model_filename) + ".bak"
             if os.path.exists(backup_filename):
                 try:
                     with open(backup_filename, "rb") as pkl_file:
@@ -114,16 +114,16 @@ class AnonymizerController:
                         f"Loaded Anonymizer Model from backup file: {backup_filename}"
                     )
                     return file_model
-                except Exception as e:
-                    logger.error(f"Backup Anonymizer Model datafile corrupt: {e}")
+                except Exception as e2:
+                    logger.error(f"Backup Anonymizer Model datafile corrupt: {e2}")
                     raise RuntimeError(
-                        f"Anonymizer datafile: {self.model_filename} and backup file corrupt\n\n{str(e)}"
-                    ) from e
+                        f"Anonymizer datafile: {self.model_filename} and backup file corrupt\n\n{str(e2)}"
+                    ) from e2
             else:
-                logger.error(f"Anonymizer Model datafile corrupt: {e}")
+                logger.error(f"Anonymizer Model datafile corrupt: {e1}")
                 raise RuntimeError(
-                    f"Anonymizer datafile: {self.model_filename} corrupt\n\n{str(e)}"
-                ) from e
+                    f"Anonymizer datafile: {self.model_filename} corrupt\n\n{str(e1)}"
+                ) from e1
 
     def __init__(self, project_model: ProjectModel):
         self._active = False
@@ -220,7 +220,7 @@ class AnonymizerController:
             return
 
         # Send sentinel value to worker threads to terminate:
-        for _index in range(self.NUMBER_OF_DATASET_WORKER_THREADS):
+        for __ in range(self.NUMBER_OF_DATASET_WORKER_THREADS):
             self._anon_ds_Q.put((None, None))
 
         # Wait for all sentinal values to be processed
@@ -369,7 +369,7 @@ class AnonymizerController:
         """
         try:
             date_obj = datetime.strptime(date_str, "%Y%m%d")
-            return not date_obj < datetime(1900, 1, 1)
+            return not (date_obj < datetime(1900, 1, 1))
         except ValueError:
             return False
 
@@ -461,7 +461,7 @@ class AnonymizerController:
         operation = self.model._tag_keep[tag]
         value = data_element.value
         # Keep data_element if no operation:
-        if operation == "":
+        if operation == "" or operation == "@keep":
             return
         # Anonymize operations:
         if "@empty" in operation:

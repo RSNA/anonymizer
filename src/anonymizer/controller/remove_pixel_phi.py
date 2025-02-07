@@ -380,7 +380,7 @@ def remove_pixel_phi(
         mask = np.zeros(pixels.shape[:2], dtype=np.uint8)
 
         # Draw bounding boxes around each detected word
-        for bbox, _text, _prob in results:
+        for bbox, __, __ in results:
             # Unpack the bounding box
             (top_left, top_right, bottom_right, bottom_left) = bbox
 

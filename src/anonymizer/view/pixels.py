@@ -107,7 +107,10 @@ class PixelsView(ctk.CTkToplevel):
         ]
 
     def __init__(
-        self, mono_font: ctk.CTkFont, base_dir: Path, patient_ids: list[str] = None
+        self,
+        mono_font: ctk.CTkFont,
+        base_dir: Path,
+        patient_ids: list[str] | None = None,
     ):
         super().__init__()
         self._data_font = mono_font  # get mono font from app
@@ -117,7 +120,7 @@ class PixelsView(ctk.CTkToplevel):
 
         # If patient_ids is not specified, iterate through ALL patient sub-directories to compile patient_ids:
         if patient_ids is None:
-            patient_ids = [p for p in base_dir.iterdir() if p.is_dir()]
+            patient_ids = [str(p) for p in base_dir.iterdir() if p.is_dir()]
 
         if not patient_ids:
             raise ValueError("No patients for PixelsView")

@@ -872,7 +872,7 @@ class QueryView(tk.Toplevel):
             attr_name = self._query_results_column_keys[-2]
             setattr(dataset, attr_name, images_stored_count)
 
-            for field, _attr in self._attr_map.items():
+            for field, __ in self._attr_map.items():
                 value = getattr(dataset, field, "")
                 display_values.append(str(value))
 

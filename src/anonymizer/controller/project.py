@@ -50,7 +50,7 @@ from anonymizer.controller.dicom_C_codes import (
     C_SUCCESS,
     C_WARNING,
 )
-from anonymizer.model.anonymizer import PHI
+from anonymizer.model.anonymizer import PHI_IndexRecord
 from anonymizer.model.project import (
     AuthenticationError,
     DICOMNode,
@@ -82,7 +82,7 @@ class SeriesUIDHierarchy:
         sop_class_uid: str | None = None,
         description: str | None = None,  # TODO: add BodyPartExamined?
         instance_count: int = 0,  # from NumberOfSeriesRelatedInstances
-        instances: Dict[str, InstanceUIDHierarchy] = None,
+        instances: Optional[Dict[str, InstanceUIDHierarchy]] = None,
     ):
         self.uid = uid
         self.number = number
@@ -90,10 +90,7 @@ class SeriesUIDHierarchy:
         self.sop_class_uid = sop_class_uid
         self.instance_count = instance_count
         self.description = description
-        if instances is None:
-            self.instances: Dict[str, InstanceUIDHierarchy] = {}
-        else:
-            self.instances = instances
+        self.instances = instances if instances is not None else {}
         # from send_c_move status response:
         self.completed_sub_ops = 0
         self.failed_sub_ops = 0
@@ -400,7 +397,7 @@ class ProjectController(AE):
     def update_model(self, new_model: ProjectModel | None = None):
         self.stop_scp()  # calls _reset_scp_vars
         if new_model:
-            self.model = new_model
+            self.model: ProjectModel = new_model
         self.set_dicom_timeouts(self.model.network_timeouts)
         self.set_radiology_storage_contexts()
         self.set_verification_context()
@@ -413,7 +410,8 @@ class ProjectController(AE):
         filepath = dest_dir / self.PROJECT_MODEL_FILENAME_JSON
         try:
             with open(filepath, "w") as f:
-                f.write(self.model.to_json(indent=4))
+                f.write(self.model.to_json(indent=4))  # type: ignore
+
             # Backup to [filepath].bak
             shutil.copy2(filepath, filepath.with_suffix(filepath.suffix + ".bak"))
             logger.debug(f"Model saved to: {filepath}")
@@ -975,7 +973,7 @@ class ProjectController(AE):
 
         return instance_uids
 
-    def send(self, file_paths: list[str], scp_name: str, send_contexts=None):
+    def send(self, file_paths: list[str], scp_name: str, send_contexts=None) -> int:
         """
         Blocking call: Sends a list of files to a specified SCP (Service Class Provider).
 
@@ -1000,11 +998,11 @@ class ProjectController(AE):
         """
         logger.info(f"Send {len(file_paths)} files to {scp_name}")
         association = None
+        files_sent = 0
+
         if send_contexts is None:
             send_contexts = self.get_radiology_storage_contexts()
 
-        files_sent = 0
-        exception_raised = False
         try:
             association = self._connect_to_scp(scp_name, send_contexts)
             for dicom_file_path in file_paths:
@@ -1018,15 +1016,13 @@ class ProjectController(AE):
                 files_sent += 1
         except Exception as e:
             logger.error(f"Send Error: {e}")
-            exception_raised = True
             raise
 
         finally:
             if association:
                 association.release()
 
-        if not exception_raised:
-            return files_sent
+        return files_sent
 
     def abort_query(self):
         logger.info("Abort Query")
@@ -1979,7 +1975,6 @@ class ProjectController(AE):
                     move_association.abort()
                 else:
                     move_association.release()
-
         return error_msg
 
     def _move_study_at_series_level(
@@ -2068,7 +2063,7 @@ class ProjectController(AE):
                 # If the status category is 'Warning', 'Failure' or 'Cancel' then yields a ~pydicom.dataset.Dataset which should contain
                 # an (0008,0058) *Failed SOP Instance UID List* element, however as this comes from the peer this is not guaranteed
                 # and may instead be an empty ~pydicom.dataset.Dataset.
-                for status, _identifier in responses:
+                for status, __ in responses:
                     if self._abort_move:
                         raise (
                             DICOMRuntimeError(
@@ -2165,7 +2160,6 @@ class ProjectController(AE):
                     move_association.abort()
                 else:
                     move_association.release()
-
         return error_msg
 
     def _move_study_at_instance_level(
@@ -2244,7 +2238,7 @@ class ProjectController(AE):
                     # If the status category is 'Warning', 'Failure' or 'Cancel' then yields a ~pydicom.dataset.Dataset which should contain
                     # an (0008,0058) *Failed SOP Instance UID List* element, however as this comes from the peer this is not guaranteed
                     # and may instead be an empty ~pydicom.dataset.Dataset.
-                    for status, _identifier in responses:
+                    for status, __ in responses:
                         time.sleep(0.1)
                         if self._abort_move:
                             raise (
@@ -2392,7 +2386,7 @@ class ProjectController(AE):
 
             logger.info(f"Move Futures: {len(self._move_futures)}")
 
-            for future, _move_op, study in self._move_futures:
+            for future, __, study in self._move_futures:
                 try:
                     error_msg = (
                         future.result()
@@ -2822,63 +2816,31 @@ class ProjectController(AE):
         Create a PHI (Protected Health Information) CSV file.
 
         This method generates a CSV file containing PHI data from the anonymizer model lookup tables.
-        The CSV file includes fields such as ANON-PatientID, ANON-PatientName, PHI-PatientName, PHI-PatientID,
-        DateOffset, PHI-StudyDate, ANON-Accession, PHI-Accession, ANON-StudyInstanceUID, PHI-StudyInstanceUID,
-        Number of Series, and Number of Instances.
+        The CSV file includes the fields of AnonymizerModel.PHI_IndexRecord dataclass.
 
         Returns:
             Path | str: The path to the generated PHI CSV file if successful, otherwise an error message.
         """
         logger.info("Create PHI CSV")
-        field_names = [
-            _("ANON-PatientID"),
-            _("ANON-PatientName"),
-            _("PHI-PatientName"),
-            _("PHI-PatientID"),
-            _("DateOffset"),
-            _("PHI-StudyDate"),
-            _("ANON-Accession"),
-            _("PHI-Accession"),
-            _("ANON-StudyInstanceUID"),
-            _("PHI-StudyInstanceUID"),
-            _("Number of Series"),
-            _("Number of Instances"),
-        ]
-        phi_data = []
-        # Create PHI data table from anonymizer model lookup tables:
-        for anon_pt_id in self.anonymizer.model._phi_lookup:
-            phi: PHI = self.anonymizer.model._phi_lookup[anon_pt_id]
-            for study in phi.studies:
-                phi_data.append(
-                    (
-                        anon_pt_id,
-                        anon_pt_id,
-                        phi.patient_name,
-                        phi.patient_id,  # TODO: Handle missing PatientID / PatientName
-                        study.anon_date_delta,
-                        study.study_date,
-                        self.anonymizer.model._acc_no_lookup[
-                            study.accession_number
-                        ],  # TODO: Handle missing accession numbers
-                        study.accession_number,
-                        self.anonymizer.model._uid_lookup[study.study_uid],
-                        study.study_uid,
-                        len(study.series),
-                        sum([s.instance_count for s in study.series]),
-                    )
-                )
+
+        phi_index: List[PHI_IndexRecord] | None = self.anonymizer.model.get_phi_index()
+
+        if not phi_index:
+            logger.error("No Studies/PHI data in Anonymizer Model")
+            return _("No Studies in Anonymizer Model")
 
         os.makedirs(self.model.phi_export_dir(), exist_ok=True)
         filename = (
-            f"{self.model.site_id}_{self.model.project_name}_PHI_{len(phi_data)}.csv"
+            f"{self.model.site_id}_{self.model.project_name}_PHI_{len(phi_index)}.csv"
         )
         phi_csv_path = Path(self.model.phi_export_dir(), filename)
 
         try:
             with open(phi_csv_path, "w", newline="") as csv_file:
                 writer = csv.writer(csv_file, delimiter=",")
-                writer.writerow(field_names)
-                writer.writerows(phi_data)
+                writer.writerow(PHI_IndexRecord.get_field_names())
+                for record in phi_index:
+                    writer.writerow(record.flatten())
             logger.info(f"PHI saved to: {phi_csv_path}")
         except Exception as e:
             logger.error(f"Error writing PHI CSV: {e}")

@@ -1,20 +1,20 @@
 # tests/conftest.py
 import os
-from typing import Any, Generator
-import pytest
+import shutil
+import tempfile
+from logging import INFO, WARNING
 
 # Add the src directory to sys.path dynamically
 #  sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
-
 from pathlib import Path
-import shutil
-import tempfile
-from logging import WARNING
+from typing import Any, Generator
 
-from anonymizer.utils.logging import init_logging
-from anonymizer.model.project import ProjectModel, NetworkTimeouts, LoggingLevels
-from anonymizer.controller.project import ProjectController
+import pytest
+
 import tests.controller.dicom_pacs_simulator_scp as pacs_simulator_scp
+from anonymizer.controller.project import ProjectController
+from anonymizer.model.project import LoggingLevels, NetworkTimeouts, ProjectModel
+from anonymizer.utils.logging import init_logging
 from tests.controller.dicom_test_nodes import (
     TEST_PROJECTNAME,
     TEST_SITEID,
@@ -24,7 +24,6 @@ from tests.controller.dicom_test_nodes import (
     PACSSimulatorSCP,
     RemoteSCPDict,
 )
-
 
 # def pytest_sessionstart(session):
 #     """Runs before the test session begins."""
@@ -61,8 +60,12 @@ def controller(temp_dir: str) -> Generator[ProjectController, Any, None]:
         scp=LocalStorageSCP,
         remote_scps=RemoteSCPDict,
         network_timeouts=NetworkTimeouts(2, 5, 5, 15),
-        anonymizer_script_path=Path("src/anonymizer/assets/scripts/default-anonymizer.script"),
-        logging_levels=LoggingLevels(anonymizer=WARNING, pynetdicom=WARNING, pydicom=False),
+        anonymizer_script_path=Path(
+            "src/anonymizer/assets/scripts/default-anonymizer.script"
+        ),
+        logging_levels=LoggingLevels(
+            anonymizer=INFO, pynetdicom=WARNING, pydicom=False
+        ),
     )
 
     project_controller = ProjectController(project_model)

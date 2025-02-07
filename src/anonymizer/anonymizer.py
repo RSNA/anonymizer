@@ -373,18 +373,18 @@ class Anonymizer(ctk.CTk):
     def load_model(self, json_filepath: Path) -> ProjectModel:
         try:
             with open(json_filepath, "r") as f:
-                file_model = ProjectModel.from_json(f.read())
+                file_model = ProjectModel.from_json(f.read())  # type: ignore
             if not isinstance(file_model, ProjectModel):
                 raise TypeError("Loaded object is not an instance of ProjectModel")
             logger.info(f"Project Model successfully loaded from: {json_filepath}")
             return file_model
-        except Exception as e:
+        except Exception as e1:
             # Attempt to load backup file
-            backup_filepath = json_filepath + ".bak"
+            backup_filepath = str(json_filepath) + ".bak"
             if os.path.exists(backup_filepath):
                 try:
                     with open(backup_filepath, "r") as f:
-                        file_model = ProjectModel.from_json(f.read())
+                        file_model = ProjectModel.from_json(f.read())  # type: ignore
                     if not isinstance(file_model, ProjectModel):
                         raise TypeError(
                             "Loaded backup object is not an instance of ProjectModel"
@@ -393,16 +393,16 @@ class Anonymizer(ctk.CTk):
                         f"Loaded Project Model from backup file: {backup_filepath}"
                     )
                     return file_model
-                except Exception as e:
-                    logger.error(f"Backup Project Model datafile corrupt: {e}")
+                except Exception as e2:
+                    logger.error(f"Backup Project Model datafile corrupt: {e2}")
                     raise RuntimeError(
-                        f"Project datafile: {backup_filepath} and backup file corrupt\n\n{str(e)}"
-                    ) from e
+                        f"Project datafile: {backup_filepath} and backup file corrupt\n\n{str(e2)}"
+                    ) from e2
             else:
-                logger.error(f"Project Model datafile corrupt: {e}")
+                logger.error(f"Project Model datafile corrupt: {e1}")
                 raise RuntimeError(
-                    f"Project Model datafile: {json_filepath} corrupt\n\n{str(e)}"
-                ) from e
+                    f"Project Model datafile: {json_filepath} corrupt\n\n{str(e1)}"
+                ) from e1
 
     def open_project(self, project_dir: Path | None = None):
         logger.debug("open_project")
@@ -1084,7 +1084,7 @@ class Anonymizer(ctk.CTk):
             html_dir.glob("*.html"), key=lambda path: int(path.stem.split("_")[0])
         )
 
-        for _index, html_file_path in enumerate(html_file_paths):
+        for __, html_file_path in enumerate(html_file_paths):
             label = self.help_filename_to_title(html_file_path)
             help_menu.add_command(
                 label=label,
@@ -1316,7 +1316,7 @@ def run_HEADLESS(project_model_path: Path):
         "Path to the configuration file. If not provided, the GUI will be launched."
     ),
 )
-def main(config: Path = None):
+def main(config: Path | None = None):
     """
     This application reads a configuration file if provided and runs headless or launches a GUI.
     """

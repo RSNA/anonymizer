@@ -366,7 +366,6 @@ class SettingsDialog(tk.Toplevel):
         row += 1
 
         btn_text = _("Create Project") if self.new_model else _("Update Project")
-
         self._create_project_button = ctk.CTkButton(
             self._frame, width=100, text=btn_text, command=self._create_project
         )
@@ -379,15 +378,15 @@ class SettingsDialog(tk.Toplevel):
         )
 
     def _project_name_change(self, name, index, mode):
-        logger.info("_project_name_change")
+        logger.debug("_project_name_change")
         new_project_name = self.project_name_var.get()
         if not new_project_name:
             return
         self.model.project_name = new_project_name
-        logger.info(f"Project Name updated: {self.model.project_name}")
+        logger.debug(f"Project Name updated: {self.model.project_name}")
         self.model.storage_dir = self.model.storage_dir.parent / self.model.project_name
         self._storage_dir_button.configure(text=self.model.abridged_storage_dir())
-        logger.info(f"Storage Directory updated: {self.model.storage_dir}")
+        logger.debug(f"Storage Directory updated: {self.model.storage_dir}")
 
     def _local_server_click(self, event=None):
         dlg = DICOMNodeDialog(self, self.model.scp, title=_("Local Server"))

@@ -56,7 +56,6 @@ class ExportView(tk.Toplevel):
         _status (ctk.CTkLabel): The label for displaying export status.
         _progressbar (ctk.CTkProgressBar): The progress bar for export.
         _cancel_export_button (ctk.CTkButton): The button for canceling export.
-        _create_phi_button (ctk.CTkButton): The button for creating patient lookup.
         _refresh_button (ctk.CTkButton): The button for refreshing the view.
         _select_all_button (ctk.CTkButton): The button for selecting all patients.
         _clear_selection_button (ctk.CTkButton): The button for clearing the selection.
@@ -156,7 +155,9 @@ class ExportView(tk.Toplevel):
         self._update_tree_from_images_directory()
 
         # Create a Scrollbar and associate it with the Treeview
-        scrollbar = ttk.Scrollbar(self._export_frame, orient="vertical", command=self._tree.yview)
+        scrollbar = ttk.Scrollbar(
+            self._export_frame, orient="vertical", command=self._tree.yview
+        )
         scrollbar.grid(row=0, column=11, sticky="ns")
         self._tree.configure(yscrollcommand=scrollbar.set)
 
@@ -182,7 +183,9 @@ class ExportView(tk.Toplevel):
 
         # Status and progress bar:
         self._status = ctk.CTkLabel(
-            self._status_frame, font=self._data_font, text=_("Processing") + " _ " + _("of") + " _ " + _("Patients")
+            self._status_frame,
+            font=self._data_font,
+            text=_("Processing") + " _ " + _("of") + " _ " + _("Patients"),
         )
         self._status.grid(row=0, column=0, padx=PAD, pady=0, sticky="w")
 
@@ -206,22 +209,6 @@ class ExportView(tk.Toplevel):
         )
         self._cancel_export_button.grid(row=0, column=2, padx=PAD, pady=PAD, sticky="w")
 
-        self._contact_sheet_button = ctk.CTkButton(
-            self._status_frame,
-            width=ButtonWidth,
-            text=_("Kaleidoscope"),
-            command=self._kaleidoscope_button_pressed,
-        )
-        self._contact_sheet_button.grid(row=0, column=4, padx=PAD, pady=PAD, sticky="w")
-
-        self._create_phi_button = ctk.CTkButton(
-            self._status_frame,
-            width=ButtonWidth,
-            text=_("Create Patient Lookup"),
-            command=self._create_phi_button_pressed,
-        )
-        self._create_phi_button.grid(row=0, column=5, padx=PAD, pady=PAD, sticky="w")
-
         self._refresh_button = ctk.CTkButton(
             self._status_frame,
             width=ButtonWidth,
@@ -243,7 +230,9 @@ class ExportView(tk.Toplevel):
             text=_("Clear Selection"),
             command=self._clear_selection_button_pressed,
         )
-        self._clear_selection_button.grid(row=0, column=9, padx=PAD, pady=PAD, sticky="w")
+        self._clear_selection_button.grid(
+            row=0, column=9, padx=PAD, pady=PAD, sticky="w"
+        )
 
         self._export_button = ctk.CTkButton(
             self._status_frame,
@@ -263,7 +252,6 @@ class ExportView(tk.Toplevel):
         self._export_button.configure(state="disabled")
         self._select_all_button.configure(state="disabled")
         self._clear_selection_button.configure(state="disabled")
-        self._create_phi_button.configure(state="disabled")
         self._cancel_export_button.configure(state="enabled")
         self._tree.configure(selectmode="none")
 
@@ -273,10 +261,6 @@ class ExportView(tk.Toplevel):
         self._export_button.configure(state="enabled")
         self._select_all_button.configure(state="enabled")
         self._clear_selection_button.configure(state="enabled")
-        if not self._tree.get_children():
-            self._create_phi_button.configure(state="disabled")
-        else:
-            self._create_phi_button.configure(state="enabled")
         self._cancel_export_button.configure(state="disabled")
         self._tree.configure(selectmode="extended")
 
@@ -344,14 +328,16 @@ class ExportView(tk.Toplevel):
     def _kaleidoscope_button_pressed(self):
         pts_selected = list(self._tree.selection())
         if len(pts_selected):
-            kaleidoscope_view = PixelsView(self._data_font, self._controller.model.images_dir(), pts_selected)
+            kaleidoscope_view = PixelsView(
+                self._data_font, self._controller.model.images_dir(), pts_selected
+            )
             kaleidoscope_view.focus()
 
     def _refresh_button_pressed(self):
         if self._export_active:
             logger.error("Refresh disabled, export is active")
             return
-        logger.info("Refresh button pressed, uodate tree from images directory...")
+        logger.info("Refresh button pressed, update tree from images directory...")
         # Clear tree to ensure all items are removed before re-populating:
         self._tree.delete(*self._tree.get_children())
         self._update_tree_from_images_directory()
@@ -377,7 +363,13 @@ class ExportView(tk.Toplevel):
         entity_label = _("Patients")
         if self._patients_processed == self._patients_to_process:
             state_label = _("Processed") + " "
-        msg = state_label + f" {self._patients_processed} " + _("of") + f" {self._patients_to_process} " + entity_label
+        msg = (
+            state_label
+            + f" {self._patients_processed} "
+            + _("of")
+            + f" {self._patients_to_process} "
+            + entity_label
+        )
         self._status.configure(text=msg)
 
     def _cancel_export_button_pressed(self):
@@ -430,10 +422,14 @@ class ExportView(tk.Toplevel):
             self._enable_action_buttons()
             self._export_active = False
             if len(self._patient_ids_to_export) > 0:
-                logger.error(f"Failed to export {len(self._patient_ids_to_export)} patients")
+                logger.error(
+                    f"Failed to export {len(self._patient_ids_to_export)} patients"
+                )
                 if messagebox.askretrycancel(
                     title=_("Export Error"),
-                    message=_("Failed to export") + f" {len(self._patient_ids_to_export)} " + _("patient(s)"),
+                    message=_("Failed to export")
+                    + f" {len(self._patient_ids_to_export)} "
+                    + _("patient(s)"),
                     parent=self,
                 ):
                     # Select failed patients in treeview to retry export:
@@ -486,7 +482,9 @@ class ExportView(tk.Toplevel):
                 title=_("Export Error"),
                 message=_("No patients selected for export.")
                 + "\n\n"
-                + _("Use SHIFT+Click and/or CMD/CTRL+Click to select multiple patients."),
+                + _(
+                    "Use SHIFT+Click and/or CMD/CTRL+Click to select multiple patients."
+                ),
                 parent=self,
             )
             return

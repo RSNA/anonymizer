@@ -9,10 +9,10 @@ import shutil
 import threading
 import xml.etree.ElementTree as ET
 from collections import namedtuple
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from pprint import pformat
-from typing import List
+from typing import ClassVar, Dict, List, Tuple
 
 from bidict import bidict
 from pydicom import Dataset
@@ -65,6 +65,48 @@ class PHI:
     studies: List[Study] = field(
         default_factory=list
     )  # TODO: make dictionary with key = study_uid
+
+
+@dataclass
+class PHI_IndexRecord:
+    anon_patient_id: str
+    anon_patient_name: str
+    phi_patient_name: str
+    phi_patient_id: str
+    date_offset: int
+    phi_study_date: str
+    anon_accession: str
+    phi_accession: str
+    anon_study_uid: str
+    phi_study_uid: str
+    num_series: int
+    num_instances: int
+
+    field_titles: ClassVar[Dict[str, str]] = {
+        "anon_patient_id": "ANON-PatientID",
+        "anon_patient_name": "ANON-PatientName",
+        "phi_patient_name": "PHI-PatientName",
+        "phi_patient_id": "PHI-PatientID",
+        "date_offset": "DateOffset",
+        "phi_study_date": "PHI-StudyDate",
+        "anon_accession": "ANON-Accession",
+        "phi_accession": "PHI-Accession",
+        "anon_study_uid": "ANON-StudyInstanceUID",
+        "phi_study_uid": "PHI-StudyInstanceUID",
+        "num_series": "Number of Series",
+        "num_instances": "Number of Instances",
+    }
+
+    @classmethod
+    def get_field_titles(cls) -> list:
+        return [cls.field_titles.get(field.name) for field in fields(cls)]
+
+    def flatten(self) -> Tuple:
+        return tuple(getattr(self, field.name) for field in fields(self))
+
+    @classmethod
+    def get_field_names(cls) -> list:
+        return [field.name for field in fields(cls)]
 
 
 Totals = namedtuple(
@@ -120,8 +162,9 @@ class AnonymizerModel:
             site_id + "-" + "".zfill(len(str(self.MAX_PATIENTS)) - 1)
         )
 
+        # Initialise Lookup Tables:
         self._patient_id_lookup = {}
-        self._uid_lookup: bidict = bidict()
+        self._uid_lookup: bidict[str, str] = bidict()
         self._acc_no_lookup = {}
         self._phi_lookup = {}
         self._tag_keep = {}
@@ -406,6 +449,32 @@ class AnonymizerModel:
                 return False
         return False
 
+    def get_phi_index(self) -> List[PHI_IndexRecord] | None:
+        if self.get_patient_id_count() == 0:
+            return None
+
+        phi_index = []
+        for anon_pt_id in self._phi_lookup:
+            phi: PHI = self._phi_lookup[anon_pt_id]
+            for study in phi.studies:
+                phi_index_record = PHI_IndexRecord(
+                    anon_patient_id=anon_pt_id,
+                    anon_patient_name=anon_pt_id,
+                    phi_patient_id=anon_pt_id,
+                    phi_patient_name=phi.patient_name,
+                    date_offset=study.anon_date_delta,
+                    phi_study_date=study.study_date,
+                    # TODO: Handle missing accession numbers
+                    anon_accession=self._acc_no_lookup[study.accession_number],
+                    phi_accession=study.accession_number,
+                    anon_study_uid=self._uid_lookup[study.study_uid],
+                    phi_study_uid=study.study_uid,
+                    num_series=len(study.series),
+                    num_instances=sum([s.instance_count for s in study.series]),
+                )
+                phi_index.append(phi_index_record)
+        return phi_index
+
     # Used by QueryRetrieveView to prevent study re-import
     def study_imported(self, ptid: str, study_uid: str) -> bool:
         with self._lock:
@@ -651,6 +720,8 @@ class AnonymizerModel:
                 del self._phi_lookup[anon_pt_id]
                 del self._patient_id_lookup[phi.patient_id]
                 self._patients -= 1
+
+            return True
 
     def process_java_phi_studies(self, java_studies: List[JavaAnonymizerExportedStudy]):
         """
