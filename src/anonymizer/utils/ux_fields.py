@@ -153,10 +153,7 @@ def str_entry(
     ctk_label.grid(row=row, column=col, padx=pad, pady=(pad, 0), sticky=sticky)
 
     char_width_px = ctk.CTkFont().measure("A")
-    if width_chars == 20 and max_chars:
-        width_px = (max_chars + 3) * char_width_px
-    else:
-        width_px = (width_chars + 3) * char_width_px
+    width_px = (max_chars + 3) * char_width_px if width_chars == 20 and max_chars else (width_chars + 3) * char_width_px
     if not enabled:
         ctk_entry = ctk.CTkLabel(view, textvariable=str_var)
     else:
