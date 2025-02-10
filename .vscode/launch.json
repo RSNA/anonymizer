@@ -10,7 +10,7 @@
       "justMyCode": false
     },
     {
-      "name": "Anonymizer GUI Optimzed 0",
+      "name": "Anonymizer GUI",
       "type": "debugpy",
       "request": "launch",
       "module": "anonymizer.anonymizer",
@@ -24,35 +24,5 @@
       },
       "justMyCode": true,
     },
-    {
-      "name": "Anonymizer GUI Optimized 1",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "anonymizer.anonymizer",
-      "cwd": "${workspaceFolder}/src",
-      "env": {
-        "PYTHONOPTIMIZE": "1"
-      },
-      "console": "integratedTerminal",
-      "autoReload": {
-        "enable": true
-      },
-      "justMyCode": true
-    },
-    {
-      "name": "Anonymizer GUI Optimized 2",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "anonymizer.anonymizer",
-      "cwd": "${workspaceFolder}/src",
-      "env": {
-        "PYTHONOPTIMIZE": "2"
-      },
-      "console": "integratedTerminal",
-      "autoReload": {
-        "enable": true
-      },
-      "justMyCode": false
-    }
   ]
 }

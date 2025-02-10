@@ -5,7 +5,7 @@ This module contains the ProjectModel class and related data classes for storing
 import time
 from copy import copy, deepcopy
 from dataclasses import asdict, dataclass, field
-from logging import DEBUG, WARNING, getLevelName
+from logging import INFO, WARNING, getLevelName
 from pathlib import Path
 from pprint import pformat
 from typing import Dict, List
@@ -72,7 +72,7 @@ class AWSCognito:
     def __repr__(self) -> str:
         d_copy = copy(self)
         d_copy.password = len(self.password) * "*"
-        return f"\nAWSCognito\n({pformat(asdict(d_copy),sort_dicts=False)})"
+        return f"\nAWSCognito\n({pformat(asdict(d_copy), sort_dicts=False)})"
 
 
 @dataclass_json()
@@ -160,7 +160,7 @@ class ProjectModel:
 
     @staticmethod
     def default_logging_levels() -> LoggingLevels:
-        return LoggingLevels(DEBUG, WARNING, False)
+        return LoggingLevels(INFO, WARNING, False)
 
     # Custom encoder and decoder for Path objects
     path_field = config(encoder=str, decoder=Path)  # Encode Path as string, Decode string to Path
@@ -220,7 +220,7 @@ class ProjectModel:
             return str(path_obj)  # Return the full path if it's short enough
         else:
             if include_filename:
-                abridged_dir = f".../{'/'.join(parts[-(depth+1):-1])}"  # Exclude filename from parts
+                abridged_dir = f".../{'/'.join(parts[-(depth + 1) : -1])}"  # Exclude filename from parts
                 return f"{abridged_dir}/{path_obj.name}"
             else:
                 abridged_dir = f".../{'/'.join(parts[-depth:])}"

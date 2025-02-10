@@ -52,15 +52,24 @@ class Dashboard(ctk.CTkFrame):
     PAD = 20
     BUTTON_WIDTH = 100
 
-    def __init__(self, parent, query_callback, export_callback, controller: ProjectController):
+    def __init__(self, parent, query_callback, export_callback, view_callback, controller: ProjectController):
         super().__init__(master=parent)
-        self._label_font = ctk.CTkFont(family=ctk.CTkFont().cget("family"), size=self.LABEL_FONT_SIZE, weight="normal")
-        self._data_font = ctk.CTkFont(family=parent.mono_font.cget("family"), size=self.DATA_FONT_SIZE, weight="normal")
+        self._label_font = ctk.CTkFont(
+            family=ctk.CTkFont().cget("family"),
+            size=self.LABEL_FONT_SIZE,
+            weight="normal",
+        )
+        self._data_font = ctk.CTkFont(
+            family=parent.mono_font.cget("family"),
+            size=self.DATA_FONT_SIZE,
+            weight="normal",
+        )
         self._mono_font = parent.mono_font
         self._last_qsize = 0
         self._latch_max_qsize = 1
         self._query_callback = query_callback
         self._export_callback = export_callback
+        self._view_callback = view_callback
         self._controller: ProjectController = controller
         self._timer = 0
         self._query_ux_Q: Queue[EchoResponse] = Queue()
@@ -85,29 +94,21 @@ class Dashboard(ctk.CTkFrame):
         )
         self._query_button.grid(row=row, column=0, padx=self.PAD, pady=(self.PAD, 0), sticky="w")
 
-        self._view_pixels_button = ctk.CTkButton(
+        self._view_button = ctk.CTkButton(
             self,
             width=self.BUTTON_WIDTH,
-            text=_("View Pixels"),
-            command=self._view_pixels_button_click,
+            text=_("View"),
+            command=self._view_button_click,
         )
-        self._view_pixels_button.grid(row=row, column=1, padx=self.PAD, pady=(self.PAD, 0))
+        self._view_button.grid(row=row, column=1, padx=self.PAD, pady=(self.PAD, 0), sticky="e")
 
-        self._view_index_button = ctk.CTkButton(
-            self,
-            width=self.BUTTON_WIDTH,
-            text=_("View Index"),
-            command=self._view_index_button_click,
-        )
-        self._view_index_button.grid(row=row, column=2, padx=self.PAD, pady=(self.PAD, 0))
-
-        self._export_button = ctk.CTkButton(
+        self._send_button = ctk.CTkButton(
             self,
             width=self.BUTTON_WIDTH,
             text=_("Send"),
-            command=self._export_button_click,
+            command=self._send_button_click,
         )
-        self._export_button.grid(row=row, column=3, padx=self.PAD, pady=(self.PAD, 0), sticky="e")
+        self._send_button.grid(row=row, column=3, padx=self.PAD, pady=(self.PAD, 0), sticky="e")
 
         row += 1
 
@@ -180,7 +181,13 @@ class Dashboard(ctk.CTkFrame):
         self._status = ctk.CTkLabel(self._status_frame, text="")
         self._status.grid(row=0, column=4, padx=self.PAD, sticky="e")
 
-    def _wait_for_scp_echo(self, scp_name: str, button: ctk.CTkButton, ux_Q: Queue[EchoResponse], callback: Any):
+    def _wait_for_scp_echo(
+        self,
+        scp_name: str,
+        button: ctk.CTkButton,
+        ux_Q: Queue[EchoResponse],
+        callback: Any,
+    ):
         if ux_Q.empty():
             self.after(500, self._wait_for_scp_echo, scp_name, button, ux_Q, callback)
             return
@@ -215,13 +222,18 @@ class Dashboard(ctk.CTkFrame):
         self._query_button.configure(state="disabled")
         self._controller.echo_ex(EchoRequest(scp=_("QUERY"), ux_Q=self._query_ux_Q))
         self.after(
-            500, self._wait_for_scp_echo, _("Query Server"), self._query_button, self._query_ux_Q, self._query_callback
+            500,
+            self._wait_for_scp_echo,
+            _("Query Server"),
+            self._query_button,
+            self._query_ux_Q,
+            self._query_callback,
         )
         self._status.configure(text=_("Checking Query DICOM Server is online") + "...")
 
-    def _export_button_click(self):
+    def _send_button_click(self):
         logger.info("_export_button_click")
-        self._export_button.configure(state="disabled")
+        self._send_button.configure(state="disabled")
 
         if self._controller.model.export_to_AWS:
             self._controller.AWS_authenticate_ex()  # Authenticate to AWS in background
@@ -234,17 +246,15 @@ class Dashboard(ctk.CTkFrame):
                 1000,
                 self._wait_for_scp_echo,
                 _("Export Server"),
-                self._export_button,
+                self._send_button,
                 self._export_ux_Q,
                 self._export_callback,
             )
             self._status.configure(text=_("Checking Export DICOM Server is online") + "...")
 
-    def _view_pixels_button_click(self):
-        logger.info("_view_pixels_button_click")
-
-    def _view_index_button_click(self):
-        logger.info("_view_index_button_click")
+    def _view_button_click(self):
+        logger.info("_view_button_click")
+        self._view_callback()
 
     def _wait_for_aws(self):
         self._timer -= 1
@@ -261,11 +271,11 @@ class Dashboard(ctk.CTkFrame):
                 parent=self,
             )
             self._status.configure(text="")
-            self._export_button.configure(state="normal", text_color="red")
+            self._send_button.configure(state="normal", text_color="red")
             return
 
         if self._controller.AWS_credentials_valid():
-            self._export_button.configure(state="normal", text_color="light green")
+            self._send_button.configure(state="normal", text_color="light green")
             self._export_callback()
             self._status.configure(text=_("AWS Authenticated"))
             return

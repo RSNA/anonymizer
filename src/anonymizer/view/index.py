@@ -82,13 +82,13 @@ class IndexView(tk.Toplevel):
         self._tree.grid(row=0, column=0, columnspan=11, sticky="nswe")
 
         # Set tree column headers, width and justification
-        col_names = PHI_IndexRecord.get_field_names()
-        for col in self._tree["columns"]:
+        col_names = PHI_IndexRecord.get_field_titles()
+        for col in range(len(col_names)):
             self._tree.heading(col, text=col_names[col])
             self._tree.column(
                 col,
                 width=(len(col_names[col]) + 2) * char_width_px,
-                anchor="center",
+                # anchor="center",
                 stretch=False,
             )
 
@@ -100,9 +100,7 @@ class IndexView(tk.Toplevel):
         self._update_tree_from_phi_index()
 
         # Create a Scrollbar and associate it with the Treeview
-        scrollbar = ttk.Scrollbar(
-            self._index_frame, orient="vertical", command=self._tree.yview
-        )
+        scrollbar = ttk.Scrollbar(self._index_frame, orient="vertical", command=self._tree.yview)
         scrollbar.grid(row=0, column=11, sticky="ns")
         self._tree.configure(yscrollcommand=scrollbar.set)
 
@@ -118,13 +116,13 @@ class IndexView(tk.Toplevel):
         self._button_frame.grid_columnconfigure(3, weight=1)
 
         # Control buttons:
-        self._view_pixels_button = ctk.CTkButton(
-            self._button_frame,
-            width=ButtonWidth,
-            text=_("View Pixels"),
-            command=self._view_pixels_button_pressed,
-        )
-        self._view_pixels_button.grid(row=0, column=4, padx=PAD, pady=PAD, sticky="w")
+        # self._view_pixels_button = ctk.CTkButton(
+        #     self._button_frame,
+        #     width=ButtonWidth,
+        #     text=_("View Pixels"),
+        #     command=self._view_pixels_button_pressed,
+        # )
+        # self._view_pixels_button.grid(row=0, column=4, padx=PAD, pady=PAD, sticky="w")
 
         self._create_phi_button = ctk.CTkButton(
             self._button_frame,
@@ -155,14 +153,12 @@ class IndexView(tk.Toplevel):
             text=_("Clear Selection"),
             command=self._clear_selection_button_pressed,
         )
-        self._clear_selection_button.grid(
-            row=0, column=9, padx=PAD, pady=PAD, sticky="w"
-        )
+        self._clear_selection_button.grid(row=0, column=9, padx=PAD, pady=PAD, sticky="w")
 
         self._delete_button = ctk.CTkButton(
             self._button_frame,
             width=ButtonWidth,
-            text=_("Export"),
+            text=_("Delete"),
             command=self._delete_button_pressed,
         )
         self._delete_button.grid(row=0, column=10, padx=PAD, pady=PAD, sticky="e")
@@ -203,9 +199,7 @@ class IndexView(tk.Toplevel):
 
     def _view_pixels_button_pressed(self):
         studies_selected = list(self._tree.selection())
-        logger.info(
-            f"View Pixels button pressed, {len(studies_selected)} studies selected"
-        )
+        logger.info(f"View Pixels button pressed, {len(studies_selected)} studies selected")
         if studies_selected:
             logger.info(studies_selected)
         # if len(pts_selected):
@@ -244,11 +238,21 @@ class IndexView(tk.Toplevel):
                 title=_("Deletion Error"),
                 message=_("No studies selected for deletion.")
                 + "\n\n"
-                + _(
-                    "Use SHIFT+Click and/or CMD/CTRL+Click to select multiple studies."
-                ),
+                + _("Use SHIFT+Click and/or CMD/CTRL+Click to select multiple studies."),
                 parent=self,
             )
+            return
+
+        if not messagebox.askyesno(
+            title=_("Confirm Study Deletion"),
+            message=_(
+                "Selected studies will be permanently deleted from PHI Index and all associated anonymized files deleted from local storage directory"
+                + "\n\n"
+                + _("Are you sure?")
+            ),
+            parent=self,
+        ):
+            logger.info("Study deletion aborted by user")
             return
 
         logger.info(f"Delete of {rows_to_delete} studies initiated")
@@ -263,6 +267,7 @@ class IndexView(tk.Toplevel):
             )
         dlg = DeleteStudiesDialog(self, self._controller, studies)
         dlg.get_input()
+        self._update_tree_from_phi_index()
 
     def _escape_keypress(self, event):
         logger.info("_escape_pressed")
@@ -272,3 +277,12 @@ class IndexView(tk.Toplevel):
         logger.info("_on_cancel")
         self.grab_release()
         self.destroy()
+
+    def get_input(self):
+        """
+        Get the user input.
+
+        """
+        self.focus()
+        self.master.wait_window(self)
+        return

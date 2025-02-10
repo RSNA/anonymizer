@@ -21,7 +21,6 @@ from anonymizer.model.project import ProjectModel
 from anonymizer.utils.storage import count_studies_series_images
 from anonymizer.utils.translate import _
 from anonymizer.view.dashboard import Dashboard
-from anonymizer.view.pixels import PixelsView
 
 logger = logging.getLogger(__name__)
 
@@ -155,9 +154,7 @@ class ExportView(tk.Toplevel):
         self._update_tree_from_images_directory()
 
         # Create a Scrollbar and associate it with the Treeview
-        scrollbar = ttk.Scrollbar(
-            self._export_frame, orient="vertical", command=self._tree.yview
-        )
+        scrollbar = ttk.Scrollbar(self._export_frame, orient="vertical", command=self._tree.yview)
         scrollbar.grid(row=0, column=11, sticky="ns")
         self._tree.configure(yscrollcommand=scrollbar.set)
 
@@ -230,9 +227,7 @@ class ExportView(tk.Toplevel):
             text=_("Clear Selection"),
             command=self._clear_selection_button_pressed,
         )
-        self._clear_selection_button.grid(
-            row=0, column=9, padx=PAD, pady=PAD, sticky="w"
-        )
+        self._clear_selection_button.grid(row=0, column=9, padx=PAD, pady=PAD, sticky="w")
 
         self._export_button = ctk.CTkButton(
             self._status_frame,
@@ -325,13 +320,13 @@ class ExportView(tk.Toplevel):
         else:
             self._error_frame.grid_remove()
 
-    def _kaleidoscope_button_pressed(self):
-        pts_selected = list(self._tree.selection())
-        if len(pts_selected):
-            kaleidoscope_view = PixelsView(
-                self._data_font, self._controller.model.images_dir(), pts_selected
-            )
-            kaleidoscope_view.focus()
+    # def _kaleidoscope_button_pressed(self):
+    #     pts_selected = list(self._tree.selection())
+    #     if len(pts_selected):
+    #         kaleidoscope_view = PixelsView(
+    #             self._data_font, self._controller.model.images_dir(), pts_selected
+    #         )
+    #         kaleidoscope_view.focus()
 
     def _refresh_button_pressed(self):
         if self._export_active:
@@ -363,13 +358,7 @@ class ExportView(tk.Toplevel):
         entity_label = _("Patients")
         if self._patients_processed == self._patients_to_process:
             state_label = _("Processed") + " "
-        msg = (
-            state_label
-            + f" {self._patients_processed} "
-            + _("of")
-            + f" {self._patients_to_process} "
-            + entity_label
-        )
+        msg = state_label + f" {self._patients_processed} " + _("of") + f" {self._patients_to_process} " + entity_label
         self._status.configure(text=msg)
 
     def _cancel_export_button_pressed(self):
@@ -422,14 +411,10 @@ class ExportView(tk.Toplevel):
             self._enable_action_buttons()
             self._export_active = False
             if len(self._patient_ids_to_export) > 0:
-                logger.error(
-                    f"Failed to export {len(self._patient_ids_to_export)} patients"
-                )
+                logger.error(f"Failed to export {len(self._patient_ids_to_export)} patients")
                 if messagebox.askretrycancel(
                     title=_("Export Error"),
-                    message=_("Failed to export")
-                    + f" {len(self._patient_ids_to_export)} "
-                    + _("patient(s)"),
+                    message=_("Failed to export") + f" {len(self._patient_ids_to_export)} " + _("patient(s)"),
                     parent=self,
                 ):
                     # Select failed patients in treeview to retry export:
@@ -462,7 +447,7 @@ class ExportView(tk.Toplevel):
             # TODO: remove this echo test? Rely on connection error from c-send?
             if not self._controller.echo(_("EXPORT")):
                 self._export_button.configure(text_color="red")
-                self._parent._export_button.configure(text_color="red")
+                self._parent._send_button.configure(text_color="red")
                 messagebox.showerror(
                     title=_("Connection Error"),
                     message=_("Export Server Failed DICOM C-ECHO"),
@@ -471,7 +456,7 @@ class ExportView(tk.Toplevel):
                 return
 
         self._export_button.configure(text_color="light green")
-        self._parent._export_button.configure(text_color="light green")
+        self._parent._send_button.configure(text_color="light green")
 
         self._patient_ids_to_export = list(self._tree.selection())
 
@@ -482,9 +467,7 @@ class ExportView(tk.Toplevel):
                 title=_("Export Error"),
                 message=_("No patients selected for export.")
                 + "\n\n"
-                + _(
-                    "Use SHIFT+Click and/or CMD/CTRL+Click to select multiple patients."
-                ),
+                + _("Use SHIFT+Click and/or CMD/CTRL+Click to select multiple patients."),
                 parent=self,
             )
             return

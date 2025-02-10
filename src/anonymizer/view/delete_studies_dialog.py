@@ -37,14 +37,11 @@ class DeleteStudiesDialog(tk.Toplevel):
     ) -> None:
         super().__init__(master=parent)
         title = _("Delete Studies")
-        sub_title = (
-            _("Deleting")
-            + f" {len(studies)} {_('study') if len(studies) == 1 else _('studies')}"
-        )
+        sub_title = _("Deleting") + f" {len(studies)} {_('study') if len(studies) == 1 else _('studies')}"
 
         self.title(title)
         self._sub_title: str = sub_title
-        self._data_font = parent.mono_font
+        self._data_font = parent._data_font
         self._controller: ProjectController = controller
         self._studies: list[tuple[str, str]] = studies
         self._cancelled = False
@@ -100,9 +97,7 @@ class DeleteStudiesDialog(tk.Toplevel):
         self._progressbar.set(0)
 
         self._progress_label = ctk.CTkLabel(self._frame, text="", font=self._data_font)
-        self._progress_label.grid(
-            row=row, column=0, padx=PAD, pady=(0, PAD), sticky="nw"
-        )
+        self._progress_label.grid(row=row, column=0, padx=PAD, pady=(0, PAD), sticky="nw")
 
         row += 1
 
@@ -119,9 +114,7 @@ class DeleteStudiesDialog(tk.Toplevel):
 
         row += 1
 
-        self._cancel_button = ctk.CTkButton(
-            self._frame, text=_("Cancel"), command=self._on_cancel
-        )
+        self._cancel_button = ctk.CTkButton(self._frame, text=_("Cancel"), command=self._on_cancel)
         self._cancel_button.grid(
             row=row,
             column=0,
@@ -148,9 +141,7 @@ class DeleteStudiesDialog(tk.Toplevel):
                 self._text_box.see(tk.END)
                 self._text_box.yview_moveto(1.0)
 
-            self._progress_label.configure(
-                text=_("Deleting") + f" {row} " + _("of") + f" {studies_to_process}"
-            )
+            self._progress_label.configure(text=_("Deleting") + f" {row} " + _("of") + f" {studies_to_process}")
 
             if self._controller.delete_study(*study):
                 self._text_box.insert(tk.END, f"{study} => OK\n")

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "rsna-anonymizer"
-version = "17.3.3"
+version = "17.3.6"
 description = "RSNA DICOM Anonymizer"
 authors = ["Algorhythm Software <michael@dx.life>"]
 license = "RSNA-MIRC Public License"
@@ -44,7 +44,7 @@ rsna-anonymizer = "anonymizer.anonymizer:main"
 
 [tool.ruff]
 target-version = "py312"
-line-length = 88
+line-length = 120
 
 lint.select = [ # https://docs.astral.sh/ruff/linter/#rule-selection
   "E",    # PyCodeStyle
@@ -75,7 +75,7 @@ max-complexity = 15 # Default is 10
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--verbose --show-capture=all --cov=src/anonymizer --cov-report=term-missing"
+# addopts = "--verbose --show-capture=all --cov=src/anonymizer --cov-report=term-missing"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

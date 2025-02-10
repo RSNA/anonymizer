@@ -94,9 +94,7 @@ class AnonymizerController:
             file_model = pickle.loads(serialized_data)
             if not isinstance(file_model, AnonymizerModel):
                 raise TypeError("Loaded object is not an instance of AnonymizerModel")
-            logger.info(
-                f"Anonymizer Model successfully loaded from: {self.model_filename}"
-            )
+            logger.info(f"Anonymizer Model successfully loaded from: {self.model_filename}")
             return file_model
         except Exception as e1:
             # Attempt to load backup file
@@ -107,12 +105,8 @@ class AnonymizerController:
                         serialized_data = pkl_file.read()
                     file_model = pickle.loads(serialized_data)
                     if not isinstance(file_model, AnonymizerModel):
-                        raise TypeError(
-                            "Loaded backup object is not an instance of AnonymizerModel"
-                        )
-                    logger.warning(
-                        f"Loaded Anonymizer Model from backup file: {backup_filename}"
-                    )
+                        raise TypeError("Loaded backup object is not an instance of AnonymizerModel")
+                    logger.warning(f"Loaded Anonymizer Model from backup file: {backup_filename}")
                     return file_model
                 except Exception as e2:
                     logger.error(f"Backup Anonymizer Model datafile corrupt: {e2}")
@@ -121,17 +115,13 @@ class AnonymizerController:
                     ) from e2
             else:
                 logger.error(f"Anonymizer Model datafile corrupt: {e1}")
-                raise RuntimeError(
-                    f"Anonymizer datafile: {self.model_filename} corrupt\n\n{str(e1)}"
-                ) from e1
+                raise RuntimeError(f"Anonymizer datafile: {self.model_filename} corrupt\n\n{str(e1)}") from e1
 
     def __init__(self, project_model: ProjectModel):
         self._active = False
         self.project_model = project_model
         # Initialise AnonymizerModel datafile full path:
-        self.model_filename = Path(
-            self.project_model.private_dir(), self.ANONYMIZER_MODEL_FILENAME
-        )
+        self.model_filename = Path(self.project_model.private_dir(), self.ANONYMIZER_MODEL_FILENAME)
         # If present, load pickled AnonymizerModel from project directory:
         if self.model_filename.exists():
             file_model = self.load_model()
@@ -151,9 +141,7 @@ class AnonymizerController:
                 )  # copy over corresponding attributes from the old model (file_model)
                 self.model._version = AnonymizerModel.MODEL_VERSION  # upgrade version
                 self.save_model()
-                logger.info(
-                    f"Anonymizer Model upgraded successfully to version: {self.model._version}"
-                )
+                logger.info(f"Anonymizer Model upgraded successfully to version: {self.model._version}")
             else:
                 self.model: AnonymizerModel = file_model
 
@@ -164,9 +152,7 @@ class AnonymizerController:
                 project_model.uid_root,
                 project_model.anonymizer_script_path,
             )
-            logger.info(
-                f"New Default Anonymizer Model initialised from script: {project_model.anonymizer_script_path}"
-            )
+            logger.info(f"New Default Anonymizer Model initialised from script: {project_model.anonymizer_script_path}")
 
         self._anon_ds_Q: Queue = Queue()  # queue for dataset workers
         self._anon_px_Q: Queue = Queue()  # queue for pixel phi workers
@@ -246,9 +232,7 @@ class AnonymizerController:
 
     def missing_attributes(self, ds: Dataset) -> list[str]:
         return [
-            attr_name
-            for attr_name in self.required_attributes
-            if attr_name not in ds or getattr(ds, attr_name) == ""
+            attr_name for attr_name in self.required_attributes if attr_name not in ds or getattr(ds, attr_name) == ""
         ]
 
     def local_storage_path(self, base_dir: Path, ds: Dataset) -> Path:
@@ -283,9 +267,7 @@ class AnonymizerController:
             self.project_model.QUARANTINE_DIR,
         )
 
-    def _move_file_to_quarantine(
-        self, file: Path, quarantine: QuarantineDirectories
-    ) -> bool:
+    def _move_file_to_quarantine(self, file: Path, quarantine: QuarantineDirectories) -> bool:
         """Writes the file to the specified quarantine sub-directory.
 
         Args:
@@ -296,9 +278,7 @@ class AnonymizerController:
             bool: True on successful move, False otherwise.
         """
         try:
-            qpath = self.get_quarantine_path().joinpath(
-                quarantine.value, f"{file.name}.{time.strftime('%H%M%S')}"
-            )
+            qpath = self.get_quarantine_path().joinpath(quarantine.value, f"{file.name}.{time.strftime('%H%M%S')}")
             logger.error(f"QUARANTINE {file} to {qpath}")
             if qpath.exists():
                 logger.error(f"File {file} already exists")
@@ -311,9 +291,7 @@ class AnonymizerController:
             logger.error(f"Error Copying to QUARANTINE: {e}")
             return False
 
-    def _write_dataset_to_quarantine(
-        self, e: Exception, ds: Dataset, quarantine_error: QuarantineDirectories
-    ) -> str:
+    def _write_dataset_to_quarantine(self, e: Exception, ds: Dataset, quarantine_error: QuarantineDirectories) -> str:
         """
         Writes the given dataset to the quarantine directory and logs any errors.
 
@@ -329,16 +307,12 @@ class AnonymizerController:
         os.makedirs(qpath, exist_ok=True)
         filename: Path = self.local_storage_path(qpath, ds)
         try:
-            error_msg: str = (
-                f"Storage Error = {e}, QUARANTINE {ds.SOPInstanceUID} to {filename}"
-            )
+            error_msg: str = f"Storage Error = {e}, QUARANTINE {ds.SOPInstanceUID} to {filename}"
             logger.error(error_msg)
             ds.save_as(filename, write_like_original=True)
             self.model.increment_quarantined()
         except Exception:
-            logger.critical(
-                f"Critical Error writing incoming dataset to QUARANTINE: {e}"
-            )
+            logger.critical(f"Critical Error writing incoming dataset to QUARANTINE: {e}")
 
         return error_msg
 
@@ -434,9 +408,7 @@ class AnonymizerController:
                 result = "0" + result
 
         except ValueError:
-            logger.error(
-                f"Invalid age string: {age_string}, round_age operation failed, keeping original value"
-            )
+            logger.error(f"Invalid age string: {age_string}, round_age operation failed, keeping original value")
             result = age_string
 
         return result
@@ -477,9 +449,7 @@ class AnonymizerController:
                 anon_acc_no = self.model.get_next_anon_acc_no(value)
             dataset[tag].value = str(anon_acc_no)
         elif "@hashdate" in operation:
-            _, anon_date = self._hash_date(
-                data_element.value, dataset.get("PatientID", "")
-            )
+            _, anon_date = self._hash_date(data_element.value, dataset.get("PatientID", ""))
             dataset[tag].value = anon_date
         elif "@round" in operation:
             # TODO: operand is named round but it is age format specific, should be renamed round_age
@@ -488,9 +458,7 @@ class AnonymizerController:
                 return
             parameter = self.extract_first_digit(operation.replace("@round", ""))
             if parameter is None:
-                logger.error(
-                    f"Invalid round operation: {operation}, ignoring operation, return unmodified value"
-                )
+                logger.error(f"Invalid round operation: {operation}, ignoring operation, return unmodified value")
                 dataset[tag].value = value
                 return
             else:
@@ -520,9 +488,7 @@ class AnonymizerController:
 
         # If pydicom logging is on, trace phi UIDs and store incoming phi file in private/source
         if self.project_model.logging_levels.pydicom:
-            logger.debug(
-                f"=>{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}"
-            )
+            logger.debug(f"=>{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}")
             filename = self.local_storage_path(self.project_model.private_dir(), ds)
             logger.debug(f"SOURCE STORE: {source} => {filename}")
             try:
@@ -539,28 +505,18 @@ class AnonymizerController:
         try:
             self.model.capture_phi(str(source), ds, date_delta)
         except ValueError as e:
-            return self._write_dataset_to_quarantine(
-                e, ds, QuarantineDirectories.INVALID_DICOM
-            )
+            return self._write_dataset_to_quarantine(e, ds, QuarantineDirectories.INVALID_DICOM)
         except Exception as e:
-            return self._write_dataset_to_quarantine(
-                e, ds, QuarantineDirectories.CAPTURE_PHI_ERROR
-            )
+            return self._write_dataset_to_quarantine(e, ds, QuarantineDirectories.CAPTURE_PHI_ERROR)
 
-        phi_instance_uid = (
-            ds.SOPInstanceUID
-        )  # if exception, remove this instance from uid_lookup
+        phi_instance_uid = ds.SOPInstanceUID  # if exception, remove this instance from uid_lookup
         try:
             # To minimize memory/computation overhead DO NOT MAKE COPY of source dataset
             # Anonymize dataset (overwrite phi dataset) (prevents dataset copy)
             ds.remove_private_tags()  # remove all private elements (odd group number)
-            ds.walk(
-                self._anonymize_element
-            )  # recursive by default, recurses into embedded dataset sequences
+            ds.walk(self._anonymize_element)  # recursive by default, recurses into embedded dataset sequences
             # All elements now anonymized according to script, finally anonymizer PatientID and PatientName elements:
-            anon_ptid = self.model.get_anon_patient_id(
-                ds.get("PatientID", "")
-            )  # created by capture_phi
+            anon_ptid = self.model.get_anon_patient_id(ds.get("PatientID", ""))  # created by capture_phi
             if anon_ptid is None:
                 logger.critical(
                     f"Critical error, PHI Capture did not create anonymized patient id, resort to default: {self.model.default_anon_pt_id}"
@@ -595,6 +551,7 @@ class AnonymizerController:
             ds.save_as(filename, write_like_original=False)
 
             # If enabled for project, and this file contains pixeldata, queue this file for pixel PHI scanning and removal:
+            # TODO: implement modality specific, via project settings, pixel phi removal
             if self.project_model.remove_pixel_phi and "PixelData" in ds:
                 self._anon_px_Q.put(filename)
             return None
@@ -603,9 +560,7 @@ class AnonymizerController:
             # Remove this phi instance UID from lookup if anonymization or storage fails
             # Leave other PHI intact for this patient
             self.model.remove_uid(phi_instance_uid)
-            return self._write_dataset_to_quarantine(
-                e, ds, QuarantineDirectories.STORAGE_ERROR
-            )
+            return self._write_dataset_to_quarantine(e, ds, QuarantineDirectories.STORAGE_ERROR)
 
     def anonymize_file(self, file: Path) -> tuple[str | None, Dataset | None]:
         """
@@ -643,12 +598,8 @@ class AnonymizerController:
         # DICOM Dataset integrity checking:
         missing_attributes: list[str] = self.missing_attributes(ds)
         if missing_attributes != []:
-            self._move_file_to_quarantine(
-                file, QuarantineDirectories.MISSING_ATTRIBUTES
-            )
-            return _("Missing Attributes") + f": {missing_attributes}" + " -> " + _(
-                "Quarantined"
-            ), ds
+            self._move_file_to_quarantine(file, QuarantineDirectories.MISSING_ATTRIBUTES)
+            return _("Missing Attributes") + f": {missing_attributes}" + " -> " + _("Quarantined"), ds
 
         # Skip instance if already stored:
         if self.model.get_anon_uid(ds.SOPInstanceUID):
@@ -659,12 +610,8 @@ class AnonymizerController:
 
         # Ensure Storage Class (SOPClassUID which is a required attribute) is present in project storage classes
         if ds.SOPClassUID not in self.project_model.storage_classes:
-            self._move_file_to_quarantine(
-                file, QuarantineDirectories.INVALID_STORAGE_CLASS
-            )
-            return _("Storage Class mismatch") + f": {ds.SOPClassUID}" + " -> " + _(
-                "Quarantined"
-            ), ds
+            self._move_file_to_quarantine(file, QuarantineDirectories.INVALID_STORAGE_CLASS)
+            return _("Storage Class mismatch") + f": {ds.SOPClassUID}" + " -> " + _("Quarantined"), ds
 
         return self.anonymize(str(file), ds), ds
 
@@ -710,9 +657,7 @@ class AnonymizerController:
 
         # Once-off initialisation of easyocr.Reader (and underlying pytorch model):
         # if pytorch models not downloaded yet, they will be when Reader initializes
-        model_dir = (
-            Path("assets") / "ocr" / "model"
-        )  # Default is: Path("~/.EasyOCR/model").expanduser()
+        model_dir = Path("assets") / "ocr" / "model"  # Default is: Path("~/.EasyOCR/model").expanduser()
         if not model_dir.exists():
             logger.warning(
                 f"EasyOCR model directory: {model_dir}, does not exist, EasyOCR will create it, models still to be downloaded..."
@@ -730,9 +675,7 @@ class AnonymizerController:
         logging.info("OCR Reader initialised successfully")
 
         # Check if GPU available
-        logger.info(
-            f"Apple MPS (Metal) GPU Available: {torch.backends.mps.is_available()}"
-        )
+        logger.info(f"Apple MPS (Metal) GPU Available: {torch.backends.mps.is_available()}")
         logger.info(f"CUDA GPU Available: {torch.cuda.is_available()}")
 
         while True:

@@ -3,22 +3,25 @@
 import os
 import time
 from pathlib import Path
+
 from pydicom import dcmread
-from pydicom.dataset import Dataset
 from pydicom.data import get_testdata_file
+from pydicom.dataset import Dataset
 from pynetdicom.presentation import build_context
-from tests.controller.helpers import send_file_to_scp, send_files_to_scp
+
+from anonymizer.controller.project import ProjectController
+from anonymizer.model.anonymizer import AnonymizerModel
 from tests.controller.dicom_test_files import (
+    COMPRESSED_TEST_FILES,
+    CR_STUDY_3_SERIES_3_IMAGES,
+    CT_STUDY_1_SERIES_4_IMAGES,
+    MR_STUDY_3_SERIES_11_IMAGES,
     cr1_filename,
     ct_small_filename,
     mr_small_filename,
-    CR_STUDY_3_SERIES_3_IMAGES,
-    CT_STUDY_1_SERIES_4_IMAGES,
-    COMPRESSED_TEST_FILES,
 )
 from tests.controller.dicom_test_nodes import TEST_SITEID, TEST_UIDROOT, LocalStorageSCP
-from anonymizer.controller.project import ProjectController
-from anonymizer.model.anonymizer import AnonymizerModel
+from tests.controller.helpers import send_file_to_scp, send_files_to_scp
 
 
 def test_send_cr1(temp_dir: str, controller):
@@ -448,6 +451,95 @@ def test_send_cr_and_ct_Archibald_Doe_then_delete_studies(temp_dir: str, control
 
     totals = model.get_totals()
     assert totals == (0, 0, 0, 0, 0)
+
+
+def test_send_ct_Archibald_Doe_mr_Peter_Doe_then_delete_studies(temp_dir: str, controller):
+    # Patient 1: Archibald Doe
+    # Send CT_STUDY_1_SERIES_4_IMAGES:
+    dsets1: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, LocalStorageSCP, controller)
+    store_dir = controller.model.images_dir()
+    model: AnonymizerModel = controller.anonymizer.model
+    time.sleep(0.25)
+    dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
+    assert len(dirlist) == 1
+    assert dirlist[0] == TEST_SITEID + "-000001"  #  Patient 1
+    study1_uid = dsets1[0].StudyInstanceUID
+
+    # Verify PHI / Study / Series stored correctly in AnonmyizerModel
+    phi_ptid_1 = dsets1[0].PatientID
+    anon_ptid_1 = model.get_anon_patient_id(phi_ptid_1)
+    assert anon_ptid_1
+    phi_1 = model.get_phi(anon_ptid_1)
+    assert phi_1
+    assert phi_1.patient_id == phi_ptid_1
+    assert len(phi_1.studies) == 1
+
+    totals = model.get_totals()
+    assert totals == (1, 1, 1, 4, 0)
+
+    # Patient 1: Peter Doe
+    # Send MR_STUDY_3_SERIES_11_IMAGES:
+    dsets2: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, LocalStorageSCP, controller)
+    time.sleep(0.25)
+    dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
+    assert len(dirlist) == 2
+    assert dirlist[1] == TEST_SITEID + "-000002"  #  Patient 2
+    study2_uid = dsets2[0].StudyInstanceUID
+
+    # Verify PHI / Study / Series stored correctly in AnonmyizerModel
+    phi_ptid_2 = dsets2[0].PatientID
+    assert phi_ptid_2 != phi_ptid_1
+    anon_ptid_2 = model.get_anon_patient_id(phi_ptid_2)
+    assert anon_ptid_2
+    assert anon_ptid_2 != anon_ptid_1
+    phi_2 = model.get_phi(anon_ptid_2)
+    assert phi_2
+    assert phi_2.patient_id == phi_ptid_2
+    assert len(phi_2.studies) == 1
+    assert study2_uid != study1_uid
+
+    totals = model.get_totals()
+    assert totals == (2, 2, 4, 15, 0)
+
+    # DELETE PATIENT 1 / STUDY 1:
+    anon_study1_uid = model.get_anon_uid(study1_uid)
+    assert anon_study1_uid
+    assert controller.delete_study(anon_ptid_1, anon_study1_uid)
+
+    # Patient 2 directory should remain in storage directory
+    dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
+    assert len(dirlist) == 1
+    assert dirlist[0] == TEST_SITEID + "-000002"  #  Patient 2
+
+    # Patient with only Study 2 should still be in AnonymizerModel:
+    anon_ptid_1 = model.get_anon_patient_id(phi_ptid_1)
+    assert not anon_ptid_1
+    assert model.get_patient_id_count() == 2  # includes default for blank ptid
+    anon_ptid_2 = model.get_anon_patient_id(phi_ptid_2)
+    assert anon_ptid_2
+    phi_2 = model.get_phi(anon_ptid_2)
+    assert phi_2
+    assert phi_2.patient_id == phi_ptid_2
+    assert len(phi_2.studies) == 1
+
+    totals = model.get_totals()
+    assert totals == (1, 1, 3, 11, 0)
+
+    # DELETE PATIENT 2 / STUDY 2:
+    anon_study2_uid = model.get_anon_uid(study2_uid)
+    assert anon_study2_uid
+    assert controller.delete_study(anon_ptid_2, anon_study2_uid)
+
+    # No patient sub-dirs should remain in storage directory
+    dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
+    assert len(dirlist) == 0
+
+    anon_ptid_2 = model.get_anon_patient_id(phi_ptid_2)
+    assert anon_ptid_2 is None
+    assert model.get_patient_id_count() == 1
+    assert model.get_acc_no_count() == 0
+    assert model.get_phi_index() == []
+    assert model.get_totals() == (0, 0, 0, 0, 0)
 
 
 # Test sending compressed syntaxes to local storage SCP:
