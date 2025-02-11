@@ -76,6 +76,7 @@ max-complexity = 15 # Default is 10
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # addopts = "--verbose --show-capture=all --cov=src/anonymizer --cov-report=term-missing"
+addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

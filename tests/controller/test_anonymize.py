@@ -2,16 +2,17 @@
 # use pytest from terminal to show full logging output
 
 import os
-from pathlib import Path
 from copy import deepcopy
-from time import sleep
+from pathlib import Path
 from queue import Queue
+from time import sleep
+
 from pydicom import dcmread
 from pydicom.data import get_testdata_file
 from pydicom.dataset import Dataset
-from anonymizer.controller.project import ProjectController
-from anonymizer.controller.anonymizer import AnonymizerController, QuarantineDirectories
 
+from anonymizer.controller.anonymizer import AnonymizerController, QuarantineDirectories
+from anonymizer.controller.project import ProjectController
 from tests.controller.dicom_test_files import (
     cr1_filename,
     ct_small_filename,
