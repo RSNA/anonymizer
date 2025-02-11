@@ -139,9 +139,7 @@ class StudyUIDHierarchy:
     ):
         self.uid = uid
         self.ptid = ptid
-        self.last_error_msg: str | None = (
-            None  # set by GetStudyHierarchy() or Move Operation
-        )
+        self.last_error_msg: str | None = None  # set by GetStudyHierarchy() or Move Operation
         self.series = series if series is not None else {}
         self.pending_instances = 0  # set by move operation
         # from send_c_move status response:
@@ -219,9 +217,7 @@ class MoveStudiesRequest:
     scp_name: str
     dest_scp_ae: str
     level: str
-    studies: list[
-        StudyUIDHierarchy
-    ]  # Move process updates hierarchy, no MoveStudiesResponse
+    studies: list[StudyUIDHierarchy]  # Move process updates hierarchy, no MoveStudiesResponse
 
 
 @dataclass
@@ -276,9 +272,7 @@ class ProjectController(AE):
     _export_file_time_slice_interval = 0.1  # seconds
     _patient_export_thread_pool_size = 4  # concurrent threads
     _study_move_thread_pool_size = 2  # concurrent threads
-    _memory_available_backoff_threshold = (
-        1 << 30
-    )  # When available memory is less than 1GB, back-off in _handle_store
+    _memory_available_backoff_threshold = 1 << 30  # When available memory is less than 1GB, back-off in _handle_store
 
     # DICOM Data model sanity checking:
     _required_attributes_study_query = [
@@ -308,9 +302,7 @@ class ProjectController(AE):
             if field in ds:
                 delattr(ds, field)
 
-    def _missing_attributes(
-        self, required_attributes: list[str], ds: Dataset
-    ) -> list[str]:
+    def _missing_attributes(self, required_attributes: list[str], ds: Dataset) -> list[str]:
         """
         Returns a list of missing attributes from the given dataset.
 
@@ -321,11 +313,7 @@ class ProjectController(AE):
         Returns:
             list[str]: A list of attribute names that are missing from the dataset.
         """
-        return [
-            attr_name
-            for attr_name in required_attributes
-            if attr_name not in ds or getattr(ds, attr_name) == ""
-        ]
+        return [attr_name for attr_name in required_attributes if attr_name not in ds or getattr(ds, attr_name) == ""]
 
     def __init__(self, model: ProjectModel):
         """
@@ -351,22 +339,14 @@ class ProjectController(AE):
         self.model = model
         set_logging_levels(levels=model.logging_levels)
         # Ensure storage, public and private directories exist:
-        self.model.storage_dir.joinpath(self.model.PRIVATE_DIR).mkdir(
-            parents=True, exist_ok=True
-        )
+        self.model.storage_dir.joinpath(self.model.PRIVATE_DIR).mkdir(parents=True, exist_ok=True)
         self.model.storage_dir.joinpath(self.model.PUBLIC_DIR).mkdir(exist_ok=True)
         self.set_dicom_timeouts(timeouts=model.network_timeouts)
-        self._implementation_class_uid = UID(
-            self.model.IMPLEMENTATION_CLASS_UID
-        )  # added to association requests
-        self._implementation_version_name = (
-            self.model.IMPLEMENTATION_VERSION_NAME
-        )  # added to association requests
+        self._implementation_class_uid = UID(self.model.IMPLEMENTATION_CLASS_UID)  # added to association requests
+        self._implementation_version_name = self.model.IMPLEMENTATION_VERSION_NAME  # added to association requests
         self._maximum_pdu_size = 0  # 0 means no limit
         # self._maximum_associations = 10 # max simultaneous remote associations, 10 is the default
-        self._require_called_aet = (
-            True  # remote clients must provide Anonymizer's AE Title
-        )
+        self._require_called_aet = True  # remote clients must provide Anonymizer's AE Title
         # TODO: project model optional setting for allowed list of calling AETs
         # self._require_calling_aet = ["<list of allowed calling AETs>"] # Default: Allow any calling AE Title
         self.set_radiology_storage_contexts()
@@ -440,9 +420,7 @@ class ProjectController(AE):
 
     # FOR SCP AE: Set allowed storage and verification contexts and corresponding transfer syntaxes
     def set_verification_context(self):
-        self.add_supported_context(
-            self._VERIFICATION_CLASS
-        )  # default transfer syntaxes
+        self.add_supported_context(self._VERIFICATION_CLASS)  # default transfer syntaxes
         return
 
     def set_radiology_storage_contexts(self) -> None:
@@ -479,9 +457,7 @@ class ProjectController(AE):
     # For testing:
     def get_radiology_storage_contexts_BIGENDIAN(self) -> List[PresentationContext]:
         return [
-            build_context(
-                abstract_syntax, "1.2.840.10008.1.2.2"
-            )  # Explicit VR Big Endian,
+            build_context(abstract_syntax, "1.2.840.10008.1.2.2")  # Explicit VR Big Endian,
             for abstract_syntax in self.model.storage_classes
         ]
 
@@ -492,14 +468,10 @@ class ProjectController(AE):
         ]
 
     def get_study_root_find_contexts(self) -> List[PresentationContext]:
-        return [
-            build_context(self._STUDY_ROOT_QR_CLASSES[0])
-        ]  # default transfer syntaxes
+        return [build_context(self._STUDY_ROOT_QR_CLASSES[0])]  # default transfer syntaxes
 
     def get_study_root_move_contexts(self) -> List[PresentationContext]:
-        return [
-            build_context(self._STUDY_ROOT_QR_CLASSES[1])
-        ]  # default transfer syntaxes
+        return [build_context(self._STUDY_ROOT_QR_CLASSES[1])]  # default transfer syntaxes
 
     # DICOM C-ECHO Verification event handler (EVT_C_ECHO):
     def _handle_echo(self, event: Event):
@@ -554,34 +526,22 @@ class ProjectController(AE):
         # Add the File Meta Information (Group 0x0002 elements)
         ds.file_meta = FileMetaDataset(event.file_meta)
         # Only one Transfer Syntax is Big Endian (mostly retired)
-        ds.is_little_endian = (
-            ds.file_meta.TransferSyntaxUID != "1.2.840.10008.1.2.2"
-        )  # Explicit VR Big Endian
+        ds.is_little_endian = ds.file_meta.TransferSyntaxUID != "1.2.840.10008.1.2.2"  # Explicit VR Big Endian
         # Only one Transfer Syntax uses Implicit VR
-        ds.is_implicit_VR = (
-            ds.file_meta.TransferSyntaxUID == "1.2.840.10008.1.2"
-        )  # Implicit VR Little Endian
+        ds.is_implicit_VR = ds.file_meta.TransferSyntaxUID == "1.2.840.10008.1.2"  # Implicit VR Little Endian
 
         # File Metadata:Implementation Class UID and Version Name:
-        ds.file_meta.ImplementationClassUID = UID(
-            self.model.IMPLEMENTATION_CLASS_UID
-        )  # UI: (0002,0012)
-        ds.file_meta.ImplementationVersionName = (
-            self.model.IMPLEMENTATION_VERSION_NAME
-        )  # SH: (0002,0013)
+        ds.file_meta.ImplementationClassUID = UID(self.model.IMPLEMENTATION_CLASS_UID)  # UI: (0002,0012)
+        ds.file_meta.ImplementationVersionName = self.model.IMPLEMENTATION_VERSION_NAME  # SH: (0002,0013)
 
-        remote_scu = DICOMNode(
-            remote["address"], remote["port"], remote["ae_title"], False
-        )
+        remote_scu = DICOMNode(remote["address"], remote["port"], remote["ae_title"], False)
         logger.debug(remote_scu)
 
         # DICOM Dataset integrity checking:
         # TODO: send to quarantine?
         missing_attributes = self.anonymizer.missing_attributes(ds)
         if missing_attributes != []:
-            logger.error(
-                f"Incoming dataset is missing required attributes: {missing_attributes}"
-            )
+            logger.error(f"Incoming dataset is missing required attributes: {missing_attributes}")
             logger.error(f"\n{ds}")
             return C_STORE_DATASET_ERROR
 
@@ -613,10 +573,7 @@ class ProjectController(AE):
                 evt_handlers=cast(List[EventHandlerType], handlers),
             )
         except Exception as e:
-            msg = (
-                _("Failed to start DICOM C-STORE scp on")
-                + f" {self.model.scp}, Error: {str(e)}"
-            )
+            msg = _("Failed to start DICOM C-STORE scp on") + f" {self.model.scp}, Error: {str(e)}"
             logger.error(msg)
             raise DICOMRuntimeError(msg) from e
 
@@ -632,9 +589,7 @@ class ProjectController(AE):
         self.scp.shutdown()
         self._reset_scp_vars()
 
-    def _connect_to_scp(
-        self, scp: str | DICOMNode, contexts: List[PresentationContext]
-    ) -> Association:
+    def _connect_to_scp(self, scp: str | DICOMNode, contexts: List[PresentationContext]) -> Association:
         """
         Connects to a remote DICOM SCP and establishes an association.
 
@@ -670,9 +625,7 @@ class ProjectController(AE):
             )
             if not association.is_established:
                 raise ConnectionError(_("Connection error to") + f": {remote_scp}")
-            logger.debug(
-                f"Association established with {association.acceptor.ae_title}"
-            )
+            logger.debug(f"Association established with {association.acceptor.ae_title}")
 
         except Exception as e:  # (ConnectionError, TimeoutError, RuntimeError) as e:
             logger.error(f"Error establishing association: {e}")
@@ -695,17 +648,11 @@ class ProjectController(AE):
         logger.info(f"Perform C-ECHO from {self.model.scu} to {scp}")
         echo_association: Association | None = None
         try:
-            echo_association = self._connect_to_scp(
-                scp, [self.get_verification_context()]
-            )
+            echo_association = self._connect_to_scp(scp, [self.get_verification_context()])
 
             status: Dataset = echo_association.send_c_echo()
             if not status:
-                raise ConnectionError(
-                    _(
-                        "Connection timed out, was aborted, or received an invalid response"
-                    )
-                )
+                raise ConnectionError(_("Connection timed out, was aborted, or received an invalid response"))
 
             if status.Status == C_SUCCESS:
                 logger.info("C-ECHO Success")
@@ -714,9 +661,7 @@ class ProjectController(AE):
                 echo_association.release()
                 return True
             else:
-                raise DICOMRuntimeError(
-                    f"C-ECHO Failed status: {VERIFICATION_SERVICE_CLASS_STATUS[status.Status][1]}"
-                )
+                raise DICOMRuntimeError(f"C-ECHO Failed status: {VERIFICATION_SERVICE_CLASS_STATUS[status.Status][1]}")
 
         except Exception as e:
             error = f"{(e)}"
@@ -747,9 +692,7 @@ class ProjectController(AE):
         # else clear stale credentials and return False
         if not self._aws_credentials or self._aws_expiration_datetime is None:
             return False
-        if self._aws_expiration_datetime - datetime.now(
-            self._aws_expiration_datetime.tzinfo
-        ) < timedelta(minutes=10):
+        if self._aws_expiration_datetime - datetime.now(self._aws_expiration_datetime.tzinfo) < timedelta(minutes=10):
             self._aws_credentials.clear()
             self._s3 = None
             return False
@@ -767,18 +710,14 @@ class ProjectController(AE):
         """
         logging.info("AWS_authenticate")
         if self.AWS_credentials_valid():
-            logger.info(
-                f"Using cached AWS credentials, Expiration:{self._aws_expiration_datetime}"
-            )
+            logger.info(f"Using cached AWS credentials, Expiration:{self._aws_expiration_datetime}")
             self._aws_last_error = None
             return self._s3
 
         self._aws_last_error = None
 
         try:
-            cognito_idp_client = boto3.client(
-                "cognito-idp", region_name=self.model.aws_cognito.region_name
-            )
+            cognito_idp_client = boto3.client("cognito-idp", region_name=self.model.aws_cognito.region_name)
 
             response = cognito_idp_client.initiate_auth(
                 ClientId=self.model.aws_cognito.app_client_id,
@@ -789,14 +728,9 @@ class ProjectController(AE):
                 },
             )
 
-            if (
-                "ChallengeName" in response
-                and response["ChallengeName"] == "NEW_PASSWORD_REQUIRED"
-            ):
+            if "ChallengeName" in response and response["ChallengeName"] == "NEW_PASSWORD_REQUIRED":
                 # New password required, reset using previous password:
-                self.model.aws_cognito.password = (
-                    self.model.aws_cognito.password + "N1-"
-                )
+                self.model.aws_cognito.password = self.model.aws_cognito.password + "N1-"
                 # TODO: allow user to enter new password?
                 session = response["Session"]
                 response = cognito_idp_client.respond_to_auth_challenge(
@@ -810,10 +744,7 @@ class ProjectController(AE):
                 )
 
             if "ChallengeName" in response:
-                raise AuthenticationError(
-                    _("Unexpected Authorisation Challenge")
-                    + f": {response['ChallengeName']}"
-                )
+                raise AuthenticationError(_("Unexpected Authorisation Challenge") + f": {response['ChallengeName']}")
 
             err_msg = None
             if "AuthenticationResult" not in response:
@@ -825,16 +756,12 @@ class ProjectController(AE):
 
             if err_msg:
                 logging.error(f"AuthenticationResult not in response: {response}")
-                raise AuthenticationError(
-                    _("AWS Cognito IDP authorisation failed") + "\n\n" + err_msg
-                )
+                raise AuthenticationError(_("AWS Cognito IDP authorisation failed") + "\n\n" + err_msg)
 
             cognito_identity_token = response["AuthenticationResult"]["IdToken"]
 
             # Get the User details and extract the user's sub-directory from User Attributes['sub'] (to follow private prefix)
-            response = cognito_idp_client.get_user(
-                AccessToken=response["AuthenticationResult"]["AccessToken"]
-            )
+            response = cognito_idp_client.get_user(AccessToken=response["AuthenticationResult"]["AccessToken"])
 
             if "UserAttributes" not in response:
                 logging.error(f"UserAttributes not in response: {response}")
@@ -846,11 +773,7 @@ class ProjectController(AE):
 
             user_attribute_1 = response["UserAttributes"][0]
 
-            if (
-                not user_attribute_1
-                or "Name" not in user_attribute_1
-                or user_attribute_1["Name"] != "sub"
-            ):
+            if not user_attribute_1 or "Name" not in user_attribute_1 or user_attribute_1["Name"] != "sub":
                 logging.error(f"User Attribute 'sub' not in response: {response}")
                 raise AuthenticationError(
                     _("AWS Cognito Get User Attributes failed")
@@ -861,9 +784,7 @@ class ProjectController(AE):
             self._aws_user_directory = user_attribute_1["Value"]
 
             # Assume the IAM role associated with the Cognito Identity Pool
-            cognito_identity_client = boto3.client(
-                "cognito-identity", region_name=self.model.aws_cognito.region_name
-            )
+            cognito_identity_client = boto3.client("cognito-identity", region_name=self.model.aws_cognito.region_name)
             response = cognito_identity_client.get_id(
                 IdentityPoolId=self.model.aws_cognito.identity_pool_id,
                 AccountId=self.model.aws_cognito.account_id,
@@ -875,9 +796,7 @@ class ProjectController(AE):
             if "IdentityId" not in response:
                 logging.error(f"IdentityId not in response: {response}")
                 raise AuthenticationError(
-                    _("AWS Cognito-identity authorisation failed")
-                    + "\n\n"
-                    + _("IdentityId Token not in response")
+                    _("AWS Cognito-identity authorisation failed") + "\n\n" + _("IdentityId Token not in response")
                 )
 
             identity_id = response["IdentityId"]
@@ -894,9 +813,7 @@ class ProjectController(AE):
                 "Expiration"
             ]  # AWS returns timezone in datetime object
 
-            logger.info(
-                f"AWS Authentication successful, Credentials Expiration:{self._aws_expiration_datetime}"
-            )
+            logger.info(f"AWS Authentication successful, Credentials Expiration:{self._aws_expiration_datetime}")
             self._aws_last_error = None
 
             self._s3 = boto3.client(
@@ -921,9 +838,7 @@ class ProjectController(AE):
         """
         threading.Thread(target=self.AWS_authenticate).start()
 
-    def AWS_get_instances(
-        self, anon_pt_id: str, study_uid: str | None = None
-    ) -> list[str]:
+    def AWS_get_instances(self, anon_pt_id: str, study_uid: str | None = None) -> list[str]:
         """
         Blocking call to get list of objects in S3 bucket
         Retrieves a list of instance UIDs associated with the specified anonymous patient ID and/or study UID (optional).
@@ -964,12 +879,7 @@ class ProjectController(AE):
         }
         for page in paginator.paginate(**pagination_config):
             if "Contents" in page:
-                instance_uids.extend(
-                    [
-                        os.path.splitext(os.path.basename(obj["Key"]))[0]
-                        for obj in page["Contents"]
-                    ]
-                )
+                instance_uids.extend([os.path.splitext(os.path.basename(obj["Key"]))[0] for obj in page["Contents"]])
 
         return instance_uids
 
@@ -1006,13 +916,9 @@ class ProjectController(AE):
         try:
             association = self._connect_to_scp(scp_name, send_contexts)
             for dicom_file_path in file_paths:
-                dcm_response: Dataset = association.send_c_store(
-                    dataset=dicom_file_path
-                )
+                dcm_response: Dataset = association.send_c_store(dataset=dicom_file_path)
                 if dcm_response.Status != 0:
-                    raise DICOMRuntimeError(
-                        f"DICOM Response: {STORAGE_SERVICE_CLASS_STATUS[dcm_response.Status][1]}"
-                    )
+                    raise DICOMRuntimeError(f"DICOM Response: {STORAGE_SERVICE_CLASS_STATUS[dcm_response.Status][1]}")
                 files_sent += 1
         except Exception as e:
             logger.error(f"Send Error: {e}")
@@ -1072,28 +978,20 @@ class ProjectController(AE):
                     raise RuntimeError("Query aborted")
 
                 if not status:
-                    raise ConnectionError(
-                        "Connection timed out, was aborted, or received an invalid response"
-                    )
+                    raise ConnectionError("Connection timed out, was aborted, or received an invalid response")
                 if status.Status not in (
                     C_SUCCESS,
                     C_PENDING_A,
                     C_PENDING_B,
                 ):
                     logger.error(f"C-FIND failure, status: {hex(status.Status)}")
-                    raise DICOMRuntimeError(
-                        f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}"
-                    )
+                    raise DICOMRuntimeError(f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}")
 
                 if identifier:
                     if required_attributes:
-                        missing_attributes = self._missing_attributes(
-                            required_attributes, identifier
-                        )
+                        missing_attributes = self._missing_attributes(required_attributes, identifier)
                         if missing_attributes != []:
-                            logger.error(
-                                f"Query result is missing required attributes: {missing_attributes}"
-                            )
+                            logger.error(f"Query result is missing required attributes: {missing_attributes}")
                             logger.error(f"\n{identifier}")
                             continue
 
@@ -1167,14 +1065,10 @@ class ProjectController(AE):
         """
         try:
             if scp_name not in self.model.remote_scps:
-                raise ConnectionError(
-                    f"Remote SCP {scp_name} not found in ProjectModel remote_scps dictionary"
-                )
+                raise ConnectionError(f"Remote SCP {scp_name} not found in ProjectModel remote_scps dictionary")
 
             scp = self.model.remote_scps[scp_name]
-            logger.info(
-                f"C-FIND[study] to {scp} Study Level Query: {name}, {id}, {acc_no}, {study_date}, {modality}"
-            )
+            logger.info(f"C-FIND[study] to {scp} Study Level Query: {name}, {id}, {acc_no}, {study_date}, {modality}")
 
             # Phase 1: Study Level Query
             ds = Dataset()
@@ -1198,9 +1092,7 @@ class ProjectController(AE):
             query_association = None
             self._abort_query = False
 
-            query_association = self._connect_to_scp(
-                scp_name, self.get_study_root_find_contexts()
-            )
+            query_association = self._connect_to_scp(scp_name, self.get_study_root_find_contexts())
 
             study_responses = query_association.send_c_find(
                 ds,
@@ -1222,12 +1114,8 @@ class ProjectController(AE):
                     C_PENDING_A,
                     C_PENDING_B,
                 ):
-                    logger.error(
-                        f"C-FIND Study failure, status: {hex(study_status.Status)}"
-                    )
-                    raise DICOMRuntimeError(
-                        f"C-FIND Study Failed: {QR_FIND_SERVICE_CLASS_STATUS[study_status.Status]}"
-                    )
+                    logger.error(f"C-FIND Study failure, status: {hex(study_status.Status)}")
+                    raise DICOMRuntimeError(f"C-FIND Study Failed: {QR_FIND_SERVICE_CLASS_STATUS[study_status.Status]}")
 
                 if study_status.Status == C_SUCCESS:
                     logger.info("C-FIND study query success")
@@ -1238,9 +1126,7 @@ class ProjectController(AE):
                             self._required_attributes_study_query, study_result
                         )
                         if missing_study_attributes != []:
-                            logger.error(
-                                f"Query result is missing required attributes: {missing_study_attributes}"
-                            )
+                            logger.error(f"Query result is missing required attributes: {missing_study_attributes}")
                             logger.error(f"\n{study_result}")
                             continue
 
@@ -1320,9 +1206,7 @@ class ProjectController(AE):
                 raise ConnectionError(f"Remote SCP {scp_name} not found")
 
             scp = self.model.remote_scps[scp_name]
-            logger.info(
-                f"C-FIND to {scp} Accession Query: {len(acc_no_list)} accession numbers..."
-            )
+            logger.info(f"C-FIND to {scp} Accession Query: {len(acc_no_list)} accession numbers...")
             acc_no_list = list(set(acc_no_list))  # remove duplicates
             logger.debug(f"{acc_no_list}")
 
@@ -1342,9 +1226,7 @@ class ProjectController(AE):
             query_association = None
             self._abort_query = False
 
-            query_association = self._connect_to_scp(
-                scp_name, self.get_study_root_find_contexts()
-            )
+            query_association = self._connect_to_scp(scp_name, self.get_study_root_find_contexts())
 
             for acc_no in acc_no_list:
                 if self._abort_query:
@@ -1364,18 +1246,14 @@ class ProjectController(AE):
                 # one response with C_PENDING with identifier and one response with C_SUCCESS and no identifier
                 for status, identifier in responses:
                     if not status:
-                        raise ConnectionError(
-                            "Connection timed out, was aborted, or received an invalid response"
-                        )
+                        raise ConnectionError("Connection timed out, was aborted, or received an invalid response")
                     if status.Status not in (
                         C_SUCCESS,
                         C_PENDING_A,
                         C_PENDING_B,
                     ):
                         logger.error(f"C-FIND failure, status: {hex(status.Status)}")
-                        raise DICOMRuntimeError(
-                            f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}"
-                        )
+                        raise DICOMRuntimeError(f"C-FIND Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status][1]}")
 
                     if identifier:
                         if verify_attributes:
@@ -1383,9 +1261,7 @@ class ProjectController(AE):
                                 self._required_attributes_study_query, identifier
                             )
                             if missing_study_attributes != []:
-                                logger.error(
-                                    f"Query result is missing required attributes: {missing_study_attributes}"
-                                )
+                                logger.error(f"Query result is missing required attributes: {missing_study_attributes}")
                                 logger.error(f"\n{identifier}")
                                 continue
 
@@ -1521,9 +1397,7 @@ class ProjectController(AE):
             f"Get StudyUIDHierarchy from {scp_name} for StudyUID={study_uid}, PatientID={patient_id} instance_level={instance_level}"
         )
 
-        study_uid_hierarchy = StudyUIDHierarchy(
-            uid=study_uid, ptid=patient_id, series={}
-        )
+        study_uid_hierarchy = StudyUIDHierarchy(uid=study_uid, ptid=patient_id, series={})
         error_msg = None
 
         scp = self.model.remote_scps[scp_name]
@@ -1532,9 +1406,7 @@ class ProjectController(AE):
 
         try:
             # 1. Connect to SCP:
-            query_association = self._connect_to_scp(
-                scp_name, self.get_study_root_find_contexts()
-            )
+            query_association = self._connect_to_scp(scp_name, self.get_study_root_find_contexts())
 
             # 2. Get list of Series UIDs for the Study UID:
             logger.info(f"C-FIND[series] to {scp} study_uid={study_uid}")
@@ -1557,23 +1429,15 @@ class ProjectController(AE):
                 if self._abort_query:
                     raise RuntimeError("Query aborted")
                 if not status:
-                    raise ConnectionError(
-                        "Connection timed out, was aborted, or received an invalid response"
-                    )
+                    raise ConnectionError("Connection timed out, was aborted, or received an invalid response")
                 if status.Status not in (C_SUCCESS, C_PENDING_A, C_PENDING_B):
-                    logger.error(
-                        f"C-FIND[series] failure, status: {hex(status.Status)}"
-                    )
-                    raise DICOMRuntimeError(
-                        f"C-FIND[series] Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status]}"
-                    )
+                    logger.error(f"C-FIND[series] failure, status: {hex(status.Status)}")
+                    raise DICOMRuntimeError(f"C-FIND[series] Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status]}")
 
                 if status.Status == C_SUCCESS:
                     logger.info("C-FIND[series] query success")
                 if identifier:
-                    missing_attributes = self._missing_attributes(
-                        self._required_attributes_series_query, identifier
-                    )
+                    missing_attributes = self._missing_attributes(self._required_attributes_series_query, identifier)
                     if missing_attributes:
                         logger.error(
                             f"Skip Series for Study:{study_uid}, Series Level Query result is missing required attributes: {missing_attributes}"
@@ -1590,28 +1454,21 @@ class ProjectController(AE):
                             f"Skip Series[Modality={identifier.Modality}]:{identifier.SeriesInstanceUID} with mismatched modality"
                         )
                         continue
-                    sop_class_uid = identifier.get("SOPClassUID")
-                    if (
-                        sop_class_uid
-                        and sop_class_uid not in self.model.storage_classes
-                    ):
+                    # Some PACS may provide SOPClassUID at series & study level if series contains a single class
+                    # ALL PACS should provide SOPClassUID at instance level
+                    sop_class_uid = identifier.get("SOPClassUID", None)
+                    if sop_class_uid and sop_class_uid not in self.model.storage_classes:
                         logger.info(
                             f"Skip Series[SOPClassUID={identifier.SOPClassUID}]:{identifier.SeriesInstanceUID} with mismatched sop_class_uid"
                         )
                         continue
 
                     # New SeriesUIDHierarchy:
-                    series_descr = (
-                        identifier.SeriesDescription
-                        if hasattr(identifier, "SeriesDescription")
-                        else "?"
-                    )
+                    series_descr = identifier.SeriesDescription if hasattr(identifier, "SeriesDescription") else "?"
                     instance_count = identifier.get("NumberOfSeriesRelatedInstances", 0)
                     if not instance_level and not instance_count:
                         raise DICOMRuntimeError(
-                            _(
-                                "Unable to retrieve UID Hierarchy for reliable import operation via DICOM C-MOVE."
-                            )
+                            _("Unable to retrieve UID Hierarchy for reliable import operation via DICOM C-MOVE.")
                             + f" {scp_name} "
                             + _("Server")
                             + " "
@@ -1630,37 +1487,27 @@ class ProjectController(AE):
                             raise DICOMRuntimeError(
                                 f"SCP Series Query Response for series:{identifier.SeriesInstanceUID}, inconsistent NumberOfSeriesRelatedInstances: {instance_count}"
                             )
-                        study_uid_hierarchy.series[
-                            identifier.SeriesInstanceUID
-                        ].instance_count += 1
+                        study_uid_hierarchy.series[identifier.SeriesInstanceUID].instance_count += 1
                         logger.info(
                             f"Add instance to existing series: {identifier.SeriesInstanceUID} i{study_uid_hierarchy.series[identifier.SeriesInstanceUID].instance_count}"
                         )
                     else:
-                        study_uid_hierarchy.series[identifier.SeriesInstanceUID] = (
-                            SeriesUIDHierarchy(
-                                uid=identifier.SeriesInstanceUID,
-                                number=identifier.get(
-                                    "SeriesNumber"
-                                ),  # TODO: should this be auto-generated if None?
-                                modality=identifier.Modality,
-                                sop_class_uid=identifier.SOPClassUID,
-                                description=series_descr,
-                                instance_count=instance_count,
-                                instances={},
-                            )
+                        study_uid_hierarchy.series[identifier.SeriesInstanceUID] = SeriesUIDHierarchy(
+                            uid=identifier.SeriesInstanceUID,
+                            number=identifier.get("SeriesNumber"),  # TODO: should this be auto-generated if None?
+                            modality=identifier.Modality,
+                            sop_class_uid=identifier.SOPClassUID,
+                            description=series_descr,
+                            instance_count=instance_count,
+                            instances={},
                         )
                         logger.info(
                             f"New Series[Modality={identifier.Modality},SOPClassUID={identifier.SOPClassUID}]: {series_descr}/{identifier.SeriesInstanceUID}/{identifier.SeriesNumber} | {instance_count}"
                         )
 
-            logger.info(
-                f"StudyUID={study_uid}, {len(study_uid_hierarchy.series)} Series found"
-            )
+            logger.info(f"StudyUID={study_uid}, {len(study_uid_hierarchy.series)} Series found")
             if len(study_uid_hierarchy.series) == 0:
-                raise DICOMRuntimeError(
-                    "C-FIND[series] Failed: No series found in study matching project modalities"
-                )
+                raise DICOMRuntimeError("C-FIND[series] Failed: No series found in study matching project modalities")
 
             if instance_level:
                 # 3. If Instance level required: Get list of Instance UIDs for each Series UID:
@@ -1680,13 +1527,9 @@ class ProjectController(AE):
                         if self._abort_query:
                             raise RuntimeError("Query aborted")
                         if not status:
-                            raise ConnectionError(
-                                "Connection timed out, was aborted, or received an invalid response"
-                            )
+                            raise ConnectionError("Connection timed out, was aborted, or received an invalid response")
                         if status.Status not in (C_SUCCESS, C_PENDING_A, C_PENDING_B):
-                            logger.error(
-                                f"C-FIND[instance] failure, status: {hex(status.Status)}"
-                            )
+                            logger.error(f"C-FIND[instance] failure, status: {hex(status.Status)}")
                             raise DICOMRuntimeError(
                                 f"C-FIND[instance] Failed: {QR_FIND_SERVICE_CLASS_STATUS[status.Status]}"
                             )
@@ -1704,33 +1547,22 @@ class ProjectController(AE):
                                 )
                                 logger.error(f"\n{identifier}")
                                 continue
-                            if (
-                                identifier.StudyInstanceUID == study_uid
-                                and identifier.SeriesInstanceUID == series.uid
-                            ):
-                                series.instances[identifier.SOPInstanceUID] = (
-                                    InstanceUIDHierarchy(
-                                        uid=identifier.SOPInstanceUID,
-                                        number=identifier.InstanceNumber
-                                        if hasattr(identifier, "InstanceNumber")
-                                        else None,
-                                    )
+                            if identifier.StudyInstanceUID == study_uid and identifier.SeriesInstanceUID == series.uid:
+                                series.instances[identifier.SOPInstanceUID] = InstanceUIDHierarchy(
+                                    uid=identifier.SOPInstanceUID,
+                                    number=identifier.InstanceNumber if hasattr(identifier, "InstanceNumber") else None,
                                 )
                             else:
                                 logger.error(
                                     f"Mismatch: Study:{study_uid}<>{identifier.StudyInstanceUID} and/or Series:{series.uid}<>{identifier.SeriesInstanceUID}"
                                 )
 
-                    logger.info(
-                        f"SeriesUID={series.uid}: {len(series.instances)} Instance UIDs found"
-                    )
+                    logger.info(f"SeriesUID={series.uid}: {len(series.instances)} Instance UIDs found")
                     # Overwrite instance_count with actual instance count:
                     series.instance_count = len(series.instances)
 
             # Initialise Study pending instances to total instance count:
-            study_uid_hierarchy.pending_instances = (
-                study_uid_hierarchy.get_number_of_instances()
-            )
+            study_uid_hierarchy.pending_instances = study_uid_hierarchy.get_number_of_instances()
 
         except Exception as e:
             error_msg = str(e)  # latch exception error msg
@@ -1746,9 +1578,7 @@ class ProjectController(AE):
 
         return error_msg, study_uid_hierarchy
 
-    def get_study_uid_hierarchies(
-        self, scp_name: str, studies: List[StudyUIDHierarchy], instance_level: bool
-    ) -> None:
+    def get_study_uid_hierarchies(self, scp_name: str, studies: List[StudyUIDHierarchy], instance_level: bool) -> None:
         """
         Blocking: Get List of StudyUIDHierarchies based on value of study_uid within each element of list of StudyUIDHierarchy objects.
         last_error_msg of each StudyUIDHierarch object is set by get_study_uid_hierarchy()
@@ -1763,9 +1593,7 @@ class ProjectController(AE):
         Returns:
             None
         """
-        logger.info(
-            f"Get StudyUIDHierarchies for {len(studies)} studies, instance_level: {instance_level}"
-        )
+        logger.info(f"Get StudyUIDHierarchies for {len(studies)} studies, instance_level: {instance_level}")
         self._abort_query = False
         for study in studies:
             if self._abort_query:
@@ -1813,16 +1641,11 @@ class ProjectController(AE):
         Returns:
             int: The number of pending instances for the study.
         """
-        return (
-            study.get_number_of_instances()
-            - self.anonymizer.model.get_stored_instance_count(study.ptid, study.uid)
-        )
+        return study.get_number_of_instances() - self.anonymizer.model.get_stored_instance_count(study.ptid, study.uid)
 
     # TODO: Refactor: create version of move_study with move_level parameter
 
-    def _move_study_at_study_level(
-        self, scp_name: str, dest_scp_ae: str, study: StudyUIDHierarchy
-    ) -> str | None:
+    def _move_study_at_study_level(self, scp_name: str, dest_scp_ae: str, study: StudyUIDHierarchy) -> str | None:
         """
         Move a study at the study level from one SCP to another.
 
@@ -1849,26 +1672,20 @@ class ProjectController(AE):
             error_msg = "No Instances in Study"
             return error_msg
 
-        study.pending_instances = self.anonymizer.model.get_pending_instance_count(
-            study.ptid, study.uid, target_count
-        )
+        study.pending_instances = self.anonymizer.model.get_pending_instance_count(study.ptid, study.uid, target_count)
         if study.pending_instances == 0:
             error_msg = "All Instances already imported"
             return error_msg
 
         try:
             # 1. Establish Association for MOVE request:
-            move_association = self._connect_to_scp(
-                scp_name, self.get_study_root_move_contexts()
-            )
+            move_association = self._connect_to_scp(scp_name, self.get_study_root_move_contexts())
 
             ds = Dataset()
             ds.QueryRetrieveLevel = "STUDY"
             ds.StudyInstanceUID = study.uid
 
-            logger.info(
-                f"C-MOVE@Study[{study.uid}] Request: InstanceCount={study.get_number_of_instances()}"
-            )
+            logger.info(f"C-MOVE@Study[{study.uid}] Request: InstanceCount={study.get_number_of_instances()}")
 
             # 2. Use the C-MOVE service to request that the remote SCP move the Study to local storage scp:
             # Send Move Request for Study UID & wait for Move Responses for each instance in study:
@@ -1888,17 +1705,10 @@ class ProjectController(AE):
             for status, identifier in responses:
                 time.sleep(0.1)
                 if self._abort_move:
-                    raise (
-                        DICOMRuntimeError(
-                            f"C-MOVE@Study[{study.uid}] move study aborted"
-                        )
-                    )
+                    raise (DICOMRuntimeError(f"C-MOVE@Study[{study.uid}] move study aborted"))
 
                 if not status:
-                    raise ConnectionError(
-                        _("Connection timed out or aborted moving study_uid")
-                        + f": {study.uid}"
-                    )
+                    raise ConnectionError(_("Connection timed out or aborted moving study_uid") + f": {study.uid}")
 
                 if status.Status not in (
                     C_SUCCESS,
@@ -1917,20 +1727,14 @@ class ProjectController(AE):
                 study.update_move_stats(status)
 
                 # Update Pending Instances count from AnonymizerModel, relevant for Syncrhonous Move:
-                study.pending_instances = (
-                    self.anonymizer.model.get_pending_instance_count(
-                        study.ptid, study.uid, study.get_number_of_instances()
-                    )
+                study.pending_instances = self.anonymizer.model.get_pending_instance_count(
+                    study.ptid, study.uid, study.get_number_of_instances()
                 )
 
                 if identifier:
-                    logger.info(
-                        f"C-MOVE@Study[{study.uid}] Response identifier: {identifier}"
-                    )
+                    logger.info(f"C-MOVE@Study[{study.uid}] Response identifier: {identifier}")
 
-            logger.info(
-                f"C-MOVE@Study Request for Study COMPLETE: StudyUIDHierachy:\n{study}"
-            )
+            logger.info(f"C-MOVE@Study Request for Study COMPLETE: StudyUIDHierachy:\n{study}")
 
             # 3. Wait for ALL instances of Study to be Imported by verifying with AnonymizerModel
             #    Timeout if a pending instance is not received within NetworkTimeout
@@ -1941,10 +1745,8 @@ class ProjectController(AE):
                 if self._abort_move:
                     raise DICOMRuntimeError(f"C-MOVE@Study[{study.uid}] aborted")
 
-                study.pending_instances = (
-                    self.anonymizer.model.get_pending_instance_count(
-                        study.ptid, study.uid, study.get_number_of_instances()
-                    )
+                study.pending_instances = self.anonymizer.model.get_pending_instance_count(
+                    study.ptid, study.uid, study.get_number_of_instances()
                 )
 
                 if study.pending_instances == 0:
@@ -1977,9 +1779,7 @@ class ProjectController(AE):
                     move_association.release()
         return error_msg
 
-    def _move_study_at_series_level(
-        self, scp_name: str, dest_scp_ae: str, study: StudyUIDHierarchy
-    ) -> str | None:
+    def _move_study_at_series_level(self, scp_name: str, dest_scp_ae: str, study: StudyUIDHierarchy) -> str | None:
         """
         Blocking: Moves a study at the series level from one SCP to another.
 
@@ -2006,9 +1806,7 @@ class ProjectController(AE):
             error_msg = "No Instances in Study"
             return error_msg
 
-        study.pending_instances = self.anonymizer.model.get_pending_instance_count(
-            study.ptid, study.uid, target_count
-        )
+        study.pending_instances = self.anonymizer.model.get_pending_instance_count(study.ptid, study.uid, target_count)
         if study.pending_instances == 0:
             error_msg = "All Instances already imported"
             return error_msg
@@ -2017,24 +1815,16 @@ class ProjectController(AE):
             for series in study.series.values():
                 # 0.1 Skip Series with no instances:
                 if series.instance_count == 0:
-                    logger.info(
-                        f"C-MOVE@Series Skip Series[{study.uid}/{series.uid}] InstanceCount=0"
-                    )
+                    logger.info(f"C-MOVE@Series Skip Series[{study.uid}/{series.uid}] InstanceCount=0")
                     continue
 
                 # 0.2 Skip Series if instances all imported:
-                if self.anonymizer.model.series_complete(
-                    study.ptid, study.uid, series.uid, series.instance_count
-                ):
-                    logger.info(
-                        f"C-MOVE@Series Skip Series[{study.uid}/{series.uid}] all instances imported"
-                    )
+                if self.anonymizer.model.series_complete(study.ptid, study.uid, series.uid, series.instance_count):
+                    logger.info(f"C-MOVE@Series Skip Series[{study.uid}/{series.uid}] all instances imported")
                     continue
 
                 # 1. Establish Association for Series MOVE request:
-                move_association = self._connect_to_scp(
-                    scp_name, self.get_study_root_move_contexts()
-                )
+                move_association = self._connect_to_scp(scp_name, self.get_study_root_move_contexts())
 
                 # 2. Move Request for each Series UID & wait for Move Response:
                 study_pending_instances_before_series_move = study.pending_instances
@@ -2065,11 +1855,7 @@ class ProjectController(AE):
                 # and may instead be an empty ~pydicom.dataset.Dataset.
                 for status, __ in responses:
                     if self._abort_move:
-                        raise (
-                            DICOMRuntimeError(
-                                f"C-MOVE@Series[{study.uid}] study move aborted"
-                            )
-                        )
+                        raise (DICOMRuntimeError(f"C-MOVE@Series[{study.uid}] study move aborted"))
 
                     if not status:
                         raise (
@@ -2097,10 +1883,8 @@ class ProjectController(AE):
                     series.update_move_stats(status)
 
                     # Update Pending Instances count from AnonymizerModel, relevant for Syncrhonous Move:
-                    study.pending_instances = (
-                        self.anonymizer.model.get_pending_instance_count(
-                            study.ptid, study.uid, study.get_number_of_instances()
-                        )
+                    study.pending_instances = self.anonymizer.model.get_pending_instance_count(
+                        study.ptid, study.uid, study.get_number_of_instances()
                     )
 
                 # 3. Wait for ALL instances of Series to be Imported by verifying with AnonymizerModel
@@ -2112,20 +1896,12 @@ class ProjectController(AE):
                     if self._abort_move:
                         raise DICOMRuntimeError(f"C-MOVE@Series[{study.uid}] aborted")
 
-                    study.pending_instances = (
-                        self.anonymizer.model.get_pending_instance_count(
-                            study.ptid, study.uid, study.get_number_of_instances()
-                        )
+                    study.pending_instances = self.anonymizer.model.get_pending_instance_count(
+                        study.ptid, study.uid, study.get_number_of_instances()
                     )
 
-                    if (
-                        study_pending_instances_before_series_move
-                        - study.pending_instances
-                        >= series.instance_count
-                    ):
-                        logger.info(
-                            f"C-MOVE@Series[{study.uid}/{series.uid}] ALL Instances IMPORTED for Series"
-                        )
+                    if study_pending_instances_before_series_move - study.pending_instances >= series.instance_count:
+                        logger.info(f"C-MOVE@Series[{study.uid}/{series.uid}] ALL Instances IMPORTED for Series")
                         break
 
                     # Reset timer if pending instances count changes:
@@ -2138,15 +1914,11 @@ class ProjectController(AE):
 
                 # 4. Raise Error if Timeout
                 if import_timer == 0:
-                    raise TimeoutError(
-                        f"C-MOVE@Series[{study.uid}/{series.uid}] Import Timeout"
-                    )
+                    raise TimeoutError(f"C-MOVE@Series[{study.uid}/{series.uid}] Import Timeout")
 
                 move_association.release()
 
-            logger.info(
-                f"C-MOVE@Series ALL Series Requests for Study COMPLETE: StudyUIDHierachy:\n{study}"
-            )
+            logger.info(f"C-MOVE@Series ALL Series Requests for Study COMPLETE: StudyUIDHierachy:\n{study}")
 
         except Exception as e:
             error_msg = str(e)  # latch exception error msg
@@ -2162,9 +1934,7 @@ class ProjectController(AE):
                     move_association.release()
         return error_msg
 
-    def _move_study_at_instance_level(
-        self, scp_name: str, dest_scp_ae: str, study: StudyUIDHierarchy
-    ) -> str | None:
+    def _move_study_at_instance_level(self, scp_name: str, dest_scp_ae: str, study: StudyUIDHierarchy) -> str | None:
         """
         Blocking: Moves a study at the instance level from one SCP to another.
 
@@ -2177,9 +1947,7 @@ class ProjectController(AE):
             str | None: An error message if any exception or error occurs during the move, otherwise None.
             Status updates are reflected in the provided study_uid_hierarchy
         """
-        logger.info(
-            f"C-MOVE@Instance[{study.uid}] scp:{scp_name} move to: {dest_scp_ae} "
-        )
+        logger.info(f"C-MOVE@Instance[{study.uid}] scp:{scp_name} move to: {dest_scp_ae} ")
 
         move_association = None
         error_msg = None
@@ -2194,9 +1962,7 @@ class ProjectController(AE):
 
         try:
             # 1. Establish Association for MOVE request:
-            move_association = self._connect_to_scp(
-                scp_name, self.get_study_root_move_contexts()
-            )
+            move_association = self._connect_to_scp(scp_name, self.get_study_root_move_contexts())
 
             # 2. Move Request for each Instance UID & wait for Move Response:
             for series in study.series.values():
@@ -2207,9 +1973,7 @@ class ProjectController(AE):
                 for instance in series.instances.values():
                     # Skip already imported instances
                     if self.anonymizer.model.uid_received(instance.uid):
-                        logger.debug(
-                            f"Instance already imported: {instance.uid}, skipping"
-                        )
+                        logger.debug(f"Instance already imported: {instance.uid}, skipping")
                         continue
 
                     ds = Dataset()
@@ -2241,11 +2005,7 @@ class ProjectController(AE):
                     for status, __ in responses:
                         time.sleep(0.1)
                         if self._abort_move:
-                            raise (
-                                DICOMRuntimeError(
-                                    f"C-MOVE@Instance[{study.uid}] aborted"
-                                )
-                            )
+                            raise (DICOMRuntimeError(f"C-MOVE@Instance[{study.uid}] aborted"))
 
                         logger.debug(f"STATUS: {status}")
 
@@ -2273,15 +2033,11 @@ class ProjectController(AE):
                         series.update_move_stats_instance_level(status)
 
                         # Update Pending Instances count from AnonymizerModel, relevant for Syncrhonous Move:
-                        study.pending_instances = (
-                            self.anonymizer.model.get_pending_instance_count(
-                                study.ptid, study.uid, study.get_number_of_instances()
-                            )
+                        study.pending_instances = self.anonymizer.model.get_pending_instance_count(
+                            study.ptid, study.uid, study.get_number_of_instances()
                         )
 
-                logger.info(
-                    f"C-MOVE@Instance[{study.uid}/{series.uid}] ALL Instance Requests for Series COMPLETE"
-                )
+                logger.info(f"C-MOVE@Instance[{study.uid}/{series.uid}] ALL Instance Requests for Series COMPLETE")
 
             logger.info(f"C-MOVE@Instance[{study.uid}] ALL Instance Requests COMPLETE")
 
@@ -2294,10 +2050,8 @@ class ProjectController(AE):
                 if self._abort_move:
                     raise (DICOMRuntimeError(f"C-MOVE@Instance[{study.uid}] aborted"))
 
-                study.pending_instances = (
-                    self.anonymizer.model.get_pending_instance_count(
-                        study.ptid, study.uid, study.get_number_of_instances()
-                    )
+                study.pending_instances = self.anonymizer.model.get_pending_instance_count(
+                    study.ptid, study.uid, study.get_number_of_instances()
                 )
 
                 if study.pending_instances == 0:
@@ -2388,13 +2142,9 @@ class ProjectController(AE):
 
             for future, __, study in self._move_futures:
                 try:
-                    error_msg = (
-                        future.result()
-                    )  # This will raise any exceptions that _move_study did not catch
+                    error_msg = future.result()  # This will raise any exceptions that _move_study did not catch
                     if error_msg:
-                        logger.warning(
-                            f"Study[{study.uid}] Move Future Error: {error_msg}"
-                        )
+                        logger.warning(f"Study[{study.uid}] Move Future Error: {error_msg}")
 
                     # Auto DOWN LEVEL Study Move operation on Timeout:
                     # This algorithm was removed after testing with Hyland VNA indicated that it does not support instance move
@@ -2504,14 +2254,10 @@ class ProjectController(AE):
             # Get all the DICOM files for this patient:
             file_paths = []
             for root, _, files in os.walk(patient_dir):
-                file_paths.extend(
-                    os.path.join(root, file) for file in files if file.endswith(".dcm")
-                )
+                file_paths.extend(os.path.join(root, file) for file in files if file.endswith(".dcm"))
 
             # Convert to dictionary with instance UIDs as keys:
-            export_instance_paths = {
-                Path(file_path).stem: file_path for file_path in file_paths
-            }
+            export_instance_paths = {Path(file_path).stem: file_path for file_path in file_paths}
 
             # Remove all instances which are already on destination from the export list:
             # For AWS get all instances for this patient id:
@@ -2526,9 +2272,7 @@ class ProjectController(AE):
                 for study_uid in os.listdir(patient_dir):
                     time.sleep(self._export_file_time_slice_interval)
                     if self._abort_export:
-                        logger.error(
-                            f"_export_patient patient_id: {patient_id} aborted"
-                        )
+                        logger.error(f"_export_patient patient_id: {patient_id} aborted")
                         return
 
                     study_path = os.path.join(patient_dir, study_uid)
@@ -2536,18 +2280,14 @@ class ProjectController(AE):
                         continue
 
                     # Get Study UID Hierarchy:
-                    _, study_hierarchy = self.get_study_uid_hierarchy(
-                        dest_name, study_uid, patient_id, True
-                    )
+                    _, study_hierarchy = self.get_study_uid_hierarchy(dest_name, study_uid, patient_id, True)
                     for instance in study_hierarchy.get_instances():
                         if instance.uid in export_instance_paths:
                             del export_instance_paths[instance.uid]
 
             # If NO files to export for this patient, indicate successful export to UX:
             if len(export_instance_paths) == 0:
-                logger.info(
-                    f"All studies already exported to {dest_name} for patient: {patient_id}"
-                )
+                logger.info(f"All studies already exported to {dest_name} for patient: {patient_id}")
                 ux_Q.put(ExportPatientsResponse(patient_id, 0, None, True))
                 return
 
@@ -2560,9 +2300,7 @@ class ProjectController(AE):
                 for dicom_file_path in export_instance_paths.values():
                     time.sleep(self._export_file_time_slice_interval)
                     if self._abort_export:
-                        logger.error(
-                            f"_export_patient patient_id: {patient_id} aborted"
-                        )
+                        logger.error(f"_export_patient patient_id: {patient_id} aborted")
                         return
 
                     logger.info(f"Upload to S3: {dicom_file_path}")
@@ -2577,15 +2315,11 @@ class ProjectController(AE):
                     # TODO: use multi-part upload_part method for large files
                     # which can be aborted via s3.abort_multipart_upload
                     # or use thread for s3.upload_file and use callback of transferred bytes
-                    s3.upload_file(
-                        dicom_file_path, self.model.aws_cognito.s3_bucket, object_key
-                    )
+                    s3.upload_file(dicom_file_path, self.model.aws_cognito.s3_bucket, object_key)
                     logger.info(f"Uploaded to S3: {object_key}")
 
                     files_sent += 1
-                    ux_Q.put(
-                        ExportPatientsResponse(patient_id, files_sent, None, False)
-                    )
+                    ux_Q.put(ExportPatientsResponse(patient_id, files_sent, None, False))
 
             else:  # DICOM Export:
                 # Connect to remote SCP and establish association based on the storage class and transfer syntax of file
@@ -2596,9 +2330,7 @@ class ProjectController(AE):
                 for dicom_file_path in export_instance_paths.values():
                     time.sleep(self._export_file_time_slice_interval)
                     if self._abort_export:
-                        logger.error(
-                            f"_export_patient patient_id: {patient_id} aborted"
-                        )
+                        logger.error(f"_export_patient patient_id: {patient_id} aborted")
                         if export_association:
                             export_association.abort()
                         return
@@ -2608,28 +2340,19 @@ class ProjectController(AE):
                     if not hasattr(ds, "SOPClassUID") or not hasattr(ds, "file_meta"):
                         raise ValueError(f"Invalid DICOM file: {dicom_file_path}")
                     # Establish a new association if there is a change of SOPClassUID or TransferSyntaxUID:
-                    if (
-                        last_sop_class_uid != ds.SOPClassUID
-                        or last_transfer_synax != ds.file_meta.TransferSyntaxUID
-                    ):
+                    if last_sop_class_uid != ds.SOPClassUID or last_transfer_synax != ds.file_meta.TransferSyntaxUID:
                         logger.info(
                             f"Connect to SCP: {dest_name} for SOPClassUID: {ds.SOPClassUID}, TransferSyntaxUID: {ds.file_meta.TransferSyntaxUID}"
                         )
                         if export_association:
                             export_association = export_association.release()
-                        send_context = build_context(
-                            ds.SOPClassUID, ds.file_meta.TransferSyntaxUID
-                        )
-                        export_association = self._connect_to_scp(
-                            dest_name, [send_context]
-                        )
+                        send_context = build_context(ds.SOPClassUID, ds.file_meta.TransferSyntaxUID)
+                        export_association = self._connect_to_scp(dest_name, [send_context])
                         last_sop_class_uid = ds.SOPClassUID
                         last_transfer_synax = ds.file_meta.TransferSyntaxUID
 
                     if export_association:
-                        dcm_response: Dataset = export_association.send_c_store(
-                            dataset=ds
-                        )
+                        dcm_response: Dataset = export_association.send_c_store(dataset=ds)
                     else:
                         logging.error(
                             "Internal error, _connect_to_scp did not establish association and did not raise corrresponding exception"
@@ -2639,14 +2362,10 @@ class ProjectController(AE):
                         raise TimeoutError("send_c_store timeout")
 
                     if dcm_response.Status != 0:
-                        raise DICOMRuntimeError(
-                            f"{STORAGE_SERVICE_CLASS_STATUS[dcm_response.Status][1]}"
-                        )
+                        raise DICOMRuntimeError(f"{STORAGE_SERVICE_CLASS_STATUS[dcm_response.Status][1]}")
 
                     files_sent += 1
-                    ux_Q.put(
-                        ExportPatientsResponse(patient_id, files_sent, None, False)
-                    )
+                    ux_Q.put(ExportPatientsResponse(patient_id, files_sent, None, False))
 
             # Successful export:
             ux_Q.put(ExportPatientsResponse(patient_id, files_sent, None, True))
@@ -2696,9 +2415,7 @@ class ProjectController(AE):
 
         with self._export_executor as executor:
             for i in range(len(req.patient_ids)):
-                future = executor.submit(
-                    self._export_patient, req.dest_name, req.patient_ids[i], req.ux_Q
-                )
+                future = executor.submit(self._export_patient, req.dest_name, req.patient_ids[i], req.ux_Q)
                 self._export_futures.append(future)
 
             logger.info(f"Export Futures: {len(self._export_futures)}")
@@ -2756,9 +2473,7 @@ class ProjectController(AE):
         # for future in self._move_futures:
         #     future.cancel()
         if self._export_executor:
-            self._export_executor.shutdown(
-                wait=not self.model.export_to_AWS, cancel_futures=True
-            )
+            self._export_executor.shutdown(wait=not self.model.export_to_AWS, cancel_futures=True)
             logger.info("Move futures cancelled and executor shutdown")
             self._export_executor = None
 
@@ -2773,9 +2488,7 @@ class ProjectController(AE):
         Returns:
             bool: True if the study was deleted successfully, False otherwise.
         """
-        logger.info(
-            f"Delete Anon StudyUID:{anon_study_uid} for Anon PatientID: {anon_pt_id}"
-        )
+        logger.info(f"Delete Anon StudyUID:{anon_study_uid} for Anon PatientID: {anon_pt_id}")
         patient_dir = Path(self.model.images_dir(), anon_pt_id)
         study_dir = Path(self.model.images_dir(), anon_pt_id, anon_study_uid)
         if study_dir.exists():
@@ -2830,9 +2543,7 @@ class ProjectController(AE):
             return _("No Studies in Anonymizer Model")
 
         os.makedirs(self.model.phi_export_dir(), exist_ok=True)
-        filename = (
-            f"{self.model.site_id}_{self.model.project_name}_PHI_{len(phi_index)}.csv"
-        )
+        filename = f"{self.model.site_id}_{self.model.project_name}_PHI_{len(phi_index)}.csv"
         phi_csv_path = Path(self.model.phi_export_dir(), filename)
 
         try:
