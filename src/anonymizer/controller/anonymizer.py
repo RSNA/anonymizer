@@ -307,12 +307,14 @@ class AnonymizerController:
         os.makedirs(qpath, exist_ok=True)
         filename: Path = self.local_storage_path(qpath, ds)
         try:
-            error_msg: str = f"Storage Error = {e}, QUARANTINE {ds.SOPInstanceUID} to {filename}"
+            estr = repr(e)
+            error_msg: str = f"Storage Error = {estr}, QUARANTINE {ds.SOPInstanceUID} to {filename}"
             logger.error(error_msg)
             ds.save_as(filename, write_like_original=True)
             self.model.increment_quarantined()
-        except Exception:
-            logger.critical(f"Critical Error writing incoming dataset to QUARANTINE: {e}")
+        except Exception as e2:
+            e2str = repr(e2)
+            logger.critical(f"Critical Error writing incoming dataset to QUARANTINE: {e2str}")
 
         return error_msg
 
@@ -494,7 +496,7 @@ class AnonymizerController:
             try:
                 ds.save_as(filename)
             except Exception as e:
-                logger.error(f"Error storing source file: {repr(e)}")
+                logger.error(f"Error storing source file: {str(e)}")
 
         # Calculate date delta from StudyDate and PatientID:
         date_delta = 0

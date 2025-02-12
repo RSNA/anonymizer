@@ -8,13 +8,13 @@ import pickle
 import shutil
 import threading
 import xml.etree.ElementTree as ET
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from pprint import pformat
 from typing import ClassVar, Dict, List, Tuple
 
-from bidict import bidict
+from bidict import OrderedBidict
 from pydicom import Dataset
 
 from anonymizer.model.project import DICOMNode
@@ -157,9 +157,9 @@ class AnonymizerModel:
         self.default_anon_pt_id: str = site_id + "-" + "".zfill(len(str(self.MAX_PATIENTS)) - 1)
 
         # Initialise Lookup Tables:
-        self._patient_id_lookup: Dict[str, str] = {}
-        self._uid_lookup: bidict[str, str] = bidict()
-        self._acc_no_lookup: Dict[str, str] = {}
+        self._patient_id_lookup: OrderedDict[str, str] = OrderedDict()
+        self._uid_lookup: OrderedBidict[str, str] = OrderedBidict()
+        self._acc_no_lookup: OrderedDict[str, str] = OrderedDict()
         self._phi_lookup: Dict[str, PHI] = {}
         self._tag_keep: Dict[str, str] = {}  # {dicom tag : anonymizer operation}
 
@@ -293,13 +293,13 @@ class AnonymizerModel:
     def get_anon_patient_id(self, phi_patient_id: str) -> str | None:
         return self._patient_id_lookup.get(phi_patient_id)
 
-    def get_next_anon_patient_id(self, phi_patient_id: str) -> str:
-        with self._lock:
-            anon_patient_id = (
-                f"{self._site_id}-{str(len(self._patient_id_lookup)).zfill(len(str(self.MAX_PATIENTS - 1)))}"
-            )
-            self._patient_id_lookup[phi_patient_id] = anon_patient_id
-            return anon_patient_id
+    # def get_next_anon_patient_id(self, phi_patient_id: str) -> str:
+    #     with self._lock:
+    #         anon_patient_id = (
+    #             f"{self._site_id}-{str(len(self._patient_id_lookup)).zfill(len(str(self.MAX_PATIENTS - 1)))}"
+    #         )
+    #         self._patient_id_lookup[phi_patient_id] = anon_patient_id
+    #         return anon_patient_id
 
     def get_patient_id_count(self) -> int:
         return len(self._patient_id_lookup)
@@ -324,16 +324,25 @@ class AnonymizerModel:
     def get_anon_uid(self, phi_uid: str) -> str | None:
         return self._uid_lookup.get(phi_uid, None)
 
-    def get_uid_count(self) -> int:
-        return len(self._uid_lookup)
-
     def set_anon_uid(self, phi_uid: str, anon_uid: str):
         with self._lock:
             self._uid_lookup[phi_uid] = anon_uid
 
+    def get_next_uid_ndx(self) -> int:
+        if len(self._uid_lookup) == 0:
+            return 1
+        # Get last entered value in _uid_lookup:
+        last_value: str = ""
+        for key in self._uid_lookup.__reversed__():
+            last_value = self._uid_lookup[key]
+            break
+        # Extract last digit and increment:
+        ndx = int(last_value.split(".")[-1]) + 1
+        return ndx
+
     def get_next_anon_uid(self, phi_uid: str) -> str:
         with self._lock:
-            anon_uid = self._uid_prefix + f".{self.get_uid_count() + 1}"
+            anon_uid = self._uid_prefix + f".{self.get_next_uid_ndx()}"
             self._uid_lookup[phi_uid] = anon_uid
             return anon_uid
 
@@ -345,11 +354,19 @@ class AnonymizerModel:
             self._acc_no_lookup[phi_acc_no] = anon_acc_no
 
     def get_next_anon_acc_no(self, phi_acc_no: str) -> str:
+        # TODO: include PHI PatientID with phi_acc_no for uniqueness
         with self._lock:
-            anon_acc_no = len(self._acc_no_lookup) + 1
-            # TODO: include PHI PatientID with phi_acc_no for uniqueness
-            self._acc_no_lookup[phi_acc_no] = str(anon_acc_no)
-            return str(anon_acc_no)
+            last_value: str = ""
+            if len(self._acc_no_lookup) == 0:
+                anon_acc_no = "1"
+            else:
+                # Get last entered value in _acc_no_lookup:
+                for key in self._acc_no_lookup.__reversed__():
+                    last_value = self._acc_no_lookup[key]
+                    break
+                anon_acc_no = str(int(last_value) + 1)
+            self._acc_no_lookup[phi_acc_no] = anon_acc_no
+            return anon_acc_no
 
     def get_acc_no_count(self) -> int:
         return len(self._acc_no_lookup)
@@ -492,6 +509,19 @@ class AnonymizerModel:
             ],
         )
 
+    def next_ptid(self, last_ptid: str) -> str:
+        """Increments the numeric part of a key with format xxxxxx-nnnnnn.
+
+        Args:
+            key: The key to increment.
+
+        Returns:
+            The incremented key.
+        """
+        prefix, numeric_part = last_ptid.split("-")
+        numeric_part = str(int(numeric_part) + 1).zfill(6)  # Increment and pad with zeros
+        return f"{prefix}-{numeric_part}"
+
     def capture_phi(self, source: str, ds: Dataset, date_delta: int) -> None:
         """
         Capture PHI (Protected Health Information) from a dataset,
@@ -524,16 +554,20 @@ class AnonymizerModel:
             # Missing or blank corresponds to AnonymizerModel.DEFAULT_ANON_PATIENT_ID ("000000") initialised in AnonymizerModel.clear_lookups()
             phi_ptid = ds.PatientID.strip() if hasattr(ds, "PatientID") else ""
             anon_patient_id: str | None = self._patient_id_lookup.get(phi_ptid, None)
-            next_uid_ndx = self.get_uid_count() + 1
+            next_uid_ndx = self.get_next_uid_ndx()
             anon_study_uid = self._uid_lookup.get(ds.StudyInstanceUID)
 
             if anon_study_uid is None:
                 # NEW Study:
                 if anon_patient_id is None:
                     # NEW patient
-                    new_anon_patient_id = (
-                        f"{self._site_id}-{str(len(self._patient_id_lookup)).zfill(len(str(self.MAX_PATIENTS - 1)))}"
-                    )
+                    # Get last patient_id in _patient_id_lookup
+                    last_pt_id = ""
+                    for key in self._patient_id_lookup.__reversed__():
+                        last_pt_id = self._patient_id_lookup[key]
+                        break
+                    # Get next sequential patient_id for the new patient: (this method handles deletions from _patient_id_lookup without recycling ids)
+                    new_anon_patient_id = self.next_ptid(last_pt_id)
                     phi = PHI(
                         patient_name=ds.get("PatientName"),
                         patient_id=phi_ptid,

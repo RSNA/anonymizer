@@ -357,7 +357,7 @@ class Anonymizer(ctk.CTk):
     def open_project(self, project_dir: Path | None = None):
         logger.debug("open_project")
 
-        self.disable_file_menu()
+        self.disable_file_menu()  # TODO: use try finally to ensure self.enable_file_menu instead of all calls below
 
         logging.info(f"Open Project project_dir={project_dir}")
 
@@ -411,15 +411,17 @@ class Anonymizer(ctk.CTk):
                     self.enable_file_menu()
                     return
             else:
+                logger.error(f"No project file found in {project_dir}")
                 messagebox.showerror(
                     title=_("Open Project Error"),
-                    message=_("No Project file not found in") + f":\n\n{project_dir}",
+                    message=_("No Project file found in") + f":\n\n{project_dir}",
                     parent=self,
                 )
                 if self.is_recent_directory(project_dir):
                     self.recent_project_dirs.remove(project_dir)
                 self.menu_bar = self.create_project_closed_menu_bar()
                 self.save_config()
+                self.enable_file_menu()
                 return
 
         if not hasattr(file_model, "version"):
@@ -719,7 +721,7 @@ class Anonymizer(ctk.CTk):
             logger.error("Internal Error: no Dashboard")
             return
 
-        self.disable_file_menu()
+        self.disable_file_menu()  # TODO: try finally to ensure self.enable_file_menu() is called
 
         msg = _("Select DICOM Directory to Import & Anonymize")
         root_dir = filedialog.askdirectory(
@@ -796,6 +798,7 @@ class Anonymizer(ctk.CTk):
                     message=msg_prefix + "\n\n" + msg_detail,
                     parent=self,
                 )
+                self.enable_file_menu()
                 return
         else:
             msg = _("Reading filenames from") + f" {Path(root_dir).stem}..."

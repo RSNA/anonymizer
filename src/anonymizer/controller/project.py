@@ -1454,7 +1454,7 @@ class ProjectController(AE):
                             f"Skip Series[Modality={identifier.Modality}]:{identifier.SeriesInstanceUID} with mismatched modality"
                         )
                         continue
-                    # Some PACS may provide SOPClassUID at series & study level if series contains a single class
+                    # Some PACS may provide SOPClassUID at series & study level if they contain a single class
                     # ALL PACS should provide SOPClassUID at instance level
                     sop_class_uid = identifier.get("SOPClassUID", None)
                     if sop_class_uid and sop_class_uid not in self.model.storage_classes:
@@ -1494,7 +1494,7 @@ class ProjectController(AE):
                     else:
                         study_uid_hierarchy.series[identifier.SeriesInstanceUID] = SeriesUIDHierarchy(
                             uid=identifier.SeriesInstanceUID,
-                            number=identifier.get("SeriesNumber"),  # TODO: should this be auto-generated if None?
+                            number=identifier.get("SeriesNumber", None),  # TODO: should this be auto-generated if None?
                             modality=identifier.Modality,
                             sop_class_uid=identifier.SOPClassUID,
                             description=series_descr,
@@ -2549,7 +2549,7 @@ class ProjectController(AE):
         try:
             with open(phi_csv_path, "w", newline="") as csv_file:
                 writer = csv.writer(csv_file, delimiter=",")
-                writer.writerow(PHI_IndexRecord.get_field_names())
+                writer.writerow(PHI_IndexRecord.get_field_titles())
                 for record in phi_index:
                     writer.writerow(record.flatten())
             logger.info(f"PHI saved to: {phi_csv_path}")

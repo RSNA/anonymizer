@@ -255,9 +255,8 @@ class IndexView(tk.Toplevel):
             logger.info("Study deletion aborted by user")
             return
 
-        logger.info(f"Delete of {rows_to_delete} studies initiated")
+        logger.info(f"Delete of {len(rows_to_delete)} studies initiated")
         studies: List[tuple[str, str]] = []
-
         for row in rows_to_delete:
             studies.append(
                 (
@@ -268,6 +267,7 @@ class IndexView(tk.Toplevel):
         dlg = DeleteStudiesDialog(self, self._controller, studies)
         dlg.get_input()
         self._update_tree_from_phi_index()
+        self._parent.update_totals(self._anon_model.get_totals())
 
     def _escape_keypress(self, event):
         logger.info("_escape_pressed")

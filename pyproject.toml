@@ -9,7 +9,7 @@ homepage = "https://github.com/RSNA/anonymizer"
 packages = [{ include = "anonymizer", from = "src"}]
 
 [tool.poetry.dependencies]
-python = ">=3.12.0,<4.0.0"
+python = ">=3.12.0,<3.13.0"
 numpy = "<2.0.0"
 customtkinter = "*"
 pillow = "*"
