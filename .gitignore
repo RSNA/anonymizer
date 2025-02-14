@@ -28,3 +28,4 @@ phi_imgs/*
 **/radon_results.txt
 Pipfile.lock
 .python-version
+anonymizer.db

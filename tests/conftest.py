@@ -32,7 +32,7 @@ from tests.controller.dicom_test_nodes import (
 @pytest.fixture
 def temp_dir() -> Generator[str, Any, None]:
     # Create a temporary directory
-    temp_path = tempfile.mkdtemp()
+    temp_path = tempfile.mkdtemp(prefix="anonymizer_")
 
     # Initialise logging without file handler:
     init_logging(file_handler=False)
@@ -60,12 +60,8 @@ def controller(temp_dir: str) -> Generator[ProjectController, Any, None]:
         scp=LocalStorageSCP,
         remote_scps=RemoteSCPDict,
         network_timeouts=NetworkTimeouts(2, 5, 5, 15),
-        anonymizer_script_path=Path(
-            "src/anonymizer/assets/scripts/default-anonymizer.script"
-        ),
-        logging_levels=LoggingLevels(
-            anonymizer=INFO, pynetdicom=WARNING, pydicom=False
-        ),
+        anonymizer_script_path=Path("src/anonymizer/assets/scripts/default-anonymizer.script"),
+        logging_levels=LoggingLevels(anonymizer=INFO, pynetdicom=WARNING, pydicom=False),
     )
 
     project_controller = ProjectController(project_model)
