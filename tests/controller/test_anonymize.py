@@ -87,8 +87,8 @@ def test_anonymize_dataset_without_PatientID(controller):
     # Remove PatientID field
     del ds.PatientID
     phi_ds = deepcopy(ds)
-    anonymizer.anonymize_dataset_ex(LocalSCU, ds)
-    sleep(0.5)
+    anonymizer.model.capture_phi("source", ds, 0)
+    # sleep(0.5)
     store_dir = controller.model.images_dir()
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
 
