@@ -537,7 +537,7 @@ def test_send_ct_Archibald_Doe_mr_Peter_Doe_then_delete_studies(temp_dir: str, c
     anon_ptid_2 = model.get_anon_patient_id(phi_ptid_2)
     assert anon_ptid_2 is None
     assert model.get_patient_id_count() == 1
-    assert model.get_acc_no_count() == 0
+    # assert model.get_acc_no_count() == 0 deletions are not currently done on acc_no lookup due to phi acc_no not unique guarantee
     assert model.get_phi_index() == []
     assert model.get_totals() == (0, 0, 0, 0, 0)
 

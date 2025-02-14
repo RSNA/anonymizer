@@ -449,7 +449,7 @@ class AnonymizerController:
             anon_acc_no = self.model.get_anon_acc_no(value)
             if not anon_acc_no:
                 anon_acc_no = self.model.get_next_anon_acc_no(value)
-            dataset[tag].value = str(anon_acc_no)
+            dataset[tag].value = anon_acc_no
         elif "@hashdate" in operation:
             _, anon_date = self._hash_date(data_element.value, dataset.get("PatientID", ""))
             dataset[tag].value = anon_date

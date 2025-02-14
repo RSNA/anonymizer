@@ -8,7 +8,7 @@ import pickle
 import shutil
 import threading
 import xml.etree.ElementTree as ET
-from collections import namedtuple, OrderedDict
+from collections import OrderedDict, namedtuple
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from pprint import pformat
@@ -680,6 +680,8 @@ class AnonymizerModel:
         Returns:
             bool: True if the PHI data was removed successfully, False otherwise.
         """
+        logger.info(f"remove_phi anon_pt_id={anon_pt_id}, anon_study_uid={anon_study_uid}")
+
         with self._lock:
             phi: PHI | None = self._phi_lookup.get(anon_pt_id, None)
             if phi is None:
@@ -703,9 +705,10 @@ class AnonymizerModel:
                 logger.error(f"Anon StudyUID={anon_study_uid} not found in PHI.studies for Anon PatientID={anon_pt_id}")
                 return False
 
-            # Remove the accession number from _acc_no_lookup:
-            if study.accession_number in self._acc_no_lookup:
-                del self._acc_no_lookup[study.accession_number]
+            # Remove the accession number of the matched study from _acc_no_lookup:
+            # To delete acc no, Need to ensure the phi acc_no is not in ANY other phi study (can't be assumed to be unique)
+            # if match.accession_number in self._acc_no_lookup:
+            #         del self._acc_no_lookup[match.accession_number]
 
             # Remove the series_uids of this study from the uid_lookup:
             # Note: instance uids are removed by controller via directory names

@@ -105,10 +105,10 @@ class IndexView(tk.Toplevel):
         self._tree.configure(yscrollcommand=scrollbar.set)
 
         # Disable Keyboard selection bindings:
-        self._tree.bind("<Left>", lambda e: "break")
-        self._tree.bind("<Right>", lambda e: "break")
-        self._tree.bind("<Up>", lambda e: "break")
-        self._tree.bind("<Down>", lambda e: "break")
+        # self._tree.bind("<Left>", lambda e: "break")
+        # self._tree.bind("<Right>", lambda e: "break")
+        # self._tree.bind("<Up>", lambda e: "break")
+        # self._tree.bind("<Down>", lambda e: "break")
 
         # 2. Button Frame:
         self._button_frame = ctk.CTkFrame(self)
