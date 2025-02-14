@@ -326,34 +326,6 @@ class Anonymizer(ctk.CTk):
         finally:
             self.enable_file_menu()
 
-    def load_model(self, json_filepath: Path) -> ProjectModel:
-        try:
-            with open(json_filepath, "r") as f:
-                file_model = ProjectModel.from_json(f.read())  # type: ignore
-            if not isinstance(file_model, ProjectModel):
-                raise TypeError("Loaded object is not an instance of ProjectModel")
-            logger.info(f"Project Model successfully loaded from: {json_filepath}")
-            return file_model
-        except Exception as e1:
-            # Attempt to load backup file
-            backup_filepath = str(json_filepath) + ".bak"
-            if os.path.exists(backup_filepath):
-                try:
-                    with open(backup_filepath, "r") as f:
-                        file_model = ProjectModel.from_json(f.read())  # type: ignore
-                    if not isinstance(file_model, ProjectModel):
-                        raise TypeError("Loaded backup object is not an instance of ProjectModel")
-                    logger.warning(f"Loaded Project Model from backup file: {backup_filepath}")
-                    return file_model
-                except Exception as e2:
-                    logger.error(f"Backup Project Model datafile corrupt: {e2}")
-                    raise RuntimeError(
-                        f"Project datafile: {backup_filepath} and backup file corrupt\n\n{str(e2)}"
-                    ) from e2
-            else:
-                logger.error(f"Project Model datafile corrupt: {e1}")
-                raise RuntimeError(f"Project Model datafile: {json_filepath} corrupt\n\n{str(e1)}") from e1
-
     def open_project(self, project_dir: Path | None = None):
         logger.debug("open_project")
 
@@ -400,7 +372,7 @@ class Anonymizer(ctk.CTk):
             project_model_path = Path(project_dir, ProjectController.PROJECT_MODEL_FILENAME_JSON)
             if project_model_path.exists() and project_model_path.is_file():
                 try:
-                    file_model = self.load_model(project_model_path)
+                    file_model = load_model(project_model_path)
                 except Exception as e:
                     logger.error(f"Error loading Project Model: {str(e)}")
                     messagebox.showerror(
@@ -1108,6 +1080,33 @@ def signal_handler(signum, frame):
     print("Signal received, shutting down...")
 
 
+def load_model(json_filepath: Path) -> ProjectModel:
+    try:
+        with open(json_filepath, "r") as f:
+            file_model = ProjectModel.from_json(f.read())  # type: ignore
+        if not isinstance(file_model, ProjectModel):
+            raise TypeError("Loaded object is not an instance of ProjectModel")
+        logger.info(f"Project Model successfully loaded from: {json_filepath}")
+        return file_model
+    except Exception as e1:
+        # Attempt to load backup file
+        backup_filepath = str(json_filepath) + ".bak"
+        if os.path.exists(backup_filepath):
+            try:
+                with open(backup_filepath, "r") as f:
+                    file_model = ProjectModel.from_json(f.read())  # type: ignore
+                if not isinstance(file_model, ProjectModel):
+                    raise TypeError("Loaded backup object is not an instance of ProjectModel")
+                logger.warning(f"Loaded Project Model from backup file: {backup_filepath}")
+                return file_model
+            except Exception as e2:
+                logger.error(f"Backup Project Model datafile corrupt: {e2}")
+                raise RuntimeError(f"Project datafile: {backup_filepath} and backup file corrupt\n\n{str(e2)}") from e2
+        else:
+            logger.error(f"Project Model datafile corrupt: {e1}")
+            raise RuntimeError(f"Project Model datafile: {json_filepath} corrupt\n\n{str(e1)}") from e1
+
+
 def run_HEADLESS(project_model_path: Path):
     if not project_model_path.exists():
         logger.error(_("Project Model file not found") + f": {project_model_path}")
@@ -1118,10 +1117,7 @@ def run_HEADLESS(project_model_path: Path):
         return
 
     try:
-        with open(project_model_path, "rb") as pkl_file:
-            file_model = pickle.load(pkl_file)
-            if not isinstance(file_model, ProjectModel):
-                raise TypeError(_("Corruption detected: Loaded model is not an instance of ProjectModel"))
+        file_model = load_model(project_model_path)
     except Exception as e:
         logger.error(f"Error loading Project Model: {str(e)}")
         return
@@ -1173,6 +1169,7 @@ def run_HEADLESS(project_model_path: Path):
         f"{controller.model.project_name}[{controller.model.site_id}] => {controller.model.abridged_storage_dir()}"
     )
     logger.info("ANONYMIZER HEADLESS MAINLOOP start...")
+    logger.info("Press CTRL-C to shutdown server")
 
     global keep_running
     keep_running = True
