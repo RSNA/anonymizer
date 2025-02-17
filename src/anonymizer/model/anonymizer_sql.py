@@ -23,6 +23,7 @@ from anonymizer.model.project import DICOMNode
 from anonymizer.utils.storage import JavaAnonymizerExportedStudy
 
 from sqlalchemy import Index, create_engine, Column, String, Integer, ForeignKey, func
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship, scoped_session, make_transient
 from pprint import pformat
 import sqlite3
@@ -30,7 +31,6 @@ import sqlite3
 
 logger = logging.getLogger(__name__)
 Base = declarative_base()
-
 
 class Series(Base):
     __tablename__ = "Series"
@@ -40,7 +40,6 @@ class Series(Base):
     modality = Column(String)
     instance_count = Column(Integer)
     study_uid = Column(String, ForeignKey("Study.study_uid"))
-
 
 class Study(Base):
     __tablename__ = "Study"  # What the table name in the db is called, links the class to the table
@@ -59,7 +58,6 @@ class Study(Base):
 
     series = relationship("Series", cascade="all, delete-orphan")  # Creating one-to-many linking relationship
 
-
 class PHI(Base):
     __tablename__ = "PHI"
 
@@ -71,6 +69,11 @@ class PHI(Base):
 
     studies = relationship("Study", cascade="all, delete-orphan")
 
+class TagKeep(Base):
+    __tablename__ = "tag_keep"
+
+    tag = Column(String, primary_key=True)
+    operation = Column(String)
 
 @dataclass
 class PHI_IndexRecord:
@@ -113,12 +116,10 @@ class PHI_IndexRecord:
     def get_field_names(cls) -> list:
         return [field.name for field in fields(cls)]
 
-
-# Data type used to return the counts of the different data types
+# Data type used to return the counts of the different data types, not a var that is used, a type that is used
 Totals = namedtuple("Totals", ["patients", "studies", "series", "instances", "quarantined"])
 
 # TODO: change AnonymizerController "def load_model(self) -> AnonymizerModel:" to load from the database instead
-
 
 class AnonymizerModelSQL:
     """
@@ -131,7 +132,7 @@ class AnonymizerModelSQL:
 
     _lock = threading.Lock()
 
-    # Changed, needs testing
+    # ✅Changed, needs testing
     def __init__(self, site_id: str, uid_root: str, script_path: Path, db_url: str = "sqlite:///anonymizer.db"):
         """
         Initializes an instance of the AnonymizerModelSQL class.
@@ -154,8 +155,6 @@ class AnonymizerModelSQL:
         self._uid_prefix = f"{self._uid_root}.{self._site_id}"
         self.default_anon_pt_id: str = site_id + "-" + "".zfill(len(str(self.MAX_PATIENTS)) - 1)
 
-        self._tag_keep = {}  # {DICOM tag : anonymizer operation}
-
         # Database connection
         self.engine = create_engine(db_url, echo=False)  # Set echo=True for debugging
         self.Session = scoped_session(sessionmaker(bind=self.engine))
@@ -165,23 +164,26 @@ class AnonymizerModelSQL:
         # Initilise quarintied totals
         self._quarantined = 0  # TODO: Implement quarantined tracking, send it quantined directory to count
 
-        # if there is no default patient id create it
-        # default_phi = PHI(patient_id=self.default_anon_pt_id)
-        # self._session.add(default_phi)
+        # if there is no default patient id in the table create it
+        #   default_phi = PHI(patient_id=self.default_anon_pt_id)
+        #   self._session.add(default_phi)
 
         # self.clear_lookups()  # Initializes default patient_id_lookup and phi_lookup
         self.load_script(script_path)
 
-    # Added, needs testing
+    # ✅Added, needs testing
     def __del__(self):
         """Ensure the database session is closed properly when the instance is deleted."""
-        self._session.close()
+        try:
+            self._session.close()
+        except Exception as e:
+            print(f"Error closing session: {e}")
 
-    # Changed, needs testing
+    # ✅Changed, needs testing
     def get_class_name(self) -> str:
         return self.__class__.__name__
 
-    # Changed, needs testing
+    # ✅Changed, needs testing
     def __repr__(self) -> str:
         """Returns a summary of the model"""
         try:
@@ -190,7 +192,7 @@ class AnonymizerModelSQL:
                 num_patients = self._session.query(PHI).count()
                 num_studies = self._session.query(Study).count()
                 num_series = self._session.query(Series).count()
-                num_instances = self._session.query(func.sum(Study.target_instance_count)).scalar() or -1
+                num_instances = self._session.query(func.sum(Study.target_instance_count)).scalar() or 0
 
                 # Build a representation dictionary
                 model_summary = {
@@ -209,10 +211,10 @@ class AnonymizerModelSQL:
             self._session.rollback()  # Rollback to maintain DB consistency
             return f"{self.get_class_name()}(Error fetching DB info: {e})"
 
-    # Will need to change to use the database instead of dictionaries
+    # ✅Changed, needs testing, very unlikly to work first time, the operation may cause alot of problems
     def load_script(self, script_path: Path):
         """
-        Load and parse an anonymize script file.
+        Load and parse an anonymize script file and store tag operations in the database.
 
         Args:
             script_path (Path): The path to the script file.
@@ -230,26 +232,33 @@ class AnonymizerModelSQL:
             # Open and parse the XML script file
             root = ET.parse(script_path).getroot()
 
-            # Extract 'e' tags into _tag_keep dictionary
-            # IGNORE "en" = "T" or "F" - Java UX checkbox
-            # Tags with no operation or specified operation (which can be @remove) are added to tag_keep dictionary
-            # ALL unspecified tags are removed
+            # Iterate through 'e' tags and store in the database
             for e in root.findall("e"):
                 tag = str(e.attrib.get("t"))
                 operation = str(e.text) if e.text is not None else ""
+
                 if "@remove" not in operation:
-                    self._tag_keep[tag] = operation
+                    # Check if the tag already exists in the database
+                    existing_entry = self._session.query(TagKeep).filter_by(tag=tag).first()
 
-            # Handle:
-            # <r en="T" t="curves">Remove curves</r>
-            # <r en="T" t="overlays">Remove overlays</r>
-            # <r en="T" t="privategroups">Remove private groups</r> # pydicom.remove_private_tags()
-            # <r en="F" t="unspecifiedelements">Remove unchecked elements</r> # ignore check/unchecked en="T/F"
+                    if existing_entry:
+                        # Fetch the current operation value explicitly (to compare as a string)
+                        current_operation = self._session.query(TagKeep.operation).filter_by(tag=tag).scalar()
 
-            filtered_tag_keep = {k: v for k, v in self._tag_keep.items() if v != ""}
-            logger.info(f"_tag_keep has {len(self._tag_keep)} entries with {len(filtered_tag_keep)} operations")
-            logger.info(f"_tag_keep operations:\n{pformat(filtered_tag_keep)}")
-            return
+                        # If the operation has changed, update the value in the database
+                        if current_operation != operation:
+                            self._session.query(TagKeep).filter_by(tag=tag).update({"operation": operation})
+                            logger.info(f"Updated operation for tag: {tag}")
+                    else:
+                        # If the tag doesn't exist, add a new entry
+                        new_entry = TagKeep(tag=tag, operation=operation)
+                        self._session.add(new_entry)
+                        logger.info(f"Added new tag: {tag} with operation: {operation}")
+
+            # Commit the changes to the database
+            self._session.commit()
+
+            logger.info(f"Loaded {len(root.findall('e'))} tags into _tag_keep database table.")
 
         except FileNotFoundError:
             logger.error(f"{script_path} not found")
@@ -262,9 +271,10 @@ class AnonymizerModelSQL:
         except Exception as e:
             # Catch other generic exceptions and print the error message
             logger.error(f"Error Parsing script file {script_path}: {str(e)}")
+            self._session.rollback()
             raise
 
-    # Changed, needs testing
+    # ✅Changed, needs testing
     def get_totals(self) -> Totals:
         with self._lock:
             return Totals(
@@ -275,15 +285,25 @@ class AnonymizerModelSQL:
                 self._quarantined,  # Still uses in-memory `_quarantined`
             )
 
-    # Changed, needs testing
+    # ✅Changed, needs testing
     def get_phi(self, anon_patient_id: str) -> PHI | None:
         """
         Fetch PHI record from the database using the anonymized patient ID.
         """
         with self._lock:
-            return self._session.query(PHI).filter_by(patient_id=anon_patient_id).first()
+            try:
+                phi_record = self._session.query(PHI).filter_by(patient_id=anon_patient_id).first()
+                return phi_record
+            except SQLAlchemyError as e:
+                self._session.rollback()  # Rollback on error
+                logger.error(f"Database error fetching PHI: {e}") # Log the error
+                return None  # Or raise the exception if you want it propagated
+            except Exception as e: # Catch other potential exceptions
+                self._session.rollback()
+                logger.error(f"An unexpected error occurred: {e}")
+                return None
 
-    # Changed, needs testing
+    # ✅Changed, needs testing
     def get_phi_name(self, anon_patient_id: str) -> str | None:
         """
         Fetch the patient's name from PHI table based on the anonymized patient ID.
@@ -292,7 +312,7 @@ class AnonymizerModelSQL:
             phi = self._session.query(PHI).filter_by(patient_id=anon_patient_id).first()
             return phi.patient_name if phi else None
 
-    # Changed, needs testing
+    # ✅Changed, needs testing
     def set_phi(self, anon_patient_id: str, phi: PHI):
         """
         Insert or update PHI record in the database.
@@ -319,41 +339,88 @@ class AnonymizerModelSQL:
 
             self._session.commit()
 
-    # reformats phi data into a format accessable for the index
-    # Not changed yet
+    # ✅Changed, needs testing 
     def get_phi_index(self) -> List[PHI_IndexRecord] | None:
-        if self.get_patient_id_count() == 0:
-            return None
+        """
+        Reformats PHI data into a format usable by the index
 
-        phi_index = []
-        for anon_pt_id in self._phi_lookup:
-            phi: PHI = self._phi_lookup[anon_pt_id]
-            for study in phi.studies:
+        Fetches all PHI index records from the database and constructs PHI_IndexRecord objects.
+        
+        Returns:
+            List[PHI_IndexRecord] | None: A list of PHI_IndexRecord instances or None if no records exist.
+        """
+        with self._lock:
+            # Check if there are any patients
+            if self._session.query(PHI).count() == 0:
+                return None
+            
+            phi_index = []
+            
+            # Query PHI records and join with Study
+            phi_records = (
+                self._session.query(PHI, Study)
+                .join(Study, PHI.patient_id == Study.patient_id)
+                .all()
+            )
+
+            for phi, study in phi_records:
+                # Fetch anonymized values (Placeholder functions, replace with actual logic)
+                anon_patient_id = self.get_anon_patient_id(phi.patient_id)
+                anon_accession = self.get_anon_acc_no(study.accession_number)
+                anon_study_uid = self.get_anon_uid(study.study_uid)
+
                 phi_index_record = PHI_IndexRecord(
-                    anon_patient_id=anon_pt_id,
-                    anon_patient_name=anon_pt_id,
-                    phi_patient_id=anon_pt_id,
+                    anon_patient_id=anon_patient_id,
+                    anon_patient_name=anon_patient_id,  # No anonymized name logic
+                    phi_patient_id=phi.patient_id,
                     phi_patient_name=phi.patient_name,
                     date_offset=study.anon_date_delta,
                     phi_study_date=study.study_date,
-                    # TODO: Handle missing accession numbers
-                    anon_accession=self._acc_no_lookup[study.accession_number],
+                    anon_accession=anon_accession,
                     phi_accession=study.accession_number,
-                    anon_study_uid=self._uid_lookup[study.study_uid],
+                    anon_study_uid=anon_study_uid,
                     phi_study_uid=study.study_uid,
                     num_series=len(study.series),
-                    num_instances=sum([s.instance_count for s in study.series]),
+                    num_instances=sum(s.instance_count for s in study.series),
                 )
+
                 phi_index.append(phi_index_record)
-        return phi_index
+
+            return phi_index
+
+    # ✅Changed, needs testing    
+    def get_anon_patient_id(self, phi_patient_id: str) -> str:
+        """
+        Retrieves the anonymized patient ID for a given PHI patient ID.
+        Returns an empty string ("") if not found.
+        """
+        with self._lock:
+            record = self._session.query(PHI_IndexRecord).filter_by(phi_patient_id=phi_patient_id).first()
+            return record.anon_patient_id if record else ""
+    
+    # ✅Changed, needs testing 
+    def get_anon_uid(self, phi_uid: str) -> str:
+        """
+        Retrieves the anonymized study UID for a given PHI study UID.
+        Returns an empty string ("") if not found.
+        """
+        with self._lock:
+            record = self._session.query(PHI_IndexRecord).filter_by(phi_study_uid=phi_uid).first()
+            return record.anon_study_uid if record else ""
+
+    # ✅Changed, needs testing 
+    def get_anon_acc_no(self, phi_acc_no: str) -> str:
+        """
+        Retrieves the anonymized accession number for a given PHI accession number.
+        Returns an empty string ("") if not found.
+        """
+        with self._lock:
+            record = self._session.query(PHI_IndexRecord).filter_by(phi_accession=phi_acc_no).first()
+            return record.anon_accession if record else ""
 
     # Not changed yet
     def increment_quarantined(self):
         self._quarantined += 1
-
-    # Not changed yet, need to use the database not the lookup
-    def get_anon_patient_id(self, phi_patient_id: str) -> str | None:
-        return self._patient_id_lookup.get(phi_patient_id)
 
     # Not changed yet, need to use the database not the lookup
     def get_next_anon_patient_id(self, phi_patient_id: str) -> str:
@@ -390,10 +457,6 @@ class AnonymizerModelSQL:
                 del self._uid_lookup.inverse[anon_uid]
 
     # Not changed yet, need to use the database not the lookup
-    def get_anon_uid(self, phi_uid: str) -> str | None:
-        return self._uid_lookup.get(phi_uid, None)
-
-    # Not changed yet, need to use the database not the lookup
     def get_uid_count(self) -> int:
         return len(self._uid_lookup)
 
@@ -408,10 +471,6 @@ class AnonymizerModelSQL:
             anon_uid = self._uid_prefix + f".{self.get_uid_count() + 1}"
             self._uid_lookup[phi_uid] = anon_uid
             return anon_uid
-
-    # Not changed yet, need to use the database not the lookup
-    def get_anon_acc_no(self, phi_acc_no: str) -> str | None:
-        return self._acc_no_lookup.get(phi_acc_no)
 
     # Not changed yet, need to use the database not the lookup
     def set_anon_acc_no(self, phi_acc_no: str, anon_acc_no: str):
