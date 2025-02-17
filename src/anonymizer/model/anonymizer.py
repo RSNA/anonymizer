@@ -459,7 +459,7 @@ class AnonymizerModel:
                 phi_index_record = PHI_IndexRecord(
                     anon_patient_id=anon_pt_id,
                     anon_patient_name=anon_pt_id,
-                    phi_patient_id=anon_pt_id,
+                    phi_patient_id=phi.patient_id,
                     phi_patient_name=phi.patient_name,
                     date_offset=study.anon_date_delta,
                     phi_study_date=study.study_date,

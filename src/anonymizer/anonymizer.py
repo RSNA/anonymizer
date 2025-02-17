@@ -354,8 +354,6 @@ class Anonymizer(ctk.CTk):
                 with open(project_model_path, "rb") as pkl_file:
                     logger.warning(f"Loading Project Model from legacy pickle file: {project_model_path}")
                     file_model = pickle.load(pkl_file)
-                    if not isinstance(file_model, ProjectModel):
-                        raise TypeError(_("Corruption detected: Loaded model is not an instance of ProjectModel"))
                     # DELETE the pickle file after successful loading, saving will be in json from now on:
                     os.remove(project_model_path)
             except Exception as e:

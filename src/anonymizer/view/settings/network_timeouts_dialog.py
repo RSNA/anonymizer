@@ -6,7 +6,7 @@ import customtkinter as ctk
 
 from anonymizer.model.project import NetworkTimeouts
 from anonymizer.utils.translate import _
-from anonymizer.utils.ux_fields import int_entry
+from anonymizer.view.ux_fields import int_entry
 
 logger = logging.getLogger(__name__)
 

@@ -92,8 +92,8 @@ class AnonymizerController:
             with open(self.model_filename, "rb") as pkl_file:
                 serialized_data = pkl_file.read()
             file_model = pickle.loads(serialized_data)
-            if not isinstance(file_model, AnonymizerModel):
-                raise TypeError("Loaded object is not an instance of AnonymizerModel")
+            if not hasattr(file_model, "_version"):
+                raise RuntimeError("Anonymizer Model missing version")
             logger.info(f"Anonymizer Model successfully loaded from: {self.model_filename}")
             return file_model
         except Exception as e1:
@@ -104,8 +104,8 @@ class AnonymizerController:
                     with open(backup_filename, "rb") as pkl_file:
                         serialized_data = pkl_file.read()
                     file_model = pickle.loads(serialized_data)
-                    if not isinstance(file_model, AnonymizerModel):
-                        raise TypeError("Loaded backup object is not an instance of AnonymizerModel")
+                    if not hasattr(file_model, "_version"):
+                        raise RuntimeError("Anonymizer Model missing version in backup file")
                     logger.warning(f"Loaded Anonymizer Model from backup file: {backup_filename}")
                     return file_model
                 except Exception as e2:

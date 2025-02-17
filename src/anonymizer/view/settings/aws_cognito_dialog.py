@@ -7,7 +7,7 @@ import customtkinter as ctk
 
 from anonymizer.model.project import AWSCognito
 from anonymizer.utils.translate import _
-from anonymizer.utils.ux_fields import str_entry
+from anonymizer.view.ux_fields import str_entry
 
 logger = logging.getLogger(__name__)
 

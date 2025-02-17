@@ -8,7 +8,7 @@ import customtkinter as ctk
 from anonymizer.model.project import DICOMNode
 from anonymizer.utils.network import dns_lookup, get_local_ip_addresses
 from anonymizer.utils.translate import _
-from anonymizer.utils.ux_fields import (
+from anonymizer.view.ux_fields import (
     aet_max_chars,
     aet_min_chars,
     int_entry,
