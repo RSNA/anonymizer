@@ -32,14 +32,16 @@ import sqlite3
 logger = logging.getLogger(__name__)
 Base = declarative_base()
 
+
 class Series(Base):
     __tablename__ = "Series"
 
     series_uid = Column(String, primary_key=True)
-    series_desc = Column(String)
+    series_desc = Column(String, nullable=True)
     modality = Column(String)
     instance_count = Column(Integer)
     study_uid = Column(String, ForeignKey("Study.study_uid"))
+
 
 class Study(Base):
     __tablename__ = "Study"  # What the table name in the db is called, links the class to the table
@@ -52,16 +54,20 @@ class Study(Base):
     source = Column(String)
     study_date = Column(String)
     anon_date_delta = Column(Integer)
-    accession_number = Column(String)
-    study_desc = Column(String)
+    accession_number = Column(String, index=True)
+    anon_accession_number_count = Column(Integer, index=True, autoincrement=True, unique=True)
+    anon_accession_number = Column(String, index=True)
+    study_desc = Column(String, nullable=True)
     target_instance_count = Column(Integer, default=0)
 
     series = relationship("Series", cascade="all, delete-orphan")  # Creating one-to-many linking relationship
+
 
 class PHI(Base):
     __tablename__ = "PHI"
 
     patient_id = Column(String, primary_key=True)
+    anon_patient_id = Column(String, index=True)
     patient_name = Column(String, nullable=True)
     sex = Column(String, nullable=True)
     dob = Column(String, nullable=True)
@@ -69,11 +75,23 @@ class PHI(Base):
 
     studies = relationship("Study", cascade="all, delete-orphan")
 
+
+# Used to map DICOM UIDs to anon UIDs
+class UID(Base):
+    __tablename__ = "UID"
+
+    uid_pk = Column(Integer, primary_key=True)
+    anon_uid = Column(String, index=True)
+    phi_uid = Column(String, index=True)
+
+
+# DICOM tags to keep after anonomization
 class TagKeep(Base):
     __tablename__ = "tag_keep"
 
     tag = Column(String, primary_key=True)
     operation = Column(String)
+
 
 @dataclass
 class PHI_IndexRecord:
@@ -116,10 +134,13 @@ class PHI_IndexRecord:
     def get_field_names(cls) -> list:
         return [field.name for field in fields(cls)]
 
+
 # Data type used to return the counts of the different data types, not a var that is used, a type that is used
 Totals = namedtuple("Totals", ["patients", "studies", "series", "instances", "quarantined"])
 
 # TODO: change AnonymizerController "def load_model(self) -> AnonymizerModel:" to load from the database instead
+# lookup function to find if accession number exits: get_anon_acc_num
+
 
 class AnonymizerModelSQL:
     """
@@ -211,7 +232,7 @@ class AnonymizerModelSQL:
             self._session.rollback()  # Rollback to maintain DB consistency
             return f"{self.get_class_name()}(Error fetching DB info: {e})"
 
-    # ✅Changed, needs testing, very unlikly to work first time, the operation may cause alot of problems
+    # ⭕Changed, needs testing, very unlikly to work first time, the "operation" may cause alot of problems
     def load_script(self, script_path: Path):
         """
         Load and parse an anonymize script file and store tag operations in the database.
@@ -296,9 +317,9 @@ class AnonymizerModelSQL:
                 return phi_record
             except SQLAlchemyError as e:
                 self._session.rollback()  # Rollback on error
-                logger.error(f"Database error fetching PHI: {e}") # Log the error
+                logger.error(f"Database error fetching PHI: {e}")  # Log the error
                 return None  # Or raise the exception if you want it propagated
-            except Exception as e: # Catch other potential exceptions
+            except Exception as e:  # Catch other potential exceptions
                 self._session.rollback()
                 logger.error(f"An unexpected error occurred: {e}")
                 return None
@@ -339,13 +360,13 @@ class AnonymizerModelSQL:
 
             self._session.commit()
 
-    # ✅Changed, needs testing 
+    # ✅Changed, needs testing
     def get_phi_index(self) -> List[PHI_IndexRecord] | None:
         """
         Reformats PHI data into a format usable by the index
 
         Fetches all PHI index records from the database and constructs PHI_IndexRecord objects.
-        
+
         Returns:
             List[PHI_IndexRecord] | None: A list of PHI_IndexRecord instances or None if no records exist.
         """
@@ -353,18 +374,14 @@ class AnonymizerModelSQL:
             # Check if there are any patients
             if self._session.query(PHI).count() == 0:
                 return None
-            
+
             phi_index = []
-            
+
             # Query PHI records and join with Study
-            phi_records = (
-                self._session.query(PHI, Study)
-                .join(Study, PHI.patient_id == Study.patient_id)
-                .all()
-            )
+            phi_records = self._session.query(PHI, Study).join(Study, PHI.patient_id == Study.patient_id).all()
 
             for phi, study in phi_records:
-                # Fetch anonymized values (Placeholder functions, replace with actual logic)
+                # Fetch anonymized values
                 anon_patient_id = self.get_anon_patient_id(phi.patient_id)
                 anon_accession = self.get_anon_acc_no(study.accession_number)
                 anon_study_uid = self.get_anon_uid(study.study_uid)
@@ -388,131 +405,169 @@ class AnonymizerModelSQL:
 
             return phi_index
 
-    # ✅Changed, needs testing    
-    def get_anon_patient_id(self, phi_patient_id: str) -> str:
+    # ✅Changed, needs testing 
+    def get_anon_patient_id(self, phi_patient_id: str) -> str | None:
         """
         Retrieves the anonymized patient ID for a given PHI patient ID.
-        Returns an empty string ("") if not found.
+        Returns None if not found.
         """
         with self._lock:
-            record = self._session.query(PHI_IndexRecord).filter_by(phi_patient_id=phi_patient_id).first()
-            return record.anon_patient_id if record else ""
-    
-    # ✅Changed, needs testing 
-    def get_anon_uid(self, phi_uid: str) -> str:
-        """
-        Retrieves the anonymized study UID for a given PHI study UID.
-        Returns an empty string ("") if not found.
-        """
-        with self._lock:
-            record = self._session.query(PHI_IndexRecord).filter_by(phi_study_uid=phi_uid).first()
-            return record.anon_study_uid if record else ""
+            record = self._session.query(PHI).filter_by(patient_id=phi_patient_id).first()
+            return record.anon_patient_id.value if record else None
 
-    # ✅Changed, needs testing 
-    def get_anon_acc_no(self, phi_acc_no: str) -> str:
+    # ✅Changed, needs testing
+    def set_anon_patient_id(self, phi_patient_id: str, anon_patient_id: str):
+        """
+        Updates the anonymized patient ID for an existing PHI record.
+        Raises an error if the PHI record does not exist.
+        """
+        with self._lock:
+            existing_entry = self._session.query(PHI).filter_by(patient_id=phi_patient_id).first()
+
+            if existing_entry:
+                self._session.query(PHI).filter_by(patient_id=phi_patient_id).update({"anon_patient_id": anon_patient_id})
+                logger.info(f"Updated anonymized patient ID for {phi_patient_id} -> {anon_patient_id}")
+                self._session.commit()
+            else:
+                logger.error(f"Cannot set anon_patient_id: No PHI record found for patient_id {phi_patient_id}")
+                raise ValueError(f"No PHI record found for patient_id {phi_patient_id}")
+
+    # ✅Changed, needs testing
+    def get_anon_uid(self, phi_uid: str) -> str | None:
+        """
+        Retrieves the anonymized UID for a given PHI UID.
+        Returns None if not found.
+        """
+        with self._lock:
+            record = self._session.query(UID).filter_by(phi_uid=phi_uid).first()
+            return record.anon_uid.value if record else None
+
+    # ✅Changed, needs testing
+    def get_anon_acc_no(self, phi_acc_no: str) -> str | None:
         """
         Retrieves the anonymized accession number for a given PHI accession number.
-        Returns an empty string ("") if not found.
+        Returns None if not found.
         """
         with self._lock:
-            record = self._session.query(PHI_IndexRecord).filter_by(phi_accession=phi_acc_no).first()
-            return record.anon_accession if record else ""
+            record = self._session.query(Study).filter_by(accession_number=phi_acc_no).first()
+            return record.anon_accession_number.value if record else None
 
-    # Not changed yet
+    # ✅No changes needed
     def increment_quarantined(self):
         self._quarantined += 1
 
-    # Not changed yet, need to use the database not the lookup
-    def get_next_anon_patient_id(self, phi_patient_id: str) -> str:
-        with self._lock:
-            anon_patient_id = (
-                f"{self._site_id}-{str(len(self._patient_id_lookup)).zfill(len(str(self.MAX_PATIENTS - 1)))}"
-            )
-            self._patient_id_lookup[phi_patient_id] = anon_patient_id
-            return anon_patient_id
-
-    # Not changed yet, need to use the database not the lookup
+    # ✅Changed, needs testing
     def get_patient_id_count(self) -> int:
-        return len(self._patient_id_lookup)
-
-    # Not changed yet, need to use the database not the lookup
-    def set_anon_patient_id(self, phi_patient_id: str, anon_patient_id: str):
+        """
+        Get the number of patients in the PHI table
+        """
         with self._lock:
-            self._patient_id_lookup[phi_patient_id] = anon_patient_id
+            return self._session.query(func.count(PHI.patient_id)).scalar() or 0
 
-    # Not changed yet, need to use the database
+    # ✅Changed, needs testing
     def uid_received(self, phi_uid: str) -> bool:
-        return phi_uid in self._uid_lookup
+        """
+        Checks if a given PHI UID exists in the database.
+        """
+        with self._lock:
+            return self._session.query(UID).filter_by(phi_uid=phi_uid).first() is not None
 
-    # Not changed yet, need to use the database not the lookup
+    # ✅Changed, needs testing
     def remove_uid(self, phi_uid: str):
+        """
+        Deletes the corresponding phi_uid from the UID table.
+        """
         with self._lock:
-            if phi_uid in self._uid_lookup:
-                del self._uid_lookup[phi_uid]
+            deleted_rows = self._session.query(UID).filter_by(phi_uid=phi_uid).delete()
+            if deleted_rows:
+                logger.info(f"Deleted UID record for phi_uid: {phi_uid}")
+            self._session.commit()
 
-    # Not changed yet, need to use the database not the lookup
+    # ✅Changed, needs testing
     def remove_uid_inverse(self, anon_uid: str):
+        """
+        Deletes the UID record where the anonymized UID matches.
+        """
         with self._lock:
-            if anon_uid in self._uid_lookup.inverse:
-                del self._uid_lookup.inverse[anon_uid]
+            deleted_rows = self._session.query(UID).filter_by(anon_uid=anon_uid).delete()
+            if deleted_rows:
+                logger.info(f"Deleted UID record for anon_uid: {anon_uid}")
+            self._session.commit()
 
-    # Not changed yet, need to use the database not the lookup
+    # ✅Changed, needs testing
     def get_uid_count(self) -> int:
-        return len(self._uid_lookup)
+        """
+        Returns the number of UID mappings in the database.
+        """
+        with self._lock:
+            return self._session.query(func.count(UID.uid_pk)).scalar() or 0
 
-    # Not changed yet, need to use the database not the lookup
+    # ⭕Changed, needs testing, need to check the adding new logic
     def set_anon_uid(self, phi_uid: str, anon_uid: str):
+        """
+        Adds or updates a UID mapping in the database.
+        """
         with self._lock:
-            self._uid_lookup[phi_uid] = anon_uid
+            existing_entry = self._session.query(UID).filter_by(phi_uid=phi_uid).first()
 
-    # Not changed yet, need to use the database not the lookup
+            if existing_entry:
+                existing_entry.anon_uid = anon_uid
+                logger.info(f"Updated UID mapping: {phi_uid} -> {anon_uid}")
+            else:
+                new_entry = UID(phi_uid=phi_uid, anon_uid=anon_uid)
+                self._session.add(new_entry)
+                logger.info(f"Inserted new UID mapping: {phi_uid} -> {anon_uid}")
+
+            self._session.commit()
+
+    # ✅Changed, needs testing
     def get_next_anon_uid(self, phi_uid: str) -> str:
+        """
+        Generates and stores a new anonymized UID using the last UID + 1.
+        """
         with self._lock:
-            anon_uid = self._uid_prefix + f".{self.get_uid_count() + 1}"
-            self._uid_lookup[phi_uid] = anon_uid
+            # Get the highest UID primary key
+            last_uid_pk = self._session.query(func.max(UID.uid_pk)).scalar() or 0
+            new_uid_pk = last_uid_pk + 1
+
+            # Generate anonymized UID
+            anon_uid = f"{self._uid_prefix}.{new_uid_pk}"
+
+            # Insert new record
+            new_entry = UID(phi_uid=phi_uid, anon_uid=anon_uid)
+            self._session.add(new_entry)
+            self._session.commit()
+
+            logger.info(f"Generated new anon UID: {anon_uid} for PHI UID: {phi_uid}")
             return anon_uid
 
-    # Not changed yet, need to use the database not the lookup
-    def set_anon_acc_no(self, phi_acc_no: str, anon_acc_no: str):
-        with self._lock:
-            self._acc_no_lookup[phi_acc_no] = anon_acc_no
-
-    # Not changed yet, need to use the database not the lookup
-    def get_next_anon_acc_no(self, phi_acc_no: str) -> str:
-        with self._lock:
-            anon_acc_no = len(self._acc_no_lookup) + 1
-            # TODO: include PHI PatientID with phi_acc_no for uniqueness
-            self._acc_no_lookup[phi_acc_no] = str(anon_acc_no)
-            return str(anon_acc_no)
-
-    # Not changed yet, need to use the database not the lookup
+    # ✅Changed, needs testing
     def get_acc_no_count(self) -> int:
-        return len(self._acc_no_lookup)
+        """
+        Returns the highest anon_accession_number_count from the Study table.
+        """
+        with self._lock:
+            return self._session.query(func.max(Study.anon_accession_number_count)).scalar() or 0
 
-    # Not changed yet, need to use the database not the lookup
+    # ✅Changed, needs testing
     def get_stored_instance_count(self, ptid: str, study_uid: str) -> int:
         """
         Retrieves the number of stored instances for a given patient ID and study UID.
-
-        Args:
-            ptid (str): PHI PatientID.
-            study_uid (str): PHI StudyUID.
-
-        Returns:
-            int: The number of stored instances.
-
         """
         with self._lock:
-            anon_patient_id = self._patient_id_lookup.get(ptid, None)
-            if anon_patient_id is None:
+            # Get the PHI record for the patient
+            phi_entry = self._session.query(PHI).filter_by(patient_id=ptid).first()
+            if not phi_entry:
                 return 0
-            phi = self._phi_lookup.get(anon_patient_id, None)
-            if phi is None:
+
+            # Get the Study entry for the given study UID
+            study_entry = self._session.query(Study).filter_by(study_uid=study_uid, patient_id=ptid).first()
+            if not study_entry:
                 return 0
-            for study in phi.studies:
-                if study.study_uid == study_uid:
-                    return sum(series.instance_count for series in study.series)
-            return 0
+
+            # Sum all instance counts from related Series
+            total_instances = self._session.query(func.sum(Series.instance_count)).filter_by(study_uid=study_uid).scalar() or 0
+            return total_instances
 
     # Not changed yet, need to use the database not the lookup
     def get_pending_instance_count(self, ptid: str, study_uid: str, target_count: int) -> int:
@@ -589,11 +644,17 @@ class AnonymizerModelSQL:
     # Not changed yet, need to use the database not the lookup
     # Helper function for capture_phi
     def new_study_from_dataset(self, ds: Dataset, source: DICOMNode | str, date_delta: int) -> Study:
+        """
+        Gets new study data from dataset
+
+        Gets the current value of anon_accession_number_count and uses that as the anon_accession_number, needs to be this way for backwards compatability
+        """
         return Study(
             study_uid=ds.get("StudyInstanceUID"),
             study_date=ds.get("StudyDate"),
             anon_date_delta=date_delta,
             accession_number=ds.get("AccessionNumber"),
+            # anon_accession_number= anon_accession_number_count + 1, # Needs to be the next value in the sequence (autoincrement=True, unique=True) need to check logic
             study_desc=ds.get("StudyDescription"),
             source=source,
             series=[
@@ -750,6 +811,8 @@ class AnonymizerModelSQL:
                 self._instances += 1
 
     # Not changed yet, need to use the database not the lookup
+    # If the patient only has one study it will remove the study and the patient
+    # If the patient has multiple studies then it will remove the study record and leave the rest
     def remove_phi(self, anon_pt_id: str, anon_study_uid: str) -> bool:
         """
         Remove PHI data for a given Anonymizer patient ID and study UID.
@@ -830,7 +893,7 @@ class AnonymizerModelSQL:
         logger.info(f"Processing {len(java_studies)} Java PHI Studies")
 
         for java_study in java_studies:
-            self.set_anon_acc_no(java_study.PHI_Accession, java_study.ANON_Accession)
+            # self.set_anon_acc_no(java_study.PHI_Accession, java_study.ANON_Accession)
             self.set_anon_uid(java_study.PHI_StudyInstanceUID, java_study.ANON_StudyInstanceUID)
 
             new_study = Study(
@@ -838,6 +901,7 @@ class AnonymizerModelSQL:
                 anon_date_delta=int(java_study.DateOffset),
                 accession_number=java_study.PHI_Accession,
                 study_uid=java_study.PHI_StudyInstanceUID,
+                # anon_accession_number = anon_accession_number_count + 1
                 study_desc="?",
                 source="Java Index File",
                 series=[],
