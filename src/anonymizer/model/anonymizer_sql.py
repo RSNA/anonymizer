@@ -4,29 +4,23 @@ and anonymization lookups. It also includes data classes for Series, Study, and 
 """
 
 import logging
-import os
-import pickle
-import shutil
 import threading
 import xml.etree.ElementTree as ET
 from collections import namedtuple
-from dataclasses import dataclass, field, fields
-from datetime import datetime
+from dataclasses import dataclass, fields
 from pathlib import Path
 from pprint import pformat
 from typing import ClassVar, Dict, List, Tuple
 
-from bidict import bidict
 from pydicom import Dataset
 
 from anonymizer.model.project import DICOMNode
 from anonymizer.utils.storage import JavaAnonymizerExportedStudy
 
-from sqlalchemy import Index, create_engine, Column, String, Integer, ForeignKey, func
+from sqlalchemy import create_engine, Column, String, Integer, ForeignKey, func
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import sessionmaker, declarative_base, relationship, scoped_session, make_transient
+from sqlalchemy.orm import sessionmaker, declarative_base, relationship, scoped_session
 from pprint import pformat
-import sqlite3
 
 
 logger = logging.getLogger(__name__)
@@ -331,7 +325,7 @@ class AnonymizerModelSQL:
         """
         with self._lock:
             phi = self._session.query(PHI).filter_by(patient_id=anon_patient_id).first()
-            return phi.patient_name if phi else None
+            return phi.patient_name.value if phi else None
 
     # ✅Changed, needs testing
     def set_phi(self, anon_patient_id: str, phi: PHI):
@@ -360,48 +354,68 @@ class AnonymizerModelSQL:
 
             self._session.commit()
 
-    # ✅Changed, needs testing
-    def get_phi_index(self) -> List[PHI_IndexRecord] | None:
+    # ⭕Changed, one part needs fixing
+    def get_phi_index(self) -> List[PHI_IndexRecord]:
         """
-        Reformats PHI data into a format usable by the index
+        Reformats PHI data into a format usable by the index.
 
         Fetches all PHI index records from the database and constructs PHI_IndexRecord objects.
 
         Returns:
-            List[PHI_IndexRecord] | None: A list of PHI_IndexRecord instances or None if no records exist.
+            List[PHI_IndexRecord]: A list of PHI_IndexRecord instances.
         """
         with self._lock:
-            # Check if there are any patients
-            if self._session.query(PHI).count() == 0:
-                return None
+            # Fetch all necessary data in a single query
+            phi_records = (
+                self._session.query(
+                    PHI.patient_id, PHI.patient_name, Study.study_uid, Study.study_date,
+                    Study.anon_date_delta, Study.accession_number, Study.anon_accession_number,
+                    func.count(Series.series_uid).label("num_series"),
+                    func.coalesce(func.sum(Series.instance_count), 0).label("num_instances"),
+                )
+                .join(Study, PHI.patient_id == Study.patient_id)
+                .outerjoin(Series, Study.study_uid == Series.study_uid)
+                .group_by(PHI.patient_id, PHI.patient_name, Study.study_uid, Study.study_date,
+                        Study.anon_date_delta, Study.accession_number, Study.anon_accession_number)
+                .all()
+            )
+
+            # If no records, return an empty list
+            if not phi_records:
+                return []
 
             phi_index = []
+            anon_uid_cache = {}
+            anon_acc_cache = {}
 
-            # Query PHI records and join with Study
-            phi_records = self._session.query(PHI, Study).join(Study, PHI.patient_id == Study.patient_id).all()
+            for record in phi_records:
+                phi_patient_id, phi_patient_name, phi_study_uid, phi_study_date, anon_date_delta, phi_accession, anon_accession, num_series, num_instances = record
 
-            for phi, study in phi_records:
-                # Fetch anonymized values
-                anon_patient_id = self.get_anon_patient_id(phi.patient_id)
-                anon_accession = self.get_anon_acc_no(study.accession_number)
-                anon_study_uid = self.get_anon_uid(study.study_uid)
+                # Fetch anonymized values using cached lookups
+                if phi_patient_id not in anon_uid_cache:
+                    anon_uid_cache[phi_patient_id] = self.get_anon_patient_id(phi_patient_id)
 
-                phi_index_record = PHI_IndexRecord(
+                if phi_accession not in anon_acc_cache:
+                    anon_acc_cache[phi_accession] = self.get_anon_acc_no(phi_accession)
+
+                anon_patient_id = anon_uid_cache[phi_patient_id]
+                anon_accession = anon_acc_cache[phi_accession]
+                anon_study_uid = self.get_anon_uid(phi_study_uid)
+
+                phi_index.append(PHI_IndexRecord(
                     anon_patient_id=anon_patient_id,
-                    anon_patient_name=anon_patient_id,  # No anonymized name logic
-                    phi_patient_id=phi.patient_id,
-                    phi_patient_name=phi.patient_name,
-                    date_offset=study.anon_date_delta,
-                    phi_study_date=study.study_date,
+                    anon_patient_name=anon_patient_id,  # No Anon name implmentation yet, uses ID for now
+                    phi_patient_id=phi_patient_id,
+                    phi_patient_name=phi_patient_name,
+                    date_offset=anon_date_delta,
+                    phi_study_date=phi_study_date,
                     anon_accession=anon_accession,
-                    phi_accession=study.accession_number,
+                    phi_accession=phi_accession,
                     anon_study_uid=anon_study_uid,
-                    phi_study_uid=study.study_uid,
-                    num_series=len(study.series),
-                    num_instances=sum(s.instance_count for s in study.series),
-                )
-
-                phi_index.append(phi_index_record)
+                    phi_study_uid=phi_study_uid,
+                    num_series=num_series,
+                    num_instances=num_instances,
+                ))
 
             return phi_index
 
@@ -511,7 +525,7 @@ class AnonymizerModelSQL:
             existing_entry = self._session.query(UID).filter_by(phi_uid=phi_uid).first()
 
             if existing_entry:
-                existing_entry.anon_uid = anon_uid
+                self._session.query(UID).filter_by(phi_uid=phi_uid).update({"anon_uid": anon_uid})
                 logger.info(f"Updated UID mapping: {phi_uid} -> {anon_uid}")
             else:
                 new_entry = UID(phi_uid=phi_uid, anon_uid=anon_uid)
@@ -569,79 +583,61 @@ class AnonymizerModelSQL:
             total_instances = self._session.query(func.sum(Series.instance_count)).filter_by(study_uid=study_uid).scalar() or 0
             return total_instances
 
-    # Not changed yet, need to use the database not the lookup
+    # ✅Changed, needs testing
     def get_pending_instance_count(self, ptid: str, study_uid: str, target_count: int) -> int:
         """
-        This will return difference between stored instances and target_count for a given patient ID & study UID
-        When first called for a study it also sets the study.target_instance_count (for future imported state detection)
-
-        Args:
-            ptid (str): The patient ID.
-            study_uid (str): The study UID.
-            target_count (int): The target count.
-
-        Returns:
-            int: The pending instance count.
+        Returns the difference between stored instances and target_count for a given study.
+        Also ensures study.target_instance_count is set.
         """
-        anon_patient_id = self._patient_id_lookup.get(ptid, None)
-        if anon_patient_id is None:
-            return target_count
-        phi = self._phi_lookup.get(anon_patient_id, None)
-        if phi is None:
-            return target_count
-        for study in phi.studies:
-            if study.study_uid == study_uid:
-                with self._lock:
-                    study.target_instance_count = target_count
-                    return target_count - sum(series.instance_count for series in study.series)
-        return target_count
+        with self._lock:
+            study = self._session.query(Study).filter_by(study_uid=study_uid, patient_id=ptid).first()
+            if not study:
+                return target_count  # No study found, assume all instances are pending
 
-    # Not changed yet, need to use the database not the lookup
+            # Update target_instance_count if it's not set
+            if study.target_instance_count.value == 0:
+                self._session.query(Study).filter_by(study_uid=study_uid, patient_id=ptid).update({"target_instance_count": target_count})
+                self._session.commit()
+
+            # Get total stored instance count
+            stored_instance_count = self._session.query(func.sum(Series.instance_count)).filter_by(study_uid=study_uid).scalar() or 0
+
+            return max(0, target_count - stored_instance_count)  # Ensure non-negative
+
+    # ✅Changed, needs testing
     def series_complete(self, ptid: str, study_uid: str, series_uid: str, target_count: int) -> bool:
         """
-        Check if a series is complete based on the given parameters.
-
-        Args:
-            ptid (str): The patient ID.
-            study_uid (str): The study UID.
-            series_uid (str): The series UID.
-            target_count (int): The target instance count.
-
-        Returns:
-            bool: True if the series is complete, False otherwise.
+        Check if a series is complete by comparing stored instances to the target count.
         """
-        anon_patient_id = self._patient_id_lookup.get(ptid, None)
-        if anon_patient_id is None:
-            return False
-        phi = self._phi_lookup.get(anon_patient_id, None)
-        if phi is None:
-            return False
-        for study in phi.studies:
-            if study.study_uid == study_uid:
-                for series in study.series:
-                    if series.series_uid == series_uid:
-                        return series.instance_count >= target_count
-                return False
-        return False
-
-    # Not changed yet, need to use the database not the lookup
-    # Used by QueryRetrieveView to prevent study re-import
-    def study_imported(self, ptid: str, study_uid: str) -> bool:
         with self._lock:
-            anon_patient_id = self._patient_id_lookup.get(ptid, None)
-            if anon_patient_id is None:
+            # Get the Series record
+            series = self._session.query(Series).filter_by(series_uid=series_uid, study_uid=study_uid).first()
+            
+            # If series does not exist, it cannot be complete
+            if not series:
                 return False
-            phi = self._phi_lookup.get(anon_patient_id, None)
-            if phi is None:
-                return False
-            for study in phi.studies:
-                if study.study_uid == study_uid:
-                    if study.target_instance_count == 0:  # Not set by ProjectController import process yet
-                        return False
-                    return sum(series.instance_count for series in study.series) >= study.target_instance_count
-            return False
 
-    # Not changed yet, need to use the database not the lookup
+            return series.instance_count.value >= target_count
+
+    # ✅Changed, needs testing 
+    def study_imported(self, ptid: str, study_uid: str) -> bool:
+        """
+        Checks if a study has already been imported by comparing stored instance count to target.
+
+        Used by QueryRetrieveView to prevent study re-import
+        """
+        with self._lock:
+            # Fetch the Study record
+            study = self._session.query(Study).filter_by(study_uid=study_uid, patient_id=ptid).first()
+            if not study or study.target_instance_count.value == 0:
+                return False  # Not imported yet or target count not set
+
+            # Sum all stored instances across series in the study
+            stored_instance_count = self._session.query(func.sum(Series.instance_count)).filter_by(study_uid=study_uid).scalar() or 0
+
+            return stored_instance_count >= study.target_instance_count.value
+
+    # ⭕ Not changed yet, need to use the database not the lookup
     # Helper function for capture_phi
     def new_study_from_dataset(self, ds: Dataset, source: DICOMNode | str, date_delta: int) -> Study:
         """
@@ -667,7 +663,7 @@ class AnonymizerModelSQL:
             ],
         )
 
-    # Not changed yet, need to use the database not the lookup
+    # ⭕ Not changed yet, need to use the database not the lookup
     # The major function that needs careful altering to ensure it keeps the same funcionality but uses the database and not the lookup tables
     def capture_phi(self, source: str, ds: Dataset, date_delta: int) -> None:
         """
@@ -810,7 +806,7 @@ class AnonymizerModelSQL:
 
                 self._instances += 1
 
-    # Not changed yet, need to use the database not the lookup
+    # ⭕ Not changed yet, need to use the database not the lookup
     # If the patient only has one study it will remove the study and the patient
     # If the patient has multiple studies then it will remove the study record and leave the rest
     def remove_phi(self, anon_pt_id: str, anon_study_uid: str) -> bool:
@@ -879,7 +875,7 @@ class AnonymizerModelSQL:
 
             return True
 
-    # Not changed yet, need to use the database not the lookup
+    # ⭕ Not changed yet, need to use the database not the lookup
     def process_java_phi_studies(self, java_studies: List[JavaAnonymizerExportedStudy]):
         """
         Process Java PHI studies and store PHI in the AnonymizerModel.
