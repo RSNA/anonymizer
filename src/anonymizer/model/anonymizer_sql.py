@@ -147,7 +147,7 @@ class AnonymizerModelSQL:
 
     _lock = threading.Lock()
 
-    # ✅ Changed, needs testing
+    # ✅ Changed
     def __init__(self, site_id: str, uid_root: str, script_path: Path, db_url: str = "sqlite:///anonymizer.db"):
         """
         Initializes an instance of the AnonymizerModelSQL class.
@@ -186,7 +186,11 @@ class AnonymizerModelSQL:
         # self.clear_lookups()  # Initializes default patient_id_lookup and phi_lookup
         self.load_script(script_path)
 
-    # ✅Added, needs testing
+
+#Model functions
+
+
+    # ✅Added, ⭕ needs testing
     def __del__(self):
         """Ensure the database session is closed properly when the instance is deleted."""
         try:
@@ -194,11 +198,11 @@ class AnonymizerModelSQL:
         except Exception as e:
             print(f"Error closing session: {e}")
 
-    # ✅ Changed, needs testing
+    # ✅ Changed, ✅ Tested
     def get_class_name(self) -> str:
         return self.__class__.__name__
 
-    # ✅ Changed, needs testing
+    # ✅ Changed, ✅ Tested
     def __repr__(self) -> str:
         """Returns a summary of the model"""
         try:
@@ -226,7 +230,22 @@ class AnonymizerModelSQL:
             self._session.rollback()  # Rollback to maintain DB consistency
             return f"{self.get_class_name()}(Error fetching DB info: {e})"
 
-    # ❌ Changed, needs testing, very unlikly to work first time, the "operation" may cause alot of problems
+    # ✅ Changed, ✅ Tested
+    def get_totals(self) -> Totals:
+        with self._lock:
+            return Totals(
+                self._session.query(PHI).count(),
+                self._session.query(Study).count(),
+                self._session.query(Series).count(),
+                self._session.query(func.sum(Study.target_instance_count)).scalar() or 0,
+                self._quarantined,  # Still uses in-memory `_quarantined`
+            )
+
+
+#load_script
+
+
+    # ✅ Changed, ✅ Tested
     def load_script(self, script_path: Path):
         """
         Load and parse an anonymize script file and store tag operations in the database.
@@ -289,18 +308,9 @@ class AnonymizerModelSQL:
             self._session.rollback()
             raise
 
-    # ✅ Changed, needs testing
-    def get_totals(self) -> Totals:
-        with self._lock:
-            return Totals(
-                self._session.query(PHI).count(),
-                self._session.query(Study).count(),
-                self._session.query(Series).count(),
-                self._session.query(func.sum(Study.target_instance_count)).scalar() or 0,
-                self._quarantined,  # Still uses in-memory `_quarantined`
-            )
 
 #PHI 
+
 
     # ✅ Changed, ✅ Tested
     def get_phi(self, anon_patient_id: str) -> PHI | None:
@@ -675,7 +685,9 @@ class AnonymizerModelSQL:
             else:
                 phi.studies.append(new_study)
 
+
 #Patients
+
 
     # ✅ Changed, ✅ Tested
     def set_anon_patient_id(self, phi_patient_id: str, anon_patient_id: str):
@@ -714,7 +726,9 @@ class AnonymizerModelSQL:
         with self._lock:
             return self._session.query(func.count(PHI.patient_id)).scalar() or 0
 
+
 #UID
+
 
     # ✅ Changed, ✅ Tested
     def get_anon_uid(self, phi_uid: str) -> str | None:
@@ -747,7 +761,7 @@ class AnonymizerModelSQL:
                 logger.info(f"Deleted UID record for phi_uid: {phi_uid}")
             self._session.commit()
 
-    # ✅ Changed, ⭕ needs testing
+    # ✅ Changed, ✅ Tested
     def remove_uid_inverse(self, anon_uid: str):
         """
         Deletes the UID record where the anonymized UID matches.
@@ -758,7 +772,7 @@ class AnonymizerModelSQL:
                 logger.info(f"Deleted UID record for anon_uid: {anon_uid}")
             self._session.commit()
 
-    # ✅ Changed, ⭕ needs testing
+    # ✅ Changed, ✅ Tested
     def get_uid_count(self) -> int:
         """
         Returns the number of UID mappings in the database.
@@ -784,7 +798,7 @@ class AnonymizerModelSQL:
 
             self._session.commit()
 
-    # ✅ Changed, ⭕ needs testing
+    # ✅ Changed, ✅ Tested
     def get_next_anon_uid(self, phi_uid: str) -> str:
         """
         Generates and stores a new anonymized UID using the last UID + 1.
@@ -805,9 +819,11 @@ class AnonymizerModelSQL:
             logger.info(f"Generated new anon UID: {anon_uid} for PHI UID: {phi_uid}")
             return anon_uid
 
+
 #Accession
 
-    # ✅ Changed, ⭕ needs testing
+
+    # ✅ Changed, ✅ Tested
     def get_anon_acc_no(self, phi_acc_no: str) -> str | None:
         """
         Retrieves the anonymized accession number for a given PHI accession number.
@@ -819,7 +835,7 @@ class AnonymizerModelSQL:
                 return str(record.anon_accession_number) if record.anon_accession_number else None # type: ignore
             return None
 
-    # ✅ Changed, ⭕ needs testing
+    # ✅ Changed, ✅ Tested
     def get_acc_no_count(self) -> int:
         """
         Returns the highest anon_accession_number_count from the Study table.
@@ -827,7 +843,7 @@ class AnonymizerModelSQL:
         with self._lock:
             return self._session.query(func.max(Study.anon_accession_number_count)).scalar() or 0
 
-    # ✅ New, ✅ Tested
+    # ✅ Added, ✅ Tested
     def set_anon_acc_no(self, study_uid: str, anon_accession: str) -> None:
         """
         Sets the anonymized accession number for a given study by its study UID.
@@ -855,7 +871,8 @@ class AnonymizerModelSQL:
 
 #Instances
 
-    # ✅ Changed, ⭕ needs testing
+
+    # ✅ Changed, ✅ Tested
     def get_stored_instance_count(self, ptid: str, study_uid: str) -> int:
         """
         Retrieves the number of stored instances for a given patient ID and study UID.
@@ -875,7 +892,7 @@ class AnonymizerModelSQL:
             total_instances = self._session.query(func.sum(Series.instance_count)).filter_by(study_uid=study_uid).scalar() or 0
             return total_instances
 
-    # ✅ Changed, ⭕ needs testing
+    # ✅ Changed, ✅ Tested
     def get_pending_instance_count(self, ptid: str, study_uid: str, target_count: int) -> int:
         """
         Returns the difference between stored instances and target_count for a given study.
@@ -887,7 +904,7 @@ class AnonymizerModelSQL:
                 return target_count  # No study found, assume all instances are pending
 
             # Update target_instance_count if it's not set
-            if study.target_instance_count.value == 0:
+            if study.target_instance_count == 0: # type: ignore
                 self._session.query(Study).filter_by(study_uid=study_uid, patient_id=ptid).update({"target_instance_count": target_count})
                 self._session.commit()
 
@@ -896,9 +913,11 @@ class AnonymizerModelSQL:
 
             return max(0, target_count - stored_instance_count)  # Ensure non-negative
 
+
 #Series
 
-    # ✅ Changed, ⭕ needs testing
+
+    # ✅ Changed, ✅ Tested
     def series_complete(self, ptid: str, study_uid: str, series_uid: str, target_count: int) -> bool:
         """
         Check if a series is complete by comparing stored instances to the target count.
@@ -911,9 +930,11 @@ class AnonymizerModelSQL:
             if not series:
                 return False
 
-            return series.instance_count.value >= target_count
+            return series.instance_count >= target_count # type: ignore
+
 
 #Study
+
 
     # ✅ Changed, ⭕ needs testing 
     def study_imported(self, ptid: str, study_uid: str) -> bool:
@@ -960,8 +981,9 @@ class AnonymizerModelSQL:
         )
 
 
-#Other
+#Quarantined
 
-    # ✅ No changes needed, ⭕ needs testing 
+
+    # ✅ No changes needed, ✅ Tested
     def increment_quarantined(self):
         self._quarantined += 1
