@@ -839,6 +839,9 @@ class Anonymizer(ctk.CTk):
             logger.error("Internal Error: no Dashboard")
             return
 
+        if self.query_view:
+            del self.query_view
+
         self.query_view = QueryView(self.dashboard, self.controller, self.mono_font)
         if not self.query_view:
             logger.error("Internal Error creating QueryView")
@@ -861,6 +864,9 @@ class Anonymizer(ctk.CTk):
         if not self.dashboard:
             logger.error("Internal Error: no Dashboard")
             return
+
+        if self.export_view:
+            del self.export_view
 
         self.export_view = ExportView(self.dashboard, self.controller, self.mono_font)
         if self.export_view is None:
@@ -885,6 +891,9 @@ class Anonymizer(ctk.CTk):
         if not self.dashboard:
             logger.error("Internal Error: no Dashboard")
             return
+
+        if self.index_view:
+            del self.index_view
 
         self.index_view = IndexView(self.dashboard, self.controller, self.mono_font)
         if self.index_view is None:

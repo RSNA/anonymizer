@@ -192,7 +192,8 @@ class AnonymizerModel:
 
     def __repr__(self) -> str:
         filtered_dict = {
-            key: len(value) if isinstance(value, (dict, set)) else value for key, value in (self.__dict__.items())
+            key: len(value) if isinstance(value, (OrderedDict, OrderedBidict, Dict, set)) else value
+            for key, value in (self.__dict__.items())
         }
         return f"{self.get_class_name()}\n({pformat(filtered_dict)})"
 
@@ -669,7 +670,7 @@ class AnonymizerModel:
 
     def remove_phi(self, anon_pt_id: str, anon_study_uid: str) -> bool:
         """
-        Remove PHI data for a given Anonymizer patient ID and study UID.
+        Remove PHI data for a given Anonymized patient ID and study UID.
 
         If the patient does not have anymore studies after removing the study, the patient is removed from the both patient_id_lookup and phi_lookup.
 

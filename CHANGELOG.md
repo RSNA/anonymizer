@@ -17,13 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - display script file path in project settings after project created
 - ProjectModel.abridged_path to handle display of storage directory and script path to depth of 4
 - change Query => Search and Export => Send
+- License changed from RSNA Public to Apache 2.0 license
 
 ## Added
 - Distribution via pyPI, github action: release.yaml
 - Unit testing via github action: tests.yaml
 - src/utility unit testing
 - Headless / Server mode via, start via rsna-anonmyizer <"path to ProjectModel.pkl">
-- "View Pixels" and "View Index" buttons on dashboard with associated views
+- view/index.py: "View" button on dashboard with associated ViewIndex window
+- view/pixel.py: View projections for each series, opened from ViewIndex via View Pixels button
+- controller/create_projections.py with functions to create projection objects for a series (2D or 3D)
+- create_projection_from_series creates Projection.pkl files for caching projections
 
 ## [17.2.*] Release Candidate
 ### Changed

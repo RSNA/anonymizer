@@ -11,6 +11,7 @@ from pynetdicom.presentation import build_context
 
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.anonymizer import AnonymizerModel
+from anonymizer.controller.create_projections import create_projection_from_series, PROJECTION_FILENAME
 from tests.controller.dicom_test_files import (
     COMPRESSED_TEST_FILES,
     CR_STUDY_3_SERIES_3_IMAGES,
@@ -218,7 +219,7 @@ def test_send_ct_small_AND_mr_small(temp_dir: str, controller):
     assert phi.studies[0].series[0].instance_count == 1
 
 
-def test_send_ct_Archibald_Doe(temp_dir: str, controller):
+def test_send_ct_Archibald_Doe_PHI_stored(temp_dir: str, controller):
     dsets: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, LocalStorageSCP, controller)
     time.sleep(0.5)
     store_dir = controller.model.images_dir()
@@ -255,6 +256,36 @@ def test_send_ct_Archibald_Doe(temp_dir: str, controller):
     assert phi.studies[0].series[0].series_desc == ds.get("SeriesDescription")
     assert phi.studies[0].series[0].modality == ds.get("Modality")
     assert phi.studies[0].series[0].instance_count == 4
+
+
+def test_send_ct_Archibald_Doe_Projection_create_cached(temp_dir: str, controller):
+    dsets: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, LocalStorageSCP, controller)
+    time.sleep(0.5)
+    store_dir = controller.model.images_dir()
+    model: AnonymizerModel = controller.anonymizer.model
+    dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
+    assert len(dirlist) == 1
+    assert dirlist[0] == TEST_SITEID + "-000001"
+    prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
+    ds = dsets[0]
+    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1"
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".2"
+    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".3"
+
+    series_path = store_dir / dirlist[0] / (prefix + ".1") / (prefix + ".2")
+    projection = create_projection_from_series(series_path)
+
+    # Check Projection created
+    assert projection.patient_id == model.get_anon_patient_id(ds.PatientID)
+    assert projection.series_description == ds.SeriesDescription
+    assert projection.study_uid == prefix + ".1"
+    assert projection.series_uid == prefix + ".2"
+    assert len(projection.images) == 3
+
+    # Check Projection cached
+    projection_file_path = series_path / PROJECTION_FILENAME
+    cached = projection_file_path.exists() and projection_file_path.is_file()
+    assert cached
 
 
 def test_send_cr_and_ct_Archibald_Doe(temp_dir: str, controller):

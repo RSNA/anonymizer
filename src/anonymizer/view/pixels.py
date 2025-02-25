@@ -1,67 +1,19 @@
 import logging
-from dataclasses import dataclass
 from enum import Enum
 from math import ceil
 from pathlib import Path
 
 import customtkinter as ctk
-import numpy as np
-from cv2 import (
-    COLOR_RGB2GRAY,
-    CV_8U,
-    INTER_AREA,
-    MORPH_RECT,
-    # MORPH_CLOSE,
-    # RETR_EXTERNAL,
-    # CHAIN_APPROX_SIMPLE,
-    # FILLED,
-    NORM_MINMAX,
-    # equalizeHist,
-    Canny,
-    GaussianBlur,
-    createCLAHE,
-    cvtColor,
-    dilate,
-    # morphologyEx,
-    # findContours,
-    # drawContours,
-    getStructuringElement,
-    normalize,
-    resize,
-)
 from PIL import Image
-from pydicom import Dataset, dcmread
-from pydicom.pixel_data_handlers.util import apply_modality_lut, apply_voi_lut
 
-from anonymizer.utils.storage import get_dcm_files
+from anonymizer.controller.create_projections import Projection, ProjectionImageSize, create_projection_from_series
+from anonymizer.model.anonymizer import PHI_IndexRecord
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class kaleidoscope:
-    patient_id: str
-    study_uid: str
-    series_uid: str
-    series_description: str
-    images: list[Image.Image]
-
-
-class KaleidoscopeImageSize(Enum):
-    # rect size in pixels (width, height)
-    SMALL = (100, 100)
-    MEDIUM = (200, 200)
-    LARGE = (300, 300)
-
-    def width(self):
-        return self.value[0]
-
-    def height(self):
-        return self.value[1]
-
-
-class KaleidoscopePAD(Enum):
+class PixelPAD(Enum):
     # padx, pady in pixels
     SMALL = (2, 4)
     MEDIUM = (3, 6)
@@ -74,10 +26,10 @@ class KaleidoscopePAD(Enum):
         return self.value[1]
 
 
-PAD_MAP: dict[KaleidoscopeImageSize, KaleidoscopePAD] = {
-    KaleidoscopeImageSize.SMALL: KaleidoscopePAD.SMALL,
-    KaleidoscopeImageSize.MEDIUM: KaleidoscopePAD.MEDIUM,
-    KaleidoscopeImageSize.LARGE: KaleidoscopePAD.LARGE,
+PAD_MAP: dict[ProjectionImageSize, PixelPAD] = {
+    ProjectionImageSize.SMALL: PixelPAD.SMALL,
+    ProjectionImageSize.MEDIUM: PixelPAD.MEDIUM,
+    ProjectionImageSize.LARGE: PixelPAD.LARGE,
 }
 
 
@@ -86,22 +38,23 @@ def get_pad(size):
 
 
 class PixelsView(ctk.CTkToplevel):
-    KS_FRAME_RELATIVE_SIZE = (0.9, 0.9)  # fraction of screen size (width, height)
+    PV_FRAME_RELATIVE_SIZE = (0.9, 0.9)  # fraction of screen size (width, height)
+    IMAGE_PAD = 2  # pixels between the projections images when combined
     WIDGET_PAD = 10
-    IMAGE_PAD = 2  # pixels between the kaleidoscopes images when combined
-    key_to_image_size_mapping: dict[str, KaleidoscopeImageSize] = {
-        "S": KaleidoscopeImageSize.SMALL,
-        "M": KaleidoscopeImageSize.MEDIUM,
-        "L": KaleidoscopeImageSize.LARGE,
+
+    key_to_image_size_mapping: dict[str, ProjectionImageSize] = {
+        "S": ProjectionImageSize.SMALL,
+        "M": ProjectionImageSize.MEDIUM,
+        "L": ProjectionImageSize.LARGE,
     }
-    DEFAULT_SIZE = "S"
+    DEFAULT_SIZE = "L"
 
     def _get_series_paths(self) -> list[Path]:
         return [
             series_path
-            for patient_id in self._patient_ids
-            for study_path in (self._base_dir / Path(patient_id)).iterdir()
-            if study_path.is_dir()
+            for phi_record in self._phi_records
+            for study_path in (self._base_dir / Path(phi_record.anon_patient_id)).iterdir()
+            if study_path.is_dir() and study_path.name == phi_record.anon_study_uid
             for series_path in study_path.iterdir()
             if series_path.is_dir()
         ]
@@ -110,7 +63,7 @@ class PixelsView(ctk.CTkToplevel):
         self,
         mono_font: ctk.CTkFont,
         base_dir: Path,
-        patient_ids: list[str] | None = None,
+        phi_records: list[PHI_IndexRecord],
     ):
         super().__init__()
         self._data_font = mono_font  # get mono font from app
@@ -118,58 +71,56 @@ class PixelsView(ctk.CTkToplevel):
         if not base_dir.is_dir():
             raise ValueError(f"{base_dir} is not a valid directory")
 
-        # If patient_ids is not specified, iterate through ALL patient sub-directories to compile patient_ids:
-        if patient_ids is None:
-            patient_ids = [str(p) for p in base_dir.iterdir() if p.is_dir()]
+        # all_patient_ids = [str(p) for p in base_dir.iterdir() if p.is_dir()]
 
-        if not patient_ids:
-            raise ValueError("No patients for PixelsView")
+        if not phi_records:
+            raise ValueError("No phi_records for PixelsView")
 
-        self._patient_ids = patient_ids
         self._base_dir = base_dir
+        self._phi_records = phi_records
 
         self._series_paths = self._get_series_paths()
         if not self._series_paths:
-            raise ValueError("No series paths found for patient list")
+            raise ValueError("No series paths found for study list")
 
         self._total_series = len(self._series_paths)
-        self._image_size = KaleidoscopeImageSize.SMALL
 
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.resizable(width=False, height=False)
+        self.bind("<Escape>", self._escape_keypress)
 
-        self._ks_frame_width = int(self.KS_FRAME_RELATIVE_SIZE[0] * self.winfo_screenwidth())
-        self._ks_frame_height = int(self.KS_FRAME_RELATIVE_SIZE[1] * self.winfo_screenheight())
+        self._pv_frame_width = int(self.PV_FRAME_RELATIVE_SIZE[0] * self.winfo_screenwidth())
+        self._pv_frame_height = int(self.PV_FRAME_RELATIVE_SIZE[1] * self.winfo_screenheight())
 
-        self._page_number = 0
+        self._page_number = 1  # not zero based
         self._rows = 0
         self._cols = 0
         self._pages = 0
+        self._page_slider = None
         self._loading_page = False
-        self._ks_labels = {}
-        self._calc_layout()
+        self._pv_labels = {}
+
         self._update_title()
         self._create_widgets()
 
-        logger.info(
-            f"PixelsView for Patients={len(self._patient_ids)}, Total Series={self._total_series}, Total Pages={self._pages}"
-        )
+        logger.info(f"PixelsView for Studies={len(self._phi_records)}, Series={self._total_series}")
 
-        # Bind Arrow buttons to page control
-        self.bind("<Left>", lambda e: self._on_page_slider(max(0, self._page_number - 1)))
+        # Bind keyboard arrow buttons to page control:
+        self.bind("<Left>", lambda e: self._on_page_slider(max(1, self._page_number - 1)))
         self.bind(
             "<Right>",
-            lambda e: self._on_page_slider(min(self._pages - 1, self._page_number + 1)),
+            lambda e: self._on_page_slider(min(self._pages, self._page_number + 1)),
         )
+        # Bind mousewheel to page control:
         self.bind("<MouseWheel>", self._mouse_wheel)
 
-        self._update_image_size(self.DEFAULT_SIZE)
+        self._update_image_size(self.DEFAULT_SIZE)  # sets self._image_size, initialise PixelView and populates frame
 
     def _update_title(self):
         title = (
             _("View")
-            + f" {len(self._patient_ids)} "
-            + (_("Patients") if len(self._patient_ids) > 1 else _("Patient"))
+            + f" {len(self._phi_records)} "
+            + (_("Studies") if len(self._phi_records) > 1 else _("Study"))
             + " "
             + _("with")
             + f" {self._total_series} "
@@ -181,15 +132,22 @@ class PixelsView(ctk.CTkToplevel):
 
         self.title(title)
 
-    def _calc_layout(self):
-        padded_combined_width = (
-            3 * self._image_size.width() + 2 * self.IMAGE_PAD + 2 * get_pad(self._image_size).width()
-        )
-        padded_combined_height = self._image_size.height() + get_pad(self._image_size).height()
+    def _update_image_size(self, value):
+        logger.info(f"Updating image size to {value}")
 
-        self._rows = self._ks_frame_height // padded_combined_height
-        self._cols = self._ks_frame_width // padded_combined_width
-        self._pages = ceil(self._total_series / (self._rows * self._cols))
+        self._image_size = self.key_to_image_size_mapping[value]
+        self._page_number = 1  # reset to first page number when image size is changed
+        self._calc_layout()
+
+        # Clear PixelView frame of all widgets:
+        for widget in self._pv_frame.winfo_children():
+            widget.destroy()
+
+        self._pv_frame.update()
+        self._pv_labels.clear()
+
+        # Redraw the frame with new size
+        self._populate_px_frame()
 
     def _create_widgets(self):
         logger.info("_create_widgets")
@@ -198,371 +156,185 @@ class PixelsView(ctk.CTkToplevel):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        # 1. Kaleidoscope Frame:
-        self._ks_frame = ctk.CTkFrame(
+        # 1. PixelsView Frame:
+        self._pv_frame = ctk.CTkFrame(
             self,
-            width=self._ks_frame_width,
-            height=self._ks_frame_height,
             fg_color="black",
         )
-        self._ks_frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nsew")
+        self._pv_frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nsew")
 
         # 2. Bottom Frame for paging & image sizing:
         self._paging_frame = ctk.CTkFrame(self)
         self._paging_frame.grid(row=1, column=0, padx=PAD, pady=(0, PAD), sticky="ew")
         self._paging_frame.grid_columnconfigure(0, weight=1)
 
-        self._page_slider = ctk.CTkSlider(
-            self._paging_frame,
-            from_=0,
-            to=1,
-            number_of_steps=1,
-            command=self._on_page_slider,
-        )
-        self._page_slider.grid(row=0, column=0, padx=PAD, pady=0, sticky="we")
-        self._page_slider.set(0)
-
         self._page_label = ctk.CTkLabel(self._paging_frame, text="Page ...")
         self._page_label.grid(row=0, column=1, padx=PAD, pady=0, sticky="e")
 
-        # Segmented Button for kaleidoscope image size selection
+        # CTkSlider widget created in _calc_layout if self._pages > 1
+
+        # Segmented Button for PixelsView image size selection
         self._image_size_button = ctk.CTkSegmentedButton(
             self._paging_frame, values=["S", "M", "L"], command=self._update_image_size
         )
         self._image_size_button.set(self.DEFAULT_SIZE)
         self._image_size_button.grid(row=0, column=2)
 
+    def _calc_layout(self):
+        padded_combined_width = (
+            3 * self._image_size.width() + 2 * self.IMAGE_PAD + 2 * get_pad(self._image_size).width()
+        )
+        padded_combined_height = self._image_size.height() + get_pad(self._image_size).height()
+
+        self._rows = self._pv_frame_height // padded_combined_height
+        self._cols = self._pv_frame_width // padded_combined_width
+        self._pages = ceil(self._total_series / (self._rows * self._cols))
+
+        logger.info(f"Rows: {self._rows}, Cols: {self._cols}, Pages: {self._pages}")
+
+        if self._pages > 1:
+            self._page_slider = ctk.CTkSlider(
+                self._paging_frame,
+                button_length=round(padded_combined_width * self._cols / self._pages),
+                from_=1,
+                to=self._pages,
+                number_of_steps=self._pages - 1,
+                command=self._on_page_slider,
+            )
+            self._page_slider.grid(row=0, column=0, padx=self.WIDGET_PAD, pady=0, sticky="we")
+            self._page_slider.set(0)
+        else:
+            if self._page_slider:
+                self._page_slider.grid_forget()
+                del self._page_slider
+                self._page_slider = None
+                self._paging_frame.update()
+
     def _mouse_wheel(self, event):
+        if not self._pages or not self._page_slider:
+            return
+
+        logger.debug(f"mouse wheel event.delta: {event.delta}")
+
         if event.delta > 0:  # Scroll up
             next_page_number = self._page_number + 1
-            if next_page_number >= self._pages:
+            if next_page_number > self._pages:
                 return
-        elif event.delta < 0:
+        elif event.delta < 0:  # Scroll down
             next_page_number = self._page_number - 1
-            if next_page_number < 0:
+            if next_page_number < 1:
                 return
 
         self._on_page_slider(next_page_number)
 
-    def _update_image_size(self, value):
-        logger.info(f"Updating image size to {value}")
-
-        self._image_size = self.key_to_image_size_mapping[value]
-        self._calc_layout()
-
-        for widget in self._ks_frame.winfo_children():
-            widget.destroy()
-        self._ks_frame.update()
-        self._ks_labels.clear()
-
-        self._page_slider.configure(to=self._pages - 1, number_of_steps=self._pages)
-
-        # Redraw the kaleidoscope frame with new size
-        self._populate_ks_frame(self._page_number)
-
     def _on_page_slider(self, value):
-        if self._loading_page:
+        if self._loading_page or self._pages <= 1:
             return
 
-        logger.info(f"value: {value}, current_page: {self._page_number}")
+        logger.debug(f"value: {value}, current_page: {self._page_number}")
 
-        if abs(value - self._page_number) < 1:
-            next_page_number = self._page_number + 1 if value > self._page_number else self._page_number - 1
-        else:
-            next_page_number = round(value)
-
-        if next_page_number == self._page_number:
-            logger.warning("page event to update to same page number")
+        if round(value) == self._page_number:
             return
 
-        try:
-            self._loading_page = True  # prevent re-entry, use lock instead?
-            self._page_slider.configure(state="disabled")
-            self._populate_ks_frame(next_page_number)
-        finally:
-            self._page_slider.configure(state="normal")
-            self._page_slider.set(next_page_number)
-            self._loading_page = False
+        # self._page_number = self._page_number + 1 if value > self._page_number else self._page_number - 1
+        self._page_number = round(value)
 
-    def _populate_ks_frame(self, page_number: int):
-        """Populate the Kaleidoscope frame with images for the given page number."""
-        logger.info(f"Populate ks_frame page={page_number}")
-        self._page_number = page_number
-        self._page_label.configure(text=_("Page") + f" {self._page_number + 1} " + _("of") + f" {self._pages}")
+        if self._page_slider:
+            try:
+                self._loading_page = True  # prevent re-entry, use lock instead?
+                self._page_slider.configure(state="disabled")
+                self._populate_px_frame()
+            finally:
+                self._page_slider.configure(state="normal")
+                self._page_slider.set(self._page_number)
+                self._loading_page = False
 
-        if not hasattr(self, "_ks_labels"):
-            self._ks_labels = {}  # Initialize labels dictionary if not present
+    def generate_combined_image(self, series_path) -> tuple[ctk.CTkImage, Projection]:
+        """Generate a combined image from the Projection images of series."""
 
-        def create_or_update_label(row, col, image, kaleidoscope=None):
-            """Create or update a label at the given grid position."""
-            label_key = (row, col)
+        projection = create_projection_from_series(series_path)
+        combined_width = 3 * self._image_size.width() + 2 * self.IMAGE_PAD
+        combined_image = Image.new(
+            mode="RGB",
+            size=(combined_width, self._image_size.height()),
+            color="black",
+        )
+        for i, image in enumerate(projection.images):
+            resized_image = image.resize(self._image_size.value)
+            combined_image.paste(resized_image, (i * (self._image_size.width() + self.IMAGE_PAD), 0))
 
-            # Create or fetch the label
-            if label_key not in self._ks_labels:
-                label = ctk.CTkLabel(self._ks_frame, text="")
-                label.grid(
-                    row=row,
-                    column=col,
-                    padx=(0, get_pad(self._image_size).value[0]),
-                    pady=(0, get_pad(self._image_size).value[1]),
-                    sticky="nsew",
-                )
-                self._ks_labels[label_key] = label
-            else:
-                label = self._ks_labels[label_key]
-
-            # Clear previous image and bind new event if applicable
-            old_image = getattr(label, "image", None)
-            if old_image:
-                del old_image  # Explicitly delete the old image reference
-            label.configure(image=image)
-            # label.image = image  # Keep reference to avoid garbage collection
-
-            label.unbind("<Button-1>")
-            if kaleidoscope:
-                label.bind(
-                    "<Button-1>",
-                    lambda event, k=kaleidoscope: self._on_image_click(event, k),
-                )
-
-        def generate_black_image():
-            """Generate a black placeholder image."""
-            size = (
-                3 * self._image_size.width() + 2 * self.IMAGE_PAD,
-                self._image_size.height(),
-            )
-            black_image = Image.new(mode="RGB", size=size, color="black")
-            return ctk.CTkImage(light_image=black_image, size=size)
-
-        def generate_combined_image(series_path):
-            """Generate a combined image from the series."""
-            kaleidoscope = self._create_kaleidoscope_from_series(series_path)
-            combined_width = 3 * self._image_size.width() + 2 * self.IMAGE_PAD
-            combined_image = Image.new(
-                mode="RGB",
+        return (
+            ctk.CTkImage(
+                light_image=combined_image,
                 size=(combined_width, self._image_size.height()),
-                color="black",
+            ),
+            projection,
+        )
+
+    def _create_or_update_label(self, row, col, image=None, projection=None):
+        """Create or update a label at the given grid position."""
+        label_key = (row, col)
+
+        if label_key not in self._pv_labels:
+            # Create new CTkLabel:
+            label = ctk.CTkLabel(self._pv_frame, text="")
+            label.grid(
+                row=row,
+                column=col,
+                padx=(0, get_pad(self._image_size).value[0]),
+                pady=(0, get_pad(self._image_size).value[1]),
+                sticky="nsew",
             )
-            for i, image in enumerate(kaleidoscope.images):
-                resized_image = image.resize(self._image_size.value)
-                combined_image.paste(resized_image, (i * (self._image_size.width() + self.IMAGE_PAD), 0))
-            return (
-                ctk.CTkImage(
-                    light_image=combined_image,
-                    size=(combined_width, self._image_size.height()),
-                ),
-                kaleidoscope,
-            )
+            self._pv_labels[label_key] = label
+        else:
+            # Fetch previously create CTkLabel:
+            label = self._pv_labels[label_key]
+
+        # Clear previous image and bind new event if applicable
+        old_image = getattr(label, "image", None)
+        if old_image:
+            del old_image  # Explicitly delete the old image reference
+
+        label.configure(image=image)
+        label.unbind("<Button-1>")
+
+        if image and projection:
+            label.bind(
+                "<Button-1>",
+                lambda event, k=projection: self._on_image_click(event, k),
+            )  # type: ignore
+
+    def _populate_px_frame(self):
+        """Populate the PixelsView frame with images for self._page_number"""
+        logger.debug(f"Populate pv_frame page={self._page_number}")
+        self._page_label.configure(text=_("Page") + f" {self._page_number} " + _("of") + f" {self._pages}")
 
         # Populate the grid
-        start_index = page_number * self._rows * self._cols
-        ks_index = start_index
+        start_index = (self._page_number - 1) * self._rows * self._cols
+        series_ndx = start_index
 
         for row in range(self._rows):
             for col in range(self._cols):
-                if ks_index < self._total_series:
+                if series_ndx < self._total_series:
                     # Generate and display the combined image for the series
-                    series_path = self._series_paths[ks_index]
-                    ctk_image, kaleidoscope = generate_combined_image(series_path)
-                    create_or_update_label(row, col, ctk_image, kaleidoscope)
+                    series_path = self._series_paths[series_ndx]
+                    self._create_or_update_label(row, col, *self.generate_combined_image(series_path))
                 else:
-                    # Display a black image for unused grid cells
-                    create_or_update_label(row, col, generate_black_image())
+                    if self._pages > 1:
+                        self._create_or_update_label(row, col)  # draw blank image, clear previous
 
-                ks_index += 1
-                self._ks_frame.update()
+                series_ndx += 1
+
+        self._pv_frame.update()
+
+    def _escape_keypress(self, event):
+        logger.info("_escape_pressed")
+        self._on_cancel()
 
     def _on_cancel(self):
         logger.info("_on_cancel")
+        self.grab_release()
         self.destroy()
 
-    def _on_image_click(self, event, kaleidoscope: kaleidoscope):
-        logger.info(f"Kaleidoscope clicked: kaleidoscope: {kaleidoscope}")
-
-    def _resize_or_pad_image(self, image_np: np.ndarray, target_size: tuple[int, int]) -> np.ndarray:
-        """Resize or pad an image to match the target size (height, width)."""
-        target_height, target_width = target_size
-        logger.info(
-            f"Resize image in series from {image_np.shape[1]}x{image_np.shape[0]} to {target_width}x{target_height}"
-        )
-
-        # Resize and interpolate
-        scale = min(target_width / image_np.shape[1], target_height / image_np.shape[0])
-        resized_np = resize(
-            image_np,
-            (int(image_np.shape[0] * scale), int(image_np.shape[1] * scale)),
-            interpolation=INTER_AREA,
-        )
-
-        # Calculate offsets for centering
-        y_offset = (target_height - resized_np.shape[0]) // 2
-        x_offset = (target_width - resized_np.shape[1]) // 2
-
-        # Create a padded image with the same number of channels as the resized image
-        if resized_np.ndim == 3:  # RGB (3 channels)
-            padded_image = np.zeros((target_height, target_width, 3), dtype=np.uint8)
-        else:  # Grayscale (1 channel)
-            padded_image = np.zeros((target_height, target_width), dtype=np.uint8)
-
-        # Place the resized image in the center of the padded image
-        padded_image[
-            y_offset : y_offset + resized_np.shape[0],
-            x_offset : x_offset + resized_np.shape[1],
-        ] = resized_np
-
-        return padded_image
-
-    def _single_frame_kaleidoscope(self, ds: Dataset) -> kaleidoscope:
-        pi = ds.get("PhotometricInterpretation", None)
-        if pi is None:
-            raise ValueError("No PhotometricInterpretation ")
-
-        pixels = ds.pixel_array
-
-        if pi in ["MONOCHROME1", "MONOCHROME2"]:
-            pixels = apply_voi_lut(apply_modality_lut(pixels, ds), ds)
-            if pi == "MONOCHROME1":
-                pixels = np.invert(pixels.astype(np.uint16))
-        elif pi == "RGB":
-            # Convert to Grayscale
-            pixels = cvtColor(pixels, COLOR_RGB2GRAY)
-
-        medium_contrast = np.zeros_like(pixels)
-        normalize(
-            src=pixels,
-            dst=medium_contrast,
-            alpha=0,
-            beta=255,
-            norm_type=NORM_MINMAX,
-            dtype=CV_8U,
-        )
-        medium_contrast = medium_contrast.astype(np.uint8)
-        # Apply CLAHE for enhanced contrast
-        clahe = createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        gray_clahe = clahe.apply(medium_contrast)
-
-        # Apply Gaussian Blur to reduce noise
-        blurred = GaussianBlur(medium_contrast, (5, 5), 0)
-
-        # Apply Canny edge detection with adjusted thresholds
-        edges = Canny(blurred, threshold1=100, threshold2=200)
-
-        # Dilate edges to make them more pronounced
-        kernel = getStructuringElement(shape=MORPH_RECT, ksize=(2, 2))
-        edges_dilated = dilate(src=edges, kernel=kernel, iterations=2)
-
-        # # Use morphological closing to fill gaps and create solid text areas
-        # closing_kernel = getStructuringElement(MORPH_RECT, (5, 5))
-        # edges_filled = morphologyEx(edges_dilated, MORPH_CLOSE, closing_kernel)
-
-        # # Convert the filled edges to white (255)
-        # edges_filled[edges_filled > 0] = 255
-
-        # # Find contours and fill them in the edges image
-        # contours, _ = findContours(edges_filled, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
-        # filled_edges = np.zeros_like(edges_dilated)
-
-        # # Fill each detected contour
-        # drawContours(filled_edges, contours, -1, (255), thickness=FILLED)
-
-        thumbnails = [
-            Image.fromarray(img)
-            .convert("RGB")
-            .resize(
-                (
-                    KaleidoscopeImageSize.LARGE.value[0] * 2,
-                    KaleidoscopeImageSize.LARGE.value[1] * 2,
-                ),
-                Image.Resampling.NEAREST,
-            )
-            for img in [medium_contrast, gray_clahe, edges_dilated]
-        ]
-
-        return kaleidoscope(
-            patient_id=ds.PatientID,
-            study_uid=ds.StudyInstanceUID,
-            series_uid=ds.SeriesInstanceUID,
-            series_description=ds.get("SeriesDescription", "?"),
-            images=thumbnails,
-        )
-
-    def _normalize_uint8(self, image: np.ndarray) -> np.ndarray:
-        """Normalize and convert an image to uint8."""
-        return normalize(
-            src=image,
-            dst=np.empty_like(image),
-            alpha=0,
-            beta=255,
-            norm_type=NORM_MINMAX,
-            dtype=CV_8U,
-        ).astype(np.uint8)
-
-    def _create_kaleidoscope_from_series(self, series_path: Path) -> kaleidoscope:
-        # Load and process the series: [min,mean,max] projections multi-frame or [mean,clahe,edge] for single-frame
-
-        dcm_paths: list[Path] = sorted(get_dcm_files(series_path))
-
-        if len(dcm_paths) == 0:
-            raise ValueError(f"No DICOM files found in {series_path}")
-
-        logger.info(f"Create Kaleidoscope from {series_path.name} from {len(dcm_paths)} DICOM files")
-
-        ds = dcmread(dcm_paths[0])
-        pi = ds.get("PhotometricInterpretation", None)
-        if pi is None:
-            raise ValueError("No PhotometricInterpretation")
-
-        grayscale = pi in ["MONOCHROME1", "MONOCHROME2"]
-        no_of_frames = ds.get("NumberOfFrames", 1)
-
-        if len(dcm_paths) == 1 and no_of_frames == 1:
-            return self._single_frame_kaleidoscope(ds)
-
-        target_size = (ds.get("Rows", None), ds.get("Columns", None))
-        all_series_frames = []
-
-        for dcm_path in dcm_paths:
-            if all_series_frames:
-                ds = dcmread(dcm_path)
-            pixels = ds.pixel_array
-
-            if grayscale:
-                pixels = apply_voi_lut(apply_modality_lut(pixels, ds), ds)
-                if pi == "MONOCHROME1":
-                    pixels = np.invert(pixels.astype(np.uint16))
-                pixels = np.stack([pixels] * 3, axis=-1)
-
-            if pixels.ndim == 4:
-                all_series_frames.append(pixels)
-            elif pixels.ndim == 3:
-                if pixels.shape[:2] != target_size:
-                    pixels = self._resize_or_pad_image(pixels, target_size)
-                all_series_frames.append(np.expand_dims(pixels, axis=0))
-            else:
-                raise ValueError("Unexpected pixel array shape")
-
-        all_series_frames = np.concatenate(all_series_frames, axis=0)
-
-        # Compute min, mean, and max projections
-        min_projection = self._normalize_uint8(np.min(all_series_frames, axis=0))
-        mean_projection = self._normalize_uint8(np.mean(all_series_frames, axis=0))
-        max_projection = self._normalize_uint8(np.max(all_series_frames, axis=0))
-
-        thumbnails = [
-            Image.fromarray(img).resize(
-                (
-                    KaleidoscopeImageSize.LARGE.value[0] * 2,
-                    KaleidoscopeImageSize.LARGE.value[1] * 2,
-                ),
-                Image.Resampling.NEAREST,
-            )
-            for img in [min_projection, mean_projection, max_projection]
-        ]
-
-        return kaleidoscope(
-            patient_id=ds.PatientID,
-            study_uid=ds.StudyInstanceUID,
-            series_uid=ds.SeriesInstanceUID,
-            series_description=ds.get("SeriesDescription", "?"),
-            images=thumbnails,
-        )
+    def _on_image_click(self, event, projection: Projection):
+        logger.info(f"Projection clicked: projection: {projection}")

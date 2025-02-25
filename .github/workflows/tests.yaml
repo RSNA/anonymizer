@@ -4,6 +4,8 @@ on:
   workflow_dispatch:  # Enables manual trigger
   pull_request:
   push:
+    tags-ignore: 
+      - 'refs/tags/+\.+\.+' # Ignore tags matching major.minor.patch
 
 jobs:
   test:

@@ -6,7 +6,6 @@ The IndexView class provides a user interface for viewing the study index, delet
 import logging
 import tkinter as tk
 from tkinter import messagebox, ttk
-from typing import List
 
 import customtkinter as ctk
 
@@ -15,6 +14,7 @@ from anonymizer.model.anonymizer import AnonymizerModel, PHI_IndexRecord
 from anonymizer.utils.translate import _
 from anonymizer.view.dashboard import Dashboard
 from anonymizer.view.delete_studies_dialog import DeleteStudiesDialog
+from anonymizer.view.pixels import PixelsView
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,8 @@ class IndexView(tk.Toplevel):
         self._parent = parent
         self._controller = project_controller
         self._anon_model: AnonymizerModel = project_controller.anonymizer.model
-        self._phi_index: List[PHI_IndexRecord] | None = None
+        self._phi_index: list[PHI_IndexRecord] | None = None
+        self._pixels_view: PixelsView | None = None
 
         self.title("View PHI Index")
         self.resizable(True, True)
@@ -104,25 +105,19 @@ class IndexView(tk.Toplevel):
         scrollbar.grid(row=0, column=11, sticky="ns")
         self._tree.configure(yscrollcommand=scrollbar.set)
 
-        # Disable Keyboard selection bindings:
-        # self._tree.bind("<Left>", lambda e: "break")
-        # self._tree.bind("<Right>", lambda e: "break")
-        # self._tree.bind("<Up>", lambda e: "break")
-        # self._tree.bind("<Down>", lambda e: "break")
-
         # 2. Button Frame:
         self._button_frame = ctk.CTkFrame(self)
         self._button_frame.grid(row=1, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")
         self._button_frame.grid_columnconfigure(3, weight=1)
 
         # Control buttons:
-        # self._view_pixels_button = ctk.CTkButton(
-        #     self._button_frame,
-        #     width=ButtonWidth,
-        #     text=_("View Pixels"),
-        #     command=self._view_pixels_button_pressed,
-        # )
-        # self._view_pixels_button.grid(row=0, column=4, padx=PAD, pady=PAD, sticky="w")
+        self._view_pixels_button = ctk.CTkButton(
+            self._button_frame,
+            width=ButtonWidth,
+            text=_("View Pixels"),
+            command=self._view_pixels_button_pressed,
+        )
+        self._view_pixels_button.grid(row=0, column=4, padx=PAD, pady=PAD, sticky="w")
 
         self._create_phi_button = ctk.CTkButton(
             self._button_frame,
@@ -198,15 +193,26 @@ class IndexView(tk.Toplevel):
             self._tree.insert("", 0, iid=row, values=record.flatten())
 
     def _view_pixels_button_pressed(self):
-        studies_selected = list(self._tree.selection())
-        logger.info(f"View Pixels button pressed, {len(studies_selected)} studies selected")
-        if studies_selected:
-            logger.info(studies_selected)
-        # if len(pts_selected):
-        #     kaleidoscope_view = PixelsView(
-        #         self._data_font, self._controller.model.images_dir(), pts_selected, studies_selected,
-        #     )
-        #     kaleidoscope_view.focus()
+        if self._phi_index is None:
+            return
+
+        if self._pixels_view and self._pixels_view.winfo_exists():
+            logger.info("PixelsView already OPEN")
+            self._pixels_view.deiconify()
+            self._pixels_view.focus_force()
+            return
+
+        rows_selected = list(self._tree.selection())
+        logger.info(f"View Pixels button pressed, {len(rows_selected)} studies selected")
+        selected_indices = [int(row) for row in rows_selected]  # convert to integers
+        selected_phi_records = [self._phi_index[i] for i in selected_indices]
+
+        self._pixels_view = PixelsView(self._data_font, self._controller.model.images_dir(), selected_phi_records)
+        if self._pixels_view is None:
+            logger.error("Internal Error creating PixelsView")
+            return
+
+        self._pixels_view.focus()
 
     def _refresh_button_pressed(self):
         logger.info("Refresh button pressed, update tree from PHI Index...")
@@ -256,7 +262,7 @@ class IndexView(tk.Toplevel):
             return
 
         logger.info(f"Delete of {len(rows_to_delete)} studies initiated")
-        studies: List[tuple[str, str]] = []
+        studies: list[tuple[str, str]] = []
         for row in rows_to_delete:
             studies.append(
                 (

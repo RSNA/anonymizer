@@ -1,76 +1,224 @@
-RSNA-MIRC Public License
+                              Apache License
+                        Version 2.0, January 2004
+                     http://www.apache.org/licenses/
 
-1. RSNA MIRC Public License Version 2.0
-THIS LICENSE APPLIES TO ALL SOURCE CODE MODULES THAT CONTAIN THE NOTATION:
-This source software is released under the terms of the RSNA Public License.
-1. DEFINITIONS
-"Source Code Module" means a computer program source code file.
-"Original Module" means the original version of a Source Code Module as distributed
-by the Radiological Society of North America, Inc. ("RSNA").
-"Derivative Work" means any computer program, either in source or object form, which
-incorporates Original Modules in whole or in part.
-"Recipient" means anyone who receives Original Modules or Derivative Works under this
-Agreement.
-2. GRANT OF RIGHTS
-a. The RSNA hereby grants to each Recipient a non-exclusive, worldwide, royalty-free copyright license to use, reproduce, publicly display, publicly perform,
-and distribute Original Modules.
-b. The RSNA hereby grants to each Recipient a non-exclusive, worldwide, royalty-free copyright license to prepare Derivative Works and to publicly display,
-publicly perform, sell, distribute and sublicense such Derivative Works.
-c. Recipient understands that the RSNA provides no assurances that the Original
-Modules do not infringe the patent or other intellectual property rights of any
-other entity. The RSNA disclaims any liability to Recipients for claims brought
-by any other entity based on infringement of intellectual property rights or
-otherwise. As a condition to exercising the rights and licenses granted
-hereunder, each Recipient hereby assumes sole responsibility to secure any
-other intellectual property rights needed, if any. For example, if a third
-party patent license is required to allow Recipient to distribute the Original
-Modules or Derivative Works, it is Recipient's responsibility to acquire that
-license before distributing the Program.
-3. REQUIREMENTS
-A Recipient may choose to distribute Original Modules or Derivative works in source
-or object code form under its own license agreement, provided that it complies with
-the terms and conditions of this Agreement.
-When Derivative Works are made available in source code form, any unmodified Original
-Modules that are included must retain the copyright notice and the notation
-referencing this agreement. Any modified Original Modules must contain a notation
-identifying the developer of the Derivative Work in a manner that reasonably allows
-subsequent Recipients to identify the developer.
-4. COMMERCIAL DISTRIBUTION
-Commercial distributors of Derivative Works may accept certain responsibilities with
-respect to end users, business partners and the like. While this license is intended
-to facilitate the commercial use of Original Modules in Derivative Works, a 
-distributor who includes Original Modules in a commercial product offering must do so
-in a manner that does not create potential liability for the RSNA. Therefore, if a
-distributor ("Commercial Distributor") includes Original Modules in a commercial
-product offering, such Commercial Distributor hereby agrees to defend and indemnify
-the RSNA against any losses, damages and costs arising from claims, lawsuits and
-other legal actions brought by a third party against the RSNA to the extent caused by
-or based upon the acts or omissions of such Commercial Distributor in connection with
-its distribution of the Derivative Work in a commercial product offering.
-5. NO WARRANTY
-EXCEPT AS EXPRESSLY SET FORTH IN THIS AGREEMENT, THE ORIGINAL MODULES ARE PROVIDED ON
-AN "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR
-IMPLIED INCLUDING, WITHOUT LIMITATION, ANY WARRANTIES OR CONDITIONS OF TITLE, NONINFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE. Each Recipient is
-solely responsible for determining the appropriateness of using and distributing the
-Original Modules and assumes all risks associated with its exercise of rights under
-this Agreement, including but not limited to the risks and costs of programming
-errors, compliance with applicable laws, damage to or loss of data, programs or
-equipment, and unavailability or interruption of operations.
-6. DISCLAIMER OF LIABILITY
-EXCEPT AS EXPRESSLY SET FORTH IN THIS AGREEMENT, NO RECIPIENT SHALL HAVE ANY
-LIABILITY FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING WITHOUT LIMITATION LOST PROFITS), HOWEVER CAUSED AND ON ANY THEORY
-OF LIABILITY, WHETHER IN CONTRACT OR TORT (INCLUDING STRICT LIABILITY, NEGLIGENCE OR
-OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OR DISTRIBUTION OF THE ORIGINAL MODULES
-OR THE EXERCISE OF ANY RIGHTS GRANTED HEREUNDER, EVEN IF ADVISED OF THE POSSIBILITY
-OF SUCH DAMAGES.
-7. GENERAL
-If any provision of this Agreement is invalid or unenforceable under applicable law,
-it shall not affect the validity or enforceability of the remainder of the terms of
-this Agreement, and without further action by the parties hereto, such provision
-shall be reformed to the minimum extent necessary to make such provision valid and
-enforceable.
-This Agreement is governed by the laws of the State of Illinois and the intellectual
-property laws of the United States of America. No party to this Agreement may bring a
-legal action under this Agreement more than one year after the cause of action arose.
-Each party waives its rights to a jury trial in any resulting litigation. 
+TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+1. Definitions.
+
+   "License" shall mean the terms and conditions for use, reproduction,
+   and distribution as defined by Sections 1 through 9 of this document.
+
+   "Licensor" shall mean the copyright owner or entity authorized by
+   the copyright owner that is granting the License.
+
+   "Legal Entity" shall mean the union of the acting entity and all
+   other entities that control, are controlled by, or are under common
+   control with that entity. For the purposes of this definition,
+   "control" means (i) the power, direct or indirect, to cause the
+   direction or management of such entity, whether by contract or
+   otherwise, or (ii) ownership of fifty percent (50%) or more of the
+   outstanding shares, or (iii) beneficial ownership of such entity.
+
+   "You" (or "Your") shall mean an individual or Legal Entity
+   exercising permissions granted by this License.
+
+   "Source" form shall mean the preferred form for making modifications,
+   including but not limited to software source code, documentation
+   source, and configuration files.
+
+   "Object" form shall mean any form resulting from mechanical
+   transformation or translation of a Source form, including but
+   not limited to compiled object code, generated documentation,
+   and conversions to other media types.
+
+   "Work" shall mean the work of authorship, whether in Source or
+   Object form, made available under the License, as indicated by a
+   copyright notice that is included in or attached to the work
+   (an example is provided in the Appendix below).
+
+   "Derivative Works" shall mean any work, whether in Source or Object
+   form, that is based on (or derived from) the Work and for which the
+   editorial revisions, annotations, elaborations, or other modifications
+   represent, as a whole, an original work of authorship. For the purposes
+   of this License, Derivative Works shall not include works that remain
+   separable from, or merely link (or bind by name) to the interfaces of,
+   the Work and Derivative Works thereof.
+
+   "Contribution" shall mean any work of authorship, including
+   the original version of the Work and any modifications or additions
+   to that Work or Derivative Works thereof, that is intentionally
+   submitted to Licensor for inclusion in the Work by the copyright owner
+   or by an individual or Legal Entity authorized to submit on behalf of
+   the copyright owner. For the purposes of this definition, "submitted"
+   means any form of electronic, verbal, or written communication sent
+   to the Licensor or its representatives, including but not limited to
+   communication on electronic mailing lists, source code control systems,
+   and issue tracking systems that are managed by, or on behalf of, the
+   Licensor for the purpose of discussing and improving the Work, but
+   excluding communication that is conspicuously marked or otherwise
+   designated in writing by the copyright owner as "Not a Contribution."
+
+   "Contributor" shall mean Licensor and any individual or Legal Entity
+   on behalf of whom a Contribution has been received by Licensor and
+   subsequently incorporated within the Work.
+
+2. Grant of Copyright License. Subject to the terms and conditions of
+   this License, each Contributor hereby grants to You a perpetual,
+   worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+   copyright license to reproduce, prepare Derivative Works of,
+   publicly display, publicly perform, sublicense, and distribute the
+   Work and such Derivative Works in Source or Object form.
+
+3. Grant of Patent License. Subject to the terms and conditions of
+   this License, each Contributor hereby grants to You a perpetual,
+   worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+   (except as stated in this section) patent license to make, have made,
+   use, offer to sell, sell, import, and otherwise transfer the Work,
+   where such license applies only to those patent claims licensable
+   by such Contributor that are necessarily infringed by their
+   Contribution(s) alone or by combination of their Contribution(s)
+   with the Work to which such Contribution(s) was submitted. If You
+   institute patent litigation against any entity (including a
+   cross-claim or counterclaim in a lawsuit) alleging that the Work
+   or a Contribution incorporated within the Work constitutes direct
+   or contributory patent infringement, then any patent licenses
+   granted to You under this License for that Work shall terminate
+   as of the date such litigation is filed.
+
+4. Redistribution. You may reproduce and distribute copies of the
+   Work or Derivative Works thereof in any medium, with or without
+   modifications, and in Source or Object form, provided that You
+   meet the following conditions:
+
+   (a) You must give any other recipients of the Work or
+       Derivative Works a copy of this License; and
+
+   (b) You must cause any modified files to carry prominent notices
+       stating that You changed the files; and
+
+   (c) You must retain, in the Source form of any Derivative Works
+       that You distribute, all copyright, patent, trademark, and
+       attribution notices from the Source form of the Work,
+       excluding those notices that do not pertain to any part of
+       the Derivative Works; and
+
+   (d) If the Work includes a "NOTICE" text file as part of its
+       distribution, then any Derivative Works that You distribute must
+       include a readable copy of the attribution notices contained
+       within such NOTICE file, excluding those notices that do not
+       pertain to any part of the Derivative Works, in at least one
+       of the following places: within a NOTICE text file distributed
+       as part of the Derivative Works; within the Source form or
+       documentation, if provided along with the Derivative Works; or,
+       within a display generated by the Derivative Works, if and
+       wherever such third-party notices normally appear. The contents
+       of the NOTICE file are for informational purposes only and
+       do not modify the License. You may add Your own attribution
+       notices within Derivative Works that You distribute, alongside
+       or as an addendum to the NOTICE text from the Work, provided
+       that such additional attribution notices cannot be construed
+       as modifying the License.
+
+   You may add Your own copyright statement to Your modifications and
+   may provide additional or different license terms and conditions
+   for use, reproduction, or distribution of Your modifications, or
+   for any such Derivative Works as a whole, provided Your use,
+   reproduction, and distribution of the Work otherwise complies with
+   the conditions stated in this License.
+
+5. Submission of Contributions. Unless You explicitly state otherwise,
+   any Contribution intentionally submitted for inclusion in the Work
+   by You to the Licensor shall be under the terms and conditions of
+   this License, without any additional terms or conditions.
+   Notwithstanding the above, nothing herein shall supersede or modify
+   the terms of any separate license agreement you may have executed
+   with Licensor regarding such Contributions.
+
+6. Trademarks. This License does not grant permission to use the trade
+   names, trademarks, service marks, or product names of the Licensor,
+   except as required for reasonable and customary use in describing the
+   origin of the Work and reproducing the content of the NOTICE file.
+
+7. Disclaimer of Warranty. Unless required by applicable law or
+   agreed to in writing, Licensor provides the Work (and each
+   Contributor provides its Contributions) on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+   implied, including, without limitation, any warranties or conditions
+   of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+   PARTICULAR PURPOSE. You are solely responsible for determining the
+   appropriateness of using or redistributing the Work and assume any
+   risks associated with Your exercise of permissions under this License.
+
+8. Limitation of Liability. In no event and under no legal theory,
+   whether in tort (including negligence), contract, or otherwise,
+   unless required by applicable law (such as deliberate and grossly
+   negligent acts) or agreed to in writing, shall any Contributor be
+   liable to You for damages, including any direct, indirect, special,
+   incidental, or consequential damages of any character arising as a
+   result of this License or out of the use or inability to use the
+   Work (including but not limited to damages for loss of goodwill,
+   work stoppage, computer failure or malfunction, or any and all
+   other commercial damages or losses), even if such Contributor
+   has been advised of the possibility of such damages.
+
+9. Accepting Warranty or Additional Liability. While redistributing
+   the Work or Derivative Works thereof, You may choose to offer,
+   and charge a fee for, acceptance of support, warranty, indemnity,
+   or other liability obligations and/or rights consistent with this
+   License. However, in accepting such obligations, You may act only
+   on Your own behalf and on Your sole responsibility, not on behalf
+   of any other Contributor, and only if You agree to indemnify,
+   defend, and hold each Contributor harmless for any liability
+   incurred by, or claims asserted against, such Contributor by reason
+   of your accepting any such warranty or additional liability.
+
+END OF TERMS AND CONDITIONS
+
+============================================================================
+   RSNA ANONYMIZER SUBCOMPONENTS:
+
+   The RSNA ANONYMIZER project contains subcomponents with separate copyright
+   notices and license terms. Your use of the source code for the these
+   subcomponents is subject to the terms and conditions of the following
+   licenses.
+
+========================================================================
+Third party Apache 2.0 licenses
+========================================================================
+
+    (ALv2 License) boto3 (https://github.com/boto/boto3)
+    (ALv2 License) requests (https://github.com/psf/requests)
+    (ALv2 License) cryptography (https://github.com/pyca/cryptography)
+    (ALv2 License) easyocr (https://github.com/JaidedAI/EasyOCR)
+
+========================================================================
+HPND licenses
+========================================================================
+
+    (HPND License) Python Imaging Library (PIL): Pillow (https://github.com/python-pillow/Pillow)
+
+========================================================================
+MIT licenses
+========================================================================
+
+    (MIT License) CustomTkinter (https://github.com/TomSchimansky/CustomTkinter)
+    (MIT License) tkhtmlview (https://github.com/bauripalash/tkhtmlview)
+    (MIT License) pydicom (https://github.com/pydicom/pydicom)
+    (MIT License) pynetdicom (https://github.com/pydicom/pynetdicom)
+    (MIT License) ifaddr (https://github.com/ifaddr/ifaddr)
+    (MIT License) openpyxl (https://github.com/theorchard/openpyxl)
+    (MIT License) opencv-python-headless (https://github.com/opencv/opencv-python)
+    (MIT License) requests-oauthlib (https://github.com/requests/requests-oauthlib)
+    (MIT License) toml (https://github.com/toml-lang/toml)
+    (MIT License) dataclasses-json (https://github.com/lidatong/dataclasses-json)
+
+========================================================================
+BSD 3-Clause licenses
+========================================================================
+
+    (BSD 3 License) psutil (https://github.com/giampaolo/psutil)
+    (BSD 3 License) click (https://github.com/pallets/click)
+    (BSD 3 License) numpy (https://github.com/numpy/numpy)
+
+========================================================================
