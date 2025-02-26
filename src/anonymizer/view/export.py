@@ -112,7 +112,7 @@ class ExportView(tk.Toplevel):
         logger.info("_create_widgets")
         PAD = 10
         ButtonWidth = 100
-        char_width_px = ctk.CTkFont().measure("A")
+        char_width_px = self._data_font.measure("A")
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
@@ -319,14 +319,6 @@ class ExportView(tk.Toplevel):
                 self._error_frame.grid_remove()
         else:
             self._error_frame.grid_remove()
-
-    # def _kaleidoscope_button_pressed(self):
-    #     pts_selected = list(self._tree.selection())
-    #     if len(pts_selected):
-    #         kaleidoscope_view = PixelsView(
-    #             self._data_font, self._controller.model.images_dir(), pts_selected
-    #         )
-    #         kaleidoscope_view.focus()
 
     def _refresh_button_pressed(self):
         if self._export_active:

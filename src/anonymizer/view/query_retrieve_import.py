@@ -116,7 +116,7 @@ class QueryView(tk.Toplevel):
 
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
-        char_width_px = ctk.CTkFont().measure("A")
+        char_width_px = self._data_font.measure("A")
 
         # QUERY PARAMETERS:
         # 1. QUERY FRAME for Query Input:

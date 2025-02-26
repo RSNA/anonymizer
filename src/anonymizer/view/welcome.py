@@ -88,6 +88,7 @@ class WelcomeView(ctk.CTkFrame):
         # Titled RSNA Logo:
         titled_logo_image = ctk.CTkImage(
             light_image=Image.open(self.TITLED_LOGO_FILE),
+            dark_image=Image.open(self.TITLED_LOGO_FILE),
             size=(self.TITLED_LOGO_WIDTH, self.TITLED_LOGO_HEIGHT),
         )
         logo_widget = ctk.CTkLabel(master=self, image=titled_logo_image, text="")
@@ -101,7 +102,7 @@ class WelcomeView(ctk.CTkFrame):
         label_welcome = ctk.CTkLabel(
             master=self,
             text=self.title,
-            font=ctk.CTkFont(family=self.font_family, size=self.TITLE_FONT_SIZE),
+            font=ctk.CTkFont(family=self.font_family, weight="normal", size=self.TITLE_FONT_SIZE),
         )
         label_welcome.grid(row=2, column=0, pady=self.PAD, sticky="n")
 
@@ -109,7 +110,7 @@ class WelcomeView(ctk.CTkFrame):
         label_welcome_text = ctk.CTkLabel(
             master=self,
             text=self.welcome_text,
-            font=ctk.CTkFont(family=self.font_family, size=self.WELCOME_TEXT_FONT_SIZE),
+            font=ctk.CTkFont(family=self.font_family, weight="normal", size=self.WELCOME_TEXT_FONT_SIZE),
             justify="left",
             wraplength=self.WELCOME_TEXT_WRAP_LENGTH,
         )
@@ -119,7 +120,7 @@ class WelcomeView(ctk.CTkFrame):
         label_sponsor_text = ctk.CTkLabel(
             master=self,
             text=self.sponsor_text,
-            font=ctk.CTkFont(family=self.font_family, size=self.SPONSOR_TEXT_FONT_SIZE),
+            font=ctk.CTkFont(family=self.font_family, weight="normal", size=self.SPONSOR_TEXT_FONT_SIZE),
             justify="left",
             wraplength=self.WELCOME_TEXT_WRAP_LENGTH,
         )

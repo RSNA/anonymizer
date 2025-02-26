@@ -138,8 +138,11 @@ def create_projection_from_single_frame(ds: Dataset) -> Projection:
 
 
 def create_projection_from_series(series_path: Path) -> Projection:
-    # Check series_path for "Projection.pkl" file.
-    # If present, load and return the corresponding Projection object:
+    """
+    Check series_path for "Projection.pkl" file.
+    If present, load and return the corresponding Projection object
+    otherwise create Projection object by loading and processing full series
+    """
     projection_file_path = series_path / PROJECTION_FILENAME
     if projection_file_path.exists() and projection_file_path.is_file():
         try:
@@ -159,25 +162,25 @@ def create_projection_from_series(series_path: Path) -> Projection:
 
     logger.debug(f"Create Projection from {series_path.name} from {len(dcm_paths)} DICOM file(s)")
 
-    ds = dcmread(dcm_paths[0])
-    pi = ds.get("PhotometricInterpretation", None)
+    ds1 = dcmread(dcm_paths[0])
+    pi = ds1.get("PhotometricInterpretation", None)
     if pi is None:
         raise ValueError("No PhotometricInterpretation")
 
     grayscale = pi in ["MONOCHROME1", "MONOCHROME2"]
-    no_of_frames = ds.get("NumberOfFrames", 1)
+    no_of_frames = ds1.get("NumberOfFrames", 1)
 
     if len(dcm_paths) == 1 and no_of_frames == 1:
-        projection = create_projection_from_single_frame(ds)
+        projection = create_projection_from_single_frame(ds1)
         cache_projection(projection, projection_file_path)
+        del ds1
         return projection
 
-    target_size = (ds.get("Rows", None), ds.get("Columns", None))
+    target_size = (ds1.get("Rows", None), ds1.get("Columns", None))
     all_series_frames = []
 
     for dcm_path in dcm_paths:
-        if all_series_frames:
-            ds = dcmread(dcm_path)
+        ds = dcmread(dcm_path) if all_series_frames else ds1
 
         pixels = ds.pixel_array
 
@@ -195,7 +198,9 @@ def create_projection_from_series(series_path: Path) -> Projection:
                 # pixels = resize_or_pad_image(pixels, target_size)
             all_series_frames.append(np.expand_dims(pixels, axis=0))
         else:
-            raise ValueError("Unexpected pixel array shape")
+            logger.error(f"Unexpected pixel array shape, skip: {dcm_path}")
+
+        del ds
 
     logger.info(f"all_series_frames read, frames= {len(all_series_frames)}")
 
@@ -209,8 +214,8 @@ def create_projection_from_series(series_path: Path) -> Projection:
     thumbnails = [
         Image.fromarray(img).resize(
             (
-                ProjectionImageSize.LARGE.value[0] * 2,
-                ProjectionImageSize.LARGE.value[1] * 2,
+                ProjectionImageSize.LARGE.value[0],
+                ProjectionImageSize.LARGE.value[1],
             ),
             Image.Resampling.NEAREST,
         )
@@ -218,10 +223,10 @@ def create_projection_from_series(series_path: Path) -> Projection:
     ]
 
     projection = Projection(
-        patient_id=ds.PatientID,
-        study_uid=ds.StudyInstanceUID,
-        series_uid=ds.SeriesInstanceUID,
-        series_description=ds.get("SeriesDescription", "?"),
+        patient_id=ds1.PatientID,
+        study_uid=ds1.StudyInstanceUID,
+        series_uid=ds1.SeriesInstanceUID,
+        series_description=ds1.get("SeriesDescription", "?"),
         images=thumbnails,
     )
 

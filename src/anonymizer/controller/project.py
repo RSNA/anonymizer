@@ -342,7 +342,7 @@ class ProjectController(AE):
         self.model.storage_dir.joinpath(self.model.PRIVATE_DIR).mkdir(parents=True, exist_ok=True)
         self.model.storage_dir.joinpath(self.model.PUBLIC_DIR).mkdir(exist_ok=True)
         self.set_dicom_timeouts(timeouts=model.network_timeouts)
-        self._implementation_class_uid = UID(self.model.IMPLEMENTATION_CLASS_UID)  # added to association requests
+        self._implementation_class_uid = UID(self.model.IMPLEMENTATION_CLASS_UID)  # type: ignore # added to association requests
         self._implementation_version_name = self.model.IMPLEMENTATION_VERSION_NAME  # added to association requests
         self._maximum_pdu_size = 0  # 0 means no limit
         # self._maximum_associations = 10 # max simultaneous remote associations, 10 is the default

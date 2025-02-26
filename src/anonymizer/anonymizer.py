@@ -1,3 +1,4 @@
+import faulthandler
 import json
 import logging
 import os
@@ -39,6 +40,8 @@ from anonymizer.view.query_retrieve_import import QueryView
 from anonymizer.view.settings.settings_dialog import SettingsDialog
 from anonymizer.view.welcome import WelcomeView
 
+faulthandler.enable()
+
 logger = logging.getLogger()  # ROOT logger
 
 
@@ -63,10 +66,9 @@ class Anonymizer(ctk.CTk):
             logger.error(f"Theme file not found: {theme}, reverting to dark-blue theme")
             theme = "dark-blue"
         ctk.set_default_color_theme(theme)
+        ctk.deactivate_automatic_dpi_awareness()  # TODO: implement dpi awareness for all views for Windows OS
         logging.info(f"ctk.ThemeManager.theme:\n{pformat(ThemeManager.theme)}")
         self.mono_font = self._init_mono_font()
-        # Font for main menu items, size is not consistent across platforms
-        self.menu_font = None  # tkFont.Font(size=13 if platform.system() == "Darwin" else 11)
 
         ctk.AppearanceModeTracker.add(self._appearance_mode_change)
         self._appearance_mode_change(ctk.get_appearance_mode())  # initialize non-ctk widget styles
@@ -138,6 +140,7 @@ class Anonymizer(ctk.CTk):
             if "selected_bg_color" in tv_theme:
                 selected_bg_color = self._apply_appearance_mode(tv_theme["selected_bg_color"])
 
+        # Set ttk Style for Treeview components used in application:
         treestyle = ttk.Style()
         treestyle.configure(
             "Treeview.Heading",

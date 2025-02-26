@@ -1,12 +1,11 @@
 import gc
 import logging
-import tkinter as tk
 from enum import Enum
 from math import ceil
 from pathlib import Path
 
 import customtkinter as ctk
-from PIL import Image, ImageTk
+from PIL import Image
 
 from anonymizer.controller.create_projections import Projection, ProjectionImageSize, create_projection_from_series
 from anonymizer.model.anonymizer import PHI_IndexRecord
@@ -17,14 +16,14 @@ logger = logging.getLogger(__name__)
 
 class PixelPAD(Enum):
     # padx, pady in pixels
-    SMALL = (2, 2)
-    MEDIUM = (3, 3)
-    LARGE = (5, 5)
+    SMALL = (2, 4)
+    MEDIUM = (3, 6)
+    LARGE = (5, 10)
 
-    def width(self) -> int:
+    def width(self):
         return self.value[0]
 
-    def height(self) -> int:
+    def height(self):
         return self.value[1]
 
 
@@ -35,7 +34,7 @@ PAD_MAP: dict[ProjectionImageSize, PixelPAD] = {
 }
 
 
-def get_pad(size: ProjectionImageSize) -> PixelPAD:
+def get_pad(size: ProjectionImageSize):
     return PAD_MAP[size]
 
 
@@ -153,9 +152,9 @@ class PixelsView(ctk.CTkToplevel):
         self.grid_columnconfigure(0, weight=1)
 
         # 1. PixelsView Frame:
-        self._pv_frame = tk.Frame(
+        self._pv_frame = ctk.CTkFrame(
             self,
-            bg="black",
+            fg_color="black",
         )
         self._pv_frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nsew")
 
@@ -167,7 +166,7 @@ class PixelsView(ctk.CTkToplevel):
         self._page_label = ctk.CTkLabel(self._paging_frame, text="Page ...")
         self._page_label.grid(row=0, column=1, padx=PAD, pady=0, sticky="e")
 
-        # CTkSlider widget is created in _calc_layout if self._pages > 1
+        # CTkSlider widget created in _calc_layout if self._pages > 1
 
         # Segmented Button for PixelsView image size selection
         self._image_size_button = ctk.CTkSegmentedButton(
@@ -244,7 +243,7 @@ class PixelsView(ctk.CTkToplevel):
                 self._page_slider.set(self._page_number)
                 self._loading_page = False
 
-    def generate_combined_image(self, series_path) -> tuple[ImageTk.PhotoImage, Projection]:
+    def generate_combined_image(self, series_path) -> tuple[ctk.CTkImage, Projection]:
         """
         Generate a combined image from the Projection images of series using padding between images.
         """
@@ -263,46 +262,36 @@ class PixelsView(ctk.CTkToplevel):
 
         projection.images.clear()
 
-        # Convert to PhotoImage
-        photo_image = ImageTk.PhotoImage(combined_image)
-
-        return photo_image, projection
+        return (
+            ctk.CTkImage(
+                light_image=combined_image,
+                dark_image=combined_image,
+                size=(combined_width, self._image_size.height()),
+            ),
+            projection,
+        )
 
     def _create_or_update_label(
-        self, row, col, combined_image: ImageTk.PhotoImage | None = None, projection: Projection | None = None
+        self, row, col, image: ctk.CTkImage | None = None, projection: Projection | None = None
     ):
         """
         Create or update a label at the given grid position.
-        If image is none a blank image is attached to the label
+        If image or projection are none a blank image is attached to the label
         """
-        if combined_image is None:
-            # Create a blank combined image if None is provided
-            combined_image = ImageTk.PhotoImage(
-                Image.new(
-                    mode="RGB",
-                    size=(3 * self._image_size.width() + 2 * self.IMAGE_PAD, self._image_size.height()),
-                    color="black",
-                )
-            )
-
-        label = tk.Label(self._pv_frame, image=combined_image)
-        # Store a reference to avoid garbage collection
-        label.photo_image = combined_image  # type: ignore
+        label = ctk.CTkLabel(self._pv_frame, text="", image=image)
         label.grid(
             row=row,
             column=col,
-            padx=(0, get_pad(self._image_size).width()),
-            pady=(0, get_pad(self._image_size).height()),
+            padx=(0, get_pad(self._image_size).value[0]),
+            pady=(0, get_pad(self._image_size).value[1]),
             sticky="nsew",
         )
 
-        label.unbind("<Button-1>")
-
-        if projection:
+        if image and projection:
             label.bind(
                 "<Button-1>",
                 lambda event, k=projection: self._on_image_click(event, k),
-            )
+            )  # type: ignore
 
     def _populate_px_frame(self):
         """

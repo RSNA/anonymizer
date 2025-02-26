@@ -30,7 +30,7 @@ class IndexView(tk.Toplevel):
         title (str | None): The title of the view.
 
     Attributes:
-        _data_font (ctk.CTkFont): The mono font.
+        _data_font (ctk.CTkFont): The mono font. (used only for calculating character width)
         _parent (Dashboard): The parent dashboard.
         _controller (ProjectController): The project controller.
         _project_model (ProjectModel): The project model.
@@ -43,7 +43,7 @@ class IndexView(tk.Toplevel):
         mono_font: ctk.CTkFont,
     ):
         super().__init__(master=parent)
-        self._data_font = mono_font  # get mono font from app
+        self._char_width_px = mono_font.measure("A")
         self._parent = parent
         self._controller = project_controller
         self._anon_model: AnonymizerModel = project_controller.anonymizer.model
@@ -62,7 +62,6 @@ class IndexView(tk.Toplevel):
         logger.info("_create_widgets")
         PAD = 10
         ButtonWidth = 100
-        char_width_px = ctk.CTkFont().measure("A")
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
@@ -87,9 +86,8 @@ class IndexView(tk.Toplevel):
         for col in range(len(col_names)):
             self._tree.heading(col, text=col_names[col])
             self._tree.column(
-                col,
-                width=(len(col_names[col]) + 2) * char_width_px,
-                # anchor="center",
+                column=col,
+                width=(len(col_names[col]) + 2) * self._char_width_px,
                 stretch=False,
             )
 
@@ -207,7 +205,7 @@ class IndexView(tk.Toplevel):
         selected_indices = [int(row) for row in rows_selected]  # convert to integers
         selected_phi_records = [self._phi_index[i] for i in selected_indices]
 
-        self._pixels_view = PixelsView(self._data_font, self._controller.model.images_dir(), selected_phi_records)
+        self._pixels_view = PixelsView(self, self._controller.model.images_dir(), selected_phi_records)
         if self._pixels_view is None:
             logger.error("Internal Error creating PixelsView")
             return
@@ -281,6 +279,9 @@ class IndexView(tk.Toplevel):
 
     def _on_cancel(self):
         logger.info("_on_cancel")
+        if self._pixels_view:
+            self._pixels_view.destroy()
+
         self.grab_release()
         self.destroy()
 
