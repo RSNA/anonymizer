@@ -49,6 +49,7 @@ def controller(temp_dir: str) -> Generator[ProjectController, Any, None]:
     anon_store = Path(temp_dir, LocalSCU.aet)
     # Make sure storage directory exists:
     os.makedirs(anon_store, exist_ok=True)
+
     # Create Test ProjectModel:
     project_model = ProjectModel(
         site_id=TEST_SITEID,

@@ -24,24 +24,38 @@ def anonymizer_model():
     # model._session.close()  # Ensure session is closed after test
 
 
-def test_is_tag_kept(anonymizer_model):
-    """Test if is_tag_kept() correctly identifies kept tags."""
-    anonymizer_model._session.add(TagKeep(tag="PatientName", operation="KEEP"))
-    anonymizer_model._session.commit()
+@pytest.fixture
+def mock_dataset():
+    """Creates a mock DICOM dataset with required fields."""
+    ds = Dataset()
+    ds.PatientID = "123456"
+    ds.PatientName = "Doe^John"
+    ds.PatientSex = "M"
+    ds.PatientBirthDate = "19800101"
+    ds.EthnicGroup = "Hispanic"
+    ds.StudyInstanceUID = "1.2.840.113619.2.5.1762583153.17482.978957063.1"
+    ds.SeriesInstanceUID = "1.2.840.113619.2.5.1762583153.17482.978957063.2"
+    ds.SOPInstanceUID = "1.2.840.113619.2.5.1762583153.17482.978957063.3"
+    ds.Modality = "CT"
+    ds.SeriesDescription = "Chest CT Scan"
+    return ds
 
-    assert anonymizer_model.is_tag_kept("PatientName") is True
-    assert anonymizer_model.is_tag_kept("StudyInstanceUID") is False
 
-
-def test_get_tag_operation(anonymizer_model):
-    """Test if get_tag_operation() correctly retrieves operations."""
-    anonymizer_model._session.add(TagKeep(tag="PatientName", operation="KEEP"))
-    anonymizer_model._session.add(TagKeep(tag="StudyDate", operation="REMOVE"))
-    anonymizer_model._session.commit()
-
-    assert anonymizer_model.get_tag_operation("PatientName") == "KEEP"
-    assert anonymizer_model.get_tag_operation("StudyDate") == "REMOVE"
-    assert anonymizer_model.get_tag_operation("NonExistentTag") == ""
+@pytest.fixture
+def mock_dataset2():
+    """Creates a mock DICOM dataset with required fields."""
+    ds = Dataset()
+    ds.PatientID = "1234567"
+    ds.PatientName = "Doe^John"
+    ds.PatientSex = "M"
+    ds.PatientBirthDate = "19800101"
+    ds.EthnicGroup = "Hispanic"
+    ds.StudyInstanceUID = "1.2.840.113619.2.5.1762583153.17482.978957064.1"
+    ds.SeriesInstanceUID = "1.2.840.113619.2.5.1762583153.17482.978957064.2"
+    ds.SOPInstanceUID = "1.2.840.113619.2.5.1762583153.17482.978957064.3"
+    ds.Modality = "CT"
+    ds.SeriesDescription = "Chest CT Scan"
+    return ds
 
 
 # Database
@@ -137,6 +151,35 @@ def test_save_failure(anonymizer_model):
     """Test that save() rolls back on failure."""
     with patch.object(anonymizer_model._session, "commit", side_effect=Exception("DB error")):
         assert anonymizer_model.save() is False  # Should return False on failure
+
+
+def test_add_default(anonymizer_model):
+    """
+    Test that add_default ensures a default PHI record exists in the database.
+    """
+
+    # Step 1: Ensure database is clean before the test
+    anonymizer_model._session.query(PHI).delete()
+    anonymizer_model._session.commit()
+
+    # Step 2: Call add_default() to insert the default PHI record
+    anonymizer_model.add_default()
+
+    # Step 3: Check if the default PHI record is in the database
+    default_phi = anonymizer_model._session.query(PHI).filter_by(patient_id=anonymizer_model.default_anon_pt_id).first()
+    assert default_phi is not None, "Default PHI record was not added"
+    assert default_phi.anon_patient_id == anonymizer_model.default_anon_pt_id, (
+        "Anon patient ID does not match expected default"
+    )
+
+    # Step 4: Call add_default() again to ensure no duplicate is created
+    anonymizer_model.add_default()
+    count = anonymizer_model._session.query(PHI).filter_by(patient_id=anonymizer_model.default_anon_pt_id).count()
+    assert count == 1, "Duplicate default PHI record was added"
+
+    # Step 5: Cleanup - Remove the default PHI record
+    anonymizer_model._session.query(PHI).filter_by(patient_id=anonymizer_model.default_anon_pt_id).delete()
+    anonymizer_model._session.commit()
 
 
 # Load_script function tests
@@ -329,19 +372,131 @@ def test_set_phi(anonymizer_model):
     assert duplicate_check == 1  # Ensure it hasn't created a second record
 
 
+def test_capture_phi_creates_phi(anonymizer_model, mock_dataset):
+    """Test that capture_phi creates a PHI record when it does not exist."""
+    anonymizer_model.capture_phi(source="TestSource", ds=mock_dataset, date_delta=0)
+
+    phi_record = anonymizer_model._session.query(PHI).filter_by(patient_id="123456").first()
+    assert phi_record is not None
+    assert phi_record.patient_name == "Doe^John"
+    assert phi_record.sex == "M"
+    assert phi_record.dob == "19800101"
+    assert phi_record.ethnic_group == "Hispanic"
+
+
+def test_capture_phi_creates_study(anonymizer_model, mock_dataset):
+    """Test that capture_phi creates a Study record when it does not exist."""
+    anonymizer_model.capture_phi(source="TestSource", ds=mock_dataset, date_delta=10)
+
+    study_record = anonymizer_model._session.query(Study).filter_by(study_uid=mock_dataset.StudyInstanceUID).first()
+    assert study_record is not None
+    assert study_record.accession_number is None  # Since accession number is not in dataset
+    assert study_record.study_uid == mock_dataset.StudyInstanceUID
+    assert study_record.anon_date_delta == 10
+    assert study_record.source == "TestSource"
+
+
+def test_capture_phi_creates_series(anonymizer_model, mock_dataset):
+    """Test that capture_phi creates a Series record when it does not exist."""
+    anonymizer_model.capture_phi(source="TestSource", ds=mock_dataset, date_delta=0)
+
+    series_record = anonymizer_model._session.query(Series).filter_by(series_uid=mock_dataset.SeriesInstanceUID).first()
+    assert series_record is not None
+    assert series_record.series_desc == "Chest CT Scan"
+    assert series_record.modality == "CT"
+    assert series_record.instance_count == 1
+
+
+def test_capture_phi_stores_anonymized_uids(anonymizer_model, mock_dataset):
+    """Test that capture_phi stores anonymized UIDs in the UID table."""
+    anonymizer_model.capture_phi(source="TestSource", ds=mock_dataset, date_delta=0)
+
+    for uid in ["StudyInstanceUID", "SeriesInstanceUID", "SOPInstanceUID"]:
+        uid_record = anonymizer_model._session.query(UID).filter_by(phi_uid=getattr(mock_dataset, uid)).first()
+        assert uid_record is not None
+        assert uid_record.anon_uid.startswith("1.2.3.")  # Ensure UID prefix is correctly applied
+
+
+def test_remove_phi_deletes_study_and_keeps_patient(anonymizer_model):
+    """
+    Test that removing a study does not delete the patient if they have other studies.
+    """
+    # Setup: Create PHI with two studies
+    phi = PHI(anon_patient_id="PT001", patient_id="12345")
+    study1 = Study(study_uid="STUDY001", patient_id="12345")
+    study2 = Study(study_uid="STUDY002", patient_id="12345")
+    anonymizer_model._session.add(phi)
+    anonymizer_model._session.add(study1)
+    anonymizer_model._session.add(study2)
+    anonymizer_model._session.commit()
+
+    # Remove first study
+    result = anonymizer_model.remove_phi(anon_pt_id="PT001", anon_study_uid="STUDY001")
+
+    # Assertions
+    assert result is True
+    assert anonymizer_model._session.query(Study).filter_by(study_uid="STUDY001").first() is None
+    assert anonymizer_model._session.query(Study).filter_by(study_uid="STUDY002").first() is not None
+    assert anonymizer_model._session.query(PHI).filter_by(anon_patient_id="PT001").first() is not None
+
+
+def test_remove_phi_deletes_patient_if_no_studies_left(anonymizer_model):
+    """
+    Test that removing the only study also removes the PHI record.
+    """
+    # Setup: Create PHI with one study
+    phi = PHI(anon_patient_id="PT002", patient_id="67890")
+    study = Study(study_uid="STUDY003", patient_id="67890")
+    anonymizer_model._session.add(phi)
+    anonymizer_model._session.add(study)
+    anonymizer_model._session.commit()
+
+    # Remove the only study
+    result = anonymizer_model.remove_phi(anon_pt_id="PT002", anon_study_uid="STUDY003")
+
+    # Assertions
+    assert result is True
+    assert anonymizer_model._session.query(Study).filter_by(study_uid="STUDY003").first() is None
+    assert anonymizer_model._session.query(PHI).filter_by(anon_patient_id="PT002").first() is None
+
+
+def test_remove_phi_fails_if_patient_not_found(anonymizer_model):
+    """
+    Test that remove_phi returns False if the anonymized patient ID does not exist.
+    """
+    result = anonymizer_model.remove_phi(anon_pt_id="NONEXISTENT", anon_study_uid="STUDY004")
+    assert result is False
+
+
+def test_remove_phi_fails_if_study_not_found(anonymizer_model):
+    """
+    Test that remove_phi returns False if the study does not exist.
+    """
+    # Setup: Create PHI without a matching study
+    phi = PHI(anon_patient_id="PT003", patient_id="13579")
+    anonymizer_model._session.add(phi)
+    anonymizer_model._session.commit()
+
+    result = anonymizer_model.remove_phi(anon_pt_id="PT003", anon_study_uid="NONEXISTENT")
+    assert result is False
+
+
 # Patient
 
 
 def test_get_patient_id_count(anonymizer_model):
     """Ensure get_patient_id_count() correctly counts PHI records in the database."""
-    assert anonymizer_model.get_patient_id_count() == 0  # Initially empty
+
+    default_phi = anonymizer_model._session.query(PHI).filter_by(patient_id=anonymizer_model.default_anon_pt_id).first()
+    assert default_phi is not None
+    assert anonymizer_model.get_patient_id_count() == 1  # One default PHI
 
     # Add a patient
     anonymizer_model._session.add(PHI(patient_id="test-patient-001", anon_patient_id="anon-001"))
-    assert anonymizer_model.get_patient_id_count() == 1  # Should now return 1
+    assert anonymizer_model.get_patient_id_count() == 2  # Should now return 2
 
     anonymizer_model._session.add(PHI(patient_id="test-patient-002", anon_patient_id="anon-002"))
-    assert anonymizer_model.get_patient_id_count() == 2  # Should be 2 now
+    assert anonymizer_model.get_patient_id_count() == 3  # Should be 3 now
 
 
 def test_set_and_get_anon_patient_id(anonymizer_model):
@@ -459,42 +614,59 @@ def test_remove_uid_inverse(anonymizer_model):
     assert anonymizer_model._session.query(UID).filter_by(anon_uid=anon_uid).first() is None
 
 
-def test_get_uid_count(anonymizer_model):
-    """Test retrieving the count of UID mappings in the database."""
-    # Ensure initial count is zero
-    assert anonymizer_model.get_uid_count() == 0
+# def test_get_uid_count(anonymizer_model):
+#     """Test retrieving the count of UID mappings in the database."""
+#     # Ensure initial count is zero
+#     assert anonymizer_model.get_uid_count() == 0
 
-    # Insert some UID mappings
+#     # Insert some UID mappings
+#     anonymizer_model._session.add_all(
+#         [
+#             UID(phi_uid="1.2.3.4.1", anon_uid="1.2.3.TEST.1"),
+#             UID(phi_uid="1.2.3.4.2", anon_uid="1.2.3.TEST.2"),
+#             UID(phi_uid="1.2.3.4.3", anon_uid="1.2.3.TEST.3"),
+#         ]
+#     )
+#     anonymizer_model._session.commit()
+
+#     # Ensure count is correct
+#     assert anonymizer_model.get_uid_count() == 3
+
+
+def test_get_next_anon_uid(anonymizer_model):
+    """Test retrieving the next anonymized UID based on the max UID in the database."""
+
+    # Step 1: Ensure the database is empty
+    anonymizer_model._session.query(UID).delete()
+    anonymizer_model._session.commit()
+
+    # Step 2: First call should return 1 (default value)
+    first_uid = anonymizer_model.get_next_anon_uid()
+    assert first_uid == 0, f"Expected first UID to be 0, but got {first_uid}"
+
+    # Step 3: Insert UID records
     anonymizer_model._session.add_all(
         [
             UID(phi_uid="1.2.3.4.1", anon_uid="1.2.3.TEST.1"),
             UID(phi_uid="1.2.3.4.2", anon_uid="1.2.3.TEST.2"),
-            UID(phi_uid="1.2.3.4.3", anon_uid="1.2.3.TEST.3"),
         ]
     )
     anonymizer_model._session.commit()
 
-    # Ensure count is correct
-    assert anonymizer_model.get_uid_count() == 3
+    # Step 4: Next call should return max UID
+    next_uid = anonymizer_model.get_next_anon_uid()
+    assert next_uid == 2, f"Expected next UID to be 2, but got {next_uid}"
 
+    # Step 5: Insert another UID record and test again
+    anonymizer_model._session.add(UID(uid_pk=3, phi_uid="1.2.3.4.3", anon_uid="1.2.3.TEST.3"))
+    anonymizer_model._session.commit()
 
-def test_get_next_anon_uid(anonymizer_model):
-    """Test generating and storing a new anonymized UID."""
-    phi_uid_1 = "1.2.3.4.1"
-    phi_uid_2 = "1.2.3.4.2"
+    final_uid = anonymizer_model.get_next_anon_uid()
+    assert final_uid == 3, f"Expected final UID to be 3, but got {final_uid}"
 
-    # Generate the first anonymized UID
-    anon_uid_1 = anonymizer_model.get_next_anon_uid(phi_uid_1)
-    assert anon_uid_1.startswith(anonymizer_model._uid_prefix)  # Check prefix
-    assert anonymizer_model._session.query(UID).filter_by(phi_uid=phi_uid_1).first() is not None
-
-    # Generate a second anonymized UID and check it's incremented
-    anon_uid_2 = anonymizer_model.get_next_anon_uid(phi_uid_2)
-    assert anon_uid_2.startswith(anonymizer_model._uid_prefix)
-    assert anon_uid_2 != anon_uid_1  # Ensure it's a new unique UID
-
-    # Ensure the UID count is updated correctly
-    assert anonymizer_model.get_uid_count() == 2
+    # Ensure the count of UIDs in the database is correct
+    records = anonymizer_model._session.query(UID).all()
+    assert len(records) == 3, "UID count mismatch after insertions."
 
 
 # Accession
@@ -516,7 +688,7 @@ def test_get_next_anon_acc_no(anonymizer_model):
         study_uid="1.2.3.4",
         patient_id="PATIENT_001",
         anon_accession_number_count=5,  # Simulating an existing record
-        anon_accession_number="5"
+        anon_accession_number="5",
     )
     session.add(study)
     session.commit()
@@ -527,10 +699,7 @@ def test_get_next_anon_acc_no(anonymizer_model):
 
     # Insert another study with anon_accession_number_count = 10
     study_2 = Study(
-        study_uid="1.2.3.5",
-        patient_id="PATIENT_002",
-        anon_accession_number_count=10,
-        anon_accession_number="10"
+        study_uid="1.2.3.5", patient_id="PATIENT_002", anon_accession_number_count=10, anon_accession_number="10"
     )
     session.add(study_2)
     session.commit()
@@ -647,6 +816,42 @@ def test_get_acc_no_count(anonymizer_model):
 
     # Ensure highest accession number count is returned
     assert anonymizer_model.get_acc_no_count() == 5
+
+
+# Tags
+
+
+def test_load_tag_keep(anonymizer_model):
+    """
+    Test that load_tag_keep correctly loads the TagKeep table into memory.
+    """
+
+    # Step 1: Ensure database is empty
+    anonymizer_model._session.query(TagKeep).delete()
+    anonymizer_model._session.commit()
+
+    # Step 2: Insert mock data
+    mock_data = [
+        TagKeep(tag="00100010", operation="KEEP"),
+        TagKeep(tag="00100020", operation="REMOVE"),
+        TagKeep(tag="0020000D", operation="KEEP"),
+    ]
+    anonymizer_model._session.add_all(mock_data)
+    anonymizer_model._session.commit()
+
+    # Step 3: Call function to load data
+    anonymizer_model.load_tag_keep()
+
+    # Step 4: Assertions - check if dictionary is populated correctly
+    assert anonymizer_model._tag_keep == {"00100010": "KEEP", "00100020": "REMOVE", "0020000D": "KEEP"}, (
+        "TagKeep dictionary does not match expected values"
+    )
+
+    # Step 5: Edge Case - Check it works with an empty table
+    anonymizer_model._session.query(TagKeep).delete()
+    anonymizer_model._session.commit()
+    anonymizer_model.load_tag_keep()
+    assert anonymizer_model._tag_keep == {}, "TagKeep dictionary should be empty when no records exist"
 
 
 # Instances
@@ -796,12 +1001,14 @@ def test_new_study_from_dataset(anonymizer_model):
     assert stored_study.patient_id == "test-patient-001", "Study is not linked to the correct patient"
 
     # Verify anon_accession_number_count is correctly incremented
-    assert stored_study.anon_accession_number_count == prev_max_count + 1, \
+    assert stored_study.anon_accession_number_count == prev_max_count + 1, (
         "anon_accession_number_count was not correctly incremented"
+    )
 
     # Ensure anon_accession_number is stored as a string
-    assert stored_study.anon_accession_number == str(prev_max_count + 1), \
+    assert stored_study.anon_accession_number == str(prev_max_count + 1), (
         "anon_accession_number is not stored as a string"
+    )
 
     # Ensure study metadata is correctly set
     assert stored_study.study_date == "20240226"

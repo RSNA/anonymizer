@@ -151,6 +151,7 @@ class AnonymizerController:
                 project_model.site_id,
                 project_model.uid_root,
                 project_model.anonymizer_script_path,
+                db_url="sqlite:///" + str(self.project_model.private_dir()) + "/AnonymizerModel.db",
             )
             logger.info(f"New Default Anonymizer Model initialised from script: {project_model.anonymizer_script_path}")
 
@@ -180,11 +181,11 @@ class AnonymizerController:
 
         # Spawn Model Autosave Thread:
         self._model_change_flag = False
-        self._autosave_event = threading.Event()
-        self._autosave_worker_thread = threading.Thread(
-            target=self._autosave_manager, name="AnonModelSaver", daemon=True
-        )
-        self._autosave_worker_thread.start()
+        # self._autosave_event = threading.Event()
+        # self._autosave_worker_thread = threading.Thread(
+        #     target=self._autosave_manager, name="AnonModelSaver", daemon=True
+        # )
+        # self._autosave_worker_thread.start()
 
         self._active = True
         logger.info("Anonymizer Controller initialised")
@@ -220,7 +221,7 @@ class AnonymizerController:
         for worker in self._worker_threads:
             worker.join()
 
-        self._autosave_event.set()
+        # self._autosave_event.set()
         self._active = False
 
     def __del__(self):
@@ -319,16 +320,16 @@ class AnonymizerController:
     def _autosave_manager(self):
         logger.info(f"thread={threading.current_thread().name} start")
 
-        while self._active:
-            self._autosave_event.wait(timeout=self.MODEL_AUTOSAVE_INTERVAL_SECS)
-            if self._model_change_flag:
-                self.save_model()
-                self._model_change_flag = False
+        # while self._active:
+        #     self._autosave_event.wait(timeout=self.MODEL_AUTOSAVE_INTERVAL_SECS)
+        #     if self._model_change_flag:
+        #         self.save_model()
+        #         self._model_change_flag = False
 
         logger.info(f"thread={threading.current_thread().name} end")
 
     def save_model(self) -> bool:
-        return self.model.save(self.model_filename)
+        return self.model.save()
 
     def valid_date(self, date_str: str) -> bool:
         """
@@ -441,7 +442,7 @@ class AnonymizerController:
         elif "uid" in operation:
             anon_uid = self.model.get_anon_uid(value)
             if not anon_uid:
-                anon_uid = self.model.get_next_anon_uid(value)
+                anon_uid = self.model.get_next_anon_uid()
             dataset[tag].value = anon_uid
         elif "acc" in operation:
             anon_acc_no = self.model.get_anon_acc_no(value)
