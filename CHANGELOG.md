@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - src/utility unit testing
 - Headless / Server mode via, start via rsna-anonmyizer <"path to ProjectModel.pkl">
 - view/index.py: "View" button on dashboard with associated ViewIndex window
-- view/pixel.py: View projections for each series, opened from ViewIndex via View Pixels button
+- view/projection.py: View projections for each series, opened from ViewIndex via View Pixels button
 - controller/create_projections.py with functions to create projection objects for a series (2D or 3D)
 - create_projection_from_series creates Projection.pkl files for caching projections
 

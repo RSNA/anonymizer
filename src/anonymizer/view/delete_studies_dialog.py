@@ -21,7 +21,6 @@ class DeleteStudiesDialog(tk.Toplevel):
 
     Attributes:
         _sub_title (str): The sub-title of the dialog.
-        _data_font: The font for displaying data.
         _controller (AnonymizerController): The controller for the anonymizer.
         _studies (list[tuple[str, str]): The studies to delete.
         _cancelled (bool): Flag indicating if the import was cancelled.
@@ -41,7 +40,6 @@ class DeleteStudiesDialog(tk.Toplevel):
 
         self.title(title)
         self._sub_title: str = sub_title
-        self._data_font = parent._data_font
         self._controller: ProjectController = controller
         self._studies: list[tuple[str, str]] = studies
         self._cancelled = False
@@ -96,18 +94,13 @@ class DeleteStudiesDialog(tk.Toplevel):
 
         self._progressbar.set(0)
 
-        self._progress_label = ctk.CTkLabel(self._frame, text="", font=self._data_font)
+        self._progress_label = ctk.CTkLabel(self._frame, text="")
         self._progress_label.grid(row=row, column=0, padx=PAD, pady=(0, PAD), sticky="nw")
 
         row += 1
 
         self._text_box = ctk.CTkTextbox(
-            self._frame,
-            border_width=1,
-            width=self.text_box_width,
-            height=self.text_box_height,
-            wrap="none",
-            font=self._data_font,
+            self._frame, border_width=1, width=self.text_box_width, height=self.text_box_height, wrap="none"
         )
 
         self._text_box.grid(row=row, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")

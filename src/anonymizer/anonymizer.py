@@ -898,7 +898,7 @@ class Anonymizer(ctk.CTk):
         if self.index_view:
             del self.index_view
 
-        self.index_view = IndexView(self.dashboard, self.controller, self.mono_font)
+        self.index_view = IndexView(self.dashboard, self.controller, self.mono_font.measure("A"))
         if self.index_view is None:
             logger.error("Internal Error creating IndexView")
             return

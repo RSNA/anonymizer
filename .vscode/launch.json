@@ -22,7 +22,7 @@
       "autoReload": {
         "enable": true
       },
-      "justMyCode": true,
+      "justMyCode": false,
     },
   ]
 }

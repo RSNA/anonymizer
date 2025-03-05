@@ -1,8 +1,9 @@
 import logging
 import pickle
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
+from pprint import pformat
 
 import numpy as np
 from cv2 import (
@@ -24,6 +25,7 @@ from PIL import Image
 from pydicom import Dataset, dcmread
 from pydicom.pixel_data_handlers.util import apply_modality_lut
 
+from anonymizer.controller.remove_pixel_phi import OCRText
 from anonymizer.utils.storage import get_dcm_files
 
 logger = logging.getLogger(__name__)
@@ -37,20 +39,54 @@ class Projection:
     study_uid: str
     series_uid: str
     series_description: str
-    images: list[Image.Image]  # [min,mean,max] projections multi-frame or [mean,clahe,edge] for single-frame
+    proj_images: (
+        list[Image.Image] | None
+    )  # [min,mean,max] projections multi-frame or [mean,clahe,edge] for single-frame
+    ocr: list[OCRText] | None
+
+    def __repr__(self) -> str:
+        return f"{pformat(asdict(self), sort_dicts=False)}"
+
+
+class ProjectionImageSizeConfig:
+    _scaling_factor = 1.0
+
+    @classmethod
+    def set_scaling_factor(cls, factor):
+        if factor <= 0:
+            raise ValueError("Scaling factor must be greater than zero.")
+        cls._scaling_factor = factor
+
+    @classmethod
+    def get_scaling_factor(cls):
+        return cls._scaling_factor
+
+    @classmethod
+    def set_scaling_factor_if_needed(cls, screen_width):
+        """Sets the scaling factor only if three LARGE images don't fit within screen width."""
+        large_image_width = ProjectionImageSize.LARGE.value[0]  # Original width of LARGE image
+        total_large_width = large_image_width * 3  # Total original width of three LARGE images
+
+        if total_large_width > screen_width:
+            scaling_factor = screen_width / total_large_width
+            cls.set_scaling_factor(scaling_factor)
+            logging.info(f"Scaling factor set to {scaling_factor}")
+        else:
+            # If they fit, make sure the scaling factor is 1.0 (reset)
+            cls.set_scaling_factor(1.0)
+            logging.info("Scaling factor reset to 1.0")
 
 
 class ProjectionImageSize(Enum):
-    # rect size in pixels (width, height)
-    SMALL = (100, 100)
-    MEDIUM = (200, 200)
-    LARGE = (300, 300)
+    SMALL = (200, 200)
+    MEDIUM = (400, 400)
+    LARGE = (600, 600)
 
     def width(self):
-        return self.value[0]
+        return int(self.value[0] * ProjectionImageSizeConfig.get_scaling_factor())
 
     def height(self):
-        return self.value[1]
+        return int(self.value[1] * ProjectionImageSizeConfig.get_scaling_factor())
 
 
 def normalize_uint8(image: np.ndarray) -> np.ndarray:
@@ -82,15 +118,15 @@ def create_projection_from_single_frame(ds: Dataset) -> Projection:
         raise ValueError("No PhotometricInterpretation ")
 
     pixels = ds.pixel_array
-    logger.info(f"pixels.value.range:[{pixels.min(), pixels.max()}]")
+    logger.debug(f"pixels.value.range:[{pixels.min(), pixels.max()}]")
 
     if pi in ["MONOCHROME1", "MONOCHROME2"]:
         pixels = apply_modality_lut(pixels, ds)
-        logger.info(f"modality_lut: pixels.value.range:[{pixels.min(), pixels.max()}]")
+        logger.debug(f"modality_lut: pixels.value.range:[{pixels.min(), pixels.max()}]")
         if pi == "MONOCHROME1":
             logger.info("Convert from MONOCHROME1 to MONOCHROME2")
             pixels = np.max(pixels) - pixels
-            logger.info(f"after inversion pixels.value.range:[{pixels.min(), pixels.max()}]")
+            logger.debug(f"after inversion pixels.value.range:[{pixels.min(), pixels.max()}]")
     elif pi == "RGB":
         # Convert to Grayscale
         pixels = cvtColor(pixels, COLOR_RGB2GRAY)
@@ -99,7 +135,7 @@ def create_projection_from_single_frame(ds: Dataset) -> Projection:
     normalize(src=pixels, dst=medium_contrast, alpha=0, beta=255, norm_type=NORM_MINMAX, dtype=-1, mask=None)
     medium_contrast = medium_contrast.astype(np.uint8)
 
-    logger.info(f"After normalization: pixels.value.range:[{medium_contrast.min(), medium_contrast.max()}]")
+    logger.debug(f"After normalization: pixels.value.range:[{medium_contrast.min(), medium_contrast.max()}]")
 
     # Apply CLAHE for enhanced contrast
     clahe = createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
@@ -115,13 +151,13 @@ def create_projection_from_single_frame(ds: Dataset) -> Projection:
     kernel = getStructuringElement(shape=MORPH_RECT, ksize=(2, 2))
     edges_dilated = dilate(src=edges, kernel=kernel, iterations=2)
 
-    thumbnails = [
+    projection_images = [
         Image.fromarray(img)
         .convert("RGB")
         .resize(
             (
-                ProjectionImageSize.LARGE.value[0] * 2,
-                ProjectionImageSize.LARGE.value[1] * 2,
+                ProjectionImageSize.LARGE.value[0],
+                ProjectionImageSize.LARGE.value[1],
             ),
             Image.Resampling.NEAREST,
         )
@@ -133,7 +169,8 @@ def create_projection_from_single_frame(ds: Dataset) -> Projection:
         study_uid=ds.StudyInstanceUID,
         series_uid=ds.SeriesInstanceUID,
         series_description=ds.get("SeriesDescription", "?"),
-        images=thumbnails,
+        proj_images=projection_images,
+        ocr=None,
     )
 
 
@@ -211,7 +248,7 @@ def create_projection_from_series(series_path: Path) -> Projection:
     mean_projection = normalize_uint8(np.mean(all_series_frames, axis=0))
     max_projection = normalize_uint8(np.max(all_series_frames, axis=0))
 
-    thumbnails = [
+    projection_images = [
         Image.fromarray(img).resize(
             (
                 ProjectionImageSize.LARGE.value[0],
@@ -227,7 +264,8 @@ def create_projection_from_series(series_path: Path) -> Projection:
         study_uid=ds1.StudyInstanceUID,
         series_uid=ds1.SeriesInstanceUID,
         series_description=ds1.get("SeriesDescription", "?"),
-        images=thumbnails,
+        proj_images=projection_images,
+        ocr=None,
     )
 
     cache_projection(projection, projection_file_path)

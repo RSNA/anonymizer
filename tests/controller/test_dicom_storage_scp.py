@@ -280,7 +280,8 @@ def test_send_ct_Archibald_Doe_Projection_create_cached(temp_dir: str, controlle
     assert projection.series_description == ds.SeriesDescription
     assert projection.study_uid == prefix + ".1"
     assert projection.series_uid == prefix + ".2"
-    assert len(projection.images) == 3
+    assert projection.proj_images
+    assert len(projection.proj_images) == 3
 
     # Check Projection cached
     projection_file_path = series_path / PROJECTION_FILENAME

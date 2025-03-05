@@ -1,48 +1,25 @@
-import gc
 import logging
 import tkinter as tk
-from enum import Enum
 from math import ceil
 from pathlib import Path
 
 import customtkinter as ctk
-from PIL import Image, ImageTk
+from PIL import Image, ImageDraw, ImageTk
 
-from anonymizer.controller.create_projections import Projection, ProjectionImageSize, create_projection_from_series
+from anonymizer.controller.create_projections import (
+    Projection,
+    ProjectionImageSize,
+    ProjectionImageSizeConfig,
+    create_projection_from_series,
+)
 from anonymizer.model.anonymizer import PHI_IndexRecord
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
 
-class PixelPAD(Enum):
-    # padx, pady in pixels
-    SMALL = (2, 2)
-    MEDIUM = (3, 3)
-    LARGE = (5, 5)
-
-    def width(self) -> int:
-        return self.value[0]
-
-    def height(self) -> int:
-        return self.value[1]
-
-
-PAD_MAP: dict[ProjectionImageSize, PixelPAD] = {
-    ProjectionImageSize.SMALL: PixelPAD.SMALL,
-    ProjectionImageSize.MEDIUM: PixelPAD.MEDIUM,
-    ProjectionImageSize.LARGE: PixelPAD.LARGE,
-}
-
-
-def get_pad(size: ProjectionImageSize) -> PixelPAD:
-    return PAD_MAP[size]
-
-
-class PixelsView(ctk.CTkToplevel):
+class ProjectionView(tk.Toplevel):  # ctk.CTkToplevel):
     PV_FRAME_RELATIVE_SIZE = (0.9, 0.9)  # fraction of screen size (width, height)
-    IMAGE_PAD = 2  # pixels between the projections images when combined
-    WIDGET_PAD = 10
 
     key_to_image_size_mapping: dict[str, ProjectionImageSize] = {
         "S": ProjectionImageSize.SMALL,
@@ -61,19 +38,14 @@ class PixelsView(ctk.CTkToplevel):
             if series_path.is_dir()
         ]
 
-    def __init__(
-        self,
-        parent,
-        base_dir: Path,
-        phi_records: list[PHI_IndexRecord],
-    ):
+    def __init__(self, parent, base_dir: Path, phi_records: list[PHI_IndexRecord]):
         super().__init__(master=parent)
 
         if not base_dir.is_dir():
             raise ValueError(f"{base_dir} is not a valid directory")
 
         if not phi_records:
-            raise ValueError("No phi_records for PixelsView")
+            raise ValueError("No phi_records for ProjectionView")
 
         self._base_dir = base_dir
         self._phi_records = phi_records
@@ -91,18 +63,19 @@ class PixelsView(ctk.CTkToplevel):
         self._pv_frame_width = int(self.PV_FRAME_RELATIVE_SIZE[0] * self.winfo_screenwidth())
         self._pv_frame_height = int(self.PV_FRAME_RELATIVE_SIZE[1] * self.winfo_screenheight())
 
+        ProjectionImageSizeConfig.set_scaling_factor_if_needed(self._pv_frame_width)
+
         self._page_number = 1  # not zero based
         self._rows = 0
         self._cols = 0
         self._pages = 0
         self._page_slider = None
         self._loading_page = False
-        # self._pv_labels = {}
 
         self._update_title()
         self._create_widgets()
 
-        logger.info(f"PixelsView for Studies={len(self._phi_records)}, Series={self._total_series}")
+        logger.info(f"ProjectionView for Studies={len(self._phi_records)}, Series={self._total_series}")
 
         # Bind keyboard arrow buttons for page control:
         self.bind("<Left>", lambda e: self._on_page_slider(max(1, self._page_number - 1)))
@@ -136,7 +109,6 @@ class PixelsView(ctk.CTkToplevel):
         for widget in self._pv_frame.winfo_children():
             widget.unbind("<Button-1>")
             widget.destroy()  # this should clean up the associated CTKImage & Tkinter PhotoImage
-        # gc.collect()
 
     def _update_image_size(self, value):
         logger.info(f"Updating image size to {value}")
@@ -147,12 +119,12 @@ class PixelsView(ctk.CTkToplevel):
 
     def _create_widgets(self):
         logger.info("_create_widgets")
-        PAD = self.WIDGET_PAD
+        PAD = 10
 
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        # 1. PixelsView Frame:
+        # 1. ProjectionView Frame:
         self._pv_frame = tk.Frame(
             self,
             bg="black",
@@ -169,7 +141,7 @@ class PixelsView(ctk.CTkToplevel):
 
         # CTkSlider widget is created in _calc_layout if self._pages > 1
 
-        # Segmented Button for PixelsView image size selection
+        # Segmented Button for ProjectionView image size selection
         self._image_size_button = ctk.CTkSegmentedButton(
             self._paging_frame, values=["S", "M", "L"], command=self._update_image_size
         )
@@ -177,13 +149,10 @@ class PixelsView(ctk.CTkToplevel):
         self._image_size_button.grid(row=0, column=2)
 
     def _calc_layout(self):
-        padded_combined_width = (
-            3 * self._image_size.width() + 2 * self.IMAGE_PAD + 2 * get_pad(self._image_size).width()
-        )
-        padded_combined_height = self._image_size.height() + get_pad(self._image_size).height()
-
-        self._rows = self._pv_frame_height // padded_combined_height
-        self._cols = self._pv_frame_width // padded_combined_width
+        combined_width = 3 * self._image_size.width()
+        combined_height = self._image_size.height()
+        self._rows = self._pv_frame_height // combined_height
+        self._cols = self._pv_frame_width // combined_width
         self._pages = ceil(self._total_series / (self._rows * self._cols))
 
         logger.info(f"Rows: {self._rows}, Cols: {self._cols}, Pages: {self._pages}")
@@ -191,13 +160,13 @@ class PixelsView(ctk.CTkToplevel):
         if self._pages > 1:
             self._page_slider = ctk.CTkSlider(
                 self._paging_frame,
-                button_length=round(padded_combined_width * self._cols / self._pages),
+                button_length=round(combined_width * self._cols / self._pages),
                 from_=1,
                 to=self._pages,
                 number_of_steps=self._pages - 1,
                 command=self._on_page_slider,
             )
-            self._page_slider.grid(row=0, column=0, padx=self.WIDGET_PAD, pady=0, sticky="we")
+            self._page_slider.grid(row=0, column=0, padx=10, pady=0, sticky="we")
             self._page_slider.set(0)
         else:
             if self._page_slider:
@@ -244,24 +213,93 @@ class PixelsView(ctk.CTkToplevel):
                 self._page_slider.set(self._page_number)
                 self._loading_page = False
 
+    def add_border_inplace(self, image: Image.Image, border_fraction=0.0075, min_border_px=3, color: str = "red"):
+        """
+        Adds a border around and within a PIL Image, modifying the source image directly.
+
+        Args:
+            imge: The PIL Image to add a border to (modified in place).
+            border_fraction: The percentage of the max dimension to use for the border width.
+            min_border_px: Minimum border width in pixels
+            color: Color of border pixels
+        """
+        width, height = image.size
+        max_dimension = max(width, height)
+        border_width = max(min_border_px, int(max_dimension * border_fraction))
+
+        draw = ImageDraw.Draw(image)
+
+        draw.rectangle(
+            [(0, 0), (width - 1, height - 1)],  # Outer rectangle,
+            outline=color,
+            width=border_width,
+        )
+
+    def add_external_border(
+        self, image: Image.Image, border_fraction=0.025, min_border_px=20, color: str = "black"
+    ) -> Image.Image:
+        """
+        Adds a border external to a PIL Image, preserving the original image pixels.
+
+        Args:
+            image: The PIL Image to add a border to.
+            border_fraction: The fraction of the max dimension to use for the border width.
+            min_border_px: Minimum border width in pixels.
+            color: Color of border pixels.
+
+        Returns:
+            A new PIL Image with the external border.
+        """
+        width, height = image.size
+        max_dimension = max(width, height)
+        border_width = max(min_border_px, int(max_dimension * border_fraction))
+
+        # Calculate new dimensions with the border
+        new_width = width + 2 * border_width
+        new_height = height + 2 * border_width
+
+        # Create a new image with the new dimensions
+        bordered_image = Image.new(image.mode, (new_width, new_height), color)
+
+        # Paste the original image into the center of the new image
+        bordered_image.paste(image, (border_width, border_width))
+
+        return bordered_image
+
     def generate_combined_image(self, series_path) -> tuple[ImageTk.PhotoImage, Projection]:
         """
         Generate a combined image from the Projection images of series using padding between images.
         """
-
         projection = create_projection_from_series(series_path)
-        combined_width = 3 * self._image_size.width() + 2 * self.IMAGE_PAD
         combined_image = Image.new(
             mode="RGB",
-            size=(combined_width, self._image_size.height()),
+            size=(3 * self._image_size.width(), self._image_size.height()),
             color="black",
         )
-        for i, image in enumerate(projection.images):
-            combined_image.paste(
-                image.resize(self._image_size.value), (i * (self._image_size.width() + self.IMAGE_PAD), 0)
-            )
 
-        projection.images.clear()
+        if projection.proj_images:
+            projection.ocr = []
+            for i, proj_image in enumerate(projection.proj_images):
+                # Detect Text only if reader provided and when size is large:
+                # if self._reader and self._image_size == ProjectionImageSize.LARGE:
+                #     ocr_list = detect_text(np.array(proj_image), self._reader)
+                #     if ocr_list:
+                #         projection.ocr.extend(ocr_list)
+                #         # Draw bounding boxes around detected text on projection image:
+                #         for ocr in ocr_list:
+                #             draw = ImageDraw.Draw(proj_image)
+                #             draw.rectangle([ocr.top_left, ocr.bottom_right], outline=(0, 255, 0), width=4)
+
+                combined_image.paste(
+                    proj_image
+                    if self._image_size == ProjectionImageSize.LARGE
+                    else proj_image.resize(self._image_size.value),
+                    (i * self._image_size.width(), 0),
+                )
+
+        # If any text detected creat a red border around combined projection image:
+        # if projection.ocr and self.any_prob_above_threshold(projection.ocr):
+        #     self.add_border_inplace(image=combined_image, color="red")
 
         # Convert to PhotoImage
         photo_image = ImageTk.PhotoImage(combined_image)
@@ -280,23 +318,15 @@ class PixelsView(ctk.CTkToplevel):
             combined_image = ImageTk.PhotoImage(
                 Image.new(
                     mode="RGB",
-                    size=(3 * self._image_size.width() + 2 * self.IMAGE_PAD, self._image_size.height()),
+                    size=(3 * self._image_size.width(), self._image_size.height()),
                     color="black",
                 )
             )
 
         label = tk.Label(self._pv_frame, image=combined_image)
-        # Store a reference to avoid garbage collection
+        label.grid(row=row, column=col)
+        # Store a reference to avoid garbage collection by tkinter
         label.photo_image = combined_image  # type: ignore
-        label.grid(
-            row=row,
-            column=col,
-            padx=(0, get_pad(self._image_size).width()),
-            pady=(0, get_pad(self._image_size).height()),
-            sticky="nsew",
-        )
-
-        label.unbind("<Button-1>")
 
         if projection:
             label.bind(
@@ -306,7 +336,7 @@ class PixelsView(ctk.CTkToplevel):
 
     def _populate_px_frame(self):
         """
-        Populate the PixelsView frame with projection images for self._page_number
+        Populate the ProjectionView frame with projection images for self._page_number
         """
         logger.debug(f"Populate pv_frame page={self._page_number}, image size={self._image_size}")
         self._page_label.configure(text=_("Page") + f" {self._page_number} " + _("of") + f" {self._pages}")
