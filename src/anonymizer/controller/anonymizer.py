@@ -73,7 +73,7 @@ class AnonymizerController:
     PRIVATE_BLOCK_NAME = "RSNA"
     DEFAULT_ANON_DATE = "20000101"  # if source date is invalid or before 19000101
 
-    NUMBER_OF_DATASET_WORKER_THREADS = 2
+    NUMBER_OF_DATASET_WORKER_THREADS = 1
     WORKER_THREAD_SLEEP_SECS = 0.075  # for UX responsiveness
     MODEL_AUTOSAVE_INTERVAL_SECS = 30
 
