@@ -4,7 +4,6 @@ The IndexView class provides a user interface for viewing the study index, delet
 """
 
 import logging
-import tkinter as tk
 from tkinter import messagebox, ttk
 
 import customtkinter as ctk
@@ -19,7 +18,7 @@ from anonymizer.view.projection import ProjectionView
 logger = logging.getLogger(__name__)
 
 
-class IndexView(tk.Toplevel):
+class IndexView(ctk.CTkToplevel):
     """
     Represents a view of the project's study index.
 
@@ -48,7 +47,7 @@ class IndexView(tk.Toplevel):
         self._controller = project_controller
         self._anon_model: AnonymizerModel = project_controller.anonymizer.model
         self._phi_index: list[PHI_IndexRecord] | None = None
-        self._pixels_view: ProjectionView | None = None
+        self._projection_view: ProjectionView | None = None
 
         self.title("View PHI Index")
         self.resizable(True, True)
@@ -194,10 +193,10 @@ class IndexView(tk.Toplevel):
         if self._phi_index is None:
             return
 
-        if self._pixels_view and self._pixels_view.winfo_exists():
+        if self._projection_view and self._projection_view.winfo_exists():
             logger.info("PixelsView already OPEN")
-            self._pixels_view.deiconify()
-            self._pixels_view.focus_force()
+            self._projection_view.deiconify()
+            self._projection_view.focus_force()
             return
 
         rows_selected = list(self._tree.selection())
@@ -209,12 +208,17 @@ class IndexView(tk.Toplevel):
         selected_indices = [int(row) for row in rows_selected]  # convert to integers
         selected_phi_records = [self._phi_index[i] for i in selected_indices]
 
-        self._pixels_view = ProjectionView(self, self._controller.model.images_dir(), selected_phi_records)
-        if self._pixels_view is None:
+        self._projection_view = ProjectionView(
+            self,
+            anon_model=self._anon_model,
+            base_dir=self._controller.model.images_dir(),
+            phi_records=selected_phi_records,
+        )
+        if self._projection_view is None:
             logger.error("Internal Error creating PixelsView")
             return
 
-        self._pixels_view.focus()
+        self._projection_view.focus()
 
     def _refresh_button_pressed(self):
         logger.info("Refresh button pressed, update tree from PHI Index...")
@@ -283,8 +287,8 @@ class IndexView(tk.Toplevel):
 
     def _on_cancel(self):
         logger.info("_on_cancel")
-        if self._pixels_view:
-            self._pixels_view.destroy()
+        if self._projection_view:
+            self._projection_view.destroy()
 
         self.grab_release()
         self.destroy()

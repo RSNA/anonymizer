@@ -1,9 +1,10 @@
 import logging
 import pickle
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 from pprint import pformat
+from typing import List, Optional
 
 import numpy as np
 from cv2 import (
@@ -23,7 +24,7 @@ from cv2 import (
 )
 from PIL import Image
 from pydicom import Dataset, dcmread
-from pydicom.pixel_data_handlers.util import apply_modality_lut
+from pydicom.pixel_data_handlers.util import apply_modality_lut, apply_voi_lut
 
 from anonymizer.controller.remove_pixel_phi import OCRText
 from anonymizer.utils.storage import get_dcm_files
@@ -39,13 +40,41 @@ class Projection:
     study_uid: str
     series_uid: str
     series_description: str
-    proj_images: (
-        list[Image.Image] | None
-    )  # [min,mean,max] projections multi-frame or [mean,clahe,edge] for single-frame
-    ocr: list[OCRText] | None
+    proj_images: Optional[List[Image.Image]] = field(
+        default=None,
+        metadata={"description": "[min,mean,max] projections multi-frame or [mean,clahe,edge] for single-frame"},
+    )
+    ocr: Optional[List[OCRText]] = field(default=None)
 
     def __repr__(self) -> str:
         return f"{pformat(asdict(self), sort_dicts=False)}"
+
+    def __enter__(self):
+        """Called when entering the 'with' statement."""
+        return self  # Return the object itself
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Called when exiting the 'with' statement (or on object deletion)."""
+        self.cleanup()  # Delegate cleanup to a dedicated method
+
+    def __del__(self):
+        """Called when the object is about to be garbage collected (fallback)."""
+        self.cleanup()
+
+    def cleanup(self):
+        """Releases resources (image data) held by the Projection object."""
+        if self.proj_images:
+            logger.debug(f"Cleaning up Projection for series: {self.series_uid}")
+            for img in self.proj_images:
+                if img:
+                    try:
+                        img.close()  # Close the PIL Image, releasing resources
+                    except Exception as e:
+                        logger.warning(f"Error closing image: {e}")
+                    img = None  # avoid errors in __del__
+            self.proj_images = None  # Release the list
+        # Add cleanup for 'ocr' if it holds any resources that need releasing
+        self.ocr = None  # Assuming OCRText doesn't need special cleanup
 
 
 class ProjectionImageSizeConfig:
@@ -80,7 +109,7 @@ class ProjectionImageSizeConfig:
 class ProjectionImageSize(Enum):
     SMALL = (200, 200)
     MEDIUM = (400, 400)
-    LARGE = (600, 600)
+    LARGE = (800, 800)
 
     def width(self):
         return int(self.value[0] * ProjectionImageSizeConfig.get_scaling_factor())
@@ -89,7 +118,7 @@ class ProjectionImageSize(Enum):
         return int(self.value[1] * ProjectionImageSizeConfig.get_scaling_factor())
 
 
-def normalize_uint8(image: np.ndarray) -> np.ndarray:
+def normalize_uint8(image: np.ndarray):
     """Normalize and convert an image to uint8."""
     return normalize(
         src=image,
@@ -97,7 +126,8 @@ def normalize_uint8(image: np.ndarray) -> np.ndarray:
         alpha=0,
         beta=255,
         norm_type=NORM_MINMAX,
-        dtype=CV_8U,
+        dtype=-1,
+        mask=None,
     ).astype(np.uint8)
 
 
@@ -111,8 +141,7 @@ def cache_projection(projection: Projection, projection_file_path: Path) -> None
     return
 
 
-def create_projection_from_single_frame(ds: Dataset) -> Projection:
-    # [mean,clahe,edge] for single-frame
+def load_single_frame(ds: Dataset) -> np.ndarray:
     pi = ds.get("PhotometricInterpretation", None)
     if pi is None:
         raise ValueError("No PhotometricInterpretation ")
@@ -122,20 +151,29 @@ def create_projection_from_single_frame(ds: Dataset) -> Projection:
 
     if pi in ["MONOCHROME1", "MONOCHROME2"]:
         pixels = apply_modality_lut(pixels, ds)
-        logger.debug(f"modality_lut: pixels.value.range:[{pixels.min(), pixels.max()}]")
+        logger.debug(f"after modality_lut: pixels.value.range:[{pixels.min(), pixels.max()}]")
+        pixels = apply_voi_lut(pixels, ds)
+        logger.debug(f"after voi_lut: pixels.value.range:[{pixels.min(), pixels.max()}]")
         if pi == "MONOCHROME1":
             logger.info("Convert from MONOCHROME1 to MONOCHROME2")
             pixels = np.max(pixels) - pixels
             logger.debug(f"after inversion pixels.value.range:[{pixels.min(), pixels.max()}]")
-    elif pi == "RGB":
-        # Convert to Grayscale
-        pixels = cvtColor(pixels, COLOR_RGB2GRAY)
 
-    medium_contrast = np.zeros_like(pixels)
-    normalize(src=pixels, dst=medium_contrast, alpha=0, beta=255, norm_type=NORM_MINMAX, dtype=-1, mask=None)
-    medium_contrast = medium_contrast.astype(np.uint8)
+    # elif pi == "RGB":
+    #     # Convert Single Frame RGB to Grayscale
+    #     pixels = cvtColor(pixels, COLOR_RGB2GRAY)
+    #     logger.debug(f"after RGB2GRAY: pixels.value.range:[{pixels.min(), pixels.max()}]")
 
-    logger.debug(f"After normalization: pixels.value.range:[{medium_contrast.min(), medium_contrast.max()}]")
+    if ds.BitsAllocated != 8:
+        pixels = normalize_uint8(pixels)
+        logger.debug(f"After normalization: pixels.value.range:[{pixels.min(), pixels.max()}]")
+
+    return pixels
+
+
+def create_projection_from_single_frame(ds: Dataset) -> Projection:
+    # [mean,clahe,edge] for single-frame
+    medium_contrast = load_single_frame(ds)
 
     # Apply CLAHE for enhanced contrast
     clahe = createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
@@ -174,6 +212,67 @@ def create_projection_from_single_frame(ds: Dataset) -> Projection:
     )
 
 
+def load_series_frames(series_path) -> tuple[Dataset, np.ndarray]:
+    # Load and process the series
+    # Return numpy array with 4 dimensions: [frame, height, width, 3]
+    # Normalised uint8 values
+    # TODO: test a series (ultrasound) comprising multiple dcm files each with multiple frames
+
+    dcm_paths: list[Path] = sorted(get_dcm_files(series_path))
+
+    if len(dcm_paths) == 0:
+        raise ValueError(f"No DICOM files found in {series_path}")
+
+    ds1 = dcmread(dcm_paths[0])
+    pi = ds1.get("PhotometricInterpretation", None)
+    if pi is None:
+        raise ValueError("No PhotometricInterpretation")
+
+    grayscale = pi in ["MONOCHROME1", "MONOCHROME2"]
+
+    target_size = (ds1.get("Rows", None), ds1.get("Columns", None))
+    all_series_frames = []
+
+    for dcm_path in dcm_paths:
+        ds = dcmread(dcm_path) if all_series_frames else ds1
+
+        pixels = ds.pixel_array  # Could be 2D, 3D, or 4D
+
+        if grayscale:
+            pixels = apply_voi_lut(apply_modality_lut(pixels, ds), ds)
+            # TODO: handle saturation, eg. see James^Michael CXR RescaleIntercept, RescaleSlope
+            # pixels = apply_modality_lut(pixels, ds)
+
+            # Convert from Monochrome1 to MonoChrome2:
+            if pi == "MONOCHROME1":
+                pixels = np.invert(pixels.astype(np.uint16))
+
+            # Convert Grayscale to 3 channel/RGB
+            pixels = np.stack([pixels] * 3, axis=-1)
+
+        if pixels.ndim == 4:  # Multi-frame DICOM (already a stack of frames)
+            all_series_frames.append(pixels)
+
+        elif pixels.ndim == 3:  # Single Frame
+            if pixels.shape[:2] != target_size:  # Ensure EACH pixel frame has size as defined by rows/cols in header
+                pixels = resize(pixels, (target_size[1], target_size[0]), interpolation=INTER_AREA)
+
+            # Add Frame dimension as first axis.  This makes it a (1, H, W, C) array.
+            all_series_frames.append(np.expand_dims(pixels, axis=0))
+
+        else:
+            logger.error(f"Unexpected pixel array shape, skip: {dcm_path}")
+
+        del ds
+
+    # Convert all frames into one list, concatenate along the frame dimension (axis=0)
+    # TODO: move normalisation to ImageViewer, maintain full dynamic range in all_series_frames
+    # Normalize and convert to uint8:
+    all_series_frames = normalize_uint8(np.concatenate(all_series_frames, axis=0))
+
+    return ds1, all_series_frames
+
+
 def create_projection_from_series(series_path: Path) -> Projection:
     """
     Check series_path for "Projection.pkl" file.
@@ -191,62 +290,23 @@ def create_projection_from_series(series_path: Path) -> Projection:
             logger.warning(f"Error loading Projection from {projection_file_path}: {e}")
             projection_file_path.unlink()  # Delete the projection file
 
-    # Load and process the series: [min,mean,max] projections multi-frame
-    dcm_paths: list[Path] = sorted(get_dcm_files(series_path))
+    logger.debug(f"Create Projection from {series_path.name}")
 
-    if len(dcm_paths) == 0:
-        raise ValueError(f"No DICOM files found in {series_path}")
+    ds1, all_series_frames = load_series_frames(series_path)
 
-    logger.debug(f"Create Projection from {series_path.name} from {len(dcm_paths)} DICOM file(s)")
-
-    ds1 = dcmread(dcm_paths[0])
-    pi = ds1.get("PhotometricInterpretation", None)
-    if pi is None:
-        raise ValueError("No PhotometricInterpretation")
-
-    grayscale = pi in ["MONOCHROME1", "MONOCHROME2"]
-    no_of_frames = ds1.get("NumberOfFrames", 1)
-
-    if len(dcm_paths) == 1 and no_of_frames == 1:
+    # Handle single frame in series:
+    if all_series_frames.shape[0] == 1:
         projection = create_projection_from_single_frame(ds1)
         cache_projection(projection, projection_file_path)
         del ds1
         return projection
 
-    target_size = (ds1.get("Rows", None), ds1.get("Columns", None))
-    all_series_frames = []
-
-    for dcm_path in dcm_paths:
-        ds = dcmread(dcm_path) if all_series_frames else ds1
-
-        pixels = ds.pixel_array
-
-        if grayscale:
-            pixels = apply_modality_lut(pixels, ds)
-            if pi == "MONOCHROME1":
-                pixels = np.invert(pixels.astype(np.uint16))
-            pixels = np.stack([pixels] * 3, axis=-1)
-
-        if pixels.ndim == 4:
-            all_series_frames.append(pixels)
-        elif pixels.ndim == 3:
-            if pixels.shape[:2] != target_size:
-                pixels = resize(pixels, (target_size[1], target_size[0]), interpolation=INTER_AREA)
-                # pixels = resize_or_pad_image(pixels, target_size)
-            all_series_frames.append(np.expand_dims(pixels, axis=0))
-        else:
-            logger.error(f"Unexpected pixel array shape, skip: {dcm_path}")
-
-        del ds
-
-    logger.info(f"all_series_frames read, frames= {len(all_series_frames)}")
-
-    all_series_frames = np.concatenate(all_series_frames, axis=0)
+    logger.info(f"all_series_frames read, frames.shape= {all_series_frames.shape}")
 
     # Compute min, mean, and max projections
-    min_projection = normalize_uint8(np.min(all_series_frames, axis=0))
-    mean_projection = normalize_uint8(np.mean(all_series_frames, axis=0))
-    max_projection = normalize_uint8(np.max(all_series_frames, axis=0))
+    min_projection = np.min(all_series_frames, axis=0)
+    mean_projection = np.mean(all_series_frames, axis=0).astype(np.uint8)
+    max_projection = np.max(all_series_frames, axis=0)
 
     projection_images = [
         Image.fromarray(img).resize(

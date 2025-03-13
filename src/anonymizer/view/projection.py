@@ -12,13 +12,14 @@ from anonymizer.controller.create_projections import (
     ProjectionImageSizeConfig,
     create_projection_from_series,
 )
-from anonymizer.model.anonymizer import PHI_IndexRecord
+from anonymizer.model.anonymizer import AnonymizerModel, PHI_IndexRecord
 from anonymizer.utils.translate import _
+from anonymizer.view.series import SeriesView
 
 logger = logging.getLogger(__name__)
 
 
-class ProjectionView(tk.Toplevel):  # ctk.CTkToplevel):
+class ProjectionView(ctk.CTkToplevel):
     PV_FRAME_RELATIVE_SIZE = (0.9, 0.9)  # fraction of screen size (width, height)
 
     key_to_image_size_mapping: dict[str, ProjectionImageSize] = {
@@ -26,7 +27,7 @@ class ProjectionView(tk.Toplevel):  # ctk.CTkToplevel):
         "M": ProjectionImageSize.MEDIUM,
         "L": ProjectionImageSize.LARGE,
     }
-    DEFAULT_SIZE = "L"
+    DEFAULT_SIZE = "S"
 
     def _get_series_paths(self) -> list[Path]:
         return [
@@ -38,7 +39,7 @@ class ProjectionView(tk.Toplevel):  # ctk.CTkToplevel):
             if series_path.is_dir()
         ]
 
-    def __init__(self, parent, base_dir: Path, phi_records: list[PHI_IndexRecord]):
+    def __init__(self, parent, anon_model: AnonymizerModel, base_dir: Path, phi_records: list[PHI_IndexRecord]):
         super().__init__(master=parent)
 
         if not base_dir.is_dir():
@@ -47,6 +48,7 @@ class ProjectionView(tk.Toplevel):  # ctk.CTkToplevel):
         if not phi_records:
             raise ValueError("No phi_records for ProjectionView")
 
+        self._anon_model = anon_model
         self._base_dir = base_dir
         self._phi_records = phi_records
 
@@ -71,6 +73,7 @@ class ProjectionView(tk.Toplevel):  # ctk.CTkToplevel):
         self._pages = 0
         self._page_slider = None
         self._loading_page = False
+        self._series_view: SeriesView | None = None
 
         self._update_title()
         self._create_widgets()
@@ -125,9 +128,9 @@ class ProjectionView(tk.Toplevel):  # ctk.CTkToplevel):
         self.grid_columnconfigure(0, weight=1)
 
         # 1. ProjectionView Frame:
-        self._pv_frame = tk.Frame(
+        self._pv_frame = ctk.CTkFrame(
             self,
-            bg="black",
+            bg_color="black",
         )
         self._pv_frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nsew")
 
@@ -293,7 +296,8 @@ class ProjectionView(tk.Toplevel):  # ctk.CTkToplevel):
                 combined_image.paste(
                     proj_image
                     if self._image_size == ProjectionImageSize.LARGE
-                    else proj_image.resize(self._image_size.value),
+                    and ProjectionImageSizeConfig().get_scaling_factor() == 1.0
+                    else proj_image.resize((self._image_size.width(), self._image_size.height())),
                     (i * self._image_size.width(), 0),
                 )
 
@@ -307,7 +311,12 @@ class ProjectionView(tk.Toplevel):  # ctk.CTkToplevel):
         return photo_image, projection
 
     def _create_or_update_label(
-        self, row, col, combined_image: ImageTk.PhotoImage | None = None, projection: Projection | None = None
+        self,
+        row,
+        col,
+        combined_image: ImageTk.PhotoImage | None = None,
+        projection: Projection | None = None,
+        series_path: Path | None = None,
     ):
         """
         Create or update a label at the given grid position.
@@ -328,10 +337,10 @@ class ProjectionView(tk.Toplevel):  # ctk.CTkToplevel):
         # Store a reference to avoid garbage collection by tkinter
         label.photo_image = combined_image  # type: ignore
 
-        if projection:
+        if projection and series_path:
             label.bind(
                 "<Button-1>",
-                lambda event, k=projection: self._on_image_click(event, k),
+                lambda event, k=projection, sp=series_path: self._on_image_click(event, k, sp),
             )
 
     def _populate_px_frame(self):
@@ -349,13 +358,13 @@ class ProjectionView(tk.Toplevel):  # ctk.CTkToplevel):
         for row in range(self._rows):
             for col in range(self._cols):
                 if series_ndx < self._total_series:
-                    # Generate and display the combined image for the series
+                    # Generate and display the combined projection images for the series
                     series_path = self._series_paths[series_ndx]
                     image, projection = self.generate_combined_image(series_path)
-                    self._create_or_update_label(row, col, image, projection)
+                    self._create_or_update_label(row, col, image, projection, series_path)
                 else:
                     if self._pages > 1:
-                        self._create_or_update_label(row, col, None, None)  # draw blank image, clear previous
+                        self._create_or_update_label(row, col)  # draw blank image, clear previous
 
                 series_ndx += 1
 
@@ -371,5 +380,17 @@ class ProjectionView(tk.Toplevel):  # ctk.CTkToplevel):
         self.grab_release()
         self.destroy()
 
-    def _on_image_click(self, event, projection: Projection):
+    def _on_image_click(self, event, projection: Projection, series_path: Path):
         logger.info(f"Projection clicked: projection: {projection}")
+        if self._series_view and self._series_view.winfo_exists():
+            logger.info("PixelsView already OPEN")
+            self._series_view.deiconify()
+            self._series_view.focus_force()
+            return
+
+        self._series_view = SeriesView(self, anon_model=self._anon_model, series_path=series_path)
+        if self._series_view is None:
+            logger.error("Internal Error creating SeriesView")
+            return
+
+        self._series_view.focus()
