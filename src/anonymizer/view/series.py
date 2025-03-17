@@ -1,15 +1,14 @@
 import gc
 import logging
+import tkinter as ttk
 from pathlib import Path
 
+# from tkinter import Listbox
 import customtkinter as ctk
 import numpy as np
 from pydicom import Dataset
 
-from anonymizer.controller.create_projections import (
-    ProjectionImageSize,
-    load_series_frames,
-)
+from anonymizer.controller.create_projections import load_series_frames
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.utils.translate import _
 from anonymizer.view.image import ImageViewer
@@ -44,31 +43,55 @@ class SeriesView(ctk.CTkToplevel):
         self._sv_frame = ctk.CTkFrame(self)
         self._sv_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
         self._sv_frame.grid_rowconfigure(0, weight=1)
-        self._sv_frame.grid_columnconfigure(0, weight=1)
+        self._sv_frame.grid_columnconfigure(2, weight=1)
 
-        self.image_viewer = ImageViewer(
-            self._sv_frame,
-            self._frames,
-            # ProjectionImageSize.LARGE.width(),  # handles scaling to screen size
-            # ProjectionImageSize.LARGE.height(),
-        )
-        self.image_viewer.grid(row=0, column=0, sticky="nsew")
+        list_frame = ctk.CTkFrame(self._sv_frame)
+        list_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        list_frame.grid_columnconfigure(0, weight=1)
+        list_frame.grid_rowconfigure(2, weight=1)
 
-        logger.info(f"SeriesView for series_path: {series_path}")
+        whitelist_title = ctk.CTkButton(list_frame, text="WHITE LIST", command=self.insert_entry_into_whitelist)
+        whitelist_title.grid(row=0, column=0, sticky="ew")
 
-        # --- Bind keys using named functions ---
-        self.bind("<Left>", self.handle_left)
-        self.bind("<Right>", self.handle_right)
-        self.bind("<Up>", self.handle_up)
-        self.bind("<Down>", self.handle_down)
-        self.bind("<Prior>", self.handle_prior)
-        self.bind("<Next>", self.handle_next)
-        self.bind("<Home>", self.handle_home)
-        self.bind("<End>", self.handle_end)
-        self.bind("<MouseWheel>", self.handle_mousewheel)
-        self.bind("<space>", self.handle_spacebar)
+        self.whitelist_entry = ctk.CTkEntry(list_frame)
+        self.whitelist_entry.grid(row=1, column=0, sticky="ew")
+        self.whitelist_entry.bind("<Return>", self.whitelist_button_clicked_or_entry_return)
 
-        self.focused_widget = "image_viewer"
+        scrollbar = ttk.Scrollbar(list_frame, orient="vertical")
+        self.whitelist = ttk.Listbox(list_frame, yscrollcommand=scrollbar.set)
+        scrollbar.config(command=self.whitelist.yview)
+        self.whitelist.grid(row=2, column=0, sticky="nsew")
+        scrollbar.grid(row=2, column=1, sticky="ns")
+        self.populate_listbox()
+
+        self.image_viewer = ImageViewer(self._sv_frame, self._frames)
+        self.image_viewer.grid(row=0, column=1, sticky="nsew")
+        self.image_viewer._canvas.focus_set()
+
+        # logger.info(f"SeriesView for series_path: {series_path}")
+        # self.bind("<FocusIn>", self.on_focus_in)
+        # self.bind("<FocusOut>", self.on_focus_out)
+        # self.bind("<Button-1>", lambda event: logger.info("SeriesView Clicked"))
+
+    def on_focus_in(self, event):
+        logger.info("SeriesView has focus")
+
+    def on_focus_out(self, event):
+        logger.info("SeriesView lost focus")
+
+    def whitelist_button_clicked_or_entry_return(self, event):
+        self.insert_entry_into_whitelist()
+
+    def insert_entry_into_whitelist(self):
+        item = self.whitelist_entry.get()
+        for i in range(self.whitelist.size()):  # Iterate through existing items
+            if self.whitelist.get(i) == item:
+                logger.warning(f"'{item}' already exists.")
+                return  # Item is already present, don't add it
+
+        self.whitelist.insert(0, item)
+        self.whitelist.select_set(0)
+        self.whitelist_entry.delete(0, ctk.END)
 
     def load_frames(self, series_path: Path) -> tuple[Dataset, np.ndarray]:
         """Loads, processes, and combines series frames and projections."""
@@ -79,7 +102,7 @@ class SeriesView(ctk.CTkToplevel):
             return ds, series_frames
 
         # Re-Generate Projections for multi-frame series
-        # (3, H, W, C) - Min, Mean, Max
+        # (3 frames, Height, Width, Channels) - Min, Mean, Max
         projections = np.stack(
             [
                 np.min(series_frames, axis=0),
@@ -89,41 +112,6 @@ class SeriesView(ctk.CTkToplevel):
             axis=0,
         )
         return ds, np.concatenate([projections, series_frames], axis=0)
-
-    def set_focus_widget(self, widget_name):
-        self.focused_widget = widget_name
-        print(f"Focus set to: {widget_name}")
-
-    # --- Handler functions for key bindings ---
-    def handle_left(self, event):
-        self.image_viewer.prev_image(event)
-
-    def handle_right(self, event):
-        self.image_viewer.next_image(event)
-
-    def handle_up(self, event):
-        self.image_viewer.change_image_up()
-
-    def handle_down(self, event):
-        self.image_viewer.change_image_down()
-
-    def handle_prior(self, event):
-        self.image_viewer.change_image_prior()
-
-    def handle_next(self, event):
-        self.image_viewer.change_image_next()
-
-    def handle_home(self, event):
-        self.image_viewer.change_image_home()
-
-    def handle_end(self, event):
-        self.image_viewer.change_image_end()
-
-    def handle_mousewheel(self, event):
-        self.image_viewer.on_mousewheel(event)
-
-    def handle_spacebar(self, event):
-        self.image_viewer.toggle_play()
 
     def _update_title(self):
         if self._ds:
@@ -152,3 +140,62 @@ class SeriesView(ctk.CTkToplevel):
         self._ds = None
         self._projection = None
         gc.collect()
+
+    def get_input(self):
+        self.focus()
+        self.master.wait_window(self)
+        return None
+
+    def populate_listbox(self):
+        self.whitelist.insert(ttk.END, "PORTABLE")
+        self.whitelist.insert(ttk.END, "LEFT")
+        self.whitelist.insert(ttk.END, "RIGHT")
+        self.whitelist.insert(ttk.END, "SUPINE")
+        self.whitelist.insert(ttk.END, "PRONE")
+        self.whitelist.insert(ttk.END, "LATERAL")
+        self.whitelist.insert(ttk.END, "ANTERIOR")
+        self.whitelist.insert(ttk.END, "POSTERIOR")
+        self.whitelist.insert(ttk.END, "DECUBITUS")
+        self.whitelist.insert(ttk.END, "ERECT")
+        self.whitelist.insert(ttk.END, "FLEXION")
+        self.whitelist.insert(ttk.END, "EXTENSION")
+        self.whitelist.insert(ttk.END, "OBLIQUE")
+        self.whitelist.insert(ttk.END, "AXIAL")
+        self.whitelist.insert(ttk.END, "CORONAL")
+        self.whitelist.insert(ttk.END, "SAGITTAL")
+        self.whitelist.insert(ttk.END, "STANDING")
+        self.whitelist.insert(ttk.END, "SITTING")
+        self.whitelist.insert(ttk.END, "RECUMBENT")
+        self.whitelist.insert(ttk.END, "UPRIGHT")
+        self.whitelist.insert(ttk.END, "WEIGHT_BEARING")
+        self.whitelist.insert(ttk.END, "NON_WEIGHT_BEARING")
+        self.whitelist.insert(ttk.END, "SKYLINE")
+        self.whitelist.insert(ttk.END, "TANGENTIAL")
+        self.whitelist.insert(ttk.END, "SUNRISE")
+        self.whitelist.insert(ttk.END, "MERCHANT")
+        self.whitelist.insert(ttk.END, "TUNNEL")
+        self.whitelist.insert(ttk.END, "MORTISE")
+        self.whitelist.insert(ttk.END, "GRASHEY")
+        self.whitelist.insert(ttk.END, "WEST_POINT")
+        self.whitelist.insert(ttk.END, "ZANCA")
+        self.whitelist.insert(ttk.END, "SWIMMERS")
+        self.whitelist.insert(ttk.END, "JUDET")
+        self.whitelist.insert(ttk.END, "INLET")
+        self.whitelist.insert(ttk.END, "OUTLET")
+        self.whitelist.insert(ttk.END, "CAUDAL")
+        self.whitelist.insert(ttk.END, "CRANIAL")
+        self.whitelist.insert(ttk.END, "FROG_LEG")
+        self.whitelist.insert(ttk.END, "CROSS_TABLE")
+        self.whitelist.insert(ttk.END, "ROSENBERG")
+        self.whitelist.insert(ttk.END, "SHOOTING")
+        self.whitelist.insert(ttk.END, "STRESS")
+        self.whitelist.insert(ttk.END, "DYNAMIC")
+        self.whitelist.insert(ttk.END, "STATIC")
+        self.whitelist.insert(ttk.END, "TRACTION")
+        self.whitelist.insert(ttk.END, "COMPRESSION")
+        self.whitelist.insert(ttk.END, "EXTERNAL")
+        self.whitelist.insert(ttk.END, "INTERNAL")
+        self.whitelist.insert(ttk.END, "NEUTRAL")
+        self.whitelist.insert(ttk.END, "ROTATED")
+        self.whitelist.insert(ttk.END, "FLEXED")
+        self.whitelist.insert(ttk.END, "EXTENDED")

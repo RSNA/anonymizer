@@ -244,6 +244,7 @@ def load_series_frames(series_path) -> tuple[Dataset, np.ndarray]:
             # pixels = apply_modality_lut(pixels, ds)
 
             # Convert from Monochrome1 to MonoChrome2:
+            # TODO: check POOLE^OLIVIA
             if pi == "MONOCHROME1":
                 pixels = np.invert(pixels.astype(np.uint16))
 

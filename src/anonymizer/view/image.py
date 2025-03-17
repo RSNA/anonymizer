@@ -1,43 +1,49 @@
 import gc
 import logging
+from pathlib import Path
 from tkinter import ttk
 
 import customtkinter as ctk
 import numpy as np
+import torch
+from easyocr import Reader
 from PIL import Image, ImageTk
 
 logger = logging.getLogger(__name__)
 
 
 class ImageViewer(ctk.CTkFrame):
+    CACHE_SIZE = 50  # Maximum number of images to keep in cache
     MIN_FPS = 1
     NORMAL_FPS = 5
     MAX_FPS = 10
+    PRELOAD_FRAMES = 10  # Number of frames to preload
     PLAY_BTN_SIZE = (32, 32)
     PAD = 10
     BUTTON_WIDTH = 100
     SMALL_JUMP_PERCENTAGE = 0.01  # 1% of the total images
     LARGE_JUMP_PERCENTAGE = 0.10  # 10% of the total images
+    MAX_SCREEN_PERCENTAGE = 0.7  # area of current screen available for displaying image
 
     def __init__(self, parent, images: np.ndarray, char_width_px=10):
         super().__init__(master=parent)  # Call the superclass constructor
         self.parent = parent
-        self.num_images = images.shape[0]
-        self.images = images
-        self.image_width = images.shape[2]  # image_width
-        self.image_height = images.shape[1]  # image_height
-        self.current_image_index = 0
+        self.num_images: int = images.shape[0]
+        self.images: np.ndarray = images
+        self.image_width: int = images.shape[2]  # image_width
+        self.image_height: int = images.shape[1]  # image_height
+        self.current_image_index: int = 0
         self.image_cache = {}  # Cache for loaded images
-        self.cache_size = 50  # Maximum number of images to keep in cache.
-        self.fps = self.NORMAL_FPS  # Frames per second for playback
-        self.playing = False  # Playback state
-        self.play_delay = int(1000 / self.fps)  # Delay in milliseconds, initial value
+        self.fps: int = self.NORMAL_FPS  # Frames per second for playback
+        self.playing: bool = False  # Playback state
+        self.play_delay: int = int(1000 / self.fps)  # Delay in milliseconds, initial value
         self.after_id = None  # Store the ID of the 'after' call
-        self.current_size = (images.shape[2], images.shape[1])
+        self.current_size: tuple[int, int] = (images.shape[2], images.shape[1])
+        self._ocr_reader = None
 
         # --- Calculate Jump Amounts Dynamically ---
-        self.small_jump = max(1, int(self.num_images * self.SMALL_JUMP_PERCENTAGE))  # Ensure at least 1
-        self.large_jump = max(1, int(self.num_images * self.LARGE_JUMP_PERCENTAGE))
+        self.small_jump: int = max(1, int(self.num_images * self.SMALL_JUMP_PERCENTAGE))  # Ensure at least 1
+        self.large_jump: int = max(1, int(self.num_images * self.LARGE_JUMP_PERCENTAGE))
 
         # --- Load Button Icons ---
         # Load images and convert to Pillow Image
@@ -112,28 +118,74 @@ class ImageViewer(ctk.CTkFrame):
 
         self.image_size_label = ctk.CTkLabel(self.status_frame, text="")
         self.image_size_label.grid(row=0, column=1, sticky="e", padx=self.PAD)
+        self.image_size_label.configure(text=f"Actual Size[{images.shape[2]}x{images.shape[1]}]")
 
         self.image_number_label = ctk.CTkLabel(self.status_frame, text="", font=("Courier Bold", 14))
         self.image_number_label.grid(row=0, column=2, sticky="e", padx=(0, self.PAD))
 
-        self.bind("<Configure>", self.on_resize)  # Bind to resize events
-        # # Add click-to-focus for image label, self frame & control frame:
-        # self.image_label.bind("<Button-1>", self.request_focus)
-        # self.control_frame.bind("<Button-1>", self.request_focus)
-        # self.bind("<Button-1>", self.request_focus)
+        # Event binding:
+        self.bind("<Configure>", self.on_resize)
+        self.image_label.bind("<MouseWheel>", self.on_mousewheel)
+        self.bind("<MouseWheel>", self.on_mousewheel)
+        # Keys:
+        # Note: customtkinter key bindings bind to the canvas of the frame
+        # see here: https://stackoverflow.com/questions/77676235/tkinter-focus-set-on-frame
+        self.bind("<Left>", self.prev_image)
+        self.bind("<Right>", self.next_image)
+        self.bind("<Up>", self.change_image_up)
+        self.bind("<Down>", self.change_image_down)
+        self.bind("<Prior>", self.change_image_prior)
+        self.bind("<Next>", self.change_image_next)
+        self.bind("<Home>", self.change_image_home)
+        self.bind("<End>", self.change_image_end)
+        self.bind("<space>", self.toggle_play)
 
+        # Focus management for ImageViewer
+        # TODO: understand why customtkinter doesn't do this correctly
+        self.bind("<Enter>", self.mouse_enter)
+        self.image_label.bind("<Enter>", self.mouse_enter)
+        self.status_frame.bind("<Enter>", self.mouse_enter)
+        self.control_frame.bind("<Enter>", self.mouse_enter)
+        self.bind("<FocusIn>", self.on_focus_in)
+        self.bind("<FocusOut>", self.on_focus_out)
+        self.image_label.bind("<FocusIn>", self.on_focus_in)
+
+        self.after_idle(self._set_initial_size)
+        self.update_status()
+
+    def mouse_enter(self, event):
+        logger.debug("mouse_enter")
+        self._canvas.focus_set()
+
+    def on_focus_in(self, event):
+        logger.debug("ImageViewer has focus")
+
+    def on_focus_out(self, event):
+        logger.debug("ImageViewer lost focus")
+
+    def _set_initial_size(self):
+        """Calculates and sets the initial image size, preserving aspect ratio."""
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        max_width = int(screen_width * self.MAX_SCREEN_PERCENTAGE)
+        max_height = int(screen_height * self.MAX_SCREEN_PERCENTAGE)
+        aspect_ratio = self.image_width / self.image_height
+
+        if self.image_width > max_width or self.image_height > max_height:
+            if self.image_width / max_width > self.image_height / max_height:
+                new_width = max_width
+                new_height = int(new_width / aspect_ratio)
+            else:
+                new_height = max_height
+                new_width = int(new_height * aspect_ratio)
+            self.current_size = (new_width, new_height)
+        else:
+            self.current_size = (self.image_width, self.image_height)
         self.load_and_display_image(0)
-
-    def request_focus(self, event=None):
-        self.focus_set()  # Set focus to this widget (ImageViewer)
-        if self.parent and hasattr(self.parent, "set_focus_widget"):
-            self.parent.set_focus_widget("image_viewer")
+        self._canvas.focus_set()
 
     def update_status(self):
         self.projection_label.configure(text=self.get_projection_label())
-        if self.images is not None:
-            image_shape = self.images[self.current_image_index].shape
-            self.image_size_label.configure(text=f"[{image_shape[1]}x{image_shape[0]}]")
         self.image_number_label.configure(text=f"{self.current_image_index + 1}/{self.num_images}")
 
     def get_projection_label(self) -> str:
@@ -167,7 +219,8 @@ class ImageViewer(ctk.CTkFrame):
 
         image_array = self.images[index]
         image = Image.fromarray(image_array)
-        image = image.resize(self.current_size, Image.Resampling.NEAREST)
+        image = image.resize(self.current_size, Image.Resampling.LANCZOS)
+        self.current_size = image.size
         photo_image = ImageTk.PhotoImage(image)
         self.add_to_cache(index, photo_image)
 
@@ -176,6 +229,35 @@ class ImageViewer(ctk.CTkFrame):
         self.current_image_index = index
         self.update_scrollbar()
         self.update_status()
+
+    # Cache functions:
+    def add_to_cache(self, index, photo_image):
+        self.image_cache[index] = (photo_image, self.current_size)
+        if len(self.image_cache) > self.CACHE_SIZE:
+            self.manage_cache()
+
+    def manage_cache(self):
+        while len(self.image_cache) > self.CACHE_SIZE:
+            oldest_key = min(self.image_cache.keys())
+            del self.image_cache[oldest_key]
+        gc.collect()
+
+    def clear_cache(self):
+        for _, (photo_image, _) in self.image_cache.items():
+            # Explicitly break the reference held by Tkinter
+            if hasattr(photo_image, "close"):  # PIL images
+                photo_image.close()
+            del photo_image  # Force deletion of the PhotoImage object
+
+        self.image_cache.clear()  # Clear the dictionary
+        gc.collect()
+
+    # ImageView Event Handlers:
+    def on_mousewheel(self, event):
+        if event.delta > 0:
+            self.change_image(self.current_image_index - 1)
+        else:
+            self.change_image(self.current_image_index + 1)
 
     def on_resize(self, event):
         label_width = self.image_label.winfo_width()
@@ -199,27 +281,6 @@ class ImageViewer(ctk.CTkFrame):
             self.current_size = new_image_size
             self.load_and_display_image(self.current_image_index)
 
-    def add_to_cache(self, index, photo_image):
-        self.image_cache[index] = (photo_image, self.current_size)
-        if len(self.image_cache) > self.cache_size:
-            self.manage_cache()
-
-    def manage_cache(self):
-        sorted_keys = sorted(self.image_cache.keys(), key=lambda k: abs(k - self.current_image_index), reverse=True)
-        while len(self.image_cache) > self.cache_size:
-            del self.image_cache[sorted_keys.pop(0)]
-        gc.collect()
-
-    def clear_cache(self):
-        for _, (photo_image, _) in self.image_cache.items():
-            # Explicitly break the reference held by Tkinter
-            if hasattr(photo_image, "close"):  # PIL images
-                photo_image.close()
-            del photo_image  # Force deletion of the PhotoImage object
-
-        self.image_cache.clear()  # Clear the dictionary
-        gc.collect()
-
     def prev_image(self, event):
         self.change_image(self.current_image_index - 1)
 
@@ -230,29 +291,23 @@ class ImageViewer(ctk.CTkFrame):
         if 0 <= new_index < self.num_images:
             self.load_and_display_image(new_index)
 
-    def change_image_home(self):
+    def change_image_home(self, event):
         self.change_image(0)
 
-    def change_image_end(self):
+    def change_image_end(self, event):
         self.change_image(self.num_images - 1)
 
-    def change_image_next(self):
+    def change_image_next(self, event):
         self.change_image(self.current_image_index + self.large_jump)
 
-    def change_image_prior(self):
+    def change_image_prior(self, event):
         self.change_image(self.current_image_index - self.large_jump)
 
-    def change_image_up(self):
+    def change_image_up(self, event):
         self.change_image(self.current_image_index + self.small_jump)
 
-    def change_image_down(self):
+    def change_image_down(self, event):
         self.change_image(self.current_image_index - self.small_jump)
-
-    def on_mousewheel(self, event):
-        if event.delta > 0:
-            self.change_image(self.current_image_index - 1)
-        else:
-            self.change_image(self.current_image_index + 1)
 
     def update_scrollbar(self):
         start = self.current_image_index / self.num_images
@@ -280,7 +335,7 @@ class ImageViewer(ctk.CTkFrame):
             self.after_cancel(self.after_id)
             self.after_id = self.after(self.play_delay, self.play_loop)
 
-    def toggle_play(self):
+    def toggle_play(self, event=None):
         self.playing = not self.playing
         if self.playing:
             self.toggle_button.configure(image=self.ctk_pause_icon)
@@ -300,7 +355,40 @@ class ImageViewer(ctk.CTkFrame):
 
     def detect_text(self):
         logger.info("Detecting text...")
-        pass
+
+        if self._ocr_reader is None:
+            # Once-off initialisation of easyocr.Reader (and underlying pytorch model):
+            # if pytorch models not downloaded yet, they will be when Reader initializes
+            model_dir = Path("assets") / "ocr" / "model"  # Default is: Path("~/.EasyOCR/model").expanduser()
+            if not model_dir.exists():
+                logger.warning(
+                    f"EasyOCR model directory: {model_dir}, does not exist, EasyOCR will create it, models still to be downloaded..."
+                )
+            else:
+                logger.info(f"EasyOCR downloaded models: {os.listdir(model_dir)}")
+
+            # Initialize the EasyOCR reader with the desired language(s), if models are not in model_dir, they will be downloaded
+            self._ocr_reader = Reader(
+                lang_list=["en", "de", "fr", "es"],
+                model_storage_directory=model_dir,
+                verbose=True,
+            )
+
+        logging.info("OCR Reader initialised successfully")
+
+        # Check if GPU available
+        logger.info(f"Apple MPS (Metal) GPU Available: {torch.backends.mps.is_available()}")
+        logger.info(f"CUDA GPU Available: {torch.cuda.is_available()}")
+
+        # with torch.no_grad():
+        # if self._reader and self._image_size == ProjectionImageSize.LARGE:
+        #     ocr_list = detect_text(np.array(proj_image), self._reader)
+        #     if ocr_list:
+        #         projection.ocr.extend(ocr_list)
+        #         # Draw bounding boxes around detected text on projection image:
+        #         for ocr in ocr_list:
+        #             draw = ImageDraw.Draw(proj_image)
+        #             draw.rectangle([ocr.top_left, ocr.bottom_right], outline=(0, 255, 0), width=4)
 
     def remove_text(self):
         logger.info("Remove text...")
@@ -312,5 +400,10 @@ class ImageViewer(ctk.CTkFrame):
             self.after_cancel(self.after_id)
             self.after_id = None
         self.clear_cache()  # Clear the cache before destroying the widget
-        self.images = None  # Release the image
+        self.images = None  # type: ignore # Release the image
+        if self._ocr_reader:
+            # Attempt to unload the model
+            del self._ocr_reader
+            self._ocr_reader = None
+            gc.collect()
         super().destroy()
