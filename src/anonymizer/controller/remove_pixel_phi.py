@@ -104,9 +104,9 @@ def _has_voi_lut(ds: Dataset) -> bool:
     return bool("WindowCenter" in ds and "WindowWidth" in ds)
 
 
-def detect_text(pixels: ndarray, ocr_reader: Reader) -> list[OCRText] | None:
+def detect_text(pixels: ndarray, ocr_reader: Reader, draw_boxes: bool = False) -> list[OCRText] | None:
     # Detect Text in pixels 2D frame, if present draw bounding box and text in green
-    # Return list of PixelPHI: (bounding boxes, text, confidence) to Projection object
+    # Return list of OCRText: (bounding boxes, text, confidence)
     if ocr_reader is None:
         logger.error("No OCR Reader specified. Return None")
         return None
@@ -119,20 +119,22 @@ def detect_text(pixels: ndarray, ocr_reader: Reader) -> list[OCRText] | None:
         (top_left, top_right, bottom_right, bottom_left) = bbox
         top_left = tuple(map(int, top_left))
         bottom_right = tuple(map(int, bottom_right))
+        bottom_left = tuple(map(int, bottom_left))
         ocr_text = OCRText(top_left=top_left, bottom_right=bottom_right, text=text, prob=float(prob))
         ocr_texts.append(ocr_text)
-        # Draw the bounding box and the recognized word
-        # box_color = (0, 255, 0)
-        # rectangle(img=pixels, pt1=top_left, pt2=bottom_right, color=box_color, thickness=1)
-        # putText(
-        #     pixels,
-        #     text,
-        #     (top_left[0], top_left[1] - 10),
-        #     FONT_HERSHEY_SIMPLEX,
-        #     0.8,
-        #     box_color,
-        #     2,
-        # )
+        if draw_boxes:
+            # Draw the bounding box and the recognized word at bottom left of bounding box
+            box_color = (0, 255, 0)
+            rectangle(img=pixels, pt1=top_left, pt2=bottom_right, color=box_color, thickness=2)
+            # putText(
+            #     img=pixels,
+            #     text=text,
+            #     org=(bottom_left[0], bottom_left[1] + 20),
+            #     fontFace=FONT_HERSHEY_SIMPLEX,
+            #     fontScale=0.75,
+            #     color=box_color,
+            #     thickness=2,
+            # )
 
     return ocr_texts
 

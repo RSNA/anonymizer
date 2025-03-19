@@ -392,5 +392,3 @@ class ProjectionView(ctk.CTkToplevel):
         if self._series_view is None:
             logger.error("Internal Error creating SeriesView")
             return
-
-        # self._series_view.focus()

@@ -1,13 +1,12 @@
 import gc
 import logging
-from pathlib import Path
 from tkinter import ttk
 
 import customtkinter as ctk
 import numpy as np
-import torch
-from easyocr import Reader
 from PIL import Image, ImageTk
+
+from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +18,8 @@ class ImageViewer(ctk.CTkFrame):
     MAX_FPS = 10
     PRELOAD_FRAMES = 10  # Number of frames to preload
     PLAY_BTN_SIZE = (32, 32)
-    PAD = 10
     BUTTON_WIDTH = 100
+    PAD = 10
     SMALL_JUMP_PERCENTAGE = 0.01  # 1% of the total images
     LARGE_JUMP_PERCENTAGE = 0.10  # 10% of the total images
     MAX_SCREEN_PERCENTAGE = 0.7  # area of current screen available for displaying image
@@ -30,8 +29,8 @@ class ImageViewer(ctk.CTkFrame):
         self.parent = parent
         self.num_images: int = images.shape[0]
         self.images: np.ndarray = images
-        self.image_width: int = images.shape[2]  # image_width
-        self.image_height: int = images.shape[1]  # image_height
+        self.image_width: int = images.shape[2]
+        self.image_height: int = images.shape[1]
         self.current_image_index: int = 0
         self.image_cache = {}  # Cache for loaded images
         self.fps: int = self.NORMAL_FPS  # Frames per second for playback
@@ -59,7 +58,7 @@ class ImageViewer(ctk.CTkFrame):
         self.grid_rowconfigure(0, weight=1)  # Image label row expands
         self.grid_columnconfigure(0, weight=1)  # Image label column expands
 
-        # Image Label
+        # Image Label (holds current frame pixels)
         self.image_label = ctk.CTkLabel(self, text="")
         self.image_label.grid(row=0, column=0, sticky="nsew")  # Fill entire cell
 
@@ -70,17 +69,14 @@ class ImageViewer(ctk.CTkFrame):
 
         # Control Frame for fixed width widgets
         self.control_frame = ctk.CTkFrame(self)
-        self.control_frame.grid(row=2, column=0, sticky="ew", padx=self.PAD, pady=self.PAD)
-        self.control_frame.grid_columnconfigure(1, weight=1)  # Play/Pause button - expands
+        self.control_frame.grid(row=2, column=0, padx=self.PAD, pady=self.PAD, sticky="ew")
+        self.control_frame.grid_columnconfigure(1, weight=1)
 
-        self.detect_button = ctk.CTkButton(
-            self.control_frame, width=self.BUTTON_WIDTH, text="Detect Text", command=self.detect_text
-        )
-        self.detect_button.grid(row=0, column=0, padx=self.PAD, pady=self.PAD)
-        self.detect_button = ctk.CTkButton(
-            self.control_frame, width=self.BUTTON_WIDTH, text="Remove Text", command=self.remove_text
-        )
-        self.detect_button.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="w")
+        self.image_size_label = ctk.CTkLabel(self.control_frame, text="")
+        self.image_size_label.grid(row=0, column=0, sticky="w", padx=self.PAD)
+
+        self.projection_label = ctk.CTkLabel(self.control_frame, text="")
+        self.projection_label.grid(row=1, column=0, sticky="w", padx=self.PAD)
 
         # --- Toggle Button (Play/Pause) for mulit-frame series ---
         if self.num_images > 1:
@@ -94,9 +90,10 @@ class ImageViewer(ctk.CTkFrame):
                 command=lambda value: self.change_fps(value),
             )
             self.fps_slider.set(self.fps)
-            self.fps_slider.grid(row=0, column=2, padx=self.PAD, pady=self.PAD, sticky="e")
+            self.fps_slider.grid(row=1, column=2, padx=self.PAD)
+
             self.fps_slider_label = ctk.CTkLabel(self.control_frame, text=f"{self.fps} fps")
-            self.fps_slider_label.grid(row=0, column=3, pady=self.PAD, sticky="e")
+            self.fps_slider_label.grid(row=0, column=2, padx=self.PAD)
 
             self.toggle_button = ctk.CTkButton(
                 self.control_frame,
@@ -105,23 +102,10 @@ class ImageViewer(ctk.CTkFrame):
                 width=self.PLAY_BTN_SIZE[0],
                 command=self.toggle_play,
             )
-            self.toggle_button.grid(row=0, column=4, padx=self.PAD, pady=self.PAD, sticky="e")
+            self.toggle_button.grid(row=0, column=3, padx=self.PAD, pady=(self.PAD, 0), sticky="e")
 
-        # --- Status Frame (for labels) ---
-        self.status_frame = ctk.CTkFrame(self)
-        self.status_frame.grid(row=3, column=0, sticky="ew", padx=self.PAD, pady=(0, self.PAD))  # pady top = 0
-        self.status_frame.grid_columnconfigure(0, weight=1)  # Projection label - expands, underneath play button
-        self.status_frame.grid_columnconfigure(1, weight=1)  # Image number label - expands
-
-        self.projection_label = ctk.CTkLabel(self.status_frame, text="")
-        self.projection_label.grid(row=0, column=0, sticky="e", padx=self.PAD)
-
-        self.image_size_label = ctk.CTkLabel(self.status_frame, text="")
-        self.image_size_label.grid(row=0, column=1, sticky="e", padx=self.PAD)
-        self.image_size_label.configure(text=f"Actual Size[{images.shape[2]}x{images.shape[1]}]")
-
-        self.image_number_label = ctk.CTkLabel(self.status_frame, text="", font=("Courier Bold", 14))
-        self.image_number_label.grid(row=0, column=2, sticky="e", padx=(0, self.PAD))
+        self.image_number_label = ctk.CTkLabel(self.control_frame, text="", font=("Courier Bold", 14))
+        self.image_number_label.grid(row=1, column=3, sticky="e", padx=(0, self.PAD))
 
         # Event binding:
         self.bind("<Configure>", self.on_resize)
@@ -144,7 +128,7 @@ class ImageViewer(ctk.CTkFrame):
         # TODO: understand why customtkinter doesn't do this correctly
         self.bind("<Enter>", self.mouse_enter)
         self.image_label.bind("<Enter>", self.mouse_enter)
-        self.status_frame.bind("<Enter>", self.mouse_enter)
+        # self.status_frame.bind("<Enter>", self.mouse_enter)
         self.control_frame.bind("<Enter>", self.mouse_enter)
         self.bind("<FocusIn>", self.on_focus_in)
         self.bind("<FocusOut>", self.on_focus_out)
@@ -152,6 +136,13 @@ class ImageViewer(ctk.CTkFrame):
 
         self.after_idle(self._set_initial_size)
         self.update_status()
+
+    def get_current_image(self) -> np.ndarray:
+        return self.images[self.current_image_index]
+
+    def refresh_current_image(self):
+        del self.image_cache[self.current_image_index]
+        self.load_and_display_image(self.current_image_index)
 
     def mouse_enter(self, event):
         logger.debug("mouse_enter")
@@ -164,7 +155,7 @@ class ImageViewer(ctk.CTkFrame):
         logger.debug("ImageViewer lost focus")
 
     def _set_initial_size(self):
-        """Calculates and sets the initial image size, preserving aspect ratio."""
+        """Calculates and sets the initial image size based on active screen size, preserving aspect ratio."""
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
         max_width = int(screen_width * self.MAX_SCREEN_PERCENTAGE)
@@ -187,18 +178,21 @@ class ImageViewer(ctk.CTkFrame):
     def update_status(self):
         self.projection_label.configure(text=self.get_projection_label())
         self.image_number_label.configure(text=f"{self.current_image_index + 1}/{self.num_images}")
+        self.image_size_label.configure(
+            text=f"View[{self.current_size[0]}x{self.current_size[1]}] Actual[{self.images.shape[2]}x{self.images.shape[1]}]"
+        )
 
     def get_projection_label(self) -> str:
         if self.num_images == 1:
             return ""
         match self.current_image_index:
             case 0:
-                return "MIN PROJECTION"
+                return _("MIN PROJECTION")
             case 1:
-                return "MEAN PROJECTION"
+                return _("MEAN PROJECTION")
             case 2:
-                return "MAX PROJECTION"
-            case _:  # Default case (for any other index)
+                return _("MAX PROJECTION")
+            case _:
                 return ""
 
     def load_and_display_image(self, index):
@@ -267,16 +261,7 @@ class ImageViewer(ctk.CTkFrame):
         if label_width <= 1 or label_height <= 1:
             return
 
-        aspect_ratio = self.image_width / self.image_height
-
-        if label_width / label_height > aspect_ratio:  # Label is wider
-            new_height = label_height
-            new_width = int(new_height * aspect_ratio)
-        else:  # Label is taller or same aspect ratio
-            new_width = label_width
-            new_height = int(new_width / aspect_ratio)
-
-        new_image_size = (new_width, new_height)
+        new_image_size = (label_width, label_height)
         if new_image_size != self.current_size:
             self.current_size = new_image_size
             self.load_and_display_image(self.current_image_index)
@@ -352,47 +337,6 @@ class ImageViewer(ctk.CTkFrame):
             if self.current_image_index == self.num_images - 1:
                 self.current_image_index = 0  # Loop back to the start
             self.after_id = self.after(self.play_delay, self.play_loop)
-
-    def detect_text(self):
-        logger.info("Detecting text...")
-
-        if self._ocr_reader is None:
-            # Once-off initialisation of easyocr.Reader (and underlying pytorch model):
-            # if pytorch models not downloaded yet, they will be when Reader initializes
-            model_dir = Path("assets") / "ocr" / "model"  # Default is: Path("~/.EasyOCR/model").expanduser()
-            if not model_dir.exists():
-                logger.warning(
-                    f"EasyOCR model directory: {model_dir}, does not exist, EasyOCR will create it, models still to be downloaded..."
-                )
-            else:
-                logger.info(f"EasyOCR downloaded models: {os.listdir(model_dir)}")
-
-            # Initialize the EasyOCR reader with the desired language(s), if models are not in model_dir, they will be downloaded
-            self._ocr_reader = Reader(
-                lang_list=["en", "de", "fr", "es"],
-                model_storage_directory=model_dir,
-                verbose=True,
-            )
-
-        logging.info("OCR Reader initialised successfully")
-
-        # Check if GPU available
-        logger.info(f"Apple MPS (Metal) GPU Available: {torch.backends.mps.is_available()}")
-        logger.info(f"CUDA GPU Available: {torch.cuda.is_available()}")
-
-        # with torch.no_grad():
-        # if self._reader and self._image_size == ProjectionImageSize.LARGE:
-        #     ocr_list = detect_text(np.array(proj_image), self._reader)
-        #     if ocr_list:
-        #         projection.ocr.extend(ocr_list)
-        #         # Draw bounding boxes around detected text on projection image:
-        #         for ocr in ocr_list:
-        #             draw = ImageDraw.Draw(proj_image)
-        #             draw.rectangle([ocr.top_left, ocr.bottom_right], outline=(0, 255, 0), width=4)
-
-    def remove_text(self):
-        logger.info("Remove text...")
-        pass
 
     def destroy(self):
         """Override destroy to properly clean up resources."""
