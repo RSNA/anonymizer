@@ -55,12 +55,37 @@ logging.getLogger("openjpeg").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+# @dataclass
+# class OCRText:
+#     text: str
+#     top_left: tuple
+#     bottom_right: tuple
+#     prob: float
+
+
+@dataclass()  # Mutable, user can edit box in ImageViewer
 class OCRText:
     text: str
-    top_left: tuple
-    bottom_right: tuple
+    top_left: tuple[int, int]
+    bottom_right: tuple[int, int]
     prob: float
+
+    @classmethod
+    def from_easyocr_result(cls, result) -> "OCRText":
+        """Creates an OCRText instance from an EasyOCR result tuple."""
+        box, text, prob = result
+        # Ensure box has exactly 4 points and they are integers
+        if not (len(box) == 4 and all(len(point) == 2 for point in box)):
+            raise ValueError(f"Invalid box format: {box}")
+
+        top_left = (int(box[0][0]), int(box[0][1]))
+        bottom_right = (int(box[2][0]), int(box[2][1]))
+
+        return cls(text=text, top_left=top_left, bottom_right=bottom_right, prob=prob)
+
+    def get_bounding_box(self) -> tuple[int, int, int, int]:
+        """Returns the bounding box as (x1, y1, x2, y2)."""
+        return (self.top_left[0], self.top_left[1], self.bottom_right[0], self.bottom_right[1])
 
 
 def _draw_text_contours_on_mask(image: ndarray, rgb: bool, top_left: tuple, bottom_right: tuple, mask: ndarray) -> None:
@@ -104,37 +129,36 @@ def _has_voi_lut(ds: Dataset) -> bool:
     return bool("WindowCenter" in ds and "WindowWidth" in ds)
 
 
-def detect_text(pixels: ndarray, ocr_reader: Reader, draw_boxes: bool = False) -> list[OCRText] | None:
+def detect_text(pixels: ndarray, ocr_reader: Reader, draw_boxes_and_text: bool = False) -> list[OCRText] | None:
     # Detect Text in pixels 2D frame, if present draw bounding box and text in green
     # Return list of OCRText: (bounding boxes, text, confidence)
-    if ocr_reader is None:
-        logger.error("No OCR Reader specified. Return None")
-        return None
 
-    ocr_texts: list[OCRText] = []
     results = ocr_reader.readtext(pixels)
     logging.info(f"Number of text items found: {len(results)}")
-    for bbox, text, prob in results:
-        # Unpack the bounding box
-        (top_left, top_right, bottom_right, bottom_left) = bbox
-        top_left = tuple(map(int, top_left))
-        bottom_right = tuple(map(int, bottom_right))
-        bottom_left = tuple(map(int, bottom_left))
-        ocr_text = OCRText(top_left=top_left, bottom_right=bottom_right, text=text, prob=float(prob))
-        ocr_texts.append(ocr_text)
-        if draw_boxes:
+
+    ocr_texts: list[OCRText] = []
+    for result in results:
+        try:
+            ocr_text = OCRText.from_easyocr_result(result)  # Use the OCRText class method
+            ocr_texts.append(ocr_text)
+        except ValueError as e:
+            logger.warning(f"Skipping invalid OCR result: {result}. Error: {e}")
+            continue  # Skip to the next result if there is an error
+
+        if draw_boxes_and_text:
             # Draw the bounding box and the recognized word at bottom left of bounding box
+            x1, y1, x2, y2 = ocr_text.get_bounding_box()
             box_color = (0, 255, 0)
-            rectangle(img=pixels, pt1=top_left, pt2=bottom_right, color=box_color, thickness=2)
-            # putText(
-            #     img=pixels,
-            #     text=text,
-            #     org=(bottom_left[0], bottom_left[1] + 20),
-            #     fontFace=FONT_HERSHEY_SIMPLEX,
-            #     fontScale=0.75,
-            #     color=box_color,
-            #     thickness=2,
-            # )
+            rectangle(img=pixels, pt1=(x1, y1), pt2=(x2, y2), color=box_color, thickness=2)
+            putText(
+                img=pixels,
+                text=ocr_text.text,
+                org=(x1, y2 + 20),
+                fontFace=FONT_HERSHEY_SIMPLEX,
+                fontScale=0.75,
+                color=box_color,
+                thickness=2,
+            )
 
     return ocr_texts
 
