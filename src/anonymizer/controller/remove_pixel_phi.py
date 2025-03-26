@@ -55,14 +55,6 @@ logging.getLogger("openjpeg").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-# @dataclass
-# class OCRText:
-#     text: str
-#     top_left: tuple
-#     bottom_right: tuple
-#     prob: float
-
-
 @dataclass()  # Mutable, user can edit box in ImageViewer
 class OCRText:
     text: str
@@ -130,10 +122,18 @@ def _has_voi_lut(ds: Dataset) -> bool:
 
 
 def detect_text(pixels: ndarray, ocr_reader: Reader, draw_boxes_and_text: bool = False) -> list[OCRText] | None:
-    # Detect Text in pixels 2D frame, if present draw bounding box and text in green
+    # Detect Text in pixels 2D frame, if present and indicated, draw bounding box and text in green
     # Return list of OCRText: (bounding boxes, text, confidence)
 
-    results = ocr_reader.readtext(pixels)
+    results = ocr_reader.readtext(
+        pixels,
+        canvas_size=1000,  # easyocr will resize pixels maintaining aspect ratio, less memory, less compute, less accurate for small text
+        paragraph=False,
+        # ycenter_ths=0.7,  # Vertical Center Threshold, to control word in column separation
+        # link_threshold=0.5,  # related to craft algo for linking characters into words
+        width_ths=0.1,
+    )
+
     logging.info(f"Number of text items found: {len(results)}")
 
     ocr_texts: list[OCRText] = []

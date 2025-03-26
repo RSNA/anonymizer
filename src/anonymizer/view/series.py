@@ -2,7 +2,9 @@ import gc
 import logging
 import os
 import tkinter as ttk
+from enum import StrEnum, auto
 from pathlib import Path
+from pprint import pformat
 
 import customtkinter as ctk
 import numpy as np
@@ -19,6 +21,16 @@ from anonymizer.view.image import ImageViewer
 logger = logging.getLogger(__name__)
 
 
+# Edit Contexts:
+class EditContext(StrEnum):
+    FRAME = auto()  # apply edits to current frame only
+    SERIES = auto()  # apply edits to every frame in series
+    PROJECT = auto()  # apply edits to all series in project
+
+
+# EditContextMap = {"FRAME": EditContext.FRAME, "SERIES": EditContext.SERIES, "PROJECT": EditContext.PROJECT}
+
+
 class SeriesView(ctk.CTkToplevel):
     BUTTON_WIDTH = 100
     PAD = 10
@@ -32,6 +44,7 @@ class SeriesView(ctk.CTkToplevel):
         self._anon_model = anon_model
         self._series_dir = series_path
         self._ocr_reader = None  # only created if user clicks "Detect Text" button
+        self.edit_context: EditContext = EditContext.FRAME
         self.detected_text: dict[int, list[OCRText]] = {}  # Store all detected text per frame
 
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
@@ -86,22 +99,37 @@ class SeriesView(ctk.CTkToplevel):
         self.control_frame.grid(row=1, columnspan=2, sticky="ew", padx=self.PAD, pady=self.PAD)
         # self.control_frame.grid_columnconfigure(0, weight=1)
 
+        # Edit Context Segmented Button:
+        col = 0
+        edit_context_label = ctk.CTkLabel(self.control_frame, text=_("Edit Context") + ":")
+        edit_context_label.grid(row=0, column=col, padx=(self.PAD, 0))
+        col += 1
+        self.edit_context_combo_box = ctk.CTkComboBox(
+            self.control_frame,
+            values=[member.value.upper() for member in EditContext],
+            command=self.edit_context_change,
+        )
+        self.edit_context_combo_box.grid(row=0, column=col, padx=self.PAD, pady=self.PAD)
+        col += 1
+
         # Detect Text Button:
         self.detect_button = ctk.CTkButton(
             self.control_frame, width=self.BUTTON_WIDTH, text="Detect Text", command=self.detect_text_button_clicked
         )
-        self.detect_button.grid(row=0, column=0, padx=self.PAD, pady=self.PAD)
+        self.detect_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD)
+        col += 1
 
         # Remove Text Button:
         self.remove_button = ctk.CTkButton(
             self.control_frame, width=self.BUTTON_WIDTH, text="Remove Text", command=self.remove_text_button_clicked
         )
-        self.remove_button.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="w")
+        self.remove_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
+        col += 1
 
         # Status label:
         self.status_label = ctk.CTkLabel(self.control_frame, text="")
-        self.status_label.grid(row=0, column=2, padx=self.PAD, pady=self.PAD, sticky="ew")
-        self.control_frame.grid_columnconfigure(2, weight=1)  # Make status label expand.
+        self.status_label.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="e")
+        self.control_frame.grid_columnconfigure(col, weight=1)  # Make status label expand.
 
         self.populate_listbox()
 
@@ -152,6 +180,10 @@ class SeriesView(ctk.CTkToplevel):
             self.whitelist.select_set(i - 1)
             self.whitelist.activate(i - 1)
 
+    def edit_context_change(self, choice):
+        logger.info(f"Edit Context changed to: {choice}")
+        self.edit_context = EditContext[choice]
+
     def load_frames(self, series_path: Path) -> tuple[Dataset, np.ndarray]:
         """Loads, processes, and combines series frames and projections."""
         ds, series_frames = load_series_frames(series_path)
@@ -191,9 +223,9 @@ class SeriesView(ctk.CTkToplevel):
         # TODO: optimize so reader is only initialised once - reference passed by ProjectionView or IndexView or global?
         self._ocr_reader = Reader(
             lang_list=["en", "de", "fr", "es"],
-            gpu=False,
+            gpu=True,
             model_storage_directory=model_dir,
-            verbose=False,
+            verbose=True,
         )
 
         logging.info("OCR Reader initialised successfully")
@@ -224,7 +256,7 @@ class SeriesView(ctk.CTkToplevel):
                     pixels=self.image_viewer.images[frame_index], ocr_reader=self._ocr_reader, draw_boxes_and_text=False
                 )
                 if results:
-                    logger.info(results)
+                    logger.info(f" OCR Results:\n{pformat(results)}")
                     self.detected_text[frame_index] = results
                     self.draw_text_overlay(frame_index)
 
@@ -233,6 +265,9 @@ class SeriesView(ctk.CTkToplevel):
         self.update_status(_("OCR on current frame..."))
         self.process_single_frame_ocr(self.image_viewer.current_image_index)
         self.update_status(_("OCR on current frame complete"))
+        gc.collect()
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
 
     def detect_text_for_series(self):
         """Detects text in all frames of the series."""
@@ -243,6 +278,9 @@ class SeriesView(ctk.CTkToplevel):
             self.process_single_frame_ocr(i)
             self.update_status(_("OCR on frame: ") + str(i + 1))
         self.update_status(_("OCR on all frames complete"))
+        gc.collect()
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
 
     def detect_text_button_clicked(self):
         logger.info("Detecting text...")
@@ -254,7 +292,12 @@ class SeriesView(ctk.CTkToplevel):
         logger.info(f"Apple MPS (Metal) GPU Available: {torch.backends.mps.is_available()}")
         logger.info(f"CUDA GPU Available: {torch.cuda.is_available()}")
 
-        self.detect_text_current_frame()
+        if self.edit_context == EditContext.FRAME:
+            self.detect_text_current_frame()
+        else:
+            self.detect_text_for_series()
+
+        # TODO: work out what to do beyond propagting edits in overlays when edit context is PROJECT
 
     def remove_text_button_clicked(self):
         logger.info("Removing text...")

@@ -19,9 +19,19 @@ logger = logging.getLogger(__name__)
 
 # Overlay layer types:
 class LayerType(Enum):
-    TEXT = auto()  # text and rectangle coordinates
+    TEXT = auto()  # OCR text and rectangle coordinates
+    USER_RECT = auto()  # User defined rectangle coordinates
     SEGMENTATIONS = auto()  # polygon vertices
     # ... other layer types ...
+
+
+@dataclass
+class UserRectangle:
+    top_left: tuple[int, int]
+    bottom_right: tuple[int, int]
+
+    def get_bounding_box(self) -> tuple[int, int, int, int]:
+        return self.top_left[0], self.top_left[1], self.bottom_right[0], self.bottom_right[1]
 
 
 @dataclass
@@ -37,11 +47,9 @@ class Segmentation:
 
 @dataclass
 class OverlayData:
-    """Holds all overlay data for a single frame."""
-
-    text: list[OCRText] = field(default_factory=list)  # List of text boxes
-    segmentations: list[Segmentation] = field(default_factory=list)  # List of segmentations
-    # Add other overlay types here as needed, using Union if necessary.
+    text: list[OCRText] = field(default_factory=list)
+    user_rect: list[UserRectangle] = field(default_factory=list)
+    segmentations: list[Segmentation] = field(default_factory=list)
 
 
 class ImageViewer(ctk.CTkFrame):
@@ -57,6 +65,8 @@ class ImageViewer(ctk.CTkFrame):
     LARGE_JUMP_PERCENTAGE = 0.10  # 10% of the total images
     MAX_SCREEN_PERCENTAGE = 0.7  # area of current screen available for displaying image
     TEXT_BOX_COLOR = (0, 255, 0)  # RGB = green
+    USER_RECT_COLOR = (0, 0, 255)  # RGB = blue
+    SEGMENTATION_COLOR = (255, 0, 0)  # RGB = red
 
     def __init__(self, parent, images: np.ndarray, add_to_whitelist_callback: Callable[[str], None] | None = None):
         super().__init__(master=parent)  # Call the superclass constructor
@@ -77,8 +87,9 @@ class ImageViewer(ctk.CTkFrame):
         self.overlay_data: dict[int, OverlayData] = {}  # Store overlay data per frame
         self.active_layers: set[LayerType] = set()
         self.active_layers.add(LayerType.TEXT)
+        self.active_layers.add(LayerType.USER_RECT)
         self.temp_rect_id = None
-        self.drawing_box = False
+        self.drawing_rect = False
         self.start_x = None
         self.start_y = None
 
@@ -163,7 +174,7 @@ class ImageViewer(ctk.CTkFrame):
         self.canvas.bind("<MouseWheel>", self.on_mousewheel)
         self.canvas.bind("<Button-1>", self._on_left_click)
         self.canvas.bind("<B1-Motion>", self.draw_box)  # left-click drag
-        self.canvas.bind("<ButtonRelease-1>", self.end_drawing_box)  # left-click release
+        self.canvas.bind("<ButtonRelease-1>", self.end_drawing_user_rect)  # left-click release
 
         self.control_frame.bind("<MouseWheel>", self.on_mousewheel)
         # Keys:
@@ -197,18 +208,14 @@ class ImageViewer(ctk.CTkFrame):
         return self.images[self.current_image_index]
 
     def set_text_overlay_data(self, frame_index: int, data: list[OCRText]):
+        # Creates new text overlay if one doesn't exist yet:
         if frame_index not in self.overlay_data:
             self.overlay_data[frame_index] = OverlayData()
+
         self.overlay_data[frame_index].text = data
+
         if frame_index == self.current_image_index:  # update display
             self.remove_from_cache(frame_index)  # force re-rendering
-            self.load_and_display_image(self.current_image_index)
-
-    def set_segmentation_overlay_data(self, frame_index: int, data: list[Segmentation]):
-        if frame_index not in self.overlay_data:
-            self.overlay_data[frame_index] = OverlayData()
-        self.overlay_data[frame_index].segmentations = data
-        if frame_index == self.current_image_index:
             self.load_and_display_image(self.current_image_index)
 
     def get_text_overlay_data(self, frame_index: int) -> list[OCRText] | None:
@@ -217,11 +224,34 @@ class ImageViewer(ctk.CTkFrame):
             return None
         return self.overlay_data[frame_index].text
 
+    def set_segmentation_overlay_data(self, frame_index: int, data: list[Segmentation]):
+        if frame_index not in self.overlay_data:
+            self.overlay_data[frame_index] = OverlayData()
+        self.overlay_data[frame_index].segmentations = data
+        if frame_index == self.current_image_index:  # update display
+            self.remove_from_cache(frame_index)  # force re-rendering
+            self.load_and_display_image(self.current_image_index)
+
     def get_segmentation_overlay_data(self, frame_index: int) -> list[Segmentation] | None:
         """Retrieves the segmentation overlay data for a specific frame."""
         if frame_index not in self.overlay_data:
             return None
         return self.overlay_data[frame_index].segmentations
+
+    def set_user_rectangle_overlay_data(self, frame_index: int, data: list[UserRectangle]):
+        """Sets the user rectangle overlay data for a specific frame."""
+        if frame_index not in self.overlay_data:
+            self.overlay_data[frame_index] = OverlayData()
+        self.overlay_data[frame_index].user_rect = data
+        if frame_index == self.current_image_index:  # update display
+            self.remove_from_cache(frame_index)  # force re-rendering
+            self.load_and_display_image(self.current_image_index)
+
+    def get_user_rectangle_overlay_data(self, frame_index: int) -> list[UserRectangle] | None:
+        """Retrieves the user rectangle overlay data for a specific frame."""
+        if frame_index not in self.overlay_data:
+            return None
+        return self.overlay_data[frame_index].user_rect
 
     def _image_to_view_coords(self, x: int, y: int) -> tuple[int, int]:
         """Converts image coordinates to view (display) coordinates."""
@@ -309,55 +339,81 @@ class ImageViewer(ctk.CTkFrame):
             case _:
                 return ""
 
-    def _render_overlays(self) -> np.ndarray:
-        """Renders all active overlays for current frame."""
+    def _render_overlays(self, frame_ndx: int) -> np.ndarray:
+        """Renders all active overlays for specified frame."""
 
         combined_overlay = np.zeros((self.image_height, self.image_width, 3), dtype=np.uint8)
-        if self.current_image_index not in self.overlay_data:
+        if frame_ndx not in self.overlay_data:
             return combined_overlay
 
-        current_frame_data = self.overlay_data[self.current_image_index]
+        overlay_data: OverlayData = self.overlay_data[frame_ndx]
 
         for layer_name in self.active_layers:
-            if layer_name == LayerType.TEXT and current_frame_data.text:
-                for text_data in current_frame_data.text:
+            if layer_name == LayerType.TEXT and overlay_data.text:
+                for text_data in overlay_data.text:
                     x1, y1, x2, y2 = text_data.get_bounding_box()
                     cv2.rectangle(combined_overlay, (x1, y1), (x2, y2), self.TEXT_BOX_COLOR, 2)
 
-            elif layer_name == LayerType.SEGMENTATIONS and current_frame_data.segmentations:
+            elif layer_name == LayerType.SEGMENTATIONS and overlay_data.segmentations:
                 # TODO: segment annotation creation and display
-                for segmentation in current_frame_data.segmentations:
+                for segmentation in overlay_data.segmentations:
                     points = np.array([(p.x, p.y) for p in segmentation.points], dtype=np.int32)
                     cv2.fillPoly(combined_overlay, [points], (255, 0, 0))  # Filled red
 
+        # Iterate through the layers that are currently active/visible
+        for layer_name in self.active_layers:
+            match layer_name:
+                case LayerType.TEXT:
+                    if overlay_data.text:
+                        for text_data in overlay_data.text:
+                            x1, y1, x2, y2 = text_data.get_bounding_box()
+                            cv2.rectangle(combined_overlay, (x1, y1), (x2, y2), self.TEXT_BOX_COLOR, 2)
+
+                case LayerType.USER_RECT:
+                    if overlay_data.user_rect:
+                        for rect in overlay_data.user_rect:
+                            x1, y1, x2, y2 = rect.get_bounding_box()
+                            cv2.rectangle(combined_overlay, (x1, y1), (x2, y2), self.USER_RECT_COLOR, 2)
+
+                case LayerType.SEGMENTATIONS:
+                    if overlay_data.segmentations:
+                        for segmentation in overlay_data.segmentations:
+                            points = np.array([(p.x, p.y) for p in segmentation.points], dtype=np.int32)
+                            # Example: Draw filled green polygons for segmentations
+                            cv2.fillPoly(combined_overlay, [points], self.SEGMENTATION_COLOR)
+
+                case _:
+                    # Handle unknown layer types if necessary
+                    logger.warning(f"Rendering not implemented for layer type: {layer_type}")
+
         return combined_overlay
 
-    def load_and_display_image(self, index: int):
-        if not (0 <= index < self.num_images) or self.images is None:
+    def load_and_display_image(self, frame_ndx: int):
+        if not (0 <= frame_ndx < self.num_images) or self.images is None:
             return
 
         # Use Cache:
-        if index in self.image_cache:
-            cached_image, __, cached_size = self.image_cache[index]
+        if frame_ndx in self.image_cache:
+            cached_image, __, cached_size = self.image_cache[frame_ndx]
             if cached_size == self.current_size:
                 self.photo_image = cached_image
                 # self.image_label.configure(image=self.photo_image)
                 # self.image_label.image = self.photo_image  # type: ignore # Keep a reference, crucially important for Tkinter.
-                self.canvas.image = self.photo_image  # type: ignore
+                self.canvas.image = self.photo_image  # type: ignore # Keep a reference, crucially important for Tkinter.
                 if self.canvas_image_item:
                     self.canvas.delete(self.canvas_image_item)
                 self.canvas_image_item = self.canvas.create_image(0, 0, anchor="nw", image=self.photo_image)
-                self.current_image_index = index
+                self.current_image_index = frame_ndx
                 self.update_scrollbar()
                 self.update_status()
                 return
 
-        image_array = self.images[index].copy()
+        image_array = self.images[frame_ndx].copy()
         if len(image_array.shape) == 2:  # TODO: necessary?
             image_array = cv2.cvtColor(image_array, cv2.COLOR_GRAY2BGR)
 
         # Rendering:
-        rendered_overlay = self._render_overlays()
+        rendered_overlay = self._render_overlays(frame_ndx)
         image_array = cv2.add(image_array, rendered_overlay)
 
         # Display:
@@ -377,12 +433,9 @@ class ImageViewer(ctk.CTkFrame):
             self.canvas.delete(self.canvas_image_item)
         self.canvas_image_item = self.canvas.create_image(0, 0, anchor="nw", image=self.photo_image)
 
-        # Optional: Update canvas size if necessary (though typically done by layout)
-        # self.canvas.config(width=self.current_size[0], height=self.current_size[1])
-
         # Caching: Store BOTH PhotoImage & resized PIL.Image
-        self.add_to_cache(index, self.photo_image, image_pil_resized)
-        self.current_image_index = index
+        self.add_to_cache(frame_ndx, self.photo_image, image_pil_resized)
+        self.current_image_index = frame_ndx
         self.update_scrollbar()
         self.update_status()
 
@@ -394,6 +447,9 @@ class ImageViewer(ctk.CTkFrame):
             self.manage_cache()
 
     def remove_from_cache(self, index):
+        if index not in self.image_cache:
+            logger.warning(f"index: {index} not in image_cache")
+            return
         # Get the PIL Image and close.
         __, pil_image, __ = self.image_cache.pop(index)
         if hasattr(pil_image, "close"):
@@ -511,43 +567,89 @@ class ImageViewer(ctk.CTkFrame):
                 self.current_image_index = 0  # Loop back to the start
             self.after_id = self.after(self.play_delay, self.play_loop)
 
+    def _find_hit_object(self, x_view: int, y_view: int, objects: list) -> int | None:
+        """
+        Checks if view coordinates hit any object in the list with a get_bounding_box method.
+
+        Args:
+            x_view: The x-coordinate in view space.
+            y_view: The y-coordinate in view space.
+            objects: A list of objects (e.g., OCRText, Rectangle) that have
+                     a get_bounding_box() method returning (x1, y1, x2, y2)
+                     in *image* coordinates.
+
+        Returns:
+            Index of hit object in list otherwise None
+        """
+        if not objects:
+            return None
+
+        for index, obj in enumerate(objects):
+            try:
+                x1_img, y1_img, x2_img, y2_img = obj.get_bounding_box()
+                # Convert bounding box to view coordinates for hit test
+                x1_view, y1_view = self._image_to_view_coords(x1_img, y1_img)
+                x2_view, y2_view = self._image_to_view_coords(x2_img, y2_img)
+
+                if x1_view <= x_view <= x2_view and y1_view <= y_view <= y2_view:
+                    return index
+            except AttributeError:
+                logger.warning(f"Object {obj} in list lacks get_bounding_box method.")
+                continue  # Skip objects without the required method
+
+        return None
+
     # Overlay editing event handlers:
     def _on_left_click(self, event):
-        """Handles left-clicks on the image, checking for text box hits."""
-        current_index = self.current_image_index
-        text_overlay_data = self.get_text_overlay_data(current_index)
-
-        if not text_overlay_data:
-            return
-
+        """
+        Handles left-clicks:
+        1. Checks for hits on TEXT boxes.
+        2. Checks for hits on USER_RECTANGLES boxes.
+        3. If no hits, initiates drawing a new user box
+           else remove hit object from corresponding overlay
+        """
+        frame_ndx = self.current_image_index
         x, y = int(event.x), int(event.y)  # View coordinates
 
-        for i, ocr_text in enumerate(text_overlay_data):
-            x1, y1, x2, y2 = ocr_text.get_bounding_box()
-            # Convert bounding box to view coordinates
-            x1_view, y1_view = self._image_to_view_coords(x1, y1)
-            x2_view, y2_view = self._image_to_view_coords(x2, y2)
-
-            if x1_view <= x <= x2_view and y1_view <= y <= y2_view:
-                logging.info(f"Left-click inside text box Removing {ocr_text.text}")
-                del text_overlay_data[i]
-                self.set_text_overlay_data(current_index, text_overlay_data)
+        # Check Text Overlay:
+        text_overlay_data = self.get_text_overlay_data(frame_ndx)
+        if text_overlay_data:
+            ndx = self._find_hit_object(x, y, text_overlay_data)
+            if ndx is not None:
+                # Remove this text box:
+                ocr_text = text_overlay_data[ndx]
+                logging.info(f"Left-click inside text box, removing {ocr_text.text}")
+                del text_overlay_data[ndx]
+                self.refresh_current_image()
                 if self.add_to_whitelist_callback:
                     self.add_to_whitelist_callback(ocr_text.text)
                 return
 
-        self.start_drawing_box(event)
+        # Check User Rectangle Overlay:
+        user_rect_overlay_data = self.get_user_rectangle_overlay_data(frame_ndx)
+        if user_rect_overlay_data:
+            ndx = self._find_hit_object(x, y, user_rect_overlay_data)
+            if ndx is not None:
+                # Remove this text box:
+                user_rect = user_rect_overlay_data[ndx]
+                logging.info(f"Left-click inside user rectangle, removing {user_rect}")
+                del user_rect_overlay_data[ndx]
+                self.refresh_current_image()
+                return
 
-    def start_drawing_box(self, event):
-        """Starts drawing a new text box."""
-        self.drawing_box = True
+        # Otherwise start user drawing rectangle action:
+        self.start_drawing_user_rect(event)
+
+    def start_drawing_user_rect(self, event):
+        """Starts drawing a new user definted rectangle"""
+        self.drawing_rect = True
         self.start_x = int(event.x)  # Store *CANVAS (VIEW)* coordinates
         self.start_y = int(event.y)
         # Ensure any previous temporary rectangle is gone (safety check)
         if self.temp_rect_id:
             self.canvas.delete(self.temp_rect_id)
             self.temp_rect_id = None
-        logger.info(f"Drawing box start x:{self.start_x} y:{self.start_y}")
+        logger.info(f"Drawing User Rectangle start x:{self.start_x} y:{self.start_y}")
 
     def draw_box(self, event):
         """
@@ -555,7 +657,7 @@ class ImageViewer(ctk.CTkFrame):
         (Bound to <B3-Motion> for right-click drag)
         """
         # Only run if we are currently in the drawing state
-        if not self.drawing_box or self.start_x is None or self.start_y is None:
+        if not self.drawing_rect or self.start_x is None or self.start_y is None:
             return
 
         # Get current coordinates in CANVAS (VIEW) space
@@ -578,7 +680,7 @@ class ImageViewer(ctk.CTkFrame):
             # Consider adding 'dash=(2, 4)' for a dashed line effect
         )
 
-    def end_drawing_box(self, event):
+    def end_drawing_user_rect(self, event):
         """
         Finalizes drawing: removes temp rect, adds permanent rect to overlay_data,
         and triggers a full redraw of the background image item.
@@ -595,12 +697,12 @@ class ImageViewer(ctk.CTkFrame):
             self.temp_rect_id = None
 
         # --- Check if drawing was valid ---
-        if not self.drawing_box or self.start_x is None or self.start_y is None:
+        if not self.drawing_rect or self.start_x is None or self.start_y is None:
             logger.warning("end_drawing_box: Invalid drawing state.")
             return  # Exit if drawing didn't start properly
 
         # Reset drawing state *after* getting coordinates but *before* processing
-        self.drawing_box = False
+        self.drawing_rect = False
         local_start_x = self.start_x  # Copy start coords before clearing
         local_start_y = self.start_y
         self.start_x = None
@@ -626,29 +728,27 @@ class ImageViewer(ctk.CTkFrame):
         min_width = 5
         min_height = 5
         if abs(final_x1 - final_x2) < min_width or abs(final_y1 - final_y2) < min_height:
-            logger.info(f"ImageViewer: Drawn box too small, not adding.")
+            logger.info(f"ImageViewer: Drawn rect too small, not adding.")
             # Need to redraw to remove the temporary rectangle even if not adding
             self.refresh_current_image()
             return
 
-        new_user_box = OCRText(
-            text="",
+        new_user_rect = UserRectangle(
             top_left=(final_x1, final_y1),
             bottom_right=(final_x2, final_y2),
-            prob=0.0,  # Mark as user-drawn
         )
 
-        # --- Add to Overlay Data ---
+        # --- Add User Rectangle to Overlay Data ---
         ndx = self.current_image_index
         if ndx in self.overlay_data:
-            ocr_list = self.overlay_data[ndx].text
-            ocr_list.append(new_user_box)
+            user_rect_list = self.overlay_data[ndx].user_rect
+            user_rect_list.append(new_user_rect)
         else:
-            ocr_list = [new_user_box]
+            user_rect_list = [new_user_rect]
 
-        self.set_text_overlay_data(self.current_image_index, ocr_list)
+        self.set_user_rectangle_overlay_data(self.current_image_index, user_rect_list)
         logger.info(
-            f"Added user text box to overlay data for current frame: {new_user_box.top_left} -> {new_user_box.bottom_right}"
+            f"Added user rectangle to overlay data for current frame: {new_user_rect.top_left} -> {new_user_rect.bottom_right}"
         )
 
     def destroy(self):
