@@ -1,8 +1,8 @@
 import gc
 import logging
+import tkinter as tk
 from dataclasses import dataclass, field
 from enum import Enum, auto
-import tkinter as tk
 from tkinter import ttk
 from typing import Callable
 
@@ -67,6 +67,8 @@ class ImageViewer(ctk.CTkFrame):
     TEXT_BOX_COLOR = (0, 255, 0)  # RGB = green
     USER_RECT_COLOR = (0, 0, 255)  # RGB = blue
     SEGMENTATION_COLOR = (255, 0, 0)  # RGB = red
+    DEFAULT_WL_SENSITIVITY = 2.0  # Pixels moved per unit change in WL (affects Beta)
+    DEFAULT_WW_SENSITIVITY = 2.0  # Pixels moved per unit change in WW (affects Alpha)
 
     def __init__(self, parent, images: np.ndarray, add_to_whitelist_callback: Callable[[str], None] | None = None):
         super().__init__(master=parent)  # Call the superclass constructor
@@ -88,10 +90,26 @@ class ImageViewer(ctk.CTkFrame):
         self.active_layers: set[LayerType] = set()
         self.active_layers.add(LayerType.TEXT)
         self.active_layers.add(LayerType.USER_RECT)
+
+        # --- User Rectangle Tracking ---
         self.temp_rect_id = None
         self.drawing_rect = False
         self.start_x = None
         self.start_y = None
+
+        # --- Windowing: Brightness/Contrast Tracking --
+        self.adjusting_wlww: bool = False
+        self.adjust_start_x: int | None = None
+        self.adjust_start_y: int | None = None
+        # User-facing state: Window Level and Width (initialized for 0-255 range)
+        self.current_wl: float = 128.0
+        self.current_ww: float = 255.0
+        self.initial_wl: float = 128.0
+        self.initial_ww: float = 255.0
+        # Derived alpha/beta for internal use with convertScaleAbs
+        self._derived_alpha: float = 1.0
+        self._derived_beta: int = 0
+        self._update_derived_alpha_beta()  # Calculate initial derived values
 
         # --- Calculate Jump Amounts Dynamically ---
         self.small_jump: int = max(1, int(self.num_images * self.SMALL_JUMP_PERCENTAGE))  # Ensure at least 1
@@ -111,9 +129,7 @@ class ImageViewer(ctk.CTkFrame):
         self.grid_rowconfigure(0, weight=1)  # Image label row expands
         self.grid_columnconfigure(0, weight=1)  # Image label column expands
 
-        # Image Label (holds current frame pixels)
-        # self.image_label = ctk.CTkLabel(self, text="")
-        # self.image_label.grid(row=0, column=0, sticky="nsew")  # Fill entire cell
+        # Canvas (holds current frame pixels)
         self.canvas = tk.Canvas(self, bg="black", borderwidth=0, highlightthickness=0)  # Use appropriate background
         self.canvas_image_item = None  # Add this attribute to store the ID of the image on the canvas
         self.canvas.grid(row=0, column=0, sticky="nsew")
@@ -128,8 +144,13 @@ class ImageViewer(ctk.CTkFrame):
         self.control_frame.grid(row=2, column=0, padx=self.PAD, pady=self.PAD, sticky="ew")
         self.control_frame.grid_columnconfigure(1, weight=1)
 
+        # Image Size Label:
         self.image_size_label = ctk.CTkLabel(self.control_frame, text="")
         self.image_size_label.grid(row=0, column=0, sticky="w", padx=self.PAD)
+
+        # --- WL/WW Labels ---
+        self.wl_ww_label = ctk.CTkLabel(self.control_frame, text="WL/WW: ---", width=80)  # Give some width
+        self.wl_ww_label.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="w")
 
         self.projection_label = ctk.CTkLabel(self.control_frame, text="")
         self.projection_label.grid(row=1, column=0, sticky="w", padx=self.PAD)
@@ -167,16 +188,15 @@ class ImageViewer(ctk.CTkFrame):
         # Mouse:
         self.bind("<Configure>", self.on_resize)
         self.bind("<MouseWheel>", self.on_mousewheel)
-        # self.image_label.bind("<MouseWheel>", self.on_mousewheel)
-        # self.image_label.bind("<Button-1>", self._on_left_click)
-        # self.image_label.bind("<B3-Motion>", self.draw_box)  # Right-click drag
-        # self.image_label.bind("<ButtonRelease-3>", self.end_drawing_box)  # Right-click release
         self.canvas.bind("<MouseWheel>", self.on_mousewheel)
-        self.canvas.bind("<Button-1>", self._on_left_click)
-        self.canvas.bind("<B1-Motion>", self.draw_box)  # left-click drag
-        self.canvas.bind("<ButtonRelease-1>", self.end_drawing_user_rect)  # left-click release
-
+        self.canvas.bind("<Button-1>", self._on_left_click)  # Left-click press
+        self.canvas.bind("<B1-Motion>", self.draw_box)  # Left-click drag
+        self.canvas.bind("<ButtonRelease-1>", self.end_drawing_user_rect)  # Left-click release
+        self.canvas.bind("<ButtonPress-3>", self._start_adjust_display)  # Right-click press
+        self.canvas.bind("<B3-Motion>", self._adjust_display)  # Right-click drag
+        self.canvas.bind("<ButtonRelease-3>", self._end_adjust_display)  # Right-click release
         self.control_frame.bind("<MouseWheel>", self.on_mousewheel)
+
         # Keys:
         # Note: customtkinter key bindings bind to the canvas of the frame
         # see here: https://stackoverflow.com/questions/77676235/tkinter-focus-set-on-frame
@@ -191,15 +211,9 @@ class ImageViewer(ctk.CTkFrame):
         self.bind("<space>", self.toggle_play)
 
         # Focus management for ImageViewer
-        # TODO: understand why customtkinter doesn't do this correctly
         self.bind("<Enter>", self.mouse_enter)
-        # self.image_label.bind("<Enter>", self.mouse_enter)
         self.canvas.bind("<Enter>", self.mouse_enter)
         self.control_frame.bind("<Enter>", self.mouse_enter)
-        self.bind("<FocusIn>", self.on_focus_in)
-        self.bind("<FocusOut>", self.on_focus_out)
-        # self.image_label.bind("<FocusIn>", self.on_focus_in)
-        self.canvas.bind("<FocusIn>", self.on_focus_in)
 
         self.after_idle(self._set_initial_size)
         self.update_status()
@@ -294,18 +308,13 @@ class ImageViewer(ctk.CTkFrame):
         self.load_and_display_image(self.current_image_index)
 
     def refresh_current_image(self):
-        del self.image_cache[self.current_image_index]
+        if self.current_image_index in self.image_cache:
+            del self.image_cache[self.current_image_index]
         self.load_and_display_image(self.current_image_index)
 
     def mouse_enter(self, event):
         logger.debug("mouse_enter")
         self._canvas.focus_set()
-
-    def on_focus_in(self, event):
-        logger.debug("ImageViewer has focus")
-
-    def on_focus_out(self, event):
-        logger.debug("ImageViewer lost focus")
 
     def _set_initial_size(self):
         """Calculates and sets the initial image size based on screen size."""
@@ -325,6 +334,8 @@ class ImageViewer(ctk.CTkFrame):
         self.image_size_label.configure(
             text=f"View[{self.current_size[0]}x{self.current_size[1]}] Actual[{self.images.shape[2]}x{self.images.shape[1]}]"
         )
+        # Update WL/WW label using current state
+        self.wl_ww_label.configure(text=f"WL/WW: {int(self.current_wl)}/{int(self.current_ww)}")
 
     def get_projection_label(self) -> str:
         if self.num_images == 1:
@@ -384,7 +395,7 @@ class ImageViewer(ctk.CTkFrame):
 
                 case _:
                     # Handle unknown layer types if necessary
-                    logger.warning(f"Rendering not implemented for layer type: {layer_type}")
+                    logger.warning(f"Rendering not implemented for layer type: {layer_name}")
 
         return combined_overlay
 
@@ -411,6 +422,15 @@ class ImageViewer(ctk.CTkFrame):
         image_array = self.images[frame_ndx].copy()
         if len(image_array.shape) == 2:  # TODO: necessary?
             image_array = cv2.cvtColor(image_array, cv2.COLOR_GRAY2BGR)
+
+        # --- Apply Brightness/Contrast (using derived alpha/beta) ---
+        # NOTE: This simulates WW/WL on uint8. True WW/WL needs high bit depth data
+        #       before this point and would use the NumPy/clip method instead.
+        if self._derived_alpha != 1.0 or self._derived_beta != 0:
+            try:
+                image_array = cv2.convertScaleAbs(image_array, alpha=self._derived_alpha, beta=int(self._derived_beta))
+            except Exception as e:
+                logger.error(f"Error applying derived brightness/contrast: {e}")
 
         # Rendering:
         rendered_overlay = self._render_overlays(frame_ndx)
@@ -464,7 +484,7 @@ class ImageViewer(ctk.CTkFrame):
 
     def clear_cache(self):
         """Clears the image cache and performs garbage collection."""
-        for _, (photo_image, pil_image, *__) in self.image_cache.items():
+        for __, (photo_image, pil_image, *__) in self.image_cache.items():
             # Explicitly break the reference held by Tkinter and PIL.Image
             if hasattr(pil_image, "close"):
                 pil_image.close()  # Close the PIL.Image
@@ -608,6 +628,9 @@ class ImageViewer(ctk.CTkFrame):
         3. If no hits, initiates drawing a new user box
            else remove hit object from corresponding overlay
         """
+        if self.playing:
+            return
+
         frame_ndx = self.current_image_index
         x, y = int(event.x), int(event.y)  # View coordinates
 
@@ -618,7 +641,7 @@ class ImageViewer(ctk.CTkFrame):
             if ndx is not None:
                 # Remove this text box:
                 ocr_text = text_overlay_data[ndx]
-                logging.info(f"Left-click inside text box, removing {ocr_text.text}")
+                logging.info(f"Left-click inside text box, removing: {ocr_text.text}")
                 del text_overlay_data[ndx]
                 self.refresh_current_image()
                 if self.add_to_whitelist_callback:
@@ -632,7 +655,7 @@ class ImageViewer(ctk.CTkFrame):
             if ndx is not None:
                 # Remove this text box:
                 user_rect = user_rect_overlay_data[ndx]
-                logging.info(f"Left-click inside user rectangle, removing {user_rect}")
+                logging.info(f"Left-click inside user rectangle, removing: {user_rect}")
                 del user_rect_overlay_data[ndx]
                 self.refresh_current_image()
                 return
@@ -728,7 +751,7 @@ class ImageViewer(ctk.CTkFrame):
         min_width = 5
         min_height = 5
         if abs(final_x1 - final_x2) < min_width or abs(final_y1 - final_y2) < min_height:
-            logger.info(f"ImageViewer: Drawn rect too small, not adding.")
+            logger.info("ImageViewer: Drawn rect too small, not adding.")
             # Need to redraw to remove the temporary rectangle even if not adding
             self.refresh_current_image()
             return
@@ -750,6 +773,73 @@ class ImageViewer(ctk.CTkFrame):
         logger.info(
             f"Added user rectangle to overlay data for current frame: {new_user_rect.top_left} -> {new_user_rect.bottom_right}"
         )
+
+    # --- Brightness/Contrast (Simulated WW/WL) Event Handlers ---
+    # --- WW/WL Adjustment Handlers ---
+    def _start_adjust_display(self, event):
+        """Starts WL/WW adjustment. (Bound to <ButtonPress-3>)"""
+        if self.drawing_rect or self.playing:
+            return  # Don't adjust if currently drawing box
+
+        logger.debug("Starting WL/WW adjust")
+        self.adjusting_wlww = True
+        self.adjust_start_x = int(event.x)
+        self.adjust_start_y = int(event.y)
+        self.initial_wl = self.current_wl
+        self.initial_ww = self.current_ww
+
+    def _adjust_display(self, event):
+        """Adjusts WL(U/D)/WW(L/R) during drag. (Bound to <B3-Motion>)"""
+        if not self.adjusting_wlww or self.adjust_start_x is None or self.adjust_start_y is None:
+            return
+
+        current_x = int(event.x)
+        current_y = int(event.y)
+
+        delta_x = current_x - self.adjust_start_x
+        delta_y = current_y - self.adjust_start_y  # Down = Positive Delta Y
+
+        wl_sensitivity = self.DEFAULT_WL_SENSITIVITY
+        ww_sensitivity = self.DEFAULT_WW_SENSITIVITY
+
+        # Brightness (WL): Up/Down drag -> Higher WL visually increases brightness on 0-255 scale
+        self.current_wl = self.initial_wl + (-delta_y / wl_sensitivity)
+
+        # Contrast (WW): Left/Right drag -> Smaller WW visually increases contrast on 0-255 scale
+        self.current_ww = self.initial_ww + (-delta_x / ww_sensitivity)
+
+        # Clamp WW (must be > 0)
+        self.current_ww = max(1.0, self.current_ww)
+        # Clamp WL (e.g., within 0-255 or a wider range if needed)
+        self.current_wl = max(0.0, min(255.0, self.current_wl))  # Simple 0-255 clamp for now
+
+        # Calculate derived alpha/beta
+        self._update_derived_alpha_beta()
+
+        logger.debug(
+            f"Adjusting Display: WL={self.current_wl:.1f}, WW={self.current_ww:.1f} -> Alpha={self._derived_alpha:.2f}, Beta={self._derived_beta}"
+        )
+
+        self.update_status()  # Update labels
+        self.clear_cache()
+        self.refresh_current_image()
+
+    def _end_adjust_display(self, event):
+        """Ends WL/WW adjustment. (Bound to <ButtonRelease-3>)"""
+        if not self.adjusting_wlww:
+            return
+
+        logger.debug("Ending WL/WW adjust")
+        self.adjusting_wlww = False
+        self.adjust_start_x = None
+        self.adjust_start_y = None
+
+    def _update_derived_alpha_beta(self):
+        """Calculates alpha/beta from current WW/WL."""
+        if self.current_ww <= 0:
+            self.current_ww = 1.0  # Safety clamp
+        self._derived_alpha = 255.0 / self.current_ww
+        self._derived_beta = int(127.5 - (self._derived_alpha * self.current_wl))
 
     def destroy(self):
         """Override destroy to properly clean up resources."""

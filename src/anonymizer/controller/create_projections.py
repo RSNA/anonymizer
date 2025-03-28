@@ -8,15 +8,12 @@ from typing import List, Optional
 
 import numpy as np
 from cv2 import (
-    COLOR_RGB2GRAY,
-    CV_8U,
     INTER_AREA,
     MORPH_RECT,
     NORM_MINMAX,
     Canny,
     GaussianBlur,
     createCLAHE,
-    cvtColor,
     dilate,
     getStructuringElement,
     normalize,

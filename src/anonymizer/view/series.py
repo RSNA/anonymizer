@@ -1,3 +1,4 @@
+import difflib
 import gc
 import logging
 import os
@@ -55,6 +56,7 @@ class SeriesView(ctk.CTkToplevel):
         if self._ds is None or self._frames is None:
             raise ValueError(f"Error loading frames from {series_path}")
 
+        self.single_frame: bool = len(self._frames) == 1
         self._update_title()
 
         self.grid_rowconfigure(0, weight=1)
@@ -106,9 +108,15 @@ class SeriesView(ctk.CTkToplevel):
         col += 1
         self.edit_context_combo_box = ctk.CTkComboBox(
             self.control_frame,
-            values=[member.value.upper() for member in EditContext],
+            state="readonly",
+            values=[
+                member.value.upper()
+                for member in EditContext
+                if not (self.single_frame and member == EditContext.SERIES)
+            ],
             command=self.edit_context_change,
         )
+        self.edit_context_combo_box.set(EditContext.FRAME.upper())
         self.edit_context_combo_box.grid(row=0, column=col, padx=self.PAD, pady=self.PAD)
         col += 1
 
@@ -230,17 +238,58 @@ class SeriesView(ctk.CTkToplevel):
 
         logging.info("OCR Reader initialised successfully")
 
-    def filter_text_data(self, frame_index: int) -> list[OCRText]:
-        """Filters the text_data for a frame based on the whitelist."""
+    # def filter_text_data(self, frame_index: int) -> list[OCRText]:
+    #     """Filters the text_data for a frame based on the whitelist."""
+    #     if frame_index not in self.detected_text:
+    #         return []
+
+    #     whitelist_set = set(item.upper().strip() for item in self.whitelist.get(0, "end"))
+    #     filtered_results = []
+
+    #     for ocr_text in self.detected_text[frame_index]:
+    #         if ocr_text.text and ocr_text.text.upper() not in whitelist_set:
+    #             filtered_results.append(ocr_text)
+    #     return filtered_results
+
+    def filter_text_data(self, frame_index: int, similarity_threshold: float = 0.75) -> list[OCRText]:
+        """
+        Filters the text_data for a frame based on fuzzy matching against the whitelist.
+        Keeps text if its similarity ratio to ALL whitelist items is <= 0.8.
+        """
+        # Use unfiltered_text_data which stores the raw OCR results
         if frame_index not in self.detected_text:
             return []
 
-        whitelist_set = set(item.upper().strip() for item in self.whitelist.get(0, "end"))
-        filtered_results = []
+        # Preprocess whitelist items once
+        whitelist_set = [item.upper().strip() for item in self.whitelist.get(0, "end") if item.strip()]
+        if not whitelist_set:  # If whitelist is empty, return all results
+            return self.detected_text.get(frame_index, [])
 
+        filtered_results = []
         for ocr_text in self.detected_text[frame_index]:
-            if ocr_text.text and ocr_text.text.upper() not in whitelist_set:
+            if not ocr_text.text:  # Skip if OCR text is empty
+                continue
+
+            processed_ocr_text = ocr_text.text.upper().strip()
+            is_similar_to_whitelist = False
+
+            # Check similarity against each whitelist item
+            for whitelist_item in whitelist_set:
+                # Use SequenceMatcher to get the similarity ratio
+                similarity = difflib.SequenceMatcher(None, processed_ocr_text, whitelist_item).ratio()
+
+                if similarity > similarity_threshold:
+                    is_similar_to_whitelist = True
+                    logger.debug(
+                        f"'{ocr_text.text}' matched whitelist item '{whitelist_item}' "
+                        f"with similarity ratio {similarity:.2f}. Filtering out."
+                    )
+                    break  # Found a close match, no need to check further
+
+            # Keep the text only if it wasn't similar to any whitelist item
+            if not is_similar_to_whitelist:
                 filtered_results.append(ocr_text)
+
         return filtered_results
 
     def draw_text_overlay(self, frame_index: int):
