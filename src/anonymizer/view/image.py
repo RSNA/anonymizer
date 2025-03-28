@@ -1,8 +1,6 @@
 import gc
 import logging
 import tkinter as tk
-from dataclasses import dataclass, field
-from enum import Enum, auto
 from tkinter import ttk
 from typing import Callable
 
@@ -11,45 +9,10 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-from anonymizer.controller.remove_pixel_phi import OCRText
+from anonymizer.controller.remove_pixel_phi import OCRText, LayerType, OverlayData, UserRectangle, Segmentation
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
-
-
-# Overlay layer types:
-class LayerType(Enum):
-    TEXT = auto()  # OCR text and rectangle coordinates
-    USER_RECT = auto()  # User defined rectangle coordinates
-    SEGMENTATIONS = auto()  # polygon vertices
-    # ... other layer types ...
-
-
-@dataclass
-class UserRectangle:
-    top_left: tuple[int, int]
-    bottom_right: tuple[int, int]
-
-    def get_bounding_box(self) -> tuple[int, int, int, int]:
-        return self.top_left[0], self.top_left[1], self.bottom_right[0], self.bottom_right[1]
-
-
-@dataclass
-class PolygonPoint:
-    x: int
-    y: int
-
-
-@dataclass
-class Segmentation:
-    points: list[PolygonPoint]
-
-
-@dataclass
-class OverlayData:
-    text: list[OCRText] = field(default_factory=list)
-    user_rect: list[UserRectangle] = field(default_factory=list)
-    segmentations: list[Segmentation] = field(default_factory=list)
 
 
 class ImageViewer(ctk.CTkFrame):
@@ -226,7 +189,7 @@ class ImageViewer(ctk.CTkFrame):
         if frame_index not in self.overlay_data:
             self.overlay_data[frame_index] = OverlayData()
 
-        self.overlay_data[frame_index].text = data
+        self.overlay_data[frame_index].ocr_texts = data
 
         if frame_index == self.current_image_index:  # update display
             self.remove_from_cache(frame_index)  # force re-rendering
@@ -236,7 +199,7 @@ class ImageViewer(ctk.CTkFrame):
         """Retrieves the text overlay data for a specific frame."""
         if frame_index not in self.overlay_data:
             return None
-        return self.overlay_data[frame_index].text
+        return self.overlay_data[frame_index].ocr_texts
 
     def set_segmentation_overlay_data(self, frame_index: int, data: list[Segmentation]):
         if frame_index not in self.overlay_data:
@@ -256,7 +219,7 @@ class ImageViewer(ctk.CTkFrame):
         """Sets the user rectangle overlay data for a specific frame."""
         if frame_index not in self.overlay_data:
             self.overlay_data[frame_index] = OverlayData()
-        self.overlay_data[frame_index].user_rect = data
+        self.overlay_data[frame_index].user_rects = data
         if frame_index == self.current_image_index:  # update display
             self.remove_from_cache(frame_index)  # force re-rendering
             self.load_and_display_image(self.current_image_index)
@@ -265,7 +228,7 @@ class ImageViewer(ctk.CTkFrame):
         """Retrieves the user rectangle overlay data for a specific frame."""
         if frame_index not in self.overlay_data:
             return None
-        return self.overlay_data[frame_index].user_rect
+        return self.overlay_data[frame_index].user_rects
 
     def _image_to_view_coords(self, x: int, y: int) -> tuple[int, int]:
         """Converts image coordinates to view (display) coordinates."""
@@ -360,8 +323,8 @@ class ImageViewer(ctk.CTkFrame):
         overlay_data: OverlayData = self.overlay_data[frame_ndx]
 
         for layer_name in self.active_layers:
-            if layer_name == LayerType.TEXT and overlay_data.text:
-                for text_data in overlay_data.text:
+            if layer_name == LayerType.TEXT and overlay_data.ocr_texts:
+                for text_data in overlay_data.ocr_texts:
                     x1, y1, x2, y2 = text_data.get_bounding_box()
                     cv2.rectangle(combined_overlay, (x1, y1), (x2, y2), self.TEXT_BOX_COLOR, 2)
 
@@ -375,14 +338,14 @@ class ImageViewer(ctk.CTkFrame):
         for layer_name in self.active_layers:
             match layer_name:
                 case LayerType.TEXT:
-                    if overlay_data.text:
-                        for text_data in overlay_data.text:
+                    if overlay_data.ocr_texts:
+                        for text_data in overlay_data.ocr_texts:
                             x1, y1, x2, y2 = text_data.get_bounding_box()
                             cv2.rectangle(combined_overlay, (x1, y1), (x2, y2), self.TEXT_BOX_COLOR, 2)
 
                 case LayerType.USER_RECT:
-                    if overlay_data.user_rect:
-                        for rect in overlay_data.user_rect:
+                    if overlay_data.user_rects:
+                        for rect in overlay_data.user_rects:
                             x1, y1, x2, y2 = rect.get_bounding_box()
                             cv2.rectangle(combined_overlay, (x1, y1), (x2, y2), self.USER_RECT_COLOR, 2)
 
@@ -764,7 +727,7 @@ class ImageViewer(ctk.CTkFrame):
         # --- Add User Rectangle to Overlay Data ---
         ndx = self.current_image_index
         if ndx in self.overlay_data:
-            user_rect_list = self.overlay_data[ndx].user_rect
+            user_rect_list = self.overlay_data[ndx].user_rects
             user_rect_list.append(new_user_rect)
         else:
             user_rect_list = [new_user_rect]

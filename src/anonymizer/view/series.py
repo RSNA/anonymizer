@@ -14,7 +14,7 @@ from easyocr import Reader
 from pydicom import Dataset
 
 from anonymizer.controller.create_projections import load_series_frames
-from anonymizer.controller.remove_pixel_phi import OCRText, detect_text
+from anonymizer.controller.remove_pixel_phi import OCRText, detect_text, remove_text  # , blackout_rectangular_areas
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.utils.translate import _
 from anonymizer.view.image import ImageViewer
@@ -27,9 +27,6 @@ class EditContext(StrEnum):
     FRAME = auto()  # apply edits to current frame only
     SERIES = auto()  # apply edits to every frame in series
     PROJECT = auto()  # apply edits to all series in project
-
-
-# EditContextMap = {"FRAME": EditContext.FRAME, "SERIES": EditContext.SERIES, "PROJECT": EditContext.PROJECT}
 
 
 class SeriesView(ctk.CTkToplevel):
@@ -132,6 +129,13 @@ class SeriesView(ctk.CTkToplevel):
             self.control_frame, width=self.BUTTON_WIDTH, text="Remove Text", command=self.remove_text_button_clicked
         )
         self.remove_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
+        col += 1
+
+        # Blackout Button:
+        self.blackout_button = ctk.CTkButton(
+            self.control_frame, width=self.BUTTON_WIDTH, text="Blackout", command=self.blackout_button_clicked
+        )
+        self.blackout_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
         col += 1
 
         # Status label:
@@ -309,27 +313,14 @@ class SeriesView(ctk.CTkToplevel):
                     self.detected_text[frame_index] = results
                     self.draw_text_overlay(frame_index)
 
-    def detect_text_current_frame(self):
-        """Detects text in the currently displayed frame."""
-        self.update_status(_("OCR on current frame..."))
-        self.process_single_frame_ocr(self.image_viewer.current_image_index)
-        self.update_status(_("OCR on current frame complete"))
-        gc.collect()
-        if torch.backends.mps.is_available():
-            torch.mps.empty_cache()
-
     def detect_text_for_series(self):
         """Detects text in all frames of the series."""
         self.update_status(_("Detecting text in all frames..."))
         total_frames = self.image_viewer.num_images
         for i in range(total_frames):
-            self.image_viewer.load_and_display_image(i)  # Display image.
+            self.image_viewer.load_and_display_image(i)  # Goto series start
             self.process_single_frame_ocr(i)
             self.update_status(_("OCR on frame: ") + str(i + 1))
-        self.update_status(_("OCR on all frames complete"))
-        gc.collect()
-        if torch.backends.mps.is_available():
-            torch.mps.empty_cache()
 
     def detect_text_button_clicked(self):
         logger.info("Detecting text...")
@@ -342,14 +333,57 @@ class SeriesView(ctk.CTkToplevel):
         logger.info(f"CUDA GPU Available: {torch.cuda.is_available()}")
 
         if self.edit_context == EditContext.FRAME:
-            self.detect_text_current_frame()
+            self.update_status(_("OCR on current frame..."))
+            self.process_single_frame_ocr(self.image_viewer.current_image_index)
         else:
             self.detect_text_for_series()
 
+        self.update_status(_("OCR on all frames complete"))
+
         # TODO: work out what to do beyond propagting edits in overlays when edit context is PROJECT
 
+        gc.collect()
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+
+    def remove_text_from_single_frame(self, frame_index: int, ocr_texts: list[OCRText]):
+        logger.info(f"Remove {len(ocr_texts)} words from frame {frame_index}")
+        remove_text(self.image_viewer.images[frame_index], ocr_texts)
+        ocr_texts.clear()
+
+    def remove_text_from_series(self):
+        total_frames = self.image_viewer.num_images
+        self.image_viewer.clear_cache()
+        for i in range(total_frames):
+            ocr_texts = self.image_viewer.overlay_data[i].ocr_texts
+            if ocr_texts:
+                self.remove_text_from_single_frame(i, ocr_texts)
+            self.image_viewer.load_and_display_image(i)
+            self.update()
+
     def remove_text_button_clicked(self):
-        logger.info("Removing text...")
+        logger.info(f"Removing text, current edit context={self.edit_context}")
+
+        if self._ocr_reader is None:
+            self.initialise_ocr()
+
+        if self.edit_context == EditContext.FRAME:
+            ndx = self.image_viewer.current_image_index
+            ocr_texts = self.image_viewer.overlay_data[ndx].ocr_texts
+            if not ocr_texts:
+                logger.warning("No text has been detected in current frame to remove")
+                self.update_status(_("No text detected in current frame to remove"))
+                return
+            self.update_status(_("Removing text from current frame..."))
+            self.remove_text_from_single_frame(ndx, ocr_texts)
+            self.update_status(_("Text removed from current frame"))
+            self.image_viewer.refresh_current_image()
+        else:
+            self.update_status(_("Removing text from all frames in series..."))
+            self.remove_text_from_series()
+            self.update_status(_("Text removed from all frames in series"))
+
+    def blackout_button_clicked(self):
         pass
 
     def populate_listbox(self):

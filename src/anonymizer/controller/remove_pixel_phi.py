@@ -1,6 +1,7 @@
 # For Burnt-IN Pixel PHI Removal:
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import Enum, auto
 from pathlib import Path
 
 import numpy as np
@@ -80,6 +81,41 @@ class OCRText:
         return (self.top_left[0], self.top_left[1], self.bottom_right[0], self.bottom_right[1])
 
 
+# Overlay layer types:
+class LayerType(Enum):
+    TEXT = auto()  # OCR text and rectangle coordinates
+    USER_RECT = auto()  # User defined rectangle coordinates
+    SEGMENTATIONS = auto()  # polygon vertices
+    # ... other layer types ...
+
+
+@dataclass
+class UserRectangle:
+    top_left: tuple[int, int]
+    bottom_right: tuple[int, int]
+
+    def get_bounding_box(self) -> tuple[int, int, int, int]:
+        return self.top_left[0], self.top_left[1], self.bottom_right[0], self.bottom_right[1]
+
+
+@dataclass
+class PolygonPoint:
+    x: int
+    y: int
+
+
+@dataclass
+class Segmentation:
+    points: list[PolygonPoint]
+
+
+@dataclass
+class OverlayData:
+    ocr_texts: list[OCRText] = field(default_factory=list)
+    user_rects: list[UserRectangle] = field(default_factory=list)
+    segmentations: list[Segmentation] = field(default_factory=list)
+
+
 def _draw_text_contours_on_mask(image: ndarray, rgb: bool, top_left: tuple, bottom_right: tuple, mask: ndarray) -> None:
     """
     Draws text contours onto the provided mask (mutates the input mask).
@@ -122,16 +158,20 @@ def _has_voi_lut(ds: Dataset) -> bool:
 
 
 def detect_text(pixels: ndarray, ocr_reader: Reader, draw_boxes_and_text: bool = False) -> list[OCRText] | None:
-    # Detect Text in pixels 2D frame, if present and indicated, draw bounding box and text in green
-    # Return list of OCRText: (bounding boxes, text, confidence)
-
+    """
+    Detect Text in pixels 2D frame, if present and indicated, draw bounding box and text in green
+    Return list of OCRText: (bounding boxes, text, confidence)
+    """
+    SIZE_THRESHOLD = 1000  # pixels
+    canvas_size = min(max(pixels.shape[0], pixels.shape[1]), SIZE_THRESHOLD)
     results = ocr_reader.readtext(
         pixels,
-        canvas_size=1000,  # easyocr will resize pixels maintaining aspect ratio, less memory, less compute, less accurate for small text
+        canvas_size=canvas_size,  # easyocr will resize pixels maintaining aspect ratio, less memory, less compute, less accurate for small text
         paragraph=False,
-        # ycenter_ths=0.7,  # Vertical Center Threshold, to control word in column separation
-        # link_threshold=0.5,  # related to craft algo for linking characters into words
+        ycenter_ths=0.7,  # Vertical Center Threshold, to control word in column separation
+        link_threshold=0.5,  # related to craft algo for linking characters into words
         width_ths=0.1,
+        text_threshold=0.85,
     )
 
     logging.info(f"Number of text items found: {len(results)}")
@@ -161,6 +201,38 @@ def detect_text(pixels: ndarray, ocr_reader: Reader, draw_boxes_and_text: bool =
             )
 
     return ocr_texts
+
+
+def remove_text(pixels: ndarray, ocr_texts: list[OCRText]):
+    """
+    Remove the PHI in the pixel data of the supplied pixels 2D frame (#TODO: for now must be RGB)
+    using the suplied ocr_text rectangles
+    Perform inpainting using cv2.inpaint with radius = 5 & INPAINT_TELEA (Poisson PDE) algorithm
+    """
+
+    # Create an 8 bit mask of pixels for in-painting
+    mask = np.zeros(pixels.shape[:2], dtype=np.uint8)
+
+    for ocr_text in ocr_texts:
+        _draw_text_contours_on_mask(
+            image=pixels, rgb=True, top_left=ocr_text.top_left, bottom_right=ocr_text.bottom_right, mask=mask
+        )
+
+    kernel = np.ones((3, 3), np.uint8)
+    dilated_mask = dilate(src=mask, kernel=kernel, iterations=1)
+
+    inpaint(
+        src=pixels,
+        dst=pixels,
+        inpaintMask=dilated_mask,
+        inpaintRadius=5,
+        flags=INPAINT_TELEA,
+    )
+
+
+def blackout_rectangular_areas(pixels: ndarray, ocr_reader: Reader, user_rects: list[UserRectangle]):
+    # For user defined rectangles simply blacken out the area defined by the user_rect
+    pass
 
 
 # TODO: split this process up into sub-alogirthms for pluggable functional pipeline:
