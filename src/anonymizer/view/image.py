@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-from anonymizer.controller.remove_pixel_phi import OCRText, LayerType, OverlayData, UserRectangle, Segmentation
+from anonymizer.controller.remove_pixel_phi import LayerType, OCRText, OverlayData, Segmentation, UserRectangle
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
@@ -33,12 +33,19 @@ class ImageViewer(ctk.CTkFrame):
     DEFAULT_WL_SENSITIVITY = 2.0  # Pixels moved per unit change in WL (affects Beta)
     DEFAULT_WW_SENSITIVITY = 2.0  # Pixels moved per unit change in WW (affects Alpha)
 
-    def __init__(self, parent, images: np.ndarray, add_to_whitelist_callback: Callable[[str], None] | None = None):
+    def __init__(
+        self,
+        parent,
+        images: np.ndarray,
+        add_to_whitelist_callback: Callable[[str], None] | None = None,
+        regenerate_series_projections_callback: Callable[[], None] | None = None,
+    ):
         super().__init__(master=parent)  # Call the superclass constructor
         self.parent = parent
         self.num_images: int = images.shape[0]
         self.images: np.ndarray = images
         self.add_to_whitelist_callback = add_to_whitelist_callback
+        self.regenerate_series_projections_callback = regenerate_series_projections_callback
         self.image_width: int = images.shape[2]
         self.image_height: int = images.shape[1]
         self.current_image_index: int = 0
@@ -50,6 +57,7 @@ class ImageViewer(ctk.CTkFrame):
         self.after_id = None  # Store the ID of the 'after' call
         self.current_size: tuple[int, int] = (images.shape[2], images.shape[1])
         self.overlay_data: dict[int, OverlayData] = {}  # Store overlay data per frame
+        self.propagate_overlays: bool = False
         self.active_layers: set[LayerType] = set()
         self.active_layers.add(LayerType.TEXT)
         self.active_layers.add(LayerType.USER_RECT)
@@ -158,20 +166,22 @@ class ImageViewer(ctk.CTkFrame):
         self.canvas.bind("<ButtonPress-3>", self._start_adjust_display)  # Right-click press
         self.canvas.bind("<B3-Motion>", self._adjust_display)  # Right-click drag
         self.canvas.bind("<ButtonRelease-3>", self._end_adjust_display)  # Right-click release
-        self.control_frame.bind("<MouseWheel>", self.on_mousewheel)
+        if self.num_images > 1:
+            self.control_frame.bind("<MouseWheel>", self.on_mousewheel)
 
         # Keys:
         # Note: customtkinter key bindings bind to the canvas of the frame
         # see here: https://stackoverflow.com/questions/77676235/tkinter-focus-set-on-frame
-        self.bind("<Left>", self.prev_image)
-        self.bind("<Right>", self.next_image)
-        self.bind("<Up>", self.change_image_up)
-        self.bind("<Down>", self.change_image_down)
-        self.bind("<Prior>", self.change_image_prior)
-        self.bind("<Next>", self.change_image_next)
-        self.bind("<Home>", self.change_image_home)
-        self.bind("<End>", self.change_image_end)
-        self.bind("<space>", self.toggle_play)
+        if self.num_images > 1:
+            self.bind("<Left>", self.prev_image)
+            self.bind("<Right>", self.next_image)
+            self.bind("<Up>", self.change_image_up)
+            self.bind("<Down>", self.change_image_down)
+            self.bind("<Prior>", self.change_image_prior)
+            self.bind("<Next>", self.change_image_next)
+            self.bind("<Home>", self.change_image_home)
+            self.bind("<End>", self.change_image_end)
+            self.bind("<space>", self.toggle_play)
 
         # Focus management for ImageViewer
         self.bind("<Enter>", self.mouse_enter)
@@ -183,6 +193,9 @@ class ImageViewer(ctk.CTkFrame):
 
     def get_current_image(self) -> np.ndarray:
         return self.images[self.current_image_index]
+
+    def set_overlay_propagation(self, propagate: bool):
+        self.propagate_overlays = propagate
 
     def set_text_overlay_data(self, frame_index: int, data: list[OCRText]):
         # Creates new text overlay if one doesn't exist yet:
@@ -588,40 +601,76 @@ class ImageViewer(ctk.CTkFrame):
         Handles left-clicks:
         1. Checks for hits on TEXT boxes.
         2. Checks for hits on USER_RECTANGLES boxes.
-        3. If no hits, initiates drawing a new user box
+        3. If no hits, initiates drawing a new user rect
            else remove hit object from corresponding overlay
+        4. If current image is a projection in a series only allow user rect drawing if propagate_overlays is true
         """
         if self.playing:
             return
 
-        frame_ndx = self.current_image_index
         x, y = int(event.x), int(event.y)  # View coordinates
 
         # Check Text Overlay:
-        text_overlay_data = self.get_text_overlay_data(frame_ndx)
-        if text_overlay_data:
-            ndx = self._find_hit_object(x, y, text_overlay_data)
-            if ndx is not None:
-                # Remove this text box:
-                ocr_text = text_overlay_data[ndx]
-                logging.info(f"Left-click inside text box, removing: {ocr_text.text}")
-                del text_overlay_data[ndx]
-                self.refresh_current_image()
-                if self.add_to_whitelist_callback:
-                    self.add_to_whitelist_callback(ocr_text.text)
-                return
+        # text_overlay_data = self.get_text_overlay_data(frame_ndx)
+        # if text_overlay_data:
+        #     ndx = self._find_hit_object(x, y, text_overlay_data)
+        #     if ndx is not None:
+        #         # Remove this text box:
+        #         ocr_text = text_overlay_data[ndx]
+        #         logging.info(f"Left-click inside text box, removing: {ocr_text.text}")
+        #         del text_overlay_data[ndx]
+        #         self.refresh_current_image()
+        #         if self.add_to_whitelist_callback:
+        #             self.add_to_whitelist_callback(ocr_text.text)
+        #         return
+
+        # Check Text Overlay:
+        hit = False
+        for i in range(self.num_images):
+            if not self.propagate_overlays and i != self.current_image_index:
+                continue
+            if i not in self.overlay_data:
+                continue
+            ocr_texts_overlay_data = self.overlay_data[i].ocr_texts
+            ocr_text_ndx = self._find_hit_object(x, y, ocr_texts_overlay_data)
+            if ocr_text_ndx is None:
+                continue
+            hit = True
+            if i == self.current_image_index and self.add_to_whitelist_callback:
+                self.add_to_whitelist_callback(ocr_texts_overlay_data[ocr_text_ndx].text)
+            del ocr_texts_overlay_data[ocr_text_ndx]
+
+        if hit:
+            logging.info(f"Remove OCR Text at {x}, {y}, propagate={self.propagate_overlays}")
+            if self.propagate_overlays:
+                self.clear_cache()
+            self.refresh_current_image()
+            return
 
         # Check User Rectangle Overlay:
-        user_rect_overlay_data = self.get_user_rectangle_overlay_data(frame_ndx)
-        if user_rect_overlay_data:
-            ndx = self._find_hit_object(x, y, user_rect_overlay_data)
-            if ndx is not None:
-                # Remove this text box:
-                user_rect = user_rect_overlay_data[ndx]
-                logging.info(f"Left-click inside user rectangle, removing: {user_rect}")
-                del user_rect_overlay_data[ndx]
-                self.refresh_current_image()
-                return
+        hit = False
+        for i in range(self.num_images):
+            if not self.propagate_overlays and i != self.current_image_index:
+                continue
+            if i not in self.overlay_data:
+                continue
+            user_rect_overlay_data = self.overlay_data[i].user_rects
+            rect_ndx = self._find_hit_object(x, y, user_rect_overlay_data)
+            if rect_ndx is None:
+                continue
+            hit = True
+            del user_rect_overlay_data[rect_ndx]
+
+        if hit:
+            logging.info(f"Remove User Rectangle at {x}, {y}, propagate={self.propagate_overlays}")
+            if self.propagate_overlays:
+                self.clear_cache()
+            self.refresh_current_image()
+            return
+
+        if self.num_images > 1 and not self.propagate_overlays and self.current_image_index < 3:
+            logger.warning("if edit context is FRAME, User Rectangles not permitted on projection images")
+            return
 
         # Otherwise start user drawing rectangle action:
         self.start_drawing_user_rect(event)
@@ -672,6 +721,14 @@ class ImageViewer(ctk.CTkFrame):
         and triggers a full redraw of the background image item.
         (Bound to <ButtonRelease-3>)
         """
+        # --- Check if drawing was valid ---
+        if not self.drawing_rect:
+            return
+
+        if self.start_x is None or self.start_y is None:
+            logger.warning("Invalid drawing state, start coordinate invalid")
+            return
+
         # Get final coordinates before resetting state
         end_x = int(event.x)
         end_y = int(event.y)
@@ -681,11 +738,6 @@ class ImageViewer(ctk.CTkFrame):
         if self.temp_rect_id:
             self.canvas.delete(self.temp_rect_id)
             self.temp_rect_id = None
-
-        # --- Check if drawing was valid ---
-        if not self.drawing_rect or self.start_x is None or self.start_y is None:
-            logger.warning("end_drawing_box: Invalid drawing state.")
-            return  # Exit if drawing didn't start properly
 
         # Reset drawing state *after* getting coordinates but *before* processing
         self.drawing_rect = False
@@ -724,18 +776,22 @@ class ImageViewer(ctk.CTkFrame):
             bottom_right=(final_x2, final_y2),
         )
 
-        # --- Add User Rectangle to Overlay Data ---
-        ndx = self.current_image_index
-        if ndx in self.overlay_data:
-            user_rect_list = self.overlay_data[ndx].user_rects
-            user_rect_list.append(new_user_rect)
-        else:
-            user_rect_list = [new_user_rect]
-
-        self.set_user_rectangle_overlay_data(self.current_image_index, user_rect_list)
+        # --- Add User Rectangle to Overlay Data from SeriesView (edit context sensitive) ---
         logger.info(
-            f"Added user rectangle to overlay data for current frame: {new_user_rect.top_left} -> {new_user_rect.bottom_right}"
+            f"Add user rectangle to overlay data for current frame: {new_user_rect.top_left} -> {new_user_rect.bottom_right}, propagate: {self.propagate_overlays}"
         )
+        for i in range(self.num_images):
+            if not self.propagate_overlays and i != self.current_image_index:
+                continue
+            if i in self.overlay_data:
+                self.overlay_data[i].user_rects.append(new_user_rect)
+            else:
+                self.overlay_data[i] = OverlayData()
+                self.overlay_data[i].user_rects = [new_user_rect]
+
+        if self.propagate_overlays:
+            self.clear_cache()
+        self.refresh_current_image()
 
     # --- Brightness/Contrast (Simulated WW/WL) Event Handlers ---
     # --- WW/WL Adjustment Handlers ---

@@ -14,7 +14,13 @@ from easyocr import Reader
 from pydicom import Dataset
 
 from anonymizer.controller.create_projections import load_series_frames
-from anonymizer.controller.remove_pixel_phi import OCRText, detect_text, remove_text  # , blackout_rectangular_areas
+from anonymizer.controller.remove_pixel_phi import (
+    OCRText,
+    UserRectangle,
+    blackout_rectangular_areas,
+    detect_text,
+    remove_text,
+)
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.utils.translate import _
 from anonymizer.view.image import ImageViewer
@@ -26,7 +32,7 @@ logger = logging.getLogger(__name__)
 class EditContext(StrEnum):
     FRAME = auto()  # apply edits to current frame only
     SERIES = auto()  # apply edits to every frame in series
-    PROJECT = auto()  # apply edits to all series in project
+    # TODO: PROJECT = auto()  # apply edits to all series in project
 
 
 class SeriesView(ctk.CTkToplevel):
@@ -90,7 +96,12 @@ class SeriesView(ctk.CTkToplevel):
         scrollbar.grid(row=2, column=1, sticky="ns")
 
         # ImageViewer:
-        self.image_viewer = ImageViewer(self._sv_frame, self._frames, add_to_whitelist_callback=self.add_to_whitelist)
+        self.image_viewer = ImageViewer(
+            self._sv_frame,
+            self._frames,
+            add_to_whitelist_callback=self.add_to_whitelist,
+            regenerate_series_projections_callback=self.regenerate_series_projections,
+        )
         self.image_viewer.grid(row=0, column=1, sticky="nsew")
 
         # Control Frame:
@@ -119,21 +130,21 @@ class SeriesView(ctk.CTkToplevel):
 
         # Detect Text Button:
         self.detect_button = ctk.CTkButton(
-            self.control_frame, width=self.BUTTON_WIDTH, text="Detect Text", command=self.detect_text_button_clicked
+            self.control_frame, width=self.BUTTON_WIDTH, text=_("Detect Text"), command=self.detect_text_button_clicked
         )
         self.detect_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD)
         col += 1
 
         # Remove Text Button:
         self.remove_button = ctk.CTkButton(
-            self.control_frame, width=self.BUTTON_WIDTH, text="Remove Text", command=self.remove_text_button_clicked
+            self.control_frame, width=self.BUTTON_WIDTH, text=_("Remove Text"), command=self.remove_text_button_clicked
         )
         self.remove_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
         col += 1
 
-        # Blackout Button:
+        # Blackout Area Button:
         self.blackout_button = ctk.CTkButton(
-            self.control_frame, width=self.BUTTON_WIDTH, text="Blackout", command=self.blackout_button_clicked
+            self.control_frame, width=self.BUTTON_WIDTH, text=_("Blackout Area"), command=self.blackout_button_clicked
         )
         self.blackout_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
         col += 1
@@ -195,6 +206,14 @@ class SeriesView(ctk.CTkToplevel):
     def edit_context_change(self, choice):
         logger.info(f"Edit Context changed to: {choice}")
         self.edit_context = EditContext[choice]
+        self.image_viewer.set_overlay_propagation(self.edit_context == EditContext.SERIES)
+
+    def regenerate_series_projections(self):
+        if self._frames is not None and not self.single_frame:
+            logger.info("Regenerate Series Projections")
+            self._frames[0] = np.min(self._frames, axis=0)
+            self._frames[1] = np.mean(self._frames, axis=0).astype(np.uint8)
+            self._frames[2] = np.max(self._frames, axis=0)
 
     def load_frames(self, series_path: Path) -> tuple[Dataset, np.ndarray]:
         """Loads, processes, and combines series frames and projections."""
@@ -204,7 +223,7 @@ class SeriesView(ctk.CTkToplevel):
             logger.info("Load single frame high-res, normalised")
             return ds, series_frames
 
-        # Re-Generate Projections for multi-frame series
+        # Generate Projections for multi-frame series
         # (3 frames, Height, Width, Channels) - Min, Mean, Max
         projections = np.stack(
             [
@@ -258,7 +277,7 @@ class SeriesView(ctk.CTkToplevel):
     def filter_text_data(self, frame_index: int, similarity_threshold: float = 0.75) -> list[OCRText]:
         """
         Filters the text_data for a frame based on fuzzy matching against the whitelist.
-        Keeps text if its similarity ratio to ALL whitelist items is <= 0.8.
+        Keeps text if its similarity threshold to ALL whitelist items is <= 0.75. #TODO: provide UX to modify sim threshold
         """
         # Use unfiltered_text_data which stores the raw OCR results
         if frame_index not in self.detected_text:
@@ -335,10 +354,10 @@ class SeriesView(ctk.CTkToplevel):
         if self.edit_context == EditContext.FRAME:
             self.update_status(_("OCR on current frame..."))
             self.process_single_frame_ocr(self.image_viewer.current_image_index)
+            self.update_status(_("OCR on current frame complete"))
         else:
             self.detect_text_for_series()
-
-        self.update_status(_("OCR on all frames complete"))
+            self.update_status(_("OCR on all frames complete"))
 
         # TODO: work out what to do beyond propagting edits in overlays when edit context is PROJECT
 
@@ -355,11 +374,15 @@ class SeriesView(ctk.CTkToplevel):
         total_frames = self.image_viewer.num_images
         self.image_viewer.clear_cache()
         for i in range(total_frames):
-            ocr_texts = self.image_viewer.overlay_data[i].ocr_texts
-            if ocr_texts:
-                self.remove_text_from_single_frame(i, ocr_texts)
-            self.image_viewer.load_and_display_image(i)
-            self.update()
+            if i in self.image_viewer.overlay_data:
+                ocr_texts = self.image_viewer.overlay_data[i].ocr_texts
+                if ocr_texts:
+                    self.remove_text_from_single_frame(i, ocr_texts)
+                self.image_viewer.load_and_display_image(i)
+                self.update()
+        self.image_viewer.clear_cache()
+        self.regenerate_series_projections()
+        self.image_viewer.load_and_display_image(0)
 
     def remove_text_button_clicked(self):
         logger.info(f"Removing text, current edit context={self.edit_context}")
@@ -383,8 +406,47 @@ class SeriesView(ctk.CTkToplevel):
             self.remove_text_from_series()
             self.update_status(_("Text removed from all frames in series"))
 
+        # TODO: Remove all in PROJECT if modality and image size constant
+
+    def blackout_areas_in_single_frame(self, frame_index: int, user_rects: list[UserRectangle]):
+        logger.info(f"Blackout {len(user_rects)} rects from frame {frame_index}")
+        blackout_rectangular_areas(self.image_viewer.images[frame_index], user_rects)
+        user_rects.clear()
+
+    def blackout_areas_in_series(self):
+        total_frames = self.image_viewer.num_images
+        self.image_viewer.clear_cache()
+        for i in range(total_frames):
+            user_rects = self.image_viewer.overlay_data[i].user_rects
+            if user_rects:
+                self.blackout_areas_in_single_frame(i, user_rects)
+            self.image_viewer.load_and_display_image(i)
+            self.update()
+        self.image_viewer.clear_cache()
+        self.regenerate_series_projections()
+        self.image_viewer.load_and_display_image(0)
+
     def blackout_button_clicked(self):
-        pass
+        logger.info(f"Blackout text, current edit context[{self.edit_context}]")
+
+        if self.edit_context == EditContext.FRAME:
+            ndx = self.image_viewer.current_image_index
+            user_rects = self.image_viewer.overlay_data[ndx].user_rects
+            if not user_rects:
+                logger.warning("No blackout user rect has been define in current frame to blackout")
+                self.update_status(_("No blackout area(s) in current frame"))
+                return
+            self.update_status(_("Blackout areas in current frame..."))
+            self.blackout_areas_in_single_frame(ndx, user_rects)
+            if not self.single_frame:
+                self.image_viewer.clear_cache()
+                self.regenerate_series_projections()
+            self.update_status(_("Areas blacked out in current frame"))
+            self.image_viewer.refresh_current_image()
+        else:
+            self.update_status(_("Removing text from all frames in series..."))
+            self.blackout_areas_in_series()
+            self.update_status(_("Text removed from all frames in series"))
 
     def populate_listbox(self):
         # TODO: create standard dictionary of likely to appear on medical images

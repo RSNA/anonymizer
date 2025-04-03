@@ -230,9 +230,41 @@ def remove_text(pixels: ndarray, ocr_texts: list[OCRText]):
     )
 
 
-def blackout_rectangular_areas(pixels: ndarray, ocr_reader: Reader, user_rects: list[UserRectangle]):
+def blackout_rectangular_areas(pixels: ndarray, user_rects: list[UserRectangle]):
     # For user defined rectangles simply blacken out the area defined by the user_rect
-    pass
+    """
+    Blacks out rectangular areas defined in user_rects on the input image.
+
+    Args:
+        pixels: NumPy array representing the image (grayscale or color, e.g., uint8).
+                This array will be modified IN-PLACE.
+        user_rects: A list of UserRectangle objects specifying the areas to black out.
+    """
+    if not user_rects:  # No rectangles to process
+        return
+
+    img_height, img_width = pixels.shape[:2]  # Get image dimensions
+
+    for rect in user_rects:
+        try:
+            # Get bounding box coordinates, ensuring x1<=x2 and y1<=y2
+            x1, y1, x2, y2 = rect.get_bounding_box()
+
+            # Clamp coordinates to image boundaries to prevent errors
+            r1 = max(0, y1)  # Row start (y1)
+            r2 = min(img_height, y2)  # Row end (y2)
+            c1 = max(0, x1)  # Col start (x1)
+            c2 = min(img_width, x2)  # Col end (x2)
+
+            # Check if the clamped rectangle has a valid area
+            if r1 < r2 and c1 < c2:
+                # Efficiently set the slice to black (0)
+                # NumPy broadcasting handles grayscale (2D) and color (3D)
+                pixels[r1:r2, c1:c2] = 0
+        except Exception as e:
+            # Log error if a specific rectangle causes issues
+            logging.error(f"Error processing rectangle {rect}: {e}")
+            continue  # Skip to the next rectangle
 
 
 # TODO: split this process up into sub-alogirthms for pluggable functional pipeline:

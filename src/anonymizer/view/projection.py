@@ -283,16 +283,6 @@ class ProjectionView(ctk.CTkToplevel):
         if projection.proj_images:
             projection.ocr = []
             for i, proj_image in enumerate(projection.proj_images):
-                # Detect Text only if reader provided and when size is large:
-                # if self._reader and self._image_size == ProjectionImageSize.LARGE:
-                #     ocr_list = detect_text(np.array(proj_image), self._reader)
-                #     if ocr_list:
-                #         projection.ocr.extend(ocr_list)
-                #         # Draw bounding boxes around detected text on projection image:
-                #         for ocr in ocr_list:
-                #             draw = ImageDraw.Draw(proj_image)
-                #             draw.rectangle([ocr.top_left, ocr.bottom_right], outline=(0, 255, 0), width=4)
-
                 combined_image.paste(
                     proj_image
                     if self._image_size == ProjectionImageSize.LARGE
@@ -300,10 +290,6 @@ class ProjectionView(ctk.CTkToplevel):
                     else proj_image.resize((self._image_size.width(), self._image_size.height())),
                     (i * self._image_size.width(), 0),
                 )
-
-        # If any text detected creat a red border around combined projection image:
-        # if projection.ocr and self.any_prob_above_threshold(projection.ocr):
-        #     self.add_border_inplace(image=combined_image, color="red")
 
         # Convert to PhotoImage
         photo_image = ImageTk.PhotoImage(combined_image)
@@ -383,7 +369,7 @@ class ProjectionView(ctk.CTkToplevel):
     def _on_image_click(self, event, projection: Projection, series_path: Path):
         logger.info(f"Projection clicked: projection: {projection}")
         if self._series_view and self._series_view.winfo_exists():
-            logger.info("PixelsView already OPEN")
+            logger.info("SeriesView already OPEN")
             self._series_view.deiconify()
             self._series_view.focus_force()
             return

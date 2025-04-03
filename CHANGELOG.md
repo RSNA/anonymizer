@@ -6,7 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [17.4.*]
 ### Added
-- SeriesView and ImageViewer classes with text detection and removal using easyocr reader
+- SeriesView and ImageViewer classes with text detection and removal using easyocr reader and blackout area with user defined rectangles
+- SeriesView includes whitelist
 
 ### Changed
 - Modifications to index and projection modules for memory management and launching SeriesView with ImageViewer

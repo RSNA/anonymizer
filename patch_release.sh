@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 
 # Get the next patch version number from poetry
-VERSION=$(poetry version minor | awk '{print $NF}') 
+VERSION=$(poetry version patch | awk '{print $NF}') 
 
 echo "Releasing Version: $VERSION"
 

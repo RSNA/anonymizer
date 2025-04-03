@@ -14,6 +14,7 @@ from anonymizer.utils.translate import _
 from anonymizer.view.dashboard import Dashboard
 from anonymizer.view.delete_studies_dialog import DeleteStudiesDialog
 from anonymizer.view.projection import ProjectionView
+from anonymizer.view.series import SeriesView
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,7 @@ class IndexView(ctk.CTkToplevel):
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
+        self.bind("<ButtonPress-3>", self._open_series_view)  # Right-click press
         self._create_widgets()
         self._update_tree_from_phi_index()
 
@@ -108,13 +110,13 @@ class IndexView(ctk.CTkToplevel):
         self._button_frame.grid_columnconfigure(3, weight=1)
 
         # Control buttons:
-        self._view_pixels_button = ctk.CTkButton(
+        self._view_projections_button = ctk.CTkButton(
             self._button_frame,
             width=ButtonWidth,
             text=_("View Projections"),
             command=self._view_projections_button_pressed,
         )
-        self._view_pixels_button.grid(row=0, column=4, padx=PAD, pady=PAD, sticky="w")
+        self._view_projections_button.grid(row=0, column=4, padx=PAD, pady=PAD, sticky="w")
 
         self._create_phi_button = ctk.CTkButton(
             self._button_frame,
@@ -280,6 +282,27 @@ class IndexView(ctk.CTkToplevel):
         dlg.get_input()
         self._update_tree_from_phi_index()
         self._parent.update_totals(self._anon_model.get_totals())
+
+    def _open_series_view(self, event):
+        logger.info("Right click")
+        if self._phi_index is None:
+            return
+
+        rows_selected = list(self._tree.selection())
+        if len(rows_selected) == 0:
+            return
+
+        ndx = int(rows_selected[0])
+        if ndx > len(self._phi_index):
+            logger.error("Critical phi_indexing error.")
+            return
+
+        phi_record = self._phi_index[ndx]
+        # TODO: UX with listbox of series descriptions / uids
+        study_path = self._controller.model.images_dir() / phi_record.anon_patient_id / phi_record.anon_study_uid
+        first_series_path = next(study_path.iterdir(), None)
+        if first_series_path:
+            SeriesView(self, anon_model=self._anon_model, series_path=first_series_path)
 
     def _escape_keypress(self, event):
         logger.info("_escape_pressed")
