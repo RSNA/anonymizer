@@ -417,6 +417,8 @@ class SeriesView(ctk.CTkToplevel):
         total_frames = self.image_viewer.num_images
         self.image_viewer.clear_cache()
         for i in range(total_frames):
+            if i not in self.image_viewer.overlay_data:
+                continue
             user_rects = self.image_viewer.overlay_data[i].user_rects
             if user_rects:
                 self.blackout_areas_in_single_frame(i, user_rects)

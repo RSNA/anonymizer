@@ -120,7 +120,7 @@ class ImageViewer(ctk.CTkFrame):
         self.image_size_label.grid(row=0, column=0, sticky="w", padx=self.PAD)
 
         # --- WL/WW Labels ---
-        self.wl_ww_label = ctk.CTkLabel(self.control_frame, text="WL/WW: ---", width=80)  # Give some width
+        self.wl_ww_label = ctk.CTkLabel(self.control_frame, text="WL/WW: ---", width=150)  # Fixed width for alignment
         self.wl_ww_label.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="w")
 
         self.projection_label = ctk.CTkLabel(self.control_frame, text="")
@@ -396,8 +396,13 @@ class ImageViewer(ctk.CTkFrame):
                 return
 
         image_array = self.images[frame_ndx].copy()
-        if len(image_array.shape) == 2:  # TODO: necessary?
-            image_array = cv2.cvtColor(image_array, cv2.COLOR_GRAY2BGR)
+
+        # if len(image_array.shape) == 2:  # TODO: necessary?
+        #     image_array = cv2.cvtColor(image_array, cv2.COLOR_GRAY2BGR)
+
+        # Rendering:
+        rendered_overlay = self._render_overlays(frame_ndx)
+        image_array = cv2.add(image_array, rendered_overlay)
 
         # --- Apply Brightness/Contrast (using derived alpha/beta) ---
         # NOTE: This simulates WW/WL on uint8. True WW/WL needs high bit depth data
@@ -408,10 +413,6 @@ class ImageViewer(ctk.CTkFrame):
             except Exception as e:
                 logger.error(f"Error applying derived brightness/contrast: {e}")
 
-        # Rendering:
-        rendered_overlay = self._render_overlays(frame_ndx)
-        image_array = cv2.add(image_array, rendered_overlay)
-
         # Display:
         image_pil = Image.fromarray(image_array)
         image_pil_resized = image_pil.resize(self.current_size, Image.Resampling.LANCZOS)
@@ -420,8 +421,6 @@ class ImageViewer(ctk.CTkFrame):
         image_pil.close()
         del image_array
 
-        # self.image_label.configure(image=self.photo_image)
-        # self.image_label.image = self.photo_image  # type: ignore # Keep a reference, crucially important for Tkinter.
         # --- Display image on Canvas ---
         # Keep a reference to the PhotoImage to prevent garbage collection
         self.canvas.image = self.photo_image  # type: ignore
@@ -433,7 +432,7 @@ class ImageViewer(ctk.CTkFrame):
         self.add_to_cache(frame_ndx, self.photo_image, image_pil_resized)
         self.current_image_index = frame_ndx
         self.update_scrollbar()
-        self.update_status()
+        #   self.update_status()
 
     # Cache functions:
     def add_to_cache(self, index, photo_image, pil_image):  # Modified signature
@@ -477,8 +476,6 @@ class ImageViewer(ctk.CTkFrame):
             self.change_image(self.current_image_index + 1)
 
     def on_resize(self, event):
-        # label_width = self.image_label.winfo_width()
-        # label_height = self.image_label.winfo_height()
         label_width = self.canvas.winfo_width()
         label_height = self.canvas.winfo_height()
 
@@ -490,6 +487,7 @@ class ImageViewer(ctk.CTkFrame):
         if new_image_size != self.current_size:
             self.current_size = new_image_size
             self.load_and_display_image(self.current_image_index)
+            self.update_status()
 
     def prev_image(self, event):
         self.change_image(self.current_image_index - 1)
@@ -559,6 +557,7 @@ class ImageViewer(ctk.CTkFrame):
     def play_loop(self):
         if self.playing:
             self.next_image(None)
+            self.update_status()
             if self.current_image_index == self.num_images - 1:
                 self.current_image_index = 0  # Loop back to the start
             self.after_id = self.after(self.play_delay, self.play_loop)
@@ -609,20 +608,6 @@ class ImageViewer(ctk.CTkFrame):
             return
 
         x, y = int(event.x), int(event.y)  # View coordinates
-
-        # Check Text Overlay:
-        # text_overlay_data = self.get_text_overlay_data(frame_ndx)
-        # if text_overlay_data:
-        #     ndx = self._find_hit_object(x, y, text_overlay_data)
-        #     if ndx is not None:
-        #         # Remove this text box:
-        #         ocr_text = text_overlay_data[ndx]
-        #         logging.info(f"Left-click inside text box, removing: {ocr_text.text}")
-        #         del text_overlay_data[ndx]
-        #         self.refresh_current_image()
-        #         if self.add_to_whitelist_callback:
-        #             self.add_to_whitelist_callback(ocr_text.text)
-        #         return
 
         # Check Text Overlay:
         hit = False
@@ -839,8 +824,6 @@ class ImageViewer(ctk.CTkFrame):
             f"Adjusting Display: WL={self.current_wl:.1f}, WW={self.current_ww:.1f} -> Alpha={self._derived_alpha:.2f}, Beta={self._derived_beta}"
         )
 
-        self.update_status()  # Update labels
-        self.clear_cache()
         self.refresh_current_image()
 
     def _end_adjust_display(self, event):
@@ -852,6 +835,8 @@ class ImageViewer(ctk.CTkFrame):
         self.adjusting_wlww = False
         self.adjust_start_x = None
         self.adjust_start_y = None
+        self.update_status()
+        self.clear_cache()
 
     def _update_derived_alpha_beta(self):
         """Calculates alpha/beta from current WW/WL."""

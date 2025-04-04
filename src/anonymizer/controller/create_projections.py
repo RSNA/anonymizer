@@ -21,7 +21,7 @@ from cv2 import (
 )
 from PIL import Image
 from pydicom import Dataset, dcmread
-from pydicom.pixel_data_handlers.util import apply_modality_lut, apply_voi_lut
+from pydicom.pixel_data_handlers.util import apply_color_lut, apply_modality_lut, apply_voi_lut, convert_color_space
 
 from anonymizer.controller.remove_pixel_phi import OCRText
 from anonymizer.utils.storage import get_dcm_files
@@ -29,6 +29,18 @@ from anonymizer.utils.storage import get_dcm_files
 logger = logging.getLogger(__name__)
 
 PROJECTION_FILENAME = "Projection.pkl"
+
+VALID_COLOR_SPACES = [
+    "MONOCHROME1",
+    "MONOCHROME2",
+    "RGB",
+    # "RGBA", TODO: provide support for Alpha channel?
+    "YBR_FULL",
+    "YBR_FULL_422",
+    "YBR_ICT",
+    "YBR_RCT",
+    "PALETTE COLOR",
+]
 
 
 @dataclass
@@ -209,10 +221,154 @@ def create_projection_from_single_frame(ds: Dataset) -> Projection:
     )
 
 
+def validate_dicom_pixel_array(ds: Dataset) -> np.ndarray:
+    """
+    Validate DICOM pixel array related fields exist and are consistent
+    Return the pixel data as a decompressed numpy array
+    Raises ValueError if any validation fails
+    """
+    # Mandatory fields:
+    if not hasattr(ds, "is_implicit_VR"):
+        raise ValueError("Invalid DICOM dataset: Missing is_implicit_VR attribute.")
+    if not hasattr(ds, "is_little_endian"):
+        raise ValueError("Invalid DICOM dataset: Missing is_little_endian attribute.")
+    if not hasattr(ds, "file_meta"):
+        raise ValueError("Invalid DICOM dataset: Missing file_meta attribute.")
+    if not hasattr(ds.file_meta, "TransferSyntaxUID"):
+        raise ValueError("Invalid DICOM dataset: Missing TransferSyntaxUID attribute.")
+    if not hasattr(ds, "PixelData"):
+        raise ValueError("Invalid DICOM dataset: Missing PixelData attribute.")
+
+    pi = ds.get("PhotometricInterpretation", None)
+    samples_per_pixel = ds.get("SamplesPerPixel", 1)
+    rows = ds.get("Rows", None)
+    cols = ds.get("Columns", None)
+    bits_allocated = ds.get("BitsAllocated", None)
+    bits_stored = ds.get("BitsStored", None)
+    high_bit = ds.get("HighBit", None)
+    pixel_representation = ds.get("PixelRepresentation", None)
+    # Not mandatory fields:
+    pixel_spacing = ds.get("PixelSpacing", None)
+    no_of_frames = ds.get("NumberOfFrames", 1)  # safe to assume 1 frame if attribute not present?
+
+    if not pi:
+        raise ValueError("PhotometricInterpretation attribute missing.")
+
+    if pi not in VALID_COLOR_SPACES:
+        raise ValueError(f"Invalid Photometric Interpretation: {pi}. Support Color Spaces: {VALID_COLOR_SPACES}")
+
+    if pi in ["MONOCHROME1", "MONOCHROME2"]:
+        if samples_per_pixel != 1:
+            raise ValueError(f"Samples per pixel = {samples_per_pixel} which should be 1 for grayscale images.")
+    elif samples_per_pixel > 4:
+        raise ValueError(f"Samples per pixel = {samples_per_pixel} which should be < 4 for multichannel images.")
+
+    if not rows or not cols:
+        raise ValueError("Missing image dimensions: Rows & Columns")
+
+    if bits_allocated is None or bits_stored is None or high_bit is None or pixel_representation is None:
+        raise ValueError(
+            "Missing essential pixel attributes (BitsAllocated, BitsStored, HighBit, PixelRepresentation)."
+        )
+
+    # Validate if bits stored is less than or equal to bits allocated
+    if bits_stored > bits_allocated:
+        raise ValueError(f"BitsStored ({bits_stored}) cannot be greater than BitsAllocated ({bits_allocated}).")
+
+    # Validate the HighBit value
+    if high_bit != bits_stored - 1:
+        raise ValueError(f"HighBit ({high_bit}) should be equal to BitsStored - 1 ({bits_stored - 1}).")
+
+    # Validate pixel representation: 0 = unsigned, 1 = signed
+    if pixel_representation not in [0, 1]:
+        raise ValueError(f"Invalid Pixel Representation: {pixel_representation}. Expected 0 (unsigned) or 1 (signed).")
+
+    # Check that pixel data exists
+    if not hasattr(ds, "PixelData"):
+        raise ValueError("PixelData element is missing.")
+
+    if not pixel_spacing:
+        logger.debug("PixelSpacing missing")
+
+    # DECOMPRESS source pixel array (if compressed):
+    pixels = ds.pixel_array
+
+    # Validate Pixel Array:
+    # Validate the shape of the Pixel Array
+    frame1 = pixels[0] if no_of_frames > 1 else pixels
+    if frame1.shape[0] != rows or frame1.shape[1] != cols:
+        raise ValueError(f"Pixel array shape {pixels.shape} does not match Rows and Columns ({rows}, {cols}).")
+    # TODO: check EVERY frame in the pixel array? Will pydicom have done this when decompressing?
+
+    # Validate the number of frames
+    if no_of_frames > 1 and no_of_frames != pixels.shape[0]:  # 3D or 4D array
+        raise ValueError(f"Number of frames {no_of_frames} does not match pixel array shape {pixels.shape[0]}.")
+
+    # Validate the number of dimensions
+    if pixels.ndim not in [2, 3, 4]:
+        raise ValueError(f"Pixel array has unexpected number of dimensions: {pixels.ndim}. Expected 2, 3, or 4.")
+
+    # Validate the number of channels
+    if samples_per_pixel > 1 and samples_per_pixel != pixels.shape[-1]:
+        raise ValueError(f"Samples per pixel {samples_per_pixel} does not match pixel array shape {pixels.shape[-1]}.")
+
+    # Validate the pixel spacing
+    if pixel_spacing and len(pixel_spacing) != 2:
+        raise ValueError(f"Pixel spacing {pixel_spacing} is not a 2D value.")
+    if pixel_spacing and pixel_spacing[0] != pixel_spacing[1]:
+        logger.debug(f"Pixel spacing {pixel_spacing} is not isotropic.")
+
+    # Validate the data type
+    if bits_allocated == 8:
+        expected_dtype = np.uint8 if pixel_representation == 0 else np.int8
+    elif bits_allocated == 16:
+        expected_dtype = np.uint16 if pixel_representation == 0 else np.int16
+    else:
+        raise ValueError("Unsupported BitsAllocated value. Only 8 and 16 bits are supported.")
+
+    if pixels.dtype != expected_dtype:
+        raise ValueError(f"Pixel data type {pixels.dtype} does not match expected type {expected_dtype}.")
+
+    # Validate pixel value range according to BitsStored
+    max_valid_value = (1 << bits_stored) - 1
+    if pixel_representation == 0:  # unsigned
+        if np.any(pixels < 0) or np.any(pixels > max_valid_value):
+            raise ValueError(
+                f"Pixel values out of range for BitsStored ({bits_stored}): Found range [{pixels.min()}, {pixels.max()}]."
+            )
+    else:  # signed
+        min_valid_value = -(1 << (bits_stored - 1))
+        max_valid_value = (1 << (bits_stored - 1)) - 1
+        if np.any(pixels < min_valid_value) or np.any(pixels > max_valid_value):
+            raise ValueError(
+                f"Pixel values out of range for signed BitsStored ({bits_stored}): Found range [{pixels.min()}, {pixels.max()}]."
+            )
+
+    # Trace the pixel relevant attributes:
+    logger.debug(f"Transfer Syntax: {ds.file_meta.TransferSyntaxUID}")
+    logger.debug(f"Compressed: {ds.file_meta.TransferSyntaxUID.is_compressed}")
+    logger.debug(f"PhotometricInterpretation: {pi}")
+    logger.debug(f"SamplePerPixel: {samples_per_pixel}")
+    logger.debug(f"Rows={rows} Columns={cols}")
+    logger.debug(
+        f"BitsAllocated={bits_allocated} BitsStored={bits_stored} HighBit={high_bit} Signed={pixel_representation != 0}"
+    )
+    logger.debug(f"pixels.shape: {pixels.shape}")
+    logger.debug(f"pixels.value.range:[{pixels.min()}..{pixels.max()}]")
+    logger.debug(f"Pixel Spacing: {pixel_spacing}")
+    logger.debug(f"Number of Frames: {no_of_frames}")
+    return pixels
+
+
 def load_series_frames(series_path) -> tuple[Dataset, np.ndarray]:
-    # Load and process the series
-    # Return numpy array with 4 dimensions: [frame, height, width, 3]
-    # Normalised uint8 values
+    """
+    Load and process the series
+    Return numpy array with 4 dimensions: [frame, height, width, 3]
+    Normalised uint8 values
+    Raises ValueError:
+            If no DICOM files found
+            If DICOM header fields are inconsistent for pixel array in any DICOM file in series
+    """
     # TODO: test a series (ultrasound) comprising multiple dcm files each with multiple frames
 
     dcm_paths: list[Path] = sorted(get_dcm_files(series_path))
@@ -226,19 +382,19 @@ def load_series_frames(series_path) -> tuple[Dataset, np.ndarray]:
         raise ValueError("No PhotometricInterpretation")
 
     grayscale = pi in ["MONOCHROME1", "MONOCHROME2"]
-
     target_size = (ds1.get("Rows", None), ds1.get("Columns", None))
     all_series_frames = []
 
+    # Iterate through all files in the series:
     for dcm_path in dcm_paths:
         ds = dcmread(dcm_path) if all_series_frames else ds1
 
-        pixels = ds.pixel_array  # Could be 2D, 3D, or 4D
+        pixels = validate_dicom_pixel_array(ds)  # Could be 2D, 3D, or 4D
 
         if grayscale:
+            # Apply modality LUT and then VOI LUT:
             pixels = apply_voi_lut(apply_modality_lut(pixels, ds), ds)
             # TODO: handle saturation, eg. see James^Michael CXR RescaleIntercept, RescaleSlope
-            # pixels = apply_modality_lut(pixels, ds)
 
             # Convert from Monochrome1 to MonoChrome2:
             # TODO: check POOLE^OLIVIA
@@ -247,6 +403,16 @@ def load_series_frames(series_path) -> tuple[Dataset, np.ndarray]:
 
             # Convert Grayscale to 3 channel/RGB
             pixels = np.stack([pixels] * 3, axis=-1)
+
+        elif pi == "PALETTE COLOR" and "PaletteColorLookupTableData" in ds:
+            # Apply Color LUT if photometric interpretation is PALETTE COLOR
+            logger.debug("Applying Palette Color Lookup Table")
+            pixels = apply_color_lut(pixels, ds)  # will return RGB or RGBA
+
+        elif pi in ["YBR_FULL", "YBR_FULL_422"]:
+            # Convert color space if needed (e.g., from YBR to RGB)
+            logger.debug(f"Convert color space from {pi} to RGB")
+            pixels = convert_color_space(arr=pixels, current=pi, desired="RGB", per_frame=True)
 
         if pixels.ndim == 4:  # Multi-frame DICOM (already a stack of frames)
             all_series_frames.append(pixels)
