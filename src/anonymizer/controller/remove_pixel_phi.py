@@ -174,7 +174,7 @@ def detect_text(pixels: ndarray, ocr_reader: Reader, draw_boxes_and_text: bool =
         text_threshold=0.85,
     )
 
-    logging.info(f"Number of text items found: {len(results)}")
+    logger.debug(f"Number of text items found: {len(results)}")
 
     ocr_texts: list[OCRText] = []
     for result in results:

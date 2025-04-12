@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "rsna-anonymizer"
-version = "17.4.4"
+version = "17.4.5"
 description = "RSNA DICOM Anonymizer"
 authors = ["Algorhythm Software <michael@dx.life>"]
 license = "RSNA-MIRC Public License"

@@ -11,7 +11,7 @@ import customtkinter as ctk
 import numpy as np
 import torch
 from easyocr import Reader
-from pydicom import Dataset
+from pydicom import Dataset, multival
 
 from anonymizer.controller.create_projections import load_series_frames
 from anonymizer.controller.remove_pixel_phi import (
@@ -99,6 +99,7 @@ class SeriesView(ctk.CTkToplevel):
         self.image_viewer = ImageViewer(
             self._sv_frame,
             self._frames,
+            *self.get_wl_ww(self._ds),
             add_to_whitelist_callback=self.add_to_whitelist,
             regenerate_series_projections_callback=self.regenerate_series_projections,
         )
@@ -155,6 +156,50 @@ class SeriesView(ctk.CTkToplevel):
         self.control_frame.grid_columnconfigure(col, weight=1)  # Make status label expand.
 
         self.populate_listbox()
+
+    def get_wl_ww(self, ds: Dataset) -> tuple[float | None, float | None]:
+        """Get the window level and width from the DICOM dataset."""
+        try:
+            # Use .get() with a default of None to safely access tags
+            wl_tag_value = ds.get("WindowCenter")
+            ww_tag_value = ds.get("WindowWidth")
+
+            initial_wl = None
+            initial_ww = None
+
+            # Check if tags exist and are not empty
+            if wl_tag_value is not None and ww_tag_value is not None:
+                # Handle single vs. multi-value (pydicom loads multi-value as a list)
+                if isinstance(wl_tag_value, multival.MultiValue):
+                    if len(wl_tag_value) > 0:
+                        initial_wl = float(wl_tag_value[0])
+                else:
+                    initial_wl = float(wl_tag_value)  # It's a single value
+
+                if isinstance(ww_tag_value, multival.MultiValue):
+                    if len(ww_tag_value) > 0:
+                        initial_ww = float(ww_tag_value[0])
+                else:
+                    initial_ww = float(ww_tag_value)  # It's a single value
+
+                # Ensure Window Width is positive
+                if initial_ww is not None and initial_ww < 1.0:
+                    logger.warning(f"DICOM WindowWidth ({initial_ww}) is less than 1. Setting to 1.")
+                    initial_ww = 1.0
+
+            # Check if both were successfully read and converted
+            if initial_wl is None or initial_ww is None:
+                logger.warning("WindowCenter or WindowWidth tag missing or invalid in DICOM. Will calculate defaults.")
+                # Let ImageViewer calculate defaults in its __init__ based on data type/range
+                initial_wl = None
+                initial_ww = None
+
+        except (AttributeError, ValueError, TypeError) as e:
+            logger.warning(f"Error reading DICOM WW/WL tags: {e}. Will calculate defaults.")
+            initial_wl = None
+            initial_ww = None
+
+        return initial_wl, initial_ww
 
     def _update_title(self):
         if self._ds:
@@ -277,7 +322,8 @@ class SeriesView(ctk.CTkToplevel):
     def filter_text_data(self, frame_index: int, similarity_threshold: float = 0.75) -> list[OCRText]:
         """
         Filters the text_data for a frame based on fuzzy matching against the whitelist.
-        Keeps text if its similarity threshold to ALL whitelist items is <= 0.75. #TODO: provide UX to modify sim threshold
+        Keeps text if its similarity threshold to ALL whitelist items is <= 0.75.
+        # TODO: provide UX to modify similarity threshold
         """
         # Use unfiltered_text_data which stores the raw OCR results
         if frame_index not in self.detected_text:
@@ -328,7 +374,7 @@ class SeriesView(ctk.CTkToplevel):
                     pixels=self.image_viewer.images[frame_index], ocr_reader=self._ocr_reader, draw_boxes_and_text=False
                 )
                 if results:
-                    logger.info(f" OCR Results:\n{pformat(results)}")
+                    logger.debug(f"OCR Results:\n{pformat(results)}")
                     self.detected_text[frame_index] = results
                     self.draw_text_overlay(frame_index)
 
@@ -366,7 +412,7 @@ class SeriesView(ctk.CTkToplevel):
             torch.mps.empty_cache()
 
     def remove_text_from_single_frame(self, frame_index: int, ocr_texts: list[OCRText]):
-        logger.info(f"Remove {len(ocr_texts)} words from frame {frame_index}")
+        logger.debug(f"Remove {len(ocr_texts)} words from frame {frame_index}")
         remove_text(self.image_viewer.images[frame_index], ocr_texts)
         ocr_texts.clear()
 
@@ -385,7 +431,7 @@ class SeriesView(ctk.CTkToplevel):
         self.image_viewer.load_and_display_image(0)
 
     def remove_text_button_clicked(self):
-        logger.info(f"Removing text, current edit context={self.edit_context}")
+        logger.debug(f"Removing text, current edit context={self.edit_context}")
 
         if self._ocr_reader is None:
             self.initialise_ocr()
@@ -409,7 +455,7 @@ class SeriesView(ctk.CTkToplevel):
         # TODO: Remove all in PROJECT if modality and image size constant
 
     def blackout_areas_in_single_frame(self, frame_index: int, user_rects: list[UserRectangle]):
-        logger.info(f"Blackout {len(user_rects)} rects from frame {frame_index}")
+        logger.debug(f"Blackout {len(user_rects)} rects from frame {frame_index}")
         blackout_rectangular_areas(self.image_viewer.images[frame_index], user_rects)
         user_rects.clear()
 
@@ -429,7 +475,7 @@ class SeriesView(ctk.CTkToplevel):
         self.image_viewer.load_and_display_image(0)
 
     def blackout_button_clicked(self):
-        logger.info(f"Blackout text, current edit context[{self.edit_context}]")
+        logger.debug(f"Blackout text, current edit context[{self.edit_context}]")
 
         if self.edit_context == EditContext.FRAME:
             ndx = self.image_viewer.current_image_index

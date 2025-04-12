@@ -9,6 +9,7 @@ from typing import List, Optional
 import numpy as np
 from cv2 import (
     INTER_AREA,
+    INTER_LINEAR,
     MORPH_RECT,
     NORM_MINMAX,
     Canny,
@@ -21,6 +22,7 @@ from cv2 import (
 )
 from PIL import Image
 from pydicom import Dataset, dcmread
+from pydicom.errors import InvalidDicomError
 from pydicom.pixel_data_handlers.util import apply_color_lut, apply_modality_lut, apply_voi_lut, convert_color_space
 
 from anonymizer.controller.remove_pixel_phi import OCRText
@@ -150,39 +152,39 @@ def cache_projection(projection: Projection, projection_file_path: Path) -> None
     return
 
 
-def load_single_frame(ds: Dataset) -> np.ndarray:
-    pi = ds.get("PhotometricInterpretation", None)
-    if pi is None:
-        raise ValueError("No PhotometricInterpretation ")
+# def load_single_frame(ds: Dataset) -> np.ndarray:
+#     pi = ds.get("PhotometricInterpretation", None)
+#     if pi is None:
+#         raise ValueError("No PhotometricInterpretation ")
 
-    pixels = ds.pixel_array
-    logger.debug(f"pixels.value.range:[{pixels.min(), pixels.max()}]")
+#     pixels = ds.pixel_array
+#     logger.debug(f"pixels.value.range:[{pixels.min(), pixels.max()}]")
 
-    if pi in ["MONOCHROME1", "MONOCHROME2"]:
-        pixels = apply_modality_lut(pixels, ds)
-        logger.debug(f"after modality_lut: pixels.value.range:[{pixels.min(), pixels.max()}]")
-        pixels = apply_voi_lut(pixels, ds)
-        logger.debug(f"after voi_lut: pixels.value.range:[{pixels.min(), pixels.max()}]")
-        if pi == "MONOCHROME1":
-            logger.info("Convert from MONOCHROME1 to MONOCHROME2")
-            pixels = np.max(pixels) - pixels
-            logger.debug(f"after inversion pixels.value.range:[{pixels.min(), pixels.max()}]")
+#     if pi in ["MONOCHROME1", "MONOCHROME2"]:
+#         pixels = apply_modality_lut(pixels, ds)
+#         logger.debug(f"after modality_lut: pixels.value.range:[{pixels.min(), pixels.max()}]")
+#         pixels = apply_voi_lut(pixels, ds)
+#         logger.debug(f"after voi_lut: pixels.value.range:[{pixels.min(), pixels.max()}]")
+#         if pi == "MONOCHROME1":
+#             logger.info("Convert from MONOCHROME1 to MONOCHROME2")
+#             pixels = np.max(pixels) - pixels
+#             logger.debug(f"after inversion pixels.value.range:[{pixels.min(), pixels.max()}]")
 
-    # elif pi == "RGB":
-    #     # Convert Single Frame RGB to Grayscale
-    #     pixels = cvtColor(pixels, COLOR_RGB2GRAY)
-    #     logger.debug(f"after RGB2GRAY: pixels.value.range:[{pixels.min(), pixels.max()}]")
+#     # elif pi == "RGB":
+#     #     # Convert Single Frame RGB to Grayscale
+#     #     pixels = cvtColor(pixels, COLOR_RGB2GRAY)
+#     #     logger.debug(f"after RGB2GRAY: pixels.value.range:[{pixels.min(), pixels.max()}]")
 
-    if ds.BitsAllocated != 8:
-        pixels = normalize_uint8(pixels)
-        logger.debug(f"After normalization: pixels.value.range:[{pixels.min(), pixels.max()}]")
+#     if ds.BitsAllocated != 8:
+#         pixels = normalize_uint8(pixels)
+#         logger.debug(f"After normalization: pixels.value.range:[{pixels.min(), pixels.max()}]")
 
-    return pixels
+#     return pixels
 
 
-def create_projection_from_single_frame(ds: Dataset) -> Projection:
+def create_projection_from_single_frame(ds: Dataset, frame: np.ndarray) -> Projection:
     # [mean,clahe,edge] for single-frame
-    medium_contrast = load_single_frame(ds)
+    medium_contrast = frame
 
     # Apply CLAHE for enhanced contrast
     clahe = createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
@@ -221,7 +223,7 @@ def create_projection_from_single_frame(ds: Dataset) -> Projection:
     )
 
 
-def validate_dicom_pixel_array(ds: Dataset) -> np.ndarray:
+def validate_dicom_pixel_array(ds: Dataset) -> tuple[np.ndarray, int, int, str]:
     """
     Validate DICOM pixel array related fields exist and are consistent
     Return the pixel data as a decompressed numpy array
@@ -344,6 +346,24 @@ def validate_dicom_pixel_array(ds: Dataset) -> np.ndarray:
                 f"Pixel values out of range for signed BitsStored ({bits_stored}): Found range [{pixels.min()}, {pixels.max()}]."
             )
 
+    # Pixel Display related attributes:
+    if ds.get("WindowCenter") is not None:
+        logger.debug(f"WindowCenter: {ds.WindowCenter}")
+    if ds.get("WindowWidth") is not None:
+        logger.debug(f"WindowWidth: {ds.WindowWidth}")
+    if ds.get("RescaleSlope") is not None:
+        logger.debug(f"RescaleSlope: {ds.RescaleSlope}")
+    if ds.get("RescaleIntercept") is not None:
+        logger.debug(f"RescaleIntercept: {ds.RescaleIntercept}")
+    if ds.get("RescaleType") is not None:
+        logger.debug(f"RescaleType: {ds.RescaleType}")
+    if ds.get("VOILUTSequence") is not None:
+        logger.debug(f"VOILUTSequence: {ds.VOILUTSequence}")
+    if ds.get("ModalityLUTSequence") is not None:
+        logger.debug(f"ModalityLUTSequence: {ds.ModalityLUTSequence}")
+    if ds.get("VOILUTFunction") is not None:
+        logger.debug(f"VOILUTFunction: {ds.VOILUTFunction}")
+
     # Trace the pixel relevant attributes:
     logger.debug(f"Transfer Syntax: {ds.file_meta.TransferSyntaxUID}")
     logger.debug(f"Compressed: {ds.file_meta.TransferSyntaxUID.is_compressed}")
@@ -357,84 +377,262 @@ def validate_dicom_pixel_array(ds: Dataset) -> np.ndarray:
     logger.debug(f"pixels.value.range:[{pixels.min()}..{pixels.max()}]")
     logger.debug(f"Pixel Spacing: {pixel_spacing}")
     logger.debug(f"Number of Frames: {no_of_frames}")
-    return pixels
+    return pixels, rows, cols, pi.upper()
 
 
-def load_series_frames(series_path) -> tuple[Dataset, np.ndarray]:
+def load_series_frames(series_path: Path) -> tuple[Dataset, np.ndarray]:
     """
-    Load and process the series
-    Return numpy array with 4 dimensions: [frame, height, width, 3]
-    Normalised uint8 values
-    Raises ValueError:
-            If no DICOM files found
-            If DICOM header fields are inconsistent for pixel array in any DICOM file in series
+    Loads and processes DICOM series frames from a directory, resizing to match
+    the first frame's dimensions.
+
+    Preserves original dynamic range and data type for MONOCHROME images after
+    applying Modality LUT and MONOCHROME1 inversion.
+    Converts standard Color images (RGB, PALETTE_COLOR, YBR*) to uint8 RGB.
+
+    Args:
+        series_path: Path object for the directory containing DICOM files.
+
+    Returns:
+        A tuple containing:
+            - The pydicom Dataset from the first file (for metadata).
+            - A single NumPy array containing all processed and resized frames,
+              stacked along the first axis. Dtype will be consistent for the series
+              (e.g., int16 for grayscale, uint8 for color).
+              Shape: (num_frames, height, width) or (num_frames, height, width, 3).
+
+    Raises:
+        ValueError: If no DICOM files are found, or if essential DICOM tags
+                    are missing or invalid during processing, or if frames
+                    cannot be consistently processed or stacked.
+        FileNotFoundError: If the series_path does not exist.
+        PermissionError: If read permissions are denied.
     """
-    # TODO: test a series (ultrasound) comprising multiple dcm files each with multiple frames
+    if not series_path.is_dir():
+        raise FileNotFoundError(f"Provided path is not a directory: {series_path}")
 
-    dcm_paths: list[Path] = sorted(get_dcm_files(series_path))
+    try:
+        dcm_paths: list[Path] = sorted(get_dcm_files(series_path))
+    except PermissionError as e:
+        logger.error(f"Permission denied accessing {series_path}: {e}")
+        raise
+    except Exception as e:  # Catch other potential OS errors
+        logger.error(f"Error listing files in {series_path}: {e}")
+        raise ValueError(f"Could not list files in directory: {series_path}") from e
 
-    if len(dcm_paths) == 0:
+    if not dcm_paths:
         raise ValueError(f"No DICOM files found in {series_path}")
 
-    ds1 = dcmread(dcm_paths[0])
-    pi = ds1.get("PhotometricInterpretation", None)
-    if pi is None:
-        raise ValueError("No PhotometricInterpretation")
+    processed_frames: list[np.ndarray] = []
+    ds1: Dataset | None = None  # To store the first dataset
+    target_size: tuple[int, int] | None = None  # (height, width)
+    series_pi: str = ""
+    # --- Process the first file to set the standard ---
+    try:
+        ds1 = dcmread(str(dcm_paths[0]), force=True)
+        # Validate first file AND get initial parameters
+        __, rows1, cols1, pi1 = validate_dicom_pixel_array(ds1)
+        target_size = (rows1, cols1)
+        series_pi = pi1.upper()  # Use upper for matching
+        logger.info(f"Series detected as {series_pi} with target size {target_size}")
+    except (InvalidDicomError, ValueError, AttributeError, KeyError) as e:
+        # Catch errors from reading or validating the *first* file
+        raise ValueError(f"Error validating or reading essential tags from first file {dcm_paths[0]}: {e}") from e
+    except Exception as e:
+        raise ValueError(f"Unexpected error reading first file {dcm_paths[0]}: {e}") from e
 
-    grayscale = pi in ["MONOCHROME1", "MONOCHROME2"]
-    target_size = (ds1.get("Rows", None), ds1.get("Columns", None))
-    all_series_frames = []
-
-    # Iterate through all files in the series:
+    # --- Loop through series files ---
     for dcm_path in dcm_paths:
-        ds = dcmread(dcm_path) if all_series_frames else ds1
+        try:
+            ds = dcmread(str(dcm_path), force=True) if processed_frames != [] else ds1
 
-        pixels = validate_dicom_pixel_array(ds)  # Could be 2D, 3D, or 4D
+            # Validate and get data for the current file
+            raw_pixels, current_rows, current_cols, current_pi = validate_dicom_pixel_array(ds)
 
-        if grayscale:
-            # Apply modality LUT and then VOI LUT:
-            pixels = apply_voi_lut(apply_modality_lut(pixels, ds), ds)
-            # TODO: handle saturation, eg. see James^Michael CXR RescaleIntercept, RescaleSlope
+            # --- Series PI Consistency Check ---
+            if current_pi != series_pi:
+                logger.warning(
+                    f"Inconsistent PI in {dcm_path} ({current_pi}) vs first file ({series_pi}). Skipping file."
+                )
+                continue
 
-            # Convert from Monochrome1 to MonoChrome2:
-            # TODO: check POOLE^OLIVIA
-            if pi == "MONOCHROME1":
-                pixels = np.invert(pixels.astype(np.uint16))
+            # Check dimensions against target_size even before processing
+            if (current_rows, current_cols) != target_size:
+                logger.warning(
+                    f"Inconsistent dimensions in {dcm_path} "
+                    f"({current_rows},{current_cols}) vs target ({target_size[0]},{target_size[1]}). "
+                    f"Frame will be resized after processing."
+                )
 
-            # Convert Grayscale to 3 channel/RGB
-            pixels = np.stack([pixels] * 3, axis=-1)
+            num_frames = ds.get("NumberOfFrames", 1)
+            is_multi_frame_source = raw_pixels.ndim > 2 and num_frames > 1
+            if is_multi_frame_source and raw_pixels.shape[0] != num_frames:
+                logger.warning(
+                    f"NumberOfFrames tag ({num_frames}) mismatch with pixel array "
+                    f"shape ({raw_pixels.shape[0]}) in {dcm_path}. Using array shape."
+                )
+                num_frames = raw_pixels.shape[0]
 
-        elif pi == "PALETTE COLOR" and "PaletteColorLookupTableData" in ds:
-            # Apply Color LUT if photometric interpretation is PALETTE COLOR
-            logger.debug("Applying Palette Color Lookup Table")
-            pixels = apply_color_lut(pixels, ds)  # will return RGB or RGBA
+            # --- Process each frame ---
+            for frame_idx in range(num_frames):
+                current_frame_pixels = raw_pixels[frame_idx] if is_multi_frame_source else raw_pixels
+                processed_frame: np.ndarray | None = None
 
-        elif pi in ["YBR_FULL", "YBR_FULL_422"]:
-            # Convert color space if needed (e.g., from YBR to RGB)
-            logger.debug(f"Convert color space from {pi} to RGB")
-            pixels = convert_color_space(arr=pixels, current=pi, desired="RGB", per_frame=True)
+                # Process based on the *series* interpretation determined from the first file
+                match series_pi:
+                    case "MONOCHROME1" | "MONOCHROME2":
+                        modality_pixels = apply_modality_lut(current_frame_pixels, ds)
+                        if series_pi == "MONOCHROME1":
+                            try:
+                                max_val = np.max(modality_pixels)
+                                processed_frame = max_val - modality_pixels
+                            except Exception:
+                                processed_frame = modality_pixels
+                                logger.warning(
+                                    f"Could not invert MONOCHROME1 frame {frame_idx} in {dcm_path}", exc_info=True
+                                )
+                        else:
+                            processed_frame = modality_pixels
+                        if processed_frame is not None and processed_frame.ndim == 3 and processed_frame.shape[-1] == 1:
+                            processed_frame = processed_frame.squeeze(axis=-1)
 
-        if pixels.ndim == 4:  # Multi-frame DICOM (already a stack of frames)
-            all_series_frames.append(pixels)
+                    case "PALETTE COLOR":
+                        processed_frame = apply_color_lut(current_frame_pixels, ds)
+                        if processed_frame.shape[-1] == 4:
+                            processed_frame = processed_frame[..., :3]
+                        if processed_frame.dtype != np.uint8:
+                            processed_frame = normalize_uint8(processed_frame)
 
-        elif pixels.ndim == 3:  # Single Frame
-            if pixels.shape[:2] != target_size:  # Ensure EACH pixel frame has size as defined by rows/cols in header
-                pixels = resize(pixels, (target_size[1], target_size[0]), interpolation=INTER_AREA)
+                    case "YBR_FULL" | "YBR_FULL_422":
+                        processed_frame = convert_color_space(current_frame_pixels, series_pi, "RGB")
+                        if (
+                            processed_frame.dtype != np.uint8
+                            or processed_frame.ndim != 3
+                            or processed_frame.shape[-1] != 3
+                        ):
+                            raise ValueError(f"Color space conversion failed for {dcm_path} frame {frame_idx}.")
 
-            # Add Frame dimension as first axis.  This makes it a (1, H, W, C) array.
-            all_series_frames.append(np.expand_dims(pixels, axis=0))
+                    case "RGB":
+                        processed_frame = current_frame_pixels
 
-        else:
-            logger.error(f"Unexpected pixel array shape, skip: {dcm_path}")
+                # --- Resize frame AFTER processing if necessary ---
+                if processed_frame is not None:
+                    # Resize to target size if necessary
+                    current_h, current_w = processed_frame.shape[:2]
+                    target_h, target_w = target_size
+                    if current_h != target_h or current_w != target_w:
+                        logger.warning(
+                            f"Resizing frame {len(processed_frames)} from ({current_h},{current_w}) "
+                            f"to target ({target_h},{target_w}) in {dcm_path}"
+                        )
+                        interpolation = INTER_AREA if (current_h > target_h or current_w > target_w) else INTER_LINEAR
+                        processed_frame = resize(processed_frame, (target_w, target_h), interpolation=interpolation)
 
-        del ds
+                    processed_frames.append(processed_frame)
+                else:
+                    logger.error(f"CRITICAL Error: Frame {frame_idx} from {dcm_path} failed to process.")
 
-    # Convert all frames into one list, concatenate along the frame dimension (axis=0)
-    # TODO: move normalisation to ImageViewer, maintain full dynamic range in all_series_frames
-    # Normalize and convert to uint8:
-    all_series_frames = normalize_uint8(np.concatenate(all_series_frames, axis=0))
+        except (InvalidDicomError, ValueError) as e:
+            logger.error(f"Invalid DICOM or processing error skipped: {dcm_path} - {e}")
+            continue  # Skip this file
+        except Exception as e:
+            logger.error(f"Unexpected error processing file {dcm_path}: {e}")
+            raise ValueError(f"Error processing file in series: {dcm_path}") from e
 
-    return ds1, all_series_frames
+    if not processed_frames:
+        raise ValueError(f"Could not load any valid frames from series: {series_path}")
+
+    # --- Stack the list of consistently typed and sized frames ---
+    try:
+        all_series_frames_stacked = np.stack(processed_frames, axis=0)
+    except ValueError as e:
+        logger.error(f"Error stacking frames: {e}. Check frame dimensions consistency.")
+        for i, frame in enumerate(processed_frames):
+            logger.error(f"Frame {i} shape: {frame.shape}, dtype: {frame.dtype}")
+        raise ValueError("Inconsistent frame dimensions prevent stacking.") from e
+
+    logger.info(
+        f"Final stacked array - Shape: {all_series_frames_stacked.shape}, Dtype: {all_series_frames_stacked.dtype}"
+    )
+
+    return ds1, all_series_frames_stacked
+
+
+# def load_series_frames_ex(series_path) -> tuple[Dataset, np.ndarray]:
+#     """
+#     Load and process the series
+#     Return numpy array with 4 dimensions: [frame, height, width, 3]
+#     Normalised uint8 values
+#     Raises ValueError:
+#             If no DICOM files found
+#             If DICOM header fields are inconsistent for pixel array in any DICOM file in series
+#     """
+#     # TODO: test a series (ultrasound) comprising multiple dcm files each with multiple frames
+
+#     dcm_paths: list[Path] = sorted(get_dcm_files(series_path))
+
+#     if len(dcm_paths) == 0:
+#         raise ValueError(f"No DICOM files found in {series_path}")
+
+#     ds1 = dcmread(dcm_paths[0])
+#     pi = ds1.get("PhotometricInterpretation", None)
+#     if pi is None:
+#         raise ValueError("No PhotometricInterpretation")
+
+#     grayscale = pi in ["MONOCHROME1", "MONOCHROME2"]
+#     target_size = (ds1.get("Rows", None), ds1.get("Columns", None))
+#     all_series_frames = []
+
+#     # Iterate through all files in the series:
+#     for dcm_path in dcm_paths:
+#         ds = dcmread(dcm_path) if all_series_frames else ds1
+
+#         pixels = validate_dicom_pixel_array(ds)  # Could be 2D, 3D, or 4D
+
+#         if grayscale:
+#             # Apply modality LUT and then VOI LUT:
+#             pixels = apply_voi_lut(apply_modality_lut(pixels, ds), ds)
+#             # TODO: handle saturation, eg. see James^Michael CXR RescaleIntercept, RescaleSlope
+
+#             # Convert from Monochrome1 to MonoChrome2:
+#             # TODO: check POOLE^OLIVIA
+#             if pi == "MONOCHROME1":
+#                 logger.debug("Convert from MONOCHROME1 to MONOCHROME, inverting pixel values")
+#                 pixels = np.invert(pixels)  # .astype(np.uint16))
+
+#             # Convert Grayscale to 3 channel/RGB
+#             pixels = np.stack([pixels] * 3, axis=-1)
+
+#         elif pi == "PALETTE COLOR" and "PaletteColorLookupTableData" in ds:
+#             # Apply Color LUT if photometric interpretation is PALETTE COLOR
+#             logger.debug("Applying Palette Color Lookup Table")
+#             pixels = apply_color_lut(pixels, ds)  # will return RGB or RGBA
+
+#         elif pi in ["YBR_FULL", "YBR_FULL_422"]:
+#             # Convert color space if needed (e.g., from YBR to RGB)
+#             logger.debug(f"Convert color space from {pi} to RGB")
+#             pixels = convert_color_space(arr=pixels, current=pi, desired="RGB", per_frame=True)
+
+#         if pixels.ndim == 4:  # Multi-frame DICOM (already a stack of frames)
+#             all_series_frames.append(pixels)
+
+#         elif pixels.ndim == 3:  # Single Frame
+#             if pixels.shape[:2] != target_size:  # Ensure EACH pixel frame has size as defined by rows/cols in header
+#                 pixels = resize(pixels, (target_size[1], target_size[0]), interpolation=INTER_AREA)
+
+#             # Add Frame dimension as first axis.  This makes it a (1, H, W, C) array.
+#             all_series_frames.append(np.expand_dims(pixels, axis=0))
+
+#         else:
+#             logger.error(f"Unexpected pixel array shape: {pixels.shape}, skip: {dcm_path}")
+
+#         del ds
+
+#     # Convert all frames into one list, concatenate along the frame dimension (axis=0)
+#     # TODO: move normalisation to ImageViewer, maintain full dynamic range in all_series_frames
+#     # Normalize and convert to uint8:
+#     all_series_frames = normalize_uint8(np.concatenate(all_series_frames, axis=0))
+
+#     return ds1, all_series_frames
 
 
 def create_projection_from_series(series_path: Path) -> Projection:
@@ -460,7 +658,7 @@ def create_projection_from_series(series_path: Path) -> Projection:
 
     # Handle single frame in series:
     if all_series_frames.shape[0] == 1:
-        projection = create_projection_from_single_frame(ds1)
+        projection = create_projection_from_single_frame(ds1, all_series_frames[0])
         cache_projection(projection, projection_file_path)
         del ds1
         return projection

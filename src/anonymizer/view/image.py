@@ -37,17 +37,39 @@ class ImageViewer(ctk.CTkFrame):
         self,
         parent,
         images: np.ndarray,
+        initial_wl: float | None = None,
+        initial_ww: float | None = None,
         add_to_whitelist_callback: Callable[[str], None] | None = None,
         regenerate_series_projections_callback: Callable[[], None] | None = None,
     ):
         super().__init__(master=parent)  # Call the superclass constructor
         self.parent = parent
+
+        if images is None or images.size == 0:
+            raise ValueError("ImageViewer requires a non-empty NumPy array for images.")
+        if images.ndim not in [3, 4]:  # Expect (F, H, W) or (F, H, W, C)
+            raise ValueError(f"Unsupported image array dimensions: {images.ndim}. Expected 3 or 4.")
+
         self.num_images: int = images.shape[0]
         self.images: np.ndarray = images
         self.add_to_whitelist_callback = add_to_whitelist_callback
         self.regenerate_series_projections_callback = regenerate_series_projections_callback
-        self.image_width: int = images.shape[2]
-        self.image_height: int = images.shape[1]
+
+        # Determine image properties from the last frame
+        last_frame = images[-1]
+        self.image_height: int = last_frame.shape[0]
+        self.image_width: int = last_frame.shape[1]
+
+        # --- Determine if series is high bit depth grayscale ---
+        self.is_high_bit_grayscale: bool = (last_frame.ndim == 2 and last_frame.dtype != np.uint8) or (
+            last_frame.ndim == 3 and last_frame.shape[-1] == 1 and last_frame.dtype != np.uint8
+        )
+        self.is_color: bool = last_frame.ndim == 3 and last_frame.shape[2] == 3
+
+        logger.info(
+            f"ImageViewer Init: HighBitGrayscale={self.is_high_bit_grayscale}, Color={self.is_color}, Dtype={last_frame.dtype}, Shape={images.shape}"
+        )
+
         self.current_image_index: int = 0
         # Cache for loaded images: cache index: (PhotoImage, (Width, Height))
         self.image_cache: dict[int, tuple[ImageTk.PhotoImage, Image.Image, tuple[int, int]]] = {}
@@ -72,11 +94,26 @@ class ImageViewer(ctk.CTkFrame):
         self.adjusting_wlww: bool = False
         self.adjust_start_x: int | None = None
         self.adjust_start_y: int | None = None
-        # User-facing state: Window Level and Width (initialized for 0-255 range)
-        self.current_wl: float = 128.0
-        self.current_ww: float = 255.0
-        self.initial_wl: float = 128.0
-        self.initial_ww: float = 255.0
+        # Set initial WW/WL
+        if initial_wl is not None and initial_ww is not None:
+            self.current_wl: float = initial_wl
+            self.current_ww: float = initial_ww
+            logger.info(f"Using provided initial WL: {initial_wl}, WW: {initial_ww}")
+        elif self.is_high_bit_grayscale:
+            # Calculate from first frame's data range
+            min_val, max_val = float(np.min(last_frame)), float(np.max(last_frame))
+            self.current_wl = (max_val + min_val) / 2.0
+            self.current_ww = max(1.0, max_val - min_val)  # Ensure WW is at least 1
+            logger.info(
+                f"Calculated initial WL: {self.current_wl}, WW: {self.current_ww} from data range [{min_val}, {max_val}]"
+            )
+        else:  # Default for uint8 color or grayscale
+            self.current_wl = 128.0
+            self.current_ww = 255.0
+            logger.info(f"Using default initial WL: {self.current_wl}, WW: {self.current_ww} for uint8/color")
+
+        self.initial_wl: float = self.current_wl
+        self.initial_ww: float = self.current_ww
         # Derived alpha/beta for internal use with convertScaleAbs
         self._derived_alpha: float = 1.0
         self._derived_beta: int = 0
@@ -284,8 +321,7 @@ class ImageViewer(ctk.CTkFrame):
         self.load_and_display_image(self.current_image_index)
 
     def refresh_current_image(self):
-        if self.current_image_index in self.image_cache:
-            del self.image_cache[self.current_image_index]
+        self.remove_from_cache(self.current_image_index)  # Use the method that closes PIL image
         self.load_and_display_image(self.current_image_index)
 
     def mouse_enter(self, event):
@@ -375,6 +411,84 @@ class ImageViewer(ctk.CTkFrame):
 
         return combined_overlay
 
+    def _apply_windowing(self, image_array_raw: np.ndarray) -> np.ndarray:
+        """
+        Applies the current WW/WL settings to the raw image data based on its type.
+        Handles high bit-depth grayscale with true WW/WL (NumPy/clip) and
+        simulates WW/WL on uint8 data using derived alpha/beta with convertScaleAbs.
+
+        Args:
+            image_array_raw: The raw input image frame (copy) as a NumPy array.
+
+        Returns:
+            A NumPy array (uint8, BGR) processed and ready for overlay rendering.
+            Returns a black image on error.
+        """
+        try:
+            current_dtype = image_array_raw.dtype
+            current_ndim = image_array_raw.ndim
+            num_channels = image_array_raw.shape[-1] if current_ndim == 3 else 1
+
+            # Determine if it's high bit depth grayscale FOR THIS FRAME
+            is_high_bit_gray = (current_ndim == 2 and current_dtype != np.uint8) or (
+                current_ndim == 3 and num_channels == 1 and current_dtype != np.uint8
+            )
+
+            if is_high_bit_gray:
+                # --- Apply True WW/WL using NumPy/clip ---
+                logger.debug(f"Applying true WW/WL: WL={self.current_wl:.1f}, WW={self.current_ww:.1f}")
+                img_to_process = image_array_raw.squeeze() if current_ndim == 3 else image_array_raw
+
+                ww = self.current_ww
+                wl = self.current_wl
+                min_val = float(wl) - float(ww) / 2.0
+                # max_val = float(wl) + float(ww) / 2.0
+                image_float = img_to_process.astype(np.float32)
+                ww_safe = max(1.0, float(ww))  # Avoid division by zero
+
+                output_float = ((image_float - min_val) / ww_safe) * 255.0
+                output_clipped = np.clip(output_float, 0, 255)
+                # np.clip handles BOTH lower bound (values < min_val become < 0 after mapping -> clip to 0)
+                # AND upper bound (values > max_val become > 255 after mapping -> clip to 255)
+                output_uint8_gray = output_clipped.astype(np.uint8)
+                # Convert final uint8 grayscale to BGR for overlay compatibility
+                image_processed_bgr = cv2.cvtColor(output_uint8_gray, cv2.COLOR_GRAY2BGR)
+
+            else:  # Assume uint8 Grayscale or Color
+                # --- Apply Simulated WW/WL using Alpha/Beta for uint8 ---
+                logger.debug("Applying simulated WW/WL (alpha/beta) for uint8 input")
+
+                # Ensure input is BGR uint8
+                if current_ndim == 2 and current_dtype == np.uint8:
+                    image_color = cv2.cvtColor(image_array_raw, cv2.COLOR_GRAY2BGR)
+                elif current_ndim == 3 and image_array_raw.shape[-1] == 4 and current_dtype == np.uint8:
+                    image_color = cv2.cvtColor(image_array_raw, cv2.COLOR_RGBA2BGR)
+                elif current_ndim == 3 and image_array_raw.shape[-1] == 3 and current_dtype == np.uint8:
+                    image_color = image_array_raw  # Already uint8 BGR/RGB
+                else:
+                    logger.error(
+                        f"Cannot apply alpha/beta to unexpected uint8 format: Shape={image_array_raw.shape}, Dtype={current_dtype}"
+                    )
+                    return np.zeros((self.image_height, self.image_width, 3), dtype=np.uint8)
+
+                # Calculate derived alpha/beta locally
+                ww_safe = max(1.0, self.current_ww)
+                derived_alpha = 255.0 / ww_safe
+                derived_beta = int(127.5 - (derived_alpha * self.current_wl))
+
+                if derived_alpha != 1.0 or derived_beta != 0:
+                    image_processed_bgr = cv2.convertScaleAbs(image_color, alpha=derived_alpha, beta=derived_beta)
+                else:
+                    image_processed_bgr = image_color  # No adjustment needed
+
+            return image_processed_bgr
+
+        except Exception as e:
+            logger.exception(
+                f"Error applying windowing to frame with shape {image_array_raw.shape} dtype {current_dtype}: {e}"
+            )
+            return np.zeros((self.image_height, self.image_width, 3), dtype=np.uint8)
+
     def load_and_display_image(self, frame_ndx: int):
         if not (0 <= frame_ndx < self.num_images) or self.images is None:
             return
@@ -397,21 +511,12 @@ class ImageViewer(ctk.CTkFrame):
 
         image_array = self.images[frame_ndx].copy()
 
-        # if len(image_array.shape) == 2:  # TODO: necessary?
-        #     image_array = cv2.cvtColor(image_array, cv2.COLOR_GRAY2BGR)
+        # --- Apply Windowing/Leveling ---
+        image_array = self._apply_windowing(image_array)
 
         # Rendering:
         rendered_overlay = self._render_overlays(frame_ndx)
         image_array = cv2.add(image_array, rendered_overlay)
-
-        # --- Apply Brightness/Contrast (using derived alpha/beta) ---
-        # NOTE: This simulates WW/WL on uint8. True WW/WL needs high bit depth data
-        #       before this point and would use the NumPy/clip method instead.
-        if self._derived_alpha != 1.0 or self._derived_beta != 0:
-            try:
-                image_array = cv2.convertScaleAbs(image_array, alpha=self._derived_alpha, beta=int(self._derived_beta))
-            except Exception as e:
-                logger.error(f"Error applying derived brightness/contrast: {e}")
 
         # Display:
         image_pil = Image.fromarray(image_array)
@@ -778,13 +883,24 @@ class ImageViewer(ctk.CTkFrame):
             self.clear_cache()
         self.refresh_current_image()
 
-    # --- Brightness/Contrast (Simulated WW/WL) Event Handlers ---
-    # --- WW/WL Adjustment Handlers ---
+    # --- WW/WL (Brightness/Contrast) Calculation ---
+    def _update_derived_alpha_beta(self):
+        """
+        Calculates the internal alpha and beta values used by cv2.convertScaleAbs
+        based on the current user-facing self.current_ww and self.current_wl.
+        """
+        # Ensure WW is at least 1 to avoid division by zero and extreme alpha
+        ww_safe = max(1.0, self.current_ww)
+        self._derived_alpha = 255.0 / ww_safe
+        # Calculate beta so that the pixel value 'wl' maps to the middle
+        # of the output range (127.5 for 0-255)
+        self._derived_beta = int(127.5 - (self._derived_alpha * self.current_wl))
+
+    # --- WW/WL Adjustment Event Handlers ---
     def _start_adjust_display(self, event):
         """Starts WL/WW adjustment. (Bound to <ButtonPress-3>)"""
-        if self.drawing_rect or self.playing:
-            return  # Don't adjust if currently drawing box
-
+        if self.drawing_rect:
+            return  # Ignore if drawing
         logger.debug("Starting WL/WW adjust")
         self.adjusting_wlww = True
         self.adjust_start_x = int(event.x)
@@ -799,51 +915,43 @@ class ImageViewer(ctk.CTkFrame):
 
         current_x = int(event.x)
         current_y = int(event.y)
-
         delta_x = current_x - self.adjust_start_x
         delta_y = current_y - self.adjust_start_y  # Down = Positive Delta Y
 
+        # --- Calculate New WW/WL based on Mouse Mapping ---
+        # Adjust sensitivity based on data range? For now, use defaults.
         wl_sensitivity = self.DEFAULT_WL_SENSITIVITY
         ww_sensitivity = self.DEFAULT_WW_SENSITIVITY
 
-        # Brightness (WL): Up/Down drag -> Higher WL visually increases brightness on 0-255 scale
+        # WL (Brightness): Up/Down drag -> Up = Brighter (Higher WL)
         self.current_wl = self.initial_wl + (-delta_y / wl_sensitivity)
 
-        # Contrast (WW): Left/Right drag -> Smaller WW visually increases contrast on 0-255 scale
+        # WW (Contrast): Left/Right drag -> Left = More contrast (Lower WW)
         self.current_ww = self.initial_ww + (-delta_x / ww_sensitivity)
 
         # Clamp WW (must be > 0)
         self.current_ww = max(1.0, self.current_ww)
-        # Clamp WL (e.g., within 0-255 or a wider range if needed)
-        self.current_wl = max(0.0, min(255.0, self.current_wl))  # Simple 0-255 clamp for now
+        # Optional: Clamp WL based on data range if known, otherwise allow free range
+        # self.current_wl = max(some_min, min(some_max, self.current_wl))
 
-        # Calculate derived alpha/beta
-        self._update_derived_alpha_beta()
+        logger.debug(f"Adjusting Display: WL={self.current_wl:.1f}, WW={self.current_ww:.1f}")
 
-        logger.debug(
-            f"Adjusting Display: WL={self.current_wl:.1f}, WW={self.current_ww:.1f} -> Alpha={self._derived_alpha:.2f}, Beta={self._derived_beta}"
-        )
+        # --- Update UI Labels ---
+        self.update_status()
 
+        # --- Trigger Redraw ---
         self.refresh_current_image()
 
     def _end_adjust_display(self, event):
         """Ends WL/WW adjustment. (Bound to <ButtonRelease-3>)"""
         if not self.adjusting_wlww:
             return
-
         logger.debug("Ending WL/WW adjust")
         self.adjusting_wlww = False
         self.adjust_start_x = None
         self.adjust_start_y = None
-        self.update_status()
-        self.clear_cache()
-
-    def _update_derived_alpha_beta(self):
-        """Calculates alpha/beta from current WW/WL."""
-        if self.current_ww <= 0:
-            self.current_ww = 1.0  # Safety clamp
-        self._derived_alpha = 255.0 / self.current_ww
-        self._derived_beta = int(127.5 - (self._derived_alpha * self.current_wl))
+        # Final redraw to potentially update cache with final WW/WL settings
+        self.refresh_current_image()
 
     def destroy(self):
         """Override destroy to properly clean up resources."""
