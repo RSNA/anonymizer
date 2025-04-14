@@ -371,7 +371,9 @@ class SeriesView(ctk.CTkToplevel):
         with torch.no_grad():
             if self._ocr_reader:
                 results = detect_text(
-                    pixels=self.image_viewer.images[frame_index], ocr_reader=self._ocr_reader, draw_boxes_and_text=False
+                    pixels=self.image_viewer._apply_windowing(self.image_viewer.images[frame_index]),
+                    ocr_reader=self._ocr_reader,
+                    draw_boxes_and_text=False,
                 )
                 if results:
                     logger.debug(f"OCR Results:\n{pformat(results)}")
@@ -413,7 +415,9 @@ class SeriesView(ctk.CTkToplevel):
 
     def remove_text_from_single_frame(self, frame_index: int, ocr_texts: list[OCRText]):
         logger.debug(f"Remove {len(ocr_texts)} words from frame {frame_index}")
-        remove_text(self.image_viewer.images[frame_index], ocr_texts)
+        raw_frame = self.image_viewer.images[frame_index]
+        windowed_frame = self.image_viewer._apply_windowing(raw_frame)
+        self.image_viewer.images[frame_index] = remove_text(raw_frame, windowed_frame, ocr_texts)
         ocr_texts.clear()
 
     def remove_text_from_series(self):

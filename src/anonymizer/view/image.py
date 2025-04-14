@@ -11,6 +11,7 @@ from PIL import Image, ImageTk
 
 from anonymizer.controller.remove_pixel_phi import LayerType, OCRText, OverlayData, Segmentation, UserRectangle
 from anonymizer.utils.translate import _
+from anonymizer.view.histogram import Histogram
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +129,7 @@ class ImageViewer(ctk.CTkFrame):
         play_image = Image.open("assets/icons/play.png").resize(self.PLAY_BTN_SIZE)
         pause_image = Image.open("assets/icons/pause.png").resize(self.PLAY_BTN_SIZE)
 
-        # --- Create CTkImage objects ---
+        # --- Create Play/Pause Icons as CTkImage objects ---
         self.ctk_play_icon = ctk.CTkImage(light_image=play_image, dark_image=play_image, size=self.PLAY_BTN_SIZE)
         self.ctk_pause_icon = ctk.CTkImage(light_image=pause_image, dark_image=pause_image, size=self.PLAY_BTN_SIZE)
 
@@ -137,28 +138,41 @@ class ImageViewer(ctk.CTkFrame):
         self.grid_rowconfigure(0, weight=1)  # Image label row expands
         self.grid_columnconfigure(0, weight=1)  # Image label column expands
 
+        # Image Frame:
+        self.image_frame = ctk.CTkFrame(self)
+        self.image_frame.grid(row=0, column=0, sticky="nsew")
+        self.image_frame.grid_rowconfigure(0, weight=1)  # Image label row expands
+        self.image_frame.grid_columnconfigure(0, weight=1)  # Image label column expands
+
         # Canvas (holds current frame pixels)
-        self.canvas = tk.Canvas(self, bg="black", borderwidth=0, highlightthickness=0)  # Use appropriate background
+        self.canvas = tk.Canvas(
+            self.image_frame, bg="black", borderwidth=0, highlightthickness=0
+        )  # Use appropriate background
         self.canvas_image_item = None  # Add this attribute to store the ID of the image on the canvas
         self.canvas.grid(row=0, column=0, sticky="nsew")
 
         # Scrollbar
-        self.scrollbar = ttk.Scrollbar(self, orient=ctk.HORIZONTAL, command=self.scroll_handler)
+        self.scrollbar = ttk.Scrollbar(self.image_frame, orient=ctk.HORIZONTAL, command=self.scroll_handler)
         self.scrollbar.grid(row=1, column=0, sticky="ew")  # sticky="ew"
         self.update_scrollbar()
 
+        # Data Frame:
+        self.data_frame = ctk.CTkFrame(self)
+        self.data_frame.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="ns")
+        self.data_frame.grid_rowconfigure(0, weight=1)
+
+        # Histogram:
+        self.histogram = Histogram(self.data_frame)
+        self.histogram.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="n")
+
         # Control Frame for fixed width widgets
-        self.control_frame = ctk.CTkFrame(self)
-        self.control_frame.grid(row=2, column=0, padx=self.PAD, pady=self.PAD, sticky="ew")
+        self.control_frame = ctk.CTkFrame(self.data_frame)
+        self.control_frame.grid(row=1, column=1, padx=self.PAD, pady=self.PAD, sticky="ew")
         self.control_frame.grid_columnconfigure(1, weight=1)
 
         # Image Size Label:
         self.image_size_label = ctk.CTkLabel(self.control_frame, text="")
         self.image_size_label.grid(row=0, column=0, sticky="w", padx=self.PAD)
-
-        # --- WL/WW Labels ---
-        self.wl_ww_label = ctk.CTkLabel(self.control_frame, text="WL/WW: ---", width=150)  # Fixed width for alignment
-        self.wl_ww_label.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="w")
 
         self.projection_label = ctk.CTkLabel(self.control_frame, text="")
         self.projection_label.grid(row=1, column=0, sticky="w", padx=self.PAD)
@@ -190,7 +204,7 @@ class ImageViewer(ctk.CTkFrame):
             self.toggle_button.grid(row=0, column=3, padx=self.PAD, pady=(self.PAD, 0), sticky="e")
 
         self.image_number_label = ctk.CTkLabel(self.control_frame, text="", font=("Courier Bold", 14))
-        self.image_number_label.grid(row=1, column=3, sticky="e", padx=(0, self.PAD))
+        self.image_number_label.grid(row=1, column=3, sticky="s", padx=(0, self.PAD))
 
         # Event binding:
         # Mouse:
@@ -346,8 +360,7 @@ class ImageViewer(ctk.CTkFrame):
         self.image_size_label.configure(
             text=f"View[{self.current_size[0]}x{self.current_size[1]}] Actual[{self.images.shape[2]}x{self.images.shape[1]}]"
         )
-        # Update WL/WW label using current state
-        self.wl_ww_label.configure(text=f"WL/WW: {int(self.current_wl)}/{int(self.current_ww)}")
+        self.histogram.set_wlww(self.current_wl, self.current_ww)
 
     def get_projection_label(self) -> str:
         if self.num_images == 1:
@@ -512,6 +525,7 @@ class ImageViewer(ctk.CTkFrame):
         image_array = self.images[frame_ndx].copy()
 
         # --- Apply Windowing/Leveling ---
+        self.histogram.update_image(image_array)
         image_array = self._apply_windowing(image_array)
 
         # Rendering:
@@ -537,7 +551,7 @@ class ImageViewer(ctk.CTkFrame):
         self.add_to_cache(frame_ndx, self.photo_image, image_pil_resized)
         self.current_image_index = frame_ndx
         self.update_scrollbar()
-        #   self.update_status()
+        self.update_status()
 
     # Cache functions:
     def add_to_cache(self, index, photo_image, pil_image):  # Modified signature

@@ -136,7 +136,7 @@ def _draw_text_contours_on_mask(image: ndarray, rgb: bool, top_left: tuple, bott
     # Constructing sub-image
     sub_image = image[y1:y2, x1:x2]
     # If RGB image, then convert sub_image to grayscale for contour detection
-    if rgb:
+    if sub_image.shape[-1] == 3:
         sub_image = cvtColor(sub_image, COLOR_RGB2GRAY)
     # Threshold the grayscale sub-image:
     _, thresh = threshold(sub_image, 0, 255, THRESH_OTSU)
@@ -203,9 +203,9 @@ def detect_text(pixels: ndarray, ocr_reader: Reader, draw_boxes_and_text: bool =
     return ocr_texts
 
 
-def remove_text(pixels: ndarray, ocr_texts: list[OCRText]):
+def remove_text(pixels: ndarray, windowed_frame: ndarray, ocr_texts: list[OCRText]) -> ndarray:
     """
-    Remove the PHI in the pixel data of the supplied pixels 2D frame (#TODO: for now must be RGB)
+    Remove the PHI in the pixel data of the supplied pixels 2D frame
     using the suplied ocr_text rectangles
     Perform inpainting using cv2.inpaint with radius = 5 & INPAINT_TELEA (Poisson PDE) algorithm
     """
@@ -215,15 +215,23 @@ def remove_text(pixels: ndarray, ocr_texts: list[OCRText]):
 
     for ocr_text in ocr_texts:
         _draw_text_contours_on_mask(
-            image=pixels, rgb=True, top_left=ocr_text.top_left, bottom_right=ocr_text.bottom_right, mask=mask
+            image=windowed_frame,
+            rgb=pixels.shape[-1] == 3,
+            top_left=ocr_text.top_left,
+            bottom_right=ocr_text.bottom_right,
+            mask=mask,
         )
 
     kernel = np.ones((3, 3), np.uint8)
     dilated_mask = dilate(src=mask, kernel=kernel, iterations=1)
 
-    inpaint(
-        src=pixels,
-        dst=pixels,
+    # Inpaint function only supports 8-bit, 16-bit UNSIGNED or 32-bit float 1-channel and 8-bit 3-channel input/output images
+    # Handle float64 pixels for high bit depth images
+    if pixels.dtype == np.float64:
+        src = pixels.astype(np.uint16)
+
+    return inpaint(
+        src=src,
         inpaintMask=dilated_mask,
         inpaintRadius=5,
         flags=INPAINT_TELEA,

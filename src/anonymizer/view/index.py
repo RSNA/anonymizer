@@ -78,6 +78,7 @@ class IndexView(ctk.CTkToplevel):
             show="headings",
             style="Treeview",
             columns=list(PHI_IndexRecord.get_field_names()),
+            height=30,
         )
         # self._tree.bind("<<TreeviewSelect>>", self._tree_select)
         self._tree.grid(row=0, column=0, columnspan=11, sticky="nswe")
