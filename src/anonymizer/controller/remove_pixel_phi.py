@@ -29,6 +29,7 @@ from cv2 import (
 )
 from easyocr import Reader
 from numpy import ndarray
+from numpy.typing import NDArray
 from openjpeg.utils import encode_array  # JPEG2000Lossless
 from pydicom import Dataset, dcmread
 from pydicom.encaps import encapsulate
@@ -157,12 +158,15 @@ def _has_voi_lut(ds: Dataset) -> bool:
     return bool("WindowCenter" in ds and "WindowWidth" in ds)
 
 
-def detect_text(pixels: ndarray, ocr_reader: Reader, draw_boxes_and_text: bool = False) -> list[OCRText] | None:
+def detect_text(
+    pixels: NDArray[np.uint8], ocr_reader: Reader, draw_boxes_and_text: bool = False
+) -> list[OCRText] | None:
     """
     Detect Text in pixels 2D frame, if present and indicated, draw bounding box and text in green
+    * NB * pixels must be 2D or 3D array (grayscale or RGB) data type: uint8
     Return list of OCRText: (bounding boxes, text, confidence)
     """
-    SIZE_THRESHOLD = 1000  # pixels
+    SIZE_THRESHOLD = 1000  # pixels #TODO: provide UX option to set this threshold / increase|decrease OCR accuracy
     canvas_size = min(max(pixels.shape[0], pixels.shape[1]), SIZE_THRESHOLD)
     results = ocr_reader.readtext(
         pixels,
@@ -205,8 +209,8 @@ def detect_text(pixels: ndarray, ocr_reader: Reader, draw_boxes_and_text: bool =
 
 def remove_text(pixels: ndarray, windowed_frame: ndarray, ocr_texts: list[OCRText]) -> ndarray:
     """
-    Remove the PHI in the pixel data of the supplied pixels 2D frame
-    using the suplied ocr_text rectangles
+    Remove the PHI in the pixel data of the supplied pixels 2D frame using the suplied ocr_text rectangles
+    Use the windowed frame to determine the text contours on the mask
     Perform inpainting using cv2.inpaint with radius = 5 & INPAINT_TELEA (Poisson PDE) algorithm
     """
 
@@ -226,9 +230,8 @@ def remove_text(pixels: ndarray, windowed_frame: ndarray, ocr_texts: list[OCRTex
     dilated_mask = dilate(src=mask, kernel=kernel, iterations=1)
 
     # Inpaint function only supports 8-bit, 16-bit UNSIGNED or 32-bit float 1-channel and 8-bit 3-channel input/output images
-    # Handle float64 pixels for high bit depth images
-    if pixels.dtype == np.float64:
-        src = pixels.astype(np.uint16)
+    if pixels.dtype == np.float64 or pixels.dtype == np.int16:
+        src = pixels.astype(np.float32)
 
     return inpaint(
         src=src,
@@ -244,7 +247,7 @@ def blackout_rectangular_areas(pixels: ndarray, user_rects: list[UserRectangle])
     Blacks out rectangular areas defined in user_rects on the input image.
 
     Args:
-        pixels: NumPy array representing the image (grayscale or color, e.g., uint8).
+        pixels: NumPy array representing the image (grayscale or color).
                 This array will be modified IN-PLACE.
         user_rects: A list of UserRectangle objects specifying the areas to black out.
     """

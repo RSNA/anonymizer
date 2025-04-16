@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
+from anonymizer.controller.create_projections import apply_windowing
 from anonymizer.controller.remove_pixel_phi import LayerType, OCRText, OverlayData, Segmentation, UserRectangle
 from anonymizer.utils.translate import _
 from anonymizer.view.histogram import Histogram
@@ -38,8 +39,8 @@ class ImageViewer(ctk.CTkFrame):
         self,
         parent,
         images: np.ndarray,
-        initial_wl: float | None = None,
-        initial_ww: float | None = None,
+        initial_wl: float,
+        initial_ww: float,
         add_to_whitelist_callback: Callable[[str], None] | None = None,
         regenerate_series_projections_callback: Callable[[], None] | None = None,
     ):
@@ -96,25 +97,10 @@ class ImageViewer(ctk.CTkFrame):
         self.adjust_start_x: int | None = None
         self.adjust_start_y: int | None = None
         # Set initial WW/WL
-        if initial_wl is not None and initial_ww is not None:
-            self.current_wl: float = initial_wl
-            self.current_ww: float = initial_ww
-            logger.info(f"Using provided initial WL: {initial_wl}, WW: {initial_ww}")
-        elif self.is_high_bit_grayscale:
-            # Calculate from first frame's data range
-            min_val, max_val = float(np.min(last_frame)), float(np.max(last_frame))
-            self.current_wl = (max_val + min_val) / 2.0
-            self.current_ww = max(1.0, max_val - min_val)  # Ensure WW is at least 1
-            logger.info(
-                f"Calculated initial WL: {self.current_wl}, WW: {self.current_ww} from data range [{min_val}, {max_val}]"
-            )
-        else:  # Default for uint8 color or grayscale
-            self.current_wl = 128.0
-            self.current_ww = 255.0
-            logger.info(f"Using default initial WL: {self.current_wl}, WW: {self.current_ww} for uint8/color")
-
-        self.initial_wl: float = self.current_wl
-        self.initial_ww: float = self.current_ww
+        self.current_wl: float = initial_wl
+        self.current_ww: float = initial_ww
+        self.initial_wl: float = initial_wl
+        self.initial_ww: float = initial_ww
         # Derived alpha/beta for internal use with convertScaleAbs
         self._derived_alpha: float = 1.0
         self._derived_beta: int = 0
@@ -145,9 +131,7 @@ class ImageViewer(ctk.CTkFrame):
         self.image_frame.grid_columnconfigure(0, weight=1)  # Image label column expands
 
         # Canvas (holds current frame pixels)
-        self.canvas = tk.Canvas(
-            self.image_frame, bg="black", borderwidth=0, highlightthickness=0
-        )  # Use appropriate background
+        self.canvas = tk.Canvas(self.image_frame, bg="black", borderwidth=0, highlightthickness=0)
         self.canvas_image_item = None  # Add this attribute to store the ID of the image on the canvas
         self.canvas.grid(row=0, column=0, sticky="nsew")
 
@@ -161,8 +145,12 @@ class ImageViewer(ctk.CTkFrame):
         self.data_frame.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="ns")
         self.data_frame.grid_rowconfigure(0, weight=1)
 
-        # Histogram:
-        self.histogram = Histogram(self.data_frame)
+        # Histogram: (histogram is displayed after layout finalised)
+        self.histogram = Histogram(
+            self.data_frame,
+            update_callback=self._handle_histogram_update,
+        )
+        self.histogram.set_wlww(self.current_wl, self.current_ww, redraw=False)
         self.histogram.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="n")
 
         # Control Frame for fixed width widgets
@@ -354,13 +342,26 @@ class ImageViewer(ctk.CTkFrame):
         self.load_and_display_image(0)
         self._canvas.focus_set()
 
+    def _handle_histogram_update(self, wl: float, ww: float):
+        """Callback function called by Histogram widget when WL/WW changes interactively."""
+        logger.debug(f"Received WL/WW update from histogram: WL={wl:.1f}, WW={ww:.1f}")
+        # Update ImageViewer's master state
+        wl_changed = abs(wl - self.current_wl) > 0.01
+        ww_clamped = max(1.0, ww)  # Ensure WW is valid
+        ww_changed = abs(ww_clamped - self.current_ww) > 0.01
+
+        if wl_changed or ww_changed:
+            self.current_wl = wl
+            self.current_ww = ww_clamped
+            # Trigger a redraw of the main image viewer
+            self.refresh_current_image()  # Use refresh to force reload
+
     def update_status(self):
         self.projection_label.configure(text=self.get_projection_label())
         self.image_number_label.configure(text=f"{self.current_image_index + 1}/{self.num_images}")
         self.image_size_label.configure(
             text=f"View[{self.current_size[0]}x{self.current_size[1]}] Actual[{self.images.shape[2]}x{self.images.shape[1]}]"
         )
-        self.histogram.set_wlww(self.current_wl, self.current_ww)
 
     def get_projection_label(self) -> str:
         if self.num_images == 1:
@@ -424,86 +425,10 @@ class ImageViewer(ctk.CTkFrame):
 
         return combined_overlay
 
-    def _apply_windowing(self, image_array_raw: np.ndarray) -> np.ndarray:
-        """
-        Applies the current WW/WL settings to the raw image data based on its type.
-        Handles high bit-depth grayscale with true WW/WL (NumPy/clip) and
-        simulates WW/WL on uint8 data using derived alpha/beta with convertScaleAbs.
-
-        Args:
-            image_array_raw: The raw input image frame (copy) as a NumPy array.
-
-        Returns:
-            A NumPy array (uint8, BGR) processed and ready for overlay rendering.
-            Returns a black image on error.
-        """
-        try:
-            current_dtype = image_array_raw.dtype
-            current_ndim = image_array_raw.ndim
-            num_channels = image_array_raw.shape[-1] if current_ndim == 3 else 1
-
-            # Determine if it's high bit depth grayscale FOR THIS FRAME
-            is_high_bit_gray = (current_ndim == 2 and current_dtype != np.uint8) or (
-                current_ndim == 3 and num_channels == 1 and current_dtype != np.uint8
-            )
-
-            if is_high_bit_gray:
-                # --- Apply True WW/WL using NumPy/clip ---
-                logger.debug(f"Applying true WW/WL: WL={self.current_wl:.1f}, WW={self.current_ww:.1f}")
-                img_to_process = image_array_raw.squeeze() if current_ndim == 3 else image_array_raw
-
-                ww = self.current_ww
-                wl = self.current_wl
-                min_val = float(wl) - float(ww) / 2.0
-                # max_val = float(wl) + float(ww) / 2.0
-                image_float = img_to_process.astype(np.float32)
-                ww_safe = max(1.0, float(ww))  # Avoid division by zero
-
-                output_float = ((image_float - min_val) / ww_safe) * 255.0
-                output_clipped = np.clip(output_float, 0, 255)
-                # np.clip handles BOTH lower bound (values < min_val become < 0 after mapping -> clip to 0)
-                # AND upper bound (values > max_val become > 255 after mapping -> clip to 255)
-                output_uint8_gray = output_clipped.astype(np.uint8)
-                # Convert final uint8 grayscale to BGR for overlay compatibility
-                image_processed_bgr = cv2.cvtColor(output_uint8_gray, cv2.COLOR_GRAY2BGR)
-
-            else:  # Assume uint8 Grayscale or Color
-                # --- Apply Simulated WW/WL using Alpha/Beta for uint8 ---
-                logger.debug("Applying simulated WW/WL (alpha/beta) for uint8 input")
-
-                # Ensure input is BGR uint8
-                if current_ndim == 2 and current_dtype == np.uint8:
-                    image_color = cv2.cvtColor(image_array_raw, cv2.COLOR_GRAY2BGR)
-                elif current_ndim == 3 and image_array_raw.shape[-1] == 4 and current_dtype == np.uint8:
-                    image_color = cv2.cvtColor(image_array_raw, cv2.COLOR_RGBA2BGR)
-                elif current_ndim == 3 and image_array_raw.shape[-1] == 3 and current_dtype == np.uint8:
-                    image_color = image_array_raw  # Already uint8 BGR/RGB
-                else:
-                    logger.error(
-                        f"Cannot apply alpha/beta to unexpected uint8 format: Shape={image_array_raw.shape}, Dtype={current_dtype}"
-                    )
-                    return np.zeros((self.image_height, self.image_width, 3), dtype=np.uint8)
-
-                # Calculate derived alpha/beta locally
-                ww_safe = max(1.0, self.current_ww)
-                derived_alpha = 255.0 / ww_safe
-                derived_beta = int(127.5 - (derived_alpha * self.current_wl))
-
-                if derived_alpha != 1.0 or derived_beta != 0:
-                    image_processed_bgr = cv2.convertScaleAbs(image_color, alpha=derived_alpha, beta=derived_beta)
-                else:
-                    image_processed_bgr = image_color  # No adjustment needed
-
-            return image_processed_bgr
-
-        except Exception as e:
-            logger.exception(
-                f"Error applying windowing to frame with shape {image_array_raw.shape} dtype {current_dtype}: {e}"
-            )
-            return np.zeros((self.image_height, self.image_width, 3), dtype=np.uint8)
-
     def load_and_display_image(self, frame_ndx: int):
+        logger.debug(f"Loading and displaying image at index: {frame_ndx}")
         if not (0 <= frame_ndx < self.num_images) or self.images is None:
+            logger.error(f"Invalid frame index: {frame_ndx}")
             return
 
         # Use Cache:
@@ -511,22 +436,23 @@ class ImageViewer(ctk.CTkFrame):
             cached_image, __, cached_size = self.image_cache[frame_ndx]
             if cached_size == self.current_size:
                 self.photo_image = cached_image
-                # self.image_label.configure(image=self.photo_image)
-                # self.image_label.image = self.photo_image  # type: ignore # Keep a reference, crucially important for Tkinter.
                 self.canvas.image = self.photo_image  # type: ignore # Keep a reference, crucially important for Tkinter.
                 if self.canvas_image_item:
                     self.canvas.delete(self.canvas_image_item)
                 self.canvas_image_item = self.canvas.create_image(0, 0, anchor="nw", image=self.photo_image)
                 self.current_image_index = frame_ndx
+                self.histogram.update_image(self.images[frame_ndx])
                 self.update_scrollbar()
                 self.update_status()
                 return
 
         image_array = self.images[frame_ndx].copy()
 
+        # Update Histogram Data:
+        self.histogram.update_image(self.images[frame_ndx])
+
         # --- Apply Windowing/Leveling ---
-        self.histogram.update_image(image_array)
-        image_array = self._apply_windowing(image_array)
+        image_array = apply_windowing(self.current_wl, self.current_ww, image_array)
 
         # Rendering:
         rendered_overlay = self._render_overlays(frame_ndx)
@@ -595,14 +521,14 @@ class ImageViewer(ctk.CTkFrame):
             self.change_image(self.current_image_index + 1)
 
     def on_resize(self, event):
-        label_width = self.canvas.winfo_width()
-        label_height = self.canvas.winfo_height()
+        canvas_width = self.canvas.winfo_width()
+        canvas_height = self.canvas.winfo_height()
 
         # Handle initial case where winfo_width/height return 1.
-        if label_width <= 1 or label_height <= 1:
+        if canvas_width <= 1 or canvas_height <= 1:
             return
 
-        new_image_size = (label_width, label_height)
+        new_image_size = (canvas_width, canvas_height)
         if new_image_size != self.current_size:
             self.current_size = new_image_size
             self.load_and_display_image(self.current_image_index)
@@ -940,8 +866,8 @@ class ImageViewer(ctk.CTkFrame):
         # WL (Brightness): Up/Down drag -> Up = Brighter (Higher WL)
         self.current_wl = self.initial_wl + (-delta_y / wl_sensitivity)
 
-        # WW (Contrast): Left/Right drag -> Left = More contrast (Lower WW)
-        self.current_ww = self.initial_ww + (-delta_x / ww_sensitivity)
+        # WW (Contrast): Left/Right drag -> Left = Less contrast (Higher WW)
+        self.current_ww = self.initial_ww + (delta_x / ww_sensitivity)
 
         # Clamp WW (must be > 0)
         self.current_ww = max(1.0, self.current_ww)
@@ -950,8 +876,8 @@ class ImageViewer(ctk.CTkFrame):
 
         logger.debug(f"Adjusting Display: WL={self.current_wl:.1f}, WW={self.current_ww:.1f}")
 
-        # --- Update UI Labels ---
-        self.update_status()
+        # --- Update Histogram ---
+        self.histogram.set_wlww(self.current_wl, self.current_ww)
 
         # --- Trigger Redraw ---
         self.refresh_current_image()

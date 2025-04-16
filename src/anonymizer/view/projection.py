@@ -108,7 +108,7 @@ class ProjectionView(ctk.CTkToplevel):
         self.title(title)
 
     def _clear_view(self):
-        logging.debug("Clear PixelView Frame")
+        logger.debug("Clear ProjectionView Frame")
         for widget in self._pv_frame.winfo_children():
             widget.unbind("<Button-1>")
             widget.destroy()  # this should clean up the associated CTKImage & Tkinter PhotoImage

@@ -11,9 +11,9 @@ import customtkinter as ctk
 import numpy as np
 import torch
 from easyocr import Reader
-from pydicom import Dataset, multival
+from pydicom import Dataset
 
-from anonymizer.controller.create_projections import load_series_frames
+from anonymizer.controller.create_projections import apply_windowing, get_wl_ww, load_series_frames
 from anonymizer.controller.remove_pixel_phi import (
     OCRText,
     UserRectangle,
@@ -99,7 +99,7 @@ class SeriesView(ctk.CTkToplevel):
         self.image_viewer = ImageViewer(
             self._sv_frame,
             self._frames,
-            *self.get_wl_ww(self._ds),
+            *get_wl_ww(self._ds),
             add_to_whitelist_callback=self.add_to_whitelist,
             regenerate_series_projections_callback=self.regenerate_series_projections,
         )
@@ -157,50 +157,6 @@ class SeriesView(ctk.CTkToplevel):
 
         self.populate_listbox()
 
-    def get_wl_ww(self, ds: Dataset) -> tuple[float | None, float | None]:
-        """Get the window level and width from the DICOM dataset."""
-        try:
-            # Use .get() with a default of None to safely access tags
-            wl_tag_value = ds.get("WindowCenter")
-            ww_tag_value = ds.get("WindowWidth")
-
-            initial_wl = None
-            initial_ww = None
-
-            # Check if tags exist and are not empty
-            if wl_tag_value is not None and ww_tag_value is not None:
-                # Handle single vs. multi-value (pydicom loads multi-value as a list)
-                if isinstance(wl_tag_value, multival.MultiValue):
-                    if len(wl_tag_value) > 0:
-                        initial_wl = float(wl_tag_value[0])
-                else:
-                    initial_wl = float(wl_tag_value)  # It's a single value
-
-                if isinstance(ww_tag_value, multival.MultiValue):
-                    if len(ww_tag_value) > 0:
-                        initial_ww = float(ww_tag_value[0])
-                else:
-                    initial_ww = float(ww_tag_value)  # It's a single value
-
-                # Ensure Window Width is positive
-                if initial_ww is not None and initial_ww < 1.0:
-                    logger.warning(f"DICOM WindowWidth ({initial_ww}) is less than 1. Setting to 1.")
-                    initial_ww = 1.0
-
-            # Check if both were successfully read and converted
-            if initial_wl is None or initial_ww is None:
-                logger.warning("WindowCenter or WindowWidth tag missing or invalid in DICOM. Will calculate defaults.")
-                # Let ImageViewer calculate defaults in its __init__ based on data type/range
-                initial_wl = None
-                initial_ww = None
-
-        except (AttributeError, ValueError, TypeError) as e:
-            logger.warning(f"Error reading DICOM WW/WL tags: {e}. Will calculate defaults.")
-            initial_wl = None
-            initial_ww = None
-
-        return initial_wl, initial_ww
-
     def _update_title(self):
         if self._ds:
             phi = self._anon_model.get_phi(self._ds.PatientID)
@@ -257,13 +213,16 @@ class SeriesView(ctk.CTkToplevel):
         if self._frames is not None and not self.single_frame:
             logger.info("Regenerate Series Projections")
             self._frames[0] = np.min(self._frames, axis=0)
-            self._frames[1] = np.mean(self._frames, axis=0).astype(np.uint8)
+            self._frames[1] = np.mean(self._frames, axis=0).astype(self._frames.dtype)
             self._frames[2] = np.max(self._frames, axis=0)
 
     def load_frames(self, series_path: Path) -> tuple[Dataset, np.ndarray]:
         """Loads, processes, and combines series frames and projections."""
         ds, series_frames = load_series_frames(series_path)
 
+        logger.info(f"SERIES FRAMES BEFORE PROJ DATA TYPE={series_frames.dtype}")
+
+        # Do not generate projections for single-frame series:
         if series_frames.shape[0] == 1:  # Single-frame case
             logger.info("Load single frame high-res, normalised")
             return ds, series_frames
@@ -273,7 +232,7 @@ class SeriesView(ctk.CTkToplevel):
         projections = np.stack(
             [
                 np.min(series_frames, axis=0),
-                np.mean(series_frames, axis=0).astype(np.uint8),
+                np.mean(series_frames, axis=0).astype(series_frames.dtype),
                 np.max(series_frames, axis=0),
             ],
             axis=0,
@@ -371,7 +330,11 @@ class SeriesView(ctk.CTkToplevel):
         with torch.no_grad():
             if self._ocr_reader:
                 results = detect_text(
-                    pixels=self.image_viewer._apply_windowing(self.image_viewer.images[frame_index]),
+                    pixels=apply_windowing(
+                        self.image_viewer.current_wl,
+                        self.image_viewer.current_ww,
+                        self.image_viewer.images[frame_index],
+                    ),
                     ocr_reader=self._ocr_reader,
                     draw_boxes_and_text=False,
                 )
@@ -416,7 +379,7 @@ class SeriesView(ctk.CTkToplevel):
     def remove_text_from_single_frame(self, frame_index: int, ocr_texts: list[OCRText]):
         logger.debug(f"Remove {len(ocr_texts)} words from frame {frame_index}")
         raw_frame = self.image_viewer.images[frame_index]
-        windowed_frame = self.image_viewer._apply_windowing(raw_frame)
+        windowed_frame = apply_windowing(self.image_viewer.current_wl, self.image_viewer.current_ww, raw_frame)
         self.image_viewer.images[frame_index] = remove_text(raw_frame, windowed_frame, ocr_texts)
         ocr_texts.clear()
 

@@ -301,9 +301,11 @@ class IndexView(ctk.CTkToplevel):
         phi_record = self._phi_index[ndx]
         # TODO: UX with listbox of series descriptions / uids
         study_path = self._controller.model.images_dir() / phi_record.anon_patient_id / phi_record.anon_study_uid
-        first_series_path = next(study_path.iterdir(), None)
-        if first_series_path:
-            SeriesView(self, anon_model=self._anon_model, series_path=first_series_path)
+        if study_path.exists():
+            # Filter out hidden files/directories and get first series directory
+            first_series_path = next((p for p in study_path.iterdir() if not p.name.startswith(".")), None)
+            if first_series_path:
+                SeriesView(self, anon_model=self._anon_model, series_path=first_series_path)
 
     def _escape_keypress(self, event):
         logger.info("_escape_pressed")

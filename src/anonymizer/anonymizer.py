@@ -18,8 +18,8 @@ import click
 import customtkinter as ctk
 from customtkinter import ThemeManager
 from pydicom import dcmread
-from pydicom._version import __version__ as pydicom_version
-from pynetdicom._version import __version__ as pynetdicom_version
+from pydicom._version import __version__ as pydicom_version  # type: ignore
+from pynetdicom._version import __version__ as pynetdicom_version  # type: ignore
 
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.project import DICOMRuntimeError, ProjectModel

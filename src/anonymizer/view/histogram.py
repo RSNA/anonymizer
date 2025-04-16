@@ -1,15 +1,9 @@
 import logging
 import tkinter as tk
+from typing import Callable
 
 import customtkinter as ctk
 import numpy as np
-
-# --- Configuration for Histogram ---
-DEFAULT_NUM_BINS = 256
-HISTOGRAM_BAR_COLOR = ("gray70", "gray30")
-WL_LINE_COLOR = "black"
-WW_BOUNDARY_LINE_COLOR = "black"
-AXIS_LABEL_COLOR = ("gray10", "gray90")
 
 logger = logging.getLogger(__name__)
 
@@ -21,20 +15,24 @@ class Histogram(ctk.CTkFrame):
     indicated by superimposed lines. Includes min/max intensity labels.
     """
 
+    DEFAULT_NUM_BINS = 256
+
     def __init__(
         self,
         master,
-        width=300,
-        height=150,
         num_bins=DEFAULT_NUM_BINS,
-        callback=None,  # Function to call with (wl, ww) when updated
+        update_callback: Callable[[float, float], None] | None = None,  # Function to call with (wl, ww) when updated
     ):
         super().__init__(master)
-
-        self.widget_width = width
-        self.widget_height = height
+        self.master = master
         self.num_bins = num_bins
-        self.update_callback = callback
+        self.update_callback = update_callback
+
+        self.HISTOGRAM_BACKGROUND_COLOR = ctk.ThemeManager.theme["Histogram"]["fg_color"]
+        self.HISTOGRAM_BAR_COLOR = ctk.ThemeManager.theme["Histogram"]["bar_color"]
+        self.AXIS_LABEL_COLOR = ctk.ThemeManager.theme["Histogram"]["axis_label_color"]
+        self.WL_LINE_COLOR = ctk.ThemeManager.theme["Histogram"]["wl_line_color"]
+        self.WW_BOUNDARY_LINE_COLOR = ctk.ThemeManager.theme["Histogram"]["ww_boundary_line_color"]
 
         # --- Internal State ---
         self.hist_data = np.array([])
@@ -60,15 +58,13 @@ class Histogram(ctk.CTkFrame):
         self.grid_rowconfigure(0, weight=1)  # Canvas row
         self.grid_rowconfigure(1, weight=0)  # Label row
 
-        self.hist_canvas = ctk.CTkCanvas(
+        self.canvas = tk.Canvas(
             self,
-            width=self.widget_width - 20,
-            height=self.widget_height - 40,  # Allow space for labels
-            background=self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"]),
+            bg=self._apply_appearance_mode(self.HISTOGRAM_BACKGROUND_COLOR),
             borderwidth=0,
             highlightthickness=0,
         )
-        self.hist_canvas.grid(row=0, column=0, padx=10, pady=(10, 5), sticky="nsew")
+        self.canvas.grid(row=0, column=0, padx=10, pady=(10, 5), sticky="nsew")
 
         self.label_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.label_frame.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="ew")
@@ -81,13 +77,13 @@ class Histogram(ctk.CTkFrame):
         self.ww_label.grid(row=0, column=1, sticky="e")
 
         # --- Bind Mouse Events ---
-        self.hist_canvas.bind("<ButtonPress-1>", self._on_left_press)
-        self.hist_canvas.bind("<B1-Motion>", self._on_left_drag)
-        self.hist_canvas.bind("<ButtonRelease-1>", self._on_left_release)
-        self.hist_canvas.bind("<ButtonPress-3>", self._on_right_press)
-        self.hist_canvas.bind("<B3-Motion>", self._on_right_drag)
-        self.hist_canvas.bind("<ButtonRelease-3>", self._on_right_release)
-        self.bind("<Configure>", self._on_configure, add=True)
+        self.canvas.bind("<ButtonPress-1>", self._on_left_press)
+        self.canvas.bind("<B1-Motion>", self._on_left_drag)
+        self.canvas.bind("<ButtonRelease-1>", self._on_left_release)
+        self.canvas.bind("<ButtonPress-3>", self._on_right_press)
+        self.canvas.bind("<B3-Motion>", self._on_right_drag)
+        self.canvas.bind("<ButtonRelease-3>", self._on_right_release)
+        self.bind("<Configure>", self._on_configure)
 
     # --- Public Methods ---
     def update_image(self, image_frame: np.ndarray):
@@ -95,25 +91,14 @@ class Histogram(ctk.CTkFrame):
         Updates histogram data based on a new image frame (expects grayscale)
         and triggers a redraw. Does NOT modify WL/WW internally.
         """
-        if image_frame is None or image_frame.size == 0 or image_frame.ndim != 2:
-            # Set empty histogram data
-            self.hist_data = np.zeros(self.num_bins)
-            self.bin_edges = np.linspace(0, 255, self.num_bins + 1)
-            self.image_min_intensity = 0.0
-            self.image_max_intensity = 255.0
-            self.max_hist_count = 1
-            logger.warning("Histogram received invalid image data. Displaying empty histogram.")
-        else:
-            # Calculate histogram based on the new data
-            self._calculate_histogram(image_frame)
-
+        logger.debug(f"Updating histogram with new image data. image shape: {image_frame.shape}")
+        self._calculate_histogram(image_frame)
         # Redraw using the current internal WL/WW (which should be set externally via set_wlww)
         self._redraw()
-        # Update internal labels based on current internal WL/WW
         self._update_labels()
 
-    def set_wlww(self, wl: float, ww: float):
-        """Programmatically sets the Window Level and Window Width."""
+    def set_wlww(self, wl: float, ww: float, redraw: bool = True):
+        logger.debug(f"Setting WL: {wl}, WW: {ww}")
         wl_changed = abs(wl - self._current_wl.get()) > 0.01
         ww_changed = abs(ww - self._current_ww.get()) > 0.01
         ww_clamped = max(1.0, ww)
@@ -121,17 +106,16 @@ class Histogram(ctk.CTkFrame):
         if wl_changed or ww_changed:
             self._current_wl.set(wl)
             self._current_ww.set(ww_clamped)
-            if hasattr(self, "hist_canvas") and self.hist_canvas.winfo_exists():
+            if redraw:
                 self._redraw()
                 self._update_labels()
 
     def get_wlww(self) -> tuple[float, float]:
-        """Gets the current Window Level and Window Width."""
         return self._current_wl.get(), self._current_ww.get()
 
     # --- Internal Calculation and Drawing Methods ---
     def _calculate_histogram(self, image_frame: np.ndarray):
-        """Calculates histogram data and intensity range."""
+        logger.debug("Calculating histogram data.")
         self.image_min_intensity = float(np.nanmin(image_frame))
         self.image_max_intensity = float(np.nanmax(image_frame))
         if self.image_min_intensity >= self.image_max_intensity:
@@ -144,27 +128,24 @@ class Histogram(ctk.CTkFrame):
             self.max_hist_count = 1.0
 
     def _redraw(self):
-        """Clears and redraws the entire canvas content."""
-        if (
-            not hasattr(self, "hist_canvas")
-            or not self.hist_canvas.winfo_exists()
-            or self.hist_canvas.winfo_width() <= 1
-        ):
+        """Clears and redraws the entire histogram canvas content."""
+        logger.debug("Redrawing histogram canvas.")
+        if self.canvas.winfo_width() <= 1:
+            logger.error("Histogram canvas width is 0. Cannot redraw.")
             return
-        hist_bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
-        self.hist_canvas.configure(background=hist_bg_color)
-        self.hist_canvas.delete("all")
+        self.canvas.delete("all")
         self._draw_histogram_bars()
         self._draw_wlww_indicators()
         self._draw_axis_labels()
 
     def _draw_histogram_bars(self):
         """Draws the histogram bars on the main canvas."""
-        canvas_width = self.hist_canvas.winfo_width()
-        canvas_height = self.hist_canvas.winfo_height()
+        logger.debug("Drawing histogram bars.")
+        canvas_width = self.canvas.winfo_width()
+        canvas_height = self.canvas.winfo_height()
         if canvas_width <= 1 or canvas_height <= 1 or len(self.hist_data) == 0:
             return
-        bar_color = self._apply_appearance_mode(HISTOGRAM_BAR_COLOR)
+        bar_color = self._apply_appearance_mode(self.HISTOGRAM_BAR_COLOR)
         bar_area_height = canvas_height - 15
         if bar_area_height <= 0:
             bar_area_height = canvas_height
@@ -176,12 +157,13 @@ class Histogram(ctk.CTkFrame):
             y1 = bar_area_height
             if x1 <= x0:
                 x1 = x0 + 1
-            self.hist_canvas.create_rectangle(x0, y0, x1, y1, fill=bar_color, outline="", tags="histogram_bar")
+            self.canvas.create_rectangle(x0, y0, x1, y1, fill=bar_color, outline="", tags="histogram_bar")
 
     def _draw_wlww_indicators(self):
         """Draws the WL line and WW boundary lines superimposed on the histogram canvas."""
-        canvas_width = self.hist_canvas.winfo_width()
-        canvas_height = self.hist_canvas.winfo_height()
+        logger.debug("Drawing WL/WW indicators.")
+        canvas_width = self.canvas.winfo_width()
+        canvas_height = self.canvas.winfo_height()
         if canvas_width <= 1 or canvas_height <= 1:
             return
         indicator_height = canvas_height - 15
@@ -196,29 +178,52 @@ class Histogram(ctk.CTkFrame):
         ww_max_x = self._intensity_to_x(ww_max, canvas_width)
         wl_x = self._intensity_to_x(wl, canvas_width)
 
-        self.hist_canvas.create_line(
-            ww_min_x, 0, ww_min_x, indicator_height, fill=WW_BOUNDARY_LINE_COLOR, width=1, dash=(4, 4), tags="ww_line"
+        self.canvas.create_line(
+            ww_min_x,
+            0,
+            ww_min_x,
+            indicator_height,
+            fill=self._apply_appearance_mode(self.WW_BOUNDARY_LINE_COLOR),
+            width=1,
+            dash=(4, 4),
+            tags="ww_line",
         )
-        self.hist_canvas.create_line(
-            ww_max_x, 0, ww_max_x, indicator_height, fill=WW_BOUNDARY_LINE_COLOR, width=1, dash=(4, 4), tags="ww_line"
+        self.canvas.create_line(
+            ww_max_x,
+            0,
+            ww_max_x,
+            indicator_height,
+            fill=self._apply_appearance_mode(self.WW_BOUNDARY_LINE_COLOR),
+            width=1,
+            dash=(4, 4),
+            tags="ww_line",
         )
-        self.hist_canvas.create_line(wl_x, 0, wl_x, indicator_height, fill=WL_LINE_COLOR, width=2, tags="wl_line")
+        self.canvas.create_line(
+            wl_x,
+            0,
+            wl_x,
+            indicator_height,
+            fill=self._apply_appearance_mode(self.WL_LINE_COLOR),
+            width=2,
+            tags="wl_line",
+        )
 
     def _draw_axis_labels(self):
         """Draws the min and max intensity labels on the x-axis."""
-        canvas_width = self.hist_canvas.winfo_width()
-        canvas_height = self.hist_canvas.winfo_height()
+        logger.debug("Drawing axis labels.")
+        canvas_width = self.canvas.winfo_width()
+        canvas_height = self.canvas.winfo_height()
         if canvas_width <= 1 or canvas_height <= 1:
             return
         label_y = canvas_height - 5
-        label_color = self._apply_appearance_mode(AXIS_LABEL_COLOR)
+        label_color = self._apply_appearance_mode(self.AXIS_LABEL_COLOR)
         label_font = ctk.CTkFont(size=10)
         min_text = f"{self.image_min_intensity:.0f}"
-        self.hist_canvas.create_text(
+        self.canvas.create_text(
             5, label_y, text=min_text, anchor="sw", fill=label_color, font=label_font, tags="axis_label"
         )
         max_text = f"{self.image_max_intensity:.0f}"
-        self.hist_canvas.create_text(
+        self.canvas.create_text(
             canvas_width - 5, label_y, text=max_text, anchor="se", fill=label_color, font=label_font, tags="axis_label"
         )
 
@@ -256,14 +261,13 @@ class Histogram(ctk.CTkFrame):
 
     # --- Event Handlers ---
     def _on_configure(self, event=None):
-        if hasattr(self, "hist_canvas") and self.hist_canvas.winfo_exists() and self.hist_canvas.winfo_width() > 1:
-            self.after_idle(self._redraw)
+        self.after_idle(self._redraw)
 
     def _on_left_press(self, event):
         self._is_left_dragging = True
         self._drag_start_x = event.x
         self._drag_start_wl = self._current_wl.get()
-        new_wl = self._x_to_intensity(event.x, self.hist_canvas.winfo_width())
+        new_wl = self._x_to_intensity(event.x, self.canvas.winfo_width())
         self._current_wl.set(new_wl)
         self._redraw()
         self._update_labels()
@@ -273,7 +277,7 @@ class Histogram(ctk.CTkFrame):
     def _on_left_drag(self, event):
         if not self._is_left_dragging:
             return
-        new_wl = self._x_to_intensity(event.x, self.hist_canvas.winfo_width())
+        new_wl = self._x_to_intensity(event.x, self.canvas.winfo_width())
         if abs(new_wl - self._current_wl.get()) > 0.01:
             self._current_wl.set(new_wl)
             self._redraw()
@@ -292,7 +296,7 @@ class Histogram(ctk.CTkFrame):
     def _on_right_drag(self, event):
         if not self._is_right_dragging:
             return
-        canvas_width = self.hist_canvas.winfo_width()
+        canvas_width = self.canvas.winfo_width()
         if canvas_width <= 0:
             return
         delta_x = event.x - self._drag_start_x

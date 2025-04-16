@@ -2504,9 +2504,6 @@ class ProjectController(AE):
                 for anon_instance_uid in anon_instance_uids:
                     self.anonymizer.model.remove_uid_inverse(anon_instance_uid)
 
-                # Remove PHI data from anonymizer model:
-                self.anonymizer.model.remove_phi(anon_pt_id, anon_study_uid)
-
                 # Remove files from local storage directory:
                 shutil.rmtree(study_dir)
                 logger.info(f"Study directory: {study_dir} deleted successfully")
@@ -2518,11 +2515,18 @@ class ProjectController(AE):
                         f"{patient_dir} empty => Patient {anon_pt_id} directory removed following study deletion"
                     )
 
-                return True
             except Exception as e:
                 # TODO: rollback?
-                logger.error(f"Error deleting study: {e}")
-        return False
+                logger.error(f"Error deleting study files: {e}")
+                return False
+
+        # Remove PHI data from anonymizer model:
+        if not self.anonymizer.model.remove_phi(anon_pt_id, anon_study_uid):
+            logger.error(f"Critical Error removing phi data for StudyUID: {anon_study_uid} PatientID: {anon_pt_id}")
+            return False
+
+        logger.info(f"PHI data removed for StudyUID: {anon_study_uid} PatientID: {anon_pt_id} successfully")
+        return True
 
     def create_phi_csv(self) -> Path | str:
         """
