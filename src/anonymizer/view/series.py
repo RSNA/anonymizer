@@ -2,7 +2,7 @@ import difflib
 import gc
 import logging
 import os
-import tkinter as ttk
+import tkinter as tk
 from enum import StrEnum, auto
 from pathlib import Path
 from pprint import pformat
@@ -13,7 +13,7 @@ import torch
 from easyocr import Reader
 from pydicom import Dataset
 
-from anonymizer.controller.create_projections import apply_windowing, get_wl_ww, load_series_frames
+from anonymizer.controller.create_projections import apply_windowing, get_wl_ww, load_series_frames, save_series_frames
 from anonymizer.controller.remove_pixel_phi import (
     OCRText,
     UserRectangle,
@@ -46,7 +46,7 @@ class SeriesView(ctk.CTkToplevel):
             raise ValueError(f"{series_path} is not a valid directory")
 
         self._anon_model = anon_model
-        self._series_dir = series_path
+        self._series_path = series_path
         self._ocr_reader = None  # only created if user clicks "Detect Text" button
         self.edit_context: EditContext = EditContext.FRAME
         self.detected_text: dict[int, list[OCRText]] = {}  # Store all detected text per frame
@@ -72,28 +72,53 @@ class SeriesView(ctk.CTkToplevel):
         self._sv_frame.grid_columnconfigure(1, weight=1)
 
         # Whitelist frame:
-        list_frame = ctk.CTkFrame(self._sv_frame)
-        list_frame.grid(row=0, column=0, sticky="nsew", padx=self.PAD, pady=self.PAD)
-        list_frame.grid_columnconfigure(0, weight=1)
-        list_frame.grid_rowconfigure(2, weight=1)
+        whitelist_frame = ctk.CTkFrame(self._sv_frame)
+        whitelist_frame.grid(row=0, column=0, sticky="nsew", padx=self.PAD, pady=self.PAD)
+        whitelist_frame.grid_columnconfigure(2, weight=1)
+        whitelist_frame.grid_rowconfigure(3, weight=1)
 
-        # Whitelist button:
-        whitelist_title = ctk.CTkButton(list_frame, text="WHITE LIST", command=self.insert_entry_into_whitelist)
+        # Whitelist buttons:
+        whitelist_title = ctk.CTkLabel(whitelist_frame, text=_("WHITE LIST"))
         whitelist_title.grid(row=0, columnspan=2, sticky="ew")
+        whitelist_defaults_button = ctk.CTkButton(
+            whitelist_frame, text=_("Defaults"), command=self.load_whitelist_defaults
+        )
+        whitelist_defaults_button.grid(row=1, column=0, sticky="ew", padx=self.PAD, pady=self.PAD)
+        whitelist_clear_button = ctk.CTkButton(whitelist_frame, text=_("Clear"), command=self.clear_whitelist)
+        whitelist_clear_button.grid(row=1, column=1, sticky="ew", padx=(0, self.PAD), pady=self.PAD)
 
         # Whitelist entry:
-        self.whitelist_entry = ctk.CTkEntry(list_frame)
+        self.whitelist_entry = ctk.CTkEntry(whitelist_frame)
         self.whitelist_entry.bind("<Return>", self.whitelist_button_clicked_or_entry_return)
-        self.whitelist_entry.grid(row=1, columnspan=2, sticky="ew")
+        self.whitelist_entry.grid(row=2, columnspan=3, sticky="ew")
 
-        # Whitelist listbox & scrollbar:
-        scrollbar = ttk.Scrollbar(list_frame, orient="vertical")
-        self.whitelist = ttk.Listbox(list_frame, border=0, yscrollcommand=scrollbar.set)
-        scrollbar.config(command=self.whitelist.yview)
+        # scrollbar = tk.Scrollbar(whitelist_frame, orient="vertical")
+        scrollbar = ctk.CTkScrollbar(
+            whitelist_frame,
+            orientation="vertical",
+            # --- Styling for CTkScrollbar ---
+            fg_color="black",  # Color of the trough (background channel)
+            button_color="black",  # Color of the arrows and the slider thumb
+            button_hover_color="gray50",  # Color when hovering over arrows/thumb
+            # You might not need borderwidth/relief for CTkScrollbar
+            # --- End Styling ---
+        )
+        self.whitelist = tk.Listbox(
+            whitelist_frame,
+            border=0,
+            yscrollcommand=scrollbar.set,
+            bg="black",
+            selectbackground="#004080",
+            fg="white",
+            selectforeground="white",
+            highlightthickness=0,  # Remove focus highlight border
+            activestyle="none",  # Remove underline on active item
+        )
+        scrollbar.configure(command=self.whitelist.yview)
         self.whitelist.bind("<Delete>", self.whitelist_delete_keypressed)
         self.whitelist.bind("<BackSpace>", self.whitelist_delete_keypressed)
-        self.whitelist.grid(row=2, column=0, sticky="nsew")
-        scrollbar.grid(row=2, column=1, sticky="ns")
+        self.whitelist.grid(row=3, columnspan=2, sticky="nsew")
+        scrollbar.grid(row=3, column=2, sticky="ns")
 
         # ImageViewer:
         self.image_viewer = ImageViewer(
@@ -108,7 +133,6 @@ class SeriesView(ctk.CTkToplevel):
         # Control Frame:
         self.control_frame = ctk.CTkFrame(self._sv_frame)
         self.control_frame.grid(row=1, columnspan=2, sticky="ew", padx=self.PAD, pady=self.PAD)
-        # self.control_frame.grid_columnconfigure(0, weight=1)
 
         # Edit Context Segmented Button:
         col = 0
@@ -150,12 +174,20 @@ class SeriesView(ctk.CTkToplevel):
         self.blackout_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
         col += 1
 
+        # Save Series Button
+        self.save_button = ctk.CTkButton(
+            self.control_frame, width=self.BUTTON_WIDTH, text=_("Save Changes"), command=self.save_series_button_clicked
+        )
+        self.save_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="e")
+        self.save_button.configure(state="disabled")
+        col += 1
+
         # Status label:
         self.status_label = ctk.CTkLabel(self.control_frame, text="")
         self.status_label.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="e")
         self.control_frame.grid_columnconfigure(col, weight=1)  # Make status label expand.
 
-        self.populate_listbox()
+        self.load_whitelist_defaults()
 
     def _update_title(self):
         if self._ds:
@@ -173,8 +205,14 @@ class SeriesView(ctk.CTkToplevel):
         self.status_label.configure(text=message)
         self.status_label.update()
 
+    def clear_whitelist(self):
+        logger.info("Clearing whitelist")
+        self.whitelist.delete(0, "end")
+        self.whitelist_entry.delete(0, ctk.END)
+        self.whitelist_entry.focus_set()
+
     def add_to_whitelist(self, text: str):
-        whitelist = self.whitelist.get(0, ttk.END)
+        whitelist = self.whitelist.get(0, tk.END)
         try:
             ndx = whitelist.index(text)
             # Already in whitelist, hightlight:
@@ -186,6 +224,8 @@ class SeriesView(ctk.CTkToplevel):
 
     def insert_entry_into_whitelist(self):
         new_item = self.whitelist_entry.get()
+        if new_item == "":
+            return
         self.add_to_whitelist(new_item)
         self.whitelist_entry.delete(0, ctk.END)
 
@@ -219,8 +259,6 @@ class SeriesView(ctk.CTkToplevel):
     def load_frames(self, series_path: Path) -> tuple[Dataset, np.ndarray]:
         """Loads, processes, and combines series frames and projections."""
         ds, series_frames = load_series_frames(series_path)
-
-        logger.info(f"SERIES FRAMES BEFORE PROJ DATA TYPE={series_frames.dtype}")
 
         # Do not generate projections for single-frame series:
         if series_frames.shape[0] == 1:  # Single-frame case
@@ -264,19 +302,6 @@ class SeriesView(ctk.CTkToplevel):
         )
 
         logging.info("OCR Reader initialised successfully")
-
-    # def filter_text_data(self, frame_index: int) -> list[OCRText]:
-    #     """Filters the text_data for a frame based on the whitelist."""
-    #     if frame_index not in self.detected_text:
-    #         return []
-
-    #     whitelist_set = set(item.upper().strip() for item in self.whitelist.get(0, "end"))
-    #     filtered_results = []
-
-    #     for ocr_text in self.detected_text[frame_index]:
-    #         if ocr_text.text and ocr_text.text.upper() not in whitelist_set:
-    #             filtered_results.append(ocr_text)
-    #     return filtered_results
 
     def filter_text_data(self, frame_index: int, similarity_threshold: float = 0.75) -> list[OCRText]:
         """
@@ -381,6 +406,7 @@ class SeriesView(ctk.CTkToplevel):
         raw_frame = self.image_viewer.images[frame_index]
         windowed_frame = apply_windowing(self.image_viewer.current_wl, self.image_viewer.current_ww, raw_frame)
         self.image_viewer.images[frame_index] = remove_text(raw_frame, windowed_frame, ocr_texts)
+        self.save_button.configure(state="enabled")
         ocr_texts.clear()
 
     def remove_text_from_series(self):
@@ -424,6 +450,7 @@ class SeriesView(ctk.CTkToplevel):
     def blackout_areas_in_single_frame(self, frame_index: int, user_rects: list[UserRectangle]):
         logger.debug(f"Blackout {len(user_rects)} rects from frame {frame_index}")
         blackout_rectangular_areas(self.image_viewer.images[frame_index], user_rects)
+        self.save_button.configure(state="enabled")
         user_rects.clear()
 
     def blackout_areas_in_series(self):
@@ -459,11 +486,23 @@ class SeriesView(ctk.CTkToplevel):
             self.update_status(_("Areas blacked out in current frame"))
             self.image_viewer.refresh_current_image()
         else:
-            self.update_status(_("Removing text from all frames in series..."))
+            self.update_status(_("Blackout areas in all frames of series..."))
             self.blackout_areas_in_series()
-            self.update_status(_("Text removed from all frames in series"))
+            self.update_status(_("Areas blacked out in all frames of series"))
 
-    def populate_listbox(self):
+    def save_series_button_clicked(self):
+        if self._frames is None or self._ds is None:
+            logger.error("No frames or dataset to save")
+            return
+        if save_series_frames(self._series_path, self._frames if self.single_frame else self._frames[3:], self._ds):
+            logger.info(f"Saved series frames to {self._series_path}")
+            self.update_status(_("Changes saved successfully"))
+        else:
+            logger.error(f"Failed to save series frames to {self._series_path}")
+            self.update_status(_("Failed to save changes"))
+        self.save_button.configure(state="disabled")
+
+    def load_whitelist_defaults(self):
         # TODO: create standard dictionary of likely to appear on medical images
         # translate dictionary into all languages, copy to relevant locales as phi_whitelist.csv
         # TODO: provide user option to load and use this dictionary
@@ -492,7 +531,7 @@ class SeriesView(ctk.CTkToplevel):
             "SEMI-UPRIGHT",
         ]
         for item in whitelist_items:
-            self.whitelist.insert(ttk.END, item)
+            self.whitelist.insert(tk.END, item)
 
     def _escape_keypress(self, event):
         logger.info("_escape_pressed")

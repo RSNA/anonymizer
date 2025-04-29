@@ -6,7 +6,7 @@
 
 ## Install Python with tkinter (GUI library)
 ### Windows
-1. Download Python 3.12+ from [python.org](https://www.python.org/downloads/)
+1. Download Python 3.12 from [python.org](https://www.python.org/downloads/)
 2. Run installer
    - Select "Add python.exe to PATH"
    - Enable "tcl/tk and IDLE"

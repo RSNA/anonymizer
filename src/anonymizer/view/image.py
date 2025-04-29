@@ -32,8 +32,8 @@ class ImageViewer(ctk.CTkFrame):
     TEXT_BOX_COLOR = (0, 255, 0)  # RGB = green
     USER_RECT_COLOR = (0, 0, 255)  # RGB = blue
     SEGMENTATION_COLOR = (255, 0, 0)  # RGB = red
-    DEFAULT_WL_SENSITIVITY = 2.0  # Pixels moved per unit change in WL (affects Beta)
-    DEFAULT_WW_SENSITIVITY = 2.0  # Pixels moved per unit change in WW (affects Alpha)
+    DEFAULT_WL_SENSITIVITY = 0.75  # Pixels moved per unit change in WL (affects Beta)
+    DEFAULT_WW_SENSITIVITY = 0.75  # Pixels moved per unit change in WW (affects Alpha)
 
     def __init__(
         self,
@@ -136,9 +136,10 @@ class ImageViewer(ctk.CTkFrame):
         self.canvas.grid(row=0, column=0, sticky="nsew")
 
         # Scrollbar
-        self.scrollbar = ttk.Scrollbar(self.image_frame, orient=ctk.HORIZONTAL, command=self.scroll_handler)
-        self.scrollbar.grid(row=1, column=0, sticky="ew")  # sticky="ew"
-        self.update_scrollbar()
+        if self.num_images > 1:
+            self.scrollbar = ttk.Scrollbar(self.image_frame, orient=ctk.HORIZONTAL, command=self.scroll_handler)
+            self.scrollbar.grid(row=1, column=0, sticky="ew")  # sticky="ew"
+            self.update_scrollbar()
 
         # Data Frame:
         self.data_frame = ctk.CTkFrame(self)
@@ -165,7 +166,7 @@ class ImageViewer(ctk.CTkFrame):
         self.projection_label = ctk.CTkLabel(self.control_frame, text="")
         self.projection_label.grid(row=1, column=0, sticky="w", padx=self.PAD)
 
-        # --- Toggle Button (Play/Pause) for mulit-frame series ---
+        # --- Toggle Button (Play/Pause) for multi-frame series ---
         if self.num_images > 1:
             self.fps_slider = ctk.CTkSlider(
                 self.control_frame,
@@ -440,16 +441,18 @@ class ImageViewer(ctk.CTkFrame):
                 if self.canvas_image_item:
                     self.canvas.delete(self.canvas_image_item)
                 self.canvas_image_item = self.canvas.create_image(0, 0, anchor="nw", image=self.photo_image)
+                if self.current_image_index != frame_ndx:
+                    self.histogram.update_image(self.images[frame_ndx])
                 self.current_image_index = frame_ndx
-                self.histogram.update_image(self.images[frame_ndx])
                 self.update_scrollbar()
                 self.update_status()
                 return
 
         image_array = self.images[frame_ndx].copy()
 
-        # Update Histogram Data:
-        self.histogram.update_image(self.images[frame_ndx])
+        # Update Histogram Data if frame change:
+        if self.current_image_index != frame_ndx:
+            self.histogram.update_image(self.images[frame_ndx])
 
         # --- Apply Windowing/Leveling ---
         image_array = apply_windowing(self.current_wl, self.current_ww, image_array)
@@ -476,7 +479,8 @@ class ImageViewer(ctk.CTkFrame):
         # Caching: Store BOTH PhotoImage & resized PIL.Image
         self.add_to_cache(frame_ndx, self.photo_image, image_pil_resized)
         self.current_image_index = frame_ndx
-        self.update_scrollbar()
+        if self.num_images > 1:
+            self.update_scrollbar()
         self.update_status()
 
     # Cache functions:
@@ -715,6 +719,7 @@ class ImageViewer(ctk.CTkFrame):
             self.canvas.delete(self.temp_rect_id)
             self.temp_rect_id = None
         logger.info(f"Drawing User Rectangle start x:{self.start_x} y:{self.start_y}")
+        self.canvas.config(cursor="sizing")
 
     def draw_box(self, event):
         """
@@ -753,10 +758,12 @@ class ImageViewer(ctk.CTkFrame):
         """
         # --- Check if drawing was valid ---
         if not self.drawing_rect:
+            self.canvas.config(cursor="")
             return
 
         if self.start_x is None or self.start_y is None:
             logger.warning("Invalid drawing state, start coordinate invalid")
+            self.canvas.config(cursor="")
             return
 
         # Get final coordinates before resetting state
@@ -783,6 +790,7 @@ class ImageViewer(ctk.CTkFrame):
             x2_img, y2_img = self._view_to_image_coords(end_x, end_y)
         except Exception as e:  # Catch potential errors during conversion
             logger.error(f"Error converting view coords to image coords: {e}")
+            self.canvas.config(cursor="")
             return
 
         # Ensure correct ordering
@@ -791,14 +799,35 @@ class ImageViewer(ctk.CTkFrame):
         final_x2 = max(x1_img, x2_img)
         final_y2 = max(y1_img, y2_img)
 
+        # --- Snapping Logic ---
+        snap_threshold = 5  # Pixels in VIEW coordinates
+        view_width, view_height = self.current_size
+
+        # Check X coordinates against view boundaries
+        if local_start_x <= snap_threshold or end_x <= snap_threshold:
+            final_x1 = 0  # Snap left edge to image left edge
+            logger.debug("Snapping X1 to image edge (0)")
+        if local_start_x >= view_width - snap_threshold or end_x >= view_width - snap_threshold:
+            final_x2 = self.image_width  # Snap right edge to image right edge
+            logger.debug(f"Snapping X2 to image edge ({self.image_width})")
+
+        # Check Y coordinates against view boundaries
+        if local_start_y <= snap_threshold or end_y <= snap_threshold:
+            final_y1 = 0  # Snap top edge to image top edge
+            logger.debug("Snapping Y1 to image edge (0)")
+        if local_start_y >= view_height - snap_threshold or end_y >= view_height - snap_threshold:
+            final_y2 = self.image_height  # Snap bottom edge to image bottom edge
+            logger.debug(f"Snapping Y2 to image edge ({self.image_height})")
+
         # --- Add to Overlay Data ---
-        # Optional: Check for minimum box size
+        # Check for minimum box size
         min_width = 5
         min_height = 5
         if abs(final_x1 - final_x2) < min_width or abs(final_y1 - final_y2) < min_height:
             logger.info("ImageViewer: Drawn rect too small, not adding.")
             # Need to redraw to remove the temporary rectangle even if not adding
             self.refresh_current_image()
+            self.canvas.config(cursor="")
             return
 
         new_user_rect = UserRectangle(
@@ -821,6 +850,8 @@ class ImageViewer(ctk.CTkFrame):
 
         if self.propagate_overlays:
             self.clear_cache()
+
+        self.canvas.config(cursor="")
         self.refresh_current_image()
 
     # --- WW/WL (Brightness/Contrast) Calculation ---
@@ -847,6 +878,7 @@ class ImageViewer(ctk.CTkFrame):
         self.adjust_start_y = int(event.y)
         self.initial_wl = self.current_wl
         self.initial_ww = self.current_ww
+        self.canvas.config(cursor="fleur")
 
     def _adjust_display(self, event):
         """Adjusts WL(U/D)/WW(L/R) during drag. (Bound to <B3-Motion>)"""
@@ -892,6 +924,7 @@ class ImageViewer(ctk.CTkFrame):
         self.adjust_start_y = None
         # Final redraw to potentially update cache with final WW/WL settings
         self.refresh_current_image()
+        self.canvas.config(cursor="")
 
     def destroy(self):
         """Override destroy to properly clean up resources."""

@@ -8,26 +8,32 @@ from typing import List, Optional
 
 import numpy as np
 from cv2 import (
+    COLOR_GRAY2BGR,
+    COLOR_RGBA2BGR,
     INTER_AREA,
     INTER_LINEAR,
     MORPH_RECT,
     NORM_MINMAX,
     Canny,
     GaussianBlur,
+    convertScaleAbs,
     createCLAHE,
+    cvtColor,
     dilate,
     getStructuringElement,
     normalize,
     resize,
-    cvtColor,
-    convertScaleAbs,
-    COLOR_GRAY2BGR,
-    COLOR_RGBA2BGR,
 )
+from numpy import ndarray
+from numpy.typing import NDArray
 from PIL import Image
 from pydicom import Dataset, dcmread, multival
+from pydicom.dataelem import DataElement
+from pydicom.dataset import FileMetaDataset
 from pydicom.errors import InvalidDicomError
-from pydicom.pixel_data_handlers.util import apply_color_lut, apply_modality_lut, apply_voi_lut, convert_color_space
+from pydicom.pixel_data_handlers.util import apply_color_lut, apply_modality_lut, convert_color_space
+from pydicom.tag import Tag
+from pydicom.uid import ExplicitVRLittleEndian
 
 from anonymizer.controller.remove_pixel_phi import OCRText
 from anonymizer.utils.storage import get_dcm_files
@@ -133,7 +139,7 @@ class ProjectionImageSize(Enum):
         return int(self.value[1] * ProjectionImageSizeConfig.get_scaling_factor())
 
 
-def normalize_uint8(image: np.ndarray):
+def normalize_uint8(image: ndarray):
     """Normalize and convert an image to uint8."""
     return normalize(
         src=image,
@@ -146,6 +152,52 @@ def normalize_uint8(image: np.ndarray):
     ).astype(np.uint8)
 
 
+def clip_and_cast_to_int(float_array: np.ndarray, target_dtype: type[np.integer]) -> np.ndarray | None:
+    """
+    Safely converts a float NumPy array to a target integer dtype by:
+    1. Clipping values to the valid range of the target integer dtype.
+    2. Casting the clipped float array to the target integer dtype (truncates decimals).
+
+    Args:
+        float_array: Input NumPy array (float dtype).
+        target_dtype: The target NumPy integer dtype (e.g., np.uint16, np.int16).
+
+    Returns:
+        NumPy array with the target integer dtype, or None on error.
+    """
+    if not np.issubdtype(float_array.dtype, np.floating):
+        logger.warning(f"Input array dtype is not float ({float_array.dtype}), attempting conversion anyway.")
+    if not np.issubdtype(target_dtype, np.integer):
+        logger.error(f"Target dtype {target_dtype} is not an integer type.")
+        return None
+
+    try:
+        # 1. Get target dtype limits
+        dtype_info = np.iinfo(target_dtype)
+        min_val, max_val = dtype_info.min, dtype_info.max
+
+        # 2. Clip the float values to the target integer range
+        #    This prevents wraparound during the subsequent cast.
+        clipped_float = np.clip(float_array, min_val, max_val)
+
+        # 3. Cast the *clipped* float array to the final target integer data type.
+        #    Since values are guaranteed to be in range, astype performs safe truncation.
+        int_array = clipped_float.astype(target_dtype)
+
+        # Optional: Check if clipping actually occurred (for logging/debugging)
+        if np.any(float_array < min_val) or np.any(float_array > max_val):
+            logger.warning(
+                f"Values were clipped during conversion to {target_dtype}. "
+                f"Original range [{np.min(float_array):.1f}..{np.max(float_array):.1f}], "
+                f"Target range [{min_val}..{max_val}]"
+            )
+
+        return int_array
+    except Exception as e:
+        logger.exception(f"Error clipping and casting float array to {target_dtype}: {e}")
+        return None
+
+
 def cache_projection(projection: Projection, projection_file_path: Path) -> None:
     # Pickle Project object to series path for faster loading next time:
     try:
@@ -156,7 +208,7 @@ def cache_projection(projection: Projection, projection_file_path: Path) -> None
     return
 
 
-def create_projection_from_single_frame(ds: Dataset, frame: np.ndarray) -> Projection:
+def create_projection_from_single_frame(ds: Dataset, frame: ndarray) -> Projection:
     # [mean,clahe,edge] for single-frame
     # Window using max & min values and convert to uint8
     frame_float = frame.astype(np.float32)
@@ -204,10 +256,10 @@ def create_projection_from_single_frame(ds: Dataset, frame: np.ndarray) -> Proje
     )
 
 
-def validate_dicom_pixel_array(ds: Dataset) -> tuple[np.ndarray, int, int, str]:
+def validate_dicom_pixel_array(ds: Dataset) -> tuple[ndarray, int, int, str]:
     """
     Validate DICOM pixel array related fields exist and are consistent
-    Return the pixel data as a decompressed numpy array
+    Return the tuple: (pixel data as a decompressed numpy array, rows, cols, photometric interpretation)
     Raises ValueError if any validation fails
     """
     # Mandatory fields:
@@ -361,7 +413,7 @@ def validate_dicom_pixel_array(ds: Dataset) -> tuple[np.ndarray, int, int, str]:
     return pixels, rows, cols, pi.upper()
 
 
-def apply_windowing(wl: float, ww: float, image_array_raw: np.ndarray) -> np.ndarray:
+def apply_windowing(wl: float, ww: float, image_array_raw: ndarray) -> NDArray[np.uint8]:
     """
     Applies the WW (window width) & WL (window level) settings to the raw image data based on its type.
     Handles high bit-depth grayscale with true WW/WL (NumPy/clip) and
@@ -374,6 +426,8 @@ def apply_windowing(wl: float, ww: float, image_array_raw: np.ndarray) -> np.nda
     Returns:
         A NumPy array (uint8, BGR) processed and ready for overlay rendering and OCR.
         Returns a black image on error.
+
+    * NOTE * This is a simplification for user interactive windowing, VOI LUT data ignored.
     """
     try:
         current_dtype = image_array_raw.dtype
@@ -430,9 +484,9 @@ def apply_windowing(wl: float, ww: float, image_array_raw: np.ndarray) -> np.nda
             if derived_alpha != 1.0 or derived_beta != 0:
                 image_processed_bgr = convertScaleAbs(image_color, alpha=derived_alpha, beta=derived_beta)
             else:
-                image_processed_bgr = image_color  # No adjustment needed
+                image_processed_bgr = image_color
 
-        return image_processed_bgr
+        return image_processed_bgr.astype(np.uint8)  # Ensure uint8
 
     except Exception as e:
         logger.exception(
@@ -501,7 +555,7 @@ def get_wl_ww(ds: Dataset) -> tuple[float, float]:
     return wl_float, ww_float
 
 
-def load_series_frames(series_path: Path) -> tuple[Dataset, np.ndarray]:
+def load_series_frames(series_path: Path, border_px: int | None = 20) -> tuple[Dataset, ndarray]:
     """
     Loads and processes DICOM series frames from a directory, resizing to match
     the first frame's dimensions.
@@ -544,7 +598,7 @@ def load_series_frames(series_path: Path) -> tuple[Dataset, np.ndarray]:
     if not dcm_paths:
         raise ValueError(f"No DICOM files found in {series_path}")
 
-    processed_frames: list[np.ndarray] = []
+    processed_frames: list[ndarray] = []
     ds1: Dataset | None = None  # To store the first dataset
     target_size: tuple[int, int] | None = None  # (height, width)
     series_pi: str = ""
@@ -599,7 +653,7 @@ def load_series_frames(series_path: Path) -> tuple[Dataset, np.ndarray]:
             # --- Process each frame ---
             for frame_idx in range(num_frames):
                 current_frame_pixels = raw_pixels[frame_idx] if is_multi_frame_source else raw_pixels
-                processed_frame: np.ndarray | None = None
+                processed_frame: ndarray | None = None
 
                 # Process based on the *series* interpretation determined from the first file
                 match series_pi:
@@ -682,6 +736,235 @@ def load_series_frames(series_path: Path) -> tuple[Dataset, np.ndarray]:
     )
 
     return ds1, all_series_frames_stacked
+
+
+def save_series_frames(original_series_path: Path, processed_frames: np.ndarray, reference_ds: Dataset) -> bool:
+    """
+    Saves processed frames back by OVERWRITING original DICOM files.
+    Converts processed float grayscale data safely to target integer type.
+    Sets metadata based on the actual data type being saved. Uses Explicit VR LE.
+
+    Args:
+        original_series_path: Path to the directory containing the original DICOM files.
+        processed_frames: The NumPy array containing all frames to be saved.
+        reference_ds: The pydicom Dataset from the first file of the original series.
+
+    Returns:
+        True if saving was successful for all files, otherwise False.
+    """
+    logger.info(f"Starting to save processed frames, OVERWRITING files in: {original_series_path}")
+    if processed_frames is None or processed_frames.size == 0:
+        logger.error("No processed frames provided to save.")
+        return False
+    if not original_series_path.is_dir():
+        logger.error(f"Original series path is not a directory: {original_series_path}")
+        return False
+
+    # --- 1. Determine Original File Structure ---
+    try:
+        original_dcm_paths: list[Path] = sorted(get_dcm_files(original_series_path))
+        if not original_dcm_paths:
+            logger.error(f"No original DICOM files found in {original_series_path}.")
+            return False
+
+        file_frame_counts: list[tuple[Path, int]] = []
+        total_frames_in_files = 0
+        for p in original_dcm_paths:
+            try:
+                ds_meta = dcmread(str(p), stop_before_pixels=True, force=True)
+                frames_in_file = ds_meta.get("NumberOfFrames", 1)
+                file_frame_counts.append((p, frames_in_file))
+                total_frames_in_files += frames_in_file
+            except Exception as e:
+                logger.warning(f"Could not read frame count from {p}, skipping file: {e}")
+                continue
+
+        if total_frames_in_files == 0:
+            logger.error("Could not determine frame counts from any original DICOM file.")
+            return False
+        if total_frames_in_files != processed_frames.shape[0]:
+            logger.error(
+                f"Mismatch: Processed frames ({processed_frames.shape[0]}) != "
+                f"Total frames in original files ({total_frames_in_files}). Cannot save."
+            )
+            return False
+    except Exception as e:
+        logger.error(f"Error analyzing original series structure: {e}")
+        return False
+
+    # --- 2. Determine Series Photometric Interpretation & Target Stored Dtype ---
+    try:
+        series_pi = reference_ds.PhotometricInterpretation.upper()
+        bits_allocated = reference_ds.get("BitsAllocated", 16 if series_pi.startswith("MONO") else 8)
+        pixel_rep = reference_ds.get("PixelRepresentation", 0)  # 0=unsigned, 1=signed
+        if bits_allocated == 16:
+            target_dtype = np.uint16 if pixel_rep == 0 else np.int16
+        elif bits_allocated == 8:
+            target_dtype = np.uint8
+        else:
+            raise ValueError(f"Unsupported BitsAllocated: {bits_allocated}")
+        logger.info(f"Saving series based on original PI: {series_pi} with target stored dtype {target_dtype}")
+    except Exception as e:
+        logger.error(f"Could not determine series type/dtype: {e}")
+        return False
+
+    # --- 3. Iterate, Process, and Save (Overwrite) ---
+    frame_ndx = 0
+    success = True
+    for original_path, num_frames_in_file in file_frame_counts:
+        logger.info(f"Processing {num_frames_in_file} frame(s) to overwrite -> {original_path.name}")
+        try:
+            ds_orig = dcmread(str(original_path), stop_before_pixels=True, force=True)
+            ds_save = ds_orig.copy()
+
+            frame_chunk = processed_frames[frame_ndx : frame_ndx + num_frames_in_file]
+            if frame_chunk.shape[0] != num_frames_in_file:
+                logger.error(f"Frame count mismatch for {original_path}. Skipping.")
+                success = False
+                frame_ndx += num_frames_in_file
+                continue
+
+            final_pixel_data = frame_chunk
+
+            if series_pi in ("MONOCHROME1", "MONOCHROME2"):
+                if np.issubdtype(final_pixel_data.dtype, np.floating):
+                    logger.debug(
+                        f"Converting float pixel data via clipping to {target_dtype} for {original_path.name}..."
+                    )
+                    converted_pixels = clip_and_cast_to_int(final_pixel_data, target_dtype)
+                    if converted_pixels is None:
+                        logger.error(f"Failed conversion to {target_dtype} for {original_path.name}. Skipping.")
+                        success = False
+                        frame_ndx += num_frames_in_file
+                        continue
+                    final_pixel_data = converted_pixels
+                    ds_save.RescaleSlope = 1
+                    ds_save.RescaleIntercept = 0
+                elif final_pixel_data.dtype != target_dtype:
+                    logger.warning(f"Casting input frame dtype {final_pixel_data.dtype} to target {target_dtype}.")
+                    final_pixel_data = final_pixel_data.astype(target_dtype)
+                    ds_save.RescaleSlope = 1
+                    ds_save.RescaleIntercept = 0
+
+                # --- Update Metadata for Monochrome ---
+                ds_save.PhotometricInterpretation = "MONOCHROME2"
+                ds_save.SamplesPerPixel = 1
+
+                if "PlanarConfiguration" in ds_save:
+                    del ds_save.PlanarConfiguration
+
+                # Set metadata based on the final_pixel_data's dtype
+                saved_dtype = final_pixel_data.dtype
+                if saved_dtype == np.uint16:
+                    ds_save.PixelRepresentation = 0
+                    bits = 16
+                elif saved_dtype == np.int16:
+                    ds_save.PixelRepresentation = 1
+                    bits = 16
+                elif saved_dtype == np.uint8:
+                    ds_save.PixelRepresentation = 0
+                    bits = 8
+                else:
+                    # This should not happen if conversion/casting worked
+                    raise ValueError(f"Unsupported final dtype for monochrome save: {saved_dtype}")
+
+                ds_save.BitsAllocated = bits
+                ds_save.BitsStored = bits
+                ds_save.HighBit = bits - 1
+
+            elif series_pi in ("RGB", "YBR_FULL", "YBR_FULL_422", "PALETTE COLOR"):
+                if final_pixel_data.dtype != np.uint8 or final_pixel_data.ndim != 4 or final_pixel_data.shape[-1] != 3:
+                    logger.error(
+                        f"Expected uint8 RGB data for {original_path.name}, got {final_pixel_data.shape} dtype {final_pixel_data.dtype}. Skipping."
+                    )
+                    success = False
+                    frame_ndx += num_frames_in_file
+                    continue
+                # Update Metadata for RGB
+                ds_save.PhotometricInterpretation = "RGB"
+                ds_save.SamplesPerPixel = 3
+                ds_save.PlanarConfiguration = 0
+                ds_save.BitsAllocated = 8
+                ds_save.BitsStored = 8
+                ds_save.HighBit = 7
+                ds_save.PixelRepresentation = 0
+                for tag in ["RescaleSlope", "RescaleIntercept", "VOILUTSequence", "WindowCenter", "WindowWidth"]:
+                    if tag in ds_save:
+                        del ds_save[tag]
+            else:
+                logger.error(f"Cannot save unsupported PI: {series_pi} for {original_path.name}")
+                success = False
+                frame_ndx += num_frames_in_file
+                continue
+
+            # Update Pixel Data and Frame Count
+            final_pixel_data_to_save = final_pixel_data.squeeze(axis=0) if num_frames_in_file == 1 else final_pixel_data
+            if final_pixel_data_to_save.dtype.byteorder not in ("=", "<"):
+                final_pixel_data_to_save = final_pixel_data_to_save.byteswap().newbyteorder("<")
+
+            # EXPLICITLY SET VR for PixelData because of using ExplicitVRLittleEndian TS
+            pixel_data_tag = Tag(0x7FE0, 0x0010)
+            # Determine VR based on BitsAllocated set above
+            if ds_save.BitsAllocated == 16:
+                pixel_vr = "OW"
+            elif ds_save.BitsAllocated == 8:
+                pixel_vr = "OB"
+            # Create/Update the DataElement with the correct VR and Value
+            ds_save[pixel_data_tag] = DataElement(
+                tag=pixel_data_tag, VR=pixel_vr, value=final_pixel_data_to_save.tobytes()
+            )
+
+            # Use shape of data being saved for Rows/Columns metadata
+            if final_pixel_data_to_save.ndim == 2:
+                ds_save.Rows, ds_save.Columns = final_pixel_data_to_save.shape
+            elif final_pixel_data_to_save.ndim >= 3:
+                ds_save.Rows, ds_save.Columns = final_pixel_data_to_save.shape[-2], final_pixel_data_to_save.shape[-1]
+            else:
+                logger.error(f"Unexpected shape after squeeze: {final_pixel_data_to_save.shape}")
+                success = False
+                frame_ndx += num_frames_in_file
+                continue
+
+            if num_frames_in_file > 1:
+                ds_save.NumberOfFrames = num_frames_in_file
+            elif "NumberOfFrames" in ds_save:
+                del ds_save.NumberOfFrames
+
+            # --- Set File Meta Information ---
+            # Copy original meta info first
+            ds_save.file_meta = FileMetaDataset(ds_orig.file_meta)
+
+            # Set preferred uncompressed transfer syntax: Explicit VR Little Endian
+            ds_save.file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
+            ds_save.is_little_endian = True
+            ds_save.is_implicit_VR = False  # Explicit VR
+
+            # Save the File (Overwrite Original)
+            ds_save.save_as(original_path, write_like_original=False)
+            logger.info(f"Successfully overwrote {original_path.name}")
+
+            frame_ndx += num_frames_in_file
+
+        except Exception as e:
+            logger.exception(f"Failed to process or save file {original_path.name}: {e}")
+            success = False
+            frame_ndx += num_frames_in_file  # Ensure index advances
+
+    if frame_ndx != processed_frames.shape[0]:
+        logger.error(f"Frame processing index mismatch, frames: {frame_ndx} expected: {processed_frames.shape[0]}.")
+        success = False
+
+    # --- 4. Remove Projection File if it exists for series ---
+    projection_file_path = original_series_path / PROJECTION_FILENAME
+    if projection_file_path.exists() and projection_file_path.is_file():
+        try:
+            projection_file_path.unlink()
+            logger.info(f"Deleted existing projection file: {projection_file_path}")
+        except Exception as e:  # Catch any errors during deletion
+            logger.warning(f"Error deleting projection file {projection_file_path}: {e}")
+
+    logger.info(f"Finished saving series to {original_series_path}. Overall success: {success}")
+    return success
 
 
 def create_projection_from_series(series_path: Path) -> Projection:

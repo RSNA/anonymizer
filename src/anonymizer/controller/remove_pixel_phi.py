@@ -65,17 +65,34 @@ class OCRText:
     prob: float
 
     @classmethod
-    def from_easyocr_result(cls, result) -> "OCRText":
+    def from_easyocr_result(cls, result, img_width: int, img_height: int) -> "OCRText":
         """Creates an OCRText instance from an EasyOCR result tuple."""
         box, text, prob = result
         # Ensure box has exactly 4 points and they are integers
         if not (len(box) == 4 and all(len(point) == 2 for point in box)):
             raise ValueError(f"Invalid box format: {box}")
 
-        top_left = (int(box[0][0]), int(box[0][1]))
-        bottom_right = (int(box[2][0]), int(box[2][1]))
+        # Extract initial coordinates
+        x1 = int(box[0][0])
+        y1 = int(box[0][1])
+        # Use bottom-right for consistency, assuming rectangular alignment from EasyOCR
+        x2 = int(box[2][0])
+        y2 = int(box[2][1])
 
-        return cls(text=text, top_left=top_left, bottom_right=bottom_right, prob=prob)
+        # --- Clip Bounding Box Coordinates ---
+        x1_clipped = max(0, x1)
+        y1_clipped = max(0, y1)
+        x2_clipped = min(img_width, x2)
+        y2_clipped = min(img_height, y2)
+
+        # --- Check if clipped box is still valid (has area) ---
+        if x1_clipped >= x2_clipped or y1_clipped >= y2_clipped:
+            raise ValueError(
+                f"Bounding box became invalid after clipping. Original: [{x1},{y1},{x2},{y2}], Clipped: [{x1_clipped},{y1_clipped},{x2_clipped},{y2_clipped}]"
+            )
+
+        # Use clipped coordinates
+        return cls(text=text, top_left=(x1_clipped, y1_clipped), bottom_right=(x2_clipped, y2_clipped), prob=prob)
 
     def get_bounding_box(self) -> tuple[int, int, int, int]:
         """Returns the bounding box as (x1, y1, x2, y2)."""
@@ -117,7 +134,7 @@ class OverlayData:
     segmentations: list[Segmentation] = field(default_factory=list)
 
 
-def _draw_text_contours_on_mask(image: ndarray, rgb: bool, top_left: tuple, bottom_right: tuple, mask: ndarray) -> None:
+def _draw_text_contours_on_mask(image: ndarray, top_left: tuple, bottom_right: tuple, mask: NDArray[np.uint8]) -> None:
     """
     Draws text contours onto the provided mask (mutates the input mask).
 
@@ -166,12 +183,23 @@ def detect_text(
     * NB * pixels must be 2D or 3D array (grayscale or RGB) data type: uint8
     Return list of OCRText: (bounding boxes, text, confidence)
     """
-    SIZE_THRESHOLD = 1000  # pixels #TODO: provide UX option to set this threshold / increase|decrease OCR accuracy
+    if pixels.ndim == 3:
+        img_height, img_width = pixels.shape[:2]
+    elif pixels.ndim == 2:
+        img_height, img_width = pixels.shape
+    else:
+        logger.error(f"Unsupported image dimensions: {pixels.ndim}")
+        return None
+
+    SIZE_THRESHOLD = 1200  # pixels #TODO: provide UX option to set this threshold / increase|decrease OCR accuracy
     canvas_size = min(max(pixels.shape[0], pixels.shape[1]), SIZE_THRESHOLD)
     results = ocr_reader.readtext(
         pixels,
         canvas_size=canvas_size,  # easyocr will resize pixels maintaining aspect ratio, less memory, less compute, less accurate for small text
-        paragraph=False,
+        paragraph=False,  # paragraph=True will detect text in paragraphs
+        add_margin=0.0,  # Margin around the text box
+        rotation_info=[0, 90],  # Rotation angles to consider
+        min_size=1,  # Minimum size of text to detect
         ycenter_ths=0.7,  # Vertical Center Threshold, to control word in column separation
         link_threshold=0.5,  # related to craft algo for linking characters into words
         width_ths=0.1,
@@ -183,7 +211,7 @@ def detect_text(
     ocr_texts: list[OCRText] = []
     for result in results:
         try:
-            ocr_text = OCRText.from_easyocr_result(result)  # Use the OCRText class method
+            ocr_text = OCRText.from_easyocr_result(result, img_width, img_height)  # Use the OCRText class method
             ocr_texts.append(ocr_text)
         except ValueError as e:
             logger.warning(f"Skipping invalid OCR result: {result}. Error: {e}")
@@ -207,34 +235,38 @@ def detect_text(
     return ocr_texts
 
 
-def remove_text(pixels: ndarray, windowed_frame: ndarray, ocr_texts: list[OCRText]) -> ndarray:
+def remove_text(pixels: ndarray, windowed_frame: NDArray[np.uint8], ocr_texts: list[OCRText]) -> ndarray:
     """
     Remove the PHI in the pixel data of the supplied pixels 2D frame using the suplied ocr_text rectangles
     Use the windowed frame to determine the text contours on the mask
     Perform inpainting using cv2.inpaint with radius = 5 & INPAINT_TELEA (Poisson PDE) algorithm
+    Args:
+        pixels: NumPy array representing the image (grayscale or color).
+        windowed_frame: Windowed pixels to determine the text contours on the mask
+        ocr_texts: A list of OCRText objects specifying the text and rectangles to remove using inpainting
+    Returns:
+        The inpainted image as a NumPy array.
+    Raises:
+        General Exception from OpenCV.inpaint
     """
 
     # Create an 8 bit mask of pixels for in-painting
-    mask = np.zeros(pixels.shape[:2], dtype=np.uint8)
+    mask: NDArray[np.uint8] = np.zeros(pixels.shape[:2], dtype=np.uint8)
 
     for ocr_text in ocr_texts:
         _draw_text_contours_on_mask(
             image=windowed_frame,
-            rgb=pixels.shape[-1] == 3,
             top_left=ocr_text.top_left,
             bottom_right=ocr_text.bottom_right,
             mask=mask,
         )
 
-    kernel = np.ones((3, 3), np.uint8)
+    kernel: NDArray[np.uint8] = np.ones((3, 3), np.uint8)
     dilated_mask = dilate(src=mask, kernel=kernel, iterations=1)
 
     # Inpaint function only supports 8-bit, 16-bit UNSIGNED or 32-bit float 1-channel and 8-bit 3-channel input/output images
-    if pixels.dtype == np.float64 or pixels.dtype == np.int16:
-        src = pixels.astype(np.float32)
-
     return inpaint(
-        src=src,
+        src=pixels.astype(np.float32) if pixels.dtype == np.float64 or pixels.dtype == np.int16 else pixels,
         inpaintMask=dilated_mask,
         inpaintRadius=5,
         flags=INPAINT_TELEA,
@@ -535,7 +567,7 @@ def remove_pixel_phi(
             bottom_right = tuple(map(int, bottom_right))
 
             # Perform full anonymization, remove all detected text from image:
-            _draw_text_contours_on_mask(pixels, not grayscale, top_left, bottom_right, mask)
+            _draw_text_contours_on_mask(pixels, top_left, bottom_right, mask)
 
         # Remove border from mask
         mask = mask[border_size:-border_size, border_size : mask.shape[1] - border_size]

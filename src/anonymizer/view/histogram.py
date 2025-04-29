@@ -130,8 +130,8 @@ class Histogram(ctk.CTkFrame):
     def _redraw(self):
         """Clears and redraws the entire histogram canvas content."""
         logger.debug("Redrawing histogram canvas.")
-        if self.canvas.winfo_width() <= 1:
-            logger.error("Histogram canvas width is 0. Cannot redraw.")
+        if self.canvas.winfo_width() <= 1 or self.canvas.winfo_height() <= 1:
+            logger.error("Histogram canvas width or height is 0. Cannot redraw.")
             return
         self.canvas.delete("all")
         self._draw_histogram_bars()
@@ -238,15 +238,25 @@ class Histogram(ctk.CTkFrame):
 
     # --- Coordinate Mapping ---
     def _intensity_to_x(self, intensity: float, canvas_width: int) -> float:
+        """Maps an intensity value to an x-coordinate on the canvas, clamping the result."""
         if canvas_width <= 1:
             return 0.0
+        # Use stored min/max intensity for consistency
         intensity_range = self.image_max_intensity - self.image_min_intensity
         if intensity_range <= 0:
-            return 0.0
-        clamped_intensity = max(self.image_min_intensity, min(self.image_max_intensity, intensity))
-        normalized_intensity = (clamped_intensity - self.image_min_intensity) / intensity_range
+            # If range is zero, map everything to the middle or left edge
+            return canvas_width / 2.0 if intensity == self.image_min_intensity else 0.0
+
+        # Normalize intensity based on the image's actual min/max range
+        normalized_intensity = (intensity - self.image_min_intensity) / intensity_range
         x = normalized_intensity * canvas_width
-        return max(0.0, min(float(canvas_width), x))
+
+        # --- Clamp the final coordinate ---
+        # Ensure it's within the drawable bounds [0, canvas_width - 1]
+        # Subtracting 1 from width ensures the line is not exactly on the edge.
+        clamped_x = max(0.0, min(float(canvas_width - 1), x))
+
+        return clamped_x
 
     def _x_to_intensity(self, x_coordinate: float, canvas_width: int) -> float:
         if canvas_width <= 0:
@@ -273,6 +283,7 @@ class Histogram(ctk.CTkFrame):
         self._update_labels()
         if self.update_callback:
             self.update_callback(self._current_wl.get(), self._current_ww.get())
+        self.canvas.config(cursor="hand")  # Hand drag cursor
 
     def _on_left_drag(self, event):
         if not self._is_left_dragging:
@@ -287,11 +298,13 @@ class Histogram(ctk.CTkFrame):
 
     def _on_left_release(self, event):
         self._is_left_dragging = False
+        self.canvas.config(cursor="")
 
     def _on_right_press(self, event):
         self._is_right_dragging = True
         self._drag_start_x = event.x
         self._drag_start_ww = self._current_ww.get()
+        self.canvas.config(cursor="sb_h_double_arrow")  # Horizontal arrow cursor
 
     def _on_right_drag(self, event):
         if not self._is_right_dragging:
@@ -316,3 +329,4 @@ class Histogram(ctk.CTkFrame):
 
     def _on_right_release(self, event):
         self._is_right_dragging = False
+        self.canvas.config(cursor="")
