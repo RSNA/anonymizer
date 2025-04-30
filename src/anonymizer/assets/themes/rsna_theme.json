@@ -136,7 +136,7 @@
     "text_color": ["gray14", "gray84"]
   },
   "Histogram" : {
-    "fg_color": ["gray90", "gray13"],
+    "fg_color": ["gray85", "gray13"],
     "bar_color": ["gray70", "gray30"],
     "axis_label_color": ["gray10", "gray90"],
     "wl_line_color": ["#3a7ebf", "#1f538d"],

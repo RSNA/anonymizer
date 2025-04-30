@@ -20,6 +20,8 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.workbook.child import _WorkbookChild
 from openpyxl.worksheet.worksheet import Worksheet
 
+from anonymizer.utils.translate import get_current_language_code
+
 DICOM_FILE_SUFFIX = ".dcm"
 
 
@@ -95,10 +97,7 @@ def get_dcm_files(root_path: str | Path) -> list[Path]:
     root_path = Path(root_path)  # Ensure root_path is a Path object
 
     return [
-        Path(root) / file
-        for root, _, files in os.walk(root_path)
-        for file in files
-        if file.endswith(DICOM_FILE_SUFFIX)
+        Path(root) / file for root, _, files in os.walk(root_path) for file in files if file.endswith(DICOM_FILE_SUFFIX)
     ]
 
 
@@ -169,3 +168,42 @@ def read_java_anonymizer_index_xlsx(filename: str) -> list[JavaAnonymizerExporte
         data.append(JavaAnonymizerExportedStudy(*str_row))
 
     return data
+
+
+def default_whitelist_path(modality_code: str) -> Path:
+    return Path(
+        "assets/locales/" + str(get_current_language_code() or "en_US") + "/whitelists/" + modality_code + ".txt"
+    )
+
+
+def load_whitelist_from_txt(filepath: Path) -> list[str]:
+    whitelist = []
+    if not filepath.is_file():
+        raise ValueError(f"{filepath} is not a valid file")
+
+    with open(filepath, "r", encoding="utf-8") as f:
+        for line in f:
+            # 1. Remove comment part first (split at #, take first part)
+            word_part = line.split("#", 1)[0]
+            # 2. Strip whitespace from the word part
+            word = word_part.strip()
+            # 3. Add if not empty
+            if word and word not in whitelist:
+                whitelist.append(word.upper())
+
+    return whitelist
+
+
+def load_default_whitelist(modality_code: str) -> list[str]:
+    """
+    Load the default whitelist for a given modality code.
+
+    Args:
+        modality_code (str): The modality code for which to load the whitelist.
+
+    Returns:
+        A set of whitelisted terms.
+    """
+    if modality_code == "CR" or modality_code == "MG":
+        modality_code = "DX"
+    return load_whitelist_from_txt(default_whitelist_path(modality_code))

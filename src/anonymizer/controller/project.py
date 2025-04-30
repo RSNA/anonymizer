@@ -906,7 +906,7 @@ class ProjectController(AE):
         * exact matching accepted presentation context required *
 
         """
-        logger.info(f"Send {len(file_paths)} files to {scp_name}")
+        logger.debug(f"Send {len(file_paths)} files to {scp_name}")
         association = None
         files_sent = 0
 

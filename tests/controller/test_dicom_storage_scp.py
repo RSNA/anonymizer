@@ -9,9 +9,9 @@ from pydicom.data import get_testdata_file
 from pydicom.dataset import Dataset
 from pynetdicom.presentation import build_context
 
+from anonymizer.controller.create_projections import PROJECTION_FILENAME, create_projection_from_series
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.anonymizer import AnonymizerModel
-from anonymizer.controller.create_projections import create_projection_from_series, PROJECTION_FILENAME
 from tests.controller.dicom_test_files import (
     COMPRESSED_TEST_FILES,
     CR_STUDY_3_SERIES_3_IMAGES,
@@ -509,11 +509,11 @@ def test_send_ct_Archibald_Doe_mr_Peter_Doe_then_delete_studies(temp_dir: str, c
     totals = model.get_totals()
     assert totals == (1, 1, 1, 4, 0)
 
-    # Patient 1: Peter Doe
+    # Patient 2: Peter Doe
     # Send MR_STUDY_3_SERIES_11_IMAGES:
     dsets2: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, LocalStorageSCP, controller)
     time.sleep(0.25)
-    dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
+    dirlist = sorted([d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))])
     assert len(dirlist) == 2
     assert dirlist[1] == TEST_SITEID + "-000002"  #  Patient 2
     study2_uid = dsets2[0].StudyInstanceUID

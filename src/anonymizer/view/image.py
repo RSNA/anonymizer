@@ -341,6 +341,7 @@ class ImageViewer(ctk.CTkFrame):
         self.current_size = self._calculate_scaled_size(max_width, max_height)
         self.canvas.config(width=self.current_size[0], height=self.current_size[1])
         self.load_and_display_image(0)
+        self.histogram.update_image(self.images[0])
         self._canvas.focus_set()
 
     def _handle_histogram_update(self, wl: float, ww: float):

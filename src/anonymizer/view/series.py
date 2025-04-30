@@ -22,6 +22,7 @@ from anonymizer.controller.remove_pixel_phi import (
     remove_text,
 )
 from anonymizer.model.anonymizer import AnonymizerModel
+from anonymizer.utils.storage import load_default_whitelist, load_whitelist_from_txt
 from anonymizer.utils.translate import _
 from anonymizer.view.image import ImageViewer
 
@@ -96,12 +97,9 @@ class SeriesView(ctk.CTkToplevel):
         scrollbar = ctk.CTkScrollbar(
             whitelist_frame,
             orientation="vertical",
-            # --- Styling for CTkScrollbar ---
             fg_color="black",  # Color of the trough (background channel)
             button_color="black",  # Color of the arrows and the slider thumb
             button_hover_color="gray50",  # Color when hovering over arrows/thumb
-            # You might not need borderwidth/relief for CTkScrollbar
-            # --- End Styling ---
         )
         self.whitelist = tk.Listbox(
             whitelist_frame,
@@ -503,34 +501,29 @@ class SeriesView(ctk.CTkToplevel):
         self.save_button.configure(state="disabled")
 
     def load_whitelist_defaults(self):
-        # TODO: create standard dictionary of likely to appear on medical images
-        # translate dictionary into all languages, copy to relevant locales as phi_whitelist.csv
-        # TODO: provide user option to load and use this dictionary
-        # TODO: consider modality specific dictionaries, context sensitive to series modality
-        whitelist_items = [
-            "L",
-            "R",
-            "PORTABLE",
-            "LEFT",
-            "RIGHT",
-            "SUPINE",
-            "PRONE",
-            "LATERAL",
-            "ANTERIOR",
-            "POSTERIOR",
-            "DECUBITUS",
-            "ERECT",
-            "OBLIQUE",
-            "AXIAL",
-            "CORONAL",
-            "SAGITTAL",
-            "STANDING",
-            "SITTING",
-            "RECUMBENT",
-            "UPRIGHT",
-            "SEMI-UPRIGHT",
-        ]
-        for item in whitelist_items:
+        # TODO: whitelist load error message to user
+        if self._ds is None:
+            logger.error("CRITICAL: self._ds is None")
+            return
+        if self._ds.Modality is None:
+            logger.error("Modality not found in dataset")
+            return
+
+        logger.info(f"Loading default whitelist for modality {self._ds.Modality}")
+
+        try:
+            whitelist = load_default_whitelist(self._ds.Modality)
+        except FileNotFoundError:
+            logger.error(f"Default whitelist for modality {self._ds.Modality} file not found")
+            return
+        except ValueError as e:
+            logger.error(f"Error loading default whitelist for modality {self._ds.Modality}: {e}")
+            return
+        except Exception as e:
+            logger.error(f"Unexpected error loading default whitelist for modality {self._ds.Modality}: {e}")
+            return
+
+        for item in whitelist:
             self.whitelist.insert(tk.END, item)
 
     def _escape_keypress(self, event):
