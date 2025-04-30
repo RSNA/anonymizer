@@ -93,14 +93,7 @@ class SeriesView(ctk.CTkToplevel):
         self.whitelist_entry.bind("<Return>", self.whitelist_button_clicked_or_entry_return)
         self.whitelist_entry.grid(row=2, columnspan=3, sticky="ew")
 
-        # scrollbar = tk.Scrollbar(whitelist_frame, orient="vertical")
-        scrollbar = ctk.CTkScrollbar(
-            whitelist_frame,
-            orientation="vertical",
-            fg_color="black",  # Color of the trough (background channel)
-            button_color="black",  # Color of the arrows and the slider thumb
-            button_hover_color="gray50",  # Color when hovering over arrows/thumb
-        )
+        scrollbar = ctk.CTkScrollbar(whitelist_frame, orientation="vertical")
         self.whitelist = tk.Listbox(
             whitelist_frame,
             border=0,
