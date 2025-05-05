@@ -16,6 +16,7 @@ class Histogram(ctk.CTkFrame):
     """
 
     DEFAULT_NUM_BINS = 256
+    Y_AXIS_PERCENTILE = 99.5  # Percentile for Y-axis scaling
 
     def __init__(
         self,
@@ -40,6 +41,7 @@ class Histogram(ctk.CTkFrame):
         self.image_min_intensity = 0.0
         self.image_max_intensity = 255.0  # Default assumption
         self.max_hist_count = 1  # Avoid division by zero
+        self._y_max_display: float = 1.0  # Initialize display max
 
         # Using tkinter DoubleVar for easy tracing if needed elsewhere,
         # but mainly used as simple float storage here.
@@ -127,11 +129,23 @@ class Histogram(ctk.CTkFrame):
         if self.max_hist_count == 0:
             self.max_hist_count = 1.0
 
+        # --- Calculate Y max for DISPLAY using percentile clipping ---
+        if self.hist_data is not None and self.hist_data.size > 0 and np.max(self.hist_data) > 0:
+            # Use only non-zero counts for percentile calculation for robustness
+            counts_for_scaling = self.hist_data[self.hist_data > 0]
+            y_max = np.percentile(counts_for_scaling, self.Y_AXIS_PERCENTILE) if counts_for_scaling.size > 0 else 1.0
+            # Ensure y_max is at least 1.0 and store as float
+            self._y_max_display = float(max(1.0, y_max))
+        else:
+            self._y_max_display = 1.0  # Default if no counts or all zero
+
+        logger.debug(
+            f"Histogram calculated. Abs Max Count={self.max_hist_count:.0f}, Display Y-Max={self._y_max_display:.1f}"
+        )
+
     def _redraw(self):
         """Clears and redraws the entire histogram canvas content."""
-        logger.debug("Redrawing histogram canvas.")
         if self.canvas.winfo_width() <= 1 or self.canvas.winfo_height() <= 1:
-            logger.error("Histogram canvas width or height is 0. Cannot redraw.")
             return
         self.canvas.delete("all")
         self._draw_histogram_bars()
@@ -139,25 +153,49 @@ class Histogram(ctk.CTkFrame):
         self._draw_axis_labels()
 
     def _draw_histogram_bars(self):
-        """Draws the histogram bars on the main canvas."""
+        """Draws the histogram bars on the main canvas using percentile-clipped scale."""
         logger.debug("Drawing histogram bars.")
         canvas_width = self.canvas.winfo_width()
         canvas_height = self.canvas.winfo_height()
-        if canvas_width <= 1 or canvas_height <= 1 or len(self.hist_data) == 0:
-            return
+
+        # Check necessary data and dimensions
+        if (
+            canvas_width <= 1
+            or canvas_height <= 1
+            or self.hist_data is None
+            or self.bin_edges is None
+            or self._y_max_display is None
+            or self._y_max_display <= 0
+            or self.hist_data.size == 0
+        ):
+            return  # Not ready or no data
+
         bar_color = self._apply_appearance_mode(self.HISTOGRAM_BAR_COLOR)
-        bar_area_height = canvas_height - 15
-        if bar_area_height <= 0:
-            bar_area_height = canvas_height
+        bar_area_height = canvas_height - 15  # Leave space for labels
+        bar_area_height = max(1, bar_area_height)  # Ensure positive height
+
+        # --- Calculate Scales using display max ---
+        bin_min = self.bin_edges[0]
+        bin_max = self.bin_edges[-1]
+        bin_range = max(1e-6, bin_max - bin_min)  # Avoid division by zero
+        y_scale = bar_area_height / self._y_max_display  # Scale based on display max
+
         for i in range(self.num_bins):
-            x0 = self._intensity_to_x(self.bin_edges[i], canvas_width)
-            x1 = self._intensity_to_x(self.bin_edges[i + 1], canvas_width)
-            bar_height_normalized = (self.hist_data[i] / self.max_hist_count) * (bar_area_height * 0.98)
-            y0 = bar_area_height - bar_height_normalized
+            x0 = ((self.bin_edges[i] - bin_min) / bin_range) * canvas_width
+            x1 = ((self.bin_edges[i + 1] - bin_min) / bin_range) * canvas_width
+
+            # --- Use y_max_display for scaling and clipping bar height ---
+            count = self.hist_data[i]
+            clipped_count = min(count, self._y_max_display)  # Don't draw bar higher than display max
+            bar_height = clipped_count * y_scale
+            # --- End change ---
+
+            y0 = bar_area_height - bar_height
             y1 = bar_area_height
             if x1 <= x0:
-                x1 = x0 + 1
-            self.canvas.create_rectangle(x0, y0, x1, y1, fill=bar_color, outline="", tags="histogram_bar")
+                x1 = x0 + 1  # Ensure min width
+            if bar_height >= 1:  # Draw only if bar height is >= 1 pixel
+                self.canvas.create_rectangle(x0, y0, x1, y1, fill=bar_color, outline="", tags="histogram_bar")
 
     def _draw_wlww_indicators(self):
         """Draws the WL line and WW boundary lines superimposed on the histogram canvas."""

@@ -1,0 +1,173 @@
+# Whitelist for common terms found on Ultrasound (US) images
+# One term/phrase per line. Case-insensitive matching is assumed after loading.
+# Lines starting with # are comments and will be ignored.
+
+# --- Laterality ---
+L
+R
+LEFT
+RIGHT
+LT
+RT
+BILATERAL
+BILAT
+
+# --- Orientation / Position ---
+SAG # Sagittal
+TRV # Transverse
+TRA # Transverse
+COR # Coronal
+LONG # Longitudinal
+AXIAL
+AX
+OBLIQUE
+SUPINE
+PRONE
+DECUBITUS
+LLD # Left Lateral Decubitus
+RLD # Right Lateral Decubitus
+ERECT
+SEMI-ERECT
+SITTING
+
+# --- Anatomy (Very General - Add specific non-PHI terms carefully) ---
+HEAD
+NECK
+THYROID
+CAROTID
+CHEST
+BREAST
+ABDOMEN
+LIVER
+GALLBLADDER
+GB
+CBD # Common Bile Duct
+PANCREAS
+SPLEEN
+KIDNEY
+RENAL
+AORTA
+IVC
+PELVIS
+UTERUS
+OVARY
+PROSTATE
+TESTIS
+SCROTUM
+BLADDER
+EXTREMITY
+ARM
+LEG
+VENOUS
+ARTERIAL
+DVT # Deep Vein Thrombosis
+APPENDIX
+HEART # Echocardiography terms often differ significantly
+FETAL
+OB # Obstetrics
+GYN # Gynecology
+
+# --- Scanner / Technical Parameters ---
+US
+ULTRA SOUND
+SONO
+SONOGRAM
+PROBE
+TRANSDUCER
+LINEAR
+CURVED
+SECTOR
+ENDO # Endocavitary (e.g., Endovaginal, Endorectal)
+EV # Endovaginal
+ER # Endorectal
+FREQ # Frequency
+MHZ # Megahertz
+GAIN
+TGC # Time Gain Compensation
+DEPTH
+FOCUS
+FOV
+ZOOM
+HARMONIC
+THI # Tissue Harmonic Imaging
+COMPOUND
+POWER
+DOPPLER
+COLOR
+CD # Color Doppler
+PWR # Power Doppler
+PW # Pulsed Wave Doppler
+CW # Continuous Wave Doppler
+SPECTRAL
+VEL # Velocity
+PRF # Pulse Repetition Frequency
+FILTER
+SCALE
+ANGLE
+CURSOR
+CALIPER
+MEASURE
+DIST # Distance
+AREA
+VOLUME
+VOL
+MI # Mechanical Index
+TIS # Thermal Index Soft Tissue
+TIB # Thermal Index Bone
+TIC # Thermal Index Cranial Bone
+FR # Frame Rate
+FPS # Frames Per Second
+GRAYSCALE
+B MODE
+M MODE
+
+# --- Measurements / Units ---
+MM
+CM
+M/S # Meters per second
+CM/S # Centimeters per second
+KHZ # Kilohertz
+HZ # Hertz
+DEG # Degrees
+
+# --- Miscellaneous ---
+SERIES
+IMAGE
+IMG
+CINE
+LOOP
+CLIP
+VIEW
+PLANE
+SCAN
+NO
+NUM
+NUMBER
+EXAM DATE
+EXAM TIME
+ACQ DATE
+ACQ TIME
+POS
+POSITION
+REF
+REFERENCE
+NONE
+N/A
+VARIOUS
+SEE REPORT
+CLINICAL HISTORY
+PROTOCOL
+AUTO
+FREEZE
+PRINT
+STORE
+
+# --- Common Artifacts / Descriptions (Use cautiously) ---
+SHADOWING
+ENHANCEMENT
+REVERBERATION
+MIRROR
+ARTIFACT
+
+# --- Add institution-specific, non-PHI identifiers if necessary ---
+# E.g., US_ROOM_3, SONOGRAPHER_ID_XYZ

@@ -1,0 +1,137 @@
+# Whitelist for common terms found on DX/CR (X-Ray) images
+# One term/phrase per line. Case-insensitive matching is assumed after loading.
+# Lines starting with # are comments and will be ignored.
+
+# --- Laterality ---
+L
+R
+LEFT
+RIGHT
+LT
+RT
+BILATERAL
+BILAT
+
+# --- Orientation / Position ---
+AP # Anteroposterior
+PA # Posteroanterior
+LAT # Lateral
+OBL # Oblique
+DECUB # Decubitus
+SUPINE
+PRONE
+ERECT
+SEMI-ERECT
+STANDING
+SITTING
+RECUMBENT
+WEIGHT BEARING
+WB
+NON WEIGHT BEARING
+NWB
+PORTABLE
+PORT
+BEDSIDE
+MOBILE
+INSPIRATION
+EXPIRATION
+FLEXION
+EXTENSION
+INTERNAL ROTATION
+EXTERNAL ROTATION
+AXIAL
+CEPHALAD
+CAUDAD
+
+# --- Anatomy (Very General - Add specific non-PHI terms carefully) ---
+HEAD
+SKULL
+NECK
+CHEST
+CXR # Chest X-Ray
+KUB # Kidneys, Ureters, Bladder
+ABDOMEN
+PELVIS
+SPINE
+CERVICAL
+THORACIC
+LUMBAR
+SACRUM
+COCCYX
+SHOULDER
+ELBOW
+WRIST
+HAND
+HIP
+KNEE
+ANKLE
+FOOT
+EXTREMITY
+UPPER
+LOWER
+RIBS
+
+# --- Technical Parameters ---
+DX
+CR
+DR
+XRAY
+X-RAY
+PORTABLE
+GRID
+NO GRID
+AEC # Automatic Exposure Control
+MANUAL
+KV
+KVP
+MA
+MAS
+EXPOSURE
+TIME
+SID # Source-to-Image Distance
+FFD # Film-Focus Distance
+MAG # Magnification
+TECH
+TECHNOLOGIST
+SCOUT
+
+# --- Miscellaneous ---
+SERIES
+IMAGE
+IMG
+VIEW
+PROJECTION
+NO
+NUM
+NUMBER
+EXAM DATE
+EXAM TIME
+TABLE
+HEIGHT
+POS
+POSITION
+REF
+REFERENCE
+NONE
+N/A
+VARIOUS
+SEE REPORT
+CLINICAL HISTORY
+COMPARISON
+PREVIOUS
+PRIOR
+
+# --- Common Artifacts / Descriptions (Use cautiously) ---
+MOTION
+ARTIFACT
+BLUR
+CLOTHING
+JEWELRY
+FOREIGN BODY
+IMPLANT
+PACEMAKER
+LINE
+TUBE
+
+# --- Add institution-specific, non-PHI identifiers if necessary ---
+# E.g., XRAY_ROOM_1, PORTABLE_UNIT_3

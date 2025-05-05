@@ -176,6 +176,10 @@ def default_whitelist_path(modality_code: str) -> Path:
     )
 
 
+def project_whitelist_path(project_dir: Path, modality_code: str) -> Path:
+    return project_dir / Path("whitelists/" + modality_code + ".txt")
+
+
 def load_whitelist_from_txt(filepath: Path) -> list[str]:
     whitelist = []
     if not filepath.is_file():
@@ -192,6 +196,48 @@ def load_whitelist_from_txt(filepath: Path) -> list[str]:
                 whitelist.append(word.upper())
 
     return whitelist
+
+
+def save_whitelist_to_txt(filepath: Path, whitelist: list[str]) -> None:
+    with open(filepath, "w", encoding="utf-8") as f:
+        for word in whitelist:
+            f.write(word + "\n")
+
+
+def save_project_whitelist(project_dir: Path, modality_code: str, whitelist: list[str]) -> Path:
+    """
+    Save the project whitelist to a text file in /project_dir/whitelists/modality_code.txt.
+
+    Args:
+        project_dir (Path): The main project directory
+        modality_code (str): The modality code for which to save the whitelist.
+        whitelist (list[str]): The whitelist to save.
+    """
+    if not whitelist:
+        raise ValueError("Whitelist is empty")
+    if not project_dir.is_dir():
+        raise ValueError(f"{project_dir} is not a valid directory")
+
+    filepath = project_whitelist_path(project_dir, modality_code)
+    # Ensure the parent directory exists
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    # Save the whitelist to the file
+    save_whitelist_to_txt(filepath, whitelist)
+    return filepath
+
+
+def load_project_whitelist(project_dir: Path, modality_code: str) -> list[str]:
+    """
+    Load the project whitelist for a given modality code.
+
+    Args:
+        project_dir (Path): The main project directory
+        modality_code (str): The modality code for which to load the whitelist.
+
+    Returns:
+        A set of whitelisted terms.
+    """
+    return load_whitelist_from_txt(project_whitelist_path(project_dir, modality_code))
 
 
 def load_default_whitelist(modality_code: str) -> list[str]:

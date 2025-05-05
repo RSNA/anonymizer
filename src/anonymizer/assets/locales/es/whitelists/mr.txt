@@ -1,0 +1,199 @@
+# Whitelist for common terms found on MRI images
+# One term/phrase per line. Case-insensitive matching is assumed after loading.
+# Lines starting with # are comments and will be ignored.
+
+# --- Laterality ---
+L
+R
+LEFT
+RIGHT
+LT
+RT
+BILATERAL
+
+# --- Orientation / Position ---
+AX
+AXIAL
+TRA # Transverse
+COR
+CORONAL
+SAG
+SAGITTAL
+OBLIQUE
+SUPINE
+PRONE
+HEAD FIRST
+FEET FIRST
+HF
+FF
+
+# --- Anatomy (Very General - Add specific non-PHI terms carefully) ---
+HEAD
+BRAIN
+NECK
+SPINE
+CERVICAL
+THORACIC
+LUMBAR
+CHEST
+ABDOMEN
+PELVIS
+HIP
+KNEE
+ANKLE
+FOOT
+SHOULDER
+ELBOW
+WRIST
+HAND
+EXTREMITY
+LIVER
+MRCP # Magnetic Resonance Cholangiopancreatography
+MRA # Magnetic Resonance Angiography
+MRV # Magnetic Resonance Venography
+
+# --- Scanner / Technical Parameters ---
+MR
+MRI
+MAGNETOM
+SIGNA
+FIELD STRENGTH
+TESLA
+T # Tesla unit
+1.5T
+3T
+COIL
+HEAD COIL
+BODY COIL
+SPINE COIL
+EXTREMITY COIL
+KNEE COIL
+SHOULDER COIL
+ARRAY
+PHASE ARRAY
+SURFACE COIL
+TR # Repetition Time
+TE # Echo Time
+TI # Inversion Time
+FLIP ANGLE
+FA
+FOV
+MATRIX
+SLICE
+THICKNESS
+SL
+THK
+GAP
+NEX # Number of Excitations
+NSA # Number of Signals Averaged
+AVG # Averages
+BW # Bandwidth
+RESOLUTION
+ACQ
+RECON
+ECHO # Echo Number
+PHASE # Phase Encoding Direction
+FREQ # Frequency Encoding Direction
+FAT SAT
+FS
+FAT SUPPRESSED
+WATER EXCITATION
+STIR # Short Tau Inversion Recovery
+FLAIR # Fluid Attenuated Inversion Recovery
+T1
+T2
+PD # Proton Density
+T1W # T1 Weighted
+T2W # T2 Weighted
+PDW # PD Weighted
+DWI # Diffusion Weighted Imaging
+ADC # Apparent Diffusion Coefficient
+B VALUE
+TRACE
+GRE # Gradient Echo
+SE # Spin Echo
+FSE # Fast Spin Echo
+TSE # Turbo Spin Echo
+EPI # Echo Planar Imaging
+MPRAGE # Magnetization Prepared Rapid Gradient Echo
+VIBE # Volumetric Interpolated Breath-hold Examination
+LAVA # Liver Acquisition with Volume Acceleration
+THRIVE # T1 High Resolution Isotropic Volume Examination
+PROP # Propeller / Blade
+MOTION CORRECTION
+MOCO
+PARALLEL IMAGING
+SENSE
+GRAPPA
+IPAT
+ASSET
+
+# --- Contrast / Timing ---
+CONTRAST
+CONT
+GAD # Gadolinium
+GD
+WITH CONTRAST
+W CONTRAST
+W/C
+WITHOUT CONTRAST
+WO CONTRAST
+NON CON
+NON-CON
+PRE
+POST
+PRE CONTRAST
+POST CONTRAST
+DYNAMIC
+ARTERIAL
+VENOUS
+DELAYED
+SUBTRACTION
+SUB
+
+# --- Measurements / Units ---
+MM
+CM
+MS # Milliseconds
+SEC # Seconds
+HZ # Hertz
+DEG # Degrees
+
+# --- Miscellaneous ---
+SERIES
+IMAGE
+IMG
+NO
+NUM
+NUMBER
+SCAN DATE
+SCAN TIME
+ACQ DATE
+ACQ TIME
+TABLE
+HEIGHT
+POS
+POSITION
+REF
+REFERENCE
+NONE
+N/A
+VARIOUS
+SEE REPORT
+CLINICAL HISTORY
+PROTOCOL
+AUTO
+
+# --- Common Artifacts / Descriptions (Use cautiously) ---
+MOTION
+ARTIFACT
+FLOW
+GHOSTING
+METAL
+SUSCEPTIBILITY
+CHEMICAL SHIFT
+WRAPAROUND
+ALIASING
+
+# --- Add institution-specific, non-PHI identifiers if necessary ---
+# E.g., MRI_SCANNER_A, PROTOCOL_BRAIN_TUMOR

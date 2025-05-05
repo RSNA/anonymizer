@@ -1,0 +1,173 @@
+# Whitelist for common terms found on CT images
+# One term/phrase per line. Case-insensitive matching is assumed after loading.
+# Lines starting with # are comments and will be ignored.
+
+# --- Laterality ---
+L
+R
+LEFT
+RIGHT
+LT
+RT
+BILATERAL
+
+# --- Orientation / Position ---
+AX
+AXIAL
+COR
+CORONAL
+SAG
+SAGITTAL
+OBLIQUE
+SUPINE
+PRONE
+DECUBITUS
+ERECT
+SEMI-ERECT
+HEAD FIRST
+FEET FIRST
+HF
+FF
+HFS
+FFS
+HFP
+FFP
+
+# --- Anatomy (Very General - Add specific non-PHI terms carefully) ---
+HEAD
+NECK
+CHEST
+ABDOMEN
+PELVIS
+SPINE
+EXTREMITY
+BRAIN
+LUNG
+LIVER
+KIDNEY
+HEART
+AORTA
+VESSEL
+
+# --- Scanner / Technical Parameters ---
+CT
+SCAN
+SCOUT
+TOPOGRAM
+SURVIEW
+SCANOGRAM
+HELICAL
+SEQUENTIAL
+VOLUME
+ACQ
+RECON
+SLICE
+THICKNESS
+SL
+THK
+FOV
+DFOV
+ZOOM
+WW
+WL
+WINDOW
+LEVEL
+WIDTH
+KV
+KVP
+MA
+MAS
+TIME
+ROT TIME
+ROTATION
+PITCH
+NOISE
+INDEX
+CTDI
+CTDI VOL
+DLP
+KERNEL
+FILTER
+STANDARD
+SOFT
+BONE
+LUNG
+EDGE
+SHARP
+SMOOTH
+ITERATIVE
+IR
+ASIR
+MBIR
+IMR
+EXPOSURE
+
+# --- Contrast / Timing ---
+CONTRAST
+CONT
+WITH CONTRAST
+W CONTRAST
+W/C
+WITHOUT CONTRAST
+WO CONTRAST
+NON CON
+NON-CON
+PRE
+POST
+PRE CONTRAST
+POST CONTRAST
+ARTERIAL
+ART
+VENOUS
+VEN
+DELAY
+DELAYED
+NEPHROGRAPHIC
+EXCRETORY
+PORTAL
+PV
+ORAL
+IV
+BOLUS
+INJECTION
+
+# --- Measurements / Units ---
+MM
+CM
+HU # Hounsfield Unit
+SUV # Standardized Uptake Value (PET/CT)
+
+# --- Miscellaneous ---
+SERIES
+IMAGE
+IMG
+NO
+NUM
+NUMBER
+SCAN DATE
+SCAN TIME
+ACQ DATE
+ACQ TIME
+TABLE
+HEIGHT
+POS
+POSITION
+REF
+REFERENCE
+NONE
+N/A
+VARIOUS
+SEE REPORT
+CLINICAL HISTORY
+PROTOCOL
+AUTO
+
+# --- Common Artifacts / Descriptions (Use cautiously) ---
+MOTION
+ARTIFACT
+METAL
+STREAKING
+BEAM HARDENING
+
+# --- Add institution-specific, non-PHI identifiers if necessary ---
+# E.g., SCANNER01, RAD_ROOM_A, PROTOCOL_ABC

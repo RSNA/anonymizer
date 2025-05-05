@@ -22,7 +22,7 @@ from anonymizer.controller.remove_pixel_phi import (
     remove_text,
 )
 from anonymizer.model.anonymizer import AnonymizerModel
-from anonymizer.utils.storage import load_default_whitelist, load_whitelist_from_txt
+from anonymizer.utils.storage import load_default_whitelist, load_project_whitelist, save_project_whitelist
 from anonymizer.utils.translate import _
 from anonymizer.view.image import ImageViewer
 
@@ -51,6 +51,7 @@ class SeriesView(ctk.CTkToplevel):
         self._ocr_reader = None  # only created if user clicks "Detect Text" button
         self.edit_context: EditContext = EditContext.FRAME
         self.detected_text: dict[int, list[OCRText]] = {}  # Store all detected text per frame
+        self._whitelist_changed = False
 
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Escape>", self._escape_keypress)
@@ -82,7 +83,7 @@ class SeriesView(ctk.CTkToplevel):
         whitelist_title = ctk.CTkLabel(whitelist_frame, text=_("WHITE LIST"))
         whitelist_title.grid(row=0, columnspan=2, sticky="ew")
         whitelist_defaults_button = ctk.CTkButton(
-            whitelist_frame, text=_("Defaults"), command=self.load_whitelist_defaults
+            whitelist_frame, text=_("Defaults"), command=self.whitelist_defaults_button_clicked
         )
         whitelist_defaults_button.grid(row=1, column=0, sticky="ew", padx=self.PAD, pady=self.PAD)
         whitelist_clear_button = ctk.CTkButton(whitelist_frame, text=_("Clear"), command=self.clear_whitelist)
@@ -178,7 +179,12 @@ class SeriesView(ctk.CTkToplevel):
         self.status_label.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="e")
         self.control_frame.grid_columnconfigure(col, weight=1)  # Make status label expand.
 
-        self.load_whitelist_defaults()
+        try:
+            whitelist = load_project_whitelist(self._series_path.parents[3], self._ds.Modality)
+            for item in whitelist:
+                self.whitelist.insert(tk.END, item)
+        except Exception:
+            self.load_whitelist_defaults()
 
     def _update_title(self):
         if self._ds:
@@ -212,6 +218,7 @@ class SeriesView(ctk.CTkToplevel):
             # Not in whitelist, insert:
             logger.info(f"Adding to whitelist: {text}")
             self.whitelist.insert(0, text)
+            self._whitelist_changed = True
 
     def insert_entry_into_whitelist(self):
         new_item = self.whitelist_entry.get()
@@ -219,6 +226,9 @@ class SeriesView(ctk.CTkToplevel):
             return
         self.add_to_whitelist(new_item)
         self.whitelist_entry.delete(0, ctk.END)
+
+    def get_whitelist_set(self) -> list[str]:
+        return [item.upper().strip() for item in self.whitelist.get(0, "end") if item.strip()]
 
     def whitelist_button_clicked_or_entry_return(self, event):
         self.insert_entry_into_whitelist()
@@ -234,6 +244,8 @@ class SeriesView(ctk.CTkToplevel):
             self.whitelist.delete(i)
             self.whitelist.select_set(i - 1)
             self.whitelist.activate(i - 1)
+
+        self._whitelist_changed = True
 
     def edit_context_change(self, choice):
         logger.info(f"Edit Context changed to: {choice}")
@@ -305,7 +317,7 @@ class SeriesView(ctk.CTkToplevel):
             return []
 
         # Preprocess whitelist items once
-        whitelist_set = [item.upper().strip() for item in self.whitelist.get(0, "end") if item.strip()]
+        whitelist_set = self.get_whitelist_set()
         if not whitelist_set:  # If whitelist is empty, return all results
             return self.detected_text.get(frame_index, [])
 
@@ -483,15 +495,41 @@ class SeriesView(ctk.CTkToplevel):
 
     def save_series_button_clicked(self):
         if self._frames is None or self._ds is None:
-            logger.error("No frames or dataset to save")
+            logger.error("CRITICAL: No frames or dataset to save")
             return
+
+        # Save Whitelist:
+        whitelist_set = self.get_whitelist_set()
+        if self._whitelist_changed and whitelist_set:
+            if not hasattr(self._ds, "Modality") or self._ds.Modality is None:
+                logger.error("CRITICAL: Modality not found in dataset")
+                return
+            if len(self._series_path.parents) < 4:
+                logger.error("CRITICAL: Series path does not have enough parents - cannot determine project directory")
+                return
+            try:
+                whitelist_filepath = save_project_whitelist(
+                    self._series_path.parents[3], self._ds.Modality, whitelist_set
+                )
+                logger.info(f"Saved whitelist to {whitelist_filepath}")
+                self._whitelist_changed = False
+            except Exception as e:
+                logger.error(f"Error saving whitelist: {e}")
+
+        # Save Series Frames:
         if save_series_frames(self._series_path, self._frames if self.single_frame else self._frames[3:], self._ds):
             logger.info(f"Saved series frames to {self._series_path}")
             self.update_status(_("Changes saved successfully"))
         else:
             logger.error(f"Failed to save series frames to {self._series_path}")
-            self.update_status(_("Failed to save changes"))
+            self.update_status(_("Failed to save changes to series frames"))
         self.save_button.configure(state="disabled")
+
+    def whitelist_defaults_button_clicked(self):
+        logger.info("Whitelist button clicked")
+        self.clear_whitelist()
+        self.load_whitelist_defaults()
+        self._whitelist_changed = True
 
     def load_whitelist_defaults(self):
         # TODO: whitelist load error message to user
@@ -499,7 +537,7 @@ class SeriesView(ctk.CTkToplevel):
             logger.error("CRITICAL: self._ds is None")
             return
         if self._ds.Modality is None:
-            logger.error("Modality not found in dataset")
+            logger.error("CRITICAL: Modality not found in dataset")
             return
 
         logger.info(f"Loading default whitelist for modality {self._ds.Modality}")
