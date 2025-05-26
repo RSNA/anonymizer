@@ -52,6 +52,7 @@ VALID_COLOR_SPACES = [
     "YBR_ICT",
     "YBR_RCT",
     "PALETTE COLOR",
+    "YBR_PARTIAL_420",
 ]
 
 

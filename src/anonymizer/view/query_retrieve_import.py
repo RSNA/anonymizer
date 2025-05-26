@@ -337,7 +337,7 @@ class QueryView(tk.Toplevel):
         )  # set default move level to SERIES
         self._move_levels_optionmenu = ctk.CTkOptionMenu(
             self._status_frame,
-            width=char_width_px * len(max(self.MOVE_LEVELS, key=len)) + 40,
+            width=char_width_px * len(max(self.MOVE_LEVELS, key=len)) + 50,
             dynamic_resizing=False,
             values=self.MOVE_LEVELS,
             variable=self._move_level_var,
