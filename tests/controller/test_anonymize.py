@@ -79,7 +79,7 @@ def test_valid_date_hash_patient_id_range(controller):
         assert anon.valid_date(hdate)
 
 
-def test_anonymize_dataset_without_PatientID(temp_dir: str, controller):
+def test_anonymize_dataset_without_PatientID(controller):
     anonymizer: AnonymizerController = controller.anonymizer
     ds = get_testdata_file(cr1_filename, read=True)
     assert isinstance(ds, Dataset)
@@ -116,7 +116,7 @@ def test_anonymize_dataset_without_PatientID(temp_dir: str, controller):
     assert controller.anonymizer.model.get_phi(anon_pt_id).patient_id == ""
 
 
-def test_anonymize_dataset_with_blank_PatientID_1_study(temp_dir: str, controller):
+def test_anonymize_dataset_with_blank_PatientID_1_study(controller):
     anonymizer: AnonymizerController = controller.anonymizer
     ds1 = get_testdata_file(cr1_filename, read=True)
     assert isinstance(ds1, Dataset)
@@ -187,7 +187,7 @@ def test_anonymize_dataset_with_blank_PatientID_1_study(temp_dir: str, controlle
     assert controller.anonymizer.model.get_phi(anon_pt_id).patient_id == ""
 
 
-def test_anonymize_dataset_with_blank_PatientID_2_studies(temp_dir: str, controller):
+def test_anonymize_dataset_with_blank_PatientID_2_studies(controller):
     anonymizer: AnonymizerController = controller.anonymizer
     ds = get_testdata_file(cr1_filename, read=True)
     assert isinstance(ds, Dataset)
@@ -223,7 +223,7 @@ def test_anonymize_dataset_with_blank_PatientID_2_studies(temp_dir: str, control
     assert controller.anonymizer.model.get_phi(anon_pt_id).patient_id == ""
 
 
-def test_anonymize_dataset_with_PatientID(temp_dir: str, controller):
+def test_anonymize_dataset_with_PatientID(controller):
     anonymizer: AnonymizerController = controller.anonymizer
     ds = get_testdata_file(cr1_filename, read=True)
     assert isinstance(ds, Dataset)
@@ -315,7 +315,7 @@ def test_anonymize_dicom_missing_attributes(temp_dir: str, controller: ProjectCo
     assert qpath.exists()
 
 
-def test_anonymize_storage_error(temp_dir: str, controller: ProjectController):
+def test_anonymize_storage_error(controller: ProjectController):
     anonymizer: AnonymizerController = controller.anonymizer
 
     cr1 = get_testdata_file(cr1_filename, read=True)
