@@ -4,7 +4,6 @@
 import os
 from copy import deepcopy
 from pathlib import Path
-from queue import Queue
 from time import sleep
 
 from pydicom import dcmread
@@ -66,10 +65,10 @@ def test_invalid_date_value(controller):
 # Test with a known date and PatientID
 def test_valid_date_hashing(controller):
     anon = controller.anonymizer
-    assert "20220921" == anon._hash_date("20220101", "12345")[1]
-    assert "20250815" == anon._hash_date("20220101", "67890")[1]
-    assert "19080814" == anon._hash_date("19000101", "123456789")[1]
-    assert "19080412" == anon._hash_date("19000101", "1234567890")[1]
+    assert anon._hash_date("20220101", "12345")[1] == "20220921"
+    assert anon._hash_date("20220101", "67890")[1] == "20250815"
+    assert anon._hash_date("19000101", "123456789")[1] == "19080814"
+    assert anon._hash_date("19000101", "1234567890")[1] == "19080412"
 
 
 def test_valid_date_hash_patient_id_range(controller):

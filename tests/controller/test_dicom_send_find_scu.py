@@ -1,47 +1,47 @@
 import os
 import time
+
 import pytest
+from pydicom.data import get_testdata_file
 from pydicom.dataset import Dataset
 from pydicom.errors import InvalidDicomError
+
 import tests.controller.dicom_pacs_simulator_scp as pacs_simulator_scp
 from anonymizer.controller.project import ProjectController
-
 from anonymizer.utils.storage import count_studies_series_images
-from pydicom.data import get_testdata_file
+from tests.controller.dicom_test_files import (
+    CR_STUDY_3_SERIES_3_IMAGES,
+    CT_STUDY_1_SERIES_4_IMAGES,
+    MR_STUDY_3_SERIES_11_IMAGES,
+    cr1_filename,
+    cr1_StudyInstanceUID,
+    ct_small_filename,
+    ct_small_SeriesInstanceUID,
+    ct_small_StudyInstanceUID,
+    mr_brain_StudyInstanceUID,
+    mr_small_bigendian_filename,
+    mr_small_filename,
+    mr_small_implicit_filename,
+    mr_small_SeriesInstanceUID,
+    mr_small_StudyInstanceUID,
+    patient1_id,
+    patient1_name,
+    patient2_id,
+    patient2_name,
+    patient3_id,
+    patient3_name,
+    patient4_id,
+    patient4_name,
+)
 
 # DICOM NODES involved in tests:
-from tests.controller.dicom_test_nodes import PACSSimulatorSCP, LocalStorageSCP, OrthancSCP
-
+from tests.controller.dicom_test_nodes import LocalStorageSCP, OrthancSCP, PACSSimulatorSCP
 from tests.controller.helpers import (
+    export_patients_from_local_storage_to_test_pacs,
     pacs_storage_dir,
     send_file_to_scp,
     send_files_to_scp,
     verify_files_sent_to_pacs_simulator,
-    export_patients_from_local_storage_to_test_pacs,
-)
-from tests.controller.dicom_test_files import (
-    patient1_name,
-    patient1_id,
-    patient2_name,
-    patient2_id,
-    patient3_name,
-    patient3_id,
-    patient4_name,
-    patient4_id,
-    cr1_filename,
-    cr1_StudyInstanceUID,
-    ct_small_filename,
-    ct_small_StudyInstanceUID,
-    ct_small_SeriesInstanceUID,
-    mr_small_filename,
-    mr_small_StudyInstanceUID,
-    mr_small_SeriesInstanceUID,
-    mr_small_implicit_filename,
-    mr_small_bigendian_filename,
-    mr_brain_StudyInstanceUID,
-    CR_STUDY_3_SERIES_3_IMAGES,
-    CT_STUDY_1_SERIES_4_IMAGES,
-    MR_STUDY_3_SERIES_11_IMAGES,
 )
 
 
@@ -153,7 +153,7 @@ def test_send_11_MR_files_to_test_pacs(temp_dir: str, controller: ProjectControl
 
 def test_export_patient_CR_study_to_test_pacs(temp_dir: str, controller: ProjectController):
     # Send 1 Study with 1 CR files to local storage:
-    phi_dsets: list[Dataset] = send_files_to_scp([cr1_filename], LocalStorageSCP, controller)
+    send_files_to_scp([cr1_filename], LocalStorageSCP, controller)
     time.sleep(0.5)
     store_dir = controller.model.images_dir()
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
@@ -166,7 +166,7 @@ def test_export_patient_CR_study_to_test_pacs(temp_dir: str, controller: Project
 
 def test_export_patient_CT_study_to_test_pacs(temp_dir: str, controller: ProjectController):
     # Send 1 Study with 4 CT files to local storage:
-    phi_dsets: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, LocalStorageSCP, controller)
+    send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, LocalStorageSCP, controller)
     time.sleep(0.5)
     store_dir = controller.model.images_dir()
     dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]

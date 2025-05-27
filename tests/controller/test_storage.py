@@ -1,18 +1,20 @@
-from src.anonymizer.utils.storage import (
-    count_studies_series_images,
-    count_series,
-    get_dcm_files,
-    count_study_images,
-    read_java_anonymizer_index_xlsx,
-)
-import tempfile
-from typing import Generator, Tuple
-import pytest
-from unittest.mock import patch, MagicMock
-import shutil
-from pathlib import Path
 import os
 import random
+import shutil
+import tempfile
+from pathlib import Path
+from typing import Generator, Tuple
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from src.anonymizer.utils.storage import (
+    count_series,
+    count_studies_series_images,
+    count_study_images,
+    get_dcm_files,
+    read_java_anonymizer_index_xlsx,
+)
 
 
 # Basic tests
@@ -176,7 +178,7 @@ def test_count_study_images(temp_dir: str):
     assert count_study_images(base_dir, "non_existent_patient", "non_existent_study") == 0
 
 
-# Random number of subsiquent folders
+# Random number of subsequent folders
 def generate_random_dicom_structure(temp_dir: str, num_patients=1) -> Tuple[int, int, int, int]:
     """
     Generates a random DICOM structure within the given temporary directory.
@@ -200,18 +202,18 @@ def generate_random_dicom_structure(temp_dir: str, num_patients=1) -> Tuple[int,
         os.makedirs(patient_dir)
 
         num_patient_studies = random.randint(1, 5)
-        for j in range(num_patient_studies):
-            study_dir = os.path.join(patient_dir, f"study_{j}")
+        for J in range(num_patient_studies):
+            study_dir = os.path.join(patient_dir, f"study_{J}")
             os.makedirs(study_dir)
 
             num_patient_study_series = random.randint(1, 10)
-            for k in range(num_patient_study_series):
-                series_dir = os.path.join(study_dir, f"series_{k}")
+            for K in range(num_patient_study_series):
+                series_dir = os.path.join(study_dir, f"series_{K}")
                 os.makedirs(series_dir)
 
                 num_patient_study_series_images = random.randint(1, 3)
-                for l in range(num_patient_study_series_images):
-                    image_path = os.path.join(series_dir, f"image_{l}.dcm")
+                for L in range(num_patient_study_series_images):
+                    image_path = os.path.join(series_dir, f"image_{L}.dcm")
                     with open(image_path, "w") as _:
                         pass  # Create an empty DICOM file
 

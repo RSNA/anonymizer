@@ -508,50 +508,52 @@ def get_wl_ww(ds: Dataset) -> tuple[float, float]:
         A tuple containing the window level and width (wl, ww).
 
     """
-    wl = ds.get("WindowCenter", None)
-    ww = ds.get("WindowWidth", None)
+    wl_from_ds = ds.get("WindowCenter", None)  # Use a different variable name initially
+    ww_from_ds = ds.get("WindowWidth", None)  # Use a different variable name initially
     bits_allocated = ds.get("BitsAllocated", None)
 
-    if wl is None or ww is None:
+    wl_float: float
+    ww_float: float
+
+    if wl_from_ds is None or ww_from_ds is None:
         logger.debug("WindowCenter or WindowWidth not found in DICOM dataset. Using default values.")
-        # Default values based on pixel data type
         if bits_allocated == 8:
-            wl = 127.5
-            ww = 255.0
+            wl_float = 127.5
+            ww_float = 255.0
         elif bits_allocated == 16:
-            wl = 32768.0
-            ww = 65535.0
-        elif bits_allocated == 12:
-            wl = 2048.0
-            ww = 4096.0
-        elif bits_allocated == 10:
-            wl = 512.0
-            ww = 1024.0
-        elif bits_allocated == 32:
-            wl = 2147483648.0
-            ww = 4294967295.0
+            wl_float = 32768.0
+            ww_float = 65535.0
+        # ... (other default conditions) ...
+        elif bits_allocated == 12:  # Added for completeness from original code
+            wl_float = 2048.0
+            ww_float = 4096.0
+        elif bits_allocated == 10:  # Added for completeness from original code
+            wl_float = 512.0
+            ww_float = 1024.0
+        elif bits_allocated == 32:  # Added for completeness from original code
+            wl_float = 2147483648.0
+            ww_float = 4294967295.0
         else:
             raise ValueError(f"Unsupported BitsAllocated value: {bits_allocated}")
+        return wl_float, ww_float  # Return defaults directly
 
-        return wl, ww
-
-    # Handle single vs. multi-value (pydicom loads multi-value as a list)
-    if isinstance(wl, multival.MultiValue):
-        if len(wl) > 0:
-            wl_float = float(wl[0])
+    # Handle single vs. multi-value
+    if isinstance(wl_from_ds, multival.MultiValue):
+        wl_float = float(wl_from_ds[0]) if len(wl_from_ds) > 0 else 0.0  # Provide a default if empty multivalue
     else:
-        wl_float = float(wl)  # It's a single value
+        wl_float = float(wl_from_ds)
 
-    if isinstance(ww, multival.MultiValue):
-        if len(ww) > 0:
-            ww_float = float(ww[0])
+    if isinstance(ww_from_ds, multival.MultiValue):
+        ww_float = float(ww_from_ds[0]) if len(ww_from_ds) > 0 else 1.0  # Provide a default if empty multivalue
     else:
-        ww_float = float(ww)  # It's a single value
+        ww_float = float(ww_from_ds)
 
     # Ensure Window Width is positive
     if ww_float < 1.0:
-        logger.warning(f"DICOM WindowWidth ({ww}) is less than 1. Setting to 1.")
-        ww = 1.0
+        logger.warning(
+            f"DICOM WindowWidth ({ww_from_ds}) is less than 1. Setting to 1."  # Log original value
+        )
+        ww_float = 1.0  # Correct ww_float itself
 
     return wl_float, ww_float
 

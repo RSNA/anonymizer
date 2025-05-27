@@ -3,7 +3,7 @@ import os
 from typing import List
 
 from pydicom import Dataset, dcmread
-from pynetdicom._globals import DEFAULT_TRANSFER_SYNTAXES  # ,ALL_TRANSFER_SYNTAXES
+from pynetdicom._globals import DEFAULT_TRANSFER_SYNTAXES  # type: ignore
 from pynetdicom.ae import ApplicationEntity as AE
 from pynetdicom.events import EVT_C_ECHO, EVT_C_FIND, EVT_C_MOVE, EVT_C_STORE, Event
 from pynetdicom.presentation import PresentationContext, build_context
@@ -77,16 +77,12 @@ def set_study_root_qr_contexts(ae: AE) -> None:
 
 def get_radiology_storage_contexts() -> List[PresentationContext]:
     return [
-        build_context(abstract_syntax, _TRANSFER_SYNTAXES)
-        for abstract_syntax in _RADIOLOGY_STORAGE_CLASSES.values()
+        build_context(abstract_syntax, _TRANSFER_SYNTAXES) for abstract_syntax in _RADIOLOGY_STORAGE_CLASSES.values()
     ]
 
 
 def get_study_root_qr_contexts() -> List[PresentationContext]:
-    return [
-        build_context(abstract_syntax, _TRANSFER_SYNTAXES)
-        for abstract_syntax in _STUDY_ROOT_QR_CLASSES
-    ]
+    return [build_context(abstract_syntax, _TRANSFER_SYNTAXES) for abstract_syntax in _STUDY_ROOT_QR_CLASSES]
 
 
 # Store scp instance after ae.start_server() is called:
@@ -123,13 +119,9 @@ def _handle_store(event: Event, storage_dir: str) -> int:
     ds.file_meta = event.file_meta
     logger.debug(remote)
     logger.debug(ds)
-    filename = os.path.join(
-        storage_dir, f"{ds.SeriesInstanceUID}.{ds.InstanceNumber}.dcm"
-    )
+    filename = os.path.join(storage_dir, f"{ds.SeriesInstanceUID}.{ds.InstanceNumber}.dcm")
 
-    logger.debug(
-        f"C-STORE [TxSyn:{ds.file_meta.TransferSyntaxUID}]: {remote['ae_title']} => {filename}"
-    )
+    logger.debug(f"C-STORE [TxSyn:{ds.file_meta.TransferSyntaxUID}]: {remote['ae_title']} => {filename}")
     try:
         ds.save_as(filename, write_like_original=False)
     except Exception as exception:
@@ -166,48 +158,22 @@ def _handle_find(event, storage_dir: str):
     if ds.QueryRetrieveLevel in ["STUDY", "SERIES"]:
         study_uid = ds.get("StudyInstanceUID", "")
         if study_uid == "":  # return a response for each study
-            study_uids = list(
-                set(
-                    [
-                        inst.StudyInstanceUID
-                        for inst in instances
-                        if hasattr(inst, "StudyInstanceUID")
-                    ]
-                )
-            )
+            study_uids = list(set([inst.StudyInstanceUID for inst in instances if hasattr(inst, "StudyInstanceUID")]))
         else:
             study_uids = [study_uid]
 
         for study_uid in study_uids:
             # Get all instances matching study_uid:
-            matching = [
-                inst for inst in instances if inst.StudyInstanceUID == study_uid
-            ]
+            matching = [inst for inst in instances if inst.StudyInstanceUID == study_uid]
 
             if len(matching) == 0:
                 logger.error("No matching instances for C-FIND response")
                 return
 
-            matching_modalities = list(
-                set([inst.Modality for inst in matching if hasattr(inst, "Modality")])
-            )
-            matching_sop_classes = list(
-                set(
-                    [
-                        inst.SOPClassUID
-                        for inst in matching
-                        if hasattr(inst, "SOPClassUID")
-                    ]
-                )
-            )
+            matching_modalities = list(set([inst.Modality for inst in matching if hasattr(inst, "Modality")]))
+            matching_sop_classes = list(set([inst.SOPClassUID for inst in matching if hasattr(inst, "SOPClassUID")]))
             matching_series_uids = list(
-                set(
-                    [
-                        inst.SeriesInstanceUID
-                        for inst in matching
-                        if hasattr(inst, "SeriesInstanceUID")
-                    ]
-                )
+                set([inst.SeriesInstanceUID for inst in matching if hasattr(inst, "SeriesInstanceUID")])
             )
 
             identifier = Dataset()
@@ -239,11 +205,7 @@ def _handle_find(event, storage_dir: str):
                 yield (C_PENDING_A, identifier)
             else:
                 for series_uid in matching_series_uids:
-                    series_matching = [
-                        inst
-                        for inst in matching
-                        if inst.SeriesInstanceUID == series_uid
-                    ]
+                    series_matching = [inst for inst in matching if inst.SeriesInstanceUID == series_uid]
                     identifier.SeriesInstanceUID = series_uid
                     identifier.SeriesNumber = series_matching[0].get("SeriesNumber", "")
                     identifier.Modality = series_matching[0].get("Modality", "")
@@ -327,27 +289,18 @@ def _handle_move(event, storage_dir: str, known_aet_dict: dict):
 
     if ds.QueryRetrieveLevel == "STUDY":
         if "StudyInstanceUID" in ds:
-            matching = [
-                inst
-                for inst in instances
-                if inst.StudyInstanceUID == ds.StudyInstanceUID
-            ]
+            matching = [inst for inst in instances if inst.StudyInstanceUID == ds.StudyInstanceUID]
 
     elif ds.QueryRetrieveLevel == "SERIES":
         if "StudyInstanceUID" in ds and "SeriesInstanceUID" in ds:
             matching = [
                 inst
                 for inst in instances
-                if inst.StudyInstanceUID == ds.StudyInstanceUID
-                and inst.SeriesInstanceUID == ds.SeriesInstanceUID
+                if inst.StudyInstanceUID == ds.StudyInstanceUID and inst.SeriesInstanceUID == ds.SeriesInstanceUID
             ]
 
     elif ds.QueryRetrieveLevel == "IMAGE":
-        if (
-            "StudyInstanceUID" in ds
-            and "SeriesInstanceUID" in ds
-            and "SOPInstanceUID" in ds
-        ):
+        if "StudyInstanceUID" in ds and "SeriesInstanceUID" in ds and "SOPInstanceUID" in ds:
             matching = [
                 inst
                 for inst in instances
@@ -365,9 +318,7 @@ def _handle_move(event, storage_dir: str, known_aet_dict: dict):
     matches = len(matching)
     logger.info(f"Matching instances: {matches}")
     if not matches:
-        logger.error(
-            f"No matching instances for C-MOVE response StudyInstanceUID={ds.StudyInstanceUID}"
-        )
+        logger.error(f"No matching instances for C-MOVE response StudyInstanceUID={ds.StudyInstanceUID}")
         yield 0
         return
 
@@ -427,9 +378,7 @@ def start(addr: DICOMNode, storage_dir: str, known_nodes: list[DICOMNode]) -> bo
         logger.error(f"Failed to start PACS SIMULATOR scp on {addr}, Error: {str(e)}")
         return False
 
-    logger.info(
-        f"PACS SIMULATOR scp listening on {addr}, storing files in {storage_dir}"
-    )
+    logger.info(f"PACS SIMULATOR scp listening on {addr}, storing files in {storage_dir}")
     return True
 
 

@@ -39,6 +39,7 @@ pytest = "*"
 pytest-cov = "^6.0.0"
 python-dotenv = "*"
 ffmpeg-python = "^0.2.0"
+pytest-mock = "^3.14.1"
 
 [tool.poetry.scripts]
 rsna-anonymizer = "anonymizer.anonymizer:main"

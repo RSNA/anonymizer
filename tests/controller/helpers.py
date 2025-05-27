@@ -1,13 +1,15 @@
 import os
 from pathlib import Path
 from queue import Queue
-from pydicom.data import get_testdata_file
+
 from pydicom import Dataset
+from pydicom.data import get_testdata_file
+
 from anonymizer.controller.project import (
-    ProjectController,
     ExportPatientsRequest,
     ExportPatientsResponse,
     MoveStudiesRequest,
+    ProjectController,
     StudyUIDHierarchy,
 )
 from anonymizer.model.project import DICOMNode
@@ -47,9 +49,7 @@ def send_files_to_scp(
     controller: ProjectController,
 ) -> list[Dataset]:
     # Read datasets from test data which comes with pydicom to return to caller
-    datasets: list[Dataset] = [
-        get_testdata_file(filename, read=True) for filename in pydicom_test_filenames
-    ]  # type: ignore
+    datasets: list[Dataset] = [get_testdata_file(filename, read=True) for filename in pydicom_test_filenames]  # type: ignore
     assert all(isinstance(item, Dataset) for item in datasets)
     assert datasets[0]
     assert datasets[0].PatientID
@@ -127,7 +127,7 @@ def export_patients_from_local_storage_to_test_pacs(patient_ids: list[str], cont
     req: ExportPatientsRequest = ExportPatientsRequest(PACSSimulatorSCP.aet, patient_ids, ux_Q)
     controller.export_patients_ex(req)
     export_count = 0
-    while not export_count == len(patient_ids):
+    while export_count != len(patient_ids):
         try:
             resp: ExportPatientsResponse = ux_Q.get(timeout=6)
             assert not resp.error
@@ -136,6 +136,6 @@ def export_patients_from_local_storage_to_test_pacs(patient_ids: list[str], cont
                 export_count += 1
 
         except Exception:  # timeout reading ux_Q
-            assert False
+            return False
 
     return True

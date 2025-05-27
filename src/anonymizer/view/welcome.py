@@ -16,8 +16,10 @@ class WelcomeView(ctk.CTkFrame):
         change_language_callback (callable): A callback function to handle language change.
 
     Attributes:
+    All dimensions in pixels.
         PAD (int): The padding value.
         TITLE_FONT_SIZE (int): The font size for the title.
+        SPONSOR_TEXT_FONT_SIZE (int): The font size for the sponsor text.
         WELCOME_TEXT_FONT_SIZE (int): The font size for the welcome text.
         TITLED_LOGO_FILE (str): The file path of the titled RSNA logo.
         TITLED_LOGO_WIDTH (int): The width of the titled RSNA logo.
