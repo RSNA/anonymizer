@@ -769,8 +769,7 @@ class QueryView(tk.Toplevel):
                 logger.critical("Critical Internal error: Query result dataset does not have StudyInstanceUID")
                 continue
 
-            patient_id = dataset.get("PatientID", "")
-            images_stored_count = self._controller.anonymizer.model.get_stored_instance_count(patient_id, study_uid)
+            images_stored_count = self._controller.anonymizer.model.get_stored_instance_count(study_uid)
             # Actual file count from file system:
             # self._images_stored_phi_lookup(
             #     patient_id,
@@ -785,7 +784,7 @@ class QueryView(tk.Toplevel):
                 imported = True
             else:
                 # For multi-modality studies query the AnonymizerModel:
-                imported = self._controller.anonymizer.model.study_imported(patient_id, study_uid)
+                imported = self._controller.anonymizer.model.study_imported(study_uid)
 
             # Do not show Imported Studies if UX switch is on
             if imported and not self._show_imported_studies_switch.get():

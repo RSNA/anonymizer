@@ -75,7 +75,6 @@ class AnonymizerController:
 
     NUMBER_OF_DATASET_WORKER_THREADS = 1
     WORKER_THREAD_SLEEP_SECS = 0.075  # for UX responsiveness
-    MODEL_AUTOSAVE_INTERVAL_SECS = 30
 
     _clean_tag_translate_table: dict[int, int | None] = str.maketrans("", "", "() ,")
 
@@ -134,13 +133,15 @@ class AnonymizerController:
                     site_id=project_model.site_id,
                     uid_root=project_model.uid_root,
                     script_path=project_model.anonymizer_script_path,
+                    db_url="sqlite:///"
+                    + str(self.project_model.private_dir())
+                    + "/AnonymizerModel.db",  # TODO: add db_url to project_model
                 )  # new default model
                 # TODO: handle new & deleted fields in nested objects
                 self.model.__dict__.update(
                     file_model.__dict__
                 )  # copy over corresponding attributes from the old model (file_model)
                 self.model._version = AnonymizerModel.MODEL_VERSION  # upgrade version
-                self.save_model()
                 logger.info(f"Anonymizer Model upgraded successfully to version: {self.model._version}")
             else:
                 self.model: AnonymizerModel = file_model
@@ -179,14 +180,6 @@ class AnonymizerController:
             px_worker.start()
             self._worker_threads.append(px_worker)
 
-        # Spawn Model Autosave Thread:
-        self._model_change_flag = False
-        # self._autosave_event = threading.Event()
-        # self._autosave_worker_thread = threading.Thread(
-        #     target=self._autosave_manager, name="AnonModelSaver", daemon=True
-        # )
-        # self._autosave_worker_thread.start()
-
         self._active = True
         logger.info("Anonymizer Controller initialised")
 
@@ -221,7 +214,6 @@ class AnonymizerController:
         for worker in self._worker_threads:
             worker.join()
 
-        # self._autosave_event.set()
         self._active = False
 
     def __del__(self):
@@ -286,7 +278,6 @@ class AnonymizerController:
                 return False
             os.makedirs(qpath.parent, exist_ok=True)
             copyfile(file, qpath)
-            self.model.increment_quarantined()
             return True
         except Exception as e:
             logger.error(f"Error Copying to QUARANTINE: {e}")
@@ -312,26 +303,11 @@ class AnonymizerController:
             error_msg: str = f"Storage Error = {estr}, QUARANTINE {ds.SOPInstanceUID} to {filename}"
             logger.error(error_msg)
             ds.save_as(filename, write_like_original=True)
-            self.model.increment_quarantined()
         except Exception as e2:
             e2str = repr(e2)
             logger.critical(f"Critical Error writing incoming dataset to QUARANTINE: {e2str}")
 
         return error_msg
-
-    def _autosave_manager(self):
-        logger.info(f"thread={threading.current_thread().name} start")
-
-        # while self._active:
-        #     self._autosave_event.wait(timeout=self.MODEL_AUTOSAVE_INTERVAL_SECS)
-        #     if self._model_change_flag:
-        #         self.save_model()
-        #         self._model_change_flag = False
-
-        logger.info(f"thread={threading.current_thread().name} end")
-
-    def save_model(self) -> bool:
-        return self.model.save()
 
     def valid_date(self, date_str: str) -> bool:
         """
@@ -416,7 +392,7 @@ class AnonymizerController:
 
         return result
 
-    def _anonymize_element(self, dataset, data_element) -> None:
+    def _anonymize_element(self, dataset, data_element, phi_ptid, anon_ptid, anon_acc_no) -> None:
         """
         Anonymizes a data element in the dataset based on the specified operations.
 
@@ -441,18 +417,15 @@ class AnonymizerController:
         # Anonymize operations:
         if "@empty" in operation:
             dataset[tag].value = ""
-        elif "uid" in operation:
-            anon_uid = self.model.get_anon_uid(value)
-            if not anon_uid:
-                anon_uid = self.model.get_next_anon_uid()
+        elif "@uid" in operation:
+            anon_uid = self.model.get_or_create_anon_uid(value)
             dataset[tag].value = anon_uid
-        elif "acc" in operation:
-            anon_acc_no = self.model.get_anon_acc_no(value)
-            if not anon_acc_no:
-                anon_acc_no = self.model.get_next_anon_acc_no(value)
+        elif "@ptid" in operation:
+            dataset[tag].value = anon_ptid
+        elif "@acc" in operation:
             dataset[tag].value = anon_acc_no
         elif "@hashdate" in operation:
-            _, anon_date = self._hash_date(data_element.value, dataset.get("PatientID", ""))
+            _, anon_date = self._hash_date(data_element.value, phi_ptid)
             dataset[tag].value = anon_date
         elif "@round" in operation:
             # TODO: operand is named round but it is age format specific, should be renamed round_age
@@ -487,7 +460,7 @@ class AnonymizerController:
             - The anonymization process involves removing PHI from the dataset and saving the anonymized dataset to a DICOM file in project's storage directory.
             - If an error occurs capturing PHI or storing the anonymized file, the dataset is moved to the quarantine for further analysis.
         """
-        self._model_change_flag = True  # for autosave manager
+        self._model_change_flag = True
 
         # If pydicom logging is on, trace phi UIDs and store incoming phi file in private/source
         if self.project_model.logging_levels.pydicom:
@@ -504,9 +477,9 @@ class AnonymizerController:
         if hasattr(ds, "StudyDate") and hasattr(ds, "PatientID"):
             date_delta, _ = self._hash_date(ds.StudyDate, ds.PatientID)
 
-        # Capture PHI and source:
+        # Verify valid DICOM format then CAPTURE PHI and source into DATABASE:
         try:
-            self.model.capture_phi(str(source), ds, date_delta)
+            phi_ptid, anon_ptid, anon_acc_no = self.model.capture_phi(str(source), ds, date_delta)
         except ValueError as e:
             return self._write_dataset_to_quarantine(e, ds, QuarantineDirectories.INVALID_DICOM)
         except Exception as e:
@@ -517,18 +490,13 @@ class AnonymizerController:
             # To minimize memory/computation overhead DO NOT MAKE COPY of source dataset
             # Anonymize dataset (overwrite phi dataset) (prevents dataset copy)
             ds.remove_private_tags()  # remove all private elements (odd group number)
-            ds.walk(self._anonymize_element)  # recursive by default, recurses into embedded dataset sequences
-            # All elements now anonymized according to script, finally anonymizer PatientID and PatientName elements:
-            anon_ptid = self.model.get_anon_patient_id(ds.get("PatientID", ""))  # created by capture_phi
-            if anon_ptid is None:
-                logger.critical(
-                    f"Critical error, PHI Capture did not create anonymized patient id, resort to default: {self.model.default_anon_pt_id}"
-                )
-                anon_ptid = self.model.default_anon_pt_id
-            ds.PatientID = anon_ptid
-            ds.PatientName = anon_ptid
 
-            # Handle Anonymization specific Tags:
+            def pydicom_callback(current_ds_item, data_element):
+                self._anonymize_element(current_ds_item, data_element, phi_ptid, anon_ptid, anon_acc_no)
+
+            ds.walk(pydicom_callback)  # recursive by default, recurses into embedded dataset sequences
+
+            # All elements now anonymized according to script, now handle Anonymization specific Tags:
             ds.PatientIdentityRemoved = "YES"  # CS: (0012, 0062)
             ds.DeidentificationMethod = self.DEIDENTIFICATION_METHOD  # LO: (0012,0063)
             de_ident_seq = Sequence()  # SQ: (0012,0064)
@@ -584,7 +552,7 @@ class AnonymizerController:
             InvalidDicomError: If the DICOM file is invalid.
             Exception: If any other unexpected exception occurs during the anonymization process.
         """
-        self._model_change_flag = True  # for autosave manager
+        self._model_change_flag = True
 
         try:
             ds: Dataset = dcmread(file)
@@ -605,7 +573,7 @@ class AnonymizerController:
             return _("Missing Attributes") + f": {missing_attributes}" + " -> " + _("Quarantined"), ds
 
         # Skip instance if already stored:
-        if self.model.get_anon_uid(ds.SOPInstanceUID):
+        if self.model.instance_received(ds.SOPInstanceUID):
             logger.info(
                 f"Instance already stored:{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}"
             )
@@ -692,7 +660,6 @@ class AnonymizerController:
             try:
                 remove_pixel_phi(path, ocr_reader)
             except Exception as e:
-                # TODO: move to quarantine on exception?
                 logger.error(repr(e))
 
             px_Q.task_done()

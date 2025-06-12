@@ -12,13 +12,13 @@
  <e en="T" t="00080018" n="SOPInstanceUID">@uid</e>
  <e en="T" t="0008001A" n="RelatedGeneralSOPClassUID">@remove()</e>
  <e en="T" t="0008001B" n="OriginalSpecializedSOPClassUID">@remove()</e>
- <e en="T" t="00080020" n="StudyDate">@hashdate(this,PatientID)</e>
- <e en="T" t="00080021" n="SeriesDate">@hashdate(this,PatientID)</e>
- <e en="T" t="00080022" n="AcquisitionDate">@hashdate(this,PatientID)</e>
- <e en="T" t="00080023" n="ContentDate">@hashdate(this,PatientID)</e>
- <e en="T" t="00080024" n="OverlayDate">@hashdate(this,PatientID)</e>
- <e en="T" t="00080025" n="CurveDate">@hashdate(this,PatientID)</e>
- <e en="T" t="0008002A" n="AcquisitionDatetime">@hashdate(this,PatientID)</e>
+ <e en="T" t="00080020" n="StudyDate">@hashdate</e>
+ <e en="T" t="00080021" n="SeriesDate">@hashdate</e>
+ <e en="T" t="00080022" n="AcquisitionDate">@hashdate</e>
+ <e en="T" t="00080023" n="ContentDate">@hashdate</e>
+ <e en="T" t="00080024" n="OverlayDate">@hashdate</e>
+ <e en="T" t="00080025" n="CurveDate">@hashdate</e>
+ <e en="T" t="0008002A" n="AcquisitionDatetime">@hashdate</e>
  <e en="T" t="00080030" n="StudyTime"></e>
  <e en="T" t="00080031" n="SeriesTime"></e>
  <e en="T" t="00080032" n="AcquisitionTime"></e>
@@ -721,8 +721,8 @@
  <e en="T" t="00181075" n="RadionuclideHalfLife"></e>
  <e en="T" t="00181076" n="RadionuclidePositronFraction"></e>
  <e en="T" t="00181077" n="RadiopharmaceuticalSpecificActivity"></e>
- <e en="T" t="00181078" n="RadiopharmaceuticalStartDateTime">@hashdate(this,PatientID)</e>
- <e en="T" t="00181079" n="RadiopharmaceuticalStopDateTime">@hashdate(this,PatientID)</e>
+ <e en="T" t="00181078" n="RadiopharmaceuticalStartDateTime">@hashdate</e>
+ <e en="T" t="00181079" n="RadiopharmaceuticalStopDateTime">@hashdate</e>
  <e en="T" t="00181080" n="BeatRejectionFlag"></e>
  <e en="T" t="00181081" n="LowRRValue"></e>
  <e en="T" t="00181082" n="HighRRValue"></e>
@@ -1212,8 +1212,8 @@
  <e en="T" t="00189366" n="XRaySourceIndex"></e>
  <e en="T" t="00189367" n="XRaySourceID">@empty()</e>
  <e en="T" t="00189368" n="MultienergySourceTechnique"></e>
- <e en="T" t="00189369" n="SourceStartDateTime">@hashdate(this,PatientID)</e>
- <e en="T" t="0018936A" n="SourceEndDateTime">@hashdate(this,PatientID)</e>
+ <e en="T" t="00189369" n="SourceStartDateTime">@hashdate</e>
+ <e en="T" t="0018936A" n="SourceEndDateTime">@hashdate</e>
  <e en="T" t="0018936B" n="SwitchingPhaseNumber"></e>
  <e en="T" t="0018936C" n="SwitchingPhaseNominalDuration"></e>
  <e en="T" t="0018936D" n="SwitchingPhaseTransitionDuration"></e>
@@ -1302,8 +1302,8 @@
  <e en="T" t="00189511" n="SecondaryPositionerScanStartAngle"></e>
  <e en="T" t="00189514" n="PrimaryPositionerIncrement"></e>
  <e en="T" t="00189515" n="SecondaryPositionerIncrement"></e>
- <e en="T" t="00189516" n="StartAcquisitionDateTime">@hashdate(this,PatientID)</e>
- <e en="T" t="00189517" n="EndAcquisitionDateTime">@hashdate(this,PatientID)</e>
+ <e en="T" t="00189516" n="StartAcquisitionDateTime">@hashdate</e>
+ <e en="T" t="00189517" n="EndAcquisitionDateTime">@hashdate</e>
  <e en="T" t="00189518" n="PrimaryPositionerIncrementSign"></e>
  <e en="T" t="00189519" n="SecondaryPositionerIncrementSign"></e>
  <e en="T" t="00189524" n="ApplicationName"></e>

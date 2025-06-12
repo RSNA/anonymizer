@@ -513,7 +513,6 @@ class Anonymizer(ctk.CTk):
             self.controller.stop_scp()
             self.controller.shutdown()
             self.controller.save_model()
-            self.controller.anonymizer.save_model()
             self.controller.anonymizer.stop()
             if self.query_view:
                 self.query_view.destroy()
@@ -1200,7 +1199,6 @@ def run_HEADLESS(project_model_path: Path):
     controller.stop_scp()
     controller.shutdown()
     controller.save_model()
-    controller.anonymizer.save_model()
     controller.anonymizer.stop()
 
 

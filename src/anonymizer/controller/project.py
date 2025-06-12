@@ -545,7 +545,7 @@ class ProjectController(AE):
             logger.error(f"\n{ds}")
             return C_STORE_DATASET_ERROR
 
-        if self.anonymizer.model.uid_received(ds.SOPInstanceUID):
+        if self.anonymizer.model.instance_received(ds.SOPInstanceUID):  # type: ignore
             logger.debug(
                 f"Instance already stored:{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}"
             )
@@ -1641,7 +1641,7 @@ class ProjectController(AE):
         Returns:
             int: The number of pending instances for the study.
         """
-        return study.get_number_of_instances() - self.anonymizer.model.get_stored_instance_count(study.ptid, study.uid)
+        return study.get_number_of_instances() - self.anonymizer.model.get_stored_instance_count(study_uid=study.uid)  # type: ignore
 
     # TODO: Refactor: create version of move_study with move_level parameter
 
@@ -1672,7 +1672,7 @@ class ProjectController(AE):
             error_msg = "No Instances in Study"
             return error_msg
 
-        study.pending_instances = self.anonymizer.model.get_pending_instance_count(study.ptid, study.uid, target_count)
+        study.pending_instances = self.anonymizer.model.get_pending_instance_count(study.uid, target_count)  # type: ignore
         if study.pending_instances == 0:
             error_msg = "All Instances already imported"
             return error_msg
@@ -1728,8 +1728,8 @@ class ProjectController(AE):
 
                 # Update Pending Instances count from AnonymizerModel, relevant for Syncrhonous Move:
                 study.pending_instances = self.anonymizer.model.get_pending_instance_count(
-                    study.ptid, study.uid, study.get_number_of_instances()
-                )
+                    study.uid, study.get_number_of_instances()
+                )  # type: ignore
 
                 if identifier:
                     logger.info(f"C-MOVE@Study[{study.uid}] Response identifier: {identifier}")
@@ -1746,8 +1746,8 @@ class ProjectController(AE):
                     raise DICOMRuntimeError(f"C-MOVE@Study[{study.uid}] aborted")
 
                 study.pending_instances = self.anonymizer.model.get_pending_instance_count(
-                    study.ptid, study.uid, study.get_number_of_instances()
-                )
+                    study.uid, study.get_number_of_instances()
+                )  # type: ignore
 
                 if study.pending_instances == 0:
                     logger.info(f"C-MOVE@Study[{study.uid}] ALL Instances IMPORTED")
@@ -1806,7 +1806,7 @@ class ProjectController(AE):
             error_msg = "No Instances in Study"
             return error_msg
 
-        study.pending_instances = self.anonymizer.model.get_pending_instance_count(study.ptid, study.uid, target_count)
+        study.pending_instances = self.anonymizer.model.get_pending_instance_count(study.uid, target_count)  # type: ignore
         if study.pending_instances == 0:
             error_msg = "All Instances already imported"
             return error_msg
@@ -1819,7 +1819,7 @@ class ProjectController(AE):
                     continue
 
                 # 0.2 Skip Series if instances all imported:
-                if self.anonymizer.model.series_complete(study.ptid, study.uid, series.uid, series.instance_count):
+                if self.anonymizer.model.series_complete(series.uid, series.instance_count):  # type: ignore
                     logger.info(f"C-MOVE@Series Skip Series[{study.uid}/{series.uid}] all instances imported")
                     continue
 
@@ -1884,8 +1884,8 @@ class ProjectController(AE):
 
                     # Update Pending Instances count from AnonymizerModel, relevant for Syncrhonous Move:
                     study.pending_instances = self.anonymizer.model.get_pending_instance_count(
-                        study.ptid, study.uid, study.get_number_of_instances()
-                    )
+                        study.uid, study.get_number_of_instances()
+                    )  # type: ignore
 
                 # 3. Wait for ALL instances of Series to be Imported by verifying with AnonymizerModel
                 #    Timeout if a pending instance is not received within NetworkTimeout
@@ -1897,8 +1897,8 @@ class ProjectController(AE):
                         raise DICOMRuntimeError(f"C-MOVE@Series[{study.uid}] aborted")
 
                     study.pending_instances = self.anonymizer.model.get_pending_instance_count(
-                        study.ptid, study.uid, study.get_number_of_instances()
-                    )
+                        study.uid, study.get_number_of_instances()
+                    )  # type: ignore
 
                     if study_pending_instances_before_series_move - study.pending_instances >= series.instance_count:
                         logger.info(f"C-MOVE@Series[{study.uid}/{series.uid}] ALL Instances IMPORTED for Series")
@@ -1972,7 +1972,7 @@ class ProjectController(AE):
 
                 for instance in series.instances.values():
                     # Skip already imported instances
-                    if self.anonymizer.model.uid_received(instance.uid):
+                    if self.anonymizer.model.instance_received(instance.uid):  # type: ignore
                         logger.debug(f"Instance already imported: {instance.uid}, skipping")
                         continue
 
@@ -2034,8 +2034,8 @@ class ProjectController(AE):
 
                         # Update Pending Instances count from AnonymizerModel, relevant for Syncrhonous Move:
                         study.pending_instances = self.anonymizer.model.get_pending_instance_count(
-                            study.ptid, study.uid, study.get_number_of_instances()
-                        )
+                            study.uid, study.get_number_of_instances()
+                        )  # type: ignore
 
                 logger.info(f"C-MOVE@Instance[{study.uid}/{series.uid}] ALL Instance Requests for Series COMPLETE")
 
@@ -2051,8 +2051,8 @@ class ProjectController(AE):
                     raise (DICOMRuntimeError(f"C-MOVE@Instance[{study.uid}] aborted"))
 
                 study.pending_instances = self.anonymizer.model.get_pending_instance_count(
-                    study.ptid, study.uid, study.get_number_of_instances()
-                )
+                    study.uid, study.get_number_of_instances()
+                )  # type: ignore
 
                 if study.pending_instances == 0:
                     logger.info(f"C-MOVE@Instance[{study.uid}] ALL Instances IMPORTED")
@@ -2502,7 +2502,7 @@ class ProjectController(AE):
 
                 # Iterate through all SOPInstanceUIDs and remove from AnonymizerModel uid_lookup using bidict inverse lookup:
                 for anon_instance_uid in anon_instance_uids:
-                    self.anonymizer.model.remove_uid_inverse(anon_instance_uid)
+                    self.anonymizer.model.remove_uid_inverse(anon_instance_uid)  # type: ignore
 
                 # Remove files from local storage directory:
                 shutil.rmtree(study_dir)
@@ -2521,7 +2521,7 @@ class ProjectController(AE):
                 return False
 
         # Remove PHI data from anonymizer model:
-        if not self.anonymizer.model.remove_phi(anon_pt_id, anon_study_uid):
+        if not self.anonymizer.model.remove_phi(anon_pt_id, anon_study_uid):  # type: ignore
             logger.error(f"Critical Error removing phi data for StudyUID: {anon_study_uid} PatientID: {anon_pt_id}")
             return False
 
@@ -2540,7 +2540,7 @@ class ProjectController(AE):
         """
         logger.info("Create PHI CSV")
 
-        phi_index: List[PHI_IndexRecord] | None = self.anonymizer.model.get_phi_index()
+        phi_index: List[PHI_IndexRecord] | None = self.anonymizer.model.get_phi_index()  # type: ignore
 
         if not phi_index:
             logger.error("No Studies/PHI data in Anonymizer Model")
