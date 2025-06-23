@@ -38,7 +38,9 @@ If python + tkinter has been installed successfully a small GUI window should op
 `rsna-anonymizer`
 ### Headless Mode
 You need to provide a path to a project configuration to run in headless mode
+
 `rsna-anonymizer -c path/to/ProjectModel.json`
+
 ## Upgrading
 `pip install --upgrade rsna-anonymizer`
 ## Documentation
