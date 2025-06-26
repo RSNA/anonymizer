@@ -24,4 +24,4 @@ def test_load_java_index_into_new_project(temp_dir: str, controller: ProjectCont
 
     controller.anonymizer.model.process_java_phi_studies(studies)
     assert controller.anonymizer.model.get_patient_id_count() == 83
-    assert controller.anonymizer.model.get_phi_name("527408-000001") == "TEST"
+    assert controller.anonymizer.model.get_phi_name_by_anon_patient_id("527408-000001") == "TEST"

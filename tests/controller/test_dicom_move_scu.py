@@ -821,7 +821,7 @@ def test_move_at_study_level_with_network_timeout_then_series_level_MR_Study_fro
 
     # logging.getLogger("pynetdicom").setLevel("DEBUG")
 
-    # Set Network Timeout to 1 second to ensure move timeout occurs:
+    # Set Network Timeout to 0.1 second to ensure move timeout occurs:
     controller.model.network_timeouts.network = 0.1
 
     # Move study at STUDY LEVEL from Orthanc to Local Storage: (orthanc must be configured in async mode for this to work)
@@ -851,9 +851,7 @@ def test_move_at_study_level_with_network_timeout_then_series_level_MR_Study_fro
 
 
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
-def test_move_at_instance_level_of_3_studies_2_patients_from_orthance_to_local_storage(
-    temp_dir: str, controller: ProjectController
-):
+def test_move_at_instance_level_3_studies_2_patients_from_orthanc_to_local_storage(controller: ProjectController):
     # Send 3 studies to ORTHANC PACS:
     ds1: list[Dataset] = send_files_to_scp(CR_STUDY_3_SERIES_3_IMAGES, OrthancSCP, controller)  # Doe^Archibald
     ds2: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, OrthancSCP, controller)  # Doe^Archibald
@@ -991,7 +989,7 @@ def test_move_at_study_level_3_studies_with_network_timeout_then_series_level_fr
     time.sleep(1)
 
     while controller.bulk_move_active():
-        time.sleep(1)
+        time.sleep(2)
 
     s1_pending = controller.get_number_of_pending_instances(study1_hierarchy)
     assert s1_pending == 0

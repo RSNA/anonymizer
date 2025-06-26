@@ -3,6 +3,7 @@ This module contains the AnonymizerModel class, which is responsible for storing
 and anonymization lookups. It also includes SQLAlchemy ORM classes for Series, Study, and PHI, as well as NamedTuple class for Totals.
 """
 
+import hashlib
 import logging
 import xml.etree.ElementTree as ET
 from contextlib import contextmanager
@@ -51,8 +52,8 @@ class Series(Base):
     anon_series_uid: Mapped[str] = mapped_column(String, unique=True, index=True)
     study_uid: Mapped[str] = mapped_column(String, ForeignKey("studies.study_uid"))
     study: Mapped["Study"] = relationship(back_populates="series", init=False)
-    modality: Mapped[str] = mapped_column(String)
-    series_desc: Mapped[str | None] = mapped_column(String, default=None)  # | None implies nullable=True
+    modality: Mapped[str | None] = mapped_column(String)
+    description: Mapped[str | None] = mapped_column(String, default=None)
 
     instances: Mapped[list["Instance"]] = relationship(
         back_populates="series", cascade="all, delete-orphan", init=False
@@ -64,14 +65,14 @@ class Study(Base):
 
     study_uid: Mapped[str] = mapped_column(String, primary_key=True)
     anon_study_uid: Mapped[str] = mapped_column(String, unique=True, index=True)
-    patient_id: Mapped[str] = mapped_column(String, ForeignKey("PHI.patient_id"))
+    patient_id: Mapped[str] = mapped_column(String, ForeignKey("phi.patient_id"))
     patient: Mapped["PHI"] = relationship(back_populates="studies", init=False)
     source: Mapped[str] = mapped_column(String)
     study_date: Mapped[str] = mapped_column(String)
     anon_date_delta: Mapped[int] = mapped_column(Integer)
     accession_number: Mapped[str | None] = mapped_column(String, index=True)
-    anon_accession_number: Mapped[int] = mapped_column(Integer, unique=True, index=True)
-    study_desc: Mapped[str | None] = mapped_column(String, default=None)
+    anon_accession_number: Mapped[str | None] = mapped_column(String, index=True)
+    description: Mapped[str | None] = mapped_column(String, default=None)
     target_instance_count: Mapped[int] = mapped_column(Integer, default=0)
 
     series: Mapped[list[Series]] = relationship(back_populates="study", cascade="all, delete-orphan", init=False)
@@ -99,14 +100,6 @@ class UID(Base):
     mapping_pk: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, init=False)
     anon_uid: Mapped[str] = mapped_column(String, unique=True, index=True)
     phi_uid: Mapped[str] = mapped_column(String, unique=True, index=True)
-
-
-# List of DICOM tags to keep and the corresponding operations for anonomization process
-# class TagKeep(Base):
-#     __tablename__ = "tag_keep"
-
-#     tag: Mapped[String] = mapped_column(Integer, primary_key=True)
-#     operation: Mapped[str | None] = mapped_column(String)
 
 
 @dataclass
@@ -227,9 +220,12 @@ class AnonymizerModel:
         # Default anon_patient_id for the default PHI record
         self.default_anon_pt_id: str = self._format_anon_patient_id(0)
         self._tag_keep: dict[str, str] = {}
+        # Create the deterministic, project-specific salt for accession_number hash:
+        salt_string = f"anonymizer::{self._site_id}::{self._uid_prefix}"
+        self._accession_salt = salt_string.encode("utf-8")
 
         # Establish Database connection
-        self.engine = create_engine(db_url, echo=True)
+        self.engine = create_engine(db_url, echo="debug", future=True)  # TODO: see dbengine_logging for logging config
 
         # Construct Thread Local Scoped Session Factory
         self.session_factory = scoped_session(sessionmaker(bind=self.engine))
@@ -251,7 +247,7 @@ class AnonymizerModel:
             "uid_root": self._uid_root,
             "db_url": self._db_url,
             "script_path": str(self._script_path),
-            "totals": self.get_totals(),
+            # "totals": self.get_totals(),
         }
 
         return f"{self._get_class_name()}\n({pformat(model_summary)})"
@@ -268,18 +264,18 @@ class AnonymizerModel:
     def _get_session(self, read_only: bool = False):
         """Provides a scoped SQLAlchemy self.session."""
         session = self.session_factory()
-        logger.debug(f"Session {id(session)} opened (read_only={read_only}).")
+        logger.info(f"Session {id(session)} opened (read_only={read_only}).")
         try:
             yield session
             if not read_only:  # Only commit if not read_only
-                logger.debug(f"Committing session {id(session)}.")
+                logger.info(f"Committing session {id(session)}.")
                 session.commit()
         except Exception:
             logger.exception(f"Exception in session {id(session)}, rolling back.")
             session.rollback()
             raise
         finally:
-            logger.debug(f"Closing session {id(session)}.")
+            logger.info(f"Closing session {id(session)}.")
             session.close()
 
     def _format_anon_patient_id(self, phi_index: int) -> str:
@@ -297,14 +293,13 @@ class AnonymizerModel:
 
         if default_phi:
             logger.info(
-                f"Default PHI record with PK '{self.DEFAULT_PHI_PATIENT_ID_PK_VALUE}' "
-                f"(anon_id: '{default_phi.anon_patient_id}') already exists."
+                f"Default PHI record with patient_id={self.DEFAULT_PHI_PATIENT_ID_PK_VALUE}, anon_id:{default_phi.anon_patient_id} already exists"
             )
             # Ensure its anon_patient_id is what we expect for the default
             if default_phi.anon_patient_id != self.default_anon_pt_id:
                 logger.warning(
-                    f"Default PHI record PK '{self.DEFAULT_PHI_PATIENT_ID_PK_VALUE}' has an unexpected anon_id: "
-                    f"'{default_phi.anon_patient_id}'. Updating to '{self.default_anon_pt_id}'."
+                    f"Default PHI record patient_id={self.DEFAULT_PHI_PATIENT_ID_PK_VALUE} has an unexpected anon_id: "
+                    f"{default_phi.anon_patient_id} Updating to:{self.default_anon_pt_id}"
                 )
                 default_phi.anon_patient_id = self.default_anon_pt_id
             return
@@ -383,7 +378,8 @@ class AnonymizerModel:
     @use_session(is_read_only_operation=True)
     def get_totals(self) -> Totals:
         return Totals(
-            patients=self.session.execute(select(func.count()).select_from(PHI)).scalar_one(),
+            patients=self.session.execute(select(func.count()).select_from(PHI)).scalar_one()
+            - 1,  # don't include default patient
             studies=self.session.execute(select(func.count()).select_from(Study)).scalar_one(),
             series=self.session.execute(select(func.count()).select_from(Series)).scalar_one(),
             instances=self.session.execute(select(func.count()).select_from(Instance)).scalar_one(),
@@ -394,21 +390,32 @@ class AnonymizerModel:
         """
         Fetch PHI record from the database using the anonymized patient ID.
         """
-        return self.session.execute(select(PHI).where(PHI.anon_patient_id == anon_patient_id)).scalar_one_or_none()
+        stmt = (
+            select(PHI)
+            .where(PHI.anon_patient_id == anon_patient_id)
+            .options(selectinload(PHI.studies).selectinload(Study.series).selectinload(Series.instances))
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
 
     @use_session(is_read_only_operation=True)
     def get_phi_by_phi_patient_id(self, phi_patient_id: str) -> PHI | None:
         """
         Fetch PHI record from the database using the PHI patient ID.
         """
-        return self.session.get(PHI, phi_patient_id)
+        stmt = (
+            select(PHI)
+            .where(PHI.patient_id == phi_patient_id)
+            .options(selectinload(PHI.studies).selectinload(Study.series).selectinload(Series.instances))
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
 
     @use_session(is_read_only_operation=True)
     def get_phi_name_by_anon_patient_id(self, anon_patient_id: str) -> str | None:
         """
         Fetch the patient's name from PHI table based on the anonymized patient ID.
         """
-        phi = self.session.get(PHI, anon_patient_id)
+        stmt = select(PHI).where(PHI.anon_patient_id == anon_patient_id)
+        phi = self.session.execute(stmt).scalar_one_or_none()
         return phi.patient_name if phi else None
 
     @use_session(is_read_only_operation=True)
@@ -420,7 +427,7 @@ class AnonymizerModel:
         phi_index_records: list[PHI_IndexRecord] = []
 
         # Eagerly load PHI.studies, and for each Study, eagerly load its Series.
-        stmt = select(PHI).options(selectinload(PHI.studies).selectinload(Study.series))
+        stmt = select(PHI).options(selectinload(PHI.studies).selectinload(Study.series).selectinload(Series.instances))
 
         # Execute the query:
         # .scalars() gets the PHI objects directly.
@@ -437,9 +444,6 @@ class AnonymizerModel:
             for study in phi.studies:
                 num_series = len(study.series)
                 num_instances = sum(len(s.instances) for s in study.series if s.instances is not None)
-                anon_study_uid = self.session.execute(
-                    select(UID.anon_uid).where(UID.phi_uid == study.study_uid)
-                ).scalar_one_or_none()
 
                 phi_index_record = PHI_IndexRecord(
                     anon_patient_id=phi.anon_patient_id,
@@ -450,7 +454,7 @@ class AnonymizerModel:
                     phi_study_date=study.study_date,
                     anon_accession=str(study.anon_accession_number),
                     phi_accession=study.accession_number if study.accession_number else "",
-                    anon_study_uid=anon_study_uid if anon_study_uid else "Critical Error",
+                    anon_study_uid=study.anon_study_uid,
                     phi_study_uid=study.study_uid,
                     num_series=num_series,
                     num_instances=num_instances,
@@ -484,16 +488,17 @@ class AnonymizerModel:
         stmt = select(UID.anon_uid).where(UID.phi_uid == phi_uid)
         return self.session.execute(stmt).scalar_one_or_none()
 
-    @use_session(is_read_only_operation=True)
-    def _get_next_anon_uid(self) -> str:
+    def _create_anon_uid(self, phi_uid: str) -> str:
         """
-        Retrieves the next available UID index.
-        This is used to generate a new unique anonymized UID. (including StudyUID, SeriesUID, SOPInstanceUID)
+        Generates a new anonymized UID based on the UID prefix and the next mapping primary key.
+        This is used internally to create a new UID mapping.
         """
-        stmt = select(func.max(UID.mapping_pk)).select_from(UID)
-        max_uid_index = self.session.execute(stmt).scalar_one_or_none() or 0
-        anon_uid = self._uid_prefix + f".{max_uid_index + 1}"
-        return anon_uid
+        new_mapping = UID(phi_uid=phi_uid, anon_uid="placeholder")
+        self.session.add(new_mapping)
+        self.session.flush()  # Send the INSERT to the DB and populates new_mapping.mapping_pk
+        new_anon_uid = f"{self._uid_prefix}.{new_mapping.mapping_pk}"
+        new_mapping.anon_uid = new_anon_uid  # Marks the object for UPDATE on final commit
+        return new_anon_uid
 
     @use_session()
     def get_or_create_anon_uid(self, phi_uid: str) -> str:
@@ -507,10 +512,7 @@ class AnonymizerModel:
         if anon_uid:
             return anon_uid
         else:
-            next_anon_uid = self._get_next_anon_uid()
-            uid = UID(phi_uid=phi_uid, anon_uid=next_anon_uid)
-            self.session.add(uid)
-            return next_anon_uid
+            return self._create_anon_uid(phi_uid)
 
     @use_session(is_read_only_operation=True)
     def uid_received(self, phi_uid: str) -> bool:
@@ -545,14 +547,14 @@ class AnonymizerModel:
             logger.info(f"Deleted UID record for anon_uid: {anon_uid}")
 
     @use_session(is_read_only_operation=True)
-    def get_anon_acc_no(self, phi_acc_no: str) -> int | None:
+    def get_anon_acc_no(self, phi_acc_no: str) -> str | None:
         stmt = select(Study.anon_accession_number).where(Study.accession_number == phi_acc_no)
         return self.session.execute(stmt).scalar_one_or_none()
 
     @use_session(is_read_only_operation=True)
     def get_stored_instance_count(self, study_uid: str) -> int:
         """
-        Retrieves the number of stored instances for a given patient ID and study UID.
+        Retrieves the number of stored instances for a given study UID.
         """
         stmt = (
             select(Study)
@@ -632,170 +634,157 @@ class AnonymizerModel:
     # --- Helper methods for capture_phi ---
     # These helpers will be called by capture_phi and use the session provided by capture_phi's decorator.
     # They do not need their own @use_session decorator if only called by capture_phi.
-    @use_session(is_read_only_operation=True)
-    def _generate_next_anon_accession_number(self) -> int:
+    def _hash_accession_number(self, original_accession: str) -> str:
         """
-        Generates the next anonymized accession number based on the current maximum in the database.
+        Generates a secure, 16-character hexadecimal hash for an accession number,
+        formatted for readability.
         """
-        current_max = self.session.execute(select(func.max(Study.anon_accession_number))).scalar_one_or_none() or 0
-        return current_max + 1
+        accession_bytes = str(original_accession or "").encode("utf-8")
+
+        hasher = hashlib.sha256()
+        hasher.update(self._accession_salt)
+        hasher.update(accession_bytes)
+
+        # Take the first 16 characters of the full 64-character hex digest
+        hex_digest_16_chars = hasher.hexdigest()[:16]
+        # Format the hash as 8-4-4 (UUID-like format)
+        formatted_hash = f"{hex_digest_16_chars[:8]}-{hex_digest_16_chars[8:12]}-{hex_digest_16_chars[12:]}"
+
+        return formatted_hash
 
     def _get_or_create_phi(self, ds: Dataset) -> PHI:
         # If PHI PatientID is missing in dataset, as per DICOM Standard, pydicom should return "", handle missing attribute
         # Missing or blank corresponds to AnonymizerModel.DEFAULT_ANON_PATIENT_ID ("000000") initialised in AnonymizerModel.add_default_PHI()
-        phi_ptid = ds.PatientID.strip() if hasattr(ds, "PatientID") else ""
+        phi_ptid = str(ds.PatientID).strip() if hasattr(ds, "PatientID") else ""
 
-        phi = self.session.get(PHI, phi_ptid)
-        if not phi:
-            logger.info(f"Creating PHI record for patient_id: {phi_ptid}")
-            # Generate a NEW anon_patient_id based on the site_id and the current patient count:
-            anon_ptid = self._format_anon_patient_id(self.get_patient_id_count())
-
-            phi = PHI(
-                patient_id=phi_ptid,
-                anon_patient_id=anon_ptid,
-                patient_name=ds.get("PatientName"),
-                sex=ds.get("PatientSex"),
-                dob=ds.get("PatientBirthDate"),
-                ethnic_group=ds.get("EthnicGroup"),
-            )
-            self.session.add(phi)
-        else:
+        phi: PHI | None = self.session.get(PHI, phi_ptid)
+        if phi:
             logger.debug(f"Found existing PHI record for patient_id: {phi_ptid}")
+            return phi
 
-        return phi
+        logger.info(f"Creating PHI record for patient_id: {phi_ptid}")
+        # Generate a NEW anon_patient_id based on the site_id and the current patient count:
+        phi_count = self.session.execute(select(func.count()).select_from(PHI)).scalar_one()
+        anon_ptid = self._format_anon_patient_id(phi_index=phi_count)
 
-    def _get_or_create_study(self, dicom_ds: Dataset, parent_phi: PHI, date_delta: int, source_name: str) -> Study:
-        study_uid = dicom_ds.StudyInstanceUID  # PK of Study
-        study_record = self.session.get(Study, study_uid)
+        new_phi: PHI = PHI(
+            patient_id=phi_ptid,
+            anon_patient_id=anon_ptid,
+            patient_name=str(ds.get("PatientName")) if hasattr(ds, "PatientName") else None,
+            sex=str(ds.get("PatientSex")) if hasattr(ds, "PatientSex") else None,
+            dob=str(ds.get("PatientBirthDate")) if hasattr(ds, "PatientBirthDate") else None,
+            ethnic_group=str(ds.get("EthnicGroup")) if hasattr(ds, "EthnicGroup") else None,
+        )
+        self.session.add(new_phi)
+        return new_phi
 
-        if not study_record:
-            logger.info(f"Study record for PK '{study_uid}' not found. Creating.")
-            phi_acc_no = dicom_ds.get("AccessionNumber")
-            # If phi dataset does not have an AccessionNumber set anon_accession_number to 0
-            if not phi_acc_no:
-                anon_acc_no = 0
-            else:
-                # Check if AccessionNumber already exists in the Study table:
-                anon_acc_no = self.get_anon_acc_no(phi_acc_no)
-                if anon_acc_no is None:
-                    logger.debug(
-                        f"AccessionNumber '{phi_acc_no}' not found in Study table. Generating new anon accession number."
-                    )
-                    anon_acc_no = self._generate_next_anon_accession_number()
+    def _get_or_create_study(self, ds: Dataset, parent_phi: PHI, date_delta: int, source_name: str) -> Study:
+        study_uid = str(ds.StudyInstanceUID)  # PK of Study
+        study: Study | None = self.session.get(Study, study_uid)
 
-            study_record = Study(
-                study_uid=study_uid,
-                anon_study_uid=self._get_next_anon_uid(),  # Generate a new anonymized StudyUID
-                patient_id=parent_phi.patient_id,  # Set the FK to PHI's PK
-                source=source_name,
-                study_date=dicom_ds.get("StudyDate", self.DEFAULT_PHI_STUDY_DATE),  # Default to 19000101 if not present
-                anon_date_delta=date_delta,
-                accession_number=phi_acc_no,
-                anon_accession_number=anon_acc_no,
-                study_desc=dicom_ds.get("StudyDescription"),
-            )
-            self.session.add(study_record)
-        else:
+        if study:
             logger.debug(f"Found existing Study record for PK '{study_uid}'.")
-            # Integrity Check: PatientID mismatch with existing Study (Critical Error 4)
-            if study_record.patient_id != parent_phi.patient_id:
+            if study.patient_id == parent_phi.patient_id:
+                return study
+            else:
+                # If the study exists but is linked to a different patient_id, raise an error
                 msg = (
                     f"IntegrityError: StudyUID '{study_uid}' exists but is linked to "
-                    f"PHI.patient_id '{study_record.patient_id}', while current DICOM "
+                    f"PHI.patient_id '{study.patient_id}', while current DICOM "
                     f"implies PHI.patient_id '{parent_phi.patient_id}'."
                 )
                 logger.error(msg)
                 raise ValueError(msg)  # Let get_session handle rollback
-        return study_record
 
-    def _get_or_create_series(self, dicom_ds: Dataset, parent_study_record: Study) -> Series:
-        series_uid = dicom_ds.SeriesInstanceUID  # PK of Series
-        series_record = self.session.get(Series, series_uid)
+        logger.info(f"Study record for PK '{study_uid}' not found. Creating new study...")
 
-        if not series_record:
-            logger.info(f"Series record for PK '{series_uid}' not found. Creating.")
-            series_record = Series(
-                series_uid=series_uid,
-                anon_series_uid=self._get_next_anon_uid(),  # Generate a new anonymized SeriesUID
-                study_uid=parent_study_record.study_uid,  # Set the FK to Study's PK
-                modality=dicom_ds.get("Modality", "OT"),  # Sensible default?
-                series_desc=dicom_ds.get("SeriesDescription"),
-            )
-            self.session.add(series_record)
-        else:
+        # Process AccessionNumber:
+        phi_acc_no: str | None = str(ds.AccessionNumber).strip() if hasattr(ds, "AccessionNumber") else None
+
+        # If phi dataset does not have an AccessionNumber or it is "" set anon_accession_number to None else use hash:
+        anon_acc_no = None if phi_acc_no is None or phi_acc_no == "" else self._hash_accession_number(phi_acc_no)
+
+        logger.debug(f"Creating new Study record with phi_acc_no:{phi_acc_no} and anon_acc_no:{anon_acc_no}")
+        new_study: Study = Study(
+            study_uid=study_uid,
+            anon_study_uid=self._create_anon_uid(study_uid),  # Generate a new anonymized StudyUID
+            patient_id=parent_phi.patient_id,  # Set the FK to PHI's PK
+            source=source_name,
+            study_date=str(ds.get("StudyDate", self.DEFAULT_PHI_STUDY_DATE)),  # Default to 19000101 if not present
+            anon_date_delta=date_delta,
+            accession_number=phi_acc_no,
+            anon_accession_number=anon_acc_no,
+            description=str(ds.get("StudyDescription")) if hasattr(ds, "StudyDescription") else None,
+        )
+        self.session.add(new_study)
+        return new_study
+
+    def _get_or_create_series(self, ds: Dataset, parent_study_record: Study) -> Series:
+        series_uid: str = str(ds.SeriesInstanceUID)  # PK of Series
+        series: Series | None = self.session.get(Series, series_uid)
+
+        if series:
             logger.debug(f"Found existing Series record for PK '{series_uid}'.")
-            # Integrity Check: StudyUID mismatch with existing Series (Critical Error 2)
-            if series_record.study_uid != parent_study_record.study_uid:
+            # Integrity Check: StudyUID mismatch with existing Series
+            if series.study_uid == parent_study_record.study_uid:
+                return series
+            else:
                 msg = (
                     f"IntegrityError: SeriesUID '{series_uid}' exists but is linked to "
-                    f"Study.study_uid '{series_record.study_uid}', while current DICOM "
+                    f"Study.study_uid '{series.study_uid}', while current DICOM "
                     f"implies Study.study_uid '{parent_study_record.study_uid}'."
                 )
                 logger.error(msg)
                 raise ValueError(msg)
 
-        return series_record
+        logger.info(f"Series record for PK '{series_uid}' not found. Creating new Series...")
+        new_series: Series = Series(
+            series_uid=series_uid,
+            anon_series_uid=self._create_anon_uid(series_uid),  # Generate a new anonymized SeriesUID
+            study_uid=parent_study_record.study_uid,  # Set the FK to Study's PK
+            modality=str(ds.get("Modality")) if hasattr(ds, "Modality") else None,
+            description=str(ds.get("SeriesDescription")) if hasattr(ds, "SeriesDescription") else None,
+        )
+        self.session.add(new_series)
+        return new_series
 
-    def _get_or_create_instance(self, dicom_ds: Dataset, parent_series_record: Series) -> Instance:
-        """
-        Gets or creates an Instance record for the given DICOM dataset and links it
-        to the parent Series record.
+    def _get_or_create_instance(self, ds: Dataset, parent_series_record: Series) -> Instance:
+        sop_instance_uid = str(ds.SOPInstanceUID)
+        instance: Instance | None = self.session.get(Instance, sop_instance_uid)
 
-        Args:
-            session: The active SQLAlchemy self.session.
-            dicom_ds: The DICOM dataset for the instance.
-            parent_series_record: The ORM object of the parent Series.
-
-        Returns:
-            The existing or newly created Instance ORM object.
-
-        Raises:
-            ValueError: If the instance exists but is linked to a different series.
-        """
-        # 1. Get the SOP Instance UID (the PK for the Instance table) from the dataset.
-        sop_instance_uid = dicom_ds.SOPInstanceUID
-
-        # 2. Use self.session.get() for an efficient lookup by primary key.
-        instance_record = self.session.get(Instance, sop_instance_uid)
-
-        if not instance_record:
-            # 3. Create instance doesn't exist
-            logger.debug(f"Instance record for PK '{sop_instance_uid}' not found. Creating.")
-
-            instance_record = Instance(
-                sop_instance_uid=sop_instance_uid,  # The Primary Key
-                anon_sop_instance_uid=self._get_next_anon_uid(),
-                series_uid=parent_series_record.series_uid,
-            )
-
-            # 3c. Add the new instance to the session to be INSERTed on commit.
-            self.session.add(instance_record)
-        else:
-            # 4. If it exists, perform an integrity check.
+        if instance:
             logger.debug(f"Found existing Instance record for PK '{sop_instance_uid}'.")
-
             # An instance should never move between series.
-            if instance_record.series_uid != parent_series_record.series_uid:
+            if instance.series_uid != parent_series_record.series_uid:
                 msg = (
                     f"IntegrityError: SOPInstanceUID '{sop_instance_uid}' exists but is linked to "
-                    f"SeriesUID '{instance_record.series_uid}', while current DICOM implies "
+                    f"SeriesUID '{instance.series_uid}', while current DICOM implies "
                     f"SeriesUID '{parent_series_record.series_uid}'."
                 )
                 logger.error(msg)
                 raise ValueError(msg)
+            else:
+                return instance
 
-        # 5. Return the (either existing or newly created) instance record.
-        return instance_record
+        logger.debug(f"Instance record for PK '{sop_instance_uid}' not found. Creating new Instance...")
+
+        new_instance: Instance = Instance(
+            sop_instance_uid=sop_instance_uid,
+            anon_sop_instance_uid=self._create_anon_uid(sop_instance_uid),  # Generate a new anonymized SOPInstanceUID
+            series_uid=parent_series_record.series_uid,
+        )
+
+        self.session.add(new_instance)
+        return new_instance
 
     @use_session()
-    def capture_phi(self, source: str, dicom_ds: Dataset, date_delta: int) -> tuple[str, str, int]:
+    def capture_phi(self, source: str, ds: Dataset, date_delta: int) -> tuple[str, str, str | None]:
         """
         Capture PHI (Protected Health Information) from a DICOM dataset
 
         Args:
             source (str): The source of the dataset.
-            dicom_ds (Dataset): The dataset containing the PHI.
+            ds (Dataset): The dataset containing the PHI.
             date_delta (int): The anonymization date offset.
 
         Returns:
@@ -804,17 +793,17 @@ class AnonymizerModel:
         Raises:
             ValueError: If core DICOM UIDs are missing in dataset
         """
-        # dicom_ds must have attributes: StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID
+        # ds must have attributes: StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID
         primary_uids = ["StudyInstanceUID", "SeriesInstanceUID", "SOPInstanceUID"]
-        if not all(hasattr(dicom_ds, uid) for uid in primary_uids):
+        if not all(hasattr(ds, uid) for uid in primary_uids):
             msg = f"Critical Error 1: Dataset missing primary UIDs: {primary_uids}"
             logger.error(msg)
             raise ValueError(msg)
 
-        phi = self._get_or_create_phi(dicom_ds)
-        study = self._get_or_create_study(dicom_ds, phi, date_delta, source)
-        series = self._get_or_create_series(dicom_ds, study)
-        self._get_or_create_instance(dicom_ds, series)
+        phi = self._get_or_create_phi(ds)
+        study = self._get_or_create_study(ds, phi, date_delta, source)
+        series = self._get_or_create_series(ds, study)
+        self._get_or_create_instance(ds, series)
 
         return phi.patient_id, phi.anon_patient_id, study.anon_accession_number
 
@@ -918,16 +907,16 @@ class AnonymizerModel:
             if not study_record:
                 # Study doesn't exist, so create it and link it to the PHI record
                 logger.debug(f"Creating new Study for study_uid '{java_study.PHI_StudyInstanceUID}'.")
+
                 study_record = Study(
                     study_uid=java_study.PHI_StudyInstanceUID,
                     anon_study_uid=java_study.ANON_StudyInstanceUID,
                     patient_id=phi_record.patient_id,
-                    # anon_accession_number is an int, so convert incoming string to its length
-                    anon_accession_number=len(java_study.ANON_Accession),
+                    anon_accession_number=java_study.ANON_Accession,
                     accession_number=java_study.PHI_Accession,
                     study_date=java_study.PHI_StudyDate,
                     anon_date_delta=int(java_study.DateOffset),
-                    study_desc="Imported from Java Index",
+                    description="Imported from Java Index",
                     source="Java Index File",
                 )
                 if phi_record.studies is None:

@@ -83,7 +83,7 @@ class ProjectModel:
     """
 
     # Project Model Version Control
-    MODEL_VERSION = 3
+    MODEL_VERSION = 4
 
     # As per instructions here: https://www.medicalconnections.co.uk/kb/ImplementationUID-And-ImplementationName
     RSNA_ROOT_ORG_UID = "1.2.826.0.1.3680043.10.474"  # sub UID from medicalconnections.co.uk as used by JavaAnonymizer
@@ -116,6 +116,15 @@ class ProjectModel:
     @staticmethod
     def default_storage_dir() -> Path:
         return ProjectModel.base_dir() / ProjectModel.default_project_name()
+
+    @staticmethod
+    def default_db_url() -> str:
+        DB_DIALECT = "sqlite"  # Database dialect
+        DB_NAME = "anonymizer.db"
+        DB_DIR = ProjectModel.default_storage_dir()
+        DB_FILE = DB_DIR / DB_NAME
+        DB_URL = f"{DB_DIALECT}:///{DB_FILE}"
+        return DB_URL
 
     @staticmethod
     def default_local_server() -> DICOMNode:
@@ -172,6 +181,7 @@ class ProjectModel:
     uid_root: str = field(default_factory=default_uid_root)
     remove_pixel_phi: bool = False
     storage_dir: Path = field(default_factory=default_storage_dir, metadata=path_field)
+    db_url: str = field(default_factory=default_db_url)
     modalities: List[str] = field(default_factory=default_modalities)
     storage_classes: List[str] = field(default_factory=default_storage_classes)  # re-initialised in post_init
     transfer_syntaxes: List[str] = field(default_factory=default_transfer_syntaxes)

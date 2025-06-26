@@ -41,26 +41,30 @@ def test_send_cr1(temp_dir: str, controller):
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
     assert anon_ptid
-    phi = model.get_phi(anon_ptid)
+    phi = model.get_phi_by_anon_patient_id(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
     assert phi.patient_name == ds.PatientName
     assert phi.dob == ds.get("PatientBirthDate")
     assert phi.sex == ds.get("PatientSex")
     assert phi.ethnic_group == ds.get("EthnicGroup")
+    assert phi.studies
     assert len(phi.studies) == 1
+    study = phi.studies[0]
     assert len(phi.studies[0].series) == 1
-    assert phi.studies[0].study_uid == ds.StudyInstanceUID
-    assert phi.studies[0].study_date == ds.get("StudyDate")
+    assert study.study_uid == ds.StudyInstanceUID
+    assert study.study_date == ds.get("StudyDate")
     date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
-    assert phi.studies[0].anon_date_delta == date_delta
-    assert phi.studies[0].study_desc == ds.get("StudyDescription")
-    assert phi.studies[0].accession_number == ds.get("AccessionNumber")
-    assert phi.studies[0].target_instance_count == 0  # Set by controller move operation
-    assert phi.studies[0].series[0].series_uid == ds.get("SeriesInstanceUID")
-    assert phi.studies[0].series[0].series_desc == ds.get("SeriesDescription")
-    assert phi.studies[0].series[0].modality == ds.get("Modality")
-    assert phi.studies[0].series[0].instance_count == 1
+    assert study.anon_date_delta == date_delta
+    assert study.description == ds.get("StudyDescription")
+    assert study.accession_number == ds.get("AccessionNumber")
+    assert study.target_instance_count == 0  # Set by controller move operation
+    series = study.series[0]
+    assert series.series_uid == ds.get("SeriesInstanceUID")
+    assert series.description == ds.get("SeriesDescription")
+    assert series.modality == ds.get("Modality")
+    assert series.instances
+    assert len(series.instances) == 1
 
 
 def test_send_ct_small(temp_dir: str, controller):
@@ -77,29 +81,33 @@ def test_send_ct_small(temp_dir: str, controller):
     assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".3"
     assert model.get_anon_uid(ds.FrameOfReferenceUID) == prefix + ".4"
 
-    # Verify PHI / Study / Series stored correctly in AnonymizerModel
+    # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
     assert anon_ptid
-    phi = model.get_phi(anon_ptid)
+    phi = model.get_phi_by_anon_patient_id(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
     assert phi.patient_name == ds.PatientName
     assert phi.dob == ds.get("PatientBirthDate")
     assert phi.sex == ds.get("PatientSex")
     assert phi.ethnic_group == ds.get("EthnicGroup")
+    assert phi.studies
     assert len(phi.studies) == 1
+    study = phi.studies[0]
     assert len(phi.studies[0].series) == 1
-    assert phi.studies[0].study_uid == ds.StudyInstanceUID
-    assert phi.studies[0].study_date == ds.get("StudyDate")
+    assert study.study_uid == ds.StudyInstanceUID
+    assert study.study_date == ds.get("StudyDate")
     date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
-    assert phi.studies[0].anon_date_delta == date_delta
-    assert phi.studies[0].study_desc == ds.get("StudyDescription")
-    assert phi.studies[0].accession_number == ds.get("AccessionNumber")
-    assert phi.studies[0].target_instance_count == 0  # Set by controller move operation
-    assert phi.studies[0].series[0].series_uid == ds.get("SeriesInstanceUID")
-    assert phi.studies[0].series[0].series_desc == ds.get("SeriesDescription")
-    assert phi.studies[0].series[0].modality == ds.get("Modality")
-    assert phi.studies[0].series[0].instance_count == 1
+    assert study.anon_date_delta == date_delta
+    assert study.description == ds.get("StudyDescription")
+    assert study.accession_number == ds.get("AccessionNumber")
+    assert study.target_instance_count == 0  # Set by controller move operation
+    series = study.series[0]
+    assert series.series_uid == ds.get("SeriesInstanceUID")
+    assert series.description == ds.get("SeriesDescription")
+    assert series.modality == ds.get("Modality")
+    assert series.instances
+    assert len(series.instances) == 1
 
 
 def test_send_mr_small(temp_dir: str, controller):
@@ -120,26 +128,30 @@ def test_send_mr_small(temp_dir: str, controller):
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
     assert anon_ptid
-    phi = model.get_phi(anon_ptid)
+    phi = model.get_phi_by_anon_patient_id(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
     assert phi.patient_name == ds.PatientName
     assert phi.dob == ds.get("PatientBirthDate")
     assert phi.sex == ds.get("PatientSex")
     assert phi.ethnic_group == ds.get("EthnicGroup")
+    assert phi.studies
     assert len(phi.studies) == 1
+    study = phi.studies[0]
     assert len(phi.studies[0].series) == 1
-    assert phi.studies[0].study_uid == ds.StudyInstanceUID
-    assert phi.studies[0].study_date == ds.get("StudyDate")
+    assert study.study_uid == ds.StudyInstanceUID
+    assert study.study_date == ds.get("StudyDate")
     date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
-    assert phi.studies[0].anon_date_delta == date_delta
-    assert phi.studies[0].study_desc == ds.get("StudyDescription")
-    assert phi.studies[0].accession_number == ds.get("AccessionNumber")
-    assert phi.studies[0].target_instance_count == 0  # Set by controller move operation
-    assert phi.studies[0].series[0].series_uid == ds.get("SeriesInstanceUID")
-    assert phi.studies[0].series[0].series_desc == ds.get("SeriesDescription")
-    assert phi.studies[0].series[0].modality == ds.get("Modality")
-    assert phi.studies[0].series[0].instance_count == 1
+    assert study.anon_date_delta == date_delta
+    assert study.description is None  # No StudyDescription in MR Small
+    assert study.accession_number == ds.get("AccessionNumber")
+    assert study.target_instance_count == 0  # Set by controller move operation
+    series = study.series[0]
+    assert series.series_uid == ds.get("SeriesInstanceUID")
+    assert series.description == ds.get("SeriesDescription")
+    assert series.modality == ds.get("Modality")
+    assert series.instances
+    assert len(series.instances) == 1
 
 
 def test_send_ct_small_AND_mr_small(temp_dir: str, controller):
@@ -161,26 +173,30 @@ def test_send_ct_small_AND_mr_small(temp_dir: str, controller):
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
     assert anon_ptid
-    phi = model.get_phi(anon_ptid)
+    phi = model.get_phi_by_anon_patient_id(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
     assert phi.patient_name == ds.PatientName
     assert phi.dob == ds.get("PatientBirthDate")
     assert phi.sex == ds.get("PatientSex")
     assert phi.ethnic_group == ds.get("EthnicGroup")
+    assert phi.studies
     assert len(phi.studies) == 1
+    study = phi.studies[0]
     assert len(phi.studies[0].series) == 1
-    assert phi.studies[0].study_uid == ds.StudyInstanceUID
-    assert phi.studies[0].study_date == ds.get("StudyDate")
+    assert study.study_uid == ds.StudyInstanceUID
+    assert study.study_date == ds.get("StudyDate")
     date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
-    assert phi.studies[0].anon_date_delta == date_delta
-    assert phi.studies[0].study_desc == ds.get("StudyDescription")
-    assert phi.studies[0].accession_number == ds.get("AccessionNumber")
-    assert phi.studies[0].target_instance_count == 0  # Set by controller move operation
-    assert phi.studies[0].series[0].series_uid == ds.get("SeriesInstanceUID")
-    assert phi.studies[0].series[0].series_desc == ds.get("SeriesDescription")
-    assert phi.studies[0].series[0].modality == ds.get("Modality")
-    assert phi.studies[0].series[0].instance_count == 1
+    assert study.anon_date_delta == date_delta
+    assert study.description == ds.get("StudyDescription") if hasattr(ds, "StudyDescription") else None
+    assert study.accession_number == ds.get("AccessionNumber")
+    assert study.target_instance_count == 0  # Set by controller move operation
+    series = study.series[0]
+    assert series.series_uid == ds.get("SeriesInstanceUID")
+    assert series.description == ds.get("SeriesDescription")
+    assert series.modality == ds.get("Modality")
+    assert series.instances
+    assert len(series.instances) == 1
 
     # Send MR SMALL:
     ds: Dataset = send_file_to_scp(mr_small_filename, LocalStorageSCP, controller)
@@ -197,26 +213,30 @@ def test_send_ct_small_AND_mr_small(temp_dir: str, controller):
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
     assert anon_ptid
-    phi = model.get_phi(anon_ptid)
+    phi = model.get_phi_by_anon_patient_id(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
     assert phi.patient_name == ds.PatientName
     assert phi.dob == ds.get("PatientBirthDate")
     assert phi.sex == ds.get("PatientSex")
     assert phi.ethnic_group == ds.get("EthnicGroup")
+    assert phi.studies
     assert len(phi.studies) == 1
+    study = phi.studies[0]
     assert len(phi.studies[0].series) == 1
-    assert phi.studies[0].study_uid == ds.StudyInstanceUID
-    assert phi.studies[0].study_date == ds.get("StudyDate")
+    assert study.study_uid == ds.StudyInstanceUID
+    assert study.study_date == ds.get("StudyDate")
     date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
-    assert phi.studies[0].anon_date_delta == date_delta
-    assert phi.studies[0].study_desc == ds.get("StudyDescription")
-    assert phi.studies[0].accession_number == ds.get("AccessionNumber")
-    assert phi.studies[0].target_instance_count == 0  # Set by controller move operation
-    assert phi.studies[0].series[0].series_uid == ds.get("SeriesInstanceUID")
-    assert phi.studies[0].series[0].series_desc == ds.get("SeriesDescription")
-    assert phi.studies[0].series[0].modality == ds.get("Modality")
-    assert phi.studies[0].series[0].instance_count == 1
+    assert study.anon_date_delta == date_delta
+    assert study.description is None  # No StudyDescription in MR Small
+    assert study.accession_number == ds.get("AccessionNumber")
+    assert study.target_instance_count == 0  # Set by controller move operation
+    series = study.series[0]
+    assert series.series_uid == ds.get("SeriesInstanceUID")
+    assert series.description == ds.get("SeriesDescription")
+    assert series.modality == ds.get("Modality")
+    assert series.instances
+    assert len(series.instances) == 1
 
 
 def test_send_ct_Archibald_Doe_PHI_stored(temp_dir: str, controller):
@@ -236,26 +256,30 @@ def test_send_ct_Archibald_Doe_PHI_stored(temp_dir: str, controller):
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
     assert anon_ptid
-    phi = model.get_phi(anon_ptid)
+    phi = model.get_phi_by_anon_patient_id(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
     assert phi.patient_name == ds.PatientName
     assert phi.dob == ds.get("PatientBirthDate")
     assert phi.sex == ds.get("PatientSex")
     assert phi.ethnic_group == ds.get("EthnicGroup")
+    assert phi.studies
     assert len(phi.studies) == 1
+    study = phi.studies[0]
     assert len(phi.studies[0].series) == 1
-    assert phi.studies[0].study_uid == ds.StudyInstanceUID
-    assert phi.studies[0].study_date == ds.get("StudyDate")
+    assert study.study_uid == ds.StudyInstanceUID
+    assert study.study_date == ds.get("StudyDate")
     date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
-    assert phi.studies[0].anon_date_delta == date_delta
-    assert phi.studies[0].study_desc == ds.get("StudyDescription")
-    assert phi.studies[0].accession_number == ds.get("AccessionNumber")
-    assert phi.studies[0].target_instance_count == 0  # Set by controller move operation
-    assert phi.studies[0].series[0].series_uid == ds.get("SeriesInstanceUID")
-    assert phi.studies[0].series[0].series_desc == ds.get("SeriesDescription")
-    assert phi.studies[0].series[0].modality == ds.get("Modality")
-    assert phi.studies[0].series[0].instance_count == 4
+    assert study.anon_date_delta == date_delta
+    assert study.description == ds.get("StudyDescription")
+    assert study.accession_number == ds.get("AccessionNumber")
+    assert study.target_instance_count == 0  # Set by controller move operation
+    series = study.series[0]
+    assert series.series_uid == ds.get("SeriesInstanceUID")
+    assert series.description == ds.get("SeriesDescription")
+    assert series.modality == ds.get("Modality")
+    assert series.instances
+    assert len(series.instances) == 4
 
 
 def test_send_ct_Archibald_Doe_Projection_create_cached(temp_dir: str, controller):
@@ -308,28 +332,29 @@ def test_send_cr_and_ct_Archibald_Doe(temp_dir: str, controller):
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
     assert anon_ptid
-    phi = model.get_phi(anon_ptid)
+    phi = model.get_phi_by_anon_patient_id(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
     assert phi.patient_name == ds.PatientName
     assert phi.dob == ds.get("PatientBirthDate")
     assert phi.sex == ds.get("PatientSex")
     assert phi.ethnic_group == ds.get("EthnicGroup")
+    assert phi.studies
     assert len(phi.studies) == 1
     assert len(phi.studies[0].series) == 3
-    assert phi.studies[0].study_uid == ds.StudyInstanceUID
-    assert phi.studies[0].study_date == ds.get("StudyDate")
+    study = phi.studies[0]
+    assert study.study_uid == ds.StudyInstanceUID
+    assert study.study_date == ds.get("StudyDate")
     date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
-    assert phi.studies[0].anon_date_delta == date_delta
-    assert phi.studies[0].study_desc == ds.get("StudyDescription")
-    assert phi.studies[0].accession_number == ds.get("AccessionNumber")
-    assert phi.studies[0].target_instance_count == 0  # Set by controller move operation
-    assert sum([s.instance_count for s in phi.studies[0].series]) == 3
-    for series in phi.studies[0].series:
+    assert study.anon_date_delta == date_delta
+    assert study.description == ds.get("StudyDescription")
+    assert study.accession_number == ds.get("AccessionNumber")
+    assert study.target_instance_count == 0  # Set by controller move operation
+    for series in study.series:
         assert series.series_uid in [ds.get("SeriesInstanceUID") for ds in dsets]
-        assert series.series_desc in [ds.get("SeriesDescription") for ds in dsets]
+        assert series.description in [ds.get("SeriesDescription") for ds in dsets]
         assert series.modality in [ds.get("Modality") for ds in dsets]
-        assert series.instance_count == 1
+        assert len(series.instances) == 1
 
     # Send CT_STUDY_1_SERIES_4_IMAGES:
     dsets: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, LocalStorageSCP, controller)
@@ -347,26 +372,30 @@ def test_send_cr_and_ct_Archibald_Doe(temp_dir: str, controller):
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
     assert anon_ptid
-    phi = model.get_phi(anon_ptid)
+    phi = model.get_phi_by_anon_patient_id(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
     assert phi.patient_name == ds.PatientName
     assert phi.dob == ds.get("PatientBirthDate")
     assert phi.sex == ds.get("PatientSex")
     assert phi.ethnic_group == ds.get("EthnicGroup")
+    assert phi.studies
     assert len(phi.studies) == 2
-    assert len(phi.studies[1].series) == 1
-    assert phi.studies[1].study_uid == ds.StudyInstanceUID
-    assert phi.studies[1].study_date == ds.get("StudyDate")
-    date_delta, _ = controller.anonymizer._hash_date(phi.studies[1].study_date, phi.patient_id)
-    assert phi.studies[1].anon_date_delta == date_delta
-    assert phi.studies[1].study_desc == ds.get("StudyDescription")
-    assert phi.studies[1].accession_number == ds.get("AccessionNumber")
-    assert phi.studies[1].target_instance_count == 0  # Set by controller move operation
-    assert phi.studies[1].series[0].series_uid == ds.get("SeriesInstanceUID")
-    assert phi.studies[1].series[0].series_desc == ds.get("SeriesDescription")
-    assert phi.studies[1].series[0].modality == ds.get("Modality")
-    assert phi.studies[1].series[0].instance_count == 4
+    study = phi.studies[1]
+    assert len(study.series) == 1
+    assert study.study_uid == ds.StudyInstanceUID
+    assert study.study_date == ds.get("StudyDate")
+    date_delta, _ = controller.anonymizer._hash_date(study.study_date, phi.patient_id)
+    assert study.anon_date_delta == date_delta
+    assert study.description == ds.get("StudyDescription")
+    assert study.accession_number == ds.get("AccessionNumber")
+    assert study.target_instance_count == 0  # Set by controller move operation
+    assert study.series
+    series = study.series[0]
+    assert series.series_uid == ds.get("SeriesInstanceUID")
+    assert series.description == ds.get("SeriesDescription")
+    assert series.modality == ds.get("Modality")
+    assert len(series.instances) == 4
 
 
 def test_send_ct_small_then_delete_study(temp_dir: str, controller):
@@ -386,26 +415,33 @@ def test_send_ct_small_then_delete_study(temp_dir: str, controller):
     # Verify PHI / Study / Series stored correctly in AnonymizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
     assert anon_ptid
-    phi = model.get_phi(anon_ptid)
+    phi = model.get_phi_by_anon_patient_id(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
     assert phi.patient_name == ds.PatientName
     assert phi.dob == ds.get("PatientBirthDate")
     assert phi.sex == ds.get("PatientSex")
     assert phi.ethnic_group == ds.get("EthnicGroup")
+    assert phi.studies
     assert len(phi.studies) == 1
+    study = phi.studies[0]
     assert len(phi.studies[0].series) == 1
-    assert phi.studies[0].study_uid == ds.StudyInstanceUID
-    assert phi.studies[0].study_date == ds.get("StudyDate")
+    assert study.study_uid == ds.StudyInstanceUID
+    assert study.study_date == ds.get("StudyDate")
     date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
-    assert phi.studies[0].anon_date_delta == date_delta
-    assert phi.studies[0].study_desc == ds.get("StudyDescription")
-    assert phi.studies[0].accession_number == ds.get("AccessionNumber")
-    assert phi.studies[0].target_instance_count == 0  # Set by controller move operation
-    assert phi.studies[0].series[0].series_uid == ds.get("SeriesInstanceUID")
-    assert phi.studies[0].series[0].series_desc == ds.get("SeriesDescription")
-    assert phi.studies[0].series[0].modality == ds.get("Modality")
-    assert phi.studies[0].series[0].instance_count == 1
+    assert study.anon_date_delta == date_delta
+    assert study.description == ds.get("StudyDescription")
+    assert study.accession_number == ds.get("AccessionNumber")
+    assert study.target_instance_count == 0  # Set by controller move operation
+    assert study.series
+    series = study.series[0]
+    assert series.series_uid == ds.get("SeriesInstanceUID")
+    assert series.description == ds.get("SeriesDescription")
+    assert series.modality == ds.get("Modality")
+    assert len(series.instances) == 1
+
+    totals = model.get_totals()
+    assert totals == (1, 1, 1, 1)
 
     # DELETE STUDY:
     assert controller.delete_study(anon_ptid, model.get_anon_uid(ds.StudyInstanceUID))
@@ -417,9 +453,9 @@ def test_send_ct_small_then_delete_study(temp_dir: str, controller):
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
     assert anon_ptid is None
 
-    # Check AmoynizerModel patients, studies, series, instances, quarantine counts are 0:
+    # Check AmoynizerModel patients, studies, series, instances counts are 0:
     totals = model.get_totals()
-    assert totals == (0, 0, 0, 0, 0)
+    assert totals == (0, 0, 0, 0)
 
 
 def test_send_cr_and_ct_Archibald_Doe_then_delete_studies(temp_dir: str, controller):
@@ -446,13 +482,14 @@ def test_send_cr_and_ct_Archibald_Doe_then_delete_studies(temp_dir: str, control
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(phi_ptid)
     assert anon_ptid
-    phi = model.get_phi(anon_ptid)
+    phi = model.get_phi_by_anon_patient_id(anon_ptid)
     assert phi
     assert phi.patient_id == phi_ptid
+    assert phi.studies
     assert len(phi.studies) == 2
 
     totals = model.get_totals()
-    assert totals == (1, 2, 4, 7, 0)
+    assert totals == (1, 2, 4, 7)
 
     # DELETE STUDIES:
     # Delete Study 1:
@@ -464,13 +501,14 @@ def test_send_cr_and_ct_Archibald_Doe_then_delete_studies(temp_dir: str, control
     # Patient with only Study 2 should still be in AnonymizerModel:
     anon_ptid = model.get_anon_patient_id(phi_ptid)
     assert anon_ptid
-    phi = model.get_phi(anon_ptid)
+    phi = model.get_phi_by_anon_patient_id(anon_ptid)
     assert phi
     assert phi.patient_id == phi_ptid
+    assert phi.studies
     assert len(phi.studies) == 1
 
     totals = model.get_totals()
-    assert totals == (1, 1, 1, 4, 0)
+    assert totals == (1, 1, 1, 4)
 
     # Delete Study 2:
     assert controller.delete_study(anon_ptid, model.get_anon_uid(study2_uid))
@@ -482,7 +520,7 @@ def test_send_cr_and_ct_Archibald_Doe_then_delete_studies(temp_dir: str, control
     assert anon_ptid is None
 
     totals = model.get_totals()
-    assert totals == (0, 0, 0, 0, 0)
+    assert totals == (0, 0, 0, 0)
 
 
 def test_send_ct_Archibald_Doe_mr_Peter_Doe_then_delete_studies(temp_dir: str, controller):
@@ -501,18 +539,19 @@ def test_send_ct_Archibald_Doe_mr_Peter_Doe_then_delete_studies(temp_dir: str, c
     phi_ptid_1 = dsets1[0].PatientID
     anon_ptid_1 = model.get_anon_patient_id(phi_ptid_1)
     assert anon_ptid_1
-    phi_1 = model.get_phi(anon_ptid_1)
+    phi_1 = model.get_phi_by_anon_patient_id(anon_ptid_1)
     assert phi_1
     assert phi_1.patient_id == phi_ptid_1
+    assert phi_1.studies
     assert len(phi_1.studies) == 1
 
     totals = model.get_totals()
-    assert totals == (1, 1, 1, 4, 0)
+    assert totals == (1, 1, 1, 4)
 
     # Patient 2: Peter Doe
     # Send MR_STUDY_3_SERIES_11_IMAGES:
     dsets2: list[Dataset] = send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, LocalStorageSCP, controller)
-    time.sleep(0.25)
+    time.sleep(0.5)
     dirlist = sorted([d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))])
     assert len(dirlist) == 2
     assert dirlist[1] == TEST_SITEID + "-000002"  #  Patient 2
@@ -524,14 +563,15 @@ def test_send_ct_Archibald_Doe_mr_Peter_Doe_then_delete_studies(temp_dir: str, c
     anon_ptid_2 = model.get_anon_patient_id(phi_ptid_2)
     assert anon_ptid_2
     assert anon_ptid_2 != anon_ptid_1
-    phi_2 = model.get_phi(anon_ptid_2)
+    phi_2 = model.get_phi_by_anon_patient_id(anon_ptid_2)
     assert phi_2
     assert phi_2.patient_id == phi_ptid_2
+    assert phi_2.studies
     assert len(phi_2.studies) == 1
     assert study2_uid != study1_uid
 
     totals = model.get_totals()
-    assert totals == (2, 2, 4, 15, 0)
+    assert totals == (2, 2, 4, 15)
 
     # DELETE PATIENT 1 / STUDY 1:
     anon_study1_uid = model.get_anon_uid(study1_uid)
@@ -549,13 +589,14 @@ def test_send_ct_Archibald_Doe_mr_Peter_Doe_then_delete_studies(temp_dir: str, c
     assert model.get_patient_id_count() == 2  # includes default for blank ptid
     anon_ptid_2 = model.get_anon_patient_id(phi_ptid_2)
     assert anon_ptid_2
-    phi_2 = model.get_phi(anon_ptid_2)
+    phi_2 = model.get_phi_by_anon_patient_id(anon_ptid_2)
     assert phi_2
     assert phi_2.patient_id == phi_ptid_2
+    assert phi_2.studies
     assert len(phi_2.studies) == 1
 
     totals = model.get_totals()
-    assert totals == (1, 1, 3, 11, 0)
+    assert totals == (1, 1, 3, 11)
 
     # DELETE PATIENT 2 / STUDY 2:
     anon_study2_uid = model.get_anon_uid(study2_uid)
@@ -569,9 +610,8 @@ def test_send_ct_Archibald_Doe_mr_Peter_Doe_then_delete_studies(temp_dir: str, c
     anon_ptid_2 = model.get_anon_patient_id(phi_ptid_2)
     assert anon_ptid_2 is None
     assert model.get_patient_id_count() == 1
-    # assert model.get_acc_no_count() == 0 deletions are not currently done on acc_no lookup due to phi acc_no not unique guarantee
-    assert model.get_phi_index() == []
-    assert model.get_totals() == (0, 0, 0, 0, 0)
+    assert model.get_phi_index() is None
+    assert model.get_totals() == (0, 0, 0, 0)
 
 
 # Test sending compressed syntaxes to local storage SCP:
@@ -644,10 +684,12 @@ def test_send_JPEG_Baseline(temp_dir: str, controller: ProjectController):
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
     assert anon_ptid
-    phi = model.get_phi(anon_ptid)
+    phi = model.get_phi_by_anon_patient_id(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
-    assert phi.patient_name == ds.PatientName
+    if phi.patient_name is not None:
+        assert phi.patient_name == ds.PatientName
+    assert phi.studies
     assert len(phi.studies) == 1
     study = phi.studies[0]
     assert study
@@ -656,14 +698,14 @@ def test_send_JPEG_Baseline(temp_dir: str, controller: ProjectController):
     assert study.study_date == ds.get("StudyDate")
     date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
-    assert study.study_desc == ds.get("StudyDescription")
+    assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")
     assert study.target_instance_count == 0  # Set by controller move operation
     series = study.series[0]
     assert series.series_uid == ds.get("SeriesInstanceUID")
-    assert series.series_desc == ds.get("SeriesDescription")
+    assert series.description == ds.get("SeriesDescription")
     assert series.modality == ds.get("Modality")
-    assert series.instance_count == 1
+    assert len(series.instances) == 1
 
     # Read the anonymize file and check the SOPClassUID and TransferSyntaxUID:
     anon_file_path = os.path.join(store_dir, dirlist[0], prefix + ".1", prefix + ".2", prefix + ".3.dcm")
@@ -720,13 +762,12 @@ def test_send_JPEG_Extended(temp_dir: str, controller: ProjectController):
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
     assert anon_ptid
-    phi = model.get_phi(anon_ptid)
+    phi = model.get_phi_by_anon_patient_id(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
-    assert phi.patient_name == ds.PatientName
-    assert phi.dob == ds.get("PatientBirthDate")
-    assert phi.ethnic_group == ds.get("EthnicGroup")
-    assert phi.sex == ds.get("PatientSex")
+    if phi.patient_name is not None:
+        assert phi.patient_name == ds.PatientName
+    assert phi.studies
     assert len(phi.studies) == 1
     study = phi.studies[0]
     assert study
@@ -735,14 +776,14 @@ def test_send_JPEG_Extended(temp_dir: str, controller: ProjectController):
     assert study.study_date == ds.get("StudyDate")
     date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
-    assert study.study_desc == ds.get("StudyDescription")
+    assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")
     assert study.target_instance_count == 0  # Set by controller move operation
     series = study.series[0]
     assert series.series_uid == ds.get("SeriesInstanceUID")
-    assert series.series_desc == ds.get("SeriesDescription")
+    assert series.description == ds.get("SeriesDescription")
     assert series.modality == ds.get("Modality")
-    assert series.instance_count == 1
+    assert len(series.instances) == 1
 
     # Read the anonymize file and check the SOPClassUID and TransferSyntaxUID:
     anon_file_path = os.path.join(store_dir, dirlist[0], prefix + ".1", prefix + ".2", prefix + ".3.dcm")
@@ -798,13 +839,12 @@ def test_send_JPEG_Lossless_P14_FOP(temp_dir: str, controller: ProjectController
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
     assert anon_ptid
-    phi = model.get_phi(anon_ptid)
+    phi = model.get_phi_by_anon_patient_id(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
-    assert phi.patient_name == ds.PatientName
-    assert phi.dob == ds.get("PatientBirthDate")
-    assert phi.ethnic_group == ds.get("EthnicGroup")
-    assert phi.sex == ds.get("PatientSex")
+    if phi.patient_name is not None:
+        assert phi.patient_name == ds.PatientName
+    assert phi.studies
     assert len(phi.studies) == 1
     study = phi.studies[0]
     assert study
@@ -813,14 +853,14 @@ def test_send_JPEG_Lossless_P14_FOP(temp_dir: str, controller: ProjectController
     assert study.study_date == ds.get("StudyDate")
     date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
-    assert study.study_desc == ds.get("StudyDescription")
+    assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")
     assert study.target_instance_count == 0  # Set by controller move operation
     series = study.series[0]
     assert series.series_uid == ds.get("SeriesInstanceUID")
-    assert series.series_desc == ds.get("SeriesDescription")
+    assert series.description == ds.get("SeriesDescription")
     assert series.modality == ds.get("Modality")
-    assert series.instance_count == 1
+    assert len(series.instances) == 1
 
     # Read the anonymize file and check the SOPClassUID and TransferSyntaxUID:
     anon_file_path = os.path.join(store_dir, dirlist[0], prefix + ".1", prefix + ".2", prefix + ".3.dcm")
@@ -875,13 +915,12 @@ def test_send_JPEG_LS_Lossless(temp_dir: str, controller: ProjectController):
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
     assert anon_ptid
-    phi = model.get_phi(anon_ptid)
+    phi = model.get_phi_by_anon_patient_id(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
-    assert phi.patient_name == ds.PatientName
-    assert phi.dob == ds.get("PatientBirthDate")
-    assert phi.ethnic_group == ds.get("EthnicGroup")
-    assert phi.sex == ds.get("PatientSex")
+    if phi.patient_name is not None:
+        assert phi.patient_name == ds.PatientName
+    assert phi.studies
     assert len(phi.studies) == 1
     study = phi.studies[0]
     assert study
@@ -890,14 +929,14 @@ def test_send_JPEG_LS_Lossless(temp_dir: str, controller: ProjectController):
     assert study.study_date == ds.get("StudyDate")
     date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
-    assert study.study_desc == ds.get("StudyDescription")
+    assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")
     assert study.target_instance_count == 0  # Set by controller move operation
     series = study.series[0]
     assert series.series_uid == ds.get("SeriesInstanceUID")
-    assert series.series_desc == ds.get("SeriesDescription")
+    assert series.description == ds.get("SeriesDescription")
     assert series.modality == ds.get("Modality")
-    assert series.instance_count == 1
+    assert len(series.instances) == 1
 
     # Read the anonymize file and check the SOPClassUID and TransferSyntaxUID:
     anon_file_path = os.path.join(store_dir, dirlist[0], prefix + ".1", prefix + ".2", prefix + ".3.dcm")
@@ -961,13 +1000,12 @@ def test_send_JPEG_LS_Lossy(temp_dir: str, controller: ProjectController):
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
     assert anon_ptid
-    phi = model.get_phi(anon_ptid)
+    phi = model.get_phi_by_anon_patient_id(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
-    assert phi.patient_name == ds.PatientName
-    assert phi.dob == ds.get("PatientBirthDate")
-    assert phi.ethnic_group == ds.get("EthnicGroup")
-    assert phi.sex == ds.get("PatientSex")
+    if phi.patient_name is not None:
+        assert phi.patient_name == ds.PatientName
+    assert phi.studies
     assert len(phi.studies) == 1
     study = phi.studies[0]
     assert study
@@ -976,14 +1014,14 @@ def test_send_JPEG_LS_Lossy(temp_dir: str, controller: ProjectController):
     assert study.study_date == ds.get("StudyDate")
     date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
-    assert study.study_desc == ds.get("StudyDescription")
+    assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")
     assert study.target_instance_count == 0  # Set by controller move operation
     series = study.series[0]
     assert series.series_uid == ds.get("SeriesInstanceUID")
-    assert series.series_desc == ds.get("SeriesDescription")
+    assert series.description == ds.get("SeriesDescription")
     assert series.modality == ds.get("Modality")
-    assert series.instance_count == 1
+    assert len(series.instances) == 1
 
     # Read the anonymize file and check the SOPClassUID and TransferSyntaxUID:
     anon_file_path = os.path.join(store_dir, dirlist[0], prefix + ".1", prefix + ".2", prefix + ".3.dcm")
@@ -1038,13 +1076,12 @@ def test_send_JPEG_2000_Lossless(temp_dir: str, controller: ProjectController):
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
     assert anon_ptid
-    phi = model.get_phi(anon_ptid)
+    phi = model.get_phi_by_anon_patient_id(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
-    assert phi.patient_name == ds.PatientName
-    assert phi.dob == ds.get("PatientBirthDate")
-    assert phi.ethnic_group == ds.get("EthnicGroup")
-    assert phi.sex == ds.get("PatientSex")
+    if phi.patient_name is not None:
+        assert phi.patient_name == ds.PatientName
+    assert phi.studies
     assert len(phi.studies) == 1
     study = phi.studies[0]
     assert study
@@ -1053,14 +1090,14 @@ def test_send_JPEG_2000_Lossless(temp_dir: str, controller: ProjectController):
     assert study.study_date == ds.get("StudyDate")
     date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
-    assert study.study_desc == ds.get("StudyDescription")
+    assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")
     assert study.target_instance_count == 0  # Set by controller move operation
     series = study.series[0]
     assert series.series_uid == ds.get("SeriesInstanceUID")
-    assert series.series_desc == ds.get("SeriesDescription")
+    assert series.description == ds.get("SeriesDescription")
     assert series.modality == ds.get("Modality")
-    assert series.instance_count == 1
+    assert len(series.instances) == 1
 
     # Read the anonymize file and check the SOPClassUID and TransferSyntaxUID:
     anon_file_path = os.path.join(store_dir, dirlist[0], prefix + ".1", prefix + ".2", prefix + ".3.dcm")
@@ -1116,13 +1153,12 @@ def test_send_JPEG_2000(temp_dir: str, controller: ProjectController):
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
     assert anon_ptid
-    phi = model.get_phi(anon_ptid)
+    phi = model.get_phi_by_anon_patient_id(anon_ptid)
     assert phi
     assert phi.patient_id == ds.PatientID
-    assert phi.patient_name == ds.PatientName
-    assert phi.dob == ds.get("PatientBirthDate")
-    assert phi.ethnic_group == ds.get("EthnicGroup")
-    assert phi.sex == ds.get("PatientSex")
+    if phi.patient_name is not None:
+        assert phi.patient_name == ds.PatientName
+    assert phi.studies
     assert len(phi.studies) == 1
     study = phi.studies[0]
     assert study
@@ -1131,14 +1167,14 @@ def test_send_JPEG_2000(temp_dir: str, controller: ProjectController):
     assert study.study_date == ds.get("StudyDate")
     date_delta, _ = controller.anonymizer._hash_date(phi.studies[0].study_date, phi.patient_id)
     assert study.anon_date_delta == date_delta
-    assert study.study_desc == ds.get("StudyDescription")
+    assert study.description == ds.get("StudyDescription")
     assert study.accession_number == ds.get("AccessionNumber")
     assert study.target_instance_count == 0  # Set by controller move operation
     series = study.series[0]
     assert series.series_uid == ds.get("SeriesInstanceUID")
-    assert series.series_desc == ds.get("SeriesDescription")
+    assert series.description == ds.get("SeriesDescription")
     assert series.modality == ds.get("Modality")
-    assert series.instance_count == 1
+    assert len(series.instances) == 1
 
     # Read the anonymize file and check the SOPClassUID and TransferSyntaxUID:
     anon_file_path = os.path.join(store_dir, dirlist[0], prefix + ".1", prefix + ".2", prefix + ".3.dcm")

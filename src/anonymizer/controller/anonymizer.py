@@ -17,7 +17,6 @@ For more information, refer to the legacy anonymizer documentation: https://mirc
 import hashlib
 import logging
 import os
-import pickle
 import re
 import threading
 import time
@@ -29,7 +28,7 @@ from shutil import copyfile
 
 import torch
 from easyocr import Reader
-from pydicom import Dataset, Sequence, dcmread
+from pydicom import DataElement, Dataset, Sequence, dcmread
 from pydicom.errors import InvalidDicomError
 
 from anonymizer.controller.remove_pixel_phi import remove_pixel_phi
@@ -86,75 +85,18 @@ class AnonymizerController:
         "SeriesInstanceUID",
     ]
 
-    def load_model(self) -> AnonymizerModel:
-        try:
-            with open(self.model_filename, "rb") as pkl_file:
-                serialized_data = pkl_file.read()
-            file_model = pickle.loads(serialized_data)
-            if not hasattr(file_model, "_version"):
-                raise RuntimeError("Anonymizer Model missing version")
-            logger.info(f"Anonymizer Model successfully loaded from: {self.model_filename}")
-            return file_model
-        except Exception as e1:
-            # Attempt to load backup file
-            backup_filename = str(self.model_filename) + ".bak"
-            if os.path.exists(backup_filename):
-                try:
-                    with open(backup_filename, "rb") as pkl_file:
-                        serialized_data = pkl_file.read()
-                    file_model = pickle.loads(serialized_data)
-                    if not hasattr(file_model, "_version"):
-                        raise RuntimeError("Anonymizer Model missing version in backup file")
-                    logger.warning(f"Loaded Anonymizer Model from backup file: {backup_filename}")
-                    return file_model
-                except Exception as e2:
-                    logger.error(f"Backup Anonymizer Model datafile corrupt: {e2}")
-                    raise RuntimeError(
-                        f"Anonymizer datafile: {self.model_filename} and backup file corrupt\n\n{str(e2)}"
-                    ) from e2
-            else:
-                logger.error(f"Anonymizer Model datafile corrupt: {e1}")
-                raise RuntimeError(f"Anonymizer datafile: {self.model_filename} corrupt\n\n{str(e1)}") from e1
-
     def __init__(self, project_model: ProjectModel):
         self._active = False
         self.project_model = project_model
         # Initialise AnonymizerModel datafile full path:
         self.model_filename = Path(self.project_model.private_dir(), self.ANONYMIZER_MODEL_FILENAME)
-        # If present, load pickled AnonymizerModel from project directory:
-        if self.model_filename.exists():
-            file_model = self.load_model()
-
-            if file_model._version != AnonymizerModel.MODEL_VERSION:
-                logger.info(
-                    f"Anonymizer Model version mismatch: {file_model._version} != {AnonymizerModel.MODEL_VERSION} upgrading accordingly"
-                )
-                self.model = AnonymizerModel(
-                    site_id=project_model.site_id,
-                    uid_root=project_model.uid_root,
-                    script_path=project_model.anonymizer_script_path,
-                    db_url="sqlite:///"
-                    + str(self.project_model.private_dir())
-                    + "/AnonymizerModel.db",  # TODO: add db_url to project_model
-                )  # new default model
-                # TODO: handle new & deleted fields in nested objects
-                self.model.__dict__.update(
-                    file_model.__dict__
-                )  # copy over corresponding attributes from the old model (file_model)
-                self.model._version = AnonymizerModel.MODEL_VERSION  # upgrade version
-                logger.info(f"Anonymizer Model upgraded successfully to version: {self.model._version}")
-            else:
-                self.model: AnonymizerModel = file_model
-
-        else:
-            # Initialise New Default AnonymizerModel if no pickle file found in project directory:
-            self.model = AnonymizerModel(
-                project_model.site_id,
-                project_model.uid_root,
-                project_model.anonymizer_script_path,
-                db_url="sqlite:///" + str(self.project_model.private_dir()) + "/AnonymizerModel.db",
-            )
-            logger.info(f"New Default Anonymizer Model initialised from script: {project_model.anonymizer_script_path}")
+        self.model = AnonymizerModel(
+            project_model.site_id,
+            project_model.uid_root,
+            project_model.anonymizer_script_path,
+            project_model.db_url,
+        )
+        logger.info(f"Anonymizer Model initialised from script: {project_model.anonymizer_script_path}")
 
         self._anon_ds_Q: Queue = Queue()  # queue for dataset workers
         self._anon_px_Q: Queue = Queue()  # queue for pixel phi workers
@@ -392,7 +334,9 @@ class AnonymizerController:
 
         return result
 
-    def _anonymize_element(self, dataset, data_element, phi_ptid, anon_ptid, anon_acc_no) -> None:
+    def _anonymize_element(
+        self, dataset: Dataset, data_element: DataElement, phi_ptid: str, anon_ptid: str, anon_acc_no: str | None
+    ) -> None:
         """
         Anonymizes a data element in the dataset based on the specified operations.
 
@@ -423,9 +367,12 @@ class AnonymizerController:
         elif "@ptid" in operation:
             dataset[tag].value = anon_ptid
         elif "@acc" in operation:
-            dataset[tag].value = anon_acc_no
+            if value == "":
+                dataset[tag].value = ""
+            elif anon_acc_no:
+                dataset[tag].value = anon_acc_no
         elif "@hashdate" in operation:
-            _, anon_date = self._hash_date(data_element.value, phi_ptid)
+            _, anon_date = self._hash_date(value, phi_ptid)
             dataset[tag].value = anon_date
         elif "@round" in operation:
             # TODO: operand is named round but it is age format specific, should be renamed round_age
@@ -491,8 +438,18 @@ class AnonymizerController:
             # Anonymize dataset (overwrite phi dataset) (prevents dataset copy)
             ds.remove_private_tags()  # remove all private elements (odd group number)
 
+            # if ds.PatientID not present, set to '' so that anonymization script can process the element:
+            if not hasattr(ds, "PatientID"):
+                ds.PatientID = ""
+
             def pydicom_callback(current_ds_item, data_element):
-                self._anonymize_element(current_ds_item, data_element, phi_ptid, anon_ptid, anon_acc_no)
+                self._anonymize_element(
+                    current_ds_item,
+                    data_element,
+                    phi_ptid,
+                    anon_ptid,
+                    None if anon_acc_no is None else str(anon_acc_no),
+                )
 
             ds.walk(pydicom_callback)  # recursive by default, recurses into embedded dataset sequences
 

@@ -2,7 +2,7 @@
 import os
 import shutil
 import tempfile
-from logging import INFO, WARNING
+from logging import DEBUG, INFO, WARNING
 
 # Add the src directory to sys.path dynamically
 #  sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
@@ -25,17 +25,23 @@ from tests.controller.dicom_test_nodes import (
     RemoteSCPDict,
 )
 
-# def pytest_sessionstart(session):
-#     """Runs before the test session begins."""
+TEST_DB_DIALECT = "sqlite"  # Database dialect
+TEST_DB_NAME = "anonymizer_test.db"  # Name of the test database file
+TEST_DB_DIR = Path(__file__).parent / ".test_dbs"  # In tests/model/.test_dbs
+TEST_DB_FILE = TEST_DB_DIR / TEST_DB_NAME
+TEST_DB_URL = f"{TEST_DB_DIALECT}:///{TEST_DB_FILE}"
+
+
+def pytest_sessionstart(session):
+    """Runs before the test session begins."""
+    # Initialise logging without file handler:
+    init_logging(file_handler=False)
 
 
 @pytest.fixture
 def temp_dir() -> Generator[str, Any, None]:
     # Create a temporary directory
     temp_path = tempfile.mkdtemp(prefix="anonymizer_")
-
-    # Initialise logging without file handler:
-    init_logging(file_handler=False)
 
     # Yield the directory path to the test function
     yield temp_path
@@ -50,6 +56,9 @@ def controller(temp_dir: str) -> Generator[ProjectController, Any, None]:
     # Make sure storage directory exists:
     os.makedirs(anon_store, exist_ok=True)
 
+    if TEST_DB_FILE.exists():
+        TEST_DB_FILE.unlink()  # Delete old DB file to ensure fresh start
+
     # Create Test ProjectModel:
     project_model = ProjectModel(
         site_id=TEST_SITEID,
@@ -57,12 +66,13 @@ def controller(temp_dir: str) -> Generator[ProjectController, Any, None]:
         uid_root=TEST_UIDROOT,
         remove_pixel_phi=False,
         storage_dir=anon_store,
+        db_url=TEST_DB_URL,
         scu=LocalSCU,
         scp=LocalStorageSCP,
         remote_scps=RemoteSCPDict,
         network_timeouts=NetworkTimeouts(2, 5, 5, 15),
         anonymizer_script_path=Path("src/anonymizer/assets/scripts/default-anonymizer.script"),
-        logging_levels=LoggingLevels(anonymizer=INFO, pynetdicom=WARNING, pydicom=False),
+        logging_levels=LoggingLevels(anonymizer=DEBUG, pynetdicom=WARNING, pydicom=False),
     )
 
     project_controller = ProjectController(project_model)

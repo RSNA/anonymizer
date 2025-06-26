@@ -24,7 +24,7 @@ from anonymizer.utils.translate import _
 LOG_FILENAME = "anonymizer.log"
 LOG_SIZE = 1024 * 1024 * 100  # 100 MB
 LOG_BACKUP_COUNT = 10
-LOG_DEFAULT_LEVEL = logging.INFO
+LOG_DEFAULT_LEVEL = logging.DEBUG
 LOG_FORMAT = "{asctime} {levelname} {threadName} {name}.{funcName}.{lineno} {message}"
 
 
@@ -36,7 +36,7 @@ def _get_logs_dir() -> str:
         str: The directory path where logs should be stored.
 
     """
-    return Path.home() / _("Documents").strip() / _("RSNA Anonymizer").strip() / _("logs").strip()
+    return str(Path.home() / _("Documents").strip() / _("RSNA Anonymizer").strip() / _("logs").strip())
     # if run_as_exe:
     #     if platform.system() == "Windows":
     #         return os.path.join(os.path.expanduser("~"), "AppData", "Local", "Anonymizer", "Logs")
@@ -50,7 +50,7 @@ def _get_logs_dir() -> str:
     #     return os.path.join(install_dir, "logs")
 
 
-def init_logging(file_handler: bool = True) -> str:
+def init_logging(file_handler: bool = True) -> str | None:
     """
     Initializes the logging configuration for the application.
 
@@ -59,16 +59,17 @@ def init_logging(file_handler: bool = True) -> str:
             Defaults to True.
 
     Returns:
-        logs_dir (str): The directory path where logs are stored.
+        logs_dir (str): The directory path where logs are stored if file_handler is True, otherwise None.
     """
-    logs_dir = _get_logs_dir()
-    os.makedirs(logs_dir, exist_ok=True)
-
     # Get root logger:
     logger = logging.getLogger()
     logFormatter = logging.Formatter(LOG_FORMAT, style="{")
+    logs_dir = None
 
     if file_handler:
+        logs_dir = _get_logs_dir()
+        os.makedirs(logs_dir, exist_ok=True)
+        logger.info("Logs will be stored in: %s", logs_dir)
         # Setup rotating log file:
         fileHandler = logging.handlers.RotatingFileHandler(
             os.path.join(logs_dir, LOG_FILENAME), maxBytes=LOG_SIZE, backupCount=LOG_BACKUP_COUNT
@@ -89,7 +90,7 @@ def init_logging(file_handler: bool = True) -> str:
     # (pynetdicom._config.LOG_HANDLER_LEVEL = "none" # disable pynetdicom logging, default is "standard")
     set_pynetdicom_log_level(logging.WARNING)
     # leave pydicom logging at default level, user can enable debug mode if needed
-    logger.info("Logging initialized, logs dir: %s", logs_dir)
+    logger.info("Logging initialized")
     return logs_dir
 
 
