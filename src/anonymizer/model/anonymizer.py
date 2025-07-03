@@ -562,8 +562,7 @@ class AnonymizerModel:
             .options(selectinload(Study.series).selectinload(Series.instances))
         )
         study: Study | None = self.session.execute(stmt).unique().scalar_one_or_none()
-        if not study:
-            logger.warning(f"No study found for StudyUID: {study_uid}")
+        if not study:  # first instance of study has not arrived yet
             return 0
 
         return sum(len(series.instances) for series in study.series)
@@ -588,13 +587,11 @@ class AnonymizerModel:
             .options(selectinload(Study.series).selectinload(Series.instances))
         )
         study: Study | None = self.session.execute(stmt).unique().scalar_one_or_none()
-        if not study:
-            logger.warning(f"No study found for StudyUID: {study_uid}")
+        if not study:  # first instance of study has not arrived yet
+            return target_count
         else:
             study.target_instance_count = target_count
             return target_count - sum(len(series.instances) for series in study.series)
-
-        return target_count
 
     @use_session(is_read_only_operation=True)
     def series_complete(self, series_uid: str, target_count: int) -> bool:
