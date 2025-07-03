@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [18.0.0]
+- AnonymizerModel based on SQLAlchemy ORM replaced AnonymizerModel using python dictionaries as lookup tables
+- Integration of new AnonymizerModel with AnonymizerController and ProjectController
+- Added LoggingLevels: sql and store_dicom_source
+
 ## [17.4.*]
 ### Added
 - SeriesView and ImageViewer classes with text detection and removal using easyocr reader and blackout area with user defined rectangles
