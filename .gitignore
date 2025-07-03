@@ -13,6 +13,7 @@ __pycache__/
 *.zip
 *.coverage
 *.anonymizer_state.json
+*.db
 ProjectModel.json
 htmlcov/*
 dist/*
@@ -28,4 +29,4 @@ phi_imgs/*
 **/radon_results.txt
 Pipfile.lock
 .python-version
-anonymizer.db
+

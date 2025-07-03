@@ -16,26 +16,24 @@ def test_set_logging_levels_all_levels():
     """
     Test setting all logging levels.
     """
-    levels = LoggingLevels(logging.DEBUG, logging.INFO, True)
+    levels = LoggingLevels(logging.DEBUG, logging.INFO, True, False, False)
 
     set_logging_levels(levels)
 
     assert logging.getLogger().getEffectiveLevel() == logging.DEBUG
     assert logging.getLogger("pynetdicom").getEffectiveLevel() == logging.INFO
-    # assert pydicom_config.debug()
 
 
 def test_set_logging_levels_no_pydicom_debug():
     """
     Test setting logging levels without pydicom debug.
     """
-    levels = LoggingLevels(logging.WARNING, logging.ERROR, False)
+    levels = LoggingLevels(logging.WARNING, logging.ERROR, False, False, False)
 
     set_logging_levels(levels)
 
     assert logging.getLogger().getEffectiveLevel() == logging.WARNING
     assert logging.getLogger("pynetdicom").getEffectiveLevel() == logging.ERROR
-    # assert not pydicom_config.debug()
 
 
 def test_set_anonymizer_log_level():

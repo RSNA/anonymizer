@@ -60,19 +60,17 @@ def controller(temp_dir: str) -> Generator[ProjectController, Any, None]:
         TEST_DB_FILE.unlink()  # Delete old DB file to ensure fresh start
 
     # Create Test ProjectModel:
-    project_model = ProjectModel(
+    project_model: ProjectModel = ProjectModel(
         site_id=TEST_SITEID,
         project_name=TEST_PROJECTNAME,
         uid_root=TEST_UIDROOT,
         remove_pixel_phi=False,
         storage_dir=anon_store,
-        db_url=TEST_DB_URL,
         scu=LocalSCU,
         scp=LocalStorageSCP,
         remote_scps=RemoteSCPDict,
         network_timeouts=NetworkTimeouts(2, 5, 5, 15),
         anonymizer_script_path=Path("src/anonymizer/assets/scripts/default-anonymizer.script"),
-        logging_levels=LoggingLevels(anonymizer=DEBUG, pynetdicom=WARNING, pydicom=False),
     )
 
     project_controller = ProjectController(project_model)
