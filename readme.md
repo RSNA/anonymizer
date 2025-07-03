@@ -1,4 +1,4 @@
-# RSNA DICOM Anonymizer V17.4
+# RSNA DICOM Anonymizer V18.0
 [![de](https://img.shields.io/badge/lang-de-blue.svg)](readme.de.md)
 [![es](https://img.shields.io/badge/lang-es-blue.svg)](readme.es.md)
 [![fr](https://img.shields.io/badge/lang-fr-blue.svg)](readme.fr.md)
@@ -35,6 +35,9 @@ If python + tkinter has been installed successfully a small GUI window should op
 `pip install rsna-anonymizer`
 ## Execution
 `rsna-anonymizer`
+### Headless Mode
+You need to provide a path to a project configuration to run in headless mode
+`rsna-anonymizer -c path/to/ProjectModel.json`
 ## Upgrading
 `pip install --upgrade rsna-anonymizer`
 ## Documentation

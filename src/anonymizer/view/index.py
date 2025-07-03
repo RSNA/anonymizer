@@ -260,11 +260,16 @@ class IndexView(ctk.CTkToplevel):
 
         if not messagebox.askyesno(
             title=_("Confirm Study Deletion"),
-            message=_(
-                "Selected studies will be permanently deleted from PHI Index and all associated anonymized files deleted from local storage directory"
+            message=(
+                _(
+                    "Selected studies will be permanently deleted from PHI Index and all associated anonymized files deleted from local storage directory"
+                )
                 + "\n\n"
                 + _("Are you sure?")
             ),
+            icon="warning",
+            type="yesno",
+            default="no",
             parent=self,
         ):
             logger.info("Study deletion aborted by user")

@@ -373,12 +373,12 @@ class SeriesView(ctk.CTkToplevel):
 
     def detect_text_for_series(self):
         """Detects text in all frames of the series."""
-        self.update_status(_("Detecting text in all frames..."))
+        self.update_status(_("Detecting text in all frames") + "...")
         total_frames = self.image_viewer.num_images
         for i in range(total_frames):
             self.image_viewer.load_and_display_image(i)  # Goto series start
             self.process_single_frame_ocr(i)
-            self.update_status(_("OCR on frame: ") + str(i + 1))
+            self.update_status(_("OCR on frame") + " :" + str(i + 1))
 
     def detect_text_button_clicked(self):
         logger.info("Detecting text...")
@@ -391,12 +391,12 @@ class SeriesView(ctk.CTkToplevel):
         logger.info(f"CUDA GPU Available: {torch.cuda.is_available()}")
 
         if self.edit_context == EditContext.FRAME:
-            self.update_status(_("OCR on current frame..."))
+            self.update_status(_("OCR on current frame") + "...")
             self.process_single_frame_ocr(self.image_viewer.current_image_index)
-            self.update_status(_("OCR on current frame complete"))
+            self.update_status(_("OCR on current frame") + " " + _("complete"))
         else:
             self.detect_text_for_series()
-            self.update_status(_("OCR on all frames complete"))
+            self.update_status(_("OCR on all frames") + " " + _("complete"))
 
         # TODO: work out what to do beyond propagting edits in overlays when edit context is PROJECT
 
@@ -439,12 +439,12 @@ class SeriesView(ctk.CTkToplevel):
                 logger.warning("No text has been detected in current frame to remove")
                 self.update_status(_("No text detected in current frame to remove"))
                 return
-            self.update_status(_("Removing text from current frame..."))
+            self.update_status(_("Removing text from current frame") + "...")
             self.remove_text_from_single_frame(ndx, ocr_texts)
             self.update_status(_("Text removed from current frame"))
             self.image_viewer.refresh_current_image()
         else:
-            self.update_status(_("Removing text from all frames in series..."))
+            self.update_status(_("Removing text from all frames in series") + "...")
             self.remove_text_from_series()
             self.update_status(_("Text removed from all frames in series"))
 
@@ -481,7 +481,7 @@ class SeriesView(ctk.CTkToplevel):
                 logger.warning("No blackout user rect has been define in current frame to blackout")
                 self.update_status(_("No blackout area(s) in current frame"))
                 return
-            self.update_status(_("Blackout areas in current frame..."))
+            self.update_status(_("Blackout areas in current frame") + "...")
             self.blackout_areas_in_single_frame(ndx, user_rects)
             if not self.single_frame:
                 self.image_viewer.clear_cache()
@@ -489,7 +489,7 @@ class SeriesView(ctk.CTkToplevel):
             self.update_status(_("Areas blacked out in current frame"))
             self.image_viewer.refresh_current_image()
         else:
-            self.update_status(_("Blackout areas in all frames of series..."))
+            self.update_status(_("Blackout areas in all frames of series") + "...")
             self.blackout_areas_in_series()
             self.update_status(_("Areas blacked out in all frames of series"))
 

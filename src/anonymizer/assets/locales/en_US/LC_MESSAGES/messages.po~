@@ -49,23 +49,23 @@ msgstr "Error creating Project Controller"
 msgid "Select Anonymizer Storage Directory"
 msgstr "Select Anonymizer Storage Directory"
 
-msgid "Corruption detected: Loaded model is not an instance of ProjectModel"
-msgstr "Corruption detected: Loaded model is not an instance of ProjectModel"
-
 msgid "Open Project Error"
 msgstr "Open Project Error"
 
+msgid "Error loading Project Model from legacy pickle data file"
+msgstr "Error loading Project Model from legacy pickle data file"
+
 msgid "Error loading Project Model from data file"
 msgstr "Error loading Project Model from data file"
+
+msgid "No Project file found in"
+msgstr "No Project file found in"
 
 msgid "Project File corrupted, missing version information."
 msgstr "Project File corrupted, missing version information."
 
 msgid "Project language mismatch"
 msgstr "Project language mismatch"
-
-msgid "No Project file not found in"
-msgstr "No Project file not found in"
 
 msgid "Local DICOM Server Error"
 msgstr "Local DICOM Server Error"
@@ -139,6 +139,12 @@ msgstr "Import Directory Cancelled"
 msgid "Importing"
 msgstr "Importing"
 
+msgid "file"
+msgstr "file"
+
+msgid "files"
+msgstr "files"
+
 msgid "Files processed"
 msgstr "Files processed"
 
@@ -190,6 +196,36 @@ msgstr "Project"
 msgid "Settings"
 msgstr "Settings"
 
+msgid "Project Model file not found"
+msgstr "No Project file not found"
+
+msgid "Project Model path is not a file"
+msgstr "Project Model path is not a file"
+
+msgid "Project Model loaded successfully, version"
+msgstr "Project Model loaded successfully, version"
+
+msgid "Project Model version mismatch"
+msgstr "Project Model version mismatch"
+
+msgid "upgrading accordingly"
+msgstr "upgrading accordingly"
+
+msgid "Project Model upgraded successfully to version"
+msgstr "Project Model upgraded successfully to version"
+
+msgid "Path to the configuration file. If not provided, the GUI will be launched."
+msgstr "Path to the configuration file. If not provided, the GUI will be launched."
+
+msgid "Documents"
+msgstr "Documents"
+
+msgid "RSNA Anonymizer"
+msgstr "RSNA Anonymizer"
+
+msgid "logs"
+msgstr "logs"
+
 msgid "Computed Radiography"
 msgstr "Computed Radiography"
 
@@ -235,45 +271,6 @@ msgstr "Other"
 msgid "Document"
 msgstr "Document"
 
-msgid "Progress Dialog"
-msgstr "Progress Dialog"
-
-msgid "Please wait..."
-msgstr "Please wait..."
-
-msgid "Cancel"
-msgstr "Cancel"
-
-msgid "View"
-msgstr "View"
-
-msgid "Patients"
-msgstr "Patients"
-
-msgid "Patient"
-msgstr "Patient"
-
-msgid "Series"
-msgstr "Series"
-
-msgid "Loading"
-msgstr "Loading"
-
-msgid "Loaded"
-msgstr "Loaded"
-
-msgid "of"
-msgstr "of"
-
-msgid "Config file not found: "
-msgstr "Config file not found: "
-
-msgid "Kaleidoscope"
-msgstr "Kaleidoscope"
-
-msgid "selected patient(s)"
-msgstr "selected patient(s)"
-
 msgid "Invalid_DICOM"
 msgstr "Invalid_DICOM"
 
@@ -291,6 +288,9 @@ msgstr "Capture_PHI_Error"
 
 msgid "Storage_Error"
 msgstr "Storage_Error"
+
+msgid "incoming"
+msgstr "incoming"
 
 msgid "Dataset missing required attributes"
 msgstr "Dataset missing required attributes"
@@ -370,50 +370,11 @@ msgstr "IMAGE"
 msgid "INSTANCE"
 msgstr "INSTANCE"
 
-msgid "ANON-PatientID"
-msgstr "ANON-PatientID"
-
-msgid "ANON-PatientName"
-msgstr "ANON-PatientName"
-
-msgid "PHI-PatientName"
-msgstr "PHI-PatientName"
-
-msgid "PHI-PatientID"
-msgstr "PHI-PatientID"
-
-msgid "DateOffset"
-msgstr "DateOffset"
-
-msgid "PHI-StudyDate"
-msgstr "PHI-StudyDate"
-
-msgid "ANON-Accession"
-msgstr "ANON-Accession"
-
-msgid "PHI-Accession"
-msgstr "PHI-Accession"
-
-msgid "ANON-StudyInstanceUID"
-msgstr "ANON-StudyInstanceUID"
-
-msgid "PHI-StudyInstanceUID"
-msgstr "PHI-StudyInstanceUID"
-
-msgid "Number of Series"
-msgstr "Number of Series"
-
-msgid "Number of Instances"
-msgstr "Number of Instances"
+msgid "No Studies in Anonymizer Model"
+msgstr "No Studies in Anonymizer Model"
 
 msgid "MY_PROJECT"
 msgstr "MY_PROJECT"
-
-msgid "Documents"
-msgstr "Documents"
-
-msgid "RSNA Anonymizer"
-msgstr "RSNA Anonymizer"
 
 msgid "ANONYMIZER"
 msgstr "ANONYMIZER"
@@ -661,14 +622,50 @@ msgstr "Please enter your Project Name and configure all other settings below."
 msgid "The Java Index data will be processed into the Python Anonymizer database when the project is created."
 msgstr "The Java Index data will be processed into the Python Anonymizer database when the project is created."
 
-msgid "with"
-msgstr "with"
+msgid "View Projections"
+msgstr "View Projections"
 
-msgid "over"
-msgstr "over"
+msgid "Create Patient Lookup"
+msgstr "Create Patient Lookup"
 
-msgid "Pages"
-msgstr "Pages"
+msgid "Refresh"
+msgstr "Refresh"
+
+msgid "Clear Selection"
+msgstr "Clear Selection"
+
+msgid "Delete"
+msgstr "Delete"
+
+msgid "Error Creating PHI CSV File"
+msgstr "Error Creating PHI CSV File"
+
+msgid "PHI CSV File Created"
+msgstr "PHI CSV File Created"
+
+msgid "PHI Lookup Data saved to"
+msgstr "PHI Lookup Data saved to"
+
+msgid "No Studies in Anonymizer Model for PHI Index"
+msgstr "No Studies in Anonymizer Model for PHI Index"
+
+msgid "Deletion Error"
+msgstr "Deletion Error"
+
+msgid "No studies selected for deletion."
+msgstr "No studies selected for deletion."
+
+msgid "Use SHIFT+Click and/or CMD/CTRL+Click to select multiple studies."
+msgstr "Use SHIFT+Click and/or CMD/CTRL+Click to select multiple patients."
+
+msgid "Confirm Study Deletion"
+msgstr "Confirm Study Deletion"
+
+msgid "Selected studies will be permanently deleted from PHI Index and all associated anonymized files deleted from local storage directory"
+msgstr "Selected studies will be permanently deleted from PHI Index and all associated anonymized files deleted from local storage directory"
+
+msgid "Are you sure?"
+msgstr "Are you sure?"
 
 msgid "Importing Study"
 msgstr "Importing Study"
@@ -682,11 +679,17 @@ msgstr "Import from"
 msgid "Retrieving Study Metadata at"
 msgstr "Retrieving Study Metadata at"
 
+msgid "Cancel"
+msgstr "Cancel"
+
 msgid "No studies to retrieve"
 msgstr "No studies to retrieve"
 
 msgid "Close"
 msgstr "Close"
+
+msgid "of"
+msgstr "of"
 
 msgid "Study Metadata"
 msgstr "Study Metadata"
@@ -730,11 +733,93 @@ msgstr "Cancelling the move operation may not stop transfers from the remote ser
 msgid "Are you sure you want to continue?"
 msgstr "Are you sure you want to continue?"
 
+msgid "WHITE LIST"
+msgstr "WHITE LIST"
+
+msgid "Defaults"
+msgstr "Defaults"
+
+msgid "Clear"
+msgstr ""
+
+msgid "Edit Context"
+msgstr "Edit Context"
+
+msgid "Detect Text"
+msgstr "Detect Text"
+
+msgid "Remove Text"
+msgstr "Remove Text"
+
+msgid "Blackout Area"
+msgstr "Blackout Area"
+
+msgid "Save Changes"
+msgstr "Save Changes"
+
+msgid "Series View"
+msgstr "Series View"
+
+msgid "Detecting text in all frames"
+msgstr "Detecting text in all frames"
+
+msgid "OCR on frame"
+msgstr "OCR on frame"
+
+msgid "OCR on current frame"
+msgstr "OCR on current frame"
+
+msgid "OCR on current frame complete"
+msgstr ""
+
+msgid "OCR on all frames complete"
+msgstr ""
+
+msgid "No text detected in current frame to remove"
+msgstr ""
+
+msgid "Removing text from current frame"
+msgstr ""
+
+msgid "Text removed from current frame"
+msgstr ""
+
+#, fuzzy
+msgid "Removing text from all frames in series"
+msgstr "Detecting text in all frames..."
+
+msgid "Text removed from all frames in series"
+msgstr ""
+
+msgid "No blackout area(s) in current frame"
+msgstr ""
+
+msgid "Blackout areas in current frame"
+msgstr ""
+
+msgid "Areas blacked out in current frame"
+msgstr ""
+
+msgid "Blackout areas in all frames of series"
+msgstr ""
+
+msgid "Areas blacked out in all frames of series"
+msgstr ""
+
+msgid "Changes saved successfully"
+msgstr ""
+
+msgid "Failed to save changes to series frames"
+msgstr ""
+
 msgid "Patient Name"
 msgstr "Patient Name"
 
 msgid "Anonymized ID"
 msgstr "Anonymized ID"
+
+msgid "Series"
+msgstr "Series"
 
 msgid "Date Time"
 msgstr "Date Time"
@@ -751,26 +836,11 @@ msgstr "Export"
 msgid "Processing"
 msgstr "Processing"
 
+msgid "Patients"
+msgstr "Patients"
+
 msgid "Cancel Export"
 msgstr "Cancel Export"
-
-msgid "Create Patient Lookup"
-msgstr "Create Patient Lookup"
-
-msgid "Refresh"
-msgstr "Refresh"
-
-msgid "Clear Selection"
-msgstr "Clear Selection"
-
-msgid "Error Creating PHI CSV File"
-msgstr "Error Creating PHI CSV File"
-
-msgid "PHI CSV File Created"
-msgstr "PHI CSV File Created"
-
-msgid "PHI Lookup Data saved to"
-msgstr "PHI Lookup Data saved to"
 
 msgid "Processed"
 msgstr "Processed"
@@ -798,6 +868,18 @@ msgstr "Use SHIFT+Click and/or CMD/CTRL+Click to select multiple patients."
 
 msgid "Cancel active export?"
 msgstr "Cancel active export?"
+
+msgid "Delete Studies"
+msgstr "Delete Studies"
+
+msgid "Deleting"
+msgstr "Deleting"
+
+msgid "study"
+msgstr "study"
+
+msgid "studies"
+msgstr "studies"
 
 msgid "Patient ID"
 msgstr "Patient ID"
@@ -883,6 +965,9 @@ msgstr "Query Server Failed DICOM C-ECHO"
 msgid "Query via Accession Numbers"
 msgstr "Query via Accession Numbers"
 
+msgid "Loaded"
+msgstr "Loaded"
+
 msgid "Accession Numbers"
 msgstr "Accession Numbers"
 
@@ -903,6 +988,9 @@ msgstr "Cancel active Query?"
 
 msgid "Search"
 msgstr "Search"
+
+msgid "View"
+msgstr "View"
 
 msgid "Send"
 msgstr "Send"
@@ -975,3 +1063,24 @@ msgstr "Select File/New Project to start."
 
 msgid "SPONSOR MESSAGE"
 msgstr "Development of Anonymizer has been supported under the Medical Imaging and Data Resource Center (MIDRC) project, funded by the National Institute of Biomedical Imaging and Bioengineering (NIBIB) of the National Institutes of Health under contract 75N92020D00021 and through The Advanced Research Projects Agency for Health (ARPA-H)."
+
+msgid "with"
+msgstr "with"
+
+msgid "over"
+msgstr "over"
+
+msgid "Pages"
+msgstr "Pages"
+
+msgid "Page"
+msgstr "Page"
+
+msgid "MIN PROJECTION"
+msgstr "MIN PROJECTION"
+
+msgid "MEAN PROJECTION"
+msgstr "MEAN PROJECTION"
+
+msgid "MAX PROJECTION"
+msgstr "MAX PROJECTION"

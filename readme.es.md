@@ -1,4 +1,4 @@
-# RSNA DICOM Anonimizador V17.3
+# RSNA DICOM Anonimizador V18.0
 [![en](https://img.shields.io/badge/lang-en-blue.svg)](readme.md)
 [![de](https://img.shields.io/badge/lang-de-blue.svg)](readme.de.md)
 [![fr](https://img.shields.io/badge/lang-fr-blue.svg)](readme.fr.md)
@@ -6,7 +6,7 @@
 
 ## Instalar Python con tkinter (biblioteca GUI)
 ### Windows
-1. Descarga Python 3.12+ desde [python.org](https://www.python.org/downloads/)
+1. Descarga Python 3.12 desde [python.org](https://www.python.org/downloads/)
 2. Ejecuta el instalador
     - Selecciona "Add python.exe to PATH"
     - Habilita "tcl/tk and IDLE"
@@ -35,6 +35,9 @@ Si python + tkinter se han instalado correctamente, se abrirá una pequeña vent
 `pip install rsna-anonymizer`
 ## Ejecución
 `rsna-anonymizer`
+###Modo sin cabeza
+Necesita proporcionar una ruta a una configuración de proyecto para ejecutar en modo sin cabeza
+`rsna-anonymizer -c ruta/a/ProjectModel.json`
 ## Actualización
 `pip install --upgrade rsna-anonymizer`
 ## Documentación

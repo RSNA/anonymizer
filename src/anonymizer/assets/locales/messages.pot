@@ -37,22 +37,22 @@ msgstr ""
 msgid "Select Anonymizer Storage Directory"
 msgstr ""
 
-msgid "Corruption detected: Loaded model is not an instance of ProjectModel"
-msgstr ""
-
 msgid "Open Project Error"
 msgstr ""
 
+msgid "Error loading Project Model from legacy pickle data file"
+msgstr ""
+
 msgid "Error loading Project Model from data file"
+msgstr ""
+
+msgid "No Project file found in"
 msgstr ""
 
 msgid "Project File corrupted, missing version information."
 msgstr ""
 
 msgid "Project language mismatch"
-msgstr ""
-
-msgid "No Project file not found in"
 msgstr ""
 
 msgid "Local DICOM Server Error"
@@ -184,6 +184,27 @@ msgstr ""
 msgid "Settings"
 msgstr ""
 
+msgid "Project Model file not found"
+msgstr ""
+
+msgid "Project Model path is not a file"
+msgstr ""
+
+msgid "Project Model loaded successfully, version"
+msgstr ""
+
+msgid "Project Model version mismatch"
+msgstr ""
+
+msgid "upgrading accordingly"
+msgstr ""
+
+msgid "Project Model upgraded successfully to version"
+msgstr ""
+
+msgid "Path to the configuration file. If not provided, the GUI will be launched."
+msgstr ""
+
 msgid "Documents"
 msgstr ""
 
@@ -254,6 +275,9 @@ msgid "Capture_PHI_Error"
 msgstr ""
 
 msgid "Storage_Error"
+msgstr ""
+
+msgid "incoming"
 msgstr ""
 
 msgid "Dataset missing required attributes"
@@ -334,40 +358,7 @@ msgstr ""
 msgid "INSTANCE"
 msgstr ""
 
-msgid "ANON-PatientID"
-msgstr ""
-
-msgid "ANON-PatientName"
-msgstr ""
-
-msgid "PHI-PatientName"
-msgstr ""
-
-msgid "PHI-PatientID"
-msgstr ""
-
-msgid "DateOffset"
-msgstr ""
-
-msgid "PHI-StudyDate"
-msgstr ""
-
-msgid "ANON-Accession"
-msgstr ""
-
-msgid "PHI-Accession"
-msgstr ""
-
-msgid "ANON-StudyInstanceUID"
-msgstr ""
-
-msgid "PHI-StudyInstanceUID"
-msgstr ""
-
-msgid "Number of Series"
-msgstr ""
-
-msgid "Number of Instances"
+msgid "No Studies in Anonymizer Model"
 msgstr ""
 
 msgid "MY_PROJECT"
@@ -619,31 +610,49 @@ msgstr ""
 msgid "The Java Index data will be processed into the Python Anonymizer database when the project is created."
 msgstr ""
 
-msgid "View"
+msgid "View Projections"
 msgstr ""
 
-msgid "Patients"
+msgid "Create Patient Lookup"
 msgstr ""
 
-msgid "Patient"
+msgid "Refresh"
 msgstr ""
 
-msgid "with"
+msgid "Clear Selection"
 msgstr ""
 
-msgid "Series"
+msgid "Delete"
 msgstr ""
 
-msgid "over"
+msgid "Error Creating PHI CSV File"
 msgstr ""
 
-msgid "Pages"
+msgid "PHI CSV File Created"
 msgstr ""
 
-msgid "Page"
+msgid "PHI Lookup Data saved to"
 msgstr ""
 
-msgid "of"
+msgid "No Studies in Anonymizer Model for PHI Index"
+msgstr ""
+
+msgid "Deletion Error"
+msgstr ""
+
+msgid "No studies selected for deletion."
+msgstr ""
+
+msgid "Use SHIFT+Click and/or CMD/CTRL+Click to select multiple studies."
+msgstr ""
+
+msgid "Confirm Study Deletion"
+msgstr ""
+
+msgid "Selected studies will be permanently deleted from PHI Index and all associated anonymized files deleted from local storage directory"
+msgstr ""
+
+msgid "Are you sure?"
 msgstr ""
 
 msgid "Importing Study"
@@ -665,6 +674,9 @@ msgid "No studies to retrieve"
 msgstr ""
 
 msgid "Close"
+msgstr ""
+
+msgid "of"
 msgstr ""
 
 msgid "Study Metadata"
@@ -709,10 +721,91 @@ msgstr ""
 msgid "Are you sure you want to continue?"
 msgstr ""
 
+msgid "WHITE LIST"
+msgstr ""
+
+msgid "Defaults"
+msgstr ""
+
+msgid "Clear"
+msgstr ""
+
+msgid "Edit Context"
+msgstr ""
+
+msgid "Detect Text"
+msgstr ""
+
+msgid "Remove Text"
+msgstr ""
+
+msgid "Blackout Area"
+msgstr ""
+
+msgid "Save Changes"
+msgstr ""
+
+msgid "Series View"
+msgstr ""
+
+msgid "Detecting text in all frames"
+msgstr ""
+
+msgid "OCR on frame"
+msgstr ""
+
+msgid "OCR on current frame"
+msgstr ""
+
+msgid "complete"
+msgstr ""
+
+msgid "OCR on all frames"
+msgstr ""
+
+msgid "No text detected in current frame to remove"
+msgstr ""
+
+msgid "Removing text from current frame"
+msgstr ""
+
+msgid "Text removed from current frame"
+msgstr ""
+
+msgid "Removing text from all frames in series"
+msgstr ""
+
+msgid "Text removed from all frames in series"
+msgstr ""
+
+msgid "No blackout area(s) in current frame"
+msgstr ""
+
+msgid "Blackout areas in current frame"
+msgstr ""
+
+msgid "Areas blacked out in current frame"
+msgstr ""
+
+msgid "Blackout areas in all frames of series"
+msgstr ""
+
+msgid "Areas blacked out in all frames of series"
+msgstr ""
+
+msgid "Changes saved successfully"
+msgstr ""
+
+msgid "Failed to save changes to series frames"
+msgstr ""
+
 msgid "Patient Name"
 msgstr ""
 
 msgid "Anonymized ID"
+msgstr ""
+
+msgid "Series"
 msgstr ""
 
 msgid "Date Time"
@@ -730,28 +823,10 @@ msgstr ""
 msgid "Processing"
 msgstr ""
 
+msgid "Patients"
+msgstr ""
+
 msgid "Cancel Export"
-msgstr ""
-
-msgid "Kaleidoscope"
-msgstr ""
-
-msgid "Create Patient Lookup"
-msgstr ""
-
-msgid "Refresh"
-msgstr ""
-
-msgid "Clear Selection"
-msgstr ""
-
-msgid "Error Creating PHI CSV File"
-msgstr ""
-
-msgid "PHI CSV File Created"
-msgstr ""
-
-msgid "PHI Lookup Data saved to"
 msgstr ""
 
 msgid "Processed"
@@ -779,6 +854,18 @@ msgid "Use SHIFT+Click and/or CMD/CTRL+Click to select multiple patients."
 msgstr ""
 
 msgid "Cancel active export?"
+msgstr ""
+
+msgid "Delete Studies"
+msgstr ""
+
+msgid "Deleting"
+msgstr ""
+
+msgid "study"
+msgstr ""
+
+msgid "studies"
 msgstr ""
 
 msgid "Patient ID"
@@ -889,6 +976,9 @@ msgstr ""
 msgid "Search"
 msgstr ""
 
+msgid "View"
+msgstr ""
+
 msgid "Send"
 msgstr ""
 
@@ -959,4 +1049,25 @@ msgid "Select File/New Project to start."
 msgstr ""
 
 msgid "SPONSOR MESSAGE"
+msgstr ""
+
+msgid "with"
+msgstr ""
+
+msgid "over"
+msgstr ""
+
+msgid "Pages"
+msgstr ""
+
+msgid "Page"
+msgstr ""
+
+msgid "MIN PROJECTION"
+msgstr ""
+
+msgid "MEAN PROJECTION"
+msgstr ""
+
+msgid "MAX PROJECTION"
 msgstr ""

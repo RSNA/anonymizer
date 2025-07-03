@@ -49,23 +49,23 @@ msgstr "Error al crear el controlador del proyecto"
 msgid "Select Anonymizer Storage Directory"
 msgstr "Seleccione el Directorio de Almacenamiento del Anonimizador"
 
-msgid "Corruption detected: Loaded model is not an instance of ProjectModel"
-msgstr "Corrupción detectada: El modelo cargado no es una instancia de ProjectModel"
-
 msgid "Open Project Error"
 msgstr "Error al Abrir Proyecto"
 
+msgid "Error loading Project Model from legacy pickle data file"
+msgstr "Error al cargar el modelo de proyecto desde el archivo de datos pickle heredado"
+
 msgid "Error loading Project Model from data file"
 msgstr "Error al cargar el modelo de proyecto desde el archivo de datos"
+
+msgid "No Project file found in"
+msgstr "Archivo de proyecto no encontrado en"
 
 msgid "Project File corrupted, missing version information."
 msgstr "Archivo de proyecto corrupto, falta información de versión."
 
 msgid "Project language mismatch"
-msgstr " Incompatibilidad de idioma del proyecto"
-
-msgid "No Project file not found in"
-msgstr "Archivo de proyecto no encontrado en"
+msgstr "Incompatibilidad de idioma del proyecto"
 
 msgid "Local DICOM Server Error"
 msgstr "Error de Servidor DICOM Local"
@@ -196,8 +196,29 @@ msgstr "Proyecto"
 msgid "Settings"
 msgstr "Ajustes"
 
+msgid "Project Model file not found"
+msgstr "Archivo del Modelo de Proyecto no encontrado"
+
+msgid "Project Model path is not a file"
+msgstr "La ruta del Modelo de Proyecto no es un archivo"
+
+msgid "Project Model loaded successfully, version"
+msgstr "Modelo de Proyecto cargado con éxito, versión"
+
+msgid "Project Model version mismatch"
+msgstr "La versión del Modelo de Proyecto no coincide"
+
+msgid "upgrading accordingly"
+msgstr "actualizando correspondientemente"
+
+msgid "Project Model upgraded successfully to version"
+msgstr "Modelo de Proyecto actualizado con éxito a la versión"
+
+msgid "Path to the configuration file. If not provided, the GUI will be launched."
+msgstr "Ruta al archivo de configuración. Si no se proporciona, se iniciará la GUI."
+
 msgid "Documents"
-msgstr "Documento"
+msgstr "Documentos"
 
 msgid "RSNA Anonymizer"
 msgstr "RSNA Anonimizador"
@@ -268,11 +289,14 @@ msgstr "Error_Captura_PHI"
 msgid "Storage_Error"
 msgstr "Error_Almacenamiento"
 
+msgid "incoming"
+msgstr "entrante"
+
 msgid "Dataset missing required attributes"
 msgstr "Conjunto de datos falta atributos requeridos"
 
 msgid "Quarantined"
-msgstr "Quarentena"
+msgstr "En cuarentena"
 
 msgid "Missing Attributes"
 msgstr "Faltan Atributos"
@@ -346,41 +370,8 @@ msgstr "IMAGEN"
 msgid "INSTANCE"
 msgstr "INSTANCIA"
 
-msgid "ANON-PatientID"
-msgstr "ANON-IDPaciente"
-
-msgid "ANON-PatientName"
-msgstr "ANON-NombrePaciente"
-
-msgid "PHI-PatientName"
-msgstr "PHI-NombrePaciente"
-
-msgid "PHI-PatientID"
-msgstr "PHI-IDPaciente"
-
-msgid "DateOffset"
-msgstr "DesplazamientoFecha"
-
-msgid "PHI-StudyDate"
-msgstr "PHI-FechaEstudio"
-
-msgid "ANON-Accession"
-msgstr "ANON-Acceso"
-
-msgid "PHI-Accession"
-msgstr "PHI-Acceso"
-
-msgid "ANON-StudyInstanceUID"
-msgstr "ANON-UIDInstanciaEstudio"
-
-msgid "PHI-StudyInstanceUID"
-msgstr "PHI-UIDInstanciaEstudio"
-
-msgid "Number of Series"
-msgstr "Número de Series"
-
-msgid "Number of Instances"
-msgstr "Número de Instancias"
+msgid "No Studies in Anonymizer Model"
+msgstr "No hay estudios en el Modelo de Anonimizador"
 
 msgid "MY_PROJECT"
 msgstr "MI_PROYECTO"
@@ -631,32 +622,50 @@ msgstr "Por favor, ingrese el Nombre de su Proyecto y configure todas las demás
 msgid "The Java Index data will be processed into the Python Anonymizer database when the project is created."
 msgstr "Los datos del Índice Java se procesarán en la base de datos de Anonimizador de Python cuando se cree el proyecto."
 
-msgid "View"
-msgstr "Vista"
+msgid "View Projections"
+msgstr "Ver Proyecciones"
 
-msgid "Patients"
-msgstr "Pacientes"
+msgid "Create Patient Lookup"
+msgstr "Crear Búsqueda de Pacientes"
 
-msgid "Patient"
-msgstr "Paciente"
+msgid "Refresh"
+msgstr "Actualizar"
 
-msgid "with"
-msgstr "con"
+msgid "Clear Selection"
+msgstr "Limpiar Selección"
 
-msgid "Series"
-msgstr "Series"
+msgid "Delete"
+msgstr "Eliminar"
 
-msgid "over"
-msgstr "sobre"
+msgid "Error Creating PHI CSV File"
+msgstr "Error al Crear Archivo CSV de PHI"
 
-msgid "Pages"
-msgstr "Páginas"
+msgid "PHI CSV File Created"
+msgstr "Archivo CSV de PHI Creado"
 
-msgid "Page"
-msgstr "Página"
+msgid "PHI Lookup Data saved to"
+msgstr "Datos de búsqueda PHI guardados en"
 
-msgid "of"
-msgstr "de"
+msgid "No Studies in Anonymizer Model for PHI Index"
+msgstr "No hay estudios en el Modelo de Anonimizador para el Índice PHI"
+
+msgid "Deletion Error"
+msgstr "Error de Eliminación"
+
+msgid "No studies selected for deletion."
+msgstr "No se han seleccionado estudios para eliminar."
+
+msgid "Use SHIFT+Click and/or CMD/CTRL+Click to select multiple studies."
+msgstr "Use SHIFT+Click y/o CMD/CTRL+Click para seleccionar múltiples estudios."
+
+msgid "Confirm Study Deletion"
+msgstr "Confirmar Eliminación de Estudio"
+
+msgid "Selected studies will be permanently deleted from PHI Index and all associated anonymized files deleted from local storage directory"
+msgstr "Los estudios seleccionados se eliminarán permanentemente del Índice PHI y todos los archivos anonimizados asociados se eliminarán del directorio de almacenamiento local"
+
+msgid "Are you sure?"
+msgstr "¿Está seguro?"
 
 msgid "Importing Study"
 msgstr "Importando Estudio"
@@ -678,6 +687,9 @@ msgstr "No hay estudios para recuperar"
 
 msgid "Close"
 msgstr "Cerrar"
+
+msgid "of"
+msgstr "de"
 
 msgid "Study Metadata"
 msgstr "Metadatos del Estudio"
@@ -721,11 +733,92 @@ msgstr "Cancelar la operación de movimiento puede que no detenga las transferen
 msgid "Are you sure you want to continue?"
 msgstr "¿Está seguro de que desea continuar?"
 
+msgid "WHITE LIST"
+msgstr "LISTA BLANCA"
+
+msgid "Defaults"
+msgstr "Predeterminado"
+
+msgid "Clear"
+msgstr "Limpiar"
+
+msgid "Edit Context"
+msgstr "Editar Contexto"
+
+msgid "Detect Text"
+msgstr "Detectar Texto"
+
+msgid "Remove Text"
+msgstr "Eliminar Texto"
+
+msgid "Blackout Area"
+msgstr "Área de Ocultación"
+
+msgid "Save Changes"
+msgstr "Guardar Cambios"
+
+msgid "Series View"
+msgstr "Vista de Series"
+
+msgid "Detecting text in all frames"
+msgstr "Detectando texto en todos los fotogramas"
+
+msgid "OCR on frame"
+msgstr "OCR en fotograma"
+
+msgid "OCR on current frame"
+msgstr "OCR en el fotograma actual"
+
+msgid "complete"
+msgstr "completado"
+
+msgid "OCR on all frames"
+msgstr "OCR en todos los fotogramas"
+
+msgid "No text detected in current frame to remove"
+msgstr "No se detectó texto para eliminar en el fotograma actual"
+
+msgid "Removing text from current frame"
+msgstr "Eliminando texto del fotograma actual"
+
+msgid "Text removed from current frame"
+msgstr "Texto eliminado del fotograma actual"
+
+msgid "Removing text from all frames in series"
+msgstr "Eliminando texto de todos los fotogramas de la serie"
+
+msgid "Text removed from all frames in series"
+msgstr "Texto eliminado de todos los fotogramas de la serie"
+
+msgid "No blackout area(s) in current frame"
+msgstr "No hay áreas de ocultación en el fotograma actual"
+
+msgid "Blackout areas in current frame"
+msgstr "Áreas de ocultación en el fotograma actual"
+
+msgid "Areas blacked out in current frame"
+msgstr "Áreas ocultadas en el fotograma actual"
+
+msgid "Blackout areas in all frames of series"
+msgstr "Áreas de ocultación en todos los fotogramas de la serie"
+
+msgid "Areas blacked out in all frames of series"
+msgstr "Áreas ocultadas en todos los fotogramas de la serie"
+
+msgid "Changes saved successfully"
+msgstr "Cambios guardados con éxito"
+
+msgid "Failed to save changes to series frames"
+msgstr "Error al guardar los cambios en los fotogramas de la serie"
+
 msgid "Patient Name"
 msgstr "Nombre del Paciente"
 
 msgid "Anonymized ID"
 msgstr "ID Anonimizado"
+
+msgid "Series"
+msgstr "Series"
 
 msgid "Date Time"
 msgstr "Fecha Hora"
@@ -742,29 +835,11 @@ msgstr "Exportar"
 msgid "Processing"
 msgstr "Procesando"
 
+msgid "Patients"
+msgstr "Pacientes"
+
 msgid "Cancel Export"
 msgstr "Cancelar Exportación"
-
-msgid "Kaleidoscope"
-msgstr "Caleidoscopio"
-
-msgid "Create Patient Lookup"
-msgstr "Crear Búsqueda de Pacientes"
-
-msgid "Refresh"
-msgstr "Actualizar"
-
-msgid "Clear Selection"
-msgstr "Limpiar Selección"
-
-msgid "Error Creating PHI CSV File"
-msgstr "Error al Crear Archivo CSV de PHI"
-
-msgid "PHI CSV File Created"
-msgstr "Archivo CSV de PHI Creado"
-
-msgid "PHI Lookup Data saved to"
-msgstr "Datos de búsqueda PHI guardados en"
 
 msgid "Processed"
 msgstr "Procesado"
@@ -792,6 +867,18 @@ msgstr "Use SHIFT+Click y/o CMD/CTRL+Click para seleccionar múltiples pacientes
 
 msgid "Cancel active export?"
 msgstr "¿Cancelar la exportación activa?"
+
+msgid "Delete Studies"
+msgstr "Eliminar Estudios"
+
+msgid "Deleting"
+msgstr "Eliminando"
+
+msgid "study"
+msgstr "estudio"
+
+msgid "studies"
+msgstr "estudios"
 
 msgid "Patient ID"
 msgstr "ID del Paciente"
@@ -901,17 +988,20 @@ msgstr "¿Cancelar la consulta activa?"
 msgid "Search"
 msgstr "Buscar"
 
+msgid "View"
+msgstr "Vista"
+
 msgid "Send"
 msgstr "Enviar"
 
 msgid "Quarantine"
-msgstr "Quarentena"
+msgstr "Cuarentena"
 
 msgid "Metadata Queue"
 msgstr "Cola de metadatos"
 
 msgid "Pixel PHI Queue"
-msgstr "Pixel-PHI-Warteschlange"
+msgstr "Cola de PHI de Píxeles"
 
 msgid "online"
 msgstr "en línea"
@@ -944,7 +1034,7 @@ msgid "Check Project Settings/AWS Cognito and ensure all parameters are correct.
 msgstr "Verifique la configuración del proyecto/AWS Cognito y asegúrese de que todos los parámetros sean correctos."
 
 msgid "AWS Authenticated"
-msgstr "Autenticación AWS"
+msgstr "Autenticado por AWS"
 
 msgid "Welcome"
 msgstr "Bienvenido"
@@ -956,7 +1046,7 @@ msgid "Easy to use, advanced DICOM expertise not required!"
 msgstr "¡Fácil de usar, no se requiere experiencia avanzada en DICOM!"
 
 msgid "Use it to ensure privacy by removing protected identity & health information (PHI/PII) from both metadata and burnt into pixel data."
-msgstr "Usalo per garantire la privacy rimuovendo informazioni protette sull'identità e sulla salute (PHI/PII) sia dai metadati che dai dati pixel incorporati."
+msgstr "Úselo para garantizar la privacidad eliminando la información de identidad y salud protegida (PHI/PII) tanto de los metadatos como de los datos de píxeles."
 
 msgid "Go to Help/Overview for a quick overview."
 msgstr "Vaya a Ayuda/Resumen para obtener una descripción general rápida."
@@ -973,17 +1063,23 @@ msgstr "Seleccione Archivo/Nuevo Proyecto para comenzar."
 msgid "SPONSOR MESSAGE"
 msgstr "El desarrollo de Anonymzer ha sido respaldado bajo el proyecto Medical Imaging and Data Resource Center (MIDRC), financiado por el National Institute of Biomedical Imaging and Bioengineering (NIBIB) de los National Institutes of Health bajo el contrato 75N92020D00021 y a través de la Advanced Research Projects Agency for Health (ARPA-H)."
 
-#~ msgid "Progress Dialog"
-#~ msgstr "Diálogo de Progreso"
+msgid "with"
+msgstr "con"
 
-#~ msgid "Please wait..."
-#~ msgstr "Por favor, espere..."
+msgid "over"
+msgstr "sobre"
 
-#~ msgid "Loading"
-#~ msgstr "Cargando"
+msgid "Pages"
+msgstr "Páginas"
 
-#~ msgid "Config file not found: "
-#~ msgstr "Archivo de configuración no encontrado: "
+msgid "Page"
+msgstr "Página"
 
-#~ msgid "selected patient(s)"
-#~ msgstr "seleccionado paciente(s)"
+msgid "MIN PROJECTION"
+msgstr "PROYECCIÓN MÍN"
+
+msgid "MEAN PROJECTION"
+msgstr "PROYECCIÓN MEDIA"
+
+msgid "MAX PROJECTION"
+msgstr "PROYECCIÓN MÁX"

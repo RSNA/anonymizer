@@ -1,11 +1,11 @@
-# RSNA DICOM l'Anonymiseur V17
+# RSNA DICOM l'Anonymiseur V18.0
 [![en](https://img.shields.io/badge/lang-en-blue.svg)](readme.md)
 [![de](https://img.shields.io/badge/lang-de-blue.svg)](readme.de.md)
 [![es](https://img.shields.io/badge/lang-es-blue.svg)](readme.es.md)
 [![Tests](https://github.com/RSNA/anonymizer/actions/workflows/tests.yaml/badge.svg)](https://github.com/RSNA/anonymizer/actions/workflows/tests.yaml)
 ## Installation de Python avec tkinter (bibliothèque GUI)
 ### Windows
-1. Téléchargez Python 3.12+ depuis [python.org](https://www.python.org/downloads/)
+1. Téléchargez Python 3.12 depuis [python.org](https://www.python.org/downloads/)
 2. Exécutez l'installateur
     - Sélectionnez "Add python.exe to PATH"
     - Activez "tcl/tk and IDLE"
@@ -34,6 +34,9 @@ Si python + tkinter sont installés correctement, une petite fenêtre GUI devrai
 `pip install rsna-anonymizer`
 ## Exécution
 `rsna-anonymizer`
+### Mode sans tête
+Vous devez fournir un chemin vers une configuration de projet pour fonctionner en mode sans tête
+`rsna-anonymizer -c chemin/vers/ProjectModel.json`
 ## Mise à jour
 `pip install --upgrade rsna-anonymizer`
 ## Documentation
