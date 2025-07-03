@@ -275,7 +275,7 @@ class ExportView(tk.Toplevel):
             study_count, series_count, file_count = count_studies_series_images(
                 os.path.join(self._controller.model.images_dir(), anon_pt_id)
             )
-            phi_name = self._controller.anonymizer.model.get_phi_name(anon_pt_id)
+            phi_name = self._controller.anonymizer.model.get_phi_name_by_anon_patient_id(anon_pt_id)
             self._tree.insert(
                 "",
                 0,

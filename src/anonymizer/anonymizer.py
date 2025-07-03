@@ -472,6 +472,9 @@ class Anonymizer(ctk.CTk):
             logger.info("Open Project Cancelled, no controller")
             return
 
+        # Set Engine Echo for SQL logging:
+        self.controller.anonymizer.model.engine.echo = self.controller.model.logging_levels.sql
+
         try:
             self.controller.start_scp()
         except DICOMRuntimeError as e:
@@ -1224,6 +1227,23 @@ def main(config: Path | None = None):
     logger.info(f"tkinter TkVersion: {tk.TkVersion} TclVersion: {tk.TclVersion}")
     logger.info(f"Customtkinter Version: {ctk.__version__}")
     logger.info(f"pydicom Version: {pydicom_version}, pynetdicom Version: {pynetdicom_version}")
+
+    ocr_model_dir = Path("assets/ocr/model")
+    if not ocr_model_dir.exists():
+        logger.warning("Downloading OCR models...")
+        from easyocr import Reader
+
+        Reader(
+            lang_list=["en", "de", "fr", "es"],
+            model_storage_directory=ocr_model_dir,
+            verbose=True,
+        )
+    models = os.listdir(ocr_model_dir)
+    if len(models) < 2:
+        logger.error("Error downloading OCR detection and recognition models")
+        ocr_model_dir.unlink()
+    else:
+        logger.info(f"OCR downloaded models: {models}")
 
     if config:
         run_HEADLESS(config)

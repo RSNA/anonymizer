@@ -176,6 +176,50 @@ class LoggingLevelsDialog(tk.Toplevel):
 
         row += 1
 
+        sql_dbg_label = ctk.CTkLabel(self, text="SQLAlchemy Debug:")
+        sql_dbg_label.grid(row=row, column=0, padx=PAD, pady=PAD, sticky="w")
+
+        self.sql_debug_var = ctk.BooleanVar(value=self.levels.sql)
+        self.sql_debug = ctk.CTkSwitch(
+            self,
+            text="",
+            variable=self.sql_debug_var,
+            onvalue=True,
+            offvalue=False,
+            # command=self._sql_debug_event,
+        )
+        self.sql_debug.grid(
+            row=row,
+            column=1,
+            padx=PAD,
+            pady=PAD,
+            sticky="w",
+        )
+
+        row += 1
+
+        store_incoming_label = ctk.CTkLabel(self, text="Store incoming DICOM in private/source:")
+        store_incoming_label.grid(row=row, column=0, padx=PAD, pady=PAD, sticky="w")
+
+        self.store_incoming_var = ctk.BooleanVar(value=self.levels.store_dicom_source)
+        self.store_incoming = ctk.CTkSwitch(
+            self,
+            text="",
+            variable=self.store_incoming_var,
+            onvalue=True,
+            offvalue=False,
+            # command=self._sql_debug_event,
+        )
+        self.store_incoming.grid(
+            row=row,
+            column=1,
+            padx=PAD,
+            pady=PAD,
+            sticky="w",
+        )
+
+        row += 1
+
         self._ok_button = ctk.CTkButton(self, width=100, text=_("Ok"), command=self._ok_event)
         self._ok_button.grid(
             row=row,
@@ -206,9 +250,11 @@ class LoggingLevelsDialog(tk.Toplevel):
     def _ok_event(self, event=None):
         self._ok_button.focus_set()
         self._user_input = LoggingLevels(
-            self.option_to_level(self.anonymizer_level_var.get()),
-            self.option_to_level(self.pynetdicom_level_var.get()),
-            self.pydicom_debug_var.get(),
+            anonymizer=self.option_to_level(self.anonymizer_level_var.get()),
+            pynetdicom=self.option_to_level(self.pynetdicom_level_var.get()),
+            pydicom=self.pydicom_debug_var.get(),
+            sql=self.sql_debug_var.get(),
+            store_dicom_source=self.store_incoming_var.get(),
         )
         self.grab_release()
         self.destroy()

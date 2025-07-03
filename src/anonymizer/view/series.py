@@ -187,15 +187,15 @@ class SeriesView(ctk.CTkToplevel):
             self.load_whitelist_defaults()
 
     def _update_title(self):
+        title = _("Series View")
         if self._ds:
-            phi = self._anon_model.get_phi(self._ds.PatientID)
+            phi = self._anon_model.get_phi_by_anon_patient_id(self._ds.PatientID)
             if phi:
-                title = (
-                    _("Series View for")
-                    + f" {phi.patient_name} PHI ID:{phi.patient_id} ANON ID: {self._ds.PatientID}"
+                title += (
+                    f" for {phi.patient_name} PHI ID:{phi.patient_id} ANON ID: {self._ds.PatientID}"
                     + f" {self._ds.get('SeriesDescription', '')} "
                 )
-                self.title(title)
+        self.title(title)
 
     def update_status(self, message: str):
         """Updates the status label."""

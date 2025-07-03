@@ -378,9 +378,11 @@ class ProjectController(AE):
         self.stop_scp()  # calls _reset_scp_vars
         if new_model:
             self.model: ProjectModel = new_model
+            self.anonymizer.project_model = new_model
         self.set_dicom_timeouts(self.model.network_timeouts)
         self.set_radiology_storage_contexts()
         self.set_verification_context()
+        self.anonymizer.model.engine.echo = self.model.logging_levels.sql
         self.save_model()
         self.start_scp()
 

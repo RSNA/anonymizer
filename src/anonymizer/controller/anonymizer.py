@@ -75,6 +75,10 @@ class AnonymizerController:
     NUMBER_OF_DATASET_WORKER_THREADS = 1
     WORKER_THREAD_SLEEP_SECS = 0.075  # for UX responsiveness
 
+    # if LoggingLevels.store_dicom_source is set, the incoming DICOM files will be stored in this directory
+    # in the project's private directory, under the INCOMING_DICOM_DIR sub-directory
+    INCOMING_DICOM_DIR = _("incoming")
+
     _clean_tag_translate_table: dict[int, int | None] = str.maketrans("", "", "() ,")
 
     # Required DICOM field attributes for accepting files:
@@ -94,8 +98,9 @@ class AnonymizerController:
             project_model.site_id,
             project_model.uid_root,
             project_model.anonymizer_script_path,
-            project_model.db_url,
+            project_model.get_db_url(),
         )
+        self._model_change_flag = False
         logger.info(f"Anonymizer Model initialised from script: {project_model.anonymizer_script_path}")
 
         self._anon_ds_Q: Queue = Queue()  # queue for dataset workers
@@ -126,7 +131,11 @@ class AnonymizerController:
         logger.info("Anonymizer Controller initialised")
 
     def model_changed(self) -> bool:
-        return self._model_change_flag
+        if self._model_change_flag:
+            # Reset model change flag
+            self._model_change_flag = False
+            return True
+        return False
 
     def idle(self) -> bool:
         return self._anon_ds_Q.empty() and self._anon_px_Q.empty()
@@ -409,10 +418,11 @@ class AnonymizerController:
         """
         self._model_change_flag = True
 
-        # If pydicom logging is on, trace phi UIDs and store incoming phi file in private/source
-        if self.project_model.logging_levels.pydicom:
+        # If User has set to store incoming dicom source, trace phi UIDs and store incoming phi file in private directory
+        if self.project_model.logging_levels.store_dicom_source:
             logger.debug(f"=>{ds.PatientID}/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}")
-            filename = self.local_storage_path(self.project_model.private_dir(), ds)
+
+            filename = self.local_storage_path(self.project_model.private_dir() / self.INCOMING_DICOM_DIR, ds)
             logger.debug(f"SOURCE STORE: {source} => {filename}")
             try:
                 ds.save_as(filename)

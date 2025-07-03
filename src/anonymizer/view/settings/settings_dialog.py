@@ -235,6 +235,25 @@ class SettingsDialog(tk.Toplevel):
 
         row += 1
 
+        # TODO: provide user access to DB DIALECT and then infer either file location or URL
+        # TODO: test with MySQL & PostgreSQL - see SQLAlchemy documentation for connection strings
+        # self.db_url_var: ctk.StringVar = str_entry(
+        #     view=self._frame,
+        #     label=_("Database URL") + ":",
+        #     initial_value=self.model.db_url,
+        #     min_chars=min_chars,
+        #     max_chars=uid_max_chars,
+        #     charset=string.digits + string.ascii_letters + " -./:",
+        #     tooltipmsg=None,
+        #     row=row,
+        #     col=0,
+        #     pad=PAD,
+        #     sticky="nw",
+        #     enabled=True,
+        # )
+
+        # row += 1
+
         self._modalities_label = ctk.CTkLabel(self._frame, text=_("Modalities") + ":")
         self._modalities_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
 

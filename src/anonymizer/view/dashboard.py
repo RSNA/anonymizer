@@ -8,7 +8,7 @@ import customtkinter as ctk
 
 from anonymizer.controller.project import EchoRequest, EchoResponse, ProjectController
 from anonymizer.model.anonymizer import Totals
-from anonymizer.utils.storage import count_studies_series_images
+from anonymizer.utils.storage import count_quarantine_images, count_studies_series_images
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
@@ -292,7 +292,9 @@ class Dashboard(ctk.CTkFrame):
         self._studies_label.configure(text=f"{totals.studies}")
         self._series_label.configure(text=f"{totals.series}")
         self._images_label.configure(text=f"{totals.instances}")
-        self._quarantined_label.configure(text=f"{totals.quarantined}")
+        self._quarantined_label.configure(
+            text=f"{count_quarantine_images(self._controller.anonymizer.get_quarantine_path())}"
+        )
 
     def _update_dashboard_from_file_system(self):
         if not self._controller:

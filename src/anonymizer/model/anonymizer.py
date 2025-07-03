@@ -189,7 +189,7 @@ class AnonymizerModel:
     DEFAULT_PHI_PATIENT_ID_PK_VALUE: ClassVar[str] = ""  # "" is used as the primary key for the default PHI record
     DEFAULT_PHI_STUDY_DATE = "19000101"
 
-    def __init__(self, site_id: str, uid_root: str, script_path: Path, db_url: str):
+    def __init__(self, site_id: str, uid_root: str, script_path: Path, db_url: str, db_echo: bool = False):
         """
         Initializes an instance of the AnonymizerModelSQL class.
 
@@ -225,7 +225,7 @@ class AnonymizerModel:
         self._accession_salt = salt_string.encode("utf-8")
 
         # Establish Database connection
-        self.engine = create_engine(db_url, echo="debug", future=True)  # TODO: see dbengine_logging for logging config
+        self.engine = create_engine(db_url, echo=db_echo, future=True)  # TODO: see dbengine_logging for logging config
 
         # Construct Thread Local Scoped Session Factory
         self.session_factory = scoped_session(sessionmaker(bind=self.engine))
@@ -264,18 +264,18 @@ class AnonymizerModel:
     def _get_session(self, read_only: bool = False):
         """Provides a scoped SQLAlchemy self.session."""
         session = self.session_factory()
-        logger.info(f"Session {id(session)} opened (read_only={read_only}).")
+        logger.debug(f"Session {id(session)} opened (read_only={read_only}).")
         try:
             yield session
             if not read_only:  # Only commit if not read_only
-                logger.info(f"Committing session {id(session)}.")
+                logger.debug(f"Committing session {id(session)}.")
                 session.commit()
         except Exception:
             logger.exception(f"Exception in session {id(session)}, rolling back.")
             session.rollback()
             raise
         finally:
-            logger.info(f"Closing session {id(session)}.")
+            logger.debug(f"Closing session {id(session)}.")
             session.close()
 
     def _format_anon_patient_id(self, phi_index: int) -> str:

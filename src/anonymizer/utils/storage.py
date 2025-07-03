@@ -123,6 +123,29 @@ def count_study_images(base_dir: Path, anon_pt_id: str, study_uid: str) -> int:
     return image_count
 
 
+def count_quarantine_images(quarantine_path: Path) -> int:
+    """
+    Counts the number of images stored in the quarantine directory.
+
+    Args:
+        quarantine_path (Path): The base directory containing the quarantine folder.
+
+    Returns:
+        The number of images stored in the quarantine directory.
+    """
+
+    if not quarantine_path.is_dir():
+        return 0
+
+    image_count = 0
+    for _, _, files in os.walk(quarantine_path):
+        for file in files:
+            if file.__contains__(DICOM_FILE_SUFFIX):
+                image_count += 1
+
+    return image_count
+
+
 @dataclass
 class JavaAnonymizerExportedStudy:
     ANON_PatientName: str
