@@ -36,7 +36,7 @@ class EditContext(StrEnum):
     # TODO: PROJECT = auto()  # apply edits to all series in project
 
 
-class SeriesView(ctk.CTkToplevel):
+class SeriesView(tk.Toplevel):
     BUTTON_WIDTH = 100
     PAD = 10
 

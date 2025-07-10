@@ -39,23 +39,25 @@
 		<h4>Differences from Java Version</h4>
 		<ol>
 			<li>Written in Python for Version 3.11</li>
-			<li>Implements operation subset to handle the default anonymizer script: {@remove, @empty, @hashdate, @round, ptid, acc, uid}</li>
+			<li>Implements operation subset to handle the default anonymizer script: {@keep, @remove, @empty, @hashdate, @round, @ptid, @acc, @uid}</li>
 			<li>Fields with ptid in the operation will be replaced by a sequentially generated Patient ID starting at 1</li>
 			<li>Fields with acc in the operation will be replaced by a sequentially generated Accession Number starting at 1</li>
 			<li>Fields with uid in the operation will be replaced by a sequentially generated UID of form {UIDRoot.SiteID.N} N = 1,2,3...</li>
 			<li>No built-in editor for anonymizer script</li>
 			<li>No filter script, uses DICOM association contexts to restrict which storage classes & transfer syntaxes are imported</li>
-			<li>No internal DICOM image viewer</li>
 			<li>No internal log viewer</li>
 			<li>Project based: multiple separate projects with sand boxed settings can be created and managed on same machine</li>
 			<li>Project defines allowed modalities, storage classes, transfer syntaxes, network timeouts and logging levels</li>
 			<li>Simplified DICOM client & server configuration</li>
-			<li>Incoming files are not written to a temporary local disk directory for delayed processing; instead they are kept in memory queue.</li>
+			<li>Incoming files are not written to a temporary local disk directory for delayed processing; instead they are kept in a memory queue.</li>
 			<li>Export to AWS S3 Object Store with AWS Cognito user authentication</li>
 			<li>Create Patient Lookup / Index in csv format with Number of Series and Number of Instances appended to each study row</li>
 			<li>Allows concurrent import and export processes</li>
 			<li>Provides a reliable study retrieval method at all levels (Study, Series, Instance) to handle remote DICOM servers which implement asynchronous C-MOVE (eg. VNA)</li>
-			<li>Fast in-memory datastore for Anonymizer Data Model</li>
+			<li>Fast SQLLite datastore for Anonymizer Data Model</li>
+			<li>Automatic pixel phi removal option</li>
+			<li>Ability to view min, mean, max projections of series images</li>
+			<li>Series viewer with pixel phi removal and blackout tools</li>
 		</ol>
 </body>
 </html>

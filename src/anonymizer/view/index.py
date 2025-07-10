@@ -4,6 +4,7 @@ The IndexView class provides a user interface for viewing the study index, delet
 """
 
 import logging
+import tkinter as tk
 from tkinter import messagebox, ttk
 
 import customtkinter as ctk
@@ -19,7 +20,7 @@ from anonymizer.view.series import SeriesView
 logger = logging.getLogger(__name__)
 
 
-class IndexView(ctk.CTkToplevel):
+class IndexView(tk.Toplevel):
     """
     Represents a view of the project's study index.
 
@@ -52,6 +53,7 @@ class IndexView(ctk.CTkToplevel):
 
         self.title("View PHI Index")
         self.resizable(True, True)
+        self.lift()
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)

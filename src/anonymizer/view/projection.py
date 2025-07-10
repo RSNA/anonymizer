@@ -19,7 +19,7 @@ from anonymizer.view.series import SeriesView
 logger = logging.getLogger(__name__)
 
 
-class ProjectionView(ctk.CTkToplevel):
+class ProjectionView(tk.Toplevel):
     PV_FRAME_RELATIVE_SIZE = (0.9, 0.9)  # fraction of screen size (width, height)
 
     key_to_image_size_mapping: dict[str, ProjectionImageSize] = {
