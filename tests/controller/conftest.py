@@ -2,7 +2,6 @@
 import os
 import shutil
 import tempfile
-from logging import DEBUG, INFO, WARNING
 
 # Add the src directory to sys.path dynamically
 #  sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
@@ -13,7 +12,7 @@ import pytest
 
 import tests.controller.dicom_pacs_simulator_scp as pacs_simulator_scp
 from anonymizer.controller.project import ProjectController
-from anonymizer.model.project import LoggingLevels, NetworkTimeouts, ProjectModel
+from anonymizer.model.project import NetworkTimeouts, ProjectModel
 from anonymizer.utils.logging import init_logging
 from tests.controller.dicom_test_nodes import (
     TEST_PROJECTNAME,

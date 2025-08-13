@@ -349,8 +349,12 @@ def transcode_dicom_to_h264_dicom(
     original_ds = ds  # Assuming 'ds' is the input dataset
     out_ds.StudyInstanceUID = (
         original_ds.StudyInstanceUID if "StudyInstanceUID" in original_ds else generate_uid(prefix="1.3.51.0.7.")
-    )  # Example prefix
-    out_ds.SeriesInstanceUID = generate_uid(prefix="1.3.51.5146.11682.")
+    )
+    out_ds.SeriesInstanceUID = (
+        original_ds.SeriesInstanceUID
+        if "SeriesInstanceUID" in original_ds
+        else generate_uid(prefix="1.3.51.5146.11682.")
+    )
 
     # Patient Module Attributes (Type 2 in Video Photographic Image Storage IOD)
     out_ds.PatientName = original_ds.PatientName if "PatientName" in original_ds else "Anonymous^Patient"
@@ -384,7 +388,7 @@ def transcode_dicom_to_h264_dicom(
         original_ds.SeriesDescription if "SeriesDescription" in original_ds else "H.264 Series from XA"
     )
 
-    out_ds.Modality = "XC"
+    out_ds.Modality = "XA"
     out_ds.Manufacturer = "FFmpegPyDICOM_Script_V4"  # Increment version for tracking
 
     # General Image Module Attributes
@@ -544,9 +548,9 @@ if __name__ == "__main__":
         os.remove(dummy_output_filename)
 
     try:
-        create_dummy_xa_dcm()
+        # create_dummy_xa_dcm()
 
-        # Corrected example call:
+        # # Corrected example call:
         # transcode_dicom_to_h264_dicom(
         #     input_dicom_path=dummy_input_filename,
         #     output_dicom_path=dummy_output_filename,
@@ -556,10 +560,26 @@ if __name__ == "__main__":
         # )
 
         transcode_dicom_to_h264_dicom(
-            input_dicom_path="xa_test.dcm",
-            output_dicom_path="xa_test.mp4.dcm",
-            output_width=750,  # Output width, same as dummy input for this example
-            output_height=750,  # Output height, same as dummy input for this example
+            input_dicom_path="xa1.dcm",
+            output_dicom_path="xa1.mp4.dcm",
+            output_width=750,
+            output_height=750,
+            crf_value=17,
+        )
+
+        transcode_dicom_to_h264_dicom(
+            input_dicom_path="xa2.dcm",
+            output_dicom_path="xa2.mp4.dcm",
+            output_width=750,
+            output_height=750,
+            crf_value=17,
+        )
+
+        transcode_dicom_to_h264_dicom(
+            input_dicom_path="xa3.dcm",
+            output_dicom_path="xa3.mp4.dcm",
+            output_width=750,
+            output_height=750,
             crf_value=17,
         )
 

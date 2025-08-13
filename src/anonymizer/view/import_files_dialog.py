@@ -173,11 +173,7 @@ class ImportFilesDialog(tk.Toplevel):
             else:
                 self._text_box.insert(
                     tk.END,
-                    (
-                        f"{abridged_path} {self._controller.model.get_phi_by_phi_patient_id(ds.PatientID)} => {ds.PatientID}\n"
-                        if ds
-                        else f"{abridged_path} => [No Dataset]\n"
-                    ),
+                    f"{abridged_path} => {ds.PatientID}\n" if ds else f"{abridged_path} => [No Dataset]\n",
                 )
 
             self.files_processed += 1
