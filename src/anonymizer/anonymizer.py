@@ -55,6 +55,7 @@ logger = logging.getLogger()  # ROOT logger
 
 class Anonymizer(ctk.CTk):
     THEME_FILE = "assets/themes/rsna_theme.json"
+    DARK_THEME_FILE = "assets/themes/rsna_theme_dark.json"
 
     project_open_startup_dwell_time = 100  # milliseconds
     metrics_loop_interval = 1000  # milliseconds
@@ -70,7 +71,12 @@ class Anonymizer(ctk.CTk):
         self.logs_dir: Path = logs_dir
 
         ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
-        theme = self.THEME_FILE
+        appearance_mode = ctk.get_appearance_mode()
+        if appearance_mode == "Light":
+            theme = self.THEME_FILE
+        else:
+            theme = self.DARK_THEME_FILE
+
         if not os.path.exists(theme):
             logger.error(f"Theme file not found: {theme}, reverting to dark-blue theme")
             theme = "dark-blue"
