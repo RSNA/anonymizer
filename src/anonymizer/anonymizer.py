@@ -1,4 +1,5 @@
 import faulthandler
+import ctypes
 import json
 import logging
 import os
@@ -40,6 +41,13 @@ from anonymizer.view.query_retrieve_import import QueryView
 from anonymizer.view.settings.settings_dialog import SettingsDialog
 from anonymizer.view.welcome import WelcomeView
 
+
+# Enable DPI awareness for Windows (improves scaling on high-DPI/4K monitors)
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+except Exception:
+    pass
+
 faulthandler.enable()
 
 logger = logging.getLogger()  # ROOT logger
@@ -60,13 +68,15 @@ class Anonymizer(ctk.CTk):
     def __init__(self, logs_dir: Path):
         super().__init__()
         self.logs_dir: Path = logs_dir
+
         ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
         theme = self.THEME_FILE
         if not os.path.exists(theme):
             logger.error(f"Theme file not found: {theme}, reverting to dark-blue theme")
             theme = "dark-blue"
         ctk.set_default_color_theme(theme)
-        ctk.deactivate_automatic_dpi_awareness()  # TODO: implement dpi awareness for all views for Windows OS
+        # DPI awareness is now enabled globally for Windows above; do not deactivate here
+        # ctk.deactivate_automatic_dpi_awareness()  # Removed for proper DPI scaling
         logging.info(f"ctk.ThemeManager.theme:\n{pformat(ThemeManager.theme)}")
         self.mono_font = self._init_mono_font()
 
