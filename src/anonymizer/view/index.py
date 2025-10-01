@@ -213,14 +213,24 @@ class IndexView(tk.Toplevel):
         selected_indices = [int(row) for row in rows_selected]  # convert to integers
         selected_phi_records = [self._phi_index[i] for i in selected_indices]
 
-        self._projection_view = ProjectionView(
-            self,
-            anon_model=self._anon_model,
-            base_dir=self._controller.model.images_dir(),
-            phi_records=selected_phi_records,
-        )
+        try:
+            self._projection_view = ProjectionView(
+                self,
+                anon_model=self._anon_model,
+                base_dir=self._controller.model.images_dir(),
+                phi_records=selected_phi_records,
+            )
+        except Exception as e:
+            logger.error(f"Error creating ProjectionView: {e}")
+            messagebox.showerror(
+                title=_("Error Creating Projection View"),
+                message=str(e),
+                parent=self,
+            )
+            return
+        
         if self._projection_view is None:
-            logger.error("Internal Error creating PixelsView")
+            logger.error("Internal Error creating ProjectionView")
             return
 
         self._projection_view.focus()

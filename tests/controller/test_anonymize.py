@@ -108,9 +108,9 @@ def test_anonymize_dataset_without_PatientID(controller: ProjectController):
     assert anon_ds.StudyDate == anonymizer.DEFAULT_ANON_DATE
     assert anon_ds.SOPClassUID == phi_ds.SOPClassUID
 
-    assert anon_ds.StudyInstanceUID == f"{UIDROOT}.{SITEID}.1"
-    assert anon_ds.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.2"
-    assert anon_ds.SOPInstanceUID == f"{UIDROOT}.{SITEID}.3"
+    assert anon_ds.StudyInstanceUID == f"{UIDROOT}.{SITEID}.1.1"
+    assert anon_ds.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.1.2"
+    assert anon_ds.SOPInstanceUID == f"{UIDROOT}.{SITEID}.1.3"
     assert controller.anonymizer.model.get_phi_name_by_anon_patient_id(anon_pt_id) is None
     phi = controller.anonymizer.model.get_phi_by_anon_patient_id(anon_pt_id)
     if phi:
@@ -146,9 +146,9 @@ def test_anonymize_dataset_with_blank_PatientID_1_study(controller):
     assert anon_ds.StudyDate != phi_ds.StudyDate
     assert anon_ds.StudyDate == anonymizer.DEFAULT_ANON_DATE
     assert anon_ds.SOPClassUID == phi_ds.SOPClassUID
-    assert anon_ds.StudyInstanceUID == f"{UIDROOT}.{SITEID}.1"
-    assert anon_ds.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.2"
-    assert anon_ds.SOPInstanceUID == f"{UIDROOT}.{SITEID}.3"
+    assert anon_ds.StudyInstanceUID == f"{UIDROOT}.{SITEID}.1.1"
+    assert anon_ds.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.1.2"
+    assert anon_ds.SOPInstanceUID == f"{UIDROOT}.{SITEID}.1.3"
     assert controller.anonymizer.model.get_phi_name_by_anon_patient_id(anon_pt_id) is None
 
     phi = controller.anonymizer.model.get_phi_by_anon_patient_id(anon_pt_id)
@@ -257,9 +257,9 @@ def test_anonymize_dataset_with_PatientID_1_study(controller):
     assert anon_ds.StudyDate != phi_ds.StudyDate
     assert anon_ds.StudyDate == anonymizer._hash_date(phi_ds.StudyDate, phi_ds.PatientID)[1]
     assert anon_ds.SOPClassUID == phi_ds.SOPClassUID
-    assert anon_ds.StudyInstanceUID == f"{UIDROOT}.{SITEID}.1"
-    assert anon_ds.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.2"
-    assert anon_ds.SOPInstanceUID == f"{UIDROOT}.{SITEID}.3"
+    assert anon_ds.StudyInstanceUID == f"{UIDROOT}.{SITEID}.1.1"
+    assert anon_ds.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.1.2"
+    assert anon_ds.SOPInstanceUID == f"{UIDROOT}.{SITEID}.1.3"
 
     assert controller.anonymizer.model.get_phi_name_by_anon_patient_id(anon_pt_id) == phi_ds.PatientName
     phi = controller.anonymizer.model.get_phi_by_anon_patient_id(anon_pt_id)

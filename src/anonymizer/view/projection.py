@@ -33,6 +33,7 @@ class ProjectionView(tk.Toplevel):
         return [
             series_path
             for phi_record in self._phi_records
+            if (self._base_dir / Path(phi_record.anon_patient_id)).is_dir()
             for study_path in (self._base_dir / Path(phi_record.anon_patient_id)).iterdir()
             if study_path.is_dir() and study_path.name == phi_record.anon_study_uid
             for series_path in study_path.iterdir()
@@ -40,8 +41,7 @@ class ProjectionView(tk.Toplevel):
         ]
 
     def __init__(self, parent, anon_model: AnonymizerModel, base_dir: Path, phi_records: list[PHI_IndexRecord]):
-        super().__init__(master=parent)
-
+    
         if not base_dir.is_dir():
             raise ValueError(f"{base_dir} is not a valid directory")
 
@@ -55,6 +55,8 @@ class ProjectionView(tk.Toplevel):
         self._series_paths = self._get_series_paths()
         if not self._series_paths:
             raise ValueError("No series paths found for study list")
+        
+        super().__init__(master=parent)
 
         self._total_series = len(self._series_paths)
 

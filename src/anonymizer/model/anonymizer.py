@@ -478,6 +478,13 @@ class AnonymizerModel:
         Get the number of patients in the PHI table.
         """
         return self.session.execute(select(func.count()).select_from(PHI)).scalar_one()
+    
+    @use_session(is_read_only_operation=True)
+    def get_uid_count(self) -> int:
+        """
+        Get the number of uid mappings in the UID table.
+        """
+        return self.session.execute(select(func.count()).select_from(UID)).scalar_one()
 
     @use_session(is_read_only_operation=True)
     def get_anon_uid(self, phi_uid: str) -> str | None:
@@ -496,7 +503,7 @@ class AnonymizerModel:
         new_mapping = UID(phi_uid=phi_uid, anon_uid="placeholder")
         self.session.add(new_mapping)
         self.session.flush()  # Send the INSERT to the DB and populates new_mapping.mapping_pk
-        new_anon_uid = f"{self._uid_prefix}.{new_mapping.mapping_pk}"
+        new_anon_uid = f"{self._uid_prefix}.1.{new_mapping.mapping_pk}" # .1 prefix added to avoid clash with JAVA Index imported UIDs
         new_mapping.anon_uid = new_anon_uid  # Marks the object for UPDATE on final commit
         return new_anon_uid
 
@@ -904,6 +911,9 @@ class AnonymizerModel:
             if not study_record:
                 # Study doesn't exist, so create it and link it to the PHI record
                 logger.debug(f"Creating new Study for study_uid '{java_study.PHI_StudyInstanceUID}'.")
+
+                # Add Study UID mapping:
+                self.session.add(UID(phi_uid=java_study.PHI_StudyInstanceUID, anon_uid=java_study.ANON_StudyInstanceUID))
 
                 study_record = Study(
                     study_uid=java_study.PHI_StudyInstanceUID,
