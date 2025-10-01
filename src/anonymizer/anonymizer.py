@@ -1,4 +1,5 @@
 import faulthandler
+import ctypes
 import json
 import logging
 import os
@@ -66,7 +67,7 @@ class Anonymizer(ctk.CTk):
             logger.error(f"Theme file not found: {theme}, reverting to dark-blue theme")
             theme = "dark-blue"
         ctk.set_default_color_theme(theme)
-        ctk.deactivate_automatic_dpi_awareness()  # TODO: implement dpi awareness for all views for Windows OS
+
         logging.info(f"ctk.ThemeManager.theme:\n{pformat(ThemeManager.theme)}")
         self.mono_font = self._init_mono_font()
 
@@ -75,6 +76,9 @@ class Anonymizer(ctk.CTk):
 
         if sys.platform.startswith("win"):
             self.iconbitmap("assets\\icons\\rsna_icon.ico", default="assets\\icons\\rsna_icon.ico")
+            # Enable DPI awareness for Windows (improves scaling on high-DPI/4K monitors)
+            #ctk.deactivate_automatic_dpi_awareness()  # TODO: implement dpi awareness for all views for Windows OS
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)              
 
         self.recent_project_dirs: list[Path] = []
         self.current_open_project_dir: Path | None = None
