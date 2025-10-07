@@ -50,9 +50,14 @@ class HTMLView(tk.Toplevel):
 
         """
 
+
         # Read the HTML content from the file
         with open(self.html_file_path, "r") as file:
             html_content = file.read()
+
+        # Replace THEME_COLOR placeholder with theme color
+        theme_color = self._parent._apply_appearance_mode(ctk.ThemeManager.theme["CTkLabel"]["text_color"])
+        html_content = html_content.replace("THEME_COLOR", theme_color)        
 
         # Find all <li> elements and their content
         li_elements = re.findall(r"<li>(.*?)</li>", html_content, re.DOTALL)
@@ -68,7 +73,7 @@ class HTMLView(tk.Toplevel):
             height=self.HEIGHT_LINES,
             wrap="word",
             background=self._bg_color,
-            html=RenderHTML(self.html_file_path),
         )
+        html_widget.set_html(html_content)
         html_widget.pack(fill="both", padx=10, pady=10, expand=True)
         html_widget.configure(state="disabled")
