@@ -59,6 +59,11 @@ class Anonymizer(ctk.CTk):
         return self.logs_dir / ".anonymizer_state.json"
 
     def __init__(self, logs_dir: Path):
+        if sys.platform.startswith("win"):
+            # Enable DPI awareness for Windows (improves scaling on high-DPI/4K monitors)
+            #ctk.deactivate_automatic_dpi_awareness()  # TODO: implement dpi awareness for all views for Windows OS
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)    
+
         super().__init__()
         self.logs_dir: Path = logs_dir
         ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
@@ -75,10 +80,7 @@ class Anonymizer(ctk.CTk):
         self._appearance_mode_change(ctk.get_appearance_mode())  # initialize non-ctk widget styles
 
         if sys.platform.startswith("win"):
-            self.iconbitmap("assets\\icons\\rsna_icon.ico", default="assets\\icons\\rsna_icon.ico")
-            # Enable DPI awareness for Windows (improves scaling on high-DPI/4K monitors)
-            #ctk.deactivate_automatic_dpi_awareness()  # TODO: implement dpi awareness for all views for Windows OS
-            ctypes.windll.shcore.SetProcessDpiAwareness(1)              
+            self.iconbitmap("assets\\icons\\rsna_icon.ico", default="assets\\icons\\rsna_icon.ico")                     
 
         self.recent_project_dirs: list[Path] = []
         self.current_open_project_dir: Path | None = None
