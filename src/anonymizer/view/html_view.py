@@ -5,7 +5,7 @@ import re
 import tkinter as tk
 
 import customtkinter as ctk
-from tkhtmlview import HTMLScrolledText, RenderHTML
+from tkhtmlview import HTMLScrolledText
 
 
 class HTMLView(tk.Toplevel):
@@ -57,7 +57,7 @@ class HTMLView(tk.Toplevel):
 
         # Replace THEME_COLOR placeholder with theme color
         theme_color = self._parent._apply_appearance_mode(ctk.ThemeManager.theme["CTkLabel"]["text_color"])
-        html_content = html_content.replace("THEME_COLOR", theme_color)        
+        html_content = html_content.replace("THEME_COLOR", theme_color)
 
         # Find all <li> elements and their content
         li_elements = re.findall(r"<li>(.*?)</li>", html_content, re.DOTALL)

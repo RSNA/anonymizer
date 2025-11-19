@@ -1,5 +1,5 @@
-import faulthandler
 import ctypes
+import faulthandler
 import json
 import logging
 import os
@@ -62,7 +62,7 @@ class Anonymizer(ctk.CTk):
         if sys.platform.startswith("win"):
             # Enable DPI awareness for Windows (improves scaling on high-DPI/4K monitors)
             #ctk.deactivate_automatic_dpi_awareness()  # TODO: implement dpi awareness for all views for Windows OS
-            ctypes.windll.shcore.SetProcessDpiAwareness(1)    
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)
 
         super().__init__()
         self.logs_dir: Path = logs_dir
@@ -80,7 +80,7 @@ class Anonymizer(ctk.CTk):
         self._appearance_mode_change(ctk.get_appearance_mode())  # initialize non-ctk widget styles
 
         if sys.platform.startswith("win"):
-            self.iconbitmap("assets\\icons\\rsna_icon.ico", default="assets\\icons\\rsna_icon.ico")                     
+            self.iconbitmap("assets\\icons\\rsna_icon.ico", default="assets\\icons\\rsna_icon.ico")
 
         self.recent_project_dirs: list[Path] = []
         self.current_open_project_dir: Path | None = None

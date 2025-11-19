@@ -228,7 +228,7 @@ class IndexView(tk.Toplevel):
                 parent=self,
             )
             return
-        
+
         if self._projection_view is None:
             logger.error("Internal Error creating ProjectionView")
             return

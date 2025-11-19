@@ -484,7 +484,7 @@ class AnonymizerModel:
         Get the number of patients in the PHI table.
         """
         return self.session.execute(select(func.count()).select_from(PHI)).scalar_one()
-    
+
     @use_session(is_read_only_operation=True)
     def get_uid_count(self) -> int:
         """
@@ -508,13 +508,13 @@ class AnonymizerModel:
         This method combines the project's UID prefix with a hash of the
         original UID. It is idempotent, meaning the same input `phi_uid`
         will always produce the same output anonymized UID.
-        
+
         The final UID is guaranteed to be 64 characters or less.
         """
         # The ".2" is added to distinguish from previous implementation of sequential UID generation.
         prefix = f"{self._uid_prefix}.2."
         max_len = self.DICOM_UID_MAX_LEN
-        
+
         if max_len <= len(prefix):
             raise ValueError(
                 f"The maximum UID length ({max_len}) is too short to accommodate "
@@ -525,7 +525,7 @@ class AnonymizerModel:
 
         # Calculate the MD5 hash (for a deterministic 128-bit mapping)
         phi_uid_hash = hashlib.md5(phi_uid.encode('utf-8'))
-        
+
         # Convert the 128-bit hash to a large integer
         phi_uid_hash_int = int(phi_uid_hash.hexdigest(), 16)
         reduced_hash_int = phi_uid_hash_int % (10**available_digits)
@@ -692,10 +692,10 @@ class AnonymizerModel:
 
         phi: PHI | None = self.session.get(PHI, phi_ptid)
         if phi:
-            logger.debug(f"Found existing PHI record")
+            logger.debug("Found existing PHI record")
             return phi
 
-        logger.debug(f"Creating PHI record for new patient_id")
+        logger.debug("Creating PHI record for new patient_id")
         # Acquire Pessimistic Lock on the PHI Table
         # This prevents any other process from reading or writing the table until commit.
         try:
@@ -726,16 +726,16 @@ class AnonymizerModel:
         study: Study | None = self.session.get(Study, study_uid)
 
         if study:
-            logger.debug(f"Found existing Study record")
+            logger.debug("Found existing Study record")
             if study.patient_id == parent_phi.patient_id:
                 return study
             else:
                 # If the study exists but is linked to a different patient_id, raise an error
-                msg = f"IntegrityError: StudyUID exists but is linked to a different patient"
+                msg = "IntegrityError: StudyUID exists but is linked to a different patient"
                 logger.error(msg)
                 raise ValueError(msg)  # Let get_session handle rollback
 
-        logger.debug(f"Study record not found. Creating new study...")
+        logger.debug("Study record not found. Creating new study...")
 
         # Process AccessionNumber:
         phi_acc_no: str | None = str(ds.AccessionNumber).strip() if hasattr(ds, "AccessionNumber") else None
@@ -763,7 +763,7 @@ class AnonymizerModel:
         series: Series | None = self.session.get(Series, series_uid)
 
         if series:
-            logger.debug(f"Found existing Series record")
+            logger.debug("Found existing Series record")
             # Integrity Check: StudyUID mismatch with existing Series
             if series.study_uid == parent_study_record.study_uid:
                 return series
@@ -772,7 +772,7 @@ class AnonymizerModel:
                 logger.error(msg)
                 raise ValueError(msg)
 
-        logger.debug(f"Series record not found. Creating new Series...")
+        logger.debug("Series record not found. Creating new Series...")
         new_series: Series = Series(
             series_uid=series_uid,
             anon_series_uid=self._create_anon_uid(series_uid),  # Generate a new anonymized SeriesUID
@@ -788,16 +788,16 @@ class AnonymizerModel:
         instance: Instance | None = self.session.get(Instance, sop_instance_uid)
 
         if instance:
-            logger.debug(f"Found existing Instance record")
+            logger.debug("Found existing Instance record")
             # An instance should never move between series.
             if instance.series_uid != parent_series_record.series_uid:
-                msg = f"IntegrityError: SOPInstanceUID '{sop_instance_uid}' exists but is linked to another Series"
+                msg = "IntegrityError: SOPInstanceUID '{sop_instance_uid}' exists but is linked to another Series"
                 logger.error(msg)
                 raise ValueError(msg)
             else:
                 return instance
 
-        logger.debug(f"Instance record not found. Creating new Instance...")
+        logger.debug("Instance record not found. Creating new Instance...")
 
         new_instance: Instance = Instance(
             sop_instance_uid=sop_instance_uid,
