@@ -322,6 +322,36 @@ class AnonymizerModel:
             self.session.add(new_default_phi)
             # Commit will be handled by @use_session on successful exit of wrapper
 
+    @use_session()
+    def change_default_PHI(self, new_site_id: str):
+        """
+        Changes the default PHI record's anon_patient_id to reflect a new site_id.
+        This involves updating the existing record in place.
+        Called from test routine after loading Java Index files to match site_id used in the index.
+
+        Args:
+            new_site_id (str): The new site ID to use for the default PHI record.
+
+        Raises:
+            ValueError: If the new_site_id is empty.
+        """
+        if not new_site_id:
+            raise ValueError("new_site_id cannot be empty.")
+
+        new_anon_pt_id = f"{new_site_id}-{'0'.zfill(len(str(self.MAX_PATIENTS)) - 1)}"
+        default_phi = self.session.get(PHI, self.DEFAULT_PHI_PATIENT_ID_PK_VALUE)
+
+        if not default_phi:
+            raise RuntimeError(
+                f"Default PHI record with patient_id={self.DEFAULT_PHI_PATIENT_ID_PK_VALUE} does not exist."
+            )
+
+        logger.info(
+            f"Changing default PHI record anon_patient_id from '{default_phi.anon_patient_id}' to '{new_anon_pt_id}'."
+        )
+        default_phi.anon_patient_id = new_anon_pt_id
+        self._site_id = new_site_id
+
     def _load_script(self, script_path: Path):
         """
         Load and parse an anonymize script file to populate the _tag_keep dictionary.
@@ -696,19 +726,13 @@ class AnonymizerModel:
             return phi
 
         logger.debug("Creating PHI record for new patient_id")
-        # Acquire Pessimistic Lock on the PHI Table
-        # This prevents any other process from reading or writing the table until commit.
-        try:
-            self.session.execute(text("LOCK TABLE PHI IN ACCESS EXCLUSIVE MODE"))
-        except Exception as e:
-            logger.warning(f"Could not acquire table lock. {e}")
-            # Depending on your environment, logging or raising is appropriate.
-            pass
-            # Generate a NEW anon_patient_id based on the site_id and the current patient count:
+        
+        # Generate a NEW anon_patient_id based on the site_id and the current patient count:
         # Site_id/prefix is constant, for anon_patient_id string MAX works the same as numeric MAX
         last_anon_patient_id = self.session.execute(select(func.max(PHI.anon_patient_id))).scalar_one()
         last_phi_index = int(last_anon_patient_id.split("-")[-1]) if last_anon_patient_id else 0
         anon_ptid = self._format_anon_patient_id(phi_index=last_phi_index+1)
+        logger.info(f"Generated new anon_patient_id:{anon_ptid}")
 
         new_phi: PHI = PHI(
             patient_id=phi_ptid,

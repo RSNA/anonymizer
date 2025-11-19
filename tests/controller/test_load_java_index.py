@@ -50,8 +50,10 @@ def test_load_java_index_into_new_project_and_import_ct_small(temp_dir: str, con
     assert controller.anonymizer.model.get_patient_id_count() == 83
     assert controller.anonymizer.model.get_phi_name_by_anon_patient_id("527408-000001") == "TEST"
 
-    uid_mapping_count = controller.anonymizer.model.get_uid_count()
-
+    # Need to change default PHI entity 99.99-000000 in PHI table to match that of the Java Index: 527408-000000
+    # Otherwise next anon_patient_id will be 99.99-000001 causing mismatches and MAX won't work 
+    controller.anonymizer.model.change_default_PHI("527408")
+    
     # After loading java index file import pydicom test file by sending to LocalStorageSCP
     ds: Dataset = send_file_to_scp(ct_small_filename, LocalStorageSCP, controller)
     time.sleep(0.5)
