@@ -2,6 +2,7 @@
 # use pytest from terminal to show full logging output
 
 import os
+import pytest
 from copy import deepcopy
 from pathlib import Path
 from time import sleep
@@ -14,6 +15,9 @@ from anonymizer.controller.anonymizer import AnonymizerController, QuarantineDir
 from anonymizer.controller.project import ProjectController
 from tests.controller.dicom_test_files import (
     cr1_filename,
+    hash_cr1_StudyInstanceUID,
+    hash_cr1_SeriesInstanceUID,
+    hash_cr1_SOPInstanceUID,
     ct_small_filename,
     # mr_small_filename,
     # mr_small_implicit_filename,
@@ -78,6 +82,82 @@ def test_valid_date_hash_patient_id_range(controller):
         assert anon.valid_date(hdate)
 
 
+def test_uid_hashing_is_deterministic_and_unique(controller: ProjectController):
+    """
+    Tests the core idempotent property:
+    1. The same input always produces the same output.
+    2. A different input produces a different output.
+    """
+    model = controller.anonymizer.model
+    orig_uid_1 = "1.2.3.4.5"
+    orig_uid_2 = "1.2.3.4.5.6" # A different UID
+
+    # Call the function twice with the same input
+    hash_1a = model._create_anon_uid(orig_uid_1)
+    hash_1b = model._create_anon_uid(orig_uid_1)
+
+    # Call with the different input
+    hash_2 = model._create_anon_uid(orig_uid_2)
+
+    # Test for idempotency
+    assert hash_1a == hash_1b
+
+    # Test for uniqueness
+    assert hash_1a != hash_2
+
+def test_uid_hash_format_and_length(controller: ProjectController):
+    """
+    Tests that the generated UID is always compliant:
+    1. Starts with the correct prefix.
+    2. Is 64 characters or less.
+    3. The hashed part is numeric.
+    """
+    model = controller.anonymizer.model
+    orig_uid = "1.2.840.113619.1.2.3.4.5.6.7.8.9.10"
+    hashed_uid = model._create_anon_uid(orig_uid)
+    
+    expected_prefix = f"{model._uid_prefix}.2."
+    
+    # 1. Check prefix
+    assert hashed_uid.startswith(expected_prefix)
+    
+    # 2. Check max length
+    assert len(hashed_uid) <= model.DICOM_UID_MAX_LEN
+    
+    # 3. Check that the hash part is numeric
+    hash_part = hashed_uid.replace(expected_prefix, "")
+    assert hash_part.isnumeric()
+    assert len(hash_part) > 0 # Ensure it's not empty
+
+def test_uid_hashing_raises_error_if_prefix_too_long(controller: ProjectController):
+    """
+    Tests the ValueError check. If the project prefix is so long
+    that it's impossible to generate a valid UID, it must fail.
+    """
+    # `uid_root` = `self._uid_prefix` + ".1" (adds 2 chars)
+    # `prefix` = `uid_root` + "." (adds 1 char)
+    # Total added: 3 chars.
+    
+    # A prefix of 61 chars will work (61 + 3 = 64). 
+    # `len(prefix)` will be 64. `max_len <= len(prefix)` will be `64 <= 64`,
+    # which is True, so it will raise the error.
+    
+    # Let's test the boundary:
+    # A prefix of 60 chars. `prefix` length = 63. `max_len <= 63` is False. OK.
+    model = controller.anonymizer.model
+    prefix_60_chars = "1." * 30 
+    model._uid_prefix = prefix_60_chars
+    model._create_anon_uid("1.2.3") # Should not raise
+    
+    # A prefix of 61 chars. `prefix` length = 64. `max_len <= 64` is True. Raise.
+    prefix_61_chars = "1.2" + ("." * 59)
+    assert len(prefix_61_chars) == 62
+    model._uid_prefix = prefix_61_chars
+
+    with pytest.raises(ValueError, match="is too short to accommodate"):
+        model._create_anon_uid("1.2.3")
+
+
 def test_anonymize_dataset_without_PatientID(controller: ProjectController):
     anonymizer: AnonymizerController = controller.anonymizer
     ds = get_testdata_file(cr1_filename, read=True)
@@ -108,9 +188,9 @@ def test_anonymize_dataset_without_PatientID(controller: ProjectController):
     assert anon_ds.StudyDate == anonymizer.DEFAULT_ANON_DATE
     assert anon_ds.SOPClassUID == phi_ds.SOPClassUID
 
-    assert anon_ds.StudyInstanceUID == f"{UIDROOT}.{SITEID}.1.1"
-    assert anon_ds.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.1.2"
-    assert anon_ds.SOPInstanceUID == f"{UIDROOT}.{SITEID}.1.3"
+    assert anon_ds.StudyInstanceUID == hash_cr1_StudyInstanceUID
+    assert anon_ds.SeriesInstanceUID == hash_cr1_SeriesInstanceUID
+    assert anon_ds.SOPInstanceUID == hash_cr1_SOPInstanceUID
     assert controller.anonymizer.model.get_phi_name_by_anon_patient_id(anon_pt_id) is None
     phi = controller.anonymizer.model.get_phi_by_anon_patient_id(anon_pt_id)
     if phi:
@@ -146,9 +226,9 @@ def test_anonymize_dataset_with_blank_PatientID_1_study(controller):
     assert anon_ds.StudyDate != phi_ds.StudyDate
     assert anon_ds.StudyDate == anonymizer.DEFAULT_ANON_DATE
     assert anon_ds.SOPClassUID == phi_ds.SOPClassUID
-    assert anon_ds.StudyInstanceUID == f"{UIDROOT}.{SITEID}.1.1"
-    assert anon_ds.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.1.2"
-    assert anon_ds.SOPInstanceUID == f"{UIDROOT}.{SITEID}.1.3"
+    assert anon_ds.StudyInstanceUID == hash_cr1_StudyInstanceUID
+    assert anon_ds.SeriesInstanceUID == hash_cr1_SeriesInstanceUID
+    assert anon_ds.SOPInstanceUID == hash_cr1_SOPInstanceUID
     assert controller.anonymizer.model.get_phi_name_by_anon_patient_id(anon_pt_id) is None
 
     phi = controller.anonymizer.model.get_phi_by_anon_patient_id(anon_pt_id)
@@ -257,9 +337,9 @@ def test_anonymize_dataset_with_PatientID_1_study(controller):
     assert anon_ds.StudyDate != phi_ds.StudyDate
     assert anon_ds.StudyDate == anonymizer._hash_date(phi_ds.StudyDate, phi_ds.PatientID)[1]
     assert anon_ds.SOPClassUID == phi_ds.SOPClassUID
-    assert anon_ds.StudyInstanceUID == f"{UIDROOT}.{SITEID}.1.1"
-    assert anon_ds.SeriesInstanceUID == f"{UIDROOT}.{SITEID}.1.2"
-    assert anon_ds.SOPInstanceUID == f"{UIDROOT}.{SITEID}.1.3"
+    assert anon_ds.StudyInstanceUID == hash_cr1_StudyInstanceUID
+    assert anon_ds.SeriesInstanceUID == hash_cr1_SeriesInstanceUID
+    assert anon_ds.SOPInstanceUID == hash_cr1_SOPInstanceUID
 
     assert controller.anonymizer.model.get_phi_name_by_anon_patient_id(anon_pt_id) == phi_ds.PatientName
     phi = controller.anonymizer.model.get_phi_by_anon_patient_id(anon_pt_id)

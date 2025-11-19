@@ -20,6 +20,41 @@ from tests.controller.dicom_test_files import (
     cr1_filename,
     ct_small_filename,
     mr_small_filename,
+    hash_cr1_SOPInstanceUID,
+    hash_cr1_StudyInstanceUID,
+    hash_cr1_SeriesInstanceUID,
+    hash_ct_small_StudyInstanceUID,
+    hash_ct_small_SeriesInstanceUID,
+    hash_ct_small_SOPInstanceUID,
+    hash_ct_small_FrameOfReferenceUID,
+    hash_mr_small_StudyInstanceUID,
+    hash_mr_small_SeriesInstanceUID,
+    hash_mr_small_SOPInstanceUID,
+    hash_mr_small_FrameOfReferenceUID,
+    hash_ct_doe_archibald_StudyInstanceUID,
+    hash_ct_doe_archibald_SeriesInstanceUID,
+    hash_ct_doe_archibald_SOPInstanceUID1,
+    hash_jpeg_baseline_StudyInstanceUID,
+    hash_jpeg_baseline_SeriesInstanceUID,
+    hash_jpeg_baseline_SOPInstanceUID,
+    hash_jpeg_extended_StudyInstanceUID,
+    hash_jpeg_extended_SeriesInstanceUID,
+    hash_jpeg_extended_SOPInstanceUID,
+    hash_jpeg_lossless_p14_StudyInstanceUID,
+    hash_jpeg_lossless_p14_SeriesInstanceUID,
+    hash_jpeg_lossless_p14_SOPInstanceUID,
+    hash_jpeg_ls_lossless_StudyInstanceUID,
+    hash_jpeg_ls_lossless_SeriesInstanceUID,                                   
+    hash_jpeg_ls_lossless_SOPInstanceUID,
+    hash_jpeg_ls_lossy_StudyInstanceUID,
+    hash_jpeg_ls_lossy_SeriesInstanceUID,
+    hash_jpeg_ls_lossy_SOPInstanceUID,
+    hash_jpeg_2000_lossless_StudyInstanceUID,
+    hash_jpeg_2000_lossless_SeriesInstanceUID,
+    hash_jpeg_2000_lossless_SOPInstanceUID,
+    hash_jpeg_2000_StudyInstanceUID,
+    hash_jpeg_2000_SeriesInstanceUID,
+    hash_jpeg_2000_SOPInstanceUID,
 )
 from tests.controller.dicom_test_nodes import TEST_SITEID, TEST_UIDROOT, LocalStorageSCP
 from tests.controller.helpers import send_file_to_scp, send_files_to_scp
@@ -34,9 +69,10 @@ def test_send_cr1(temp_dir: str, controller):
     assert len(dirlist) == 1
     assert dirlist[0] == controller.model.site_id + "-000001"
     prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
-    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1.1"
-    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".1.2"
-    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".1.3"
+    
+    assert model.get_anon_uid(ds.StudyInstanceUID) == hash_cr1_StudyInstanceUID
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_cr1_SeriesInstanceUID
+    assert model.get_anon_uid(ds.SOPInstanceUID) == hash_cr1_SOPInstanceUID
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
@@ -76,10 +112,10 @@ def test_send_ct_small(temp_dir: str, controller):
     assert len(dirlist) == 1
     assert dirlist[0] == TEST_SITEID + "-000001"
     prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
-    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1.1"
-    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".1.2"
-    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".1.3"
-    assert model.get_anon_uid(ds.FrameOfReferenceUID) == prefix + ".1.4"
+    assert model.get_anon_uid(ds.StudyInstanceUID) == hash_ct_small_StudyInstanceUID
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_ct_small_SeriesInstanceUID
+    assert model.get_anon_uid(ds.SOPInstanceUID) == hash_ct_small_SOPInstanceUID
+    assert model.get_anon_uid(ds.FrameOfReferenceUID) == hash_ct_small_FrameOfReferenceUID
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
@@ -119,11 +155,10 @@ def test_send_mr_small(temp_dir: str, controller):
     assert len(dirlist) == 1
     assert dirlist[0] == TEST_SITEID + "-000001"
 
-    prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
-    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1.1"
-    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".1.2"
-    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".1.3"
-    assert model.get_anon_uid(ds.FrameOfReferenceUID) == prefix + ".1.4"
+    assert model.get_anon_uid(ds.StudyInstanceUID) == hash_mr_small_StudyInstanceUID
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_mr_small_SeriesInstanceUID
+    assert model.get_anon_uid(ds.SOPInstanceUID) == hash_mr_small_SOPInstanceUID
+    assert model.get_anon_uid(ds.FrameOfReferenceUID) == hash_mr_small_FrameOfReferenceUID
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
@@ -164,11 +199,10 @@ def test_send_ct_small_AND_mr_small(temp_dir: str, controller):
     assert len(dirlist) == 1
     assert dirlist[0] == TEST_SITEID + "-000001"
 
-    prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
-    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1.1"
-    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".1.2"
-    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".1.3"
-    assert model.get_anon_uid(ds.FrameOfReferenceUID) == prefix + ".1.4"
+    assert model.get_anon_uid(ds.StudyInstanceUID) == hash_ct_small_StudyInstanceUID
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_ct_small_SeriesInstanceUID
+    assert model.get_anon_uid(ds.SOPInstanceUID) == hash_ct_small_SOPInstanceUID
+    assert model.get_anon_uid(ds.FrameOfReferenceUID) == hash_ct_small_FrameOfReferenceUID
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
@@ -205,10 +239,10 @@ def test_send_ct_small_AND_mr_small(temp_dir: str, controller):
     assert len(dirlist) == 2
     assert TEST_SITEID + "-000002" in dirlist
 
-    prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
-    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1.5"
-    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".1.6"
-    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".1.7"
+    assert model.get_anon_uid(ds.StudyInstanceUID) == hash_mr_small_StudyInstanceUID
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_mr_small_SeriesInstanceUID
+    assert model.get_anon_uid(ds.SOPInstanceUID) == hash_mr_small_SOPInstanceUID
+    assert model.get_anon_uid(ds.FrameOfReferenceUID) == hash_mr_small_FrameOfReferenceUID
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
@@ -249,9 +283,9 @@ def test_send_ct_Archibald_Doe_PHI_stored(temp_dir: str, controller):
     assert dirlist[0] == TEST_SITEID + "-000001"
     prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
     ds = dsets[0]
-    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1.1"
-    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".1.2"
-    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".1.3"
+    assert model.get_anon_uid(ds.StudyInstanceUID) == hash_ct_doe_archibald_StudyInstanceUID
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_ct_doe_archibald_SeriesInstanceUID
+    assert model.get_anon_uid(ds.SOPInstanceUID) == hash_ct_doe_archibald_SOPInstanceUID1
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
@@ -292,18 +326,18 @@ def test_send_ct_Archibald_Doe_Projection_create_cached(temp_dir: str, controlle
     assert dirlist[0] == TEST_SITEID + "-000001"
     prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
     ds = dsets[0]
-    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1.1"
-    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".1.2"
-    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".1.3"
+    assert model.get_anon_uid(ds.StudyInstanceUID) == hash_ct_doe_archibald_StudyInstanceUID
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_ct_doe_archibald_SeriesInstanceUID
+    assert model.get_anon_uid(ds.SOPInstanceUID) == hash_ct_doe_archibald_SOPInstanceUID1
 
-    series_path = store_dir / dirlist[0] / (prefix + ".1.1") / (prefix + ".1.2")
+    series_path = store_dir / dirlist[0] / hash_ct_doe_archibald_StudyInstanceUID / hash_ct_doe_archibald_SeriesInstanceUID
     projection = create_projection_from_series(series_path)
 
     # Check Projection created
     assert projection.patient_id == model.get_anon_patient_id(ds.PatientID)
     assert projection.series_description == ds.SeriesDescription
-    assert projection.study_uid == prefix + ".1.1"
-    assert projection.series_uid == prefix + ".1.2"
+    assert projection.study_uid == hash_ct_doe_archibald_StudyInstanceUID
+    assert projection.series_uid == hash_ct_doe_archibald_SeriesInstanceUID
     assert projection.proj_images
     assert len(projection.proj_images) == 3
 
@@ -325,9 +359,9 @@ def test_send_cr_and_ct_Archibald_Doe(temp_dir: str, controller):
 
     prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
     ds = dsets[0]
-    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1.1"
-    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".1.2"
-    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".1.3"
+    assert model.get_anon_uid(ds.StudyInstanceUID) == hash_cr1_StudyInstanceUID
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_cr1_SeriesInstanceUID
+    assert model.get_anon_uid(ds.SOPInstanceUID) == hash_cr1_SOPInstanceUID
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
@@ -365,9 +399,9 @@ def test_send_cr_and_ct_Archibald_Doe(temp_dir: str, controller):
 
     prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
     ds = dsets[0]
-    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1.8"
-    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".1.9"
-    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".1.10"
+    assert model.get_anon_uid(ds.StudyInstanceUID) == hash_ct_doe_archibald_StudyInstanceUID
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_ct_doe_archibald_SeriesInstanceUID
+    assert model.get_anon_uid(ds.SOPInstanceUID) == hash_ct_doe_archibald_SOPInstanceUID1
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
@@ -407,10 +441,10 @@ def test_send_ct_small_then_delete_study(temp_dir: str, controller):
     assert len(dirlist) == 1
     assert dirlist[0] == TEST_SITEID + "-000001"
     prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
-    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1.1"
-    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".1.2"
-    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".1.3"
-    assert model.get_anon_uid(ds.FrameOfReferenceUID) == prefix + ".1.4"
+    assert model.get_anon_uid(ds.StudyInstanceUID) == hash_ct_small_StudyInstanceUID
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_ct_small_SeriesInstanceUID
+    assert model.get_anon_uid(ds.SOPInstanceUID) == hash_ct_small_SOPInstanceUID
+    assert model.get_anon_uid(ds.FrameOfReferenceUID) == hash_ct_small_FrameOfReferenceUID
 
     # Verify PHI / Study / Series stored correctly in AnonymizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
@@ -450,8 +484,17 @@ def test_send_ct_small_then_delete_study(temp_dir: str, controller):
     assert len(dirlist) == 0
 
     # Patient without any studies should be removed from AnonymizerModel:
-    anon_ptid = model.get_anon_patient_id(ds.PatientID)
-    assert anon_ptid is None
+    anon_ptid_lookup = model.get_anon_patient_id(ds.PatientID)
+    assert anon_ptid_lookup is None
+
+    # Ensure all PHI / Study / Series data removed from AnonymizerModel
+    phi = model.get_phi_by_anon_patient_id(anon_ptid)
+    assert phi is None
+
+    # Ensure UID mappings removed from AnonymizerModel
+    assert model.get_anon_uid(ds.SOPInstanceUID) is None
+    assert model.get_anon_uid(ds.StudyInstanceUID) is None
+    assert model.get_anon_uid(ds.SeriesInstanceUID) is None
 
     # Check AmoynizerModel patients, studies, series, instances counts are 0:
     totals = model.get_totals()
@@ -677,9 +720,9 @@ def test_send_JPEG_Baseline(temp_dir: str, controller: ProjectController):
     # This test file has no patient ID so it will file in default anonymized patient directory site_id + "000000"
     assert dirlist[0] == controller.anonymizer.model.default_anon_pt_id
     prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
-    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1.1"
-    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".1.2"
-    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".1.3"
+    assert model.get_anon_uid(ds.StudyInstanceUID) == hash_jpeg_baseline_StudyInstanceUID
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_jpeg_baseline_SeriesInstanceUID
+    assert model.get_anon_uid(ds.SOPInstanceUID) == hash_jpeg_baseline_SOPInstanceUID
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
@@ -708,7 +751,7 @@ def test_send_JPEG_Baseline(temp_dir: str, controller: ProjectController):
     assert len(series.instances) == 1
 
     # Read the anonymized file and check the SOPClassUID and TransferSyntaxUID:
-    anon_file_path = os.path.join(store_dir, dirlist[0], prefix + ".1.1", prefix + ".1.2", prefix + ".1.3.dcm")
+    anon_file_path = os.path.join(store_dir, dirlist[0], hash_jpeg_baseline_StudyInstanceUID, hash_jpeg_baseline_SeriesInstanceUID, hash_jpeg_baseline_SOPInstanceUID + ".dcm")
     assert os.path.exists(anon_file_path)
     ds = dcmread(anon_file_path)
     assert ds
@@ -755,9 +798,9 @@ def test_send_JPEG_Extended(temp_dir: str, controller: ProjectController):
     assert len(dirlist) == 1
     assert dirlist[0] == TEST_SITEID + "-000001"
     prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
-    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1.1"
-    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".1.2"
-    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".1.3"
+    assert model.get_anon_uid(ds.StudyInstanceUID) == hash_jpeg_extended_StudyInstanceUID
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_jpeg_extended_SeriesInstanceUID
+    assert model.get_anon_uid(ds.SOPInstanceUID) == hash_jpeg_extended_SOPInstanceUID
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
@@ -786,7 +829,7 @@ def test_send_JPEG_Extended(temp_dir: str, controller: ProjectController):
     assert len(series.instances) == 1
 
     # Read the anonymize file and check the SOPClassUID and TransferSyntaxUID:
-    anon_file_path = os.path.join(store_dir, dirlist[0], prefix + ".1.1", prefix + ".1.2", prefix + ".1.3.dcm")
+    anon_file_path = os.path.join(store_dir, dirlist[0], hash_jpeg_extended_StudyInstanceUID, hash_jpeg_extended_SeriesInstanceUID, hash_jpeg_extended_SOPInstanceUID + ".dcm")
     assert os.path.exists(anon_file_path)
     ds = dcmread(anon_file_path)
     assert ds
@@ -832,9 +875,9 @@ def test_send_JPEG_Lossless_P14_FOP(temp_dir: str, controller: ProjectController
     assert len(dirlist) == 1
     assert dirlist[0] == TEST_SITEID + "-000001"
     prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
-    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1.1"
-    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".1.2"
-    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".1.3"
+    assert model.get_anon_uid(ds.StudyInstanceUID) == hash_jpeg_lossless_p14_StudyInstanceUID
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_jpeg_lossless_p14_SeriesInstanceUID
+    assert model.get_anon_uid(ds.SOPInstanceUID) == hash_jpeg_lossless_p14_SOPInstanceUID
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
@@ -863,7 +906,7 @@ def test_send_JPEG_Lossless_P14_FOP(temp_dir: str, controller: ProjectController
     assert len(series.instances) == 1
 
     # Read the anonymize file and check the SOPClassUID and TransferSyntaxUID:
-    anon_file_path = os.path.join(store_dir, dirlist[0], prefix + ".1.1", prefix + ".1.2", prefix + ".1.3.dcm")
+    anon_file_path = os.path.join(store_dir, dirlist[0], hash_jpeg_lossless_p14_StudyInstanceUID, hash_jpeg_lossless_p14_SeriesInstanceUID, hash_jpeg_lossless_p14_SOPInstanceUID + ".dcm")
     assert os.path.exists(anon_file_path)
     ds = dcmread(anon_file_path)
     assert ds
@@ -908,9 +951,9 @@ def test_send_JPEG_LS_Lossless(temp_dir: str, controller: ProjectController):
     assert len(dirlist) == 1
     assert dirlist[0] == TEST_SITEID + "-000001"
     prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
-    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1.1"
-    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".1.2"
-    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".1.3"
+    assert model.get_anon_uid(ds.StudyInstanceUID) == hash_jpeg_ls_lossless_StudyInstanceUID
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_jpeg_ls_lossless_SeriesInstanceUID
+    assert model.get_anon_uid(ds.SOPInstanceUID) == hash_jpeg_ls_lossless_SOPInstanceUID
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
@@ -939,7 +982,7 @@ def test_send_JPEG_LS_Lossless(temp_dir: str, controller: ProjectController):
     assert len(series.instances) == 1
 
     # Read the anonymize file and check the SOPClassUID and TransferSyntaxUID:
-    anon_file_path = os.path.join(store_dir, dirlist[0], prefix + ".1.1", prefix + ".1.2", prefix + ".1.3.dcm")
+    anon_file_path = os.path.join(store_dir, dirlist[0], hash_jpeg_ls_lossless_StudyInstanceUID, hash_jpeg_ls_lossless_SeriesInstanceUID, hash_jpeg_ls_lossless_SOPInstanceUID + ".dcm")
     assert os.path.exists(anon_file_path)
     ds = dcmread(anon_file_path)
     assert ds
@@ -993,9 +1036,9 @@ def test_send_JPEG_LS_Lossy(temp_dir: str, controller: ProjectController):
     assert len(dirlist) == 1
     assert dirlist[0] == TEST_SITEID + "-000001"
     prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
-    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1.1"
-    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".1.2"
-    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".1.3"
+    assert model.get_anon_uid(ds.StudyInstanceUID) == hash_jpeg_ls_lossy_StudyInstanceUID
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_jpeg_ls_lossy_SeriesInstanceUID
+    assert model.get_anon_uid(ds.SOPInstanceUID) == hash_jpeg_ls_lossy_SOPInstanceUID
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
@@ -1024,7 +1067,7 @@ def test_send_JPEG_LS_Lossy(temp_dir: str, controller: ProjectController):
     assert len(series.instances) == 1
 
     # Read the anonymize file and check the SOPClassUID and TransferSyntaxUID:
-    anon_file_path = os.path.join(store_dir, dirlist[0], prefix + ".1.1", prefix + ".1.2", prefix + ".1.3.dcm")
+    anon_file_path = os.path.join(store_dir, dirlist[0], hash_jpeg_ls_lossy_StudyInstanceUID, hash_jpeg_ls_lossy_SeriesInstanceUID, hash_jpeg_ls_lossy_SOPInstanceUID + ".dcm")
     assert os.path.exists(anon_file_path)
     ds = dcmread(anon_file_path)
     assert ds
@@ -1069,9 +1112,9 @@ def test_send_JPEG_2000_Lossless(temp_dir: str, controller: ProjectController):
     assert len(dirlist) == 1
     assert dirlist[0] == TEST_SITEID + "-000001"
     prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
-    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1.1"
-    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".1.2"
-    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".1.3"
+    assert model.get_anon_uid(ds.StudyInstanceUID) == hash_jpeg_2000_lossless_StudyInstanceUID
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_jpeg_2000_lossless_SeriesInstanceUID
+    assert model.get_anon_uid(ds.SOPInstanceUID) == hash_jpeg_2000_lossless_SOPInstanceUID
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
@@ -1100,7 +1143,7 @@ def test_send_JPEG_2000_Lossless(temp_dir: str, controller: ProjectController):
     assert len(series.instances) == 1
 
     # Read the anonymize file and check the SOPClassUID and TransferSyntaxUID:
-    anon_file_path = os.path.join(store_dir, dirlist[0], prefix + ".1.1", prefix + ".1.2", prefix + ".1.3.dcm")
+    anon_file_path = os.path.join(store_dir, dirlist[0], hash_jpeg_2000_lossless_StudyInstanceUID, hash_jpeg_2000_lossless_SeriesInstanceUID, hash_jpeg_2000_lossless_SOPInstanceUID + ".dcm")
     assert os.path.exists(anon_file_path)
     ds = dcmread(anon_file_path)
     assert ds
@@ -1146,9 +1189,9 @@ def test_send_JPEG_2000(temp_dir: str, controller: ProjectController):
     assert len(dirlist) == 1
     assert dirlist[0] == TEST_SITEID + "-000001"
     prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
-    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1.1"
-    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".1.2"
-    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".1.3"
+    assert model.get_anon_uid(ds.StudyInstanceUID) == hash_jpeg_2000_StudyInstanceUID
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_jpeg_2000_SeriesInstanceUID
+    assert model.get_anon_uid(ds.SOPInstanceUID) == hash_jpeg_2000_SOPInstanceUID
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)
@@ -1177,7 +1220,7 @@ def test_send_JPEG_2000(temp_dir: str, controller: ProjectController):
     assert len(series.instances) == 1
 
     # Read the anonymize file and check the SOPClassUID and TransferSyntaxUID:
-    anon_file_path = os.path.join(store_dir, dirlist[0], prefix + ".1.1", prefix + ".1.2", prefix + ".1.3.dcm")
+    anon_file_path = os.path.join(store_dir, dirlist[0], hash_jpeg_2000_StudyInstanceUID, hash_jpeg_2000_SeriesInstanceUID, hash_jpeg_2000_SOPInstanceUID + ".dcm")
     assert os.path.exists(anon_file_path)
     ds = dcmread(anon_file_path)
     assert ds

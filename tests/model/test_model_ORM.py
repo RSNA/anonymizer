@@ -3,13 +3,16 @@ from pathlib import Path
 import pytest
 from pydicom import Dataset
 from pydicom.data import get_testdata_file
-
+from tests.controller.dicom_test_nodes import (
+    TEST_SITEID,
+    TEST_UIDROOT,
+)
 from src.anonymizer.model.anonymizer import PHI, AnonymizerModel, Series, Study
 from tests.controller.dicom_test_files import ct_small_filename, mr_brain_filename
 
 TEST_DB_DIALECT = "sqlite"  # Database dialect
-TEST_DB_NAME = "anonymizer_test.db"  # Name of the test database file
-TEST_DB_DIR = Path(__file__).parent / ".test_dbs"  # In tests/model/.test_dbs
+TEST_DB_NAME = "anonymizer_model_test.db"  # Name of the test database file
+TEST_DB_DIR = Path(__file__).parent / ".test_db"  
 TEST_DB_FILE = TEST_DB_DIR / TEST_DB_NAME
 TEST_DB_URL = f"{TEST_DB_DIALECT}:///{TEST_DB_FILE}"
 
@@ -27,8 +30,8 @@ def anonymizer_model() -> AnonymizerModel:
     TEST_DB_FILE.parent.mkdir(parents=True, exist_ok=True)
 
     model = AnonymizerModel(
-        site_id="TEST_SITE",
-        uid_root="1.2.3.4.5",
+        site_id=TEST_SITEID,
+        uid_root=TEST_UIDROOT,
         script_path=Path("src/anonymizer/assets/scripts/default-anonymizer.script"),
         db_url=TEST_DB_URL,  # db_url = "sqlite:///:memory:"
     )
@@ -87,14 +90,14 @@ def test_anonymizer_model_initialization(anonymizer_model: AnonymizerModel):
     # Ensure default PHI entry has been created:
     default_phi = anonymizer_model.get_phi_by_phi_patient_id(AnonymizerModel.DEFAULT_PHI_PATIENT_ID_PK_VALUE)
     assert default_phi is not None
-    assert default_phi.anon_patient_id == "TEST_SITE-000000"
+    assert default_phi.anon_patient_id == TEST_SITEID + "-000000"
 
 
 def test_capture_phi_with_mock_ds1(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
     # Store:
     ptid, anon_ptid, acc_no = anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
     assert ptid == mock_dataset1.PatientID
-    assert anon_ptid == "TEST_SITE-000001"
+    assert anon_ptid == TEST_SITEID + "-000001"
     assert acc_no
     assert len(acc_no) == 18
 
@@ -103,7 +106,7 @@ def test_capture_phi_with_mock_ds1(anonymizer_model: AnonymizerModel, mock_datas
     assert phi is not None
     assert phi.patient_name == mock_dataset1.PatientName
     assert phi.patient_id == mock_dataset1.PatientID
-    assert phi.anon_patient_id == "TEST_SITE-000001"
+    assert phi.anon_patient_id == TEST_SITEID + "-000001"
     assert phi.sex == mock_dataset1.PatientSex
     assert phi.dob == mock_dataset1.PatientBirthDate
     assert phi.ethnic_group == mock_dataset1.EthnicGroup
@@ -126,7 +129,7 @@ def test_capture_phi_with_mock_ds2(anonymizer_model: AnonymizerModel, mock_datas
     # Store:
     ptid, anon_ptid, anon_acc_no = anonymizer_model.capture_phi(source="pytest", ds=mock_dataset2, date_delta=0)
     assert ptid == mock_dataset2.PatientID
-    assert anon_ptid == "TEST_SITE-000001"
+    assert anon_ptid == TEST_SITEID + "-000001"
     assert anon_acc_no is None
 
     # Lookup
@@ -134,7 +137,7 @@ def test_capture_phi_with_mock_ds2(anonymizer_model: AnonymizerModel, mock_datas
     assert phi is not None
     assert phi.patient_name == mock_dataset2.PatientName
     assert phi.patient_id == mock_dataset2.PatientID
-    assert phi.anon_patient_id == "TEST_SITE-000001"
+    assert phi.anon_patient_id == TEST_SITEID + "-000001"
     assert phi.sex == mock_dataset2.PatientSex
     assert phi.dob == mock_dataset2.PatientBirthDate
     assert phi.ethnic_group == mock_dataset2.EthnicGroup
@@ -159,13 +162,13 @@ def test_capture_phi_with_mock_ds1_and_ds2(
     # Store:
     ptid1, anon_ptid1, anon_acc_no1 = anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
     assert ptid1 == mock_dataset1.PatientID
-    assert anon_ptid1 == "TEST_SITE-000001"
+    assert anon_ptid1 == TEST_SITEID + "-000001"
     assert anon_acc_no1
     assert len(anon_acc_no1) == 18
 
     ptid2, anon_ptid2, anon_acc_no2 = anonymizer_model.capture_phi(source="pytest", ds=mock_dataset2, date_delta=0)
     assert ptid2 == mock_dataset2.PatientID
-    assert anon_ptid2 == "TEST_SITE-000002"
+    assert anon_ptid2 == TEST_SITEID + "-000002"
     assert anon_acc_no2 is None
 
     # Lookup 1
@@ -173,7 +176,7 @@ def test_capture_phi_with_mock_ds1_and_ds2(
     assert phi1 is not None
     assert phi1.patient_name == mock_dataset1.PatientName
     assert phi1.patient_id == mock_dataset1.PatientID
-    assert phi1.anon_patient_id == "TEST_SITE-000001"
+    assert phi1.anon_patient_id == TEST_SITEID + "-000001"
     assert phi1.sex == mock_dataset1.PatientSex
     assert phi1.dob == mock_dataset1.PatientBirthDate
     assert phi1.ethnic_group == mock_dataset1.EthnicGroup
@@ -196,7 +199,7 @@ def test_capture_phi_with_mock_ds1_and_ds2(
     assert phi2 is not None
     assert phi2.patient_name == mock_dataset2.PatientName
     assert phi2.patient_id == mock_dataset2.PatientID
-    assert phi2.anon_patient_id == "TEST_SITE-000002"
+    assert phi2.anon_patient_id == TEST_SITEID + "-000002"
     assert phi2.sex == mock_dataset2.PatientSex
     assert phi2.dob == mock_dataset2.PatientBirthDate
     assert phi2.ethnic_group == mock_dataset2.EthnicGroup
@@ -224,14 +227,14 @@ def test_capture_phi_with_ct_small_filename(anonymizer_model: AnonymizerModel):
     # Store:
     ptid1, anon_ptid1, anon_acc_no1 = anonymizer_model.capture_phi(source="pytest", ds=ct1_ds, date_delta=0)
     assert ptid1 == ct1_ds.PatientID
-    assert anon_ptid1 == "TEST_SITE-000001"
+    assert anon_ptid1 == TEST_SITEID + "-000001"
     assert anon_acc_no1 is None
     # Lookup:
     phi1: PHI | None = anonymizer_model.get_phi_by_phi_patient_id(ct1_ds.PatientID)
     assert phi1 is not None
     assert phi1.patient_name == ct1_ds.PatientName
     assert phi1.patient_id == ct1_ds.PatientID
-    assert phi1.anon_patient_id == "TEST_SITE-000001"
+    assert phi1.anon_patient_id == TEST_SITEID + "-000001"
     assert phi1.sex == ct1_ds.PatientSex
     assert phi1.dob == ct1_ds.PatientBirthDate
     assert phi1.studies is not None
@@ -260,7 +263,7 @@ def test_capture_phi_with_mr_brain_filename(anonymizer_model: AnonymizerModel):
     # Store:
     ptid1, anon_ptid1, anon_acc_no1 = anonymizer_model.capture_phi(source="pytest", ds=mr1_ds, date_delta=0)
     assert ptid1 == mr1_ds.PatientID
-    assert anon_ptid1 == "TEST_SITE-000001"
+    assert anon_ptid1 == TEST_SITEID + "-000001"
     assert anon_acc_no1
     assert len(anon_acc_no1) == 18
     # Lookup:
@@ -268,7 +271,7 @@ def test_capture_phi_with_mr_brain_filename(anonymizer_model: AnonymizerModel):
     assert phi1 is not None
     assert phi1.patient_name == mr1_ds.PatientName
     assert phi1.patient_id == mr1_ds.PatientID
-    assert phi1.anon_patient_id == "TEST_SITE-000001"
+    assert phi1.anon_patient_id == TEST_SITEID + "-000001"
     assert phi1.sex == mr1_ds.PatientSex
     assert phi1.dob == mr1_ds.PatientBirthDate
     assert phi1.studies is not None
@@ -301,11 +304,11 @@ def test_capture_phi_with_ct_small_and_mr_brain_filename(anonymizer_model: Anony
     # Store:
     ptid1, anon_ptid1, anon_acc_no1 = anonymizer_model.capture_phi(source="pytest", ds=ct1_ds, date_delta=10)
     assert ptid1 == ct1_ds.PatientID
-    assert anon_ptid1 == "TEST_SITE-000001"
+    assert anon_ptid1 == TEST_SITEID + "-000001"
     assert anon_acc_no1 is None
     ptid2, anon_ptid2, anon_acc_no2 = anonymizer_model.capture_phi(source="pytest", ds=mr1_ds, date_delta=20)
     assert ptid2 == mr1_ds.PatientID
-    assert anon_ptid2 == "TEST_SITE-000002"
+    assert anon_ptid2 == TEST_SITEID + "-000002"
     assert anon_acc_no2
     assert len(anon_acc_no2) == 18
     # Lookup:

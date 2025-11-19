@@ -7,11 +7,17 @@ from anonymizer.utils.storage import (
 )
 from pydicom.dataset import Dataset
 from anonymizer.model.anonymizer import AnonymizerModel
-from tests.controller.dicom_test_files import ct_small_filename
     
 from tests.controller.dicom_test_nodes import LocalStorageSCP
 from tests.controller.helpers import send_file_to_scp
-
+from tests.controller.dicom_test_files import (
+    ct_small_filename,
+    
+    hash_ct_small_StudyInstanceUID,
+    hash_ct_small_SeriesInstanceUID,
+    hash_ct_small_SOPInstanceUID,
+    hash_ct_small_FrameOfReferenceUID
+)
 
 
 def test_read_java_anonymizer_index_xlsx(temp_dir: str, controller: ProjectController) -> None:
@@ -55,10 +61,10 @@ def test_load_java_index_into_new_project_and_import_ct_small(temp_dir: str, con
     assert len(dirlist) == 1
     assert dirlist[0] == model._site_id + "-000083"
     prefix = f"{model._uid_root}.{model._site_id}"
-    assert model.get_anon_uid(ds.StudyInstanceUID) == prefix + ".1." + str(uid_mapping_count + 1)
-    assert model.get_anon_uid(ds.SeriesInstanceUID) == prefix + ".1." + str(uid_mapping_count + 2)
-    assert model.get_anon_uid(ds.SOPInstanceUID) == prefix + ".1." + str(uid_mapping_count + 3)
-    assert model.get_anon_uid(ds.FrameOfReferenceUID) == prefix + ".1." + str(uid_mapping_count + 4)
+    assert model.get_anon_uid(ds.StudyInstanceUID) == hash_ct_small_StudyInstanceUID
+    assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_ct_small_SeriesInstanceUID
+    assert model.get_anon_uid(ds.SOPInstanceUID) == hash_ct_small_SOPInstanceUID
+    assert model.get_anon_uid(ds.FrameOfReferenceUID) == hash_ct_small_FrameOfReferenceUID
 
     # Verify PHI / Study / Series stored correctly in AnonmyizerModel
     anon_ptid = model.get_anon_patient_id(ds.PatientID)

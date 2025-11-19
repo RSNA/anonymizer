@@ -24,13 +24,6 @@ from tests.controller.dicom_test_nodes import (
     RemoteSCPDict,
 )
 
-TEST_DB_DIALECT = "sqlite"  # Database dialect
-TEST_DB_NAME = "anonymizer_test.db"  # Name of the test database file
-TEST_DB_DIR = Path(__file__).parent / ".test_dbs"  # In tests/model/.test_dbs
-TEST_DB_FILE = TEST_DB_DIR / TEST_DB_NAME
-TEST_DB_URL = f"{TEST_DB_DIALECT}:///{TEST_DB_FILE}"
-
-
 def pytest_sessionstart(session):
     """Runs before the test session begins."""
     # Initialise logging without file handler:
@@ -54,9 +47,6 @@ def controller(temp_dir: str) -> Generator[ProjectController, Any, None]:
     anon_store = Path(temp_dir, LocalSCU.aet)
     # Make sure storage directory exists:
     os.makedirs(anon_store, exist_ok=True)
-
-    if TEST_DB_FILE.exists():
-        TEST_DB_FILE.unlink()  # Delete old DB file to ensure fresh start
 
     # Create Test ProjectModel:
     project_model: ProjectModel = ProjectModel(

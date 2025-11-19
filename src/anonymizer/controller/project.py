@@ -2481,7 +2481,7 @@ class ProjectController(AE):
 
     def delete_study(self, anon_pt_id: str, anon_study_uid: str) -> bool:
         """
-        Delete a study from the local storage and remove assoicated PHI data from the anonymizer model.
+        Delete a study from the local storage, remove Study,Series,Instance UID mappings and remove assoicated PHI data from the anonymizer model.
 
         Args:
             anon_pt_id (str): The Anonymized Patient ID of the study to be deleted.
@@ -2502,9 +2502,18 @@ class ProjectController(AE):
                         if file.endswith(".dcm"):
                             anon_instance_uids.append(Path(root, file).stem)
 
-                # Iterate through all SOPInstanceUIDs and remove from AnonymizerModel uid_lookup using bidict inverse lookup:
+                # Iterate through all SOPInstanceUIDs and remove from AnonymizerModel UID Map:
                 for anon_instance_uid in anon_instance_uids:
                     self.anonymizer.model.remove_uid_inverse(anon_instance_uid)
+
+                # Compile list of all SeriesInstanceUIDs in the study by reading the series sub-directories from storage directory:
+                anon_series_uids = os.listdir(study_dir)
+                # Iterate through all SeriesInstanceUIDs and remove from AnonymizerModel UID Map:
+                for anon_series_uid in anon_series_uids:
+                    self.anonymizer.model.remove_uid_inverse(anon_series_uid)
+
+                # Remove StudyInstanceUID from AnonymizerModel UID Map:
+                self.anonymizer.model.remove_uid_inverse(anon_study_uid)
 
                 # Remove files from local storage directory:
                 shutil.rmtree(study_dir)
@@ -2524,7 +2533,7 @@ class ProjectController(AE):
 
         # Remove PHI data from anonymizer model:
         if not self.anonymizer.model.remove_phi(anon_pt_id, anon_study_uid):
-            logger.error(f"Critical Error removing phi data for StudyUID: {anon_study_uid} PatientID: {anon_pt_id}")
+            logger.error(f"Critical Error removing phi data for AnonStudyUID: {anon_study_uid} AnonPatientID: {anon_pt_id}")
             return False
 
         logger.info(f"PHI data removed for StudyUID: {anon_study_uid} PatientID: {anon_pt_id} successfully")

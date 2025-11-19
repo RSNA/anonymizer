@@ -4,7 +4,24 @@ All notable changes to this project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [18.0.6]
+### Changed
+- Change UID generation from sequential to hash of phi UID value, as per TCIA (Michael Rutherford) recommendation
+- Fix issue#35 UID of deleted instances remain in DB <= cause was due to new patient creation, anon_ptid now generated safely from max string in table
+- Significant test refactoring to handle new UID hash
+
+## [18.0.5]
+### Added
+- PR#34 Michael Rutherford: DPI call for Windows 
+### Changed
+- Dark Theme text color set to white
+
+## [18.0.4]
+### Added
+- Fix issue#32, add uid mapping when importing java index
+
 ## [18.0.0]
+### Changed
 - AnonymizerModel based on SQLAlchemy ORM replaced AnonymizerModel using python dictionaries as lookup tables
 - Integration of new AnonymizerModel with AnonymizerController and ProjectController
 - Added LoggingLevels: sql and store_dicom_source
@@ -14,7 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SeriesView and ImageViewer classes with text detection and removal using easyocr reader and blackout area with user defined rectangles
 - ImageViewer includes histogram display of current frame
 - SeriesView includes whitelist with associated modality specific default lists in assets/locales/*/whitelists
-
 ### Changed
 - Modifications to index and projection modules for memory management and launching SeriesView with ImageViewer
 
@@ -31,7 +47,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ProjectModel.abridged_path to handle display of storage directory and script path to depth of 4
 - change Query => Search and Export => Send
 - License changed from RSNA Public to Apache 2.0 license
-
 ## Added
 - Distribution via pyPI, github action: release.yaml
 - Unit testing via github action: tests.yaml
@@ -54,14 +69,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Moved logger.info trace of incoming file in ProjectController._handle_store to AnonymizeController.anonymize_dataset in pydicom logging true clause
 - resturctured src directory for pypi: src/anonymizer/...
 - release.yaml github action for managing pypi releases
-
-
 ## Added
 - Add tcl/tk install and test to development setup in readme.md
 - Addressing issue [#18] (https://github.com/RSNA/anonymizer/issues/18) 
     - IF pydicom logging enabled then incoming datasets, either via network or file import, will be stored in private subdir or storage directory
     - Classify all critial errors in AnonmyizerModel.capture_phi so logger output is clearer
-
 
 ## [17.1.1] - July 15, 2024
 ### Radon raw totals:
@@ -126,7 +138,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GUI App initialisation creation exception handling
 - Output tkinter and customtkinter version to log at startup
 - Set log levels Anonymizer, pynetdicom, pydicom
-
 ## Changed
 - Moved de-identification string constants within AnonymizerController class
 - unit-test.yml to build.yml, gh action build and upload steps for all platforms using build.py (renamed build_win.py) with automatic release if version does not contain "RC"
@@ -136,13 +147,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Allow multiple concurrent file and directory import processes
 - ProjectController.find_uids to get list of series_uids and instance_uids for study retrieval management
-
 ### Changed
 - If local server does start on open project (eg. due to local server start / port open error) then still open project 
 - Product Name = "Anonymizer" across platforms, File Description = "RSNA DICOM Anonymizer"
 - Query & Retrieve import verification by verifying files in store
 - Storage path naming, remove Series and Instance Number dependency, use uids
 - Increased log file size to 60MB
-
 ### Removed
  - Removed 

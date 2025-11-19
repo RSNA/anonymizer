@@ -14,7 +14,7 @@ from pprint import pformat
 from typing import ClassVar, NamedTuple
 
 from pydicom import Dataset
-from sqlalchemy import ForeignKey, Integer, String, create_engine, delete, func, select
+from sqlalchemy import ForeignKey, Integer, String, create_engine, delete, func, select, text
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -31,6 +31,7 @@ from sqlalchemy.orm import (
 from anonymizer.utils.storage import JavaAnonymizerExportedStudy
 
 logger = logging.getLogger(__name__)
+
 
 
 class Base(MappedAsDataclass, DeclarativeBase):
@@ -94,6 +95,9 @@ class PHI(Base):
 
 
 # Used to map all PHI DICOM UIDs to anonymized UIDs
+# This is only necessary due to legacy reasons where UIDs were not generated deterministically
+# or imported from Java Anonymizer exports
+# To be removed in future major version release
 class UID(Base):
     __tablename__ = "UID_map"
 
@@ -188,6 +192,8 @@ class AnonymizerModel:
     # The primary key value for the PHI record representing studies with no/empty PatientID
     DEFAULT_PHI_PATIENT_ID_PK_VALUE: ClassVar[str] = ""  # "" is used as the primary key for the default PHI record
     DEFAULT_PHI_STUDY_DATE = "19000101"
+    # DICOM Standard VR for UI (Unique Identifier) is 64 characters max
+    DICOM_UID_MAX_LEN = 64
 
     def __init__(self, site_id: str, uid_root: str, script_path: Path, db_url: str, db_echo: bool = False):
         """
@@ -497,14 +503,37 @@ class AnonymizerModel:
 
     def _create_anon_uid(self, phi_uid: str) -> str:
         """
-        Generates a new anonymized UID based on the UID prefix and the next mapping primary key.
-        This is used internally to create a new UID mapping.
+        Generates a new, *deterministic* anonymized UID from an original UID.
+
+        This method combines the project's UID prefix with a hash of the
+        original UID. It is idempotent, meaning the same input `phi_uid`
+        will always produce the same output anonymized UID.
+        
+        The final UID is guaranteed to be 64 characters or less.
         """
-        new_mapping = UID(phi_uid=phi_uid, anon_uid="placeholder")
+        # The ".2" is added to distinguish from previous implementation of sequential UID generation.
+        prefix = f"{self._uid_prefix}.2."
+        max_len = self.DICOM_UID_MAX_LEN
+        
+        if max_len <= len(prefix):
+            raise ValueError(
+                f"The maximum UID length ({max_len}) is too short to accommodate "
+                f"the UID root prefix '{prefix}' (length {len(prefix)})."
+            )
+
+        available_digits = max_len - len(prefix)
+
+        # Calculate the MD5 hash (for a deterministic 128-bit mapping)
+        phi_uid_hash = hashlib.md5(phi_uid.encode('utf-8'))
+        
+        # Convert the 128-bit hash to a large integer
+        phi_uid_hash_int = int(phi_uid_hash.hexdigest(), 16)
+        reduced_hash_int = phi_uid_hash_int % (10**available_digits)
+
+        new_anon_uid = f"{prefix}{reduced_hash_int}"
+        new_mapping = UID(phi_uid=phi_uid, anon_uid=new_anon_uid)
         self.session.add(new_mapping)
-        self.session.flush()  # Send the INSERT to the DB and populates new_mapping.mapping_pk
-        new_anon_uid = f"{self._uid_prefix}.1.{new_mapping.mapping_pk}" # .1 prefix added to avoid clash with JAVA Index imported UIDs
-        new_mapping.anon_uid = new_anon_uid  # Marks the object for UPDATE on final commit
+
         return new_anon_uid
 
     @use_session()
@@ -663,13 +692,23 @@ class AnonymizerModel:
 
         phi: PHI | None = self.session.get(PHI, phi_ptid)
         if phi:
-            logger.debug(f"Found existing PHI record for patient_id: {phi_ptid}")
+            logger.debug(f"Found existing PHI record")
             return phi
 
-        logger.info(f"Creating PHI record for patient_id: {phi_ptid}")
-        # Generate a NEW anon_patient_id based on the site_id and the current patient count:
-        phi_count = self.session.execute(select(func.count()).select_from(PHI)).scalar_one()
-        anon_ptid = self._format_anon_patient_id(phi_index=phi_count)
+        logger.debug(f"Creating PHI record for new patient_id")
+        # Acquire Pessimistic Lock on the PHI Table
+        # This prevents any other process from reading or writing the table until commit.
+        try:
+            self.session.execute(text("LOCK TABLE PHI IN ACCESS EXCLUSIVE MODE"))
+        except Exception as e:
+            logger.warning(f"Could not acquire table lock. {e}")
+            # Depending on your environment, logging or raising is appropriate.
+            pass
+            # Generate a NEW anon_patient_id based on the site_id and the current patient count:
+        # Site_id/prefix is constant, for anon_patient_id string MAX works the same as numeric MAX
+        last_anon_patient_id = self.session.execute(select(func.max(PHI.anon_patient_id))).scalar_one()
+        last_phi_index = int(last_anon_patient_id.split("-")[-1]) if last_anon_patient_id else 0
+        anon_ptid = self._format_anon_patient_id(phi_index=last_phi_index+1)
 
         new_phi: PHI = PHI(
             patient_id=phi_ptid,
@@ -687,20 +726,16 @@ class AnonymizerModel:
         study: Study | None = self.session.get(Study, study_uid)
 
         if study:
-            logger.debug(f"Found existing Study record for PK '{study_uid}'.")
+            logger.debug(f"Found existing Study record")
             if study.patient_id == parent_phi.patient_id:
                 return study
             else:
                 # If the study exists but is linked to a different patient_id, raise an error
-                msg = (
-                    f"IntegrityError: StudyUID '{study_uid}' exists but is linked to "
-                    f"PHI.patient_id '{study.patient_id}', while current DICOM "
-                    f"implies PHI.patient_id '{parent_phi.patient_id}'."
-                )
+                msg = f"IntegrityError: StudyUID exists but is linked to a different patient"
                 logger.error(msg)
                 raise ValueError(msg)  # Let get_session handle rollback
 
-        logger.info(f"Study record for PK '{study_uid}' not found. Creating new study...")
+        logger.debug(f"Study record not found. Creating new study...")
 
         # Process AccessionNumber:
         phi_acc_no: str | None = str(ds.AccessionNumber).strip() if hasattr(ds, "AccessionNumber") else None
@@ -708,7 +743,7 @@ class AnonymizerModel:
         # If phi dataset does not have an AccessionNumber or it is "" set anon_accession_number to None else use hash:
         anon_acc_no = None if phi_acc_no is None or phi_acc_no == "" else self._hash_accession_number(phi_acc_no)
 
-        logger.debug(f"Creating new Study record with phi_acc_no:{phi_acc_no} and anon_acc_no:{anon_acc_no}")
+        logger.debug(f"Creating new Study record with anon_acc_no:{anon_acc_no}")
         new_study: Study = Study(
             study_uid=study_uid,
             anon_study_uid=self._create_anon_uid(study_uid),  # Generate a new anonymized StudyUID
@@ -728,20 +763,16 @@ class AnonymizerModel:
         series: Series | None = self.session.get(Series, series_uid)
 
         if series:
-            logger.debug(f"Found existing Series record for PK '{series_uid}'.")
+            logger.debug(f"Found existing Series record")
             # Integrity Check: StudyUID mismatch with existing Series
             if series.study_uid == parent_study_record.study_uid:
                 return series
             else:
-                msg = (
-                    f"IntegrityError: SeriesUID '{series_uid}' exists but is linked to "
-                    f"Study.study_uid '{series.study_uid}', while current DICOM "
-                    f"implies Study.study_uid '{parent_study_record.study_uid}'."
-                )
+                msg = f"IntegrityError: SeriesUID '{series_uid}' exists but is linked to another Study"
                 logger.error(msg)
                 raise ValueError(msg)
 
-        logger.info(f"Series record for PK '{series_uid}' not found. Creating new Series...")
+        logger.debug(f"Series record not found. Creating new Series...")
         new_series: Series = Series(
             series_uid=series_uid,
             anon_series_uid=self._create_anon_uid(series_uid),  # Generate a new anonymized SeriesUID
@@ -757,20 +788,16 @@ class AnonymizerModel:
         instance: Instance | None = self.session.get(Instance, sop_instance_uid)
 
         if instance:
-            logger.debug(f"Found existing Instance record for PK '{sop_instance_uid}'.")
+            logger.debug(f"Found existing Instance record")
             # An instance should never move between series.
             if instance.series_uid != parent_series_record.series_uid:
-                msg = (
-                    f"IntegrityError: SOPInstanceUID '{sop_instance_uid}' exists but is linked to "
-                    f"SeriesUID '{instance.series_uid}', while current DICOM implies "
-                    f"SeriesUID '{parent_series_record.series_uid}'."
-                )
+                msg = f"IntegrityError: SOPInstanceUID '{sop_instance_uid}' exists but is linked to another Series"
                 logger.error(msg)
                 raise ValueError(msg)
             else:
                 return instance
 
-        logger.debug(f"Instance record for PK '{sop_instance_uid}' not found. Creating new Instance...")
+        logger.debug(f"Instance record not found. Creating new Instance...")
 
         new_instance: Instance = Instance(
             sop_instance_uid=sop_instance_uid,
@@ -814,11 +841,8 @@ class AnonymizerModel:
     @use_session()
     def remove_phi(self, anon_pt_id: str, anon_study_uid: str) -> bool:
         """
-        Removes a Study and its children (Series, Instances) from the database,
-        and returns the list of associated anonymized filenames for disk cleanup.
-
-        If the Study was the last one for a Patient (PHI), the PHI record is also removed.
-        All corresponding UID mappings in the generic UID_map are cleaned up.
+        Removes a Study and its children (Series, Instances) from the PHI table and associated Series & Instance tables,
+        If the Study is the last one for the Patient (PHI), the PHI record is also removed.
 
         Args:
             session (Session): The active SQLAlchemy session (injected by decorator).
@@ -830,19 +854,10 @@ class AnonymizerModel:
         """
         logger.info(f"remove_phi called for anon_pt_id={anon_pt_id}, anon_study_uid={anon_study_uid}")
 
-        # 1. Find the original Study UID from the provided anonymized one
-        phi_study_uid = self.session.execute(
-            select(UID.phi_uid).where(UID.anon_uid == anon_study_uid)
-        ).scalar_one_or_none()
-
-        if not phi_study_uid:
-            logger.error(f"Anon StudyUID='{anon_study_uid}' not found in UID map.")
-            return False
-
-        # 2. Fetch the Study to be deleted and its full object tree (PHI, Series, Instances)
+        # 1. Fetch the Study to be deleted and its full object tree (PHI, Series, Instances)
         stmt = (
             select(Study)
-            .where(Study.study_uid == phi_study_uid)
+            .where(Study.anon_study_uid == anon_study_uid)
             .options(
                 joinedload(Study.patient),  # Use joinedload for the to-one parent (efficient)
                 selectinload(Study.series).selectinload(Series.instances),  # Eager load the full to-many tree
@@ -851,16 +866,16 @@ class AnonymizerModel:
         study_to_delete = self.session.execute(stmt).scalar_one_or_none()
 
         if not study_to_delete:
-            logger.error(f"Study with original UID='{phi_study_uid}' (from anon UID '{anon_study_uid}') not found.")
+            logger.error(f"Study with anon UID '{anon_study_uid}' not found.")
             return False
 
-        # 3. Perform integrity check: Does this study belong to the expected anonymized patient?
+        # 2. Perform integrity check: Does this study belong to the expected anonymized patient?
         parent_phi = study_to_delete.patient  # Access the eagerly loaded parent PHI
         if not parent_phi or parent_phi.anon_patient_id != anon_pt_id:
-            logger.error(f"Integrity error: Study '{phi_study_uid}' does not belong to anon_pt_id '{anon_pt_id}'.")
+            logger.error(f"Integrity error: Study does not belong to anon_pt_id '{anon_pt_id}'.")
             return False
 
-        # 4. Delete the Study or the parent PHI.
+        # 3. Delete the Study or the parent PHI.
         #    SQLAlchemy's cascade="all, delete-orphan" will handle deleting all children
         #    (Study -> Series -> Instances).
         if parent_phi.studies and len(parent_phi.studies) == 1:
