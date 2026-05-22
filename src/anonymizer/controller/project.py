@@ -1498,13 +1498,13 @@ class ProjectController(AE):
                             uid=identifier.SeriesInstanceUID,
                             number=identifier.get("SeriesNumber", None),  # TODO: should this be auto-generated if None?
                             modality=identifier.Modality,
-                            sop_class_uid=identifier.SOPClassUID,
+                            sop_class_uid=sop_class_uid,
                             description=series_descr,
                             instance_count=instance_count,
                             instances={},
                         )
                         logger.info(
-                            f"New Series[Modality={identifier.Modality},SOPClassUID={identifier.SOPClassUID}]: {series_descr}/{identifier.SeriesInstanceUID}/{identifier.SeriesNumber} | {instance_count}"
+                            f"New Series[Modality={identifier.Modality},SOPClassUID={sop_class_uid}]: {series_descr}/{identifier.SeriesInstanceUID}/{identifier.SeriesNumber} | {instance_count}"
                         )
 
             logger.info(f"StudyUID={study_uid}, {len(study_uid_hierarchy.series)} Series found")

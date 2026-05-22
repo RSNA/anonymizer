@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [18.0.7]
+### Changed
+- Bugfix: controller/project.py.get_study_uid_hierarchy was insisting C-FIND[series] responses contained SOPClassUID, some PACS/VNA's do not return this, not mandatory as per DICOM Standard
+- Disabled unit test: test_aws_upload/test_send_1_dicomfile_to_AWS_S3_and_list_objects for CI (Due to: "AWS Cognito Get User Attributes failed" on 22 May 2026)
+
 ## [18.0.6]
 ### Changed
 - Change UID generation from sequential to hash of phi UID value, as per TCIA (Michael Rutherford) recommendation

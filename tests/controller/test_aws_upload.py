@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import pytest
 
 from botocore.exceptions import NoCredentialsError
 from dotenv import load_dotenv
@@ -11,7 +12,7 @@ from tests.controller.dicom_test_files import ct_small_filename
 # Load environment variables from .env file (for username/password for AWS upload)
 load_dotenv()
 
-
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_send_1_dicomfile_to_AWS_S3_and_list_objects(temp_dir: str, controller: ProjectController):
     dcm_file_path = str(get_testdata_file(ct_small_filename))
     assert dcm_file_path
