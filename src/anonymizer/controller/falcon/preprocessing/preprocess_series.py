@@ -1,7 +1,7 @@
 """Preprocess a CT DICOM series directory for FALCON inference."""
 
 from pathlib import Path
-
+import numpy as np
 import SimpleITK as sitk
 
 from anonymizer.controller.falcon.preprocessing.dicom_loading import get_sitk_from_dicom
