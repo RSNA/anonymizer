@@ -3,6 +3,7 @@
 *.dmg
 *.log
 *.tmp
+tests/controller/tmp/
 *.DS_Store
 *.pem
 __pycache__/
@@ -23,6 +24,7 @@ src/dist/*
 src/logs/*
 src/certs/*
 src/assets/ocr/*
+src/assets/falcon/models/*
 dicom/*
 phi_imgs/*
 **/versionfile.txt

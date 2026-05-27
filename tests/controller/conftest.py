@@ -5,8 +5,9 @@ import tempfile
 
 # Add the src directory to sys.path dynamically
 #  sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any
 
 import pytest
 
@@ -23,11 +24,46 @@ from tests.controller.dicom_test_nodes import (
     PACSSimulatorSCP,
     RemoteSCPDict,
 )
+from tests.controller.falcon_memory import collect_garbage, process_rss_mb
+
 
 def pytest_sessionstart(session):
     """Runs before the test session begins."""
     # Initialise logging without file handler:
     init_logging(file_handler=False)
+
+
+@pytest.fixture(autouse=True)
+def falcon_memory(request: pytest.FixtureRequest) -> Generator[None, None, None]:
+    """Log RSS before/after and optionally fail when ``@pytest.mark.falcon_memory`` delta is too large."""
+    marker = request.node.get_closest_marker("falcon_memory")
+    if marker is None:
+        yield
+        return
+
+    max_rss_delta_mb = float(marker.kwargs.get("max_rss_delta_mb", 400.0))
+    collect_garbage()
+    rss_before_mb = process_rss_mb()
+    yield
+    collect_garbage()
+    rss_after_mb = process_rss_mb()
+    rss_delta_mb = rss_after_mb - rss_before_mb
+
+    request.node.user_properties.extend(
+        (
+            ("rss_before_mb", round(rss_before_mb, 1)),
+            ("rss_after_mb", round(rss_after_mb, 1)),
+            ("rss_delta_mb", round(rss_delta_mb, 1)),
+        )
+    )
+    print(
+        f"\n[{request.node.name}] RSS {rss_before_mb:.1f} -> {rss_after_mb:.1f} MB "
+        f"({rss_delta_mb:+.1f} MB)"
+    )
+    if rss_delta_mb > max_rss_delta_mb:
+        pytest.fail(
+            f"RSS grew by {rss_delta_mb:.1f} MB, exceeding limit of {max_rss_delta_mb:.1f} MB"
+        )
 
 
 @pytest.fixture

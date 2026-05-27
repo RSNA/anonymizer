@@ -600,6 +600,17 @@ def load_series_frames(series_path: Path, border_px: int | None = 20) -> tuple[D
 
     if not dcm_paths:
         raise ValueError(f"No DICOM files found in {series_path}")
+    
+    # --- Pre-sort paths by InstanceNumber using lightweight headers ---
+    def get_instance_number(path: Path) -> int:
+        try:
+            # stop_before_pixels=True prevents loading the heavy image data into RAM
+            ds_header = dcmread(str(path), stop_before_pixels=True, force=True)
+            return int(ds_header.get("InstanceNumber", 999999))
+        except (ValueError, TypeError, InvalidDicomError):
+            return 999999  # Push files with missing/bad tags to the end
+
+    dcm_paths.sort(key=get_instance_number)
 
     processed_frames: list[ndarray] = []
     ds1: Dataset | None = None  # To store the first dataset

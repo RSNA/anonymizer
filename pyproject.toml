@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "rsna-anonymizer"
-version = "18.0.7"
+version = "19.0.0"
 description = "RSNA DICOM Anonymizer"
 authors = ["Algorhythm Software <michael@dx.life>"]
 license = "RSNA-MIRC Public License"
@@ -23,6 +23,7 @@ psutil = "*"
 pylibjpeg = {extras = ["all"], version = "*"}
 opencv-python-headless = "*"
 easyocr = "*"
+torch = "*"
 cryptography = "*"
 requests = "*"
 requests-oauthlib = "*"
@@ -32,6 +33,7 @@ dataclasses-json = "^0.6.7"
 bidict = "^0.23.1"
 sqlalchemy = "^2.0.38"
 simpleitk = "^2.5.5"
+scipy = "*"
 
 [tool.poetry.group.dev.dependencies]
 poetry = "^2.0.1"
@@ -82,7 +84,9 @@ testpaths = ["tests"]
 # addopts = "--verbose --show-capture=all --cov=src/anonymizer --cov-report=term-missing"
 addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model"
 pythonpath = "."
-markers = ["integration: requires FALCON model weights on disk"]
+markers = [
+    "falcon_memory(max_rss_delta_mb): measure RSS before/after the test and fail if delta exceeds the limit",
+]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

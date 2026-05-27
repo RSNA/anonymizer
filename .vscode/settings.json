@@ -11,7 +11,7 @@
     "editor.defaultFormatter": "charliermarsh.ruff", 
     "editor.formatOnSave": true,
   },
-  "python.languageServer": "Pylance",
+  "python.languageServer": "Default",
   "python.analysis.typeCheckingMode": "basic",
   "python-envs.defaultEnvManager": "ms-python.python:poetry",
   "python-envs.defaultPackageManager": "ms-python.python:poetry",

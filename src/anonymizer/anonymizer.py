@@ -23,6 +23,7 @@ from pydicom._version import __version__ as pydicom_version  # type: ignore
 from pynetdicom._version import __version__ as pynetdicom_version  # type: ignore
 
 from anonymizer.controller.project import ProjectController
+from anonymizer.controller.falcon.load_models import FalconModelDownloadError, ensure_falcon_models_downloaded
 from anonymizer.model.project import DICOMRuntimeError, ProjectModel
 from anonymizer.utils.logging import init_logging
 from anonymizer.utils.translate import (
@@ -62,7 +63,7 @@ class Anonymizer(ctk.CTk):
         if sys.platform.startswith("win"):
             # Enable DPI awareness for Windows (improves scaling on high-DPI/4K monitors)
             #ctk.deactivate_automatic_dpi_awareness()  # TODO: implement dpi awareness for all views for Windows OS
-            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+            ctypes.windll.shcore.SetProcessDpiAwareness(1) # type: ignore
 
         super().__init__()
         self.logs_dir: Path = logs_dir
@@ -1234,6 +1235,7 @@ def main(config: Path | None = None):
     logger.info(f"Customtkinter Version: {ctk.__version__}")
     logger.info(f"pydicom Version: {pydicom_version}, pynetdicom Version: {pynetdicom_version}")
 
+    # Ensure OCR models are downloaded:
     ocr_model_dir = Path("assets/ocr/model")
     if not ocr_model_dir.exists():
         logger.warning("Downloading OCR models...")
@@ -1251,6 +1253,14 @@ def main(config: Path | None = None):
     else:
         logger.info(f"OCR downloaded models: {models}")
 
+    
+    # Ensure FALCON CT models are downloaded:
+    try:
+        falcon_model_paths = ensure_falcon_models_downloaded()
+        logger.info(f"FALCON CT models ready at: {falcon_model_paths}")
+    except FalconModelDownloadError:
+        logger.error("Failed to download FALCON CT models for HelperAI")
+        
     if config:
         run_HEADLESS(config)
     else:
