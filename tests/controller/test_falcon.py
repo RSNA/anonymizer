@@ -1,14 +1,11 @@
-import os
-import sys
-import gc
 import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import numpy as np
-import psutil
 import torch
 
 from anonymizer.controller.falcon.predict import predict_falcon_series, FalconPrediction
+from create_synthetic_ct_series import write_synthetic_phantom_assets
 
 BASE_TEST_DIR = Path("tests/controller/assets/test_dcm_files")
 
@@ -17,6 +14,29 @@ SYNTHETIC_DIRS = {
     "Chest": BASE_TEST_DIR / "synthetic_CT_chest",
     "Abdomen": BASE_TEST_DIR / "synthetic_CT_abdomen"
 }
+
+@pytest.fixture(scope="session", autouse=True)
+def ensure_synthetic_assets():
+    """
+    Runs once per test session. Checks if the synthetic DICOM files exist.
+    If they are missing, it triggers the generation script automatically.
+    """
+    # Check if the primary test directory exists and actually contains files
+    head_neck_dir = SYNTHETIC_DIRS["HeadNeck"]
+    
+    needs_generation = False
+    if not head_neck_dir.exists():
+        needs_generation = True
+    else:
+        # Check if the directory is empty
+        dcm_files = list(head_neck_dir.glob("*.dcm"))
+        if len(dcm_files) == 0:
+            needs_generation = True
+
+    if needs_generation:
+        print("\n[Setup] Synthetic DICOM assets missing. Generating them now...")
+        write_synthetic_phantom_assets()
+        print("[Setup] Generation complete. Starting tests...\n")
 
 # -------------------------------------------------------------------------
 # FIXTURES
@@ -108,7 +128,6 @@ def test_inference_failure(mock_get_probs, mock_preprocess, mock_load_models, mo
 # REAL MODEL INTEGRATION TESTS (Skipped in CI/CD)
 # -------------------------------------------------------------------------
 
-# @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_predict_real_models_headneck(assert_no_memory_leak):
     series_path = SYNTHETIC_DIRS["HeadNeck"]
     predictions = predict_falcon_series([series_path])
@@ -125,7 +144,6 @@ def test_predict_real_models_headneck(assert_no_memory_leak):
     assert 0.0 <= pred.body_part_confidence <= 1.0
     assert 0.0 <= pred.iv_contrast_confidence <= 1.0
 
-# @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_predict_real_models_chest(assert_no_memory_leak):
     series_path = SYNTHETIC_DIRS["Chest"]
     predictions = predict_falcon_series([series_path])
@@ -142,7 +160,6 @@ def test_predict_real_models_chest(assert_no_memory_leak):
     assert 0.0 <= pred.body_part_confidence <= 1.0
     assert 0.0 <= pred.iv_contrast_confidence <= 1.0
 
-# @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_predict_real_models_abdomen(assert_no_memory_leak):
     series_path = SYNTHETIC_DIRS["Abdomen"]
     predictions = predict_falcon_series([series_path])
@@ -159,7 +176,6 @@ def test_predict_real_models_abdomen(assert_no_memory_leak):
     assert 0.0 <= pred.body_part_confidence <= 1.0
     assert 0.0 <= pred.iv_contrast_confidence <= 1.0
 
-# @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_predict_real_models_batch(assert_no_memory_leak):
     test_dirs = [
         SYNTHETIC_DIRS["HeadNeck"],
