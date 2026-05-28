@@ -108,7 +108,7 @@ def test_inference_failure(mock_get_probs, mock_preprocess, mock_load_models, mo
 # REAL MODEL INTEGRATION TESTS (Skipped in CI/CD)
 # -------------------------------------------------------------------------
 
-@pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
+# @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_predict_real_models_headneck(assert_no_memory_leak):
     series_path = SYNTHETIC_DIRS["HeadNeck"]
     predictions = predict_falcon_series([series_path])
@@ -125,7 +125,7 @@ def test_predict_real_models_headneck(assert_no_memory_leak):
     assert 0.0 <= pred.body_part_confidence <= 1.0
     assert 0.0 <= pred.iv_contrast_confidence <= 1.0
 
-@pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
+# @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_predict_real_models_chest(assert_no_memory_leak):
     series_path = SYNTHETIC_DIRS["Chest"]
     predictions = predict_falcon_series([series_path])
@@ -142,7 +142,7 @@ def test_predict_real_models_chest(assert_no_memory_leak):
     assert 0.0 <= pred.body_part_confidence <= 1.0
     assert 0.0 <= pred.iv_contrast_confidence <= 1.0
 
-@pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
+# @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_predict_real_models_abdomen(assert_no_memory_leak):
     series_path = SYNTHETIC_DIRS["Abdomen"]
     predictions = predict_falcon_series([series_path])
@@ -159,7 +159,7 @@ def test_predict_real_models_abdomen(assert_no_memory_leak):
     assert 0.0 <= pred.body_part_confidence <= 1.0
     assert 0.0 <= pred.iv_contrast_confidence <= 1.0
 
-@pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
+# @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_predict_real_models_batch(assert_no_memory_leak):
     test_dirs = [
         SYNTHETIC_DIRS["HeadNeck"],
