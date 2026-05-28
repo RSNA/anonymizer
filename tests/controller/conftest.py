@@ -1,5 +1,8 @@
 # tests/conftest.py
+import sys
 import os
+import gc
+import psutil
 import shutil
 import tempfile
 
@@ -24,46 +27,11 @@ from tests.controller.dicom_test_nodes import (
     PACSSimulatorSCP,
     RemoteSCPDict,
 )
-from tests.controller.falcon_memory import collect_garbage, process_rss_mb
-
 
 def pytest_sessionstart(session):
     """Runs before the test session begins."""
     # Initialise logging without file handler:
     init_logging(file_handler=False)
-
-
-@pytest.fixture(autouse=True)
-def falcon_memory(request: pytest.FixtureRequest) -> Generator[None, None, None]:
-    """Log RSS before/after and optionally fail when ``@pytest.mark.falcon_memory`` delta is too large."""
-    marker = request.node.get_closest_marker("falcon_memory")
-    if marker is None:
-        yield
-        return
-
-    max_rss_delta_mb = float(marker.kwargs.get("max_rss_delta_mb", 400.0))
-    collect_garbage()
-    rss_before_mb = process_rss_mb()
-    yield
-    collect_garbage()
-    rss_after_mb = process_rss_mb()
-    rss_delta_mb = rss_after_mb - rss_before_mb
-
-    request.node.user_properties.extend(
-        (
-            ("rss_before_mb", round(rss_before_mb, 1)),
-            ("rss_after_mb", round(rss_after_mb, 1)),
-            ("rss_delta_mb", round(rss_delta_mb, 1)),
-        )
-    )
-    print(
-        f"\n[{request.node.name}] RSS {rss_before_mb:.1f} -> {rss_after_mb:.1f} MB "
-        f"({rss_delta_mb:+.1f} MB)"
-    )
-    if rss_delta_mb > max_rss_delta_mb:
-        pytest.fail(
-            f"RSS grew by {rss_delta_mb:.1f} MB, exceeding limit of {max_rss_delta_mb:.1f} MB"
-        )
 
 
 @pytest.fixture
@@ -77,6 +45,30 @@ def temp_dir() -> Generator[str, Any, None]:
     # Remove the temporary directory after the test is done
     shutil.rmtree(temp_path)
 
+@pytest.fixture
+def assert_no_memory_leak():
+    """
+    Measures the OS-level memory of the current test process.
+    Skips the strict assertion if running inside a debugger (like VSCode).
+    """
+    process = psutil.Process(os.getpid())
+    mem_before = process.memory_info().rss
+    
+    yield 
+    
+    gc.collect()
+    mem_after = process.memory_info().rss
+    growth_mb = (mem_after - mem_before) / (1024 * 1024)
+    
+    # Check if a debugger trace function is active
+    is_debugging = sys.gettrace() is not None
+
+    if is_debugging:
+        # Just print/log the growth, don't fail the test
+        print(f"\n[Debugger Active] Memory growth bypassed: {growth_mb:.2f} MB")
+    else:
+        # Enforce the strict threshold during normal CLI or CI runs
+        assert growth_mb < 5.0, f"Memory leak detected! RAM grew by {growth_mb:.2f} MB"
 
 @pytest.fixture
 def controller(temp_dir: str) -> Generator[ProjectController, Any, None]:

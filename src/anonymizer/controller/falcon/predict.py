@@ -172,7 +172,7 @@ def predict_falcon_series(series_directories: list[Path]) -> list[FalconPredicti
         try:
             image_np = preprocess_series(series_dir)
         except Exception as ex:
-            logger.error(f"FALCON preprocessing failed for {series_dir}: {ex}", series_dir, ex)
+            logger.error(f"FALCON preprocessing failed for {series_dir}: {ex}")
             predictions.append(_error_prediction(series_dir, f"Preprocessing error: {ex}"))
             continue
         
@@ -206,7 +206,7 @@ def predict_falcon_series(series_directories: list[Path]) -> list[FalconPredicti
 
         finally:
             # Guarantee memory release for the 1GB objects on every iteration
-            if image_np:
+            if image_np is not None:
                 del image_np
         
             # Prevent accelerator and RAM fragmentation during large batches

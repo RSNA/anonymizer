@@ -14,7 +14,7 @@ import psutil
 import pydicom
 import pytest
 
-from anonymizer.controller.falcon.pipeline import preprocess_series_directory
+from anonymizer.controller.falcon.preprocessing.preprocess_series import preprocess_series
 
 RSNA_TEST_DATA_DIR = Path("/Users/michaelevans/DATA/RSNA_TEST_DATA")
 ELIGIBILITY_OUTPUT_DIR = Path(__file__).resolve().parent / "tmp" / "falcon_rsna"

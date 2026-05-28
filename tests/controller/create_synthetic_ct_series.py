@@ -1,5 +1,6 @@
 """Synthetic multi-slice CT DICOM fixtures for FALCON controller tests."""
 
+import shutil
 from collections.abc import Callable
 from pathlib import Path
 
@@ -50,13 +51,14 @@ def build_synthetic_ct_small_series(
     num_slices: int = DEFAULT_SYNTHETIC_SLICE_COUNT,
     series_uid: str = "1.2.826.0.1.3680043.8.498806137165147036080431708860",
 ) -> Path:
-    """Build a series by cloning pydicom ``CT_small.dcm`` (minimal pipeline smoke test)."""
     _validate_slice_count(num_slices)
 
     series_dir = Path(output_dir)
-    series_dir.mkdir(parents=True, exist_ok=True)
+    if series_dir.exists():
+        shutil.rmtree(series_dir)
+    series_dir.mkdir(parents=True, exist_ok=False)
 
-    template_path = get_testdata_file(CT_SMALL_TEMPLATE)
+    template_path = str(get_testdata_file(CT_SMALL_TEMPLATE))
     template = pydicom.dcmread(template_path)
     slice_thickness = float(getattr(template, "SliceThickness", 1.0))
     base_position = [float(value) for value in template.ImagePositionPatient]
@@ -86,7 +88,6 @@ def build_synthetic_head_ct_series(
     study_uid: str | None = None,
     sop_instance_uid_prefix: str | None = None,
 ) -> Path:
-    """Build a pseudo-realistic axial head CT with skull, brain, and air."""
     return _build_phantom_series(
         output_dir,
         slice_generator=_head_hu_slice,
@@ -107,7 +108,6 @@ def build_synthetic_chest_ct_series(
     study_uid: str | None = None,
     sop_instance_uid_prefix: str | None = None,
 ) -> Path:
-    """Build a pseudo-realistic axial chest CT with lungs, mediastinum, and ribs."""
     return _build_phantom_series(
         output_dir,
         slice_generator=_chest_hu_slice,
@@ -128,7 +128,6 @@ def build_synthetic_abdomen_ct_series(
     study_uid: str | None = None,
     sop_instance_uid_prefix: str | None = None,
 ) -> Path:
-    """Build a pseudo-realistic axial abdomen CT with organs, spine, and bowel gas."""
     return _build_phantom_series(
         output_dir,
         slice_generator=_abdomen_hu_slice,
@@ -142,7 +141,6 @@ def build_synthetic_abdomen_ct_series(
 
 
 def write_synthetic_phantom_assets() -> dict[str, Path]:
-    """Write committed head, chest, and abdomen phantom series to controller test assets."""
     return {
         SYNTHETIC_CT_HEAD_ASSET_DIR.name: build_synthetic_head_ct_series(
             SYNTHETIC_CT_HEAD_ASSET_DIR,
@@ -166,7 +164,6 @@ def write_synthetic_phantom_assets() -> dict[str, Path]:
 
 
 def list_dcm_files(series_dir: Path) -> list[Path]:
-    """Return sorted ``*.dcm`` paths under ``series_dir``."""
     return sorted(series_dir.glob("*.dcm"))
 
 
@@ -189,7 +186,10 @@ def _build_phantom_series(
     _validate_slice_count(num_slices)
 
     series_dir = Path(output_dir)
-    series_dir.mkdir(parents=True, exist_ok=True)
+    if series_dir.exists():
+        shutil.rmtree(series_dir)
+    series_dir.mkdir(parents=True, exist_ok=False)
+
     resolved_series_uid = series_uid or generate_uid()
     resolved_study_uid = study_uid or generate_uid()
 
@@ -239,7 +239,7 @@ def _new_ct_dataset(
     body_part_examined: str,
     series_description: str,
 ) -> pydicom.Dataset:
-    dataset = pydicom.dcmread(get_testdata_file(CT_SMALL_TEMPLATE))
+    dataset = pydicom.dcmread(str(get_testdata_file(CT_SMALL_TEMPLATE)))
     rows, cols = hu_slice.shape
     stored_pixels = _hu_to_stored_pixels(hu_slice)
 
@@ -269,7 +269,7 @@ def _hu_to_stored_pixels(hu_slice: np.ndarray) -> np.ndarray:
     return np.clip(stored, -32768, 32767).astype(np.int16)
 
 
-def _coordinate_grids(rows: int, cols: int) -> tuple[np.ndarray, np.ndarray]:
+def _coordinate_grids(rows: int, cols: int):
     y = np.arange(rows, dtype=np.float32) - rows / 2
     x = np.arange(cols, dtype=np.float32) - cols / 2
     return np.meshgrid(x, y, indexing="xy")
@@ -300,9 +300,6 @@ def _chest_hu_slice(index: int, num_slices: int, rows: int, cols: int) -> np.nda
     chest_fat = (distance > 82) & (distance <= 95)
     hu[chest_fat] = _HU_CHEST_WALL_FAT
 
-    # Non-contrast lungs only in the mid-thoracic input slices. Upper and lower
-    # slices stay soft-tissue dominated so the FALCON chest contrast slice is not
-    # driven by air/tissue min-max normalization.
     lung_slice_start = num_slices // 2 - 2
     lung_slice_end = num_slices - 4
     if lung_slice_start <= index <= lung_slice_end:
@@ -351,3 +348,13 @@ def _abdomen_hu_slice(index: int, num_slices: int, rows: int, cols: int) -> np.n
 
     hu += np.random.default_rng(index + 201).normal(0.0, 10.0, size=(rows, cols))
     return hu.astype(np.float32)
+
+
+if __name__ == "__main__":
+    print(f"Generating synthetic CT DICOM assets in: {CONTROLLER_TEST_DCM_FILES_DIR}")
+    
+    generated_assets = write_synthetic_phantom_assets()
+    
+    print("\nGeneration Complete! Asset Directories created/updated:")
+    for key, path in generated_assets.items():
+        print(f" - {key}: {len(list_dcm_files(path))} slices")
