@@ -4,14 +4,13 @@ import gc
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+
 import numpy as np
-import SimpleITK as sitk
 import torch
 
 from anonymizer.controller.falcon.load_models import load_falcon_models
 from anonymizer.controller.falcon.preprocessing.preprocess_series import preprocess_series
 from anonymizer.controller.falcon.resnet9 import ResNet9
-
 
 # Determine device: GPU (CUDA) > Apple Silicon (MPS) > CPU
 if torch.cuda.is_available():
@@ -47,15 +46,15 @@ def _get_contrast_slices(body_part: str) -> tuple[range, int]:
 @dataclass(frozen=True)
 class FalconPrediction:
     series_directory: Path
-    body_part: str 
-    body_part_confidence: float 
+    body_part: str
+    body_part_confidence: float
     iv_contrast: bool
-    iv_contrast_confidence: float 
+    iv_contrast_confidence: float
     error: str | None = None
 
 
 def _error_prediction(series_directory: Path, error: str) -> FalconPrediction:
-    
+
     return FalconPrediction(
         series_directory=Path(series_directory),
         body_part="",
@@ -83,11 +82,7 @@ def get_body_part_probabilities(model: ResNet9, image_np: np.ndarray) -> np.ndar
     data = image_np[BP_SLICE_RANGE, :, :]
     data = np.clip(data, a_min=-200, a_max=200)
     data_min, data_max = data.min(), data.max()
-    if data_max == data_min:
-        data = np.zeros_like(data)
-    else:
-        data = (data - data_min) / (data_max - data_min)
-    
+    data = np.zeros_like(data) if data_max == data_min else (data - data_min) / (data_max - data_min)
     data_single_slice = data[BP_SLICE_IDX, :, :]
     data_3ch = np.broadcast_to(data_single_slice[np.newaxis, ...], (3, *data_single_slice.shape))
     data_3ch = np.copy(data_3ch)
@@ -95,16 +90,16 @@ def get_body_part_probabilities(model: ResNet9, image_np: np.ndarray) -> np.ndar
 
     with torch.no_grad():
         output = model(tensor.unsqueeze(0)).cpu()
-    
+
     probabilities = torch.softmax(output, dim=1).squeeze(0)
     return probabilities.cpu().numpy()
-    
+
 
 
 def get_contrast_probability(model: ResNet9, image_np: np.ndarray, body_part: str) -> float:
     """
     Run IV contrast inference on a CT image for a specific body part.
-    
+
     Args:
         - model: The ResNet9 model for IV contrast classification corresponding to the body part.
         - image_np: The numpy array of the preprocessed image to classify.
@@ -112,7 +107,7 @@ def get_contrast_probability(model: ResNet9, image_np: np.ndarray, body_part: st
 
     Returns:
         - A float representing the probability that IV contrast is present in the image.
-    
+
     Raises:
         - ValueError if the body part is not recognized or if the model output is not as expected.
 
@@ -121,10 +116,7 @@ def get_contrast_probability(model: ResNet9, image_np: np.ndarray, body_part: st
     data = image_np[slice_range, :, :]
     data = np.clip(data, a_min=-200, a_max=200)
     data_min, data_max = data.min(), data.max()
-    if data_max == data_min:
-        data = np.zeros_like(data)
-    else:
-        data = (data - data_min) / (data_max - data_min)
+    data = np.zeros_like(data) if data_max == data_min else (data - data_min) / (data_max - data_min)
     data_single_slice = data[slice_idx, :, :]
     data_3ch = np.broadcast_to(data_single_slice[np.newaxis, ...], (3, *data_single_slice.shape))
     data_3ch = np.copy(data_3ch)
@@ -132,7 +124,7 @@ def get_contrast_probability(model: ResNet9, image_np: np.ndarray, body_part: st
 
     with torch.no_grad():
         output = model(tensor.unsqueeze(0)).cpu()
-    
+
     probability = torch.sigmoid(output).squeeze().cpu().numpy()
     return float(probability.item())
 
@@ -140,7 +132,7 @@ def predict_falcon_series(series_directories: list[Path]) -> list[FalconPredicti
     """
     Run FALCON body-part and IV contrast inference on CT series directories.
     For each series directory, returns a FalconPrediction with results or error details.
-    
+
     Args:
         series_directories: List of paths to CT series directories to predict on.
 
@@ -156,7 +148,7 @@ def predict_falcon_series(series_directories: list[Path]) -> list[FalconPredicti
     if not series_directories:
         logger.error("No series directories provided for FALCON prediction.")
         return []
-    
+
     predictions: list[FalconPrediction] = []
 
     # Load ResNet9 models:
@@ -175,7 +167,7 @@ def predict_falcon_series(series_directories: list[Path]) -> list[FalconPredicti
             logger.error(f"FALCON preprocessing failed for {series_dir}: {ex}")
             predictions.append(_error_prediction(series_dir, f"Preprocessing error: {ex}"))
             continue
-        
+
         # INFERENCE
         try:
             body_part_probs = get_body_part_probabilities(part_model, image_np)
@@ -208,7 +200,7 @@ def predict_falcon_series(series_directories: list[Path]) -> list[FalconPredicti
             # Guarantee memory release for the 1GB objects on every iteration
             if image_np is not None:
                 del image_np
-        
+
             # Prevent accelerator and RAM fragmentation during large batches
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -216,8 +208,8 @@ def predict_falcon_series(series_directories: list[Path]) -> list[FalconPredicti
                 torch.mps.empty_cache()
             gc.collect()
 
-        
-    del part_model, hn_model, ch_model, ab_model    
+
+    del part_model, hn_model, ch_model, ab_model
     gc.collect()
 
     return predictions

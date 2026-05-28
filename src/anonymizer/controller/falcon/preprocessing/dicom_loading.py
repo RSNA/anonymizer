@@ -3,9 +3,9 @@
 from pathlib import Path
 
 import numpy as np
-from pydicom import dcmread, Dataset
-from pydicom.misc import is_dicom
 import SimpleITK as sitk
+from pydicom import Dataset, dcmread
+from pydicom.misc import is_dicom
 
 MIN_DICOM_SLICES = 11
 
@@ -44,19 +44,22 @@ def load_dicom(slice_list: list[Path]) -> tuple[list[Path], list[float], list[fl
         next_path = img_dirs[index + 1] if index + 1 < len(img_dirs) else None
         if next_path is not None:
             slice2 = dcmread(next_path, stop_before_pixels=True)
+
             if slice1.SliceThickness is None:
                 slice1.SliceThickness = float(
                     abs(slice1.ImagePositionPatient[2] - slice2.ImagePositionPatient[2])
                 )
+
             if list(slice1.ImageOrientationPatient) == [0, 1, 0, 0, 0, -1]:
                 slice1.ImageOrientationPatient = [1, 0, 0, 0, 1, 0]
                 slice2.ImageOrientationPatient = [1, 0, 0, 0, 1, 0]
-            if float(slice1.SliceThickness) == abs(slice1.ImagePositionPatient[2] - slice2.ImagePositionPatient[2]):
+
+            if float(slice1.SliceThickness) == abs(slice1.ImagePositionPatient[2] - slice2.ImagePositionPatient[2]) or list(slice1.ImageOrientationPatient) == [1, 0, 0, 0, 1, 0]:
                 accepted_paths.append(current_path)
-            elif list(slice1.ImageOrientationPatient) == [1, 0, 0, 0, 1, 0]:
-                accepted_paths.append(current_path)
+
             if index + 1 == len(img_dirs) - 1:
                 accepted_paths.append(next_path)
+
         elif len(img_dirs) == 1:
             accepted_paths.append(current_path)
 

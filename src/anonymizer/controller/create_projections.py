@@ -600,7 +600,7 @@ def load_series_frames(series_path: Path, border_px: int | None = 20) -> tuple[D
 
     if not dcm_paths:
         raise ValueError(f"No DICOM files found in {series_path}")
-    
+
     # --- Pre-sort paths by InstanceNumber using lightweight headers ---
     def get_instance_number(path: Path) -> int:
         try:

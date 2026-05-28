@@ -22,8 +22,8 @@ from pydicom import dcmread
 from pydicom._version import __version__ as pydicom_version  # type: ignore
 from pynetdicom._version import __version__ as pynetdicom_version  # type: ignore
 
-from anonymizer.controller.project import ProjectController
 from anonymizer.controller.falcon.load_models import FalconModelDownloadError, ensure_falcon_models_downloaded
+from anonymizer.controller.project import ProjectController
 from anonymizer.model.project import DICOMRuntimeError, ProjectModel
 from anonymizer.utils.logging import init_logging
 from anonymizer.utils.translate import (
@@ -1253,14 +1253,14 @@ def main(config: Path | None = None):
     else:
         logger.info(f"OCR downloaded models: {models}")
 
-    
+
     # Ensure FALCON CT models are downloaded:
     try:
         falcon_model_paths = ensure_falcon_models_downloaded()
         logger.info(f"FALCON CT models ready at: {falcon_model_paths}")
     except FalconModelDownloadError:
         logger.error("Failed to download FALCON CT models for HelperAI")
-        
+
     if config:
         run_HEADLESS(config)
     else:

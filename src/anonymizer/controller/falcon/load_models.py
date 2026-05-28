@@ -1,7 +1,8 @@
 """If necessary download FALCON ResNet9 model weights from github and save to disk. When required load them from disk and return as PyTorch model objects."""
 
-from pathlib import Path
 import logging
+from pathlib import Path
+
 import requests
 import torch
 from torch import nn
@@ -39,11 +40,11 @@ def _download_model(filename: str, url: str, destination: Path) -> None:
     Args:
         filename: The name of the model file (for logging purposes).
         url: The URL to download the model from.
-        destination: The local file path to save the downloaded model to.   
+        destination: The local file path to save the downloaded model to.
 
     Raises:
         FalconModelDownloadError if the download fails for any reason.
-        
+
     """
     destination.parent.mkdir(parents=True, exist_ok=True)
     temp_path = destination.with_suffix(destination.suffix + ".part")
@@ -63,13 +64,13 @@ def _download_model(filename: str, url: str, destination: Path) -> None:
 def _remove_module_prefix(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
     """
     Removes the ``_module.`` prefix that DataParallel adds to checkpoint keys.
-    
+
     Args:
         state_dict: The state dictionary loaded from the checkpoint.
-    
-    Returns:     
+
+    Returns:
         A new state dictionary with the prefix removed from keys if it was present.
-    
+
     """
     adjusted: dict[str, torch.Tensor] = {}
     for key, value in state_dict.items():
@@ -92,7 +93,7 @@ def _load_resnet9(weights_path: Path, num_classes: int, device: torch.device) ->
 
     Raises:
         FileNotFoundError if the weights file does not exist.
-        RuntimeError if the weights cannot be loaded or do not match the model architecture.    
+        RuntimeError if the weights cannot be loaded or do not match the model architecture.
     """
     model = ResNet9(
         in_channels=3,
@@ -114,11 +115,11 @@ def falcon_models_available() -> bool:
 def ensure_falcon_models_downloaded() -> dict[str, Path]:
     """
     Ensure all FALCON model weight files exist locally, downloading any that are missing.
-    
-    Returns: 
+
+    Returns:
         Dictionary mapping model keys to their local file paths.
-    
-    Raises: 
+
+    Raises:
         FalconModelDownloadError if any model file cannot be downloaded.
     """
     FALCON_MODEL_DIR.mkdir(parents=True, exist_ok=True)
@@ -149,7 +150,7 @@ def load_falcon_models(device: torch.device) -> tuple[ResNet9, ResNet9, ResNet9,
     if len(paths) != 4:
         missing = set(FALCON_MODEL_FILES.keys()) - set(paths.keys())
         raise FalconModelDownloadError(f"Missing FALCON model files: {missing}")
-    
+
     part_model = _load_resnet9(paths["body_part"], 3, device)
     hn_model = _load_resnet9(paths["headneck"], 1, device)
     ch_model = _load_resnet9(paths["chest"], 1, device)

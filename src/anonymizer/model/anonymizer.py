@@ -14,7 +14,7 @@ from pprint import pformat
 from typing import ClassVar, NamedTuple
 
 from pydicom import Dataset
-from sqlalchemy import ForeignKey, Integer, String, create_engine, delete, func, select, text
+from sqlalchemy import ForeignKey, Integer, String, create_engine, delete, func, select
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -726,7 +726,7 @@ class AnonymizerModel:
             return phi
 
         logger.debug("Creating PHI record for new patient_id")
-        
+
         # Generate a NEW anon_patient_id based on the site_id and the current patient count:
         # Site_id/prefix is constant, for anon_patient_id string MAX works the same as numeric MAX
         last_anon_patient_id = self.session.execute(select(func.max(PHI.anon_patient_id))).scalar_one()

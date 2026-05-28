@@ -36,7 +36,7 @@ def respacing(img: sitk.Image, interp_type: str, new_spacing: tuple[float, float
     resample.SetInterpolator(sitk_interp)
     resample.SetDefaultPixelValue(img.GetPixelIDValue())
     resample.SetOutputPixelType(sitk.sitkFloat32)
-    
+
     return resample.Execute(img)
 
 
@@ -62,22 +62,22 @@ def crop_image(
     x_crop, y_crop, c_crop = crop_shape
 
     ## Get center of mass to center the crop in Y plane
-    mask_arr = np.copy(img_arr) 
+    mask_arr = np.copy(img_arr)
     mask_arr[mask_arr > -500] = 1
     mask_arr[mask_arr <= -500] = 0
-    if not mass_centered: 
+    if not mass_centered:
         mask_arr[mask_arr >= -500] = 1
 
-    
+
     center_of_mass = ndimage.center_of_mass(mask_arr)
 
     if np.any(np.isnan(center_of_mass)):
         raise ValueError("Empty or invalid volume for cropping. Center of mass could not be calculated.")
-    
+
     center_of_mass = tuple(int(x) for x in cast(tuple, center_of_mass))
-    
+
     startc = int(center_of_mass[0] - c_crop//2)
-    starty = int(center_of_mass[1] - y_crop//2)      
+    starty = int(center_of_mass[1] - y_crop//2)
     startx = int(center_of_mass[2] - x_crop//2)
 
     pad_c_before = -min(0, startc)
@@ -138,8 +138,8 @@ def scale_image(img_crop_arr: np.ndarray, scale_size: tuple[int, int, int]) -> n
         scale_size[1] / img_crop_arr.shape[2],
     )
     scaled: np.ndarray = np.asarray(ndimage.zoom(img_crop_arr, zoom_factors, order=1))
-    
+
     if scaled.shape != target_shape:
         raise ValueError(f"Scaled image shape {scaled.shape} does not match target {target_shape}")
-    
+
     return scaled.astype(img_crop_arr.dtype, copy=False)

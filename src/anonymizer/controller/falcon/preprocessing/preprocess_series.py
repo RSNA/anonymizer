@@ -1,6 +1,7 @@
 """Preprocess a CT DICOM series directory for FALCON inference."""
 
 from pathlib import Path
+
 import numpy as np
 import SimpleITK as sitk
 
@@ -20,7 +21,7 @@ def preprocess_series(series_directory: Path) -> np.ndarray:
     1. Loads DICOM slices from the specified directory into a SimpleITK image object
     2. Resamples the volume to a standardized spacing to normalize voxel dimensions
     3. Crops and scales the volume to match the expected input dimensions for FALCON model inference
-    
+
     Intermediate image objects are processed sequentially, allowing garbage collection to free memory
     as each preprocessing step completes.
 
@@ -29,18 +30,18 @@ def preprocess_series(series_directory: Path) -> np.ndarray:
             The directory should contain only the DICOM files for one volumetric study.
 
     Returns:
-        np.ndarray:     
+        np.ndarray:
             A preprocessed NumPy array with standardized spacing and dimensions,
             ready for input into the FALCON torch inference pipeline.
 
     Raises:
-        ValueError: 
+        ValueError:
             If insufficient DICOM slices are found
             If zero x,y or z spacing is detected in the loaded image volume.
             If the center of mass cannot be calculated for cropping (e.g., empty or invalid volume).
             If interpoloation method is invalid for resampling.
             If scaled image dimensions do not match expected dimensions after cropping and scaling.
-    
+
     Note:
         The preprocessing uses predefined constants (NEW_SPACING, CROP_SHAPE, CLIPPING, SCALE_SIZE)
         that must be configured according to FALCON model requirements.
@@ -57,8 +58,8 @@ def preprocess_series(series_directory: Path) -> np.ndarray:
     )
     # Extract the NumPy array
     image_np = sitk.GetArrayFromImage(cropped_object)
-    
+
     # Explicitly release the SimpleITK C++ memory before returning
     del sitk_object, respaced_object, cropped_object
-    
+
     return image_np
