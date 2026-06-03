@@ -649,6 +649,10 @@ msgstr "PHI Lookup Data saved to"
 msgid "No Studies in Anonymizer Model for PHI Index"
 msgstr "No Studies in Anonymizer Model for PHI Index"
 
+#, fuzzy
+msgid "Error Creating Projection View"
+msgstr "Error creating Project Controller"
+
 msgid "Deletion Error"
 msgstr "Deletion Error"
 
@@ -740,7 +744,7 @@ msgid "Defaults"
 msgstr "Defaults"
 
 msgid "Clear"
-msgstr ""
+msgstr "Clear"
 
 msgid "Edit Context"
 msgstr "Edit Context"
@@ -754,11 +758,64 @@ msgstr "Remove Text"
 msgid "Blackout Area"
 msgstr "Blackout Area"
 
-msgid "Save Changes"
+#, fuzzy
+msgid "Harmonize Description"
+msgstr "Description"
+
+#, fuzzy
+msgid "Save Pixel Changes"
 msgstr "Save Changes"
 
 msgid "Series View"
 msgstr "Series View"
+
+msgid "Modality"
+msgstr "Modality"
+
+#, fuzzy
+msgid "Series Description"
+msgstr "Study Description"
+
+msgid "Body Part Examined"
+msgstr ""
+
+msgid "View / Plane"
+msgstr ""
+
+#, fuzzy
+msgid "Contrast"
+msgstr "Edit Context"
+
+msgid "Field"
+msgstr ""
+
+msgid "Tag"
+msgstr ""
+
+msgid "Value"
+msgstr ""
+
+#, fuzzy
+msgid "With Contrast"
+msgstr "Edit Context"
+
+msgid "Without Contrast"
+msgstr ""
+
+msgid "FALCON prediction"
+msgstr ""
+
+msgid "Body part"
+msgstr ""
+
+msgid "Body part confidence"
+msgstr ""
+
+msgid "IV contrast"
+msgstr ""
+
+msgid "IV contrast probability"
+msgstr ""
 
 msgid "Detecting text in all frames"
 msgstr "Detecting text in all frames"
@@ -769,48 +826,94 @@ msgstr "OCR on frame"
 msgid "OCR on current frame"
 msgstr "OCR on current frame"
 
-msgid "OCR on current frame complete"
-msgstr ""
+msgid "complete"
+msgstr "complete"
 
-msgid "OCR on all frames complete"
-msgstr ""
+msgid "OCR on all frames"
+msgstr "OCR on all frames"
 
 msgid "No text detected in current frame to remove"
-msgstr ""
+msgstr "No text detected in current frame to remove"
 
 msgid "Removing text from current frame"
-msgstr ""
+msgstr "Removing text from current frame"
 
 msgid "Text removed from current frame"
+msgstr "Text removed from current frame"
+
+msgid "Removing text from all frames in series"
+msgstr "Removing text from all frames in series"
+
+msgid "Text removed from all frames in series"
+msgstr "Text removed from all frames in series"
+
+msgid "No blackout area(s) in current frame"
+msgstr "No blackout area(s) in current frame"
+
+msgid "Blackout areas in current frame"
+msgstr "Blackout areas in current frame"
+
+msgid "Areas blacked out in current frame"
+msgstr "Areas blacked out in current frame"
+
+msgid "Blackout areas in all frames of series"
+msgstr "Blackout areas in all frames of series"
+
+msgid "Areas blacked out in all frames of series"
+msgstr "Areas blacked out in all frames of series"
+
+msgid "Running FALCON analysis..."
+msgstr ""
+
+msgid "FALCON Error"
+msgstr ""
+
+msgid "Failed to load FALCON models."
+msgstr ""
+
+msgid "FALCON analysis failed"
+msgstr ""
+
+msgid "FALCON could not analyze this series."
+msgstr ""
+
+msgid "FALCON Results"
+msgstr ""
+
+msgid "Current Series Description already matches the FALCON prediction."
+msgstr ""
+
+msgid "FALCON analysis complete"
 msgstr ""
 
 #, fuzzy
-msgid "Removing text from all frames in series"
-msgstr "Detecting text in all frames..."
+msgid "Proposed Series Description"
+msgstr "Study Description"
 
-msgid "Text removed from all frames in series"
+#, fuzzy
+msgid "Apply this description?"
+msgstr "Study Description"
+
+#, fuzzy
+msgid "Failed to save series description."
+msgstr "Failed to save changes to series frames"
+
+msgid "FALCON description applied"
 msgstr ""
 
-msgid "No blackout area(s) in current frame"
+msgid "FALCON description not applied"
 msgstr ""
 
-msgid "Blackout areas in current frame"
-msgstr ""
+#, fuzzy
+msgid "Pixel changes saved successfully"
+msgstr "Changes saved successfully"
 
-msgid "Areas blacked out in current frame"
-msgstr ""
-
-msgid "Blackout areas in all frames of series"
-msgstr ""
-
-msgid "Areas blacked out in all frames of series"
-msgstr ""
-
-msgid "Changes saved successfully"
-msgstr ""
+#, fuzzy
+msgid "Save Changes Error"
+msgstr "Save Changes"
 
 msgid "Failed to save changes to series frames"
-msgstr ""
+msgstr "Failed to save changes to series frames"
 
 msgid "Patient Name"
 msgstr "Patient Name"
@@ -916,9 +1019,6 @@ msgstr "Accession No.(s)"
 
 msgid "Study Date"
 msgstr "Study Date"
-
-msgid "Modality"
-msgstr "Modality"
 
 msgid "Load Accession Numbers"
 msgstr "Load Accession Numbers"
@@ -1084,3 +1184,7 @@ msgstr "MEAN PROJECTION"
 
 msgid "MAX PROJECTION"
 msgstr "MAX PROJECTION"
+
+#, fuzzy
+#~ msgid "Use Save Changes to write to the series files."
+#~ msgstr "Failed to save changes to series frames"

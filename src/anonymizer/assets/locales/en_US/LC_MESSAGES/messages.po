@@ -649,6 +649,9 @@ msgstr "PHI Lookup Data saved to"
 msgid "No Studies in Anonymizer Model for PHI Index"
 msgstr "No Studies in Anonymizer Model for PHI Index"
 
+msgid "Error Creating Projection View"
+msgstr "Error Creating Projection View"
+
 msgid "Deletion Error"
 msgstr "Deletion Error"
 
@@ -754,11 +757,59 @@ msgstr "Remove Text"
 msgid "Blackout Area"
 msgstr "Blackout Area"
 
-msgid "Save Changes"
-msgstr "Save Changes"
+msgid "Harmonize Description"
+msgstr "Harmonize Description"
+
+msgid "Save Pixel Changes"
+msgstr "Save Pixel Changes"
 
 msgid "Series View"
 msgstr "Series View"
+
+msgid "Modality"
+msgstr "Modality"
+
+msgid "Series Description"
+msgstr "Series Description"
+
+msgid "Body Part Examined"
+msgstr "Body Part Examined"
+
+msgid "Slice Thickness"
+msgstr "Slice Thickness"
+
+msgid "View Position"
+msgstr "View Position"
+
+msgid "Patient Position"
+msgstr "Patient Position"
+
+msgid "Contrast Bolus Agent"
+msgstr "Contrast Bolus Agent"
+
+msgid "Contrast Bolus Route"
+msgstr "Contrast Bolus Route"
+
+msgid "With Contrast"
+msgstr "With Contrast"
+
+msgid "Without Contrast"
+msgstr "Without Contrast"
+
+msgid "FALCON prediction"
+msgstr "FALCON prediction"
+
+msgid "Body part"
+msgstr "Body part"
+
+msgid "Body part confidence"
+msgstr "Body part confidence"
+
+msgid "IV contrast"
+msgstr "IV contrast"
+
+msgid "IV contrast confidence"
+msgstr "IV contrast confidence"
 
 msgid "Detecting text in all frames"
 msgstr "Detecting text in all frames"
@@ -805,8 +856,50 @@ msgstr "Blackout areas in all frames of series"
 msgid "Areas blacked out in all frames of series"
 msgstr "Areas blacked out in all frames of series"
 
-msgid "Changes saved successfully"
-msgstr "Changes saved successfully"
+msgid "Running FALCON analysis..."
+msgstr "Running FALCON analysis..."
+
+msgid "FALCON Error"
+msgstr "FALCON Error"
+
+msgid "Failed to load FALCON models."
+msgstr "Failed to load FALCON models."
+
+msgid "FALCON analysis failed"
+msgstr "FALCON analysis failed"
+
+msgid "FALCON could not analyze this series."
+msgstr "FALCON could not analyze this series."
+
+msgid "FALCON Results"
+msgstr "FALCON Results"
+
+msgid "Current Series Description already matches the FALCON prediction."
+msgstr "Current Series Description already matches the FALCON prediction."
+
+msgid "FALCON analysis complete"
+msgstr "FALCON analysis complete"
+
+msgid "Proposed Series Description"
+msgstr "Proposed Series Description"
+
+msgid "Apply this description?"
+msgstr "Apply this description?"
+
+msgid "Failed to save series description."
+msgstr "Failed to save series description."
+
+msgid "FALCON description applied"
+msgstr "FALCON description applied"
+
+msgid "FALCON description not applied"
+msgstr "FALCON description not applied"
+
+msgid "Pixel changes saved successfully"
+msgstr "Pixel changes saved successfully"
+
+msgid "Save Changes Error"
+msgstr "Save Changes Error"
 
 msgid "Failed to save changes to series frames"
 msgstr "Failed to save changes to series frames"
@@ -915,9 +1008,6 @@ msgstr "Accession No.(s)"
 
 msgid "Study Date"
 msgstr "Study Date"
-
-msgid "Modality"
-msgstr "Modality"
 
 msgid "Load Accession Numbers"
 msgstr "Load Accession Numbers"
@@ -1083,3 +1173,9 @@ msgstr "MEAN PROJECTION"
 
 msgid "MAX PROJECTION"
 msgstr "MAX PROJECTION"
+
+#~ msgid "Contrast"
+#~ msgstr "Edit Context"
+
+#~ msgid "Use Save Changes to write to the series files."
+#~ msgstr "Failed to save changes to series frames"

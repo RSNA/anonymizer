@@ -330,3 +330,22 @@ def test_capture_phi_with_ct_small_and_mr_brain_filename(anonymizer_model: Anony
     assert anonymizer_model.instance_received(ct1_ds.SOPInstanceUID) is True
     assert anonymizer_model.instance_received(mr1_ds.SOPInstanceUID) is True
     assert anonymizer_model.instance_received("non_existent_uid") is False
+
+
+def test_update_series_description_by_anon_uid(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
+    phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
+    assert phi is not None
+    assert phi.studies is not None
+    series = phi.studies[0].series[0]
+    assert series.description == mock_dataset1.SeriesDescription
+
+    new_description = "CT Head Neck Without Contrast"
+    assert anonymizer_model.update_series_description_by_anon_uid(series.anon_series_uid, new_description) is True
+
+    phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
+    assert phi is not None
+    assert phi.studies is not None
+    assert phi.studies[0].series[0].description == new_description
+
+    assert anonymizer_model.update_series_description_by_anon_uid("nonexistent-anon-uid", "x") is False

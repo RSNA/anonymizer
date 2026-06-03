@@ -52,14 +52,12 @@ msgstr "Anonymisierungs-Speicherverzeichnis auswählen"
 msgid "Open Project Error"
 msgstr "Fehler beim Öffnen des Projekts"
 
-#, fuzzy
 msgid "Error loading Project Model from legacy pickle data file"
-msgstr "Fehler beim Laden des Projektmodells aus der Datendatei"
+msgstr "Fehler beim Laden des Projektmodells aus der alten Pickle-Datendatei"
 
 msgid "Error loading Project Model from data file"
 msgstr "Fehler beim Laden des Projektmodells aus der Datendatei"
 
-#, fuzzy
 msgid "No Project file found in"
 msgstr "Keine Projektdatei gefunden in"
 
@@ -198,28 +196,26 @@ msgstr "Projekt"
 msgid "Settings"
 msgstr "Einstellungen"
 
-#, fuzzy
 msgid "Project Model file not found"
-msgstr "Keine Projektdatei gefunden in"
+msgstr "Projektmodelldatei nicht gefunden"
 
 msgid "Project Model path is not a file"
-msgstr ""
+msgstr "Der Pfad zum Projektmodell ist keine Datei"
 
 msgid "Project Model loaded successfully, version"
-msgstr ""
+msgstr "Projektmodell erfolgreich geladen, Version"
 
-#, fuzzy
 msgid "Project Model version mismatch"
-msgstr "Projektsprachenmismatch"
+msgstr "Version des Projektmodells stimmt nicht überein"
 
 msgid "upgrading accordingly"
-msgstr ""
+msgstr "wird entsprechend aktualisiert"
 
 msgid "Project Model upgraded successfully to version"
-msgstr ""
+msgstr "Projektmodell erfolgreich auf Version aktualisiert"
 
 msgid "Path to the configuration file. If not provided, the GUI will be launched."
-msgstr ""
+msgstr "Pfad zur Konfigurationsdatei. Wenn nicht angegeben, wird die GUI gestartet."
 
 msgid "Documents"
 msgstr "Dokumente"
@@ -294,7 +290,7 @@ msgid "Storage_Error"
 msgstr "Speicher_Fehler"
 
 msgid "incoming"
-msgstr ""
+msgstr "eingehend"
 
 msgid "Dataset missing required attributes"
 msgstr "Datensatz fehlt erforderliche Attribute"
@@ -375,7 +371,7 @@ msgid "INSTANCE"
 msgstr "INSTANZ"
 
 msgid "No Studies in Anonymizer Model"
-msgstr ""
+msgstr "Keine Studien im Anonymisierer-Modell"
 
 msgid "MY_PROJECT"
 msgstr "MEIN_PROJEKT"
@@ -626,9 +622,8 @@ msgstr "Bitte geben Sie Ihren Projektnamen ein und konfigurieren Sie alle weiter
 msgid "The Java Index data will be processed into the Python Anonymizer database when the project is created."
 msgstr "Die Java Indexdaten werden in die Python Anonymisierer Datenbank verarbeitet, wenn das Projekt erstellt wird."
 
-#, fuzzy
 msgid "View Projections"
-msgstr "Neues Projekt"
+msgstr "Projektionen anzeigen"
 
 msgid "Create Patient Lookup"
 msgstr "Patientensuche erstellen"
@@ -640,7 +635,7 @@ msgid "Clear Selection"
 msgstr "Auswahl aufheben"
 
 msgid "Delete"
-msgstr ""
+msgstr "Löschen"
 
 msgid "Error Creating PHI CSV File"
 msgstr "Fehler beim Erstellen der PHI-CSV-Datei"
@@ -652,29 +647,29 @@ msgid "PHI Lookup Data saved to"
 msgstr "PHI-Suchdaten gespeichert in"
 
 msgid "No Studies in Anonymizer Model for PHI Index"
-msgstr ""
+msgstr "Keine Studien im Anonymisierer-Modell für PHI-Index"
 
 #, fuzzy
+msgid "Error Creating Projection View"
+msgstr "Fehler beim Erstellen des Projektcontrollers"
+
 msgid "Deletion Error"
-msgstr "Verbindungsfehler"
+msgstr "Fehler beim Löschen"
 
-#, fuzzy
 msgid "No studies selected for deletion."
-msgstr "Keine Patienten für den Export ausgewählt."
+msgstr "Keine Studien zum Löschen ausgewählt."
 
-#, fuzzy
 msgid "Use SHIFT+Click and/or CMD/CTRL+Click to select multiple studies."
-msgstr "Verwenden Sie SHIFT+Klick und/oder CMD/CTRL+Klick, um mehrere Patienten auszuwählen."
+msgstr "Verwenden Sie SHIFT+Klick und/oder CMD/CTRL+Klick, um mehrere Studien auszuwählen."
 
-#, fuzzy
 msgid "Confirm Study Deletion"
-msgstr "Studienbeschreibung"
+msgstr "Löschen der Studie bestätigen"
 
 msgid "Selected studies will be permanently deleted from PHI Index and all associated anonymized files deleted from local storage directory"
-msgstr ""
+msgstr "Ausgewählte Studien werden dauerhaft aus dem PHI-Index und alle zugehörigen anonymisierten Dateien aus dem lokalen Speicherverzeichnis gelöscht"
 
 msgid "Are you sure?"
-msgstr ""
+msgstr "Sind Sie sicher?"
 
 msgid "Importing Study"
 msgstr "Studie importieren"
@@ -743,84 +738,182 @@ msgid "Are you sure you want to continue?"
 msgstr "Sind Sie sicher, dass Sie fortfahren möchten?"
 
 msgid "WHITE LIST"
-msgstr ""
+msgstr "WEISSE LISTE"
 
-#, fuzzy
 msgid "Defaults"
 msgstr "Standard"
 
 msgid "Clear"
-msgstr ""
+msgstr "Zurücksetzen"
 
 msgid "Edit Context"
-msgstr ""
+msgstr "Kontext bearbeiten"
 
 msgid "Detect Text"
-msgstr ""
+msgstr "Text erkennen"
 
 msgid "Remove Text"
-msgstr ""
+msgstr "Text entfernen"
 
 msgid "Blackout Area"
+msgstr "Bereich schwärzen"
+
+#, fuzzy
+msgid "Harmonize Description"
+msgstr "Beschreibung"
+
+#, fuzzy
+msgid "Save Pixel Changes"
+msgstr "Änderungen speichern"
+
+msgid "Series View"
+msgstr "Serienansicht"
+
+msgid "Modality"
+msgstr "Modalität"
+
+#, fuzzy
+msgid "Series Description"
+msgstr "Studienbeschreibung"
+
+msgid "Body Part Examined"
 msgstr ""
 
-msgid "Save Changes"
+msgid "View / Plane"
 msgstr ""
 
 #, fuzzy
-msgid "Series View"
-msgstr "Serien"
+msgid "Contrast"
+msgstr "Kontext bearbeiten"
+
+msgid "Field"
+msgstr ""
+
+msgid "Tag"
+msgstr ""
+
+msgid "Value"
+msgstr ""
+
+#, fuzzy
+msgid "With Contrast"
+msgstr "Kontext bearbeiten"
+
+msgid "Without Contrast"
+msgstr ""
+
+msgid "FALCON prediction"
+msgstr ""
+
+msgid "Body part"
+msgstr ""
+
+msgid "Body part confidence"
+msgstr ""
+
+msgid "IV contrast"
+msgstr ""
+
+msgid "IV contrast probability"
+msgstr ""
 
 msgid "Detecting text in all frames"
-msgstr ""
+msgstr "Text wird in allen Bildern erkannt"
 
 msgid "OCR on frame"
-msgstr ""
+msgstr "OCR auf Bild"
 
 msgid "OCR on current frame"
-msgstr ""
+msgstr "OCR auf aktuellem Bild"
 
-msgid "OCR on current frame complete"
-msgstr ""
+msgid "complete"
+msgstr "abgeschlossen"
 
-msgid "OCR on all frames complete"
-msgstr ""
+msgid "OCR on all frames"
+msgstr "OCR auf allen Bildern"
 
 msgid "No text detected in current frame to remove"
-msgstr ""
+msgstr "Kein Text im aktuellen Bild zum Entfernen erkannt"
 
 msgid "Removing text from current frame"
-msgstr ""
+msgstr "Text wird aus dem aktuellen Bild entfernt"
 
 msgid "Text removed from current frame"
-msgstr ""
+msgstr "Text aus dem aktuellen Bild entfernt"
 
 msgid "Removing text from all frames in series"
-msgstr ""
+msgstr "Text wird aus allen Bildern der Serie entfernt"
 
 msgid "Text removed from all frames in series"
-msgstr ""
+msgstr "Text aus allen Bildern der Serie entfernt"
 
 msgid "No blackout area(s) in current frame"
-msgstr ""
+msgstr "Keine geschwärzten Bereiche im aktuellen Bild"
 
 msgid "Blackout areas in current frame"
-msgstr ""
+msgstr "Geschwärzte Bereiche im aktuellen Bild"
 
 msgid "Areas blacked out in current frame"
-msgstr ""
+msgstr "Bereiche im aktuellen Bild geschwärzt"
 
 msgid "Blackout areas in all frames of series"
-msgstr ""
+msgstr "Geschwärzte Bereiche in allen Bildern der Serie"
 
 msgid "Areas blacked out in all frames of series"
+msgstr "Bereiche in allen Bildern der Serie geschwärzt"
+
+msgid "Running FALCON analysis..."
 msgstr ""
 
-msgid "Changes saved successfully"
+msgid "FALCON Error"
 msgstr ""
+
+msgid "Failed to load FALCON models."
+msgstr ""
+
+msgid "FALCON analysis failed"
+msgstr ""
+
+msgid "FALCON could not analyze this series."
+msgstr ""
+
+msgid "FALCON Results"
+msgstr ""
+
+msgid "Current Series Description already matches the FALCON prediction."
+msgstr ""
+
+msgid "FALCON analysis complete"
+msgstr ""
+
+#, fuzzy
+msgid "Proposed Series Description"
+msgstr "Studienbeschreibung"
+
+#, fuzzy
+msgid "Apply this description?"
+msgstr "Studienbeschreibung"
+
+#, fuzzy
+msgid "Failed to save series description."
+msgstr "Speichern der Änderungen an den Serienbildern fehlgeschlagen"
+
+msgid "FALCON description applied"
+msgstr ""
+
+msgid "FALCON description not applied"
+msgstr ""
+
+#, fuzzy
+msgid "Pixel changes saved successfully"
+msgstr "Änderungen erfolgreich gespeichert"
+
+#, fuzzy
+msgid "Save Changes Error"
+msgstr "Änderungen speichern"
 
 msgid "Failed to save changes to series frames"
-msgstr ""
+msgstr "Speichern der Änderungen an den Serienbildern fehlgeschlagen"
 
 msgid "Patient Name"
 msgstr "Patientenname"
@@ -879,19 +972,15 @@ msgstr "Verwenden Sie SHIFT+Klick und/oder CMD/CTRL+Klick, um mehrere Patienten 
 msgid "Cancel active export?"
 msgstr "Aktiven Export abbrechen?"
 
-#, fuzzy
 msgid "Delete Studies"
-msgstr "Studien"
+msgstr "Studien löschen"
 
-#, fuzzy
 msgid "Deleting"
-msgstr "Einstellungen"
+msgstr "Wird gelöscht"
 
-#, fuzzy
 msgid "study"
 msgstr "Studie"
 
-#, fuzzy
 msgid "studies"
 msgstr "Studien"
 
@@ -930,9 +1019,6 @@ msgstr "Zugangsnummer(n)"
 
 msgid "Study Date"
 msgstr "Studiendatum"
-
-msgid "Modality"
-msgstr "Modalität"
 
 msgid "Load Accession Numbers"
 msgstr "Zugangsnummern laden"
@@ -1090,74 +1176,15 @@ msgstr "Seiten"
 msgid "Page"
 msgstr "Seite"
 
-#, fuzzy
 msgid "MIN PROJECTION"
-msgstr "MEIN_PROJEKT"
+msgstr "MIN-PROJEKTION"
 
-#, fuzzy
 msgid "MEAN PROJECTION"
-msgstr "MEIN_PROJEKT"
+msgstr "MITTELWERT-PROJEKTION"
+
+msgid "MAX PROJECTION"
+msgstr "MAX-PROJEKTION"
 
 #, fuzzy
-msgid "MAX PROJECTION"
-msgstr "MEIN_PROJEKT"
-
-#~ msgid "Corruption detected: Loaded model is not an instance of ProjectModel"
-#~ msgstr "Beschädigung festgestellt: Geladenes Modell ist keine Instanz von ProjectModel"
-
-#~ msgid "ANON-PatientID"
-#~ msgstr "ANON-PatientenID"
-
-#~ msgid "ANON-PatientName"
-#~ msgstr "ANON-Patientenname"
-
-#~ msgid "PHI-PatientName"
-#~ msgstr "PHI-Patientenname"
-
-#~ msgid "PHI-PatientID"
-#~ msgstr "PHI-PatientenID"
-
-#~ msgid "DateOffset"
-#~ msgstr "Datumsversatz"
-
-#~ msgid "PHI-StudyDate"
-#~ msgstr "PHI-Studiendatum"
-
-#~ msgid "ANON-Accession"
-#~ msgstr "ANON-Zugangsnummer"
-
-#~ msgid "PHI-Accession"
-#~ msgstr "PHI-Zugangsnummer"
-
-#~ msgid "ANON-StudyInstanceUID"
-#~ msgstr "ANON-Studieninstanz-UID"
-
-#~ msgid "PHI-StudyInstanceUID"
-#~ msgstr "PHI-Studieninstanz-UID"
-
-#~ msgid "Number of Series"
-#~ msgstr "Anzahl der Serien"
-
-#~ msgid "Number of Instances"
-#~ msgstr "Anzahl der Instanzen"
-
-#~ msgid "Patient"
-#~ msgstr "Patient"
-
-#~ msgid "Kaleidoscope"
-#~ msgstr "Kaleidoskop"
-
-#~ msgid "Progress Dialog"
-#~ msgstr "Fortschrittsdialog"
-
-#~ msgid "Please wait..."
-#~ msgstr "Bitte warten..."
-
-#~ msgid "Loading"
-#~ msgstr "Laden"
-
-#~ msgid "Config file not found: "
-#~ msgstr "Konfigurationsdatei nicht gefunden: "
-
-#~ msgid "selected patient(s)"
-#~ msgstr "ausgewählte Patient(en)"
+#~ msgid "Use Save Changes to write to the series files."
+#~ msgstr "Speichern der Änderungen an den Serienbildern fehlgeschlagen"

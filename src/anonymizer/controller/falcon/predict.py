@@ -24,6 +24,12 @@ logger = logging.getLogger(__name__)
 
 FALCON_BODY_PARTS = ("HeadNeck", "Chest", "Abdomen")
 
+_BODY_PART_RADLEX_LABELS: dict[str, str] = {
+    "HeadNeck": "Head Neck",
+    "Chest": "Chest",
+    "Abdomen": "Abdomen",
+}
+
 BP_SLICE_RANGE = range(35, 65)
 HN_SLICE_RANGE = range(35, 75)
 CH_SLICE_RANGE = range(50, 80)
@@ -34,6 +40,7 @@ HN_SLICE_IDX = 20
 CH_SLICE_IDX = 15
 AB_SLICE_IDX = 43
 
+
 def _get_contrast_slices(body_part: str) -> tuple[range, int]:
     if body_part == "HeadNeck":
         return HN_SLICE_RANGE, HN_SLICE_IDX
@@ -43,26 +50,66 @@ def _get_contrast_slices(body_part: str) -> tuple[range, int]:
         return AB_SLICE_RANGE, AB_SLICE_IDX
     raise ValueError(f"Unsupported body part for contrast inference: {body_part}")
 
+
+def _format_radlex_series_description(body_part: str, iv_contrast: bool, modality: str = "CT") -> str:
+    """
+    Build a RadLex-style CT series description from FALCON inference results.
+    Args:
+        - body_part: The body part predicted by FALCON ("HeadNeck", "Chest", or "Abdomen").
+        - iv_contrast: A boolean indicating whether IV contrast is present.
+        - modality: The modality of the series (default is "CT").
+    Returns:
+        - A string representing the RadLex-style series description.
+    """
+    body_label = _BODY_PART_RADLEX_LABELS.get(body_part)
+    
+    if body_label is None:
+        raise ValueError(f"Unsupported body part for RadLex description: {body_part}")
+    
+    contrast_label = "With Contrast" if iv_contrast else "Without Contrast"
+    return f"{modality} {body_label} {contrast_label}"
+
+
 @dataclass(frozen=True)
 class FalconPrediction:
     series_directory: Path
     body_part: str
     body_part_confidence: float
     iv_contrast: bool
+    # Sigmoid output: P(IV contrast present). Threshold 0.5 yields iv_contrast.
     iv_contrast_confidence: float
+    radlex_series_description: str
     error: str | None = None
 
 
-def _error_prediction(series_directory: Path, error: str) -> FalconPrediction:
+def format_confidence_percent(confidence: float) -> str:
+    """Format a 0–1 confidence as a percentage with two fractional digits (e.g. 99.87%)."""
+    return f"{confidence * 100.0:.2f}%"
 
+
+def contrast_prediction_confidence(prediction: FalconPrediction) -> float:
+    """
+    Confidence in the predicted contrast class (With or Without), analogous to body-part softmax max prob.
+
+    iv_contrast_confidence is always P(contrast present); for a Without prediction that value is low
+    even when the model is highly confident.
+    """
+    if prediction.iv_contrast:
+        return prediction.iv_contrast_confidence
+    return 1.0 - prediction.iv_contrast_confidence
+
+
+def _error_prediction(series_directory: Path, error: str) -> FalconPrediction:
     return FalconPrediction(
         series_directory=Path(series_directory),
         body_part="",
         body_part_confidence=0.0,
         iv_contrast=False,
         iv_contrast_confidence=0.0,
-        error=error
+        radlex_series_description="",
+        error=error,
     )
+
 
 def get_body_part_probabilities(model: ResNet9, image_np: np.ndarray) -> np.ndarray:
     """
@@ -93,7 +140,6 @@ def get_body_part_probabilities(model: ResNet9, image_np: np.ndarray) -> np.ndar
 
     probabilities = torch.softmax(output, dim=1).squeeze(0)
     return probabilities.cpu().numpy()
-
 
 
 def get_contrast_probability(model: ResNet9, image_np: np.ndarray, body_part: str) -> float:
@@ -128,6 +174,7 @@ def get_contrast_probability(model: ResNet9, image_np: np.ndarray, body_part: st
     probability = torch.sigmoid(output).squeeze().cpu().numpy()
     return float(probability.item())
 
+
 def predict_falcon_series(series_directories: list[Path]) -> list[FalconPrediction]:
     """
     Run FALCON body-part and IV contrast inference on CT series directories.
@@ -149,26 +196,34 @@ def predict_falcon_series(series_directories: list[Path]) -> list[FalconPredicti
         logger.error("No series directories provided for FALCON prediction.")
         return []
 
+    logger.info(
+        "FALCON predict starting for {} series on {}".format(len(series_directories), device)
+    )
+
     predictions: list[FalconPrediction] = []
 
-    # Load ResNet9 models:
-    part_model, hn_model, ch_model, ab_model = load_falcon_models(device=device)
-    if any(model is None for model in (part_model, hn_model, ch_model, ab_model)):
-        logger.error("Failed to load all FALCON models.")
+    try:
+        part_model, hn_model, ch_model, ab_model = load_falcon_models(device=device)
+        if any(m is None for m in (part_model, hn_model, ch_model, ab_model)):
+            logger.error("Failed to load all FALCON models.")
+            return []
+    except Exception as ex:
+        logger.exception("Failed to load FALCON models: {}".format(ex))
         return []
 
     for series_dir in series_directories:
         image_np = None
 
-        # PREPROCESSING
         try:
+            logger.info("FALCON preprocessing series: {}".format(series_dir))
             image_np = preprocess_series(series_dir)
         except Exception as ex:
-            logger.error(f"FALCON preprocessing failed for {series_dir}: {ex}")
+            logger.error("FALCON preprocessing failed for {}: {}".format(series_dir, ex))
             predictions.append(_error_prediction(series_dir, f"Preprocessing error: {ex}"))
             continue
 
-        # INFERENCE
+        logger.info("FALCON running inference for {}".format(series_dir))
+
         try:
             body_part_probs = get_body_part_probabilities(part_model, image_np)
             body_part_idx = int(np.argmax(body_part_probs))
@@ -181,6 +236,22 @@ def predict_falcon_series(series_directories: list[Path]) -> list[FalconPredicti
                 body_part,
             )
             iv_contrast = iv_contrast_prob >= 0.5
+            radlex_description = _format_radlex_series_description(body_part, iv_contrast)
+
+            contrast_class_confidence = iv_contrast_prob if iv_contrast else 1.0 - iv_contrast_prob
+            logger.info(
+                "FALCON inference results for {}: body_part={} ({:.3f}), "
+                "iv_contrast={} (P_present={:.3f}, class_confidence={:.3f}), "
+                "radlex_series_description={}".format(
+                    series_dir,
+                    body_part,
+                    body_part_confidence,
+                    iv_contrast,
+                    iv_contrast_prob,
+                    contrast_class_confidence,
+                    radlex_description,
+                )
+            )
 
             predictions.append(
                 FalconPrediction(
@@ -189,27 +260,26 @@ def predict_falcon_series(series_directories: list[Path]) -> list[FalconPredicti
                     body_part_confidence=body_part_confidence,
                     iv_contrast=iv_contrast,
                     iv_contrast_confidence=iv_contrast_prob,
+                    radlex_series_description=radlex_description,
                 )
             )
 
         except Exception as ex:
-            logger.error("FALCON prediction failed for %s: %s", series_dir, ex)
+            logger.error("FALCON prediction failed for {}: {}".format(series_dir, ex))
             predictions.append(_error_prediction(series_dir, f"Prediction error: {ex}"))
 
         finally:
-            # Guarantee memory release for the 1GB objects on every iteration
             if image_np is not None:
                 del image_np
 
-            # Prevent accelerator and RAM fragmentation during large batches
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             elif torch.backends.mps.is_available():
-                torch.mps.empty_cache()
+                torch.mps.empty_cache() 
             gc.collect()
-
 
     del part_model, hn_model, ch_model, ab_model
     gc.collect()
 
+    logger.info("FALCON predict finished: {} result(s)".format(len(predictions)))
     return predictions

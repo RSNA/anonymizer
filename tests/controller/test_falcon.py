@@ -4,7 +4,12 @@ from unittest.mock import patch, MagicMock
 import numpy as np
 import torch
 
-from anonymizer.controller.falcon.predict import predict_falcon_series, FalconPrediction
+from anonymizer.controller.falcon.predict import (
+    FalconPrediction,
+    contrast_prediction_confidence,
+    format_confidence_percent,
+    predict_falcon_series,
+)
 from create_synthetic_ct_series import write_synthetic_phantom_assets
 
 BASE_TEST_DIR = Path("tests/controller/assets/test_dcm_files")
@@ -98,6 +103,33 @@ def test_successful_predictions(mock_preprocess, mock_load_models, mock_models):
         assert pred.body_part_confidence > 0.99
         assert pred.iv_contrast is True
         assert pred.iv_contrast_confidence > 0.99
+        assert contrast_prediction_confidence(pred) > 0.99
+        assert pred.radlex_series_description == "CT Chest With Contrast"
+
+
+@pytest.mark.parametrize(
+    ("confidence", "expected"),
+    [
+        (0.991234, "99.12%"),
+        (0.999949, "99.99%"),
+        (0.001, "0.10%"),
+        (1.0, "100.00%"),
+    ],
+)
+def test_format_confidence_percent_two_fractional_digits(confidence, expected):
+    assert format_confidence_percent(confidence) == expected
+
+
+def test_contrast_prediction_confidence_without_contrast():
+    pred = FalconPrediction(
+        series_directory=Path("/tmp/series"),
+        body_part="Abdomen",
+        body_part_confidence=0.99,
+        iv_contrast=False,
+        iv_contrast_confidence=0.001,
+        radlex_series_description="CT Abdomen Without Contrast",
+    )
+    assert contrast_prediction_confidence(pred) == pytest.approx(0.999, abs=0.001)
 
 @patch("anonymizer.controller.falcon.predict.load_falcon_models")
 @patch("anonymizer.controller.falcon.predict.preprocess_series")
@@ -109,6 +141,7 @@ def test_preprocessing_failure(mock_preprocess, mock_load_models, mock_models):
     assert len(predictions) == 1
     assert predictions[0].error is not None
     assert "Preprocessing error: Corrupted DICOM files" in predictions[0].error
+    assert predictions[0].radlex_series_description == ""
 
 @patch("anonymizer.controller.falcon.predict.load_falcon_models")
 @patch("anonymizer.controller.falcon.predict.preprocess_series")
@@ -123,6 +156,7 @@ def test_inference_failure(mock_get_probs, mock_preprocess, mock_load_models, mo
     assert predictions[0].error is not None
     assert "Prediction error: CUDA out of memory" in predictions[0].error
     assert predictions[0].iv_contrast is False
+    assert predictions[0].radlex_series_description == ""
 
 # -------------------------------------------------------------------------
 # REAL MODEL INTEGRATION TESTS (Skipped in CI/CD)
@@ -141,6 +175,7 @@ def test_predict_real_models_headneck(assert_no_memory_leak):
     # Assert reliable body part and non-contrast state
     assert pred.body_part == "HeadNeck"
     assert pred.iv_contrast is False
+    assert pred.radlex_series_description == "CT Head Neck Without Contrast"
     assert 0.0 <= pred.body_part_confidence <= 1.0
     assert 0.0 <= pred.iv_contrast_confidence <= 1.0
 

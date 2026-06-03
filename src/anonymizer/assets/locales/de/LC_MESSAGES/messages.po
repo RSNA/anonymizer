@@ -649,6 +649,9 @@ msgstr "PHI-Suchdaten gespeichert in"
 msgid "No Studies in Anonymizer Model for PHI Index"
 msgstr "Keine Studien im Anonymisierer-Modell für PHI-Index"
 
+msgid "Error Creating Projection View"
+msgstr "Fehler beim Erstellen der Projektionsansicht"
+
 msgid "Deletion Error"
 msgstr "Fehler beim Löschen"
 
@@ -754,11 +757,59 @@ msgstr "Text entfernen"
 msgid "Blackout Area"
 msgstr "Bereich schwärzen"
 
-msgid "Save Changes"
-msgstr "Änderungen speichern"
+msgid "Harmonize Description"
+msgstr "Beschreibung harmonisieren"
+
+msgid "Save Pixel Changes"
+msgstr "Pixeländerungen speichern"
 
 msgid "Series View"
 msgstr "Serienansicht"
+
+msgid "Modality"
+msgstr "Modalität"
+
+msgid "Series Description"
+msgstr "Serienbeschreibung"
+
+msgid "Body Part Examined"
+msgstr "Untersuchte Körperregion"
+
+msgid "Slice Thickness"
+msgstr "Schichtdicke"
+
+msgid "View Position"
+msgstr "Projektionsrichtung"
+
+msgid "Patient Position"
+msgstr "Patientenposition"
+
+msgid "Contrast Bolus Agent"
+msgstr "Kontrastmittel"
+
+msgid "Contrast Bolus Route"
+msgstr "Applikationsweg des Kontrastmittels"
+
+msgid "With Contrast"
+msgstr "Mit Kontrastmittel"
+
+msgid "Without Contrast"
+msgstr "Ohne Kontrastmittel"
+
+msgid "FALCON prediction"
+msgstr "FALCON-Vorhersage"
+
+msgid "Body part"
+msgstr "Körperregion"
+
+msgid "Body part confidence"
+msgstr "Konfidenz Körperregion"
+
+msgid "IV contrast"
+msgstr "IV-Kontrast"
+
+msgid "IV contrast confidence"
+msgstr "Konfidenz IV-Kontrast"
 
 msgid "Detecting text in all frames"
 msgstr "Text wird in allen Bildern erkannt"
@@ -805,8 +856,50 @@ msgstr "Geschwärzte Bereiche in allen Bildern der Serie"
 msgid "Areas blacked out in all frames of series"
 msgstr "Bereiche in allen Bildern der Serie geschwärzt"
 
-msgid "Changes saved successfully"
-msgstr "Änderungen erfolgreich gespeichert"
+msgid "Running FALCON analysis..."
+msgstr "FALCON-Analyse wird ausgeführt..."
+
+msgid "FALCON Error"
+msgstr "FALCON-Fehler"
+
+msgid "Failed to load FALCON models."
+msgstr "FALCON-Modelle konnten nicht geladen werden."
+
+msgid "FALCON analysis failed"
+msgstr "FALCON-Analyse fehlgeschlagen"
+
+msgid "FALCON could not analyze this series."
+msgstr "FALCON konnte diese Serie nicht analysieren."
+
+msgid "FALCON Results"
+msgstr "FALCON-Ergebnisse"
+
+msgid "Current Series Description already matches the FALCON prediction."
+msgstr "Die aktuelle Serienbeschreibung entspricht bereits der FALCON-Vorhersage."
+
+msgid "FALCON analysis complete"
+msgstr "FALCON-Analyse abgeschlossen"
+
+msgid "Proposed Series Description"
+msgstr "Vorgeschlagene Serienbeschreibung"
+
+msgid "Apply this description?"
+msgstr "Diese Beschreibung anwenden?"
+
+msgid "Failed to save series description."
+msgstr "Serienbeschreibung konnte nicht gespeichert werden."
+
+msgid "FALCON description applied"
+msgstr "FALCON-Beschreibung angewendet"
+
+msgid "FALCON description not applied"
+msgstr "FALCON-Beschreibung nicht angewendet"
+
+msgid "Pixel changes saved successfully"
+msgstr "Pixeländerungen erfolgreich gespeichert"
+
+msgid "Save Changes Error"
+msgstr "Fehler beim Speichern"
 
 msgid "Failed to save changes to series frames"
 msgstr "Speichern der Änderungen an den Serienbildern fehlgeschlagen"
@@ -915,9 +1008,6 @@ msgstr "Zugangsnummer(n)"
 
 msgid "Study Date"
 msgstr "Studiendatum"
-
-msgid "Modality"
-msgstr "Modalität"
 
 msgid "Load Accession Numbers"
 msgstr "Zugangsnummern laden"
@@ -1084,3 +1174,8 @@ msgstr "MITTELWERT-PROJEKTION"
 msgid "MAX PROJECTION"
 msgstr "MAX-PROJEKTION"
 
+#~ msgid "Contrast"
+#~ msgstr "Kontext bearbeiten"
+
+#~ msgid "Use Save Changes to write to the series files."
+#~ msgstr "Speichern der Änderungen an den Serienbildern fehlgeschlagen"

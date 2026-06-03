@@ -649,6 +649,9 @@ msgstr "Datos de búsqueda PHI guardados en"
 msgid "No Studies in Anonymizer Model for PHI Index"
 msgstr "No hay estudios en el Modelo de Anonimizador para el Índice PHI"
 
+msgid "Error Creating Projection View"
+msgstr "Error al crear la vista de proyección"
+
 msgid "Deletion Error"
 msgstr "Error de Eliminación"
 
@@ -754,11 +757,59 @@ msgstr "Eliminar Texto"
 msgid "Blackout Area"
 msgstr "Área de Ocultación"
 
-msgid "Save Changes"
-msgstr "Guardar Cambios"
+msgid "Harmonize Description"
+msgstr "Armonizar descripción"
+
+msgid "Save Pixel Changes"
+msgstr "Guardar cambios de píxeles"
 
 msgid "Series View"
 msgstr "Vista de Series"
+
+msgid "Modality"
+msgstr "Modalidad"
+
+msgid "Series Description"
+msgstr "Descripción de la serie"
+
+msgid "Body Part Examined"
+msgstr "Parte del cuerpo examinada"
+
+msgid "Slice Thickness"
+msgstr "Grosor de corte"
+
+msgid "View Position"
+msgstr "Posición de la vista"
+
+msgid "Patient Position"
+msgstr "Posición del paciente"
+
+msgid "Contrast Bolus Agent"
+msgstr "Agente de contraste"
+
+msgid "Contrast Bolus Route"
+msgstr "Vía de administración del contraste"
+
+msgid "With Contrast"
+msgstr "Con contraste"
+
+msgid "Without Contrast"
+msgstr "Sin contraste"
+
+msgid "FALCON prediction"
+msgstr "Predicción FALCON"
+
+msgid "Body part"
+msgstr "Parte del cuerpo"
+
+msgid "Body part confidence"
+msgstr "Confianza parte del cuerpo"
+
+msgid "IV contrast"
+msgstr "Contraste IV"
+
+msgid "IV contrast confidence"
+msgstr "Confianza contraste IV"
 
 msgid "Detecting text in all frames"
 msgstr "Detectando texto en todos los fotogramas"
@@ -805,8 +856,50 @@ msgstr "Áreas de ocultación en todos los fotogramas de la serie"
 msgid "Areas blacked out in all frames of series"
 msgstr "Áreas ocultadas en todos los fotogramas de la serie"
 
-msgid "Changes saved successfully"
-msgstr "Cambios guardados con éxito"
+msgid "Running FALCON analysis..."
+msgstr "Ejecutando análisis FALCON..."
+
+msgid "FALCON Error"
+msgstr "Error de FALCON"
+
+msgid "Failed to load FALCON models."
+msgstr "No se pudieron cargar los modelos FALCON."
+
+msgid "FALCON analysis failed"
+msgstr "Análisis FALCON fallido"
+
+msgid "FALCON could not analyze this series."
+msgstr "FALCON no pudo analizar esta serie."
+
+msgid "FALCON Results"
+msgstr "Resultados FALCON"
+
+msgid "Current Series Description already matches the FALCON prediction."
+msgstr "La descripción de serie actual ya coincide con la predicción FALCON."
+
+msgid "FALCON analysis complete"
+msgstr "Análisis FALCON completado"
+
+msgid "Proposed Series Description"
+msgstr "Descripción de serie propuesta"
+
+msgid "Apply this description?"
+msgstr "¿Aplicar esta descripción?"
+
+msgid "Failed to save series description."
+msgstr "Error al guardar la descripción de la serie."
+
+msgid "FALCON description applied"
+msgstr "Descripción FALCON aplicada"
+
+msgid "FALCON description not applied"
+msgstr "Descripción FALCON no aplicada"
+
+msgid "Pixel changes saved successfully"
+msgstr "Cambios de píxeles guardados correctamente"
+
+msgid "Save Changes Error"
+msgstr "Error al guardar"
 
 msgid "Failed to save changes to series frames"
 msgstr "Error al guardar los cambios en los fotogramas de la serie"
@@ -915,9 +1008,6 @@ msgstr "Número(s) de Acceso"
 
 msgid "Study Date"
 msgstr "Fecha del Estudio"
-
-msgid "Modality"
-msgstr "Modalidad"
 
 msgid "Load Accession Numbers"
 msgstr "Cargar Números de Acceso"
@@ -1083,3 +1173,9 @@ msgstr "PROYECCIÓN MEDIA"
 
 msgid "MAX PROJECTION"
 msgstr "PROYECCIÓN MÁX"
+
+#~ msgid "Contrast"
+#~ msgstr "Editar Contexto"
+
+#~ msgid "Use Save Changes to write to the series files."
+#~ msgstr "Error al guardar los cambios en los fotogramas de la serie"

@@ -637,6 +637,9 @@ msgstr ""
 msgid "No Studies in Anonymizer Model for PHI Index"
 msgstr ""
 
+msgid "Error Creating Projection View"
+msgstr ""
+
 msgid "Deletion Error"
 msgstr ""
 
@@ -742,10 +745,58 @@ msgstr ""
 msgid "Blackout Area"
 msgstr ""
 
-msgid "Save Changes"
+msgid "Harmonize Description"
+msgstr ""
+
+msgid "Save Pixel Changes"
 msgstr ""
 
 msgid "Series View"
+msgstr ""
+
+msgid "Modality"
+msgstr ""
+
+msgid "Series Description"
+msgstr ""
+
+msgid "Body Part Examined"
+msgstr ""
+
+msgid "Slice Thickness"
+msgstr ""
+
+msgid "View Position"
+msgstr ""
+
+msgid "Patient Position"
+msgstr ""
+
+msgid "Contrast Bolus Agent"
+msgstr ""
+
+msgid "Contrast Bolus Route"
+msgstr ""
+
+msgid "With Contrast"
+msgstr ""
+
+msgid "Without Contrast"
+msgstr ""
+
+msgid "FALCON prediction"
+msgstr ""
+
+msgid "Body part"
+msgstr ""
+
+msgid "Body part confidence"
+msgstr ""
+
+msgid "IV contrast"
+msgstr ""
+
+msgid "IV contrast confidence"
 msgstr ""
 
 msgid "Detecting text in all frames"
@@ -793,7 +844,49 @@ msgstr ""
 msgid "Areas blacked out in all frames of series"
 msgstr ""
 
-msgid "Changes saved successfully"
+msgid "Running FALCON analysis..."
+msgstr ""
+
+msgid "FALCON Error"
+msgstr ""
+
+msgid "Failed to load FALCON models."
+msgstr ""
+
+msgid "FALCON analysis failed"
+msgstr ""
+
+msgid "FALCON could not analyze this series."
+msgstr ""
+
+msgid "FALCON Results"
+msgstr ""
+
+msgid "Current Series Description already matches the FALCON prediction."
+msgstr ""
+
+msgid "FALCON analysis complete"
+msgstr ""
+
+msgid "Proposed Series Description"
+msgstr ""
+
+msgid "Apply this description?"
+msgstr ""
+
+msgid "Failed to save series description."
+msgstr ""
+
+msgid "FALCON description applied"
+msgstr ""
+
+msgid "FALCON description not applied"
+msgstr ""
+
+msgid "Pixel changes saved successfully"
+msgstr ""
+
+msgid "Save Changes Error"
 msgstr ""
 
 msgid "Failed to save changes to series frames"
@@ -902,9 +995,6 @@ msgid "Accession No.(s)"
 msgstr ""
 
 msgid "Study Date"
-msgstr ""
-
-msgid "Modality"
 msgstr ""
 
 msgid "Load Accession Numbers"

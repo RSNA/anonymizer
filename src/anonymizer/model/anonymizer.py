@@ -913,6 +913,26 @@ class AnonymizerModel:
 
         return True
 
+    @use_session()
+    def update_series_description_by_anon_uid(self, anon_series_uid: str, description: str) -> bool:
+        """
+        Update the stored series description for the series matching an anonymized SeriesInstanceUID.
+
+        Args:
+            anon_series_uid: Anonymized SeriesInstanceUID (directory name under public storage).
+            description: New series description text.
+
+        Returns:
+            True if a series row was found and updated, False otherwise.
+        """
+        stmt = select(Series).where(Series.anon_series_uid == anon_series_uid)
+        series = self.session.execute(stmt).scalar_one_or_none()
+        if series is None:
+            logger.error("Series with anon_series_uid '%s' not found.", anon_series_uid)
+            return False
+        series.description = description
+        return True
+
     @use_session()  # The decorator manages the session and a single transaction for the whole batch
     def process_java_phi_studies(self, java_studies: list[JavaAnonymizerExportedStudy]):
         """

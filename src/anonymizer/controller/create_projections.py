@@ -752,6 +752,46 @@ def load_series_frames(series_path: Path, border_px: int | None = 20) -> tuple[D
     return ds1, all_series_frames_stacked
 
 
+def apply_series_description(series_path: Path, description: str) -> bool:
+    """
+    Set SeriesDescription on every DICOM file in a series directory.
+
+    Args:
+        series_path: Directory containing series instance .dcm files.
+        description: Value to write to (0008,103E) SeriesDescription.
+
+    Returns:
+        True if all files were updated successfully, otherwise False.
+    """
+    if not series_path.is_dir():
+        logger.error(f"Series path is not a directory {series_path}")
+        return False
+
+    try:
+        dcm_paths = sorted(get_dcm_files(series_path))
+    except Exception as ex:
+        logger.error(f"Could not list DICOM files in {series_path}: {ex}")
+        return False
+
+    if not dcm_paths:
+        logger.error(f"No DICOM files found in {series_path}")
+        return False
+
+    success = True
+    logger.info("Updated SeriesDescription on {series_path}")
+    for dcm_path in dcm_paths:
+        try:
+            ds = dcmread(str(dcm_path), stop_before_pixels=True, force=True)
+            ds.SeriesDescription = description
+            ds.save_as(dcm_path, write_like_original=False)
+            
+        except Exception as ex:
+            logger.exception(f"Failed to update SeriesDescription on {dcm_path}: {ex}")
+            success = False
+
+    return success
+
+
 def save_series_frames(original_series_path: Path, processed_frames: np.ndarray, reference_ds: Dataset) -> bool:
     """
     Saves processed frames back by OVERWRITING original DICOM files.

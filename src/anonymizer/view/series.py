@@ -3,9 +3,11 @@ import gc
 import logging
 import os
 import tkinter as tk
+import tkinter.font as tkfont
 from enum import StrEnum, auto
 from pathlib import Path
 from pprint import pformat
+from tkinter import messagebox
 
 import customtkinter as ctk
 import numpy as np
@@ -13,7 +15,19 @@ import torch
 from easyocr import Reader
 from pydicom import Dataset
 
-from anonymizer.controller.create_projections import apply_windowing, get_wl_ww, load_series_frames, save_series_frames
+from anonymizer.controller.create_projections import (
+    apply_series_description,
+    apply_windowing,
+    get_wl_ww,
+    load_series_frames,
+    save_series_frames,
+)
+from anonymizer.controller.falcon.predict import (
+    _BODY_PART_RADLEX_LABELS,
+    contrast_prediction_confidence,
+    format_confidence_percent,
+    predict_falcon_series,
+)
 from anonymizer.controller.remove_pixel_phi import (
     OCRText,
     UserRectangle,
@@ -166,9 +180,23 @@ class SeriesView(tk.Toplevel):
         self.blackout_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
         col += 1
 
-        # Save Series Button
+        harmonize_state = "normal" if getattr(self._ds, "Modality", None) == "CT" else "disabled"
+        self.harmonize_button = ctk.CTkButton(
+            self.control_frame,
+            width=160,
+            text=_("Harmonize Description"),
+            command=self.harmonize_description_button_clicked,
+            state=harmonize_state,
+        )
+        self.harmonize_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
+        col += 1
+
+        # Save pixel edits (PHI removal / blackout) only; harmonized description is saved on accept.
         self.save_button = ctk.CTkButton(
-            self.control_frame, width=self.BUTTON_WIDTH, text=_("Save Changes"), command=self.save_series_button_clicked
+            self.control_frame,
+            width=130,
+            text=_("Save Pixel Changes"),
+            command=self.save_series_button_clicked,
         )
         self.save_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="e")
         self.save_button.configure(state="disabled")
@@ -201,6 +229,76 @@ class SeriesView(tk.Toplevel):
         """Updates the status label."""
         self.status_label.configure(text=message)
         self.status_label.update()
+
+    @staticmethod
+    def _dicom_field_display(ds: Dataset, keyword: str) -> str:
+        value = ds.get(keyword)
+        if value is None or value == "":
+            return "—"
+        return str(value).strip()
+
+    @staticmethod
+    def _messagebox_font() -> tkfont.Font:
+        """Font closest to the system message box (proportional)."""
+        for name in ("TkDialogFont", "TkCaptionFont", "TkDefaultFont"):
+            try:
+                return tkfont.nametofont(name)
+            except tk.TclError:
+                continue
+        return tkfont.Font()
+
+    @staticmethod
+    def _pad_to_pixel_width(text: str, width_px: float, font: tkfont.Font) -> str:
+        padded = str(text)
+        while font.measure(padded) < width_px:
+            padded += " "
+        return padded
+
+    def _format_falcon_dicom_table(self, ds: Dataset) -> str:
+        rows = [
+            (_("Modality"), "(0008,0060)", self._dicom_field_display(ds, "Modality")),
+            (_("Series Description"), "(0008,103E)", self._dicom_field_display(ds, "SeriesDescription")),
+            (_("Body Part Examined"), "(0018,0015)", self._dicom_field_display(ds, "BodyPartExamined")),
+            (_("Slice Thickness"), "(0018,0050)", self._dicom_field_display(ds, "SliceThickness")),
+            (_("View Position"), "(0018,5101)", self._dicom_field_display(ds, "ViewPosition")),
+            (_("Patient Position"), "(0018,5100)", self._dicom_field_display(ds, "PatientPosition")),
+            (_("Contrast Bolus Agent"), "(0018,0010)", self._dicom_field_display(ds, "ContrastBolusAgent")),
+            (_("Contrast Bolus Route"), "(0018,1040)", self._dicom_field_display(ds, "ContrastBolusRoute")),
+        ]
+        font = self._messagebox_font()
+        col_gap = "  "
+        col_px = [max(font.measure(str(row[i])) for row in rows) for i in range(3)]
+
+        lines: list[str] = []
+        for field, tag, value in rows:
+            value_text = str(value).replace("\n", " ")
+            lines.append(
+                self._pad_to_pixel_width(field, col_px[0], font)
+                + col_gap
+                + self._pad_to_pixel_width(tag, col_px[1], font)
+                + col_gap
+                + value_text
+            )
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_falcon_prediction_section(prediction) -> str:
+        body_label = _BODY_PART_RADLEX_LABELS.get(prediction.body_part, prediction.body_part)
+        contrast_state = _("With Contrast") if prediction.iv_contrast else _("Without Contrast")
+        body_confidence = format_confidence_percent(prediction.body_part_confidence)
+        contrast_confidence = format_confidence_percent(contrast_prediction_confidence(prediction))
+        return (
+            _("FALCON prediction")
+            + ":\n"
+            + _("Body part")
+            + f": {body_label}\n"
+            + _("Body part confidence")
+            + f": {body_confidence}\n\n"
+            + _("IV contrast")
+            + f": {contrast_state}\n"
+            + _("IV contrast confidence")
+            + f": {contrast_confidence}"
+        )
 
     def clear_whitelist(self):
         logger.info("Clearing whitelist")
@@ -493,6 +591,100 @@ class SeriesView(tk.Toplevel):
             self.blackout_areas_in_series()
             self.update_status(_("Areas blacked out in all frames of series"))
 
+    def harmonize_description_button_clicked(self):
+        if self._ds is None or getattr(self._ds, "Modality", None) != "CT":
+            return
+
+        logger.info("FALCON harmonize starting for %s", self._series_path)
+        self.update_status(_("Running FALCON analysis..."))
+        self.harmonize_button.configure(state="disabled")
+        self.update_idletasks()
+
+        predictions = predict_falcon_series([self._series_path])
+
+        if not predictions:
+            messagebox.showerror(
+                title=_("FALCON Error"),
+                message=_("Failed to load FALCON models."),
+                parent=self,
+            )
+            self.update_status(_("FALCON analysis failed"))
+            self.harmonize_button.configure(state="normal")
+            return
+
+        prediction = predictions[0]
+        if prediction.error is not None:
+            messagebox.showerror(
+                title=_("FALCON Error"),
+                message=_("FALCON could not analyze this series.") + f"\n\n{prediction.error}",
+                parent=self,
+            )
+            self.update_status(_("FALCON analysis failed"))
+            self.harmonize_button.configure(state="normal")
+            return
+
+        current = str(self._ds.get("SeriesDescription", "") or "").strip()
+        proposed = prediction.radlex_series_description
+        dicom_table = self._format_falcon_dicom_table(self._ds)
+        falcon_section = self._format_falcon_prediction_section(prediction)
+
+        if proposed.strip() == current:
+            messagebox.showinfo(
+                title=_("FALCON Results"),
+                message=(
+                    dicom_table
+                    + "\n\n"
+                    + _("Current Series Description already matches the FALCON prediction.")
+                    + "\n\n"
+                    + falcon_section
+                ),
+                parent=self,
+            )
+            self.update_status(_("FALCON analysis complete"))
+            self.harmonize_button.configure(state="normal")
+            return
+
+        accept = messagebox.askyesno(
+            title=_("FALCON Results"),
+            message=(
+                dicom_table
+                + "\n\n"
+                + falcon_section
+                + "\n\n"
+                + _("Proposed Series Description")
+                + f':\n  "{proposed}"\n\n'
+                + _("Apply this description?")
+            ),
+            default="no",
+            parent=self,
+        )
+
+        if accept:
+            if not apply_series_description(self._series_path, proposed):
+                messagebox.showerror(
+                    title=_("FALCON Error"),
+                    message=_("Failed to save series description."),
+                    parent=self,
+                )
+                self.update_status(_("FALCON analysis failed"))
+            elif not self._anon_model.update_series_description_by_anon_uid(
+                str(self._ds.SeriesInstanceUID), proposed
+            ):
+                messagebox.showerror(
+                    title=_("FALCON Error"),
+                    message=_("Failed to save series description."),
+                    parent=self,
+                )
+                self.update_status(_("FALCON analysis failed"))
+            else:
+                self._ds.SeriesDescription = proposed
+                self._update_title()
+                self.update_status(_("FALCON description applied"))
+        else:
+            self.update_status(_("FALCON description not applied"))
+
+        self.harmonize_button.configure(state="normal")
+
     def save_series_button_clicked(self):
         if self._frames is None or self._ds is None:
             logger.error("CRITICAL: No frames or dataset to save")
@@ -516,14 +708,18 @@ class SeriesView(tk.Toplevel):
             except Exception as e:
                 logger.error(f"Error saving whitelist: {e}")
 
-        # Save Series Frames:
         if save_series_frames(self._series_path, self._frames if self.single_frame else self._frames[3:], self._ds):
             logger.info(f"Saved series frames to {self._series_path}")
-            self.update_status(_("Changes saved successfully"))
+            self.update_status(_("Pixel changes saved successfully"))
+            self.save_button.configure(state="disabled")
         else:
             logger.error(f"Failed to save series frames to {self._series_path}")
+            messagebox.showerror(
+                title=_("Save Changes Error"),
+                message=_("Failed to save changes to series frames"),
+                parent=self,
+            )
             self.update_status(_("Failed to save changes to series frames"))
-        self.save_button.configure(state="disabled")
 
     def whitelist_defaults_button_clicked(self):
         logger.info("Whitelist button clicked")
