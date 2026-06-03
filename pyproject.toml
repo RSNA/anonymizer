@@ -37,6 +37,7 @@ scipy = "*"
 
 [tool.poetry.group.dev.dependencies]
 poetry = "^2.0.1"
+pre-commit = "*"
 ruff = "*"
 black = "*"
 pytest = "*"

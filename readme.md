@@ -50,6 +50,21 @@ You need to provide a path to a project configuration to run in headless mode
 4. Set virtual environment within project: `poetry config virtualenvs.in-project true`
 4. Clone repository
 5. Setup virtual environment and install all dependencies listed in pyproject.toml: `poetry install --with dev`
+6. Enable Git pre-commit hooks (Ruff lint, same rules as CI): `poetry run pre-commit install`
+
+Hooks run on every `git commit`, including commits from the VS Code / Cursor Source Control UI. To skip once: `git commit --no-verify`.
+
+### Linting (Ruff)
+Configuration: `[tool.ruff]` in `pyproject.toml` (scope: `src/anonymizer/`).
+
+```bash
+poetry run ruff check ./src/anonymizer/
+poetry run ruff check ./src/anonymizer/ --fix   # safe auto-fixes only; not run in CI
+poetry run pre-commit run ruff-check --all-files
+```
+
+CI runs `ruff check` without `--fix`. Pre-commit uses the same check on staged Python files under `src/anonymizer/`.
+
 ### Unit Testing 
 #### For model and controller with coverage
 ```

@@ -1,0 +1,9 @@
+# Install once per clone: poetry run pre-commit install
+# Run on demand: poetry run pre-commit run --all-files
+# Matches CI: poetry run ruff check ./src/anonymizer/
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.2
+    hooks:
+      - id: ruff-check
+        files: ^src/anonymizer/.*\.py$
