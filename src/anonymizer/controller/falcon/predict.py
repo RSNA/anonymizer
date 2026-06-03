@@ -62,10 +62,10 @@ def _format_radlex_series_description(body_part: str, iv_contrast: bool, modalit
         - A string representing the RadLex-style series description.
     """
     body_label = _BODY_PART_RADLEX_LABELS.get(body_part)
-    
+
     if body_label is None:
         raise ValueError(f"Unsupported body part for RadLex description: {body_part}")
-    
+
     contrast_label = "With Contrast" if iv_contrast else "Without Contrast"
     return f"{modality} {body_label} {contrast_label}"
 
@@ -275,7 +275,7 @@ def predict_falcon_series(series_directories: list[Path]) -> list[FalconPredicti
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             elif torch.backends.mps.is_available():
-                torch.mps.empty_cache() 
+                torch.mps.empty_cache()
             gc.collect()
 
     del part_model, hn_model, ch_model, ab_model

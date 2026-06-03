@@ -784,7 +784,7 @@ def apply_series_description(series_path: Path, description: str) -> bool:
             ds = dcmread(str(dcm_path), stop_before_pixels=True, force=True)
             ds.SeriesDescription = description
             ds.save_as(dcm_path, write_like_original=False)
-            
+
         except Exception as ex:
             logger.exception(f"Failed to update SeriesDescription on {dcm_path}: {ex}")
             success = False

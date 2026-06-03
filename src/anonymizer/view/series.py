@@ -660,14 +660,7 @@ class SeriesView(tk.Toplevel):
         )
 
         if accept:
-            if not apply_series_description(self._series_path, proposed):
-                messagebox.showerror(
-                    title=_("FALCON Error"),
-                    message=_("Failed to save series description."),
-                    parent=self,
-                )
-                self.update_status(_("FALCON analysis failed"))
-            elif not self._anon_model.update_series_description_by_anon_uid(
+            if not apply_series_description(self._series_path, proposed) or not self._anon_model.update_series_description_by_anon_uid(
                 str(self._ds.SeriesInstanceUID), proposed
             ):
                 messagebox.showerror(
