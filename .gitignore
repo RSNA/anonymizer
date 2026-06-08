@@ -24,7 +24,7 @@ src/dist/*
 src/logs/*
 src/certs/*
 src/assets/ocr/*
-src/assets/falcon/models/*
+src/anonymizer/assets/falcon/models/*
 dicom/*
 phi_imgs/*
 **/versionfile.txt

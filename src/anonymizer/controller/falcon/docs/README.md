@@ -22,7 +22,7 @@ Anonymizer downloads pretrained weights from a fixed upstream commit (see `load_
 - Commit: `7c33595ff6f45e609b2b0a3f5168fec883b45f2c`
 - Base URL: `https://raw.githubusercontent.com/FintelmannLabDevelopmentTeam/Falcon/7c33595ff6f45e609b2b0a3f5168fec883b45f2c/models/`
 
-Local cache after download: `assets/falcon/models/`
+Local cache after download: `src/anonymizer/assets/falcon/models/` (resolved from the package root, independent of process cwd)
 
 | File | Role |
 | ---- | ---- |
@@ -81,6 +81,7 @@ https://doi.org/10.1007/s10278-026-01865-8
 
 ## Related documentation
 
+- [FALCON_Evaluation.md](FALCON_Evaluation.md) — labeled manifest accuracy/F1 evaluation utility
 - [RadLex_Notes.md](RadLex_Notes.md) — LOINC/RSNA Playbook, RadLex Series Playbook, and how proposed series descriptions relate to full Playbook compliance
 
 ---

@@ -36,6 +36,7 @@ CH_SLICE_RANGE = range(50, 80)
 AB_SLICE_RANGE = range(20, 80)
 
 BP_SLICE_IDX = 15
+BODY_PART_MODEL_INPUT_Z_INDEX = BP_SLICE_RANGE.start + BP_SLICE_IDX
 HN_SLICE_IDX = 20
 CH_SLICE_IDX = 15
 AB_SLICE_IDX = 43
@@ -111,6 +112,45 @@ def _error_prediction(series_directory: Path, error: str) -> FalconPrediction:
     )
 
 
+def extract_body_part_model_input_slice(image_np: np.ndarray) -> np.ndarray:
+    """
+    Return the normalized 2D slice (H, W) in [0, 1] used as ResNet9 channel 0 for body-part inference.
+
+    ``image_np`` must be the volume produced by ``preprocess_series`` (typically shape 100×150×150).
+    """
+    data = image_np[BP_SLICE_RANGE, :, :]
+    data = np.clip(data, a_min=-200, a_max=200)
+    data_min, data_max = data.min(), data.max()
+    data = np.zeros_like(data) if data_max == data_min else (data - data_min) / (data_max - data_min)
+    return np.asarray(data[BP_SLICE_IDX, :, :], dtype=np.float32)
+
+
+def extract_body_part_model_input(image_np: np.ndarray) -> np.ndarray:
+    """Return the 3-channel float array (3, H, W) passed to the body-part ResNet9."""
+    slice_2d = extract_body_part_model_input_slice(image_np)
+    return np.broadcast_to(slice_2d[np.newaxis, ...], (3, *slice_2d.shape)).copy()
+
+
+def extract_contrast_model_input_slice(image_np: np.ndarray, body_part: str) -> np.ndarray:
+    """
+    Return the normalized 2D slice (H, W) in [0, 1] used as ResNet9 channel 0 for contrast inference.
+
+    Uses the slice range for ``body_part`` (predicted body part in production).
+    """
+    slice_range, slice_idx = _get_contrast_slices(body_part)
+    data = image_np[slice_range, :, :]
+    data = np.clip(data, a_min=-200, a_max=200)
+    data_min, data_max = data.min(), data.max()
+    data = np.zeros_like(data) if data_max == data_min else (data - data_min) / (data_max - data_min)
+    return np.asarray(data[slice_idx, :, :], dtype=np.float32)
+
+
+def extract_contrast_model_input(image_np: np.ndarray, body_part: str) -> np.ndarray:
+    """Return the 3-channel float array (3, H, W) passed to the contrast ResNet9."""
+    slice_2d = extract_contrast_model_input_slice(image_np, body_part)
+    return np.broadcast_to(slice_2d[np.newaxis, ...], (3, *slice_2d.shape)).copy()
+
+
 def get_body_part_probabilities(model: ResNet9, image_np: np.ndarray) -> np.ndarray:
     """
     Run body part classification model and return probabilities for each class.
@@ -126,13 +166,7 @@ def get_body_part_probabilities(model: ResNet9, image_np: np.ndarray) -> np.ndar
         ValueError if the model output is not as expected.
 
     """
-    data = image_np[BP_SLICE_RANGE, :, :]
-    data = np.clip(data, a_min=-200, a_max=200)
-    data_min, data_max = data.min(), data.max()
-    data = np.zeros_like(data) if data_max == data_min else (data - data_min) / (data_max - data_min)
-    data_single_slice = data[BP_SLICE_IDX, :, :]
-    data_3ch = np.broadcast_to(data_single_slice[np.newaxis, ...], (3, *data_single_slice.shape))
-    data_3ch = np.copy(data_3ch)
+    data_3ch = extract_body_part_model_input(image_np)
     tensor = torch.from_numpy(data_3ch).float().to(device)
 
     with torch.no_grad():
@@ -158,14 +192,7 @@ def get_contrast_probability(model: ResNet9, image_np: np.ndarray, body_part: st
         - ValueError if the body part is not recognized or if the model output is not as expected.
 
     """
-    slice_range, slice_idx = _get_contrast_slices(body_part)
-    data = image_np[slice_range, :, :]
-    data = np.clip(data, a_min=-200, a_max=200)
-    data_min, data_max = data.min(), data.max()
-    data = np.zeros_like(data) if data_max == data_min else (data - data_min) / (data_max - data_min)
-    data_single_slice = data[slice_idx, :, :]
-    data_3ch = np.broadcast_to(data_single_slice[np.newaxis, ...], (3, *data_single_slice.shape))
-    data_3ch = np.copy(data_3ch)
+    data_3ch = extract_contrast_model_input(image_np, body_part)
     tensor = torch.from_numpy(data_3ch).float().to(device)
 
     with torch.no_grad():

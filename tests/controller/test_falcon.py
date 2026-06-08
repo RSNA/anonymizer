@@ -4,13 +4,24 @@ from unittest.mock import patch, MagicMock
 import numpy as np
 import torch
 
+from anonymizer.controller.falcon import load_models
+
 from anonymizer.controller.falcon.predict import (
+    BODY_PART_MODEL_INPUT_Z_INDEX,
     FalconPrediction,
     contrast_prediction_confidence,
+    extract_body_part_model_input,
+    extract_body_part_model_input_slice,
     format_confidence_percent,
     predict_falcon_series,
 )
+from anonymizer.controller.falcon.preprocessing.preprocess_series import preprocess_series
 from create_synthetic_ct_series import write_synthetic_phantom_assets
+
+def test_falcon_model_dir_under_anonymizer_package() -> None:
+    expected = Path(load_models.__file__).resolve().parents[2] / "assets" / "falcon" / "models"
+    assert load_models.FALCON_MODEL_DIR == expected
+
 
 BASE_TEST_DIR = Path("tests/controller/assets/test_dcm_files")
 
@@ -73,6 +84,22 @@ def mock_preprocess():
 # -------------------------------------------------------------------------
 # MOCKED UNIT TESTS (Run on every commit)
 # -------------------------------------------------------------------------
+
+def test_body_part_model_input_z_index_is_fixed():
+    assert BODY_PART_MODEL_INPUT_Z_INDEX == 50
+
+
+def test_extract_body_part_model_input_from_preprocessed_volume():
+    image_np = np.linspace(-100, 100, 100 * 150 * 150, dtype=np.float32).reshape(100, 150, 150)
+    slice_2d = extract_body_part_model_input_slice(image_np)
+    assert slice_2d.shape == (150, 150)
+    assert 0.0 <= slice_2d.min() <= slice_2d.max() <= 1.0
+
+    model_input = extract_body_part_model_input(image_np)
+    assert model_input.shape == (3, 150, 150)
+    np.testing.assert_array_equal(model_input[0], slice_2d)
+    np.testing.assert_array_equal(model_input[1], slice_2d)
+
 
 def test_empty_directory_list():
     predictions = predict_falcon_series([])
