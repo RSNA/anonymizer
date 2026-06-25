@@ -39,7 +39,7 @@ def authenticate_user(username, password, user_pool_id, client_id, identity_pool
     ):
         # New password required:
         session = response["Session"]
-        new_password = "SpeedFast1967#"
+        new_password = "***********"
         response = cognito_client.respond_to_auth_challenge(
             ClientId=client_id,
             ChallengeName="NEW_PASSWORD_REQUIRED",
