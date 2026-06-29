@@ -2,6 +2,8 @@ import difflib
 import gc
 import logging
 import os
+import queue
+import threading
 import tkinter as tk
 import tkinter.font as tkfont
 from enum import StrEnum, auto
@@ -26,8 +28,8 @@ from anonymizer.controller.falcon.predict import (
     _BODY_PART_RADLEX_LABELS,
     contrast_prediction_confidence,
     format_confidence_percent,
-    predict_falcon_series,
 )
+from anonymizer.controller.harmonize import HarmonizedResult, HarmonizeProgress, harmonize_series
 from anonymizer.controller.remove_pixel_phi import (
     OCRText,
     UserRectangle,
@@ -207,6 +209,8 @@ class SeriesView(tk.Toplevel):
         self.status_label.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="e")
         self.control_frame.grid_columnconfigure(col, weight=1)  # Make status label expand.
 
+        self._harmonize_queue: queue.Queue | None = None
+
         try:
             whitelist = load_project_whitelist(self._series_path.parents[3], self._ds.Modality)
             for item in whitelist:
@@ -280,6 +284,75 @@ class SeriesView(tk.Toplevel):
                 + value_text
             )
         return "\n".join(lines)
+
+    @staticmethod
+    def _format_tseg_result_section(result: HarmonizedResult) -> str:
+        tseg = result.tseg
+        if tseg is None:
+            return _("TotalSegmentator anatomy") + ":\n" + _("Not available")
+
+        if not tseg.body_parts_present.strip():
+            error = tseg.error or _("Not available")
+            return _("TotalSegmentator anatomy") + f":\n{error}"
+
+        contrast_state = _("With Contrast") if tseg.iv_contrast else _("Without Contrast")
+        region_fraction = format_confidence_percent(tseg.region_fraction)
+        lines = [
+            _("TotalSegmentator anatomy") + ":",
+            _("Regions present") + f": {tseg.body_parts_present}",
+            _("Dominant region") + f": {tseg.dominant_region}",
+            _("Region fraction") + f": {region_fraction}",
+        ]
+        if tseg.contrast_phase:
+            phase_probability = format_confidence_percent(tseg.phase_probability)
+            lines.extend(
+                [
+                    "",
+                    _("Contrast phase") + f": {tseg.contrast_phase}",
+                    _("IV contrast") + f": {contrast_state}",
+                    _("Phase probability") + f": {phase_probability}",
+                ]
+            )
+        elif tseg.error:
+            lines.extend(["", _("Contrast analysis") + f": {tseg.error}"])
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_falcon_result_section(result: HarmonizedResult) -> str:
+        falcon = result.falcon
+        if falcon is None or falcon.error is not None:
+            error = falcon.error if falcon is not None else _("Not available")
+            fallback = _(" (used as fallback)") if result.regions_source == "falcon" or result.contrast_source == "falcon" else ""
+            return _("FALCON") + fallback + f":\n{error}"
+
+        body_label = _BODY_PART_RADLEX_LABELS.get(falcon.body_part, falcon.body_part)
+        contrast_state = _("With Contrast") if falcon.iv_contrast else _("Without Contrast")
+        body_confidence = format_confidence_percent(falcon.body_part_confidence)
+        contrast_confidence = format_confidence_percent(contrast_prediction_confidence(falcon))
+        fallback_note = ""
+        if result.regions_source == "falcon" or result.contrast_source == "falcon":
+            fallback_note = "\n" + _("(FALCON used as fallback for regions or contrast)")
+        return (
+            _("FALCON")
+            + ":\n"
+            + _("Body part")
+            + f": {body_label}\n"
+            + _("Body part confidence")
+            + f": {body_confidence}\n\n"
+            + _("IV contrast")
+            + f": {contrast_state}\n"
+            + _("IV contrast confidence")
+            + f": {contrast_confidence}"
+            + fallback_note
+        )
+
+    @staticmethod
+    def _format_harmonize_result_section(result: HarmonizedResult) -> str:
+        return (
+            SeriesView._format_tseg_result_section(result)
+            + "\n\n"
+            + SeriesView._format_falcon_result_section(result)
+        )
 
     @staticmethod
     def _format_falcon_prediction_section(prediction) -> str:
@@ -591,65 +664,106 @@ class SeriesView(tk.Toplevel):
             self.blackout_areas_in_series()
             self.update_status(_("Areas blacked out in all frames of series"))
 
-    def harmonize_description_button_clicked(self):
-        if self._ds is None or getattr(self._ds, "Modality", None) != "CT":
+    def _show_harmonize_progress(self, progress: HarmonizeProgress) -> None:
+        if progress.remaining_sec is not None and progress.remaining_sec > 0:
+            self.update_status(f"{progress.message} ~{int(progress.remaining_sec)}s")
+        else:
+            self.update_status(progress.message)
+
+    def _hide_harmonize_progress(self) -> None:
+        pass
+
+    def _harmonize_worker(self) -> None:
+        assert self._harmonize_queue is not None
+
+        def on_progress(progress: HarmonizeProgress) -> None:
+            self._harmonize_queue.put(("progress", progress))
+
+        try:
+            results = harmonize_series([self._series_path], progress=on_progress)
+            self._harmonize_queue.put(("done", results))
+        except Exception as exc:
+            logger.exception("Harmonize failed: %s", exc)
+            self._harmonize_queue.put(("error", exc))
+
+    def _poll_harmonize_progress(self) -> None:
+        if self._harmonize_queue is None:
             return
 
-        logger.info("FALCON harmonize starting for %s", self._series_path)
-        self.update_status(_("Running FALCON analysis..."))
-        self.harmonize_button.configure(state="disabled")
-        self.update_idletasks()
+        while True:
+            try:
+                kind, payload = self._harmonize_queue.get_nowait()
+            except queue.Empty:
+                break
 
-        predictions = predict_falcon_series([self._series_path])
+            if kind == "progress":
+                self._show_harmonize_progress(payload)
+            elif kind == "done":
+                self._hide_harmonize_progress()
+                self._finish_harmonize(payload)
+                return
+            elif kind == "error":
+                self._hide_harmonize_progress()
+                messagebox.showerror(
+                    title=_("Harmonize Error"),
+                    message=_("Harmonize could not analyze this series.") + f"\n\n{payload}",
+                    parent=self,
+                )
+                self.update_status(_("Harmonize analysis failed"))
+                self.harmonize_button.configure(state="normal")
+                return
 
-        if not predictions:
+        self.after(200, self._poll_harmonize_progress)
+
+    def _finish_harmonize(self, results: list[HarmonizedResult]) -> None:
+        if not results:
             messagebox.showerror(
-                title=_("FALCON Error"),
-                message=_("Failed to load FALCON models."),
+                title=_("Harmonize Error"),
+                message=_("Harmonize could not analyze this series."),
                 parent=self,
             )
-            self.update_status(_("FALCON analysis failed"))
+            self.update_status(_("Harmonize analysis failed"))
             self.harmonize_button.configure(state="normal")
             return
 
-        prediction = predictions[0]
-        if prediction.error is not None:
+        result = results[0]
+        if result.error is not None:
             messagebox.showerror(
-                title=_("FALCON Error"),
-                message=_("FALCON could not analyze this series.") + f"\n\n{prediction.error}",
+                title=_("Harmonize Error"),
+                message=_("Harmonize could not analyze this series.") + f"\n\n{result.error}",
                 parent=self,
             )
-            self.update_status(_("FALCON analysis failed"))
+            self.update_status(_("Harmonize analysis failed"))
             self.harmonize_button.configure(state="normal")
             return
 
         current = str(self._ds.get("SeriesDescription", "") or "").strip()
-        proposed = prediction.radlex_series_description
+        proposed = result.radlex_series_description
         dicom_table = self._format_falcon_dicom_table(self._ds)
-        falcon_section = self._format_falcon_prediction_section(prediction)
+        harmonize_section = self._format_harmonize_result_section(result)
 
         if proposed.strip() == current:
             messagebox.showinfo(
-                title=_("FALCON Results"),
+                title=_("Harmonize Results"),
                 message=(
                     dicom_table
                     + "\n\n"
-                    + _("Current Series Description already matches the FALCON prediction.")
+                    + _("Current Series Description already matches the harmonized result.")
                     + "\n\n"
-                    + falcon_section
+                    + harmonize_section
                 ),
                 parent=self,
             )
-            self.update_status(_("FALCON analysis complete"))
+            self.update_status(_("Harmonize analysis complete"))
             self.harmonize_button.configure(state="normal")
             return
 
         accept = messagebox.askyesno(
-            title=_("FALCON Results"),
+            title=_("Harmonize Results"),
             message=(
                 dicom_table
                 + "\n\n"
-                + falcon_section
+                + harmonize_section
                 + "\n\n"
                 + _("Proposed Series Description")
                 + f':\n  "{proposed}"\n\n'
@@ -664,19 +778,43 @@ class SeriesView(tk.Toplevel):
                 str(self._ds.SeriesInstanceUID), proposed
             ):
                 messagebox.showerror(
-                    title=_("FALCON Error"),
+                    title=_("Harmonize Error"),
                     message=_("Failed to save series description."),
                     parent=self,
                 )
-                self.update_status(_("FALCON analysis failed"))
+                self.update_status(_("Harmonize analysis failed"))
             else:
                 self._ds.SeriesDescription = proposed
                 self._update_title()
-                self.update_status(_("FALCON description applied"))
+                self.update_status(_("Harmonize description applied"))
         else:
-            self.update_status(_("FALCON description not applied"))
+            self.update_status(_("Harmonize description not applied"))
 
         self.harmonize_button.configure(state="normal")
+
+    def harmonize_description_button_clicked(self):
+        if self._ds is None or getattr(self._ds, "Modality", None) != "CT":
+            return
+
+        logger.info("Harmonize starting for %s", self._series_path)
+        self.update_status(_("Running harmonize (FALCON, then anatomy analysis)..."))
+        self.harmonize_button.configure(state="disabled")
+        self._harmonize_queue = queue.Queue()
+        self._show_harmonize_progress(
+            HarmonizeProgress(
+                stage="start",
+                message=_("Starting harmonize (FALCON → anatomy → contrast)"),
+                fraction=0.0,
+                elapsed_sec=0.0,
+                remaining_sec=None,
+            )
+        )
+        threading.Thread(
+            target=self._harmonize_worker,
+            name="HarmonizeWorker",
+            daemon=True,
+        ).start()
+        self.after(200, self._poll_harmonize_progress)
 
     def save_series_button_clicked(self):
         if self._frames is None or self._ds is None:

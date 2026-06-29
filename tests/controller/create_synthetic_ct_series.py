@@ -1,4 +1,4 @@
-"""Synthetic multi-slice CT DICOM fixtures for FALCON controller tests."""
+"""Synthetic multi-slice CT DICOM fixtures for FALCON and tseg controller tests."""
 
 import shutil
 from collections.abc import Callable

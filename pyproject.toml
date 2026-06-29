@@ -1,96 +1,106 @@
-[tool.poetry]
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
 name = "rsna-anonymizer"
 version = "19.0.0"
 description = "RSNA DICOM Anonymizer"
-authors = ["Algorhythm Software <michael@dx.life>"]
-license = "RSNA-MIRC Public License"
 readme = "readme.md"
-homepage = "https://github.com/RSNA/anonymizer"
-packages = [{ include = "anonymizer", from = "src"}]
+license = { text = "RSNA-MIRC Public License" }
+authors = [{ name = "Algorhythm Software", email = "michael@dx.life" }]
+requires-python = ">=3.12.0,<3.13.0"
+dependencies = [
+    "numpy<2.0.0",
+    "customtkinter",
+    "pillow",
+    "tkhtmlview",
+    "pydicom>=2.4,<2.5",
+    "pynetdicom",
+    "ifaddr",
+    "boto3",
+    "openpyxl",
+    "psutil",
+    "pylibjpeg[all]",
+    "opencv-python-headless",
+    "easyocr",
+    "torch",
+    "cryptography",
+    "requests",
+    "requests-oauthlib",
+    "toml>=0.10.2",
+    "click>=8.1.8",
+    "dataclasses-json>=0.6.7",
+    "bidict>=0.23.1",
+    "sqlalchemy>=2.0.38",
+    "simpleitk>=2.5.5",
+    "scipy",
+]
 
-[tool.poetry.dependencies]
-python = ">=3.12.0,<3.13.0"
-numpy = "<2.0.0"
-customtkinter = "*"
-pillow = "*"
-tkhtmlview = "*"
-pydicom = ">=2.4,<2.5"
-pynetdicom = "*"
-ifaddr = "*"
-boto3 = "*"
-openpyxl = "*"
-psutil = "*"
-pylibjpeg = {extras = ["all"], version = "*"}
-opencv-python-headless = "*"
-easyocr = "*"
-torch = "*"
-cryptography = "*"
-requests = "*"
-requests-oauthlib = "*"
-toml = "^0.10.2"
-click = "^8.1.8"
-dataclasses-json = "^0.6.7"
-bidict = "^0.23.1"
-sqlalchemy = "^2.0.38"
-simpleitk = "^2.5.5"
-scipy = "*"
+[project.optional-dependencies]
+tseg = [
+    "totalsegmentator>=2.3.0",
+    "xgboost>=2.0.0",
+    "nibabel",
+    "dicom2nifti>=2.3,<2.6",
+]
 
-[tool.poetry.group.dev.dependencies]
-poetry = "^2.0.1"
-pre-commit = "*"
-ruff = "*"
-black = "*"
-pytest = "*"
-pytest-cov = "^6.0.0"
-python-dotenv = "*"
-ffmpeg-python = "^0.2.0"
-pytest-mock = "^3.14.1"
-
-[tool.poetry.scripts]
+[project.scripts]
 rsna-anonymizer = "anonymizer.anonymizer:main"
+
+[project.urls]
+Homepage = "https://github.com/RSNA/anonymizer"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/anonymizer"]
+
+[dependency-groups]
+dev = [
+    "pre-commit",
+    "ruff",
+    "black",
+    "pytest",
+    "pytest-cov>=6.0.0",
+    "python-dotenv",
+    "ffmpeg-python>=0.2.0",
+    "pytest-mock>=3.14.1",
+]
 
 [tool.ruff]
 target-version = "py312"
 line-length = 120
 
-lint.select = [ # https://docs.astral.sh/ruff/linter/#rule-selection
-  "E",    # PyCodeStyle
-  "F",    # PyFlakes
-  "W",    # PyCodeStyle
-  "I",    # iSort
-  "B",    # flake8-bugbear
-  "SIM",  # flake8-simplify
-  "C90",  # mccabe
-  ] 
-
-lint.fixable = [ #All the errors that are fixed with --fix, SAFE only
-  "I001", # Import block is un-sorted or un-formatted
-  "W292", # No newline at end of file
-  "W293", # Blank line contains whitespace
-  "W291", # Trailing whitespace
-  "F401", # Imported but unused
-  ]
-
-lint.ignore = [
-  "E501",   # Line too long
-  "SIM102",  # Nested if statements
-  "C901", # Mccabe complexity
-  ]
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "W",
+    "I",
+    "B",
+    "SIM",
+    "C90",
+]
+fixable = [
+    "I001",
+    "W292",
+    "W293",
+    "W291",
+    "F401",
+]
+ignore = [
+    "E501",
+    "SIM102",
+    "C901",
+]
 
 [tool.ruff.lint.mccabe]
-max-complexity = 15 # Default is 10
+max-complexity = 15
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# addopts = "--verbose --show-capture=all --cov=src/anonymizer --cov-report=term-missing"
 addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model"
 pythonpath = "."
 markers = [
     "falcon_memory(max_rss_delta_mb): measure RSS before/after the test and fail if delta exceeds the limit",
+    "tseg_integration: run TotalSegmentator inference (slow, optional)",
 ]
-
-[build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
-
-

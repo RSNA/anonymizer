@@ -6,26 +6,38 @@ There is no single RadLex document titled “harmonization rules for CT series d
 
 ## What this application produces
 
-FALCON builds a simplified, human-readable label in `predict._format_radlex_series_description()`:
+**Harmonize Description** (Series View) combines:
+
+1. **TotalSegmentator (`tseg`)** — anatomic analysis from segmented organ volumes and HU statistics (primary for regions and contrast).
+2. **FALCON** — predictive ResNet9 classifier (fallback when anatomy analysis fails).
+
+The harmonized label uses RadLex Playbook+ multi-region syntax in `tseg/radlex.py`:
 
 ```text
-{Modality} {Body part} {With Contrast | Without Contrast}
+{Modality} {Body regions joined by +} {With Contrast | Without Contrast}
 ```
 
 Examples:
 
 - `CT Chest With Contrast`
-- `CT Head Neck Without Contrast`
+- `CT Head+Neck Without Contrast`
+- `CT Chest+Abdomen With Contrast`
 
-Body-part labels map FALCON classes to display text (`HeadNeck` → `Head Neck`). This is **RadLex-inspired**, not a full LOINC/Playbook fully specified name, RPID, or LOINC code assignment.
+| Internal region | Playbook+ label in description |
+| --------------- | ------------------------------ |
+| `Head`          | Head+Neck                      |
+| `Chest`         | Chest                          |
+| `Abdomen`       | Abdomen                        |
 
-| FALCON `body_part` | Label in description |
-| ------------------ | ------------------- |
-| `HeadNeck`         | Head Neck           |
-| `Chest`            | Chest               |
-| `Abdomen`          | Abdomen             |
+Multi-region volumes use `+` between regions (e.g. `Chest+Abdomen`). Contrast is derived from organ median HU phase analysis (native → Without; arterial/portal → With).
 
-Contrast is binary from IV contrast inference: **With Contrast** if sigmoid P(present) ≥ 0.5, else **Without Contrast**.
+FALCON alone (when used as fallback) still uses its own formatter in `predict._format_radlex_series_description()`:
+
+```text
+{Modality} {Body part} {With Contrast | Without Contrast}
+```
+
+FALCON body-part labels (`HeadNeck` → `Head Neck`) differ from the Playbook+ harmonized form (`Head+Neck`).
 
 ---
 
@@ -107,5 +119,8 @@ WO & W contrast IV      # without then with
 ## Implementation references in this repo
 
 - FALCON upstream attribution, models, and publication: [README.md](README.md)
-- Description formatter: `src/anonymizer/controller/falcon/predict.py` — `_format_radlex_series_description()`, `FalconPrediction.radlex_series_description`
-- Series View UI: `src/anonymizer/view/series.py` — Harmonize Description, DICOM table, apply to `(0008,103E)` via `apply_series_description()`
+- FALCON description formatter: `src/anonymizer/controller/falcon/predict.py`
+- TotalSegmentator anatomy analysis: `src/anonymizer/controller/tseg/segment.py` — `analyze_series()`, `TS_result`
+- Playbook+ harmonized formatter: `src/anonymizer/controller/tseg/radlex.py`
+- Harmonize merge logic: `src/anonymizer/controller/harmonize.py` — `harmonize_series()`, `HarmonizedResult`
+- Series View UI: `src/anonymizer/view/series.py` — Harmonize Description, apply to `(0008,103E)` via `apply_series_description()`

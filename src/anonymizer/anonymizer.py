@@ -1261,6 +1261,24 @@ def main(config: Path | None = None):
     except FalconModelDownloadError:
         logger.error("Failed to download FALCON CT models for HelperAI")
 
+    # TotalSegmentator weights download on first anatomy analysis (pip install "rsna-anonymizer[tseg]").
+    try:
+        import totalsegmentator  # noqa: F401
+
+        from anonymizer.controller.tseg.contrast import verify_xgboost_runtime
+
+        verify_xgboost_runtime()
+        logger.info("TotalSegmentator and XGBoost ready for Harmonize anatomy analysis (tseg)")
+    except ImportError:
+        logger.info(
+            'TotalSegmentator not installed; install with pip install "rsna-anonymizer[tseg]" for Harmonize'
+        )
+    except RuntimeError as exc:
+        logger.warning(
+            "TotalSegmentator contrast analysis unavailable (%s). Harmonize will fall back to FALCON for contrast.",
+            exc,
+        )
+
     if config:
         run_HEADLESS(config)
     else:
