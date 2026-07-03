@@ -14,7 +14,7 @@ Requires: ``uv sync --extra tseg`` (TotalSegmentator, XGBoost). No FALCON.
 from __future__ import annotations
 
 # Running as ``python src/prototyping/ct/ct_eval.py`` puts ``ct/`` on sys.path; avoid
-# prepending ``prototyping/`` (would shadow stdlib ``locale`` via prototyping/locale.py).
+# prepending ``prototyping/`` on sys.path before stdlib imports (see ct_eval shim).
 import os
 import sys
 from pathlib import Path as _Path

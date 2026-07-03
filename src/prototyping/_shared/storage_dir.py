@@ -1,7 +1,7 @@
 import customtkinter as ctk
 from tkinter import filedialog
 import logging
-import prototyping.config as config
+from prototyping._shared import config
 
 logger = logging.getLogger(__name__)
 

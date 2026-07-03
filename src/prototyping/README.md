@@ -2,9 +2,7 @@
 
 Experimental scripts, CLIs, and UI spikes. **Not** part of the shipped `rsna-anonymizer` package (`src/anonymizer/`).
 
-Maintained tooling (eval CLIs, studies) moves into domain subdirectories. Throwaway UI demos and asyncio examples go in `scratch/` (planned).
-
-## Target layout (migration in progress)
+## Layout
 
 ```
 src/prototyping/
@@ -17,10 +15,12 @@ src/prototyping/
 ├── build/           # packaging and CI helpers
 ├── ui/              # tkinter / CustomTkinter spikes
 ├── scratch/         # unmaintained demos (no tests required)
-└── _shared/         # config and small shared helpers
+├── _shared/         # config, storage_dir, parse_log
+├── ct_eval.py       # shim → ct/ct_eval.py
+└── ex_test_falcon_rsna_study_temp.py  # shim → falcon/rsna_eligibility.py
 ```
 
-Until migration completes, many scripts remain in this directory root.
+Root-level shims exist only for backward-compatible CLI entry points and ``prototyping.config``.
 
 ## Running CLIs
 
@@ -31,12 +31,10 @@ uv sync --extra tseg --group dev
 uv run python src/prototyping/ct/ct_eval.py --help
 ```
 
-The root ``src/prototyping/ct_eval.py`` shim delegates to ``ct/ct_eval.py`` for backward compatibility.
-
 ## Promotion to production
 
 When a script stabilizes, move core logic to `src/anonymizer/controller/` and tests to `tests/controller/`. Leave a thin CLI here or remove once the app exposes the feature.
 
-## Note on `locale.py`
+## Stdlib `locale`
 
-This folder contains a `locale.py` that can shadow the Python stdlib `locale` module if `src/prototyping` is prepended to `sys.path`. CLIs that import torch/subprocess should avoid that (see `ct_eval.py` header). Planned rename: `_shared/i18n_config.py`.
+There is no root ``locale.py`` (it previously shadowed the Python stdlib). The locale demo lives in ``scratch/locale_demo.py``.
