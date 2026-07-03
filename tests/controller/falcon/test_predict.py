@@ -16,7 +16,7 @@ from anonymizer.controller.falcon.predict import (
     predict_falcon_series,
 )
 from anonymizer.controller.falcon.preprocessing.preprocess_series import preprocess_series
-from create_synthetic_ct_series import write_synthetic_phantom_assets
+from tests.controller.tseg.support.synthetic_ct import write_synthetic_phantom_assets
 
 def test_falcon_model_dir_under_anonymizer_package() -> None:
     expected = Path(load_models.__file__).resolve().parents[2] / "assets" / "falcon" / "models"

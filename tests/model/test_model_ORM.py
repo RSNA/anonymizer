@@ -3,12 +3,12 @@ from pathlib import Path
 import pytest
 from pydicom import Dataset
 from pydicom.data import get_testdata_file
-from tests.controller.dicom_test_nodes import (
+from tests.controller.dicom.support.test_nodes import (
     TEST_SITEID,
     TEST_UIDROOT,
 )
 from src.anonymizer.model.anonymizer import PHI, AnonymizerModel, Series, Study
-from tests.controller.dicom_test_files import ct_small_filename, mr_brain_filename
+from tests.controller.dicom.support.test_files import ct_small_filename, mr_brain_filename
 
 TEST_DB_DIALECT = "sqlite"  # Database dialect
 TEST_DB_NAME = "anonymizer_model_test.db"  # Name of the test database file

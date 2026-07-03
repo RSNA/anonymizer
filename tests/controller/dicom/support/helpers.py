@@ -15,7 +15,7 @@ from anonymizer.controller.project import (
 from anonymizer.model.project import DICOMNode
 
 # DICOM NODES involved in tests:
-from tests.controller.dicom_test_nodes import LocalStorageSCP, PACSSimulatorSCP  # , OrthancSCP
+from tests.controller.dicom.support.test_nodes import LocalStorageSCP, PACSSimulatorSCP  # , OrthancSCP
 
 # from anonymizer.model.project import ProjectModel
 

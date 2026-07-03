@@ -1,4 +1,4 @@
-"""Temporary FALCON RSNA eligibility scan (preprocessing only, no model inference)."""
+"""FALCON RSNA CT series eligibility scan (preprocessing only, no model inference)."""
 
 from __future__ import annotations
 
@@ -7,19 +7,21 @@ import gc
 import logging
 import os
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
 import psutil
 import pydicom
-import pytest
 
 from anonymizer.controller.falcon.preprocessing.preprocess_series import preprocess_series
 
-RSNA_TEST_DATA_DIR = Path("/Users/michaelevans/DATA/RSNA_TEST_DATA")
+RSNA_TEST_DATA_DIR = Path(
+    os.environ.get("RSNA_TEST_DATA_DIR", "/Users/michaelevans/DATA/RSNA_TEST_DATA")
+)
 ELIGIBILITY_OUTPUT_DIR = Path(__file__).resolve().parent / "tmp" / "falcon_rsna"
 CT_SERIES_PATHS_FILE = ELIGIBILITY_OUTPUT_DIR / "ct_series_paths.txt"
-ANONYMIZER_INSTALL_DIR = Path(__file__).resolve().parents[2] / "src" / "anonymizer"
+ANONYMIZER_INSTALL_DIR = Path(__file__).resolve().parents[2] / "anonymizer"
 
 ELIGIBLE_CSV = ELIGIBILITY_OUTPUT_DIR / "eligible.csv"
 INELIGIBLE_CSV = ELIGIBILITY_OUTPUT_DIR / "ineligible.csv"
@@ -62,13 +64,16 @@ class EligibilityScanResult:
     rss_end_mb: float
 
 
-@pytest.fixture(scope="module")
-def falcon_runtime() -> None:
+@contextmanager
+def falcon_runtime_context() -> Iterator[None]:
+    """Change cwd to anonymizer package root for relative asset paths in FALCON preprocessing."""
     previous = os.getcwd()
     os.chdir(ANONYMIZER_INSTALL_DIR)
     logging.getLogger("anonymizer.controller.falcon").setLevel(logging.WARNING)
-    yield
-    os.chdir(previous)
+    try:
+        yield
+    finally:
+        os.chdir(previous)
 
 
 def process_rss_mb() -> float:
@@ -125,7 +130,13 @@ def check_series_eligibility(series_dir: Path) -> str | None:
     mem_before = process_rss_mb()
     logger.info("  preprocessing start | RSS %.1f MB", mem_before)
 
-    image, error = preprocess_series_directory(series_dir)
+    try:
+        image = preprocess_series(series_dir)
+        error = None
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"
+        image = None
+
     del image
     gc.collect()
 
@@ -285,72 +296,6 @@ def configure_scan_logging() -> None:
     logging.getLogger("anonymizer.controller.falcon").setLevel(logging.WARNING)
 
 
-@pytest.mark.skipif(not RSNA_TEST_DATA_DIR.is_dir(), reason="RSNA test data directory not available locally")
-def test_falcon_filter_rsna_ct_series_paths(capsys) -> None:
-    """Filter RSNA dataset for CT series and write directory paths to a temp file."""
-    count = write_ct_series_paths_file(RSNA_TEST_DATA_DIR, CT_SERIES_PATHS_FILE)
-
-    print(f"\nFound {count} CT series")
-    print(f"Paths written to {CT_SERIES_PATHS_FILE}")
-
-    assert count > 0
-    assert CT_SERIES_PATHS_FILE.is_file()
-    assert all(line.strip() for line in CT_SERIES_PATHS_FILE.read_text(encoding="utf-8").splitlines())
-
-
-@pytest.mark.skipif(not RSNA_TEST_DATA_DIR.is_dir(), reason="RSNA test data directory not available locally")
-@pytest.mark.skipif(not CT_SERIES_PATHS_FILE.is_file(), reason="CT series paths file not generated yet")
-def test_falcon_scan_rsna_ct_eligibility_first_10(capsys) -> None:
-    """Linear eligibility scan on the first 10 CT paths (preprocessing only, no models)."""
-    configure_scan_logging()
-    series_paths = load_ct_series_paths(CT_SERIES_PATHS_FILE)[:10]
-
-    result = scan_eligibility_linear(
-        series_paths,
-        eligible_csv=ELIGIBLE_FIRST_10_CSV,
-        ineligible_csv=INELIGIBLE_FIRST_10_CSV,
-    )
-
-    assert result.total == 10
-    assert result.eligible + result.ineligible == 10
-    assert ELIGIBLE_FIRST_10_CSV.is_file()
-    assert INELIGIBLE_FIRST_10_CSV.is_file()
-
-
-@pytest.mark.skipif(not RSNA_TEST_DATA_DIR.is_dir(), reason="RSNA test data directory not available locally")
-@pytest.mark.skipif(not CT_SERIES_PATHS_FILE.is_file(), reason="CT series paths file not generated yet")
-def test_falcon_scan_rsna_ct_eligibility_from_paths_file(capsys) -> None:
-    """Run eligibility preprocessing on full CT paths list (no model inference)."""
-    configure_scan_logging()
-    series_paths = load_ct_series_paths(CT_SERIES_PATHS_FILE)
-
-    result = scan_eligibility_linear(
-        series_paths,
-        eligible_csv=ELIGIBLE_CSV,
-        ineligible_csv=INELIGIBLE_CSV,
-    )
-
-    assert result.total > 0
-    assert result.eligible + result.ineligible == result.total
-    assert ELIGIBLE_CSV.is_file()
-    assert INELIGIBLE_CSV.is_file()
-
-
-@pytest.mark.skipif(not RSNA_TEST_DATA_DIR.is_dir(), reason="RSNA test data directory not available locally")
-def test_falcon_scan_rsna_ct_eligibility(falcon_runtime, capsys) -> None:
-    """Scan RSNA CT series and write eligible/ineligible lists without loading models."""
-    configure_scan_logging()
-    ct_series_count, eligible_count, ineligible_count = write_eligibility_csvs(
-        RSNA_TEST_DATA_DIR,
-        ELIGIBILITY_OUTPUT_DIR,
-    )
-
-    assert ct_series_count > 0
-    assert eligible_count + ineligible_count == ct_series_count
-    assert ELIGIBLE_CSV.is_file()
-    assert INELIGIBLE_CSV.is_file()
-
-
 def run_eligibility_scan_first_10() -> EligibilityScanResult:
     """CLI entry point: linear eligibility scan on first 10 CT paths."""
     configure_scan_logging()
@@ -360,7 +305,3 @@ def run_eligibility_scan_first_10() -> EligibilityScanResult:
         eligible_csv=ELIGIBLE_FIRST_10_CSV,
         ineligible_csv=INELIGIBLE_FIRST_10_CSV,
     )
-
-
-if __name__ == "__main__":
-    run_eligibility_scan_first_10()

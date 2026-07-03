@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from pydicom.data import get_testdata_file
 
 from anonymizer.controller.project import ProjectController
-from tests.controller.dicom_test_files import ct_small_filename
+from tests.controller.dicom.support.test_files import ct_small_filename
 
 # Load environment variables from .env file (for username/password for AWS upload)
 load_dotenv()

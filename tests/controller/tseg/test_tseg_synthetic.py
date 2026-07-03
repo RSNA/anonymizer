@@ -20,8 +20,8 @@ from anonymizer.controller.tseg.segment import (
     dicom_series_to_nifti,
     sorted_dicom_paths,
 )
-from tests.controller.create_synthetic_ct_series import list_dcm_files
-from tests.controller.tseg_fixtures import SYNTHETIC_CT_ASSET_DIRS
+from tests.controller.tseg.support.synthetic_ct import list_dcm_files
+from tests.controller.tseg.fixtures import SYNTHETIC_CT_ASSET_DIRS
 
 pytestmark = pytest.mark.usefixtures("synthetic_ct_asset_dirs")
 

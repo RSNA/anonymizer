@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.controller.create_synthetic_ct_series import (
+from tests.controller.tseg.support.synthetic_ct import (
     build_synthetic_abdomen_ct_series,
     build_synthetic_chest_ct_series,
     build_synthetic_head_ct_series,
@@ -14,7 +14,7 @@ from tests.controller.create_synthetic_ct_series import (
     write_synthetic_phantom_assets,
 )
 
-CONTROLLER_TEST_DCM_FILES_DIR = Path(__file__).resolve().parent / "assets" / "test_dcm_files"
+CONTROLLER_TEST_DCM_FILES_DIR = Path(__file__).resolve().parents[1] / "assets" / "test_dcm_files"
 SYNTHETIC_CT_HEAD_ASSET_DIR = CONTROLLER_TEST_DCM_FILES_DIR / "synthetic_CT_head"
 SYNTHETIC_CT_CHEST_ASSET_DIR = CONTROLLER_TEST_DCM_FILES_DIR / "synthetic_CT_chest"
 SYNTHETIC_CT_ABDOMEN_ASSET_DIR = CONTROLLER_TEST_DCM_FILES_DIR / "synthetic_CT_abdomen"

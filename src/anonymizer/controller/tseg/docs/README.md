@@ -47,9 +47,10 @@ Run anatomy analysis and FALCON **sequentially** during Harmonize to limit peak 
 
 Harmonize order (single worker thread, per series):
 
+0. **Geometry** — read DICOM headers; infer plane, 2D/3D dimensionality, original vs derived; cache in ``<series>/.tseg_cache/geometry.json``
 1. **FALCON** — lightweight slice-based inference; models released before TS
-2. **TS segmentation** — ROI masks and regions on MPS/CUDA; accelerator memory released
-3. **TS contrast** — optional (`ENABLE_TS_CONTRAST` in `config.py`, **False by default** on 8 GB hosts). When off, FALCON supplies contrast.
+2. **TS segmentation** — ROI masks and regions on MPS/CUDA; **skipped** when ``geometry.ts_suitable`` is false (scouts, MIP/VR, single-slice)
+3. **TS contrast** — optional (`ENABLE_TS_CONTRAST` in `config.py`). When off, FALCON supplies contrast.
 
 The harmonize worker is the only thread that runs ML. Segmentation no longer spawns a progress ticker thread. Each stage uses `sequential_ml_context` to force `OMP/MKL=1`, `torch.set_num_threads(1)`, and `nnUNet_n_proc_DA=0`.
 
@@ -58,7 +59,24 @@ The harmonize worker is the only thread that runs ML. Segmentation no longer spa
 ## Public API
 
 - `analyze_series(series_directories) -> list[TS_result]` in `segment.py`
+- `resolve_series_geometry(series_directory) -> SeriesGeometryResult` in `dicom_geometry.py`
 - RadLex Playbook+ descriptions via `format_radlex_ct_series_description()` in `radlex.py`
+
+### Module layout (tseg + Harmonize)
+
+| Module | Role |
+|--------|------|
+| `dicom_geometry.py` | DICOM header analysis: plane, dimensionality, provenance; slice sorting; ``geometry.json`` cache |
+| `segment.py` | DICOM→NIfTI, TotalSegmentator ROI segmentation, region summary (`analyze_tseg_regions`) |
+| `contrast.py` | Organ HU statistics + XGBoost contrast phase |
+| `harmonize.py` | Orchestrates geometry → FALCON → TS → merge into `HarmonizedResult` |
+
+Per-series cache under ``<series>/.tseg_cache/``:
+
+- `geometry.json` — geometry/provenance (this PR)
+- `volume.nii.gz` — converted NIfTI
+- `seg/*.nii.gz` — ROI masks
+- `contrast_stats.json` — organ HU stats
 
 ## Harmonize integration
 

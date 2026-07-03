@@ -8,9 +8,9 @@ from anonymizer.utils.storage import (
 from pydicom.dataset import Dataset
 from anonymizer.model.anonymizer import AnonymizerModel
     
-from tests.controller.dicom_test_nodes import LocalStorageSCP
-from tests.controller.helpers import send_file_to_scp
-from tests.controller.dicom_test_files import (
+from tests.controller.dicom.support.test_nodes import LocalStorageSCP
+from tests.controller.dicom.support.helpers import send_file_to_scp
+from tests.controller.dicom.support.test_files import (
     ct_small_filename,
     
     hash_ct_small_StudyInstanceUID,

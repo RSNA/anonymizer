@@ -1,5 +1,6 @@
 """Synthetic multi-slice CT DICOM fixtures for FALCON and tseg controller tests."""
 
+import math
 import shutil
 from collections.abc import Callable
 from pathlib import Path
@@ -17,7 +18,7 @@ DEFAULT_SLICE_THICKNESS_MM = 5.0
 DEFAULT_PIXEL_SPACING_MM = (1.0, 1.0)
 
 CT_SMALL_TEMPLATE = "CT_small.dcm"
-CONTROLLER_TEST_DCM_FILES_DIR = Path(__file__).resolve().parent / "assets" / "test_dcm_files"
+CONTROLLER_TEST_DCM_FILES_DIR = Path(__file__).resolve().parents[2] / "assets" / "test_dcm_files"
 SYNTHETIC_CT_SMALL_ASSET_DIR = CONTROLLER_TEST_DCM_FILES_DIR / "synthetic_CT_small"
 SYNTHETIC_CT_HEAD_ASSET_DIR = CONTROLLER_TEST_DCM_FILES_DIR / "synthetic_CT_head"
 SYNTHETIC_CT_CHEST_ASSET_DIR = CONTROLLER_TEST_DCM_FILES_DIR / "synthetic_CT_chest"
@@ -140,6 +141,168 @@ def build_synthetic_abdomen_ct_series(
     )
 
 
+def build_synthetic_oriented_ct_series(
+    output_dir: Path,
+    *,
+    num_slices: int = DEFAULT_PHANTOM_SLICE_COUNT,
+    image_orientation: list[float],
+    stack_delta: list[float],
+    image_type: list[str] | None = None,
+    series_description: str = "Synthetic chest CT phantom",
+    body_part_examined: str = "CHEST",
+    series_uid: str | None = None,
+    study_uid: str | None = None,
+    sop_instance_uid_prefix: str | None = None,
+    require_falcon_min_slices: bool = True,
+) -> Path:
+    """Build a synthetic chest phantom with custom IOP and stack direction."""
+    if require_falcon_min_slices:
+        _validate_slice_count(num_slices)
+    elif num_slices < 1:
+        raise ValueError(f"num_slices must be at least 1, got {num_slices}")
+
+    series_dir = Path(output_dir)
+    if series_dir.exists():
+        shutil.rmtree(series_dir)
+    series_dir.mkdir(parents=True, exist_ok=False)
+
+    resolved_series_uid = series_uid or generate_uid()
+    resolved_study_uid = study_uid or generate_uid()
+    rows = cols = DEFAULT_PHANTOM_MATRIX
+    pixel_spacing = DEFAULT_PIXEL_SPACING_MM
+    slice_thickness = DEFAULT_SLICE_THICKNESS_MM
+    origin = [-cols / 2 * pixel_spacing[1], -rows / 2 * pixel_spacing[0], 0.0]
+    resolved_image_type = image_type or ["ORIGINAL", "PRIMARY", "AXIAL"]
+
+    for index in range(num_slices):
+        hu_slice = _chest_hu_slice(index, num_slices, rows, cols)
+        sop_instance_uid = (
+            f"{sop_instance_uid_prefix}.{index + 1}"
+            if sop_instance_uid_prefix is not None
+            else generate_uid()
+        )
+        dataset = _new_ct_dataset(
+            hu_slice,
+            instance_number=index + 1,
+            series_uid=resolved_series_uid,
+            study_uid=resolved_study_uid,
+            sop_instance_uid=sop_instance_uid,
+            image_position=[
+                origin[0] + index * stack_delta[0],
+                origin[1] + index * stack_delta[1],
+                origin[2] + index * stack_delta[2],
+            ],
+            pixel_spacing=pixel_spacing,
+            slice_thickness=slice_thickness,
+            body_part_examined=body_part_examined,
+            series_description=series_description,
+            image_orientation=image_orientation,
+            image_type=resolved_image_type,
+        )
+        dataset.save_as(series_dir / f"slice_{index + 1:03d}.dcm")
+
+    return series_dir
+
+
+def build_synthetic_sagittal_ct_series(output_dir: Path, *, num_slices: int = DEFAULT_PHANTOM_SLICE_COUNT) -> Path:
+    """Native sagittal stack: slice normal along patient X (LPS)."""
+    return build_synthetic_oriented_ct_series(
+        output_dir,
+        num_slices=num_slices,
+        image_orientation=[0.0, 0.0, 1.0, 0.0, 1.0, 0.0],
+        stack_delta=[DEFAULT_SLICE_THICKNESS_MM, 0.0, 0.0],
+        image_type=["ORIGINAL", "PRIMARY", "SAGITTAL"],
+        series_description="Synthetic sagittal chest CT phantom",
+    )
+
+
+def build_synthetic_coronal_ct_series(output_dir: Path, *, num_slices: int = DEFAULT_PHANTOM_SLICE_COUNT) -> Path:
+    """Native coronal stack: slice normal along patient Y (LPS)."""
+    return build_synthetic_oriented_ct_series(
+        output_dir,
+        num_slices=num_slices,
+        image_orientation=[1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+        stack_delta=[0.0, DEFAULT_SLICE_THICKNESS_MM, 0.0],
+        image_type=["ORIGINAL", "PRIMARY", "CORONAL"],
+        series_description="Synthetic coronal chest CT phantom",
+    )
+
+
+def build_synthetic_oblique_ct_series(output_dir: Path, *, num_slices: int = DEFAULT_PHANTOM_SLICE_COUNT) -> Path:
+    """Oblique acquisition: slice normal between axial and coronal."""
+    step = DEFAULT_SLICE_THICKNESS_MM / math.sqrt(2)
+    return build_synthetic_oriented_ct_series(
+        output_dir,
+        num_slices=num_slices,
+        image_orientation=[1.0, 0.0, 0.0, 0.0, 0.70710678, 0.70710678],
+        stack_delta=[0.0, -step, step],
+        image_type=["ORIGINAL", "PRIMARY", "OBLIQUE"],
+        series_description="Synthetic oblique chest CT phantom",
+    )
+
+
+def build_synthetic_scout_ct_series(output_dir: Path, *, num_slices: int = 5) -> Path:
+    """Scout/localizer-style series: few slices with LOCALIZER ImageType."""
+    return build_synthetic_oriented_ct_series(
+        output_dir,
+        num_slices=num_slices,
+        image_orientation=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+        stack_delta=[0.0, 0.0, 10.0],
+        image_type=["ORIGINAL", "PRIMARY", "LOCALIZER"],
+        series_description="SCOUT TOPOGRAM",
+        require_falcon_min_slices=False,
+    )
+
+
+def build_synthetic_derived_coronal_mpr_series(
+    output_dir: Path,
+    *,
+    num_slices: int = DEFAULT_PHANTOM_SLICE_COUNT,
+    source_series_uid: str = "1.2.826.0.1.3680043.8.498.137165147036080431709001",
+) -> Path:
+    """Derived coronal MPR-style series with referenced source UID."""
+    series_dir = build_synthetic_oriented_ct_series(
+        output_dir,
+        num_slices=num_slices,
+        image_orientation=[1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+        stack_delta=[0.0, DEFAULT_SLICE_THICKNESS_MM, 0.0],
+        image_type=["DERIVED", "SECONDARY", "REFORMATTED"],
+        series_description="COR MPR REFORMAT",
+    )
+    ref_item = pydicom.Dataset()
+    ref_item.SeriesInstanceUID = source_series_uid
+    ref_sequence = pydicom.Sequence([ref_item])
+    for path in sorted(series_dir.glob("*.dcm")):
+        dataset = pydicom.dcmread(path)
+        dataset.ReferencedSeriesSequence = ref_sequence
+        dataset.save_as(path)
+    return series_dir
+
+
+def build_synthetic_derived_mip_series(output_dir: Path, *, num_slices: int = DEFAULT_PHANTOM_SLICE_COUNT) -> Path:
+    """Derived MIP-style series unsuitable for TotalSegmentator."""
+    return build_synthetic_oriented_ct_series(
+        output_dir,
+        num_slices=num_slices,
+        image_orientation=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+        stack_delta=[0.0, 0.0, DEFAULT_SLICE_THICKNESS_MM],
+        image_type=["DERIVED", "SECONDARY", "PROJECTION"],
+        series_description="3D MIP THICK SLAB",
+    )
+
+
+def build_synthetic_single_slice_ct_series(output_dir: Path) -> Path:
+    """Single-slice diagnostic-style series."""
+    return build_synthetic_oriented_ct_series(
+        output_dir,
+        num_slices=1,
+        image_orientation=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+        stack_delta=[0.0, 0.0, DEFAULT_SLICE_THICKNESS_MM],
+        series_description="Single slice CT",
+        require_falcon_min_slices=False,
+    )
+
+
 def write_synthetic_phantom_assets() -> dict[str, Path]:
     return {
         SYNTHETIC_CT_HEAD_ASSET_DIR.name: build_synthetic_head_ct_series(
@@ -238,6 +401,8 @@ def _new_ct_dataset(
     slice_thickness: float,
     body_part_examined: str,
     series_description: str,
+    image_orientation: list[float] | None = None,
+    image_type: list[str] | None = None,
 ) -> pydicom.Dataset:
     dataset = pydicom.dcmread(str(get_testdata_file(CT_SMALL_TEMPLATE)))
     rows, cols = hu_slice.shape
@@ -251,12 +416,12 @@ def _new_ct_dataset(
     dataset.PatientID = "SYN001"
     dataset.BodyPartExamined = body_part_examined
     dataset.SeriesDescription = series_description
-    dataset.ImageType = ["ORIGINAL", "PRIMARY", "AXIAL"]
+    dataset.ImageType = image_type or ["ORIGINAL", "PRIMARY", "AXIAL"]
     dataset.Rows = rows
     dataset.Columns = cols
     dataset.PixelSpacing = [pixel_spacing[0], pixel_spacing[1]]
     dataset.SliceThickness = slice_thickness
-    dataset.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+    dataset.ImageOrientationPatient = image_orientation or [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
     dataset.ImagePositionPatient = image_position
     dataset.RescaleSlope = 1
     dataset.RescaleIntercept = _RESCALE_INTERCEPT

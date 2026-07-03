@@ -1,1 +1,1 @@
-pytest_plugins = ["tests.controller.tseg_fixtures"]
+pytest_plugins = ["tests.controller.tseg.fixtures"]

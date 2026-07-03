@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from prototyping.ct_eval import (
+from prototyping.ct.ct_eval import (
     BODY_PART_NONE,
     BODY_PARTS,
     CONTRAST_LABELS,
+    body_part_confusion_rows,
     build_confusion_matrix,
     contrast_confusion_rows,
-    body_part_confusion_rows,
 )
 
 

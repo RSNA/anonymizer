@@ -14,11 +14,11 @@ from typing import Any
 
 import pytest
 
-import tests.controller.dicom_pacs_simulator_scp as pacs_simulator_scp
+import tests.controller.dicom.support.pacs_simulator_scp as pacs_simulator_scp
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.project import NetworkTimeouts, ProjectModel
 from anonymizer.utils.logging import init_logging
-from tests.controller.dicom_test_nodes import (
+from tests.controller.dicom.support.test_nodes import (
     TEST_PROJECTNAME,
     TEST_SITEID,
     TEST_UIDROOT,

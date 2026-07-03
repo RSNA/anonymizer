@@ -15,7 +15,7 @@ from anonymizer.controller.falcon.eval_utils import (
 )
 from anonymizer.controller.falcon.predict import extract_body_part_model_input_slice, extract_contrast_model_input_slice
 from anonymizer.controller.falcon.preprocessing.preprocess_series import preprocess_series
-from create_synthetic_ct_series import write_synthetic_phantom_assets
+from tests.controller.tseg.support.synthetic_ct import write_synthetic_phantom_assets
 
 BASE_TEST_DIR = Path("tests/controller/assets/test_dcm_files")
 

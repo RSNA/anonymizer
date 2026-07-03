@@ -75,11 +75,15 @@ def test_harmonize_with_synthetic_chest_series(
     assert merged.radlex_series_description == "CT Chest Without Contrast"
     assert merged.regions_source == "tseg"
     assert merged.contrast_source == "falcon"
+    assert merged.geometry is not None
+    assert merged.geometry.plane == "axial"
+    assert merged.geometry.ts_suitable is True
     mock_falcon.assert_called_once()
     mock_regions.assert_called_once()
     mock_contrast.assert_not_called()
 
 
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
 @patch("anonymizer.controller.harmonize.ENABLE_TS_CONTRAST", False)
 @patch("anonymizer.controller.harmonize.analyze_tseg_contrast")
 @patch("anonymizer.controller.harmonize.analyze_tseg_regions")
@@ -88,20 +92,19 @@ def test_harmonize_skips_ts_contrast_when_disabled(
     mock_falcon: MagicMock,
     mock_regions: MagicMock,
     mock_contrast: MagicMock,
-    tmp_path: Path,
+    synthetic_chest_series: Path,
 ) -> None:
-    series_dir = tmp_path / "series"
-    series_dir.mkdir()
-    mock_falcon.return_value = [_falcon_result(series_dir)]
-    mock_regions.return_value = (_tseg_region_result(series_dir), tmp_path / "vol.nii.gz")
+    mock_falcon.return_value = [_falcon_result(synthetic_chest_series)]
+    mock_regions.return_value = (_tseg_region_result(synthetic_chest_series), synthetic_chest_series / "vol.nii.gz")
 
-    results = harmonize_series([series_dir])
+    results = harmonize_series([synthetic_chest_series])
     merged = results[0]
     assert merged.regions_source == "tseg"
     assert merged.contrast_source == "falcon"
     mock_contrast.assert_not_called()
 
 
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
 @patch("anonymizer.controller.harmonize.ENABLE_TS_CONTRAST", True)
 @patch("anonymizer.controller.harmonize.analyze_tseg_contrast")
 @patch("anonymizer.controller.harmonize.analyze_tseg_regions")
@@ -110,32 +113,31 @@ def test_harmonize_execution_order_falcon_then_seg_then_contrast(
     mock_falcon: MagicMock,
     mock_regions: MagicMock,
     mock_contrast: MagicMock,
-    tmp_path: Path,
+    synthetic_chest_series: Path,
 ) -> None:
-    series_dir = tmp_path / "series"
-    series_dir.mkdir()
     call_log: list[str] = []
 
     def _falcon(*_args, **_kwargs):
         call_log.append("falcon")
-        return [_falcon_result(series_dir)]
+        return [_falcon_result(synthetic_chest_series)]
 
     def _regions(*_args, **_kwargs):
         call_log.append("regions")
-        return (_tseg_region_result(series_dir), tmp_path / "vol.nii.gz")
+        return (_tseg_region_result(synthetic_chest_series), synthetic_chest_series / "vol.nii.gz")
 
     def _contrast(*_args, **_kwargs):
         call_log.append("contrast")
-        return _tseg_result(series_dir)
+        return _tseg_result(synthetic_chest_series)
 
     mock_falcon.side_effect = _falcon
     mock_regions.side_effect = _regions
     mock_contrast.side_effect = _contrast
 
-    harmonize_series([series_dir])
+    harmonize_series([synthetic_chest_series])
     assert call_log == ["falcon", "regions", "contrast"]
 
 
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
 @patch("anonymizer.controller.harmonize.ENABLE_TS_CONTRAST", False)
 @patch("anonymizer.controller.harmonize.analyze_tseg_contrast")
 @patch("anonymizer.controller.harmonize.analyze_tseg_regions")
@@ -144,14 +146,12 @@ def test_harmonize_uses_falcon_contrast_when_ts_contrast_disabled(
     mock_falcon: MagicMock,
     mock_regions: MagicMock,
     mock_contrast: MagicMock,
-    tmp_path: Path,
+    synthetic_chest_series: Path,
 ) -> None:
-    series_dir = tmp_path / "series"
-    series_dir.mkdir()
-    mock_falcon.return_value = [_falcon_result(series_dir)]
-    mock_regions.return_value = (_tseg_region_result(series_dir), tmp_path / "vol.nii.gz")
+    mock_falcon.return_value = [_falcon_result(synthetic_chest_series)]
+    mock_regions.return_value = (_tseg_region_result(synthetic_chest_series), synthetic_chest_series / "vol.nii.gz")
 
-    results = harmonize_series([series_dir])
+    results = harmonize_series([synthetic_chest_series])
     merged = results[0]
     assert merged.radlex_series_description == "CT Chest Without Contrast"
     assert merged.regions_source == "tseg"
@@ -159,6 +159,7 @@ def test_harmonize_uses_falcon_contrast_when_ts_contrast_disabled(
     mock_contrast.assert_not_called()
 
 
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
 @patch("anonymizer.controller.harmonize.ENABLE_TS_CONTRAST", True)
 @patch("anonymizer.controller.harmonize.analyze_tseg_contrast")
 @patch("anonymizer.controller.harmonize.analyze_tseg_regions")
@@ -167,21 +168,20 @@ def test_harmonize_uses_tseg_contrast_when_enabled(
     mock_falcon: MagicMock,
     mock_regions: MagicMock,
     mock_contrast: MagicMock,
-    tmp_path: Path,
+    synthetic_chest_series: Path,
 ) -> None:
-    series_dir = tmp_path / "series"
-    series_dir.mkdir()
-    mock_falcon.return_value = [_falcon_result(series_dir)]
-    mock_regions.return_value = (_tseg_region_result(series_dir), tmp_path / "vol.nii.gz")
-    mock_contrast.return_value = _tseg_result(series_dir)
+    mock_falcon.return_value = [_falcon_result(synthetic_chest_series)]
+    mock_regions.return_value = (_tseg_region_result(synthetic_chest_series), synthetic_chest_series / "vol.nii.gz")
+    mock_contrast.return_value = _tseg_result(synthetic_chest_series)
 
-    results = harmonize_series([series_dir])
+    results = harmonize_series([synthetic_chest_series])
     merged = results[0]
     assert merged.radlex_series_description == "CT Chest With Contrast"
     assert merged.regions_source == "tseg"
     assert merged.contrast_source == "tseg"
 
 
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
 @patch("anonymizer.controller.harmonize.analyze_tseg_contrast")
 @patch("anonymizer.controller.harmonize.analyze_tseg_regions")
 @patch("anonymizer.controller.harmonize.predict_falcon_series")
@@ -189,14 +189,12 @@ def test_harmonize_falcon_fallback_regions(
     mock_falcon: MagicMock,
     mock_regions: MagicMock,
     mock_contrast: MagicMock,
-    tmp_path: Path,
+    synthetic_chest_series: Path,
 ) -> None:
-    series_dir = tmp_path / "series"
-    series_dir.mkdir()
-    mock_falcon.return_value = [_falcon_result(series_dir)]
+    mock_falcon.return_value = [_falcon_result(synthetic_chest_series)]
     mock_regions.return_value = (
         TS_result(
-            series_directory=series_dir,
+            series_directory=synthetic_chest_series,
             dominant_region="",
             body_parts_present="",
             multi_region=False,
@@ -210,7 +208,7 @@ def test_harmonize_falcon_fallback_regions(
         None,
     )
 
-    results = harmonize_series([series_dir])
+    results = harmonize_series([synthetic_chest_series])
     merged = results[0]
     assert merged.radlex_series_description == "CT Chest Without Contrast"
     assert merged.regions_source == "falcon"
@@ -218,6 +216,7 @@ def test_harmonize_falcon_fallback_regions(
     mock_contrast.assert_not_called()
 
 
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
 @patch("anonymizer.controller.harmonize.ENABLE_TS_CONTRAST", True)
 @patch("anonymizer.controller.harmonize.analyze_tseg_contrast")
 @patch("anonymizer.controller.harmonize.analyze_tseg_regions")
@@ -226,14 +225,12 @@ def test_harmonize_tseg_regions_with_contrast_error_uses_falcon_contrast(
     mock_falcon: MagicMock,
     mock_regions: MagicMock,
     mock_contrast: MagicMock,
-    tmp_path: Path,
+    synthetic_chest_series: Path,
 ) -> None:
-    series_dir = tmp_path / "series"
-    series_dir.mkdir()
-    mock_falcon.return_value = [_falcon_result(series_dir)]
-    mock_regions.return_value = (_tseg_region_result(series_dir), tmp_path / "vol.nii.gz")
+    mock_falcon.return_value = [_falcon_result(synthetic_chest_series)]
+    mock_regions.return_value = (_tseg_region_result(synthetic_chest_series), synthetic_chest_series / "vol.nii.gz")
     mock_contrast.return_value = TS_result(
-        series_directory=series_dir,
+        series_directory=synthetic_chest_series,
         dominant_region="Chest",
         body_parts_present="Chest",
         multi_region=False,
@@ -245,13 +242,14 @@ def test_harmonize_tseg_regions_with_contrast_error_uses_falcon_contrast(
         error="RuntimeError: XGBoost is required",
     )
 
-    results = harmonize_series([series_dir])
+    results = harmonize_series([synthetic_chest_series])
     merged = results[0]
     assert merged.regions_source == "tseg"
     assert merged.contrast_source == "falcon"
     assert merged.radlex_series_description == "CT Chest Without Contrast"
 
 
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
 @patch("anonymizer.controller.harmonize.analyze_tseg_contrast")
 @patch("anonymizer.controller.harmonize.analyze_tseg_regions")
 @patch("anonymizer.controller.harmonize.predict_falcon_series")
@@ -259,14 +257,12 @@ def test_harmonize_both_fail(
     mock_falcon: MagicMock,
     mock_regions: MagicMock,
     mock_contrast: MagicMock,
-    tmp_path: Path,
+    synthetic_chest_series: Path,
 ) -> None:
-    series_dir = tmp_path / "series"
-    series_dir.mkdir()
-    mock_falcon.return_value = [_falcon_result(series_dir, error="failed")]
+    mock_falcon.return_value = [_falcon_result(synthetic_chest_series, error="failed")]
     mock_regions.return_value = (
         TS_result(
-            series_directory=series_dir,
+            series_directory=synthetic_chest_series,
             dominant_region="",
             body_parts_present="",
             multi_region=False,
@@ -280,7 +276,7 @@ def test_harmonize_both_fail(
         None,
     )
 
-    results = harmonize_series([series_dir])
+    results = harmonize_series([synthetic_chest_series])
     merged = results[0]
     assert merged.error is not None
     assert merged.radlex_series_description == ""

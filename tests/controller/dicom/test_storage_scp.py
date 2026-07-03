@@ -12,7 +12,7 @@ from pynetdicom.presentation import build_context
 from anonymizer.controller.create_projections import PROJECTION_FILENAME, create_projection_from_series
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.anonymizer import AnonymizerModel
-from tests.controller.dicom_test_files import (
+from tests.controller.dicom.support.test_files import (
     COMPRESSED_TEST_FILES,
     CR_STUDY_3_SERIES_3_IMAGES,
     CT_STUDY_1_SERIES_4_IMAGES,
@@ -56,8 +56,8 @@ from tests.controller.dicom_test_files import (
     hash_jpeg_2000_SeriesInstanceUID,
     hash_jpeg_2000_SOPInstanceUID,
 )
-from tests.controller.dicom_test_nodes import TEST_SITEID, TEST_UIDROOT, LocalStorageSCP
-from tests.controller.helpers import send_file_to_scp, send_files_to_scp
+from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT, LocalStorageSCP
+from tests.controller.dicom.support.helpers import send_file_to_scp, send_files_to_scp
 
 
 def test_send_cr1(temp_dir: str, controller):

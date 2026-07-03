@@ -29,6 +29,11 @@ from anonymizer.controller.tseg.contrast import (
     release_before_contrast,
     release_working_memory,
 )
+from anonymizer.controller.tseg.dicom_geometry import (
+    resolve_series_geometry,
+    sorted_dicom_paths,
+    ts_regions_eligible,
+)
 from anonymizer.controller.tseg.radlex import format_radlex_ct_series_description
 from anonymizer.controller.tseg.runtime import sequential_ml_context
 
@@ -99,25 +104,6 @@ class TS_result:
     phase_probability: float
     radlex_series_description: str
     error: str | None = None
-
-
-def _looks_like_dicom(path: Path) -> bool:
-    name = path.name.lower()
-    return name.endswith(".dcm") or name.endswith(".dicom") or "." not in path.name
-
-
-def sorted_dicom_paths(series_directory: Path) -> list[Path]:
-    paths = [
-        path
-        for path in series_directory.iterdir()
-        if path.is_file() and not path.name.startswith(".") and _looks_like_dicom(path)
-    ]
-    if not paths:
-        raise ValueError(f"No DICOM files found in {series_directory}")
-    return sorted(
-        paths,
-        key=lambda path: float(dcmread(path, stop_before_pixels=True).ImagePositionPatient[2]),
-    )
 
 
 def dicom_series_to_nifti(series_directory: Path, output_path: Path) -> int:
@@ -404,6 +390,19 @@ def analyze_tseg_regions(
     nifti_path = work_dir / "volume.nii.gz"
     seg_dir = work_dir / "seg"
     analysis_started = time.perf_counter()
+
+    geometry = resolve_series_geometry(series_directory)
+    logger.info(
+        "TS regions: geometry plane=%s dimensionality=%s provenance=%s ts_suitable=%s",
+        geometry.plane,
+        geometry.dimensionality,
+        geometry.provenance,
+        geometry.ts_suitable,
+    )
+    if not ts_regions_eligible(geometry):
+        message = geometry.notes or f"Series not suitable for TotalSegmentator ({geometry.dimensionality})"
+        logger.info("TS regions: skipped for %s (%s)", series_directory, message)
+        return (_error_result(series_directory, message), None)
 
     logger.info("TS regions: starting for %s (cache=%s)", series_directory, work_dir)
     log_memory_usage("ts_regions_start")

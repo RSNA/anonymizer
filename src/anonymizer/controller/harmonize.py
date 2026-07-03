@@ -11,6 +11,11 @@ from typing import Literal
 from anonymizer.controller.falcon.predict import FalconPrediction, predict_falcon_series
 from anonymizer.controller.tseg.config import ENABLE_TS_CONTRAST
 from anonymizer.controller.tseg.contrast import log_memory_usage, release_working_memory
+from anonymizer.controller.tseg.dicom_geometry import (
+    SeriesGeometryResult,
+    resolve_series_geometry,
+    ts_regions_eligible,
+)
 from anonymizer.controller.tseg.radlex import falcon_body_part_to_region_token, format_radlex_ct_series_description
 from anonymizer.controller.tseg.runtime import log_active_threads, sequential_ml_context
 from anonymizer.controller.tseg.segment import (
@@ -26,6 +31,7 @@ logger = logging.getLogger(__name__)
 HarmonizeProgress = AnalysisProgress
 
 # Progress fractions for sequential harmonize stages (single-threaded worker).
+_GEOMETRY_FRAC = (0.0, 0.05)
 _FALCON_FRAC = (0.05, 0.22)
 _TSEG_SEG_FRAC = (0.22, 0.62)
 _TSEG_CONTRAST_FRAC = (0.62, 0.90)
@@ -40,6 +46,7 @@ class HarmonizedResult:
     falcon: FalconPrediction | None
     regions_source: Literal["tseg", "falcon", "none"]
     contrast_source: Literal["tseg", "falcon", "none"]
+    geometry: SeriesGeometryResult | None = None
     error: str | None = None
 
 
@@ -51,6 +58,8 @@ def _merge_result(
     series_directory: Path,
     tseg: TS_result | None,
     falcon: FalconPrediction | None,
+    *,
+    geometry: SeriesGeometryResult | None = None,
 ) -> HarmonizedResult:
     regions_source: Literal["tseg", "falcon", "none"] = "none"
     contrast_source: Literal["tseg", "falcon", "none"] = "none"
@@ -88,6 +97,7 @@ def _merge_result(
             falcon=falcon,
             regions_source="none",
             contrast_source="none",
+            geometry=geometry,
             error="Could not determine anatomy regions from TotalSegmentator or FALCON",
         )
 
@@ -99,6 +109,7 @@ def _merge_result(
         falcon=falcon,
         regions_source=regions_source,
         contrast_source=contrast_source,
+        geometry=geometry,
     )
 
 
@@ -134,7 +145,10 @@ def harmonize_series(
     progress: ProgressCallback | None = None,
 ) -> list[HarmonizedResult]:
     """
-    Run harmonize sequentially per series: FALCON → TS segmentation → (optional) TS contrast → merge.
+    Run harmonize sequentially per series: geometry → FALCON → TS segmentation → (optional) TS contrast → merge.
+
+    Geometry is cached under ``<series>/.tseg_cache/geometry.json``. TotalSegmentator is skipped when
+    ``geometry.ts_suitable`` is false (localizers, single-slice 2D, derived 3D renders, etc.).
 
     When ``ENABLE_TS_CONTRAST`` is False, regions come from TS and contrast from FALCON.
     """
@@ -142,7 +156,7 @@ def harmonize_series(
         return []
 
     logger.info(
-        "Harmonize starting for %d series (FALCON → TS seg%s)",
+        "Harmonize starting for %d series (geometry → FALCON → TS seg%s)",
         len(series_directories),
         " → TS contrast" if ENABLE_TS_CONTRAST else "; TS contrast off → FALCON contrast",
     )
@@ -170,9 +184,19 @@ def harmonize_series(
         series_dir = Path(series_dir)
         logger.info("=== Harmonize [%d/%d] %s ===", index, n_series, series_dir)
 
+        _report("geometry", "Analyzing DICOM geometry", _GEOMETRY_FRAC[1])
+        geometry = resolve_series_geometry(series_dir)
+        logger.info(
+            "Harmonize geometry: plane=%s dimensionality=%s provenance=%s ts_suitable=%s",
+            geometry.plane,
+            geometry.dimensionality,
+            geometry.provenance,
+            geometry.ts_suitable,
+        )
+
         # Stage 1: FALCON (lightweight; runs before TS to avoid peak RAM with both loaded)
         _report("falcon", "Running FALCON analysis", _FALCON_FRAC[0], remaining_sec=12.0)
-        logger.info("Harmonize stage 1/3: FALCON for %s", series_dir)
+        logger.info("Harmonize stage 1/4: FALCON for %s", series_dir)
         log_memory_usage("harmonize_before_falcon")
         with sequential_ml_context("harmonize_falcon"):
             falcon_results = predict_falcon_series([series_dir])
@@ -190,14 +214,34 @@ def harmonize_series(
 
         # Stage 2: TS segmentation + regions (volume released before contrast)
         _report("tseg", "Segmenting anatomy", _TSEG_SEG_FRAC[0], remaining_sec=60.0)
-        logger.info("Harmonize stage 2/3: TS segmentation for %s", series_dir)
-        tseg_progress = _scaled_progress(
-            progress,
-            started=started,
-            frac_range=_TSEG_SEG_FRAC,
-            stage_label="Segmenting anatomy",
-        )
-        region_result, nifti_path = analyze_tseg_regions(series_dir, progress=tseg_progress)
+        if ts_regions_eligible(geometry):
+            logger.info("Harmonize stage 2/4: TS segmentation for %s", series_dir)
+            tseg_progress = _scaled_progress(
+                progress,
+                started=started,
+                frac_range=_TSEG_SEG_FRAC,
+                stage_label="Segmenting anatomy",
+            )
+            region_result, nifti_path = analyze_tseg_regions(series_dir, progress=tseg_progress)
+        else:
+            logger.info(
+                "Harmonize stage 2/4: TS segmentation skipped for %s (%s)",
+                series_dir,
+                geometry.notes or geometry.dimensionality,
+            )
+            region_result = TS_result(
+                series_directory=series_dir,
+                dominant_region="",
+                body_parts_present="",
+                multi_region=False,
+                region_fraction=0.0,
+                iv_contrast=False,
+                contrast_phase="",
+                phase_probability=0.0,
+                radlex_series_description="",
+                error=geometry.notes or f"TS skipped ({geometry.dimensionality})",
+            )
+            nifti_path = None
 
         # Stage 3: TS contrast (organ HU statistics + XGBoost)
         tseg: TS_result | None = region_result
@@ -208,7 +252,7 @@ def harmonize_series(
             and region_result.error is None
         ):
             _report("contrast", "Analyzing contrast phase", _TSEG_CONTRAST_FRAC[0], remaining_sec=35.0)
-            logger.info("Harmonize stage 3/3: TS contrast for %s (nifti=%s)", series_dir, nifti_path)
+            logger.info("Harmonize stage 3/4: TS contrast for %s (nifti=%s)", series_dir, nifti_path)
             contrast_progress = _scaled_progress(
                 progress,
                 started=started,
@@ -235,7 +279,7 @@ def harmonize_series(
         release_working_memory(stage="harmonize_after_tseg_contrast")
 
         _report("merge", "Building harmonized description", _MERGE_FRAC[0], remaining_sec=0.0)
-        merged = _merge_result(series_dir, tseg, falcon)
+        merged = _merge_result(series_dir, tseg, falcon, geometry=geometry)
         harmonized.append(merged)
         logger.info(
             "Harmonize [%d/%d] %s: regions=%s contrast=%s description=%r",

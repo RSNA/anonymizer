@@ -13,7 +13,7 @@ from pydicom.dataset import Dataset
 
 from anonymizer.controller.anonymizer import AnonymizerController, QuarantineDirectories
 from anonymizer.controller.project import ProjectController
-from tests.controller.dicom_test_files import (
+from tests.controller.dicom.support.test_files import (
     cr1_filename,
     hash_cr1_StudyInstanceUID,
     hash_cr1_SeriesInstanceUID,
@@ -26,7 +26,7 @@ from tests.controller.dicom_test_files import (
     # CT_STUDY_1_SERIES_4_IMAGES,
     # MR_STUDY_3_SERIES_11_IMAGES,
 )
-from tests.controller.dicom_test_nodes import LocalSCU
+from tests.controller.dicom.support.test_nodes import LocalSCU
 
 
 # Test a valid date before 19000101
