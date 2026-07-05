@@ -44,6 +44,10 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
+from anonymizer.controller.tseg.dicom_geometry import (
+    SeriesGeometryResult,
+    resolve_series_geometry,
+)
 from anonymizer.controller.tseg.runtime import configure_macos_subprocess_env
 from anonymizer.controller.tseg.segment import TS_result, analyze_series
 
@@ -55,6 +59,17 @@ BODY_PARTS: tuple[str, ...] = ("Head", "Chest", "Abdomen")
 CONTRAST_LABELS: tuple[str, ...] = ("WITHOUT", "WITH")
 BODY_PART_NONE = "(none)"
 DEFAULT_DATA_DIR = Path("/Users/michaelevans/Downloads/A_DATA")
+
+GEOMETRY_COLUMNS: tuple[str, ...] = (
+    "geometry_plane",
+    "geometry_plane_confidence",
+    "geometry_dimensionality",
+    "geometry_provenance",
+    "geometry_n_slices",
+    "geometry_ts_suitable",
+    "geometry_metadata_suspect",
+    "geometry_method",
+)
 
 RESULT_COLUMNS: tuple[str, ...] = (
     "series_index",
@@ -73,6 +88,7 @@ RESULT_COLUMNS: tuple[str, ...] = (
     "contrast_phase",
     "phase_probability",
     "iv_contrast_correct",
+    *GEOMETRY_COLUMNS,
     "error",
     "elapsed_sec",
     "status",
@@ -219,13 +235,41 @@ def _gt_in_body_parts_present(body_part_gt: str, body_parts_present: str) -> boo
     return body_part_gt in present
 
 
+def geometry_fields(geometry: SeriesGeometryResult) -> dict[str, object]:
+    """Flatten ``SeriesGeometryResult`` for CSV/JSON eval rows."""
+    return {
+        "geometry_plane": geometry.plane,
+        "geometry_plane_confidence": round(geometry.plane_confidence, 4),
+        "geometry_dimensionality": geometry.dimensionality,
+        "geometry_provenance": geometry.provenance,
+        "geometry_n_slices": geometry.n_slices,
+        "geometry_ts_suitable": geometry.ts_suitable,
+        "geometry_metadata_suspect": geometry.metadata_suspect,
+        "geometry_method": geometry.method,
+    }
+
+
+def empty_geometry_fields() -> dict[str, object]:
+    return {column: "" for column in GEOMETRY_COLUMNS}
+
+
+def geometry_fields_for_series(series_path: Path) -> dict[str, object]:
+    try:
+        return geometry_fields(resolve_series_geometry(series_path))
+    except Exception as exc:
+        logger.warning("Geometry analysis failed for %s: %s", series_path, exc)
+        return empty_geometry_fields()
+
+
 def evaluate_record(
     record: SeriesRecord,
     tseg: TS_result,
     *,
     series_index: int,
     elapsed_sec: float,
+    geometry: SeriesGeometryResult | None = None,
 ) -> dict:
+    geo_row = geometry_fields(geometry) if geometry is not None else geometry_fields_for_series(record.series_path)
     body_part_pred = _tseg_body_part_pred(tseg)
     body_parts_present = (tseg.body_parts_present or "") if tseg else ""
     iv_pred = _tseg_contrast_pred(tseg)
@@ -259,6 +303,7 @@ def evaluate_record(
         "contrast_phase": tseg.contrast_phase,
         "phase_probability": round(tseg.phase_probability, 4) if tseg.contrast_phase else "",
         "iv_contrast_correct": contrast_correct,
+        **geo_row,
         "error": error,
         "elapsed_sec": round(elapsed_sec, 1),
         "status": status,
@@ -378,11 +423,34 @@ def print_confusion_matrices(rows: list[dict]) -> None:
             print(f"  {line}")
 
 
+def _summarize_subset(subset: list[dict]) -> dict[str, str]:
+    present = _fmt_acc([bool(row["body_part_correct"]) for row in subset])
+    dominant = _fmt_acc([bool(row["body_part_dominant_match"]) for row in subset])
+    c_sub = [row for row in subset if row["iv_contrast_correct"] != ""]
+    contrast = _fmt_acc([bool(row["iv_contrast_correct"]) for row in c_sub]) if c_sub else "n/a"
+    return {"present": present, "dominant": dominant, "iv": contrast}
+
+
+def _print_grouped_metrics(rows: list[dict], field: str, *, title: str) -> None:
+    ok = [row for row in rows if row["status"] == "ok"]
+    values = sorted({str(row.get(field, "") or "") for row in ok if row.get(field, "")})
+    if not values:
+        return
+    print(f"\n{title}")
+    for value in values:
+        subset = [row for row in ok if row.get(field) == value]
+        metrics = _summarize_subset(subset)
+        print(
+            f"  {value:<18} n={len(subset):>2}  "
+            f"present={metrics['present']}  dominant={metrics['dominant']}  IV={metrics['iv']}"
+        )
+
+
 def print_series_table(rows: list[dict]) -> None:
     """Print one line per series with ground truth, predictions, and pass/fail."""
     print("\n--- Per-series results ---")
     header = (
-        f"{'#':>3}  {'label_dir':<14} {'series_uid':<30} "
+        f"{'#':>3}  {'label_dir':<14} {'plane':<8} {'series_uid':<28} "
         f"{'GT body':<8} {'GT IV':<7} {'segmented':<16} {'dominant':<8} "
         f"{'IV pred':<7} {'phase':<12} {'body':<5} {'dom':<5} {'IV':<5}"
     )
@@ -392,16 +460,19 @@ def print_series_table(rows: list[dict]) -> None:
         if row["status"] != "ok":
             print(
                 f"{row['series_index']:>3}  {row['label_dir']:<14} "
-                f"{_short_uid(row['series_uid']):<30} ERROR: {row['error']}"
+                f"{row.get('geometry_plane', ''):<8} "
+                f"{_short_uid(row['series_uid'], max_len=28):<28} ERROR: {row['error']}"
             )
             continue
         iv_ok = row["iv_contrast_correct"] if row["iv_contrast_correct"] != "" else True
         phase = row["contrast_phase"] or "-"
         if len(phase) > 12:
             phase = phase[:11] + "…"
+        plane = str(row.get("geometry_plane") or "-")
         print(
             f"{row['series_index']:>3}  {row['label_dir']:<14} "
-            f"{_short_uid(row['series_uid']):<30} "
+            f"{plane:<8} "
+            f"{_short_uid(row['series_uid'], max_len=28):<28} "
             f"{row['body_part_gt']:<8} {_contrast_label(row['iv_contrast_gt']):<7} "
             f"{row['body_parts_present']:<16} {row['body_part_pred']:<8} "
             f"{_contrast_label(row['iv_contrast_pred']):<7} {phase:<12} "
@@ -465,6 +536,10 @@ def print_summary(rows: list[dict]) -> None:
         contrast = _fmt_acc([bool(row["iv_contrast_correct"]) for row in c_sub]) if c_sub else "n/a"
         print(f"  {body_part:<8} n={len(subset):>2}  present={present}  IV={contrast}")
 
+    _print_grouped_metrics(rows, "geometry_plane", title="By acquisition plane:")
+    _print_grouped_metrics(rows, "geometry_dimensionality", title="By dimensionality:")
+    _print_grouped_metrics(rows, "geometry_provenance", title="By provenance:")
+
     print_confusion_matrices(rows)
     print_series_table(rows)
 
@@ -492,6 +567,9 @@ def write_summary_json(path: Path, rows: list[dict]) -> None:
         "confusion_matrices": {},
         "by_body_part": {},
         "by_label_dir": {},
+        "by_geometry_plane": {},
+        "by_geometry_dimensionality": {},
+        "by_geometry_provenance": {},
     }
     if y_true_body:
         body_matrix = build_confusion_matrix(
@@ -522,6 +600,26 @@ def write_summary_json(path: Path, rows: list[dict]) -> None:
             "body_part_accuracy": _accuracy([bool(r["body_part_correct"]) for r in subset]),
             "iv_contrast_accuracy": _accuracy([bool(r["iv_contrast_correct"]) for r in c_sub]),
         }
+    for field, summary_key in (
+        ("geometry_plane", "by_geometry_plane"),
+        ("geometry_dimensionality", "by_geometry_dimensionality"),
+        ("geometry_provenance", "by_geometry_provenance"),
+    ):
+        grouped: dict[str, list] = defaultdict(list)
+        for row in ok:
+            value = row.get(field)
+            if value:
+                grouped[str(value)].append(row)
+        for value, subset in sorted(grouped.items()):
+            c_sub = [r for r in subset if r["iv_contrast_correct"] != ""]
+            summary[summary_key][value] = {
+                "n": len(subset),
+                "body_part_accuracy": _accuracy([bool(r["body_part_correct"]) for r in subset]),
+                "body_part_dominant_accuracy": _accuracy(
+                    [bool(r["body_part_dominant_match"]) for r in subset]
+                ),
+                "iv_contrast_accuracy": _accuracy([bool(r["iv_contrast_correct"]) for r in c_sub]),
+            }
     path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
 
@@ -557,11 +655,23 @@ def run_eval(
         )
         series_started = time.perf_counter()
         try:
+            geometry = resolve_series_geometry(record.series_path)
+        except Exception as exc:
+            logger.warning("Geometry analysis failed for %s: %s", record.series_path, exc)
+            geometry = None
+        geo_row = geometry_fields(geometry) if geometry is not None else empty_geometry_fields()
+        try:
             tseg_results = analyze_series([record.series_path])
             tseg = tseg_results[0] if tseg_results else None
             if tseg is None:
                 raise RuntimeError("analyze_series returned no result")
-            row = evaluate_record(record, tseg, series_index=index, elapsed_sec=time.perf_counter() - series_started)
+            row = evaluate_record(
+                record,
+                tseg,
+                series_index=index,
+                elapsed_sec=time.perf_counter() - series_started,
+                geometry=geometry,
+            )
         except Exception as exc:
             logger.exception("Failed on %s: %s", record.series_path, exc)
             row = {
@@ -581,6 +691,7 @@ def run_eval(
                 "contrast_phase": "",
                 "phase_probability": "",
                 "iv_contrast_correct": "",
+                **geo_row,
                 "error": f"{type(exc).__name__}: {exc}",
                 "elapsed_sec": round(time.perf_counter() - series_started, 1),
                 "status": "fail",

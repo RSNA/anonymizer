@@ -1,0 +1,43 @@
+# Tests
+
+| Tree | Mirrors | README |
+|------|---------|--------|
+| `tests/controller/` | `src/anonymizer/controller/` | [controller/README.md](controller/README.md) |
+| `tests/prototyping/` | `src/prototyping/` | [prototyping/README.md](prototyping/README.md) |
+| `tests/model/` | `src/anonymizer/model/` | — |
+
+## Running
+
+```bash
+uv sync --extra tseg --group dev
+uv run pytest tests/controller/tseg -q
+uv run pytest tests/prototyping -q
+uv run pytest -q                                    # full suite + coverage (see pyproject.toml)
+```
+
+## Markers
+
+Defined in `pyproject.toml`:
+
+| Marker | Use |
+|--------|-----|
+| `tseg_integration` | TotalSegmentator inference (slow) |
+| `dicom_integration` | Local Orthanc or heavy DICOM network tests |
+| `rsna_local_data` | RSNA test data directory required |
+| `falcon_memory` | RSS leak guard on real FALCON inference |
+
+```bash
+pytest tests/controller -m tseg_integration
+pytest tests/controller/dicom -m dicom_integration
+pytest tests/prototyping -m rsna_local_data
+```
+
+## Shared assets
+
+Binary fixtures live under `tests/controller/assets/`. Import paths from `tests.controller.paths`:
+
+```python
+from tests.controller.paths import CONTROLLER_ASSETS, CONTROLLER_TEST_DCM_FILES_DIR
+```
+
+Synthetic CT builders: `tests/controller/tseg/support/synthetic_ct.py`.

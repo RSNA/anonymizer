@@ -17,18 +17,17 @@ from anonymizer.controller.falcon.predict import (
 )
 from anonymizer.controller.falcon.preprocessing.preprocess_series import preprocess_series
 from tests.controller.tseg.support.synthetic_ct import write_synthetic_phantom_assets
+from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 
 def test_falcon_model_dir_under_anonymizer_package() -> None:
     expected = Path(load_models.__file__).resolve().parents[2] / "assets" / "falcon" / "models"
     assert load_models.FALCON_MODEL_DIR == expected
 
 
-BASE_TEST_DIR = Path("tests/controller/assets/test_dcm_files")
-
 SYNTHETIC_DIRS = {
-    "HeadNeck": BASE_TEST_DIR / "synthetic_CT_head",
-    "Chest": BASE_TEST_DIR / "synthetic_CT_chest",
-    "Abdomen": BASE_TEST_DIR / "synthetic_CT_abdomen"
+    "HeadNeck": CONTROLLER_TEST_DCM_FILES_DIR / "synthetic_CT_head",
+    "Chest": CONTROLLER_TEST_DCM_FILES_DIR / "synthetic_CT_chest",
+    "Abdomen": CONTROLLER_TEST_DCM_FILES_DIR / "synthetic_CT_abdomen"
 }
 
 @pytest.fixture(scope="session", autouse=True)

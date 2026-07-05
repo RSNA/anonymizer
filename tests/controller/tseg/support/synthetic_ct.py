@@ -10,6 +10,8 @@ import pydicom
 from pydicom.data import get_testdata_file
 from pydicom.uid import generate_uid
 
+from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
+
 FALCON_MIN_SLICES = 11
 DEFAULT_SYNTHETIC_SLICE_COUNT = 12
 DEFAULT_PHANTOM_SLICE_COUNT = 24
@@ -18,7 +20,6 @@ DEFAULT_SLICE_THICKNESS_MM = 5.0
 DEFAULT_PIXEL_SPACING_MM = (1.0, 1.0)
 
 CT_SMALL_TEMPLATE = "CT_small.dcm"
-CONTROLLER_TEST_DCM_FILES_DIR = Path(__file__).resolve().parents[2] / "assets" / "test_dcm_files"
 SYNTHETIC_CT_SMALL_ASSET_DIR = CONTROLLER_TEST_DCM_FILES_DIR / "synthetic_CT_small"
 SYNTHETIC_CT_HEAD_ASSET_DIR = CONTROLLER_TEST_DCM_FILES_DIR / "synthetic_CT_head"
 SYNTHETIC_CT_CHEST_ASSET_DIR = CONTROLLER_TEST_DCM_FILES_DIR / "synthetic_CT_chest"

@@ -18,11 +18,11 @@ from tests.controller.dicom.support.test_files import (
     hash_ct_small_SOPInstanceUID,
     hash_ct_small_FrameOfReferenceUID
 )
+from tests.controller.paths import JAVA_GENERATED_INDEX
 
 
 def test_read_java_anonymizer_index_xlsx(temp_dir: str, controller: ProjectController) -> None:
-    index_file = "tests/controller/assets/JavaGeneratedIndex.xlsx"
-    studies: list[JavaAnonymizerExportedStudy] = read_java_anonymizer_index_xlsx(index_file)
+    studies: list[JavaAnonymizerExportedStudy] = read_java_anonymizer_index_xlsx(str(JAVA_GENERATED_INDEX))
     assert studies
     assert len(studies) == 112
     assert studies[0].ANON_PatientName == "527408-000001"
@@ -34,8 +34,7 @@ def test_read_java_anonymizer_index_xlsx(temp_dir: str, controller: ProjectContr
 
 
 def test_load_java_index_into_new_project(temp_dir: str, controller: ProjectController) -> None:
-    index_file = "tests/controller/assets/JavaGeneratedIndex.xlsx"
-    studies: list[JavaAnonymizerExportedStudy] = read_java_anonymizer_index_xlsx(index_file)
+    studies: list[JavaAnonymizerExportedStudy] = read_java_anonymizer_index_xlsx(str(JAVA_GENERATED_INDEX))
 
     controller.anonymizer.model.process_java_phi_studies(studies)
     assert controller.anonymizer.model.get_patient_id_count() == 83
@@ -43,8 +42,7 @@ def test_load_java_index_into_new_project(temp_dir: str, controller: ProjectCont
 
 
 def test_load_java_index_into_new_project_and_import_ct_small(temp_dir: str, controller: ProjectController) -> None:
-    index_file = "tests/controller/assets/JavaGeneratedIndex.xlsx"
-    studies: list[JavaAnonymizerExportedStudy] = read_java_anonymizer_index_xlsx(index_file)
+    studies: list[JavaAnonymizerExportedStudy] = read_java_anonymizer_index_xlsx(str(JAVA_GENERATED_INDEX))
 
     controller.anonymizer.model.process_java_phi_studies(studies)
     assert controller.anonymizer.model.get_patient_id_count() == 83

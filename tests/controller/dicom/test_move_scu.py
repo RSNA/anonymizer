@@ -768,6 +768,7 @@ def test_move_at_series_level_via_accession_number_list_from_pacs_to_local_stora
 # include orthanc binaries in repository
 
 
+@pytest.mark.dicom_integration
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_move_at_study_level_1_CT_file_from_orthanc_to_local_storage(temp_dir: str, controller: ProjectController):
     ds: Dataset = send_file_to_scp(ct_small_filename, OrthancSCP, controller)
@@ -805,6 +806,7 @@ def test_move_at_study_level_1_CT_file_from_orthanc_to_local_storage(temp_dir: s
     assert count_studies_series_images(os.path.join(store_dir, dirlist[0])) == (1, 1, 1)
 
 
+@pytest.mark.dicom_integration
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_move_at_study_level_with_network_timeout_then_series_level_MR_Study_from_orthanc_to_local_storage(
     temp_dir: str, controller: ProjectController
@@ -850,6 +852,7 @@ def test_move_at_study_level_with_network_timeout_then_series_level_MR_Study_fro
     )
 
 
+@pytest.mark.dicom_integration
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_move_at_instance_level_3_studies_2_patients_from_orthanc_to_local_storage(controller: ProjectController):
     # Send 3 studies to ORTHANC PACS:
@@ -926,6 +929,7 @@ def test_move_at_instance_level_3_studies_2_patients_from_orthanc_to_local_stora
     assert total_files == 18
 
 
+@pytest.mark.dicom_integration
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_move_at_study_level_3_studies_with_network_timeout_then_series_level_from_orthance_to_local_storage(
     temp_dir: str, controller: ProjectController

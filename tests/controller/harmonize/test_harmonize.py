@@ -280,3 +280,42 @@ def test_harmonize_both_fail(
     merged = results[0]
     assert merged.error is not None
     assert merged.radlex_series_description == ""
+
+
+def test_harmonize_geometry_result_section_renders_plane() -> None:
+    from anonymizer.controller.harmonize import HarmonizedResult
+    from anonymizer.controller.tseg.dicom_geometry import SeriesGeometryResult
+    from anonymizer.view.series import SeriesView
+
+    geometry = SeriesGeometryResult(
+        plane="axial",
+        plane_confidence=0.92,
+        slice_normal_lps=(0.0, 0.0, 1.0),
+        plane_angles_deg={"axial": 8.0, "coronal": 82.0, "sagittal": 82.0},
+        dimensionality="volume_3d",
+        n_slices=12,
+        through_plane_extent_mm=55.0,
+        slice_spacing_mm=5.0,
+        spacing_regularity=1.0,
+        provenance="original",
+        provenance_confidence=0.85,
+        image_type=("ORIGINAL", "PRIMARY", "AXIAL"),
+        source_series_uids=(),
+        ts_suitable=True,
+        metadata_suspect=False,
+        method="dicom_headers",
+        notes="",
+    )
+    result = HarmonizedResult(
+        series_directory=Path("/tmp/series"),
+        radlex_series_description="CT Chest With Contrast",
+        tseg=None,
+        falcon=None,
+        regions_source="none",
+        contrast_source="none",
+        geometry=geometry,
+    )
+    text = SeriesView._format_geometry_result_section(result)
+    assert "axial" in text
+    assert "volume_3d" in text
+    assert "92" in text

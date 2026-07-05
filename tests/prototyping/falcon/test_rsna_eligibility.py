@@ -48,7 +48,7 @@ def falcon_runtime():
         yield
 
 
-pytestmark = pytest.mark.rsna_local_data
+pytestmark = [pytest.mark.prototyping, pytest.mark.rsna_local_data]
 
 
 @pytest.mark.skipif(not RSNA_TEST_DATA_DIR.is_dir(), reason="RSNA test data directory not available locally")

@@ -16,13 +16,12 @@ from anonymizer.controller.falcon.eval_utils import (
 from anonymizer.controller.falcon.predict import extract_body_part_model_input_slice, extract_contrast_model_input_slice
 from anonymizer.controller.falcon.preprocessing.preprocess_series import preprocess_series
 from tests.controller.tseg.support.synthetic_ct import write_synthetic_phantom_assets
-
-BASE_TEST_DIR = Path("tests/controller/assets/test_dcm_files")
+from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 
 SYNTHETIC_DIRS = {
-    "HeadNeck": BASE_TEST_DIR / "synthetic_CT_head",
-    "Chest": BASE_TEST_DIR / "synthetic_CT_chest",
-    "Abdomen": BASE_TEST_DIR / "synthetic_CT_abdomen",
+    "HeadNeck": CONTROLLER_TEST_DCM_FILES_DIR / "synthetic_CT_head",
+    "Chest": CONTROLLER_TEST_DCM_FILES_DIR / "synthetic_CT_chest",
+    "Abdomen": CONTROLLER_TEST_DCM_FILES_DIR / "synthetic_CT_abdomen",
 }
 
 

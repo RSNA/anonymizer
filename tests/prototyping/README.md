@@ -7,7 +7,8 @@ Tests for scripts and CLIs under `src/prototyping/`. Mirrors the domain layout o
 ```
 tests/prototyping/
 ├── ct/
-│   └── test_ct_eval_confusion_matrix.py
+│   ├── test_ct_eval_confusion_matrix.py
+│   └── test_ct_eval_integration.py   # @tseg_integration; needs totalsegmentator extra
 └── falcon/
     └── test_rsna_eligibility.py   # @rsna_local_data when RSNA_TEST_DATA_DIR set
 ```
@@ -22,6 +23,7 @@ tests/prototyping/
 ```bash
 pytest tests/prototyping -q
 pytest tests/prototyping/ct -q
+pytest tests/prototyping/ct -m tseg_integration -q   # slow; needs uv sync --extra tseg
 ```
 
 Prototyping integration tests that run TotalSegmentator should use `@pytest.mark.tseg_integration`.

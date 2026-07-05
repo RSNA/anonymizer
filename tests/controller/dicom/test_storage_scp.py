@@ -58,6 +58,7 @@ from tests.controller.dicom.support.test_files import (
 )
 from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT, LocalStorageSCP
 from tests.controller.dicom.support.helpers import send_file_to_scp, send_files_to_scp
+from tests.controller.paths import CONTROLLER_ASSETS
 
 
 def test_send_cr1(temp_dir: str, controller):
@@ -1005,7 +1006,7 @@ def test_send_JPEG_LS_Lossy(temp_dir: str, controller: ProjectController):
 
     if "test_dcm_files" in filename:
         # Get file from test assets:
-        dcm_file_path = Path("tests/controller/assets/", filename)
+        dcm_file_path = CONTROLLER_ASSETS / filename
         ds = dcmread(dcm_file_path)
     else:
         # Get test file from pydicom data:

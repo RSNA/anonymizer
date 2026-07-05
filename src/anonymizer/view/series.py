@@ -286,6 +286,30 @@ class SeriesView(tk.Toplevel):
         return "\n".join(lines)
 
     @staticmethod
+    def _format_geometry_result_section(result: HarmonizedResult) -> str:
+        geometry = result.geometry
+        if geometry is None:
+            return _("DICOM geometry") + ":\n" + _("Not available")
+
+        plane_confidence = format_confidence_percent(geometry.plane_confidence)
+        ts_state = _("Yes") if geometry.ts_suitable else _("No")
+        lines = [
+            _("DICOM geometry") + ":",
+            _("Acquisition plane") + f": {geometry.plane} ({plane_confidence})",
+            _("Dimensionality") + f": {geometry.dimensionality}",
+            _("Provenance") + f": {geometry.provenance}",
+            _("Slice count") + f": {geometry.n_slices}",
+            _("TotalSegmentator eligible") + f": {ts_state}",
+        ]
+        if geometry.through_plane_extent_mm is not None:
+            lines.append(_("Through-plane extent") + f": {geometry.through_plane_extent_mm:.1f} mm")
+        if geometry.metadata_suspect:
+            lines.append(_("Metadata") + ": " + _("suspect — verify orientation tags"))
+        if geometry.notes and not geometry.ts_suitable:
+            lines.append(_("Notes") + f": {geometry.notes}")
+        return "\n".join(lines)
+
+    @staticmethod
     def _format_tseg_result_section(result: HarmonizedResult) -> str:
         tseg = result.tseg
         if tseg is None:
@@ -349,7 +373,9 @@ class SeriesView(tk.Toplevel):
     @staticmethod
     def _format_harmonize_result_section(result: HarmonizedResult) -> str:
         return (
-            SeriesView._format_tseg_result_section(result)
+            SeriesView._format_geometry_result_section(result)
+            + "\n\n"
+            + SeriesView._format_tseg_result_section(result)
             + "\n\n"
             + SeriesView._format_falcon_result_section(result)
         )

@@ -15,6 +15,7 @@ from src.anonymizer.utils.storage import (
     get_dcm_files,
     read_java_anonymizer_index_xlsx,
 )
+from tests.controller.paths import JAVA_GENERATED_INDEX
 
 
 # Basic tests
@@ -296,8 +297,7 @@ def test_load_data_from_existing_excel():
     Tests if the function can load data from an existing Excel file and verifies
     the number of entries and the IDs of the first few entries.
     """
-    filename = "tests/controller/assets/JavaGeneratedIndex.xlsx"
-    data = read_java_anonymizer_index_xlsx(filename)
+    data = read_java_anonymizer_index_xlsx(str(JAVA_GENERATED_INDEX))
 
     # Expected number of entries (replace with actual value)
     expected_num_entries = 112  # Example

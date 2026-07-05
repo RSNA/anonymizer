@@ -340,6 +340,7 @@ def test_find_study_uid_hierarchy(temp_dir: str, controller: ProjectController):
     assert study3_uid_hierarchy.get_number_of_instances() == 11
 
 
+@pytest.mark.dicom_integration
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_send_3_studies_to_orthanc_find_with_acc_no_list(temp_dir: str, controller: ProjectController):
     dset1: list[Dataset] = send_files_to_scp(

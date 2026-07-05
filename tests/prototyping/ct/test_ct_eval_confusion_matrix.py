@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from prototyping.ct.ct_eval import (
     BODY_PART_NONE,
     BODY_PARTS,
@@ -10,6 +12,8 @@ from prototyping.ct.ct_eval import (
     build_confusion_matrix,
     contrast_confusion_rows,
 )
+
+pytestmark = pytest.mark.prototyping
 
 
 def test_body_part_confusion_matrix() -> None:

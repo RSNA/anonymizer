@@ -65,12 +65,20 @@ uv run pre-commit run ruff-check --all-files
 
 CI runs `ruff check` without `--fix`. Pre-commit uses the same check on staged Python files under `src/anonymizer/`.
 
-### Unit Testing 
-#### For model and controller with coverage
+### Unit Testing
+
+Test layout mirrors source: `tests/controller/` → `src/anonymizer/controller/`, `tests/prototyping/` → `src/prototyping/`. See [tests/README.md](tests/README.md).
+
+```bash
+uv sync --extra tseg --group dev
+uv run pytest tests/controller/tseg -q
+uv run pytest tests/prototyping -q
+uv run pytest -q   # full suite with coverage (see pyproject.toml)
 ```
-1. Create tests/controller/.env file with your AWS_USERNAME and AWS_PASSWORD
-2. uv run pytest
-```
+
+Optional: create `tests/controller/.env` with `AWS_USERNAME` and `AWS_PASSWORD` for S3 upload tests.
+
+Markers (`tseg_integration`, `dicom_integration`, `rsna_local_data`) are documented in `pyproject.toml` and `tests/README.md`.
 ### Translations
 Languages for 17.3: `en_US, de, es, fr`
 #### Ensure gettext is installed:

@@ -18,12 +18,10 @@ tests/controller/
 
 ## Shared assets
 
-All DICOM phantoms and eval fixtures live under `tests/controller/assets/`. Prefer resolving paths relative to this directory:
+All DICOM phantoms and eval fixtures live under `tests/controller/assets/`. Import paths from `tests.controller.paths`:
 
 ```python
-from pathlib import Path
-
-CONTROLLER_ASSETS = Path(__file__).resolve().parents[1] / "assets"
+from tests.controller.paths import CONTROLLER_ASSETS, CONTROLLER_TEST_DCM_FILES_DIR, JAVA_GENERATED_INDEX
 ```
 
 Synthetic CT series builders live under `tests/controller/tseg/support/synthetic_ct.py`.
@@ -45,4 +43,7 @@ pytest tests/controller/dicom -q
 pytest tests/controller/core -q
 pytest tests/controller/infra -q
 pytest tests/controller -m tseg_integration   # slow; needs totalsegmentator extra
+pytest tests/controller/dicom -m dicom_integration   # local Orthanc required
 ```
+
+See also [tests/README.md](../README.md) for the full test tree and marker reference.
