@@ -324,6 +324,145 @@ def _fmt_acc(values: list[bool]) -> str:
     return f"{pct:.1f}% ({correct}/{len(values)})"
 
 
+def _fmt_rate(numerator: int, denominator: int) -> str:
+    if denominator == 0:
+        return "n/a"
+    pct = 100.0 * numerator / denominator
+    return f"{pct:.1f}% ({numerator}/{denominator})"
+
+
+def _coerce_bool(value: object) -> bool | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"true", "1", "yes"}:
+            return True
+        if lowered in {"false", "0", "no"}:
+            return False
+    return None
+
+
+def _row_ts_suitable(row: dict) -> bool | None:
+    return _coerce_bool(row.get("geometry_ts_suitable"))
+
+
+def geometry_group_stats(rows: list[dict], group_field: str) -> dict[str, dict]:
+    """Per-group counts, fail rates, and accuracy for all eval rows."""
+    grouped: dict[str, list[dict]] = defaultdict(list)
+    for row in rows:
+        key = row.get(group_field)
+        if key not in (None, ""):
+            grouped[str(key)].append(row)
+
+    stats: dict[str, dict] = {}
+    for key, subset in sorted(grouped.items()):
+        ok = [row for row in subset if row["status"] == "ok"]
+        failed = [row for row in subset if row["status"] != "ok"]
+        ts_suitable = [row for row in subset if _row_ts_suitable(row) is True]
+        ts_not_suitable = [row for row in subset if _row_ts_suitable(row) is False]
+        contrast_ok = [row for row in ok if row["iv_contrast_correct"] != ""]
+        stats[key] = {
+            "n": len(subset),
+            "n_ok": len(ok),
+            "n_failed": len(failed),
+            "fail_rate": len(failed) / len(subset) if subset else None,
+            "n_ts_suitable": len(ts_suitable),
+            "n_ts_not_suitable": len(ts_not_suitable),
+            "body_part_accuracy": _accuracy([bool(row["body_part_correct"]) for row in ok]),
+            "body_part_dominant_accuracy": _accuracy(
+                [bool(row["body_part_dominant_match"]) for row in ok]
+            ),
+            "iv_contrast_accuracy": _accuracy([bool(row["iv_contrast_correct"]) for row in contrast_ok])
+            if contrast_ok
+            else None,
+        }
+    return stats
+
+
+def build_geometry_routing_summary(rows: list[dict]) -> dict[str, dict]:
+    """Compare pipeline outcomes for TS-eligible vs ineligible series."""
+    suitable = [row for row in rows if _row_ts_suitable(row) is True]
+    not_suitable = [row for row in rows if _row_ts_suitable(row) is False]
+    unknown = [row for row in rows if _row_ts_suitable(row) is None]
+
+    def _bucket(subset: list[dict]) -> dict:
+        ok = [row for row in subset if row["status"] == "ok"]
+        failed = [row for row in subset if row["status"] != "ok"]
+        contrast_ok = [row for row in ok if row["iv_contrast_correct"] != ""]
+        return {
+            "n": len(subset),
+            "n_ok": len(ok),
+            "n_failed": len(failed),
+            "fail_rate": len(failed) / len(subset) if subset else None,
+            "body_part_accuracy": _accuracy([bool(row["body_part_correct"]) for row in ok]),
+            "body_part_dominant_accuracy": _accuracy(
+                [bool(row["body_part_dominant_match"]) for row in ok]
+            ),
+            "iv_contrast_accuracy": _accuracy([bool(row["iv_contrast_correct"]) for row in contrast_ok])
+            if contrast_ok
+            else None,
+        }
+
+    return {
+        "ts_suitable": _bucket(suitable),
+        "ts_not_suitable": _bucket(not_suitable),
+        "ts_unknown": _bucket(unknown),
+    }
+
+
+def print_geometry_impact_report(rows: list[dict]) -> None:
+    """Print fail rates and accuracy split by plane, dimensionality, and TS eligibility."""
+    routing = build_geometry_routing_summary(rows)
+    print("\n=== Geometry routing impact ===")
+    for label, key in (
+        ("TS eligible", "ts_suitable"),
+        ("TS ineligible (expected skip)", "ts_not_suitable"),
+        ("TS eligibility unknown", "ts_unknown"),
+    ):
+        bucket = routing[key]
+        if bucket["n"] == 0:
+            continue
+        present = (
+            f"{100.0 * bucket['body_part_accuracy']:.1f}%"
+            if bucket["body_part_accuracy"] is not None
+            else "n/a"
+        )
+        print(
+            f"  {label:<32} n={bucket['n']:>3}  ok={bucket['n_ok']:>3}  "
+            f"failed={bucket['n_failed']:>3}  fail={_fmt_rate(bucket['n_failed'], bucket['n'])}  "
+            f"present={present}"
+        )
+
+    for field, title in (
+        ("geometry_plane", "By acquisition plane"),
+        ("geometry_dimensionality", "By dimensionality"),
+    ):
+        stats = geometry_group_stats(rows, field)
+        if not stats:
+            continue
+        print(f"\n{title} (all series; fail = TS skip or pipeline error):")
+        for key, bucket in stats.items():
+            present = (
+                f"{100.0 * bucket['body_part_accuracy']:.1f}%"
+                if bucket["body_part_accuracy"] is not None
+                else "n/a"
+            )
+            fail = (
+                f"{100.0 * bucket['fail_rate']:.1f}%"
+                if bucket["fail_rate"] is not None
+                else "n/a"
+            )
+            print(
+                f"  {key:<20} n={bucket['n']:>3}  ok={bucket['n_ok']:>3}  "
+                f"failed={bucket['n_failed']:>3} ({fail})  "
+                f"ts_ok={bucket['n_ts_suitable']:>3} ts_skip={bucket['n_ts_not_suitable']:>3}  "
+                f"present={present}"
+            )
+
+
 def _contrast_label(value) -> str:
     if value is True:
         return "WITH"
@@ -423,29 +562,6 @@ def print_confusion_matrices(rows: list[dict]) -> None:
             print(f"  {line}")
 
 
-def _summarize_subset(subset: list[dict]) -> dict[str, str]:
-    present = _fmt_acc([bool(row["body_part_correct"]) for row in subset])
-    dominant = _fmt_acc([bool(row["body_part_dominant_match"]) for row in subset])
-    c_sub = [row for row in subset if row["iv_contrast_correct"] != ""]
-    contrast = _fmt_acc([bool(row["iv_contrast_correct"]) for row in c_sub]) if c_sub else "n/a"
-    return {"present": present, "dominant": dominant, "iv": contrast}
-
-
-def _print_grouped_metrics(rows: list[dict], field: str, *, title: str) -> None:
-    ok = [row for row in rows if row["status"] == "ok"]
-    values = sorted({str(row.get(field, "") or "") for row in ok if row.get(field, "")})
-    if not values:
-        return
-    print(f"\n{title}")
-    for value in values:
-        subset = [row for row in ok if row.get(field) == value]
-        metrics = _summarize_subset(subset)
-        print(
-            f"  {value:<18} n={len(subset):>2}  "
-            f"present={metrics['present']}  dominant={metrics['dominant']}  IV={metrics['iv']}"
-        )
-
-
 def print_series_table(rows: list[dict]) -> None:
     """Print one line per series with ground truth, predictions, and pass/fail."""
     print("\n--- Per-series results ---")
@@ -536,9 +652,7 @@ def print_summary(rows: list[dict]) -> None:
         contrast = _fmt_acc([bool(row["iv_contrast_correct"]) for row in c_sub]) if c_sub else "n/a"
         print(f"  {body_part:<8} n={len(subset):>2}  present={present}  IV={contrast}")
 
-    _print_grouped_metrics(rows, "geometry_plane", title="By acquisition plane:")
-    _print_grouped_metrics(rows, "geometry_dimensionality", title="By dimensionality:")
-    _print_grouped_metrics(rows, "geometry_provenance", title="By provenance:")
+    print_geometry_impact_report(rows)
 
     print_confusion_matrices(rows)
     print_series_table(rows)
@@ -570,6 +684,9 @@ def write_summary_json(path: Path, rows: list[dict]) -> None:
         "by_geometry_plane": {},
         "by_geometry_dimensionality": {},
         "by_geometry_provenance": {},
+        "geometry_routing": build_geometry_routing_summary(rows),
+        "geometry_impact_by_plane": geometry_group_stats(rows, "geometry_plane"),
+        "geometry_impact_by_dimensionality": geometry_group_stats(rows, "geometry_dimensionality"),
     }
     if y_true_body:
         body_matrix = build_confusion_matrix(

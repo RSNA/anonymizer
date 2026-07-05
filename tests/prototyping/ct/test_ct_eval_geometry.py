@@ -12,9 +12,11 @@ from prototyping.ct.ct_eval import (
     GEOMETRY_COLUMNS,
     RESULT_COLUMNS,
     SeriesRecord,
+    build_geometry_routing_summary,
     empty_geometry_fields,
     evaluate_record,
     geometry_fields,
+    geometry_group_stats,
 )
 
 
@@ -95,3 +97,75 @@ def test_evaluate_record_includes_geometry_columns() -> None:
     assert row["geometry_dimensionality"] == "volume_3d"
     assert row["geometry_ts_suitable"] is True
     assert row["body_part_correct"] is True
+
+
+def test_geometry_group_stats_fail_rate_by_plane() -> None:
+    rows = [
+        {
+            "status": "ok",
+            "geometry_plane": "axial",
+            "geometry_ts_suitable": True,
+            "body_part_correct": True,
+            "body_part_dominant_match": True,
+            "iv_contrast_correct": True,
+        },
+        {
+            "status": "fail",
+            "geometry_plane": "oblique",
+            "geometry_ts_suitable": False,
+            "body_part_correct": False,
+            "body_part_dominant_match": False,
+            "iv_contrast_correct": "",
+        },
+        {
+            "status": "fail",
+            "geometry_plane": "oblique",
+            "geometry_ts_suitable": False,
+            "body_part_correct": False,
+            "body_part_dominant_match": False,
+            "iv_contrast_correct": "",
+        },
+        {
+            "status": "fail",
+            "geometry_plane": "axial",
+            "geometry_dimensionality": "localizer_2d",
+            "geometry_ts_suitable": False,
+            "body_part_correct": False,
+            "body_part_dominant_match": False,
+            "iv_contrast_correct": "",
+        },
+    ]
+    by_plane = geometry_group_stats(rows, "geometry_plane")
+    assert by_plane["axial"]["n"] == 2
+    assert by_plane["axial"]["n_ok"] == 1
+    assert by_plane["axial"]["fail_rate"] == 0.5
+    assert by_plane["oblique"]["fail_rate"] == 1.0
+    assert by_plane["oblique"]["n_ts_not_suitable"] == 2
+
+    by_dim = geometry_group_stats(rows, "geometry_dimensionality")
+    assert by_dim["localizer_2d"]["fail_rate"] == 1.0
+
+
+def test_build_geometry_routing_summary() -> None:
+    rows = [
+        {
+            "status": "ok",
+            "geometry_ts_suitable": True,
+            "body_part_correct": True,
+            "body_part_dominant_match": True,
+            "iv_contrast_correct": True,
+        },
+        {
+            "status": "fail",
+            "geometry_ts_suitable": False,
+            "body_part_correct": False,
+            "body_part_dominant_match": False,
+            "iv_contrast_correct": "",
+        },
+    ]
+    routing = build_geometry_routing_summary(rows)
+    assert routing["ts_suitable"]["n"] == 1
+    assert routing["ts_suitable"]["n_ok"] == 1
+    assert routing["ts_suitable"]["fail_rate"] == 0.0
+    assert routing["ts_not_suitable"]["n"] == 1
+    assert routing["ts_not_suitable"]["fail_rate"] == 1.0

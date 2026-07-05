@@ -66,3 +66,6 @@ def test_run_eval_smoke_includes_geometry_columns_for_axial_chest(
     assert "by_geometry_plane" in summary
     assert "axial" in summary["by_geometry_plane"]
     assert summary["by_geometry_plane"]["axial"]["n"] == 1
+    assert summary["geometry_routing"]["ts_suitable"]["n"] == 1
+    assert summary["geometry_routing"]["ts_suitable"]["fail_rate"] == 0.0
+    assert summary["geometry_impact_by_plane"]["axial"]["fail_rate"] == 0.0
