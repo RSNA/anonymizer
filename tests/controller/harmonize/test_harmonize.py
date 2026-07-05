@@ -88,6 +88,68 @@ def test_harmonize_with_synthetic_chest_series(
 @patch("anonymizer.controller.harmonize.analyze_tseg_contrast")
 @patch("anonymizer.controller.harmonize.analyze_tseg_regions")
 @patch("anonymizer.controller.harmonize.predict_falcon_series")
+def test_harmonize_reports_geometry_progress(
+    mock_falcon: MagicMock,
+    mock_regions: MagicMock,
+    mock_contrast: MagicMock,
+    synthetic_chest_series: Path,
+) -> None:
+    progress_events: list[tuple[str, str]] = []
+
+    def on_progress(progress) -> None:
+        progress_events.append((progress.stage, progress.message))
+
+    mock_falcon.return_value = [_falcon_result(synthetic_chest_series)]
+    mock_regions.return_value = (
+        _tseg_region_result(synthetic_chest_series),
+        synthetic_chest_series / "volume.nii.gz",
+    )
+
+    harmonize_series([synthetic_chest_series], progress=on_progress)
+
+    geometry_messages = [message for stage, message in progress_events if stage == "geometry"]
+    assert len(geometry_messages) == 1
+    assert geometry_messages[0].startswith("Geometry: axial · volume_3d · TS ok")
+
+
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
+@patch("anonymizer.controller.harmonize.ENABLE_TS_CONTRAST", False)
+@patch("anonymizer.controller.harmonize.analyze_tseg_contrast")
+@patch("anonymizer.controller.harmonize.analyze_tseg_regions")
+@patch("anonymizer.controller.harmonize.predict_falcon_series")
+def test_harmonize_skips_tseg_for_scout_localizer(
+    mock_falcon: MagicMock,
+    mock_regions: MagicMock,
+    mock_contrast: MagicMock,
+    tmp_path: Path,
+) -> None:
+    from tests.controller.tseg.support.synthetic_ct import build_synthetic_scout_ct_series
+
+    scout_dir = build_synthetic_scout_ct_series(tmp_path / "scout")
+    progress_events: list[tuple[str, str]] = []
+
+    def on_progress(progress) -> None:
+        progress_events.append((progress.stage, progress.message))
+
+    mock_falcon.return_value = [_falcon_result(scout_dir)]
+
+    results = harmonize_series([scout_dir], progress=on_progress)
+
+    mock_regions.assert_not_called()
+    mock_contrast.assert_not_called()
+    merged = results[0]
+    assert merged.geometry is not None
+    assert merged.geometry.ts_suitable is False
+    assert merged.geometry.dimensionality == "localizer_2d"
+    tseg_messages = [message for stage, message in progress_events if stage == "tseg"]
+    assert any("TS skip" in message for message in tseg_messages)
+
+
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
+@patch("anonymizer.controller.harmonize.ENABLE_TS_CONTRAST", False)
+@patch("anonymizer.controller.harmonize.analyze_tseg_contrast")
+@patch("anonymizer.controller.harmonize.analyze_tseg_regions")
+@patch("anonymizer.controller.harmonize.predict_falcon_series")
 def test_harmonize_skips_ts_contrast_when_disabled(
     mock_falcon: MagicMock,
     mock_regions: MagicMock,
@@ -319,3 +381,44 @@ def test_harmonize_geometry_result_section_renders_plane() -> None:
     assert "axial" in text
     assert "volume_3d" in text
     assert "92" in text
+
+
+def test_geometry_dicom_rows_include_ts_eligibility() -> None:
+    from anonymizer.controller.tseg.dicom_geometry import SeriesGeometryResult
+    from anonymizer.view.series import SeriesView
+
+    geometry = SeriesGeometryResult(
+        plane="coronal",
+        plane_confidence=0.7,
+        slice_normal_lps=(0.0, 1.0, 0.0),
+        plane_angles_deg={"axial": 80.0, "coronal": 10.0, "sagittal": 80.0},
+        dimensionality="volume_3d",
+        n_slices=20,
+        through_plane_extent_mm=100.0,
+        slice_spacing_mm=5.0,
+        spacing_regularity=1.0,
+        provenance="original",
+        provenance_confidence=0.9,
+        image_type=("ORIGINAL", "PRIMARY", "AXIAL"),
+        source_series_uids=(),
+        ts_suitable=False,
+        metadata_suspect=False,
+        method="dicom_headers",
+        notes="",
+    )
+    rows = SeriesView._geometry_dicom_rows(geometry)
+    assert rows[0][2] == "coronal"
+    assert rows[3][2] == "No"
+
+
+def test_series_geometry_caption_reads_cached_geometry(tmp_path: Path) -> None:
+    from anonymizer.controller.tseg.dicom_geometry import resolve_series_geometry
+    from anonymizer.view.projection import ProjectionView
+    from tests.controller.tseg.support.synthetic_ct import build_synthetic_chest_ct_series
+
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest")
+    resolve_series_geometry(series_dir)
+
+    caption = ProjectionView._series_geometry_caption(series_dir)
+    assert caption == "axial · volume_3d · TS ok"
+    assert ProjectionView._series_geometry_caption(tmp_path / "missing") == ""

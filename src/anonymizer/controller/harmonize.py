@@ -13,6 +13,7 @@ from anonymizer.controller.tseg.config import ENABLE_TS_CONTRAST
 from anonymizer.controller.tseg.contrast import log_memory_usage, release_working_memory
 from anonymizer.controller.tseg.dicom_geometry import (
     SeriesGeometryResult,
+    format_geometry_progress_message,
     resolve_series_geometry,
     ts_regions_eligible,
 )
@@ -184,8 +185,8 @@ def harmonize_series(
         series_dir = Path(series_dir)
         logger.info("=== Harmonize [%d/%d] %s ===", index, n_series, series_dir)
 
-        _report("geometry", "Analyzing DICOM geometry", _GEOMETRY_FRAC[1])
         geometry = resolve_series_geometry(series_dir)
+        _report("geometry", format_geometry_progress_message(geometry), _GEOMETRY_FRAC[1])
         logger.info(
             "Harmonize geometry: plane=%s dimensionality=%s provenance=%s ts_suitable=%s",
             geometry.plane,
@@ -228,6 +229,11 @@ def harmonize_series(
                 "Harmonize stage 2/4: TS segmentation skipped for %s (%s)",
                 series_dir,
                 geometry.notes or geometry.dimensionality,
+            )
+            _report(
+                "tseg",
+                format_geometry_progress_message(geometry),
+                _TSEG_SEG_FRAC[1],
             )
             region_result = TS_result(
                 series_directory=series_dir,

@@ -30,6 +30,12 @@ from anonymizer.controller.falcon.predict import (
     format_confidence_percent,
 )
 from anonymizer.controller.harmonize import HarmonizedResult, HarmonizeProgress, harmonize_series
+from anonymizer.controller.tseg.dicom_geometry import (
+    SeriesGeometryResult,
+    format_geometry_summary,
+    load_geometry_cache,
+    resolve_series_geometry,
+)
 from anonymizer.controller.remove_pixel_phi import (
     OCRText,
     UserRectangle,
@@ -210,6 +216,23 @@ class SeriesView(tk.Toplevel):
         self.control_frame.grid_columnconfigure(col, weight=1)  # Make status label expand.
 
         self._harmonize_queue: queue.Queue | None = None
+        self._series_geometry: SeriesGeometryResult | None = None
+
+        if getattr(self._ds, "Modality", None) == "CT":
+            self._series_geometry = load_geometry_cache(self._series_path)
+            if self._series_geometry is None:
+                try:
+                    self._series_geometry = resolve_series_geometry(self._series_path)
+                except Exception as exc:
+                    logger.warning("Could not resolve series geometry for %s: %s", self._series_path, exc)
+
+        if self._series_geometry is not None:
+            self._geometry_label = ctk.CTkLabel(
+                self.control_frame,
+                text=_("Geometry") + f": {format_geometry_summary(self._series_geometry)}",
+                anchor="w",
+            )
+            self._geometry_label.grid(row=1, column=0, columnspan=col + 1, padx=self.PAD, pady=(0, self.PAD), sticky="w")
 
         try:
             whitelist = load_project_whitelist(self._series_path.parents[3], self._ds.Modality)
@@ -258,7 +281,21 @@ class SeriesView(tk.Toplevel):
             padded += " "
         return padded
 
-    def _format_falcon_dicom_table(self, ds: Dataset) -> str:
+    @staticmethod
+    def _geometry_dicom_rows(geometry: SeriesGeometryResult) -> list[tuple[str, str, str]]:
+        ts_state = _("Yes") if geometry.ts_suitable else _("No")
+        return [
+            (_("Acquisition plane"), "(geometry)", geometry.plane),
+            (_("Dimensionality"), "(geometry)", geometry.dimensionality),
+            (_("Provenance"), "(geometry)", geometry.provenance),
+            (_("TotalSegmentator eligible"), "(geometry)", ts_state),
+        ]
+
+    def _format_falcon_dicom_table(
+        self,
+        ds: Dataset,
+        geometry: SeriesGeometryResult | None = None,
+    ) -> str:
         rows = [
             (_("Modality"), "(0008,0060)", self._dicom_field_display(ds, "Modality")),
             (_("Series Description"), "(0008,103E)", self._dicom_field_display(ds, "SeriesDescription")),
@@ -269,6 +306,8 @@ class SeriesView(tk.Toplevel):
             (_("Contrast Bolus Agent"), "(0018,0010)", self._dicom_field_display(ds, "ContrastBolusAgent")),
             (_("Contrast Bolus Route"), "(0018,1040)", self._dicom_field_display(ds, "ContrastBolusRoute")),
         ]
+        if geometry is not None:
+            rows.extend(self._geometry_dicom_rows(geometry))
         font = self._messagebox_font()
         col_gap = "  "
         col_px = [max(font.measure(str(row[i])) for row in rows) for i in range(3)]
@@ -691,10 +730,19 @@ class SeriesView(tk.Toplevel):
             self.update_status(_("Areas blacked out in all frames of series"))
 
     def _show_harmonize_progress(self, progress: HarmonizeProgress) -> None:
+        message = progress.message
+        if progress.stage == "geometry" and not message.startswith("Geometry:"):
+            message = _("Analyzing DICOM geometry") + "…"
+        elif progress.stage == "tseg" and message.startswith("Geometry:"):
+            message = _("TotalSegmentator skipped") + f" ({message.removeprefix('Geometry: ').strip()})"
         if progress.remaining_sec is not None and progress.remaining_sec > 0:
-            self.update_status(f"{progress.message} ~{int(progress.remaining_sec)}s")
+            self.update_status(f"{message} ~{int(progress.remaining_sec)}s")
         else:
-            self.update_status(progress.message)
+            self.update_status(message)
+        if progress.stage == "geometry" and progress.message.startswith("Geometry:"):
+            summary = progress.message.removeprefix("Geometry:").split("—")[0].strip()
+            if hasattr(self, "_geometry_label"):
+                self._geometry_label.configure(text=_("Geometry") + f": {summary}")
 
     def _hide_harmonize_progress(self) -> None:
         pass
@@ -753,6 +801,13 @@ class SeriesView(tk.Toplevel):
             return
 
         result = results[0]
+        if result.geometry is not None:
+            self._series_geometry = result.geometry
+            if hasattr(self, "_geometry_label"):
+                self._geometry_label.configure(
+                    text=_("Geometry") + f": {format_geometry_summary(self._series_geometry)}"
+                )
+
         if result.error is not None:
             messagebox.showerror(
                 title=_("Harmonize Error"),
@@ -765,7 +820,7 @@ class SeriesView(tk.Toplevel):
 
         current = str(self._ds.get("SeriesDescription", "") or "").strip()
         proposed = result.radlex_series_description
-        dicom_table = self._format_falcon_dicom_table(self._ds)
+        dicom_table = self._format_falcon_dicom_table(self._ds, result.geometry or self._series_geometry)
         harmonize_section = self._format_harmonize_result_section(result)
 
         if proposed.strip() == current:
@@ -823,13 +878,13 @@ class SeriesView(tk.Toplevel):
             return
 
         logger.info("Harmonize starting for %s", self._series_path)
-        self.update_status(_("Running harmonize (FALCON, then anatomy analysis)..."))
+        self.update_status(_("Running harmonize (geometry → FALCON → anatomy → contrast)…"))
         self.harmonize_button.configure(state="disabled")
         self._harmonize_queue = queue.Queue()
         self._show_harmonize_progress(
             HarmonizeProgress(
-                stage="start",
-                message=_("Starting harmonize (FALCON → anatomy → contrast)"),
+                stage="geometry",
+                message=_("Analyzing DICOM geometry") + "…",
                 fraction=0.0,
                 elapsed_sec=0.0,
                 remaining_sec=None,

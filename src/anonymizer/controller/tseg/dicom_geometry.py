@@ -533,6 +533,20 @@ def load_geometry_cache(series_directory: Path) -> SeriesGeometryResult | None:
         return None
 
 
+def format_geometry_summary(geometry: SeriesGeometryResult) -> str:
+    """Compact one-line summary for UI captions and status bars."""
+    ts_tag = "TS ok" if geometry.ts_suitable else "TS skip"
+    return f"{geometry.plane} · {geometry.dimensionality} · {ts_tag}"
+
+
+def format_geometry_progress_message(geometry: SeriesGeometryResult) -> str:
+    """Progress/status text after geometry analysis in Harmonize."""
+    summary = format_geometry_summary(geometry)
+    if not geometry.ts_suitable and geometry.notes:
+        return f"Geometry: {summary} — {geometry.notes}"
+    return f"Geometry: {summary}"
+
+
 def resolve_series_geometry(
     series_directory: Path,
     *,

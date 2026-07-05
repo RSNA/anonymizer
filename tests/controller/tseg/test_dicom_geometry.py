@@ -14,6 +14,8 @@ from anonymizer.controller.tseg.dicom_geometry import (
     analyze_series_geometry,
     classify_plane,
     compute_stack_metrics,
+    format_geometry_progress_message,
+    format_geometry_summary,
     geometry_cache_path,
     geometry_from_dict,
     geometry_to_dict,
@@ -254,6 +256,40 @@ def test_resolve_series_geometry_uses_cache(tmp_path: Path) -> None:
 
     refreshed = resolve_series_geometry(series_dir, use_cache=False, write_cache=True)
     assert refreshed.plane == "axial"
+
+
+def test_format_geometry_summary(tmp_path: Path) -> None:
+    geom = analyze_series_geometry(build_synthetic_chest_ct_series(tmp_path / "chest"))
+    assert format_geometry_summary(geom) == "axial · volume_3d · TS ok"
+    assert format_geometry_progress_message(geom).startswith("Geometry: axial · volume_3d · TS ok")
+
+
+def test_format_geometry_progress_message_includes_skip_reason() -> None:
+    from anonymizer.controller.tseg.dicom_geometry import SeriesGeometryResult
+
+    geometry = SeriesGeometryResult(
+        plane="oblique",
+        plane_confidence=0.8,
+        slice_normal_lps=(0.1, 0.2, 0.97),
+        plane_angles_deg={"axial": 15.0, "coronal": 75.0, "sagittal": 75.0},
+        dimensionality="localizer_2d",
+        n_slices=5,
+        through_plane_extent_mm=20.0,
+        slice_spacing_mm=5.0,
+        spacing_regularity=1.0,
+        provenance="original",
+        provenance_confidence=0.9,
+        image_type=("ORIGINAL", "PRIMARY", "LOCALIZER"),
+        source_series_uids=(),
+        ts_suitable=False,
+        metadata_suspect=False,
+        method="dicom_headers",
+        notes="Not a diagnostic 3D volume (localizer_2d)",
+    )
+    message = format_geometry_progress_message(geometry)
+    assert "TS skip" in message
+    assert "localizer_2d" in message
+    assert "Not a diagnostic 3D volume" in message
 
 
 def test_sagittal_series_converts_to_nifti_with_correct_slice_count(tmp_path: Path) -> None:
