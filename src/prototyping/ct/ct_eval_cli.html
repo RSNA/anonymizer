@@ -1,0 +1,94 @@
+<div style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 1.5; color: #222;">
+
+<h2 style="font-size: 18px; margin: 0 0 12px 0; border-bottom: 1px solid #ddd; padding-bottom: 6px;">ct_eval.py — CLI usage</h2>
+
+<p>End-to-end eval of TotalSegmentator body region + IV contrast against labeled CT series. Each series is analyzed for DICOM acquisition geometry before TotalSegmentator runs; localizers and other ineligible stacks are skipped with geometry recorded in the CSV.</p>
+
+<h3 style="font-size: 16px; margin: 20px 0 8px 0;">Setup</h3>
+<pre style="background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; padding: 10px 12px; font-family: Consolas, Monaco, monospace; font-size: 13px; overflow-x: auto;">uv sync --extra tseg</pre>
+<p>Requires TotalSegmentator and XGBoost. Does not use FALCON.</p>
+
+<h3 style="font-size: 16px; margin: 20px 0 8px 0;">Run</h3>
+<pre style="background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; padding: 10px 12px; font-family: Consolas, Monaco, monospace; font-size: 13px; overflow-x: auto;">uv run python src/prototyping/ct_eval.py [options]</pre>
+
+<table style="border-collapse: collapse; width: 100%; max-width: 640px; margin: 12px 0; font-size: 13px;">
+  <thead>
+    <tr>
+      <th style="border: 1px solid #ccc; padding: 8px 10px; background: #f0f0f0; text-align: left;">Flag</th>
+      <th style="border: 1px solid #ccc; padding: 8px 10px; background: #f0f0f0; text-align: left;">Default</th>
+      <th style="border: 1px solid #ccc; padding: 8px 10px; background: #f0f0f0; text-align: left;">Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="border: 1px solid #ccc; padding: 8px 10px;"><code>--data-dir PATH</code></td>
+      <td style="border: 1px solid #ccc; padding: 8px 10px;"><code>~/Downloads/A_DATA</code></td>
+      <td style="border: 1px solid #ccc; padding: 8px 10px;">Root of labeled CT data</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid #ccc; padding: 8px 10px;"><code>--output-dir PATH</code></td>
+      <td style="border: 1px solid #ccc; padding: 8px 10px;"><code>artifacts/ct_eval</code></td>
+      <td style="border: 1px solid #ccc; padding: 8px 10px;">Directory for CSV and JSON summary</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid #ccc; padding: 8px 10px;"><code>--per-class N</code></td>
+      <td style="border: 1px solid #ccc; padding: 8px 10px;">all series</td>
+      <td style="border: 1px solid #ccc; padding: 8px 10px;">Max series per label folder (e.g. HEAD_WITH, CHEST_WITHOUT)</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid #ccc; padding: 8px 10px;"><code>-v</code> / <code>--verbose</code></td>
+      <td style="border: 1px solid #ccc; padding: 8px 10px;">off</td>
+      <td style="border: 1px solid #ccc; padding: 8px 10px;">DEBUG logging</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>Example (smoke test, 10 per label class):</strong></p>
+<pre style="background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; padding: 10px 12px; font-family: Consolas, Monaco, monospace; font-size: 13px; overflow-x: auto;">uv run python src/prototyping/ct_eval.py \
+  --data-dir /Users/michaelevans/Downloads/A_DATA \
+  --output-dir artifacts/ct_eval_smoke \
+  --per-class 10</pre>
+
+<h3 style="font-size: 16px; margin: 20px 0 8px 0;">Input layout (<code>--data-dir</code>)</h3>
+<p>Ground truth comes from <strong>first-level label directory names</strong>:</p>
+<pre style="background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; padding: 10px 12px; font-family: Consolas, Monaco, monospace; font-size: 13px; overflow-x: auto;">A_DATA/
+  HEAD_WITH/&lt;study_uid&gt;/&lt;series_uid&gt;/*.dcm
+  HEAD_WITHOUT/...
+  CHEST_WITH/...
+  CHEST_WITHOUT/...</pre>
+<p>Body part: Head, Chest, or Abdomen. Contrast: WITH or WITHOUT (also WO, NC, etc.).</p>
+
+<h3 style="font-size: 16px; margin: 20px 0 8px 0;">Output files</h3>
+<p><strong><code>ct_eval_results.csv</code></strong> — one row per series. Geometry columns (cached under <code>&lt;series&gt;/.tseg_cache/geometry.json</code>):</p>
+
+<table style="border-collapse: collapse; width: 100%; max-width: 720px; margin: 12px 0; font-size: 13px;">
+  <thead>
+    <tr>
+      <th style="border: 1px solid #ccc; padding: 8px 10px; background: #f0f0f0; text-align: left;">Column</th>
+      <th style="border: 1px solid #ccc; padding: 8px 10px; background: #f0f0f0; text-align: left;">Example</th>
+      <th style="border: 1px solid #ccc; padding: 8px 10px; background: #f0f0f0; text-align: left;">Meaning</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td style="border: 1px solid #ccc; padding: 8px 10px;"><code>geometry_plane</code></td><td style="border: 1px solid #ccc; padding: 8px 10px;">axial</td><td style="border: 1px solid #ccc; padding: 8px 10px;">Acquisition plane</td></tr>
+    <tr><td style="border: 1px solid #ccc; padding: 8px 10px;"><code>geometry_plane_confidence</code></td><td style="border: 1px solid #ccc; padding: 8px 10px;">0.9512</td><td style="border: 1px solid #ccc; padding: 8px 10px;">Plane classification confidence</td></tr>
+    <tr><td style="border: 1px solid #ccc; padding: 8px 10px;"><code>geometry_dimensionality</code></td><td style="border: 1px solid #ccc; padding: 8px 10px;">volume_3d</td><td style="border: 1px solid #ccc; padding: 8px 10px;">volume_3d, localizer_2d, single_slice_2d, …</td></tr>
+    <tr><td style="border: 1px solid #ccc; padding: 8px 10px;"><code>geometry_provenance</code></td><td style="border: 1px solid #ccc; padding: 8px 10px;">original</td><td style="border: 1px solid #ccc; padding: 8px 10px;">original / derived_3d_render / …</td></tr>
+    <tr><td style="border: 1px solid #ccc; padding: 8px 10px;"><code>geometry_n_slices</code></td><td style="border: 1px solid #ccc; padding: 8px 10px;">24</td><td style="border: 1px solid #ccc; padding: 8px 10px;">Slice count in stack</td></tr>
+    <tr><td style="border: 1px solid #ccc; padding: 8px 10px;"><code>geometry_ts_suitable</code></td><td style="border: 1px solid #ccc; padding: 8px 10px;">True</td><td style="border: 1px solid #ccc; padding: 8px 10px;">Whether TotalSegmentator should run</td></tr>
+    <tr><td style="border: 1px solid #ccc; padding: 8px 10px;"><code>geometry_metadata_suspect</code></td><td style="border: 1px solid #ccc; padding: 8px 10px;">False</td><td style="border: 1px solid #ccc; padding: 8px 10px;">Inconsistent DICOM headers flag</td></tr>
+    <tr><td style="border: 1px solid #ccc; padding: 8px 10px;"><code>geometry_method</code></td><td style="border: 1px solid #ccc; padding: 8px 10px;">dicom_headers</td><td style="border: 1px solid #ccc; padding: 8px 10px;">How geometry was inferred</td></tr>
+  </tbody>
+</table>
+
+<p><strong><code>ct_eval_summary.json</code></strong> — aggregate accuracy plus geometry breakdowns:</p>
+<ul style="margin: 8px 0 8px 20px;">
+  <li><code>by_geometry_plane</code>, <code>by_geometry_dimensionality</code>, <code>by_geometry_provenance</code></li>
+  <li><code>geometry_routing</code> — <code>ts_suitable</code>, <code>ts_not_suitable</code>, <code>ts_unknown</code> buckets with fail rates</li>
+  <li><code>geometry_impact_by_plane</code>, <code>geometry_impact_by_dimensionality</code> — per-group n, fail_rate, TS skip counts</li>
+</ul>
+
+<h3 style="font-size: 16px; margin: 20px 0 8px 0;">Console report</h3>
+<p>Stdout includes a <strong>Geometry routing impact</strong> section (fail = TS skip or pipeline error), confusion matrices, and a per-series table with an acquisition <strong>plane</strong> column.</p>
+
+</div>

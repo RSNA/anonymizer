@@ -9,6 +9,50 @@ Ground truth is parsed from first-level label directory names under ``--data-dir
     A_DATA/CHEST_WITHOUT/<study>/<series>/*.dcm
 
 Requires: ``uv sync --extra tseg`` (TotalSegmentator, XGBoost). No FALCON.
+
+Run::
+
+    uv run python src/prototyping/ct_eval.py \\
+        --data-dir /path/to/A_DATA \\
+        --output-dir artifacts/ct_eval \\
+        --per-class 10
+
+Flags
+-----
+``--data-dir PATH``   Labeled CT root (default: ~/Downloads/A_DATA).
+``--output-dir PATH`` Write ``ct_eval_results.csv`` and ``ct_eval_summary.json`` here.
+``--per-class N``     Max series per label folder (``HEAD_WITH``, ``CHEST_WITHOUT``, …).
+``-v`` / ``--verbose``  DEBUG logging.
+
+Outputs
+-------
+**``ct_eval_results.csv``** — one row per series. Prediction columns plus DICOM geometry
+(from ``.tseg_cache/geometry.json``, resolved before TS when missing):
+
++-------------------------------+------------------------------------------+
+| Column                        | Meaning                                  |
++===============================+==========================================+
+| geometry_plane                | axial / coronal / sagittal / oblique     |
+| geometry_plane_confidence     | 0–1 confidence in plane classification   |
+| geometry_dimensionality       | volume_3d, localizer_2d, single_slice_2d |
+| geometry_provenance           | original / derived_3d_render / …         |
+| geometry_n_slices             | slice count in stack                     |
+| geometry_ts_suitable          | True if TS segmentation should run       |
+| geometry_metadata_suspect     | True if headers look inconsistent        |
+| geometry_method               | dicom_headers (etc.)                     |
++-------------------------------+------------------------------------------+
+
+**``ct_eval_summary.json``** — aggregate metrics plus geometry breakdowns:
+
+- ``by_geometry_plane``, ``by_geometry_dimensionality``, ``by_geometry_provenance``
+- ``geometry_routing`` — TS eligible vs ineligible vs unknown (fail rates, accuracy)
+- ``geometry_impact_by_plane``, ``geometry_impact_by_dimensionality`` — per-group
+  ``n``, ``n_ok``, ``n_failed``, ``fail_rate``, ``n_ts_suitable``, ``n_ts_not_suitable``
+
+Console output includes a **Geometry routing impact** section (fail = TS skip or pipeline
+error) and a per-series table with an acquisition **plane** column.
+
+Email-friendly HTML copy of this reference: ``src/prototyping/ct/ct_eval_cli.html``.
 """
 
 from __future__ import annotations
@@ -839,8 +883,24 @@ def run_eval(
 
 
 def build_parser() -> argparse.ArgumentParser:
+    epilog = """
+Geometry CSV columns (also in --help via module docstring):
+  geometry_plane, geometry_plane_confidence, geometry_dimensionality,
+  geometry_provenance, geometry_n_slices, geometry_ts_suitable,
+  geometry_metadata_suspect, geometry_method
+
+JSON summary adds geometry_routing, geometry_impact_by_plane,
+geometry_impact_by_dimensionality, and by_geometry_* breakdowns.
+
+See src/prototyping/ct/ct_eval_cli.html for full HTML reference.
+"""
     parser = argparse.ArgumentParser(
-        description="Evaluate tseg body part + IV contrast via analyze_series on labeled CT data.",
+        description=(
+            "Evaluate tseg body part + IV contrast via analyze_series on labeled CT data. "
+            "Resolves DICOM geometry per series and reports TS routing impact."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=epilog,
     )
     parser.add_argument(
         "--data-dir",
