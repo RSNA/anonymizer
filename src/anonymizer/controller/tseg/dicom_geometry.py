@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
@@ -355,6 +356,81 @@ def read_series_headers(series_directory: Path) -> list[Dataset]:
     return [dcmread(path, stop_before_pixels=True) for path in paths]
 
 
+def _slice_rows_columns(header: Dataset) -> tuple[int, int] | None:
+    rows = getattr(header, "Rows", None)
+    cols = getattr(header, "Columns", None)
+    if rows is None or cols is None:
+        return None
+    return int(rows), int(cols)
+
+
+def _format_slice_dimension_ref(path: Path, header: Dataset, dims: tuple[int, int] | None) -> str:
+    instance = getattr(header, "InstanceNumber", None)
+    instance_text = str(instance) if instance is not None else "?"
+    if dims is None:
+        return f"{path.name} (missing Rows/Columns, InstanceNumber={instance_text})"
+    return f"{path.name}={dims[0]}x{dims[1]} (InstanceNumber={instance_text})"
+
+
+def validate_uniform_slice_dimensions(
+    paths: list[Path],
+    headers: list[Dataset],
+    *,
+    max_listed: int = 20,
+) -> str | None:
+    """
+    Return None when all slices share the same Rows/Columns.
+
+    Otherwise return a precise rejection message listing inconsistent slices
+    (and any slices missing Rows/Columns).
+    """
+    if len(paths) != len(headers):
+        raise ValueError("paths and headers must have the same length")
+    if not paths:
+        return None
+
+    sized: list[tuple[Path, Dataset, tuple[int, int] | None]] = [
+        (path, header, _slice_rows_columns(header)) for path, header in zip(paths, headers, strict=True)
+    ]
+    present = [(path, header, dims) for path, header, dims in sized if dims is not None]
+    missing = [(path, header) for path, header, dims in sized if dims is None]
+
+    counts = Counter(dims for _, _, dims in present)
+    if len(counts) <= 1 and not missing:
+        return None
+
+    if present:
+        (canonical, n_canonical) = counts.most_common(1)[0]
+        outliers = [(path, header, dims) for path, header, dims in present if dims != canonical]
+        message = (
+            f"Non-uniform Rows/Columns across series: majority {canonical[0]}x{canonical[1]} "
+            f"({n_canonical}/{len(present)} slices with size tags)"
+        )
+    else:
+        outliers = []
+        message = "Non-uniform Rows/Columns across series: no slices have Rows and Columns"
+
+    if outliers:
+        shown = outliers[:max_listed]
+        listed = ", ".join(_format_slice_dimension_ref(path, header, dims) for path, header, dims in shown)
+        remainder = len(outliers) - len(shown)
+        if remainder > 0:
+            listed = f"{listed}, ... and {remainder} more"
+        message = f"{message}; inconsistent: {listed}"
+
+    if missing:
+        shown_missing = missing[:max_listed]
+        listed_missing = ", ".join(
+            _format_slice_dimension_ref(path, header, None) for path, header in shown_missing
+        )
+        remainder = len(missing) - len(shown_missing)
+        if remainder > 0:
+            listed_missing = f"{listed_missing}, ... and {remainder} more"
+        message = f"{message}; missing size: {listed_missing}"
+
+    return message
+
+
 def sorted_dicom_paths(series_directory: Path) -> list[Path]:
     """Return DICOM paths sorted along the acquisition stack direction."""
     paths = list_dicom_paths(series_directory)
@@ -423,16 +499,19 @@ def analyze_series_geometry(series_directory: Path) -> SeriesGeometryResult:
     """Infer plane, dimensionality, and provenance for one DICOM series directory."""
     series_directory = Path(series_directory).resolve()
     try:
-        raw_headers = read_series_headers(series_directory)
+        paths = list_dicom_paths(series_directory)
+        raw_headers = [dcmread(path, stop_before_pixels=True) for path in paths]
     except ValueError as exc:
         return _unknown_geometry_result(str(exc))
+
+    dimension_error = validate_uniform_slice_dimensions(paths, raw_headers)
     headers = headers_in_stack_order(raw_headers)
 
     slice_normal: tuple[float, float, float] | None = None
     plane: PlaneLabel = "unknown"
     plane_confidence = 0.0
     plane_angles_deg: dict[str, float] = {}
-    metadata_suspect = False
+    metadata_suspect = dimension_error is not None
     method = "dicom_iop"
 
     try:
@@ -448,7 +527,13 @@ def analyze_series_geometry(series_directory: Path) -> SeriesGeometryResult:
     dimensionality = infer_dimensionality(headers, stack)
     ts_suitable, notes = _build_ts_suitable(dimensionality, provenance)
 
-    if metadata_suspect and ts_suitable:
+    if dimension_error is not None:
+        # Mixed matrix sizes cannot be stacked by SimpleITK ImageSeriesReader.
+        ts_suitable = False
+        metadata_suspect = True
+        notes = dimension_error
+        logger.warning("Rejecting series for TS (%s): %s", series_directory, dimension_error)
+    elif metadata_suspect and ts_suitable:
         notes = notes or "Plane classification unavailable; TS may be unreliable"
 
     return SeriesGeometryResult(

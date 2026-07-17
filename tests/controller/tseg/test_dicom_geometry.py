@@ -22,6 +22,7 @@ from anonymizer.controller.tseg.dicom_geometry import (
     headers_in_stack_order,
     infer_dimensionality,
     infer_provenance,
+    list_dicom_paths,
     load_geometry_cache,
     project_ipp_onto_normal,
     read_series_headers,
@@ -29,6 +30,7 @@ from anonymizer.controller.tseg.dicom_geometry import (
     slice_normal_from_iop,
     sorted_dicom_paths,
     ts_regions_eligible,
+    validate_uniform_slice_dimensions,
     write_geometry_cache,
 )
 from anonymizer.controller.tseg.segment import dicom_series_to_nifti
@@ -290,6 +292,51 @@ def test_format_geometry_progress_message_includes_skip_reason() -> None:
     assert "TS skip" in message
     assert "localizer_2d" in message
     assert "Not a diagnostic 3D volume" in message
+
+
+def test_validate_uniform_slice_dimensions_accepts_uniform(tmp_path: Path) -> None:
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "uniform")
+    paths = list_dicom_paths(series_dir)
+    headers = [pydicom.dcmread(path, stop_before_pixels=True) for path in paths]
+    assert validate_uniform_slice_dimensions(paths, headers) is None
+
+
+def test_analyze_rejects_nonuniform_rows_columns(tmp_path: Path) -> None:
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "mixed")
+    paths = sorted(series_dir.glob("*.dcm"))
+    mismatched = paths[-2:]
+    for path in mismatched:
+        dataset = pydicom.dcmread(path)
+        dataset.Rows = 728
+        dataset.Columns = 512
+        dataset.save_as(path)
+
+    geometry = analyze_series_geometry(series_dir)
+    assert geometry.ts_suitable is False
+    assert geometry.metadata_suspect is True
+    assert ts_regions_eligible(geometry) is False
+    assert "Non-uniform Rows/Columns" in geometry.notes
+    assert "majority" in geometry.notes
+    assert "728x512" in geometry.notes
+    for path in mismatched:
+        assert path.name in geometry.notes
+        assert f"InstanceNumber={pydicom.dcmread(path, stop_before_pixels=True).InstanceNumber}" in geometry.notes
+
+
+def test_validate_uniform_slice_dimensions_lists_missing_size(tmp_path: Path) -> None:
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "missing_size")
+    paths = sorted(series_dir.glob("*.dcm"))
+    target = paths[0]
+    dataset = pydicom.dcmread(target)
+    del dataset.Rows
+    del dataset.Columns
+    dataset.save_as(target)
+
+    headers = [pydicom.dcmread(path, stop_before_pixels=True) for path in paths]
+    message = validate_uniform_slice_dimensions(paths, headers)
+    assert message is not None
+    assert "missing size" in message
+    assert target.name in message
 
 
 def test_sagittal_series_converts_to_nifti_with_correct_slice_count(tmp_path: Path) -> None:
