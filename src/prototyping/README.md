@@ -8,7 +8,11 @@ Experimental scripts, CLIs, and UI spikes. **Not** part of the shipped `rsna-ano
 src/prototyping/
 ├── ct/              # CT eval CLIs (e.g. ct_eval.py)
 ├── falcon/          # FALCON one-off studies (e.g. rsna_eligibility.py)
-├── deid/            # OCR / pixel de-id experiments
+├── ocr/             # OCR burned-in text detection / inpainting experiments
+├── ffr/             # facial feature removal (CT face blur POC, legacy volume scripts)
+│   └── face/        # face blur viz POC (QA gallery + report.html)
+├── deid/            # deprecated shims → use ocr/ or ffr/
+├── ts_seg_face.py   # licensed TS face → <series>/ts_seg/face.nii.gz
 ├── dicom/           # DICOM transcoding, H.264, network spikes
 ├── fhir/            # Epic / HAPI FHIR experiments
 ├── aws/             # S3 import/export helpers
@@ -29,6 +33,10 @@ From repo root with dev dependencies:
 ```bash
 uv sync --extra tseg --group dev
 uv run python src/prototyping/ct/ct_eval.py --help
+uv run python src/prototyping/ts_seg_face.py /path/to/ct_head_series
+uv sync --extra viz --group dev
+uv run python -m prototyping.ffr.face /path/to/ct_head_series
+# → opens <series>/ts_seg/viz_poc/report.html in a browser
 ```
 
 ## Promotion to production

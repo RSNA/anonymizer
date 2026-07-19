@@ -44,6 +44,10 @@ tseg = [
     "nibabel",
     "dicom2nifti>=2.3,<2.6",
 ]
+viz = [
+    "matplotlib>=3.8.0",
+    "scikit-image>=0.22.0",
+]
 
 [project.scripts]
 rsna-anonymizer = "anonymizer.anonymizer:main"

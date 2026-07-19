@@ -1838,6 +1838,10 @@ tseg = [
     { name = "totalsegmentator" },
     { name = "xgboost" },
 ]
+viz = [
+    { name = "matplotlib" },
+    { name = "scikit-image" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -1862,6 +1866,7 @@ requires-dist = [
     { name = "dicom2nifti", marker = "extra == 'tseg'", specifier = ">=2.3,<2.6" },
     { name = "easyocr" },
     { name = "ifaddr" },
+    { name = "matplotlib", marker = "extra == 'viz'", specifier = ">=3.8.0" },
     { name = "nibabel", marker = "extra == 'tseg'" },
     { name = "numpy", specifier = "<2.0.0" },
     { name = "opencv-python-headless" },
@@ -1873,6 +1878,7 @@ requires-dist = [
     { name = "pynetdicom" },
     { name = "requests" },
     { name = "requests-oauthlib" },
+    { name = "scikit-image", marker = "extra == 'viz'", specifier = ">=0.22.0" },
     { name = "scipy" },
     { name = "simpleitk", specifier = ">=2.5.5" },
     { name = "sqlalchemy", specifier = ">=2.0.38" },
@@ -1882,7 +1888,7 @@ requires-dist = [
     { name = "totalsegmentator", marker = "extra == 'tseg'", specifier = ">=2.3.0" },
     { name = "xgboost", marker = "extra == 'tseg'", specifier = ">=2.0.0" },
 ]
-provides-extras = ["tseg"]
+provides-extras = ["tseg", "viz"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -11,6 +11,8 @@ tests/prototyping/
 │   ├── test_ct_eval_geometry.py          # geometry column helpers
 │   ├── test_ct_eval_geometry_impact.py   # routing / fail-rate reports (step 4)
 │   └── test_ct_eval_integration.py       # @tseg_integration; needs totalsegmentator extra
+├── ffr/
+│   └── test_face_*.py                    # face blur / export / report POC
 └── falcon/
     └── test_rsna_eligibility.py   # @rsna_local_data when RSNA_TEST_DATA_DIR set
 ```
