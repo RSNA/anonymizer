@@ -41,7 +41,7 @@ def authenticate_user():
     if "ChallengeName" in response and response["ChallengeName"] == "NEW_PASSWORD_REQUIRED":
         # New password required:
         session = response["Session"]
-        new_password = "SpeedFast1967#"
+        new_password = "*************"
         response = cognito_idp_client.respond_to_auth_challenge(
             ClientId=app_client_id,
             ChallengeName="NEW_PASSWORD_REQUIRED",

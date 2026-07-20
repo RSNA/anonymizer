@@ -15,7 +15,7 @@ s3_bucket_name = "amplify-datauploader-prodmi-stagingbucketeec2e4de-x4qrvyzen65z
 s3_prefix = "private"
 aws_tag = ""
 username = "anonymizer2"
-password = "************"
+password = "***********"
 # - At least 12 characters
 # - At least one uppercase letter
 # - At least one lowercase letter
@@ -41,7 +41,7 @@ def authenticate_user():
     if "ChallengeName" in response and response["ChallengeName"] == "NEW_PASSWORD_REQUIRED":
         # New password required:
         session = response["Session"]
-        new_password = "SpeedFast1967#"
+        new_password = password
         response = cognito_idp_client.respond_to_auth_challenge(
             ClientId=app_client_id,
             ChallengeName="NEW_PASSWORD_REQUIRED",

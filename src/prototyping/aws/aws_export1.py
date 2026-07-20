@@ -11,7 +11,7 @@ client_id = "fgnijvmig42ruvn37mte1p9au"
 s3_bucket_name = "amplify-datauploader-prodmi-stagingbucketeec2e4de-x4qrvyzen65z"
 s3_prefix = "private"
 username = "anonymizer2"
-password = "************"
+password = "***********"
 # - At least 12 characters
 # - At least one uppercase letter
 # - At least one lowercase letter
@@ -39,7 +39,7 @@ def authenticate_user(username, password, user_pool_id, client_id, identity_pool
     ):
         # New password required:
         session = response["Session"]
-        new_password = "SpeedFast1967#"
+        new_password = "***********"
         response = cognito_client.respond_to_auth_challenge(
             ClientId=client_id,
             ChallengeName="NEW_PASSWORD_REQUIRED",
@@ -103,8 +103,8 @@ def main():
         # Now you can make S3 requests using the configured credentials
 
         # Example: Upload a file to S3
-        file_path = "/Users/michaelevans/Desktop/2023_Kaggle_AI_Report.pdf"
-        object_key = f"{s3_prefix}/2023_Kaggle_AI_Report.pdf"
+        file_path = "/Users/michaelevans/Desktop/RSNA_Anonymizer_Splash_V18.png"
+        object_key = f"{s3_prefix}/RSNA_Anonymizer_Splash_V18.pdf"
 
         s3.upload_file(file_path, s3_bucket_name, object_key)
         print(f"File uploaded successfully to s3://{s3_bucket_name}/{object_key}")
