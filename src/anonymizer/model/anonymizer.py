@@ -131,6 +131,7 @@ class PHI_IndexRecord:
     phi_study_uid: str
     num_series: int
     num_instances: int
+    harmonize: bool = False
 
     field_titles: ClassVar[dict[str, str]] = {
         "anon_patient_id": "ANON-PatientID",
@@ -145,14 +146,21 @@ class PHI_IndexRecord:
         "phi_study_uid": "PHI-StudyUID",
         "num_series": "Series",
         "num_instances": "Instances",
+        "harmonize": "Harmonized",
     }
+
+    @staticmethod
+    def _display_value(value: object) -> object:
+        if isinstance(value, bool):
+            return "Yes" if value else "No"
+        return value
 
     @classmethod
     def get_field_titles(cls) -> list:
         return [cls.field_titles.get(field.name) for field in fields(cls)]
 
     def flatten(self) -> tuple:
-        return tuple(getattr(self, field.name) for field in fields(self))
+        return tuple(self._display_value(getattr(self, field.name)) for field in fields(self))
 
     @classmethod
     def get_field_names(cls) -> list:
@@ -525,6 +533,7 @@ class AnonymizerModel:
                     phi_study_uid=study.study_uid,
                     num_series=num_series,
                     num_instances=num_instances,
+                    harmonize=False,
                 )
                 phi_index_records.append(phi_index_record)
 

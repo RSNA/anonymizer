@@ -13,7 +13,7 @@ import shutil
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from pathlib import Path
 from queue import Queue
@@ -49,6 +49,14 @@ from anonymizer.controller.dicom_C_codes import (
     C_STORE_DECODE_ERROR,
     C_SUCCESS,
     C_WARNING,
+)
+from anonymizer.controller.harmonize import (
+    HarmonizeStudiesCancelledCallback,
+    HarmonizeStudiesLogCallback,
+    HarmonizeStudiesProgressCallback,
+    HarmonizeStudiesSummary,
+    harmonize_studies_batch,
+    study_harmonize_status,
 )
 from anonymizer.model.anonymizer import PHI_IndexRecord
 from anonymizer.model.project import (
@@ -2551,7 +2559,7 @@ class ProjectController(AE):
         """
         logger.info("Create PHI CSV")
 
-        phi_index: List[PHI_IndexRecord] | None = self.anonymizer.model.get_phi_index()
+        phi_index: List[PHI_IndexRecord] | None = self.get_phi_index_records()
 
         if not phi_index:
             logger.error("No Studies/PHI data in Anonymizer Model")
@@ -2573,3 +2581,39 @@ class ProjectController(AE):
             return repr(e)
 
         return phi_csv_path
+
+    def get_phi_index_records(self) -> list[PHI_IndexRecord] | None:
+        """Return PHI index rows with Harmonized status computed from on-disk series cache."""
+        records = self.anonymizer.model.get_phi_index()
+        if not records:
+            return None
+        images_dir = self.model.images_dir()
+        return [
+            replace(
+                record,
+                harmonize=study_harmonize_status(
+                    images_dir,
+                    record.anon_patient_id,
+                    record.anon_study_uid,
+                ),
+            )
+            for record in records
+        ]
+
+    def harmonize_studies(
+        self,
+        studies: list[tuple[str, str]],
+        *,
+        progress: HarmonizeStudiesProgressCallback | None = None,
+        cancelled: HarmonizeStudiesCancelledCallback | None = None,
+        on_outcome: HarmonizeStudiesLogCallback | None = None,
+    ) -> HarmonizeStudiesSummary:
+        """Run unattended harmonize for all CT series under the selected studies."""
+        return harmonize_studies_batch(
+            self.model.images_dir(),
+            studies,
+            anon_model=self.anonymizer.model,
+            progress=progress,
+            cancelled=cancelled,
+            on_outcome=on_outcome,
+        )

@@ -263,7 +263,6 @@ class ImageViewer(ctk.CTkFrame):
         if self.control_frame is not None:
             self.control_frame.bind("<Enter>", self.mouse_enter)
 
-        self.after_idle(self._set_initial_size)
         self.update_status()
 
     def _interaction_allowed(self) -> bool:
@@ -373,6 +372,7 @@ class ImageViewer(ctk.CTkFrame):
 
         self._companion_images = None
         self._companion_cache.clear()
+        self.image_frame.grid_columnconfigure(0, weight=1)
         self.image_frame.grid_columnconfigure(1, weight=0)
         self.image_frame.grid_rowconfigure(0, weight=1)
         self.image_frame.grid_rowconfigure(1, weight=0)
@@ -571,17 +571,17 @@ class ImageViewer(ctk.CTkFrame):
         self.update_status()
         return True
 
-    def _set_initial_size(self):
+    def _set_initial_size(self) -> bool:
         """Show the first frame at native (Actual) pixel dimensions; View == Actual at open."""
         if self._initial_display_done:
-            return
+            return True
         if not self._apply_actual_display_size():
-            self.after_idle(self._set_initial_size)
-            return
+            return False
         self._initial_display_done = True
         if self.histogram is not None:
             self.histogram.update_image(self.images[self.current_image_index])
         self.canvas.focus_set()
+        return True
 
     def _handle_histogram_update(self, wl: float, ww: float):
         """Callback function called by Histogram widget when WL/WW changes interactively."""

@@ -16,8 +16,12 @@ import customtkinter as ctk
 from pydicom import Dataset
 
 from anonymizer.controller.create_projections import apply_series_description
-from anonymizer.controller.harmonize import HarmonizedResult, HarmonizeProgress, harmonize_series
-from anonymizer.controller.tseg.dicom_geometry import geometry_analysis_progress_prefix
+from anonymizer.controller.harmonize import (
+    HarmonizedResult,
+    HarmonizeProgress,
+    format_harmonize_progress_message,
+    harmonize_series,
+)
 from anonymizer.controller.tseg.radlex_playbook import (
     PLAYBOOK_TREE_IIDS,
     build_localizer_playbook_attributes,
@@ -533,54 +537,7 @@ class HarmonizeResultsView(tk.Toplevel):
 
     @staticmethod
     def _status_text_for_progress(progress: HarmonizeProgress) -> str:
-        message = (progress.message or "").strip()
-        stage = progress.stage
-        geometry_prefix = geometry_analysis_progress_prefix()
-        pct = HarmonizeResultsView._format_progress_pct(progress.fraction)
-
-        if stage == "done":
-            return _("Harmonize analysis complete")
-
-        if stage == "geometry" and message.startswith(geometry_prefix):
-            return _("Scan geometry analyzed") + pct
-        if stage == "tseg" and message.startswith(geometry_prefix):
-            return _("Anatomy analysis not available for this series") + pct
-
-        stage_labels: dict[str, str] = {
-            "geometry": _("Analyzing scan geometry"),
-            "prepare": _("Preparing CT volume"),
-            "segment": _("Segmenting anatomy"),
-            "regions": _("Summarizing anatomy regions"),
-            "tseg": _("Analyzing anatomy"),
-            "contrast": _("Analyzing contrast phase"),
-            "contrast_stats": _("Computing organ HU statistics"),
-            "contrast_stats_cached": _("Using cached organ HU statistics"),
-            "contrast_stats_hn": _("Computing head/neck vessel statistics"),
-            "contrast_stats_hn_cached": _("Using cached head/neck vessel statistics"),
-            "contrast_stats_hn_skip": _("Head/neck statistics not required"),
-            "contrast_xgboost": _("Classifying contrast phase"),
-            "contrast_phase_cache": _("Using cached contrast phase classification"),
-            "merge": _("Building series description"),
-        }
-
-        if stage in stage_labels:
-            return stage_labels[stage] + "…" + pct
-
-        known_messages = {
-            "Starting contrast phase analysis": _("Starting contrast phase analysis"),
-            "Contrast phase analysis complete": _("Contrast phase analysis complete"),
-            "Segmenting anatomy": _("Segmenting anatomy"),
-            "Preparing CT volume": _("Preparing CT volume"),
-            "Summarizing anatomy regions": _("Summarizing anatomy regions"),
-            "Building harmonized description": _("Building series description"),
-        }
-        if message in known_messages:
-            return known_messages[message] + pct
-
-        if message:
-            return message + pct
-
-        return _("Processing") + "…" + pct
+        return format_harmonize_progress_message(progress)
 
     def _populate_dicom_tree(self) -> None:
         for item in self._dicom_tree.get_children():

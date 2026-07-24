@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydicom import Dataset, dcmread
 
@@ -27,11 +29,13 @@ from anonymizer.controller.tseg.contrast import (
 from anonymizer.controller.tseg.dicom_geometry import (
     SeriesGeometryResult,
     format_geometry_progress_message,
+    geometry_analysis_progress_prefix,
     load_geometry_cache,
     resolve_series_geometry,
     sorted_dicom_paths,
     ts_regions_eligible,
 )
+from anonymizer.controller.tseg.model_cache import tseg_batch_session
 from anonymizer.controller.tseg.radlex_playbook import (
     PlaybookHarmonizeAttributes,
     build_harmonized_series_description,
@@ -58,6 +62,9 @@ from anonymizer.controller.tseg.segment import (
     _segmentation_cache_valid as segmentation_cache_valid,
 )
 from anonymizer.utils.translate import _
+
+if TYPE_CHECKING:
+    from anonymizer.model.anonymizer import AnonymizerModel
 
 logger = logging.getLogger(__name__)
 
@@ -324,6 +331,343 @@ def harmonize_context_hint(series_directory: Path, ds: Dataset | None) -> str | 
     return _(
         "Series description already harmonized — use Clear TS Cache to re-run analysis"
     )
+
+
+@dataclass(frozen=True)
+class HarmonizeApplyOutcome:
+    series_path: Path
+    status: str
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class HarmonizeStudiesSummary:
+    processed: int = 0
+    skipped: int = 0
+    applied: int = 0
+    failed: int = 0
+    cancelled: bool = False
+
+
+HarmonizeStudiesProgressCallback = Callable[[int, int, str, float], None]
+HarmonizeStudiesCancelledCallback = Callable[[], bool]
+HarmonizeStudiesLogCallback = Callable[[HarmonizeApplyOutcome], None]
+HarmonizeStudiesBatchHook = Callable[[], None]
+
+
+def _format_progress_pct(fraction: float) -> str:
+    pct = min(100, max(0, int(round(fraction * 100))))
+    return f" ({pct}%)"
+
+
+def format_harmonize_progress_message(
+    progress: AnalysisProgress,
+    *,
+    include_pct: bool = True,
+) -> str:
+    """Translate harmonize pipeline stages to clinician-friendly status text."""
+    message = (progress.message or "").strip()
+    stage = progress.stage
+    geometry_prefix = geometry_analysis_progress_prefix()
+    pct = _format_progress_pct(progress.fraction) if include_pct else ""
+
+    if stage == "done":
+        return _("Harmonize analysis complete")
+
+    if stage == "geometry" and message.startswith(geometry_prefix):
+        return _("Scan geometry analyzed") + pct
+    if stage == "tseg" and message.startswith(geometry_prefix):
+        return _("Anatomy analysis not available for this series") + pct
+
+    stage_labels: dict[str, str] = {
+        "geometry": _("Analyzing scan geometry"),
+        "prepare": _("Preparing CT volume"),
+        "segment": _("Segmenting anatomy (TotalSegmentator)"),
+        "regions": _("Summarizing anatomy regions"),
+        "tseg": _("Analyzing anatomy"),
+        "contrast": _("Determining contrast phase"),
+        "contrast_stats": _("Computing organ HU statistics"),
+        "contrast_stats_cached": _("Using cached organ HU statistics"),
+        "contrast_stats_hn": _("Computing head/neck vessel statistics"),
+        "contrast_stats_hn_cached": _("Using cached head/neck vessel statistics"),
+        "contrast_stats_hn_skip": _("Head/neck statistics not required"),
+        "contrast_xgboost": _("Classifying contrast phase"),
+        "contrast_phase_cache": _("Using cached contrast phase classification"),
+        "merge": _("Building standardized series description"),
+    }
+
+    if stage in stage_labels:
+        return stage_labels[stage] + "…" + pct
+
+    known_messages = {
+        "Starting contrast phase analysis": _("Starting contrast phase analysis"),
+        "Contrast phase analysis complete": _("Contrast phase analysis complete"),
+        "Segmenting anatomy": _("Segmenting anatomy (TotalSegmentator)"),
+        "Preparing CT volume": _("Preparing CT volume"),
+        "Summarizing anatomy regions": _("Summarizing anatomy regions"),
+        "Building harmonized description": _("Building standardized series description"),
+        "Harmonized description ready": _("Standardized series description ready"),
+        "Analyzing contrast phase": _("Determining contrast phase"),
+    }
+    if message in known_messages:
+        return known_messages[message] + pct
+
+    if message:
+        return message + pct
+
+    return _("Processing") + "…" + pct
+
+
+def format_harmonize_batch_series_label(series_path: Path, ds: Dataset | None = None) -> str:
+    """Compact series label for batch harmonize progress."""
+    series_path = Path(series_path)
+    if ds is not None:
+        description = str(ds.get("SeriesDescription", "") or "").strip()
+        series_no = ds.get("SeriesNumber")
+        if description:
+            if series_no not in (None, ""):
+                return _("Series") + f" #{series_no}: \"{description}\""
+            return _("Series") + f": \"{description}\""
+    return _("Series") + f" {series_path.name}"
+
+
+def format_harmonize_batch_progress_text(
+    *,
+    series_index: int,
+    total: int,
+    progress: AnalysisProgress,
+    series_path: Path,
+    ds: Dataset | None = None,
+) -> str:
+    """Full batch progress line: series position, context, and friendly stage."""
+    series_label = format_harmonize_batch_series_label(series_path, ds)
+    stage_text = format_harmonize_progress_message(progress)
+    if total > 1:
+        position = _("Series") + f" {series_index}/{total}"
+        return f"{position} · {series_label} · {stage_text}"
+    return f"{series_label} · {stage_text}"
+
+
+def _iter_study_series_dirs(
+    images_dir: Path,
+    studies: Sequence[tuple[str, str]],
+) -> list[Path]:
+    series_paths: list[Path] = []
+    for anon_patient_id, anon_study_uid in studies:
+        study_path = images_dir / anon_patient_id / anon_study_uid
+        if not study_path.is_dir():
+            continue
+        for series_path in study_path.iterdir():
+            if series_path.is_dir() and not series_path.name.startswith("."):
+                series_paths.append(series_path)
+    return series_paths
+
+
+def _load_ct_series_dataset(series_path: Path) -> Dataset | None:
+    try:
+        ds = _load_series_dataset(series_path)
+    except ValueError:
+        return None
+    if getattr(ds, "Modality", None) != "CT":
+        return None
+    return ds
+
+
+def enumerate_ct_series_for_studies(
+    images_dir: Path,
+    studies: Sequence[tuple[str, str]],
+) -> list[Path]:
+    """Return CT series directories under the selected anonymized studies."""
+    ct_series: list[Path] = []
+    for series_path in _iter_study_series_dirs(images_dir, studies):
+        if _load_ct_series_dataset(series_path) is not None:
+            ct_series.append(series_path)
+    return ct_series
+
+
+def study_harmonize_status(
+    images_dir: Path,
+    anon_patient_id: str,
+    anon_study_uid: str,
+) -> bool:
+    """
+    Return True when every eligible CT series in the study is harmonized.
+
+    Returns False when the study path is missing, has no CT series, or any CT series
+    is not harmonized (including unknown cache status).
+    """
+    study_path = images_dir / anon_patient_id / anon_study_uid
+    if not study_path.is_dir():
+        return False
+
+    ct_series_found = False
+    for series_path in study_path.iterdir():
+        if not series_path.is_dir() or series_path.name.startswith("."):
+            continue
+        ds = _load_ct_series_dataset(series_path)
+        if ds is None:
+            continue
+        ct_series_found = True
+        if series_description_is_harmonized(series_path, ds) is not True:
+            return False
+    return ct_series_found
+
+
+def apply_harmonized_description(
+    series_path: Path,
+    description: str,
+    anon_model: AnonymizerModel | None,
+) -> bool:
+    """Write harmonized SeriesDescription to DICOM files and update the project database."""
+    from anonymizer.controller.create_projections import apply_series_description
+
+    if not apply_series_description(series_path, description):
+        return False
+    if anon_model is None:
+        return True
+    try:
+        ds = _load_series_dataset(series_path)
+    except ValueError:
+        return False
+    update = getattr(anon_model, "update_series_description_by_anon_uid", None)
+    if update is None:
+        return True
+    return bool(update(str(ds.SeriesInstanceUID), description))
+
+
+def harmonize_and_apply_series(
+    series_path: Path,
+    *,
+    anon_model: AnonymizerModel | None = None,
+    progress: ProgressCallback | None = None,
+) -> HarmonizeApplyOutcome:
+    """Run harmonize for one CT series and auto-apply the merged description."""
+    series_path = Path(series_path)
+    ds = _load_ct_series_dataset(series_path)
+    if ds is None:
+        return HarmonizeApplyOutcome(series_path, "failed", "Not a CT series or no DICOM files")
+
+    if series_description_is_harmonized(series_path, ds) is True:
+        return HarmonizeApplyOutcome(series_path, "skipped", "Already harmonized")
+
+    results = harmonize_series([series_path], progress=progress)
+    if not results:
+        return HarmonizeApplyOutcome(series_path, "failed", "No harmonize result")
+
+    merged = results[0]
+    if merged.error:
+        return HarmonizeApplyOutcome(series_path, "failed", merged.error)
+
+    description = (merged.radlex_series_description or "").strip()
+    if not description:
+        return HarmonizeApplyOutcome(series_path, "failed", "Empty harmonized description")
+
+    if not apply_harmonized_description(series_path, description, anon_model):
+        return HarmonizeApplyOutcome(series_path, "failed", "Failed to apply description")
+
+    return HarmonizeApplyOutcome(series_path, "ok", description)
+
+
+def harmonize_studies_batch(
+    images_dir: Path,
+    studies: Sequence[tuple[str, str]],
+    *,
+    anon_model: AnonymizerModel | None = None,
+    progress: HarmonizeStudiesProgressCallback | None = None,
+    cancelled: HarmonizeStudiesCancelledCallback | None = None,
+    on_outcome: HarmonizeStudiesLogCallback | None = None,
+    on_batch_start: HarmonizeStudiesBatchHook | None = None,
+    on_batch_end: HarmonizeStudiesBatchHook | None = None,
+) -> HarmonizeStudiesSummary:
+    """Harmonize all CT series under selected studies, auto-applying descriptions."""
+    series_paths = enumerate_ct_series_for_studies(images_dir, studies)
+    total = len(series_paths)
+    summary = HarmonizeStudiesSummary()
+
+    if progress is not None and total == 0:
+        progress(0, 0, _("No CT series found for selected studies"), 1.0)
+
+    with tseg_batch_session(preload=True):
+        if on_batch_start is not None:
+            on_batch_start()
+        if progress is not None and total > 0:
+            progress(0, total, _("Loading anatomy analysis models") + "…", 0.0)
+
+        try:
+            for index, series_path in enumerate(series_paths):
+                if cancelled is not None and cancelled():
+                    summary = HarmonizeStudiesSummary(
+                        processed=summary.processed,
+                        skipped=summary.skipped,
+                        applied=summary.applied,
+                        failed=summary.failed,
+                        cancelled=True,
+                    )
+                    break
+
+                try:
+                    ds = _load_ct_series_dataset(series_path)
+                except (OSError, ValueError):
+                    ds = None
+                base_fraction = index / total if total else 1.0
+
+                def series_progress(
+                    item_progress: AnalysisProgress,
+                    *,
+                    _index: int = index,
+                    _series_path: Path = series_path,
+                    _ds: Dataset | None = ds,
+                    _base_fraction: float = base_fraction,
+                ) -> None:
+                    if progress is None or total == 0:
+                        return
+                    overall = _base_fraction + (item_progress.fraction / total)
+                    message = format_harmonize_batch_progress_text(
+                        series_index=_index + 1,
+                        total=total,
+                        progress=item_progress,
+                        series_path=_series_path,
+                        ds=_ds,
+                    )
+                    progress(_index + 1, total, message, overall)
+
+                outcome = harmonize_and_apply_series(
+                    series_path,
+                    anon_model=anon_model,
+                    progress=series_progress,
+                )
+                if on_outcome is not None:
+                    on_outcome(outcome)
+
+                summary = HarmonizeStudiesSummary(
+                    processed=summary.processed + 1,
+                    skipped=summary.skipped + (1 if outcome.status == "skipped" else 0),
+                    applied=summary.applied + (1 if outcome.status == "ok" else 0),
+                    failed=summary.failed + (1 if outcome.status == "failed" else 0),
+                    cancelled=summary.cancelled,
+                )
+
+                if progress is not None:
+                    fraction = (index + 1) / total if total else 1.0
+                    if outcome.status == "skipped":
+                        status_text = _("Already harmonized")
+                    elif outcome.status == "ok":
+                        status_text = _("Applied standardized description")
+                    elif outcome.status == "failed":
+                        status_text = _("Failed") + f": {outcome.message or outcome.status}"
+                    else:
+                        status_text = outcome.message or outcome.status
+                    series_label = format_harmonize_batch_series_label(series_path, ds)
+                    if total > 1:
+                        message = _("Series") + f" {index + 1}/{total} · {series_label} · {status_text}"
+                    else:
+                        message = f"{series_label} · {status_text}"
+                    progress(index + 1, total, message, fraction)
+        finally:
+            if on_batch_end is not None:
+                on_batch_end()
+
+    return summary
 
 
 def _scaled_progress(

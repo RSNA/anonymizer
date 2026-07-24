@@ -414,6 +414,7 @@ class SeriesView(tk.Toplevel):
         self.deiconify()
         self.lift()
         self.focus_force()
+        self.image_viewer._resize_to_viewport_enabled = True
         self._log_series_memory("after_viewer_initial_display", array=self._frames)
         self.after_idle(self._refresh_analysis_cache_ui)
 
@@ -453,8 +454,12 @@ class SeriesView(tk.Toplevel):
         if pos_x is None or pos_y is None:
             pos_x, pos_y = self.winfo_x(), self.winfo_y()
         viewer = self.image_viewer
+        viewer.detach_companion_stack()
+        viewer._initial_display_done = False
         viewer._resize_to_viewport_enabled = False
-        viewer._set_initial_size()
+        if not viewer._set_initial_size():
+            self.update_idletasks()
+            viewer._set_initial_size()
         self._sync_viewer_wl_ww()
         self.update_idletasks()
 
@@ -462,8 +467,7 @@ class SeriesView(tk.Toplevel):
         height = max(self.winfo_reqheight(), 480)
         self.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
         self.update_idletasks()
-
-        viewer._resize_to_viewport_enabled = True
+        viewer._apply_actual_display_size()
 
     def _capture_whitelist_items(self) -> list[str]:
         if not hasattr(self, "whitelist"):
@@ -548,6 +552,7 @@ class SeriesView(tk.Toplevel):
 
     def _destroy_ui(self) -> None:
         """Remove Series View widgets while keeping loaded series data in memory."""
+        self._blur_running = False
         self._release_blur_review_state()
         viewer = getattr(self, "image_viewer", None)
         if viewer is not None:
@@ -573,6 +578,9 @@ class SeriesView(tk.Toplevel):
 
         self._update_title()
         self._apply_initial_viewer_layout(pos_x, pos_y)
+        self.deiconify()
+        self.lift()
+        self.image_viewer._resize_to_viewport_enabled = True
         self._refresh_analysis_cache_ui()
 
     def _build_ui(self) -> None:
@@ -640,9 +648,10 @@ class SeriesView(tk.Toplevel):
             regenerate_series_projections_callback=self.regenerate_series_projections,
         )
         self.image_viewer.grid(row=0, column=0, sticky="nsew")
-        self._blur_review_saved: dict[str, object] | None = None
-        self._blur_preview: FaceBlurPreviewResult | None = None
-        self._blur_worker_queue: queue.Queue[tuple[str, object]] = queue.Queue()
+        self.image_viewer.detach_companion_stack()
+        self._blur_review_saved = None
+        self._blur_preview = None
+        self._blur_worker_queue = queue.Queue()
         self._blur_running = False
 
         # Control Frame:
@@ -1370,8 +1379,11 @@ class SeriesView(tk.Toplevel):
                 break
 
             if kind == "progress":
-                self.update_status(format_face_blur_progress_status(payload))
+                if self._blur_running:
+                    self.update_status(format_face_blur_progress_status(payload))
             elif kind == "done":
+                if not self._blur_running:
+                    continue
                 self._blur_running = False
                 preview = payload
                 if preview.error is not None:
@@ -1386,6 +1398,8 @@ class SeriesView(tk.Toplevel):
                 self._show_blur_review(preview)
                 return
             elif kind == "error":
+                if not self._blur_running:
+                    continue
                 self._blur_running = False
                 messagebox.showerror(
                     title=_("Blur Face"),
@@ -1588,10 +1602,22 @@ class SeriesView(tk.Toplevel):
                 ", ".join(parts),
             )
 
+    @staticmethod
+    def _drain_blur_worker_queue(worker_queue: queue.Queue[tuple[str, object]] | None = None) -> None:
+        if worker_queue is None:
+            return
+        while True:
+            try:
+                worker_queue.get_nowait()
+            except queue.Empty:
+                return
+
     def _release_blur_review_state(self) -> None:
         """Drop blur-review references without restoring viewer layout (used on window close)."""
         self._blur_review_saved = None
         self._blur_preview = None
+        if hasattr(self, "_blur_worker_queue"):
+            self._drain_blur_worker_queue(self._blur_worker_queue)
         if hasattr(self, "image_viewer"):
             with contextlib.suppress(tk.TclError):
                 self.image_viewer.detach_companion_stack()

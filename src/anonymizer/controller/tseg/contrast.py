@@ -171,9 +171,12 @@ def log_memory_usage(stage: str) -> None:
         logger.debug("Memory [%s]: psutil unavailable", stage)
 
 
-def release_working_memory(*, stage: str = "") -> None:
+def release_working_memory(*, stage: str = "", preserve_accelerator: bool = False) -> None:
     """Release accelerator caches and run GC between harmonize pipeline stages."""
-    release_accelerator_memory()
+    from anonymizer.controller.tseg.model_cache import preserve_accelerator_memory
+
+    if not preserve_accelerator and not preserve_accelerator_memory():
+        release_accelerator_memory()
     gc.collect()
     if stage:
         log_memory_usage(stage)

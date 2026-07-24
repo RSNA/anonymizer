@@ -953,7 +953,7 @@ def save_series_frames(original_series_path: Path, processed_frames: np.ndarray,
     frame_ndx = 0
     success = True
     for original_path, num_frames_in_file in file_frame_counts:
-        logger.info(f"Processing {num_frames_in_file} frame(s) to overwrite -> {original_path.name}")
+        logger.debug(f"Processing {num_frames_in_file} frame(s) to overwrite -> {original_path.name}")
         try:
             ds_orig = dcmread(str(original_path), stop_before_pixels=True, force=True)
             ds_save = ds_orig.copy()
@@ -1064,7 +1064,7 @@ def save_series_frames(original_series_path: Path, processed_frames: np.ndarray,
 
             # Save the File (Overwrite Original)
             ds_save.save_as(original_path, write_like_original=False)
-            logger.info(f"Successfully overwrote {original_path.name}")
+            logger.debug(f"Successfully overwrote {original_path.name}")
 
             frame_ndx += num_frames_in_file
 

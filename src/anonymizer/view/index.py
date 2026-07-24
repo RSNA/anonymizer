@@ -14,6 +14,7 @@ from anonymizer.model.anonymizer import AnonymizerModel, PHI_IndexRecord
 from anonymizer.utils.translate import _
 from anonymizer.view.dashboard import Dashboard
 from anonymizer.view.delete_studies_dialog import DeleteStudiesDialog
+from anonymizer.view.harmonize_studies_dialog import HarmonizeStudiesDialog
 from anonymizer.view.projection import ProjectionView
 from anonymizer.view.series import show_series_view
 
@@ -121,6 +122,14 @@ class IndexView(tk.Toplevel):
         )
         self._view_projections_button.grid(row=0, column=4, padx=PAD, pady=PAD, sticky="w")
 
+        self._harmonize_button = ctk.CTkButton(
+            self._button_frame,
+            width=ButtonWidth,
+            text=_("Harmonize"),
+            command=self._harmonize_button_pressed,
+        )
+        self._harmonize_button.grid(row=0, column=6, padx=PAD, pady=PAD, sticky="w")
+
         self._create_phi_button = ctk.CTkButton(
             self._button_frame,
             width=ButtonWidth,
@@ -161,6 +170,38 @@ class IndexView(tk.Toplevel):
         self._delete_button.grid(row=0, column=10, padx=PAD, pady=PAD, sticky="e")
         self._delete_button.focus_set()
 
+    def _harmonize_button_pressed(self) -> None:
+        if self._phi_index is None:
+            logger.error("self._phi_index is empty")
+            return
+
+        rows_selected = list(self._tree.selection())
+        if not rows_selected:
+            messagebox.showerror(
+                title=_("Harmonize"),
+                message=_("No studies selected for harmonize.")
+                + "\n\n"
+                + _("Use SHIFT+Click and/or CMD/CTRL+Click to select multiple studies."),
+                parent=self,
+            )
+            return
+
+        studies: list[tuple[str, str]] = [
+            (
+                self._phi_index[int(row)].anon_patient_id,
+                self._phi_index[int(row)].anon_study_uid,
+            )
+            for row in rows_selected
+        ]
+        logger.info("Harmonize button pressed for %d studies", len(studies))
+        self._harmonize_button.configure(state="disabled")
+        try:
+            dialog = HarmonizeStudiesDialog(self, self._controller, studies)
+            dialog.get_input()
+        finally:
+            self._harmonize_button.configure(state="normal")
+        self._update_tree_from_phi_index()
+
     def _create_phi_button_pressed(self):
         logger.info("Create PHI button pressed")
         csv_path = self._controller.create_phi_csv()
@@ -185,7 +226,7 @@ class IndexView(tk.Toplevel):
         # Clear tree to ensure all items are removed before re-populating:
         self._tree.delete(*self._tree.get_children())
 
-        self._phi_index = self._anon_model.get_phi_index()
+        self._phi_index = self._controller.get_phi_index_records()
 
         if self._phi_index is None:
             logger.warning("No Studies/PHI data in Anonymizer Model for PHI Index")
