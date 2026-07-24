@@ -10,20 +10,15 @@ from anonymizer.utils.translate import _
 # BGR for OpenCV overlay compositing.
 FACE_MASK_OVERLAY_COLOR = (0, 255, 0)
 FACE_MASK_OVERLAY_ALPHA = 0.35
-# Soft-tissue window in Hounsfield units for reviewing facial features on CT.
-FACE_REVIEW_WL_HU = 40.0
+# CT window in Hounsfield units for reviewing blurred facial features.
+FACE_REVIEW_WL_HU = -250.0
 FACE_REVIEW_WW_HU = 2500.0
 
 
 def face_review_wl_ww(ds: Dataset) -> tuple[float, float]:
-    """Return WL/WW in stored-pixel space for soft-tissue face review on CT."""
-    slope = float(getattr(ds, "RescaleSlope", 1) or 1)
-    intercept = float(getattr(ds, "RescaleIntercept", 0) or 0)
-    if slope in (0, 0.0):
-        slope = 1.0
-    wl = (FACE_REVIEW_WL_HU - intercept) / slope
-    ww = FACE_REVIEW_WW_HU / abs(slope)
-    return wl, max(1.0, ww)
+    """Return WL/WW in the same units as Series View CT frames (modality-LUT / HU space)."""
+    _ = ds
+    return FACE_REVIEW_WL_HU, max(1.0, FACE_REVIEW_WW_HU)
 
 
 def format_face_blur_qa_summary(

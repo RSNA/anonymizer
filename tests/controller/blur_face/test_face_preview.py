@@ -66,13 +66,13 @@ def test_preview_face_blur_does_not_write_dicom(
 
 def test_format_face_blur_qa_summary_pass_and_fail() -> None:
     mask = np.zeros((2, 8, 8), dtype=np.uint8)
-    mask[:, 2:6, 2:6] = 1
+    mask[0, 2:6, 2:6] = 1
     hu_before = np.zeros((2, 8, 8), dtype=np.float32)
     hu_after = hu_before.copy()
-    hu_after[:, 2:6, 2:6] += 50.0
+    hu_after[0, 2:6, 2:6] += 50.0
     qa = compute_qa_stats(hu_before, hu_after, mask)
 
-    pass_summary = format_face_blur_qa_summary(qa, sigma_mm=8.0, slice_count=2)
+    pass_summary = format_face_blur_qa_summary(qa, sigma_mm=8.0, slice_count=1)
     assert "QA PASS" in pass_summary
     assert "8.0" in pass_summary
     assert str(qa.n_face_voxels) in pass_summary.replace(",", "")
@@ -80,7 +80,7 @@ def test_format_face_blur_qa_summary_pass_and_fail() -> None:
     pending = format_face_blur_qa_summary(None, sigma_mm=0.0, slice_count=0)
     assert "pending" in pending.lower()
 
-    hu_after[0, 0, 0] = 999.0
+    hu_after[1, 0, 0] = 999.0
     fail_qa = compute_qa_stats(hu_before, hu_after, mask)
     fail_summary = format_face_blur_qa_summary(fail_qa, sigma_mm=8.0, slice_count=2)
     assert "QA FAIL" in fail_summary
@@ -114,7 +114,7 @@ def test_mask_slice_segmentations_smooths_jagged_mask() -> None:
     assert len(smooth[0].points) <= len(raw[0].points)
 
 
-def test_face_review_wl_ww_uses_soft_tissue_hu() -> None:
+def test_face_review_wl_ww_uses_post_blur_hu() -> None:
     from pydicom import Dataset
 
     from anonymizer.view.blur_face_results import FACE_REVIEW_WL_HU, FACE_REVIEW_WW_HU, face_review_wl_ww
@@ -123,7 +123,7 @@ def test_face_review_wl_ww_uses_soft_tissue_hu() -> None:
     ds.RescaleSlope = 1
     ds.RescaleIntercept = -1024
     wl, ww = face_review_wl_ww(ds)
-    assert wl == pytest.approx(FACE_REVIEW_WL_HU - ds.RescaleIntercept)
+    assert wl == pytest.approx(FACE_REVIEW_WL_HU)
     assert ww == pytest.approx(FACE_REVIEW_WW_HU)
 
 

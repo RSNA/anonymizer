@@ -77,6 +77,7 @@ class ImageViewer(ctk.CTkFrame):
         self._companion_cache: dict[int, tuple[ImageTk.PhotoImage, tuple[int, int]]] = {}
         self._primary_label: ctk.CTkLabel | None = None
         self._companion_label: ctk.CTkLabel | None = None
+        self._interaction_enabled = True
         self._suppress_callbacks = False
         self._initial_display_done = False
         self._resize_to_viewport_enabled = True
@@ -264,6 +265,30 @@ class ImageViewer(ctk.CTkFrame):
 
         self.after_idle(self._set_initial_size)
         self.update_status()
+
+    def _interaction_allowed(self) -> bool:
+        return self._interaction_enabled
+
+    def set_interaction_enabled(self, enabled: bool) -> None:
+        """Enable or disable viewer navigation, windowing, and editing."""
+        self._interaction_enabled = enabled
+        if not enabled and self.playing:
+            self._stop_playback()
+        canvas_state = tk.NORMAL if enabled else tk.DISABLED
+        with contextlib.suppress(tk.TclError):
+            self.canvas.configure(state=canvas_state)
+            if self.companion_canvas is not None:
+                self.companion_canvas.configure(state=canvas_state)
+        if self.control_frame is not None:
+            control_state = "normal" if enabled else "disabled"
+            for widget_name in ("fps_slider", "toggle_button", "fps_slider_label"):
+                widget = getattr(self, widget_name, None)
+                if widget is not None:
+                    with contextlib.suppress(tk.TclError):
+                        widget.configure(state=control_state)
+        if self.histogram is not None:
+            with contextlib.suppress(tk.TclError, AttributeError):
+                self.histogram.canvas.configure(state=canvas_state)
 
     def set_slice_index_sync(self, index: int) -> None:
         """Change slice without notifying sync partners (face blur review)."""
@@ -760,11 +785,27 @@ class ImageViewer(ctk.CTkFrame):
         self.playing = False
         self.detach_companion_stack()
         self.clear_cache()
+        with contextlib.suppress(tk.TclError, AttributeError):
+            if self.canvas_image_item is not None:
+                self.canvas.delete(self.canvas_image_item)
+                self.canvas_image_item = None
+            if self.companion_canvas is not None and self.companion_canvas_image_item is not None:
+                self.companion_canvas.delete(self.companion_canvas_image_item)
+                self.companion_canvas_image_item = None
+        self.photo_image = None
+        with contextlib.suppress(AttributeError):
+            self.canvas.image = None  # type: ignore[attr-defined]
+        with contextlib.suppress(AttributeError):
+            if self.companion_canvas is not None:
+                self.companion_canvas.image = None  # type: ignore[attr-defined]
         self.images = None  # type: ignore[assignment]
+        self._companion_images = None
         self.overlay_data.clear()
 
     # ImageView Event Handlers:
     def on_mousewheel(self, event):
+        if not self._interaction_allowed():
+            return
         if event.delta > 0:
             self.change_image(self.current_image_index - 1)
         else:
@@ -795,6 +836,8 @@ class ImageViewer(ctk.CTkFrame):
         self.change_image(self.current_image_index + 1)
 
     def change_image(self, new_index):
+        if not self._interaction_allowed():
+            return
         if 0 <= new_index < self.num_images:
             previous_index = self.current_image_index
             self.load_and_display_image(new_index)
@@ -829,6 +872,8 @@ class ImageViewer(ctk.CTkFrame):
         self.scrollbar.set(start, end)
 
     def scroll_handler(self, *args):
+        if not self._interaction_allowed():
+            return
         command = args[0]
         if command == "moveto":
             position = float(args[1])
@@ -850,18 +895,26 @@ class ImageViewer(ctk.CTkFrame):
             self.after_cancel(self.after_id)
             self.after_id = self.after(self.play_delay, self.play_loop)
 
+    def _stop_playback(self) -> None:
+        self.playing = False
+        if hasattr(self, "toggle_button"):
+            with contextlib.suppress(tk.TclError):
+                self.toggle_button.configure(image=self.ctk_play_icon)
+        if self.after_id:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self.after_id)
+            self.after_id = None
+
     def toggle_play(self, event=None):
+        if not self._interaction_allowed():
+            return
         self.playing = not self.playing
         if self.playing:
             if hasattr(self, "toggle_button"):
                 self.toggle_button.configure(image=self.ctk_pause_icon)
             self.play_loop()
         else:
-            if hasattr(self, "toggle_button"):
-                self.toggle_button.configure(image=self.ctk_play_icon)
-            if self.after_id:
-                self.after_cancel(self.after_id)
-                self.after_id = None
+            self._stop_playback()
 
     def play_loop(self):
         if self.playing:
@@ -913,6 +966,8 @@ class ImageViewer(ctk.CTkFrame):
            else remove hit object from corresponding overlay
         4. If current image is a projection in a series only allow user rect drawing if propagate_overlays is true
         """
+        if not self._interaction_allowed():
+            return
         if not self.enable_interactive_editing:
             return
         if self.playing:
@@ -1132,6 +1187,8 @@ class ImageViewer(ctk.CTkFrame):
     # --- WW/WL Adjustment Event Handlers ---
     def _start_adjust_display(self, event):
         """Starts WL/WW adjustment. (Bound to <ButtonPress-3>)"""
+        if not self._interaction_allowed():
+            return
         if self.drawing_rect:
             return  # Ignore if drawing
         logger.debug("Starting WL/WW adjust")

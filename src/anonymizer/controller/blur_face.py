@@ -50,6 +50,13 @@ DEFAULT_FACE_BLUR_SIGMA_MM = 8.0
 # Minimum pixel sigma passed to OpenCV when spacing is very fine or sigma_mm is small.
 MIN_FACE_BLUR_SIGMA_PX = 0.5
 
+# In-plane Gaussian sigma (pixels) applied to the face mask before blur and overlay contours.
+# Softens jagged segmentation edges so the final blur feathers instead of a hard pixel stair-step.
+FACE_MASK_SMOOTH_SIGMA_PX = 1.5
+
+# Ignore sub-HU noise outside the feathered mask when checking QA (float32 + soft blend).
+QA_OUTSIDE_HU_TOLERANCE = 0.5
+
 LEGACY_FACE_MASK_REL = Path("ts_seg") / FACE_MASK_FILENAME
 
 # --- Results ----------------------------------------------------------------
@@ -294,6 +301,30 @@ def load_hu_stack(slice_paths: tuple[Path, ...]) -> np.ndarray:
 # --- In-mask blur -----------------------------------------------------------
 
 
+def smooth_face_mask_slice(
+    slice_mask: np.ndarray,
+    *,
+    smooth_sigma: float = FACE_MASK_SMOOTH_SIGMA_PX,
+) -> np.ndarray:
+    """Return float32 blend weights in [0, 1] with softened mask edges (one axial slice)."""
+    binary = (slice_mask > 0).astype(np.float32)
+    if not binary.any() or smooth_sigma <= 0:
+        return binary
+    return cv2.GaussianBlur(binary, (0, 0), smooth_sigma)
+
+
+def face_mask_blend_weights(
+    mask: np.ndarray,
+    *,
+    smooth_sigma: float = FACE_MASK_SMOOTH_SIGMA_PX,
+) -> np.ndarray:
+    """Return per-voxel blend weights for face blur (Z, Y, X), same smoothing as overlay contours."""
+    weights = np.empty(mask.shape, dtype=np.float32)
+    for z in range(mask.shape[0]):
+        weights[z] = smooth_face_mask_slice(mask[z], smooth_sigma=smooth_sigma)
+    return weights
+
+
 def blur_face_hu_volume(
     hu: np.ndarray,
     mask: np.ndarray,
@@ -301,9 +332,13 @@ def blur_face_hu_volume(
     sigma_mm: float = DEFAULT_FACE_BLUR_SIGMA_MM,
     pixel_spacing_mm: tuple[float, float] = (1.0, 1.0),
     min_sigma_px: float = MIN_FACE_BLUR_SIGMA_PX,
+    mask_smooth_sigma_px: float = FACE_MASK_SMOOTH_SIGMA_PX,
 ) -> np.ndarray:
     """
-    In-plane Gaussian blur inside ``mask`` only; voxels outside ``mask`` unchanged.
+    In-plane Gaussian blur inside ``mask``, feathered at the boundary.
+
+    Uses the same mask smoothing as the Series View face overlay so the saved blur
+    does not follow jagged segmentation voxels literally.
 
     ``hu`` and ``mask`` shape: (Z, Y, X).
     """
@@ -314,31 +349,33 @@ def blur_face_hu_volume(
     sigma_y = max(sigma_mm / row_spacing, min_sigma_px)
     sigma_x = max(sigma_mm / col_spacing, min_sigma_px)
     logger.info(
-        "Face blur: Gaussian blur sigma_mm=%.2f → sigma_px=(%.2f, %.2f) spacing_mm=(%.3f, %.3f)",
+        "Face blur: Gaussian blur sigma_mm=%.2f → sigma_px=(%.2f, %.2f) spacing_mm=(%.3f, %.3f) "
+        "mask_smooth_sigma_px=%.2f",
         sigma_mm,
         sigma_x,
         sigma_y,
         row_spacing,
         col_spacing,
+        mask_smooth_sigma_px,
     )
 
     out = hu.copy()
     face = mask.astype(bool)
     slices_with_face = 0
     for z in range(hu.shape[0]):
-        slice_mask = face[z]
-        if not slice_mask.any():
+        if not face[z].any():
             continue
         slices_with_face += 1
+        blend = smooth_face_mask_slice(face[z], smooth_sigma=mask_smooth_sigma_px)
         blurred = cv2.GaussianBlur(
             hu[z].astype(np.float32),
             ksize=(0, 0),
             sigmaX=sigma_x,
             sigmaY=sigma_y,
         )
-        out[z] = np.where(slice_mask, blurred, hu[z])
+        out[z] = blurred * blend + hu[z] * (1.0 - blend)
     logger.info(
-        "Face blur: blurred %d / %d axial slices (%d face voxels)",
+        "Face blur: blurred %d / %d axial slices (%d face voxels, feathered edges)",
         slices_with_face,
         hu.shape[0],
         int(face.sum()),
@@ -349,16 +386,23 @@ def blur_face_hu_volume(
 # --- QA ---------------------------------------------------------------------
 
 
-def compute_qa_stats(hu_before: np.ndarray, hu_after: np.ndarray, mask: np.ndarray) -> QaStats:
-    """Quantify whether any voxels outside the face mask changed."""
+def compute_qa_stats(
+    hu_before: np.ndarray,
+    hu_after: np.ndarray,
+    mask: np.ndarray,
+    *,
+    mask_smooth_sigma_px: float = FACE_MASK_SMOOTH_SIGMA_PX,
+) -> QaStats:
+    """Quantify whether voxels outside the feathered face mask changed."""
     face = mask.astype(bool)
-    outside = ~face
+    blend = face_mask_blend_weights(mask, smooth_sigma=mask_smooth_sigma_px)
+    outside = blend <= 1e-6
     diff = np.abs(hu_after.astype(np.float32) - hu_before.astype(np.float32))
 
     outside_diff = diff[outside]
     inside_diff = diff[face]
 
-    n_violating = int(np.sum(outside_diff > 0)) if outside_diff.size else 0
+    n_violating = int(np.sum(outside_diff > QA_OUTSIDE_HU_TOLERANCE)) if outside_diff.size else 0
     max_outside = float(outside_diff.max()) if outside_diff.size else 0.0
     mean_inside = float(inside_diff.mean()) if inside_diff.size else 0.0
 
@@ -375,19 +419,17 @@ def mask_slice_segmentations(
     mask: np.ndarray,
     slice_index: int,
     *,
-    smooth_sigma: float = 1.5,
+    smooth_sigma: float = FACE_MASK_SMOOTH_SIGMA_PX,
     contour_epsilon_ratio: float = 0.002,
 ) -> list[Segmentation]:
     """Extract smoothed face-mask contours for one axial slice (viewer overlay polygons)."""
     if slice_index < 0 or slice_index >= mask.shape[0]:
         return []
-    slice_mask = (mask[slice_index] > 0).astype(np.uint8)
-    if not slice_mask.any():
+    if not (mask[slice_index] > 0).any():
         return []
 
-    if smooth_sigma > 0:
-        blurred = cv2.GaussianBlur(slice_mask.astype(np.float32), (0, 0), smooth_sigma)
-        slice_mask = (blurred >= 0.5).astype(np.uint8)
+    smoothed = smooth_face_mask_slice(mask[slice_index], smooth_sigma=smooth_sigma)
+    slice_mask = (smoothed >= 0.5).astype(np.uint8)
 
     contours, _ = cv2.findContours(slice_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     segmentations: list[Segmentation] = []
