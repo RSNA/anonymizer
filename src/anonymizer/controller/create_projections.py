@@ -1,3 +1,4 @@
+import gc
 import logging
 import pickle
 from dataclasses import asdict, dataclass, field
@@ -36,7 +37,8 @@ from pydicom.tag import Tag
 from pydicom.uid import ExplicitVRLittleEndian
 
 from anonymizer.controller.remove_pixel_phi import OCRText
-from anonymizer.controller.tseg.dicom_geometry import stackable_dicom_paths
+from anonymizer.controller.tseg.dicom_geometry import list_dicom_paths, stackable_dicom_paths
+from anonymizer.utils.memory import log_process_memory
 from anonymizer.utils.storage import get_dcm_files
 
 logger = logging.getLogger(__name__)
@@ -198,6 +200,82 @@ def clip_and_cast_to_int(float_array: np.ndarray, target_dtype: type[np.integer]
     except Exception as e:
         logger.exception(f"Error clipping and casting float array to {target_dtype}: {e}")
         return None
+
+
+def ordered_series_dcm_paths(series_path: Path) -> list[Path]:
+    """
+    Return DICOM paths in the same order as ``load_series_frames`` / face blur.
+
+    Uses ``stackable_dicom_paths`` (IPP stack order). Falls back to direct children
+    of ``series_path`` sorted by ``InstanceNumber`` — never recursive subdirectories.
+    """
+    series_path = Path(series_path).resolve()
+    try:
+        return stackable_dicom_paths(series_path)
+    except ValueError as exc:
+        logger.warning("Falling back to legacy DICOM listing for save in %s: %s", series_path, exc)
+        try:
+            dcm_paths = list(list_dicom_paths(series_path))
+        except ValueError:
+            dcm_paths = sorted(
+                path
+                for path in series_path.iterdir()
+                if path.is_file() and path.suffix.lower() in {".dcm", ".dicom"}
+            )
+        if not dcm_paths:
+            raise ValueError(f"No DICOM files found in {series_path}") from exc
+
+        def get_instance_number(path: Path) -> int:
+            try:
+                ds_header = dcmread(str(path), stop_before_pixels=True, force=True)
+                return int(ds_header.get("InstanceNumber", 999999))
+            except (ValueError, TypeError, InvalidDicomError):
+                return 999999
+
+        dcm_paths.sort(key=get_instance_number)
+        return dcm_paths
+
+
+def _stored_integer_dtype(ds: Dataset) -> type[np.integer]:
+    bits_allocated = int(getattr(ds, "BitsAllocated", 16) or 16)
+    pixel_rep = int(getattr(ds, "PixelRepresentation", 0) or 0)
+    if bits_allocated == 16:
+        return np.int16 if pixel_rep == 1 else np.uint16
+    if bits_allocated == 8:
+        return np.uint8
+    raise ValueError(f"Unsupported BitsAllocated: {bits_allocated}")
+
+
+def _prepare_monochrome_stored_pixels(frame_data: np.ndarray, ds_orig: Dataset) -> np.ndarray:
+    """
+    Convert processed frames to stored pixels using ``ds_orig`` rescale and integer encoding.
+
+    Float input is treated as post-modality-LUT values (same as ``load_series_frames`` output).
+    Integer input is clipped/cast to the source slice dtype without changing rescale semantics.
+    """
+    target_dtype = _stored_integer_dtype(ds_orig)
+    slope = float(getattr(ds_orig, "RescaleSlope", 1) or 1)
+    intercept = float(getattr(ds_orig, "RescaleIntercept", 0) or 0)
+    if slope in (0, 0.0):
+        slope = 1.0
+    dtype_info = np.iinfo(target_dtype)
+
+    def _one_frame(frame: np.ndarray) -> np.ndarray:
+        if np.issubdtype(frame.dtype, np.floating):
+            stored = (frame - intercept) / slope
+            return np.clip(np.rint(stored), dtype_info.min, dtype_info.max).astype(target_dtype)
+        if frame.dtype != target_dtype:
+            return np.clip(frame, dtype_info.min, dtype_info.max).astype(target_dtype)
+        return frame
+
+    if frame_data.ndim == 2:
+        return _one_frame(frame_data)
+    return np.stack([_one_frame(frame_data[index]) for index in range(frame_data.shape[0])], axis=0)
+
+
+def _pixel_data_vr(ds: Dataset) -> str:
+    bits_allocated = int(getattr(ds, "BitsAllocated", 16) or 16)
+    return "OW" if bits_allocated == 16 else "OB"
 
 
 def cache_projection(projection: Projection, projection_file_path: Path) -> None:
@@ -576,8 +654,8 @@ def load_series_frames(series_path: Path, border_px: int | None = 20) -> tuple[D
             - The pydicom Dataset from the first file (for metadata).
             - A single NumPy array containing all processed and resized frames,
               stacked along the first axis.
-              Dtype will be consitent for modality.
-              For grayscale, if modality LUT applied rescale operation then conversion to float64 will occur
+              Dtype will be consistent for modality.
+              Grayscale CT/MR stored-pixel stacks use float32 after modality LUT.
               Shape: (num_frames, height, width) or (num_frames, height, width, 3).
             - Source DICOM paths in the same order as stacked frames (one entry per frame).
 
@@ -615,6 +693,8 @@ def load_series_frames(series_path: Path, border_px: int | None = 20) -> tuple[D
 
     if not dcm_paths:
         raise ValueError(f"No DICOM files found in {series_path}")
+
+    log_process_memory("load_series_frames_start", extra=str(series_path.name))
 
     processed_frames: list[ndarray] = []
     processed_paths: list[Path] = []
@@ -665,10 +745,15 @@ def load_series_frames(series_path: Path, border_px: int | None = 20) -> tuple[D
                 # Process based on the *series* interpretation determined from the first file
                 match series_pi:
                     case "MONOCHROME1" | "MONOCHROME2":
-                        # Conversion to float64 may occur from rescale operation in applying modality LUT
-                        modality_pixels = apply_modality_lut(current_frame_pixels, ds)
+                        modality_pixels = np.asarray(
+                            apply_modality_lut(current_frame_pixels, ds),
+                            dtype=np.float32,
+                        )
                         if modality_pixels.dtype != current_frame_pixels.dtype:
-                            logger.debug(f"Modality LUT changed pixel data type to {modality_pixels.dtype}")
+                            logger.debug(
+                                "Modality LUT changed pixel data type to %s (stored as float32)",
+                                modality_pixels.dtype,
+                            )
                         if series_pi == "MONOCHROME1":
                             try:
                                 max_val = np.max(modality_pixels)
@@ -730,14 +815,23 @@ def load_series_frames(series_path: Path, border_px: int | None = 20) -> tuple[D
     if ds1 is None or not processed_frames:
         raise ValueError(f"No image slices with PixelData found in {series_path}")
 
-    # --- Stack the list of consistently typed and sized frames ---
-    try:
-        all_series_frames_stacked = np.stack(processed_frames, axis=0)
-    except ValueError as e:
-        logger.error(f"Error stacking frames: {e}. Check frame dimensions consistency.")
-        for i, frame in enumerate(processed_frames):
-            logger.error(f"Frame {i} shape: {frame.shape}, dtype: {frame.dtype}")
-        raise ValueError("Inconsistent frame dimensions prevent stacking.") from e
+    # --- Stack frames into one array without np.stack's extra full-volume copy ---
+    slice_count = len(processed_frames)
+    frame_shape = processed_frames[0].shape
+    stack_dtype = np.float32 if series_pi in ("MONOCHROME1", "MONOCHROME2") else processed_frames[0].dtype
+    all_series_frames_stacked = np.empty((slice_count,) + frame_shape, dtype=stack_dtype)
+    for index, frame in enumerate(processed_frames):
+        all_series_frames_stacked[index] = frame
+        processed_frames[index] = None  # type: ignore[call-overload]
+    processed_frames.clear()
+    del processed_frames
+    gc.collect()
+
+    log_process_memory(
+        "load_series_frames_stacked",
+        array=all_series_frames_stacked,
+        extra=f"slices={all_series_frames_stacked.shape[0]}",
+    )
 
     logger.info(
         f"Final stacked array - Shape: {all_series_frames_stacked.shape}, Dtype: {all_series_frames_stacked.dtype}"
@@ -815,9 +909,9 @@ def save_series_frames(original_series_path: Path, processed_frames: np.ndarray,
         logger.error(f"Original series path is not a directory: {original_series_path}")
         return False
 
-    # --- 1. Determine Original File Structure ---
+    # --- 1. Determine Original File Structure (stack order, same as load_series_frames) ---
     try:
-        original_dcm_paths: list[Path] = sorted(get_dcm_files(original_series_path))
+        original_dcm_paths = ordered_series_dcm_paths(original_series_path)
         if not original_dcm_paths:
             logger.error(f"No original DICOM files found in {original_series_path}.")
             return False
@@ -847,20 +941,12 @@ def save_series_frames(original_series_path: Path, processed_frames: np.ndarray,
         logger.error(f"Error analyzing original series structure: {e}")
         return False
 
-    # --- 2. Determine Series Photometric Interpretation & Target Stored Dtype ---
+    # --- 2. Determine Series Photometric Interpretation ---
     try:
         series_pi = reference_ds.PhotometricInterpretation.upper()
-        bits_allocated = reference_ds.get("BitsAllocated", 16 if series_pi.startswith("MONO") else 8)
-        pixel_rep = reference_ds.get("PixelRepresentation", 0)  # 0=unsigned, 1=signed
-        if bits_allocated == 16:
-            target_dtype = np.uint16 if pixel_rep == 0 else np.int16
-        elif bits_allocated == 8:
-            target_dtype = np.uint8
-        else:
-            raise ValueError(f"Unsupported BitsAllocated: {bits_allocated}")
-        logger.info(f"Saving series based on original PI: {series_pi} with target stored dtype {target_dtype}")
+        logger.info(f"Saving series based on original PI: {series_pi}")
     except Exception as e:
-        logger.error(f"Could not determine series type/dtype: {e}")
+        logger.error(f"Could not determine series type: {e}")
         return False
 
     # --- 3. Iterate, Process, and Save (Overwrite) ---
@@ -879,55 +965,41 @@ def save_series_frames(original_series_path: Path, processed_frames: np.ndarray,
                 frame_ndx += num_frames_in_file
                 continue
 
-            final_pixel_data = frame_chunk
-
             if series_pi in ("MONOCHROME1", "MONOCHROME2"):
-                if np.issubdtype(final_pixel_data.dtype, np.floating):
-                    logger.debug(
-                        f"Converting float pixel data via clipping to {target_dtype} for {original_path.name}..."
-                    )
-                    converted_pixels = clip_and_cast_to_int(final_pixel_data, target_dtype)
-                    if converted_pixels is None:
-                        logger.error(f"Failed conversion to {target_dtype} for {original_path.name}. Skipping.")
-                        success = False
-                        frame_ndx += num_frames_in_file
-                        continue
-                    final_pixel_data = converted_pixels
-                    ds_save.RescaleSlope = 1
-                    ds_save.RescaleIntercept = 0
-                elif final_pixel_data.dtype != target_dtype:
-                    logger.warning(f"Casting input frame dtype {final_pixel_data.dtype} to target {target_dtype}.")
-                    final_pixel_data = final_pixel_data.astype(target_dtype)
-                    ds_save.RescaleSlope = 1
-                    ds_save.RescaleIntercept = 0
+                try:
+                    final_pixel_data = _prepare_monochrome_stored_pixels(frame_chunk, ds_orig)
+                except ValueError as exc:
+                    logger.error(f"Failed monochrome pixel preparation for {original_path.name}: {exc}")
+                    success = False
+                    frame_ndx += num_frames_in_file
+                    continue
 
-                # --- Update Metadata for Monochrome ---
-                ds_save.PhotometricInterpretation = "MONOCHROME2"
-                ds_save.SamplesPerPixel = 1
+                # Preserve per-slice pixel encoding and presentation metadata from source.
+                ds_save.PhotometricInterpretation = ds_orig.PhotometricInterpretation
+                ds_save.SamplesPerPixel = int(getattr(ds_orig, "SamplesPerPixel", 1) or 1)
+                for tag_name in (
+                    "PlanarConfiguration",
+                    "RescaleSlope",
+                    "RescaleIntercept",
+                    "BitsAllocated",
+                    "BitsStored",
+                    "HighBit",
+                    "PixelRepresentation",
+                ):
+                    if tag_name in ds_orig:
+                        ds_save[tag_name] = ds_orig[tag_name]
+                    elif tag_name in ds_save:
+                        del ds_save[tag_name]
 
-                if "PlanarConfiguration" in ds_save:
-                    del ds_save.PlanarConfiguration
-
-                # Set metadata based on the final_pixel_data's dtype
-                saved_dtype = final_pixel_data.dtype
-                if saved_dtype == np.uint16:
-                    ds_save.PixelRepresentation = 0
-                    bits = 16
-                elif saved_dtype == np.int16:
-                    ds_save.PixelRepresentation = 1
-                    bits = 16
-                elif saved_dtype == np.uint8:
-                    ds_save.PixelRepresentation = 0
-                    bits = 8
-                else:
-                    # This should not happen if conversion/casting worked
-                    raise ValueError(f"Unsupported final dtype for monochrome save: {saved_dtype}")
-
-                ds_save.BitsAllocated = bits
-                ds_save.BitsStored = bits
-                ds_save.HighBit = bits - 1
+                # Keep presentation window from the source DICOM (never viewer-adjusted WL/WW).
+                for tag in ("WindowCenter", "WindowWidth"):
+                    if tag in ds_orig:
+                        ds_save[tag] = ds_orig[tag]
+                    elif tag in ds_save:
+                        del ds_save[tag]
 
             elif series_pi in ("RGB", "YBR_FULL", "YBR_FULL_422", "PALETTE COLOR"):
+                final_pixel_data = frame_chunk
                 if final_pixel_data.dtype != np.uint8 or final_pixel_data.ndim != 4 or final_pixel_data.shape[-1] != 3:
                     logger.error(
                         f"Expected uint8 RGB data for {original_path.name}, got {final_pixel_data.shape} dtype {final_pixel_data.dtype}. Skipping."
@@ -959,11 +1031,7 @@ def save_series_frames(original_series_path: Path, processed_frames: np.ndarray,
 
             # EXPLICITLY SET VR for PixelData because of using ExplicitVRLittleEndian TS
             pixel_data_tag = Tag(0x7FE0, 0x0010)
-            # Determine VR based on BitsAllocated set above
-            if ds_save.BitsAllocated == 16:
-                pixel_vr = "OW"
-            elif ds_save.BitsAllocated == 8:
-                pixel_vr = "OB"
+            pixel_vr = _pixel_data_vr(ds_orig)
             # Create/Update the DataElement with the correct VR and Value
             ds_save[pixel_data_tag] = DataElement(
                 tag=pixel_data_tag, VR=pixel_vr, value=final_pixel_data_to_save.tobytes()

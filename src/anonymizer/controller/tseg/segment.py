@@ -44,6 +44,7 @@ from anonymizer.controller.tseg.dicom_geometry import (
     stackable_dicom_paths,
     ts_regions_eligible,
 )
+from anonymizer.controller.tseg.radlex import format_radlex_ct_series_description
 from anonymizer.controller.tseg.runtime import sequential_ml_context
 
 logger = logging.getLogger(__name__)
@@ -831,7 +832,10 @@ def analyze_tseg_contrast(
                     remaining_sec=remaining_sec,
                 ),
             )
-        radlex_description = ""
+        radlex_description = format_radlex_ct_series_description(
+            region_result.body_parts_present,
+            contrast.iv_contrast,
+        )
         _report_progress(
             progress,
             stage="contrast",

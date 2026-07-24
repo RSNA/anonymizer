@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import numpy as np
 import pydicom
 from pydicom.data import get_testdata_file
 
-from anonymizer.controller.blur_face import blur_face_hu_volume, load_hu_stack, write_blurred_dicom_series
+from anonymizer.controller.blur_face import blur_face_hu_volume, hu_slice_to_stored_pixels, load_hu_stack, write_blurred_dicom_series
+from anonymizer.controller.create_projections import load_series_frames, save_series_frames
 
 
 def _write_template_slice(path: Path, *, hu_value: float, instance_number: int) -> None:
@@ -57,3 +59,35 @@ def test_write_blurred_dicom_series_preserves_geometry(tmp_path: Path) -> None:
     assert reloaded.shape == hu_after.shape
     assert np.allclose(reloaded, hu_after, atol=1.0)
     assert np.allclose(reloaded[~mask], hu_before[~mask], atol=1.0)
+
+
+def test_save_series_frames_preserves_ct_encoding(tmp_path: Path) -> None:
+    source_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    source_dir.mkdir()
+    output_dir.mkdir()
+    slice_paths = tuple(source_dir / f"slice_{index:03d}.dcm" for index in range(2))
+    _write_template_slice(slice_paths[0], hu_value=-100.0, instance_number=1)
+    _write_template_slice(slice_paths[1], hu_value=40.0, instance_number=2)
+
+    reference_ds, frames, loaded_paths = load_series_frames(source_dir)
+    assert loaded_paths == slice_paths
+
+    for path in slice_paths:
+        shutil.copy2(path, output_dir / path.name)
+
+    assert save_series_frames(output_dir, frames, reference_ds)
+
+    for source_path in slice_paths:
+        source_ds = pydicom.dcmread(source_path)
+        output_ds = pydicom.dcmread(output_dir / source_path.name)
+        assert float(output_ds.RescaleSlope) == float(source_ds.RescaleSlope)
+        assert float(output_ds.RescaleIntercept) == float(source_ds.RescaleIntercept)
+        assert int(output_ds.BitsStored) == int(source_ds.BitsStored)
+        if "WindowCenter" in source_ds:
+            assert output_ds.WindowCenter == source_ds.WindowCenter
+            assert output_ds.WindowWidth == source_ds.WindowWidth
+
+    hu_source = load_hu_stack(slice_paths)
+    hu_output = load_hu_stack(tuple(output_dir / path.name for path in slice_paths))
+    assert np.allclose(hu_output, hu_source, atol=1.0)

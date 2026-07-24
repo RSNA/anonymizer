@@ -207,7 +207,7 @@ def hu_stack_from_series_frames(frames: np.ndarray) -> np.ndarray:
     """Return HU values from a ``load_series_frames`` grayscale stack."""
     if frames.ndim != 3:
         raise ValueError(f"Face blur requires grayscale slice stack (Z, Y, X), got shape {frames.shape}")
-    hu = frames.astype(np.float64)
+    hu = np.asarray(frames, dtype=np.float32)
     logger.info(
         "Face blur: HU stack from series frames shape=%s range=[%.1f, %.1f]",
         hu.shape,
@@ -277,11 +277,11 @@ def load_hu_stack(slice_paths: tuple[Path, ...]) -> np.ndarray:
         ds = dcmread(str(path))
         if not hasattr(ds, "PixelData"):
             raise ValueError(f"DICOM slice has no pixel data: {path.name}")
-        pixels = ds.pixel_array.astype(np.float64)
+        pixels = ds.pixel_array.astype(np.float32)
         slope = float(getattr(ds, "RescaleSlope", 1) or 1)
         intercept = float(getattr(ds, "RescaleIntercept", 0) or 0)
         slices.append(pixels * slope + intercept)
-    stack = np.stack(slices, axis=0)
+    stack = np.stack(slices, axis=0).astype(np.float32, copy=False)
     logger.info(
         "Face blur: loaded HU stack shape=%s range=[%.1f, %.1f]",
         stack.shape,
@@ -353,7 +353,7 @@ def compute_qa_stats(hu_before: np.ndarray, hu_after: np.ndarray, mask: np.ndarr
     """Quantify whether any voxels outside the face mask changed."""
     face = mask.astype(bool)
     outside = ~face
-    diff = np.abs(hu_after.astype(np.float64) - hu_before.astype(np.float64))
+    diff = np.abs(hu_after.astype(np.float32) - hu_before.astype(np.float32))
 
     outside_diff = diff[outside]
     inside_diff = diff[face]
@@ -411,29 +411,37 @@ def hu_stack_to_viewer_frames(
     reference_ds: Dataset | None = None,
     frame_dtype: np.dtype | None = None,
 ) -> np.ndarray:
-    """Convert an HU stack to per-slice stored-pixel frames for ``ImageViewer``."""
+    """Convert an HU stack to per-slice frames for ``ImageViewer`` / ``save_series_frames``.
+
+    Integer ``frame_dtype`` returns stored pixels (DICOM encoding). Floating ``frame_dtype``
+    returns HU values in the same space as ``load_series_frames`` (post-modality-LUT floats).
+    """
     if hu.shape[0] != len(slice_paths):
         raise ValueError(f"HU stack depth {hu.shape[0]} != slice count {len(slice_paths)}")
 
     if reference_ds is not None and frame_dtype is not None:
-        slope = float(getattr(reference_ds, "RescaleSlope", 1) or 1)
-        intercept = float(getattr(reference_ds, "RescaleIntercept", 0) or 0)
-        if slope in (0, 0.0):
-            slope = 1.0
-        return np.stack(
-            [
-                hu_slice_to_stored_pixels(
-                    hu[index],
-                    rescale_slope=slope,
-                    rescale_intercept=intercept,
-                    dtype=frame_dtype,
-                )
-                for index in range(hu.shape[0])
-            ],
-            axis=0,
-        )
+        frames: list[np.ndarray] = []
+        for index in range(hu.shape[0]):
+            source_path = slice_paths[index]
+            source_ds = dcmread(str(source_path))
+            stored_dtype = source_ds.pixel_array.dtype
+            slice_slope = float(getattr(source_ds, "RescaleSlope", 1) or 1)
+            slice_intercept = float(getattr(source_ds, "RescaleIntercept", 0) or 0)
+            if slice_slope in (0, 0.0):
+                slice_slope = 1.0
+            stored = hu_slice_to_stored_pixels(
+                hu[index],
+                rescale_slope=slice_slope,
+                rescale_intercept=slice_intercept,
+                dtype=stored_dtype,
+            )
+            if np.issubdtype(frame_dtype, np.floating):
+                frames.append(stored.astype(np.float32) * slice_slope + slice_intercept)
+            else:
+                frames.append(stored.astype(frame_dtype, copy=False))
+        return np.stack(frames, axis=0)
 
-    frames: list[np.ndarray] = []
+    frames = []
     for index, source_path in enumerate(slice_paths):
         ds = dcmread(str(source_path))
         source_dtype = ds.pixel_array.dtype

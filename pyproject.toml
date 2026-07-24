@@ -65,6 +65,7 @@ dev = [
     "ffmpeg-python>=0.2.0",
     "pytest-mock>=3.14.1",
     "watchfiles>=1.0.0",
+    "setuptools>=70,<82",
 ]
 prototyping-viz = [
     "matplotlib>=3.8.0",

@@ -13,10 +13,9 @@ from tkinter import messagebox
 
 import customtkinter as ctk
 import numpy as np
-import psutil
 import torch
 from easyocr import Reader
-from pydicom import Dataset
+from pydicom import Dataset, dcmread
 
 from anonymizer.controller.blur_face import (
     FaceBlurPreviewResult,
@@ -58,6 +57,7 @@ from anonymizer.controller.tseg.dicom_geometry import (
     stackable_dicom_paths,
 )
 from anonymizer.model.anonymizer import AnonymizerModel
+from anonymizer.utils.memory import log_process_memory
 from anonymizer.utils.storage import (
     get_dcm_files,
     load_default_whitelist,
@@ -96,6 +96,7 @@ def show_series_view(
             parent=parent,
         )
         return None
+    log_process_memory("series_view_open", extra=str(series_path.name))
     return SeriesView(parent, anon_model=anon_model, series_path=series_path)
 
 
@@ -141,6 +142,8 @@ class SeriesView(tk.Toplevel):
         self._frames: np.ndarray | None = None
         self._slice_paths: tuple[Path, ...] = ()
         self.single_frame = False
+        self._dicom_wl: float | None = None
+        self._dicom_ww: float | None = None
         self._face_blur_preview_pending = False
         self._series_geometry: SeriesGeometryResult | None = None
         self._face_blur_eligibility_cache: FaceBlurEligibility | None = None
@@ -156,6 +159,8 @@ class SeriesView(tk.Toplevel):
         else:
             self._prepare_hidden_load()
         self.lift()
+
+        log_process_memory("series_view_init", extra=str(series_path.name))
 
         threading.Thread(
             target=self._load_worker,
@@ -251,38 +256,85 @@ class SeriesView(tk.Toplevel):
         return self._frames if self.single_frame else self._frames[3:]
 
     @staticmethod
+    def _build_viewer_frames(series_frames: np.ndarray) -> np.ndarray:
+        """Build projection + slice stack in one buffer (avoids an extra full-volume copy)."""
+        slice_count = series_frames.shape[0]
+        frames = np.empty((slice_count + 3,) + series_frames.shape[1:], dtype=series_frames.dtype)
+        np.copyto(frames[3:], series_frames)
+        del series_frames
+
+        proj_min = np.copy(frames[3])
+        proj_max = np.copy(frames[3])
+        proj_sum = frames[3].astype(np.float32, copy=True)
+        for slice_index in range(4, frames.shape[0]):
+            slice_frame = frames[slice_index]
+            np.minimum(proj_min, slice_frame, out=proj_min)
+            np.maximum(proj_max, slice_frame, out=proj_max)
+            proj_sum += slice_frame
+
+        frames[0] = proj_min
+        frames[2] = proj_max
+        frames[1] = (proj_sum / slice_count).astype(frames.dtype, copy=False)
+        return frames
+
+    @staticmethod
     def _load_series_data(series_path: Path) -> tuple[Dataset, np.ndarray, tuple[Path, ...], SeriesGeometryResult | None]:
+        log_process_memory("load_series_data_start", extra=str(series_path.name))
         ds, series_frames, slice_paths = load_series_frames(series_path)
         if ds is None or series_frames is None:
             raise SeriesLoadError(f"Error loading frames from {series_path}")
 
+        log_process_memory(
+            "after_load_series_frames",
+            array=series_frames,
+            extra=str(series_path.name),
+        )
+
         if series_frames.shape[0] == 1:
             frames = series_frames
         else:
-            projections = np.stack(
-                [
-                    np.min(series_frames, axis=0),
-                    np.mean(series_frames, axis=0).astype(series_frames.dtype),
-                    np.max(series_frames, axis=0),
-                ],
-                axis=0,
+            frames = SeriesView._build_viewer_frames(series_frames)
+            del series_frames
+            gc.collect()
+            log_process_memory(
+                "after_build_viewer_frames",
+                array=frames,
+                extra=str(series_path.name),
             )
-            frames = np.concatenate([projections, series_frames], axis=0)
 
         series_geometry: SeriesGeometryResult | None = None
         if getattr(ds, "Modality", None) == "CT":
             series_geometry = load_geometry_cache(series_path)
-            if series_geometry is None:
-                try:
-                    series_geometry = resolve_series_geometry(series_path)
-                except Exception as exc:
-                    logger.warning("Could not resolve series geometry for %s: %s", series_path, exc)
 
+        log_process_memory(
+            "load_series_data_done",
+            array=frames,
+            extra=str(series_path.name),
+        )
         return ds, frames, slice_paths, series_geometry
 
+    def _ensure_series_geometry(self) -> SeriesGeometryResult | None:
+        if self._series_geometry is not None:
+            return self._series_geometry
+        if getattr(self._ds, "Modality", None) != "CT":
+            return None
+        self._series_geometry = load_geometry_cache(self._series_path)
+        if self._series_geometry is not None:
+            return self._series_geometry
+        try:
+            self._log_series_memory("resolve_series_geometry_start")
+            self._series_geometry = resolve_series_geometry(self._series_path)
+            self._log_series_memory("resolve_series_geometry_done")
+        except Exception as exc:
+            logger.warning("Could not resolve series geometry for %s: %s", self._series_path, exc)
+        return self._series_geometry
+
     def _load_worker(self) -> None:
+        self._log_series_memory("load_worker_start")
         try:
             payload = self._load_series_data(self._series_path)
+            _, frames, _, _ = payload
+            self._log_series_memory("load_worker_done", array=frames)
             self._load_queue.put(("done", payload))
         except SeriesLoadError as exc:
             self._load_queue.put(("error", exc))
@@ -333,12 +385,14 @@ class SeriesView(tk.Toplevel):
         slice_paths: tuple[Path, ...],
         series_geometry: SeriesGeometryResult | None,
     ) -> None:
+        self._log_series_memory("finish_loading_start", array=frames)
         self._loading = False
         self._ds = ds
         self._frames = frames
         self._slice_paths = slice_paths
         self._series_geometry = series_geometry
         self.single_frame = frames.shape[0] == 1
+        self._remember_dicom_wl_ww(ds)
 
         pos_x, pos_y = self.winfo_x(), self.winfo_y()
         self.withdraw()
@@ -351,11 +405,49 @@ class SeriesView(tk.Toplevel):
         self.resizable(True, True)
         self.minsize(960, 640)
         self._build_ui()
+        self._log_series_memory("after_build_ui", array=self._frames)
         self._update_title()
+        self._apply_initial_viewer_layout(pos_x, pos_y)
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+        self._log_series_memory("after_viewer_initial_display", array=self._frames)
+        self.after_idle(self._refresh_analysis_cache_ui)
 
+    def _remember_dicom_wl_ww(self, ds: Dataset | None = None) -> tuple[float, float]:
+        """Read and cache WL/WW from DICOM headers (not viewer-adjusted values)."""
+        source: Dataset | None = ds if ds is not None else self._ds
+        if self._slice_paths:
+            try:
+                source = dcmread(str(self._slice_paths[0]), stop_before_pixels=True, force=True)
+            except Exception as exc:
+                logger.debug("Could not refresh WL/WW from %s: %s", self._slice_paths[0], exc)
+        if source is None:
+            self._dicom_wl, self._dicom_ww = 127.5, 255.0
+            return self._dicom_wl, self._dicom_ww
+        wl, ww = get_wl_ww(source)
+        self._dicom_wl, self._dicom_ww = wl, ww
+        return wl, ww
+
+    def _dicom_wl_ww(self) -> tuple[float, float]:
+        if self._dicom_wl is not None and self._dicom_ww is not None:
+            return self._dicom_wl, self._dicom_ww
+        return self._remember_dicom_wl_ww()
+
+    def _sync_viewer_to_dicom_wl_ww(self) -> None:
+        if not hasattr(self, "image_viewer"):
+            return
+        wl, ww = self._dicom_wl_ww()
+        self.image_viewer.set_wlww_sync(wl, ww)
+
+    def _apply_initial_viewer_layout(self, pos_x: int | None = None, pos_y: int | None = None) -> None:
+        """Size the viewer to native pixels and fit the window (View == Actual at open)."""
+        if pos_x is None or pos_y is None:
+            pos_x, pos_y = self.winfo_x(), self.winfo_y()
         viewer = self.image_viewer
         viewer._resize_to_viewport_enabled = False
         viewer._set_initial_size()
+        self._sync_viewer_to_dicom_wl_ww()
         self.update_idletasks()
 
         width = max(self.winfo_reqwidth(), 640)
@@ -364,10 +456,44 @@ class SeriesView(tk.Toplevel):
         self.update_idletasks()
 
         viewer._resize_to_viewport_enabled = True
-        self.deiconify()
-        self.lift()
-        self.focus_force()
-        self.after_idle(self._refresh_analysis_cache_ui)
+
+    def _capture_whitelist_items(self) -> list[str]:
+        if not hasattr(self, "whitelist"):
+            return []
+        return [str(item) for item in self.whitelist.get(0, tk.END)]
+
+    def _restore_whitelist_items(self, items: list[str]) -> None:
+        if not hasattr(self, "whitelist"):
+            return
+        self.whitelist.delete(0, tk.END)
+        for item in items:
+            self.whitelist.insert(tk.END, item)
+
+    def _destroy_ui(self) -> None:
+        """Remove Series View widgets while keeping loaded series data in memory."""
+        self._release_blur_review_state()
+        if hasattr(self, "image_viewer"):
+            self._release_image_viewer(self.image_viewer)
+        if hasattr(self, "_sv_frame"):
+            with contextlib.suppress(tk.TclError):
+                self._sv_frame.destroy()
+
+    def _rebuild_ui(self) -> None:
+        """Rebuild Series View widgets and restore the initial single-pane layout."""
+        if self._frames is None or self._ds is None:
+            return
+
+        whitelist_items = self._capture_whitelist_items()
+        pos_x, pos_y = self.winfo_x(), self.winfo_y()
+
+        self._remember_dicom_wl_ww()
+        self._destroy_ui()
+        self._build_ui()
+        self._restore_whitelist_items(whitelist_items)
+
+        self._update_title()
+        self._apply_initial_viewer_layout(pos_x, pos_y)
+        self._refresh_analysis_cache_ui()
 
     def _build_ui(self) -> None:
         assert self._ds is not None and self._frames is not None
@@ -429,7 +555,7 @@ class SeriesView(tk.Toplevel):
         self.image_viewer = ImageViewer(
             self._viewer_container,
             self._frames,
-            *get_wl_ww(self._ds),
+            *self._dicom_wl_ww(),
             add_to_whitelist_callback=self.add_to_whitelist,
             regenerate_series_projections_callback=self.regenerate_series_projections,
         )
@@ -566,11 +692,12 @@ class SeriesView(tk.Toplevel):
         self.title(title)
 
     def _series_context_line(self) -> str:
-        if self._series_geometry is None:
+        geometry = self._ensure_series_geometry()
+        if geometry is None:
             return ""
-        line = format_series_view_geometry_line(self._series_geometry)
+        line = format_series_view_geometry_line(geometry)
         suffixes: list[str] = []
-        face_hint = face_blur_context_hint(self._face_blur_eligibility(), self._series_geometry)
+        face_hint = face_blur_context_hint(self._face_blur_eligibility(), geometry)
         if face_hint:
             suffixes.append(face_hint)
         harmonize_hint = harmonize_context_hint(self._series_path, self._ds)
@@ -626,20 +753,21 @@ class SeriesView(tk.Toplevel):
         self._show_default_context_line()
 
     def _face_blur_eligibility(self) -> FaceBlurEligibility:
+        geometry = self._ensure_series_geometry()
         if (
             self._face_blur_eligibility_cache is not None
-            and self._series_geometry is self._face_blur_eligibility_geometry
+            and geometry is self._face_blur_eligibility_geometry
         ):
             return self._face_blur_eligibility_cache
 
         eligibility = evaluate_face_blur_eligibility(
             self._series_path,
             ds=self._ds,
-            geometry=self._series_geometry,
+            geometry=geometry,
             enable_tseg_face=ENABLE_TSEG_FACE,
         )
         self._face_blur_eligibility_cache = eligibility
-        self._face_blur_eligibility_geometry = self._series_geometry
+        self._face_blur_eligibility_geometry = geometry
         return eligibility
 
     def _refresh_blur_face_ui(self) -> None:
@@ -976,15 +1104,14 @@ class SeriesView(tk.Toplevel):
 
         logger.info("Clearing TS cache for %s", self._series_path)
         clear_tseg_series_cache(self._series_path)
-        if self._blur_preview is not None:
-            self._teardown_blur_review()
         self._series_geometry = None
         self._face_blur_eligibility_cache = None
         self._face_blur_eligibility_geometry = None
-        self._refresh_analysis_cache_ui()
+        self._rebuild_ui()
         self.update_status(_("Analysis cache cleared"))
 
     def _teardown_blur_review(self, *, keep_applied_frames: bool = False) -> None:
+        self._log_series_memory("blur_review_teardown_start", array=self._frames)
         viewer = self.image_viewer
         saved = self._blur_review_saved
         viewer._resize_to_viewport_enabled = False
@@ -1011,19 +1138,28 @@ class SeriesView(tk.Toplevel):
             viewer.segmentation_overlay_color = saved["segmentation_overlay_color"]  # type: ignore[assignment]
             viewer.segmentation_overlay_alpha = saved["segmentation_overlay_alpha"]  # type: ignore[assignment]
             if self._ds is not None:
-                wl, ww = get_wl_ww(self._ds)
+                wl, ww = self._dicom_wl_ww()
                 viewer.set_wlww_sync(wl, ww)
 
             restore_index = min(int(saved["current_image_index"]), viewer.num_images - 1)
             viewer.clear_cache()
+            viewer.current_image_index = restore_index
+            viewer.update_idletasks()
+            viewer._apply_actual_display_size()
+            self.update_idletasks()
+            width = max(self.winfo_reqwidth(), self.winfo_width())
+            height = max(self.winfo_reqheight(), self.winfo_height())
+            pos_x, pos_y = self.winfo_x(), self.winfo_y()
+            self.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
+            self.update_idletasks()
+            viewer._apply_actual_display_size()
             viewer._resize_to_viewport_enabled = True
-            viewer._fit_to_viewport()
-            viewer.change_image(restore_index)
             self._blur_review_saved = None
         else:
             viewer._resize_to_viewport_enabled = True
 
         self._blur_preview = None
+        self._log_series_memory("blur_review_teardown_done", array=self._frames)
         self._refresh_blur_face_ui()
 
     def _show_blur_review(self, preview: FaceBlurPreviewResult) -> None:
@@ -1031,6 +1167,7 @@ class SeriesView(tk.Toplevel):
             return
 
         self._blur_preview = preview
+        self._log_series_memory("blur_review_show", array=preview.blurred_slice_frames)
         viewer = self.image_viewer
         if viewer.playing:
             viewer.toggle_play()
@@ -1091,8 +1228,16 @@ class SeriesView(tk.Toplevel):
             companion_label=_("Proposed face blur"),
         )
         viewer.set_wlww_sync(review_wl, review_ww)
+        viewer.update_idletasks()
+        viewer._apply_actual_display_size()
+        self.update_idletasks()
+        width = max(self.winfo_reqwidth(), self.winfo_width())
+        height = max(self.winfo_reqheight(), self.winfo_height())
+        pos_x, pos_y = self.winfo_x(), self.winfo_y()
+        self.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
+        self.update_idletasks()
+        viewer._apply_actual_display_size()
         viewer._resize_to_viewport_enabled = True
-        viewer._fit_to_viewport()
 
         qa_summary = format_face_blur_qa_summary(
             preview.qa_stats,
@@ -1107,7 +1252,7 @@ class SeriesView(tk.Toplevel):
         self._refresh_blur_face_ui()
 
     def _blur_worker(self) -> None:
-        geometry = self._series_geometry
+        geometry = self._ensure_series_geometry()
         volume_context = SeriesVolumeContext(
             reference_ds=self._ds,
             slice_frames=self._slice_stack(),
@@ -1180,10 +1325,15 @@ class SeriesView(tk.Toplevel):
         )
         if not self.single_frame:
             self.regenerate_series_projections()
-        self.image_viewer.images = self._frames
-        self.image_viewer.num_images = self._frames.shape[0]
-        self.image_viewer.clear_cache()
-        self.image_viewer.refresh_current_image()
+        viewer = self.image_viewer
+        viewer.images = self._frames
+        viewer.num_images = self._frames.shape[0]
+        viewer.image_height = self._frames.shape[1]
+        viewer.image_width = self._frames.shape[2]
+        viewer.small_jump = max(1, int(viewer.num_images * viewer.SMALL_JUMP_PERCENTAGE))
+        viewer.large_jump = max(1, int(viewer.num_images * viewer.LARGE_JUMP_PERCENTAGE))
+        viewer.clear_cache()
+        viewer.refresh_current_image()
         self._face_blur_preview_pending = True
         self.save_button.configure(state="normal")
 
@@ -1233,7 +1383,6 @@ class SeriesView(tk.Toplevel):
         preview = self._blur_preview
         if preview is not None and preview.error is None:
             self._apply_face_blur_preview(preview)
-            self._teardown_blur_review(keep_applied_frames=True)
             logger.info(
                 "Series View: face blur applied on save for %s (slices=%d, qa=%s)",
                 self._series_path,
@@ -1263,9 +1412,9 @@ class SeriesView(tk.Toplevel):
 
         if save_series_frames(self._series_path, self._frames if self.single_frame else self._frames[3:], self._ds):
             logger.info(f"Saved series frames to {self._series_path}")
-            self.update_status(_("Changes saved"))
             self._face_blur_preview_pending = False
-            self.save_button.configure(state="disabled")
+            self._rebuild_ui()
+            self.update_status(_("Changes saved"))
         else:
             logger.error(f"Failed to save series frames to {self._series_path}")
             messagebox.showerror(
@@ -1311,31 +1460,53 @@ class SeriesView(tk.Toplevel):
         logger.info("_escape_pressed")
         self._on_cancel()
 
-    def _log_close_memory(self, stage: str) -> float | None:
-        try:
-            rss_mb = psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
-        except Exception:
-            logger.debug("SeriesView close memory [%s]: unavailable", stage)
-            return None
+    def _log_series_memory(
+        self,
+        stage: str,
+        *,
+        array: np.ndarray | None = None,
+        extra: str = "",
+    ) -> float | None:
+        parts = [self._series_path.name]
+        if extra:
+            parts.append(extra)
+        return log_process_memory(stage, array=array, extra=" ".join(parts))
 
-        logger.info(
-            "SeriesView close memory [%s]: RSS %.1f MB (%s)",
-            stage,
-            rss_mb,
-            self._series_path.name,
-        )
-        return rss_mb
+    def _log_close_memory(self, stage: str) -> float | None:
+        return self._log_series_memory(f"close_{stage}", array=self._frames)
 
     def _log_series_data_size(self) -> None:
         total_bytes = 0
-        for array in (self._frames,):
-            if array is not None:
-                total_bytes += array.nbytes
+        parts: list[str] = []
+        if self._frames is not None:
+            total_bytes += self._frames.nbytes
+            parts.append(f"_frames={self._frames.nbytes / (1024 * 1024):.1f}MB")
+        preview = self._blur_preview
+        if preview is not None:
+            if preview.blurred_slice_frames is not None:
+                total_bytes += preview.blurred_slice_frames.nbytes
+                parts.append(f"blurred={preview.blurred_slice_frames.nbytes / (1024 * 1024):.1f}MB")
+            total_bytes += preview.mask.nbytes
+            parts.append(f"mask={preview.mask.nbytes / (1024 * 1024):.1f}MB")
+        if self._blur_review_saved is not None:
+            saved_images = self._blur_review_saved.get("images")
+            if isinstance(saved_images, np.ndarray):
+                total_bytes += saved_images.nbytes
+                parts.append(f"review_saved={saved_images.nbytes / (1024 * 1024):.1f}MB")
         if total_bytes:
             logger.info(
-                "SeriesView releasing %.1f MB of in-memory frame data",
+                "SeriesView releasing %.1f MB of in-memory frame data (%s)",
                 total_bytes / (1024 * 1024),
+                ", ".join(parts),
             )
+
+    def _release_blur_review_state(self) -> None:
+        """Drop blur-review references without restoring viewer layout (used on window close)."""
+        self._blur_review_saved = None
+        self._blur_preview = None
+        if hasattr(self, "image_viewer"):
+            with contextlib.suppress(tk.TclError):
+                self.image_viewer.detach_companion_stack()
 
     def _release_image_viewer(self, viewer: ImageViewer | None) -> None:
         if viewer is None:
@@ -1352,6 +1523,7 @@ class SeriesView(tk.Toplevel):
 
     def _release_series_data(self) -> None:
         self._blur_preview = None
+        self._blur_review_saved = None
         self._frames = None
         self._slice_paths = ()
         self._ds = None
@@ -1380,6 +1552,7 @@ class SeriesView(tk.Toplevel):
         rss_before = self._log_close_memory("before")
         self._log_series_data_size()
 
+        self._release_blur_review_state()
         self._release_all_viewer_resources()
         self._release_series_data()
         self._release_ocr_reader()
@@ -1388,6 +1561,7 @@ class SeriesView(tk.Toplevel):
             self.grab_release()
 
         self.destroy()
+        gc.collect()
         gc.collect()
 
         rss_after = self._log_close_memory("after")

@@ -14,11 +14,11 @@ from pydicom import dcmread
 
 from anonymizer.controller.tseg.config import MIN_DICOM_SLICES
 from anonymizer.controller.tseg.contrast import ContrastResult
+from anonymizer.controller.tseg.dicom_geometry import sorted_dicom_paths
 from anonymizer.controller.tseg.segment import (
     TS_result,
     analyze_series,
     dicom_series_to_nifti,
-    sorted_dicom_paths,
 )
 from tests.controller.tseg.support.synthetic_ct import list_dcm_files
 from tests.controller.tseg.fixtures import SYNTHETIC_CT_ASSET_DIRS

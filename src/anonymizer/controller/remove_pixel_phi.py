@@ -266,7 +266,7 @@ def remove_text(pixels: ndarray, windowed_frame: NDArray[np.uint8], ocr_texts: l
 
     # Inpaint function only supports 8-bit, 16-bit UNSIGNED or 32-bit float 1-channel and 8-bit 3-channel input/output images
     return inpaint(
-        src=pixels.astype(np.float32) if pixels.dtype == np.float64 or pixels.dtype == np.int16 else pixels,
+        src=pixels.astype(np.float32) if np.issubdtype(pixels.dtype, np.floating) or pixels.dtype == np.int16 else pixels,
         inpaintMask=dilated_mask,
         inpaintRadius=5,
         flags=INPAINT_TELEA,

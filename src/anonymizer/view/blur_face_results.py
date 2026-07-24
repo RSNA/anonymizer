@@ -12,7 +12,7 @@ FACE_MASK_OVERLAY_COLOR = (0, 255, 0)
 FACE_MASK_OVERLAY_ALPHA = 0.35
 # Soft-tissue window in Hounsfield units for reviewing facial features on CT.
 FACE_REVIEW_WL_HU = 40.0
-FACE_REVIEW_WW_HU = 400.0
+FACE_REVIEW_WW_HU = 2500.0
 
 
 def face_review_wl_ww(ds: Dataset) -> tuple[float, float]:

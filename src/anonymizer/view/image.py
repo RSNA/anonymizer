@@ -529,18 +529,33 @@ class ImageViewer(ctk.CTkFrame):
         logger.debug("mouse_enter")
         self.canvas.focus_set()
 
+    def _apply_actual_display_size(self) -> bool:
+        """Set View to native frame size (View == Actual). Returns False if the canvas is not ready."""
+        actual_size = (self.image_width, self.image_height)
+        self.current_size = actual_size
+        self.canvas.config(width=actual_size[0], height=actual_size[1])
+        if self.companion_canvas is not None:
+            self.companion_canvas.config(width=actual_size[0], height=actual_size[1])
+        self.update_idletasks()
+        if self.canvas.winfo_width() <= 1 or self.canvas.winfo_height() <= 1:
+            return False
+
+        self._companion_cache.clear()
+        self.remove_from_cache(self.current_image_index)
+        self.load_and_display_image(self.current_image_index)
+        self.update_status()
+        return True
+
     def _set_initial_size(self):
         """Show the first frame at native (Actual) pixel dimensions; View == Actual at open."""
         if self._initial_display_done:
             return
+        if not self._apply_actual_display_size():
+            self.after_idle(self._set_initial_size)
+            return
         self._initial_display_done = True
-
-        self.current_size = (self.image_width, self.image_height)
-        self.canvas.config(width=self.current_size[0], height=self.current_size[1])
-        self.load_and_display_image(0)
         if self.histogram is not None:
-            self.histogram.update_image(self.images[0])
-        self.update_status()
+            self.histogram.update_image(self.images[self.current_image_index])
         self.canvas.focus_set()
 
     def _handle_histogram_update(self, wl: float, ww: float):

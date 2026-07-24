@@ -13,6 +13,7 @@ from pydicom.uid import generate_uid
 from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 
 FALCON_MIN_SLICES = 11
+SYNTHETIC_PHANTOM_VERSION = 3
 DEFAULT_SYNTHETIC_SLICE_COUNT = 12
 DEFAULT_PHANTOM_SLICE_COUNT = 24
 DEFAULT_PHANTOM_MATRIX = 256
@@ -444,12 +445,22 @@ def _coordinate_grids(rows: int, cols: int):
 def _head_hu_slice(index: int, num_slices: int, rows: int, cols: int) -> np.ndarray:
     xx, yy = _coordinate_grids(rows, cols)
     zz = (index - (num_slices - 1) / 2) * DEFAULT_SLICE_THICKNESS_MM
-    radius = np.sqrt((xx / 78.0) ** 2 + (yy / 78.0) ** 2 + (zz / 55.0) ** 2)
+    radius = np.sqrt((xx / 72.0) ** 2 + (yy / 72.0) ** 2 + (zz / 50.0) ** 2)
 
     hu = np.full((rows, cols), _HU_AIR, dtype=np.float32)
-    hu[radius <= 1.0] = _HU_SOFT_TISSUE
-    hu[(radius > 0.88) & (radius <= 1.0)] = _HU_BONE
-    hu += np.random.default_rng(index + 1).normal(0.0, 8.0, size=(rows, cols))
+    brain = radius <= 0.68
+    skull = (radius > 0.68) & (radius <= 0.98)
+    hu[brain] = 36.0
+    hu[skull] = 750.0
+
+    # Midline nasal cavity (avoid bilateral air pockets that mimic chest lungs).
+    if num_slices // 3 <= index <= (2 * num_slices) // 3:
+        nasal = (xx / 7.0) ** 2 + ((yy - 38.0) / 10.0) ** 2 <= 1.0
+        hu[nasal & brain] = _HU_AIR
+
+    hu += np.random.default_rng(index + 1).normal(0.0, 4.0, size=(rows, cols))
+    hu[radius > 1.05] = _HU_AIR
+    hu[skull] = np.maximum(hu[skull], 650.0)
     return hu.astype(np.float32)
 
 

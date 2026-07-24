@@ -13,6 +13,10 @@ from tests.controller.dicom.support.test_files import ct_small_filename
 load_dotenv()
 
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
+@pytest.mark.skipif(
+    not os.getenv("AWS_USERNAME") or not os.getenv("AWS_PASSWORD"),
+    reason="AWS credentials not configured (set AWS_USERNAME and AWS_PASSWORD)",
+)
 def test_send_1_dicomfile_to_AWS_S3_and_list_objects(temp_dir: str, controller: ProjectController):
     dcm_file_path = str(get_testdata_file(ct_small_filename))
     assert dcm_file_path
@@ -28,6 +32,8 @@ def test_send_1_dicomfile_to_AWS_S3_and_list_objects(temp_dir: str, controller: 
     controller.model.aws_cognito.password = pw
 
     s3 = controller.AWS_authenticate()
+    if s3 is None:
+        pytest.skip("AWS authentication failed (check AWS_USERNAME/AWS_PASSWORD)")
     assert s3
 
     try:
