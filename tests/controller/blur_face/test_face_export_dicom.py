@@ -8,9 +8,7 @@ import numpy as np
 import pydicom
 from pydicom.data import get_testdata_file
 
-from prototyping.ffr.face.blur import blur_face_hu_volume
-from prototyping.ffr.face.export_dicom import write_blurred_dicom_series
-from prototyping.ffr.face.volume import load_hu_stack
+from anonymizer.controller.blur_face import blur_face_hu_volume, load_hu_stack, write_blurred_dicom_series
 
 
 def _write_template_slice(path: Path, *, hu_value: float, instance_number: int) -> None:
@@ -26,10 +24,7 @@ def _write_template_slice(path: Path, *, hu_value: float, instance_number: int) 
 def test_write_blurred_dicom_series_preserves_geometry(tmp_path: Path) -> None:
     source_dir = tmp_path / "input"
     source_dir.mkdir()
-    slice_paths = tuple(
-        source_dir / f"slice_{index:03d}.dcm"
-        for index in range(2)
-    )
+    slice_paths = tuple(source_dir / f"slice_{index:03d}.dcm" for index in range(2))
     _write_template_slice(slice_paths[0], hu_value=-100.0, instance_number=1)
     _write_template_slice(slice_paths[1], hu_value=40.0, instance_number=2)
 

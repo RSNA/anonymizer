@@ -26,8 +26,11 @@ ROI_SUBSET: tuple[str, ...] = (
 SEGMENTATION_MODE = "3mm"
 
 # Per-series cache directory (NIfTI volume, ROI seg masks, contrast statistics JSON).
-TSEG_CACHE_DIRNAME = ".tseg_cache"
+TSEG_CACHE_DIRNAME = "A_TS_SEG"
 GEOMETRY_CACHE_FILENAME = "geometry.json"
+CONTRAST_STATS_FILENAME = "contrast_stats.json"
+CONTRAST_STATS_HN_FILENAME = "contrast_stats_hn.json"
+CONTRAST_PHASE_CACHE_FILENAME = "contrast_phase.json"
 
 # DICOM geometry heuristics (plane, localizer vs volume).
 LOCALIZER_MAX_SLICES = 10
@@ -38,3 +41,8 @@ PLANE_AMBIGUITY_DOT_DELTA = 0.05
 # Head/neck vessel stats (when brain present) + XGBoost after organ HU statistics.
 # Set False on low-memory hosts to fall back to FALCON for contrast.
 ENABLE_TS_CONTRAST = True
+
+# Licensed TotalSegmentator ``face`` task (Dataset303; academic ``aca_*`` license).
+FACE_TASK = "face"
+FACE_MASK_FILENAME = "face.nii.gz"
+ENABLE_TSEG_FACE = True

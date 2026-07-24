@@ -1,7 +1,7 @@
 """DICOM series geometry: acquisition plane, 2D/3D dimensionality, and provenance.
 
 Used by the tseg pipeline and Harmonize to sort slices correctly, cache metadata under
-``.tseg_cache/geometry.json``, and decide whether TotalSegmentator should run.
+``A_TS_SEG/geometry.json``, and decide whether TotalSegmentator should run.
 """
 
 from __future__ import annotations
@@ -10,12 +10,16 @@ import json
 import logging
 import math
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
 
+import numpy as np
+import SimpleITK as sitk
 from pydicom import Dataset, dcmread
 
+from anonymizer.controller.tseg.cache import resolve_series_cache_dir
 from anonymizer.controller.tseg.config import (
     GEOMETRY_CACHE_FILENAME,
     LOCALIZER_MAX_SLICES,
@@ -23,8 +27,8 @@ from anonymizer.controller.tseg.config import (
     MIN_THROUGH_PLANE_EXTENT_MM,
     OBLIQUE_DOT_THRESHOLD,
     PLANE_AMBIGUITY_DOT_DELTA,
-    TSEG_CACHE_DIRNAME,
 )
+from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +60,11 @@ RENDER_KEYWORDS = ("MIP", "MINIP", "VR", "VRT", "3D", "SSD", "AVERAGE", "THICK S
 LOCALIZER_KEYWORDS = ("SCOUT", "TOPO", "TOPOGRAM", "SCANOGRAM", "LOCALIZER", "SURVIEW", "PLAN")
 
 SECONDARY_CAPTURE_SOP = "1.2.840.10008.5.1.4.1.1.7"
+IMAGE_STORAGE_SOP_PREFIX = "1.2.840.10008.5.1.4.1.1."
+NON_STACKABLE_SOP_PREFIXES = (
+    "1.2.840.10008.5.1.4.1.1.88",  # Structured Report
+    "1.2.840.10008.5.1.4.1.1.104",  # Encapsulated PDF
+)
 
 
 @dataclass(frozen=True)
@@ -456,6 +465,224 @@ def sorted_dicom_paths(series_directory: Path) -> list[Path]:
     )
 
 
+def is_stackable_image_header(header: Dataset) -> bool:
+    """Return True when a lightweight header describes one grayscale/stackable slice."""
+    sop_class = str(getattr(header, "SOPClassUID", "") or "")
+    if not sop_class.startswith(IMAGE_STORAGE_SOP_PREFIX):
+        return False
+    if sop_class == SECONDARY_CAPTURE_SOP or any(
+        sop_class.startswith(prefix) for prefix in NON_STACKABLE_SOP_PREFIXES
+    ):
+        return False
+    rows = int(getattr(header, "Rows", 0) or 0)
+    cols = int(getattr(header, "Columns", 0) or 0)
+    if rows < 1 or cols < 1:
+        return False
+    if getattr(header, "PhotometricInterpretation", None) is None:
+        return False
+    if getattr(header, "BitsAllocated", None) is None:
+        return False
+    if int(getattr(header, "NumberOfFrames", 1) or 1) > 1:
+        return False
+    if getattr(header, "ImageOrientationPatient", None) is None:
+        return False
+    return getattr(header, "ImagePositionPatient", None) is not None
+
+
+def stackable_dicom_paths(series_directory: Path) -> list[Path]:
+    """
+    Return stackable image slice paths sorted along the acquisition direction.
+
+    Excludes non-image DICOM objects and stray instances from other series that
+    sometimes appear in the same directory.
+    """
+    series_directory = Path(series_directory).resolve()
+    entries: list[tuple[Path, Dataset]] = []
+    for path in list_dicom_paths(series_directory):
+        try:
+            header = dcmread(path, stop_before_pixels=True, force=True)
+        except Exception as exc:
+            logger.warning("Skipping unreadable DICOM header %s: %s", path.name, exc)
+            continue
+        if not is_stackable_image_header(header):
+            logger.debug(
+                "Skipping non-stackable DICOM %s (SOPClassUID=%s)",
+                path.name,
+                getattr(header, "SOPClassUID", ""),
+            )
+            continue
+        entries.append((path, header))
+
+    if not entries:
+        raise ValueError(f"No stackable image slices found in {series_directory}")
+
+    series_uids = Counter(
+        str(header.get("SeriesInstanceUID", "") or "")
+        for _, header in entries
+        if header.get("SeriesInstanceUID")
+    )
+    if len(series_uids) > 1:
+        dominant_uid = series_uids.most_common(1)[0][0]
+        excluded = sum(
+            1 for _, header in entries if str(header.get("SeriesInstanceUID", "") or "") != dominant_uid
+        )
+        if excluded:
+            logger.warning(
+                "Excluding %d DICOM instance(s) with non-dominant SeriesInstanceUID in %s",
+                excluded,
+                series_directory,
+            )
+        entries = [
+            (path, header)
+            for path, header in entries
+            if str(header.get("SeriesInstanceUID", "") or "") == dominant_uid
+        ]
+
+    path_by_sop = {str(header.SOPInstanceUID): path for path, header in entries}
+    ordered_headers = headers_in_stack_order([header for _, header in entries])
+    ordered_paths = [path_by_sop[str(header.SOPInstanceUID)] for header in ordered_headers]
+    return ordered_paths
+
+
+def _slice_spacing_mm_from_headers(headers: Sequence[Dataset]) -> float:
+    first = headers[0]
+    fallback = float(getattr(first, "SliceThickness", 1.0) or 1.0)
+    if len(headers) < 2:
+        return fallback
+    try:
+        slice_normal = slice_normal_from_iop(first.ImageOrientationPatient)
+        positions = sorted(
+            project_ipp_onto_normal(header.ImagePositionPatient, slice_normal) for header in headers
+        )
+        steps = [abs(positions[index + 1] - positions[index]) for index in range(len(positions) - 1)]
+        positive_steps = [step for step in steps if step > 1e-6]
+        if positive_steps:
+            return sum(positive_steps) / len(positive_steps)
+    except (AttributeError, TypeError, ValueError):
+        pass
+    return fallback
+
+
+def _dicom_slice_has_pixel_data(path: Path) -> bool:
+    """Return True when a DICOM instance contains decodable pixel data."""
+    try:
+        ds = dcmread(str(path), force=True)
+    except Exception:
+        return False
+    if hasattr(ds, "PixelData") or hasattr(ds, "FloatPixelData") or hasattr(ds, "DoubleFloatPixelData"):
+        try:
+            _ = ds.pixel_array
+        except (AttributeError, ValueError, TypeError):
+            return False
+        return True
+    return False
+
+
+def filter_dicom_paths_with_pixel_data(paths: Sequence[Path]) -> list[Path]:
+    """Keep only stackable slice paths whose pixel data can be decoded."""
+    readable: list[Path] = []
+    for path in paths:
+        if _dicom_slice_has_pixel_data(path):
+            readable.append(Path(path))
+    return readable
+
+
+def build_sitk_volume_from_series_frames(
+    reference_ds: Dataset,
+    frames: np.ndarray,
+    slice_paths: Sequence[Path],
+    *,
+    slice_spacing_mm: float | None = None,
+) -> sitk.Image:
+    """
+    Build a 3D SimpleITK volume from a ``load_series_frames`` stack.
+
+    Uses the same geometry tags as ``build_sitk_volume_from_pydicom`` so TS and face blur
+    align with Series View pixels (modality LUT, MONOCHROME1 inversion, resize).
+    """
+    paths = tuple(Path(path) for path in slice_paths)
+    if frames.ndim != 3:
+        raise ValueError(f"Expected grayscale slice stack (Z, Y, X), got shape {frames.shape}")
+    if frames.shape[0] != len(paths):
+        raise ValueError(f"Frame count {frames.shape[0]} != slice path count {len(paths)}")
+
+    first = reference_ds
+    row_spacing, col_spacing = (float(value) for value in first.PixelSpacing)
+
+    image = sitk.GetImageFromArray(np.asarray(frames))
+    if slice_spacing_mm is not None and slice_spacing_mm > 0:
+        spacing_z = float(slice_spacing_mm)
+    else:
+        headers = [dcmread(path, stop_before_pixels=True, force=True) for path in paths]
+        spacing_z = _slice_spacing_mm_from_headers(headers)
+    iop = [float(value) for value in first.ImageOrientationPatient]
+    row_direction = iop[:3]
+    column_direction = iop[3:]
+    slice_direction = list(_cross(_vector3(row_direction), _vector3(column_direction)))
+
+    image.SetSpacing((col_spacing, row_spacing, spacing_z))
+    image.SetOrigin([float(value) for value in first.ImagePositionPatient])
+    image.SetDirection(tuple(row_direction + column_direction + slice_direction))
+    return image
+
+
+def build_sitk_volume_from_pydicom(slice_paths: Sequence[Path]) -> sitk.Image:
+    """Assemble a 3D SimpleITK volume from per-slice pydicom reads (same decoder path as Series View)."""
+    paths = tuple(Path(path) for path in slice_paths)
+    if not paths:
+        raise ValueError("No DICOM slice paths provided")
+
+    readable_paths: list[Path] = []
+    for path in paths:
+        if _dicom_slice_has_pixel_data(path):
+            readable_paths.append(path)
+        else:
+            logger.warning("Skipping DICOM slice without pixel data: %s", path.name)
+
+    if not readable_paths:
+        raise ValueError("No DICOM slices with pixel data found")
+
+    headers = [dcmread(path, stop_before_pixels=True, force=True) for path in readable_paths]
+    first = headers[0]
+    row_spacing, col_spacing = (float(value) for value in first.PixelSpacing)
+
+    arrays: list[np.ndarray] = []
+    for path in readable_paths:
+        ds = dcmread(str(path), force=True)
+        pixels = ds.pixel_array
+        if pixels.ndim > 2:
+            pixels = pixels[0]
+        arrays.append(np.asarray(pixels))
+
+    stack = np.stack(arrays, axis=0)
+    image = sitk.GetImageFromArray(stack)
+
+    slice_spacing = _slice_spacing_mm_from_headers(headers)
+    iop = [float(value) for value in first.ImageOrientationPatient]
+    row_direction = iop[:3]
+    column_direction = iop[3:]
+    slice_direction = list(_cross(_vector3(row_direction), _vector3(column_direction)))
+
+    image.SetSpacing((col_spacing, row_spacing, slice_spacing))
+    image.SetOrigin([float(value) for value in first.ImagePositionPatient])
+    image.SetDirection(tuple(row_direction + column_direction + slice_direction))
+    return image
+
+
+def read_sitk_volume_from_dicom_paths(slice_paths: Sequence[Path]) -> sitk.Image:
+    """
+    Load a DICOM stack into SimpleITK using pydicom per-slice reads.
+
+    Series View already loads the same slices via pydicom (``load_series_frames``).
+    SimpleITK ``ImageSeriesReader`` can fail on transfer syntaxes or instances that
+    pydicom decodes fine, so we prefer the pydicom path for consistency.
+    """
+    paths = tuple(Path(path) for path in slice_paths)
+    if not paths:
+        raise ValueError("No DICOM slice paths provided")
+    return build_sitk_volume_from_pydicom(paths)
+
+
 def headers_in_stack_order(headers: list[Dataset]) -> list[Dataset]:
     """Sort loaded headers along the slice normal derived from the first instance."""
     if not headers:
@@ -558,7 +785,7 @@ def analyze_series_geometry(series_directory: Path) -> SeriesGeometryResult:
 
 
 def tseg_cache_dir(series_directory: Path) -> Path:
-    return Path(series_directory).resolve() / TSEG_CACHE_DIRNAME
+    return resolve_series_cache_dir(series_directory)
 
 
 def geometry_cache_path(series_directory: Path) -> Path:
@@ -618,18 +845,92 @@ def load_geometry_cache(series_directory: Path) -> SeriesGeometryResult | None:
         return None
 
 
+# User-facing labels (msgids for gettext). Internal codes remain on SeriesGeometryResult.
+_PROVENANCE_MSGIDS: dict[ProvenanceLabel, str] = {
+    "original": "Original acquisition",
+    "derived_reformat": "Reformatted series",
+    "derived_3d_render": "3D rendering (MIP/VR)",
+    "derived_secondary": "Derived secondary capture",
+    "unknown": "Unknown source",
+}
+
+_PLANE_MSGIDS: dict[PlaneLabel, str] = {
+    "axial": "Axial",
+    "sagittal": "Sagittal",
+    "coronal": "Coronal",
+    "oblique": "Oblique",
+    "unknown": "Unknown orientation",
+}
+
+_DIMENSIONALITY_MSGIDS: dict[DimensionalityLabel, str] = {
+    "volume_3d": "Diagnostic 3D volume",
+    "multiframe_volume": "Multi-frame volume",
+    "localizer_2d": "Localizer or scout",
+    "single_slice_2d": "Single slice",
+    "projection_2d": "2D projection",
+    "unknown": "Unknown series type",
+}
+
+
+def provenance_label(provenance: ProvenanceLabel) -> str:
+    return _(_PROVENANCE_MSGIDS.get(provenance, "Unknown source"))
+
+
+def plane_label(plane: PlaneLabel) -> str:
+    return _(_PLANE_MSGIDS.get(plane, "Unknown orientation"))
+
+
+def dimensionality_label(dimensionality: DimensionalityLabel) -> str:
+    return _(_DIMENSIONALITY_MSGIDS.get(dimensionality, "Unknown series type"))
+
+
+def ts_suitability_label(ts_suitable: bool) -> str:
+    if ts_suitable:
+        return _("Suitable for segmentation and anatomy analysis")
+    return _("Not suitable for segmentation and anatomy analysis")
+
+
+def geometry_skip_reason_label(geometry: SeriesGeometryResult) -> str:
+    """Plain-language reason anatomy segmentation is unavailable."""
+    if geometry.dimensionality == "localizer_2d":
+        return _("Localizer and scout series are not suitable for anatomy analysis")
+    if geometry.dimensionality == "single_slice_2d":
+        return _("Single-slice series are not suitable for anatomy analysis")
+    if geometry.dimensionality == "projection_2d":
+        return _("Projection images are not suitable for anatomy analysis")
+    if geometry.provenance == "derived_3d_render":
+        return _("3D renderings (MIP or VR) are not suitable for anatomy analysis")
+    if geometry.dimensionality == "unknown":
+        return _("Series type could not be determined for anatomy analysis")
+    return _("This series is not suitable for anatomy analysis")
+
+
+def geometry_analysis_progress_prefix() -> str:
+    return _("Geometry analysis") + ": "
+
+
 def format_geometry_summary(geometry: SeriesGeometryResult) -> str:
-    """Compact one-line summary for UI captions and status bars."""
+    """Compact one-line summary for projection tiles and cached geometry captions."""
     ts_tag = "TS ok" if geometry.ts_suitable else "TS skip"
     return f"{geometry.plane} · {geometry.dimensionality} · {ts_tag}"
+
+
+def format_series_view_geometry_line(geometry: SeriesGeometryResult) -> str:
+    """Detailed one-line geometry caption for Series View row 2."""
+    return (
+        f"{_('Provenance')}: {provenance_label(geometry.provenance)} · "
+        f"{_('Geometry')}: {plane_label(geometry.plane)} · "
+        f"{dimensionality_label(geometry.dimensionality)} · "
+        f"{ts_suitability_label(geometry.ts_suitable)} ·"
+    )
 
 
 def format_geometry_progress_message(geometry: SeriesGeometryResult) -> str:
     """Progress/status text after geometry analysis in Harmonize."""
     summary = format_geometry_summary(geometry)
-    if not geometry.ts_suitable and geometry.notes:
-        return f"Geometry: {summary} — {geometry.notes}"
-    return f"Geometry: {summary}"
+    if not geometry.ts_suitable:
+        return f"{geometry_analysis_progress_prefix()}{summary} — {geometry_skip_reason_label(geometry)}"
+    return f"{geometry_analysis_progress_prefix()}{summary}"
 
 
 def resolve_series_geometry(
@@ -638,7 +939,7 @@ def resolve_series_geometry(
     use_cache: bool = True,
     write_cache: bool = True,
 ) -> SeriesGeometryResult:
-    """Load cached geometry or analyze headers and optionally persist to ``.tseg_cache/geometry.json``."""
+    """Load cached geometry or analyze headers and optionally persist to ``A_TS_SEG/geometry.json``."""
     series_directory = Path(series_directory).resolve()
     if use_cache:
         cached = load_geometry_cache(series_directory)

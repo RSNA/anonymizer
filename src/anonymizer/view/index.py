@@ -15,7 +15,7 @@ from anonymizer.utils.translate import _
 from anonymizer.view.dashboard import Dashboard
 from anonymizer.view.delete_studies_dialog import DeleteStudiesDialog
 from anonymizer.view.projection import ProjectionView
-from anonymizer.view.series import SeriesView
+from anonymizer.view.series import show_series_view
 
 logger = logging.getLogger(__name__)
 
@@ -322,7 +322,11 @@ class IndexView(tk.Toplevel):
             # Filter out hidden files/directories and get first series directory
             first_series_path = next((p for p in study_path.iterdir() if not p.name.startswith(".")), None)
             if first_series_path:
-                SeriesView(self, anon_model=self._anon_model, series_path=first_series_path)
+                show_series_view(
+                    self,
+                    anon_model=self._anon_model,
+                    series_path=first_series_path,
+                )
 
     def _escape_keypress(self, event):
         logger.info("_escape_pressed")

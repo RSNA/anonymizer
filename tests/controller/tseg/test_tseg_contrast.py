@@ -8,15 +8,23 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from anonymizer.controller.tseg.contrast import (
+    CONTRAST_ORGANS_HN,
     _apply_hu_gate,
     _run_contrast_classifier,
+    contrast_phase_cache_is_valid,
+    estimate_contrast_remaining_sec,
     head_dominant_limited_fov,
     hu_gate_iv_contrast,
+    load_contrast_statistics,
     phase_to_iv_contrast,
     predict_contrast_phase,
     resolve_contrast_device,
+    save_contrast_phase_cache,
+    save_contrast_statistics,
+    save_contrast_stats_hn,
     verify_xgboost_runtime,
 )
+from anonymizer.controller.tseg.segment import estimate_tseg_contrast_remaining_sec, series_cache_dir
 
 
 def test_resolve_contrast_device_matches_resolve_device() -> None:
@@ -143,6 +151,191 @@ def test_predict_contrast_phase_reuses_existing_stats(
     assert result["phase"] == "native"
     assert inference_sec >= 0.0
     assert hu_medians["liver"] == 50.0
+
+
+@pytest.mark.parametrize(
+    ("stats_cached", "stats_hn_cached", "phase_cached", "needs_head_neck", "expected"),
+    [
+        (True, True, True, True, 0.0),
+        (True, True, False, True, 2.0),
+        (True, False, False, True, 22.0),
+        (True, False, False, False, 2.0),
+        (False, False, False, False, 60.0),
+    ],
+)
+def test_estimate_contrast_remaining_sec(
+    stats_cached: bool,
+    stats_hn_cached: bool,
+    phase_cached: bool,
+    needs_head_neck: bool,
+    expected: float,
+) -> None:
+    assert (
+        estimate_contrast_remaining_sec(
+            stats_cached=stats_cached,
+            stats_hn_cached=stats_hn_cached,
+            phase_cached=phase_cached,
+            needs_head_neck=needs_head_neck,
+        )
+        == expected
+    )
+
+
+@patch("anonymizer.controller.tseg.contrast._run_contrast_classifier")
+@patch("anonymizer.controller.tseg.contrast._require_totalsegmentator")
+@patch("anonymizer.controller.tseg.contrast.nib.load")
+def test_predict_contrast_phase_reuses_phase_cache(
+    mock_nib_load: MagicMock,
+    mock_require_ts: MagicMock,
+    mock_classifier: MagicMock,
+    tmp_path: Path,
+) -> None:
+    nifti_path = tmp_path / "volume.nii.gz"
+    nifti_path.write_bytes(b"")
+    stats_path = tmp_path / "contrast_stats.json"
+    phase_path = tmp_path / "contrast_phase.json"
+    existing_stats = _sample_contrast_stats()
+    save_contrast_statistics(existing_stats, stats_path)
+    save_contrast_phase_cache(
+        {
+            "phase": "portal_venous",
+            "pi_time": 45.0,
+            "probability": 0.91,
+            "pi_time_min": 44.0,
+            "pi_time_max": 46.0,
+            "stddev": 0.5,
+        },
+        hu_medians={"liver": 120.0},
+        phase_cache_path=phase_path,
+    )
+
+    result, inference_sec, hu_medians = predict_contrast_phase(
+        nifti_path,
+        existing_stats=existing_stats,
+        stats_output_path=stats_path,
+        phase_cache_path=phase_path,
+    )
+
+    mock_require_ts.assert_not_called()
+    mock_nib_load.assert_not_called()
+    mock_classifier.assert_not_called()
+    assert result["phase"] == "portal_venous"
+    assert inference_sec >= 0.0
+    assert hu_medians["liver"] == 120.0
+    assert contrast_phase_cache_is_valid(phase_path, stats_path)
+
+
+@patch("anonymizer.controller.tseg.contrast._run_contrast_classifier")
+@patch("anonymizer.controller.tseg.contrast._require_totalsegmentator")
+@patch("anonymizer.controller.tseg.contrast.nib.load")
+def test_predict_contrast_phase_emits_progress_for_phase_cache(
+    mock_nib_load: MagicMock,
+    mock_require_ts: MagicMock,
+    mock_classifier: MagicMock,
+    tmp_path: Path,
+) -> None:
+    nifti_path = tmp_path / "volume.nii.gz"
+    nifti_path.write_bytes(b"")
+    stats_path = tmp_path / "contrast_stats.json"
+    phase_path = tmp_path / "contrast_phase.json"
+    existing_stats = _sample_contrast_stats()
+    save_contrast_statistics(existing_stats, stats_path)
+    save_contrast_phase_cache(
+        {
+            "phase": "native",
+            "pi_time": 0.0,
+            "probability": 0.99,
+            "pi_time_min": 0.0,
+            "pi_time_max": 0.0,
+            "stddev": 0.0,
+        },
+        hu_medians={"liver": 50.0},
+        phase_cache_path=phase_path,
+    )
+    events: list[tuple[str, str, float]] = []
+
+    predict_contrast_phase(
+        nifti_path,
+        existing_stats=existing_stats,
+        stats_output_path=stats_path,
+        phase_cache_path=phase_path,
+        progress=lambda stage, message, fraction: events.append((stage, message, fraction)),
+    )
+
+    assert events == [("contrast_phase_cache", "Using cached contrast phase classification", 1.0)]
+
+
+@patch("anonymizer.controller.tseg.contrast._run_contrast_classifier")
+@patch("anonymizer.controller.tseg.contrast._require_totalsegmentator")
+@patch("anonymizer.controller.tseg.contrast.nib.load")
+def test_predict_contrast_phase_reuses_stats_hn_cache(
+    mock_nib_load: MagicMock,
+    mock_require_ts: MagicMock,
+    mock_classifier: MagicMock,
+    tmp_path: Path,
+) -> None:
+    mock_ts = MagicMock()
+    mock_require_ts.return_value = mock_ts
+    mock_classifier.return_value = {
+        "pi_time": 12.0,
+        "phase": "native",
+        "probability": 0.88,
+        "pi_time_min": 10.0,
+        "pi_time_max": 14.0,
+        "stddev": 1.0,
+    }
+    nifti_path = tmp_path / "volume.nii.gz"
+    nifti_path.write_bytes(b"")
+    stats_path = tmp_path / "contrast_stats.json"
+    stats_hn_path = tmp_path / "contrast_stats_hn.json"
+    existing_stats = _sample_contrast_stats(brain_volume=5000.0)
+    save_contrast_statistics(existing_stats, stats_path)
+    save_contrast_stats_hn(
+        {organ: {"intensity": 55.0, "volume": 100.0} for organ in CONTRAST_ORGANS_HN},
+        stats_hn_path,
+    )
+
+    result, _, _ = predict_contrast_phase(
+        nifti_path,
+        existing_stats=existing_stats,
+        stats_output_path=stats_path,
+        stats_hn_output_path=stats_hn_path,
+    )
+
+    mock_ts.assert_not_called()
+    mock_nib_load.assert_called_once_with(nifti_path)
+    mock_classifier.assert_called_once()
+    assert result["phase"] == "native"
+
+
+def test_estimate_tseg_contrast_remaining_sec_from_cache(tmp_path: Path) -> None:
+    series_dir = tmp_path / "series"
+    cache_dir = series_cache_dir(series_dir)
+    cache_dir.mkdir(parents=True)
+    stats_path = cache_dir / "contrast_stats.json"
+    phase_path = cache_dir / "contrast_phase.json"
+    existing_stats = _sample_contrast_stats(brain_volume=5000.0)
+    save_contrast_statistics(existing_stats, stats_path)
+    save_contrast_stats_hn(
+        {organ: {"intensity": 55.0, "volume": 100.0} for organ in CONTRAST_ORGANS_HN},
+        cache_dir / "contrast_stats_hn.json",
+    )
+
+    assert estimate_tseg_contrast_remaining_sec(series_dir) == 2.0
+
+    save_contrast_phase_cache(
+        {
+            "phase": "native",
+            "pi_time": 5.0,
+            "probability": 0.9,
+            "pi_time_min": 5.0,
+            "pi_time_max": 5.0,
+            "stddev": 0.0,
+        },
+        hu_medians={"liver": 50.0},
+        phase_cache_path=phase_path,
+    )
+    assert estimate_tseg_contrast_remaining_sec(series_dir) == 0.0
 
 
 def test_hu_gate_head_only_cect() -> None:

@@ -12,10 +12,9 @@ from anonymizer.controller.create_projections import (
     ProjectionImageSizeConfig,
     create_projection_from_series,
 )
-from anonymizer.controller.tseg.dicom_geometry import format_geometry_summary, load_geometry_cache
 from anonymizer.model.anonymizer import AnonymizerModel, PHI_IndexRecord
 from anonymizer.utils.translate import _
-from anonymizer.view.series import SeriesView
+from anonymizer.view.series import SeriesView, show_series_view
 
 logger = logging.getLogger(__name__)
 
@@ -299,13 +298,6 @@ class ProjectionView(tk.Toplevel):
 
         return photo_image, projection
 
-    @staticmethod
-    def _series_geometry_caption(series_path: Path) -> str:
-        geometry = load_geometry_cache(series_path)
-        if geometry is None:
-            return ""
-        return format_geometry_summary(geometry)
-
     def _create_or_update_label(
         self,
         row,
@@ -329,20 +321,9 @@ class ProjectionView(tk.Toplevel):
             )
 
         label = tk.Label(self._pv_frame, image=combined_image)
-        grid_row = row * 2
-        label.grid(row=grid_row, column=col)
+        label.grid(row=row, column=col)
         # Store a reference to avoid garbage collection by tkinter
         label.photo_image = combined_image  # type: ignore
-
-        caption = self._series_geometry_caption(series_path) if series_path else ""
-        if caption:
-            caption_label = tk.Label(
-                self._pv_frame,
-                text=caption,
-                font=("TkDefaultFont", 9),
-                fg="#888888",
-            )
-            caption_label.grid(row=grid_row + 1, column=col, pady=(0, 4))
 
         if projection and series_path:
             label.bind(
@@ -395,7 +376,10 @@ class ProjectionView(tk.Toplevel):
             self._series_view.focus_force()
             return
 
-        self._series_view = SeriesView(self, anon_model=self._anon_model, series_path=series_path)
+        self._series_view = show_series_view(
+            self,
+            anon_model=self._anon_model,
+            series_path=series_path,
+        )
         if self._series_view is None:
-            logger.error("Internal Error creating SeriesView")
             return

@@ -36,6 +36,7 @@ from pydicom.tag import Tag
 from pydicom.uid import ExplicitVRLittleEndian
 
 from anonymizer.controller.remove_pixel_phi import OCRText
+from anonymizer.controller.tseg.dicom_geometry import stackable_dicom_paths
 from anonymizer.utils.storage import get_dcm_files
 
 logger = logging.getLogger(__name__)
@@ -558,7 +559,7 @@ def get_wl_ww(ds: Dataset) -> tuple[float, float]:
     return wl_float, ww_float
 
 
-def load_series_frames(series_path: Path, border_px: int | None = 20) -> tuple[Dataset, ndarray]:
+def load_series_frames(series_path: Path, border_px: int | None = 20) -> tuple[Dataset, ndarray, tuple[Path, ...]]:
     """
     Loads and processes DICOM series frames from a directory, resizing to match
     the first frame's dimensions.
@@ -578,6 +579,7 @@ def load_series_frames(series_path: Path, border_px: int | None = 20) -> tuple[D
               Dtype will be consitent for modality.
               For grayscale, if modality LUT applied rescale operation then conversion to float64 will occur
               Shape: (num_frames, height, width) or (num_frames, height, width, 3).
+            - Source DICOM paths in the same order as stacked frames (one entry per frame).
 
     Raises:
         ValueError: If no DICOM files are found, or if essential DICOM tags
@@ -590,60 +592,51 @@ def load_series_frames(series_path: Path, border_px: int | None = 20) -> tuple[D
         raise FileNotFoundError(f"Provided path is not a directory: {series_path}")
 
     try:
-        dcm_paths: list[Path] = sorted(get_dcm_files(series_path))
-    except PermissionError as e:
-        logger.error(f"Permission denied accessing {series_path}: {e}")
-        raise
-    except Exception as e:  # Catch other potential OS errors
-        logger.error(f"Error listing files in {series_path}: {e}")
-        raise ValueError(f"Could not list files in directory: {series_path}") from e
+        dcm_paths = stackable_dicom_paths(series_path)
+    except ValueError as exc:
+        logger.warning("Falling back to legacy DICOM listing for %s: %s", series_path, exc)
+        try:
+            dcm_paths = sorted(get_dcm_files(series_path))
+        except PermissionError as e:
+            logger.error(f"Permission denied accessing {series_path}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error listing files in {series_path}: {e}")
+            raise ValueError(f"Could not list files in directory: {series_path}") from e
+
+        def get_instance_number(path: Path) -> int:
+            try:
+                ds_header = dcmread(str(path), stop_before_pixels=True, force=True)
+                return int(ds_header.get("InstanceNumber", 999999))
+            except (ValueError, TypeError, InvalidDicomError):
+                return 999999
+
+        dcm_paths.sort(key=get_instance_number)
 
     if not dcm_paths:
         raise ValueError(f"No DICOM files found in {series_path}")
 
-    # --- Pre-sort paths by InstanceNumber using lightweight headers ---
-    def get_instance_number(path: Path) -> int:
-        try:
-            # stop_before_pixels=True prevents loading the heavy image data into RAM
-            ds_header = dcmread(str(path), stop_before_pixels=True, force=True)
-            return int(ds_header.get("InstanceNumber", 999999))
-        except (ValueError, TypeError, InvalidDicomError):
-            return 999999  # Push files with missing/bad tags to the end
-
-    dcm_paths.sort(key=get_instance_number)
-
     processed_frames: list[ndarray] = []
-    ds1: Dataset | None = None  # To store the first dataset
-    target_size: tuple[int, int] | None = None  # (height, width)
+    processed_paths: list[Path] = []
+    ds1: Dataset | None = None
+    target_size: tuple[int, int] | None = None
     series_pi: str = ""
-    # --- Process the first file to set the standard ---
-    try:
-        ds1 = dcmread(str(dcm_paths[0]), force=True)
-        # Validate first file AND get initial parameters
-        raw_pixels, rows, cols, pi = validate_dicom_pixel_array(ds1)
-        target_size = (rows, cols)
-        series_pi = pi.upper()
-        logger.info(
-            f"Series detected as {series_pi} with target size {target_size} and pixels data type {raw_pixels.dtype}"
-        )
-    except (InvalidDicomError, ValueError, AttributeError, KeyError) as e:
-        # Catch errors from reading or validating the *first* file
-        raise ValueError(f"Error validating or reading essential tags from first file {dcm_paths[0]}: {e}") from e
-    except Exception as e:
-        raise ValueError(f"Unexpected error reading first file {dcm_paths[0]}: {e}") from e
 
-    # --- Loop through series files ---
+    # --- Loop through series files (skip non-image instances without PixelData) ---
     for dcm_path in dcm_paths:
         try:
-            # Don't re-read and validate first file:
-            if processed_frames != []:
-                ds = dcmread(str(dcm_path), force=True)
-                raw_pixels, rows, cols, pi = validate_dicom_pixel_array(ds)
-            else:
-                ds = ds1
+            ds = dcmread(str(dcm_path), force=True)
+            raw_pixels, rows, cols, pi = validate_dicom_pixel_array(ds)
 
-            # --- Series PI Consistency Check ---
-            if pi != series_pi:
+            if ds1 is None:
+                ds1 = ds
+                target_size = (rows, cols)
+                series_pi = pi.upper()
+                logger.info(
+                    f"Series detected as {series_pi} with target size {target_size} "
+                    f"from {dcm_path.name} and pixels data type {raw_pixels.dtype}"
+                )
+            elif pi != series_pi:
                 logger.warning(f"Inconsistent PI in {dcm_path} ({pi}) vs first file ({series_pi}). Skipping file.")
                 continue
 
@@ -723,6 +716,7 @@ def load_series_frames(series_path: Path, border_px: int | None = 20) -> tuple[D
                         processed_frame = resize(processed_frame, (target_w, target_h), interpolation=interpolation)
 
                     processed_frames.append(processed_frame)
+                    processed_paths.append(dcm_path)
                 else:
                     raise RuntimeError(f"CRITICAL Error: Frame {frame_idx} from {dcm_path} failed to process.")
 
@@ -733,8 +727,8 @@ def load_series_frames(series_path: Path, border_px: int | None = 20) -> tuple[D
             logger.error(f"Unexpected error processing file {dcm_path}: {e}")
             raise ValueError(f"Error processing file in series: {dcm_path}") from e
 
-    if not processed_frames:
-        raise ValueError(f"Could not load any valid frames from series: {series_path}")
+    if ds1 is None or not processed_frames:
+        raise ValueError(f"No image slices with PixelData found in {series_path}")
 
     # --- Stack the list of consistently typed and sized frames ---
     try:
@@ -749,7 +743,7 @@ def load_series_frames(series_path: Path, border_px: int | None = 20) -> tuple[D
         f"Final stacked array - Shape: {all_series_frames_stacked.shape}, Dtype: {all_series_frames_stacked.dtype}"
     )
 
-    return ds1, all_series_frames_stacked
+    return ds1, all_series_frames_stacked, tuple(processed_paths)
 
 
 def apply_series_description(series_path: Path, description: str) -> bool:
@@ -778,12 +772,19 @@ def apply_series_description(series_path: Path, description: str) -> bool:
         return False
 
     success = True
-    logger.info("Updated SeriesDescription on {series_path}")
+    logger.info("Updated SeriesDescription on %s", series_path)
     for dcm_path in dcm_paths:
         try:
-            ds = dcmread(str(dcm_path), stop_before_pixels=True, force=True)
+            # Full read required: saving after stop_before_pixels=True drops PixelData.
+            ds = dcmread(str(dcm_path), force=True)
+            if not hasattr(ds, "PixelData"):
+                logger.warning(
+                    "Skipping SeriesDescription update for %s: no PixelData present",
+                    dcm_path.name,
+                )
+                continue
             ds.SeriesDescription = description
-            ds.save_as(dcm_path, write_like_original=False)
+            ds.save_as(dcm_path, write_like_original=True)
 
         except Exception as ex:
             logger.exception(f"Failed to update SeriesDescription on {dcm_path}: {ex}")
@@ -1041,7 +1042,7 @@ def create_projection_from_series(series_path: Path) -> Projection:
 
     logger.debug(f"Create Projection from {series_path.name}")
 
-    ds1, all_series_frames = load_series_frames(series_path)
+    ds1, all_series_frames, _slice_paths = load_series_frames(series_path)
 
     # Handle single frame in series:
     if all_series_frames.shape[0] == 1:

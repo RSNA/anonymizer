@@ -106,6 +106,17 @@ class UID(Base):
     phi_uid: Mapped[str] = mapped_column(String, unique=True, index=True)
 
 
+@dataclass(frozen=True)
+class StudyPhiHeader:
+    """PHI study/patient fields for display headers (not anonymized DICOM tags)."""
+
+    patient_name: str = ""
+    patient_id: str = ""
+    study_date: str = ""
+    accession_number: str = ""
+    study_description: str = ""
+
+
 @dataclass
 class PHI_IndexRecord:
     anon_patient_id: str
@@ -455,6 +466,26 @@ class AnonymizerModel:
         return phi.patient_name if phi else None
 
     @use_session(is_read_only_operation=True)
+    def get_study_phi_header_by_anon_study_uid(self, anon_study_uid: str) -> StudyPhiHeader | None:
+        """Resolve PHI patient/study metadata for a stored anonymized study UID."""
+        stmt = (
+            select(Study)
+            .where(Study.anon_study_uid == anon_study_uid)
+            .options(joinedload(Study.patient))
+        )
+        study = self.session.execute(stmt).unique().scalar_one_or_none()
+        if study is None or study.patient is None:
+            return None
+        patient = study.patient
+        return StudyPhiHeader(
+            patient_name=str(patient.patient_name or ""),
+            patient_id=str(patient.patient_id or ""),
+            study_date=str(study.study_date or ""),
+            accession_number=str(study.accession_number or ""),
+            study_description=str(study.description or ""),
+        )
+
+    @use_session(is_read_only_operation=True)
     def get_phi_index(self) -> list[PHI_IndexRecord] | None:
         """
         Retrieves fully populated PHI objects (with their studies and series)
@@ -610,7 +641,7 @@ class AnonymizerModel:
         stmt = delete(UID).where(UID.anon_uid == anon_uid)
         result = self.session.execute(stmt)
         if result.rowcount > 0:
-            logger.info(f"Deleted UID record for anon_uid: {anon_uid}")
+            logger.debug(f"Deleted UID record for anon_uid: {anon_uid}")
 
     @use_session(is_read_only_operation=True)
     def get_anon_acc_no(self, phi_acc_no: str) -> str | None:

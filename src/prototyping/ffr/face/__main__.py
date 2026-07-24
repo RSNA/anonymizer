@@ -6,9 +6,11 @@ Usage::
 
     uv run python -m prototyping.ffr.face /path/to/ct_head_series
 
-Requires ``ts_seg/face.nii.gz`` (from ``ts_seg_face.py``) and viz dependencies::
+Requires TotalSegmentator (``tseg`` extra) and viz dependencies. Face mask is read from
+``.tseg_cache/seg/face.nii.gz``; segmentation runs automatically if the mask is missing::
 
-    uv sync --extra tseg --extra viz --group dev
+    uv sync --extra tseg --group dev --group prototyping-viz
+    uv run python -m prototyping.ffr.face /path/to/ct_head_series
 """
 
 from __future__ import annotations

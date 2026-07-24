@@ -12,10 +12,14 @@ import pytest
 from anonymizer.controller.tseg.config import MIN_DICOM_SLICES
 from anonymizer.controller.tseg.dicom_geometry import (
     analyze_series_geometry,
+    build_sitk_volume_from_pydicom,
+    build_sitk_volume_from_series_frames,
     classify_plane,
     compute_stack_metrics,
+    filter_dicom_paths_with_pixel_data,
     format_geometry_progress_message,
     format_geometry_summary,
+    format_series_view_geometry_line,
     geometry_cache_path,
     geometry_from_dict,
     geometry_to_dict,
@@ -26,9 +30,11 @@ from anonymizer.controller.tseg.dicom_geometry import (
     load_geometry_cache,
     project_ipp_onto_normal,
     read_series_headers,
+    read_sitk_volume_from_dicom_paths,
     resolve_series_geometry,
     slice_normal_from_iop,
     sorted_dicom_paths,
+    stackable_dicom_paths,
     ts_regions_eligible,
     validate_uniform_slice_dimensions,
     write_geometry_cache,
@@ -263,7 +269,16 @@ def test_resolve_series_geometry_uses_cache(tmp_path: Path) -> None:
 def test_format_geometry_summary(tmp_path: Path) -> None:
     geom = analyze_series_geometry(build_synthetic_chest_ct_series(tmp_path / "chest"))
     assert format_geometry_summary(geom) == "axial · volume_3d · TS ok"
-    assert format_geometry_progress_message(geom).startswith("Geometry: axial · volume_3d · TS ok")
+    assert format_geometry_progress_message(geom).startswith("Geometry analysis: axial · volume_3d · TS ok")
+
+
+def test_format_series_view_geometry_line(tmp_path: Path) -> None:
+    geom = analyze_series_geometry(build_synthetic_chest_ct_series(tmp_path / "chest"))
+    expected = (
+        "Provenance: Original acquisition · Geometry: Axial · Diagnostic 3D volume · "
+        "Suitable for segmentation and anatomy analysis ·"
+    )
+    assert format_series_view_geometry_line(geom) == expected
 
 
 def test_format_geometry_progress_message_includes_skip_reason() -> None:
@@ -291,7 +306,7 @@ def test_format_geometry_progress_message_includes_skip_reason() -> None:
     message = format_geometry_progress_message(geometry)
     assert "TS skip" in message
     assert "localizer_2d" in message
-    assert "Not a diagnostic 3D volume" in message
+    assert "Localizer and scout series are not suitable for anatomy analysis" in message
 
 
 def test_validate_uniform_slice_dimensions_accepts_uniform(tmp_path: Path) -> None:
@@ -345,3 +360,63 @@ def test_sagittal_series_converts_to_nifti_with_correct_slice_count(tmp_path: Pa
     n_slices = dicom_series_to_nifti(series_dir, nifti_path)
     assert n_slices >= MIN_DICOM_SLICES
     assert nifti_path.is_file()
+
+
+def test_stackable_dicom_paths_excludes_structured_report(tmp_path: Path) -> None:
+    import shutil
+
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest")
+    all_paths = list_dicom_paths(series_dir)
+    sr_path = series_dir / "structured_report.dcm"
+    shutil.copy(all_paths[0], sr_path)
+    ds = pydicom.dcmread(sr_path)
+    ds.SOPClassUID = "1.2.840.10008.5.1.4.1.1.88.11"
+    ds.save_as(sr_path)
+
+    stack_paths = stackable_dicom_paths(series_dir)
+    assert len(stack_paths) == len(all_paths)
+    assert sr_path not in stack_paths
+
+
+def test_read_sitk_volume_uses_pydicom_loader(tmp_path: Path) -> None:
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest")
+    paths = stackable_dicom_paths(series_dir)
+    volume = read_sitk_volume_from_dicom_paths(paths)
+    assert volume.GetSize()[2] == len(paths)
+
+
+def test_build_sitk_volume_from_pydicom_matches_stackable_paths(tmp_path: Path) -> None:
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest")
+    paths = stackable_dicom_paths(series_dir)
+    volume = build_sitk_volume_from_pydicom(paths)
+    assert volume.GetSize()[2] == len(paths)
+
+
+def test_build_sitk_volume_from_series_frames_matches_load_series_frames(tmp_path: Path) -> None:
+    from anonymizer.controller.create_projections import load_series_frames
+
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest")
+    reference_ds, frames, slice_paths = load_series_frames(series_dir)
+    volume = build_sitk_volume_from_series_frames(reference_ds, frames, slice_paths)
+    assert volume.GetSize()[2] == len(slice_paths)
+    assert volume.GetSize()[2] == frames.shape[0]
+
+
+def test_build_sitk_volume_skips_header_only_instances(tmp_path: Path) -> None:
+    import shutil
+
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest")
+    paths = stackable_dicom_paths(series_dir)
+    header_only = series_dir / "header_only.dcm"
+    shutil.copy(paths[0], header_only)
+    ds = pydicom.dcmread(header_only)
+    ds.save_as(header_only, write_like_original=False)
+    ds_no_pixels = pydicom.dcmread(header_only, stop_before_pixels=True, force=True)
+    if hasattr(ds_no_pixels, "PixelData"):
+        del ds_no_pixels.PixelData
+    ds_no_pixels.save_as(header_only, write_like_original=False)
+
+    readable = filter_dicom_paths_with_pixel_data(paths + [header_only])
+    assert header_only not in readable
+    volume = build_sitk_volume_from_pydicom(paths + [header_only])
+    assert volume.GetSize()[2] == len(paths)

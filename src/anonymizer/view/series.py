@@ -1,3 +1,4 @@
+import contextlib
 import difflib
 import gc
 import logging
@@ -5,7 +6,6 @@ import os
 import queue
 import threading
 import tkinter as tk
-import tkinter.font as tkfont
 from enum import StrEnum, auto
 from pathlib import Path
 from pprint import pformat
@@ -13,42 +13,90 @@ from tkinter import messagebox
 
 import customtkinter as ctk
 import numpy as np
+import psutil
 import torch
 from easyocr import Reader
 from pydicom import Dataset
 
+from anonymizer.controller.blur_face import (
+    FaceBlurPreviewResult,
+    SeriesVolumeContext,
+    apply_face_blur_preview_to_series_frames,
+    hu_stack_to_viewer_frames,
+    mask_slice_segmentations,
+    preview_face_blur,
+)
+from anonymizer.controller.blur_face_gate import (
+    FaceBlurEligibility,
+    FaceBlurGateDecision,
+    evaluate_face_blur_eligibility,
+    face_blur_context_hint,
+    face_blur_gate_message,
+)
 from anonymizer.controller.create_projections import (
-    apply_series_description,
     apply_windowing,
     get_wl_ww,
     load_series_frames,
     save_series_frames,
 )
-from anonymizer.controller.falcon.predict import (
-    _BODY_PART_RADLEX_LABELS,
-    contrast_prediction_confidence,
-    format_confidence_percent,
-)
-from anonymizer.controller.harmonize import HarmonizedResult, HarmonizeProgress, harmonize_series
-from anonymizer.controller.tseg.dicom_geometry import (
-    SeriesGeometryResult,
-    format_geometry_summary,
-    load_geometry_cache,
-    resolve_series_geometry,
-)
+from anonymizer.controller.harmonize import harmonize_context_hint, series_description_is_harmonized
 from anonymizer.controller.remove_pixel_phi import (
+    LayerType,
     OCRText,
     UserRectangle,
     blackout_rectangular_areas,
     detect_text,
     remove_text,
 )
+from anonymizer.controller.tseg.cache import clear_tseg_series_cache, tseg_cache_summary
+from anonymizer.controller.tseg.config import ENABLE_TSEG_FACE, TSEG_CACHE_DIRNAME
+from anonymizer.controller.tseg.dicom_geometry import (
+    SeriesGeometryResult,
+    format_series_view_geometry_line,
+    load_geometry_cache,
+    resolve_series_geometry,
+    stackable_dicom_paths,
+)
 from anonymizer.model.anonymizer import AnonymizerModel
-from anonymizer.utils.storage import load_default_whitelist, load_project_whitelist, save_project_whitelist
+from anonymizer.utils.storage import (
+    get_dcm_files,
+    load_default_whitelist,
+    load_project_whitelist,
+    save_project_whitelist,
+)
 from anonymizer.utils.translate import _
+from anonymizer.view.blur_face_results import (
+    FACE_MASK_OVERLAY_ALPHA,
+    FACE_MASK_OVERLAY_COLOR,
+    face_review_wl_ww,
+    format_face_blur_progress_status,
+    format_face_blur_qa_summary,
+)
+from anonymizer.view.harmonize_results import show_harmonize_results_view
 from anonymizer.view.image import ImageViewer
 
 logger = logging.getLogger(__name__)
+
+
+class SeriesLoadError(Exception):
+    """Raised when DICOM series pixels cannot be loaded for Series View."""
+
+
+def show_series_view(
+    parent: tk.Misc,
+    *,
+    anon_model: AnonymizerModel,
+    series_path: Path,
+) -> "SeriesView | None":
+    """Open Series View with a loading shell while DICOM pixels are read in the background."""
+    if not series_path.is_dir():
+        messagebox.showerror(
+            title=_("Series View"),
+            message=_("Could not load this series.") + f"\n\n{series_path}",
+            parent=parent,
+        )
+        return None
+    return SeriesView(parent, anon_model=anon_model, series_path=series_path)
 
 
 # Edit Contexts:
@@ -61,30 +109,268 @@ class EditContext(StrEnum):
 class SeriesView(tk.Toplevel):
     BUTTON_WIDTH = 100
     PAD = 10
+    BLUR_POLL_MS = 200
+    LOAD_POLL_MS = 100
+    PROGRESS_SLICE_THRESHOLD = 400
+    DEFAULT_WIDTH = 1400
+    DEFAULT_HEIGHT = 900
+    LOADING_SHELL_WIDTH = 420
+    LOADING_SHELL_HEIGHT = 72
+    LOADING_SHELL_PAD = 12
+    LOAD_PROGRESS_PULSE_MS = 180
 
     def __init__(self, parent, anon_model: AnonymizerModel, series_path: Path):
         super().__init__(master=parent)
 
-        if not series_path.is_dir():
-            raise ValueError(f"{series_path} is not a valid directory")
-
+        self._parent = parent
         self._anon_model = anon_model
         self._series_path = series_path
         self._ocr_reader = None  # only created if user clicks "Detect Text" button
         self.edit_context: EditContext = EditContext.FRAME
         self.detected_text: dict[int, list[OCRText]] = {}  # Store all detected text per frame
         self._whitelist_changed = False
+        self._loading = True
+        self._load_queue: queue.Queue[tuple[str, object]] = queue.Queue()
+        self._loading_shell: ctk.CTkFrame | None = None
+        self._load_progress: ctk.CTkProgressBar | None = None
+        self._load_progress_after_id: str | None = None
+        self._load_progress_value = 0.0
+        self._show_load_progress = self._series_needs_load_progress(series_path)
+
+        self._ds: Dataset | None = None
+        self._frames: np.ndarray | None = None
+        self._slice_paths: tuple[Path, ...] = ()
+        self.single_frame = False
+        self._face_blur_preview_pending = False
+        self._series_geometry: SeriesGeometryResult | None = None
+        self._face_blur_eligibility_cache: FaceBlurEligibility | None = None
+        self._face_blur_eligibility_geometry: SeriesGeometryResult | None = None
 
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Escape>", self._escape_keypress)
 
-        self._ds, self._frames = self.load_frames(series_path)
+        if self._show_load_progress:
+            self._show_loading_shell()
+            self.update_idletasks()
+            self.deiconify()
+        else:
+            self._prepare_hidden_load()
+        self.lift()
 
-        if self._ds is None or self._frames is None:
-            raise ValueError(f"Error loading frames from {series_path}")
+        threading.Thread(
+            target=self._load_worker,
+            name="SeriesViewLoadWorker",
+            daemon=True,
+        ).start()
+        self.after(self.LOAD_POLL_MS, self._poll_load_worker)
 
-        self.single_frame: bool = len(self._frames) == 1
+    def _show_loading_shell(self) -> None:
+        self.withdraw()
+        self.title(_("Series View"))
+        width = self.LOADING_SHELL_WIDTH
+        height = self.LOADING_SHELL_HEIGHT
+        self.geometry(f"{width}x{height}")
+        self.minsize(width, height)
+        self.resizable(False, False)
+
+        self._loading_shell = ctk.CTkFrame(self, fg_color="transparent")
+        pad = self.LOADING_SHELL_PAD
+        self._loading_shell.pack(fill="both", expand=True, padx=pad, pady=pad)
+
+        ctk.CTkLabel(
+            self._loading_shell,
+            text=f"{_('Loading series')}…  {self._series_path.name}",
+            anchor="w",
+        ).pack(fill="x", pady=(0, 8))
+
+        progress_width = width - (2 * pad)
+        self._load_progress = ctk.CTkProgressBar(self._loading_shell, width=progress_width)
+        self._load_progress.pack(fill="x")
+        self._load_progress_value = 0.0
+        self._load_progress.set(0.0)
+        self._pulse_load_progress()
+
+        self._position_near_parent(width=width, height=height)
+
+    def _pulse_load_progress(self) -> None:
+        if not self._loading or self._load_progress is None:
+            return
+        self._load_progress_value = min(0.92, self._load_progress_value + 0.035)
+        self._load_progress.set(self._load_progress_value)
+        self._load_progress_after_id = self.after(
+            self.LOAD_PROGRESS_PULSE_MS,
+            self._pulse_load_progress,
+        )
+
+    def _stop_load_progress_pulse(self) -> None:
+        if self._load_progress_after_id is None:
+            return
+        with contextlib.suppress(tk.TclError):
+            self.after_cancel(self._load_progress_after_id)
+        self._load_progress_after_id = None
+
+    def _prepare_hidden_load(self) -> None:
+        """Keep the window hidden while short series load (no progress flicker)."""
+        self.withdraw()
+        self.title(_("Series View"))
+        self.geometry(f"{self.DEFAULT_WIDTH}x{self.DEFAULT_HEIGHT}")
+        self.minsize(960, 640)
+        self._position_near_parent(width=self.DEFAULT_WIDTH, height=self.DEFAULT_HEIGHT)
+
+    @staticmethod
+    def _count_series_slices(series_path: Path) -> int:
+        try:
+            return len(stackable_dicom_paths(series_path))
+        except ValueError:
+            return len(get_dcm_files(series_path))
+
+    @classmethod
+    def _series_needs_load_progress(cls, series_path: Path) -> bool:
+        return cls._count_series_slices(series_path) > cls.PROGRESS_SLICE_THRESHOLD
+
+    def _position_near_parent(self, *, width: int | None = None, height: int | None = None) -> None:
+        """Place the window near the parent (Projection View), matching pre-loader behavior."""
+        self.update_idletasks()
+        width = width or self.winfo_width()
+        height = height or self.winfo_height()
+        try:
+            self._parent.update_idletasks()
+            pos_x = self._parent.winfo_rootx() + 30
+            pos_y = self._parent.winfo_rooty() + 30
+        except tk.TclError:
+            pos_x = (self.winfo_screenwidth() - width) // 2
+            pos_y = (self.winfo_screenheight() - height) // 2
+        pos_x = max(0, min(pos_x, self.winfo_screenwidth() - width))
+        pos_y = max(0, min(pos_y, self.winfo_screenheight() - height))
+        self.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
+
+    def _slice_stack(self) -> np.ndarray:
+        """Return the slice-only stack (no projections) from the viewer frame buffer."""
+        if self._frames is None:
+            raise SeriesLoadError("Series View has no loaded frames")
+        return self._frames if self.single_frame else self._frames[3:]
+
+    @staticmethod
+    def _load_series_data(series_path: Path) -> tuple[Dataset, np.ndarray, tuple[Path, ...], SeriesGeometryResult | None]:
+        ds, series_frames, slice_paths = load_series_frames(series_path)
+        if ds is None or series_frames is None:
+            raise SeriesLoadError(f"Error loading frames from {series_path}")
+
+        if series_frames.shape[0] == 1:
+            frames = series_frames
+        else:
+            projections = np.stack(
+                [
+                    np.min(series_frames, axis=0),
+                    np.mean(series_frames, axis=0).astype(series_frames.dtype),
+                    np.max(series_frames, axis=0),
+                ],
+                axis=0,
+            )
+            frames = np.concatenate([projections, series_frames], axis=0)
+
+        series_geometry: SeriesGeometryResult | None = None
+        if getattr(ds, "Modality", None) == "CT":
+            series_geometry = load_geometry_cache(series_path)
+            if series_geometry is None:
+                try:
+                    series_geometry = resolve_series_geometry(series_path)
+                except Exception as exc:
+                    logger.warning("Could not resolve series geometry for %s: %s", series_path, exc)
+
+        return ds, frames, slice_paths, series_geometry
+
+    def _load_worker(self) -> None:
+        try:
+            payload = self._load_series_data(self._series_path)
+            self._load_queue.put(("done", payload))
+        except SeriesLoadError as exc:
+            self._load_queue.put(("error", exc))
+        except (ValueError, FileNotFoundError, PermissionError) as exc:
+            self._load_queue.put(("error", SeriesLoadError(str(exc))))
+        except Exception as exc:
+            logger.exception("Series View load failed for %s", self._series_path)
+            self._load_queue.put(("error", SeriesLoadError(str(exc))))
+
+    def _poll_load_worker(self) -> None:
+        if not self.winfo_exists() or not self._loading:
+            return
+
+        while True:
+            try:
+                kind, payload = self._load_queue.get_nowait()
+            except queue.Empty:
+                break
+
+            if kind == "done":
+                ds, frames, slice_paths, series_geometry = payload
+                self._finish_loading(
+                    ds=ds,
+                    frames=frames,
+                    slice_paths=slice_paths,
+                    series_geometry=series_geometry,
+                )
+                return
+            if kind == "error":
+                self._loading = False
+                logger.error("Could not open series view for %s: %s", self._series_path, payload)
+                messagebox.showerror(
+                    title=_("Series View"),
+                    message=_("Could not load this series.")
+                    + f"\n\n{self._series_path}\n\n{payload}",
+                    parent=self._parent,
+                )
+                self.destroy()
+                return
+
+        self.after(self.LOAD_POLL_MS, self._poll_load_worker)
+
+    def _finish_loading(
+        self,
+        *,
+        ds: Dataset,
+        frames: np.ndarray,
+        slice_paths: tuple[Path, ...],
+        series_geometry: SeriesGeometryResult | None,
+    ) -> None:
+        self._loading = False
+        self._ds = ds
+        self._frames = frames
+        self._slice_paths = slice_paths
+        self._series_geometry = series_geometry
+        self.single_frame = frames.shape[0] == 1
+
+        pos_x, pos_y = self.winfo_x(), self.winfo_y()
+        self.withdraw()
+        self._stop_load_progress_pulse()
+        if self._loading_shell is not None:
+            self._loading_shell.destroy()
+            self._loading_shell = None
+            self._load_progress = None
+
+        self.resizable(True, True)
+        self.minsize(960, 640)
+        self._build_ui()
         self._update_title()
+
+        viewer = self.image_viewer
+        viewer._resize_to_viewport_enabled = False
+        viewer._set_initial_size()
+        self.update_idletasks()
+
+        width = max(self.winfo_reqwidth(), 640)
+        height = max(self.winfo_reqheight(), 480)
+        self.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
+        self.update_idletasks()
+
+        viewer._resize_to_viewport_enabled = True
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+        self.after_idle(self._refresh_analysis_cache_ui)
+
+    def _build_ui(self) -> None:
+        assert self._ds is not None and self._frames is not None
 
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -134,15 +420,24 @@ class SeriesView(tk.Toplevel):
         self.whitelist.grid(row=3, columnspan=2, sticky="nsew")
         scrollbar.grid(row=3, column=2, sticky="ns")
 
-        # ImageViewer:
+        # Image viewer container (single viewer or embedded blur review pane).
+        self._viewer_container = ctk.CTkFrame(self._sv_frame, fg_color="transparent")
+        self._viewer_container.grid(row=0, column=1, sticky="nsew")
+        self._viewer_container.grid_rowconfigure(0, weight=1)
+        self._viewer_container.grid_columnconfigure(0, weight=1)
+
         self.image_viewer = ImageViewer(
-            self._sv_frame,
+            self._viewer_container,
             self._frames,
             *get_wl_ww(self._ds),
             add_to_whitelist_callback=self.add_to_whitelist,
             regenerate_series_projections_callback=self.regenerate_series_projections,
         )
-        self.image_viewer.grid(row=0, column=1, sticky="nsew")
+        self.image_viewer.grid(row=0, column=0, sticky="nsew")
+        self._blur_review_saved: dict[str, object] | None = None
+        self._blur_preview: FaceBlurPreviewResult | None = None
+        self._blur_worker_queue: queue.Queue[tuple[str, object]] = queue.Queue()
+        self._blur_running = False
 
         # Control Frame:
         self.control_frame = ctk.CTkFrame(self._sv_frame)
@@ -188,7 +483,7 @@ class SeriesView(tk.Toplevel):
         self.blackout_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
         col += 1
 
-        harmonize_state = "normal" if getattr(self._ds, "Modality", None) == "CT" else "disabled"
+        harmonize_state = self._harmonize_button_state()
         self.harmonize_button = ctk.CTkButton(
             self.control_frame,
             width=160,
@@ -197,6 +492,26 @@ class SeriesView(tk.Toplevel):
             state=harmonize_state,
         )
         self.harmonize_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
+        col += 1
+
+        self.blur_face_button = ctk.CTkButton(
+            self.control_frame,
+            width=120,
+            text=_("Blur Face"),
+            command=self.blur_face_button_clicked,
+            state="disabled",
+        )
+        self.blur_face_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
+        col += 1
+
+        self.clear_ts_cache_button = ctk.CTkButton(
+            self.control_frame,
+            width=130,
+            text=_("Clear TS Cache"),
+            command=self.clear_ts_cache_button_clicked,
+            state=self._clear_ts_cache_button_state(),
+        )
+        self.clear_ts_cache_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
         col += 1
 
         # Save pixel edits (PHI removal / blackout) only; harmonized description is saved on accept.
@@ -208,31 +523,24 @@ class SeriesView(tk.Toplevel):
         )
         self.save_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="e")
         self.save_button.configure(state="disabled")
-        col += 1
+        button_columns = col + 1
 
-        # Status label:
-        self.status_label = ctk.CTkLabel(self.control_frame, text="")
-        self.status_label.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="e")
-        self.control_frame.grid_columnconfigure(col, weight=1)  # Make status label expand.
+        self._status_label = ctk.CTkLabel(
+            self.control_frame,
+            text="",
+            anchor="w",
+        )
+        self._status_label.grid(
+            row=1,
+            column=0,
+            columnspan=button_columns,
+            padx=self.PAD,
+            pady=(0, self.PAD),
+            sticky="w",
+        )
+        self._show_default_context_line()
 
-        self._harmonize_queue: queue.Queue | None = None
-        self._series_geometry: SeriesGeometryResult | None = None
-
-        if getattr(self._ds, "Modality", None) == "CT":
-            self._series_geometry = load_geometry_cache(self._series_path)
-            if self._series_geometry is None:
-                try:
-                    self._series_geometry = resolve_series_geometry(self._series_path)
-                except Exception as exc:
-                    logger.warning("Could not resolve series geometry for %s: %s", self._series_path, exc)
-
-        if self._series_geometry is not None:
-            self._geometry_label = ctk.CTkLabel(
-                self.control_frame,
-                text=_("Geometry") + f": {format_geometry_summary(self._series_geometry)}",
-                anchor="w",
-            )
-            self._geometry_label.grid(row=1, column=0, columnspan=col + 1, padx=self.PAD, pady=(0, self.PAD), sticky="w")
+        self._refresh_blur_face_ui()
 
         try:
             whitelist = load_project_whitelist(self._series_path.parents[3], self._ds.Modality)
@@ -240,6 +548,11 @@ class SeriesView(tk.Toplevel):
                 self.whitelist.insert(tk.END, item)
         except Exception:
             self.load_whitelist_defaults()
+
+    def load_frames(self, series_path: Path) -> tuple[Dataset, np.ndarray, tuple[Path, ...]]:
+        """Loads, processes, and combines series frames and projections."""
+        ds, frames, slice_paths, _geometry = self._load_series_data(series_path)
+        return ds, frames, slice_paths
 
     def _update_title(self):
         title = _("Series View")
@@ -252,191 +565,94 @@ class SeriesView(tk.Toplevel):
                 )
         self.title(title)
 
-    def update_status(self, message: str):
-        """Updates the status label."""
-        self.status_label.configure(text=message)
-        self.status_label.update()
+    def _series_context_line(self) -> str:
+        if self._series_geometry is None:
+            return ""
+        line = format_series_view_geometry_line(self._series_geometry)
+        suffixes: list[str] = []
+        face_hint = face_blur_context_hint(self._face_blur_eligibility(), self._series_geometry)
+        if face_hint:
+            suffixes.append(face_hint)
+        harmonize_hint = harmonize_context_hint(self._series_path, self._ds)
+        if harmonize_hint:
+            suffixes.append(harmonize_hint)
+        if suffixes:
+            return f"{line} {' '.join(suffixes)}"
+        return line
 
-    @staticmethod
-    def _dicom_field_display(ds: Dataset, keyword: str) -> str:
-        value = ds.get(keyword)
-        if value is None or value == "":
-            return "—"
-        return str(value).strip()
+    def _show_default_context_line(self) -> None:
+        if hasattr(self, "_status_label"):
+            self._status_label.configure(text=self._series_context_line())
 
-    @staticmethod
-    def _messagebox_font() -> tkfont.Font:
-        """Font closest to the system message box (proportional)."""
-        for name in ("TkDialogFont", "TkCaptionFont", "TkDefaultFont"):
-            try:
-                return tkfont.nametofont(name)
-            except tk.TclError:
-                continue
-        return tkfont.Font()
+    def update_status(self, message: str) -> None:
+        """Overwrite the context line with transient operation status."""
+        logger.info("Series view: %s", message)
+        if hasattr(self, "_status_label"):
+            self._status_label.configure(text=message)
 
-    @staticmethod
-    def _pad_to_pixel_width(text: str, width_px: float, font: tkfont.Font) -> str:
-        padded = str(text)
-        while font.measure(padded) < width_px:
-            padded += " "
-        return padded
+    def _harmonize_button_state(self) -> str:
+        if getattr(self._ds, "Modality", None) != "CT":
+            return "disabled"
+        if series_description_is_harmonized(self._series_path, self._ds) is True:
+            return "disabled"
+        return "normal"
 
-    @staticmethod
-    def _geometry_dicom_rows(geometry: SeriesGeometryResult) -> list[tuple[str, str, str]]:
-        ts_state = _("Yes") if geometry.ts_suitable else _("No")
-        return [
-            (_("Acquisition plane"), "(geometry)", geometry.plane),
-            (_("Dimensionality"), "(geometry)", geometry.dimensionality),
-            (_("Provenance"), "(geometry)", geometry.provenance),
-            (_("TotalSegmentator eligible"), "(geometry)", ts_state),
-        ]
+    def _refresh_harmonize_button(self) -> None:
+        if not hasattr(self, "harmonize_button"):
+            return
+        self.harmonize_button.configure(state=self._harmonize_button_state())
 
-    def _format_falcon_dicom_table(
-        self,
-        ds: Dataset,
-        geometry: SeriesGeometryResult | None = None,
-    ) -> str:
-        rows = [
-            (_("Modality"), "(0008,0060)", self._dicom_field_display(ds, "Modality")),
-            (_("Series Description"), "(0008,103E)", self._dicom_field_display(ds, "SeriesDescription")),
-            (_("Body Part Examined"), "(0018,0015)", self._dicom_field_display(ds, "BodyPartExamined")),
-            (_("Slice Thickness"), "(0018,0050)", self._dicom_field_display(ds, "SliceThickness")),
-            (_("View Position"), "(0018,5101)", self._dicom_field_display(ds, "ViewPosition")),
-            (_("Patient Position"), "(0018,5100)", self._dicom_field_display(ds, "PatientPosition")),
-            (_("Contrast Bolus Agent"), "(0018,0010)", self._dicom_field_display(ds, "ContrastBolusAgent")),
-            (_("Contrast Bolus Route"), "(0018,1040)", self._dicom_field_display(ds, "ContrastBolusRoute")),
-        ]
-        if geometry is not None:
-            rows.extend(self._geometry_dicom_rows(geometry))
-        font = self._messagebox_font()
-        col_gap = "  "
-        col_px = [max(font.measure(str(row[i])) for row in rows) for i in range(3)]
+    def _clear_ts_cache_button_state(self) -> str:
+        if getattr(self._ds, "Modality", None) != "CT":
+            return "disabled"
+        if tseg_cache_summary(self._series_path).exists:
+            return "normal"
+        return "disabled"
 
-        lines: list[str] = []
-        for field, tag, value in rows:
-            value_text = str(value).replace("\n", " ")
-            lines.append(
-                self._pad_to_pixel_width(field, col_px[0], font)
-                + col_gap
-                + self._pad_to_pixel_width(tag, col_px[1], font)
-                + col_gap
-                + value_text
-            )
-        return "\n".join(lines)
+    def _refresh_clear_ts_cache_button(self) -> None:
+        if not hasattr(self, "clear_ts_cache_button"):
+            return
+        self.clear_ts_cache_button.configure(state=self._clear_ts_cache_button_state())
 
-    @staticmethod
-    def _format_geometry_result_section(result: HarmonizedResult) -> str:
-        geometry = result.geometry
-        if geometry is None:
-            return _("DICOM geometry") + ":\n" + _("Not available")
+    def _refresh_analysis_cache_ui(self) -> None:
+        self._refresh_harmonize_button()
+        self._refresh_blur_face_ui()
+        self._refresh_clear_ts_cache_button()
+        self._show_default_context_line()
 
-        plane_confidence = format_confidence_percent(geometry.plane_confidence)
-        ts_state = _("Yes") if geometry.ts_suitable else _("No")
-        lines = [
-            _("DICOM geometry") + ":",
-            _("Acquisition plane") + f": {geometry.plane} ({plane_confidence})",
-            _("Dimensionality") + f": {geometry.dimensionality}",
-            _("Provenance") + f": {geometry.provenance}",
-            _("Slice count") + f": {geometry.n_slices}",
-            _("TotalSegmentator eligible") + f": {ts_state}",
-        ]
-        if geometry.through_plane_extent_mm is not None:
-            lines.append(_("Through-plane extent") + f": {geometry.through_plane_extent_mm:.1f} mm")
-        if geometry.metadata_suspect:
-            lines.append(_("Metadata") + ": " + _("suspect — verify orientation tags"))
-        if geometry.notes and not geometry.ts_suitable:
-            lines.append(_("Notes") + f": {geometry.notes}")
-        return "\n".join(lines)
+    def _on_series_description_updated(self) -> None:
+        self._update_title()
+        self._refresh_harmonize_button()
+        self._show_default_context_line()
 
-    @staticmethod
-    def _format_tseg_result_section(result: HarmonizedResult) -> str:
-        tseg = result.tseg
-        if tseg is None:
-            return _("TotalSegmentator anatomy") + ":\n" + _("Not available")
+    def _face_blur_eligibility(self) -> FaceBlurEligibility:
+        if (
+            self._face_blur_eligibility_cache is not None
+            and self._series_geometry is self._face_blur_eligibility_geometry
+        ):
+            return self._face_blur_eligibility_cache
 
-        if not tseg.body_parts_present.strip():
-            error = tseg.error or _("Not available")
-            return _("TotalSegmentator anatomy") + f":\n{error}"
-
-        contrast_state = _("With Contrast") if tseg.iv_contrast else _("Without Contrast")
-        region_fraction = format_confidence_percent(tseg.region_fraction)
-        lines = [
-            _("TotalSegmentator anatomy") + ":",
-            _("Regions present") + f": {tseg.body_parts_present}",
-            _("Dominant region") + f": {tseg.dominant_region}",
-            _("Region fraction") + f": {region_fraction}",
-        ]
-        if tseg.contrast_phase:
-            phase_probability = format_confidence_percent(tseg.phase_probability)
-            lines.extend(
-                [
-                    "",
-                    _("Contrast phase") + f": {tseg.contrast_phase}",
-                    _("IV contrast") + f": {contrast_state}",
-                    _("Phase probability") + f": {phase_probability}",
-                ]
-            )
-        elif tseg.error:
-            lines.extend(["", _("Contrast analysis") + f": {tseg.error}"])
-        return "\n".join(lines)
-
-    @staticmethod
-    def _format_falcon_result_section(result: HarmonizedResult) -> str:
-        falcon = result.falcon
-        if falcon is None or falcon.error is not None:
-            error = falcon.error if falcon is not None else _("Not available")
-            fallback = _(" (used as fallback)") if result.regions_source == "falcon" or result.contrast_source == "falcon" else ""
-            return _("FALCON") + fallback + f":\n{error}"
-
-        body_label = _BODY_PART_RADLEX_LABELS.get(falcon.body_part, falcon.body_part)
-        contrast_state = _("With Contrast") if falcon.iv_contrast else _("Without Contrast")
-        body_confidence = format_confidence_percent(falcon.body_part_confidence)
-        contrast_confidence = format_confidence_percent(contrast_prediction_confidence(falcon))
-        fallback_note = ""
-        if result.regions_source == "falcon" or result.contrast_source == "falcon":
-            fallback_note = "\n" + _("(FALCON used as fallback for regions or contrast)")
-        return (
-            _("FALCON")
-            + ":\n"
-            + _("Body part")
-            + f": {body_label}\n"
-            + _("Body part confidence")
-            + f": {body_confidence}\n\n"
-            + _("IV contrast")
-            + f": {contrast_state}\n"
-            + _("IV contrast confidence")
-            + f": {contrast_confidence}"
-            + fallback_note
+        eligibility = evaluate_face_blur_eligibility(
+            self._series_path,
+            ds=self._ds,
+            geometry=self._series_geometry,
+            enable_tseg_face=ENABLE_TSEG_FACE,
         )
+        self._face_blur_eligibility_cache = eligibility
+        self._face_blur_eligibility_geometry = self._series_geometry
+        return eligibility
 
-    @staticmethod
-    def _format_harmonize_result_section(result: HarmonizedResult) -> str:
-        return (
-            SeriesView._format_geometry_result_section(result)
-            + "\n\n"
-            + SeriesView._format_tseg_result_section(result)
-            + "\n\n"
-            + SeriesView._format_falcon_result_section(result)
-        )
+    def _refresh_blur_face_ui(self) -> None:
+        eligibility = self._face_blur_eligibility()
+        state = "disabled" if eligibility.decision == FaceBlurGateDecision.BLOCK else "normal"
+        if not self._blur_running and self._blur_preview is None:
+            self.blur_face_button.configure(state=state)
 
-    @staticmethod
-    def _format_falcon_prediction_section(prediction) -> str:
-        body_label = _BODY_PART_RADLEX_LABELS.get(prediction.body_part, prediction.body_part)
-        contrast_state = _("With Contrast") if prediction.iv_contrast else _("Without Contrast")
-        body_confidence = format_confidence_percent(prediction.body_part_confidence)
-        contrast_confidence = format_confidence_percent(contrast_prediction_confidence(prediction))
-        return (
-            _("FALCON prediction")
-            + ":\n"
-            + _("Body part")
-            + f": {body_label}\n"
-            + _("Body part confidence")
-            + f": {body_confidence}\n\n"
-            + _("IV contrast")
-            + f": {contrast_state}\n"
-            + _("IV contrast confidence")
-            + f": {contrast_confidence}"
-        )
+    def _blur_face_button_state(self) -> str:
+        eligibility = self._face_blur_eligibility()
+        if eligibility.decision == FaceBlurGateDecision.BLOCK:
+            return "disabled"
+        return "normal"
 
     def clear_whitelist(self):
         logger.info("Clearing whitelist")
@@ -494,27 +710,6 @@ class SeriesView(tk.Toplevel):
             self._frames[0] = np.min(self._frames, axis=0)
             self._frames[1] = np.mean(self._frames, axis=0).astype(self._frames.dtype)
             self._frames[2] = np.max(self._frames, axis=0)
-
-    def load_frames(self, series_path: Path) -> tuple[Dataset, np.ndarray]:
-        """Loads, processes, and combines series frames and projections."""
-        ds, series_frames = load_series_frames(series_path)
-
-        # Do not generate projections for single-frame series:
-        if series_frames.shape[0] == 1:  # Single-frame case
-            logger.info("Load single frame high-res, normalised")
-            return ds, series_frames
-
-        # Generate Projections for multi-frame series
-        # (3 frames, Height, Width, Channels) - Min, Mean, Max
-        projections = np.stack(
-            [
-                np.min(series_frames, axis=0),
-                np.mean(series_frames, axis=0).astype(series_frames.dtype),
-                np.max(series_frames, axis=0),
-            ],
-            axis=0,
-        )
-        return ds, np.concatenate([projections, series_frames], axis=0)
 
     def initialise_ocr(self):
         # Once-off initialisation of easyocr.Reader (and underlying pytorch model):
@@ -609,12 +804,12 @@ class SeriesView(tk.Toplevel):
 
     def detect_text_for_series(self):
         """Detects text in all frames of the series."""
-        self.update_status(_("Detecting text in all frames") + "...")
         total_frames = self.image_viewer.num_images
+        self.update_status(_("Detecting text in all images") + "…")
         for i in range(total_frames):
             self.image_viewer.load_and_display_image(i)  # Goto series start
             self.process_single_frame_ocr(i)
-            self.update_status(_("OCR on frame") + " :" + str(i + 1))
+            self.update_status(_("Detecting text") + f"… {_('image')} {i + 1} {_('of')} {total_frames}")
 
     def detect_text_button_clicked(self):
         logger.info("Detecting text...")
@@ -627,12 +822,12 @@ class SeriesView(tk.Toplevel):
         logger.info(f"CUDA GPU Available: {torch.cuda.is_available()}")
 
         if self.edit_context == EditContext.FRAME:
-            self.update_status(_("OCR on current frame") + "...")
+            self.update_status(_("Detecting text in current image") + "…")
             self.process_single_frame_ocr(self.image_viewer.current_image_index)
-            self.update_status(_("OCR on current frame") + " " + _("complete"))
+            self.update_status(_("Text detection complete"))
         else:
             self.detect_text_for_series()
-            self.update_status(_("OCR on all frames") + " " + _("complete"))
+            self.update_status(_("Text detection complete"))
 
         # TODO: work out what to do beyond propagting edits in overlays when edit context is PROJECT
 
@@ -675,14 +870,14 @@ class SeriesView(tk.Toplevel):
                 logger.warning("No text has been detected in current frame to remove")
                 self.update_status(_("No text detected in current frame to remove"))
                 return
-            self.update_status(_("Removing text from current frame") + "...")
+            self.update_status(_("Removing text from current image") + "…")
             self.remove_text_from_single_frame(ndx, ocr_texts)
-            self.update_status(_("Text removed from current frame"))
+            self.update_status(_("Text removed from current image"))
             self.image_viewer.refresh_current_image()
         else:
-            self.update_status(_("Removing text from all frames in series") + "...")
+            self.update_status(_("Removing text from all images") + "…")
             self.remove_text_from_series()
-            self.update_status(_("Text removed from all frames in series"))
+            self.update_status(_("Text removed from all images"))
 
         # TODO: Remove all in PROJECT if modality and image size constant
 
@@ -717,190 +912,336 @@ class SeriesView(tk.Toplevel):
                 logger.warning("No blackout user rect has been define in current frame to blackout")
                 self.update_status(_("No blackout area(s) in current frame"))
                 return
-            self.update_status(_("Blackout areas in current frame") + "...")
+            self.update_status(_("Applying blackout to current image") + "…")
             self.blackout_areas_in_single_frame(ndx, user_rects)
             if not self.single_frame:
                 self.image_viewer.clear_cache()
                 self.regenerate_series_projections()
-            self.update_status(_("Areas blacked out in current frame"))
+            self.update_status(_("Blackout applied to current image"))
             self.image_viewer.refresh_current_image()
         else:
-            self.update_status(_("Blackout areas in all frames of series") + "...")
+            self.update_status(_("Applying blackout to all images") + "…")
             self.blackout_areas_in_series()
-            self.update_status(_("Areas blacked out in all frames of series"))
-
-    def _show_harmonize_progress(self, progress: HarmonizeProgress) -> None:
-        message = progress.message
-        if progress.stage == "geometry" and not message.startswith("Geometry:"):
-            message = _("Analyzing DICOM geometry") + "…"
-        elif progress.stage == "tseg" and message.startswith("Geometry:"):
-            message = _("TotalSegmentator skipped") + f" ({message.removeprefix('Geometry: ').strip()})"
-        if progress.remaining_sec is not None and progress.remaining_sec > 0:
-            self.update_status(f"{message} ~{int(progress.remaining_sec)}s")
-        else:
-            self.update_status(message)
-        if progress.stage == "geometry" and progress.message.startswith("Geometry:"):
-            summary = progress.message.removeprefix("Geometry:").split("—")[0].strip()
-            if hasattr(self, "_geometry_label"):
-                self._geometry_label.configure(text=_("Geometry") + f": {summary}")
-
-    def _hide_harmonize_progress(self) -> None:
-        pass
-
-    def _harmonize_worker(self) -> None:
-        assert self._harmonize_queue is not None
-
-        def on_progress(progress: HarmonizeProgress) -> None:
-            self._harmonize_queue.put(("progress", progress))
-
-        try:
-            results = harmonize_series([self._series_path], progress=on_progress)
-            self._harmonize_queue.put(("done", results))
-        except Exception as exc:
-            logger.exception("Harmonize failed: %s", exc)
-            self._harmonize_queue.put(("error", exc))
-
-    def _poll_harmonize_progress(self) -> None:
-        if self._harmonize_queue is None:
-            return
-
-        while True:
-            try:
-                kind, payload = self._harmonize_queue.get_nowait()
-            except queue.Empty:
-                break
-
-            if kind == "progress":
-                self._show_harmonize_progress(payload)
-            elif kind == "done":
-                self._hide_harmonize_progress()
-                self._finish_harmonize(payload)
-                return
-            elif kind == "error":
-                self._hide_harmonize_progress()
-                messagebox.showerror(
-                    title=_("Harmonize Error"),
-                    message=_("Harmonize could not analyze this series.") + f"\n\n{payload}",
-                    parent=self,
-                )
-                self.update_status(_("Harmonize analysis failed"))
-                self.harmonize_button.configure(state="normal")
-                return
-
-        self.after(200, self._poll_harmonize_progress)
-
-    def _finish_harmonize(self, results: list[HarmonizedResult]) -> None:
-        if not results:
-            messagebox.showerror(
-                title=_("Harmonize Error"),
-                message=_("Harmonize could not analyze this series."),
-                parent=self,
-            )
-            self.update_status(_("Harmonize analysis failed"))
-            self.harmonize_button.configure(state="normal")
-            return
-
-        result = results[0]
-        if result.geometry is not None:
-            self._series_geometry = result.geometry
-            if hasattr(self, "_geometry_label"):
-                self._geometry_label.configure(
-                    text=_("Geometry") + f": {format_geometry_summary(self._series_geometry)}"
-                )
-
-        if result.error is not None:
-            messagebox.showerror(
-                title=_("Harmonize Error"),
-                message=_("Harmonize could not analyze this series.") + f"\n\n{result.error}",
-                parent=self,
-            )
-            self.update_status(_("Harmonize analysis failed"))
-            self.harmonize_button.configure(state="normal")
-            return
-
-        current = str(self._ds.get("SeriesDescription", "") or "").strip()
-        proposed = result.radlex_series_description
-        dicom_table = self._format_falcon_dicom_table(self._ds, result.geometry or self._series_geometry)
-        harmonize_section = self._format_harmonize_result_section(result)
-
-        if proposed.strip() == current:
-            messagebox.showinfo(
-                title=_("Harmonize Results"),
-                message=(
-                    dicom_table
-                    + "\n\n"
-                    + _("Current Series Description already matches the harmonized result.")
-                    + "\n\n"
-                    + harmonize_section
-                ),
-                parent=self,
-            )
-            self.update_status(_("Harmonize analysis complete"))
-            self.harmonize_button.configure(state="normal")
-            return
-
-        accept = messagebox.askyesno(
-            title=_("Harmonize Results"),
-            message=(
-                dicom_table
-                + "\n\n"
-                + harmonize_section
-                + "\n\n"
-                + _("Proposed Series Description")
-                + f':\n  "{proposed}"\n\n'
-                + _("Apply this description?")
-            ),
-            default="no",
-            parent=self,
-        )
-
-        if accept:
-            if not apply_series_description(self._series_path, proposed) or not self._anon_model.update_series_description_by_anon_uid(
-                str(self._ds.SeriesInstanceUID), proposed
-            ):
-                messagebox.showerror(
-                    title=_("Harmonize Error"),
-                    message=_("Failed to save series description."),
-                    parent=self,
-                )
-                self.update_status(_("Harmonize analysis failed"))
-            else:
-                self._ds.SeriesDescription = proposed
-                self._update_title()
-                self.update_status(_("Harmonize description applied"))
-        else:
-            self.update_status(_("Harmonize description not applied"))
-
-        self.harmonize_button.configure(state="normal")
+            self.update_status(_("Blackout applied to all images"))
 
     def harmonize_description_button_clicked(self):
         if self._ds is None or getattr(self._ds, "Modality", None) != "CT":
             return
 
         logger.info("Harmonize starting for %s", self._series_path)
-        self.update_status(_("Running harmonize (geometry → FALCON → anatomy → contrast)…"))
         self.harmonize_button.configure(state="disabled")
-        self._harmonize_queue = queue.Queue()
-        self._show_harmonize_progress(
-            HarmonizeProgress(
-                stage="geometry",
-                message=_("Analyzing DICOM geometry") + "…",
-                fraction=0.0,
-                elapsed_sec=0.0,
-                remaining_sec=None,
-            )
+        mono_font = getattr(self.master, "_data_font", None)
+        show_harmonize_results_view(
+            self,
+            series_path=self._series_path,
+            ds=self._ds,
+            current_description=str(self._ds.get("SeriesDescription", "") or "").strip(),
+            mono_font=mono_font,
+            anon_model=self._anon_model,
+            on_series_description_updated=self._on_series_description_updated,
         )
+        self._face_blur_eligibility_cache = None
+        self._face_blur_eligibility_geometry = None
+        self._refresh_analysis_cache_ui()
+
+    def clear_ts_cache_button_clicked(self) -> None:
+        if self._ds is None or getattr(self._ds, "Modality", None) != "CT":
+            return
+
+        summary = tseg_cache_summary(self._series_path)
+        if not summary.exists:
+            return
+
+        size_mb = summary.size_bytes / (1024 * 1024)
+        size_text = f"{size_mb:.1f} MB" if size_mb >= 0.1 else _("< 0.1 MB")
+
+        confirmed = messagebox.askyesno(
+            title=_("Clear Analysis Cache"),
+            message=(
+                _("Delete analysis cache for this series?")
+                + "\n\n"
+                + _("Removes geometry, segmentation masks, contrast analysis, and face mask under")
+                + f" {TSEG_CACHE_DIRNAME}/ ({size_text}, {summary.file_count} "
+                + _("files")
+                + ").\n\n"
+                + _("DICOM images and series description are not changed.")
+                + "\n\n"
+                + _("Next Harmonize or Blur Face will re-run analysis and may take several minutes.")
+            ),
+            parent=self,
+            default="no",
+        )
+        if not confirmed:
+            return
+
+        logger.info("Clearing TS cache for %s", self._series_path)
+        clear_tseg_series_cache(self._series_path)
+        if self._blur_preview is not None:
+            self._teardown_blur_review()
+        self._series_geometry = None
+        self._face_blur_eligibility_cache = None
+        self._face_blur_eligibility_geometry = None
+        self._refresh_analysis_cache_ui()
+        self.update_status(_("Analysis cache cleared"))
+
+    def _teardown_blur_review(self, *, keep_applied_frames: bool = False) -> None:
+        viewer = self.image_viewer
+        saved = self._blur_review_saved
+        viewer._resize_to_viewport_enabled = False
+        viewer.detach_companion_stack()
+
+        if saved is not None:
+            if keep_applied_frames and self._frames is not None:
+                viewer.images = self._frames
+                viewer.num_images = self._frames.shape[0]
+                viewer.image_height = self._frames.shape[1]
+                viewer.image_width = self._frames.shape[2]
+                viewer.small_jump = max(1, int(viewer.num_images * viewer.SMALL_JUMP_PERCENTAGE))
+                viewer.large_jump = max(1, int(viewer.num_images * viewer.LARGE_JUMP_PERCENTAGE))
+            elif not keep_applied_frames:
+                viewer.images = saved["images"]  # type: ignore[assignment]
+                viewer.num_images = int(saved["num_images"])  # type: ignore[arg-type]
+                viewer.image_height = int(saved["image_height"])  # type: ignore[arg-type]
+                viewer.image_width = int(saved["image_width"])  # type: ignore[arg-type]
+                viewer.small_jump = int(saved["small_jump"])  # type: ignore[arg-type]
+                viewer.large_jump = int(saved["large_jump"])  # type: ignore[arg-type]
+
+            viewer.overlay_data = saved["overlay_data"]  # type: ignore[assignment]
+            viewer.active_layers = saved["active_layers"]  # type: ignore[assignment]
+            viewer.segmentation_overlay_color = saved["segmentation_overlay_color"]  # type: ignore[assignment]
+            viewer.segmentation_overlay_alpha = saved["segmentation_overlay_alpha"]  # type: ignore[assignment]
+            if self._ds is not None:
+                wl, ww = get_wl_ww(self._ds)
+                viewer.set_wlww_sync(wl, ww)
+
+            restore_index = min(int(saved["current_image_index"]), viewer.num_images - 1)
+            viewer.clear_cache()
+            viewer._resize_to_viewport_enabled = True
+            viewer._fit_to_viewport()
+            viewer.change_image(restore_index)
+            self._blur_review_saved = None
+        else:
+            viewer._resize_to_viewport_enabled = True
+
+        self._blur_preview = None
+        self._refresh_blur_face_ui()
+
+    def _show_blur_review(self, preview: FaceBlurPreviewResult) -> None:
+        if self._frames is None or self._ds is None:
+            return
+
+        self._blur_preview = preview
+        viewer = self.image_viewer
+        if viewer.playing:
+            viewer.toggle_play()
+
+        slice_stack = self._slice_stack()
+        blurred_frames = preview.blurred_slice_frames
+        if blurred_frames is None:
+            if preview.hu_after is None:
+                return
+            blurred_frames = hu_stack_to_viewer_frames(
+                preview.hu_after,
+                preview.slice_paths,
+                reference_ds=self._ds,
+                frame_dtype=slice_stack.dtype,
+            )
+
+        self._blur_review_saved = {
+            "images": viewer.images,
+            "num_images": viewer.num_images,
+            "image_height": viewer.image_height,
+            "image_width": viewer.image_width,
+            "small_jump": viewer.small_jump,
+            "large_jump": viewer.large_jump,
+            "overlay_data": viewer.overlay_data.copy(),
+            "active_layers": viewer.active_layers.copy(),
+            "segmentation_overlay_color": viewer.segmentation_overlay_color,
+            "segmentation_overlay_alpha": viewer.segmentation_overlay_alpha,
+            "current_image_index": viewer.current_image_index,
+        }
+
+        viewer._resize_to_viewport_enabled = False
+        viewer.clear_cache()
+        viewer.current_image_index = 0
+        viewer.images = slice_stack
+        viewer.num_images = slice_stack.shape[0]
+        viewer.image_height = slice_stack.shape[1]
+        viewer.image_width = slice_stack.shape[2]
+        viewer.small_jump = max(1, int(viewer.num_images * viewer.SMALL_JUMP_PERCENTAGE))
+        viewer.large_jump = max(1, int(viewer.num_images * viewer.LARGE_JUMP_PERCENTAGE))
+        viewer.overlay_data.clear()
+        viewer.active_layers.discard(LayerType.TEXT)
+        viewer.active_layers.discard(LayerType.USER_RECT)
+        viewer.active_layers.add(LayerType.SEGMENTATIONS)
+        viewer.segmentation_overlay_color = FACE_MASK_OVERLAY_COLOR
+        viewer.segmentation_overlay_alpha = FACE_MASK_OVERLAY_ALPHA
+
+        segmentations_by_slice: dict[int, list] = {}
+        for slice_index in range(preview.mask.shape[0]):
+            segmentations = mask_slice_segmentations(preview.mask, slice_index)
+            if segmentations:
+                segmentations_by_slice[slice_index] = segmentations
+        viewer.set_segmentation_overlays(segmentations_by_slice)
+
+        review_wl, review_ww = face_review_wl_ww(self._ds)
+        viewer.attach_companion_stack(
+            blurred_frames,
+            primary_label=_("Current — face region (green)"),
+            companion_label=_("Proposed face blur"),
+        )
+        viewer.set_wlww_sync(review_wl, review_ww)
+        viewer._resize_to_viewport_enabled = True
+        viewer._fit_to_viewport()
+
+        qa_summary = format_face_blur_qa_summary(
+            preview.qa_stats,
+            sigma_mm=preview.sigma_mm,
+            slice_count=preview.slice_count,
+        )
+        self.update_status(
+            qa_summary + " " + _("Review side-by-side, then Save Pixel Changes to keep.")
+        )
+        self.save_button.configure(state="normal")
+        self.blur_face_button.configure(state="disabled")
+        self._refresh_blur_face_ui()
+
+    def _blur_worker(self) -> None:
+        geometry = self._series_geometry
+        volume_context = SeriesVolumeContext(
+            reference_ds=self._ds,
+            slice_frames=self._slice_stack(),
+            slice_paths=self._slice_paths,
+            slice_spacing_mm=geometry.slice_spacing_mm if geometry is not None else None,
+        )
+
+        def on_progress(progress) -> None:
+            self._blur_worker_queue.put(("progress", progress))
+
+        try:
+            preview = preview_face_blur(
+                self._series_path,
+                progress=on_progress,
+                volume_context=volume_context,
+            )
+            self._blur_worker_queue.put(("done", preview))
+        except Exception as exc:
+            logger.exception("Face blur preview worker failed for %s", self._series_path)
+            self._blur_worker_queue.put(("error", exc))
+
+    def _poll_blur_worker(self) -> None:
+        if not self.winfo_exists():
+            return
+
+        while True:
+            try:
+                kind, payload = self._blur_worker_queue.get_nowait()
+            except queue.Empty:
+                break
+
+            if kind == "progress":
+                self.update_status(format_face_blur_progress_status(payload))
+            elif kind == "done":
+                self._blur_running = False
+                preview = payload
+                if preview.error is not None:
+                    messagebox.showerror(
+                        title=_("Blur Face"),
+                        message=preview.error,
+                        parent=self,
+                    )
+                    self.update_status(_("Could not blur facial features"))
+                    self._refresh_blur_face_ui()
+                    return
+                self._show_blur_review(preview)
+                return
+            elif kind == "error":
+                self._blur_running = False
+                messagebox.showerror(
+                    title=_("Blur Face"),
+                    message=str(payload),
+                    parent=self,
+                )
+                self.update_status(_("Could not blur facial features"))
+                self._refresh_blur_face_ui()
+                return
+
+        self.after(self.BLUR_POLL_MS, self._poll_blur_worker)
+
+    def _apply_face_blur_preview(self, preview: FaceBlurPreviewResult) -> None:
+        if self._frames is None:
+            return
+        self._frames = apply_face_blur_preview_to_series_frames(
+            self._frames,
+            preview,
+            single_frame=self.single_frame,
+            reference_ds=self._ds,
+            frame_dtype=self._slice_stack().dtype,
+        )
+        if not self.single_frame:
+            self.regenerate_series_projections()
+        self.image_viewer.images = self._frames
+        self.image_viewer.num_images = self._frames.shape[0]
+        self.image_viewer.clear_cache()
+        self.image_viewer.refresh_current_image()
+        self._face_blur_preview_pending = True
+        self.save_button.configure(state="normal")
+
+    def blur_face_button_clicked(self) -> None:
+        if self._blur_running or self._blur_face_button_state() != "normal":
+            return
+
+        eligibility = self._face_blur_eligibility()
+        if eligibility.decision == FaceBlurGateDecision.CONFIRM:
+            proceed = messagebox.askyesno(
+                title=_("Blur Face"),
+                message=face_blur_gate_message(eligibility.reason),
+                default="no",
+                parent=self,
+            )
+            if not proceed:
+                return
+        elif eligibility.decision == FaceBlurGateDecision.BLOCK:
+            messagebox.showinfo(
+                title=_("Blur Face"),
+                message=face_blur_gate_message(eligibility.reason),
+                parent=self,
+            )
+            return
+
+        logger.info(
+            "Series View: blur face starting for %s (gate=%s)",
+            self._series_path,
+            eligibility.reason.name,
+        )
+        self._blur_running = True
+        self._blur_worker_queue = queue.Queue()
+        self.update_status(_("Preparing face blur preview") + "…")
+        self.blur_face_button.configure(state="disabled")
         threading.Thread(
-            target=self._harmonize_worker,
-            name="HarmonizeWorker",
+            target=self._blur_worker,
+            name="BlurFacePreviewWorker",
             daemon=True,
         ).start()
-        self.after(200, self._poll_harmonize_progress)
+        self.after(self.BLUR_POLL_MS, self._poll_blur_worker)
 
     def save_series_button_clicked(self):
         if self._frames is None or self._ds is None:
             logger.error("CRITICAL: No frames or dataset to save")
             return
+
+        preview = self._blur_preview
+        if preview is not None and preview.error is None:
+            self._apply_face_blur_preview(preview)
+            self._teardown_blur_review(keep_applied_frames=True)
+            logger.info(
+                "Series View: face blur applied on save for %s (slices=%d, qa=%s)",
+                self._series_path,
+                preview.slice_count,
+                "PASS"
+                if preview.qa_stats is None or preview.qa_stats.outside_clean
+                else "FAIL",
+            )
 
         # Save Whitelist:
         whitelist_set = self.get_whitelist_set()
@@ -922,7 +1263,8 @@ class SeriesView(tk.Toplevel):
 
         if save_series_frames(self._series_path, self._frames if self.single_frame else self._frames[3:], self._ds):
             logger.info(f"Saved series frames to {self._series_path}")
-            self.update_status(_("Pixel changes saved successfully"))
+            self.update_status(_("Changes saved"))
+            self._face_blur_preview_pending = False
             self.save_button.configure(state="disabled")
         else:
             logger.error(f"Failed to save series frames to {self._series_path}")
@@ -931,7 +1273,7 @@ class SeriesView(tk.Toplevel):
                 message=_("Failed to save changes to series frames"),
                 parent=self,
             )
-            self.update_status(_("Failed to save changes to series frames"))
+            self.update_status(_("Could not save changes"))
 
     def whitelist_defaults_button_clicked(self):
         logger.info("Whitelist button clicked")
@@ -969,21 +1311,90 @@ class SeriesView(tk.Toplevel):
         logger.info("_escape_pressed")
         self._on_cancel()
 
+    def _log_close_memory(self, stage: str) -> float | None:
+        try:
+            rss_mb = psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
+        except Exception:
+            logger.debug("SeriesView close memory [%s]: unavailable", stage)
+            return None
+
+        logger.info(
+            "SeriesView close memory [%s]: RSS %.1f MB (%s)",
+            stage,
+            rss_mb,
+            self._series_path.name,
+        )
+        return rss_mb
+
+    def _log_series_data_size(self) -> None:
+        total_bytes = 0
+        for array in (self._frames,):
+            if array is not None:
+                total_bytes += array.nbytes
+        if total_bytes:
+            logger.info(
+                "SeriesView releasing %.1f MB of in-memory frame data",
+                total_bytes / (1024 * 1024),
+            )
+
+    def _release_image_viewer(self, viewer: ImageViewer | None) -> None:
+        if viewer is None:
+            return
+        try:
+            viewer.release_resources()
+        except tk.TclError:
+            logger.debug("ImageViewer already destroyed during SeriesView close")
+
+    def _release_all_viewer_resources(self) -> None:
+        if hasattr(self, "image_viewer"):
+            self.image_viewer.detach_companion_stack()
+            self._release_image_viewer(self.image_viewer)
+
+    def _release_series_data(self) -> None:
+        self._blur_preview = None
+        self._frames = None
+        self._slice_paths = ()
+        self._ds = None
+        self._series_geometry = None
+        self.detected_text.clear()
+
+    def _release_ocr_reader(self) -> None:
+        if self._ocr_reader is None:
+            return
+        del self._ocr_reader
+        self._ocr_reader = None
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+        elif torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
     def _on_cancel(self):
         logger.info("_on_cancel")
-        self.grab_release()
+        if self._loading:
+            self._loading = False
+            with contextlib.suppress(tk.TclError):
+                self.grab_release()
+            self.destroy()
+            return
+
+        rss_before = self._log_close_memory("before")
+        self._log_series_data_size()
+
+        self._release_all_viewer_resources()
+        self._release_series_data()
+        self._release_ocr_reader()
+
+        with contextlib.suppress(tk.TclError):
+            self.grab_release()
+
         self.destroy()
-
-        if hasattr(self, "image_viewer") and self.image_viewer:
-            self.image_viewer.clear_cache()
-
-        if self._ocr_reader:
-            # Attempt to unload the model
-            del self._ocr_reader
-            self._ocr_reader = None
-            gc.collect()
-
-        self._frames = None
-        self._ds = None
-        self._projection = None
         gc.collect()
+
+        rss_after = self._log_close_memory("after")
+        if rss_before is not None and rss_after is not None:
+            logger.info(
+                "SeriesView close memory delta: %.1f MB (before %.1f MB, after %.1f MB)",
+                rss_before - rss_after,
+                rss_before,
+                rss_after,
+            )

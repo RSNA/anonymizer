@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 """
-Run TotalSegmentator ``face`` on one CT DICOM series directory.
+Run TotalSegmentator ``face`` on one CT DICOM series directory via the tseg controller API.
 
 Usage::
 
+    uv sync --extra tseg --group dev
+    uv run totalseg_set_license -l aca_XXXXXXXXXXXXXX   # once, academic license
     uv run python src/prototyping/ts_seg_face.py /path/to/ct_head_series
+    uv run python src/prototyping/ts_seg_face.py /path/to/ct_head_series --force
 
-Writes ``<series>/ts_seg/face.nii.gz`` only. DICOM is converted to a temporary
-NIfTI for inference (TotalSegmentator requires a volume file path), then removed.
-
-Requires ``uv sync --extra tseg`` and an academic license (``aca_*``, 18 chars)::
-
-    uv run totalseg_set_license -l aca_XXXXXXXXXXXXXX
+Writes ``<series>/A_TS_SEG/seg/face.nii.gz`` (reuses ``A_TS_SEG/volume.nii.gz`` when present).
 
 Licensed weights (Dataset303) download on first run. See:
 https://backend.totalsegmentator.com/license-academic/
@@ -19,148 +17,106 @@ https://backend.totalsegmentator.com/license-academic/
 
 from __future__ import annotations
 
+import argparse
 import logging
 import sys
-import tempfile
 import time
 from pathlib import Path
 
-import SimpleITK as sitk
-
 from anonymizer.controller.tseg.dicom_geometry import sorted_dicom_paths
-from anonymizer.controller.tseg.runtime import sequential_ml_context
-from anonymizer.controller.tseg.segment import dicom_series_to_nifti, resolve_device
+from anonymizer.controller.tseg.segment import AnalysisProgress, analyze_tseg_face, face_mask_cache_path
 
 logger = logging.getLogger("ts_seg_face")
 
 
-def _configure_logging() -> None:
-    if logger.handlers:
-        return
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(
-        logging.Formatter("%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
+def _configure_logging(*, verbose: bool) -> None:
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+        force=True,
     )
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
+    logging.getLogger("anonymizer.controller.tseg").setLevel(level)
 
 
-def _require_totalsegmentator():
-    try:
-        from totalsegmentator.python_api import totalsegmentator
-    except ImportError as exc:
-        raise ImportError(
-            'TotalSegmentator is required. Install with: uv sync --extra tseg'
-        ) from exc
-    return totalsegmentator
+def _log_progress(event: AnalysisProgress) -> None:
+    remaining = ""
+    if event.remaining_sec is not None:
+        remaining = f" (~{event.remaining_sec:.0f}s left)"
+    logger.info(
+        "[%s] %s (%.0f%%)%s",
+        event.stage,
+        event.message,
+        event.fraction * 100.0,
+        remaining,
+    )
 
 
-def count_mask_voxels(mask_path: Path) -> int:
-    image = sitk.ReadImage(str(mask_path))
-    try:
-        array = sitk.GetArrayFromImage(image)
-        return int((array > 0).sum())
-    finally:
-        del image
-
-
-def run_face_segmentation(nifti_path: Path, output_dir: Path, *, device: str) -> tuple[Path, float]:
-    """Run licensed TS ``face`` task. Returns ``(face.nii.gz path, inference seconds)``."""
-    totalsegmentator = _require_totalsegmentator()
-    output_dir.mkdir(parents=True, exist_ok=True)
-    face_path = output_dir / "face.nii.gz"
-
-    logger.info("TotalSegmentator face task starting (device=%s)", device)
-    logger.info("  input volume: %s", nifti_path)
-    logger.info("  output dir:   %s", output_dir)
-
-    seg_started = time.perf_counter()
-    with sequential_ml_context("ts_seg_face"):
-        totalsegmentator(
-            str(nifti_path),
-            str(output_dir),
-            task="face",
-            fast=False,
-            fastest=False,
-            quiet=False,
-            device=device,
-            nr_thr_resamp=1,
-            nr_thr_saving=1,
-        )
-    seg_seconds = time.perf_counter() - seg_started
-
-    if not face_path.is_file():
-        raise FileNotFoundError(f"TotalSegmentator did not write {face_path}")
-
-    logger.info("TotalSegmentator face task finished in %.1fs", seg_seconds)
-    return face_path, seg_seconds
-
-
-def segment_face(series_directory: Path) -> tuple[Path, int, int, float]:
+def segment_face(series_directory: Path, *, force: bool = False) -> tuple[Path, int, int, float]:
     """
-    DICOM → temp NIfTI → face segmentation → ``ts_seg/face.nii.gz``.
+    Thin wrapper around ``analyze_tseg_face`` for scripts and notebooks.
 
     Returns ``(face_mask_path, slice_count, face_voxel_count, inference_seconds)``.
     """
-    series_directory = series_directory.resolve()
-    if not series_directory.is_dir():
-        raise NotADirectoryError(f"Not a directory: {series_directory}")
-
-    output_dir = series_directory / "ts_seg"
-    device = resolve_device(None)
-    slice_paths = sorted_dicom_paths(series_directory)
-
-    logger.info("Series directory: %s", series_directory)
-    logger.info("DICOM instances (stack order): %d", len(slice_paths))
-    logger.info("Output directory: %s", output_dir)
-    logger.info("Resolved inference device: %s", device)
-
-    with tempfile.TemporaryDirectory(prefix="ts_seg_face_") as tmp:
-        nifti_path = Path(tmp) / "volume.nii.gz"
-        logger.info("Converting DICOM series to temporary NIfTI …")
-        convert_started = time.perf_counter()
-        n_slices = dicom_series_to_nifti(series_directory, nifti_path)
-        convert_seconds = time.perf_counter() - convert_started
-        logger.info(
-            "Temporary NIfTI ready: %s (%d slices, %.1fs); removed after inference",
-            nifti_path,
-            n_slices,
-            convert_seconds,
-        )
-
-        face_path, seg_seconds = run_face_segmentation(nifti_path, output_dir, device=device)
-
-    voxels = count_mask_voxels(face_path)
-    logger.info("Face mask voxels (label > 0): %d", voxels)
-    logger.info("Wrote %s", face_path)
-    return face_path, n_slices, voxels, seg_seconds
+    result = analyze_tseg_face(series_directory, progress=_log_progress, force=force)
+    if result.error is not None:
+        raise RuntimeError(result.error)
+    assert result.face_mask_path is not None
+    return (
+        result.face_mask_path,
+        result.slice_count,
+        result.face_voxel_count,
+        result.inference_seconds,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
-    _configure_logging()
-    args = argv if argv is not None else sys.argv[1:]
-    if len(args) != 1:
-        logger.error(
-            "Usage: uv run python src/prototyping/ts_seg_face.py /path/to/ct_head_series"
-        )
+    parser = argparse.ArgumentParser(
+        description="Run TotalSegmentator face segmentation on a CT head DICOM series directory.",
+    )
+    parser.add_argument(
+        "series_directory",
+        type=Path,
+        help="Directory containing one axial CT series (*.dcm)",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-run face segmentation even when A_TS_SEG/seg/face.nii.gz exists",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable debug logging",
+    )
+    args = parser.parse_args(argv)
+    _configure_logging(verbose=args.verbose)
+
+    series_dir = args.series_directory.resolve()
+    if not series_dir.is_dir():
+        logger.error("Not a directory: %s", series_dir)
         return 2
 
-    series_dir = Path(args[0])
     try:
-        sorted_dicom_paths(series_dir)
+        slice_paths = sorted_dicom_paths(series_dir)
     except ValueError as exc:
         logger.error("%s", exc)
         return 1
 
+    logger.info("Series directory: %s", series_dir)
+    logger.info("DICOM instances (stack order): %d", len(slice_paths))
+    logger.info("Face mask cache: %s", face_mask_cache_path(series_dir))
+
     total_started = time.perf_counter()
     try:
-        face_path, n_slices, voxels, seg_seconds = segment_face(series_dir)
-    except SystemExit as exc:
-        logger.error(
-            "TotalSegmentator exited (missing or invalid license?). "
-            "Run: uv run totalseg_set_license -l aca_XXXXXXXXXXXXXX"
-        )
-        return int(exc.code) if isinstance(exc.code, int) else 1
+        face_path, n_slices, voxels, seg_seconds = segment_face(series_dir, force=args.force)
+    except RuntimeError as exc:
+        logger.error("%s", exc)
+        if "academic license" in str(exc).lower():
+            logger.error("Run: uv run totalseg_set_license -l aca_XXXXXXXXXXXXXX")
+        return 1
     except Exception as exc:
         logger.exception("Face segmentation failed: %s", exc)
         return 1

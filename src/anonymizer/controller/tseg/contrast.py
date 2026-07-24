@@ -9,6 +9,7 @@ import logging
 import pickle
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,6 +19,20 @@ import numpy as np
 from anonymizer.controller.tseg.runtime import sequential_ml_context
 
 logger = logging.getLogger(__name__)
+
+ContrastProgressCallback = Callable[[str, str, float], None]
+
+
+def _emit_contrast_progress(
+    callback: ContrastProgressCallback | None,
+    *,
+    stage: str,
+    message: str,
+    fraction: float,
+) -> None:
+    if callback is None:
+        return
+    callback(stage, message, min(1.0, max(0.0, fraction)))
 
 PHASES_WITH_CONTRAST: frozenset[str] = frozenset(
     {"arterial_early", "arterial_late", "portal_venous"}
@@ -230,6 +245,89 @@ def save_contrast_statistics(stats: dict, stats_path: Path) -> None:
     stats_path.write_text(json.dumps(stats), encoding="utf-8")
 
 
+def load_contrast_stats_hn(stats_hn_path: Path) -> dict:
+    stats_hn_path = Path(stats_hn_path)
+    if not stats_hn_path.is_file():
+        raise FileNotFoundError(f"Head/neck statistics file not found: {stats_hn_path}")
+    return json.loads(stats_hn_path.read_text(encoding="utf-8"))
+
+
+def save_contrast_stats_hn(stats_hn: dict, stats_hn_path: Path) -> None:
+    stats_hn_path = Path(stats_hn_path)
+    stats_hn_path.parent.mkdir(parents=True, exist_ok=True)
+    stats_hn_path.write_text(json.dumps(stats_hn), encoding="utf-8")
+
+
+def contrast_phase_cache_is_valid(
+    phase_cache_path: Path,
+    stats_path: Path,
+    *,
+    stats_hn_path: Path | None = None,
+    require_stats_hn: bool = False,
+) -> bool:
+    """Return True when cached XGBoost output is at least as new as its statistics inputs."""
+    phase_cache_path = Path(phase_cache_path)
+    stats_path = Path(stats_path)
+    if not phase_cache_path.is_file() or not stats_path.is_file():
+        return False
+
+    phase_mtime = phase_cache_path.stat().st_mtime
+    if phase_mtime < stats_path.stat().st_mtime:
+        return False
+
+    if require_stats_hn:
+        if stats_hn_path is None or not Path(stats_hn_path).is_file():
+            return False
+        if phase_mtime < Path(stats_hn_path).stat().st_mtime:
+            return False
+
+    return True
+
+
+def load_contrast_phase_cache(phase_cache_path: Path) -> dict:
+    phase_cache_path = Path(phase_cache_path)
+    if not phase_cache_path.is_file():
+        raise FileNotFoundError(f"Contrast phase cache not found: {phase_cache_path}")
+    return json.loads(phase_cache_path.read_text(encoding="utf-8"))
+
+
+def save_contrast_phase_cache(
+    result: dict,
+    *,
+    hu_medians: dict[str, float],
+    phase_cache_path: Path,
+) -> None:
+    phase_cache_path = Path(phase_cache_path)
+    phase_cache_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "phase": str(result["phase"]),
+        "pi_time": float(result["pi_time"]),
+        "probability": float(result["probability"]),
+        "pi_time_min": float(result.get("pi_time_min", result["pi_time"])),
+        "pi_time_max": float(result.get("pi_time_max", result["pi_time"])),
+        "stddev": float(result.get("stddev", 0.0)),
+        "hu_medians": {key: float(value) for key, value in hu_medians.items()},
+    }
+    phase_cache_path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def estimate_contrast_remaining_sec(
+    *,
+    stats_cached: bool,
+    stats_hn_cached: bool,
+    phase_cached: bool,
+    needs_head_neck: bool,
+) -> float | None:
+    """Rough ETA for UI progress based on which contrast cache layers are already present."""
+    if phase_cached:
+        return 0.0
+    if stats_cached and (not needs_head_neck or stats_hn_cached):
+        return 2.0
+    if stats_cached and needs_head_neck:
+        return 22.0
+    return 60.0
+
+
 def _hu_medians_from_stats(stats: dict, organs: tuple[str, ...]) -> dict[str, float]:
     return {organ: float(stats[organ]["intensity"]) for organ in organs}
 
@@ -284,9 +382,7 @@ def hu_gate_iv_contrast(stats: dict, stats_hn: dict) -> bool | None:
         if not head_intensities:
             return None
         max_hn_vessel = max(head_intensities)
-        if max_hn_vessel < _HU_NATIVE_VESSEL_MAX:
-            return False
-        return True
+        return max_hn_vessel >= _HU_NATIVE_VESSEL_MAX
 
     return None
 
@@ -348,6 +444,9 @@ def predict_contrast_phase(
     device: str | None = None,
     existing_stats: dict | None = None,
     stats_output_path: Path | None = None,
+    stats_hn_output_path: Path | None = None,
+    phase_cache_path: Path | None = None,
+    progress: ContrastProgressCallback | None = None,
 ) -> tuple[dict, float, dict[str, float]]:
     """
     Run TotalSegmentator contrast-phase (organ median HU + XGBoost).
@@ -356,13 +455,57 @@ def predict_contrast_phase(
     skipped. Cached stats must come from a prior ``ml=True, fast=True, statistics=True``
     pass (full ``total`` task, not the ROI anatomy subset).
 
+    When ``phase_cache_path`` is valid relative to the statistics cache files, the
+    head/neck statistics pass, XGBoost ensemble, and NIfTI reload are skipped.
+
     Returns ``(result dict, inference_sec, hu_medians for all classifier organs)``.
     """
+    started = time.perf_counter()
+    stats_path = Path(stats_output_path) if stats_output_path is not None else None
+    stats_hn_path = Path(stats_hn_output_path) if stats_hn_output_path is not None else None
+    phase_cache = Path(phase_cache_path) if phase_cache_path is not None else None
+
+    if (
+        phase_cache is not None
+        and stats_path is not None
+        and existing_stats is not None
+    ):
+        needs_head_neck = existing_stats["brain"]["volume"] > 100
+        if contrast_phase_cache_is_valid(
+            phase_cache,
+            stats_path,
+            stats_hn_path=stats_hn_path,
+            require_stats_hn=needs_head_neck,
+        ):
+            cached = load_contrast_phase_cache(phase_cache)
+            hu_medians = {
+                key: float(value) for key, value in cached.get("hu_medians", {}).items()
+            }
+            result = {
+                "phase": cached["phase"],
+                "pi_time": cached["pi_time"],
+                "probability": cached["probability"],
+                "pi_time_min": cached.get("pi_time_min", cached["pi_time"]),
+                "pi_time_max": cached.get("pi_time_max", cached["pi_time"]),
+                "stddev": cached.get("stddev", 0.0),
+            }
+            logger.info(
+                "TS contrast: reusing cached XGBoost result from %s (phase=%s pi_time=%s)",
+                phase_cache,
+                result["phase"],
+                result["pi_time"],
+            )
+            _emit_contrast_progress(
+                progress,
+                stage="contrast_phase_cache",
+                message="Using cached contrast phase classification",
+                fraction=1.0,
+            )
+            return result, time.perf_counter() - started, hu_medians
+
     totalsegmentator = _require_totalsegmentator()
     ts_device = resolve_device(device)
     nifti_path = Path(nifti_path)
-    started = time.perf_counter()
-    ct_img = nib.load(nifti_path)
 
     logger.info(
         "TS contrast: statistics from %s (device=%s, existing_stats=%s)",
@@ -371,10 +514,17 @@ def predict_contrast_phase(
         existing_stats is not None,
     )
     log_memory_usage("ts_contrast_start")
+    ct_img = nib.load(nifti_path)
 
     with sequential_ml_context("ts_contrast_statistics"):
         try:
             if existing_stats is None:
+                _emit_contrast_progress(
+                    progress,
+                    stage="contrast_stats",
+                    message="Computing organ HU statistics",
+                    fraction=0.05,
+                )
                 logger.info(
                     "TS contrast: running TotalSegmentator organ statistics "
                     "(total task, fast=3mm, statistics=True)"
@@ -392,32 +542,87 @@ def predict_contrast_phase(
                     nr_thr_resamp=1,
                     device=ts_device,
                 )
+                _emit_contrast_progress(
+                    progress,
+                    stage="contrast_stats",
+                    message="Organ HU statistics complete",
+                    fraction=0.30,
+                )
             else:
                 logger.info("TS contrast: reusing cached organ statistics")
                 stats = existing_stats
+                _emit_contrast_progress(
+                    progress,
+                    stage="contrast_stats_cached",
+                    message="Using cached organ HU statistics",
+                    fraction=0.30,
+                )
 
             if existing_stats is None and stats_output_path is not None:
                 save_contrast_statistics(stats, stats_output_path)
                 logger.info("TS contrast: wrote cached contrast statistics to %s", stats_output_path)
 
-            if stats["brain"]["volume"] > 100:
-                logger.info("TS contrast: running head/neck vessel statistics")
-                _, stats_hn = totalsegmentator(
-                    ct_img,
-                    None,
-                    ml=True,
-                    fast=False,
-                    statistics=True,
-                    task="headneck_bones_vessels",
-                    roi_subset=None,
-                    statistics_exclude_masks_at_border=False,
-                    quiet=True,
-                    stats_aggregation="median",
-                    nr_thr_resamp=1,
-                    device=ts_device,
+            needs_head_neck = stats["brain"]["volume"] > 100
+            if needs_head_neck:
+                _emit_contrast_progress(
+                    progress,
+                    stage="contrast_stats_hn",
+                    message="Computing head/neck vessel statistics",
+                    fraction=0.35,
                 )
+                if (
+                    stats_hn_path is not None
+                    and stats_hn_path.is_file()
+                    and (
+                        existing_stats is not None
+                        or stats_path is None
+                        or stats_hn_path.stat().st_mtime >= stats_path.stat().st_mtime
+                    )
+                ):
+                    logger.info("TS contrast: reusing cached head/neck vessel statistics")
+                    stats_hn = load_contrast_stats_hn(stats_hn_path)
+                    _emit_contrast_progress(
+                        progress,
+                        stage="contrast_stats_hn_cached",
+                        message="Using cached head/neck vessel statistics",
+                        fraction=0.65,
+                    )
+                else:
+                    logger.info("TS contrast: running head/neck vessel statistics")
+                    _, stats_hn = totalsegmentator(
+                        ct_img,
+                        None,
+                        ml=True,
+                        fast=False,
+                        statistics=True,
+                        task="headneck_bones_vessels",
+                        roi_subset=None,
+                        statistics_exclude_masks_at_border=False,
+                        quiet=True,
+                        stats_aggregation="median",
+                        nr_thr_resamp=1,
+                        device=ts_device,
+                    )
+                    if stats_hn_path is not None:
+                        save_contrast_stats_hn(stats_hn, stats_hn_path)
+                        logger.info(
+                            "TS contrast: wrote cached head/neck statistics to %s",
+                            stats_hn_path,
+                        )
+                    _emit_contrast_progress(
+                        progress,
+                        stage="contrast_stats_hn",
+                        message="Head/neck vessel statistics complete",
+                        fraction=0.65,
+                    )
             else:
                 stats_hn = {organ: {"intensity": 0.0} for organ in CONTRAST_ORGANS_HN}
+                _emit_contrast_progress(
+                    progress,
+                    stage="contrast_stats_hn_skip",
+                    message="Head/neck statistics not required",
+                    fraction=0.65,
+                )
 
             hu_features = [stats[organ]["intensity"] for organ in CONTRAST_ORGANS]
             hu_features.extend(stats_hn[organ]["intensity"] for organ in CONTRAST_ORGANS_HN)
@@ -425,8 +630,20 @@ def predict_contrast_phase(
             hu_medians.update(_hu_medians_from_stats(stats_hn, CONTRAST_ORGANS_HN))
             logger.info("TS contrast: HU median: %s", _format_hu_medians(hu_medians, _LOG_HU_ORGANS))
             logger.info("TS contrast: HU features ready; running XGBoost ensemble")
+            _emit_contrast_progress(
+                progress,
+                stage="contrast_xgboost",
+                message="Classifying contrast phase (XGBoost)",
+                fraction=0.75,
+            )
             result = _run_contrast_classifier(hu_features)
             result = _apply_hu_gate(result, stats, stats_hn)
+            _emit_contrast_progress(
+                progress,
+                stage="contrast_xgboost",
+                message="Contrast phase classification complete",
+                fraction=0.95,
+            )
             phase = str(result["phase"])
             logger.info(
                 "TS contrast: phase=%s pi_time=%s probability=%.3f iv_contrast=%s",
@@ -435,6 +652,10 @@ def predict_contrast_phase(
                 result["probability"],
                 phase_to_iv_contrast(phase),
             )
+
+            if phase_cache is not None:
+                save_contrast_phase_cache(result, hu_medians=hu_medians, phase_cache_path=phase_cache)
+                logger.info("TS contrast: wrote cached XGBoost result to %s", phase_cache)
 
             inference_sec = time.perf_counter() - started
             return result, inference_sec, hu_medians
@@ -448,6 +669,9 @@ def analyze_contrast_phase(
     device: str | None = None,
     existing_stats: dict | None = None,
     stats_output_path: Path | None = None,
+    stats_hn_output_path: Path | None = None,
+    phase_cache_path: Path | None = None,
+    progress: ContrastProgressCallback | None = None,
 ) -> ContrastResult:
     """Derive IV contrast phase; thin wrapper around ``predict_contrast_phase``."""
     classified, _, _ = predict_contrast_phase(
@@ -455,6 +679,9 @@ def analyze_contrast_phase(
         device=device,
         existing_stats=existing_stats,
         stats_output_path=stats_output_path,
+        stats_hn_output_path=stats_hn_output_path,
+        phase_cache_path=phase_cache_path,
+        progress=progress,
     )
     phase = str(classified["phase"])
     return ContrastResult(

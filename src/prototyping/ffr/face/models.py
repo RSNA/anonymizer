@@ -6,10 +6,12 @@ from pathlib import Path
 import numpy as np
 import SimpleITK as sitk
 
+from anonymizer.controller.blur_face import QaStats
+
 
 @dataclass(frozen=True)
 class FaceVolumeData:
-    """Aligned HU volumes and boolean face mask (Z, Y, X) in stack order."""
+    """Aligned HU volumes and boolean face mask (Z, Y, X) — viz POC only."""
 
     hu_before: np.ndarray
     hu_after: np.ndarray
@@ -18,14 +20,4 @@ class FaceVolumeData:
     volume_img: sitk.Image
 
 
-@dataclass(frozen=True)
-class QaStats:
-    max_abs_diff_outside: float
-    n_violating_voxels: int
-    n_outside_voxels: int
-    n_face_voxels: int
-    mean_abs_diff_inside: float
-
-    @property
-    def outside_clean(self) -> bool:
-        return self.n_violating_voxels == 0
+__all__ = ["FaceVolumeData", "QaStats"]

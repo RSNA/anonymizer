@@ -83,7 +83,7 @@ def test_resolve_device_auto_cpu(_cuda: object, _mps: object) -> None:
 def test_series_cache_dir_under_series(tmp_path) -> None:
     series = tmp_path / "1.2.3"
     series.mkdir()
-    assert series_cache_dir(series) == series / ".tseg_cache"
+    assert series_cache_dir(series) == series / "A_TS_SEG"
 
 
 def test_segmentation_cache_valid_requires_mask(tmp_path) -> None:

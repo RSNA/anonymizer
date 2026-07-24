@@ -47,7 +47,7 @@ Run anatomy analysis and FALCON **sequentially** during Harmonize to limit peak 
 
 Harmonize order (single worker thread, per series):
 
-0. **Geometry** — read DICOM headers; infer plane, 2D/3D dimensionality, original vs derived; cache in ``<series>/.tseg_cache/geometry.json``
+0. **Geometry** — read DICOM headers; infer plane, 2D/3D dimensionality, original vs derived; cache in ``<series>/A_TS_SEG/geometry.json``
 1. **FALCON** — lightweight slice-based inference; models released before TS
 2. **TS segmentation** — ROI masks and regions on MPS/CUDA; **skipped** when ``geometry.ts_suitable`` is false (scouts, MIP/VR, single-slice)
 3. **TS contrast** — optional (`ENABLE_TS_CONTRAST` in `config.py`). When off, FALCON supplies contrast.
@@ -59,6 +59,7 @@ The harmonize worker is the only thread that runs ML. Segmentation no longer spa
 ## Public API
 
 - `analyze_series(series_directories) -> list[TS_result]` in `segment.py`
+- `analyze_tseg_face(series_directory, ...) -> FaceSegResult` in `segment.py`
 - `resolve_series_geometry(series_directory) -> SeriesGeometryResult` in `dicom_geometry.py`
 - RadLex Playbook+ descriptions via `format_radlex_ct_series_description()` in `radlex.py`
 
@@ -71,12 +72,32 @@ The harmonize worker is the only thread that runs ML. Segmentation no longer spa
 | `contrast.py` | Organ HU statistics + XGBoost contrast phase |
 | `harmonize.py` | Orchestrates geometry → FALCON → TS → merge into `HarmonizedResult` |
 
-Per-series cache under ``<series>/.tseg_cache/``:
+Per-series cache under ``<series>/A_TS_SEG/``:
 
 - `geometry.json` — geometry/provenance (this PR)
 - `volume.nii.gz` — converted NIfTI
-- `seg/*.nii.gz` — ROI masks
+- `seg/*.nii.gz` — ROI masks and `face.nii.gz` (licensed face task)
 - `contrast_stats.json` — organ HU stats
+
+### Face segmentation (licensed task)
+
+TotalSegmentator’s ``face`` task (Dataset303) is **separate** from the ROI ``total`` task: different weights and an **academic license** requirement.
+
+```bash
+uv run totalseg_set_license -l aca_XXXXXXXXXXXXXX
+```
+
+See [TotalSegmentator academic licensing](https://backend.totalsegmentator.com/license-academic/).
+
+Public API in `segment.py`:
+
+- `analyze_tseg_face(series_directory, *, progress=None, force=False) -> FaceSegResult`
+- `run_face_segmentation(nifti_path, output_dir, ...) -> float` — low-level inference
+- `face_mask_cache_path(series_directory) -> Path` — ``<series>/A_TS_SEG/seg/face.nii.gz``
+
+Geometry gating matches anatomy regions (`ts_regions_eligible`); head-series eligibility is handled by downstream FFR/de-id callers. Set `ENABLE_TSEG_FACE = False` in `config.py` to disable the API.
+
+Optional integration tests: `pytest tests/controller/tseg/test_tseg_face.py -m tseg_integration` (real TS ``face`` inference; slow).
 
 ## Harmonize integration
 

@@ -6,6 +6,7 @@ from pathlib import Path
 from prototyping.ffr.face.config import DEFAULT_FACE_BLUR_SIGMA_MM
 from prototyping.ffr.face.export_dicom import write_blurred_dicom_series
 from prototyping.ffr.face.blur import blur_face_hu_volume
+from prototyping.ffr.face.mask_source import resolve_face_mask_path
 from prototyping.ffr.face.models import FaceVolumeData
 from prototyping.ffr.face.qa import compute_qa_stats
 from prototyping.ffr.face.report import write_report
@@ -26,17 +27,16 @@ DEFAULT_WINDOW_WIDTH = 400.0
 
 def run_face_viz_poc(series_directory: Path) -> Path:
     """
-    Load series + ``ts_seg/face.nii.gz``, blur in memory, render QA viz modes.
+    Load series + face mask, blur in memory, render QA viz modes.
+
+    Face mask is read from ``.tseg_cache/seg/face.nii.gz`` (or legacy ``ts_seg/face.nii.gz``).
+    If missing, ``analyze_tseg_face`` runs when TotalSegmentator is available.
 
     Returns path to ``ts_seg/viz_poc/report.html``. Also writes blurred DICOM to
     ``<series>/face_blurred/``.
     """
     series_directory = Path(series_directory).resolve()
-    mask_path = series_directory / "ts_seg" / "face.nii.gz"
-    if not mask_path.is_file():
-        raise FileNotFoundError(
-            f"Missing {mask_path}. Run: uv run python src/prototyping/ts_seg_face.py {series_directory}"
-        )
+    mask_path = resolve_face_mask_path(series_directory)
 
     viz_dir = series_directory / "ts_seg" / "viz_poc"
     logger.info("Loading reference volume and mask …")

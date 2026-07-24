@@ -5,10 +5,17 @@ Compare visualization modes and verify **no HU change outside** the face mask.
 ## Prerequisites
 
 ```bash
-uv sync --extra tseg --extra viz --group dev
+uv sync --extra tseg --group dev --group prototyping-viz
 uv run totalseg_set_license -l aca_XXXXXXXXXXXXXX   # if not already done
+```
+
+Either run face segmentation first (faster when iterating on viz only):
+
+```bash
 uv run python src/prototyping/ts_seg_face.py /path/to/ct_head_series
 ```
+
+Or let the blur POC run segmentation automatically when the cached mask is missing.
 
 ## Run
 
@@ -61,16 +68,25 @@ Constants live in `config.py` (`DEFAULT_FACE_BLUR_SIGMA_MM`, `MIN_FACE_BLUR_SIGM
 
 ## Layout
 
+Core blur/export/QA logic lives in ``anonymizer.controller.blur_face`` (production API).
+This package adds visualization/reporting only.
+
 ```
 face/
-  __main__.py      CLI entry
-  pipeline.py      orchestration
-  projections.py   coronal/sagittal MIP via patient LPS axes
-  orientation.py   classify array axes (L/P/S) + physical index mapping
-  config.py        blur defaults (sigma_mm, min_sigma_px)
-  blur.py          in-plane HU Gaussian blur inside mask
-  export_dicom.py  write blurred axial DICOM series
-  qa.py            outside-mask diff stats
-  report.py        HTML + JSON
-  viz/modes.py     PNG renderers
+  __main__.py      CLI entry (viz POC)
+  pipeline.py      viz orchestration (calls controller via shims)
+  mask_source.py   shim → controller.blur_face
+  blur.py          shim → controller.blur_face
+  ...
+  viz/modes.py     PNG renderers (prototyping only)
+```
+
+Production entry point:
+
+```python
+from anonymizer.controller.blur_face import blur_face_series
+
+result = blur_face_series(series_directory)
+if result.error:
+    ...
 ```

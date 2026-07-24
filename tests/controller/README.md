@@ -10,6 +10,7 @@ tests/controller/
 ├── conftest.py      # Cross-cutting fixtures (project, SCP, temp dirs)
 ├── tseg/            # TotalSegmentator, dicom_geometry, synthetic CT support
 ├── harmonize/       # harmonize_series merge and pipeline
+├── blur_face/       # CT face blur (remove_pixel_phi.py handles burned-in text)
 ├── falcon/          # FALCON predict and eval
 ├── dicom/           # SCU/SCP integration tests + support modules
 ├── core/            # anonymizer.py, create_projections.py
@@ -39,6 +40,7 @@ from tests.controller.dicom.support.helpers import send_file_to_scp
 ```bash
 pytest tests/controller/tseg -q
 pytest tests/controller/harmonize -q
+pytest tests/controller/blur_face -q
 pytest tests/controller/dicom -q
 pytest tests/controller/core -q
 pytest tests/controller/infra -q

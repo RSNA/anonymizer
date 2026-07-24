@@ -1,4 +1,4 @@
-"""Combine TotalSegmentator anatomy analysis with FALCON for harmonized series descriptions."""
+"""Combine TotalSegmentator anatomy analysis into Playbook-compliant series descriptions."""
 
 from __future__ import annotations
 
@@ -6,37 +6,68 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
 
-from anonymizer.controller.falcon.predict import FalconPrediction, predict_falcon_series
-from anonymizer.controller.tseg.config import ENABLE_TS_CONTRAST
-from anonymizer.controller.tseg.contrast import log_memory_usage, release_working_memory
+from pydicom import Dataset, dcmread
+
+from anonymizer.controller.tseg.config import (
+    CONTRAST_PHASE_CACHE_FILENAME,
+    CONTRAST_STATS_FILENAME,
+    CONTRAST_STATS_HN_FILENAME,
+    ENABLE_TS_CONTRAST,
+    ROI_SUBSET,
+)
+from anonymizer.controller.tseg.contrast import (
+    contrast_phase_cache_is_valid,
+    load_contrast_phase_cache,
+    load_contrast_statistics,
+    log_memory_usage,
+    phase_to_iv_contrast,
+    release_working_memory,
+)
 from anonymizer.controller.tseg.dicom_geometry import (
     SeriesGeometryResult,
     format_geometry_progress_message,
+    load_geometry_cache,
     resolve_series_geometry,
+    sorted_dicom_paths,
     ts_regions_eligible,
 )
-from anonymizer.controller.tseg.radlex import falcon_body_part_to_region_token, format_radlex_ct_series_description
-from anonymizer.controller.tseg.runtime import log_active_threads, sequential_ml_context
+from anonymizer.controller.tseg.radlex_playbook import (
+    PlaybookHarmonizeAttributes,
+    build_harmonized_series_description,
+    build_localizer_harmonized_series_description,
+    is_localizer_geometry,
+)
+from anonymizer.controller.tseg.runtime import log_active_threads
 from anonymizer.controller.tseg.segment import (
     AnalysisProgress,
     ProgressCallback,
     TS_result,
     analyze_tseg_contrast,
     analyze_tseg_regions,
+    body_parts_present,
+    collect_structure_voxels,
+    dominant_region_from_voxels,
+    estimate_tseg_contrast_remaining_sec,
+    series_cache_dir,
 )
+from anonymizer.controller.tseg.segment import (
+    _region_ts_result as region_ts_result_from_summary,
+)
+from anonymizer.controller.tseg.segment import (
+    _segmentation_cache_valid as segmentation_cache_valid,
+)
+from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
 HarmonizeProgress = AnalysisProgress
 
 # Progress fractions for sequential harmonize stages (single-threaded worker).
-_GEOMETRY_FRAC = (0.0, 0.05)
-_FALCON_FRAC = (0.05, 0.22)
-_TSEG_SEG_FRAC = (0.22, 0.62)
-_TSEG_CONTRAST_FRAC = (0.62, 0.90)
-_MERGE_FRAC = (0.90, 1.0)
+_GEOMETRY_FRAC = (0.0, 0.08)
+_TSEG_SEG_FRAC = (0.08, 0.62)
+_TSEG_CONTRAST_FRAC = (0.62, 0.92)
+_MERGE_FRAC = (0.92, 1.0)
 
 
 @dataclass(frozen=True)
@@ -44,73 +75,254 @@ class HarmonizedResult:
     series_directory: Path
     radlex_series_description: str
     tseg: TS_result | None
-    falcon: FalconPrediction | None
-    regions_source: Literal["tseg", "falcon", "none"]
-    contrast_source: Literal["tseg", "falcon", "none"]
     geometry: SeriesGeometryResult | None = None
+    playbook: PlaybookHarmonizeAttributes | None = None
     error: str | None = None
 
 
-def _falcon_regions_label(falcon: FalconPrediction) -> str:
-    return falcon_body_part_to_region_token(falcon.body_part)
+def _load_series_dataset(series_directory: Path):
+    paths = sorted_dicom_paths(series_directory)
+    if not paths:
+        raise ValueError(f"No DICOM files found in {series_directory}")
+    return dcmread(paths[0], stop_before_pixels=True)
+
+
+def _merge_localizer_result(
+    series_directory: Path,
+    geometry: SeriesGeometryResult,
+    tseg: TS_result | None,
+) -> HarmonizedResult:
+    if (
+        tseg is not None
+        and tseg.body_parts_present.strip()
+        and tseg.contrast_phase
+        and tseg.error is None
+    ):
+        try:
+            ds = _load_series_dataset(series_directory)
+            description, playbook = build_harmonized_series_description(tseg, geometry, ds=ds)
+        except ValueError as exc:
+            logger.warning("Harmonize localizer merge via TS failed for %s: %s", series_directory, exc)
+        else:
+            return HarmonizedResult(
+                series_directory=series_directory,
+                radlex_series_description=description,
+                tseg=tseg,
+                geometry=geometry,
+                playbook=playbook,
+            )
+
+    try:
+        ds = _load_series_dataset(series_directory)
+        description, playbook = build_localizer_harmonized_series_description(ds, geometry)
+    except ValueError as exc:
+        logger.warning("Harmonize localizer merge failed for %s: %s", series_directory, exc)
+        return HarmonizedResult(
+            series_directory=series_directory,
+            radlex_series_description="",
+            tseg=tseg,
+            geometry=geometry,
+            error=str(exc),
+        )
+
+    return HarmonizedResult(
+        series_directory=series_directory,
+        radlex_series_description=description,
+        tseg=tseg,
+        geometry=geometry,
+        playbook=playbook,
+    )
 
 
 def _merge_result(
     series_directory: Path,
     tseg: TS_result | None,
-    falcon: FalconPrediction | None,
     *,
     geometry: SeriesGeometryResult | None = None,
 ) -> HarmonizedResult:
-    regions_source: Literal["tseg", "falcon", "none"] = "none"
-    contrast_source: Literal["tseg", "falcon", "none"] = "none"
-    body_parts_present = ""
-    iv_contrast = False
-
-    tseg_ok = tseg is not None and tseg.body_parts_present.strip()
-    tseg_regions_ok = tseg_ok and (tseg.error is None or not tseg.contrast_phase)
-    tseg_contrast_ok = (
-        tseg is not None
-        and tseg.error is None
-        and bool(tseg.contrast_phase)
-    )
-    falcon_ok = falcon is not None and falcon.error is None and falcon.body_part
-
-    if tseg_regions_ok and tseg is not None:
-        body_parts_present = tseg.body_parts_present
-        regions_source = "tseg"
-    elif falcon_ok and falcon is not None:
-        body_parts_present = _falcon_regions_label(falcon)
-        regions_source = "falcon"
-
-    if tseg_contrast_ok and tseg is not None:
-        iv_contrast = tseg.iv_contrast
-        contrast_source = "tseg"
-    elif falcon_ok and falcon is not None:
-        iv_contrast = falcon.iv_contrast
-        contrast_source = "falcon"
-
-    if not body_parts_present:
+    if geometry is None:
         return HarmonizedResult(
             series_directory=series_directory,
             radlex_series_description="",
             tseg=tseg,
-            falcon=falcon,
-            regions_source="none",
-            contrast_source="none",
-            geometry=geometry,
-            error="Could not determine anatomy regions from TotalSegmentator or FALCON",
+            geometry=None,
+            error="Series geometry is required for Playbook harmonization",
         )
 
-    radlex_description = format_radlex_ct_series_description(body_parts_present, iv_contrast)
+    if is_localizer_geometry(geometry):
+        return _merge_localizer_result(series_directory, geometry, tseg)
+
+    if tseg is None or not tseg.body_parts_present.strip():
+        error = tseg.error if tseg is not None and tseg.error else "TotalSegmentator anatomy analysis unavailable"
+        return HarmonizedResult(
+            series_directory=series_directory,
+            radlex_series_description="",
+            tseg=tseg,
+            geometry=geometry,
+            error=error,
+        )
+
+    if tseg.error and not tseg.contrast_phase:
+        return HarmonizedResult(
+            series_directory=series_directory,
+            radlex_series_description="",
+            tseg=tseg,
+            geometry=geometry,
+            error=tseg.error,
+        )
+
+    if not tseg.contrast_phase:
+        return HarmonizedResult(
+            series_directory=series_directory,
+            radlex_series_description="",
+            tseg=tseg,
+            geometry=geometry,
+            error="TotalSegmentator contrast phase is required for Playbook harmonization",
+        )
+
+    try:
+        ds = _load_series_dataset(series_directory)
+        description, playbook = build_harmonized_series_description(tseg, geometry, ds=ds)
+    except ValueError as exc:
+        logger.warning("Harmonize merge failed for %s: %s", series_directory, exc)
+        return HarmonizedResult(
+            series_directory=series_directory,
+            radlex_series_description="",
+            tseg=tseg,
+            geometry=geometry,
+            error=str(exc),
+        )
+
     return HarmonizedResult(
         series_directory=series_directory,
-        radlex_series_description=radlex_description,
+        radlex_series_description=description,
         tseg=tseg,
-        falcon=falcon,
-        regions_source=regions_source,
-        contrast_source=contrast_source,
         geometry=geometry,
+        playbook=playbook,
+    )
+
+
+def _tseg_result_from_cache(series_directory: Path) -> TS_result | None:
+    """Rebuild anatomy + contrast TS_result from ``A_TS_SEG`` without running ML."""
+    cache_dir = series_cache_dir(series_directory)
+    seg_dir = cache_dir / "seg"
+    structures = list(ROI_SUBSET)
+    if not segmentation_cache_valid(seg_dir, structures):
+        return None
+
+    structure_voxels = collect_structure_voxels(seg_dir, structures)
+    region = dominant_region_from_voxels(structure_voxels)
+    regions_label = body_parts_present(region.region_voxels)
+    if not regions_label:
+        return None
+
+    region_result = region_ts_result_from_summary(
+        series_directory,
+        region=region,
+        regions_label=regions_label,
+    )
+
+    contrast_stats_path = cache_dir / CONTRAST_STATS_FILENAME
+    contrast_stats_hn_path = cache_dir / CONTRAST_STATS_HN_FILENAME
+    contrast_phase_path = cache_dir / CONTRAST_PHASE_CACHE_FILENAME
+    if not contrast_stats_path.is_file() or not contrast_phase_path.is_file():
+        return None
+
+    try:
+        existing_stats = load_contrast_statistics(contrast_stats_path)
+        cached = load_contrast_phase_cache(contrast_phase_path)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        logger.debug("Harmonize cache: contrast artifacts unreadable for %s: %s", series_directory, exc)
+        return None
+
+    needs_head_neck = existing_stats["brain"]["volume"] > 100
+    if not contrast_phase_cache_is_valid(
+        contrast_phase_path,
+        contrast_stats_path,
+        stats_hn_path=contrast_stats_hn_path,
+        require_stats_hn=needs_head_neck,
+    ):
+        return None
+
+    phase = str(cached["phase"])
+    return TS_result(
+        series_directory=series_directory,
+        dominant_region=region_result.dominant_region,
+        body_parts_present=region_result.body_parts_present,
+        multi_region=region_result.multi_region,
+        region_fraction=region_result.region_fraction,
+        iv_contrast=phase_to_iv_contrast(phase),
+        contrast_phase=phase,
+        phase_probability=float(cached.get("probability", 0.0)),
+        radlex_series_description="",
+        structures_present=dict(region_result.structures_present),
+    )
+
+
+def harmonized_description_from_cache(
+    series_directory: Path,
+    *,
+    ds: Dataset | None = None,
+) -> str | None:
+    """
+    Reconstruct the Playbook series description from cached harmonize inputs.
+
+    Returns the expected description when geometry and TS caches are complete,
+    or ``None`` when harmonize must run before the outcome can be known.
+    """
+    series_directory = Path(series_directory)
+    geometry = load_geometry_cache(series_directory)
+    if geometry is None:
+        return None
+
+    if ds is None:
+        try:
+            ds = _load_series_dataset(series_directory)
+        except ValueError:
+            return None
+
+    if is_localizer_geometry(geometry):
+        merged = _merge_localizer_result(series_directory, geometry, None)
+        if merged.error:
+            return None
+        description = (merged.radlex_series_description or "").strip()
+        return description or None
+
+    if not ts_regions_eligible(geometry) or not ENABLE_TS_CONTRAST:
+        return None
+
+    tseg = _tseg_result_from_cache(series_directory)
+    if tseg is None:
+        return None
+
+    merged = _merge_result(series_directory, tseg, geometry=geometry)
+    if merged.error:
+        return None
+    description = (merged.radlex_series_description or "").strip()
+    return description or None
+
+
+def series_description_is_harmonized(series_directory: Path, ds: Dataset) -> bool | None:
+    """
+    Return whether ``SeriesDescription`` matches the cached Playbook harmonization.
+
+    ``True`` / ``False`` when TS cache is complete; ``None`` when unknown.
+    """
+    expected = harmonized_description_from_cache(series_directory, ds=ds)
+    if expected is None:
+        return None
+    current = str(ds.get("SeriesDescription", "") or "").strip()
+    return current == expected
+
+
+def harmonize_context_hint(series_directory: Path, ds: Dataset | None) -> str | None:
+    """Optional Series View geometry-line suffix when harmonization is already up to date."""
+    if ds is None or getattr(ds, "Modality", None) != "CT":
+        return None
+    if series_description_is_harmonized(series_directory, ds) is not True:
+        return None
+    return _(
+        "Series description already harmonized — use Clear TS Cache to re-run analysis"
     )
 
 
@@ -134,6 +346,9 @@ def _scaled_progress(
                 fraction=frac_start + progress.fraction * span,
                 elapsed_sec=time.perf_counter() - started,
                 remaining_sec=progress.remaining_sec,
+                geometry=progress.geometry,
+                tseg=progress.tseg,
+                radlex_series_description=progress.radlex_series_description,
             )
         )
 
@@ -146,26 +361,38 @@ def harmonize_series(
     progress: ProgressCallback | None = None,
 ) -> list[HarmonizedResult]:
     """
-    Run harmonize sequentially per series: geometry → FALCON → TS segmentation → (optional) TS contrast → merge.
+    Run harmonize sequentially per series: geometry → TS segmentation → TS contrast → Playbook merge.
 
-    Geometry is cached under ``<series>/.tseg_cache/geometry.json``. TotalSegmentator is skipped when
+    Geometry is cached under ``<series>/A_TS_SEG/geometry.json``. TotalSegmentator is skipped when
     ``geometry.ts_suitable`` is false (localizers, single-slice 2D, derived 3D renders, etc.).
 
-    When ``ENABLE_TS_CONTRAST`` is False, regions come from TS and contrast from FALCON.
+    Series descriptions are built only from TotalSegmentator anatomy and contrast plus DICOM geometry
+    (Playbook body part, IV contrast phase, anatomic plane). FALCON is not used.
     """
     if not series_directories:
         return []
 
+    if not ENABLE_TS_CONTRAST:
+        logger.warning("Harmonize: ENABLE_TS_CONTRAST=False; contrast phase is required for Playbook merge")
+
     logger.info(
-        "Harmonize starting for %d series (geometry → FALCON → TS seg%s)",
+        "Harmonize starting for %d series (geometry → TS seg → TS contrast → Playbook merge)",
         len(series_directories),
-        " → TS contrast" if ENABLE_TS_CONTRAST else "; TS contrast off → FALCON contrast",
     )
     started = time.perf_counter()
     log_memory_usage("harmonize_start")
     log_active_threads("harmonize_start")
 
-    def _report(stage: str, message: str, fraction: float, remaining_sec: float | None = None) -> None:
+    def _report(
+        stage: str,
+        message: str,
+        fraction: float,
+        remaining_sec: float | None = None,
+        *,
+        geometry: SeriesGeometryResult | None = None,
+        tseg: TS_result | None = None,
+        radlex_series_description: str | None = None,
+    ) -> None:
         if progress is None:
             return
         progress(
@@ -175,6 +402,9 @@ def harmonize_series(
                 fraction=fraction,
                 elapsed_sec=time.perf_counter() - started,
                 remaining_sec=remaining_sec,
+                geometry=geometry,
+                tseg=tseg,
+                radlex_series_description=radlex_series_description,
             )
         )
 
@@ -186,7 +416,12 @@ def harmonize_series(
         logger.info("=== Harmonize [%d/%d] %s ===", index, n_series, series_dir)
 
         geometry = resolve_series_geometry(series_dir)
-        _report("geometry", format_geometry_progress_message(geometry), _GEOMETRY_FRAC[1])
+        _report(
+            "geometry",
+            format_geometry_progress_message(geometry),
+            _GEOMETRY_FRAC[1],
+            geometry=geometry,
+        )
         logger.info(
             "Harmonize geometry: plane=%s dimensionality=%s provenance=%s ts_suitable=%s",
             geometry.plane,
@@ -195,28 +430,9 @@ def harmonize_series(
             geometry.ts_suitable,
         )
 
-        # Stage 1: FALCON (lightweight; runs before TS to avoid peak RAM with both loaded)
-        _report("falcon", "Running FALCON analysis", _FALCON_FRAC[0], remaining_sec=12.0)
-        logger.info("Harmonize stage 1/4: FALCON for %s", series_dir)
-        log_memory_usage("harmonize_before_falcon")
-        with sequential_ml_context("harmonize_falcon"):
-            falcon_results = predict_falcon_series([series_dir])
-        falcon = falcon_results[0] if falcon_results else None
-        if falcon is not None and falcon.error is None:
-            logger.info(
-                "Harmonize FALCON: body_part=%s iv_contrast=%s confidence=%.3f",
-                falcon.body_part,
-                falcon.iv_contrast,
-                falcon.body_part_confidence,
-            )
-        elif falcon is not None and falcon.error:
-            logger.warning("Harmonize FALCON failed: %s", falcon.error)
-        release_working_memory(stage="harmonize_after_falcon")
-
-        # Stage 2: TS segmentation + regions (volume released before contrast)
         _report("tseg", "Segmenting anatomy", _TSEG_SEG_FRAC[0], remaining_sec=60.0)
         if ts_regions_eligible(geometry):
-            logger.info("Harmonize stage 2/4: TS segmentation for %s", series_dir)
+            logger.info("Harmonize stage 1/3: TS segmentation for %s", series_dir)
             tseg_progress = _scaled_progress(
                 progress,
                 started=started,
@@ -224,9 +440,17 @@ def harmonize_series(
                 stage_label="Segmenting anatomy",
             )
             region_result, nifti_path = analyze_tseg_regions(series_dir, progress=tseg_progress)
+            if region_result.body_parts_present.strip() and region_result.error is None:
+                _report(
+                    "regions",
+                    "Anatomy regions summarized",
+                    _TSEG_SEG_FRAC[1],
+                    geometry=geometry,
+                    tseg=region_result,
+                )
         else:
             logger.info(
-                "Harmonize stage 2/4: TS segmentation skipped for %s (%s)",
+                "Harmonize stage 1/3: TS segmentation skipped for %s (%s)",
                 series_dir,
                 geometry.notes or geometry.dimensionality,
             )
@@ -249,7 +473,6 @@ def harmonize_series(
             )
             nifti_path = None
 
-        # Stage 3: TS contrast (organ HU statistics + XGBoost)
         tseg: TS_result | None = region_result
         if (
             ENABLE_TS_CONTRAST
@@ -257,8 +480,13 @@ def harmonize_series(
             and region_result.body_parts_present.strip()
             and region_result.error is None
         ):
-            _report("contrast", "Analyzing contrast phase", _TSEG_CONTRAST_FRAC[0], remaining_sec=35.0)
-            logger.info("Harmonize stage 3/4: TS contrast for %s (nifti=%s)", series_dir, nifti_path)
+            _report(
+                "contrast",
+                "Analyzing contrast phase",
+                _TSEG_CONTRAST_FRAC[0],
+                remaining_sec=estimate_tseg_contrast_remaining_sec(series_dir),
+            )
+            logger.info("Harmonize stage 2/3: TS contrast for %s (nifti=%s)", series_dir, nifti_path)
             contrast_progress = _scaled_progress(
                 progress,
                 started=started,
@@ -271,12 +499,15 @@ def harmonize_series(
                 region_result,
                 progress=contrast_progress,
             )
-        elif not ENABLE_TS_CONTRAST and region_result.body_parts_present.strip():
-            logger.info(
-                "Harmonize: TS contrast disabled (ENABLE_TS_CONTRAST=False); "
-                "using FALCON for contrast on %s",
-                series_dir,
+            _report(
+                "contrast",
+                "Contrast phase analysis complete",
+                _TSEG_CONTRAST_FRAC[1],
+                geometry=geometry,
+                tseg=tseg,
             )
+        elif not ENABLE_TS_CONTRAST:
+            logger.warning("Harmonize: TS contrast disabled; cannot build Playbook description for %s", series_dir)
         elif region_result.error:
             logger.warning("Harmonize skipping TS contrast (regions error): %s", region_result.error)
         else:
@@ -284,18 +515,44 @@ def harmonize_series(
 
         release_working_memory(stage="harmonize_after_tseg_contrast")
 
-        _report("merge", "Building harmonized description", _MERGE_FRAC[0], remaining_sec=0.0)
-        merged = _merge_result(series_dir, tseg, falcon, geometry=geometry)
-        harmonized.append(merged)
-        logger.info(
-            "Harmonize [%d/%d] %s: regions=%s contrast=%s description=%r",
-            index,
-            n_series,
-            series_dir,
-            merged.regions_source,
-            merged.contrast_source,
-            merged.radlex_series_description,
+        _report(
+            "merge",
+            "Building harmonized description",
+            _MERGE_FRAC[0],
+            remaining_sec=0.0,
+            geometry=geometry,
+            tseg=tseg,
         )
+        merged = _merge_result(series_dir, tseg, geometry=geometry)
+        harmonized.append(merged)
+        if merged.error:
+            logger.warning(
+                "Harmonize [%d/%d] %s failed: %s",
+                index,
+                n_series,
+                series_dir,
+                merged.error,
+            )
+        else:
+            logger.info(
+                "Harmonize [%d/%d] %s: description=%r body=%s contrast=%s plane=%s series_type=%s",
+                index,
+                n_series,
+                series_dir,
+                merged.radlex_series_description,
+                merged.playbook.body_part_code if merged.playbook else "",
+                merged.playbook.iv_contrast_code if merged.playbook else "",
+                merged.playbook.anatomic_plane_code if merged.playbook else "",
+                merged.playbook.series_type_code if merged.playbook else "",
+            )
+            _report(
+                "merge",
+                "Harmonized description ready",
+                _MERGE_FRAC[1],
+                geometry=geometry,
+                tseg=tseg,
+                radlex_series_description=merged.radlex_series_description,
+            )
 
     _report("done", "Harmonize complete", 1.0, remaining_sec=0.0)
     log_memory_usage("harmonize_end")

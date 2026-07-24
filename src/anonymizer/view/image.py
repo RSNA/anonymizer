@@ -1,4 +1,4 @@
-import gc
+import contextlib
 import logging
 import tkinter as tk
 from tkinter import ttk
@@ -43,6 +43,14 @@ class ImageViewer(ctk.CTkFrame):
         initial_ww: float,
         add_to_whitelist_callback: Callable[[str], None] | None = None,
         regenerate_series_projections_callback: Callable[[], None] | None = None,
+        *,
+        segmentation_overlay_color: tuple[int, int, int] | None = None,
+        segmentation_overlay_alpha: float = 1.0,
+        on_slice_index_changed: Callable[[int], None] | None = None,
+        on_wlww_changed: Callable[[float, float], None] | None = None,
+        enable_interactive_editing: bool = True,
+        show_playback_controls: bool = True,
+        show_data_panel: bool = True,
     ):
         super().__init__(master=parent)  # Call the superclass constructor
         self.parent = parent
@@ -56,6 +64,22 @@ class ImageViewer(ctk.CTkFrame):
         self.images: np.ndarray = images
         self.add_to_whitelist_callback = add_to_whitelist_callback
         self.regenerate_series_projections_callback = regenerate_series_projections_callback
+        self.segmentation_overlay_color = segmentation_overlay_color or self.SEGMENTATION_COLOR
+        self.segmentation_overlay_alpha = min(1.0, max(0.0, segmentation_overlay_alpha))
+        self.on_slice_index_changed = on_slice_index_changed
+        self.on_wlww_changed = on_wlww_changed
+        self.enable_interactive_editing = enable_interactive_editing
+        self.show_playback_controls = show_playback_controls
+        self.show_data_panel = show_data_panel
+        self._companion_images: np.ndarray | None = None
+        self.companion_canvas: tk.Canvas | None = None
+        self.companion_canvas_image_item = None
+        self._companion_cache: dict[int, tuple[ImageTk.PhotoImage, tuple[int, int]]] = {}
+        self._primary_label: ctk.CTkLabel | None = None
+        self._companion_label: ctk.CTkLabel | None = None
+        self._suppress_callbacks = False
+        self._initial_display_done = False
+        self._resize_to_viewport_enabled = True
 
         # Determine image properties from the last frame
         last_frame = images[-1]
@@ -141,72 +165,80 @@ class ImageViewer(ctk.CTkFrame):
             self.scrollbar.grid(row=1, column=0, sticky="ew")  # sticky="ew"
             self.update_scrollbar()
 
-        # Data Frame:
-        self.data_frame = ctk.CTkFrame(self)
-        self.data_frame.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="ns")
-        self.data_frame.grid_rowconfigure(0, weight=1)
+        self.histogram: Histogram | None = None
+        self.data_frame: ctk.CTkFrame | None = None
+        self.control_frame: ctk.CTkFrame | None = None
+        self.image_size_label: ctk.CTkLabel | None = None
+        self.projection_label: ctk.CTkLabel | None = None
+        self.image_number_label: ctk.CTkLabel | None = None
 
-        # Histogram: (histogram is displayed after layout finalised)
-        self.histogram = Histogram(
-            self.data_frame,
-            update_callback=self._handle_histogram_update,
-        )
-        self.histogram.set_wlww(self.current_wl, self.current_ww, redraw=False)
-        self.histogram.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="n")
+        if self.show_data_panel:
+            # Data Frame:
+            self.data_frame = ctk.CTkFrame(self)
+            self.data_frame.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="ns")
+            self.data_frame.grid_rowconfigure(0, weight=1)
 
-        # Control Frame for fixed width widgets
-        self.control_frame = ctk.CTkFrame(self.data_frame)
-        self.control_frame.grid(row=1, column=1, padx=self.PAD, pady=self.PAD, sticky="ew")
-        self.control_frame.grid_columnconfigure(1, weight=1)
-
-        # Image Size Label:
-        self.image_size_label = ctk.CTkLabel(self.control_frame, text="")
-        self.image_size_label.grid(row=0, column=0, sticky="w", padx=self.PAD)
-
-        self.projection_label = ctk.CTkLabel(self.control_frame, text="")
-        self.projection_label.grid(row=1, column=0, sticky="w", padx=self.PAD)
-
-        # --- Toggle Button (Play/Pause) for multi-frame series ---
-        if self.num_images > 1:
-            self.fps_slider = ctk.CTkSlider(
-                self.control_frame,
-                width=self.BUTTON_WIDTH,
-                from_=self.MIN_FPS,
-                to=self.MAX_FPS,
-                number_of_steps=self.MAX_FPS - self.MIN_FPS,
-                orientation=ctk.HORIZONTAL,
-                command=lambda value: self.change_fps(value),
+            self.histogram = Histogram(
+                self.data_frame,
+                update_callback=self._handle_histogram_update,
             )
-            self.fps_slider.set(self.fps)
-            self.fps_slider.grid(row=1, column=2, padx=self.PAD)
+            self.histogram.set_wlww(self.current_wl, self.current_ww, redraw=False)
+            self.histogram.grid(row=0, column=0, padx=self.PAD, pady=self.PAD, sticky="n")
 
-            self.fps_slider_label = ctk.CTkLabel(self.control_frame, text=f"{self.fps} fps")
-            self.fps_slider_label.grid(row=0, column=2, padx=self.PAD)
+            # Control Frame for fixed width widgets
+            self.control_frame = ctk.CTkFrame(self.data_frame)
+            self.control_frame.grid(row=1, column=0, padx=self.PAD, pady=self.PAD, sticky="ew")
+            self.control_frame.grid_columnconfigure(1, weight=1)
 
-            self.toggle_button = ctk.CTkButton(
-                self.control_frame,
-                text="",
-                image=self.ctk_play_icon,
-                width=self.PLAY_BTN_SIZE[0],
-                command=self.toggle_play,
-            )
-            self.toggle_button.grid(row=0, column=3, padx=self.PAD, pady=(self.PAD, 0), sticky="e")
+            # Image Size Label:
+            self.image_size_label = ctk.CTkLabel(self.control_frame, text="")
+            self.image_size_label.grid(row=0, column=0, sticky="w", padx=self.PAD)
 
-        self.image_number_label = ctk.CTkLabel(self.control_frame, text="", font=("Courier Bold", 14))
-        self.image_number_label.grid(row=1, column=3, sticky="s", padx=(0, self.PAD))
+            self.projection_label = ctk.CTkLabel(self.control_frame, text="")
+            self.projection_label.grid(row=1, column=0, sticky="w", padx=self.PAD)
+
+            # --- Toggle Button (Play/Pause) for multi-frame series ---
+            if self.num_images > 1 and self.show_playback_controls:
+                self.fps_slider = ctk.CTkSlider(
+                    self.control_frame,
+                    width=self.BUTTON_WIDTH,
+                    from_=self.MIN_FPS,
+                    to=self.MAX_FPS,
+                    number_of_steps=self.MAX_FPS - self.MIN_FPS,
+                    orientation=ctk.HORIZONTAL,
+                    command=lambda value: self.change_fps(value),
+                )
+                self.fps_slider.set(self.fps)
+                self.fps_slider.grid(row=1, column=2, padx=self.PAD)
+
+                self.fps_slider_label = ctk.CTkLabel(self.control_frame, text=f"{self.fps} fps")
+                self.fps_slider_label.grid(row=0, column=2, padx=self.PAD)
+
+                self.toggle_button = ctk.CTkButton(
+                    self.control_frame,
+                    text="",
+                    image=self.ctk_play_icon,
+                    width=self.PLAY_BTN_SIZE[0],
+                    command=self.toggle_play,
+                )
+                self.toggle_button.grid(row=0, column=3, padx=self.PAD, pady=(self.PAD, 0), sticky="e")
+
+            self.image_number_label = ctk.CTkLabel(self.control_frame, text="", font=("Courier Bold", 14))
+            self.image_number_label.grid(row=1, column=3, sticky="s", padx=(0, self.PAD))
 
         # Event binding:
         # Mouse:
         self.bind("<Configure>", self.on_resize)
         self.bind("<MouseWheel>", self.on_mousewheel)
         self.canvas.bind("<MouseWheel>", self.on_mousewheel)
-        self.canvas.bind("<Button-1>", self._on_left_click)  # Left-click press
-        self.canvas.bind("<B1-Motion>", self.draw_box)  # Left-click drag
-        self.canvas.bind("<ButtonRelease-1>", self.end_drawing_user_rect)  # Left-click release
+        if self.enable_interactive_editing:
+            self.canvas.bind("<Button-1>", self._on_left_click)  # Left-click press
+            self.canvas.bind("<B1-Motion>", self.draw_box)  # Left-click drag
+            self.canvas.bind("<ButtonRelease-1>", self.end_drawing_user_rect)  # Left-click release
         self.canvas.bind("<ButtonPress-3>", self._start_adjust_display)  # Right-click press
         self.canvas.bind("<B3-Motion>", self._adjust_display)  # Right-click drag
         self.canvas.bind("<ButtonRelease-3>", self._end_adjust_display)  # Right-click release
-        if self.num_images > 1:
+        if self.num_images > 1 and self.control_frame is not None:
             self.control_frame.bind("<MouseWheel>", self.on_mousewheel)
 
         # Keys:
@@ -221,15 +253,139 @@ class ImageViewer(ctk.CTkFrame):
             self.bind("<Next>", self.change_image_next)
             self.bind("<Home>", self.change_image_home)
             self.bind("<End>", self.change_image_end)
-            self.bind("<space>", self.toggle_play)
+            if self.show_playback_controls:
+                self.bind("<space>", self.toggle_play)
 
         # Focus management for ImageViewer
         self.bind("<Enter>", self.mouse_enter)
         self.canvas.bind("<Enter>", self.mouse_enter)
-        self.control_frame.bind("<Enter>", self.mouse_enter)
+        if self.control_frame is not None:
+            self.control_frame.bind("<Enter>", self.mouse_enter)
 
         self.after_idle(self._set_initial_size)
         self.update_status()
+
+    def set_slice_index_sync(self, index: int) -> None:
+        """Change slice without notifying sync partners (face blur review)."""
+        self._suppress_callbacks = True
+        try:
+            self.change_image(index)
+        finally:
+            self._suppress_callbacks = False
+
+    def set_wlww_sync(self, wl: float, ww: float) -> None:
+        """Apply window/level without notifying sync partners (face blur review)."""
+        self._suppress_callbacks = True
+        try:
+            self.current_wl = wl
+            self.current_ww = max(1.0, ww)
+            self._update_derived_alpha_beta()
+            if self.histogram is not None:
+                self.histogram.set_wlww(self.current_wl, self.current_ww)
+            self._companion_cache.clear()
+            self.refresh_current_image()
+        finally:
+            self._suppress_callbacks = False
+
+    @property
+    def companion_attached(self) -> bool:
+        return self.companion_canvas is not None
+
+    def attach_companion_stack(
+        self,
+        images: np.ndarray,
+        *,
+        primary_label: str = "",
+        companion_label: str = "",
+    ) -> None:
+        """Show a second image stack beside the primary canvas; existing controls drive both."""
+        if images.shape[0] != self.num_images:
+            raise ValueError(
+                f"Companion stack length {images.shape[0]} does not match primary stack {self.num_images}"
+            )
+
+        self.detach_companion_stack()
+        self._companion_images = images
+        self.image_frame.grid_columnconfigure(0, weight=1)
+        self.image_frame.grid_columnconfigure(1, weight=1)
+
+        canvas_row = 0
+        if primary_label or companion_label:
+            if primary_label:
+                self._primary_label = ctk.CTkLabel(self.image_frame, text=primary_label, anchor="w")
+                self._primary_label.grid(row=0, column=0, sticky="w", padx=4, pady=(0, 4))
+            if companion_label:
+                self._companion_label = ctk.CTkLabel(self.image_frame, text=companion_label, anchor="w")
+                self._companion_label.grid(row=0, column=1, sticky="w", padx=4, pady=(0, 4))
+            canvas_row = 1
+            self.image_frame.grid_rowconfigure(0, weight=0)
+            self.image_frame.grid_rowconfigure(canvas_row, weight=1)
+        else:
+            self.image_frame.grid_rowconfigure(0, weight=1)
+
+        self.canvas.grid(row=canvas_row, column=0, sticky="nsew", padx=(0, 4))
+        self.companion_canvas = tk.Canvas(self.image_frame, bg="black", borderwidth=0, highlightthickness=0)
+        self.companion_canvas.grid(row=canvas_row, column=1, sticky="nsew", padx=(4, 0))
+        self.companion_canvas.bind("<MouseWheel>", self.on_mousewheel)
+        self.companion_canvas.bind("<Enter>", self.mouse_enter)
+
+        scroll_row = canvas_row + 1
+        if self.num_images > 1:
+            self.scrollbar.grid(row=scroll_row, column=0, columnspan=2, sticky="ew")
+
+    def detach_companion_stack(self) -> None:
+        """Remove the companion stack and restore the single-stack layout."""
+        if self.companion_canvas is not None:
+            self.companion_canvas.destroy()
+            self.companion_canvas = None
+            self.companion_canvas_image_item = None
+
+        for label in (self._primary_label, self._companion_label):
+            if label is not None:
+                label.destroy()
+        self._primary_label = None
+        self._companion_label = None
+
+        self._companion_images = None
+        self._companion_cache.clear()
+        self.image_frame.grid_columnconfigure(1, weight=0)
+        self.image_frame.grid_rowconfigure(0, weight=1)
+        self.image_frame.grid_rowconfigure(1, weight=0)
+        self.canvas.grid(row=0, column=0, sticky="nsew", padx=0)
+        if self.num_images > 1:
+            self.scrollbar.grid(row=1, column=0, sticky="ew")
+
+    def _load_companion_display(self, frame_ndx: int) -> None:
+        if self._companion_images is None or self.companion_canvas is None:
+            return
+        if not (0 <= frame_ndx < self._companion_images.shape[0]):
+            return
+
+        if frame_ndx in self._companion_cache:
+            cached_image, cached_size = self._companion_cache[frame_ndx]
+            if cached_size == self.current_size:
+                self.companion_canvas.image = cached_image  # type: ignore[attr-defined]
+                if self.companion_canvas_image_item:
+                    self.companion_canvas.delete(self.companion_canvas_image_item)
+                self.companion_canvas_image_item = self.companion_canvas.create_image(
+                    0, 0, anchor="nw", image=cached_image
+                )
+                return
+
+        image_array = self._companion_images[frame_ndx].copy()
+        image_array = apply_windowing(self.current_wl, self.current_ww, image_array)
+        image_pil = Image.fromarray(image_array)
+        image_pil_resized = image_pil.resize(self.current_size, Image.Resampling.LANCZOS)
+        photo_image = ImageTk.PhotoImage(image_pil_resized)
+        image_pil.close()
+
+        self.companion_canvas.image = photo_image  # type: ignore[attr-defined]
+        if self.companion_canvas_image_item:
+            self.companion_canvas.delete(self.companion_canvas_image_item)
+        self.companion_canvas_image_item = self.companion_canvas.create_image(
+            0, 0, anchor="nw", image=photo_image
+        )
+        self._companion_cache[frame_ndx] = (photo_image, self.current_size)
 
     def get_current_image(self) -> np.ndarray:
         return self.images[self.current_image_index]
@@ -261,6 +417,15 @@ class ImageViewer(ctk.CTkFrame):
         if frame_index == self.current_image_index:  # update display
             self.remove_from_cache(frame_index)  # force re-rendering
             self.load_and_display_image(self.current_image_index)
+
+    def set_segmentation_overlays(self, overlays: dict[int, list[Segmentation]]) -> None:
+        """Apply segmentation overlays for many frames with a single refresh."""
+        for frame_index, segmentations in overlays.items():
+            if frame_index not in self.overlay_data:
+                self.overlay_data[frame_index] = OverlayData()
+            self.overlay_data[frame_index].segmentations = segmentations
+        self.remove_from_cache(self.current_image_index)
+        self.load_and_display_image(self.current_image_index)
 
     def get_segmentation_overlay_data(self, frame_index: int) -> list[Segmentation] | None:
         """Retrieves the segmentation overlay data for a specific frame."""
@@ -302,6 +467,38 @@ class ImageViewer(ctk.CTkFrame):
             return x, y
         return int(x / scale_x), int(y / scale_y)
 
+    def _viewport_max_dimensions(self) -> tuple[int, int]:
+        """Return the max (width, height) available for one image canvas."""
+        self.update_idletasks()
+        frame_w = max(self.image_frame.winfo_width(), 1)
+        frame_h = max(self.image_frame.winfo_height(), 1)
+        scroll_h = self.scrollbar.winfo_height() if self.num_images > 1 and hasattr(self, "scrollbar") else 0
+        label_h = 0
+        if self._primary_label is not None and self._primary_label.winfo_ismapped():
+            label_h = self._primary_label.winfo_height() + 4
+        usable_h = max(1, frame_h - scroll_h - label_h)
+        if self.companion_attached:
+            col_w = max(1, (frame_w - 8) // 2)
+            return col_w, usable_h
+        return max(1, frame_w), usable_h
+
+    def _fit_to_viewport(self) -> None:
+        """Scale the current frame to fill the available canvas area."""
+        max_width, max_height = self._viewport_max_dimensions()
+        if max_width <= 1 or max_height <= 1:
+            return
+        new_size = self._calculate_scaled_size(max_width, max_height)
+        if new_size == self.current_size and self.canvas_image_item is not None:
+            if self.companion_attached:
+                self._load_companion_display(self.current_image_index)
+            return
+        self.current_size = new_size
+        self.canvas.config(width=self.current_size[0], height=self.current_size[1])
+        if self.companion_canvas is not None:
+            self.companion_canvas.config(width=self.current_size[0], height=self.current_size[1])
+        self._companion_cache.clear()
+        self.load_and_display_image(self.current_image_index)
+
     def _calculate_scaled_size(self, max_width: int, max_height: int) -> tuple[int, int]:
         """Calculates the scaled size, preserving aspect ratio."""
         aspect_ratio = self.image_width / self.image_height
@@ -325,47 +522,54 @@ class ImageViewer(ctk.CTkFrame):
 
     def refresh_current_image(self):
         self.remove_from_cache(self.current_image_index)  # Use the method that closes PIL image
+        self._companion_cache.clear()
         self.load_and_display_image(self.current_image_index)
 
     def mouse_enter(self, event):
         logger.debug("mouse_enter")
-        self._canvas.focus_set()
+        self.canvas.focus_set()
 
     def _set_initial_size(self):
-        """Calculates and sets the initial image size based on screen size."""
-        screen_width = self.winfo_screenwidth()
-        screen_height = self.winfo_screenheight()
-        max_width = int(screen_width * self.MAX_SCREEN_PERCENTAGE)
-        max_height = int(screen_height * self.MAX_SCREEN_PERCENTAGE)
+        """Show the first frame at native (Actual) pixel dimensions; View == Actual at open."""
+        if self._initial_display_done:
+            return
+        self._initial_display_done = True
 
-        self.current_size = self._calculate_scaled_size(max_width, max_height)
+        self.current_size = (self.image_width, self.image_height)
         self.canvas.config(width=self.current_size[0], height=self.current_size[1])
         self.load_and_display_image(0)
-        self.histogram.update_image(self.images[0])
-        self._canvas.focus_set()
+        if self.histogram is not None:
+            self.histogram.update_image(self.images[0])
+        self.update_status()
+        self.canvas.focus_set()
 
     def _handle_histogram_update(self, wl: float, ww: float):
         """Callback function called by Histogram widget when WL/WW changes interactively."""
         logger.debug(f"Received WL/WW update from histogram: WL={wl:.1f}, WW={ww:.1f}")
-        # Update ImageViewer's master state
         wl_changed = abs(wl - self.current_wl) > 0.01
-        ww_clamped = max(1.0, ww)  # Ensure WW is valid
+        ww_clamped = max(1.0, ww)
         ww_changed = abs(ww_clamped - self.current_ww) > 0.01
 
         if wl_changed or ww_changed:
             self.current_wl = wl
             self.current_ww = ww_clamped
-            # Trigger a redraw of the main image viewer
-            self.refresh_current_image()  # Use refresh to force reload
+            self.refresh_current_image()
+
+    def get_dimensions_text(self) -> str:
+        # View = on-screen pixel dimensions (current_size); Actual = native DICOM frame size.
+        return f"View[{self.current_size[0]}x{self.current_size[1]}] Actual[{self.images.shape[2]}x{self.images.shape[1]}]"
 
     def update_status(self):
-        self.projection_label.configure(text=self.get_projection_label())
-        self.image_number_label.configure(text=f"{self.current_image_index + 1}/{self.num_images}")
-        self.image_size_label.configure(
-            text=f"View[{self.current_size[0]}x{self.current_size[1]}] Actual[{self.images.shape[2]}x{self.images.shape[1]}]"
-        )
+        if self.projection_label is not None:
+            self.projection_label.configure(text=self.get_projection_label())
+        if self.image_number_label is not None:
+            self.image_number_label.configure(text=f"{self.current_image_index + 1}/{self.num_images}")
+        if self.image_size_label is not None:
+            self.image_size_label.configure(text=self.get_dimensions_text())
 
     def get_projection_label(self) -> str:
+        if self.companion_attached:
+            return ""
         if self.num_images == 1:
             return ""
         match self.current_image_index:
@@ -394,10 +598,9 @@ class ImageViewer(ctk.CTkFrame):
                     cv2.rectangle(combined_overlay, (x1, y1), (x2, y2), self.TEXT_BOX_COLOR, 2)
 
             elif layer_name == LayerType.SEGMENTATIONS and overlay_data.segmentations:
-                # TODO: segment annotation creation and display
                 for segmentation in overlay_data.segmentations:
                     points = np.array([(p.x, p.y) for p in segmentation.points], dtype=np.int32)
-                    cv2.fillPoly(combined_overlay, [points], (255, 0, 0))  # Filled red
+                    cv2.fillPoly(combined_overlay, [points], self.segmentation_overlay_color)
 
         # Iterate through the layers that are currently active/visible
         for layer_name in self.active_layers:
@@ -418,14 +621,29 @@ class ImageViewer(ctk.CTkFrame):
                     if overlay_data.segmentations:
                         for segmentation in overlay_data.segmentations:
                             points = np.array([(p.x, p.y) for p in segmentation.points], dtype=np.int32)
-                            # Example: Draw filled green polygons for segmentations
-                            cv2.fillPoly(combined_overlay, [points], self.SEGMENTATION_COLOR)
+                            cv2.fillPoly(combined_overlay, [points], self.segmentation_overlay_color)
 
                 case _:
                     # Handle unknown layer types if necessary
                     logger.warning(f"Rendering not implemented for layer type: {layer_name}")
 
         return combined_overlay
+
+    def _composite_overlay(self, image_array: np.ndarray, rendered_overlay: np.ndarray) -> np.ndarray:
+        if not np.any(rendered_overlay):
+            return image_array
+        if self.segmentation_overlay_alpha >= 1.0:
+            return cv2.add(image_array, rendered_overlay)
+
+        mask = rendered_overlay.max(axis=2) > 0
+        if not np.any(mask):
+            return image_array
+
+        blended = image_array.astype(np.float32)
+        overlay = rendered_overlay.astype(np.float32)
+        alpha = self.segmentation_overlay_alpha
+        blended[mask] = blended[mask] * (1.0 - alpha) + overlay[mask] * alpha
+        return np.clip(blended, 0, 255).astype(np.uint8)
 
     def load_and_display_image(self, frame_ndx: int):
         logger.debug(f"Loading and displaying image at index: {frame_ndx}")
@@ -442,9 +660,10 @@ class ImageViewer(ctk.CTkFrame):
                 if self.canvas_image_item:
                     self.canvas.delete(self.canvas_image_item)
                 self.canvas_image_item = self.canvas.create_image(0, 0, anchor="nw", image=self.photo_image)
-                if self.current_image_index != frame_ndx:
+                if self.current_image_index != frame_ndx and self.histogram is not None:
                     self.histogram.update_image(self.images[frame_ndx])
                 self.current_image_index = frame_ndx
+                self._load_companion_display(frame_ndx)
                 self.update_scrollbar()
                 self.update_status()
                 return
@@ -452,7 +671,7 @@ class ImageViewer(ctk.CTkFrame):
         image_array = self.images[frame_ndx].copy()
 
         # Update Histogram Data if frame change:
-        if self.current_image_index != frame_ndx:
+        if self.current_image_index != frame_ndx and self.histogram is not None:
             self.histogram.update_image(self.images[frame_ndx])
 
         # --- Apply Windowing/Leveling ---
@@ -460,7 +679,7 @@ class ImageViewer(ctk.CTkFrame):
 
         # Rendering:
         rendered_overlay = self._render_overlays(frame_ndx)
-        image_array = cv2.add(image_array, rendered_overlay)
+        image_array = self._composite_overlay(image_array, rendered_overlay)
 
         # Display:
         image_pil = Image.fromarray(image_array)
@@ -480,6 +699,7 @@ class ImageViewer(ctk.CTkFrame):
         # Caching: Store BOTH PhotoImage & resized PIL.Image
         self.add_to_cache(frame_ndx, self.photo_image, image_pil_resized)
         self.current_image_index = frame_ndx
+        self._load_companion_display(frame_ndx)
         if self.num_images > 1:
             self.update_scrollbar()
         self.update_status()
@@ -493,13 +713,12 @@ class ImageViewer(ctk.CTkFrame):
 
     def remove_from_cache(self, index):
         if index not in self.image_cache:
-            logger.warning(f"index: {index} not in image_cache")
+            logger.debug(f"index: {index} not in image_cache")
             return
         # Get the PIL Image and close.
         __, pil_image, __ = self.image_cache.pop(index)
         if hasattr(pil_image, "close"):
             pil_image.close()
-        gc.collect()
 
     def manage_cache(self):
         """Manages the cache, removing the oldest entry if it's full."""
@@ -508,15 +727,26 @@ class ImageViewer(ctk.CTkFrame):
             self.remove_from_cache(oldest_key)
 
     def clear_cache(self):
-        """Clears the image cache and performs garbage collection."""
+        """Clear cached PhotoImage / PIL entries (no forced GC)."""
         for __, (photo_image, pil_image, *__) in self.image_cache.items():
-            # Explicitly break the reference held by Tkinter and PIL.Image
             if hasattr(pil_image, "close"):
-                pil_image.close()  # Close the PIL.Image
-            del photo_image  # Delete PhotoImage
+                pil_image.close()
+            del photo_image
 
-        self.image_cache.clear()  # Clear the dictionary
-        gc.collect()  # Force garbage collection
+        self.image_cache.clear()
+        self._companion_cache.clear()
+
+    def release_resources(self) -> None:
+        """Cancel playback and drop pixel caches without destroying widgets."""
+        if self.after_id:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self.after_id)
+            self.after_id = None
+        self.playing = False
+        self.detach_companion_stack()
+        self.clear_cache()
+        self.images = None  # type: ignore[assignment]
+        self.overlay_data.clear()
 
     # ImageView Event Handlers:
     def on_mousewheel(self, event):
@@ -526,16 +756,20 @@ class ImageViewer(ctk.CTkFrame):
             self.change_image(self.current_image_index + 1)
 
     def on_resize(self, event):
-        canvas_width = self.canvas.winfo_width()
-        canvas_height = self.canvas.winfo_height()
-
-        # Handle initial case where winfo_width/height return 1.
-        if canvas_width <= 1 or canvas_height <= 1:
+        if not self._resize_to_viewport_enabled:
             return
 
-        new_image_size = (canvas_width, canvas_height)
+        max_width, max_height = self._viewport_max_dimensions()
+        if max_width <= 1 or max_height <= 1:
+            return
+
+        new_image_size = self._calculate_scaled_size(max_width, max_height)
         if new_image_size != self.current_size:
             self.current_size = new_image_size
+            self.canvas.config(width=self.current_size[0], height=self.current_size[1])
+            if self.companion_canvas is not None:
+                self.companion_canvas.config(width=self.current_size[0], height=self.current_size[1])
+            self._companion_cache.clear()
             self.load_and_display_image(self.current_image_index)
             self.update_status()
 
@@ -547,7 +781,14 @@ class ImageViewer(ctk.CTkFrame):
 
     def change_image(self, new_index):
         if 0 <= new_index < self.num_images:
+            previous_index = self.current_image_index
             self.load_and_display_image(new_index)
+            if (
+                not self._suppress_callbacks
+                and self.on_slice_index_changed is not None
+                and new_index != previous_index
+            ):
+                self.on_slice_index_changed(new_index)
 
     def change_image_home(self, event):
         self.change_image(0)
@@ -588,7 +829,8 @@ class ImageViewer(ctk.CTkFrame):
     def change_fps(self, value):
         self.fps = int(value)
         self.play_delay = int(1000 / self.fps)
-        self.fps_slider_label.configure(text=f"{self.fps} fps")
+        if hasattr(self, "fps_slider_label"):
+            self.fps_slider_label.configure(text=f"{self.fps} fps")
         if self.playing and self.after_id:
             self.after_cancel(self.after_id)
             self.after_id = self.after(self.play_delay, self.play_loop)
@@ -596,10 +838,12 @@ class ImageViewer(ctk.CTkFrame):
     def toggle_play(self, event=None):
         self.playing = not self.playing
         if self.playing:
-            self.toggle_button.configure(image=self.ctk_pause_icon)
+            if hasattr(self, "toggle_button"):
+                self.toggle_button.configure(image=self.ctk_pause_icon)
             self.play_loop()
         else:
-            self.toggle_button.configure(image=self.ctk_play_icon)
+            if hasattr(self, "toggle_button"):
+                self.toggle_button.configure(image=self.ctk_play_icon)
             if self.after_id:
                 self.after_cancel(self.after_id)
                 self.after_id = None
@@ -654,6 +898,8 @@ class ImageViewer(ctk.CTkFrame):
            else remove hit object from corresponding overlay
         4. If current image is a projection in a series only allow user rect drawing if propagate_overlays is true
         """
+        if not self.enable_interactive_editing:
+            return
         if self.playing:
             return
 
@@ -910,7 +1156,8 @@ class ImageViewer(ctk.CTkFrame):
         logger.debug(f"Adjusting Display: WL={self.current_wl:.1f}, WW={self.current_ww:.1f}")
 
         # --- Update Histogram ---
-        self.histogram.set_wlww(self.current_wl, self.current_ww)
+        if self.histogram is not None:
+            self.histogram.set_wlww(self.current_wl, self.current_ww)
 
         # --- Trigger Redraw ---
         self.refresh_current_image()
@@ -926,12 +1173,10 @@ class ImageViewer(ctk.CTkFrame):
         # Final redraw to potentially update cache with final WW/WL settings
         self.refresh_current_image()
         self.canvas.config(cursor="")
+        if not self._suppress_callbacks and self.on_wlww_changed is not None:
+            self.on_wlww_changed(self.current_wl, self.current_ww)
 
     def destroy(self):
         """Override destroy to properly clean up resources."""
-        if self.after_id:
-            self.after_cancel(self.after_id)
-            self.after_id = None
-        self.clear_cache()  # Clear the cache before destroying the widget
-        self.images = None  # type: ignore # Release the image
+        self.release_resources()
         super().destroy()

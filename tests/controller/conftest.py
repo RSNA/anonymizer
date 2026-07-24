@@ -18,6 +18,7 @@ import tests.controller.dicom.support.pacs_simulator_scp as pacs_simulator_scp
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.project import NetworkTimeouts, ProjectModel
 from anonymizer.utils.logging import init_logging
+from anonymizer.utils.translate import set_language_code
 from tests.controller.dicom.support.test_nodes import (
     TEST_PROJECTNAME,
     TEST_SITEID,
@@ -32,6 +33,13 @@ def pytest_sessionstart(session):
     """Runs before the test session begins."""
     # Initialise logging without file handler:
     init_logging(file_handler=False)
+    set_language_code("en_US")
+
+
+@pytest.fixture(autouse=True)
+def _english_translations() -> None:
+    """Ensure gettext is initialized for controller code that calls _()."""
+    set_language_code("en_US")
 
 
 @pytest.fixture

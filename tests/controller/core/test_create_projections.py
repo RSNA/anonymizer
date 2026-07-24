@@ -415,3 +415,21 @@ class TestCreateProjectionFromSingleFrame:
         # The first argument to resize should be the tuple (width, height)
         assert resize_call_args.args[0] == (120, 120)
         assert resize_call_args.args[1] == PILImageModule.Resampling.NEAREST
+
+
+def test_apply_series_description_preserves_pixel_data(tmp_path: Path) -> None:
+    from pydicom import dcmread
+
+    from anonymizer.controller.create_projections import apply_series_description
+    from tests.controller.tseg.support.synthetic_ct import build_synthetic_chest_ct_series
+
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest")
+    sample_path = sorted(series_dir.glob("*.dcm"))[0]
+    before_pixels = dcmread(sample_path).pixel_array.copy()
+
+    assert apply_series_description(series_dir, "Brain Ax EarlyArt") is True
+
+    after = dcmread(sample_path)
+    assert after.SeriesDescription == "Brain Ax EarlyArt"
+    assert after.pixel_array.shape == before_pixels.shape
+    assert np.array_equal(after.pixel_array, before_pixels)

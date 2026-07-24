@@ -1,10 +1,10 @@
-"""Tests for face blur QA helpers (prototyping)."""
+"""Tests for face blur QA."""
 
 from __future__ import annotations
 
 import numpy as np
 
-from prototyping.ffr.face.qa import compute_qa_stats
+from anonymizer.controller.blur_face import compute_qa_stats
 
 
 def test_qa_detects_outside_violation() -> None:
