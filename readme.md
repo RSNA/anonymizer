@@ -6,15 +6,15 @@
 
 ## Install Python with tkinter (GUI library)
 ### Windows
-1. Download Python 3.12 from [python.org](https://www.python.org/downloads/) (pytorch does not currently support 3.13)
+1. Download Python 3.11 or 3.12 from [python.org](https://www.python.org/downloads/) (3.13 is not supported: the pinned `numpy <2.0.0` has no 3.13 wheels)
 2. Run installer
    - Select "Add python.exe to PATH"
    - Enable "tcl/tk and IDLE"
 ### macOS
 1. Install Homebrew if not present: `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)'
-2. Install Python 3.12 with Tcl/Tk:
+2. Install Python 3.12 (or 3.11) with Tcl/Tk:
 ```
-brew install python@3.12
+brew install python@3.12   # or: brew install python@3.11
 brew install tcl-tk
 ```
 ### Linux (Ubuntu/Debian)
@@ -23,7 +23,7 @@ brew install tcl-tk
 sudo apt update
 sudo apt install software-properties-common
 sudo add-apt-repository ppa:deadsnakes/ppa
-sudo apt install python3.12 python3.12-tk
+sudo apt install python3.12 python3.12-tk   # or: python3.11 python3.11-tk
 ```
 ## Verify Installation
 ```
@@ -44,7 +44,7 @@ You need to provide a path to a project configuration to run in headless mode
 [Help files](https://rsna.github.io/anonymizer)
 ## Development
 ### Setup
-1. Setup python environment (>3.10) which includes Tkinter, recommend using pyenv with MacOS & Linux
+1. Setup python environment (3.11 or 3.12) which includes Tkinter, recommend using pyenv with MacOS & Linux
 2. Ensure python is installed with Tkinter: `python -m tkinter`, a small GUI window should open
 3. Install poetry: `pip install poetry`
 4. Set virtual environment within project: `poetry config virtualenvs.in-project true`
