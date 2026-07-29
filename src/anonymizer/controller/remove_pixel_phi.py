@@ -1,8 +1,12 @@
 # For Burnt-IN Pixel PHI Removal:
+from __future__ import annotations
+
 import logging
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 from cv2 import (
@@ -40,6 +44,9 @@ from pydicom.pixel_data_handlers.util import (
     convert_color_space,
 )
 from pydicom.uid import JPEG2000Lossless
+
+if TYPE_CHECKING:
+    from anonymizer.model.anonymizer import AnonymizerModel
 
 VALID_COLOR_SPACES = [
     "MONOCHROME1",
@@ -132,6 +139,17 @@ class OverlayData:
     ocr_texts: list[OCRText] = field(default_factory=list)
     user_rects: list[UserRectangle] = field(default_factory=list)
     segmentations: list[Segmentation] = field(default_factory=list)
+
+
+def _dedupe_texts(texts: Sequence[str]) -> list[str]:
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for item in texts:
+        stripped = item.strip()
+        if stripped and stripped not in seen:
+            seen.add(stripped)
+            deduped.append(stripped)
+    return deduped
 
 
 def _draw_text_contours_on_mask(image: ndarray, top_left: tuple, bottom_right: tuple, mask: NDArray[np.uint8]) -> None:
@@ -318,7 +336,7 @@ def remove_pixel_phi(
     ocr_reader: Reader,
     downscale_dimension_threshold: int = 800,
     border_size: int = 20,
-) -> bool:
+) -> tuple[bool, list[str]]:
     """
     Description:
         Removes the PHI in the pixel data of a DICOM file with 1...N frames
@@ -334,8 +352,8 @@ def remove_pixel_phi(
          border_size: size in pixels added to the pixel frame to enable text detection at the edges
 
     Returns:
-        If text is detected and file modified with text removed, return True
-        If no text is detected, file is not modified, return False
+        Tuple of (modified, detected_texts). ``modified`` is True when pixel data was changed.
+        ``detected_texts`` is a deduplicated list of OCR strings found across all frames.
 
     Raises:
         InvalidDicomError: if dcm_path not a valid DICOM file
@@ -494,6 +512,7 @@ def remove_pixel_phi(
 
     source_pixels_deid_stack = []
     source_pixels_changed = False
+    detected_texts: list[str] = []
 
     for frame in range(no_of_frames):
         if no_of_frames > 1:
@@ -554,6 +573,9 @@ def remove_pixel_phi(
             continue
 
         logger.debug(f"Text boxes detected in frame: {len(results)}")
+
+        for _bbox, text, _prob in results:
+            detected_texts.append(text)
 
         # Create an 8 bit mask of pixels for in-painting
         mask = np.zeros(pixels.shape[:2], dtype=np.uint8)
@@ -629,9 +651,11 @@ def remove_pixel_phi(
 
         source_pixels_deid_stack.append(source_pixels_deid)
 
+    deduped_texts = _dedupe_texts(detected_texts)
+
     if not source_pixels_changed:
         logging.info("No changes made to pixel data")
-        return False
+        return False, deduped_texts
 
     # Save processed stack to PixelData:
     if ds.file_meta.TransferSyntaxUID.is_compressed:
@@ -643,4 +667,54 @@ def remove_pixel_phi(
         ds.PixelData = np.stack(source_pixels_deid_stack, axis=0).tobytes()
 
     ds.save_as(dcm_path)
-    return True
+    return True, deduped_texts
+
+
+def apply_instance_pixel_phi(
+    anon_model: AnonymizerModel,
+    anon_sop_instance_uid: str,
+    texts: Sequence[str],
+) -> bool:
+    return anon_model.set_instance_pixel_phi(anon_sop_instance_uid, texts)
+
+
+def apply_instance_pixel_phi_for_dcm(
+    anon_model: AnonymizerModel,
+    dcm_path: Path,
+    texts: Sequence[str],
+) -> bool:
+    ds = dcmread(dcm_path, stop_before_pixels=True)
+    return apply_instance_pixel_phi(anon_model, str(ds.SOPInstanceUID), texts)
+
+
+def collect_series_view_pixel_phi_texts(image_viewer) -> dict[int, list[str]]:
+    """Collect OCR text strings from a Series View image viewer overlay, keyed by frame index."""
+    texts_by_frame: dict[int, list[str]] = {}
+    overlay_data = getattr(image_viewer, "overlay_data", None)
+    if not overlay_data:
+        return texts_by_frame
+
+    for frame_index, overlay in overlay_data.items():
+        frame_texts = [text.text for text in overlay.ocr_texts if text.text.strip()]
+        deduped = _dedupe_texts(frame_texts)
+        if deduped:
+            texts_by_frame[frame_index] = deduped
+    return texts_by_frame
+
+
+def apply_series_view_pixel_phi(
+    anon_model: AnonymizerModel,
+    slice_paths: Sequence[Path],
+    texts_by_frame: Mapping[int, Sequence[str]],
+    *,
+    projection_frame_count: int = 0,
+) -> int:
+    """Persist pixel PHI metadata for series slices that have overlay OCR text."""
+    updated = 0
+    for frame_index, texts in texts_by_frame.items():
+        slice_index = frame_index - projection_frame_count
+        if slice_index < 0 or slice_index >= len(slice_paths):
+            continue
+        if apply_instance_pixel_phi_for_dcm(anon_model, slice_paths[slice_index], texts):
+            updated += 1
+    return updated

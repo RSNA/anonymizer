@@ -529,10 +529,7 @@ def apply_harmonized_description(
         ds = _load_series_dataset(series_path)
     except ValueError:
         return False
-    update = getattr(anon_model, "update_series_description_by_anon_uid", None)
-    if update is None:
-        return True
-    return bool(update(str(ds.SeriesInstanceUID), description))
+    return anon_model.set_series_harmonized_description(str(ds.SeriesInstanceUID), description)
 
 
 def harmonize_and_apply_series(

@@ -152,12 +152,12 @@ def test_on_yes_runs_save_before_recording_outcome(monkeypatch) -> None:
 
     saved: list[tuple[Path, str]] = []
 
-    def fake_apply(series_path: Path, description: str) -> bool:
+    def fake_apply(series_path: Path, description: str, anon_model=None) -> bool:
         saved.append((series_path, description))
         return True
 
     monkeypatch.setattr(
-        "anonymizer.view.harmonize_results.apply_series_description",
+        "anonymizer.view.harmonize_results.apply_harmonized_description",
         fake_apply,
     )
 

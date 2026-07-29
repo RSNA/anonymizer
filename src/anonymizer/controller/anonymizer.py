@@ -31,7 +31,7 @@ from easyocr import Reader
 from pydicom import DataElement, Dataset, Sequence, dcmread
 from pydicom.errors import InvalidDicomError
 
-from anonymizer.controller.remove_pixel_phi import remove_pixel_phi
+from anonymizer.controller.remove_pixel_phi import apply_instance_pixel_phi_for_dcm, remove_pixel_phi
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.model.project import DICOMNode, ProjectModel
 from anonymizer.utils.storage import DICOM_FILE_SUFFIX
@@ -625,7 +625,11 @@ class AnonymizerController:
                 break
 
             try:
-                remove_pixel_phi(path, ocr_reader)
+                modified, texts = remove_pixel_phi(path, ocr_reader)
+                if texts:
+                    apply_instance_pixel_phi_for_dcm(self.model, path, texts)
+                if modified:
+                    logger.info("Removed burnt-in pixel PHI from %s", path)
             except Exception as e:
                 logger.error(repr(e))
 

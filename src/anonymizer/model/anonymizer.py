@@ -6,6 +6,7 @@ and anonymization lookups. It also includes SQLAlchemy ORM classes for Series, S
 import hashlib
 import logging
 import xml.etree.ElementTree as ET
+from collections.abc import Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, fields
 from functools import wraps
@@ -14,7 +15,7 @@ from pprint import pformat
 from typing import ClassVar, NamedTuple
 
 from pydicom import Dataset
-from sqlalchemy import ForeignKey, Integer, String, create_engine, delete, func, select
+from sqlalchemy import ForeignKey, Integer, String, create_engine, delete, func, select, text
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -44,6 +45,7 @@ class Instance(Base):
     anon_sop_instance_uid: Mapped[str] = mapped_column(String, unique=True, index=True)
     series_uid: Mapped[str] = mapped_column(String, ForeignKey("series.series_uid"))
     series: Mapped["Series"] = relationship(back_populates="instances", init=False)
+    pixel_phi: Mapped[str | None] = mapped_column(String, default=None)
 
 
 class Series(Base):
@@ -55,6 +57,8 @@ class Series(Base):
     study: Mapped["Study"] = relationship(back_populates="series", init=False)
     modality: Mapped[str | None] = mapped_column(String)
     description: Mapped[str | None] = mapped_column(String, default=None)
+    harmonized_description: Mapped[str | None] = mapped_column(String, default=None)
+    face_blur_algorithm_applied: Mapped[str | None] = mapped_column(String, default=None)
 
     instances: Mapped[list["Instance"]] = relationship(
         back_populates="series", cascade="all, delete-orphan", init=False
@@ -74,6 +78,7 @@ class Study(Base):
     accession_number: Mapped[str | None] = mapped_column(String, index=True)
     anon_accession_number: Mapped[str | None] = mapped_column(String, index=True)
     description: Mapped[str | None] = mapped_column(String, default=None)
+    harmonized_description: Mapped[str | None] = mapped_column(String, default=None)
     target_instance_count: Mapped[int] = mapped_column(Integer, default=0)
 
     series: Mapped[list[Series]] = relationship(back_populates="study", cascade="all, delete-orphan", init=False)
@@ -200,13 +205,24 @@ class MissingSessionError(RuntimeError):
         super().__init__(message)
 
 
+def _format_pixel_phi(texts: Sequence[str]) -> str:
+    seen: set[str] = set()
+    parts: list[str] = []
+    for item in texts:
+        stripped = item.strip()
+        if stripped and stripped not in seen:
+            seen.add(stripped)
+            parts.append(stripped)
+    return ", ".join(parts)
+
+
 class AnonymizerModel:
     """
     The Anonymizer data model class to store PHI (Protected Health Information) with anonymized key lookups.
     """
 
     # Model Version Control
-    MODEL_VERSION = 2
+    MODEL_VERSION = 3
     MAX_PATIENTS = 1000000  # 1 million patients
     # The primary key value for the PHI record representing studies with no/empty PatientID
     DEFAULT_PHI_PATIENT_ID_PK_VALUE: ClassVar[str] = ""  # "" is used as the primary key for the default PHI record
@@ -257,10 +273,33 @@ class AnonymizerModel:
 
         # Create tables IFF they don't exist
         Base.metadata.create_all(self.engine)
+        self._ensure_schema_columns()
 
         # Default PHI record: (patient_id=DEFAULT_PHI_PATIENT_ID_PK_VALUE, anon_patient_id = site_id + "-000000")
         self._add_default_PHI()
         self._load_script(script_path)
+
+    def _ensure_schema_columns(self) -> None:
+        """Add ORM metadata columns to existing SQLite databases created before they existed."""
+        if not self._db_url.startswith("sqlite"):
+            return
+
+        migrations = (
+            ("instances", "pixel_phi", "TEXT"),
+            ("series", "harmonized_description", "TEXT"),
+            ("series", "face_blur_algorithm_applied", "TEXT"),
+        )
+        with self.engine.connect() as conn:
+            for table_name, column_name, column_type in migrations:
+                existing = {
+                    row[1]
+                    for row in conn.execute(text(f"PRAGMA table_info({table_name})"))
+                }
+                if column_name not in existing:
+                    conn.execute(
+                        text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+                    )
+            conn.commit()
 
     def _get_class_name(self) -> str:
         return self.__class__.__name__
@@ -972,6 +1011,52 @@ class AnonymizerModel:
             return False
         series.description = description
         return True
+
+    @use_session()
+    def set_series_harmonized_description(self, anon_series_uid: str, description: str) -> bool:
+        stmt = select(Series).where(Series.anon_series_uid == anon_series_uid)
+        series = self.session.execute(stmt).scalar_one_or_none()
+        if series is None:
+            logger.error("Series with anon_series_uid '%s' not found.", anon_series_uid)
+            return False
+        series.harmonized_description = description
+        series.description = description
+        return True
+
+    @use_session()
+    def set_series_face_blur_algorithm(self, anon_series_uid: str, algorithm: str) -> bool:
+        stmt = select(Series).where(Series.anon_series_uid == anon_series_uid)
+        series = self.session.execute(stmt).scalar_one_or_none()
+        if series is None:
+            logger.error("Series with anon_series_uid '%s' not found.", anon_series_uid)
+            return False
+        series.face_blur_algorithm_applied = algorithm
+        return True
+
+    @use_session()
+    def set_instance_pixel_phi(self, anon_sop_instance_uid: str, texts: Sequence[str]) -> bool:
+        formatted = _format_pixel_phi(texts)
+        if not formatted:
+            return False
+        stmt = select(Instance).where(Instance.anon_sop_instance_uid == anon_sop_instance_uid)
+        instance = self.session.execute(stmt).scalar_one_or_none()
+        if instance is None:
+            logger.error("Instance with anon_sop_instance_uid '%s' not found.", anon_sop_instance_uid)
+            return False
+        instance.pixel_phi = formatted
+        return True
+
+    @use_session(is_read_only_operation=True)
+    def series_is_harmonized(self, anon_series_uid: str) -> bool:
+        stmt = select(Series.harmonized_description).where(Series.anon_series_uid == anon_series_uid)
+        value = self.session.execute(stmt).scalar_one_or_none()
+        return value is not None and bool(str(value).strip())
+
+    @use_session(is_read_only_operation=True)
+    def series_has_face_blur(self, anon_series_uid: str) -> bool:
+        stmt = select(Series.face_blur_algorithm_applied).where(Series.anon_series_uid == anon_series_uid)
+        value = self.session.execute(stmt).scalar_one_or_none()
+        return value is not None and bool(str(value).strip())
 
     @use_session()  # The decorator manages the session and a single transaction for the whole batch
     def process_java_phi_studies(self, java_studies: list[JavaAnonymizerExportedStudy]):

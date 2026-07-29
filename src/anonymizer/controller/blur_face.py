@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 import cv2
@@ -19,6 +20,7 @@ import pydicom
 import SimpleITK as sitk
 from pydicom import Dataset, dcmread
 from pydicom.uid import generate_uid
+from scipy.ndimage import median_filter
 
 from anonymizer.controller.blur_face_gate import (
     FaceBlurGateReason,
@@ -57,7 +59,24 @@ FACE_MASK_SMOOTH_SIGMA_PX = 1.5
 # Ignore sub-HU noise outside the feathered mask when checking QA (float32 + soft blend).
 QA_OUTSIDE_HU_TOLERANCE = 0.5
 
+# Maximum in-plane median kernel (pixels). Larger effective radii use downsample → median → upsample.
+MAX_MEDIAN_KERNEL_PX = 15
+
+# Soft-tissue HU band for ``fill_noise`` mode.
+FACE_BLUR_NOISE_HU_MIN = 20.0
+FACE_BLUR_NOISE_HU_MAX = 60.0
+
 LEGACY_FACE_MASK_REL = Path("ts_seg") / FACE_MASK_FILENAME
+
+
+class FaceBlurMode(StrEnum):
+    GAUSSIAN = "gaussian"
+    MEDIAN = "median"
+    PIXELATE = "pixelate"
+    FILL_NOISE = "fill_noise"
+
+
+DEFAULT_FACE_BLUR_MODE = FaceBlurMode.GAUSSIAN
 
 # --- Results ----------------------------------------------------------------
 
@@ -113,6 +132,7 @@ class FaceBlurPreviewResult:
     slice_count: int
     qa_stats: QaStats | None
     sigma_mm: float
+    blur_mode: FaceBlurMode
     pixel_spacing_mm: tuple[float, float]
     hu_after: np.ndarray | None = None
     blurred_slice_frames: np.ndarray | None = None
@@ -325,32 +345,116 @@ def face_mask_blend_weights(
     return weights
 
 
+def _median_kernel_size(sigma_px: float) -> int:
+    kernel = max(3, int(round(sigma_px * 2)))
+    if kernel % 2 == 0:
+        kernel += 1
+    return min(kernel, MAX_MEDIAN_KERNEL_PX)
+
+
+def _median_face_slice(
+    hu_slice: np.ndarray,
+    *,
+    sigma_mm: float,
+    pixel_spacing_mm: tuple[float, float],
+    sigma_x: float,
+    sigma_y: float,
+) -> np.ndarray:
+    """Median de-id on one slice; downsample when sigma_mm implies a large in-plane radius."""
+    slice_f32 = hu_slice.astype(np.float32)
+    kernel = _median_kernel_size(min(sigma_x, sigma_y))
+    block_px = _pixelate_block_size(sigma_mm, pixel_spacing_mm)
+
+    if block_px <= MAX_MEDIAN_KERNEL_PX:
+        return median_filter(slice_f32, size=kernel)
+
+    height, width = slice_f32.shape
+    small_h = max(1, height // block_px)
+    small_w = max(1, width // block_px)
+    small = cv2.resize(slice_f32, (small_w, small_h), interpolation=cv2.INTER_AREA)
+    small_kernel = min(
+        _median_kernel_size(max(small_h, small_w) / 4),
+        MAX_MEDIAN_KERNEL_PX,
+    )
+    if small_kernel >= 3 and min(small_h, small_w) >= small_kernel:
+        small = median_filter(small, size=small_kernel)
+    return cv2.resize(small, (width, height), interpolation=cv2.INTER_NEAREST)
+
+
+def _pixelate_block_size(sigma_mm: float, pixel_spacing_mm: tuple[float, float]) -> int:
+    row_spacing, col_spacing = pixel_spacing_mm
+    min_spacing = min(row_spacing, col_spacing)
+    return max(4, int(round(sigma_mm / min_spacing)))
+
+
+def _transform_face_hu_slice(
+    hu_slice: np.ndarray,
+    *,
+    blur_mode: FaceBlurMode,
+    sigma_x: float,
+    sigma_y: float,
+    pixel_spacing_mm: tuple[float, float],
+    sigma_mm: float,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    """Apply the selected in-mask de-identification operator on one axial slice."""
+    slice_f32 = hu_slice.astype(np.float32)
+    if blur_mode == FaceBlurMode.GAUSSIAN:
+        return cv2.GaussianBlur(slice_f32, ksize=(0, 0), sigmaX=sigma_x, sigmaY=sigma_y)
+    if blur_mode == FaceBlurMode.MEDIAN:
+        return _median_face_slice(
+            hu_slice,
+            sigma_mm=sigma_mm,
+            pixel_spacing_mm=pixel_spacing_mm,
+            sigma_x=sigma_x,
+            sigma_y=sigma_y,
+        )
+    if blur_mode == FaceBlurMode.PIXELATE:
+        block_px = _pixelate_block_size(sigma_mm, pixel_spacing_mm)
+        height, width = slice_f32.shape
+        small_h = max(1, height // block_px)
+        small_w = max(1, width // block_px)
+        small = cv2.resize(slice_f32, (small_w, small_h), interpolation=cv2.INTER_AREA)
+        return cv2.resize(small, (width, height), interpolation=cv2.INTER_NEAREST)
+    if blur_mode == FaceBlurMode.FILL_NOISE:
+        return rng.uniform(
+            FACE_BLUR_NOISE_HU_MIN,
+            FACE_BLUR_NOISE_HU_MAX,
+            size=slice_f32.shape,
+        ).astype(np.float32)
+    raise ValueError(f"Unsupported face blur mode: {blur_mode}")
+
+
 def blur_face_hu_volume(
     hu: np.ndarray,
     mask: np.ndarray,
     *,
     sigma_mm: float = DEFAULT_FACE_BLUR_SIGMA_MM,
+    blur_mode: FaceBlurMode | str = DEFAULT_FACE_BLUR_MODE,
     pixel_spacing_mm: tuple[float, float] = (1.0, 1.0),
     min_sigma_px: float = MIN_FACE_BLUR_SIGMA_PX,
     mask_smooth_sigma_px: float = FACE_MASK_SMOOTH_SIGMA_PX,
 ) -> np.ndarray:
     """
-    In-plane Gaussian blur inside ``mask``, feathered at the boundary.
+    In-plane face de-identification inside ``mask``, feathered at the boundary.
 
-    Uses the same mask smoothing as the Series View face overlay so the saved blur
-    does not follow jagged segmentation voxels literally.
+    For each slice: apply the selected de-id operator, then blend into the original
+    using smoothed mask weights from ``smooth_face_mask_slice`` (same feathering as
+    the Series View face overlay, avoiding jagged segmentation edges).
 
     ``hu`` and ``mask`` shape: (Z, Y, X).
     """
     if hu.shape != mask.shape:
         raise ValueError(f"HU shape {hu.shape} != mask shape {mask.shape}")
 
+    mode = FaceBlurMode(blur_mode)
     row_spacing, col_spacing = pixel_spacing_mm
     sigma_y = max(sigma_mm / row_spacing, min_sigma_px)
     sigma_x = max(sigma_mm / col_spacing, min_sigma_px)
     logger.info(
-        "Face blur: Gaussian blur sigma_mm=%.2f → sigma_px=(%.2f, %.2f) spacing_mm=(%.3f, %.3f) "
+        "Face blur: mode=%s sigma_mm=%.2f → sigma_px=(%.2f, %.2f) spacing_mm=(%.3f, %.3f) "
         "mask_smooth_sigma_px=%.2f",
+        mode.value,
         sigma_mm,
         sigma_x,
         sigma_y,
@@ -361,21 +465,26 @@ def blur_face_hu_volume(
 
     out = hu.copy()
     face = mask.astype(bool)
+    rng = np.random.default_rng()
     slices_with_face = 0
     for z in range(hu.shape[0]):
         if not face[z].any():
             continue
         slices_with_face += 1
         blend = smooth_face_mask_slice(face[z], smooth_sigma=mask_smooth_sigma_px)
-        blurred = cv2.GaussianBlur(
-            hu[z].astype(np.float32),
-            ksize=(0, 0),
-            sigmaX=sigma_x,
-            sigmaY=sigma_y,
+        transformed = _transform_face_hu_slice(
+            hu[z],
+            blur_mode=mode,
+            sigma_x=sigma_x,
+            sigma_y=sigma_y,
+            pixel_spacing_mm=pixel_spacing_mm,
+            sigma_mm=sigma_mm,
+            rng=rng,
         )
-        out[z] = blurred * blend + hu[z] * (1.0 - blend)
+        out[z] = transformed * blend + hu[z] * (1.0 - blend)
     logger.info(
-        "Face blur: blurred %d / %d axial slices (%d face voxels, feathered edges)",
+        "Face blur: %s applied on %d / %d axial slices (%d face voxels, feathered edges)",
+        mode.value,
         slices_with_face,
         hu.shape[0],
         int(face.sum()),
@@ -564,6 +673,7 @@ def _preview_error(
         slice_count=len(slice_paths),
         qa_stats=None,
         sigma_mm=DEFAULT_FACE_BLUR_SIGMA_MM,
+        blur_mode=DEFAULT_FACE_BLUR_MODE,
         pixel_spacing_mm=(1.0, 1.0),
         error=error,
     )
@@ -573,6 +683,7 @@ def preview_face_blur(
     series_directory: Path,
     *,
     sigma_mm: float = DEFAULT_FACE_BLUR_SIGMA_MM,
+    blur_mode: FaceBlurMode | str = DEFAULT_FACE_BLUR_MODE,
     run_segmentation_if_missing: bool = True,
     force_segmentation: bool = False,
     volume_context: SeriesVolumeContext | None = None,
@@ -659,13 +770,14 @@ def preview_face_blur(
         _report_face_blur_progress(
             progress,
             stage="blur",
-            message="Applying in-mask Gaussian blur",
+            message=f"Applying in-mask {FaceBlurMode(blur_mode).value} de-identification",
             fraction=0.65,
         )
         hu_after = blur_face_hu_volume(
             hu_before,
             mask,
             sigma_mm=sigma_mm,
+            blur_mode=blur_mode,
             pixel_spacing_mm=pixel_spacing_mm,
         )
 
@@ -704,6 +816,7 @@ def preview_face_blur(
             slice_count=len(slice_paths),
             qa_stats=stats,
             sigma_mm=sigma_mm,
+            blur_mode=FaceBlurMode(blur_mode),
             pixel_spacing_mm=pixel_spacing_mm,
             hu_after=hu_after_for_result,
             blurred_slice_frames=blurred_slice_frames,
@@ -832,6 +945,7 @@ def blur_face_series(
     *,
     output_directory: Path | None = None,
     sigma_mm: float = DEFAULT_FACE_BLUR_SIGMA_MM,
+    blur_mode: FaceBlurMode | str = DEFAULT_FACE_BLUR_MODE,
     run_segmentation_if_missing: bool = True,
     force_segmentation: bool = False,
     progress: FaceBlurProgressCallback | None = None,
@@ -851,6 +965,7 @@ def blur_face_series(
     preview = preview_face_blur(
         series_directory,
         sigma_mm=sigma_mm,
+        blur_mode=blur_mode,
         run_segmentation_if_missing=run_segmentation_if_missing,
         force_segmentation=force_segmentation,
         progress=progress,
@@ -880,3 +995,8 @@ def blur_face_series(
         slice_count=preview.slice_count,
         qa_stats=preview.qa_stats,
     )
+
+
+def apply_series_face_blur_metadata(anon_model, anon_series_uid: str, algorithm: str) -> bool:
+    """Record the face blur algorithm applied to a series in the project database."""
+    return anon_model.set_series_face_blur_algorithm(anon_series_uid, algorithm)

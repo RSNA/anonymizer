@@ -349,3 +349,52 @@ def test_update_series_description_by_anon_uid(anonymizer_model: AnonymizerModel
     assert phi.studies[0].series[0].description == new_description
 
     assert anonymizer_model.update_series_description_by_anon_uid("nonexistent-anon-uid", "x") is False
+
+
+def test_set_series_harmonized_description(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
+    phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
+    assert phi is not None
+    series = phi.studies[0].series[0]
+    harmonized = "CT Head Neck Without Contrast"
+
+    assert anonymizer_model.set_series_harmonized_description(series.anon_series_uid, harmonized) is True
+    assert anonymizer_model.series_is_harmonized(series.anon_series_uid) is True
+
+    phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
+    assert phi is not None
+    updated = phi.studies[0].series[0]
+    assert updated.description == harmonized
+    assert updated.harmonized_description == harmonized
+
+
+def test_set_series_face_blur_algorithm(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
+    phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
+    assert phi is not None
+    series = phi.studies[0].series[0]
+
+    assert anonymizer_model.series_has_face_blur(series.anon_series_uid) is False
+    assert anonymizer_model.set_series_face_blur_algorithm(series.anon_series_uid, "gaussian") is True
+    assert anonymizer_model.series_has_face_blur(series.anon_series_uid) is True
+
+
+def test_set_instance_pixel_phi(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
+    from anonymizer.model.anonymizer import Instance, _format_pixel_phi
+
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
+    phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
+    assert phi is not None
+    instance = phi.studies[0].series[0].instances[0]
+
+    assert _format_pixel_phi(["  foo ", "bar", "foo"]) == "foo, bar"
+    assert anonymizer_model.set_instance_pixel_phi(instance.anon_sop_instance_uid, []) is False
+    assert anonymizer_model.set_instance_pixel_phi("missing-uid", ["text"]) is False
+
+    texts = ["Patient", "Patient", " Name "]
+    assert anonymizer_model.set_instance_pixel_phi(instance.anon_sop_instance_uid, texts) is True
+
+    with anonymizer_model._get_session(read_only=True) as session:
+        row = session.get(Instance, instance.sop_instance_uid)
+        assert row is not None
+        assert row.pixel_phi == "Patient, Name"

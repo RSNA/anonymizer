@@ -1,4 +1,5 @@
 import contextlib
+import copy
 import difflib
 import gc
 import logging
@@ -18,9 +19,11 @@ from easyocr import Reader
 from pydicom import Dataset, dcmread
 
 from anonymizer.controller.blur_face import (
+    FaceBlurMode,
     FaceBlurPreviewResult,
     SeriesVolumeContext,
     apply_face_blur_preview_to_series_frames,
+    apply_series_face_blur_metadata,
     hu_stack_to_viewer_frames,
     mask_slice_segmentations,
     preview_face_blur,
@@ -43,7 +46,9 @@ from anonymizer.controller.remove_pixel_phi import (
     LayerType,
     OCRText,
     UserRectangle,
+    apply_series_view_pixel_phi,
     blackout_rectangular_areas,
+    collect_series_view_pixel_phi_texts,
     detect_text,
     remove_text,
 )
@@ -68,6 +73,8 @@ from anonymizer.utils.translate import _
 from anonymizer.view.blur_face_results import (
     FACE_MASK_OVERLAY_ALPHA,
     FACE_MASK_OVERLAY_COLOR,
+    face_blur_mode_from_menu_label,
+    face_blur_mode_menu_values,
     face_review_wl_ww,
     format_face_blur_progress_status,
     format_face_blur_qa_summary,
@@ -145,11 +152,16 @@ class SeriesView(tk.Toplevel):
         self._dicom_wl: float | None = None
         self._dicom_ww: float | None = None
         self._face_blur_preview_pending = False
-        self._face_blur_applied = False
+        self._blur_preview = None
+        self._blur_review_saved = None
         self._series_geometry: SeriesGeometryResult | None = None
         self._face_blur_eligibility_cache: FaceBlurEligibility | None = None
         self._face_blur_eligibility_geometry: SeriesGeometryResult | None = None
         self._blur_running = False
+        self._blur_poll_after_id: str | None = None
+        self._blur_review_after_id: str | None = None
+        self._rebuild_after_id: str | None = None
+        self._rebuild_pending = False
         self._ui_rebuilding = False
 
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
@@ -404,6 +416,7 @@ class SeriesView(tk.Toplevel):
             self._loading_shell.destroy()
             self._loading_shell = None
             self._load_progress = None
+            self.update_idletasks()
 
         self.resizable(True, True)
         self.minsize(960, 640)
@@ -439,7 +452,7 @@ class SeriesView(tk.Toplevel):
         return self._remember_dicom_wl_ww()
 
     def _viewer_wl_ww(self) -> tuple[float, float]:
-        if self._face_blur_applied and self._ds is not None:
+        if self._blur_preview is not None and self._ds is not None:
             return face_review_wl_ww(self._ds)
         return self._dicom_wl_ww()
 
@@ -499,6 +512,7 @@ class SeriesView(tk.Toplevel):
             "blackout_button",
             "harmonize_button",
             "blur_face_button",
+            "blur_face_mode_menu",
             "clear_ts_cache_button",
             "edit_context_combo_box",
             "whitelist_entry",
@@ -518,7 +532,7 @@ class SeriesView(tk.Toplevel):
             with contextlib.suppress(tk.TclError):
                 if busy:
                     self.save_button.configure(state="disabled")
-                elif self._face_blur_preview_pending:
+                elif self._face_blur_preview_pending or self._blur_preview is not None:
                     self.save_button.configure(state="normal")
                 else:
                     self.save_button.configure(state="disabled")
@@ -533,15 +547,50 @@ class SeriesView(tk.Toplevel):
         if enabled:
             self._refresh_blur_face_ui()
 
+    def _stop_blur_worker_poll(self) -> None:
+        if self._blur_poll_after_id is None:
+            return
+        with contextlib.suppress(tk.TclError):
+            self.after_cancel(self._blur_poll_after_id)
+        self._blur_poll_after_id = None
+
+    def _stop_blur_review_deferred(self) -> None:
+        if self._blur_review_after_id is None:
+            return
+        with contextlib.suppress(tk.TclError):
+            self.after_cancel(self._blur_review_after_id)
+        self._blur_review_after_id = None
+
+    def _flush_pending_rebuild_ui(self) -> None:
+        if not self._rebuild_pending or self._blur_running or self._blur_preview is not None:
+            return
+        self._rebuild_pending = False
+        self._schedule_rebuild_ui()
+
+    def _stop_rebuild_ui(self) -> None:
+        if self._rebuild_after_id is None:
+            return
+        with contextlib.suppress(tk.TclError):
+            self.after_cancel(self._rebuild_after_id)
+        self._rebuild_after_id = None
+
     def _schedule_rebuild_ui(self) -> None:
-        """Rebuild widgets on the Tk main thread after save or cache clear."""
+        """Rebuild widgets on the Tk main thread after cache clear or similar."""
         if not self.winfo_exists():
             return
+        if self._blur_running or self._blur_preview is not None:
+            self._rebuild_pending = True
+            return
+        self._stop_rebuild_ui()
         self._set_series_interaction_enabled(False)
-        self.after(0, self._rebuild_ui_on_main_thread)
+        self._rebuild_after_id = self.after_idle(self._rebuild_ui_on_main_thread)
 
     def _rebuild_ui_on_main_thread(self) -> None:
+        self._rebuild_after_id = None
         if not self.winfo_exists():
+            return
+        if self._blur_running or self._blur_preview is not None:
+            self._rebuild_pending = True
             return
         self._ui_rebuilding = True
         try:
@@ -553,15 +602,17 @@ class SeriesView(tk.Toplevel):
     def _destroy_ui(self) -> None:
         """Remove Series View widgets while keeping loaded series data in memory."""
         self._blur_running = False
+        self._stop_blur_worker_poll()
         self._release_blur_review_state()
         viewer = getattr(self, "image_viewer", None)
         if viewer is not None:
             self._release_image_viewer(viewer, destroy_widget=True)
             self.image_viewer = None  # type: ignore[assignment]
-        if hasattr(self, "_sv_frame"):
+        if hasattr(self, "_sv_frame") and self._sv_frame is not None:
             with contextlib.suppress(tk.TclError):
+                self.update_idletasks()
                 self._sv_frame.destroy()
-            del self._sv_frame
+            self._sv_frame = None
 
     def _rebuild_ui(self) -> None:
         """Rebuild Series View widgets and restore the initial single-pane layout."""
@@ -572,7 +623,9 @@ class SeriesView(tk.Toplevel):
         pos_x, pos_y = self.winfo_x(), self.winfo_y()
 
         self._remember_dicom_wl_ww()
+        self.update_idletasks()
         self._destroy_ui()
+        self.update_idletasks()
         self._build_ui()
         self._restore_whitelist_items(whitelist_items)
 
@@ -719,6 +772,16 @@ class SeriesView(tk.Toplevel):
         self.blur_face_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
         col += 1
 
+        self.blur_face_mode_var = tk.StringVar(value=face_blur_mode_menu_values()[0])
+        self.blur_face_mode_menu = ctk.CTkOptionMenu(
+            self.control_frame,
+            width=140,
+            values=face_blur_mode_menu_values(),
+            variable=self.blur_face_mode_var,
+        )
+        self.blur_face_mode_menu.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
+        col += 1
+
         self.clear_ts_cache_button = ctk.CTkButton(
             self.control_frame,
             width=130,
@@ -863,7 +926,15 @@ class SeriesView(tk.Toplevel):
         eligibility = self._face_blur_eligibility()
         state = "disabled" if eligibility.decision == FaceBlurGateDecision.BLOCK else "normal"
         if not self._blur_running and self._blur_preview is None:
-            self.blur_face_button.configure(state=state)
+            if hasattr(self, "blur_face_button"):
+                self.blur_face_button.configure(state=state)
+            if hasattr(self, "blur_face_mode_menu"):
+                self.blur_face_mode_menu.configure(state=state)
+
+    def _selected_face_blur_mode(self) -> FaceBlurMode:
+        if not hasattr(self, "blur_face_mode_var"):
+            return FaceBlurMode.GAUSSIAN
+        return face_blur_mode_from_menu_label(self.blur_face_mode_var.get())
 
     def _blur_face_button_state(self) -> str:
         eligibility = self._face_blur_eligibility()
@@ -1199,7 +1270,12 @@ class SeriesView(tk.Toplevel):
         self._schedule_rebuild_ui()
         self.update_status(_("Analysis cache cleared"))
 
-    def _teardown_blur_review(self, *, keep_applied_frames: bool = False) -> None:
+    def _teardown_blur_review(
+        self,
+        *,
+        keep_applied_frames: bool = False,
+        restore_dicom_wl: bool = False,
+    ) -> None:
         self._log_series_memory("blur_review_teardown_start", array=self._frames)
         viewer = self.image_viewer
         saved = self._blur_review_saved
@@ -1223,44 +1299,42 @@ class SeriesView(tk.Toplevel):
                 viewer.large_jump = int(saved["large_jump"])  # type: ignore[arg-type]
 
             viewer.overlay_data = saved["overlay_data"]  # type: ignore[assignment]
-            viewer.active_layers = saved["active_layers"]  # type: ignore[assignment]
+            viewer.active_layers = set(saved["active_layers"])  # type: ignore[arg-type]
+            viewer.active_layers.discard(LayerType.SEGMENTATIONS)
             viewer.segmentation_overlay_color = saved["segmentation_overlay_color"]  # type: ignore[assignment]
             viewer.segmentation_overlay_alpha = saved["segmentation_overlay_alpha"]  # type: ignore[assignment]
             if self._ds is not None:
-                wl, ww = (
-                    face_review_wl_ww(self._ds)
-                    if keep_applied_frames
-                    else self._dicom_wl_ww()
-                )
+                if restore_dicom_wl or not keep_applied_frames:
+                    wl, ww = self._dicom_wl_ww()
+                else:
+                    wl, ww = face_review_wl_ww(self._ds)
                 viewer.set_wlww_sync(wl, ww)
 
-            restore_index = min(int(saved["current_image_index"]), viewer.num_images - 1)
+            saved_index = int(saved["current_image_index"])
+            if keep_applied_frames and not self.single_frame:
+                restore_index = min(saved_index + 3, viewer.num_images - 1)
+            else:
+                restore_index = min(saved_index, viewer.num_images - 1)
+            viewer._initial_display_done = False
             viewer.clear_cache()
             viewer.current_image_index = restore_index
-            viewer.update_idletasks()
-            viewer._apply_actual_display_size()
-            self.update_idletasks()
-            width = max(self.winfo_reqwidth(), self.winfo_width())
-            height = max(self.winfo_reqheight(), self.winfo_height())
-            pos_x, pos_y = self.winfo_x(), self.winfo_y()
-            self.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
-            self.update_idletasks()
-            viewer._apply_actual_display_size()
-            viewer._resize_to_viewport_enabled = True
-            self._blur_review_saved = None
         else:
-            viewer._resize_to_viewport_enabled = True
+            viewer._initial_display_done = False
 
+        self._blur_review_saved = None
         self._blur_preview = None
+        pos_x, pos_y = self.winfo_x(), self.winfo_y()
+        self._apply_initial_viewer_layout(pos_x, pos_y)
+        viewer._resize_to_viewport_enabled = True
         self._log_series_memory("blur_review_teardown_done", array=self._frames)
         self._refresh_blur_face_ui()
+        self._flush_pending_rebuild_ui()
 
     def _show_blur_review(self, preview: FaceBlurPreviewResult) -> None:
         if self._frames is None or self._ds is None:
             return
 
         self._blur_preview = preview
-        self._face_blur_applied = True
         self._log_series_memory("blur_review_show", array=preview.blurred_slice_frames)
         viewer = self.image_viewer
         if viewer.playing:
@@ -1295,7 +1369,7 @@ class SeriesView(tk.Toplevel):
         viewer._resize_to_viewport_enabled = False
         viewer.clear_cache()
         viewer.current_image_index = 0
-        viewer.images = slice_stack
+        viewer.images = slice_stack.copy()
         viewer.num_images = slice_stack.shape[0]
         viewer.image_height = slice_stack.shape[1]
         viewer.image_width = slice_stack.shape[2]
@@ -1337,23 +1411,18 @@ class SeriesView(tk.Toplevel):
             preview.qa_stats,
             sigma_mm=preview.sigma_mm,
             slice_count=preview.slice_count,
+            blur_mode=preview.blur_mode,
         )
         self.update_status(
             qa_summary + " " + _("Review side-by-side, then Save Pixel Changes to keep.")
         )
         self.save_button.configure(state="normal")
         self.blur_face_button.configure(state="disabled")
+        if hasattr(self, "blur_face_mode_menu"):
+            self.blur_face_mode_menu.configure(state="disabled")
         self._refresh_blur_face_ui()
 
-    def _blur_worker(self) -> None:
-        geometry = self._ensure_series_geometry()
-        volume_context = SeriesVolumeContext(
-            reference_ds=self._ds,
-            slice_frames=self._slice_stack(),
-            slice_paths=self._slice_paths,
-            slice_spacing_mm=geometry.slice_spacing_mm if geometry is not None else None,
-        )
-
+    def _blur_worker(self, blur_mode, volume_context: SeriesVolumeContext) -> None:
         def on_progress(progress) -> None:
             self._blur_worker_queue.put(("progress", progress))
 
@@ -1362,11 +1431,55 @@ class SeriesView(tk.Toplevel):
                 self._series_path,
                 progress=on_progress,
                 volume_context=volume_context,
+                blur_mode=blur_mode,
             )
             self._blur_worker_queue.put(("done", preview))
         except Exception as exc:
             logger.exception("Face blur preview worker failed for %s", self._series_path)
             self._blur_worker_queue.put(("error", exc))
+
+    def _launch_blur_worker(self, blur_mode: FaceBlurMode) -> None:
+        """Start the blur worker after UI lockout has settled on the main thread."""
+        if not self._blur_running or not self.winfo_exists():
+            return
+        if self._frames is None or self._ds is None:
+            self._blur_running = False
+            self._set_series_interaction_enabled(True)
+            return
+
+        geometry = self._ensure_series_geometry()
+        volume_context = SeriesVolumeContext(
+            reference_ds=copy.deepcopy(self._ds),
+            slice_frames=self._slice_stack().copy(),
+            slice_paths=self._slice_paths,
+            slice_spacing_mm=geometry.slice_spacing_mm if geometry is not None else None,
+        )
+        threading.Thread(
+            target=self._blur_worker,
+            args=(blur_mode, volume_context),
+            name="BlurFacePreviewWorker",
+            daemon=True,
+        ).start()
+        self._blur_poll_after_id = self.after(self.BLUR_POLL_MS, self._poll_blur_worker)
+
+    def _complete_blur_review(self, preview: FaceBlurPreviewResult) -> None:
+        """Show blur review on an idle tick, avoiding CTk churn during poll callbacks."""
+        self._blur_review_after_id = None
+        if not self.winfo_exists() or not self._blur_running:
+            return
+        if self._ui_rebuilding:
+            self._blur_review_after_id = self.after_idle(
+                lambda p=preview: self._complete_blur_review(p)
+            )
+            return
+
+        try:
+            self._show_blur_review(preview)
+        finally:
+            self._blur_running = False
+            self._set_series_interaction_enabled(True)
+            self._refresh_blur_face_ui()
+            self._flush_pending_rebuild_ui()
 
     def _poll_blur_worker(self) -> None:
         if not self.winfo_exists():
@@ -1384,18 +1497,23 @@ class SeriesView(tk.Toplevel):
             elif kind == "done":
                 if not self._blur_running:
                     continue
-                self._blur_running = False
                 preview = payload
                 if preview.error is not None:
+                    self._blur_running = False
                     messagebox.showerror(
                         title=_("Blur Face"),
                         message=preview.error,
                         parent=self,
                     )
                     self.update_status(_("Could not blur facial features"))
+                    self._set_series_interaction_enabled(True)
                     self._refresh_blur_face_ui()
+                    self._flush_pending_rebuild_ui()
                     return
-                self._show_blur_review(preview)
+                self._stop_blur_review_deferred()
+                self._blur_review_after_id = self.after_idle(
+                    lambda p=preview: self._complete_blur_review(p)
+                )
                 return
             elif kind == "error":
                 if not self._blur_running:
@@ -1407,12 +1525,17 @@ class SeriesView(tk.Toplevel):
                     parent=self,
                 )
                 self.update_status(_("Could not blur facial features"))
+                self._set_series_interaction_enabled(True)
                 self._refresh_blur_face_ui()
+                self._flush_pending_rebuild_ui()
                 return
 
-        self.after(self.BLUR_POLL_MS, self._poll_blur_worker)
+        if not self.winfo_exists():
+            return
+        self._blur_poll_after_id = self.after(self.BLUR_POLL_MS, self._poll_blur_worker)
 
     def _apply_face_blur_preview(self, preview: FaceBlurPreviewResult) -> None:
+        """Merge accepted blur preview into in-memory frames (viewer rebuilt after save)."""
         if self._frames is None:
             return
         self._frames = apply_face_blur_preview_to_series_frames(
@@ -1424,20 +1547,7 @@ class SeriesView(tk.Toplevel):
         )
         if not self.single_frame:
             self.regenerate_series_projections()
-        viewer = self.image_viewer
-        viewer.images = self._frames
-        viewer.num_images = self._frames.shape[0]
-        viewer.image_height = self._frames.shape[1]
-        viewer.image_width = self._frames.shape[2]
-        viewer.small_jump = max(1, int(viewer.num_images * viewer.SMALL_JUMP_PERCENTAGE))
-        viewer.large_jump = max(1, int(viewer.num_images * viewer.LARGE_JUMP_PERCENTAGE))
-        viewer.clear_cache()
-        viewer.refresh_current_image()
-        self._face_blur_applied = True
-        review_wl, review_ww = face_review_wl_ww(self._ds)
-        viewer.set_wlww_sync(review_wl, review_ww)
         self._face_blur_preview_pending = True
-        self.save_button.configure(state="normal")
 
     def blur_face_button_clicked(self) -> None:
         if not self._series_interaction_allowed() or self._blur_running or self._blur_face_button_state() != "normal":
@@ -1468,14 +1578,10 @@ class SeriesView(tk.Toplevel):
         )
         self._blur_running = True
         self._blur_worker_queue = queue.Queue()
+        blur_mode = self._selected_face_blur_mode()
         self.update_status(_("Preparing face blur preview") + "…")
-        self.blur_face_button.configure(state="disabled")
-        threading.Thread(
-            target=self._blur_worker,
-            name="BlurFacePreviewWorker",
-            daemon=True,
-        ).start()
-        self.after(self.BLUR_POLL_MS, self._poll_blur_worker)
+        self._set_series_interaction_enabled(False)
+        self.after_idle(lambda: self._launch_blur_worker(blur_mode))
 
     def save_series_button_clicked(self):
         if self._frames is None or self._ds is None:
@@ -1483,7 +1589,11 @@ class SeriesView(tk.Toplevel):
             return
 
         preview = self._blur_preview
-        if preview is not None and preview.error is None:
+        had_blur_review = preview is not None and preview.error is None
+        if had_blur_review:
+            if hasattr(self, "image_viewer"):
+                with contextlib.suppress(tk.TclError):
+                    self.image_viewer.detach_companion_stack()
             self._apply_face_blur_preview(preview)
             logger.info(
                 "Series View: face blur applied on save for %s (slices=%d, qa=%s)",
@@ -1515,7 +1625,27 @@ class SeriesView(tk.Toplevel):
         if save_series_frames(self._series_path, self._frames if self.single_frame else self._frames[3:], self._ds):
             logger.info(f"Saved series frames to {self._series_path}")
             self._face_blur_preview_pending = False
-            self._schedule_rebuild_ui()
+            if had_blur_review and preview is not None:
+                apply_series_face_blur_metadata(
+                    self._anon_model,
+                    str(self._ds.SeriesInstanceUID),
+                    preview.blur_mode.value,
+                )
+            if hasattr(self, "image_viewer"):
+                texts_by_frame = collect_series_view_pixel_phi_texts(self.image_viewer)
+                if texts_by_frame:
+                    projection_count = 0 if self.single_frame else 3
+                    apply_series_view_pixel_phi(
+                        self._anon_model,
+                        self._slice_paths,
+                        texts_by_frame,
+                        projection_frame_count=projection_count,
+                    )
+            if had_blur_review:
+                self._teardown_blur_review(keep_applied_frames=True, restore_dicom_wl=True)
+                self.save_button.configure(state="disabled")
+            else:
+                self.save_button.configure(state="disabled")
             self.update_status(_("Changes saved"))
         else:
             logger.error(f"Failed to save series frames to {self._series_path}")
@@ -1631,17 +1761,16 @@ class SeriesView(tk.Toplevel):
         if viewer is None:
             return
         try:
-            viewer.release_resources()
+            if destroy_widget:
+                viewer.destroy()
+            else:
+                viewer.release_resources()
         except tk.TclError:
             logger.debug("ImageViewer already destroyed during SeriesView close")
             return
-        if destroy_widget:
-            with contextlib.suppress(tk.TclError):
-                viewer.destroy()
 
     def _release_all_viewer_resources(self) -> None:
         if hasattr(self, "image_viewer"):
-            self.image_viewer.detach_companion_stack()
             self._release_image_viewer(self.image_viewer)
 
     def _release_series_data(self) -> None:
@@ -1665,8 +1794,13 @@ class SeriesView(tk.Toplevel):
 
     def _on_cancel(self):
         logger.info("_on_cancel")
+        self._blur_running = False
+        self._stop_blur_worker_poll()
+        self._stop_blur_review_deferred()
+        self._stop_rebuild_ui()
         if self._loading:
             self._loading = False
+            self._stop_load_progress_pulse()
             with contextlib.suppress(tk.TclError):
                 self.grab_release()
             self.destroy()

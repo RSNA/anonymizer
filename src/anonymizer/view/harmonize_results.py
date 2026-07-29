@@ -15,10 +15,10 @@ from tkinter import ttk
 import customtkinter as ctk
 from pydicom import Dataset
 
-from anonymizer.controller.create_projections import apply_series_description
 from anonymizer.controller.harmonize import (
     HarmonizedResult,
     HarmonizeProgress,
+    apply_harmonized_description,
     format_harmonize_progress_message,
     harmonize_series,
 )
@@ -721,14 +721,9 @@ class HarmonizeResultsView(tk.Toplevel):
 
     def _save_description_worker(self, series_path: Path, description: str, series_uid: str) -> None:
         try:
-            if not apply_series_description(series_path, description):
-                self._save_queue.put(("error", _("Failed to write DICOM files.")))
+            if not apply_harmonized_description(series_path, description, self._anon_model):
+                self._save_queue.put(("error", _("Failed to write DICOM files or update project database.")))
                 return
-            if self._anon_model is not None:
-                update = getattr(self._anon_model, "update_series_description_by_anon_uid", None)
-                if update is not None and not update(series_uid, description):
-                    self._save_queue.put(("error", _("Failed to update project database.")))
-                    return
             self._save_queue.put(("done", None))
         except Exception as exc:
             logger.exception("Harmonize save failed for %s", series_path)

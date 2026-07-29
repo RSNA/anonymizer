@@ -10,6 +10,7 @@ from pydicom import Dataset
 
 from anonymizer.controller.harmonize import (
     HarmonizedResult,
+    apply_harmonized_description,
     format_harmonize_batch_progress_text,
     format_harmonize_progress_message,
     harmonize_and_apply_series,
@@ -143,6 +144,25 @@ def test_harmonize_and_apply_series_applies_merged_description(
     outcome = harmonize_and_apply_series(series_path)
     assert outcome.status == "ok"
     assert outcome.message == "Ch Ax PortVen"
+
+
+@patch("anonymizer.controller.create_projections.apply_series_description", return_value=True)
+@patch("anonymizer.controller.harmonize._load_series_dataset")
+def test_apply_harmonized_description_uses_set_series_harmonized_description(
+    mock_load: MagicMock,
+    _mock_apply_dicom: MagicMock,
+    tmp_path: Path,
+) -> None:
+    series_path = tmp_path / "series"
+    series_path.mkdir()
+    anon_model = MagicMock()
+    anon_model.set_series_harmonized_description.return_value = True
+    ds = _ct_dataset()
+    mock_load.return_value = ds
+
+    assert apply_harmonized_description(series_path, "Ch Ax PortVen", anon_model) is True
+
+    anon_model.set_series_harmonized_description.assert_called_once_with("1.2.3", "Ch Ax PortVen")
 
 
 @patch("anonymizer.controller.harmonize.tseg_batch_session")
