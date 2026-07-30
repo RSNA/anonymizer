@@ -1,0 +1,149 @@
+"""Tests for Series View geometry context line and master-style viewer sizing."""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+from anonymizer.controller.tseg.dicom_geometry import format_series_view_geometry_line
+from anonymizer.view.image import ImageViewer
+from anonymizer.view.series import SeriesView
+from tests.controller.blur_face.test_face_blur_gate import _geometry
+
+
+def test_series_context_line_is_geometry_only() -> None:
+    series = SeriesView.__new__(SeriesView)
+    geometry = _geometry()
+    series._ensure_series_geometry = MagicMock(return_value=geometry)
+
+    line = SeriesView._series_context_line(series)
+
+    assert line == format_series_view_geometry_line(geometry)
+    assert "chest or abdomen" not in line.lower()
+
+
+def test_apply_initial_viewer_display_calls_set_initial_size() -> None:
+    series = SeriesView.__new__(SeriesView)
+    series.update_idletasks = MagicMock()
+    series._fit_window_to_content = MagicMock()
+    viewer = MagicMock()
+    viewer.detach_companion_stack = MagicMock()
+    viewer._set_initial_size = MagicMock()
+    viewer.on_resize = MagicMock()
+    series.image_viewer = viewer
+
+    SeriesView._apply_initial_viewer_display(series)
+
+    viewer.detach_companion_stack.assert_called_once()
+    viewer._set_initial_size.assert_called_once()
+    series._fit_window_to_content.assert_called_once()
+    viewer.on_resize.assert_called_once()
+    assert viewer._resize_to_viewport_enabled is True
+
+
+def test_on_series_configure_updates_wraplength_only() -> None:
+    series = SeriesView.__new__(SeriesView)
+    series._loading = False
+    series._ui_rebuilding = False
+    series._update_status_label_wraplength = MagicMock()
+    series.image_viewer = MagicMock()
+
+    SeriesView._on_series_configure(series, SimpleNamespace(widget=series))
+
+    series._update_status_label_wraplength.assert_called_once()
+
+
+def test_calculate_scaled_size_returns_native_when_image_fits() -> None:
+    viewer = ImageViewer.__new__(ImageViewer)
+    viewer.image_width = 512
+    viewer.image_height = 512
+
+    assert ImageViewer._calculate_scaled_size(viewer, 900, 700) == (512, 512)
+
+
+def test_calculate_scaled_size_scales_down_large_images() -> None:
+    viewer = ImageViewer.__new__(ImageViewer)
+    viewer.image_width = 1024
+    viewer.image_height = 1024
+
+    width, height = ImageViewer._calculate_scaled_size(viewer, 400, 300)
+
+    assert width == 300
+    assert height == 300
+
+
+def test_set_initial_size_uses_screen_budget_and_loads_frame() -> None:
+    viewer = ImageViewer.__new__(ImageViewer)
+    viewer.image_width = 512
+    viewer.image_height = 512
+    viewer.current_image_index = 0
+    viewer.companion_canvas = None
+    viewer.MAX_SCREEN_PERCENTAGE = 0.7
+    viewer.canvas = MagicMock()
+    # Early layout can report ~155px; initial size must ignore canvas winfo.
+    viewer.canvas.winfo_width = MagicMock(return_value=155)
+    viewer.canvas.winfo_height = MagicMock(return_value=155)
+    viewer.winfo_screenwidth = MagicMock(return_value=2000)
+    viewer.winfo_screenheight = MagicMock(return_value=1000)
+    viewer.load_and_display_image = MagicMock()
+    viewer.update_status = MagicMock()
+    viewer.histogram = None
+    viewer.images = MagicMock()
+    viewer._companion_cache = {}
+
+    ImageViewer._set_initial_size(viewer)
+
+    assert viewer.current_size == (512, 512)
+    viewer.canvas.config.assert_called_once_with(width=512, height=512)
+    viewer.load_and_display_image.assert_called_once_with(0)
+
+
+def test_set_initial_size_halves_budget_for_companion() -> None:
+    viewer = ImageViewer.__new__(ImageViewer)
+    viewer.image_width = 512
+    viewer.image_height = 512
+    viewer.current_image_index = 0
+    viewer.companion_canvas = MagicMock()
+    viewer.MAX_SCREEN_PERCENTAGE = 0.7
+    viewer.canvas = MagicMock()
+    viewer.winfo_screenwidth = MagicMock(return_value=2000)
+    viewer.winfo_screenheight = MagicMock(return_value=1000)
+    viewer.load_and_display_image = MagicMock()
+    viewer.update_status = MagicMock()
+    viewer.histogram = None
+    viewer.images = MagicMock()
+    viewer._companion_cache = {}
+
+    ImageViewer._set_initial_size(viewer)
+
+    viewer.companion_canvas.config.assert_called_once_with(width=512, height=512)
+
+
+def test_on_resize_updates_display_from_canvas_dimensions() -> None:
+    viewer = ImageViewer.__new__(ImageViewer)
+    viewer._resize_to_viewport_enabled = True
+    viewer.current_size = (512, 512)
+    viewer.current_image_index = 2
+    viewer.canvas = MagicMock()
+    viewer.canvas.winfo_width = MagicMock(return_value=400)
+    viewer.canvas.winfo_height = MagicMock(return_value=300)
+    viewer.load_and_display_image = MagicMock()
+    viewer.update_status = MagicMock()
+    viewer._companion_cache = {}
+
+    ImageViewer.on_resize(viewer)
+
+    assert viewer.current_size == (400, 300)
+    viewer.load_and_display_image.assert_called_once_with(2)
+    viewer.update_status.assert_called_once()
+    viewer.canvas.config.assert_not_called()
+
+
+def test_on_resize_skips_when_disabled() -> None:
+    viewer = ImageViewer.__new__(ImageViewer)
+    viewer._resize_to_viewport_enabled = False
+    viewer.load_and_display_image = MagicMock()
+
+    ImageViewer.on_resize(viewer)
+
+    viewer.load_and_display_image.assert_not_called()

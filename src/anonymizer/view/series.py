@@ -32,7 +32,6 @@ from anonymizer.controller.blur_face_gate import (
     FaceBlurEligibility,
     FaceBlurGateDecision,
     evaluate_face_blur_eligibility,
-    face_blur_context_hint,
     face_blur_gate_message,
 )
 from anonymizer.controller.create_projections import (
@@ -41,7 +40,7 @@ from anonymizer.controller.create_projections import (
     load_series_frames,
     save_series_frames,
 )
-from anonymizer.controller.harmonize import harmonize_context_hint, series_description_is_harmonized
+from anonymizer.controller.harmonize import series_description_is_harmonized
 from anonymizer.controller.remove_pixel_phi import (
     LayerType,
     OCRText,
@@ -120,8 +119,9 @@ class SeriesView(tk.Toplevel):
     BLUR_POLL_MS = 200
     LOAD_POLL_MS = 100
     PROGRESS_SLICE_THRESHOLD = 400
-    DEFAULT_WIDTH = 1400
-    DEFAULT_HEIGHT = 900
+    DEFAULT_WIDTH = 960
+    DEFAULT_HEIGHT = 640
+    STATUS_WRAPLENGTH = 600
     LOADING_SHELL_WIDTH = 420
     LOADING_SHELL_HEIGHT = 72
     LOADING_SHELL_PAD = 12
@@ -166,6 +166,7 @@ class SeriesView(tk.Toplevel):
 
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Escape>", self._escape_keypress)
+        self.bind("<Configure>", self._on_series_configure)
 
         if self._show_load_progress:
             self._show_loading_shell()
@@ -234,7 +235,6 @@ class SeriesView(tk.Toplevel):
         self.withdraw()
         self.title(_("Series View"))
         self.geometry(f"{self.DEFAULT_WIDTH}x{self.DEFAULT_HEIGHT}")
-        self.minsize(960, 640)
         self._position_near_parent(width=self.DEFAULT_WIDTH, height=self.DEFAULT_HEIGHT)
 
     @staticmethod
@@ -409,7 +409,6 @@ class SeriesView(tk.Toplevel):
         self.single_frame = frames.shape[0] == 1
         self._remember_dicom_wl_ww(ds)
 
-        pos_x, pos_y = self.winfo_x(), self.winfo_y()
         self.withdraw()
         self._stop_load_progress_pulse()
         if self._loading_shell is not None:
@@ -419,15 +418,13 @@ class SeriesView(tk.Toplevel):
             self.update_idletasks()
 
         self.resizable(True, True)
-        self.minsize(960, 640)
         self._build_ui()
         self._log_series_memory("after_build_ui", array=self._frames)
         self._update_title()
-        self._apply_initial_viewer_layout(pos_x, pos_y)
         self.deiconify()
         self.lift()
         self.focus_force()
-        self.image_viewer._resize_to_viewport_enabled = True
+        self._apply_initial_viewer_display()
         self._log_series_memory("after_viewer_initial_display", array=self._frames)
         self.after_idle(self._refresh_analysis_cache_ui)
 
@@ -462,25 +459,47 @@ class SeriesView(tk.Toplevel):
         wl, ww = self._viewer_wl_ww()
         self.image_viewer.set_wlww_sync(wl, ww)
 
-    def _apply_initial_viewer_layout(self, pos_x: int | None = None, pos_y: int | None = None) -> None:
-        """Size the viewer to native pixels and fit the window (View == Actual at open)."""
-        if pos_x is None or pos_y is None:
-            pos_x, pos_y = self.winfo_x(), self.winfo_y()
+    def _fit_window_to_content(self) -> None:
+        """Expand the window to fit the built UI (V18 auto-size after synchronous build)."""
+        self.update_idletasks()
+        req_w = max(self.winfo_reqwidth(), self.DEFAULT_WIDTH)
+        req_h = max(self.winfo_reqheight(), self.DEFAULT_HEIGHT)
+        max_w = int(self.winfo_screenwidth() * ImageViewer.MAX_SCREEN_PERCENTAGE)
+        max_h = int(self.winfo_screenheight() * ImageViewer.MAX_SCREEN_PERCENTAGE)
+        width = min(req_w, max_w)
+        height = min(req_h, max_h)
+        self.minsize(min(640, width), min(480, height))
+
+        pos_x, pos_y = self.winfo_x(), self.winfo_y()
+        if pos_x <= 0 and pos_y <= 0:
+            self._position_near_parent(width=width, height=height)
+        else:
+            self.geometry(f"{width}x{height}+{max(0, pos_x)}+{max(0, pos_y)}")
+
+    def _apply_initial_viewer_display(self) -> None:
+        """Apply master-style viewer sizing once the Series View window is mapped."""
+        if not hasattr(self, "image_viewer") or self.image_viewer is None:
+            return
         viewer = self.image_viewer
         viewer.detach_companion_stack()
-        viewer._initial_display_done = False
-        viewer._resize_to_viewport_enabled = False
-        if not viewer._set_initial_size():
-            self.update_idletasks()
-            viewer._set_initial_size()
-        self._sync_viewer_wl_ww()
         self.update_idletasks()
+        viewer._resize_to_viewport_enabled = True
+        viewer._set_initial_size()
+        self._fit_window_to_content()
+        self.update_idletasks()
+        viewer.on_resize()
 
-        width = max(self.winfo_reqwidth(), 640)
-        height = max(self.winfo_reqheight(), 480)
-        self.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
-        self.update_idletasks()
-        viewer._apply_actual_display_size()
+    def _update_status_label_wraplength(self) -> None:
+        if not hasattr(self, "_status_label"):
+            return
+        wrap = max(320, self.winfo_width() or self.STATUS_WRAPLENGTH) - (3 * self.PAD)
+        with contextlib.suppress(tk.TclError):
+            self._status_label.configure(wraplength=wrap)
+
+    def _on_series_configure(self, event: tk.Event) -> None:
+        if event.widget is not self or self._loading or self._ui_rebuilding:
+            return
+        self._update_status_label_wraplength()
 
     def _capture_whitelist_items(self) -> list[str]:
         if not hasattr(self, "whitelist"):
@@ -620,7 +639,6 @@ class SeriesView(tk.Toplevel):
             return
 
         whitelist_items = self._capture_whitelist_items()
-        pos_x, pos_y = self.winfo_x(), self.winfo_y()
 
         self._remember_dicom_wl_ww()
         self.update_idletasks()
@@ -630,10 +648,9 @@ class SeriesView(tk.Toplevel):
         self._restore_whitelist_items(whitelist_items)
 
         self._update_title()
-        self._apply_initial_viewer_layout(pos_x, pos_y)
         self.deiconify()
         self.lift()
-        self.image_viewer._resize_to_viewport_enabled = True
+        self._apply_initial_viewer_display()
         self._refresh_analysis_cache_ui()
 
     def _build_ui(self) -> None:
@@ -687,37 +704,32 @@ class SeriesView(tk.Toplevel):
         self.whitelist.grid(row=3, columnspan=2, sticky="nsew")
         scrollbar.grid(row=3, column=2, sticky="ns")
 
-        # Image viewer container (single viewer or embedded blur review pane).
-        self._viewer_container = ctk.CTkFrame(self._sv_frame, fg_color="transparent")
-        self._viewer_container.grid(row=0, column=1, sticky="nsew")
-        self._viewer_container.grid_rowconfigure(0, weight=1)
-        self._viewer_container.grid_columnconfigure(0, weight=1)
-
+        # ImageViewer:
         self.image_viewer = ImageViewer(
-            self._viewer_container,
+            self._sv_frame,
             self._frames,
             *self._viewer_wl_ww(),
             add_to_whitelist_callback=self.add_to_whitelist,
             regenerate_series_projections_callback=self.regenerate_series_projections,
         )
-        self.image_viewer.grid(row=0, column=0, sticky="nsew")
+        self.image_viewer.grid(row=0, column=1, sticky="nsew")
         self.image_viewer.detach_companion_stack()
         self._blur_review_saved = None
         self._blur_preview = None
         self._blur_worker_queue = queue.Queue()
         self._blur_running = False
 
-        # Control Frame:
+        # Control Frame (two toolbar rows + status line):
         self.control_frame = ctk.CTkFrame(self._sv_frame)
         self.control_frame.grid(row=1, columnspan=2, sticky="ew", padx=self.PAD, pady=self.PAD)
+        self.control_frame.grid_columnconfigure(1, weight=1)
 
-        # Edit Context Segmented Button:
-        col = 0
-        edit_context_label = ctk.CTkLabel(self.control_frame, text=_("Edit Context") + ":")
-        edit_context_label.grid(row=0, column=col, padx=(self.PAD, 0))
-        col += 1
+        text_edit_group = ctk.CTkFrame(self.control_frame, fg_color="transparent")
+        text_edit_group.grid(row=0, column=0, padx=(0, self.PAD), pady=self.PAD, sticky="w")
+        edit_context_label = ctk.CTkLabel(text_edit_group, text=_("Text Edit Context") + ":")
+        edit_context_label.grid(row=0, column=0, padx=(self.PAD, 2))
         self.edit_context_combo_box = ctk.CTkComboBox(
-            self.control_frame,
+            text_edit_group,
             state="readonly",
             values=[
                 member.value.upper()
@@ -727,91 +739,76 @@ class SeriesView(tk.Toplevel):
             command=self.edit_context_change,
         )
         self.edit_context_combo_box.set(EditContext.FRAME.upper())
-        self.edit_context_combo_box.grid(row=0, column=col, padx=self.PAD, pady=self.PAD)
-        col += 1
-
-        # Detect Text Button:
+        self.edit_context_combo_box.grid(row=0, column=1, padx=(0, 8))
         self.detect_button = ctk.CTkButton(
-            self.control_frame, width=self.BUTTON_WIDTH, text=_("Detect Text"), command=self.detect_text_button_clicked
+            text_edit_group, width=self.BUTTON_WIDTH, text=_("Detect Text"), command=self.detect_text_button_clicked
         )
-        self.detect_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD)
-        col += 1
-
-        # Remove Text Button:
+        self.detect_button.grid(row=0, column=2, padx=(0, 2), pady=0)
         self.remove_button = ctk.CTkButton(
-            self.control_frame, width=self.BUTTON_WIDTH, text=_("Remove Text"), command=self.remove_text_button_clicked
+            text_edit_group, width=self.BUTTON_WIDTH, text=_("Remove Text"), command=self.remove_text_button_clicked
         )
-        self.remove_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
-        col += 1
-
-        # Blackout Area Button:
+        self.remove_button.grid(row=0, column=3, padx=2, pady=0)
         self.blackout_button = ctk.CTkButton(
-            self.control_frame, width=self.BUTTON_WIDTH, text=_("Blackout Area"), command=self.blackout_button_clicked
+            text_edit_group, width=self.BUTTON_WIDTH, text=_("Blackout Area"), command=self.blackout_button_clicked
         )
-        self.blackout_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
-        col += 1
+        self.blackout_button.grid(row=0, column=4, padx=(2, self.PAD), pady=0)
 
+        harmonize_blur_group = ctk.CTkFrame(self.control_frame, fg_color="transparent")
+        harmonize_blur_group.grid(row=1, column=0, padx=(0, self.PAD), pady=(0, self.PAD), sticky="w")
         harmonize_state = self._harmonize_button_state()
         self.harmonize_button = ctk.CTkButton(
-            self.control_frame,
+            harmonize_blur_group,
             width=160,
             text=_("Harmonize Description"),
             command=self.harmonize_description_button_clicked,
             state=harmonize_state,
         )
-        self.harmonize_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
-        col += 1
-
+        self.harmonize_button.grid(row=0, column=0, padx=(self.PAD, 2), pady=0, sticky="w")
         self.blur_face_button = ctk.CTkButton(
-            self.control_frame,
+            harmonize_blur_group,
             width=120,
             text=_("Blur Face"),
             command=self.blur_face_button_clicked,
             state="disabled",
         )
-        self.blur_face_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
-        col += 1
-
+        self.blur_face_button.grid(row=0, column=1, padx=2, pady=0, sticky="w")
         self.blur_face_mode_var = tk.StringVar(value=face_blur_mode_menu_values()[0])
         self.blur_face_mode_menu = ctk.CTkOptionMenu(
-            self.control_frame,
+            harmonize_blur_group,
             width=140,
             values=face_blur_mode_menu_values(),
             variable=self.blur_face_mode_var,
         )
-        self.blur_face_mode_menu.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
-        col += 1
-
+        self.blur_face_mode_menu.grid(row=0, column=2, padx=(2, 2), pady=0, sticky="w")
         self.clear_ts_cache_button = ctk.CTkButton(
-            self.control_frame,
+            harmonize_blur_group,
             width=130,
             text=_("Clear TS Cache"),
             command=self.clear_ts_cache_button_clicked,
             state=self._clear_ts_cache_button_state(),
         )
-        self.clear_ts_cache_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="w")
-        col += 1
+        self.clear_ts_cache_button.grid(row=0, column=3, padx=(2, self.PAD), pady=0, sticky="w")
 
-        # Save pixel edits (PHI removal / blackout) only; harmonized description is saved on accept.
         self.save_button = ctk.CTkButton(
             self.control_frame,
             width=130,
             text=_("Save Pixel Changes"),
             command=self.save_series_button_clicked,
         )
-        self.save_button.grid(row=0, column=col, padx=self.PAD, pady=self.PAD, sticky="e")
+        self.save_button.grid(row=1, column=1, padx=self.PAD, pady=(0, self.PAD), sticky="e")
         self.save_button.configure(state="disabled")
-        button_columns = col + 1
 
         self._status_label = ctk.CTkLabel(
             self.control_frame,
             text="",
             anchor="w",
+            justify="left",
+            wraplength=self.STATUS_WRAPLENGTH,
         )
         self._status_label.grid(
-            row=1,
+            row=2,
             column=0,
-            columnspan=button_columns,
+            columnspan=2,
             padx=self.PAD,
             pady=(0, self.PAD),
             sticky="w",
@@ -847,17 +844,7 @@ class SeriesView(tk.Toplevel):
         geometry = self._ensure_series_geometry()
         if geometry is None:
             return ""
-        line = format_series_view_geometry_line(geometry)
-        suffixes: list[str] = []
-        face_hint = face_blur_context_hint(self._face_blur_eligibility(), geometry)
-        if face_hint:
-            suffixes.append(face_hint)
-        harmonize_hint = harmonize_context_hint(self._series_path, self._ds)
-        if harmonize_hint:
-            suffixes.append(harmonize_hint)
-        if suffixes:
-            return f"{line} {' '.join(suffixes)}"
-        return line
+        return format_series_view_geometry_line(geometry)
 
     def _show_default_context_line(self) -> None:
         if hasattr(self, "_status_label"):
@@ -1315,17 +1302,11 @@ class SeriesView(tk.Toplevel):
                 restore_index = min(saved_index + 3, viewer.num_images - 1)
             else:
                 restore_index = min(saved_index, viewer.num_images - 1)
-            viewer._initial_display_done = False
             viewer.clear_cache()
             viewer.current_image_index = restore_index
-        else:
-            viewer._initial_display_done = False
-
         self._blur_review_saved = None
         self._blur_preview = None
-        pos_x, pos_y = self.winfo_x(), self.winfo_y()
-        self._apply_initial_viewer_layout(pos_x, pos_y)
-        viewer._resize_to_viewport_enabled = True
+        self._apply_initial_viewer_display()
         self._log_series_memory("blur_review_teardown_done", array=self._frames)
         self._refresh_blur_face_ui()
         self._flush_pending_rebuild_ui()
@@ -1395,17 +1376,10 @@ class SeriesView(tk.Toplevel):
             primary_label=_("Current — face region (green)"),
             companion_label=_("Proposed face blur"),
         )
-        viewer.update_idletasks()
-        viewer._apply_actual_display_size()
-        self.update_idletasks()
-        width = max(self.winfo_reqwidth(), self.winfo_width())
-        height = max(self.winfo_reqheight(), self.winfo_height())
-        pos_x, pos_y = self.winfo_x(), self.winfo_y()
-        self.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
-        self.update_idletasks()
-        viewer._apply_actual_display_size()
         viewer.set_wlww_sync(review_wl, review_ww)
+        self.update_idletasks()
         viewer._resize_to_viewport_enabled = True
+        viewer._set_initial_size()
 
         qa_summary = format_face_blur_qa_summary(
             preview.qa_stats,
