@@ -465,6 +465,9 @@ def test_get_series_processing_status(anonymizer_model: AnonymizerModel, mock_da
     assert format_series_processing_status(status) == (
         "Pixel PHI: None removed · Harmonized: None · Face blur: None"
     )
+    assert format_series_processing_status(status, include_face_blur=False) == (
+        "Pixel PHI: None removed · Harmonized: None"
+    )
 
     harmonized = "CT Head Without Contrast"
     anonymizer_model.set_series_harmonized_description(series.anon_series_uid, harmonized)

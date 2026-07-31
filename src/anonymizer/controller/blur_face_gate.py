@@ -161,6 +161,25 @@ def face_blur_gate_message(reason: FaceBlurGateReason) -> str:
     return _(_REASON_MSGIDS[reason])
 
 
+def face_blur_status_applicable(
+    eligibility: FaceBlurEligibility,
+    *,
+    already_applied: bool,
+) -> bool:
+    """Return whether Series View should show the Face blur segment in processing status."""
+    if already_applied:
+        return True
+    if eligibility.decision in {FaceBlurGateDecision.ALLOW, FaceBlurGateDecision.CONFIRM}:
+        return True
+    return eligibility.reason not in {
+        FaceBlurGateReason.MODALITY,
+        FaceBlurGateReason.FEATURE_DISABLED,
+        FaceBlurGateReason.GEOMETRY,
+        FaceBlurGateReason.CACHED_REGIONS_NON_HEAD,
+        FaceBlurGateReason.METADATA_NON_HEAD,
+    }
+
+
 def face_blur_context_hint(
     eligibility: FaceBlurEligibility,
     geometry: SeriesGeometryResult | None,

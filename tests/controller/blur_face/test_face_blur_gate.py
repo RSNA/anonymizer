@@ -21,6 +21,7 @@ from anonymizer.controller.blur_face_gate import (
     evaluate_face_blur_eligibility,
     face_blur_context_hint,
     face_blur_gate_message,
+    face_blur_status_applicable,
     face_mask_is_substantial,
     metadata_signal,
 )
@@ -261,3 +262,26 @@ def test_face_blur_context_hint_for_non_head_blocks() -> None:
 def test_face_blur_context_hint_omits_modality_without_geometry() -> None:
     eligibility = FaceBlurEligibility(FaceBlurGateDecision.BLOCK, FaceBlurGateReason.MODALITY)
     assert face_blur_context_hint(eligibility, None) is None
+
+
+@pytest.mark.parametrize(
+    ("decision", "reason", "already_applied", "expected"),
+    [
+        (FaceBlurGateDecision.ALLOW, FaceBlurGateReason.CACHED_REGIONS_HEAD, False, True),
+        (FaceBlurGateDecision.CONFIRM, FaceBlurGateReason.AMBIGUOUS, False, True),
+        (FaceBlurGateDecision.CONFIRM, FaceBlurGateReason.CACHED_REGIONS_MULTI, False, True),
+        (FaceBlurGateDecision.BLOCK, FaceBlurGateReason.CACHED_REGIONS_NON_HEAD, False, False),
+        (FaceBlurGateDecision.BLOCK, FaceBlurGateReason.METADATA_NON_HEAD, False, False),
+        (FaceBlurGateDecision.BLOCK, FaceBlurGateReason.MODALITY, False, False),
+        (FaceBlurGateDecision.BLOCK, FaceBlurGateReason.GEOMETRY, False, False),
+        (FaceBlurGateDecision.BLOCK, FaceBlurGateReason.CACHED_REGIONS_NON_HEAD, True, True),
+    ],
+)
+def test_face_blur_status_applicable(
+    decision: FaceBlurGateDecision,
+    reason: FaceBlurGateReason,
+    already_applied: bool,
+    expected: bool,
+) -> None:
+    eligibility = FaceBlurEligibility(decision, reason)
+    assert face_blur_status_applicable(eligibility, already_applied=already_applied) is expected

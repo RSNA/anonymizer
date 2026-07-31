@@ -228,7 +228,11 @@ class SeriesProcessingStatus:
     face_blur_algorithm: str | None
 
 
-def format_series_processing_status(status: SeriesProcessingStatus) -> str:
+def format_series_processing_status(
+    status: SeriesProcessingStatus,
+    *,
+    include_face_blur: bool = True,
+) -> str:
     """Compact one-line series processing caption for Series View control bar."""
     total = status.pixel_phi_total_count
     applied = status.pixel_phi_applied_count
@@ -242,14 +246,17 @@ def format_series_processing_status(status: SeriesProcessingStatus) -> str:
     harmonized = status.harmonized_description
     harmonized_part = harmonized.strip() if harmonized and harmonized.strip() else "None"
 
+    base = f"Pixel PHI: {pixel_phi_part} · Harmonized: {harmonized_part}"
+    if not include_face_blur:
+        return base
+
     face_blur = status.face_blur_algorithm
     face_blur_part = (
         _format_face_blur_status_label(face_blur)
         if face_blur and face_blur.strip()
         else "None"
     )
-
-    return f"Pixel PHI: {pixel_phi_part} · Harmonized: {harmonized_part} · Face blur: {face_blur_part}"
+    return f"{base} · Face blur: {face_blur_part}"
 
 
 def _study_ct_series_all_harmonized(study: Study) -> bool:

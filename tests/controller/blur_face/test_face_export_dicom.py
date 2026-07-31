@@ -24,6 +24,10 @@ def _write_template_slice(path: Path, *, hu_value: float, instance_number: int) 
     ds.PixelData = stored.astype(ds.pixel_array.dtype).tobytes()
     ds.InstanceNumber = instance_number
     ds.SOPInstanceUID = pydicom.uid.generate_uid()
+    if getattr(ds, "ImagePositionPatient", None) is not None:
+        ipp = [float(value) for value in ds.ImagePositionPatient]
+        ipp[2] += float(instance_number - 1)
+        ds.ImagePositionPatient = ipp
     ds.save_as(path)
 
 

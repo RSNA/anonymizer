@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 from pydicom import Dataset
 
 from anonymizer.controller.harmonize import HarmonizeProgress
@@ -88,62 +90,63 @@ def _tseg(*, body_parts: str = "Head", contrast_phase: str = "arterial_early") -
     )
 
 
+def _mock_data_font() -> MagicMock:
+    font = MagicMock()
+    font.cget.return_value = "Menlo"
+    font.measure.return_value = 8.0
+    font.metrics.return_value = 14
+    return font
+
+
 def test_playbook_tree_starts_empty_and_grows_with_progress() -> None:
-    import customtkinter as ctk
+    view = HarmonizeResultsView.__new__(HarmonizeResultsView)
+    view.PAD = HarmonizeResultsView.PAD
+    view._data_font = _mock_data_font()
+    view._playbook_column_keys = HarmonizeResultsView._playbook_column_keys
+    view._playbook_attr_map = HarmonizeResultsView._playbook_attr_map
+    view._series_path = __import__("pathlib").Path("/tmp/series")
+    view._ds = Dataset()
+    view._playbook_tree = _MockPlaybookTree()
 
-    root = ctk.CTk()
-    root.withdraw()
-    try:
-        view = HarmonizeResultsView.__new__(HarmonizeResultsView)
-        view.PAD = HarmonizeResultsView.PAD
-        view._data_font = ctk.CTkFont(family="Menlo", size=12)
-        view._playbook_column_keys = HarmonizeResultsView._playbook_column_keys
-        view._playbook_attr_map = HarmonizeResultsView._playbook_attr_map
-        view._series_path = __import__("pathlib").Path("/tmp/series")
-        view._ds = Dataset()
-        view._playbook_tree = _MockPlaybookTree()
+    view._clear_playbook_tree()
+    assert view._playbook_tree.get_children() == ()
 
-        view._clear_playbook_tree()
-        assert view._playbook_tree.get_children() == ()
+    view._update_playbook_from_progress(
+        HarmonizeProgress(stage="geometry", message="", fraction=0.08, elapsed_sec=0.1, geometry=_geometry())
+    )
+    assert view._playbook_tree.insert_order == [
+        PLAYBOOK_TREE_IIDS[1],
+        PLAYBOOK_TREE_IIDS[3],
+    ]
+    for iid in view._playbook_tree.insert_order:
+        values = view._playbook_tree.rows[iid]
+        assert not all(value == "—" for value in values)
 
-        view._update_playbook_from_progress(
-            HarmonizeProgress(stage="geometry", message="", fraction=0.08, elapsed_sec=0.1, geometry=_geometry())
+    view._update_playbook_from_progress(
+        HarmonizeProgress(
+            stage="regions",
+            message="",
+            fraction=0.62,
+            elapsed_sec=1.0,
+            geometry=_geometry(),
+            tseg=_tseg(body_parts="Head", contrast_phase=""),
         )
-        assert view._playbook_tree.insert_order == [
-            PLAYBOOK_TREE_IIDS[1],
-            PLAYBOOK_TREE_IIDS[3],
-        ]
-        for iid in view._playbook_tree.insert_order:
-            values = view._playbook_tree.rows[iid]
-            assert not all(value == "—" for value in values)
+    )
+    assert PLAYBOOK_TREE_IIDS[0] in view._playbook_tree.insert_order
+    assert PLAYBOOK_TREE_IIDS[2] not in view._playbook_tree.insert_order
 
-        view._update_playbook_from_progress(
-            HarmonizeProgress(
-                stage="regions",
-                message="",
-                fraction=0.62,
-                elapsed_sec=1.0,
-                geometry=_geometry(),
-                tseg=_tseg(body_parts="Head", contrast_phase=""),
-            )
+    view._update_playbook_from_progress(
+        HarmonizeProgress(
+            stage="contrast",
+            message="",
+            fraction=0.92,
+            elapsed_sec=2.0,
+            geometry=_geometry(),
+            tseg=_tseg(),
         )
-        assert PLAYBOOK_TREE_IIDS[0] in view._playbook_tree.insert_order
-        assert PLAYBOOK_TREE_IIDS[2] not in view._playbook_tree.insert_order
-
-        view._update_playbook_from_progress(
-            HarmonizeProgress(
-                stage="contrast",
-                message="",
-                fraction=0.92,
-                elapsed_sec=2.0,
-                geometry=_geometry(),
-                tseg=_tseg(),
-            )
-        )
-        assert view._playbook_tree.insert_order[-1] == PLAYBOOK_TREE_IIDS[2]
-        assert len(view._playbook_tree.insert_order) == 4
-    finally:
-        root.destroy()
+    )
+    assert view._playbook_tree.insert_order[-1] == PLAYBOOK_TREE_IIDS[2]
+    assert len(view._playbook_tree.insert_order) == 4
 
 
 def test_on_yes_runs_save_before_recording_outcome(monkeypatch) -> None:
@@ -386,22 +389,14 @@ def test_harmonize_results_tree_row_counts_match_playbook_content():
 
 
 def test_harmonize_results_min_height_fits_all_sections():
-    import customtkinter as ctk
-
-    root = ctk.CTk()
-    root.withdraw()
-    try:
-        font = ctk.CTkFont(family="Menlo", size=12)
-        view = HarmonizeResultsView.__new__(HarmonizeResultsView)
-        view.PAD = HarmonizeResultsView.PAD
-        view._DICOM_TREE_ROWS = HarmonizeResultsView._DICOM_TREE_ROWS
-        view._PLAYBOOK_TREE_ROWS = HarmonizeResultsView._PLAYBOOK_TREE_ROWS
-        view._DICOM_TREE_VISIBLE_ROWS = HarmonizeResultsView._DICOM_TREE_VISIBLE_ROWS
-        view._PLAYBOOK_TREE_VISIBLE_ROWS = HarmonizeResultsView._PLAYBOOK_TREE_VISIBLE_ROWS
-        view._data_font = font
-        min_height = view._compute_min_window_height()
-        assert min_height >= 720
-        # DICOM (16) + Playbook (4) + header/proposal/footer should exceed old 540px default.
-        assert min_height > 540
-    finally:
-        root.destroy()
+    view = HarmonizeResultsView.__new__(HarmonizeResultsView)
+    view.PAD = HarmonizeResultsView.PAD
+    view._DICOM_TREE_ROWS = HarmonizeResultsView._DICOM_TREE_ROWS
+    view._PLAYBOOK_TREE_ROWS = HarmonizeResultsView._PLAYBOOK_TREE_ROWS
+    view._DICOM_TREE_VISIBLE_ROWS = HarmonizeResultsView._DICOM_TREE_VISIBLE_ROWS
+    view._PLAYBOOK_TREE_VISIBLE_ROWS = HarmonizeResultsView._PLAYBOOK_TREE_VISIBLE_ROWS
+    view._data_font = _mock_data_font()
+    min_height = view._compute_min_window_height()
+    assert min_height >= 720
+    # DICOM (16) + Playbook (4) + header/proposal/footer should exceed old 540px default.
+    assert min_height > 540

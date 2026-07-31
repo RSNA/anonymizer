@@ -5,7 +5,11 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from anonymizer.controller.blur_face_gate import FaceBlurGateDecision
+from anonymizer.controller.blur_face_gate import (
+    FaceBlurEligibility,
+    FaceBlurGateDecision,
+    FaceBlurGateReason,
+)
 from anonymizer.controller.tseg.dicom_geometry import format_series_view_geometry_line
 from anonymizer.model.anonymizer import SeriesProcessingStatus, format_series_processing_status
 from anonymizer.view.image import ImageViewer
@@ -35,6 +39,67 @@ def test_refresh_series_processing_status_formats_label() -> None:
         face_blur_algorithm=None,
     )
     series._anon_model.get_series_processing_status.return_value = status
+    series._anon_model.series_has_face_blur.return_value = False
+    series._face_blur_eligibility = MagicMock(
+        return_value=FaceBlurEligibility(
+            FaceBlurGateDecision.ALLOW,
+            FaceBlurGateReason.METADATA_HEAD,
+        ),
+    )
+    series._series_status_label = MagicMock()
+
+    SeriesView._refresh_series_processing_status(series)
+
+    series._series_status_label.configure.assert_called_once_with(
+        text=format_series_processing_status(status),
+    )
+
+
+def test_refresh_series_processing_status_omits_face_blur_for_non_head() -> None:
+    series = SeriesView.__new__(SeriesView)
+    series._ds = SimpleNamespace(SeriesInstanceUID="anon-series-1")
+    series._anon_model = MagicMock()
+    status = SeriesProcessingStatus(
+        pixel_phi_applied_count=0,
+        pixel_phi_total_count=3,
+        harmonized_description="Ch Ax WO",
+        face_blur_algorithm=None,
+    )
+    series._anon_model.get_series_processing_status.return_value = status
+    series._anon_model.series_has_face_blur.return_value = False
+    series._face_blur_eligibility = MagicMock(
+        return_value=FaceBlurEligibility(
+            FaceBlurGateDecision.BLOCK,
+            FaceBlurGateReason.CACHED_REGIONS_NON_HEAD,
+        ),
+    )
+    series._series_status_label = MagicMock()
+
+    SeriesView._refresh_series_processing_status(series)
+
+    series._series_status_label.configure.assert_called_once_with(
+        text=format_series_processing_status(status, include_face_blur=False),
+    )
+
+
+def test_refresh_series_processing_status_shows_face_blur_when_already_applied() -> None:
+    series = SeriesView.__new__(SeriesView)
+    series._ds = SimpleNamespace(SeriesInstanceUID="anon-series-1")
+    series._anon_model = MagicMock()
+    status = SeriesProcessingStatus(
+        pixel_phi_applied_count=0,
+        pixel_phi_total_count=3,
+        harmonized_description="Ch Ax WO",
+        face_blur_algorithm="gaussian",
+    )
+    series._anon_model.get_series_processing_status.return_value = status
+    series._anon_model.series_has_face_blur.return_value = True
+    series._face_blur_eligibility = MagicMock(
+        return_value=FaceBlurEligibility(
+            FaceBlurGateDecision.BLOCK,
+            FaceBlurGateReason.CACHED_REGIONS_NON_HEAD,
+        ),
+    )
     series._series_status_label = MagicMock()
 
     SeriesView._refresh_series_processing_status(series)

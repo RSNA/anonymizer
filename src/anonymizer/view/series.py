@@ -34,6 +34,7 @@ from anonymizer.controller.blur_face_gate import (
     FaceBlurGateReason,
     evaluate_face_blur_eligibility,
     face_blur_gate_message,
+    face_blur_status_applicable,
 )
 from anonymizer.controller.create_projections import (
     apply_windowing,
@@ -898,7 +899,14 @@ class SeriesView(tk.Toplevel):
         if status is None:
             self._series_status_label.configure(text="")
             return
-        self._series_status_label.configure(text=format_series_processing_status(status))
+        already_applied = self._anon_model.series_has_face_blur(anon_uid)
+        include_face_blur = face_blur_status_applicable(
+            self._face_blur_eligibility(),
+            already_applied=already_applied,
+        )
+        self._series_status_label.configure(
+            text=format_series_processing_status(status, include_face_blur=include_face_blur),
+        )
 
     def update_status(self, message: str) -> None:
         """Overwrite the context line with transient operation status."""

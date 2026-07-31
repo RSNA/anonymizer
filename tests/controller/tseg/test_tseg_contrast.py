@@ -71,6 +71,7 @@ def test_verify_xgboost_runtime_missing() -> None:
 
 
 @patch("anonymizer.controller.tseg.contrast.verify_xgboost_runtime")
+@patch("anonymizer.controller.tseg.contrast._contrast_classifier_pickle_path", return_value="/fake/classifier.pkl")
 @patch("anonymizer.controller.tseg.contrast._require_pi_time_to_phase")
 @patch("anonymizer.controller.tseg.contrast.open")
 @patch("anonymizer.controller.tseg.contrast.pickle.load")
@@ -78,6 +79,7 @@ def test_run_contrast_classifier(
     mock_pickle_load: MagicMock,
     mock_open: MagicMock,
     mock_pi_time_to_phase: MagicMock,
+    mock_classifier_path: MagicMock,
     mock_verify: MagicMock,
 ) -> None:
     mock_clf = MagicMock()

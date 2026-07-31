@@ -214,6 +214,16 @@ def _require_totalsegmentator():
     return totalsegmentator
 
 
+def _contrast_classifier_pickle_path() -> str:
+    try:
+        resource_root = importlib.resources.files("totalsegmentator")
+    except ModuleNotFoundError as exc:
+        raise ImportError(
+            f"TotalSegmentator is required for contrast classification. Install with: {_TSEG_INSTALL_HINT}"
+        ) from exc
+    return str(resource_root / "resources/contrast_phase_classifiers_2024_07_19.pkl")
+
+
 def resolve_device(device: str | None = None) -> str:
     import torch
 
@@ -431,10 +441,7 @@ def _run_contrast_classifier(hu_features: list[float]) -> dict:
     with sequential_ml_context("ts_contrast_xgboost"):
         verify_xgboost_runtime()
         pi_time_to_phase = _require_pi_time_to_phase()
-        classifier_path = str(
-            importlib.resources.files("totalsegmentator")
-            / "resources/contrast_phase_classifiers_2024_07_19.pkl"
-        )
+        classifier_path = _contrast_classifier_pickle_path()
         with open(classifier_path, "rb") as classifier_file:
             clfs = pickle.load(classifier_file)
         preds = np.array([clf.predict([hu_features])[0] for clf in clfs.values()])
