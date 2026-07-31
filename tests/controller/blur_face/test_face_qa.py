@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
-from anonymizer.controller.blur_face import blur_face_hu_volume, compute_qa_stats, face_mask_blend_weights
+from anonymizer.controller.blur_face import (
+    FaceBlurMode,
+    blur_face_hu_volume,
+    compute_qa_stats,
+    face_mask_blend_weights,
+)
 
 
 def test_qa_detects_outside_violation() -> None:
@@ -52,3 +58,41 @@ def test_blur_feathers_mask_edges() -> None:
     assert blend[0, 0] <= 1e-6
     assert after[0, 0, 0] == hu[0, 0, 0]
     assert compute_qa_stats(hu, after, mask).outside_clean
+
+
+@pytest.mark.parametrize("blur_mode", list(FaceBlurMode))
+def test_blur_modes_preserve_outside_mask(blur_mode: FaceBlurMode) -> None:
+    hu = np.full((1, 32, 32), -100.0, dtype=np.float32)
+    hu[0, 12:20, 12:20] = 800.0
+    mask = np.zeros((1, 32, 32), dtype=bool)
+    mask[0, 12:20, 12:20] = True
+
+    after = blur_face_hu_volume(
+        hu,
+        mask,
+        sigma_mm=8.0,
+        blur_mode=blur_mode,
+        pixel_spacing_mm=(1.0, 1.0),
+    )
+
+    stats = compute_qa_stats(hu, after, mask)
+    assert stats.outside_clean
+    assert after[0, 12:20, 12:20].mean() != hu[0, 12:20, 12:20].mean()
+
+
+def test_median_uses_downsample_path_at_fine_spacing() -> None:
+    hu = np.full((4, 128, 128), -100.0, dtype=np.float32)
+    hu[:, 40:88, 40:88] = 900.0
+    mask = np.zeros((4, 128, 128), dtype=bool)
+    mask[:, 40:88, 40:88] = True
+
+    after = blur_face_hu_volume(
+        hu,
+        mask,
+        sigma_mm=8.0,
+        blur_mode=FaceBlurMode.MEDIAN,
+        pixel_spacing_mm=(0.457, 0.457),
+    )
+
+    assert compute_qa_stats(hu, after, mask).outside_clean
+    assert after[mask].mean() != hu[mask].mean()
