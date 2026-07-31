@@ -52,6 +52,8 @@ You need to provide a path to a project configuration to run in headless mode
 6. Optional — TotalSegmentator anatomy analysis for Harmonize: `uv sync --extra tseg --group dev`
 7. Enable Git pre-commit hooks (Ruff lint, same rules as CI): `uv run pre-commit install`
 
+For hot-reload during UI work: `uv run python scripts/dev_anonymizer.py` (requires [watchexec](https://github.com/watchexec/watchexec)).
+
 Hooks run on every `git commit`, including commits from the VS Code / Cursor Source Control UI. To skip once: `git commit --no-verify`.
 
 ### Linting (Ruff)
