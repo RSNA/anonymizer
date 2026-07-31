@@ -716,6 +716,18 @@ class HarmonizeResultsView(tk.Toplevel):
             return
         self._ds.SeriesDescription = self._pending_save_description
         self._pending_save_description = None
+        self._notify_series_description_updated()
+
+    def _apply_current_harmonized_description_if_unchanged(self) -> None:
+        """Record harmonized metadata when DICOM already matches the Playbook proposal."""
+        if self.result is None or self.result.error is not None:
+            return
+        proposed = (self.result.radlex_series_description or "").strip()
+        if not proposed or proposed != self._current_description:
+            return
+        apply_harmonized_description(self._series_path, proposed, self._anon_model)
+
+    def _notify_series_description_updated(self) -> None:
         if self._on_series_description_updated is not None:
             self._on_series_description_updated()
 
@@ -883,6 +895,9 @@ class HarmonizeResultsView(tk.Toplevel):
         accepted = False if self.error is not None else None
         self.accepted = accepted
         self._record_outcome(accepted=accepted)
+        if self.error is None and self.result is not None and not self.result.error:
+            self._apply_current_harmonized_description_if_unchanged()
+            self._notify_series_description_updated()
 
     def _on_cancel(self) -> None:
         if self._saving or self._closing:

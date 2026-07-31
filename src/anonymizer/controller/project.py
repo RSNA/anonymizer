@@ -13,7 +13,7 @@ import shutil
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from queue import Queue
@@ -56,7 +56,6 @@ from anonymizer.controller.harmonize import (
     HarmonizeStudiesProgressCallback,
     HarmonizeStudiesSummary,
     harmonize_studies_batch,
-    study_harmonize_status,
 )
 from anonymizer.model.anonymizer import PHI_IndexRecord
 from anonymizer.model.project import (
@@ -2583,22 +2582,8 @@ class ProjectController(AE):
         return phi_csv_path
 
     def get_phi_index_records(self) -> list[PHI_IndexRecord] | None:
-        """Return PHI index rows with Harmonized status computed from on-disk series cache."""
-        records = self.anonymizer.model.get_phi_index()
-        if not records:
-            return None
-        images_dir = self.model.images_dir()
-        return [
-            replace(
-                record,
-                harmonize=study_harmonize_status(
-                    images_dir,
-                    record.anon_patient_id,
-                    record.anon_study_uid,
-                ),
-            )
-            for record in records
-        ]
+        """Return PHI index rows with Harmonized status from ORM series metadata."""
+        return self.anonymizer.model.get_phi_index()
 
     def harmonize_studies(
         self,

@@ -147,8 +147,9 @@ def test_playbook_tree_starts_empty_and_grows_with_progress() -> None:
 
 
 def test_on_yes_runs_save_before_recording_outcome(monkeypatch) -> None:
-    from anonymizer.controller.harmonize import HarmonizedResult
     from pathlib import Path
+
+    from anonymizer.controller.harmonize import HarmonizedResult
 
     saved: list[tuple[Path, str]] = []
 
@@ -203,6 +204,42 @@ def test_on_yes_runs_save_before_recording_outcome(monkeypatch) -> None:
 
     assert saved == [(Path("/tmp/series"), "Brain Ax EarlyArt")]
     assert view._outcomes == [True]
+
+
+def test_on_ok_applies_harmonized_description_when_description_already_matches() -> None:
+    from pathlib import Path
+    from unittest.mock import MagicMock, patch
+
+    from anonymizer.controller.harmonize import HarmonizedResult
+
+    view = HarmonizeResultsView.__new__(HarmonizeResultsView)
+    view._series_path = Path("/tmp/series")
+    view._current_description = "Brain Ax EarlyArt"
+    view._ds = Dataset()
+    view._ds.SeriesInstanceUID = "1.2.3.4"
+    view.error = None
+    view.result = HarmonizedResult(
+        series_directory=Path("/tmp/series"),
+        radlex_series_description="Brain Ax EarlyArt",
+        tseg=None,
+    )
+    view._anon_model = MagicMock()
+    view._on_series_description_updated = MagicMock()
+    view._record_outcome = MagicMock()
+
+    with patch(
+        "anonymizer.view.harmonize_results.apply_harmonized_description",
+        return_value=True,
+    ) as apply_description:
+        HarmonizeResultsView._on_ok(view)
+
+    apply_description.assert_called_once_with(
+        Path("/tmp/series"),
+        "Brain Ax EarlyArt",
+        view._anon_model,
+    )
+    view._on_series_description_updated.assert_called_once()
+    view._record_outcome.assert_called_once_with(accepted=None)
 
 
 def test_format_study_header_uses_placeholder_when_empty():

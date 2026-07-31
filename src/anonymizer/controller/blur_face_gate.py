@@ -41,6 +41,7 @@ class FaceBlurGateReason(StrEnum):
     METADATA_NON_HEAD = auto()
     AMBIGUOUS = auto()
     INSUFFICIENT_FACE_MASK = auto()
+    ALREADY_APPLIED = auto()
 
 
 class MetadataSignal(StrEnum):
@@ -81,6 +82,9 @@ _REASON_MSGIDS: dict[FaceBlurGateReason, str] = {
     FaceBlurGateReason.INSUFFICIENT_FACE_MASK: (
         "This appears to be a head CT, but TotalSegmentator found no face region to blur. "
         "The series may already be face-blurred or otherwise unsuitable for re-blur."
+    ),
+    FaceBlurGateReason.ALREADY_APPLIED: (
+        "Face blur has already been applied to this series and cannot be run again."
     ),
 }
 
@@ -253,12 +257,16 @@ def evaluate_face_blur_eligibility(
     geometry: SeriesGeometryResult | None = None,
     modality: str | None = None,
     enable_tseg_face: bool = True,
+    face_blur_already_applied: bool = False,
 ) -> FaceBlurEligibility:
     """
     Decide whether Blur Face should run, prompt for confirmation, or stay disabled.
 
     Cached anatomy regions (when present) override DICOM metadata heuristics.
     """
+    if face_blur_already_applied:
+        return _eligibility(FaceBlurGateDecision.BLOCK, FaceBlurGateReason.ALREADY_APPLIED)
+
     series_directory = Path(series_directory).resolve()
     resolved_modality = modality
     if resolved_modality is None and ds is not None:

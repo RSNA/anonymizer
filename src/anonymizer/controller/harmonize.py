@@ -486,31 +486,15 @@ def enumerate_ct_series_for_studies(
 
 
 def study_harmonize_status(
-    images_dir: Path,
-    anon_patient_id: str,
+    anon_model: "AnonymizerModel",
     anon_study_uid: str,
 ) -> bool:
     """
     Return True when every eligible CT series in the study is harmonized.
 
-    Returns False when the study path is missing, has no CT series, or any CT series
-    is not harmonized (including unknown cache status).
+    Uses ORM ``Series.harmonized_description`` metadata (no filesystem or TS cache reads).
     """
-    study_path = images_dir / anon_patient_id / anon_study_uid
-    if not study_path.is_dir():
-        return False
-
-    ct_series_found = False
-    for series_path in study_path.iterdir():
-        if not series_path.is_dir() or series_path.name.startswith("."):
-            continue
-        ds = _load_ct_series_dataset(series_path)
-        if ds is None:
-            continue
-        ct_series_found = True
-        if series_description_is_harmonized(series_path, ds) is not True:
-            return False
-    return ct_series_found
+    return anon_model.study_is_harmonized(anon_study_uid)
 
 
 def apply_harmonized_description(
@@ -518,17 +502,24 @@ def apply_harmonized_description(
     description: str,
     anon_model: AnonymizerModel | None,
 ) -> bool:
-    """Write harmonized SeriesDescription to DICOM files and update the project database."""
+    """Apply harmonized SeriesDescription to DICOM when needed and update the project database."""
     from anonymizer.controller.create_projections import apply_series_description
 
-    if not apply_series_description(series_path, description):
+    description = description.strip()
+    if not description:
         return False
-    if anon_model is None:
-        return True
+
     try:
         ds = _load_series_dataset(series_path)
     except ValueError:
         return False
+
+    current = str(ds.get("SeriesDescription", "") or "").strip()
+    if current != description and not apply_series_description(series_path, description):
+        return False
+
+    if anon_model is None:
+        return True
     return anon_model.set_series_harmonized_description(str(ds.SeriesInstanceUID), description)
 
 

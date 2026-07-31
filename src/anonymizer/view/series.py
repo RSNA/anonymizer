@@ -31,6 +31,7 @@ from anonymizer.controller.blur_face import (
 from anonymizer.controller.blur_face_gate import (
     FaceBlurEligibility,
     FaceBlurGateDecision,
+    FaceBlurGateReason,
     evaluate_face_blur_eligibility,
     face_blur_gate_message,
 )
@@ -40,7 +41,6 @@ from anonymizer.controller.create_projections import (
     load_series_frames,
     save_series_frames,
 )
-from anonymizer.controller.harmonize import series_description_is_harmonized
 from anonymizer.controller.remove_pixel_phi import (
     LayerType,
     OCRText,
@@ -51,7 +51,7 @@ from anonymizer.controller.remove_pixel_phi import (
     detect_text,
     remove_text,
 )
-from anonymizer.controller.tseg.cache import clear_tseg_series_cache, tseg_cache_summary
+from anonymizer.controller.tseg.cache import clear_series_tseg_cache, tseg_cache_summary
 from anonymizer.controller.tseg.config import ENABLE_TSEG_FACE, TSEG_CACHE_DIRNAME
 from anonymizer.controller.tseg.dicom_geometry import (
     SeriesGeometryResult,
@@ -60,7 +60,7 @@ from anonymizer.controller.tseg.dicom_geometry import (
     resolve_series_geometry,
     stackable_dicom_paths,
 )
-from anonymizer.model.anonymizer import AnonymizerModel
+from anonymizer.model.anonymizer import AnonymizerModel, format_series_processing_status
 from anonymizer.utils.memory import log_process_memory
 from anonymizer.utils.storage import (
     get_dcm_files,
@@ -476,18 +476,22 @@ class SeriesView(tk.Toplevel):
         else:
             self.geometry(f"{width}x{height}+{max(0, pos_x)}+{max(0, pos_y)}")
 
-    def _apply_initial_viewer_display(self) -> None:
-        """Apply master-style viewer sizing once the Series View window is mapped."""
+    def _apply_viewer_display_sizing(self, *, detach_companion: bool = False) -> None:
+        """Apply V18-style viewer sizing after layout (single-pane or dual-pane)."""
         if not hasattr(self, "image_viewer") or self.image_viewer is None:
             return
         viewer = self.image_viewer
-        viewer.detach_companion_stack()
+        if detach_companion:
+            viewer.detach_companion_stack()
         self.update_idletasks()
         viewer._resize_to_viewport_enabled = True
         viewer._set_initial_size()
         self._fit_window_to_content()
-        self.update_idletasks()
-        viewer.on_resize()
+        viewer.sync_viewport_after_layout()
+
+    def _apply_initial_viewer_display(self) -> None:
+        """Apply master-style viewer sizing once the Series View window is mapped."""
+        self._apply_viewer_display_sizing(detach_companion=True)
 
     def _update_status_label_wraplength(self) -> None:
         if not hasattr(self, "_status_label"):
@@ -516,6 +520,12 @@ class SeriesView(tk.Toplevel):
     def _series_interaction_allowed(self) -> bool:
         return not self._blur_running and not self._ui_rebuilding and not self._loading
 
+    def _refresh_model_aware_toolbar_buttons(self) -> None:
+        """Restore harmonize / blur / TS-cache buttons from ORM and eligibility rules."""
+        self._refresh_harmonize_button()
+        self._refresh_blur_face_ui()
+        self._refresh_clear_ts_cache_button()
+
     def _set_series_interaction_enabled(self, enabled: bool) -> None:
         """Enable or disable Series View controls and the image viewer."""
         if not self.winfo_exists():
@@ -529,10 +539,6 @@ class SeriesView(tk.Toplevel):
             "detect_button",
             "remove_button",
             "blackout_button",
-            "harmonize_button",
-            "blur_face_button",
-            "blur_face_mode_menu",
-            "clear_ts_cache_button",
             "edit_context_combo_box",
             "whitelist_entry",
             "whitelist_defaults_button",
@@ -542,6 +548,20 @@ class SeriesView(tk.Toplevel):
             if widget is not None:
                 with contextlib.suppress(tk.TclError):
                     widget.configure(state=widget_state)
+
+        if busy:
+            for attr in (
+                "harmonize_button",
+                "blur_face_button",
+                "blur_face_mode_menu",
+                "clear_ts_cache_button",
+            ):
+                widget = getattr(self, attr, None)
+                if widget is not None:
+                    with contextlib.suppress(tk.TclError):
+                        widget.configure(state="disabled")
+        else:
+            self._refresh_model_aware_toolbar_buttons()
 
         if hasattr(self, "whitelist"):
             with contextlib.suppress(tk.TclError):
@@ -562,9 +582,6 @@ class SeriesView(tk.Toplevel):
 
         with contextlib.suppress(tk.TclError):
             self.configure(cursor="watch" if busy else "")
-
-        if enabled:
-            self._refresh_blur_face_ui()
 
     def _stop_blur_worker_poll(self) -> None:
         if self._blur_poll_after_id is None:
@@ -719,10 +736,10 @@ class SeriesView(tk.Toplevel):
         self._blur_worker_queue = queue.Queue()
         self._blur_running = False
 
-        # Control Frame (two toolbar rows + status line):
+        # Control Frame (toolbar row, status line, save row):
         self.control_frame = ctk.CTkFrame(self._sv_frame)
         self.control_frame.grid(row=1, columnspan=2, sticky="ew", padx=self.PAD, pady=self.PAD)
-        self.control_frame.grid_columnconfigure(1, weight=1)
+        self.control_frame.grid_columnconfigure(0, weight=1)
 
         text_edit_group = ctk.CTkFrame(self.control_frame, fg_color="transparent")
         text_edit_group.grid(row=0, column=0, padx=(0, self.PAD), pady=self.PAD, sticky="w")
@@ -754,7 +771,7 @@ class SeriesView(tk.Toplevel):
         self.blackout_button.grid(row=0, column=4, padx=(2, self.PAD), pady=0)
 
         harmonize_blur_group = ctk.CTkFrame(self.control_frame, fg_color="transparent")
-        harmonize_blur_group.grid(row=1, column=0, padx=(0, self.PAD), pady=(0, self.PAD), sticky="w")
+        harmonize_blur_group.grid(row=0, column=1, padx=(0, self.PAD), pady=self.PAD, sticky="e")
         harmonize_state = self._harmonize_button_state()
         self.harmonize_button = ctk.CTkButton(
             harmonize_blur_group,
@@ -763,7 +780,7 @@ class SeriesView(tk.Toplevel):
             command=self.harmonize_description_button_clicked,
             state=harmonize_state,
         )
-        self.harmonize_button.grid(row=0, column=0, padx=(self.PAD, 2), pady=0, sticky="w")
+        self.harmonize_button.grid(row=0, column=0, padx=(self.PAD, 2), pady=0, sticky="e")
         self.blur_face_button = ctk.CTkButton(
             harmonize_blur_group,
             width=120,
@@ -771,7 +788,7 @@ class SeriesView(tk.Toplevel):
             command=self.blur_face_button_clicked,
             state="disabled",
         )
-        self.blur_face_button.grid(row=0, column=1, padx=2, pady=0, sticky="w")
+        self.blur_face_button.grid(row=0, column=1, padx=2, pady=0, sticky="e")
         self.blur_face_mode_var = tk.StringVar(value=face_blur_mode_menu_values()[0])
         self.blur_face_mode_menu = ctk.CTkOptionMenu(
             harmonize_blur_group,
@@ -779,7 +796,7 @@ class SeriesView(tk.Toplevel):
             values=face_blur_mode_menu_values(),
             variable=self.blur_face_mode_var,
         )
-        self.blur_face_mode_menu.grid(row=0, column=2, padx=(2, 2), pady=0, sticky="w")
+        self.blur_face_mode_menu.grid(row=0, column=2, padx=(2, 2), pady=0, sticky="e")
         self.clear_ts_cache_button = ctk.CTkButton(
             harmonize_blur_group,
             width=130,
@@ -787,16 +804,7 @@ class SeriesView(tk.Toplevel):
             command=self.clear_ts_cache_button_clicked,
             state=self._clear_ts_cache_button_state(),
         )
-        self.clear_ts_cache_button.grid(row=0, column=3, padx=(2, self.PAD), pady=0, sticky="w")
-
-        self.save_button = ctk.CTkButton(
-            self.control_frame,
-            width=130,
-            text=_("Save Pixel Changes"),
-            command=self.save_series_button_clicked,
-        )
-        self.save_button.grid(row=1, column=1, padx=self.PAD, pady=(0, self.PAD), sticky="e")
-        self.save_button.configure(state="disabled")
+        self.clear_ts_cache_button.grid(row=0, column=3, padx=(2, self.PAD), pady=0, sticky="e")
 
         self._status_label = ctk.CTkLabel(
             self.control_frame,
@@ -806,14 +814,38 @@ class SeriesView(tk.Toplevel):
             wraplength=self.STATUS_WRAPLENGTH,
         )
         self._status_label.grid(
-            row=2,
+            row=1,
             column=0,
             columnspan=2,
             padx=self.PAD,
             pady=(0, self.PAD),
             sticky="w",
         )
+
+        self._series_status_label = ctk.CTkLabel(
+            self.control_frame,
+            text="",
+            anchor="w",
+            justify="left",
+        )
+        self._series_status_label.grid(
+            row=2,
+            column=0,
+            padx=self.PAD,
+            pady=(0, self.PAD),
+            sticky="w",
+        )
+
+        self.save_button = ctk.CTkButton(
+            self.control_frame,
+            width=130,
+            text=_("Save Pixel Changes"),
+            command=self.save_series_button_clicked,
+        )
+        self.save_button.grid(row=2, column=1, padx=self.PAD, pady=(0, self.PAD), sticky="e")
+        self.save_button.configure(state="disabled")
         self._show_default_context_line()
+        self._refresh_series_processing_status()
 
         self._refresh_blur_face_ui()
 
@@ -850,6 +882,24 @@ class SeriesView(tk.Toplevel):
         if hasattr(self, "_status_label"):
             self._status_label.configure(text=self._series_context_line())
 
+    def _anon_series_uid(self) -> str | None:
+        if self._ds is None:
+            return None
+        return str(self._ds.SeriesInstanceUID)
+
+    def _refresh_series_processing_status(self) -> None:
+        if not hasattr(self, "_series_status_label"):
+            return
+        anon_uid = self._anon_series_uid()
+        if anon_uid is None:
+            self._series_status_label.configure(text="")
+            return
+        status = self._anon_model.get_series_processing_status(anon_uid)
+        if status is None:
+            self._series_status_label.configure(text="")
+            return
+        self._series_status_label.configure(text=format_series_processing_status(status))
+
     def update_status(self, message: str) -> None:
         """Overwrite the context line with transient operation status."""
         logger.info("Series view: %s", message)
@@ -859,7 +909,8 @@ class SeriesView(tk.Toplevel):
     def _harmonize_button_state(self) -> str:
         if getattr(self._ds, "Modality", None) != "CT":
             return "disabled"
-        if series_description_is_harmonized(self._series_path, self._ds) is True:
+        anon_uid = self._anon_series_uid()
+        if anon_uid is not None and self._anon_model.series_is_harmonized(anon_uid):
             return "disabled"
         return "normal"
 
@@ -881,15 +932,17 @@ class SeriesView(tk.Toplevel):
         self.clear_ts_cache_button.configure(state=self._clear_ts_cache_button_state())
 
     def _refresh_analysis_cache_ui(self) -> None:
-        self._refresh_harmonize_button()
-        self._refresh_blur_face_ui()
-        self._refresh_clear_ts_cache_button()
+        self._refresh_model_aware_toolbar_buttons()
         self._show_default_context_line()
+        self._refresh_series_processing_status()
 
     def _on_series_description_updated(self) -> None:
         self._update_title()
-        self._refresh_harmonize_button()
-        self._show_default_context_line()
+        self._series_geometry = None
+        self._face_blur_eligibility_cache = None
+        self._face_blur_eligibility_geometry = None
+        self._refresh_analysis_cache_ui()
+        self._refresh_series_processing_status()
 
     def _face_blur_eligibility(self) -> FaceBlurEligibility:
         geometry = self._ensure_series_geometry()
@@ -904,19 +957,33 @@ class SeriesView(tk.Toplevel):
             ds=self._ds,
             geometry=geometry,
             enable_tseg_face=ENABLE_TSEG_FACE,
+            face_blur_already_applied=(
+                self._anon_model.series_has_face_blur(str(self._ds.SeriesInstanceUID))
+                if self._ds is not None
+                else False
+            ),
         )
         self._face_blur_eligibility_cache = eligibility
         self._face_blur_eligibility_geometry = geometry
         return eligibility
 
-    def _refresh_blur_face_ui(self) -> None:
+    def _blur_face_toolbar_state(self) -> str:
+        anon_uid = self._anon_series_uid()
+        if anon_uid is not None and self._anon_model.series_has_face_blur(anon_uid):
+            return "disabled"
+        if self._blur_running or self._blur_preview is not None:
+            return "disabled"
         eligibility = self._face_blur_eligibility()
-        state = "disabled" if eligibility.decision == FaceBlurGateDecision.BLOCK else "normal"
-        if not self._blur_running and self._blur_preview is None:
-            if hasattr(self, "blur_face_button"):
-                self.blur_face_button.configure(state=state)
-            if hasattr(self, "blur_face_mode_menu"):
-                self.blur_face_mode_menu.configure(state=state)
+        if eligibility.decision == FaceBlurGateDecision.BLOCK:
+            return "disabled"
+        return "normal"
+
+    def _refresh_blur_face_ui(self) -> None:
+        state = self._blur_face_toolbar_state()
+        if hasattr(self, "blur_face_button"):
+            self.blur_face_button.configure(state=state)
+        if hasattr(self, "blur_face_mode_menu"):
+            self.blur_face_mode_menu.configure(state=state)
 
     def _selected_face_blur_mode(self) -> FaceBlurMode:
         if not hasattr(self, "blur_face_mode_var"):
@@ -924,10 +991,7 @@ class SeriesView(tk.Toplevel):
         return face_blur_mode_from_menu_label(self.blur_face_mode_var.get())
 
     def _blur_face_button_state(self) -> str:
-        eligibility = self._face_blur_eligibility()
-        if eligibility.decision == FaceBlurGateDecision.BLOCK:
-            return "disabled"
-        return "normal"
+        return self._blur_face_toolbar_state()
 
     def clear_whitelist(self):
         logger.info("Clearing whitelist")
@@ -1215,9 +1279,11 @@ class SeriesView(tk.Toplevel):
             anon_model=self._anon_model,
             on_series_description_updated=self._on_series_description_updated,
         )
+        self._series_geometry = None
         self._face_blur_eligibility_cache = None
         self._face_blur_eligibility_geometry = None
         self._refresh_analysis_cache_ui()
+        self._refresh_series_processing_status()
 
     def clear_ts_cache_button_clicked(self) -> None:
         if self._ds is None or getattr(self._ds, "Modality", None) != "CT":
@@ -1230,19 +1296,27 @@ class SeriesView(tk.Toplevel):
         size_mb = summary.size_bytes / (1024 * 1024)
         size_text = f"{size_mb:.1f} MB" if size_mb >= 0.1 else _("< 0.1 MB")
 
+        cache_message = (
+            _("Delete analysis cache for this series?")
+            + "\n\n"
+            + _("Removes geometry, segmentation masks, contrast analysis, and face mask under")
+            + f" {TSEG_CACHE_DIRNAME}/ ({size_text}, {summary.file_count} "
+            + _("files")
+            + ").\n\n"
+            + _("DICOM images and series description are not changed.")
+            + "\n\n"
+            + _("Harmonize analysis can be re-run after clearing the cache.")
+        )
+        anon_uid = self._anon_series_uid()
+        if anon_uid is not None and self._anon_model.series_has_face_blur(anon_uid):
+            cache_message += (
+                "\n\n"
+                + _("Face blur has already been applied; blurred pixels and Blur Face status are unchanged.")
+            )
+
         confirmed = messagebox.askyesno(
             title=_("Clear Analysis Cache"),
-            message=(
-                _("Delete analysis cache for this series?")
-                + "\n\n"
-                + _("Removes geometry, segmentation masks, contrast analysis, and face mask under")
-                + f" {TSEG_CACHE_DIRNAME}/ ({size_text}, {summary.file_count} "
-                + _("files")
-                + ").\n\n"
-                + _("DICOM images and series description are not changed.")
-                + "\n\n"
-                + _("Next Harmonize or Blur Face will re-run analysis and may take several minutes.")
-            ),
+            message=cache_message,
             parent=self,
             default="no",
         )
@@ -1250,12 +1324,17 @@ class SeriesView(tk.Toplevel):
             return
 
         logger.info("Clearing TS cache for %s", self._series_path)
-        clear_tseg_series_cache(self._series_path)
+        clear_series_tseg_cache(
+            self._series_path,
+            anon_model=self._anon_model,
+            anon_series_uid=anon_uid,
+        )
         self._series_geometry = None
         self._face_blur_eligibility_cache = None
         self._face_blur_eligibility_geometry = None
-        self._schedule_rebuild_ui()
+        self._refresh_analysis_cache_ui()
         self.update_status(_("Analysis cache cleared"))
+        self._refresh_series_processing_status()
 
     def _teardown_blur_review(
         self,
@@ -1308,7 +1387,8 @@ class SeriesView(tk.Toplevel):
         self._blur_preview = None
         self._apply_initial_viewer_display()
         self._log_series_memory("blur_review_teardown_done", array=self._frames)
-        self._refresh_blur_face_ui()
+        self._refresh_model_aware_toolbar_buttons()
+        self._refresh_series_processing_status()
         self._flush_pending_rebuild_ui()
 
     def _show_blur_review(self, preview: FaceBlurPreviewResult) -> None:
@@ -1377,9 +1457,7 @@ class SeriesView(tk.Toplevel):
             companion_label=_("Proposed face blur"),
         )
         viewer.set_wlww_sync(review_wl, review_ww)
-        self.update_idletasks()
-        viewer._resize_to_viewport_enabled = True
-        viewer._set_initial_size()
+        self._apply_viewer_display_sizing()
 
         qa_summary = format_face_blur_qa_summary(
             preview.qa_stats,
@@ -1388,12 +1466,13 @@ class SeriesView(tk.Toplevel):
             blur_mode=preview.blur_mode,
         )
         self.update_status(
-            qa_summary + " " + _("Review side-by-side, then Save Pixel Changes to keep.")
+            qa_summary
+            + " "
+            + _("Review side-by-side, then Save Pixel Changes to keep.")
+            + " "
+            + _("This change is permanent once saved.")
         )
         self.save_button.configure(state="normal")
-        self.blur_face_button.configure(state="disabled")
-        if hasattr(self, "blur_face_mode_menu"):
-            self.blur_face_mode_menu.configure(state="disabled")
         self._refresh_blur_face_ui()
 
     def _blur_worker(self, blur_mode, volume_context: SeriesVolumeContext) -> None:
@@ -1524,6 +1603,14 @@ class SeriesView(tk.Toplevel):
         self._face_blur_preview_pending = True
 
     def blur_face_button_clicked(self) -> None:
+        anon_uid = self._anon_series_uid()
+        if anon_uid is not None and self._anon_model.series_has_face_blur(anon_uid):
+            messagebox.showinfo(
+                title=_("Blur Face"),
+                message=face_blur_gate_message(FaceBlurGateReason.ALREADY_APPLIED),
+                parent=self,
+            )
+            return
         if not self._series_interaction_allowed() or self._blur_running or self._blur_face_button_state() != "normal":
             return
 
@@ -1618,8 +1705,11 @@ class SeriesView(tk.Toplevel):
             if had_blur_review:
                 self._teardown_blur_review(keep_applied_frames=True, restore_dicom_wl=True)
                 self.save_button.configure(state="disabled")
+                self._face_blur_eligibility_cache = None
+                self._face_blur_eligibility_geometry = None
             else:
                 self.save_button.configure(state="disabled")
+            self._refresh_series_processing_status()
             self.update_status(_("Changes saved"))
         else:
             logger.error(f"Failed to save series frames to {self._series_path}")
@@ -1735,10 +1825,9 @@ class SeriesView(tk.Toplevel):
         if viewer is None:
             return
         try:
+            viewer.release_resources()
             if destroy_widget:
                 viewer.destroy()
-            else:
-                viewer.release_resources()
         except tk.TclError:
             logger.debug("ImageViewer already destroyed during SeriesView close")
             return

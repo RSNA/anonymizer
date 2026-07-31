@@ -15,7 +15,7 @@ from pprint import pformat
 from typing import ClassVar, NamedTuple
 
 from pydicom import Dataset
-from sqlalchemy import ForeignKey, Integer, String, create_engine, delete, func, select, text
+from sqlalchemy import Column, ForeignKey, Integer, String, create_engine, delete, func, select, text
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -216,9 +216,90 @@ def _format_pixel_phi(texts: Sequence[str]) -> str:
     return ", ".join(parts)
 
 
+def _format_face_blur_status_label(algorithm: str) -> str:
+    return " ".join(part.capitalize() for part in algorithm.strip().split("_"))
+
+
+@dataclass(frozen=True)
+class SeriesProcessingStatus:
+    pixel_phi_applied_count: int
+    pixel_phi_total_count: int
+    harmonized_description: str | None
+    face_blur_algorithm: str | None
+
+
+def format_series_processing_status(status: SeriesProcessingStatus) -> str:
+    """Compact one-line series processing caption for Series View control bar."""
+    total = status.pixel_phi_total_count
+    applied = status.pixel_phi_applied_count
+    if total == 0 or applied == 0:
+        pixel_phi_part = "None removed"
+    elif applied == total:
+        pixel_phi_part = "Applied"
+    else:
+        pixel_phi_part = f"Partial ({applied}/{total})"
+
+    harmonized = status.harmonized_description
+    harmonized_part = harmonized.strip() if harmonized and harmonized.strip() else "None"
+
+    face_blur = status.face_blur_algorithm
+    face_blur_part = (
+        _format_face_blur_status_label(face_blur)
+        if face_blur and face_blur.strip()
+        else "None"
+    )
+
+    return f"Pixel PHI: {pixel_phi_part} · Harmonized: {harmonized_part} · Face blur: {face_blur_part}"
+
+
+def _study_ct_series_all_harmonized(study: Study) -> bool:
+    """Return True when every CT series in the study has a harmonized_description."""
+    ct_series = [series for series in (study.series or []) if (series.modality or "").upper() == "CT"]
+    if not ct_series:
+        return False
+    return all(
+        series.harmonized_description is not None and bool(str(series.harmonized_description).strip())
+        for series in ct_series
+    )
+
+
+def _sqlite_column_type(column: Column) -> str | None:
+    """Map a SQLAlchemy column to a SQLite ADD COLUMN type, or None if unsupported."""
+    column_type = column.type
+    if isinstance(column_type, String):
+        return "TEXT"
+    if isinstance(column_type, Integer):
+        return "INTEGER"
+    logger.warning(
+        "SQLite schema sync: unsupported column type %r for %s.%s",
+        column_type,
+        column.table.name,
+        column.name,
+    )
+    return None
+
+
+def _sqlite_add_column_sql(table_name: str, column: Column) -> str | None:
+    sqlite_type = _sqlite_column_type(column)
+    if sqlite_type is None:
+        return None
+
+    parts = [f"ALTER TABLE {table_name} ADD COLUMN {column.name} {sqlite_type}"]
+    if not column.nullable and column.default is not None:
+        default = column.default.arg if hasattr(column.default, "arg") else column.default
+        if isinstance(default, bool):
+            default = int(default)
+        parts.append(f"DEFAULT {default!r}" if isinstance(default, str) else f"DEFAULT {default}")
+    return " ".join(parts)
+
+
 class AnonymizerModel:
     """
     The Anonymizer data model class to store PHI (Protected Health Information) with anonymized key lookups.
+
+    ``MODEL_VERSION`` tracks the code release schema generation. Existing project SQLite databases are
+    upgraded on open by ``_ensure_schema_columns``, which adds any ORM-mapped columns missing from
+    older ``anonymizer.db`` files. Bumping ``MODEL_VERSION`` alone does not migrate the database.
     """
 
     # Model Version Control
@@ -280,25 +361,31 @@ class AnonymizerModel:
         self._load_script(script_path)
 
     def _ensure_schema_columns(self) -> None:
-        """Add ORM metadata columns to existing SQLite databases created before they existed."""
+        """Add any ORM-mapped columns missing from existing SQLite databases."""
         if not self._db_url.startswith("sqlite"):
+            logger.debug("SQLite schema sync skipped for non-sqlite database URL.")
             return
 
-        migrations = (
-            ("instances", "pixel_phi", "TEXT"),
-            ("series", "harmonized_description", "TEXT"),
-            ("series", "face_blur_algorithm_applied", "TEXT"),
-        )
         with self.engine.connect() as conn:
-            for table_name, column_name, column_type in migrations:
-                existing = {
-                    row[1]
-                    for row in conn.execute(text(f"PRAGMA table_info({table_name})"))
+            for table in Base.metadata.sorted_tables:
+                table_exists = conn.execute(
+                    text("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = :name"),
+                    {"name": table.name},
+                ).fetchone()
+                if table_exists is None:
+                    continue
+
+                existing_columns = {
+                    row[1] for row in conn.execute(text(f"PRAGMA table_info({table.name})"))
                 }
-                if column_name not in existing:
-                    conn.execute(
-                        text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
-                    )
+                for column in table.columns:
+                    if column.name in existing_columns:
+                        continue
+                    add_column_sql = _sqlite_add_column_sql(table.name, column)
+                    if add_column_sql is None:
+                        continue
+                    conn.execute(text(add_column_sql))
+                    logger.info("SQLite schema sync: added %s.%s", table.name, column.name)
             conn.commit()
 
     def _get_class_name(self) -> str:
@@ -572,7 +659,7 @@ class AnonymizerModel:
                     phi_study_uid=study.study_uid,
                     num_series=num_series,
                     num_instances=num_instances,
-                    harmonize=False,
+                    harmonize=_study_ct_series_all_harmonized(study),
                 )
                 phi_index_records.append(phi_index_record)
 
@@ -1046,6 +1133,34 @@ class AnonymizerModel:
         instance.pixel_phi = formatted
         return True
 
+    @use_session()
+    def clear_series_tseg_metadata(self, anon_series_uid: str) -> bool:
+        """
+        Clear TS-analysis harmonize metadata for a series after its on-disk cache was removed.
+
+        Clears harmonized_description only. Face blur and instance pixel_phi are unchanged.
+        """
+        stmt = select(Series).where(Series.anon_series_uid == anon_series_uid)
+        series = self.session.execute(stmt).scalar_one_or_none()
+        if series is None:
+            logger.error("Series with anon_series_uid '%s' not found.", anon_series_uid)
+            return False
+        series.harmonized_description = None
+        return True
+
+    @use_session(is_read_only_operation=True)
+    def study_is_harmonized(self, anon_study_uid: str) -> bool:
+        """Return True when every CT series in the study has harmonized_description set."""
+        stmt = (
+            select(Study)
+            .where(Study.anon_study_uid == anon_study_uid)
+            .options(selectinload(Study.series))
+        )
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None:
+            return False
+        return _study_ct_series_all_harmonized(study)
+
     @use_session(is_read_only_operation=True)
     def series_is_harmonized(self, anon_series_uid: str) -> bool:
         stmt = select(Series.harmonized_description).where(Series.anon_series_uid == anon_series_uid)
@@ -1057,6 +1172,31 @@ class AnonymizerModel:
         stmt = select(Series.face_blur_algorithm_applied).where(Series.anon_series_uid == anon_series_uid)
         value = self.session.execute(stmt).scalar_one_or_none()
         return value is not None and bool(str(value).strip())
+
+    @use_session(is_read_only_operation=True)
+    def get_series_processing_status(self, anon_series_uid: str) -> SeriesProcessingStatus | None:
+        stmt = (
+            select(Series)
+            .where(Series.anon_series_uid == anon_series_uid)
+            .options(selectinload(Series.instances))
+        )
+        series = self.session.execute(stmt).scalar_one_or_none()
+        if series is None:
+            return None
+
+        instances = series.instances or []
+        total = len(instances)
+        applied = sum(
+            1
+            for instance in instances
+            if instance.pixel_phi is not None and bool(str(instance.pixel_phi).strip())
+        )
+        return SeriesProcessingStatus(
+            pixel_phi_applied_count=applied,
+            pixel_phi_total_count=total,
+            harmonized_description=series.harmonized_description,
+            face_blur_algorithm=series.face_blur_algorithm_applied,
+        )
 
     @use_session()  # The decorator manages the session and a single transaction for the whole batch
     def process_java_phi_studies(self, java_studies: list[JavaAnonymizerExportedStudy]):

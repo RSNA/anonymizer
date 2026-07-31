@@ -6,8 +6,8 @@ from pathlib import Path
 
 import numpy as np
 import pydicom
-import SimpleITK as sitk
 import pytest
+import SimpleITK as sitk
 from pydicom.data import get_testdata_file
 
 from anonymizer.controller.blur_face_gate import (
@@ -223,6 +223,16 @@ def test_face_mask_is_substantial_threshold() -> None:
     assert face_mask_is_substantial(MIN_FACE_MASK_VOXELS)
     assert not face_mask_is_substantial(MIN_FACE_MASK_VOXELS - 1)
     assert MIN_FACE_MASK_VOXELS == MIN_STRUCTURE_VOXELS
+
+
+def test_evaluate_face_blur_eligibility_already_applied() -> None:
+    result = evaluate_face_blur_eligibility(
+        Path("/tmp/series"),
+        face_blur_already_applied=True,
+    )
+    assert result.decision == FaceBlurGateDecision.BLOCK
+    assert result.reason == FaceBlurGateReason.ALREADY_APPLIED
+    assert "already been applied" in face_blur_gate_message(result.reason).lower()
 
 
 @pytest.mark.parametrize("reason", list(FaceBlurGateReason))

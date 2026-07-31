@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydicom import Dataset
 
-from anonymizer.controller.blur_face import FaceBlurProgress, QaStats
+from anonymizer.controller.blur_face import FaceBlurMode, FaceBlurProgress, QaStats
 from anonymizer.utils.translate import _
 
 # BGR for OpenCV overlay compositing.
@@ -13,6 +13,28 @@ FACE_MASK_OVERLAY_ALPHA = 0.35
 # CT window in Hounsfield units for reviewing blurred facial features.
 FACE_REVIEW_WL_HU = -250.0
 FACE_REVIEW_WW_HU = 2500.0
+
+FACE_BLUR_MODE_LABELS: dict[FaceBlurMode, str] = {
+    FaceBlurMode.GAUSSIAN: "Gaussian blur",
+    FaceBlurMode.MEDIAN: "Median filter",
+    FaceBlurMode.PIXELATE: "Pixelate",
+    FaceBlurMode.FILL_NOISE: "Noise fill",
+}
+
+
+def face_blur_mode_menu_values() -> tuple[str, ...]:
+    return tuple(_(label) for label in FACE_BLUR_MODE_LABELS.values())
+
+
+def face_blur_mode_from_menu_label(label: str) -> FaceBlurMode:
+    for mode, mode_label in FACE_BLUR_MODE_LABELS.items():
+        if label == _(mode_label):
+            return mode
+    return FaceBlurMode.GAUSSIAN
+
+
+def face_blur_mode_display_label(mode: FaceBlurMode) -> str:
+    return _(FACE_BLUR_MODE_LABELS[mode])
 
 
 def face_review_wl_ww(ds: Dataset) -> tuple[float, float]:
@@ -26,7 +48,9 @@ def format_face_blur_qa_summary(
     *,
     sigma_mm: float,
     slice_count: int,
+    blur_mode: FaceBlurMode = FaceBlurMode.GAUSSIAN,
 ) -> str:
+    mode_label = face_blur_mode_display_label(blur_mode)
     if qa is None:
         return _("Quality assurance pending.")
     if not qa.outside_clean:
@@ -41,7 +65,8 @@ def format_face_blur_qa_summary(
     return (
         _("QA PASS")
         + f" — {qa.n_face_voxels:,} "
-        + _("face voxels blurred")
+        + _("face voxels de-identified")
+        + f" ({mode_label})"
         + f", {slice_count} "
         + _("slices")
         + f", σ={sigma_mm:.1f} mm."
@@ -55,7 +80,7 @@ def format_face_blur_progress_status(progress: FaceBlurProgress) -> str:
         "mask": _("Resolving face segmentation mask"),
         "volume": _("Loading CT volume and aligning face mask"),
         "load_hu": _("Loading Hounsfield unit stack"),
-        "blur": _("Applying in-mask Gaussian blur"),
+        "blur": _("Applying in-mask face de-identification"),
         "qa": _("Checking pixels outside face mask"),
         "done": _("Ready"),
     }

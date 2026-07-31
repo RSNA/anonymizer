@@ -110,3 +110,20 @@ def clear_tseg_series_cache(series_directory: Path) -> bool:
         removed = True
 
     return removed
+
+
+def clear_series_tseg_cache(
+    series_directory: Path,
+    *,
+    anon_model=None,
+    anon_series_uid: str | None = None,
+) -> bool:
+    """
+    Remove on-disk TS cache and clear harmonize metadata in the project database.
+
+    Face blur records and pixel PHI instance metadata are not changed.
+    """
+    removed = clear_tseg_series_cache(series_directory)
+    if anon_model is not None and anon_series_uid:
+        anon_model.clear_series_tseg_metadata(anon_series_uid)
+    return removed

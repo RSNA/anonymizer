@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from anonymizer.controller.harmonize import HarmonizedResult, harmonize_series
+from anonymizer.controller.harmonize import harmonize_series
 from anonymizer.controller.tseg.segment import TS_result
 
 
@@ -133,7 +133,7 @@ def test_harmonize_skips_tseg_for_scout_localizer(
     assert merged.geometry is not None
     assert merged.geometry.ts_suitable is False
     assert merged.error is None
-    assert merged.radlex_series_description == "Ch Localizer"
+    assert merged.radlex_series_description == "Ch WO Localizer"
     assert merged.playbook is not None
     assert merged.playbook.body_part_code == "Ch"
     assert merged.playbook.series_type_code == "Localizer"

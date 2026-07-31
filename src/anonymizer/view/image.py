@@ -522,14 +522,31 @@ class ImageViewer(ctk.CTkFrame):
             return x, y
         return int(x / scale_x), int(y / scale_y)
 
-    def _set_initial_size(self) -> None:
-        """Calculates and sets the initial image size based on screen size."""
-        screen_width = self.winfo_screenwidth()
-        screen_height = self.winfo_screenheight()
-        max_width = int(screen_width * self.MAX_SCREEN_PERCENTAGE)
-        max_height = int(screen_height * self.MAX_SCREEN_PERCENTAGE)
+    def _screen_canvas_budget(self) -> tuple[int, int]:
+        """Return max drawable (width, height) from screen budget and visible chrome."""
+        max_width = int(self.winfo_screenwidth() * self.MAX_SCREEN_PERCENTAGE)
+        max_height = int(self.winfo_screenheight() * self.MAX_SCREEN_PERCENTAGE)
         if self.companion_attached:
             max_width = max(1, (max_width - 8) // 2)
+        with contextlib.suppress(tk.TclError):
+            self.update_idletasks()
+        label_reserve = 0
+        for label in (self._primary_label, self._companion_label):
+            if label is not None:
+                height = label.winfo_height()
+                if height > 1:
+                    label_reserve = max(label_reserve, height + 4)
+        if label_reserve:
+            max_height = max(1, max_height - label_reserve)
+        if self.num_images > 1 and hasattr(self, "scrollbar"):
+            scroll_height = self.scrollbar.winfo_height()
+            if scroll_height > 1:
+                max_height = max(1, max_height - scroll_height)
+        return max_width, max_height
+
+    def _set_initial_size(self) -> None:
+        """Calculates and sets the initial image size based on screen size."""
+        max_width, max_height = self._screen_canvas_budget()
 
         self.current_size = self._calculate_scaled_size(max_width, max_height)
         self.canvas.config(width=self.current_size[0], height=self.current_size[1])
@@ -542,6 +559,29 @@ class ImageViewer(ctk.CTkFrame):
         self.update_status()
         with contextlib.suppress(tk.TclError):
             self.canvas.focus_set()
+
+    def _apply_viewport_size(self) -> None:
+        """Resize the displayed image to match the primary canvas viewport (V18 behavior)."""
+        canvas_width = self.canvas.winfo_width()
+        canvas_height = self.canvas.winfo_height()
+        if canvas_width <= 1 or canvas_height <= 1:
+            return
+        native = (self.image_width, self.image_height)
+        if self.current_size == native and canvas_height >= native[1] and canvas_width >= native[0] - 2:
+            # Keep View == Actual at startup; ignore minor grid rounding (e.g. 510 vs 512 px wide).
+            return
+        new_image_size = (canvas_width, canvas_height)
+        if new_image_size != self.current_size:
+            self.current_size = new_image_size
+            self._companion_cache.clear()
+            self.load_and_display_image(self.current_image_index)
+            self.update_status()
+
+    def sync_viewport_after_layout(self) -> None:
+        """Match rendered image size to canvas viewport after grid layout settles."""
+        self.update_idletasks()
+        self._apply_viewport_size()
+        self.after_idle(self._apply_viewport_size)
 
     def _calculate_scaled_size(self, max_width: int, max_height: int) -> tuple[int, int]:
         """Calculates the scaled size, preserving aspect ratio."""
@@ -813,16 +853,7 @@ class ImageViewer(ctk.CTkFrame):
     def on_resize(self, event=None):
         if not self._resize_to_viewport_enabled:
             return
-        canvas_width = self.canvas.winfo_width()
-        canvas_height = self.canvas.winfo_height()
-        if canvas_width <= 1 or canvas_height <= 1:
-            return
-        new_image_size = (canvas_width, canvas_height)
-        if new_image_size != self.current_size:
-            self.current_size = new_image_size
-            self._companion_cache.clear()
-            self.load_and_display_image(self.current_image_index)
-            self.update_status()
+        self._apply_viewport_size()
 
     def prev_image(self, event):
         self.change_image(self.current_image_index - 1)

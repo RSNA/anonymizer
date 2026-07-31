@@ -3,16 +3,17 @@ from pathlib import Path
 import pytest
 from pydicom import Dataset
 from pydicom.data import get_testdata_file
+
+from src.anonymizer.model.anonymizer import PHI, AnonymizerModel, Series, Study
+from tests.controller.dicom.support.test_files import ct_small_filename, mr_brain_filename
 from tests.controller.dicom.support.test_nodes import (
     TEST_SITEID,
     TEST_UIDROOT,
 )
-from src.anonymizer.model.anonymizer import PHI, AnonymizerModel, Series, Study
-from tests.controller.dicom.support.test_files import ct_small_filename, mr_brain_filename
 
 TEST_DB_DIALECT = "sqlite"  # Database dialect
 TEST_DB_NAME = "anonymizer_model_test.db"  # Name of the test database file
-TEST_DB_DIR = Path(__file__).parent / ".test_db"  
+TEST_DB_DIR = Path(__file__).parent / ".test_db"
 TEST_DB_FILE = TEST_DB_DIR / TEST_DB_NAME
 TEST_DB_URL = f"{TEST_DB_DIALECT}:///{TEST_DB_FILE}"
 
@@ -358,6 +359,10 @@ def test_set_series_harmonized_description(anonymizer_model: AnonymizerModel, mo
     series = phi.studies[0].series[0]
     harmonized = "CT Head Neck Without Contrast"
 
+    records = anonymizer_model.get_phi_index()
+    assert records is not None
+    assert records[0].harmonize is False
+
     assert anonymizer_model.set_series_harmonized_description(series.anon_series_uid, harmonized) is True
     assert anonymizer_model.series_is_harmonized(series.anon_series_uid) is True
 
@@ -366,6 +371,18 @@ def test_set_series_harmonized_description(anonymizer_model: AnonymizerModel, mo
     updated = phi.studies[0].series[0]
     assert updated.description == harmonized
     assert updated.harmonized_description == harmonized
+
+    records = anonymizer_model.get_phi_index()
+    assert records is not None
+    assert records[0].harmonize is True
+
+
+def test_get_phi_index_harmonize_false_for_mr_only_study(anonymizer_model: AnonymizerModel, mock_dataset2: Dataset):
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset2, date_delta=0)
+
+    records = anonymizer_model.get_phi_index()
+    assert records is not None
+    assert records[0].harmonize is False
 
 
 def test_set_series_face_blur_algorithm(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
@@ -398,3 +415,68 @@ def test_set_instance_pixel_phi(anonymizer_model: AnonymizerModel, mock_dataset1
         row = session.get(Instance, instance.sop_instance_uid)
         assert row is not None
         assert row.pixel_phi == "Patient, Name"
+
+
+def test_clear_series_tseg_metadata(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
+    from anonymizer.model.anonymizer import format_series_processing_status
+
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
+    phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
+    assert phi is not None
+    series = phi.studies[0].series[0]
+    instance = series.instances[0]
+
+    harmonized = "CT Head Without Contrast"
+    anonymizer_model.set_series_harmonized_description(series.anon_series_uid, harmonized)
+    anonymizer_model.set_series_face_blur_algorithm(series.anon_series_uid, "gaussian")
+    anonymizer_model.set_instance_pixel_phi(instance.anon_sop_instance_uid, ["Name"])
+
+    assert anonymizer_model.clear_series_tseg_metadata(series.anon_series_uid) is True
+
+    status = anonymizer_model.get_series_processing_status(series.anon_series_uid)
+    assert status is not None
+    assert status.harmonized_description is None
+    assert status.face_blur_algorithm == "gaussian"
+    assert status.pixel_phi_applied_count == 1
+    assert format_series_processing_status(status) == (
+        "Pixel PHI: Applied · Harmonized: None · Face blur: Gaussian"
+    )
+
+    assert anonymizer_model.clear_series_tseg_metadata("missing-uid") is False
+
+
+def test_get_series_processing_status(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
+    from anonymizer.model.anonymizer import format_series_processing_status
+
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
+    phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
+    assert phi is not None
+    series = phi.studies[0].series[0]
+    instance = series.instances[0]
+
+    assert anonymizer_model.get_series_processing_status("missing-uid") is None
+
+    status = anonymizer_model.get_series_processing_status(series.anon_series_uid)
+    assert status is not None
+    assert status.pixel_phi_applied_count == 0
+    assert status.pixel_phi_total_count == 1
+    assert status.harmonized_description is None
+    assert status.face_blur_algorithm is None
+    assert format_series_processing_status(status) == (
+        "Pixel PHI: None removed · Harmonized: None · Face blur: None"
+    )
+
+    harmonized = "CT Head Without Contrast"
+    anonymizer_model.set_series_harmonized_description(series.anon_series_uid, harmonized)
+    anonymizer_model.set_series_face_blur_algorithm(series.anon_series_uid, "gaussian")
+    anonymizer_model.set_instance_pixel_phi(instance.anon_sop_instance_uid, ["Name"])
+
+    status = anonymizer_model.get_series_processing_status(series.anon_series_uid)
+    assert status is not None
+    assert status.pixel_phi_applied_count == 1
+    assert status.pixel_phi_total_count == 1
+    assert status.harmonized_description == harmonized
+    assert status.face_blur_algorithm == "gaussian"
+    assert format_series_processing_status(status) == (
+        f"Pixel PHI: Applied · Harmonized: {harmonized} · Face blur: Gaussian"
+    )

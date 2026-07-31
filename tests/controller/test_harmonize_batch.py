@@ -11,11 +11,11 @@ from pydicom import Dataset
 from anonymizer.controller.harmonize import (
     HarmonizedResult,
     apply_harmonized_description,
+    enumerate_ct_series_for_studies,
     format_harmonize_batch_progress_text,
     format_harmonize_progress_message,
     harmonize_and_apply_series,
     harmonize_studies_batch,
-    enumerate_ct_series_for_studies,
     study_harmonize_status,
 )
 from anonymizer.controller.tseg.segment import AnalysisProgress
@@ -59,32 +59,30 @@ def test_enumerate_ct_series_for_studies_filters_non_ct(
     assert series_paths[0].name == "series_ct"
 
 
-@patch("anonymizer.controller.harmonize.series_description_is_harmonized")
 @patch("anonymizer.controller.harmonize._load_ct_series_dataset")
 def test_study_harmonize_status_true_when_all_ct_series_harmonized(
     mock_load: MagicMock,
-    mock_is_harmonized: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
 ) -> None:
-    images_dir, studies = images_layout
-    mock_load.return_value = _ct_dataset()
-    mock_is_harmonized.return_value = True
+    anon_model = MagicMock()
+    anon_model.study_is_harmonized.return_value = True
 
-    assert study_harmonize_status(images_dir, "anon_pt", "anon_study") is True
+    assert study_harmonize_status(anon_model, "anon_study") is True
+    anon_model.study_is_harmonized.assert_called_once_with("anon_study")
+    mock_load.assert_not_called()
 
 
-@patch("anonymizer.controller.harmonize.series_description_is_harmonized")
 @patch("anonymizer.controller.harmonize._load_ct_series_dataset")
 def test_study_harmonize_status_false_when_any_ct_series_not_harmonized(
     mock_load: MagicMock,
-    mock_is_harmonized: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
 ) -> None:
-    images_dir, studies = images_layout
-    mock_load.return_value = _ct_dataset()
-    mock_is_harmonized.return_value = False
+    anon_model = MagicMock()
+    anon_model.study_is_harmonized.return_value = False
 
-    assert study_harmonize_status(images_dir, "anon_pt", "anon_study") is False
+    assert study_harmonize_status(anon_model, "anon_study") is False
+    anon_model.study_is_harmonized.assert_called_once_with("anon_study")
+    mock_load.assert_not_called()
 
 
 @patch("anonymizer.controller.harmonize._load_ct_series_dataset")
@@ -92,10 +90,12 @@ def test_study_harmonize_status_false_when_no_ct_series(
     mock_load: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
 ) -> None:
-    images_dir, _studies = images_layout
-    mock_load.return_value = None
+    anon_model = MagicMock()
+    anon_model.study_is_harmonized.return_value = False
 
-    assert study_harmonize_status(images_dir, "anon_pt", "anon_study") is False
+    assert study_harmonize_status(anon_model, "anon_study") is False
+    anon_model.study_is_harmonized.assert_called_once_with("anon_study")
+    mock_load.assert_not_called()
 
 
 @patch("anonymizer.controller.harmonize.harmonize_series")
@@ -162,6 +162,27 @@ def test_apply_harmonized_description_uses_set_series_harmonized_description(
 
     assert apply_harmonized_description(series_path, "Ch Ax PortVen", anon_model) is True
 
+    anon_model.set_series_harmonized_description.assert_called_once_with("1.2.3", "Ch Ax PortVen")
+
+
+@patch("anonymizer.controller.create_projections.apply_series_description", return_value=True)
+@patch("anonymizer.controller.harmonize._load_series_dataset")
+def test_apply_harmonized_description_skips_dicom_when_unchanged(
+    mock_load: MagicMock,
+    mock_apply_dicom: MagicMock,
+    tmp_path: Path,
+) -> None:
+    series_path = tmp_path / "series"
+    series_path.mkdir()
+    anon_model = MagicMock()
+    anon_model.set_series_harmonized_description.return_value = True
+    ds = _ct_dataset()
+    ds.SeriesDescription = "Ch Ax PortVen"
+    mock_load.return_value = ds
+
+    assert apply_harmonized_description(series_path, "Ch Ax PortVen", anon_model) is True
+
+    mock_apply_dicom.assert_not_called()
     anon_model.set_series_harmonized_description.assert_called_once_with("1.2.3", "Ch Ax PortVen")
 
 

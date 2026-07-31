@@ -6,6 +6,7 @@ from pathlib import Path
 
 from anonymizer.controller.tseg.cache import (
     LEGACY_TSEG_CACHE_DIRNAME,
+    clear_series_tseg_cache,
     clear_tseg_series_cache,
     resolve_series_cache_dir,
     tseg_cache_summary,
@@ -60,3 +61,17 @@ def test_clear_tseg_series_cache_removes_new_and_legacy(tmp_path: Path) -> None:
     assert not legacy_cache.exists()
     assert dicom.is_file()
     assert tseg_cache_summary(tmp_path).exists is False
+
+
+def test_clear_series_tseg_cache_updates_model_metadata(tmp_path: Path) -> None:
+    from unittest.mock import MagicMock
+
+    cache = tmp_path / TSEG_CACHE_DIRNAME
+    cache.mkdir()
+    (cache / "geometry.json").write_text("{}", encoding="utf-8")
+
+    anon_model = MagicMock()
+
+    assert clear_series_tseg_cache(tmp_path, anon_model=anon_model, anon_series_uid="anon-series-1") is True
+    anon_model.clear_series_tseg_metadata.assert_called_once_with("anon-series-1")
+    assert not cache.exists()

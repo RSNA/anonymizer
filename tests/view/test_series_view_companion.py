@@ -160,7 +160,7 @@ def test_show_blur_review_layouts_dual_pane_window(sample_frames: np.ndarray) ->
     viewer.set_segmentation_overlays = MagicMock()
     viewer.active_layers = set()
     viewer.overlay_data = {}
-    viewer._set_initial_size = MagicMock()
+    series._apply_viewer_display_sizing = MagicMock()
     series.image_viewer = viewer
 
     with patch("anonymizer.view.series.mask_slice_segmentations", return_value=[]):
@@ -169,8 +169,7 @@ def test_show_blur_review_layouts_dual_pane_window(sample_frames: np.ndarray) ->
                 SeriesView._show_blur_review(series, preview)
 
     viewer.attach_companion_stack.assert_called_once()
-    viewer._set_initial_size.assert_called_once()
-    assert viewer._resize_to_viewport_enabled is True
+    series._apply_viewer_display_sizing.assert_called_once()
 
 
 def test_complete_blur_review_shows_review_and_clears_running() -> None:
@@ -358,3 +357,86 @@ def test_drain_blur_worker_queue_discards_pending_messages() -> None:
     SeriesView._drain_blur_worker_queue(worker_queue)
 
     assert worker_queue.empty()
+
+
+def test_clear_ts_cache_refreshes_ui_without_rebuild() -> None:
+    series = SeriesView.__new__(SeriesView)
+    series._ds = MagicMock(Modality="CT", SeriesInstanceUID="anon-series-1")
+    series._series_path = MagicMock()
+    series._anon_model = MagicMock()
+    series._schedule_rebuild_ui = MagicMock()
+    series._refresh_analysis_cache_ui = MagicMock()
+    series._refresh_series_processing_status = MagicMock()
+    series.update_status = MagicMock()
+    summary = SimpleNamespace(exists=True, size_bytes=1024 * 1024, file_count=3)
+
+    with (
+        patch("anonymizer.view.series.tseg_cache_summary", return_value=summary),
+        patch("anonymizer.view.series.messagebox.askyesno", return_value=True),
+        patch("anonymizer.view.series.clear_series_tseg_cache") as clear_cache,
+    ):
+        SeriesView.clear_ts_cache_button_clicked(series)
+
+    clear_cache.assert_called_once_with(
+        series._series_path,
+        anon_model=series._anon_model,
+        anon_series_uid="anon-series-1",
+    )
+    series._refresh_analysis_cache_ui.assert_called_once()
+    series._schedule_rebuild_ui.assert_not_called()
+    series.update_status.assert_called_once()
+    series._refresh_series_processing_status.assert_called_once()
+
+
+def test_blur_face_button_clicked_blocks_when_already_applied() -> None:
+    from anonymizer.controller.blur_face_gate import FaceBlurGateReason
+
+    series = SeriesView.__new__(SeriesView)
+    series._ds = SimpleNamespace(SeriesInstanceUID="anon-series-1")
+    series._anon_model = MagicMock()
+    series._anon_model.series_has_face_blur.return_value = True
+    series._blur_running = False
+
+    with patch("anonymizer.view.series.messagebox.showinfo") as showinfo:
+        SeriesView.blur_face_button_clicked(series)
+
+    showinfo.assert_called_once()
+    assert series._blur_running is False
+
+
+def test_clear_ts_cache_refresh_keeps_blur_disabled_when_applied() -> None:
+    series = SeriesView.__new__(SeriesView)
+    series._ds = MagicMock(Modality="CT", SeriesInstanceUID="anon-series-1")
+    series._series_path = MagicMock()
+    series._anon_model = MagicMock()
+    series._anon_model.series_has_face_blur.return_value = True
+    series._schedule_rebuild_ui = MagicMock()
+    series._refresh_harmonize_button = MagicMock()
+    series._refresh_blur_face_ui = MagicMock()
+    series._refresh_clear_ts_cache_button = MagicMock()
+    series._show_default_context_line = MagicMock()
+    series._refresh_series_processing_status = MagicMock()
+    series.update_status = MagicMock()
+    series._series_geometry = None
+    series._face_blur_eligibility_cache = None
+    series._face_blur_eligibility_geometry = None
+    summary = SimpleNamespace(exists=True, size_bytes=1024 * 1024, file_count=3)
+
+    with (
+        patch("anonymizer.view.series.tseg_cache_summary", return_value=summary),
+        patch("anonymizer.view.series.messagebox.askyesno", return_value=True),
+        patch("anonymizer.view.series.clear_series_tseg_cache"),
+    ):
+        SeriesView.clear_ts_cache_button_clicked(series)
+
+    series._refresh_blur_face_ui.assert_called_once()
+
+
+def test_release_image_viewer_clears_resources_before_destroy() -> None:
+    series = SeriesView.__new__(SeriesView)
+    viewer = MagicMock()
+
+    SeriesView._release_image_viewer(series, viewer, destroy_widget=True)
+
+    viewer.release_resources.assert_called_once()
+    viewer.destroy.assert_called_once()

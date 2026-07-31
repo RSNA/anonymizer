@@ -5,10 +5,14 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from typing import Iterator
 
 logger = logging.getLogger(__name__)
+
+# nnUNet reads these exact mixed-case names (see nnunetv2/utilities/default_n_proc_DA.py).
+_NNUNET_N_PROC_DA = "nnUNet_n_proc_DA"
+_NNUNET_DEF_N_PROC = "nnUNet_def_n_proc"
 
 _THREAD_ENV_VARS = (
     "OMP_NUM_THREADS",
@@ -54,15 +58,15 @@ def sequential_ml_context(stage: str) -> Iterator[None]:
     """
     saved_env = {key: os.environ.get(key) for key in _THREAD_ENV_VARS}
     saved_nnunet = {
-        "nnUNet_n_proc_DA": os.environ.get("nnUNet_n_proc_DA"),
-        "nnUNet_def_n_proc": os.environ.get("nnUNet_def_n_proc"),
+        _NNUNET_N_PROC_DA: os.environ.get(_NNUNET_N_PROC_DA),
+        _NNUNET_DEF_N_PROC: os.environ.get(_NNUNET_DEF_N_PROC),
     }
 
     configure_macos_subprocess_env()
     for key in _THREAD_ENV_VARS:
         os.environ[key] = "1"
-    os.environ["nnUNet_n_proc_DA"] = "0"
-    os.environ["nnUNet_def_n_proc"] = "1"
+    os.environ[_NNUNET_N_PROC_DA] = "0"
+    os.environ[_NNUNET_DEF_N_PROC] = "1"
 
     prior_intra = prior_inter = None
     try:
@@ -71,10 +75,8 @@ def sequential_ml_context(stage: str) -> Iterator[None]:
         prior_intra = torch.get_num_threads()
         prior_inter = torch.get_num_interop_threads()
         torch.set_num_threads(1)
-        try:
+        with suppress(RuntimeError):
             torch.set_num_interop_threads(1)
-        except RuntimeError:
-            pass
     except ImportError:
         torch = None
 
@@ -86,11 +88,9 @@ def sequential_ml_context(stage: str) -> Iterator[None]:
     finally:
         if torch is not None and prior_intra is not None:
             torch.set_num_threads(prior_intra)
-            try:
+            with suppress(RuntimeError):
                 if prior_inter is not None:
                     torch.set_num_interop_threads(prior_inter)
-            except RuntimeError:
-                pass
 
         for key, value in saved_env.items():
             if value is None:
