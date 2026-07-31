@@ -691,10 +691,9 @@ def playbook_series_description_elements(
 
     Full CT convention order (RSNA spreadsheet): Laterality, Body Part, Body Part
     Modifier, Maneuvers, Anatomic Plane, IV Contrast, … Harmonize currently emits
-    Body Part → Anatomic Plane → IV Contrast (when contrast is present).
+    Body Part → Anatomic Plane → IV Contrast → Series Type (when applicable).
 
-    Assumed defaults omitted from the string: ``WO`` (without contrast) and, for
-    single-modality CT exams, the ``CT`` modality prefix.
+    For single-modality CT exams the ``CT`` modality prefix is omitted per Playbook rules.
     """
     elements: list[str] = []
     if include_modality:
@@ -704,7 +703,7 @@ def playbook_series_description_elements(
     if geometry.dimensionality != "localizer_2d" and attributes.anatomic_plane_code:
         elements.append(attributes.anatomic_plane_code)
 
-    if attributes.iv_contrast_code != "WO":
+    if attributes.iv_contrast_code:
         elements.append(attributes.iv_contrast_code)
 
     if attributes.series_type_code:
@@ -722,10 +721,10 @@ def format_playbook_series_description(
     """
     Build the Playbook-compliant CT series description string.
 
-    Element order: ``{BodyPart[+…]} {AnatomicPlane} {IVContrastPhase} {SeriesType}`` with IV
-    contrast omitted when native (``WO`` assumed default) and Series Type omitted for standard
-    diagnostic volumes. Modality is omitted for single-modality CT per Playbook rules.
-    Localizers omit anatomic plane.
+    Element order: ``{BodyPart[+…]} {AnatomicPlane} {IVContrastPhase} {SeriesType}``.
+    ``WO`` is emitted for native (without contrast) series per RadLex Playbook vocabulary.
+    Series Type is omitted for standard diagnostic volumes. Modality is omitted for
+    single-modality CT per Playbook rules. Localizers omit anatomic plane.
     """
     elements = playbook_series_description_elements(
         attributes,

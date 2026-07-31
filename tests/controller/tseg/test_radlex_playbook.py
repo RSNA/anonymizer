@@ -187,7 +187,7 @@ def test_build_harmonized_series_description_head_native_axial() -> None:
         ),
         _geometry(plane="axial"),
     )
-    assert description == "Brain Ax"
+    assert description == "Brain Ax WO"
     assert attributes.body_part_code == "Brain"
     assert attributes.iv_contrast_code == "WO"
     assert attributes.anatomic_plane_code == "Ax"
@@ -203,14 +203,14 @@ def test_build_harmonized_series_description_chest_portal_oblique() -> None:
     assert format_playbook_series_description(attributes, geometry) == "Ch Ax_Obl PortVen"
 
 
-def test_native_series_description_omits_wo_contrast_element() -> None:
+def test_native_series_description_includes_wo_contrast_element() -> None:
     geometry = _geometry(plane="axial")
     attributes = build_playbook_attributes(
         _tseg(body_parts_present="Chest", contrast_phase="native"),
         geometry,
     )
     assert attributes.iv_contrast_code == "WO"
-    assert format_playbook_series_description(attributes, geometry) == "Ch Ax"
+    assert format_playbook_series_description(attributes, geometry) == "Ch Ax WO"
 
 
 def test_localizer_series_description_omits_plane() -> None:
@@ -219,7 +219,7 @@ def test_localizer_series_description_omits_plane() -> None:
         _tseg(body_parts_present="Chest", contrast_phase="native"),
         geometry,
     )
-    assert format_playbook_series_description(attributes, geometry) == "Ch Localizer"
+    assert format_playbook_series_description(attributes, geometry) == "Ch WO Localizer"
 
 
 def test_localizer_harmonized_from_dicom_body_part() -> None:
@@ -232,7 +232,7 @@ def test_localizer_harmonized_from_dicom_body_part() -> None:
 
     description, attributes = build_localizer_harmonized_series_description(ds, geometry)
 
-    assert description == "Ch Localizer"
+    assert description == "Ch WO Localizer"
     assert attributes.body_part_code == "Ch"
     assert attributes.iv_contrast_code == "WO"
     assert attributes.anatomic_plane_code == ""
