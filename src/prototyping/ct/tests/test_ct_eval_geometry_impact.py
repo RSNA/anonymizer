@@ -20,7 +20,6 @@ from tests.controller.tseg.support.synthetic_ct import (
     build_synthetic_scout_ct_series,
 )
 
-
 pytestmark = pytest.mark.prototyping
 
 

@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import shutil
-
-import nibabel as nib
 import pytest
 import SimpleITK as sitk
 from pydicom import dcmread
@@ -20,8 +18,8 @@ from anonymizer.controller.tseg.segment import (
     analyze_series,
     dicom_series_to_nifti,
 )
-from tests.controller.tseg.support.synthetic_ct import list_dcm_files
 from tests.controller.tseg.fixtures import SYNTHETIC_CT_ASSET_DIRS
+from tests.controller.tseg.support.synthetic_ct import list_dcm_files
 
 pytestmark = pytest.mark.usefixtures("synthetic_ct_asset_dirs")
 
@@ -104,8 +102,8 @@ def test_dicom_series_to_nifti_committed_chest_assets(synthetic_ct_asset_dirs: d
     nifti_path = tmp_path / "committed_chest.nii.gz"
     n_slices = dicom_series_to_nifti(chest_dir, nifti_path)
     assert n_slices >= MIN_DICOM_SLICES
-    loaded = nib.load(nifti_path)
-    assert loaded.ndim == 3
+    loaded = sitk.ReadImage(str(nifti_path))
+    assert loaded.GetDimension() == 3
 
 
 def _chest_structure_voxels() -> dict[str, int]:

@@ -13,7 +13,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-import nibabel as nib
 import numpy as np
 
 from anonymizer.controller.tseg.runtime import sequential_ml_context
@@ -193,6 +192,16 @@ def release_before_contrast(*, stage: str = "before_contrast") -> None:
     gc.collect()
     gc.collect()
     log_memory_usage(stage)
+
+
+def _require_nibabel():
+    try:
+        import nibabel as nib
+    except ImportError as exc:
+        raise ImportError(
+            f"nibabel is required for contrast analysis. Install with: {_TSEG_INSTALL_HINT}"
+        ) from exc
+    return nib
 
 
 def _require_totalsegmentator():
@@ -517,7 +526,7 @@ def predict_contrast_phase(
         existing_stats is not None,
     )
     log_memory_usage("ts_contrast_start")
-    ct_img = nib.load(nifti_path)
+    ct_img = _require_nibabel().load(nifti_path)
 
     with sequential_ml_context("ts_contrast_statistics"):
         try:

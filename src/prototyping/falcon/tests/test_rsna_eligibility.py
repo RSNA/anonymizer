@@ -9,9 +9,9 @@ import pytest
 
 from prototyping.falcon.rsna_eligibility import (
     CT_SERIES_PATHS_FILE,
+    ELIGIBILITY_OUTPUT_DIR,
     ELIGIBLE_CSV,
     ELIGIBLE_FIRST_10_CSV,
-    ELIGIBILITY_OUTPUT_DIR,
     INELIGIBLE_CSV,
     INELIGIBLE_FIRST_10_CSV,
     RSNA_TEST_DATA_DIR,

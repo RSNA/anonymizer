@@ -47,6 +47,10 @@ uv run python -m prototyping.ffr.face /path/to/ct_head_series
 
 When a script stabilizes, move core logic to `src/anonymizer/controller/` and tests to `tests/controller/`. Leave a thin CLI here or remove once the app exposes the feature.
 
+## Tests
+
+Prototyping tests live under `src/prototyping/*/tests/` (see [tests/README.md](tests/README.md)). They are excluded from CI; run with `pytest src/prototyping`.
+
 ## Stdlib `locale`
 
 There is no root ``locale.py`` (it previously shadowed the Python stdlib). The locale demo lives in ``scratch/locale_demo.py``.

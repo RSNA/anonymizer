@@ -103,7 +103,7 @@ ignore = [
 max-complexity = 15
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests/controller", "tests/view", "tests/model"]
 addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model"
 pythonpath = ["src", "."]
 markers = [

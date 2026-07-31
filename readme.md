@@ -67,13 +67,13 @@ CI runs `ruff check` without `--fix`. Pre-commit uses the same check on staged P
 
 ### Unit Testing
 
-Test layout mirrors source: `tests/controller/` → `src/anonymizer/controller/`, `tests/prototyping/` → `src/prototyping/`. See [tests/README.md](tests/README.md).
+Test layout mirrors source: `tests/controller/` → `src/anonymizer/controller/`, prototyping tests live under `src/prototyping/*/tests/`. See [tests/README.md](tests/README.md).
 
 ```bash
 uv sync --extra tseg --group dev
 uv run pytest tests/controller/tseg -q
-uv run pytest tests/prototyping -q
-uv run pytest -q   # full suite with coverage (see pyproject.toml)
+uv run pytest src/prototyping -q              # local only; excluded from CI
+uv run pytest -q                              # CI suite with coverage (see pyproject.toml)
 ```
 
 Optional: create `tests/controller/.env` with `AWS_USERNAME` and `AWS_PASSWORD` for S3 upload tests.

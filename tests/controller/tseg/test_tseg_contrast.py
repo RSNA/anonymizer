@@ -15,7 +15,6 @@ from anonymizer.controller.tseg.contrast import (
     estimate_contrast_remaining_sec,
     head_dominant_limited_fov,
     hu_gate_iv_contrast,
-    load_contrast_statistics,
     phase_to_iv_contrast,
     predict_contrast_phase,
     resolve_contrast_device,
@@ -120,13 +119,15 @@ def _sample_contrast_stats(*, brain_volume: float = 0.0) -> dict:
 
 @patch("anonymizer.controller.tseg.contrast._run_contrast_classifier")
 @patch("anonymizer.controller.tseg.contrast._require_totalsegmentator")
-@patch("anonymizer.controller.tseg.contrast.nib.load")
+@patch("anonymizer.controller.tseg.contrast._require_nibabel")
 def test_predict_contrast_phase_reuses_existing_stats(
-    mock_nib_load: MagicMock,
+    mock_require_nib: MagicMock,
     mock_require_ts: MagicMock,
     mock_classifier: MagicMock,
     tmp_path: Path,
 ) -> None:
+    mock_nib = MagicMock()
+    mock_require_nib.return_value = mock_nib
     mock_ts = MagicMock()
     mock_require_ts.return_value = mock_ts
     mock_classifier.return_value = {
@@ -147,7 +148,7 @@ def test_predict_contrast_phase_reuses_existing_stats(
     )
 
     mock_ts.assert_not_called()
-    mock_nib_load.assert_called_once_with(nifti_path)
+    mock_nib.load.assert_called_once_with(nifti_path)
     assert result["phase"] == "native"
     assert inference_sec >= 0.0
     assert hu_medians["liver"] == 50.0
@@ -183,9 +184,9 @@ def test_estimate_contrast_remaining_sec(
 
 @patch("anonymizer.controller.tseg.contrast._run_contrast_classifier")
 @patch("anonymizer.controller.tseg.contrast._require_totalsegmentator")
-@patch("anonymizer.controller.tseg.contrast.nib.load")
+@patch("anonymizer.controller.tseg.contrast._require_nibabel")
 def test_predict_contrast_phase_reuses_phase_cache(
-    mock_nib_load: MagicMock,
+    mock_require_nib: MagicMock,
     mock_require_ts: MagicMock,
     mock_classifier: MagicMock,
     tmp_path: Path,
@@ -217,7 +218,7 @@ def test_predict_contrast_phase_reuses_phase_cache(
     )
 
     mock_require_ts.assert_not_called()
-    mock_nib_load.assert_not_called()
+    mock_require_nib.assert_not_called()
     mock_classifier.assert_not_called()
     assert result["phase"] == "portal_venous"
     assert inference_sec >= 0.0
@@ -227,9 +228,9 @@ def test_predict_contrast_phase_reuses_phase_cache(
 
 @patch("anonymizer.controller.tseg.contrast._run_contrast_classifier")
 @patch("anonymizer.controller.tseg.contrast._require_totalsegmentator")
-@patch("anonymizer.controller.tseg.contrast.nib.load")
+@patch("anonymizer.controller.tseg.contrast._require_nibabel")
 def test_predict_contrast_phase_emits_progress_for_phase_cache(
-    mock_nib_load: MagicMock,
+    mock_require_nib: MagicMock,
     mock_require_ts: MagicMock,
     mock_classifier: MagicMock,
     tmp_path: Path,
@@ -267,13 +268,15 @@ def test_predict_contrast_phase_emits_progress_for_phase_cache(
 
 @patch("anonymizer.controller.tseg.contrast._run_contrast_classifier")
 @patch("anonymizer.controller.tseg.contrast._require_totalsegmentator")
-@patch("anonymizer.controller.tseg.contrast.nib.load")
+@patch("anonymizer.controller.tseg.contrast._require_nibabel")
 def test_predict_contrast_phase_reuses_stats_hn_cache(
-    mock_nib_load: MagicMock,
+    mock_require_nib: MagicMock,
     mock_require_ts: MagicMock,
     mock_classifier: MagicMock,
     tmp_path: Path,
 ) -> None:
+    mock_nib = MagicMock()
+    mock_require_nib.return_value = mock_nib
     mock_ts = MagicMock()
     mock_require_ts.return_value = mock_ts
     mock_classifier.return_value = {
@@ -303,7 +306,7 @@ def test_predict_contrast_phase_reuses_stats_hn_cache(
     )
 
     mock_ts.assert_not_called()
-    mock_nib_load.assert_called_once_with(nifti_path)
+    mock_nib.load.assert_called_once_with(nifti_path)
     mock_classifier.assert_called_once()
     assert result["phase"] == "native"
 

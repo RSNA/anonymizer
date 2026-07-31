@@ -3,16 +3,16 @@
 | Tree | Mirrors | README |
 |------|---------|--------|
 | `tests/controller/` | `src/anonymizer/controller/` | [controller/README.md](controller/README.md) |
-| `tests/prototyping/` | `src/prototyping/` | [prototyping/README.md](prototyping/README.md) |
 | `tests/model/` | `src/anonymizer/model/` | — |
+| `src/prototyping/*/tests/` | `src/prototyping/` | [prototyping/tests/README.md](../src/prototyping/tests/README.md) |
 
 ## Running
 
 ```bash
 uv sync --extra tseg --group dev
 uv run pytest tests/controller/tseg -q
-uv run pytest tests/prototyping -q
-uv run pytest -q                                    # full suite + coverage (see pyproject.toml)
+uv run pytest src/prototyping -q              # prototyping only; excluded from CI
+uv run pytest -q                              # CI suite + coverage (see pyproject.toml)
 ```
 
 ## Markers
@@ -29,7 +29,7 @@ Defined in `pyproject.toml`:
 ```bash
 pytest tests/controller -m tseg_integration
 pytest tests/controller/dicom -m dicom_integration
-pytest tests/prototyping -m rsna_local_data
+pytest src/prototyping -m rsna_local_data
 ```
 
 ## Shared assets
