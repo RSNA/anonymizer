@@ -1,13 +1,12 @@
+import importlib.metadata
+import logging
 import os
 import sys
-import logging
-import importlib.metadata
+import tkinter as tk
 
+import customtkinter as ctk
 from pydicom._version import __version__ as pydicom_version
 from pynetdicom._version import __version__ as pynetdicom_version
-
-import tkinter as tk
-import customtkinter as ctk
 
 from anonymizer.utils.logging import init_logging
 

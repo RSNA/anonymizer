@@ -7,17 +7,17 @@
 # pipenv shell
 # python build.py
 
+import importlib.metadata
 import os
-import sys
-import time
-import shutil
-import subprocess
 import platform
 import plistlib
-import importlib.metadata
+import shutil
+import subprocess
+import sys
+import time
 
-import pyinstaller_versionfile
 import PyInstaller.__main__
+import pyinstaller_versionfile
 
 # V6.6 new option: --optimize 2 option in pyinstaller cmd line determine optimization of exe
 # os.environ["PYTHONOPTIMIZE"] = "2"  # range: 0,1,2 (2 is highest level of optimization)

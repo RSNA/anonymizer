@@ -1,6 +1,6 @@
-from tkinter import Tk, Canvas, PhotoImage
+from tkinter import Canvas, PhotoImage, Tk
+
 from PIL import Image, ImageSequence
-import time
 
 
 def create_gif(images, duration=500, loop=0):

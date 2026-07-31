@@ -1,9 +1,10 @@
-import requests
 import ssl
-from http.server import HTTPServer, BaseHTTPRequestHandler
 import webbrowser
-from urllib.parse import urlencode, urlparse, parse_qs
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pprint import pprint
+from urllib.parse import parse_qs, urlencode, urlparse
+
+import requests
 
 # Epic OAuth2 authorization and token endpoint
 authorize_url = "https://fhir.epic.com/interconnect-fhir-oauth/oauth2/authorize"

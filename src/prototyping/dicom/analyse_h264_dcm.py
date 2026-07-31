@@ -1,6 +1,6 @@
-import pydicom
-from pydicom.uid import UID
 import os
+
+import pydicom
 
 
 def inspect_dicom_video_file(filepath):

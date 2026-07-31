@@ -1,5 +1,6 @@
 import tkinter as tk
-from tkhtmlview import RenderHTML, HTMLScrolledText
+
+from tkhtmlview import HTMLScrolledText, RenderHTML
 
 root = tk.Tk()
 html_label = HTMLScrolledText(

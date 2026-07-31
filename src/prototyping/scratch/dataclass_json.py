@@ -1,12 +1,9 @@
 import os
-from pathlib import Path
-import shutil
-import json
 import tempfile
 from logging import WARNING
-from anonymizer.model.project import ProjectModel, NetworkTimeouts, LoggingLevels
-from anonymizer.model.project import DICOMNode
+from pathlib import Path
 
+from anonymizer.model.project import DICOMNode, LoggingLevels, NetworkTimeouts, ProjectModel
 
 LocalSCU = DICOMNode("127.0.0.1", 0, "ANONYMIZER", True)
 LocalStorageSCP = DICOMNode("127.0.0.1", 1045, "ANONYMIZER", True)

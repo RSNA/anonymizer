@@ -1,9 +1,8 @@
 # tests/conftest.py
-import sys
-import os
 import gc
-import psutil
+import os
 import shutil
+import sys
 import tempfile
 
 # Add the src directory to sys.path dynamically
@@ -12,6 +11,7 @@ from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 
+import psutil
 import pytest
 
 import tests.controller.dicom.support.pacs_simulator_scp as pacs_simulator_scp
@@ -28,6 +28,7 @@ from tests.controller.dicom.support.test_nodes import (
     PACSSimulatorSCP,
     RemoteSCPDict,
 )
+
 
 def pytest_sessionstart(session):
     """Runs before the test session begins."""
@@ -61,13 +62,13 @@ def assert_no_memory_leak():
     """
     process = psutil.Process(os.getpid())
     mem_before = process.memory_info().rss
-    
-    yield 
-    
+
+    yield
+
     gc.collect()
     mem_after = process.memory_info().rss
     growth_mb = (mem_after - mem_before) / (1024 * 1024)
-    
+
     # Check if a debugger trace function is active
     is_debugging = sys.gettrace() is not None
 

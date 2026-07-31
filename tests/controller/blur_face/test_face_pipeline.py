@@ -10,7 +10,6 @@ import SimpleITK as sitk
 
 from anonymizer.controller.blur_face import blur_face_series, read_reference_volume
 from anonymizer.controller.tseg.segment import face_mask_cache_path
-from tests.controller.tseg.fixtures import synthetic_head_series
 
 
 def _write_mask(mask_path: Path, *, shape: tuple[int, int, int]) -> None:

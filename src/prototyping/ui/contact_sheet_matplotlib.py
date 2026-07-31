@@ -1,9 +1,9 @@
 import os
-import pydicom
-import numpy as np
+
 import cv2
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+import pydicom
 
 
 # Function to apply high-contrast windowing to DICOM image pixel data

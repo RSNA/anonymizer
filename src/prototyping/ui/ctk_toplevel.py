@@ -1,5 +1,6 @@
 import customtkinter as ctk
 
+
 def open_toplevel():
     toplevel = ctk.CTkToplevel(root)  # Set the 'top' attribute to the parent window 'root'
     toplevel.title("Toplevel Window")

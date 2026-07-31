@@ -8,8 +8,8 @@ from matplotlib.figure import Figure
 
 from prototyping.ffr.face.models import FaceVolumeData, QaStats
 from prototyping.ffr.face.projections import FaceProjections, SlabView
-from prototyping.ffr.face.volume import face_slice_indices
 from prototyping.ffr.face.viz.windowing import auto_window_from_mask, window_hu_to_uint8
+from prototyping.ffr.face.volume import face_slice_indices
 
 MODE_DESCRIPTIONS: dict[str, str] = {
     "J_front_side": (

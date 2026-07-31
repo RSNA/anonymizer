@@ -1,6 +1,7 @@
+from pprint import pprint
+
 import boto3
 from botocore.exceptions import NoCredentialsError
-from pprint import pprint
 
 # RSNA Anonymizer UPLOAD AWS S3 Bucket Details
 # account_id = "691746062725"  # RSNA AWS account id (covid-image AWS account)

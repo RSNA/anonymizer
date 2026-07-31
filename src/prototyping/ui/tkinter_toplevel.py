@@ -1,5 +1,6 @@
 import tkinter as tk
 
+
 def open_toplevel():
     toplevel = tk.Toplevel(root)  # Set the 'top' attribute to the parent window 'root'
     toplevel.title("Toplevel Window")

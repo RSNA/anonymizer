@@ -1,19 +1,17 @@
-from pathlib import Path
-from easyocr import Reader
-import cv2
-
-import matplotlib.pyplot as plt
-import numpy as np
-import spacy
-import re
-from pydicom import Dataset, Sequence, dcmread
-from pydicom.pixel_data_handlers.util import apply_voi_lut, apply_modality_lut
-from pydicom import config as pydicom_config
-from pylibjpeg.utils import get_encoders, get_decoders
-from pydicom.uid import JPEG2000Lossless
-from openjpeg.utils import encode_array  # JPG2000Lossless
-from pydicom.encaps import encapsulate
 import logging
+import re
+from pathlib import Path
+
+import cv2
+import numpy as np
+from easyocr import Reader
+from openjpeg.utils import encode_array  # JPG2000Lossless
+from pydicom import Dataset, dcmread
+from pydicom import config as pydicom_config
+from pydicom.encaps import encapsulate
+from pydicom.pixel_data_handlers.util import apply_modality_lut, apply_voi_lut
+from pydicom.uid import JPEG2000Lossless
+from pylibjpeg.utils import get_decoders, get_encoders
 
 logger = logging.getLogger()  # ROOT logger
 logging.getLogger("matplotlib").setLevel(logging.ERROR)

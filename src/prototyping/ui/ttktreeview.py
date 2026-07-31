@@ -1,4 +1,5 @@
 from tkinter import ttk
+
 import customtkinter as ctk
 
 # Create the main window

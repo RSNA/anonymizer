@@ -1,5 +1,6 @@
 import tkinter as tk
-from tkhtmlview import HTMLLabel, HTMLScrolledText
+
+from tkhtmlview import HTMLScrolledText
 
 root = tk.Tk()
 html_label = HTMLScrolledText(root, html='<h1 style="color: red; text-align: center"> Hello World </H1>')

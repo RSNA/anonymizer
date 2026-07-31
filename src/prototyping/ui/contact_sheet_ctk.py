@@ -1,11 +1,12 @@
 import os
 import platform
-import pydicom
-import numpy as np
-from PIL import Image, ImageTk
+from tkinter import NW, Canvas, Frame, Scrollbar
+
 import customtkinter as ctk
-from customtkinter import CTk, CTkLabel, CTkImage
-from tkinter import Frame, Canvas, Scrollbar, NW
+import numpy as np
+import pydicom
+from customtkinter import CTk, CTkLabel
+from PIL import Image, ImageTk
 
 # Initialize CustomTkinter
 ctk.set_appearance_mode("dark")

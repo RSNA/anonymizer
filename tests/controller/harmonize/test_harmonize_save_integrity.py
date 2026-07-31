@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-import pydicom
 from pydicom import dcmread
 
 from anonymizer.controller.create_projections import (

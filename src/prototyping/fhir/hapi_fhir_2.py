@@ -1,5 +1,6 @@
-import requests
 from pprint import pprint
+
+import requests
 
 FHIR_BASE_URL = "http://hapi.fhir.org/baseR4"
 

@@ -1,10 +1,9 @@
-import pydicom
 import os
-import numpy as np
 
 # pipenv matplotlib to test this
 import matplotlib.pyplot as plt  # type: ignore
-from mpl_toolkits.mplot3d import Axes3D  # type: ignore
+import numpy as np
+import pydicom
 
 # Directory containing DICOM files of the CT scan
 directory = "path_to_dicom_files_directory"

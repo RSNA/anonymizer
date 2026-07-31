@@ -3,13 +3,14 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from prototyping.ffr.face.blur import blur_face_hu_volume
 from prototyping.ffr.face.config import DEFAULT_FACE_BLUR_SIGMA_MM
 from prototyping.ffr.face.export_dicom import write_blurred_dicom_series
-from prototyping.ffr.face.blur import blur_face_hu_volume
 from prototyping.ffr.face.mask_source import resolve_face_mask_path
 from prototyping.ffr.face.models import FaceVolumeData
 from prototyping.ffr.face.qa import compute_qa_stats
 from prototyping.ffr.face.report import write_report
+from prototyping.ffr.face.viz import render_all_modes
 from prototyping.ffr.face.volume import (
     align_mask_to_volume,
     face_slice_indices,
@@ -17,7 +18,6 @@ from prototyping.ffr.face.volume import (
     mask_array_from_volume,
     read_reference_volume,
 )
-from prototyping.ffr.face.viz import render_all_modes
 
 logger = logging.getLogger(__name__)
 

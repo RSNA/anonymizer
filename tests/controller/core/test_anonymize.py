@@ -2,11 +2,11 @@
 # use pytest from terminal to show full logging output
 
 import os
-import pytest
 from copy import deepcopy
 from pathlib import Path
 from time import sleep
 
+import pytest
 from pydicom import dcmread
 from pydicom.data import get_testdata_file
 from pydicom.dataset import Dataset
@@ -15,9 +15,6 @@ from anonymizer.controller.anonymizer import AnonymizerController, QuarantineDir
 from anonymizer.controller.project import ProjectController
 from tests.controller.dicom.support.test_files import (
     cr1_filename,
-    hash_cr1_StudyInstanceUID,
-    hash_cr1_SeriesInstanceUID,
-    hash_cr1_SOPInstanceUID,
     ct_small_filename,
     # mr_small_filename,
     # mr_small_implicit_filename,
@@ -25,6 +22,9 @@ from tests.controller.dicom.support.test_files import (
     # CR_STUDY_3_SERIES_3_IMAGES,
     # CT_STUDY_1_SERIES_4_IMAGES,
     # MR_STUDY_3_SERIES_11_IMAGES,
+    hash_cr1_SeriesInstanceUID,
+    hash_cr1_SOPInstanceUID,
+    hash_cr1_StudyInstanceUID,
 )
 from tests.controller.dicom.support.test_nodes import LocalSCU
 
@@ -115,15 +115,15 @@ def test_uid_hash_format_and_length(controller: ProjectController):
     model = controller.anonymizer.model
     orig_uid = "1.2.840.113619.1.2.3.4.5.6.7.8.9.10"
     hashed_uid = model._create_anon_uid(orig_uid)
-    
+
     expected_prefix = f"{model._uid_prefix}.2."
-    
+
     # 1. Check prefix
     assert hashed_uid.startswith(expected_prefix)
-    
+
     # 2. Check max length
     assert len(hashed_uid) <= model.DICOM_UID_MAX_LEN
-    
+
     # 3. Check that the hash part is numeric
     hash_part = hashed_uid.replace(expected_prefix, "")
     assert hash_part.isnumeric()
@@ -137,18 +137,18 @@ def test_uid_hashing_raises_error_if_prefix_too_long(controller: ProjectControll
     # `uid_root` = `self._uid_prefix` + ".1" (adds 2 chars)
     # `prefix` = `uid_root` + "." (adds 1 char)
     # Total added: 3 chars.
-    
-    # A prefix of 61 chars will work (61 + 3 = 64). 
+
+    # A prefix of 61 chars will work (61 + 3 = 64).
     # `len(prefix)` will be 64. `max_len <= len(prefix)` will be `64 <= 64`,
     # which is True, so it will raise the error.
-    
+
     # Let's test the boundary:
     # A prefix of 60 chars. `prefix` length = 63. `max_len <= 63` is False. OK.
     model = controller.anonymizer.model
-    prefix_60_chars = "1." * 30 
+    prefix_60_chars = "1." * 30
     model._uid_prefix = prefix_60_chars
     model._create_anon_uid("1.2.3") # Should not raise
-    
+
     # A prefix of 61 chars. `prefix` length = 64. `max_len <= 64` is True. Raise.
     prefix_61_chars = "1.2" + ("." * 59)
     assert len(prefix_61_chars) == 62

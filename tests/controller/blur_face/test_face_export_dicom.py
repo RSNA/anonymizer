@@ -9,7 +9,11 @@ import numpy as np
 import pydicom
 from pydicom.data import get_testdata_file
 
-from anonymizer.controller.blur_face import blur_face_hu_volume, hu_slice_to_stored_pixels, load_hu_stack, write_blurred_dicom_series
+from anonymizer.controller.blur_face import (
+    blur_face_hu_volume,
+    load_hu_stack,
+    write_blurred_dicom_series,
+)
 from anonymizer.controller.create_projections import load_series_frames, save_series_frames
 
 

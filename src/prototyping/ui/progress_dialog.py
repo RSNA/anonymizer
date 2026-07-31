@@ -1,9 +1,9 @@
-from typing import Dict, Union
-from queue import Queue
-import tkinter as tk
-import customtkinter as ctk
-from tkinter import ttk
 import logging
+import tkinter as tk
+from queue import Queue
+from typing import Union
+
+import customtkinter as ctk
 from utils.translate import _
 
 logger = logging.getLogger(__name__)

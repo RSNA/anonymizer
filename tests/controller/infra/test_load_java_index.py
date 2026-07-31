@@ -1,23 +1,23 @@
 import os
 import time
+
+from pydicom.dataset import Dataset
+
 from anonymizer.controller.project import ProjectController
+from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.utils.storage import (
     JavaAnonymizerExportedStudy,
     read_java_anonymizer_index_xlsx,
 )
-from pydicom.dataset import Dataset
-from anonymizer.model.anonymizer import AnonymizerModel
-    
-from tests.controller.dicom.support.test_nodes import LocalStorageSCP
 from tests.controller.dicom.support.helpers import send_file_to_scp
 from tests.controller.dicom.support.test_files import (
     ct_small_filename,
-    
-    hash_ct_small_StudyInstanceUID,
+    hash_ct_small_FrameOfReferenceUID,
     hash_ct_small_SeriesInstanceUID,
     hash_ct_small_SOPInstanceUID,
-    hash_ct_small_FrameOfReferenceUID
+    hash_ct_small_StudyInstanceUID,
 )
+from tests.controller.dicom.support.test_nodes import LocalStorageSCP
 from tests.controller.paths import JAVA_GENERATED_INDEX
 
 
@@ -49,9 +49,9 @@ def test_load_java_index_into_new_project_and_import_ct_small(temp_dir: str, con
     assert controller.anonymizer.model.get_phi_name_by_anon_patient_id("527408-000001") == "TEST"
 
     # Need to change default PHI entity 99.99-000000 in PHI table to match that of the Java Index: 527408-000000
-    # Otherwise next anon_patient_id will be 99.99-000001 causing mismatches and MAX won't work 
+    # Otherwise next anon_patient_id will be 99.99-000001 causing mismatches and MAX won't work
     controller.anonymizer.model.change_default_PHI("527408")
-    
+
     # After loading java index file import pydicom test file by sending to LocalStorageSCP
     ds: Dataset = send_file_to_scp(ct_small_filename, LocalStorageSCP, controller)
     time.sleep(0.5)

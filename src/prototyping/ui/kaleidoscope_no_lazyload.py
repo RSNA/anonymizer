@@ -1,39 +1,31 @@
-from pathlib import Path
 import logging
 import threading
 from dataclasses import dataclass
-from pydicom import dcmread, Dataset
-from pydicom.pixel_data_handlers.util import apply_voi_lut, apply_modality_lut
-import numpy as np
-from PIL import Image
-from cv2 import (
-    resize,
-    normalize,
-    equalizeHist,
-    Canny,
-    cvtColor,
-    createCLAHE,
-    GaussianBlur,
-    dilate,
-    morphologyEx,
-    findContours,
-    drawContours,
-    getStructuringElement,
-    INTER_AREA,
-    NORM_MINMAX,
-    CV_8U,
-    COLOR_RGB2GRAY,
-    MORPH_RECT,
-    MORPH_CLOSE,
-    RETR_EXTERNAL,
-    CHAIN_APPROX_SIMPLE,
-    FILLED,
-)
+from pathlib import Path
 
 import customtkinter as ctk
-from anonymizer.utils.storage import get_dcm_files, count_series
-from anonymizer.utils.translate import _
+import numpy as np
+from cv2 import (
+    COLOR_RGB2GRAY,
+    CV_8U,
+    INTER_AREA,
+    MORPH_RECT,
+    NORM_MINMAX,
+    Canny,
+    GaussianBlur,
+    createCLAHE,
+    cvtColor,
+    dilate,
+    getStructuringElement,
+    normalize,
+    resize,
+)
+from PIL import Image
+from pydicom import Dataset, dcmread
+from pydicom.pixel_data_handlers.util import apply_modality_lut, apply_voi_lut
 
+from anonymizer.utils.storage import count_series, get_dcm_files
+from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 

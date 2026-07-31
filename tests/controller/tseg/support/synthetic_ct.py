@@ -529,9 +529,9 @@ def _abdomen_hu_slice(index: int, num_slices: int, rows: int, cols: int) -> np.n
 
 if __name__ == "__main__":
     print(f"Generating synthetic CT DICOM assets in: {CONTROLLER_TEST_DCM_FILES_DIR}")
-    
+
     generated_assets = write_synthetic_phantom_assets()
-    
+
     print("\nGeneration Complete! Asset Directories created/updated:")
     for key, path in generated_assets.items():
         print(f" - {key}: {len(list_dcm_files(path))} slices")

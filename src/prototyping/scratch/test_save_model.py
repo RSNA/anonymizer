@@ -1,8 +1,4 @@
-from pathlib import Path
-import threading
-from time import perf_counter
 
-from anonymizer.controller.project import ProjectController
 from anonymizer.model.anonymizer import PHI, AnonymizerModel, Series, Study
 
 # patient, study, series

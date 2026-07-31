@@ -25,7 +25,6 @@ from anonymizer.view.blur_face_results import (
     format_face_blur_progress_status,
     format_face_blur_qa_summary,
 )
-from tests.controller.tseg.fixtures import synthetic_head_series
 
 
 def _write_mask(mask_path: Path, *, shape: tuple[int, int, int]) -> None:
@@ -91,7 +90,7 @@ def test_status_text_for_progress_includes_stage_and_percent() -> None:
         FaceBlurProgress(stage="blur", message="", fraction=0.65),
     )
     assert "65%" in text
-    assert "Gaussian blur" in text
+    assert "de-identification" in text
 
 
 def test_mask_slice_segmentations_returns_polygons() -> None:

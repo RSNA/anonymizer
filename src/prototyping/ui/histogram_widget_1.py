@@ -1,7 +1,8 @@
+import tkinter as tk
+
 import customtkinter as ctk
 import numpy as np
-import tkinter as tk
-from PIL import Image, ImageTk  # Pillow for image handling
+from PIL import Image  # Pillow for image handling
 
 # --- Configuration (Updated Colors) ---
 DEFAULT_NUM_BINS = 256

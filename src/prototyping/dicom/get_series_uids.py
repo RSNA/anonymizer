@@ -1,8 +1,6 @@
 from pynetdicom import AE
 from pynetdicom.sop_class import StudyRootQueryRetrieveInformationModelFind
 
-
-
 # Create an Application Entity
 ae = AE("ANONYMIZER")
 

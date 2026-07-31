@@ -1,12 +1,12 @@
-import os
-from pathlib import Path
 import platform
-import pydicom
-import numpy as np
-from PIL import Image, ImageTk
 import tkinter as tk
-from customtkinter import CTk, CTkLabel
-from tkinter import Frame, Canvas, Scrollbar, NW
+from pathlib import Path
+from tkinter import NW, Canvas, Frame, Scrollbar
+
+import numpy as np
+import pydicom
+from customtkinter import CTkLabel
+from PIL import Image, ImageTk
 from utils.storage import patient_dcm_files
 
 

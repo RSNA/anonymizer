@@ -1,7 +1,7 @@
 # Run from github actions to set the version in the environment file to be accessed from build.yml release step
 
-import os
 import importlib.metadata
+import os
 
 env_file = os.getenv("GITHUB_ENV")
 

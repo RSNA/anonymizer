@@ -1,9 +1,10 @@
-import easyocr
-import cv2
 import os
+import re
+
+import cv2
+import easyocr
 import numpy as np
 import spacy
-import re
 
 # Load the spacy model
 nlp = spacy.load("en_core_web_trf")  # "en_core_web_sm"

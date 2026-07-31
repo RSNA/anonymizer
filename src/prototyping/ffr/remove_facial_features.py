@@ -1,8 +1,9 @@
 import os
-import pydicom
-import numpy as np
-import cv2
 import time
+
+import cv2
+import numpy as np
+import pydicom
 from tqdm import tqdm
 
 FACE_MAX_VALUE = 50

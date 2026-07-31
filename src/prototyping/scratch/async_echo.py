@@ -1,8 +1,9 @@
 import asyncio
 import tkinter as tk
 from tkinter import messagebox
+
 from pydicom.uid import ExplicitVRLittleEndian
-from pynetdicom import AE, evt, debug_logger
+from pynetdicom import AE, debug_logger
 
 # Enable logging
 debug_logger()

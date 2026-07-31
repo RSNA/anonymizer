@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
-import pytest
 
+import pytest
 from botocore.exceptions import NoCredentialsError
 from dotenv import load_dotenv
 from pydicom.data import get_testdata_file

@@ -1,4 +1,3 @@
-import gc
 import logging
 from enum import Enum
 from math import ceil

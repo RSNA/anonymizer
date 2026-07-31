@@ -1,11 +1,11 @@
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import numpy as np
+import pytest
 import torch
 
 from anonymizer.controller.falcon import load_models
-
 from anonymizer.controller.falcon.predict import (
     BODY_PART_MODEL_INPUT_Z_INDEX,
     FalconPrediction,
@@ -15,9 +15,9 @@ from anonymizer.controller.falcon.predict import (
     format_confidence_percent,
     predict_falcon_series,
 )
-from anonymizer.controller.falcon.preprocessing.preprocess_series import preprocess_series
-from tests.controller.tseg.support.synthetic_ct import SYNTHETIC_PHANTOM_VERSION, write_synthetic_phantom_assets
 from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
+from tests.controller.tseg.support.synthetic_ct import SYNTHETIC_PHANTOM_VERSION, write_synthetic_phantom_assets
+
 
 def test_falcon_model_dir_under_anonymizer_package() -> None:
     expected = Path(load_models.__file__).resolve().parents[2] / "assets" / "falcon" / "models"
@@ -73,16 +73,16 @@ def mock_models():
     mock_part_model = MagicMock()
     # Output shape (1, 3). High value at index 1 -> Chest prediction
     mock_part_model.return_value = torch.tensor([[-10.0, 10.0, -10.0]])
-    
+
     mock_hn_model = MagicMock()
     mock_ch_model = MagicMock()
     mock_ab_model = MagicMock()
-    
+
     # 10.0 -> Sigmoid -> ~1.0 (Contrast Present); -10.0 -> ~0.0 (No Contrast)
     mock_hn_model.return_value = torch.tensor([[10.0]])
     mock_ch_model.return_value = torch.tensor([[10.0]])
     mock_ab_model.return_value = torch.tensor([[-10.0]])
-    
+
     return mock_part_model, mock_hn_model, mock_ch_model, mock_ab_model
 
 @pytest.fixture
@@ -128,10 +128,10 @@ def test_model_load_failure(mock_load):
 def test_successful_predictions(mock_preprocess, mock_load_models, mock_models):
     mock_load_models.return_value = mock_models
     mock_preprocess.return_value = np.zeros((100, 200, 200), dtype=np.float32)
-    
+
     test_dirs = list(SYNTHETIC_DIRS.values())
     predictions = predict_falcon_series(test_dirs)
-    
+
     assert len(predictions) == 3
     for pred in predictions:
         assert isinstance(pred, FalconPrediction)
@@ -173,7 +173,7 @@ def test_contrast_prediction_confidence_without_contrast():
 def test_preprocessing_failure(mock_preprocess, mock_load_models, mock_models):
     mock_load_models.return_value = mock_models
     mock_preprocess.side_effect = Exception("Corrupted DICOM files")
-    
+
     predictions = predict_falcon_series([SYNTHETIC_DIRS["HeadNeck"]])
     assert len(predictions) == 1
     assert predictions[0].error is not None
@@ -187,7 +187,7 @@ def test_inference_failure(mock_get_probs, mock_preprocess, mock_load_models, mo
     mock_load_models.return_value = mock_models
     mock_preprocess.return_value = np.zeros((100, 200, 200))
     mock_get_probs.side_effect = RuntimeError("CUDA out of memory")
-    
+
     predictions = predict_falcon_series([SYNTHETIC_DIRS["Abdomen"]])
     assert len(predictions) == 1
     assert predictions[0].error is not None
@@ -217,13 +217,13 @@ def test_predict_real_models_headneck(assert_no_memory_leak):
 def test_predict_real_models_chest(assert_no_memory_leak):
     series_path = SYNTHETIC_DIRS["Chest"]
     predictions = predict_falcon_series([series_path])
-    
+
     assert len(predictions) == 1
     pred = predictions[0]
-    
+
     assert pred.error is None, f"Pipeline failed with error: {pred.error}"
     assert pred.series_directory == series_path
-    
+
     # Assert reliable body part and non-contrast state
     assert pred.body_part == "Chest"
     # assert pred.iv_contrast is False &&TODO: Update when we have a real non-contrast chest series in the test assets
@@ -233,13 +233,13 @@ def test_predict_real_models_chest(assert_no_memory_leak):
 def test_predict_real_models_abdomen(assert_no_memory_leak):
     series_path = SYNTHETIC_DIRS["Abdomen"]
     predictions = predict_falcon_series([series_path])
-    
+
     assert len(predictions) == 1
     pred = predictions[0]
-    
+
     assert pred.error is None, f"Pipeline failed with error: {pred.error}"
     assert pred.series_directory == series_path
-    
+
     # Assert reliable body part and non-contrast state
     assert pred.body_part == "Abdomen"
     assert pred.iv_contrast is False
@@ -253,10 +253,10 @@ def test_predict_real_models_batch(assert_no_memory_leak):
         SYNTHETIC_DIRS["Abdomen"]
     ]
     expected_body_parts = ["HeadNeck", "Chest", "Abdomen"]
-    
+
     predictions = predict_falcon_series(test_dirs)
     assert len(predictions) == 3
-    
+
     for idx, pred in enumerate(predictions):
         assert pred.error is None, f"Pipeline failed on series {idx} with error: {pred.error}"
         assert pred.series_directory == test_dirs[idx]

@@ -15,8 +15,8 @@ from anonymizer.controller.falcon.eval_utils import (
 )
 from anonymizer.controller.falcon.predict import extract_body_part_model_input_slice, extract_contrast_model_input_slice
 from anonymizer.controller.falcon.preprocessing.preprocess_series import preprocess_series
-from tests.controller.tseg.support.synthetic_ct import write_synthetic_phantom_assets
 from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
+from tests.controller.tseg.support.synthetic_ct import write_synthetic_phantom_assets
 
 SYNTHETIC_DIRS = {
     "HeadNeck": CONTROLLER_TEST_DCM_FILES_DIR / "synthetic_CT_head",

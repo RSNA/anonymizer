@@ -1,10 +1,11 @@
-import easyocr
-import cv2
-import matplotlib.pyplot as plt
 import os
 import tkinter as tk
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+import cv2
+import easyocr
+import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 # Initialize the EasyOCR reader with the desired language(s)
 reader = easyocr.Reader(["en"])  # You can add more languages if needed

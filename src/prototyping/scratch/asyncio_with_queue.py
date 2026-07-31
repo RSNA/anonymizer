@@ -1,8 +1,7 @@
 import asyncio
-import concurrent.futures
 from queue import Queue
-from pynetdicom import AE, evt
-from pydicom import Dataset
+
+from pynetdicom import AE
 
 # Initialize a thread-safe queue for inter-task communication
 dicom_queue = Queue()

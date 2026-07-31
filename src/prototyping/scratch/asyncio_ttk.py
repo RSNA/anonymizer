@@ -1,8 +1,8 @@
 # https://www.loekvandenouweland.com/content/python-asyncio-and-tkinter.html
 
+import asyncio
 import tkinter as tk
 from tkinter import ttk
-import asyncio
 
 
 class App:

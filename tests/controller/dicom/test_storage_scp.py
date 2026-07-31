@@ -2,7 +2,6 @@
 # use pytest from terminal to show full logging output: pytest --log-cli-level=DEBUG
 import os
 import time
-from pathlib import Path
 
 from pydicom import dcmread
 from pydicom.data import get_testdata_file
@@ -12,6 +11,7 @@ from pynetdicom.presentation import build_context
 from anonymizer.controller.create_projections import PROJECTION_FILENAME, create_projection_from_series
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.anonymizer import AnonymizerModel
+from tests.controller.dicom.support.helpers import send_file_to_scp, send_files_to_scp
 from tests.controller.dicom.support.test_files import (
     COMPRESSED_TEST_FILES,
     CR_STUDY_3_SERIES_3_IMAGES,
@@ -19,45 +19,44 @@ from tests.controller.dicom.support.test_files import (
     MR_STUDY_3_SERIES_11_IMAGES,
     cr1_filename,
     ct_small_filename,
-    mr_small_filename,
+    hash_cr1_SeriesInstanceUID,
     hash_cr1_SOPInstanceUID,
     hash_cr1_StudyInstanceUID,
-    hash_cr1_SeriesInstanceUID,
-    hash_ct_small_StudyInstanceUID,
-    hash_ct_small_SeriesInstanceUID,
-    hash_ct_small_SOPInstanceUID,
-    hash_ct_small_FrameOfReferenceUID,
-    hash_mr_small_StudyInstanceUID,
-    hash_mr_small_SeriesInstanceUID,
-    hash_mr_small_SOPInstanceUID,
-    hash_mr_small_FrameOfReferenceUID,
-    hash_ct_doe_archibald_StudyInstanceUID,
     hash_ct_doe_archibald_SeriesInstanceUID,
     hash_ct_doe_archibald_SOPInstanceUID1,
-    hash_jpeg_baseline_StudyInstanceUID,
-    hash_jpeg_baseline_SeriesInstanceUID,
-    hash_jpeg_baseline_SOPInstanceUID,
-    hash_jpeg_extended_StudyInstanceUID,
-    hash_jpeg_extended_SeriesInstanceUID,
-    hash_jpeg_extended_SOPInstanceUID,
-    hash_jpeg_lossless_p14_StudyInstanceUID,
-    hash_jpeg_lossless_p14_SeriesInstanceUID,
-    hash_jpeg_lossless_p14_SOPInstanceUID,
-    hash_jpeg_ls_lossless_StudyInstanceUID,
-    hash_jpeg_ls_lossless_SeriesInstanceUID,                                   
-    hash_jpeg_ls_lossless_SOPInstanceUID,
-    hash_jpeg_ls_lossy_StudyInstanceUID,
-    hash_jpeg_ls_lossy_SeriesInstanceUID,
-    hash_jpeg_ls_lossy_SOPInstanceUID,
-    hash_jpeg_2000_lossless_StudyInstanceUID,
+    hash_ct_doe_archibald_StudyInstanceUID,
+    hash_ct_small_FrameOfReferenceUID,
+    hash_ct_small_SeriesInstanceUID,
+    hash_ct_small_SOPInstanceUID,
+    hash_ct_small_StudyInstanceUID,
     hash_jpeg_2000_lossless_SeriesInstanceUID,
     hash_jpeg_2000_lossless_SOPInstanceUID,
-    hash_jpeg_2000_StudyInstanceUID,
+    hash_jpeg_2000_lossless_StudyInstanceUID,
     hash_jpeg_2000_SeriesInstanceUID,
     hash_jpeg_2000_SOPInstanceUID,
+    hash_jpeg_2000_StudyInstanceUID,
+    hash_jpeg_baseline_SeriesInstanceUID,
+    hash_jpeg_baseline_SOPInstanceUID,
+    hash_jpeg_baseline_StudyInstanceUID,
+    hash_jpeg_extended_SeriesInstanceUID,
+    hash_jpeg_extended_SOPInstanceUID,
+    hash_jpeg_extended_StudyInstanceUID,
+    hash_jpeg_lossless_p14_SeriesInstanceUID,
+    hash_jpeg_lossless_p14_SOPInstanceUID,
+    hash_jpeg_lossless_p14_StudyInstanceUID,
+    hash_jpeg_ls_lossless_SeriesInstanceUID,
+    hash_jpeg_ls_lossless_SOPInstanceUID,
+    hash_jpeg_ls_lossless_StudyInstanceUID,
+    hash_jpeg_ls_lossy_SeriesInstanceUID,
+    hash_jpeg_ls_lossy_SOPInstanceUID,
+    hash_jpeg_ls_lossy_StudyInstanceUID,
+    hash_mr_small_FrameOfReferenceUID,
+    hash_mr_small_SeriesInstanceUID,
+    hash_mr_small_SOPInstanceUID,
+    hash_mr_small_StudyInstanceUID,
+    mr_small_filename,
 )
 from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT, LocalStorageSCP
-from tests.controller.dicom.support.helpers import send_file_to_scp, send_files_to_scp
 from tests.controller.paths import CONTROLLER_ASSETS
 
 
@@ -70,7 +69,7 @@ def test_send_cr1(temp_dir: str, controller):
     assert len(dirlist) == 1
     assert dirlist[0] == controller.model.site_id + "-000001"
     prefix = f"{TEST_UIDROOT}.{TEST_SITEID}"
-    
+
     assert model.get_anon_uid(ds.StudyInstanceUID) == hash_cr1_StudyInstanceUID
     assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_cr1_SeriesInstanceUID
     assert model.get_anon_uid(ds.SOPInstanceUID) == hash_cr1_SOPInstanceUID

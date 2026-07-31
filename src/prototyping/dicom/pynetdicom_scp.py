@@ -1,15 +1,13 @@
 import os
-from pydicom.filewriter import write_file_meta_info
-from pynetdicom.ae import ApplicationEntity as AE
-from pynetdicom.events import Event, EVT_C_STORE, EVT_C_ECHO
+
 from pynetdicom import debug_logger
+from pynetdicom._globals import ALL_TRANSFER_SYNTAXES
+from pynetdicom.ae import ApplicationEntity as AE
+from pynetdicom.events import EVT_C_STORE
 from pynetdicom.presentation import (
-    build_context,
     AllStoragePresentationContexts,
     VerificationPresentationContexts,
 )
-from pynetdicom._globals import ALL_TRANSFER_SYNTAXES
-
 from utils.storage import local_storage_path
 
 debug_logger()

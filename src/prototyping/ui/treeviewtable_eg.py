@@ -1,9 +1,10 @@
-import tkinter as tk
-from tkinter import ttk
-# pipenv pandas to test this
-import pandas as pd # type: ignore           
 import random
 import string
+import tkinter as tk
+from tkinter import ttk
+
+# pipenv pandas to test this
+import pandas as pd  # type: ignore
 
 # Generate more data for your DataFrame
 data = {

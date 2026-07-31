@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 import numpy as np
+import pytest
 import SimpleITK as sitk
 
 from anonymizer.controller.blur_face_gate import FaceBlurGateReason, face_blur_gate_message
