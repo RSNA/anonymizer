@@ -9,7 +9,7 @@ homepage = "https://github.com/RSNA/anonymizer"
 packages = [{ include = "anonymizer", from = "src"}]
 
 [tool.poetry.dependencies]
-python = ">=3.12.0,<3.13.0"
+python = ">=3.11.0,<3.13.0"
 numpy = "<2.0.0"
 customtkinter = "*"
 pillow = "*"
@@ -46,7 +46,7 @@ pytest-mock = "^3.14.1"
 rsna-anonymizer = "anonymizer.anonymizer:main"
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py311"
 line-length = 120
 
 lint.select = [ # https://docs.astral.sh/ruff/linter/#rule-selection
