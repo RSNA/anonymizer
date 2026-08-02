@@ -165,10 +165,16 @@ jobs:
           name: dist
           path: dist/
 
-      - name: Create GitHub Release
+      - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ needs.details.outputs.tag_name }}
         run: |
-          gh release create "${{ needs.details.outputs.tag_name }}" dist/* \
-            --title "${{ needs.details.outputs.tag_name }}" \
-            --generate-notes
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Release $TAG_NAME already exists; uploading/replacing dist assets."
+            gh release upload "$TAG_NAME" dist/* --clobber
+          else
+            gh release create "$TAG_NAME" dist/* \
+              --title "$TAG_NAME" \
+              --generate-notes
+          fi
