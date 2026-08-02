@@ -32,7 +32,19 @@ python -m tkinter
 ```
 If python + tkinter has been installed successfully a small GUI window should open
 ## Install rsna-anonymizer package from PyPI
-`pip install rsna-anonymizer`
+
+Stable (V18):
+
+```bash
+pip install rsna-anonymizer
+```
+
+V19 development pre-release (requires `--pre`; does not replace the stable install above):
+
+```bash
+pip install --pre rsna-anonymizer
+pip install --pre "rsna-anonymizer[tseg]"   # optional TotalSegmentator extras
+```
 ## Execution
 `rsna-anonymizer`
 ### Headless Mode
