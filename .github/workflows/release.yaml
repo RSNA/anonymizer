@@ -46,16 +46,21 @@ jobs:
   check_pypi:
     needs: details
     runs-on: ubuntu-latest
+    outputs:
+      already_on_pypi: ${{ steps.check.outputs.already_on_pypi }}
     steps:
       - name: Validate PyPI version availability
+        id: check
         env:
           NEW_VERSION: ${{ needs.details.outputs.new_version }}
         run: |
           response=$(curl -s "https://pypi.org/pypi/${{ env.PACKAGE_NAME }}/json" || echo "{}")
           if echo "$response" | jq -e --arg v "$NEW_VERSION" '.releases[$v] != null' >/dev/null; then
-            echo "Version $NEW_VERSION is already published on PyPI."
-            exit 1
+            echo "Version $NEW_VERSION is already published on PyPI; skipping PyPI upload."
+            echo "already_on_pypi=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          echo "already_on_pypi=false" >> "$GITHUB_OUTPUT"
 
           if echo "$NEW_VERSION" | grep -qE '(a|b|rc|\.dev)[0-9]+$'; then
             echo "Pre-release $NEW_VERSION is not yet on PyPI; continuing."
@@ -132,7 +137,8 @@ jobs:
 
   pypi_publish:
     name: Upload release to PyPI
-    needs: [setup_and_build, details]
+    needs: [setup_and_build, details, check_pypi]
+    if: needs.check_pypi.outputs.already_on_pypi != 'true'
     runs-on: ubuntu-latest
     environment:
       name: release
