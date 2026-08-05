@@ -1,4 +1,4 @@
-# RSNA DICOM Anonymizer (V18 stable / V19 dev)
+# RSNA DICOM Anonymizer (V19)
 [![de](https://img.shields.io/badge/lang-de-blue.svg)](readme.de.md)
 [![es](https://img.shields.io/badge/lang-es-blue.svg)](readme.es.md)
 [![fr](https://img.shields.io/badge/lang-fr-blue.svg)](readme.fr.md)
@@ -12,10 +12,11 @@
    - Enable "tcl/tk and IDLE"
 ### macOS
 1. Install Homebrew if not present: `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)'
-2. Install Python 3.12 with Tcl/Tk:
+2. Install Python 3.12, Tcl/Tk, and OpenMP (required for Harmonize contrast analysis on macOS):
 ```
 brew install python@3.12
 brew install tcl-tk
+brew install libomp
 ```
 ### Linux (Ubuntu/Debian)
 1. Install the required packages:
@@ -31,9 +32,9 @@ python --version
 python -m tkinter
 ```
 If python + tkinter has been installed successfully a small GUI window should open
-## Install rsna-anonymizer package from PyPI
+## Install rsna-anonymizer from PyPI
 
-Use [uv](https://docs.astral.sh/uv/) for installs. It is much faster than plain `pip` for V19, which pulls large ML dependencies (PyTorch, TotalSegmentator, etc.).
+V19 is on PyPI as a pre-release (`--pre`). Use [uv](https://docs.astral.sh/uv/) — much faster than plain `pip` for large ML dependencies (PyTorch, TotalSegmentator, etc.).
 
 ### One-time: install uv
 
@@ -54,21 +55,13 @@ source rsna-anonymizer/bin/activate    # Windows: rsna-anonymizer\Scripts\activa
 
 ### Install the package
 
-Stable (V18):
-
-```bash
-uv pip install rsna-anonymizer
-```
-
-V19 development pre-release (requires `--pre`; does not replace the stable install above):
-
 ```bash
 uv pip install --pre rsna-anonymizer
 ```
 
 Verify: `uv pip show rsna-anonymizer` or `rsna-anonymizer --version`. See [CHANGELOG](CHANGELOG.md) for release notes.
 
-TotalSegmentator, XGBoost, and related dependencies are included. Enable Harmonize, Face Blur, and Remove Pixel PHI per project in **Settings → Project** (or when creating a new project). Download models and apply the face license from the AI Features panel.
+TotalSegmentator, XGBoost, and related dependencies are included. Enable AI Features per project in **Settings → Project** (or when creating a new project). Download models and accept the face license from **AI Features** on the Welcome screen.
 ## Execution
 `rsna-anonymizer`
 ### Headless Mode
@@ -77,14 +70,6 @@ You need to provide a path to a project configuration to run in headless mode
 ## Upgrading
 
 Activate the virtual environment first (`source rsna-anonymizer/bin/activate`).
-
-Stable:
-
-```bash
-uv pip install --upgrade rsna-anonymizer
-```
-
-V19 dev pre-release:
 
 ```bash
 uv pip install --upgrade --pre rsna-anonymizer
