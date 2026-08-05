@@ -1,4 +1,4 @@
-"""AI Features Setup dialog (Welcome view and Help menu)."""
+"""AI Features Setup dialog (Welcome view)."""
 
 from __future__ import annotations
 

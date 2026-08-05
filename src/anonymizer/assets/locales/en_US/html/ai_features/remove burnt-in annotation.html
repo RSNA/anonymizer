@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<!-- List of HTML Tags supported by tkhtmlview:
+see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support -->
+<html>
+<body>
+<div style="color: THEME_COLOR; font-size: 14px;">
+
+	<h2>Remove Burnt-in Annotation</h2>
+	<p>
+	Some images contain <b>burnt-in text</b> — patient names, dates, hospital names, or measurements drawn directly onto the pixels (common on ultrasound, CR/DR, and some CT/MR screenshots).
+	Standard DICOM de-identification removes tags in the file header but leaves this visible text in the picture.
+	</p>
+	<p>
+	<b>Remove Burnt-in Annotation</b> uses optical character recognition (OCR) to find text in the image and replace it with a solid black region or a blended patch, depending on your chosen mode.
+	</p>
+
+	<h2>What you need before using it</h2>
+	<ol>
+		<li>On the <b>Welcome</b> screen, click <b>AI Features</b>.</li>
+		<li>Check <b>Remove Burnt-in Annotation</b>.</li>
+		<li>Click <b>Download</b> if shown, and wait until the status is ready.</li>
+		<li>Save your settings.</li>
+	</ol>
+
+	<h2>How it works (in plain terms)</h2>
+	<ul>
+		<li>The tool reads each image frame the same way Series View displays it (including window/level for grayscale images).</li>
+		<li>It searches for text-like regions and compares them against rules and optional whitelists (allowed words such as “L” or “R” for left/right markers).</li>
+		<li>Matched text is covered using either <b>black out</b> (solid rectangle) or <b>blend into background</b> (softer fill).</li>
+		<li>Changes are written to new DICOM files in your anonymized storage; originals in the PHI area are not modified by batch runs until you export the updated series.</li>
+	</ul>
+
+	<h2>Using Series View (one series at a time)</h2>
+	<ol>
+		<li>Open a project and go to the PHI Index or View Index, then open <b>Series View</b> for a series.</li>
+		<li>Click <b>Detect Text</b> to highlight regions the tool thinks are text. Detected regions appear as <b>green rectangles</b> on the image.</li>
+		<li>To <b>keep</b> text inside a green rectangle (for example “L”, “R”, or a slice number you want to preserve), <b>click the rectangle</b>. That text is added to the whitelist on the left and will not be removed when you run <b>Remove Text</b>.</li>
+		<li>Use <b>Remove Text</b> to apply removal on the current frame or series according to the active mode.</li>
+		<li>You can draw <b>blackout rectangles</b> manually for areas OCR missed (toolbar in Series View).</li>
+		<li>Modality-specific <b>whitelists</b> (under project locale assets) define text that should be kept, such as orientation markers.</li>
+	</ol>
+
+	<h2>Removal modes</h2>
+	<ul>
+		<li><b>Black out text</b> — fills detected text with black (or the appropriate background for inverted grayscale). Best when you want obvious, uniform removal.</li>
+		<li><b>Blend into background</b> — tries to match surrounding pixels. Useful when a hard black box would look unnatural.</li>
+	</ul>
+	<p>When running <b>AI Batch Process</b>, you choose the mode in the batch options dialog before processing starts.</p>
+
+	<h2>Batch processing many studies</h2>
+	<p>See <a href="help:ai_features/ai batch process.html">AI Batch Process</a>. Select <b>Remove Burnt-in Annotation</b> in the batch dialog. The tool runs on each slice of each selected series where OCR finds text.</p>
+
+	<h2>Limitations and tips</h2>
+	<ul>
+		<li>Very small or low-contrast text may be missed; use manual blackout rectangles if needed.</li>
+		<li>Short numeric strings (slice numbers, etc.) may be ignored by design to avoid false positives.</li>
+		<li>Always spot-check a sample of images before releasing a dataset.</li>
+		<li>OCR models require a one-time download; they do not send your images to the internet during processing.</li>
+	</ul>
+
+	<h2>Related help pages</h2>
+	<ul>
+		<li><a href="help:2_ai features.html">AI Features</a></li>
+		<li><a href="help:ai_features/ai batch process.html">AI Batch Process</a></li>
+	</ul>
+
+</div>
+</body>
+</html>

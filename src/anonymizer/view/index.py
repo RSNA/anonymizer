@@ -196,14 +196,14 @@ class IndexView(tk.Toplevel):
         if not self._any_ai_batch_feature_enabled():
             messagebox.showinfo(
                 title=_("AI Batch Process"),
-                message=_("No AI features are enabled. Open AI Features Setup from the Welcome screen or Help menu."),
+                message=_("No AI features are enabled. Click AI Features on the Welcome screen."),
                 parent=self,
             )
             return
         if not any_ai_batch_feature_allowed():
             messagebox.showinfo(
                 title=_("AI Batch Process"),
-                message=_("AI features are not ready yet. Open AI Features Setup to download models."),
+                message=_("AI features are not ready yet. Click AI Features on the Welcome screen to download models."),
                 parent=self,
             )
             return

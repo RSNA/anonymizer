@@ -36,7 +36,7 @@ from anonymizer.utils.translate import (
 from anonymizer.utils.version import get_version
 from anonymizer.view.dashboard import Dashboard
 from anonymizer.view.export import ExportView
-from anonymizer.view.html_view import HTMLView
+from anonymizer.view.html_view import HTMLView, is_ai_features_help
 from anonymizer.view.import_files_dialog import ImportFilesDialog
 from anonymizer.view.index import IndexView
 from anonymizer.view.query_retrieve_import import QueryView
@@ -1009,12 +1009,20 @@ class Anonymizer(ctk.CTk):
 
         show_ai_features_setup_dialog(self, on_changed=on_changed)
 
-    def help_filename_to_title(self, filename):
-        words = filename.stem.split("_")[1].split()
-        return " ".join(word.capitalize() for word in words)
+    def help_path_to_title(self, html_file_path: Path) -> str:
+        stem = html_file_path.stem
+        prefix, _, remainder = stem.partition("_")
+        label = remainder if prefix.isdigit() and remainder else stem
+        return " ".join(word.capitalize() for word in label.split())
 
-    def show_help_view(self, html_file_path):
-        view_name = self.help_filename_to_title(html_file_path)
+    def help_html_dir(self) -> Path:
+        return Path("assets/locales/" + str(get_current_language_code() or "en_US") + "/html/")
+
+    def resolve_help_link(self, relative_path: str) -> Path:
+        return (self.help_html_dir() / relative_path).resolve()
+
+    def show_help_view(self, html_file_path: Path):
+        view_name = self.help_path_to_title(html_file_path)
 
         if view_name in self.help_views:
             view = self.help_views[view_name]
@@ -1023,28 +1031,31 @@ class Anonymizer(ctk.CTk):
                 view.deiconify()
                 return
 
-        self.help_views[view_name] = HTMLView(self, title=view_name, html_file_path=html_file_path.as_posix())
+        self.help_views[view_name] = HTMLView(
+            self,
+            title=view_name,
+            html_file_path=html_file_path.as_posix(),
+            on_help_link=self._open_linked_help_page,
+            wide_layout=is_ai_features_help(html_file_path.as_posix()),
+        )
         self.help_views[view_name].focus()
+
+    def _open_linked_help_page(self, relative_path: str) -> None:
+        self.show_help_view(self.resolve_help_link(relative_path))
 
     def get_help_menu(self, menu_bar: tk.Menu):
         help_menu = tk.Menu(menu_bar, tearoff=0)
         # Get all html files in assets/locale/*/html/ directory
         # Sort by filename number prefix
-        html_dir = Path("assets/locales/" + str(get_current_language_code() or "en_US") + "/html/")
+        html_dir = self.help_html_dir()
         html_file_paths = sorted(html_dir.glob("*.html"), key=lambda path: int(path.stem.split("_")[0]))
 
         for __, html_file_path in enumerate(html_file_paths):
-            label = self.help_filename_to_title(html_file_path)
+            label = self.help_path_to_title(html_file_path)
             help_menu.add_command(
                 label=label,
                 command=lambda path=html_file_path: self.show_help_view(path),
             )
-
-        help_menu.add_separator()
-        help_menu.add_command(
-            label=_("AI Features setup…"),
-            command=self.show_ai_features_setup_dialog,
-        )
 
         return help_menu
 

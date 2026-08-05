@@ -1224,14 +1224,14 @@ class SeriesView(ctk.CTkToplevel):
         if not get_ai_session().enable_harmonize:
             messagebox.showinfo(
                 title=_("Harmonize"),
-                message=_("Harmonize is not enabled. Open AI Features Setup from the Welcome screen or Help menu."),
+                message=_("Harmonize is not enabled. Click AI Features on the Welcome screen."),
                 parent=self,
             )
             return
         if not harmonize_allowed():
             messagebox.showinfo(
                 title=_("Harmonize"),
-                message=_("Harmonize is not ready yet. Open AI Features Setup to download models."),
+                message=_("Harmonize is not ready yet. Click AI Features on the Welcome screen to download models."),
                 parent=self,
             )
             return

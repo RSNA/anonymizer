@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<!-- List of HTML Tags supported by tkhtmlview:
+see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support -->
+<html>
+<body>
+<div style="color: THEME_COLOR; font-size: 14px;">
+
+	<h2>AI Features</h2>
+	<p>
+	The Anonymizer can use optional <b>AI Features</b> to improve de-identification beyond removing patient names and IDs from DICOM tags.
+	These tools work on the <b>image pixels</b> or on <b>series descriptions</b> and are designed for research datasets where burned-in text, recognizable faces, or inconsistent series names could still identify a patient.
+	</p>
+	<p>
+	All AI Features are <b>optional</b>. You choose which tools to turn on for your project. None of them run until you enable them and complete any required setup (such as downloading helper files).
+	</p>
+
+	<h2>Opening AI Features Setup</h2>
+	<p>
+	From the <b>Welcome</b> screen, click the <b>AI Features</b> button to open setup.
+	</p>
+	<p>
+	The setup window lists each available tool with a short description, an on/off checkbox, and a status line (for example “Ready” or “Models not downloaded”).
+	</p>
+
+	<h2>First-time setup (all tools)</h2>
+	<ol>
+		<li>On the <b>Welcome</b> screen, click <b>AI Features</b>.</li>
+		<li>Turn on the tools you plan to use by checking the box next to each name.</li>
+		<li>If a <b>Download</b> button appears, click it and wait until the status shows the tool is ready. Downloads are stored on your computer for future sessions.</li>
+		<li>For <b>Face De-identify</b> only: you must also accept the academic license when prompted (see <a href="help:ai_features/face de-identify.html">Face De-identify</a>).</li>
+		<li>Click <b>Save</b> or close the dialog to keep your choices.</li>
+	</ol>
+	<p>
+	An internet connection is needed only while downloading helper files. After that, the tools run locally on your machine.
+	</p>
+
+	<h2>Available tools</h2>
+	<p>Each tool has its own help page with step-by-step configuration and usage:</p>
+	<ul>
+		<li><a href="help:ai_features/remove burnt-in annotation.html">Remove Burnt-in Annotation</a> — finds and removes text burned into the image (patient labels on X-rays, ultrasound overlays, etc.).</li>
+		<li><a href="help:ai_features/harmonize.html">Harmonize</a> — suggests a standard CT series description from anatomy and contrast (RadLex playbook style).</li>
+		<li><a href="help:ai_features/face de-identify.html">Face De-identify</a> — blurs the face region on head CT scans to reduce the chance of recognition.</li>
+		<li><a href="help:ai_features/ai batch process.html">AI Batch Process</a> — runs one or more of the tools above on many studies at once from the PHI Index.</li>
+	</ul>
+
+	<h2>Where you can run AI Features</h2>
+	<ul>
+		<li><b>Series View</b> — work on a single series: detect/remove text, harmonize description, or review face blur (see Help/Operation).</li>
+		<li><b>AI Batch Process</b> — on the PHI Index, select studies and run the enabled tools in bulk (see <a href="help:ai_features/ai batch process.html">AI Batch Process</a>).</li>
+	</ul>
+
+	<h2>Turning a tool off</h2>
+	<ul>
+		<li>Uncheck the tool in the <b>AI Features</b> setup window (Welcome screen).</li>
+		<li>If you disable a tool whose files were already downloaded, the Anonymizer may ask whether to remove those files from disk to save space.</li>
+		<li>Disabling a tool does not undo changes already applied to exported images.</li>
+	</ul>
+
+	<h2>If something is not ready</h2>
+	<ul>
+		<li>On the <b>Welcome</b> screen, click <b>AI Features</b> and read the status line under each tool.</li>
+		<li>Complete any pending download or license step.</li>
+		<li>On macOS, Harmonize may require an extra system library (<i>libomp</i>) for contrast analysis; install via Homebrew if the status message mentions OpenMP or XGBoost.</li>
+	</ul>
+
+</div>
+</body>
+</html>
