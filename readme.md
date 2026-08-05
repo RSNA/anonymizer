@@ -106,7 +106,7 @@ Test layout mirrors source: `tests/controller/` → `src/anonymizer/controller/`
 ```bash
 uv sync --group dev
 uv run pytest tests/controller/tseg -q                             # may download TS weights
-uv run pytest tests/controller -q                 # CI suite (controller + tseg)
+uv run pytest tests/controller tests/model -q   # CI suite (no view)
 uv run pytest src/prototyping -q              # prototyping only
 uv run pytest -q                              # full local suite (controller + view + model)
 ```
