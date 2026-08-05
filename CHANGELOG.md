@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [19.0.0.dev3]
+- English AI Features help: overview after Overview, linked tool pages (not in Help menu), in-app `help:` navigation, wider layout
+- AI Features setup opened from Welcome screen only; help and UI messages updated accordingly
+- Remove Burnt-in Annotation help: click green rectangles after Detect Text to whitelist text
+- Readmes document uv-based install and upgrade for faster V19 setup
+
 ## [19.0.0.dev2]
 - AI batch processing (harmonize, face blur, remove pixel PHI) with progress UI and memory guards
 - Batch OCR and MONOCHROME1 blackout aligned with Series View pixel pipeline
