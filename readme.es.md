@@ -66,13 +66,7 @@ Versión preliminar de desarrollo V19 (requiere `--pre`; no reemplaza la instala
 uv pip install --pre rsna-anonymizer
 ```
 
-Fijar una versión dev concreta:
-
-```bash
-uv pip install --pre rsna-anonymizer==19.0.0.dev3
-```
-
-Verificar: `uv pip show rsna-anonymizer` o `rsna-anonymizer --version`. Ver [CHANGELOG](CHANGELOG.md#1900dev3).
+Verificar: `uv pip show rsna-anonymizer` o `rsna-anonymizer --version`. Ver [CHANGELOG](CHANGELOG.md).
 
 TotalSegmentator, XGBoost y dependencias relacionadas están incluidos. Active Harmonize, Face Blur y Remove Pixel PHI por proyecto en **Configuración → Proyecto**. Descargue modelos y aplique la licencia face desde el panel AI Features.
 ## Ejecución
@@ -94,12 +88,6 @@ V19 dev preliminar:
 
 ```bash
 uv pip install --upgrade --pre rsna-anonymizer
-```
-
-Fijar una versión dev concreta:
-
-```bash
-uv pip install --upgrade --pre rsna-anonymizer==19.0.0.dev3
 ```
 ## Documentación
 [Archivos de ayuda](https://mdevans.github.io/anonymizer/index.html)
