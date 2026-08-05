@@ -4,15 +4,17 @@
 |------|---------|--------|
 | `tests/controller/` | `src/anonymizer/controller/` | [controller/README.md](controller/README.md) |
 | `tests/model/` | `src/anonymizer/model/` | — |
+| `tests/view/` | `src/anonymizer/view/` | — (local only) |
 | `src/prototyping/*/tests/` | `src/prototyping/` | [prototyping/tests/README.md](../src/prototyping/tests/README.md) |
 
 ## Running
 
 ```bash
 uv sync --extra tseg --group dev
-uv run pytest tests/controller/tseg -q
-uv run pytest src/prototyping -q              # prototyping only; excluded from CI
-uv run pytest -q                              # CI suite + coverage (see pyproject.toml)
+uv run pytest tests/controller/tseg -q                             # may download TS weights
+uv run pytest tests/controller --ignore=tests/controller/tseg -q   # controller without tseg
+uv run pytest src/prototyping -q              # prototyping only
+uv run pytest -q                              # full local suite (controller + view + model)
 ```
 
 ## Markers

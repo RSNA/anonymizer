@@ -1,4 +1,4 @@
-# RSNA DICOM Anonymizer V18.0
+# RSNA DICOM Anonymizer (V18 stable / V19 dev)
 [![de](https://img.shields.io/badge/lang-de-blue.svg)](readme.de.md)
 [![es](https://img.shields.io/badge/lang-es-blue.svg)](readme.es.md)
 [![fr](https://img.shields.io/badge/lang-fr-blue.svg)](readme.fr.md)
@@ -45,6 +45,14 @@ V19 development pre-release (requires `--pre`; does not replace the stable insta
 pip install --pre rsna-anonymizer
 ```
 
+Pin a specific dev build:
+
+```bash
+pip install --pre rsna-anonymizer==19.0.0.dev1
+```
+
+Verify: `pip show rsna-anonymizer` or `rsna-anonymizer --version`. See [CHANGELOG](CHANGELOG.md#1900dev1) for dev release notes.
+
 TotalSegmentator, XGBoost, and related dependencies are included. Enable Harmonize, Face Blur, and Remove Pixel PHI per project in **Settings → Project** (or when creating a new project). Download models and apply the face license from the AI Features panel.
 ## Execution
 `rsna-anonymizer`
@@ -52,7 +60,18 @@ TotalSegmentator, XGBoost, and related dependencies are included. Enable Harmoni
 You need to provide a path to a project configuration to run in headless mode
 `rsna-anonymizer -c path/to/ProjectModel.json`
 ## Upgrading
-`pip install --upgrade rsna-anonymizer`
+
+Stable:
+
+```bash
+pip install --upgrade rsna-anonymizer
+```
+
+V19 dev pre-release:
+
+```bash
+pip install --upgrade --pre rsna-anonymizer
+```
 ## Documentation
 [Help files](https://rsna.github.io/anonymizer)
 ## Development
@@ -60,7 +79,7 @@ You need to provide a path to a project configuration to run in headless mode
 1. Setup python environment (3.12) which includes Tkinter, recommend using pyenv with MacOS & Linux
 2. Ensure python is installed with Tkinter: `python -m tkinter`, a small GUI window should open
 3. Install [uv](https://docs.astral.sh/uv/): `curl -LsSf https://astral.sh/uv/install.sh | sh`
-4. Clone repository
+4. Clone repository (for V19 work, checkout branch `V19` before syncing)
 5. Create virtual environment and install dependencies: `uv sync --group dev`
 6. macOS Harmonize contrast: `brew install libomp` when using XGBoost/TotalSegmentator contrast
 7. Enable Git pre-commit hooks (Ruff lint, same rules as CI): `uv run pre-commit install`
@@ -86,9 +105,10 @@ Test layout mirrors source: `tests/controller/` → `src/anonymizer/controller/`
 
 ```bash
 uv sync --group dev
-uv run pytest tests/controller/tseg -q
-uv run pytest src/prototyping -q              # local only; excluded from CI
-uv run pytest -q                              # CI suite with coverage (see pyproject.toml)
+uv run pytest tests/controller/tseg -q                             # may download TS weights
+uv run pytest tests/controller --ignore=tests/controller/tseg -q   # controller without tseg
+uv run pytest src/prototyping -q              # prototyping only
+uv run pytest -q                              # full local suite (controller + view + model)
 ```
 
 Optional: create `tests/controller/.env` with `AWS_USERNAME` and `AWS_PASSWORD` for S3 upload tests.

@@ -1,4 +1,4 @@
-# RSNA DICOM Anonimizador V18.0
+# RSNA DICOM Anonimizador (V18 estable / V19 dev)
 [![en](https://img.shields.io/badge/lang-en-blue.svg)](readme.md)
 [![de](https://img.shields.io/badge/lang-de-blue.svg)](readme.de.md)
 [![fr](https://img.shields.io/badge/lang-fr-blue.svg)](readme.fr.md)
@@ -32,13 +32,45 @@ python -m tkinter
 ```
 Si python + tkinter se han instalado correctamente, se abrirá una pequeña ventana GUI
 ## Instalar el paquete rsna-anonymizer desde PyPI
-`pip install rsna-anonymizer`
+
+Estable (V18):
+
+```bash
+pip install rsna-anonymizer
+```
+
+Versión preliminar de desarrollo V19 (requiere `--pre`; no reemplaza la instalación estable anterior):
+
+```bash
+pip install --pre rsna-anonymizer
+```
+
+Fijar una versión dev concreta:
+
+```bash
+pip install --pre rsna-anonymizer==19.0.0.dev1
+```
+
+Verificar: `pip show rsna-anonymizer` o `rsna-anonymizer --version`. Ver [CHANGELOG](CHANGELOG.md#1900dev1).
+
+TotalSegmentator, XGBoost y dependencias relacionadas están incluidos. Active Harmonize, Face Blur y Remove Pixel PHI por proyecto en **Configuración → Proyecto**. Descargue modelos y aplique la licencia face desde el panel AI Features.
 ## Ejecución
 `rsna-anonymizer`
 ###Modo sin cabeza
 Necesita proporcionar una ruta a una configuración de proyecto para ejecutar en modo sin cabeza
 `rsna-anonymizer -c ruta/a/ProjectModel.json`
 ## Actualización
-`pip install --upgrade rsna-anonymizer`
+
+Estable:
+
+```bash
+pip install --upgrade rsna-anonymizer
+```
+
+V19 dev preliminar:
+
+```bash
+pip install --upgrade --pre rsna-anonymizer
+```
 ## Documentación
 [Archivos de ayuda](https://mdevans.github.io/anonymizer/index.html)
