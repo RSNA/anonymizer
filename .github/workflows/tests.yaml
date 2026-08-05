@@ -32,4 +32,4 @@ jobs:
         PYTHONPATH: ${{ github.workspace }}/src
         AWS_USERNAME: ${{ secrets.AWS_USERNAME }}
         AWS_PASSWORD: ${{ secrets.AWS_PASSWORD }}
-      run: uv run pytest tests/controller --ignore=tests/controller/tseg
+      run: uv run pytest tests/controller

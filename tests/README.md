@@ -12,7 +12,7 @@
 ```bash
 uv sync --extra tseg --group dev
 uv run pytest tests/controller/tseg -q                             # may download TS weights
-uv run pytest tests/controller --ignore=tests/controller/tseg -q   # controller without tseg
+uv run pytest tests/controller -q                 # CI suite (controller + tseg)
 uv run pytest src/prototyping -q              # prototyping only
 uv run pytest -q                              # full local suite (controller + view + model)
 ```
