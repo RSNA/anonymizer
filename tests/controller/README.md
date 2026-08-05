@@ -8,7 +8,7 @@ Tests for `src/anonymizer/controller/` and related integration (DICOM network, s
 tests/controller/
 ├── assets/          # Shared binary fixtures (DICOM, indexes)
 ├── conftest.py      # Cross-cutting fixtures (project, SCP, temp dirs)
-├── tseg/            # TotalSegmentator, dicom_geometry, synthetic CT support (local only)
+├── tseg/            # TotalSegmentator, dicom_geometry, synthetic CT support
 ├── harmonize/       # harmonize_series merge and pipeline (incl. batch helpers)
 ├── blur_face/       # CT face blur, pixel PHI / OCR (remove_pixel_phi.py)
 ├── falcon/          # FALCON predict and eval
@@ -38,7 +38,7 @@ from tests.controller.dicom.support.helpers import send_file_to_scp
 ## Running subsets
 
 ```bash
-pytest tests/controller/tseg -q                 # local; may download TS weights
+pytest tests/controller/tseg -q
 pytest tests/controller/harmonize -q
 pytest tests/controller/blur_face -q
 pytest tests/controller/dicom -q
