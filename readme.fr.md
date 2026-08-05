@@ -47,10 +47,10 @@ pip install --pre rsna-anonymizer
 Épingler une version dev précise :
 
 ```bash
-pip install --pre rsna-anonymizer==19.0.0.dev1
+pip install --pre rsna-anonymizer==19.0.0.dev2
 ```
 
-Vérifier : `pip show rsna-anonymizer` ou `rsna-anonymizer --version`. Voir [CHANGELOG](CHANGELOG.md#1900dev1).
+Vérifier : `pip show rsna-anonymizer` ou `rsna-anonymizer --version`. Voir [CHANGELOG](CHANGELOG.md#1900dev2).
 
 TotalSegmentator, XGBoost et dépendances associées sont inclus. Activez Harmonize, Face Blur et Remove Pixel PHI par projet dans **Paramètres → Projet**. Téléchargez les modèles et appliquez la licence face depuis le panneau AI Features.
 ## Exécution
