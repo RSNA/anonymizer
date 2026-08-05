@@ -68,7 +68,6 @@ def crop_image(
     if not mass_centered:
         mask_arr[mask_arr >= -500] = 1
 
-
     center_of_mass = ndimage.center_of_mass(mask_arr)
 
     if np.any(np.isnan(center_of_mass)):
@@ -76,9 +75,9 @@ def crop_image(
 
     center_of_mass = tuple(int(x) for x in cast(tuple, center_of_mass))
 
-    startc = int(center_of_mass[0] - c_crop//2)
-    starty = int(center_of_mass[1] - y_crop//2)
-    startx = int(center_of_mass[2] - x_crop//2)
+    startc = int(center_of_mass[0] - c_crop // 2)
+    starty = int(center_of_mass[1] - y_crop // 2)
+    startx = int(center_of_mass[2] - x_crop // 2)
 
     pad_c_before = -min(0, startc)
     pad_c_after = max(0, startc + c_crop - depth)

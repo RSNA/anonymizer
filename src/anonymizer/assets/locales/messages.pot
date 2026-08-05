@@ -1078,9 +1078,6 @@ msgstr ""
 msgid "Metadata Queue"
 msgstr ""
 
-msgid "Pixel PHI Queue"
-msgstr ""
-
 msgid "online"
 msgstr ""
 

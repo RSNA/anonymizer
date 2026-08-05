@@ -12,6 +12,7 @@ from tests.controller.dicom.support.test_files import ct_small_filename
 # Load environment variables from .env file (for username/password for AWS upload)
 load_dotenv()
 
+
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 @pytest.mark.skipif(
     not os.getenv("AWS_USERNAME") or not os.getenv("AWS_PASSWORD"),

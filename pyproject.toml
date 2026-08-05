@@ -35,10 +35,6 @@ dependencies = [
     "sqlalchemy>=2.0.38",
     "simpleitk>=2.5.5",
     "scipy",
-]
-
-[project.optional-dependencies]
-tseg = [
     "totalsegmentator>=2.3.0",
     "xgboost>=2.0.0",
     "nibabel",

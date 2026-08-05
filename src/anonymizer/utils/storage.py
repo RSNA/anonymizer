@@ -25,6 +25,29 @@ from anonymizer.utils.translate import get_current_language_code
 DICOM_FILE_SUFFIX = ".dcm"
 
 
+def is_hidden_name(name: str) -> bool:
+    """True for dot-prefixed file or directory names (e.g. ``.DS_Store``, ``.git``)."""
+    return bool(name) and name.startswith(".")
+
+
+def is_hidden_path(path: str | Path) -> bool:
+    """True when any path component is a hidden file or directory name."""
+    return any(is_hidden_name(part) for part in Path(path).parts)
+
+
+def list_import_directory_files(root_dir: str | Path) -> list[str]:
+    """List files under ``root_dir``, skipping hidden directories and files."""
+    root = os.fspath(root_dir)
+    file_paths: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [name for name in dirnames if not is_hidden_name(name)]
+        for filename in filenames:
+            if is_hidden_name(filename):
+                continue
+            file_paths.append(os.path.join(dirpath, filename))
+    return file_paths
+
+
 def count_studies_series_images(patient_path: str) -> tuple[int, int, int]:
     """
     Counts the number of studies, series, and images in a given patient directory in the anonymizer store

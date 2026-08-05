@@ -79,15 +79,9 @@ class ModalitiesDialog(tk.Toplevel):
         )
         # Bind a callback function to item selection
         self._tree.bind("<<TreeviewSelect>>", self.on_item_select)
-        selected_bg_color = self.root._apply_appearance_mode(
-            ThemeManager.theme["Treeview"]["selected_bg_color"]
-        )
-        selected_color = self.root._apply_appearance_mode(
-            ThemeManager.theme["Treeview"]["selected_color"]
-        )
-        self._tree.tag_configure(
-            "green", foreground=selected_color, background=selected_bg_color
-        )
+        selected_bg_color = self.root._apply_appearance_mode(ThemeManager.theme["Treeview"]["selected_bg_color"])
+        selected_color = self.root._apply_appearance_mode(ThemeManager.theme["Treeview"]["selected_color"])
+        self._tree.tag_configure("green", foreground=selected_color, background=selected_bg_color)
         self._tree.grid(row=0, column=0, columnspan=2, sticky="nswe")
 
         # Set tree column headers, width and justifications
@@ -137,13 +131,9 @@ class ModalitiesDialog(tk.Toplevel):
             text=_("Default"),
             command=self._default_selection_button_pressed,
         )
-        self._default_selection_button.grid(
-            row=0, column=1, padx=PAD, pady=PAD, sticky="w"
-        )
+        self._default_selection_button.grid(row=0, column=1, padx=PAD, pady=PAD, sticky="w")
 
-        self._ok_button = ctk.CTkButton(
-            self._button_frame, width=100, text=_("Ok"), command=self._ok_event
-        )
+        self._ok_button = ctk.CTkButton(self._button_frame, width=100, text=_("Ok"), command=self._ok_event)
         self._ok_button.grid(
             row=0,
             column=2,

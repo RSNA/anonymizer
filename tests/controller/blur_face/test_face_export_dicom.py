@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -62,6 +63,7 @@ def test_write_blurred_dicom_series_preserves_geometry(tmp_path: Path) -> None:
     assert out_ds.Columns == source_ds.Columns
     assert out_ds.SeriesInstanceUID != source_ds.SeriesInstanceUID
     assert "face blurred" in out_ds.SeriesDescription.lower()
+    assert out_ds.SpecificCharacterSet == "ISO_IR 192"
 
     reloaded = load_hu_stack(written_paths)
     assert reloaded.shape == hu_after.shape
@@ -99,3 +101,22 @@ def test_save_series_frames_preserves_ct_encoding(tmp_path: Path) -> None:
     hu_source = load_hu_stack(slice_paths)
     hu_output = load_hu_stack(tuple(output_dir / path.name for path in slice_paths))
     assert np.allclose(hu_output, hu_source, atol=1.0)
+
+
+def test_write_blurred_dicom_series_no_charset_warning(tmp_path: Path) -> None:
+    source_dir = tmp_path / "input"
+    source_dir.mkdir()
+    slice_path = source_dir / "slice_001.dcm"
+    _write_template_slice(slice_path, hu_value=0.0, instance_number=1)
+
+    hu = load_hu_stack((slice_path,))
+    mask = np.zeros(hu.shape, dtype=bool)
+    mask[:, 20:40, 20:40] = True
+    hu = blur_face_hu_volume(hu, mask, sigma_mm=4.0, pixel_spacing_mm=(1.0, 1.0))
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        write_blurred_dicom_series(hu, (slice_path,), tmp_path / "out")
+
+    charset_warnings = [item for item in caught if "encode value with encodings" in str(item.message).lower()]
+    assert not charset_warnings

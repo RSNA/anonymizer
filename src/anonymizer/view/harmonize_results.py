@@ -333,6 +333,13 @@ class HarmonizeResultsView(tk.Toplevel):
         self._progressbar.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="w")
         self._progressbar.set(0)
 
+        self._cancel_button = ctk.CTkButton(
+            self._footer_frame,
+            width=self.ButtonWidth,
+            text=_("Cancel"),
+            command=self._on_cancel,
+        )
+
         self._no_button = ctk.CTkButton(
             self._footer_frame,
             width=self.ButtonWidth,
@@ -368,8 +375,8 @@ class HarmonizeResultsView(tk.Toplevel):
         series_desc = current_description.strip() or _("(no series description)")
         series_no = ds.get("SeriesNumber")
         if series_no not in (None, ""):
-            return _("Series Description") + f" (#{series_no}): \"{series_desc}\""
-        return _("Series Description") + f": \"{series_desc}\""
+            return _("Series Description") + f' (#{series_no}): "{series_desc}"'
+        return _("Series Description") + f': "{series_desc}"'
 
     @staticmethod
     def format_study_context_line(
@@ -615,7 +622,12 @@ class HarmonizeResultsView(tk.Toplevel):
             return
         for iid, values in zip(
             PLAYBOOK_TREE_IIDS,
-            harmonize_analysis_rows(result.playbook, geometry=result.geometry, ds=self._ds),
+            harmonize_analysis_rows(
+                result.playbook,
+                geometry=result.geometry,
+                ds=self._ds,
+                tseg=result.tseg,
+            ),
             strict=True,
         ):
             self._upsert_playbook_row(iid, values)
@@ -639,6 +651,13 @@ class HarmonizeResultsView(tk.Toplevel):
         self._clear_playbook_tree()
         self._proposal_frame.grid_remove()
 
+    def _show_cancel_button(self, *, enabled: bool = True) -> None:
+        self._cancel_button.configure(state="normal" if enabled else "disabled")
+        self._cancel_button.grid(row=0, column=2, padx=(self.PAD, self.PAD), pady=self.PAD, sticky="e")
+
+    def _hide_cancel_button(self) -> None:
+        self._cancel_button.grid_remove()
+
     def _show_running_state(self) -> None:
         self._dicom_frame.grid()
         self._playbook_frame.grid()
@@ -649,6 +668,7 @@ class HarmonizeResultsView(tk.Toplevel):
         self._no_button.configure(state="disabled")
         self._yes_button.configure(state="disabled")
         self._ok_button.configure(state="disabled")
+        self._show_cancel_button()
 
     def _show_error(self, message: str) -> None:
         self._running = False
@@ -666,6 +686,7 @@ class HarmonizeResultsView(tk.Toplevel):
             self._ok_button.configure(text=_("OK"))
         self._ok_button.configure(state="normal")
         self._ok_button.grid(row=0, column=5, padx=(self.PAD, self.PAD), pady=self.PAD, sticky="e")
+        self._show_cancel_button()
 
     def _configure_review_buttons(self, *, already_matches: bool) -> None:
         if already_matches:
@@ -682,6 +703,7 @@ class HarmonizeResultsView(tk.Toplevel):
         self._yes_button.configure(state="normal")
         self._no_button.grid(row=0, column=3, padx=(self.PAD, 0), pady=self.PAD, sticky="e")
         self._yes_button.grid(row=0, column=4, padx=(self.PAD, 0), pady=self.PAD, sticky="e")
+        self._show_cancel_button()
 
     def _show_saving_state(self) -> None:
         self._saving = True
@@ -690,6 +712,7 @@ class HarmonizeResultsView(tk.Toplevel):
         self._no_button.configure(state="disabled")
         self._yes_button.configure(state="disabled")
         self._ok_button.grid_remove()
+        self._show_cancel_button(enabled=False)
         self._error_frame.grid_remove()
         self._status_label.configure(text=_("Saving series description to DICOM") + "…")
         self._progressbar.set(self._batch_overall_fraction(1.0))
@@ -825,7 +848,7 @@ class HarmonizeResultsView(tk.Toplevel):
 
     def _poll_harmonize_progress(self) -> None:
         self._poll_after_id = None
-        if not self.winfo_exists() or self._closing:
+        if not self.winfo_exists() or self._closing or self.cancelled:
             return
 
         while True:
@@ -908,9 +931,8 @@ class HarmonizeResultsView(tk.Toplevel):
             self.accepted = False
         elif self._batch_total > 1 and len(self._outcomes) < self._batch_total:
             self.cancelled = True
-        elif self.accepted is None and self.result is not None:
-            pass
         elif self.accepted is None:
+            self.cancelled = True
             self.accepted = False
         self._close()
 

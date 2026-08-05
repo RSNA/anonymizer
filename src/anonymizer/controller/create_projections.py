@@ -1,4 +1,3 @@
-import gc
 import logging
 import pickle
 from dataclasses import asdict, dataclass, field
@@ -44,6 +43,19 @@ from anonymizer.utils.storage import get_dcm_files
 logger = logging.getLogger(__name__)
 
 PROJECTION_FILENAME = "Projection.pkl"
+
+
+def delete_series_projection_cache(series_path: Path) -> None:
+    """Remove cached Projection.pkl so viewers reload pixels from updated DICOM."""
+    projection_file_path = Path(series_path) / PROJECTION_FILENAME
+    if not projection_file_path.is_file():
+        return
+    try:
+        projection_file_path.unlink()
+        logger.info("Deleted stale projection cache: %s", projection_file_path)
+    except OSError as exc:
+        logger.warning("Error deleting projection cache %s: %s", projection_file_path, exc)
+
 
 VALID_COLOR_SPACES = [
     "MONOCHROME1",
@@ -218,9 +230,7 @@ def ordered_series_dcm_paths(series_path: Path) -> list[Path]:
             dcm_paths = list(list_dicom_paths(series_path))
         except ValueError:
             dcm_paths = sorted(
-                path
-                for path in series_path.iterdir()
-                if path.is_file() and path.suffix.lower() in {".dcm", ".dicom"}
+                path for path in series_path.iterdir() if path.is_file() and path.suffix.lower() in {".dcm", ".dicom"}
             )
         if not dcm_paths:
             raise ValueError(f"No DICOM files found in {series_path}") from exc
@@ -271,6 +281,55 @@ def _prepare_monochrome_stored_pixels(frame_data: np.ndarray, ds_orig: Dataset) 
     if frame_data.ndim == 2:
         return _one_frame(frame_data)
     return np.stack([_one_frame(frame_data[index]) for index in range(frame_data.shape[0])], axis=0)
+
+
+def stored_grayscale_frame_to_viewer_pixels(
+    stored_frame: np.ndarray,
+    ds: Dataset,
+) -> tuple[np.ndarray, float | None]:
+    """
+    Convert one stored grayscale frame to Series View pixel space (float32).
+
+    Matches ``load_series_frames`` monochrome handling (modality LUT, MONOCHROME1 invert).
+    Returns ``(viewer_pixels, modality_max)``; ``modality_max`` is required to map back
+    for MONOCHROME1 and is ``None`` for MONOCHROME2.
+    """
+    pi = str(getattr(ds, "PhotometricInterpretation", "") or "").upper()
+    modality = np.asarray(apply_modality_lut(stored_frame, ds), dtype=np.float32)
+    if pi == "MONOCHROME1":
+        modality_max = float(np.max(modality))
+        return modality_max - modality, modality_max
+    return modality, None
+
+
+def viewer_grayscale_pixels_to_stored_frame(
+    viewer_frame: np.ndarray,
+    ds: Dataset,
+    *,
+    modality_max: float | None = None,
+) -> np.ndarray:
+    """Convert Series View grayscale pixels back to stored DICOM pixels."""
+    pi = str(getattr(ds, "PhotometricInterpretation", "") or "").upper()
+    viewer = viewer_frame.astype(np.float32, copy=False)
+    if pi == "MONOCHROME1":
+        if modality_max is None:
+            raise ValueError("modality_max is required for MONOCHROME1")
+        modality = modality_max - viewer
+    else:
+        modality = viewer
+    return _prepare_monochrome_stored_pixels(modality, ds)
+
+
+def prepare_series_view_ocr_frame(stored_frame: np.ndarray, ds: Dataset) -> NDArray[np.uint8]:
+    """
+    Build the uint8 BGR frame Series View uses for Detect Text.
+
+    Uses the same monochrome conversion as ``load_series_frames`` and DICOM
+    ``WindowCenter``/``WindowWidth`` via ``get_wl_ww`` (no border or downscale).
+    """
+    viewer_pixels, _modality_max = stored_grayscale_frame_to_viewer_pixels(stored_frame, ds)
+    wl, ww = get_wl_ww(ds)
+    return apply_windowing(wl, ww, viewer_pixels)
 
 
 def _pixel_data_vr(ds: Dataset) -> str:
@@ -825,7 +884,6 @@ def load_series_frames(series_path: Path, border_px: int | None = 20) -> tuple[D
         processed_frames[index] = None  # type: ignore[call-overload]
     processed_frames.clear()
     del processed_frames
-    gc.collect()
 
     log_process_memory(
         "load_series_frames_stacked",
@@ -1078,13 +1136,7 @@ def save_series_frames(original_series_path: Path, processed_frames: np.ndarray,
         success = False
 
     # --- 4. Remove Projection File if it exists for series ---
-    projection_file_path = original_series_path / PROJECTION_FILENAME
-    if projection_file_path.exists() and projection_file_path.is_file():
-        try:
-            projection_file_path.unlink()
-            logger.info(f"Deleted existing projection file: {projection_file_path}")
-        except Exception as e:  # Catch any errors during deletion
-            logger.warning(f"Error deleting projection file {projection_file_path}: {e}")
+    delete_series_projection_cache(original_series_path)
 
     logger.info(f"Finished saving series to {original_series_path}. Overall success: {success}")
     return success

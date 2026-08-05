@@ -1090,9 +1090,6 @@ msgstr "Quarantäne"
 msgid "Metadata Queue"
 msgstr "Metadaten-Warteschlange"
 
-msgid "Pixel PHI Queue"
-msgstr "Pixel-PHI-Warteschlange"
-
 msgid "online"
 msgstr "online"
 

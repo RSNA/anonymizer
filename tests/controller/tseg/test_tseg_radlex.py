@@ -20,9 +20,7 @@ def test_single_region_chest_with_contrast() -> None:
 
 
 def test_multi_region() -> None:
-    assert (
-        format_radlex_ct_series_description("Chest+Abdomen", True) == "CT Chest+Abdomen With Contrast"
-    )
+    assert format_radlex_ct_series_description("Chest+Abdomen", True) == "CT Chest+Abdomen With Contrast"
 
 
 def test_falcon_headneck_token() -> None:

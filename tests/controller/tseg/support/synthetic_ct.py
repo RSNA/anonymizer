@@ -2,11 +2,12 @@
 
 import math
 import shutil
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import numpy as np
 import pydicom
+from cv2 import FONT_HERSHEY_SIMPLEX, putText
 from pydicom.data import get_testdata_file
 from pydicom.uid import generate_uid
 
@@ -179,9 +180,7 @@ def build_synthetic_oriented_ct_series(
     for index in range(num_slices):
         hu_slice = _chest_hu_slice(index, num_slices, rows, cols)
         sop_instance_uid = (
-            f"{sop_instance_uid_prefix}.{index + 1}"
-            if sop_instance_uid_prefix is not None
-            else generate_uid()
+            f"{sop_instance_uid_prefix}.{index + 1}" if sop_instance_uid_prefix is not None else generate_uid()
         )
         dataset = _new_ct_dataset(
             hu_slice,
@@ -366,9 +365,7 @@ def _build_phantom_series(
     for index in range(num_slices):
         hu_slice = slice_generator(index, num_slices, rows, cols)
         sop_instance_uid = (
-            f"{sop_instance_uid_prefix}.{index + 1}"
-            if sop_instance_uid_prefix is not None
-            else generate_uid()
+            f"{sop_instance_uid_prefix}.{index + 1}" if sop_instance_uid_prefix is not None else generate_uid()
         )
         dataset = _new_ct_dataset(
             hu_slice,
@@ -525,6 +522,64 @@ def _abdomen_hu_slice(index: int, num_slices: int, rows: int, cols: int) -> np.n
 
     hu += np.random.default_rng(index + 201).normal(0.0, 10.0, size=(rows, cols))
     return hu.astype(np.float32)
+
+
+DEFAULT_BURNED_IN_PHI_LINES: tuple[str, ...] = ("SMITH^JOHN", "01-Jan-2024")
+_BURNED_IN_PHI_HU = 3071.0
+_BURNED_IN_PHI_BACKGROUND_HU = -200.0
+
+
+def burn_phi_overlay_on_hu_slice(
+    hu_slice: np.ndarray,
+    lines: Sequence[str],
+    *,
+    origin: tuple[int, int] = (24, 40),
+    line_spacing_px: int = 32,
+) -> np.ndarray:
+    """Simulate bright burnt-in patient overlay text on a CT HU slice."""
+    mask = np.zeros(hu_slice.shape, dtype=np.uint8)
+    x, y = origin
+    banner_bottom = y + len(lines) * line_spacing_px + 12
+    banner_right = min(hu_slice.shape[1] - 1, x + 260)
+    result = hu_slice.copy()
+    result[20:banner_bottom, 20:banner_right] = _BURNED_IN_PHI_BACKGROUND_HU
+    for index, line in enumerate(lines):
+        putText(
+            mask,
+            line,
+            (x, y + index * line_spacing_px),
+            FONT_HERSHEY_SIMPLEX,
+            0.9,
+            255,
+            2,
+        )
+    result[mask > 0] = _BURNED_IN_PHI_HU
+    return result
+
+
+def apply_burned_in_phi_to_dicom(path: Path, lines: Sequence[str] = DEFAULT_BURNED_IN_PHI_LINES) -> None:
+    """Burn sample PHI overlay text into an on-disk synthetic CT slice."""
+    dataset = pydicom.dcmread(path)
+    hu_slice = dataset.pixel_array.astype(np.float32)
+    burned = burn_phi_overlay_on_hu_slice(hu_slice, lines)
+    dataset.PixelData = _hu_to_stored_pixels(burned).tobytes()
+    dataset.save_as(path)
+
+
+def build_synthetic_ct_series_with_burned_in_phi(
+    output_dir: Path,
+    *,
+    phi_lines: Sequence[str] = DEFAULT_BURNED_IN_PHI_LINES,
+    burn_slice_index: int = 0,
+    num_slices: int = FALCON_MIN_SLICES,
+) -> Path:
+    """Build a synthetic chest CT series with burnt-in PHI on one slice."""
+    series_dir = build_synthetic_chest_ct_series(output_dir, num_slices=num_slices)
+    slice_paths = list_dcm_files(series_dir)
+    if not 0 <= burn_slice_index < len(slice_paths):
+        raise IndexError(f"burn_slice_index {burn_slice_index} out of range for {len(slice_paths)} slices")
+    apply_burned_in_phi_to_dicom(slice_paths[burn_slice_index], phi_lines)
+    return series_dir
 
 
 if __name__ == "__main__":

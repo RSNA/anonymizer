@@ -44,7 +44,7 @@ pytest tests/controller/blur_face -q
 pytest tests/controller/dicom -q
 pytest tests/controller/core -q
 pytest tests/controller/infra -q
-pytest tests/controller -m tseg_integration   # slow; needs totalsegmentator extra
+pytest tests/controller -m tseg_integration   # slow; needs totalsegmentator (core dep in V19)
 pytest tests/controller/dicom -m dicom_integration   # local Orthanc required
 ```
 

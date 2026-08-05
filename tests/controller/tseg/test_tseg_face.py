@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 import SimpleITK as sitk
 
-from anonymizer.controller.blur_face_gate import FaceBlurGateReason, face_blur_gate_message
+from anonymizer.controller.blur_face import FaceBlurGateReason, face_blur_gate_message
 from anonymizer.controller.tseg.config import FACE_MASK_FILENAME
 from anonymizer.controller.tseg.segment import (
     AnalysisProgress,

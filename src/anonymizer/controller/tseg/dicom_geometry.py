@@ -429,9 +429,7 @@ def validate_uniform_slice_dimensions(
 
     if missing:
         shown_missing = missing[:max_listed]
-        listed_missing = ", ".join(
-            _format_slice_dimension_ref(path, header, None) for path, header in shown_missing
-        )
+        listed_missing = ", ".join(_format_slice_dimension_ref(path, header, None) for path, header in shown_missing)
         remainder = len(missing) - len(shown_missing)
         if remainder > 0:
             listed_missing = f"{listed_missing}, ... and {remainder} more"
@@ -440,9 +438,40 @@ def validate_uniform_slice_dimensions(
     return message
 
 
+def _dicom_sort_key_ipp_z(path: Path) -> float:
+    header = dcmread(path, stop_before_pixels=True)
+    ipp = header.ImagePositionPatient
+    return float(ipp[2])
+
+
+def _dicom_sort_key_ipp_projection(
+    path: Path,
+    slice_normal: tuple[float, float, float],
+) -> float:
+    header = dcmread(path, stop_before_pixels=True)
+    return project_ipp_onto_normal(header.ImagePositionPatient, slice_normal)
+
+
+def _sorted_dicom_paths_by_ipp_z_or_filename(
+    series_directory: Path,
+    paths: list[Path],
+) -> list[Path]:
+    try:
+        return sorted(paths, key=_dicom_sort_key_ipp_z)
+    except (AttributeError, TypeError, ValueError, IndexError):
+        logger.warning(
+            "Falling back to filename sort for %s (missing or invalid IOP and IPP)",
+            series_directory,
+        )
+        return sorted(paths, key=lambda path: path.name)
+
+
 def sorted_dicom_paths(series_directory: Path) -> list[Path]:
     """Return DICOM paths sorted along the acquisition stack direction."""
     paths = list_dicom_paths(series_directory)
+    if len(paths) == 1:
+        return paths
+
     first_header = dcmread(paths[0], stop_before_pixels=True)
     try:
         slice_normal = slice_normal_from_iop(first_header.ImageOrientationPatient)
@@ -451,18 +480,19 @@ def sorted_dicom_paths(series_directory: Path) -> list[Path]:
             "Falling back to ImagePositionPatient[2] sort for %s (missing or invalid IOP)",
             series_directory,
         )
+        return _sorted_dicom_paths_by_ipp_z_or_filename(series_directory, paths)
+
+    try:
         return sorted(
             paths,
-            key=lambda path: float(dcmread(path, stop_before_pixels=True).ImagePositionPatient[2]),
+            key=lambda path: _dicom_sort_key_ipp_projection(path, slice_normal),
         )
-
-    return sorted(
-        paths,
-        key=lambda path: project_ipp_onto_normal(
-            dcmread(path, stop_before_pixels=True).ImagePositionPatient,
-            slice_normal,
-        ),
-    )
+    except (AttributeError, TypeError, ValueError, IndexError):
+        logger.warning(
+            "Falling back to ImagePositionPatient[2] sort for %s (missing or invalid IPP)",
+            series_directory,
+        )
+        return _sorted_dicom_paths_by_ipp_z_or_filename(series_directory, paths)
 
 
 def is_stackable_image_header(header: Dataset) -> bool:
@@ -470,9 +500,7 @@ def is_stackable_image_header(header: Dataset) -> bool:
     sop_class = str(getattr(header, "SOPClassUID", "") or "")
     if not sop_class.startswith(IMAGE_STORAGE_SOP_PREFIX):
         return False
-    if sop_class == SECONDARY_CAPTURE_SOP or any(
-        sop_class.startswith(prefix) for prefix in NON_STACKABLE_SOP_PREFIXES
-    ):
+    if sop_class == SECONDARY_CAPTURE_SOP or any(sop_class.startswith(prefix) for prefix in NON_STACKABLE_SOP_PREFIXES):
         return False
     rows = int(getattr(header, "Rows", 0) or 0)
     cols = int(getattr(header, "Columns", 0) or 0)
@@ -517,15 +545,11 @@ def stackable_dicom_paths(series_directory: Path) -> list[Path]:
         raise ValueError(f"No stackable image slices found in {series_directory}")
 
     series_uids = Counter(
-        str(header.get("SeriesInstanceUID", "") or "")
-        for _, header in entries
-        if header.get("SeriesInstanceUID")
+        str(header.get("SeriesInstanceUID", "") or "") for _, header in entries if header.get("SeriesInstanceUID")
     )
     if len(series_uids) > 1:
         dominant_uid = series_uids.most_common(1)[0][0]
-        excluded = sum(
-            1 for _, header in entries if str(header.get("SeriesInstanceUID", "") or "") != dominant_uid
-        )
+        excluded = sum(1 for _, header in entries if str(header.get("SeriesInstanceUID", "") or "") != dominant_uid)
         if excluded:
             logger.warning(
                 "Excluding %d DICOM instance(s) with non-dominant SeriesInstanceUID in %s",
@@ -533,9 +557,7 @@ def stackable_dicom_paths(series_directory: Path) -> list[Path]:
                 series_directory,
             )
         entries = [
-            (path, header)
-            for path, header in entries
-            if str(header.get("SeriesInstanceUID", "") or "") == dominant_uid
+            (path, header) for path, header in entries if str(header.get("SeriesInstanceUID", "") or "") == dominant_uid
         ]
 
     path_by_sop = {str(header.SOPInstanceUID): path for path, header in entries}
@@ -551,9 +573,7 @@ def _slice_spacing_mm_from_headers(headers: Sequence[Dataset]) -> float:
         return fallback
     try:
         slice_normal = slice_normal_from_iop(first.ImageOrientationPatient)
-        positions = sorted(
-            project_ipp_onto_normal(header.ImagePositionPatient, slice_normal) for header in headers
-        )
+        positions = sorted(project_ipp_onto_normal(header.ImagePositionPatient, slice_normal) for header in headers)
         steps = [abs(positions[index + 1] - positions[index]) for index in range(len(positions) - 1)]
         positive_steps = [step for step in steps if step > 1e-6]
         if positive_steps:
@@ -845,6 +865,35 @@ def load_geometry_cache(series_directory: Path) -> SeriesGeometryResult | None:
         return None
 
 
+def ensure_series_geometry(
+    series_directory: Path,
+    *,
+    ds: Dataset | None = None,
+    modality: str | None = None,
+    cached: SeriesGeometryResult | None = None,
+) -> SeriesGeometryResult | None:
+    """Return CT series geometry from memory, cache, or on-demand analysis."""
+    if cached is not None:
+        return cached
+
+    resolved_modality = modality
+    if resolved_modality is None and ds is not None:
+        resolved_modality = getattr(ds, "Modality", None)
+    if resolved_modality != "CT":
+        return None
+
+    series_directory = Path(series_directory)
+    geometry = load_geometry_cache(series_directory)
+    if geometry is not None:
+        return geometry
+
+    try:
+        return resolve_series_geometry(series_directory)
+    except Exception as exc:
+        logger.warning("Could not resolve series geometry for %s: %s", series_directory, exc)
+        return None
+
+
 # User-facing labels (msgids for gettext). Internal codes remain on SeriesGeometryResult.
 _PROVENANCE_MSGIDS: dict[ProvenanceLabel, str] = {
     "original": "Original acquisition",
@@ -911,8 +960,8 @@ def geometry_analysis_progress_prefix() -> str:
 
 def format_geometry_summary(geometry: SeriesGeometryResult) -> str:
     """Compact one-line summary for projection tiles and cached geometry captions."""
-    ts_tag = "TS ok" if geometry.ts_suitable else "TS skip"
-    return f"{geometry.plane} · {geometry.dimensionality} · {ts_tag}"
+    ts_tag = _("TS ok") if geometry.ts_suitable else _("TS skip")
+    return f"{plane_label(geometry.plane)} · {dimensionality_label(geometry.dimensionality)} · {ts_tag}"
 
 
 def format_series_view_geometry_line(geometry: SeriesGeometryResult) -> str:

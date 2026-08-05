@@ -155,7 +155,7 @@ class Dashboard(ctk.CTkFrame):
         row += 1
 
         self._status_frame = ctk.CTkFrame(self)
-        self._status_frame.columnconfigure(3, weight=1)
+        self._status_frame.columnconfigure(2, weight=1)
         self._status_frame.grid(
             row=row,
             column=0,
@@ -171,15 +171,8 @@ class Dashboard(ctk.CTkFrame):
         self._meta_qsize = ctk.CTkLabel(self._status_frame, text="0")
         self._meta_qsize.grid(row=0, column=1, sticky="w")
 
-        if self._controller.model.remove_pixel_phi:
-            self.label_pixel_queue = ctk.CTkLabel(self._status_frame, text=_("Pixel PHI Queue") + ":")
-            self.label_pixel_queue.grid(row=0, column=2, padx=self.PAD, sticky="w")
-
-            self._pixel_qsize = ctk.CTkLabel(self._status_frame, text="0")
-            self._pixel_qsize.grid(row=0, column=3, sticky="w")
-
         self._status = ctk.CTkLabel(self._status_frame, text="")
-        self._status.grid(row=0, column=4, padx=self.PAD, sticky="e")
+        self._status.grid(row=0, column=2, padx=self.PAD, sticky="e")
 
     def _wait_for_scp_echo(
         self,
@@ -282,10 +275,8 @@ class Dashboard(ctk.CTkFrame):
 
         self.after(1000, self._wait_for_aws)
 
-    def update_anonymizer_queues(self, ds_Q_size: int, px_Q_size: int):
+    def update_anonymizer_queues(self, ds_Q_size: int) -> None:
         self._meta_qsize.configure(text=f"{ds_Q_size}")
-        if hasattr(self, "_pixel_qsize"):
-            self._pixel_qsize.configure(text=f"{px_Q_size}")
 
     def update_totals(self, totals: Totals):
         self._patients_label.configure(text=f"{totals.patients}")

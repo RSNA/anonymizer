@@ -3,6 +3,7 @@ from customtkinter import ThemeManager
 from PIL import Image
 
 from anonymizer.utils.translate import _, get_current_language, language_to_code
+from anonymizer.view.ctk_safe import release_ctk_label_image
 
 
 class WelcomeView(ctk.CTkFrame):
@@ -14,6 +15,7 @@ class WelcomeView(ctk.CTkFrame):
     Args:
         parent (ctk.CTk): The parent widget.
         change_language_callback (callable): A callback function to handle language change.
+        ai_features_callback (callable): Opens the AI Features Setup dialog.
 
     Attributes:
     All dimensions in pixels.
@@ -37,13 +39,14 @@ class WelcomeView(ctk.CTkFrame):
     TITLED_LOGO_HEIGHT = 155
     WELCOME_TEXT_WRAP_LENGTH = 650
 
-    def __init__(self, parent: ctk.CTk, change_language_callback):
+    def __init__(self, parent: ctk.CTk, change_language_callback, ai_features_callback):
         """
         Initialize the WelcomeView.
 
         Args:
             parent (ctk.CTk): The parent widget.
             change_language_callback (callable): A callback function to handle language change.
+            ai_features_callback (callable): Opens the AI Features Setup dialog.
 
         """
         super().__init__(master=parent)
@@ -69,32 +72,53 @@ class WelcomeView(ctk.CTkFrame):
         )
         self.sponsor_text = _("SPONSOR MESSAGE")
         self.change_language_callback = change_language_callback
+        self.ai_features_callback = ai_features_callback
         self.font_family = ThemeManager.theme["CTkFont"]["family"]
+        self._logo_widget: ctk.CTkLabel | None = None
+        self._logo_image: ctk.CTkImage | None = None
         self._create_widgets()
         self.grid(row=0, column=0)
+
+    def release_images(self) -> None:
+        """Drop logo PhotoImage references on the main thread before destroy."""
+        if self._logo_widget is not None:
+            release_ctk_label_image(self._logo_widget)
+        self._logo_widget = None
+        self._logo_image = None
 
     def _create_widgets(self):
         """
         Create the widgets for the WelcomeView.
 
         """
-        self.rowconfigure(3, weight=1)
+        self.rowconfigure(4, weight=1)
 
-        # Languages:
+        controls = ctk.CTkFrame(self, fg_color="transparent")
+        controls.grid(row=0, column=0, padx=self.PAD, pady=self.PAD, sticky="ne")
+
         language_buttons = ctk.CTkSegmentedButton(
-            master=self, values=list(language_to_code.keys()), command=self.change_language_callback
+            master=controls,
+            values=list(language_to_code.keys()),
+            command=self.change_language_callback,
         )
         language_buttons.set(get_current_language())
-        language_buttons.grid(row=0, column=0, padx=self.PAD, pady=self.PAD, sticky="ne")
+        language_buttons.grid(row=0, column=0, sticky="e")
+
+        self._ai_features_button = ctk.CTkButton(
+            master=controls,
+            text=_("AI Features"),
+            command=self.ai_features_callback,
+        )
+        self._ai_features_button.grid(row=1, column=0, pady=(8, 0), sticky="e")
 
         # Titled RSNA Logo:
-        titled_logo_image = ctk.CTkImage(
+        self._logo_image = ctk.CTkImage(
             light_image=Image.open(self.TITLED_LOGO_FILE),
             dark_image=Image.open(self.TITLED_LOGO_FILE),
             size=(self.TITLED_LOGO_WIDTH, self.TITLED_LOGO_HEIGHT),
         )
-        logo_widget = ctk.CTkLabel(master=self, image=titled_logo_image, text="")
-        logo_widget.grid(
+        self._logo_widget = ctk.CTkLabel(master=self, image=self._logo_image, text="")
+        self._logo_widget.grid(
             row=1,
             column=0,
             sticky="n",

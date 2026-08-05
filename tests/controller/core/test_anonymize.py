@@ -90,7 +90,7 @@ def test_uid_hashing_is_deterministic_and_unique(controller: ProjectController):
     """
     model = controller.anonymizer.model
     orig_uid_1 = "1.2.3.4.5"
-    orig_uid_2 = "1.2.3.4.5.6" # A different UID
+    orig_uid_2 = "1.2.3.4.5.6"  # A different UID
 
     # Call the function twice with the same input
     hash_1a = model._create_anon_uid(orig_uid_1)
@@ -104,6 +104,7 @@ def test_uid_hashing_is_deterministic_and_unique(controller: ProjectController):
 
     # Test for uniqueness
     assert hash_1a != hash_2
+
 
 def test_uid_hash_format_and_length(controller: ProjectController):
     """
@@ -127,7 +128,8 @@ def test_uid_hash_format_and_length(controller: ProjectController):
     # 3. Check that the hash part is numeric
     hash_part = hashed_uid.replace(expected_prefix, "")
     assert hash_part.isnumeric()
-    assert len(hash_part) > 0 # Ensure it's not empty
+    assert len(hash_part) > 0  # Ensure it's not empty
+
 
 def test_uid_hashing_raises_error_if_prefix_too_long(controller: ProjectController):
     """
@@ -147,7 +149,7 @@ def test_uid_hashing_raises_error_if_prefix_too_long(controller: ProjectControll
     model = controller.anonymizer.model
     prefix_60_chars = "1." * 30
     model._uid_prefix = prefix_60_chars
-    model._create_anon_uid("1.2.3") # Should not raise
+    model._create_anon_uid("1.2.3")  # Should not raise
 
     # A prefix of 61 chars. `prefix` length = 64. `max_len <= 64` is True. Raise.
     prefix_61_chars = "1.2" + ("." * 59)

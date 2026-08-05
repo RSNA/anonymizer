@@ -139,9 +139,7 @@ def test_ensure_schema_columns_is_idempotent(tmp_path: Path) -> None:
         script_path=SCRIPT_PATH,
         db_url=db_url,
     )
-    columns_after_first_open = {
-        table: _column_names(db_path, table) for table, _ in V3_METADATA_COLUMNS
-    }
+    columns_after_first_open = {table: _column_names(db_path, table) for table, _ in V3_METADATA_COLUMNS}
 
     AnonymizerModel(
         site_id=TEST_SITEID,
@@ -149,9 +147,7 @@ def test_ensure_schema_columns_is_idempotent(tmp_path: Path) -> None:
         script_path=SCRIPT_PATH,
         db_url=db_url,
     )
-    columns_after_second_open = {
-        table: _column_names(db_path, table) for table, _ in V3_METADATA_COLUMNS
-    }
+    columns_after_second_open = {table: _column_names(db_path, table) for table, _ in V3_METADATA_COLUMNS}
 
     assert columns_after_first_open == columns_after_second_open
 

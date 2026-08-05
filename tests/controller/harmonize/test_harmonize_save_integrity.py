@@ -17,10 +17,7 @@ from tests.controller.tseg.support.synthetic_ct import build_synthetic_chest_ct_
 
 
 def _snapshot_series_pixel_arrays(series_dir: Path) -> dict[str, np.ndarray]:
-    return {
-        dcm_path.name: dcmread(dcm_path).pixel_array.copy()
-        for dcm_path in sorted(series_dir.glob("*.dcm"))
-    }
+    return {dcm_path.name: dcmread(dcm_path).pixel_array.copy() for dcm_path in sorted(series_dir.glob("*.dcm"))}
 
 
 def _assert_series_pixels_unchanged(

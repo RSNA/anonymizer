@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from anonymizer.controller.blur_face_gate import (
+from anonymizer.controller.blur_face import (
     FaceBlurEligibility,
     FaceBlurGateDecision,
     FaceBlurGateReason,
 )
 from anonymizer.controller.tseg.dicom_geometry import format_series_view_geometry_line
+from anonymizer.controller.tseg.runtime_status import set_ai_session
 from anonymizer.model.anonymizer import SeriesProcessingStatus, format_series_processing_status
 from anonymizer.view.image import ImageViewer
 from anonymizer.view.series import SeriesView
@@ -109,21 +110,37 @@ def test_refresh_series_processing_status_shows_face_blur_when_already_applied()
     )
 
 
+def _enable_ai_session() -> None:
+    set_ai_session(remove_pixel_phi=True, enable_harmonize=True, enable_face_blur=True)
+
+
+def test_harmonize_button_visible_when_cache_exists_without_session_flag() -> None:
+    series = SeriesView.__new__(SeriesView)
+    set_ai_session(enable_harmonize=False, enable_face_blur=False)
+    series._ds = SimpleNamespace(Modality="CT")
+    series._series_path = MagicMock()
+    with patch(
+        "anonymizer.view.series.tseg_cache_summary",
+        return_value=SimpleNamespace(exists=True),
+    ):
+        assert SeriesView._harmonize_button_visible(series) is True
+
+
 def test_harmonize_button_state_uses_orm_metadata() -> None:
     series = SeriesView.__new__(SeriesView)
+    _enable_ai_session()
     series._ds = SimpleNamespace(Modality="CT", SeriesInstanceUID="anon-series-1")
     series._anon_model = MagicMock()
     series._anon_model.series_is_harmonized.return_value = True
 
-    assert SeriesView._harmonize_button_state(series) == "disabled"
+    with patch("anonymizer.view.series.harmonize_allowed", return_value=True):
+        assert SeriesView._harmonize_button_state(series) == "disabled"
     series._anon_model.series_is_harmonized.assert_called_once_with("anon-series-1")
 
 
 def test_set_series_interaction_enabled_restores_harmonize_from_model() -> None:
     series = SeriesView.__new__(SeriesView)
     series.winfo_exists = MagicMock(return_value=True)
-    series._face_blur_preview_pending = False
-    series._blur_preview = None
     series.harmonize_button = MagicMock()
     series.blur_face_button = MagicMock()
     series.blur_face_mode_menu = MagicMock()
@@ -159,8 +176,7 @@ def test_on_series_description_updated_refreshes_processing_status() -> None:
 
 def test_refresh_blur_face_ui_disabled_when_face_blur_applied() -> None:
     series = SeriesView.__new__(SeriesView)
-    series._blur_running = False
-    series._blur_preview = None
+    _enable_ai_session()
     series._ds = SimpleNamespace(SeriesInstanceUID="anon-series-1")
     series._anon_model = MagicMock()
     series._anon_model.series_has_face_blur.return_value = True
@@ -178,25 +194,13 @@ def test_refresh_blur_face_ui_disabled_when_face_blur_applied() -> None:
 
 def test_blur_face_button_state_disabled_when_face_blur_applied() -> None:
     series = SeriesView.__new__(SeriesView)
-    series._blur_running = False
-    series._blur_preview = None
+    _enable_ai_session()
     series._ds = SimpleNamespace(SeriesInstanceUID="anon-series-1")
     series._anon_model = MagicMock()
     series._anon_model.series_has_face_blur.return_value = True
     series._face_blur_eligibility = MagicMock(
         return_value=SimpleNamespace(decision=FaceBlurGateDecision.ALLOW),
     )
-
-    assert SeriesView._blur_face_button_state(series) == "disabled"
-
-
-def test_blur_face_toolbar_state_disabled_during_preview() -> None:
-    series = SeriesView.__new__(SeriesView)
-    series._blur_running = False
-    series._blur_preview = object()
-    series._ds = SimpleNamespace(SeriesInstanceUID="anon-series-1")
-    series._anon_model = MagicMock()
-    series._anon_model.series_has_face_blur.return_value = False
 
     assert SeriesView._blur_face_toolbar_state(series) == "disabled"
 
@@ -232,12 +236,20 @@ def test_on_series_configure_updates_wraplength_only() -> None:
     series._update_status_label_wraplength.assert_called_once()
 
 
-def test_calculate_scaled_size_returns_native_when_image_fits() -> None:
+def test_calculate_scaled_size_returns_native_when_image_fits_and_upscale_disabled() -> None:
     viewer = ImageViewer.__new__(ImageViewer)
     viewer.image_width = 512
     viewer.image_height = 512
 
-    assert ImageViewer._calculate_scaled_size(viewer, 900, 700) == (512, 512)
+    assert ImageViewer._calculate_scaled_size(viewer, 900, 700, allow_upscale=False) == (512, 512)
+
+
+def test_calculate_scaled_size_upscales_when_viewport_is_larger() -> None:
+    viewer = ImageViewer.__new__(ImageViewer)
+    viewer.image_width = 512
+    viewer.image_height = 512
+
+    assert ImageViewer._calculate_scaled_size(viewer, 900, 700) == (700, 700)
 
 
 def test_calculate_scaled_size_scales_down_large_images() -> None:
@@ -306,7 +318,7 @@ def test_set_initial_size_halves_budget_for_companion() -> None:
     viewer.companion_canvas.config.assert_called_once_with(width=512, height=512)
 
 
-def test_on_resize_updates_display_from_canvas_dimensions() -> None:
+def test_on_resize_preserves_aspect_ratio_in_viewport() -> None:
     viewer = ImageViewer.__new__(ImageViewer)
     viewer._resize_to_viewport_enabled = True
     viewer.companion_canvas = None
@@ -315,30 +327,43 @@ def test_on_resize_updates_display_from_canvas_dimensions() -> None:
     viewer.current_size = (512, 512)
     viewer.current_image_index = 2
     viewer.canvas_image_item = None
+    viewer.num_images = 1
+    viewer._primary_label = None
+    viewer.update_idletasks = MagicMock()
+    viewer.image_frame = MagicMock()
+    viewer.image_frame.winfo_width = MagicMock(return_value=400)
+    viewer.image_frame.winfo_height = MagicMock(return_value=300)
     viewer.canvas = MagicMock()
     viewer.canvas.winfo_width = MagicMock(return_value=400)
     viewer.canvas.winfo_height = MagicMock(return_value=300)
+    viewer.canvas.config = MagicMock()
     viewer.load_and_display_image = MagicMock()
     viewer.update_status = MagicMock()
     viewer._companion_cache = {}
 
     ImageViewer.on_resize(viewer)
 
-    assert viewer.current_size == (400, 300)
+    assert viewer.current_size == (300, 300)
+    viewer.canvas.config.assert_called_once_with(width=300, height=300)
     viewer.load_and_display_image.assert_called_once_with(2)
     viewer.update_status.assert_called_once()
 
 
-def test_apply_viewport_size_keeps_native_when_canvas_within_layout_slop() -> None:
+def test_apply_viewport_size_keeps_native_when_viewport_within_layout_slop() -> None:
     viewer = ImageViewer.__new__(ImageViewer)
     viewer.image_width = 512
     viewer.image_height = 512
     viewer.current_size = (512, 512)
     viewer.current_image_index = 0
-    viewer.canvas = MagicMock()
     viewer.companion_canvas = None
-    viewer.canvas.winfo_width = MagicMock(return_value=510)
-    viewer.canvas.winfo_height = MagicMock(return_value=512)
+    viewer._primary_label = None
+    viewer.num_images = 1
+    viewer.update_idletasks = MagicMock()
+    viewer.image_frame = MagicMock()
+    viewer.image_frame.winfo_width = MagicMock(return_value=510)
+    viewer.image_frame.winfo_height = MagicMock(return_value=512)
+    viewer.canvas = MagicMock()
+    viewer.canvas_image_item = MagicMock()
     viewer.load_and_display_image = MagicMock()
     viewer.update_status = MagicMock()
     viewer._companion_cache = {}
@@ -349,26 +374,129 @@ def test_apply_viewport_size_keeps_native_when_canvas_within_layout_slop() -> No
     viewer.load_and_display_image.assert_not_called()
 
 
-def test_apply_viewport_size_uses_primary_canvas_for_companion_panes() -> None:
+def test_apply_viewport_size_restores_native_after_grid_rounding() -> None:
     viewer = ImageViewer.__new__(ImageViewer)
     viewer.image_width = 512
     viewer.image_height = 512
-    viewer.current_size = (600, 400)
+    viewer.current_size = (510, 512)
     viewer.current_image_index = 0
+    viewer.companion_canvas = None
+    viewer._primary_label = None
+    viewer.num_images = 1
+    viewer.update_idletasks = MagicMock()
+    viewer.image_frame = MagicMock()
+    viewer.image_frame.winfo_width = MagicMock(return_value=510)
+    viewer.image_frame.winfo_height = MagicMock(return_value=512)
     viewer.canvas = MagicMock()
-    viewer.companion_canvas = MagicMock()
-    viewer.canvas.winfo_width = MagicMock(return_value=400)
-    viewer.canvas.winfo_height = MagicMock(return_value=300)
+    viewer.canvas.config = MagicMock()
     viewer.load_and_display_image = MagicMock()
     viewer.update_status = MagicMock()
     viewer._companion_cache = {}
 
     ImageViewer._apply_viewport_size(viewer)
 
-    assert viewer.current_size == (400, 300)
+    assert viewer.current_size == (512, 512)
+    viewer.canvas.config.assert_called_once_with(width=512, height=512)
     viewer.load_and_display_image.assert_called_once_with(0)
-    viewer.canvas.config.assert_not_called()
-    viewer.companion_canvas.config.assert_not_called()
+    viewer.update_status.assert_called_once()
+
+
+def test_apply_viewport_size_scales_down_when_window_shrinks() -> None:
+    viewer = ImageViewer.__new__(ImageViewer)
+    viewer.image_width = 512
+    viewer.image_height = 512
+    viewer.current_size = (512, 512)
+    viewer.current_image_index = 0
+    viewer.companion_canvas = None
+    viewer._primary_label = None
+    viewer.num_images = 1
+    viewer.canvas_image_item = MagicMock()
+    viewer.update_idletasks = MagicMock()
+    viewer.image_frame = MagicMock()
+    viewer.image_frame.winfo_width = MagicMock(return_value=400)
+    viewer.image_frame.winfo_height = MagicMock(return_value=300)
+    viewer.canvas = MagicMock()
+    viewer.canvas.config = MagicMock()
+    viewer.load_and_display_image = MagicMock()
+    viewer.update_status = MagicMock()
+    viewer._companion_cache = {}
+
+    ImageViewer._apply_viewport_size(viewer)
+
+    assert viewer.current_size == (300, 300)
+    viewer.canvas.config.assert_called_once_with(width=300, height=300)
+    viewer.load_and_display_image.assert_called_once_with(0)
+
+
+def test_apply_viewport_size_upscales_when_window_grows() -> None:
+    viewer = ImageViewer.__new__(ImageViewer)
+    viewer.image_width = 512
+    viewer.image_height = 512
+    viewer.current_size = (512, 512)
+    viewer.current_image_index = 0
+    viewer.companion_canvas = None
+    viewer._primary_label = None
+    viewer.num_images = 1
+    viewer.canvas_image_item = MagicMock()
+    viewer.update_idletasks = MagicMock()
+    viewer.image_frame = MagicMock()
+    viewer.image_frame.winfo_width = MagicMock(return_value=900)
+    viewer.image_frame.winfo_height = MagicMock(return_value=700)
+    viewer.canvas = MagicMock()
+    viewer.canvas.config = MagicMock()
+    viewer.load_and_display_image = MagicMock()
+    viewer.update_status = MagicMock()
+    viewer._companion_cache = {}
+
+    ImageViewer._apply_viewport_size(viewer)
+
+    assert viewer.current_size == (700, 700)
+    viewer.canvas.config.assert_called_once_with(width=700, height=700)
+    viewer.load_and_display_image.assert_called_once_with(0)
+
+
+def test_on_resize_skips_before_viewport_resize_enabled() -> None:
+    viewer = ImageViewer.__new__(ImageViewer)
+    viewer._resize_to_viewport_enabled = False
+    viewer.canvas = MagicMock()
+    viewer.canvas.winfo_width = MagicMock(return_value=155)
+    viewer.canvas.winfo_height = MagicMock(return_value=155)
+    viewer.load_and_display_image = MagicMock()
+
+    ImageViewer.on_resize(viewer)
+
+    viewer.load_and_display_image.assert_not_called()
+
+
+def test_apply_viewport_size_preserves_aspect_ratio_for_companion_panes() -> None:
+    viewer = ImageViewer.__new__(ImageViewer)
+    viewer.image_width = 512
+    viewer.image_height = 512
+    viewer.current_size = (600, 400)
+    viewer.current_image_index = 0
+    viewer.canvas_image_item = None
+    viewer.num_images = 1
+    viewer._primary_label = None
+    viewer.update_idletasks = MagicMock()
+    viewer.image_frame = MagicMock()
+    viewer.image_frame.winfo_width = MagicMock(return_value=808)
+    viewer.image_frame.winfo_height = MagicMock(return_value=300)
+    viewer.canvas = MagicMock()
+    viewer.companion_canvas = MagicMock()
+    viewer.canvas.winfo_width = MagicMock(return_value=400)
+    viewer.canvas.winfo_height = MagicMock(return_value=300)
+    viewer.canvas.config = MagicMock()
+    viewer.companion_canvas.config = MagicMock()
+    viewer.load_and_display_image = MagicMock()
+    viewer.update_status = MagicMock()
+    viewer._companion_cache = {}
+
+    ImageViewer._apply_viewport_size(viewer)
+
+    assert viewer.current_size == (300, 300)
+    viewer.load_and_display_image.assert_called_once_with(0)
+    viewer.canvas.config.assert_called_once_with(width=300, height=300)
+    viewer.companion_canvas.config.assert_called_once_with(width=300, height=300)
 
 
 def test_on_resize_skips_when_disabled() -> None:

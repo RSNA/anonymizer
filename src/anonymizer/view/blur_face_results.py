@@ -1,4 +1,4 @@
-"""Face blur status formatting and review constants for Series View."""
+"""Face blur status formatting and review constants."""
 
 from __future__ import annotations
 
@@ -37,6 +37,10 @@ def face_blur_mode_display_label(mode: FaceBlurMode) -> str:
     return _(FACE_BLUR_MODE_LABELS[mode])
 
 
+def proposed_face_blur_companion_label(mode: FaceBlurMode) -> str:
+    return _("Proposed face blur using") + f" {face_blur_mode_display_label(mode)}"
+
+
 def face_review_wl_ww(ds: Dataset) -> tuple[float, float]:
     """Return WL/WW in the same units as Series View CT frames (modality-LUT / HU space)."""
     _ = ds
@@ -54,28 +58,19 @@ def format_face_blur_qa_summary(
     if qa is None:
         return _("Quality assurance pending.")
     if not qa.outside_clean:
-        return (
-            _("QA FAIL")
-            + f" — {qa.n_violating_voxels} "
-            + _("voxels changed outside the face mask")
-            + f" ({qa.n_outside_voxels} "
-            + _("outside voxels checked")
-            + ")."
-        )
-    return (
-        _("QA PASS")
-        + f" — {qa.n_face_voxels:,} "
-        + _("face voxels de-identified")
-        + f" ({mode_label})"
-        + f", {slice_count} "
-        + _("slices")
-        + f", σ={sigma_mm:.1f} mm."
-    )
+        return _("QA FAIL") + " — " + _("pixels changed outside the face mask") + "."
+    return _("QA PASS") + f" ({mode_label})" + f", {slice_count} " + _("slices") + f", σ={sigma_mm:.1f} mm."
 
 
-def format_face_blur_progress_status(progress: FaceBlurProgress) -> str:
-    pct = min(100, max(0, int(round(progress.fraction * 100))))
-    pct_text = f" ({pct}%)"
+def format_face_blur_progress_status(
+    progress: FaceBlurProgress,
+    *,
+    include_pct: bool = True,
+) -> str:
+    pct_text = ""
+    if include_pct:
+        pct = min(100, max(0, int(round(progress.fraction * 100))))
+        pct_text = f" ({pct}%)"
     stage_labels = {
         "mask": _("Resolving face segmentation mask"),
         "volume": _("Loading CT volume and aligning face mask"),

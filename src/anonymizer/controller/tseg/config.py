@@ -46,3 +46,11 @@ ENABLE_TS_CONTRAST = True
 FACE_TASK = "face"
 FACE_MASK_FILENAME = "face.nii.gz"
 ENABLE_TSEG_FACE = True
+
+# Release anatomy nnUNet predictors before contrast statistics (low-memory batch mode).
+RELEASE_ANATOMY_PREDICTORS_BEFORE_CONTRAST = False
+
+# AI batch process memory guard thresholds (MB).
+BATCH_MEMORY_WARN_AVAILABLE_MB = 3_000
+BATCH_MEMORY_ABORT_AVAILABLE_MB = 1_024
+BATCH_MEMORY_POLL_INTERVAL_SEC = 2.0

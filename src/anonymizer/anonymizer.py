@@ -1,3 +1,4 @@
+import contextlib
 import ctypes
 import faulthandler
 import json
@@ -22,10 +23,10 @@ from pydicom import dcmread
 from pydicom._version import __version__ as pydicom_version  # type: ignore
 from pynetdicom._version import __version__ as pynetdicom_version  # type: ignore
 
-from anonymizer.controller.falcon.load_models import FalconModelDownloadError, ensure_falcon_models_downloaded
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.project import DICOMRuntimeError, ProjectModel
 from anonymizer.utils.logging import init_logging
+from anonymizer.utils.storage import is_hidden_path, list_import_directory_files
 from anonymizer.utils.translate import (
     _,
     get_current_language,
@@ -47,6 +48,13 @@ faulthandler.enable()
 logger = logging.getLogger()  # ROOT logger
 
 
+def _cli_help() -> str:
+    return _(
+        "RSNA DICOM Anonymizer {version}\n\n"
+        "This application reads a configuration file if provided and runs headless or launches a GUI."
+    ).format(version=get_version())
+
+
 class Anonymizer(ctk.CTk):
     THEME_FILE = "assets/themes/rsna_theme.json"
 
@@ -62,8 +70,8 @@ class Anonymizer(ctk.CTk):
     def __init__(self, logs_dir: Path):
         if sys.platform.startswith("win"):
             # Enable DPI awareness for Windows (improves scaling on high-DPI/4K monitors)
-            #ctk.deactivate_automatic_dpi_awareness()  # TODO: implement dpi awareness for all views for Windows OS
-            ctypes.windll.shcore.SetProcessDpiAwareness(1) # type: ignore
+            # ctk.deactivate_automatic_dpi_awareness()  # TODO: implement dpi awareness for all views for Windows OS
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)  # type: ignore
 
         super().__init__()
         self.logs_dir: Path = logs_dir
@@ -74,7 +82,7 @@ class Anonymizer(ctk.CTk):
             theme = "dark-blue"
         ctk.set_default_color_theme(theme)
 
-        logging.info(f"ctk.ThemeManager.theme:\n{pformat(ThemeManager.theme)}")
+        logging.debug(f"ctk.ThemeManager.theme:\n{pformat(ThemeManager.theme)}")
         self.mono_font = self._init_mono_font()
 
         ctk.AppearanceModeTracker.add(self._appearance_mode_change)
@@ -88,15 +96,24 @@ class Anonymizer(ctk.CTk):
 
         self.load_config()  # may set language
         self.controller: ProjectController | None = None
-        self.welcome_view: WelcomeView = WelcomeView(self, self.change_language)
+        self.welcome_view: WelcomeView = WelcomeView(
+            self,
+            self.change_language,
+            self.show_ai_features_setup_dialog,
+        )
         self.welcome_view.focus()
         self.query_view: QueryView | None = None
         self.export_view: ExportView | None = None
         self.index_view: IndexView | None = None
         self.help_views = {}
         self.dashboard: Dashboard | None = None
+        self._shutting_down = False
+        self._import_in_progress = False
         self.resizable(False, False)
         self.title(self.get_title())
+        self.protocol("WM_DELETE_WINDOW", self.quit_app)
+        if sys.platform == "darwin":
+            self.createcommand("::tk::mac::Quit", self.quit_app)
         self.menu_bar = self.create_project_closed_menu_bar()
         self.after(self.project_open_startup_dwell_time, self._open_project_startup)
 
@@ -178,8 +195,13 @@ class Anonymizer(ctk.CTk):
         self.recent_project_dirs = []
         self.menu_bar = self.create_project_closed_menu_bar()  # resets Help Menu
         self.save_config()
+        self.welcome_view.release_images()
         self.welcome_view.destroy()
-        self.welcome_view = WelcomeView(self, self.change_language)
+        self.welcome_view = WelcomeView(
+            self,
+            self.change_language,
+            self.show_ai_features_setup_dialog,
+        )
 
     # Dashboard metrics updates from the main thread
     def metrics_loop(self):
@@ -189,7 +211,7 @@ class Anonymizer(ctk.CTk):
 
         # Update dashboard if anonymizer model has changed:
         if self.dashboard:
-            self.dashboard.update_anonymizer_queues(*self.controller.anonymizer.queued())
+            self.dashboard.update_anonymizer_queues(self.controller.anonymizer.queued())
             if self.controller.anonymizer.model_changed():
                 self.dashboard.update_totals(self.controller.anonymizer.model.get_totals())
 
@@ -491,7 +513,11 @@ class Anonymizer(ctk.CTk):
             f"{self.controller.model.project_name}[{self.controller.model.site_id}] => {self.controller.model.abridged_storage_dir()}"
         )
 
+        from anonymizer.controller.tseg.runtime_status import log_runtime_status_for_session
+
+        self.welcome_view.release_images()
         self.welcome_view.destroy()
+        log_runtime_status_for_session()
         self.protocol("WM_DELETE_WINDOW", self.close_project)
         self.menu_bar = self.create_project_open_menu_bar()
 
@@ -513,64 +539,84 @@ class Anonymizer(ctk.CTk):
         logger.info(f"metrics_loop start interval={self.metrics_loop_interval}ms")
         self.metrics_loop()
 
+    def _project_close_blocked(self) -> tuple[str, str] | None:
+        """Return (title, message) when project shutdown must wait, else None."""
+        if self.query_view and self.query_view.busy():
+            return (
+                _("Query Busy"),
+                _("Query is busy, please wait for query to complete before closing project."),
+            )
+        if self.export_view and self.export_view.busy():
+            return (
+                _("Export Busy"),
+                _("Export is busy, please wait for export to complete before closing project."),
+            )
+        if self.controller and not self.controller.anonymizer.idle():
+            return (
+                _("Anonymizer Workers Busy"),
+                _("Anonymizer queues are not empty, please wait for workers to process files before closing project."),
+            )
+        return None
+
+    def quit_app(self, event=None) -> None:
+        """Gracefully stop workers and exit (File/Exit, Cmd-Q, signals)."""
+        if self._shutting_down:
+            return
+        logger.info("quit_app")
+        blocked = self._project_close_blocked()
+        if blocked:
+            title, message = blocked
+            logger.info("%s, cannot quit application", title)
+            messagebox.showerror(title=title, message=message, parent=self)
+            return
+        self._shutting_down = True
+        if self.controller:
+            self.shutdown_controller()
+        self.save_config()
+        self.quit()
+
     def shutdown_controller(self):
         logger.info("shutdown_controller")
 
         if self.dashboard:
             self.dashboard.destroy()
             self.dashboard = None
-        if self.controller:
-            self.controller.stop_scp()
-            self.controller.shutdown()
-            self.controller.save_model()
-            self.controller.anonymizer.stop()
-            if self.query_view:
-                self.query_view.destroy()
-                self.query_view = None
-            if self.export_view:
-                self.export_view.destroy()
-                self.export_view = None
+        if not self.controller:
+            return
+        self.controller.stop_scp()
+        self.controller.shutdown()
+        self.controller.save_model()
+        self.controller.anonymizer.stop()
+        if self.query_view:
+            self.query_view.destroy()
+            self.query_view = None
+        if self.export_view:
+            self.export_view.destroy()
+            self.export_view = None
+        self.controller = None
 
     def close_project(self, event=None):
         logger.info("Close Project")
-        if self.query_view and self.query_view.busy():
-            logger.info("QueryView busy, cannot close project")
-            messagebox.showerror(
-                title=_("Query Busy"),
-                message=_("Query is busy, please wait for query to complete before closing project."),
-                parent=self,
-            )
-            return
-        if self.export_view and self.export_view.busy():
-            logger.info("ExportView busy, cannot close project")
-            messagebox.showerror(
-                title=_("Export Busy"),
-                message=_("Export is busy, please wait for export to complete before closing project."),
-                parent=self,
-            )
-            return
-
-        if self.controller and not self.controller.anonymizer.idle():
-            logger.info("Anonymizer busy, cannot close project")
-            messagebox.showerror(
-                title=_("Anonymizer Workers Busy"),
-                message=_(
-                    "Anonymizer queues are not empty, please wait for workers to process files before closing project."
-                ),
-                parent=self,
-            )
+        blocked = self._project_close_blocked()
+        if blocked:
+            title, message = blocked
+            logger.info("%s, cannot close project", title)
+            messagebox.showerror(title=title, message=message, parent=self)
             return
 
         # TODO: Do not allow project close if Import Files/Import Directory is busy
         # TODO: Shutdowncontroller asynchronously using Dashboard Status to provide shutdown updates (especially Anonymizer worker threads)
         self.shutdown_controller()
 
-        self.welcome_view = WelcomeView(self, self.change_language)
-        self.protocol("WM_DELETE_WINDOW", self.quit)
+        self.welcome_view = WelcomeView(
+            self,
+            self.change_language,
+            self.show_ai_features_setup_dialog,
+        )
+        self.protocol("WM_DELETE_WINDOW", self.quit_app)
         self.focus_force()
 
         self.current_open_project_dir = None
-        self.controller = None
         self.menu_bar = self.create_project_closed_menu_bar()
         self.title(self.get_title())
         self.save_config()
@@ -668,29 +714,34 @@ class Anonymizer(ctk.CTk):
             logger.error("Internal Error: no ProjectController")
             return
 
-        self.disable_file_menu()
-
-        file_extension_filters = [
-            ("dcm Files", "*.dcm"),
-            ("dicom Files", "*.dicom"),
-            ("All Files", "*.*"),
-        ]
-        msg = _("Select DICOM Files to Import & Anonymize")
-        file_paths = filedialog.askopenfilenames(
-            title=msg,
-            defaultextension=".dcm",
-            filetypes=file_extension_filters,
-            parent=self,
-        )
-
-        if not file_paths:
-            logger.info("Import Files Cancelled")
-            self.enable_file_menu()
+        if not self._begin_import():
             return
 
-        dlg = ImportFilesDialog(self, self.controller.anonymizer, file_paths)
-        dlg.get_input()
-        self.enable_file_menu()
+        self.disable_file_menu()
+        try:
+            self.update_idletasks()
+
+            file_extension_filters = [
+                ("dcm Files", "*.dcm"),
+                ("dicom Files", "*.dicom"),
+                ("All Files", "*.*"),
+            ]
+            msg = _("Select DICOM Files to Import & Anonymize")
+            file_paths = filedialog.askopenfilenames(
+                title=msg,
+                defaultextension=".dcm",
+                filetypes=file_extension_filters,
+                parent=self,
+            )
+
+            if not file_paths:
+                logger.info("Import Files Cancelled")
+                return
+
+            dlg = ImportFilesDialog(self, self.controller.anonymizer, file_paths)
+            dlg.get_input()
+        finally:
+            self._end_import()
 
     def import_directory(self, event=None):
         logging.info("Import Directory")
@@ -703,136 +754,134 @@ class Anonymizer(ctk.CTk):
             logger.error("Internal Error: no Dashboard")
             return
 
-        self.disable_file_menu()  # TODO: try finally to ensure self.enable_file_menu() is called
-
-        msg = _("Select DICOM Directory to Import & Anonymize")
-        root_dir = filedialog.askdirectory(
-            title=msg,
-            mustexist=True,
-            parent=self,
-        )
-        logger.info(root_dir)
-
-        if not root_dir:
-            logger.info("Import Directory Cancelled")
-            self.enable_file_menu()
+        if not self._begin_import():
             return
 
-        file_paths = []
-        # Handle reading DICOMDIR files in Media Storage Directory (eg. CD/DVD/USB Drive)
-        dicomdir_file = os.path.join(root_dir, "DICOMDIR")
-        if os.path.exists(dicomdir_file):
-            try:
-                ds = dcmread(fp=dicomdir_file)
-                root_dir = Path(str(ds.filename)).resolve().parent
-                msg = _("Reading DICOMDIR Root directory" + f": {Path(root_dir).stem}...")
-                logger.info(msg)
-                self.dashboard.set_status(msg)
+        self.disable_file_menu()
+        try:
+            self.update_idletasks()
 
-                # Iterate through the PATIENT records
-                for patient in ds.patient_records:
-                    logger.info(f"PATIENT: PatientID={patient.PatientID}, PatientName={patient.PatientName}")
-
-                    # Find all the STUDY records for the patient
-                    studies = [ii for ii in patient.children if ii.DirectoryRecordType == "STUDY"]
-                    for study in studies:
-                        descr = study.StudyDescription or "(no value available)"
-                        logging.info(
-                            f"{'  ' * 1}STUDY: StudyID={study.StudyID}, "
-                            f"StudyDate={study.StudyDate}, StudyDescription={descr}"
-                        )
-
-                        # Find all the SERIES records in the study
-                        all_series = [ii for ii in study.children if ii.DirectoryRecordType == "SERIES"]
-                        for series in all_series:
-                            # Find all the IMAGE records in the series
-                            images = [ii for ii in series.children if ii.DirectoryRecordType == "IMAGE"]
-                            plural = ("", "s")[len(images) > 1]
-
-                            descr = getattr(series, "SeriesDescription", "(no value available)")
-                            logging.info(
-                                f"{'  ' * 2}SERIES: SeriesNumber={series.SeriesNumber}, "
-                                f"Modality={series.Modality}, SeriesDescription={descr} - "
-                                f"{len(images)} SOP Instance{plural}"
-                            )
-
-                            # Get the absolute file path to each instance
-                            # Each IMAGE contains a relative file path to the root directory
-                            elems = [ii["ReferencedFileID"] for ii in images]
-                            # Make sure the relative file path is always a list of str
-                            paths = [[ee.value] if ee.VM == 1 else ee.value for ee in elems]
-                            paths = [f"{root_dir}/{Path(*fp)}" for fp in paths]
-
-                            # List the instance file paths for this series
-                            for fp in paths:
-                                logger.info(f"{'  ' * 3}IMAGE: Path={os.fspath(fp)}")
-
-                            file_paths.extend(paths)
-
-            except Exception as e:
-                msg_prefix = _("Error reading DICOMDIR file")
-                msg_detail = f"{dicomdir_file}, {str(e)}"
-                logger.error(msg_prefix + ": " + msg_detail)
-                self.dashboard.set_status(msg_prefix)
-
-                messagebox.showerror(
-                    title=_("Import Directory Error"),
-                    message=msg_prefix + "\n\n" + msg_detail,
-                    parent=self,
-                )
-                self.enable_file_menu()
-                return
-        else:
-            msg = _("Reading filenames from") + f" {Path(root_dir).stem}..."
-            logger.info(msg)
-            self.dashboard.set_status(msg)
-            # TODO OPTIMIZE: use Python Generator to handle massive directory trees
-            file_paths = [
-                os.path.join(root, file)
-                for root, _, files in os.walk(root_dir)
-                for file in files
-                if not file.startswith(".")
-            ]
-
-        if len(file_paths) == 0:
-            msg = _("No files found in") + f" {root_dir}"
-            logger.info(msg)
-            messagebox.showerror(
-                title=_("Import Directory Error"),
-                message=msg,
+            msg = _("Select DICOM Directory to Import & Anonymize")
+            root_dir = filedialog.askdirectory(
+                title=msg,
+                mustexist=True,
                 parent=self,
             )
-            self.dashboard.set_status(msg)
-            self.enable_file_menu()
-            return
+            logger.info(root_dir)
 
-        msg = (
-            f"{len(file_paths)} "
-            + _("filenames read from")
-            + f"\n\n{root_dir}\n\n"
-            + _("Do you want to initiate import?")
-        )
-        if not messagebox.askyesno(
-            title=_("Import Directory"),
-            message=msg,
-            parent=self,
-        ):
-            msg = _("Import Directory Cancelled")
+            if not root_dir:
+                logger.info("Import Directory Cancelled")
+                return
+
+            file_paths = []
+            # Handle reading DICOMDIR files in Media Storage Directory (eg. CD/DVD/USB Drive)
+            dicomdir_file = os.path.join(root_dir, "DICOMDIR")
+            if os.path.exists(dicomdir_file):
+                try:
+                    ds = dcmread(fp=dicomdir_file)
+                    root_dir = Path(str(ds.filename)).resolve().parent
+                    msg = _("Reading DICOMDIR Root directory" + f": {Path(root_dir).stem}...")
+                    logger.info(msg)
+                    self.dashboard.set_status(msg)
+
+                    # Iterate through the PATIENT records
+                    for patient in ds.patient_records:
+                        logger.info(f"PATIENT: PatientID={patient.PatientID}, PatientName={patient.PatientName}")
+
+                        # Find all the STUDY records for the patient
+                        studies = [ii for ii in patient.children if ii.DirectoryRecordType == "STUDY"]
+                        for study in studies:
+                            descr = study.StudyDescription or "(no value available)"
+                            logging.info(
+                                f"{'  ' * 1}STUDY: StudyID={study.StudyID}, "
+                                f"StudyDate={study.StudyDate}, StudyDescription={descr}"
+                            )
+
+                            # Find all the SERIES records in the study
+                            all_series = [ii for ii in study.children if ii.DirectoryRecordType == "SERIES"]
+                            for series in all_series:
+                                # Find all the IMAGE records in the series
+                                images = [ii for ii in series.children if ii.DirectoryRecordType == "IMAGE"]
+                                plural = ("", "s")[len(images) > 1]
+
+                                descr = getattr(series, "SeriesDescription", "(no value available)")
+                                logging.info(
+                                    f"{'  ' * 2}SERIES: SeriesNumber={series.SeriesNumber}, "
+                                    f"Modality={series.Modality}, SeriesDescription={descr} - "
+                                    f"{len(images)} SOP Instance{plural}"
+                                )
+
+                                # Get the absolute file path to each instance
+                                # Each IMAGE contains a relative file path to the root directory
+                                elems = [ii["ReferencedFileID"] for ii in images]
+                                # Make sure the relative file path is always a list of str
+                                paths = [[ee.value] if ee.VM == 1 else ee.value for ee in elems]
+                                paths = [f"{root_dir}/{Path(*fp)}" for fp in paths]
+
+                                # List the instance file paths for this series
+                                for fp in paths:
+                                    if is_hidden_path(fp):
+                                        continue
+                                    logger.info(f"{'  ' * 3}IMAGE: Path={os.fspath(fp)}")
+                                    file_paths.append(fp)
+
+                except Exception as e:
+                    msg_prefix = _("Error reading DICOMDIR file")
+                    msg_detail = f"{dicomdir_file}, {str(e)}"
+                    logger.error(msg_prefix + ": " + msg_detail)
+                    self.dashboard.set_status(msg_prefix)
+
+                    messagebox.showerror(
+                        title=_("Import Directory Error"),
+                        message=msg_prefix + "\n\n" + msg_detail,
+                        parent=self,
+                    )
+                    return
+            else:
+                msg = _("Reading filenames from") + f" {Path(root_dir).stem}..."
+                logger.info(msg)
+                self.dashboard.set_status(msg)
+                # TODO OPTIMIZE: use Python Generator to handle massive directory trees
+                file_paths = list_import_directory_files(root_dir)
+
+            if len(file_paths) == 0:
+                msg = _("No files found in") + f" {root_dir}"
+                logger.info(msg)
+                messagebox.showerror(
+                    title=_("Import Directory Error"),
+                    message=msg,
+                    parent=self,
+                )
+                self.dashboard.set_status(msg)
+                return
+
+            msg = (
+                f"{len(file_paths)} "
+                + _("filenames read from")
+                + f"\n\n{root_dir}\n\n"
+                + _("Do you want to initiate import?")
+            )
+            if not messagebox.askyesno(
+                title=_("Import Directory"),
+                message=msg,
+                parent=self,
+            ):
+                msg = _("Import Directory Cancelled")
+                logger.info(msg)
+                self.dashboard.set_status(msg)
+                return
+
+            msg = _("Importing") + f" {len(file_paths)} {_('file') if len(file_paths) == 1 else _('files')}"
             logger.info(msg)
             self.dashboard.set_status(msg)
-            self.enable_file_menu()
-            return
 
-        msg = _("Importing") + f" {len(file_paths)} {_('file') if len(file_paths) == 1 else _('files')}"
-        logger.info(msg)
-        self.dashboard.set_status(msg)
-
-        dlg = ImportFilesDialog(self, self.controller.anonymizer, sorted(file_paths))
-        files_processed = dlg.get_input()
-        msg = _("Files processed") + f": {files_processed}"
-        logger.info(msg)
-        self.dashboard.set_status(msg)
-        self.enable_file_menu()
+            dlg = ImportFilesDialog(self, self.controller.anonymizer, sorted(file_paths))
+            files_processed = dlg.get_input()
+            msg = _("Files processed") + f": {files_processed}"
+            logger.info(msg)
+            self.dashboard.set_status(msg)
+        finally:
+            self._end_import()
 
     def query_retrieve(self):
         logging.info("OPEN QueryView")
@@ -947,18 +996,18 @@ class Anonymizer(ctk.CTk):
 
         logger.info("User Edited ProjectModel")
 
-        # Some settings change require the project to be closed and re-opened:
-        # TODO: elegantly open and close project, see clone project above
-        if self.controller.model.remove_pixel_phi != edited_model.remove_pixel_phi:
-            messagebox.showwarning(
-                title=_("Project restart"),
-                message=_("The settings change will take effect when the project is next opened."),
-                parent=self,
-            )
-
         self.controller.update_model(edited_model)
 
         logger.info(f"{self.controller}")
+
+    def show_ai_features_setup_dialog(self) -> None:
+        from anonymizer.view.tseg_setup_dialog import show_ai_features_setup_dialog
+
+        def on_changed() -> None:
+            if self.index_view is not None and self.index_view.winfo_exists():
+                self.index_view.refresh_ai_feature_ui()
+
+        show_ai_features_setup_dialog(self, on_changed=on_changed)
 
     def help_filename_to_title(self, filename):
         words = filename.stem.split("_")[1].split()
@@ -991,7 +1040,16 @@ class Anonymizer(ctk.CTk):
                 command=lambda path=html_file_path: self.show_help_view(path),
             )
 
+        help_menu.add_separator()
+        help_menu.add_command(
+            label=_("AI Features setup…"),
+            command=self.show_ai_features_setup_dialog,
+        )
+
         return help_menu
+
+    def show_tseg_setup_dialog(self) -> None:
+        self.show_ai_features_setup_dialog()
 
     def create_project_closed_menu_bar(self) -> tk.Menu:
         logger.debug("create_project_closed_menu_bar")
@@ -1013,7 +1071,7 @@ class Anonymizer(ctk.CTk):
 
         file_menu.add_separator()
 
-        file_menu.add_command(label=_("Exit"), command=self.quit)
+        file_menu.add_command(label=_("Exit"), command=self.quit_app)
 
         menu_bar.add_cascade(label=_("File"), menu=file_menu)
 
@@ -1039,7 +1097,7 @@ class Anonymizer(ctk.CTk):
         file_menu.add_command(label=_("Close Project"), command=self.close_project)
 
         file_menu.add_separator()
-        file_menu.add_command(label=_("Exit"), command=self.quit)
+        file_menu.add_command(label=_("Exit"), command=self.quit_app)
 
         menu_bar.add_cascade(label=_("File"), menu=file_menu)
 
@@ -1068,8 +1126,26 @@ class Anonymizer(ctk.CTk):
         if self.menu_bar:
             self.menu_bar.entryconfig(_("File"), state="normal")
 
+    def _begin_import(self) -> bool:
+        if self._import_in_progress:
+            messagebox.showwarning(
+                title=_("Import"),
+                message=_("An import is already in progress."),
+                parent=self,
+            )
+            return False
+        self._import_in_progress = True
+        return True
+
+    def _end_import(self) -> None:
+        self._import_in_progress = False
+        self.enable_file_menu()
+
 
 def run_GUI(logs_dir):
+    from anonymizer.view.ctk_safe import install_safe_scaling_tracker
+
+    install_safe_scaling_tracker()
     try:
         app = Anonymizer(Path(logs_dir))
         app.lift()
@@ -1078,6 +1154,15 @@ def run_GUI(logs_dir):
     except Exception as e:
         logger.exception(f"Error initialising ANONYMIZER GUI, exiting: {str(e)}")
         sys.exit(1)
+
+    def _signal_quit(signum, _frame) -> None:
+        logger.info("Signal %s received, scheduling graceful quit", signum)
+        if app.winfo_exists():
+            app.after(0, app.quit_app)
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        with contextlib.suppress(ValueError, OSError):
+            signal.signal(sig, _signal_quit)
 
     logger.info("ANONYMIZER GUI MAINLOOP...")
     try:
@@ -1212,7 +1297,8 @@ def run_HEADLESS(project_model_path: Path):
     controller.anonymizer.stop()
 
 
-@click.command()
+@click.command(help=_cli_help())
+@click.version_option(version=get_version(), prog_name="RSNA DICOM Anonymizer")
 @click.option(
     "--config",
     "-c",
@@ -1220,12 +1306,22 @@ def run_HEADLESS(project_model_path: Path):
     help=_("Path to the configuration file. If not provided, the GUI will be launched."),
 )
 def main(config: Path | None = None):
-    """
-    This application reads a configuration file if provided and runs headless or launches a GUI.
-    """
     install_dir = os.path.dirname(os.path.realpath(__file__))
     logs_dir = init_logging()
     os.chdir(install_dir)
+    # path[0]=="" resolves to install_dir and can shadow venv packages (e.g. totalsegmentator).
+    if sys.path and sys.path[0] in ("", "."):
+        sys.path.pop(0)
+    from anonymizer.controller.remove_pixel_phi import OCR_MODEL_DIR, OcrModelStatus, probe_ocr_models
+
+    tseg_home = Path("assets/ai/tseg")
+    tseg_weights = tseg_home / "nnunet" / "results"
+    OCR_MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    tseg_home.mkdir(parents=True, exist_ok=True)
+    tseg_weights.mkdir(parents=True, exist_ok=True)
+    os.environ["TOTALSEG_HOME_DIR"] = str(tseg_home.resolve())
+    os.environ["TOTALSEG_WEIGHTS_PATH"] = str(tseg_weights.resolve())
+
     logger.info(f"Running from {install_dir}")
     logger.info(f"Python Optimization Level [0,1,2]: {sys.flags.optimize}")
     logger.info(f"Starting ANONYMIZER Version {get_version()}")
@@ -1235,49 +1331,25 @@ def main(config: Path | None = None):
     logger.info(f"Customtkinter Version: {ctk.__version__}")
     logger.info(f"pydicom Version: {pydicom_version}, pynetdicom Version: {pynetdicom_version}")
 
-    # Ensure OCR models are downloaded:
-    ocr_model_dir = Path("assets/ocr/model")
-    if not ocr_model_dir.exists():
-        logger.warning("Downloading OCR models...")
-        from easyocr import Reader
-
-        Reader(
-            lang_list=["en", "de", "fr", "es"],
-            model_storage_directory=ocr_model_dir,
-            verbose=True,
-        )
-    models = os.listdir(ocr_model_dir)
-    if len(models) < 2:
-        logger.error("Error downloading OCR detection and recognition models")
-        ocr_model_dir.unlink()
+    # OCR models download on demand from AI Setup dialog.
+    ocr_status, ocr_detail = probe_ocr_models()
+    if ocr_status == OcrModelStatus.READY:
+        try:
+            file_count = len([p for p in OCR_MODEL_DIR.iterdir() if not p.name.startswith(".")])
+        except OSError:
+            file_count = 0
+        logger.info("OCR models: downloaded (%d files)", file_count)
     else:
-        logger.info(f"OCR downloaded models: {models}")
-
-
-    # Ensure FALCON CT models are downloaded:
-    try:
-        falcon_model_paths = ensure_falcon_models_downloaded()
-        logger.info(f"FALCON CT models ready at: {falcon_model_paths}")
-    except FalconModelDownloadError:
-        logger.error("Failed to download FALCON CT models for HelperAI")
-
-    # TotalSegmentator weights download on first anatomy analysis (pip install "rsna-anonymizer[tseg]").
-    try:
-        import totalsegmentator  # noqa: F401
-
-        from anonymizer.controller.tseg.contrast import verify_xgboost_runtime
-
-        verify_xgboost_runtime()
-        logger.info("TotalSegmentator and XGBoost ready for Harmonize anatomy analysis (tseg)")
-    except ImportError:
         logger.info(
-            'TotalSegmentator not installed; install with pip install "rsna-anonymizer[tseg]" for Harmonize'
+            "OCR models: %s (enable Remove Pixel PHI in AI Features setup to download)",
+            ocr_detail,
         )
-    except RuntimeError as exc:
-        logger.warning(
-            "TotalSegmentator contrast analysis unavailable (%s). Harmonize will fall back to FALCON for contrast.",
-            exc,
-        )
+
+    # TotalSegmentator runtime (Harmonize / Face Blur prerequisites and model cache).
+    from anonymizer.controller.tseg.runtime_status import init_ai_session_from_runtime, log_runtime_status
+
+    log_runtime_status()
+    init_ai_session_from_runtime(force_refresh=True)
 
     if config:
         run_HEADLESS(config)

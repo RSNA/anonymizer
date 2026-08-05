@@ -1,4 +1,4 @@
-"""Unit tests for CT head eligibility gate (blur_face_gate)."""
+"""Unit tests for CT head eligibility gate (blur_face)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import pytest
 import SimpleITK as sitk
 from pydicom.data import get_testdata_file
 
-from anonymizer.controller.blur_face_gate import (
+from anonymizer.controller.blur_face import (
     MIN_FACE_MASK_VOXELS,
     CachedRegionSignal,
     FaceBlurEligibility,

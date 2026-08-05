@@ -16,6 +16,7 @@ from anonymizer.controller.tseg.dicom_geometry import (
     build_sitk_volume_from_series_frames,
     classify_plane,
     compute_stack_metrics,
+    ensure_series_geometry,
     filter_dicom_paths_with_pixel_data,
     format_geometry_progress_message,
     format_geometry_summary,
@@ -181,6 +182,26 @@ def test_sorted_dicom_paths_sagittal_orders_along_stack(tmp_path: Path) -> None:
     assert projections == sorted(projections)
 
 
+def test_sorted_dicom_paths_projection_without_geometry_tags(tmp_path: Path) -> None:
+    """CXR and other 2D projection series often omit IOP and IPP."""
+    series_dir = build_synthetic_single_slice_ct_series(tmp_path / "cxr")
+    for path in series_dir.iterdir():
+        if not path.is_file() or path.name.startswith("."):
+            continue
+        ds = pydicom.dcmread(path)
+        ds.Modality = "CR"
+        del ds.ImageOrientationPatient
+        del ds.ImagePositionPatient
+        ds.save_as(path)
+
+    paths = sorted_dicom_paths(series_dir)
+    assert len(paths) == 1
+    header = pydicom.dcmread(paths[0], stop_before_pixels=True)
+    assert header.Modality == "CR"
+    assert not hasattr(header, "ImageOrientationPatient")
+    assert not hasattr(header, "ImagePositionPatient")
+
+
 def test_analyze_series_geometry_axial_chest(tmp_path: Path) -> None:
     series_dir = build_synthetic_chest_ct_series(tmp_path / "chest")
     geometry = analyze_series_geometry(series_dir)
@@ -266,10 +287,32 @@ def test_resolve_series_geometry_uses_cache(tmp_path: Path) -> None:
     assert refreshed.plane == "axial"
 
 
+def test_ensure_series_geometry_returns_cached_without_reload(tmp_path: Path) -> None:
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest")
+    geometry = resolve_series_geometry(series_dir)
+
+    assert ensure_series_geometry(series_dir, cached=geometry) is geometry
+
+
+def test_ensure_series_geometry_skips_non_ct_modality(tmp_path: Path) -> None:
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest")
+
+    assert ensure_series_geometry(series_dir, modality="MR") is None
+
+
+def test_ensure_series_geometry_loads_cache_then_resolves(tmp_path: Path) -> None:
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest")
+    write_geometry_cache(series_dir, analyze_series_geometry(series_dir))
+
+    loaded = ensure_series_geometry(series_dir, modality="CT")
+    assert loaded is not None
+    assert loaded == load_geometry_cache(series_dir)
+
+
 def test_format_geometry_summary(tmp_path: Path) -> None:
     geom = analyze_series_geometry(build_synthetic_chest_ct_series(tmp_path / "chest"))
-    assert format_geometry_summary(geom) == "axial · volume_3d · TS ok"
-    assert format_geometry_progress_message(geom).startswith("Geometry analysis: axial · volume_3d · TS ok")
+    assert format_geometry_summary(geom) == "Axial · Diagnostic 3D volume · TS ok"
+    assert format_geometry_progress_message(geom).startswith("Geometry analysis: Axial · Diagnostic 3D volume · TS ok")
 
 
 def test_format_series_view_geometry_line(tmp_path: Path) -> None:
@@ -305,7 +348,7 @@ def test_format_geometry_progress_message_includes_skip_reason() -> None:
     )
     message = format_geometry_progress_message(geometry)
     assert "TS skip" in message
-    assert "localizer_2d" in message
+    assert "Localizer or scout" in message
     assert "Localizer and scout series are not suitable for anatomy analysis" in message
 
 

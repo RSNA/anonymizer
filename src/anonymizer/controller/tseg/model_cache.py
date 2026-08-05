@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import logging
+import shutil
 import threading
 from contextlib import contextmanager
-from typing import Any, Iterator
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Iterator
+
+if TYPE_CHECKING:
+    from anonymizer.controller.tseg.runtime_status import TsWeightKind
 
 logger = logging.getLogger(__name__)
 
@@ -277,6 +282,264 @@ def _resolve_totalseg_device(device: str) -> str:
     return device
 
 
+def _anatomy_preload_trainer() -> str:
+    return "nnUNetTrainer_4000epochs_NoMirroring"
+
+
+def harmonize_anatomy_task_ids() -> tuple[int, ...]:
+    """
+    TotalSegmentator task IDs downloaded during harmonize anatomy segmentation.
+
+    With ``roi_subset`` + ``body_seg`` (see ``run_segmentation``), TotalSegmentator
+    downloads the main task (3mm/6mm/1.5mm) plus task 298 for rough ROI cropping on CT.
+    """
+    from anonymizer.controller.tseg.config import SEGMENTATION_MODE
+
+    if SEGMENTATION_MODE == "6mm":
+        return (298,)
+    if SEGMENTATION_MODE == "1.5mm":
+        return (291, 292, 293, 294, 295, 298)
+    return (297, 298)
+
+
+def harmonize_contrast_task_ids() -> tuple[int, ...]:
+    """
+    TotalSegmentator task IDs for harmonize IV contrast (head/neck vessel statistics).
+
+    ``predict_contrast_phase`` runs ``task=headneck_bones_vessels`` (task 776) when brain
+    volume is present in organ statistics.
+    """
+    from anonymizer.controller.tseg.config import ENABLE_TS_CONTRAST
+
+    if not ENABLE_TS_CONTRAST:
+        return ()
+    return (776,)
+
+
+def harmonize_ts_task_ids() -> tuple[int, ...]:
+    """All TotalSegmentator weight tasks required for harmonize (segmentation + contrast)."""
+    return harmonize_anatomy_task_ids() + harmonize_contrast_task_ids()
+
+
+def trainer_for_harmonize_task(task_id: int) -> str:
+    if task_id in (297, 298):
+        return "nnUNetTrainer_4000epochs_NoMirroring"
+    if task_id in (291, 292, 293, 294, 295):
+        return "nnUNetTrainerNoMirroring"
+    if task_id == 776:
+        return "nnUNetTrainer_DASegOrd0_NoMirroring"
+    return _anatomy_preload_trainer()
+
+
+def model_for_harmonize_task(task_id: int) -> str:
+    if task_id == 776:
+        return "3d_fullres_high"
+    return "3d_fullres"
+
+
+def trainer_for_anatomy_task(task_id: int) -> str:
+    return trainer_for_harmonize_task(task_id)
+
+
+def resolve_harmonize_model_folder(task_id: int) -> Path | None:
+    try:
+        from totalsegmentator.config import setup_nnunet, setup_totalseg
+        from totalsegmentator.nnunet import get_output_folder
+
+        setup_nnunet()
+        setup_totalseg()
+        trainer = trainer_for_harmonize_task(task_id)
+        model = model_for_harmonize_task(task_id)
+        return Path(get_output_folder(task_id, trainer, "nnUNetPlans", model))
+    except ImportError:
+        return None
+    except Exception as exc:
+        logger.debug("TS harmonize weight folder lookup failed for task %s: %s", task_id, exc)
+        return None
+
+
+def resolve_anatomy_model_folder(task_id: int) -> Path | None:
+    return resolve_harmonize_model_folder(task_id)
+
+
+def missing_harmonize_ts_task_ids() -> tuple[int, ...]:
+    return tuple(task_id for task_id in harmonize_ts_task_ids() if not _harmonize_task_checkpoint_ready(task_id))
+
+
+def missing_anatomy_task_ids() -> tuple[int, ...]:
+    return missing_harmonize_ts_task_ids()
+
+
+def anatomy_models_ready() -> bool:
+    return not missing_harmonize_ts_task_ids()
+
+
+def _harmonize_task_checkpoint_ready(task_id: int) -> bool:
+    from anonymizer.controller.tseg.runtime_status import _checkpoint_ready
+
+    return _checkpoint_ready(resolve_harmonize_model_folder(task_id))
+
+
+def _face_task_checkpoint_ready() -> bool:
+    from anonymizer.controller.tseg.runtime_status import _checkpoint_ready
+
+    return _checkpoint_ready(_resolve_task_model_folder(_FACE_TASK_ID, trainer=_FACE_TRAINER, model=_FACE_MODEL))
+
+
+def _task_checkpoint_ready(task_id: int, *, trainer: str, model: str) -> bool:
+    from anonymizer.controller.tseg.runtime_status import _checkpoint_ready
+
+    return _checkpoint_ready(_resolve_task_model_folder(task_id, trainer=trainer, model=model))
+
+
+def _anatomy_task_checkpoint_ready(task_id: int) -> bool:
+    return _harmonize_task_checkpoint_ready(task_id)
+
+
+_FACE_TASK_ID = 303
+_FACE_TRAINER = "nnUNetTrainerNoMirroring"
+_FACE_MODEL = "3d_fullres"
+_NNUNET_PLANS = "nnUNetPlans"
+
+
+def _resolve_task_model_folder(task_id: int, *, trainer: str, model: str) -> Path:
+    from totalsegmentator.nnunet import get_output_folder
+
+    return Path(get_output_folder(task_id, trainer, _NNUNET_PLANS, model))
+
+
+def _remove_incomplete_dataset_dir(model_folder: Path) -> None:
+    """Remove a dataset directory left behind by a failed or partial weight download."""
+    dataset_dir = model_folder.parent
+    if dataset_dir.is_dir():
+        shutil.rmtree(dataset_dir)
+        logger.info("TS weights: removed incomplete dataset cache at %s", dataset_dir)
+
+
+def _ensure_pretrained_weights(task_id: int, *, trainer: str, model: str) -> None:
+    """
+    Download one TotalSegmentator task when its checkpoint is not ready.
+
+    TotalSegmentator skips download when the dataset root folder exists, even if it
+    contains no nnUNet checkpoint (e.g. after a partial download). Re-probe the
+    checkpoint path and remove stale dataset directories before downloading.
+    """
+    from totalsegmentator.libs import download_pretrained_weights
+
+    model_folder = _resolve_task_model_folder(task_id, trainer=trainer, model=model)
+    if _task_checkpoint_ready(task_id, trainer=trainer, model=model):
+        return
+    _remove_incomplete_dataset_dir(model_folder)
+    download_pretrained_weights(task_id)
+    if not _task_checkpoint_ready(task_id, trainer=trainer, model=model):
+        raise RuntimeError(f"TotalSegmentator weights for task {task_id} are still missing after download")
+
+
+def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
+    """Download TotalSegmentator weights for anatomy or face segmentation (no predictor preload)."""
+    from anonymizer.controller.tseg.runtime_status import (
+        TsWeightKind as Kind,
+    )
+    from anonymizer.controller.tseg.runtime_status import (
+        verify_face_license,
+    )
+
+    try:
+        from totalsegmentator.config import setup_nnunet, setup_totalseg
+    except ImportError as exc:
+        raise RuntimeError("TotalSegmentator is required. Install with pip install rsna-anonymizer") from exc
+
+    setup_nnunet()
+    setup_totalseg()
+
+    from anonymizer.utils.download_progress import track_segmentation_download
+
+    if kind == Kind.ANATOMY:
+        task_ids = harmonize_ts_task_ids()
+        if not task_ids:
+            raise RuntimeError("Anatomy segmentation download is not supported for 1.5mm mode")
+        for task_id in task_ids:
+            trainer = trainer_for_harmonize_task(task_id)
+            model = model_for_harmonize_task(task_id)
+            with track_segmentation_download(kind, task_id=task_id):
+                _ensure_pretrained_weights(task_id, trainer=trainer, model=model)
+        still_missing = missing_harmonize_ts_task_ids()
+        if still_missing:
+            raise RuntimeError(f"Harmonize models are still missing after download (tasks {still_missing})")
+        logger.info("TS weights: harmonize models downloaded (tasks %s)", task_ids)
+        return
+
+    if kind == Kind.FACE:
+        licensed, message = verify_face_license()
+        if not licensed:
+            raise RuntimeError(message)
+        with track_segmentation_download(kind, task_id=_FACE_TASK_ID):
+            _ensure_pretrained_weights(_FACE_TASK_ID, trainer=_FACE_TRAINER, model=_FACE_MODEL)
+        if not _face_task_checkpoint_ready():
+            raise RuntimeError(f"Face segmentation model is still missing after download (task {_FACE_TASK_ID})")
+        logger.info("TS weights: face segmentation model downloaded (task %s)", _FACE_TASK_ID)
+        return
+
+    raise ValueError(f"Unknown segmentation model kind: {kind}")
+
+
+def preload_face_models(*, device: str | None = None) -> None:
+    """
+    Eager-load TotalSegmentator face segmentation weights.
+
+    No-op when TotalSegmentator is not installed or academic license is missing.
+    """
+    from anonymizer.controller.tseg.runtime_status import verify_face_license
+
+    try:
+        from totalsegmentator.config import setup_nnunet, setup_totalseg
+        from totalsegmentator.libs import download_pretrained_weights
+        from totalsegmentator.nnunet import get_output_folder
+    except ImportError:
+        logger.debug("TS face preload skipped (TotalSegmentator not installed)")
+        return
+
+    licensed, message = verify_face_license()
+    if not licensed:
+        logger.debug("TS face preload skipped: %s", message)
+        return
+
+    from anonymizer.controller.tseg.segment import resolve_device
+
+    setup_nnunet()
+    setup_totalseg()
+
+    download_pretrained_weights(_FACE_TASK_ID)
+    resolved = _resolve_totalseg_device(resolve_device(device))
+    import torch
+    import totalsegmentator.nnunet as nnunet_module
+    from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
+
+    if resolved == "cpu":
+        torch_device: Any = torch.device("cpu")
+    elif resolved == "cuda":
+        torch_device = torch.device("cuda")
+    else:
+        torch_device = torch.device("mps")
+
+    model_folder = get_output_folder(_FACE_TASK_ID, _FACE_TRAINER, "nnUNetPlans", "3d_fullres")
+    try:
+        _get_or_create_predictor(
+            model_folder=model_folder,
+            folds=[0],
+            checkpoint_name="checkpoint_final.pth",
+            device=torch_device,
+            step_size=0.5,
+            disable_tta=True,
+            nnunet_module=nnunet_module,
+            nnUNetPredictor=nnUNetPredictor,
+            quiet=True,
+        )
+        logger.info("TS model cache: face segmentation model preloaded (task %s)", _FACE_TASK_ID)
+    except Exception as exc:
+        logger.warning("TS face preload failed: %s", exc)
+
+
 def preload_harmonize_models(*, device: str | None = None) -> None:
     """
     Eager-load TotalSegmentator weights used by harmonize anatomy segmentation.
@@ -291,7 +554,6 @@ def preload_harmonize_models(*, device: str | None = None) -> None:
         logger.debug("TS model cache preload skipped (TotalSegmentator not installed)")
         return
 
-    from anonymizer.controller.tseg.config import SEGMENTATION_MODE
     from anonymizer.controller.tseg.segment import resolve_device
 
     setup_nnunet()
@@ -306,36 +568,44 @@ def preload_harmonize_models(*, device: str | None = None) -> None:
         torch_device = torch.device("cuda")
     else:
         torch_device = torch.device("mps")
-    if SEGMENTATION_MODE == "6mm":
-        task_id = 298
-        trainer = "nnUNetTrainer_4000epochs_NoMirroring"
-    elif SEGMENTATION_MODE == "1.5mm":
+    task_ids = harmonize_ts_task_ids()
+    if not task_ids:
         logger.info("TS model cache preload skipped for 1.5mm mode (multi-model)")
         return
-    else:
-        task_id = 297
-        trainer = "nnUNetTrainer_4000epochs_NoMirroring"
 
     import totalsegmentator.nnunet as nnunet_module
     from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
 
-    download_pretrained_weights(task_id)
-    model_folder = get_output_folder(task_id, trainer, "nnUNetPlans", "3d_fullres")
-    try:
-        _get_or_create_predictor(
-            model_folder=model_folder,
-            folds=[0],
-            checkpoint_name="checkpoint_final.pth",
-            device=torch_device,
-            step_size=0.5,
-            disable_tta=True,
-            nnunet_module=nnunet_module,
-            nnUNetPredictor=nnUNetPredictor,
-            quiet=True,
+    for task_id in task_ids:
+        download_pretrained_weights(task_id)
+
+    anatomy_task_ids = harmonize_anatomy_task_ids()
+    preloaded: list[int] = []
+    for task_id in anatomy_task_ids:
+        trainer = trainer_for_harmonize_task(task_id)
+        model = model_for_harmonize_task(task_id)
+        model_folder = get_output_folder(task_id, trainer, "nnUNetPlans", model)
+        try:
+            _get_or_create_predictor(
+                model_folder=model_folder,
+                folds=[0],
+                checkpoint_name="checkpoint_final.pth",
+                device=torch_device,
+                step_size=0.5,
+                disable_tta=True,
+                nnunet_module=nnunet_module,
+                nnUNetPredictor=nnUNetPredictor,
+                quiet=True,
+            )
+            preloaded.append(task_id)
+        except Exception as exc:
+            logger.warning("TS model cache preload failed for task %s: %s", task_id, exc)
+    if preloaded:
+        logger.info(
+            "TS model cache: harmonize segmentation models preloaded (tasks %s, loaded %s)",
+            task_ids,
+            preloaded,
         )
-        logger.info("TS model cache: harmonize segmentation model preloaded (task %s)", task_id)
-    except Exception as exc:
-        logger.warning("TS model cache preload failed: %s", exc)
 
 
 def _release_batch_working_memory() -> None:

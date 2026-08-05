@@ -85,7 +85,7 @@ class ProjectModel:
     """
 
     # Project Model Version Control
-    MODEL_VERSION = 5
+    MODEL_VERSION = 7
 
     # SQLite DB configuration for SQLAlchemy
     # TODO: expand for other supported databases (PostgreSQL, MySQL, etc.)
@@ -177,7 +177,6 @@ class ProjectModel:
     site_id: str = field(default_factory=default_site_id)
     project_name: str = field(default_factory=default_project_name)
     uid_root: str = field(default_factory=default_uid_root)
-    remove_pixel_phi: bool = False
     storage_dir: Path = field(default_factory=default_storage_dir, metadata=path_field)
     modalities: List[str] = field(default_factory=default_modalities)
     storage_classes: List[str] = field(default_factory=default_storage_classes)  # re-initialised in post_init

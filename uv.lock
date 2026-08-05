@@ -1870,8 +1870,10 @@ dependencies = [
     { name = "cryptography" },
     { name = "customtkinter" },
     { name = "dataclasses-json" },
+    { name = "dicom2nifti" },
     { name = "easyocr" },
     { name = "ifaddr" },
+    { name = "nibabel" },
     { name = "numpy" },
     { name = "opencv-python-headless" },
     { name = "openpyxl" },
@@ -1888,12 +1890,6 @@ dependencies = [
     { name = "tkhtmlview" },
     { name = "toml" },
     { name = "torch" },
-]
-
-[package.optional-dependencies]
-tseg = [
-    { name = "dicom2nifti" },
-    { name = "nibabel" },
     { name = "totalsegmentator" },
     { name = "xgboost" },
 ]
@@ -1924,10 +1920,10 @@ requires-dist = [
     { name = "cryptography" },
     { name = "customtkinter" },
     { name = "dataclasses-json", specifier = ">=0.6.7" },
-    { name = "dicom2nifti", marker = "extra == 'tseg'", specifier = ">=2.3,<2.6" },
+    { name = "dicom2nifti", specifier = ">=2.3,<2.6" },
     { name = "easyocr" },
     { name = "ifaddr" },
-    { name = "nibabel", marker = "extra == 'tseg'" },
+    { name = "nibabel" },
     { name = "numpy", specifier = "<2.0.0" },
     { name = "opencv-python-headless" },
     { name = "openpyxl" },
@@ -1944,10 +1940,9 @@ requires-dist = [
     { name = "tkhtmlview" },
     { name = "toml", specifier = ">=0.10.2" },
     { name = "torch" },
-    { name = "totalsegmentator", marker = "extra == 'tseg'", specifier = ">=2.3.0" },
-    { name = "xgboost", marker = "extra == 'tseg'", specifier = ">=2.0.0" },
+    { name = "totalsegmentator", specifier = ">=2.3.0" },
+    { name = "xgboost", specifier = ">=2.0.0" },
 ]
-provides-extras = ["tseg"]
 
 [package.metadata.requires-dev]
 dev = [

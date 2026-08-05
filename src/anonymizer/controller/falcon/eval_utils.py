@@ -1,4 +1,5 @@
 """FALCON evaluation helpers: model-input visualization and artifact PNG export."""
+
 from pathlib import Path
 
 import numpy as np
@@ -49,11 +50,7 @@ def _annotate_model_input_png(image: Image.Image, title: str) -> Image.Image:
     padding = 2
     line_spacing = 1
     max_text_width = image.width - (2 * margin) - (2 * padding)
-    lines = [
-        _truncate_text_to_width(line, font, max_text_width)
-        for line in title.splitlines()
-        if line
-    ]
+    lines = [_truncate_text_to_width(line, font, max_text_width) for line in title.splitlines() if line]
     if not lines:
         return image
 

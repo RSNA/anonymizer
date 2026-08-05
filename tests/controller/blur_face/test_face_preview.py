@@ -10,6 +10,7 @@ import pytest
 import SimpleITK as sitk
 
 from anonymizer.controller.blur_face import (
+    FaceBlurMode,
     FaceBlurProgress,
     SeriesVolumeContext,
     apply_face_blur_preview_to_series_frames,
@@ -24,6 +25,7 @@ from anonymizer.controller.tseg.segment import face_mask_cache_path
 from anonymizer.view.blur_face_results import (
     format_face_blur_progress_status,
     format_face_blur_qa_summary,
+    proposed_face_blur_companion_label,
 )
 
 
@@ -63,6 +65,12 @@ def test_preview_face_blur_does_not_write_dicom(
     assert stages == ["mask", "volume", "load_hu", "blur", "qa", "done"]
 
 
+def test_proposed_face_blur_companion_label_includes_mode() -> None:
+    label = proposed_face_blur_companion_label(FaceBlurMode.GAUSSIAN)
+    assert "Proposed face blur using" in label
+    assert "Gaussian blur" in label
+
+
 def test_format_face_blur_qa_summary_pass_and_fail() -> None:
     mask = np.zeros((2, 8, 8), dtype=np.uint8)
     mask[0, 2:6, 2:6] = 1
@@ -74,7 +82,7 @@ def test_format_face_blur_qa_summary_pass_and_fail() -> None:
     pass_summary = format_face_blur_qa_summary(qa, sigma_mm=8.0, slice_count=1)
     assert "QA PASS" in pass_summary
     assert "8.0" in pass_summary
-    assert str(qa.n_face_voxels) in pass_summary.replace(",", "")
+    assert "Gaussian blur" in pass_summary or "blur" in pass_summary.lower()
 
     pending = format_face_blur_qa_summary(None, sigma_mm=0.0, slice_count=0)
     assert "pending" in pending.lower()

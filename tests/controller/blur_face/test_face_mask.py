@@ -9,8 +9,12 @@ import numpy as np
 import pytest
 import SimpleITK as sitk
 
-from anonymizer.controller.blur_face import LEGACY_FACE_MASK_REL, resolve_face_mask_path
-from anonymizer.controller.blur_face_gate import FaceBlurGateReason, face_blur_gate_message
+from anonymizer.controller.blur_face import (
+    LEGACY_FACE_MASK_REL,
+    FaceBlurGateReason,
+    face_blur_gate_message,
+    resolve_face_mask_path,
+)
 from anonymizer.controller.tseg.config import FACE_MASK_FILENAME
 from anonymizer.controller.tseg.segment import FaceSegResult, face_mask_cache_path
 

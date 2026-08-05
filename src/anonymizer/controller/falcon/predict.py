@@ -223,9 +223,7 @@ def predict_falcon_series(series_directories: list[Path]) -> list[FalconPredicti
         logger.error("No series directories provided for FALCON prediction.")
         return []
 
-    logger.info(
-        "FALCON predict starting for {} series on {}".format(len(series_directories), device)
-    )
+    logger.info("FALCON predict starting for {} series on {}".format(len(series_directories), device))
 
     predictions: list[FalconPrediction] = []
 

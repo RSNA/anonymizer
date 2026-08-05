@@ -13,14 +13,21 @@ from anonymizer.controller.tseg.contrast import (
     _run_contrast_classifier,
     contrast_phase_cache_is_valid,
     estimate_contrast_remaining_sec,
+    format_cached_contrast_phase_message,
+    format_cached_organ_hu_message,
+    format_cached_vessel_hu_message,
+    format_contrast_organ_hu_summary,
+    format_contrast_vessel_hu_summary,
     head_dominant_limited_fov,
     hu_gate_iv_contrast,
+    needs_head_neck_vessel_stats,
     phase_to_iv_contrast,
     predict_contrast_phase,
     resolve_contrast_device,
     save_contrast_phase_cache,
     save_contrast_statistics,
     save_contrast_stats_hn,
+    truncal_anatomy_present,
     verify_xgboost_runtime,
 )
 from anonymizer.controller.tseg.segment import estimate_tseg_contrast_remaining_sec, series_cache_dir
@@ -66,7 +73,7 @@ def test_verify_xgboost_runtime_ok() -> None:
 
 def test_verify_xgboost_runtime_missing() -> None:
     with patch.dict("sys.modules", {"xgboost": None}):
-        with pytest.raises(RuntimeError, match='pip install "rsna-anonymizer\\[tseg\\]"'):
+        with pytest.raises(RuntimeError, match="pip install rsna-anonymizer"):
             verify_xgboost_runtime()
 
 
@@ -93,6 +100,32 @@ def test_run_contrast_classifier(
     assert result["phase"] == "portal_venous"
     assert result["probability"] == 0.92
     mock_verify.assert_called_once()
+
+
+def _head_only_contrast_stats(*, brain_volume: float = 5000.0) -> dict:
+    stats = {
+        organ: {"intensity": 0.0, "volume": 0.0}
+        for organ in (
+            "liver",
+            "pancreas",
+            "urinary_bladder",
+            "gallbladder",
+            "heart",
+            "aorta",
+            "inferior_vena_cava",
+            "portal_vein_and_splenic_vein",
+            "iliac_vena_left",
+            "iliac_vena_right",
+            "iliac_artery_left",
+            "iliac_artery_right",
+            "pulmonary_vein",
+            "brain",
+            "colon",
+            "small_bowel",
+        )
+    }
+    stats["brain"] = {"intensity": 27.0, "volume": brain_volume}
+    return stats
 
 
 def _sample_contrast_stats(*, brain_volume: float = 0.0) -> dict:
@@ -265,7 +298,7 @@ def test_predict_contrast_phase_emits_progress_for_phase_cache(
         progress=lambda stage, message, fraction: events.append((stage, message, fraction)),
     )
 
-    assert events == [("contrast_phase_cache", "Using cached contrast phase classification", 1.0)]
+    assert events == [("contrast_phase_cache", "Using cached contrast phase: native (liver=50 HU)", 1.0)]
 
 
 @patch("anonymizer.controller.tseg.contrast._run_contrast_classifier")
@@ -311,6 +344,142 @@ def test_predict_contrast_phase_reuses_stats_hn_cache(
     mock_nib.load.assert_called_once_with(nifti_path)
     mock_classifier.assert_called_once()
     assert result["phase"] == "native"
+
+
+@patch("anonymizer.controller.tseg.contrast._run_contrast_classifier")
+@patch("anonymizer.controller.tseg.contrast._require_totalsegmentator")
+@patch("anonymizer.controller.tseg.contrast._require_nibabel")
+def test_predict_contrast_phase_headneck_task_omits_fast(
+    mock_require_nib: MagicMock,
+    mock_require_ts: MagicMock,
+    mock_classifier: MagicMock,
+    tmp_path: Path,
+) -> None:
+    mock_nib = MagicMock()
+    mock_require_nib.return_value = mock_nib
+    mock_ts = MagicMock()
+    mock_require_ts.return_value = mock_ts
+    organ_stats = _head_only_contrast_stats(brain_volume=5000.0)
+    headneck_stats = {organ: {"intensity": 55.0, "volume": 100.0} for organ in CONTRAST_ORGANS_HN}
+    mock_ts.side_effect = [(None, organ_stats), (None, headneck_stats)]
+    mock_classifier.return_value = {
+        "pi_time": 12.0,
+        "phase": "native",
+        "probability": 0.88,
+        "pi_time_min": 10.0,
+        "pi_time_max": 14.0,
+        "stddev": 1.0,
+    }
+    nifti_path = tmp_path / "volume.nii.gz"
+    nifti_path.write_bytes(b"")
+
+    predict_contrast_phase(nifti_path)
+
+    assert mock_ts.call_count == 2
+    organ_call_kwargs = mock_ts.call_args_list[0].kwargs
+    headneck_call_kwargs = mock_ts.call_args_list[1].kwargs
+    assert organ_call_kwargs.get("fast") is True
+    assert headneck_call_kwargs.get("task") == "headneck_bones_vessels"
+    assert headneck_call_kwargs.get("fast") is not True
+
+
+@patch("anonymizer.controller.tseg.contrast._run_contrast_classifier")
+@patch("anonymizer.controller.tseg.contrast._require_totalsegmentator")
+@patch("anonymizer.controller.tseg.contrast._require_nibabel")
+def test_predict_contrast_phase_skips_headneck_for_truncal_fov(
+    mock_require_nib: MagicMock,
+    mock_require_ts: MagicMock,
+    mock_classifier: MagicMock,
+    tmp_path: Path,
+) -> None:
+    mock_nib = MagicMock()
+    mock_require_nib.return_value = mock_nib
+    mock_ts = MagicMock()
+    mock_require_ts.return_value = mock_ts
+    organ_stats = _sample_contrast_stats(brain_volume=5000.0)
+    mock_ts.return_value = (None, organ_stats)
+    mock_classifier.return_value = {
+        "pi_time": 12.0,
+        "phase": "portal_venous",
+        "probability": 0.88,
+        "pi_time_min": 10.0,
+        "pi_time_max": 14.0,
+        "stddev": 1.0,
+    }
+    nifti_path = tmp_path / "volume.nii.gz"
+    nifti_path.write_bytes(b"")
+
+    predict_contrast_phase(nifti_path)
+
+    assert mock_ts.call_count == 1
+    assert mock_ts.call_args.kwargs.get("task") != "headneck_bones_vessels"
+
+
+@patch("anonymizer.controller.tseg.contrast._run_contrast_classifier")
+@patch("anonymizer.controller.tseg.contrast._require_totalsegmentator")
+@patch("anonymizer.controller.tseg.contrast._require_nibabel")
+def test_predict_contrast_phase_skips_headneck_when_truncal_anatomy(
+    mock_require_nib: MagicMock,
+    mock_require_ts: MagicMock,
+    mock_classifier: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """Abdomen-dominant anatomy skips head/neck even when organ HU stats look head-only."""
+    mock_nib = MagicMock()
+    mock_require_nib.return_value = mock_nib
+    mock_ts = MagicMock()
+    mock_require_ts.return_value = mock_ts
+    organ_stats = _head_only_contrast_stats(brain_volume=5000.0)
+    mock_ts.return_value = (None, organ_stats)
+    mock_classifier.return_value = {
+        "pi_time": 12.0,
+        "phase": "native",
+        "probability": 0.88,
+        "pi_time_min": 10.0,
+        "pi_time_max": 14.0,
+        "stddev": 1.0,
+    }
+    nifti_path = tmp_path / "volume.nii.gz"
+    nifti_path.write_bytes(b"")
+
+    predict_contrast_phase(nifti_path, body_parts_present="Chest+Abdomen")
+
+    assert mock_ts.call_count == 1
+    assert mock_ts.call_args.kwargs.get("task") != "headneck_bones_vessels"
+
+
+def test_truncal_anatomy_present() -> None:
+    assert truncal_anatomy_present("Chest+Abdomen")
+    assert truncal_anatomy_present("Abdomen")
+    assert not truncal_anatomy_present("Head")
+    assert not truncal_anatomy_present("")
+
+
+def test_needs_head_neck_vessel_stats_respects_truncal_anatomy() -> None:
+    stats = _head_only_contrast_stats(brain_volume=5000.0)
+    assert head_dominant_limited_fov(stats)
+    assert not needs_head_neck_vessel_stats(stats, body_parts_present="Chest+Abdomen")
+    assert needs_head_neck_vessel_stats(stats, body_parts_present="Head")
+
+
+def test_format_dominant_organ_hu_summary_head_region() -> None:
+    from anonymizer.controller.tseg.contrast import format_dominant_organ_hu_summary
+
+    stats = {"brain": {"intensity": 27.0, "volume": 5000.0}}
+    stats_hn = {
+        "internal_carotid_artery_right": {"intensity": 75.0, "volume": 200.0},
+        "internal_carotid_artery_left": {"intensity": 72.0, "volume": 200.0},
+    }
+    summary = format_dominant_organ_hu_summary(stats, stats_hn, dominant_region="Head")
+    assert "27–75 HU" in summary
+    assert "brain=27 HU" in summary
+
+
+def test_format_dominant_organ_hu_summary_skips_low_volume() -> None:
+    from anonymizer.controller.tseg.contrast import format_dominant_organ_hu_summary
+
+    stats = {"liver": {"intensity": 50.0, "volume": 0.0}}
+    assert format_dominant_organ_hu_summary(stats, None, dominant_region="Abdomen") == ""
 
 
 def test_estimate_tseg_contrast_remaining_sec_from_cache(tmp_path: Path) -> None:
@@ -407,3 +576,61 @@ def test_release_before_contrast_gc_and_accelerator(
     release_before_contrast(stage="test_before_contrast")
     mock_release_accel.assert_called_once()
     assert mock_gc.call_count == 2
+
+
+@patch("anonymizer.controller.tseg.contrast.release_working_memory")
+@patch("anonymizer.controller.tseg.contrast._require_totalsegmentator")
+@patch("anonymizer.controller.tseg.contrast._require_nibabel")
+def test_predict_contrast_phase_releases_memory_on_error(
+    mock_nibabel: MagicMock,
+    _mock_ts: MagicMock,
+    mock_release: MagicMock,
+    tmp_path: Path,
+) -> None:
+    nifti_path = tmp_path / "series.nii.gz"
+    nifti_path.write_bytes(b"")
+    mock_nibabel.return_value.load.side_effect = RuntimeError("boom")
+    with pytest.raises(RuntimeError, match="boom"):
+        predict_contrast_phase(nifti_path)
+    mock_release.assert_called_once()
+
+
+def test_format_contrast_organ_hu_summary_skips_low_volume_organs() -> None:
+    stats = {
+        "liver": {"intensity": 120.0, "volume": 5000.0},
+        "aorta": {"intensity": 180.0, "volume": 800.0},
+        "brain": {"intensity": 40.0, "volume": 0.0},
+    }
+    summary = format_contrast_organ_hu_summary(stats)
+    assert summary == "aorta=180 HU, liver=120 HU"
+
+
+def test_format_contrast_vessel_hu_summary_uses_short_labels() -> None:
+    stats_hn = {organ: {"intensity": 55.0 + index, "volume": 200.0} for index, organ in enumerate(CONTRAST_ORGANS_HN)}
+    summary = format_contrast_vessel_hu_summary(stats_hn)
+    assert "ICA-R=55 HU" in summary
+    assert "IJV-L=58 HU" in summary
+
+
+def test_format_cached_organ_and_vessel_messages_include_hu_values() -> None:
+    organ_stats = {
+        "liver": {"intensity": 120.0, "volume": 5000.0},
+        "aorta": {"intensity": 180.0, "volume": 800.0},
+    }
+    vessel_stats = {
+        "internal_carotid_artery_right": {"intensity": 190.0, "volume": 100.0},
+    }
+    assert format_cached_organ_hu_message(organ_stats) == (
+        "Using cached organ HU statistics: aorta=180 HU, liver=120 HU"
+    )
+    assert format_cached_vessel_hu_message(vessel_stats) == ("Using cached head/neck vessel statistics: ICA-R=190 HU")
+
+
+def test_format_cached_contrast_phase_message_includes_phase_and_hu() -> None:
+    message = format_cached_contrast_phase_message(
+        {
+            "phase": "portal_venous",
+            "hu_medians": {"liver": 120.0, "aorta": 180.0},
+        }
+    )
+    assert message == ("Using cached contrast phase: portal venous (aorta=180 HU, liver=120 HU)")

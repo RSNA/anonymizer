@@ -164,7 +164,7 @@ def test_contrast_series_playbook_row_uses_radlex_iv_contrast_code() -> None:
     assert code == "PortVen"
     assert value == "Portal venous"
     assert code in IV_CONTRAST_PLAYBOOK_CODES
-    assert "portal_venous" in evidence
+    assert "portal venous" in evidence
     assert "TotalSegmentator contrast" in source
 
 

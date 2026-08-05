@@ -43,8 +43,9 @@ V19 development pre-release (requires `--pre`; does not replace the stable insta
 
 ```bash
 pip install --pre rsna-anonymizer
-pip install --pre "rsna-anonymizer[tseg]"   # optional TotalSegmentator extras
 ```
+
+TotalSegmentator, XGBoost, and related dependencies are included. Enable Harmonize, Face Blur, and Remove Pixel PHI per project in **Settings → Project** (or when creating a new project). Download models and apply the face license from the AI Features panel.
 ## Execution
 `rsna-anonymizer`
 ### Headless Mode
@@ -61,7 +62,7 @@ You need to provide a path to a project configuration to run in headless mode
 3. Install [uv](https://docs.astral.sh/uv/): `curl -LsSf https://astral.sh/uv/install.sh | sh`
 4. Clone repository
 5. Create virtual environment and install dependencies: `uv sync --group dev`
-6. Optional — TotalSegmentator anatomy analysis for Harmonize: `uv sync --extra tseg --group dev`
+6. macOS Harmonize contrast: `brew install libomp` when using XGBoost/TotalSegmentator contrast
 7. Enable Git pre-commit hooks (Ruff lint, same rules as CI): `uv run pre-commit install`
 
 For hot-reload during UI work: `uv run python scripts/dev_anonymizer.py` (requires [watchexec](https://github.com/watchexec/watchexec)).
@@ -84,7 +85,7 @@ CI runs `ruff check` without `--fix`. Pre-commit uses the same check on staged P
 Test layout mirrors source: `tests/controller/` → `src/anonymizer/controller/`, prototyping tests live under `src/prototyping/*/tests/`. See [tests/README.md](tests/README.md).
 
 ```bash
-uv sync --extra tseg --group dev
+uv sync --group dev
 uv run pytest tests/controller/tseg -q
 uv run pytest src/prototyping -q              # local only; excluded from CI
 uv run pytest -q                              # CI suite with coverage (see pyproject.toml)

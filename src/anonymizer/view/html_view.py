@@ -1,4 +1,3 @@
-
 # List of HTML Tags supported by tkhtmlview:
 # see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support
 import re
@@ -49,7 +48,6 @@ class HTMLView(tk.Toplevel):
         an HTMLScrolledText widget to display the HTML content.
 
         """
-
 
         # Read the HTML content from the file
         with open(self.html_file_path, "r") as file:

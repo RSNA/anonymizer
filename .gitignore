@@ -23,7 +23,8 @@ src/build/*
 src/dist/*
 src/logs/*
 src/certs/*
-src/assets/ocr/*
+src/anonymizer/assets/ai/ocr/*
+src/anonymizer/assets/ai/tseg/*
 src/anonymizer/assets/falcon/models/*
 dicom/*
 phi_imgs/*

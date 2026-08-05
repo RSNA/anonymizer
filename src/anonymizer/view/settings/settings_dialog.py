@@ -141,23 +141,6 @@ class SettingsDialog(tk.Toplevel):
         )
         row += 1
 
-        remove_pixel_phi_label = ctk.CTkLabel(self._frame, text=_("Remove Pixel PHI") + ":")
-        remove_pixel_phi_label.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="nw")
-
-        self._remove_pixel_phi_checkbox = ctk.CTkCheckBox(self._frame, text="")
-        if self.model.remove_pixel_phi:
-            self._remove_pixel_phi_checkbox.select()
-
-        self._remove_pixel_phi_checkbox.grid(
-            row=row,
-            column=1,
-            padx=PAD,
-            pady=PAD,
-            sticky="nw",
-        )
-
-        row += 1
-
         servers_label = ctk.CTkLabel(self._frame, text=_("DICOM Servers") + ":")
         servers_label.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="nw")
 
@@ -527,7 +510,6 @@ class SettingsDialog(tk.Toplevel):
         self.model.language_code = get_current_language_code()
         self.model.project_name = self.project_name_var.get()
         self.model.uid_root = self.uidroot_var.get()
-        self.model.remove_pixel_phi = self._remove_pixel_phi_checkbox.get() == 1
         self._user_input = self.model, self.java_phi_studies
 
         self.grab_release()

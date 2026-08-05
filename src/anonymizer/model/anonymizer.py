@@ -15,7 +15,7 @@ from pprint import pformat
 from typing import ClassVar, NamedTuple
 
 from pydicom import Dataset
-from sqlalchemy import Column, ForeignKey, Integer, String, create_engine, delete, func, select, text
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, create_engine, delete, func, select, text
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -32,7 +32,6 @@ from sqlalchemy.orm import (
 from anonymizer.utils.storage import JavaAnonymizerExportedStudy
 
 logger = logging.getLogger(__name__)
-
 
 
 class Base(MappedAsDataclass, DeclarativeBase):
@@ -59,6 +58,7 @@ class Series(Base):
     description: Mapped[str | None] = mapped_column(String, default=None)
     harmonized_description: Mapped[str | None] = mapped_column(String, default=None)
     face_blur_algorithm_applied: Mapped[str | None] = mapped_column(String, default=None)
+    pixel_phi_scanned: Mapped[bool] = mapped_column(Boolean, default=False)
 
     instances: Mapped[list["Instance"]] = relationship(
         back_populates="series", cascade="all, delete-orphan", init=False
@@ -137,6 +137,9 @@ class PHI_IndexRecord:
     num_series: int
     num_instances: int
     harmonize: bool = False
+    face_blurred: str = ""
+    pixel_phi_removed: bool = False
+    pixel_phi: str = ""
 
     field_titles: ClassVar[dict[str, str]] = {
         "anon_patient_id": "ANON-PatientID",
@@ -152,6 +155,9 @@ class PHI_IndexRecord:
         "num_series": "Series",
         "num_instances": "Instances",
         "harmonize": "Harmonized",
+        "face_blurred": "FaceBlurred",
+        "pixel_phi_removed": "PixelPHIRemoved",
+        "pixel_phi": "PixelPHI",
     }
 
     @staticmethod
@@ -251,11 +257,7 @@ def format_series_processing_status(
         return base
 
     face_blur = status.face_blur_algorithm
-    face_blur_part = (
-        _format_face_blur_status_label(face_blur)
-        if face_blur and face_blur.strip()
-        else "None"
-    )
+    face_blur_part = _format_face_blur_status_label(face_blur) if face_blur and face_blur.strip() else "None"
     return f"{base} · Face blur: {face_blur_part}"
 
 
@@ -270,12 +272,47 @@ def _study_ct_series_all_harmonized(study: Study) -> bool:
     )
 
 
+def _study_face_blur_label(study: Study) -> str:
+    """Return formatted face-blur algorithm(s) for the study, or blank when none applied."""
+    labels: list[str] = []
+    seen: set[str] = set()
+    for series in study.series or []:
+        raw = series.face_blur_algorithm_applied
+        if raw is None or not str(raw).strip():
+            continue
+        key = str(raw).strip()
+        if key in seen:
+            continue
+        seen.add(key)
+        labels.append(_format_face_blur_status_label(key))
+    return ", ".join(labels)
+
+
+def _study_pixel_phi_removed(study: Study) -> bool:
+    """Return True when any instance in the study has recorded pixel PHI removal."""
+    return bool(_study_pixel_phi_digest(study))
+
+
+def _study_pixel_phi_digest(study: Study) -> str:
+    """Return deduplicated comma-delimited pixel PHI text removed across the study."""
+    texts: list[str] = []
+    for series in study.series or []:
+        for instance in series.instances or []:
+            raw = instance.pixel_phi
+            if raw is None or not str(raw).strip():
+                continue
+            texts.extend(item.strip() for item in str(raw).split(",") if item.strip())
+    return _format_pixel_phi(texts)
+
+
 def _sqlite_column_type(column: Column) -> str | None:
     """Map a SQLAlchemy column to a SQLite ADD COLUMN type, or None if unsupported."""
     column_type = column.type
     if isinstance(column_type, String):
         return "TEXT"
     if isinstance(column_type, Integer):
+        return "INTEGER"
+    if isinstance(column_type, Boolean):
         return "INTEGER"
     logger.warning(
         "SQLite schema sync: unsupported column type %r for %s.%s",
@@ -382,9 +419,7 @@ class AnonymizerModel:
                 if table_exists is None:
                     continue
 
-                existing_columns = {
-                    row[1] for row in conn.execute(text(f"PRAGMA table_info({table.name})"))
-                }
+                existing_columns = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table.name})"))}
                 for column in table.columns:
                     if column.name in existing_columns:
                         continue
@@ -609,11 +644,7 @@ class AnonymizerModel:
     @use_session(is_read_only_operation=True)
     def get_study_phi_header_by_anon_study_uid(self, anon_study_uid: str) -> StudyPhiHeader | None:
         """Resolve PHI patient/study metadata for a stored anonymized study UID."""
-        stmt = (
-            select(Study)
-            .where(Study.anon_study_uid == anon_study_uid)
-            .options(joinedload(Study.patient))
-        )
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(joinedload(Study.patient))
         study = self.session.execute(stmt).unique().scalar_one_or_none()
         if study is None or study.patient is None:
             return None
@@ -667,6 +698,9 @@ class AnonymizerModel:
                     num_series=num_series,
                     num_instances=num_instances,
                     harmonize=_study_ct_series_all_harmonized(study),
+                    face_blurred=_study_face_blur_label(study),
+                    pixel_phi_removed=_study_pixel_phi_removed(study),
+                    pixel_phi=_study_pixel_phi_digest(study),
                 )
                 phi_index_records.append(phi_index_record)
 
@@ -727,7 +761,7 @@ class AnonymizerModel:
         available_digits = max_len - len(prefix)
 
         # Calculate the MD5 hash (for a deterministic 128-bit mapping)
-        phi_uid_hash = hashlib.md5(phi_uid.encode('utf-8'))
+        phi_uid_hash = hashlib.md5(phi_uid.encode("utf-8"))
 
         # Convert the 128-bit hash to a large integer
         phi_uid_hash_int = int(phi_uid_hash.hexdigest(), 16)
@@ -904,7 +938,7 @@ class AnonymizerModel:
         # Site_id/prefix is constant, for anon_patient_id string MAX works the same as numeric MAX
         last_anon_patient_id = self.session.execute(select(func.max(PHI.anon_patient_id))).scalar_one()
         last_phi_index = int(last_anon_patient_id.split("-")[-1]) if last_anon_patient_id else 0
-        anon_ptid = self._format_anon_patient_id(phi_index=last_phi_index+1)
+        anon_ptid = self._format_anon_patient_id(phi_index=last_phi_index + 1)
         logger.info(f"Generated new anon_patient_id:{anon_ptid}")
 
         new_phi: PHI = PHI(
@@ -1158,11 +1192,7 @@ class AnonymizerModel:
     @use_session(is_read_only_operation=True)
     def study_is_harmonized(self, anon_study_uid: str) -> bool:
         """Return True when every CT series in the study has harmonized_description set."""
-        stmt = (
-            select(Study)
-            .where(Study.anon_study_uid == anon_study_uid)
-            .options(selectinload(Study.series))
-        )
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
         study = self.session.execute(stmt).scalar_one_or_none()
         if study is None:
             return False
@@ -1181,12 +1211,28 @@ class AnonymizerModel:
         return value is not None and bool(str(value).strip())
 
     @use_session(is_read_only_operation=True)
+    def series_pixel_phi_scanned(self, anon_series_uid: str) -> bool:
+        stmt = select(Series.pixel_phi_scanned).where(Series.anon_series_uid == anon_series_uid)
+        value = self.session.execute(stmt).scalar_one_or_none()
+        return bool(value)
+
+    @use_session()
+    def set_series_pixel_phi_scanned(self, anon_series_uid: str, *, scanned: bool = True) -> bool:
+        stmt = select(Series).where(Series.anon_series_uid == anon_series_uid)
+        series = self.session.execute(stmt).scalar_one_or_none()
+        if series is None:
+            logger.error("Series with anon_series_uid '%s' not found.", anon_series_uid)
+            return False
+        series.pixel_phi_scanned = scanned
+        return True
+
+    @use_session()
+    def clear_series_pixel_phi_scan(self, anon_series_uid: str) -> bool:
+        return self.set_series_pixel_phi_scanned(anon_series_uid, scanned=False)
+
+    @use_session(is_read_only_operation=True)
     def get_series_processing_status(self, anon_series_uid: str) -> SeriesProcessingStatus | None:
-        stmt = (
-            select(Series)
-            .where(Series.anon_series_uid == anon_series_uid)
-            .options(selectinload(Series.instances))
-        )
+        stmt = select(Series).where(Series.anon_series_uid == anon_series_uid).options(selectinload(Series.instances))
         series = self.session.execute(stmt).scalar_one_or_none()
         if series is None:
             return None
@@ -1194,9 +1240,7 @@ class AnonymizerModel:
         instances = series.instances or []
         total = len(instances)
         applied = sum(
-            1
-            for instance in instances
-            if instance.pixel_phi is not None and bool(str(instance.pixel_phi).strip())
+            1 for instance in instances if instance.pixel_phi is not None and bool(str(instance.pixel_phi).strip())
         )
         return SeriesProcessingStatus(
             pixel_phi_applied_count=applied,
@@ -1244,7 +1288,9 @@ class AnonymizerModel:
                 logger.debug(f"Creating new Study for study_uid '{java_study.PHI_StudyInstanceUID}'.")
 
                 # Add Study UID mapping:
-                self.session.add(UID(phi_uid=java_study.PHI_StudyInstanceUID, anon_uid=java_study.ANON_StudyInstanceUID))
+                self.session.add(
+                    UID(phi_uid=java_study.PHI_StudyInstanceUID, anon_uid=java_study.ANON_StudyInstanceUID)
+                )
 
                 study_record = Study(
                     study_uid=java_study.PHI_StudyInstanceUID,

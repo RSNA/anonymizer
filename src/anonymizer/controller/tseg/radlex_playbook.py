@@ -14,6 +14,7 @@ from anonymizer.controller.tseg.dicom_geometry import (
     SECONDARY_CAPTURE_SOP,
     PlaneLabel,
     SeriesGeometryResult,
+    format_geometry_summary,
     plane_label,
 )
 from anonymizer.controller.tseg.segment import TS_result
@@ -345,6 +346,44 @@ def _format_classifier_confidence(probability: float | None) -> str:
     return f"{probability * 100.0:.2f}% " + _("confidence")
 
 
+def _humanize_contrast_phase(phase: str) -> str:
+    return str(phase or "").strip().replace("_", " ")
+
+
+def _playbook_body_part_evidence(
+    *,
+    tseg: TS_result | None = None,
+    attributes: PlaybookHarmonizeAttributes | None = None,
+    geometry: SeriesGeometryResult | None = None,
+) -> str:
+    if tseg is not None and tseg.body_parts_present.strip() and tseg.error is None:
+        from anonymizer.controller.tseg.segment import format_anatomy_regions_summary
+
+        return format_anatomy_regions_summary(tseg)
+    if attributes is not None:
+        if geometry is not None and is_localizer_geometry(geometry) and attributes.body_part_confidence is None:
+            return _("Body part from DICOM fields")
+        return _format_region_voxel_fraction(attributes.body_part_confidence)
+    return "—"
+
+
+def _playbook_iv_contrast_evidence(
+    *,
+    phase: str,
+    probability: float | None,
+    iv_evidence: str | None = None,
+) -> str:
+    if iv_evidence:
+        return iv_evidence
+    confidence = _format_classifier_confidence(probability)
+    human_phase = _humanize_contrast_phase(phase)
+    if human_phase and confidence != "—":
+        return f"{human_phase} · {confidence}"
+    if human_phase:
+        return human_phase
+    return confidence
+
+
 def body_part_label(code: str) -> str:
     return _(_BODY_PART_LABELS.get(code, code))
 
@@ -409,9 +448,7 @@ def map_series_type_code(ds: Dataset | None, geometry: SeriesGeometryResult) -> 
     image_type = _series_image_type_tokens(ds, geometry)
     sop_class = str(ds.get("SOPClassUID", "") if ds is not None else "")
 
-    if sop_class.startswith(STRUCTURED_REPORT_SOP_PREFIX) and _contains_dicom_keyword(
-        text, _RADIATION_DOSE_KEYWORDS
-    ):
+    if sop_class.startswith(STRUCTURED_REPORT_SOP_PREFIX) and _contains_dicom_keyword(text, _RADIATION_DOSE_KEYWORDS):
         return "Radiation_Dose"
 
     if _contains_dicom_keyword(text, _CONTRAST_DOSE_KEYWORDS):
@@ -529,15 +566,11 @@ def _head_region_playbook_code(structures_present: dict[str, int]) -> str:
     if brain_voxels >= MIN_STRUCTURE_VOXELS:
         return "Brain"
     if skull_voxels >= MIN_STRUCTURE_VOXELS and brain_voxels == 0:
-        logger.info(
-            "Playbook map body part: Head region with skull/spinal cord but no brain → Head"
-        )
+        logger.info("Playbook map body part: Head region with skull/spinal cord but no brain → Head")
         return "Head"
     if brain_voxels > 0 or skull_voxels > 0:
         return "Brain"
-    logger.info(
-        "Playbook map body part: Head region without structure detail; defaulting to Brain"
-    )
+    logger.info("Playbook map body part: Head region without structure detail; defaulting to Brain")
     return "Brain"
 
 
@@ -568,9 +601,7 @@ def map_body_part_from_dicom(ds: Dataset) -> str:
             logger.info("Playbook localizer body part: text match %r → %s", keywords[0], code)
             return code
 
-    raise ValueError(
-        "Could not determine Playbook body part from DICOM metadata for this localizer series"
-    )
+    raise ValueError("Could not determine Playbook body part from DICOM metadata for this localizer series")
 
 
 def build_localizer_playbook_attributes(
@@ -802,10 +833,13 @@ def playbook_body_part_row_values(
 ) -> tuple[str, str, str, str, str]:
     if attributes is not None:
         source = _("TotalSegmentator anatomy")
-        evidence = _format_region_voxel_fraction(attributes.body_part_confidence)
+        evidence = _playbook_body_part_evidence(
+            tseg=tseg,
+            attributes=attributes,
+            geometry=geometry,
+        )
         if geometry is not None and is_localizer_geometry(geometry) and attributes.body_part_confidence is None:
             source = _("DICOM metadata")
-            evidence = _("Body part from DICOM fields")
         return (
             _("Body Part"),
             attributes.body_part_code,
@@ -819,7 +853,7 @@ def playbook_body_part_row_values(
             _("Body Part"),
             code,
             body_part_label(code),
-            _format_region_voxel_fraction(tseg.region_fraction),
+            _playbook_body_part_evidence(tseg=tseg),
             _("TotalSegmentator anatomy"),
         )
     return (_("Body Part"), "—", "—", "—", "—")
@@ -840,11 +874,16 @@ def playbook_plane_row_values(
     if geometry is None:
         return (_("Anatomic Plane"), "—", "—", "—", "—")
     code = anatomic_plane_code or map_anatomic_plane_code(geometry)
+    evidence = format_geometry_summary(geometry)
+    if not geometry.ts_suitable:
+        from anonymizer.controller.tseg.dicom_geometry import geometry_skip_reason_label
+
+        evidence = f"{evidence} — {geometry_skip_reason_label(geometry)}"
     return (
         _("Anatomic Plane"),
         code,
         anatomic_plane_label(code),
-        _format_plane_deviation(geometry, code),
+        evidence,
         _("DICOM ImageOrientationPatient"),
     )
 
@@ -858,16 +897,23 @@ def playbook_iv_contrast_row_values(
     geometry: SeriesGeometryResult | None = None,
 ) -> tuple[str, str, str, str, str]:
     if attributes is not None:
-        phase = contrast_phase
+        phase = attributes.contrast_phase or ""
         if attributes.iv_contrast_code != "WO" and attributes.contrast_phase:
             phase = attributes.contrast_phase
-        evidence = iv_evidence or _format_classifier_confidence(attributes.contrast_confidence)
+        if tseg is not None and tseg.contrast_phase:
+            phase = tseg.contrast_phase
+            probability = tseg.phase_probability if tseg.contrast_phase else None
+        else:
+            probability = attributes.contrast_confidence
+        evidence = _playbook_iv_contrast_evidence(
+            phase=phase,
+            probability=probability,
+            iv_evidence=iv_evidence,
+        )
         source = _("TotalSegmentator contrast")
         if geometry is not None and is_localizer_geometry(geometry) and attributes.contrast_confidence is None:
             source = _("RadLex Playbook")
             evidence = _("Native (assumed for localizer)")
-        elif phase:
-            evidence = f"{phase} · {evidence}"
         return (
             _("IV Contrast Phase"),
             attributes.iv_contrast_code,
@@ -877,15 +923,14 @@ def playbook_iv_contrast_row_values(
         )
     if tseg is not None and tseg.contrast_phase:
         code = map_iv_contrast_code(tseg)
-        phase = tseg.contrast_phase
-        evidence = _format_classifier_confidence(tseg.phase_probability if tseg.contrast_phase else None)
-        if phase:
-            evidence = f"{phase} · {evidence}"
         return (
             _("IV Contrast Phase"),
             code,
             iv_contrast_label(code),
-            evidence,
+            _playbook_iv_contrast_evidence(
+                phase=tseg.contrast_phase,
+                probability=tseg.phase_probability if tseg.contrast_phase else None,
+            ),
             _("TotalSegmentator contrast"),
         )
     return (_("IV Contrast Phase"), "—", "—", "—", "—")
@@ -932,14 +977,41 @@ def harmonize_analysis_rows(
     *,
     geometry: SeriesGeometryResult | None = None,
     ds: Dataset | None = None,
+    tseg: TS_result | None = None,
 ) -> list[tuple[str, str, str, str, str]]:
     """Return ``(element, code, value, evidence, source)`` rows for harmonize results UI."""
     return [
-        playbook_body_part_row_values(attributes, geometry=geometry),
+        playbook_body_part_row_values(attributes, geometry=geometry, tseg=tseg),
         playbook_plane_row_values(geometry, attributes.anatomic_plane_code),
-        playbook_iv_contrast_row_values(attributes, geometry=geometry),
+        playbook_iv_contrast_row_values(attributes, geometry=geometry, tseg=tseg),
         playbook_series_type_row_values(attributes=attributes, ds=ds, geometry=geometry),
     ]
+
+
+def format_playbook_analysis_log_lines(
+    attributes: PlaybookHarmonizeAttributes,
+    *,
+    geometry: SeriesGeometryResult | None = None,
+    ds: Dataset | None = None,
+    tseg: TS_result | None = None,
+) -> list[str]:
+    """One line per Playbook row, aligned with the harmonize results table."""
+    lines: list[str] = []
+    for element, _code, value, evidence, source in harmonize_analysis_rows(
+        attributes,
+        geometry=geometry,
+        ds=ds,
+        tseg=tseg,
+    ):
+        if value == "—":
+            continue
+        line = f"{element}: {value}"
+        if evidence and evidence != "—":
+            line += f" — {evidence}"
+        if source and source != "—":
+            line += f" ({source})"
+        lines.append(line)
+    return lines
 
 
 def format_harmonize_analysis_section(

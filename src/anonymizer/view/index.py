@@ -10,11 +10,17 @@ from tkinter import messagebox, ttk
 import customtkinter as ctk
 
 from anonymizer.controller.project import ProjectController
+from anonymizer.controller.tseg.runtime_status import (
+    any_ai_batch_feature_allowed,
+    get_ai_session,
+)
 from anonymizer.model.anonymizer import AnonymizerModel, PHI_IndexRecord
 from anonymizer.utils.translate import _
+from anonymizer.view.ai_batch_process_dialog import AiBatchProcessDialog
+from anonymizer.view.ai_batch_process_options_dialog import show_ai_batch_process_options_dialog
+from anonymizer.view.ctk_safe import mark_ctk_window_alive, mark_ctk_window_destroyed
 from anonymizer.view.dashboard import Dashboard
 from anonymizer.view.delete_studies_dialog import DeleteStudiesDialog
-from anonymizer.view.harmonize_studies_dialog import HarmonizeStudiesDialog
 from anonymizer.view.projection import ProjectionView
 from anonymizer.view.series import show_series_view
 
@@ -45,6 +51,7 @@ class IndexView(tk.Toplevel):
         char_width_px: int,
     ):
         super().__init__(master=parent)
+        mark_ctk_window_alive(self)
         self._char_width_px = char_width_px
         self._parent = parent
         self._controller = project_controller
@@ -65,7 +72,7 @@ class IndexView(tk.Toplevel):
     def _create_widgets(self):
         logger.info("_create_widgets")
         PAD = 10
-        ButtonWidth = 100
+        ButtonWidth = 120
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
@@ -111,24 +118,26 @@ class IndexView(tk.Toplevel):
         # 2. Button Frame:
         self._button_frame = ctk.CTkFrame(self)
         self._button_frame.grid(row=1, column=0, padx=PAD, pady=(0, PAD), sticky="nswe")
-        self._button_frame.grid_columnconfigure(3, weight=1)
+        self._button_frame.grid_columnconfigure(1, weight=1)
 
         # Control buttons:
+        self._ai_batch_process_button = ctk.CTkButton(
+            self._button_frame,
+            width=ButtonWidth,
+            text=_("AI Batch Process"),
+            command=self._ai_batch_process_button_pressed,
+        )
+        self._ai_batch_process_button.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="w")
+        if not self._any_ai_batch_feature_enabled():
+            self._ai_batch_process_button.grid_remove()
+
         self._view_projections_button = ctk.CTkButton(
             self._button_frame,
             width=ButtonWidth,
             text=_("View Projections"),
             command=self._view_projections_button_pressed,
         )
-        self._view_projections_button.grid(row=0, column=4, padx=PAD, pady=PAD, sticky="w")
-
-        self._harmonize_button = ctk.CTkButton(
-            self._button_frame,
-            width=ButtonWidth,
-            text=_("Harmonize"),
-            command=self._harmonize_button_pressed,
-        )
-        self._harmonize_button.grid(row=0, column=6, padx=PAD, pady=PAD, sticky="w")
+        self._view_projections_button.grid(row=0, column=2, padx=PAD, pady=PAD, sticky="e")
 
         self._create_phi_button = ctk.CTkButton(
             self._button_frame,
@@ -136,7 +145,7 @@ class IndexView(tk.Toplevel):
             text=_("Create Patient Lookup"),
             command=self._create_phi_button_pressed,
         )
-        self._create_phi_button.grid(row=0, column=5, padx=PAD, pady=PAD, sticky="w")
+        self._create_phi_button.grid(row=0, column=3, padx=PAD, pady=PAD, sticky="e")
 
         self._refresh_button = ctk.CTkButton(
             self._button_frame,
@@ -144,14 +153,14 @@ class IndexView(tk.Toplevel):
             text=_("Refresh"),
             command=self._refresh_button_pressed,
         )
-        self._refresh_button.grid(row=0, column=7, padx=PAD, pady=PAD, sticky="we")
+        self._refresh_button.grid(row=0, column=4, padx=PAD, pady=PAD, sticky="e")
         self._select_all_button = ctk.CTkButton(
             self._button_frame,
             width=ButtonWidth,
             text=_("Select All"),
             command=self._select_all_button_pressed,
         )
-        self._select_all_button.grid(row=0, column=8, padx=PAD, pady=PAD, sticky="w")
+        self._select_all_button.grid(row=0, column=5, padx=PAD, pady=PAD, sticky="e")
 
         self._clear_selection_button = ctk.CTkButton(
             self._button_frame,
@@ -159,7 +168,7 @@ class IndexView(tk.Toplevel):
             text=_("Clear Selection"),
             command=self._clear_selection_button_pressed,
         )
-        self._clear_selection_button.grid(row=0, column=9, padx=PAD, pady=PAD, sticky="w")
+        self._clear_selection_button.grid(row=0, column=6, padx=PAD, pady=PAD, sticky="e")
 
         self._delete_button = ctk.CTkButton(
             self._button_frame,
@@ -167,10 +176,37 @@ class IndexView(tk.Toplevel):
             text=_("Delete"),
             command=self._delete_button_pressed,
         )
-        self._delete_button.grid(row=0, column=10, padx=PAD, pady=PAD, sticky="e")
+        self._delete_button.grid(row=0, column=7, padx=PAD, pady=PAD, sticky="e")
         self._delete_button.focus_set()
 
-    def _harmonize_button_pressed(self) -> None:
+    @staticmethod
+    def _any_ai_batch_feature_enabled() -> bool:
+        session = get_ai_session()
+        return session.remove_pixel_phi or session.enable_harmonize or session.enable_face_blur
+
+    def refresh_ai_feature_ui(self) -> None:
+        if not hasattr(self, "_ai_batch_process_button"):
+            return
+        if self._any_ai_batch_feature_enabled():
+            self._ai_batch_process_button.grid()
+        else:
+            self._ai_batch_process_button.grid_remove()
+
+    def _ai_batch_process_button_pressed(self) -> None:
+        if not self._any_ai_batch_feature_enabled():
+            messagebox.showinfo(
+                title=_("AI Batch Process"),
+                message=_("No AI features are enabled. Open AI Features Setup from the Welcome screen or Help menu."),
+                parent=self,
+            )
+            return
+        if not any_ai_batch_feature_allowed():
+            messagebox.showinfo(
+                title=_("AI Batch Process"),
+                message=_("AI features are not ready yet. Open AI Features Setup to download models."),
+                parent=self,
+            )
+            return
         if self._phi_index is None:
             logger.error("self._phi_index is empty")
             return
@@ -178,12 +214,16 @@ class IndexView(tk.Toplevel):
         rows_selected = list(self._tree.selection())
         if not rows_selected:
             messagebox.showerror(
-                title=_("Harmonize"),
-                message=_("No studies selected for harmonize.")
+                title=_("AI Batch Process"),
+                message=_("No studies selected for AI batch processing.")
                 + "\n\n"
                 + _("Use SHIFT+Click and/or CMD/CTRL+Click to select multiple studies."),
                 parent=self,
             )
+            return
+
+        options_result = show_ai_batch_process_options_dialog(self)
+        if not options_result.confirmed or options_result.options is None:
             return
 
         studies: list[tuple[str, str]] = [
@@ -193,13 +233,17 @@ class IndexView(tk.Toplevel):
             )
             for row in rows_selected
         ]
-        logger.info("Harmonize button pressed for %d studies", len(studies))
-        self._harmonize_button.configure(state="disabled")
+        logger.info(
+            "AI Batch Process pressed for %d studies with algorithms %s",
+            len(studies),
+            options_result.options.algorithms,
+        )
+        self._ai_batch_process_button.configure(state="disabled")
         try:
-            dialog = HarmonizeStudiesDialog(self, self._controller, studies)
+            dialog = AiBatchProcessDialog(self, self._controller, studies, options_result.options)
             dialog.get_input()
         finally:
-            self._harmonize_button.configure(state="normal")
+            self._ai_batch_process_button.configure(state="normal")
         self._update_tree_from_phi_index()
 
     def _create_phi_button_pressed(self):
@@ -367,6 +411,7 @@ class IndexView(tk.Toplevel):
                     self,
                     anon_model=self._anon_model,
                     series_path=first_series_path,
+                    project_model=self._controller.model,
                 )
 
     def _escape_keypress(self, event):
@@ -378,7 +423,12 @@ class IndexView(tk.Toplevel):
         if self._projection_view:
             self._projection_view.destroy()
 
+        app = self.winfo_toplevel()
+        if getattr(app, "index_view", None) is self:
+            app.index_view = None
+
         self.grab_release()
+        mark_ctk_window_destroyed(self)
         self.destroy()
 
     def get_input(self):

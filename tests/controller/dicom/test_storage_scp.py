@@ -330,7 +330,9 @@ def test_send_ct_Archibald_Doe_Projection_create_cached(temp_dir: str, controlle
     assert model.get_anon_uid(ds.SeriesInstanceUID) == hash_ct_doe_archibald_SeriesInstanceUID
     assert model.get_anon_uid(ds.SOPInstanceUID) == hash_ct_doe_archibald_SOPInstanceUID1
 
-    series_path = store_dir / dirlist[0] / hash_ct_doe_archibald_StudyInstanceUID / hash_ct_doe_archibald_SeriesInstanceUID
+    series_path = (
+        store_dir / dirlist[0] / hash_ct_doe_archibald_StudyInstanceUID / hash_ct_doe_archibald_SeriesInstanceUID
+    )
     projection = create_projection_from_series(series_path)
 
     # Check Projection created
@@ -751,7 +753,13 @@ def test_send_JPEG_Baseline(temp_dir: str, controller: ProjectController):
     assert len(series.instances) == 1
 
     # Read the anonymized file and check the SOPClassUID and TransferSyntaxUID:
-    anon_file_path = os.path.join(store_dir, dirlist[0], hash_jpeg_baseline_StudyInstanceUID, hash_jpeg_baseline_SeriesInstanceUID, hash_jpeg_baseline_SOPInstanceUID + ".dcm")
+    anon_file_path = os.path.join(
+        store_dir,
+        dirlist[0],
+        hash_jpeg_baseline_StudyInstanceUID,
+        hash_jpeg_baseline_SeriesInstanceUID,
+        hash_jpeg_baseline_SOPInstanceUID + ".dcm",
+    )
     assert os.path.exists(anon_file_path)
     ds = dcmread(anon_file_path)
     assert ds
@@ -829,7 +837,13 @@ def test_send_JPEG_Extended(temp_dir: str, controller: ProjectController):
     assert len(series.instances) == 1
 
     # Read the anonymize file and check the SOPClassUID and TransferSyntaxUID:
-    anon_file_path = os.path.join(store_dir, dirlist[0], hash_jpeg_extended_StudyInstanceUID, hash_jpeg_extended_SeriesInstanceUID, hash_jpeg_extended_SOPInstanceUID + ".dcm")
+    anon_file_path = os.path.join(
+        store_dir,
+        dirlist[0],
+        hash_jpeg_extended_StudyInstanceUID,
+        hash_jpeg_extended_SeriesInstanceUID,
+        hash_jpeg_extended_SOPInstanceUID + ".dcm",
+    )
     assert os.path.exists(anon_file_path)
     ds = dcmread(anon_file_path)
     assert ds
@@ -906,7 +920,13 @@ def test_send_JPEG_Lossless_P14_FOP(temp_dir: str, controller: ProjectController
     assert len(series.instances) == 1
 
     # Read the anonymize file and check the SOPClassUID and TransferSyntaxUID:
-    anon_file_path = os.path.join(store_dir, dirlist[0], hash_jpeg_lossless_p14_StudyInstanceUID, hash_jpeg_lossless_p14_SeriesInstanceUID, hash_jpeg_lossless_p14_SOPInstanceUID + ".dcm")
+    anon_file_path = os.path.join(
+        store_dir,
+        dirlist[0],
+        hash_jpeg_lossless_p14_StudyInstanceUID,
+        hash_jpeg_lossless_p14_SeriesInstanceUID,
+        hash_jpeg_lossless_p14_SOPInstanceUID + ".dcm",
+    )
     assert os.path.exists(anon_file_path)
     ds = dcmread(anon_file_path)
     assert ds
@@ -982,7 +1002,13 @@ def test_send_JPEG_LS_Lossless(temp_dir: str, controller: ProjectController):
     assert len(series.instances) == 1
 
     # Read the anonymize file and check the SOPClassUID and TransferSyntaxUID:
-    anon_file_path = os.path.join(store_dir, dirlist[0], hash_jpeg_ls_lossless_StudyInstanceUID, hash_jpeg_ls_lossless_SeriesInstanceUID, hash_jpeg_ls_lossless_SOPInstanceUID + ".dcm")
+    anon_file_path = os.path.join(
+        store_dir,
+        dirlist[0],
+        hash_jpeg_ls_lossless_StudyInstanceUID,
+        hash_jpeg_ls_lossless_SeriesInstanceUID,
+        hash_jpeg_ls_lossless_SOPInstanceUID + ".dcm",
+    )
     assert os.path.exists(anon_file_path)
     ds = dcmread(anon_file_path)
     assert ds
@@ -1067,7 +1093,13 @@ def test_send_JPEG_LS_Lossy(temp_dir: str, controller: ProjectController):
     assert len(series.instances) == 1
 
     # Read the anonymize file and check the SOPClassUID and TransferSyntaxUID:
-    anon_file_path = os.path.join(store_dir, dirlist[0], hash_jpeg_ls_lossy_StudyInstanceUID, hash_jpeg_ls_lossy_SeriesInstanceUID, hash_jpeg_ls_lossy_SOPInstanceUID + ".dcm")
+    anon_file_path = os.path.join(
+        store_dir,
+        dirlist[0],
+        hash_jpeg_ls_lossy_StudyInstanceUID,
+        hash_jpeg_ls_lossy_SeriesInstanceUID,
+        hash_jpeg_ls_lossy_SOPInstanceUID + ".dcm",
+    )
     assert os.path.exists(anon_file_path)
     ds = dcmread(anon_file_path)
     assert ds
@@ -1143,7 +1175,13 @@ def test_send_JPEG_2000_Lossless(temp_dir: str, controller: ProjectController):
     assert len(series.instances) == 1
 
     # Read the anonymize file and check the SOPClassUID and TransferSyntaxUID:
-    anon_file_path = os.path.join(store_dir, dirlist[0], hash_jpeg_2000_lossless_StudyInstanceUID, hash_jpeg_2000_lossless_SeriesInstanceUID, hash_jpeg_2000_lossless_SOPInstanceUID + ".dcm")
+    anon_file_path = os.path.join(
+        store_dir,
+        dirlist[0],
+        hash_jpeg_2000_lossless_StudyInstanceUID,
+        hash_jpeg_2000_lossless_SeriesInstanceUID,
+        hash_jpeg_2000_lossless_SOPInstanceUID + ".dcm",
+    )
     assert os.path.exists(anon_file_path)
     ds = dcmread(anon_file_path)
     assert ds
@@ -1220,7 +1258,13 @@ def test_send_JPEG_2000(temp_dir: str, controller: ProjectController):
     assert len(series.instances) == 1
 
     # Read the anonymize file and check the SOPClassUID and TransferSyntaxUID:
-    anon_file_path = os.path.join(store_dir, dirlist[0], hash_jpeg_2000_StudyInstanceUID, hash_jpeg_2000_SeriesInstanceUID, hash_jpeg_2000_SOPInstanceUID + ".dcm")
+    anon_file_path = os.path.join(
+        store_dir,
+        dirlist[0],
+        hash_jpeg_2000_StudyInstanceUID,
+        hash_jpeg_2000_SeriesInstanceUID,
+        hash_jpeg_2000_SOPInstanceUID + ".dcm",
+    )
     assert os.path.exists(anon_file_path)
     ds = dcmread(anon_file_path)
     assert ds

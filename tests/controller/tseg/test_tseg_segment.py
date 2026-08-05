@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
+from anonymizer.controller.tseg.dicom_geometry import SeriesGeometryResult
 from anonymizer.controller.tseg.segment import (
     _segmentation_cache_valid,
+    analyze_tseg_regions,
     body_parts_present,
     dominant_region_from_voxels,
     is_multi_region,
@@ -92,3 +95,35 @@ def test_segmentation_cache_valid_requires_mask(tmp_path) -> None:
     assert not _segmentation_cache_valid(seg_dir, ["brain", "liver"])
     (seg_dir / "brain.nii.gz").write_bytes(b"x")
     assert _segmentation_cache_valid(seg_dir, ["brain", "liver"])
+
+
+@patch("anonymizer.controller.tseg.segment.resolve_series_geometry")
+@patch("anonymizer.controller.tseg.segment.ts_regions_eligible", return_value=False)
+def test_analyze_tseg_regions_uses_provided_geometry(
+    _mock_eligible: MagicMock,
+    mock_resolve: MagicMock,
+    tmp_path: Path,
+) -> None:
+    geometry = SeriesGeometryResult(
+        plane="axial",
+        plane_confidence=0.95,
+        slice_normal_lps=(0.0, 0.0, 1.0),
+        plane_angles_deg={"axial": 5.0, "coronal": 85.0, "sagittal": 85.0},
+        dimensionality="volume_3d",
+        n_slices=24,
+        through_plane_extent_mm=120.0,
+        slice_spacing_mm=5.0,
+        spacing_regularity=1.0,
+        provenance="original",
+        provenance_confidence=0.9,
+        image_type=("ORIGINAL", "PRIMARY", "AXIAL"),
+        source_series_uids=(),
+        ts_suitable=False,
+        metadata_suspect=False,
+        method="dicom_headers",
+        notes="not suitable",
+    )
+    result, nifti = analyze_tseg_regions(tmp_path, geometry=geometry)
+    mock_resolve.assert_not_called()
+    assert result.error is not None
+    assert nifti is None

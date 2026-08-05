@@ -9,12 +9,9 @@ The `tseg` module derives CT series anatomy and IV contrast from **physical HU v
 
 ## Install implications (PyPI)
 
-| Command | What you get |
-|---------|----------------|
-| `pip install rsna-anonymizer` | Core app only. Harmonize runs **FALCON** for regions and contrast. No TotalSegmentator or XGBoost. |
-| `pip install "rsna-anonymizer[tseg]"` | Adds `totalsegmentator`, `xgboost`, `nibabel`, and pinned `dicom2nifti`. Harmonize uses TS for regions and contrast when runtime loads successfully. |
+| `pip install rsna-anonymizer` | Includes TotalSegmentator, XGBoost, nibabel, and dicom2nifti. Harmonize and Face Blur are enabled per project in **Project Settings**. |
 
-**Why XGBoost is in our extra, not TotalSegmentator’s:** upstream TS ships the contrast classifier `.pkl` files but documents `pip install xgboost` as a manual step and does **not** declare `xgboost` in its package metadata. The `tseg` extra makes that explicit for rsna-anonymizer.
+**Model storage:** OCR models under `assets/ai/ocr/model/`; TotalSegmentator config and weights under `assets/ai/tseg/` (relative to the install directory after startup).
 
 **Native OpenMP (outside pip):** the `xgboost` wheel links to a platform OpenMP runtime that pip cannot install.
 
@@ -29,7 +26,7 @@ If XGBoost fails to load, the app still starts. Harmonize keeps TS regions when 
 ### Development
 
 ```bash
-uv sync --extra tseg --group dev
+uv sync --group dev
 ```
 
 `dicom2nifti` is pinned to `<2.6` for compatibility with this project’s `pydicom` 2.4.x.

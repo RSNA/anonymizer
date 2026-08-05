@@ -64,6 +64,7 @@ def ensure_synthetic_assets():
     version_file.write_text(str(SYNTHETIC_PHANTOM_VERSION), encoding="utf-8")
     print("[Setup] Generation complete. Starting tests...\n")
 
+
 # -------------------------------------------------------------------------
 # FIXTURES
 # -------------------------------------------------------------------------
@@ -85,15 +86,18 @@ def mock_models():
 
     return mock_part_model, mock_hn_model, mock_ch_model, mock_ab_model
 
+
 @pytest.fixture
 def mock_preprocess():
     """Mocks the preprocessing to return a dummy 3D numpy array instead of hitting disk."""
     dummy_array = np.zeros((100, 200, 200), dtype=np.float32)
     return dummy_array
 
+
 # -------------------------------------------------------------------------
 # MOCKED UNIT TESTS (Run on every commit)
 # -------------------------------------------------------------------------
+
 
 def test_body_part_model_input_z_index_is_fixed():
     assert BODY_PART_MODEL_INPUT_Z_INDEX == 50
@@ -116,12 +120,14 @@ def test_empty_directory_list():
     assert isinstance(predictions, list)
     assert len(predictions) == 0
 
+
 @patch("anonymizer.controller.falcon.predict.load_falcon_models")
 def test_model_load_failure(mock_load):
     mock_load.return_value = (MagicMock(), None, MagicMock(), MagicMock())
     predictions = predict_falcon_series([SYNTHETIC_DIRS["Chest"]])
     assert len(predictions) == 0
     mock_load.assert_called_once()
+
 
 @patch("anonymizer.controller.falcon.predict.load_falcon_models")
 @patch("anonymizer.controller.falcon.predict.preprocess_series")
@@ -168,6 +174,7 @@ def test_contrast_prediction_confidence_without_contrast():
     )
     assert contrast_prediction_confidence(pred) == pytest.approx(0.999, abs=0.001)
 
+
 @patch("anonymizer.controller.falcon.predict.load_falcon_models")
 @patch("anonymizer.controller.falcon.predict.preprocess_series")
 def test_preprocessing_failure(mock_preprocess, mock_load_models, mock_models):
@@ -179,6 +186,7 @@ def test_preprocessing_failure(mock_preprocess, mock_load_models, mock_models):
     assert predictions[0].error is not None
     assert "Preprocessing error: Corrupted DICOM files" in predictions[0].error
     assert predictions[0].radlex_series_description == ""
+
 
 @patch("anonymizer.controller.falcon.predict.load_falcon_models")
 @patch("anonymizer.controller.falcon.predict.preprocess_series")
@@ -195,9 +203,11 @@ def test_inference_failure(mock_get_probs, mock_preprocess, mock_load_models, mo
     assert predictions[0].iv_contrast is False
     assert predictions[0].radlex_series_description == ""
 
+
 # -------------------------------------------------------------------------
 # REAL MODEL INTEGRATION TESTS (Skipped in CI/CD)
 # -------------------------------------------------------------------------
+
 
 def test_predict_real_models_headneck(assert_no_memory_leak):
     series_path = SYNTHETIC_DIRS["HeadNeck"]
@@ -213,6 +223,7 @@ def test_predict_real_models_headneck(assert_no_memory_leak):
     assert pred.radlex_series_description.startswith("CT ")
     assert 0.0 <= pred.body_part_confidence <= 1.0
     assert 0.0 <= pred.iv_contrast_confidence <= 1.0
+
 
 def test_predict_real_models_chest(assert_no_memory_leak):
     series_path = SYNTHETIC_DIRS["Chest"]
@@ -230,6 +241,7 @@ def test_predict_real_models_chest(assert_no_memory_leak):
     assert 0.0 <= pred.body_part_confidence <= 1.0
     assert 0.0 <= pred.iv_contrast_confidence <= 1.0
 
+
 def test_predict_real_models_abdomen(assert_no_memory_leak):
     series_path = SYNTHETIC_DIRS["Abdomen"]
     predictions = predict_falcon_series([series_path])
@@ -246,12 +258,9 @@ def test_predict_real_models_abdomen(assert_no_memory_leak):
     assert 0.0 <= pred.body_part_confidence <= 1.0
     assert 0.0 <= pred.iv_contrast_confidence <= 1.0
 
+
 def test_predict_real_models_batch(assert_no_memory_leak):
-    test_dirs = [
-        SYNTHETIC_DIRS["HeadNeck"],
-        SYNTHETIC_DIRS["Chest"],
-        SYNTHETIC_DIRS["Abdomen"]
-    ]
+    test_dirs = [SYNTHETIC_DIRS["HeadNeck"], SYNTHETIC_DIRS["Chest"], SYNTHETIC_DIRS["Abdomen"]]
     expected_body_parts = ["HeadNeck", "Chest", "Abdomen"]
 
     predictions = predict_falcon_series(test_dirs)
@@ -264,6 +273,6 @@ def test_predict_real_models_batch(assert_no_memory_leak):
             assert pred.body_part in ("HeadNeck", "Chest", "Abdomen")
         else:
             assert pred.body_part == expected_body_parts[idx]
-        #assert pred.iv_contrast is False
+        # assert pred.iv_contrast is False
         assert 0.0 <= pred.body_part_confidence <= 1.0
         assert 0.0 <= pred.iv_contrast_confidence <= 1.0

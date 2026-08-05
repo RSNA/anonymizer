@@ -284,9 +284,7 @@ def test_error_confidence_aggregate(tmp_path: Path) -> None:
         iv_contrast_confidence=0.2,
         radlex_series_description="CT Head Neck Without Contrast",
     )
-    aggregate = format_error_confidence_aggregate(
-        [body_row, contrast_row], [body_pred, contrast_pred]
-    )
+    aggregate = format_error_confidence_aggregate([body_row, contrast_row], [body_pred, contrast_pred])
     assert "body_part errors: n=1" in aggregate
     assert "95.00%" in aggregate
     assert "contrast errors: n=1" in aggregate
@@ -380,9 +378,7 @@ def test_filter_error_artifacts_for_category():
     image_path = Path("/tmp/series.png")
     saved = [
         SavedEvalArtifact(row=row, prediction=body_pred, image_path=image_path, task_kind="body_part"),
-        SavedEvalArtifact(
-            row=row, prediction=contrast_pred, image_path=image_path, task_kind="contrast"
-        ),
+        SavedEvalArtifact(row=row, prediction=contrast_pred, image_path=image_path, task_kind="contrast"),
     ]
     assert len(filter_error_artifacts_for_category(saved, "body_part")) == 1
     assert len(filter_error_artifacts_for_category(saved, "contrast_with_pred_without")) == 1
@@ -406,9 +402,7 @@ def test_filter_contrast_success_artifacts_for_category():
     )
     image_path = Path("/tmp/series.png")
     saved = [
-        SavedEvalArtifact(
-            row=row, prediction=contrast_pred, image_path=image_path, task_kind="contrast"
-        ),
+        SavedEvalArtifact(row=row, prediction=contrast_pred, image_path=image_path, task_kind="contrast"),
     ]
     assert len(filter_contrast_success_artifacts_for_category(saved, "contrast_with_pred_with")) == 1
     assert filter_contrast_success_artifacts_for_category(saved, "contrast_without_pred_without") == []
@@ -453,12 +447,8 @@ def test_filter_body_part_error_artifacts_for_gt():
         radlex_series_description="CT Abdomen Without Contrast",
     )
     saved = [
-        SavedEvalArtifact(
-            row=head_row, prediction=head_pred, image_path=image_path, task_kind="body_part"
-        ),
-        SavedEvalArtifact(
-            row=chest_row, prediction=chest_pred, image_path=image_path, task_kind="body_part"
-        ),
+        SavedEvalArtifact(row=head_row, prediction=head_pred, image_path=image_path, task_kind="body_part"),
+        SavedEvalArtifact(row=chest_row, prediction=chest_pred, image_path=image_path, task_kind="body_part"),
     ]
     assert len(filter_body_part_error_artifacts_for_gt(saved, "HeadNeck")) == 1
     assert len(filter_body_part_error_artifacts_for_gt(saved, "Chest")) == 1
@@ -635,9 +625,7 @@ def test_save_success_summary_matrices_writes_only_non_empty_categories(tmp_path
             [prediction],
             artifact_root,
             [
-                SavedEvalArtifact(
-                    row=row, prediction=prediction, image_path=image_path, task_kind="contrast"
-                ),
+                SavedEvalArtifact(row=row, prediction=prediction, image_path=image_path, task_kind="contrast"),
             ],
         )
     assert len(paths) == 2

@@ -26,12 +26,9 @@ from pathlib import Path
 from queue import Queue
 from shutil import copyfile
 
-import torch
-from easyocr import Reader
 from pydicom import DataElement, Dataset, Sequence, dcmread
 from pydicom.errors import InvalidDicomError
 
-from anonymizer.controller.remove_pixel_phi import apply_instance_pixel_phi_for_dcm, remove_pixel_phi
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.model.project import DICOMNode, ProjectModel
 from anonymizer.utils.storage import DICOM_FILE_SUFFIX
@@ -104,7 +101,6 @@ class AnonymizerController:
         logger.info(f"Anonymizer Model initialised from script: {project_model.anonymizer_script_path}")
 
         self._anon_ds_Q: Queue = Queue()  # queue for dataset workers
-        self._anon_px_Q: Queue = Queue()  # queue for pixel phi workers
         self._worker_threads = []
 
         # Spawn Anonymizer DATASET worker threads:
@@ -117,16 +113,6 @@ class AnonymizerController:
             ds_worker.start()
             self._worker_threads.append(ds_worker)
 
-        # Spawn Remove Pixel PHI Thread:
-        if self.project_model.remove_pixel_phi:
-            px_worker = threading.Thread(
-                target=self._anonymizer_pixel_phi_worker,
-                name="AnonPixelWorker_1",
-                args=(self._anon_px_Q,),
-            )
-            px_worker.start()
-            self._worker_threads.append(px_worker)
-
         self._active = True
         logger.info("Anonymizer Controller initialised")
 
@@ -138,10 +124,10 @@ class AnonymizerController:
         return False
 
     def idle(self) -> bool:
-        return self._anon_ds_Q.empty() and self._anon_px_Q.empty()
+        return self._anon_ds_Q.empty()
 
-    def queued(self) -> tuple[int, int]:
-        return (self._anon_ds_Q.qsize(), self._anon_px_Q.qsize())
+    def queued(self) -> int:
+        return self._anon_ds_Q.qsize()
 
     def _stop_worker_threads(self):
         logger.info("Stopping Anonymizer Worker Threads")
@@ -156,10 +142,6 @@ class AnonymizerController:
 
         # Wait for all sentinal values to be processed
         self._anon_ds_Q.join()
-
-        if self.project_model.remove_pixel_phi:
-            self._anon_px_Q.put(None)
-            self._anon_px_Q.join()
 
         # Wait for all worker threads to finish
         for worker in self._worker_threads:
@@ -488,10 +470,6 @@ class AnonymizerController:
             # see options for write_like_original=True
             ds.save_as(filename, write_like_original=False)
 
-            # If enabled for project, and this file contains pixeldata, queue this file for pixel PHI scanning and removal:
-            # TODO: implement modality specific, via project settings, pixel phi removal
-            if self.project_model.remove_pixel_phi and "PixelData" in ds:
-                self._anon_px_Q.put(filename)
             return None
 
         except Exception as e:
@@ -587,60 +565,5 @@ class AnonymizerController:
                 break
             self.anonymize(source, ds)
             ds_Q.task_done()
-
-        logger.info(f"thread={threading.current_thread().name} end")
-
-    def _anonymizer_pixel_phi_worker(self, px_Q: Queue) -> None:
-        logger.info(f"thread={threading.current_thread().name} start")
-
-        # Once-off initialisation of easyocr.Reader (and underlying pytorch model):
-        # if pytorch models not downloaded yet, they will be when Reader initializes
-        model_dir = Path("assets") / "ocr" / "model"  # Default is: Path("~/.EasyOCR/model").expanduser()
-        if not model_dir.exists():
-            logger.warning(
-                f"EasyOCR model directory: {model_dir}, does not exist, EasyOCR will create it, models still to be downloaded..."
-            )
-        else:
-            logger.info(f"EasyOCR downloaded models: {os.listdir(model_dir)}")
-
-        # Initialize the EasyOCR reader with the desired language(s), if models are not in model_dir, they will be downloaded
-        ocr_reader = Reader(
-            lang_list=["en", "de", "fr", "es"],
-            model_storage_directory=model_dir,
-            verbose=False,
-        )
-
-        logging.info("OCR Reader initialised successfully")
-
-        # Check if GPU available
-        logger.info(f"Apple MPS (Metal) GPU Available: {torch.backends.mps.is_available()}")
-        logger.info(f"CUDA GPU Available: {torch.cuda.is_available()}")
-
-        while True:
-            time.sleep(self.WORKER_THREAD_SLEEP_SECS)
-
-            path = px_Q.get()  # Blocks by default
-            if path is None:  # sentinel value set by _stop_worker_threads
-                px_Q.task_done()
-                break
-
-            try:
-                modified, texts = remove_pixel_phi(path, ocr_reader)
-                if texts:
-                    apply_instance_pixel_phi_for_dcm(self.model, path, texts)
-                if modified:
-                    logger.info("Removed burnt-in pixel PHI from %s", path)
-            except Exception as e:
-                logger.error(repr(e))
-
-            px_Q.task_done()
-
-        # Cleanup resources used for Pixel PHI Neural back-end
-        if ocr_reader:
-            del ocr_reader
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()  # Clear GPU memory cache
-        if torch.backends.mps.is_available():
-            torch.mps.empty_cache()
 
         logger.info(f"thread={threading.current_thread().name} end")

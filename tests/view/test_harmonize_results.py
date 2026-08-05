@@ -98,6 +98,51 @@ def _mock_data_font() -> MagicMock:
     return font
 
 
+def test_on_cancel_during_review_marks_cancelled() -> None:
+    from pathlib import Path
+
+    from anonymizer.controller.harmonize import HarmonizedResult
+
+    view = HarmonizeResultsView.__new__(HarmonizeResultsView)
+    view._saving = False
+    view._closing = False
+    view._running = False
+    view._batch_total = 1
+    view._outcomes = []
+    view.cancelled = False
+    view.accepted = None
+    view.result = HarmonizedResult(
+        series_directory=Path("/tmp/series"),
+        radlex_series_description="Brain Ax EarlyArt",
+        tseg=None,
+    )
+    view._close = MagicMock()
+
+    HarmonizeResultsView._on_cancel(view)
+
+    assert view.cancelled is True
+    assert view.accepted is False
+    view._close.assert_called_once()
+
+
+def test_on_cancel_during_analysis_marks_cancelled() -> None:
+    view = HarmonizeResultsView.__new__(HarmonizeResultsView)
+    view._saving = False
+    view._closing = False
+    view._running = True
+    view._batch_total = 1
+    view.cancelled = False
+    view.accepted = None
+    view.result = None
+    view._close = MagicMock()
+
+    HarmonizeResultsView._on_cancel(view)
+
+    assert view.cancelled is True
+    assert view.accepted is False
+    view._close.assert_called_once()
+
+
 def test_playbook_tree_starts_empty_and_grows_with_progress() -> None:
     view = HarmonizeResultsView.__new__(HarmonizeResultsView)
     view.PAD = HarmonizeResultsView.PAD
@@ -195,6 +240,11 @@ def test_on_yes_runs_save_before_recording_outcome(monkeypatch) -> None:
     view._no_button = type("Btn", (), {"configure": lambda *_a, **_k: None, "grid_remove": lambda *_a, **_k: None})()
     view._yes_button = type("Btn", (), {"configure": lambda *_a, **_k: None, "grid_remove": lambda *_a, **_k: None})()
     view._ok_button = type("Btn", (), {"grid_remove": lambda *_a, **_k: None})()
+    view._cancel_button = type(
+        "Btn",
+        (),
+        {"configure": lambda *_a, **_k: None, "grid_remove": lambda *_a, **_k: None, "grid": lambda *_a, **_k: None},
+    )()
     view._error_frame = type("Frm", (), {"grid_remove": lambda *_a, **_k: None})()
     view._error_label = type("Lbl", (), {"configure": lambda *_a, **_k: None})()
     view._record_outcome = lambda *, accepted: view._outcomes.append(accepted)

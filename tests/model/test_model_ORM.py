@@ -377,6 +377,31 @@ def test_set_series_harmonized_description(anonymizer_model: AnonymizerModel, mo
     assert records[0].harmonize is True
 
 
+def test_get_phi_index_face_blur_and_pixel_phi_columns(
+    anonymizer_model: AnonymizerModel, mock_dataset1: Dataset
+) -> None:
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
+    phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
+    assert phi is not None
+    series = phi.studies[0].series[0]
+    instance = series.instances[0]
+
+    records = anonymizer_model.get_phi_index()
+    assert records is not None
+    assert records[0].face_blurred == ""
+    assert records[0].pixel_phi_removed is False
+    assert records[0].pixel_phi == ""
+
+    anonymizer_model.set_series_face_blur_algorithm(series.anon_series_uid, "gaussian")
+    anonymizer_model.set_instance_pixel_phi(instance.anon_sop_instance_uid, ["Name"])
+
+    records = anonymizer_model.get_phi_index()
+    assert records is not None
+    assert records[0].face_blurred == "Gaussian"
+    assert records[0].pixel_phi_removed is True
+    assert records[0].pixel_phi == "Name"
+
+
 def test_get_phi_index_harmonize_false_for_mr_only_study(anonymizer_model: AnonymizerModel, mock_dataset2: Dataset):
     anonymizer_model.capture_phi(source="pytest", ds=mock_dataset2, date_delta=0)
 
@@ -394,6 +419,19 @@ def test_set_series_face_blur_algorithm(anonymizer_model: AnonymizerModel, mock_
     assert anonymizer_model.series_has_face_blur(series.anon_series_uid) is False
     assert anonymizer_model.set_series_face_blur_algorithm(series.anon_series_uid, "gaussian") is True
     assert anonymizer_model.series_has_face_blur(series.anon_series_uid) is True
+
+
+def test_set_series_pixel_phi_scanned(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
+    phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
+    assert phi is not None
+    series = phi.studies[0].series[0]
+
+    assert anonymizer_model.series_pixel_phi_scanned(series.anon_series_uid) is False
+    assert anonymizer_model.set_series_pixel_phi_scanned(series.anon_series_uid, scanned=True) is True
+    assert anonymizer_model.series_pixel_phi_scanned(series.anon_series_uid) is True
+    assert anonymizer_model.clear_series_pixel_phi_scan(series.anon_series_uid) is True
+    assert anonymizer_model.series_pixel_phi_scanned(series.anon_series_uid) is False
 
 
 def test_set_instance_pixel_phi(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
@@ -438,9 +476,7 @@ def test_clear_series_tseg_metadata(anonymizer_model: AnonymizerModel, mock_data
     assert status.harmonized_description is None
     assert status.face_blur_algorithm == "gaussian"
     assert status.pixel_phi_applied_count == 1
-    assert format_series_processing_status(status) == (
-        "Pixel PHI: Applied · Harmonized: None · Face blur: Gaussian"
-    )
+    assert format_series_processing_status(status) == ("Pixel PHI: Applied · Harmonized: None · Face blur: Gaussian")
 
     assert anonymizer_model.clear_series_tseg_metadata("missing-uid") is False
 
@@ -462,9 +498,7 @@ def test_get_series_processing_status(anonymizer_model: AnonymizerModel, mock_da
     assert status.pixel_phi_total_count == 1
     assert status.harmonized_description is None
     assert status.face_blur_algorithm is None
-    assert format_series_processing_status(status) == (
-        "Pixel PHI: None removed · Harmonized: None · Face blur: None"
-    )
+    assert format_series_processing_status(status) == ("Pixel PHI: None removed · Harmonized: None · Face blur: None")
     assert format_series_processing_status(status, include_face_blur=False) == (
         "Pixel PHI: None removed · Harmonized: None"
     )

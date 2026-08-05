@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import StrEnum, auto
 from pathlib import Path
 
 import cv2
@@ -22,22 +22,21 @@ from pydicom import Dataset, dcmread
 from pydicom.uid import generate_uid
 from scipy.ndimage import median_filter
 
-from anonymizer.controller.blur_face_gate import (
-    FaceBlurGateReason,
-    face_blur_gate_message,
-    face_mask_is_substantial,
-)
 from anonymizer.controller.create_projections import load_series_frames
 from anonymizer.controller.remove_pixel_phi import PolygonPoint, Segmentation
-from anonymizer.controller.tseg.config import FACE_MASK_FILENAME
-from anonymizer.controller.tseg.dicom_geometry import build_sitk_volume_from_series_frames
+from anonymizer.controller.tseg.config import FACE_MASK_FILENAME, MIN_STRUCTURE_VOXELS, ROI_SUBSET
+from anonymizer.controller.tseg.dicom_geometry import SeriesGeometryResult, build_sitk_volume_from_series_frames
 from anonymizer.controller.tseg.segment import (
     analyze_tseg_face,
+    body_parts_present,
+    collect_structure_voxels,
     count_mask_voxels,
+    dominant_region_from_voxels,
     face_mask_cache_path,
     invalidate_stale_tseg_volume_cache,
     series_cache_dir,
 )
+from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +76,293 @@ class FaceBlurMode(StrEnum):
 
 
 DEFAULT_FACE_BLUR_MODE = FaceBlurMode.GAUSSIAN
+
+# --- Eligibility gate -------------------------------------------------------
+
+MIN_FACE_MASK_VOXELS = MIN_STRUCTURE_VOXELS
+
+
+class FaceBlurGateDecision(StrEnum):
+    ALLOW = auto()
+    CONFIRM = auto()
+    BLOCK = auto()
+
+
+class FaceBlurGateReason(StrEnum):
+    MODALITY = auto()
+    FEATURE_DISABLED = auto()
+    GEOMETRY = auto()
+    CACHED_REGIONS_HEAD = auto()
+    CACHED_REGIONS_NON_HEAD = auto()
+    CACHED_REGIONS_MULTI = auto()
+    METADATA_HEAD = auto()
+    METADATA_NON_HEAD = auto()
+    AMBIGUOUS = auto()
+    INSUFFICIENT_FACE_MASK = auto()
+    ALREADY_APPLIED = auto()
+
+
+class MetadataSignal(StrEnum):
+    HEAD = auto()
+    NON_HEAD = auto()
+    AMBIGUOUS = auto()
+
+
+class CachedRegionSignal(StrEnum):
+    HEAD = auto()
+    NON_HEAD = auto()
+    MULTI_REGION = auto()
+    UNAVAILABLE = auto()
+
+
+@dataclass(frozen=True)
+class FaceBlurEligibility:
+    decision: FaceBlurGateDecision
+    reason: FaceBlurGateReason
+
+
+_REASON_MSGIDS: dict[FaceBlurGateReason, str] = {
+    FaceBlurGateReason.MODALITY: "Face blur is available for CT series only.",
+    FaceBlurGateReason.FEATURE_DISABLED: "Face blur is not enabled in this installation.",
+    FaceBlurGateReason.GEOMETRY: "This series type is not suitable for face segmentation.",
+    FaceBlurGateReason.CACHED_REGIONS_HEAD: "Head anatomy detected from prior segmentation.",
+    FaceBlurGateReason.CACHED_REGIONS_NON_HEAD: ("This series appears to be a chest or abdomen study, not a head CT."),
+    FaceBlurGateReason.CACHED_REGIONS_MULTI: (
+        "This series spans multiple body regions. Face blur is intended for head CT. Continue?"
+    ),
+    FaceBlurGateReason.METADATA_HEAD: "Series metadata indicates a head study.",
+    FaceBlurGateReason.METADATA_NON_HEAD: "Series metadata indicates this is not a head CT.",
+    FaceBlurGateReason.AMBIGUOUS: (
+        "Could not confirm this is a head CT. Face blur is intended for head studies. Continue?"
+    ),
+    FaceBlurGateReason.INSUFFICIENT_FACE_MASK: (
+        "This appears to be a head CT, but TotalSegmentator found no face region to blur. "
+        "The series may already be face-blurred or otherwise unsuitable for re-blur."
+    ),
+    FaceBlurGateReason.ALREADY_APPLIED: ("Face blur has already been applied to this series and cannot be run again."),
+}
+
+# DICOM keyword heuristics (not user-facing).
+_HEAD_KEYWORDS: tuple[str, ...] = (
+    "HEAD",
+    "BRAIN",
+    "SKULL",
+    "NECK",
+    "ORBIT",
+    "SINUS",
+    "FACIAL",
+    "CEREB",
+    "STROKE",
+    "CTA HEAD",
+    "HEAD NECK",
+)
+
+_NON_HEAD_KEYWORDS: tuple[str, ...] = (
+    "CHEST",
+    "THOR",
+    "ABDOM",
+    "PELV",
+    "LUNG",
+    "LIVER",
+    "RENAL",
+    "KUB",
+    "EXTREM",
+    "LOWER LIMB",
+    "UPPER LIMB",
+    "FOOT",
+    "ANKLE",
+    "KNEE",
+    "HIP",
+)
+
+_CACHED_SIGNAL_ELIGIBILITY: dict[
+    CachedRegionSignal,
+    FaceBlurEligibility | None,
+] = {
+    CachedRegionSignal.HEAD: FaceBlurEligibility(
+        FaceBlurGateDecision.ALLOW,
+        FaceBlurGateReason.CACHED_REGIONS_HEAD,
+    ),
+    CachedRegionSignal.NON_HEAD: FaceBlurEligibility(
+        FaceBlurGateDecision.BLOCK,
+        FaceBlurGateReason.CACHED_REGIONS_NON_HEAD,
+    ),
+    CachedRegionSignal.MULTI_REGION: FaceBlurEligibility(
+        FaceBlurGateDecision.CONFIRM,
+        FaceBlurGateReason.CACHED_REGIONS_MULTI,
+    ),
+    CachedRegionSignal.UNAVAILABLE: None,
+}
+
+_METADATA_SIGNAL_ELIGIBILITY: dict[MetadataSignal, FaceBlurEligibility] = {
+    MetadataSignal.HEAD: FaceBlurEligibility(
+        FaceBlurGateDecision.ALLOW,
+        FaceBlurGateReason.METADATA_HEAD,
+    ),
+    MetadataSignal.NON_HEAD: FaceBlurEligibility(
+        FaceBlurGateDecision.BLOCK,
+        FaceBlurGateReason.METADATA_NON_HEAD,
+    ),
+    MetadataSignal.AMBIGUOUS: FaceBlurEligibility(
+        FaceBlurGateDecision.CONFIRM,
+        FaceBlurGateReason.AMBIGUOUS,
+    ),
+}
+
+
+def face_blur_gate_message(reason: FaceBlurGateReason) -> str:
+    """Return the translated user-facing message for a gate reason."""
+    return _(_REASON_MSGIDS[reason])
+
+
+def face_blur_status_applicable(
+    eligibility: FaceBlurEligibility,
+    *,
+    already_applied: bool,
+) -> bool:
+    """Return whether Series View should show the Face blur segment in processing status."""
+    if already_applied:
+        return True
+    if eligibility.decision in {FaceBlurGateDecision.ALLOW, FaceBlurGateDecision.CONFIRM}:
+        return True
+    return eligibility.reason not in {
+        FaceBlurGateReason.MODALITY,
+        FaceBlurGateReason.FEATURE_DISABLED,
+        FaceBlurGateReason.GEOMETRY,
+        FaceBlurGateReason.CACHED_REGIONS_NON_HEAD,
+        FaceBlurGateReason.METADATA_NON_HEAD,
+    }
+
+
+def face_blur_context_hint(
+    eligibility: FaceBlurEligibility,
+    geometry: SeriesGeometryResult | None,
+) -> str | None:
+    """
+    Optional geometry-line suffix when the block reason is not already covered there.
+
+    Geometry blocks are omitted because the Series View geometry line already states
+    segmentation suitability; non-head blocks after Harmonize get a explicit cause.
+    """
+    if eligibility.decision != FaceBlurGateDecision.BLOCK:
+        return None
+    if eligibility.reason == FaceBlurGateReason.GEOMETRY:
+        return None
+    if geometry is None:
+        return None
+    if eligibility.reason in {
+        FaceBlurGateReason.CACHED_REGIONS_NON_HEAD,
+        FaceBlurGateReason.METADATA_NON_HEAD,
+    }:
+        return face_blur_gate_message(eligibility.reason)
+    return None
+
+
+def face_mask_is_substantial(face_voxel_count: int) -> bool:
+    return face_voxel_count >= MIN_FACE_MASK_VOXELS
+
+
+def _dicom_search_text(ds: Dataset | None) -> str:
+    if ds is None:
+        return ""
+    parts = [
+        getattr(ds, "BodyPartExamined", None),
+        getattr(ds, "SeriesDescription", None),
+        getattr(ds, "ProtocolName", None),
+        getattr(ds, "StudyDescription", None),
+    ]
+    return " ".join(str(part).strip() for part in parts if part).upper()
+
+
+def metadata_signal(ds: Dataset | None) -> MetadataSignal:
+    text = _dicom_search_text(ds)
+    if not text:
+        return MetadataSignal.AMBIGUOUS
+    has_head = any(keyword in text for keyword in _HEAD_KEYWORDS)
+    has_non_head = any(keyword in text for keyword in _NON_HEAD_KEYWORDS)
+    if has_head and not has_non_head:
+        return MetadataSignal.HEAD
+    if has_non_head and not has_head:
+        return MetadataSignal.NON_HEAD
+    return MetadataSignal.AMBIGUOUS
+
+
+def cached_region_signal(series_directory: Path) -> CachedRegionSignal:
+    """
+    Infer head vs non-head from cached TotalSegmentator ROI masks (``A_TS_SEG/seg/``).
+
+    Returns ``UNAVAILABLE`` when harmonize/regions has not populated the cache.
+    """
+    seg_dir = series_cache_dir(series_directory) / "seg"
+    if not seg_dir.is_dir():
+        return CachedRegionSignal.UNAVAILABLE
+
+    structure_voxels = collect_structure_voxels(seg_dir, list(ROI_SUBSET))
+    if not any(count >= MIN_STRUCTURE_VOXELS for count in structure_voxels.values()):
+        return CachedRegionSignal.UNAVAILABLE
+
+    region = dominant_region_from_voxels(structure_voxels)
+    regions_label = body_parts_present(region.region_voxels)
+    if not regions_label:
+        return CachedRegionSignal.UNAVAILABLE
+
+    head_present = "Head" in regions_label.split("+")
+    if "+" in regions_label and head_present:
+        return CachedRegionSignal.MULTI_REGION
+    if region.dominant_region == "Head" or head_present:
+        return CachedRegionSignal.HEAD
+    if region.dominant_region in {"Chest", "Abdomen"}:
+        return CachedRegionSignal.NON_HEAD
+    return CachedRegionSignal.UNAVAILABLE
+
+
+def _eligibility(
+    decision: FaceBlurGateDecision,
+    reason: FaceBlurGateReason,
+) -> FaceBlurEligibility:
+    return FaceBlurEligibility(decision, reason)
+
+
+def evaluate_face_blur_eligibility(
+    series_directory: Path,
+    *,
+    ds: Dataset | None = None,
+    geometry: SeriesGeometryResult | None = None,
+    modality: str | None = None,
+    enable_tseg_face: bool = True,
+    face_blur_already_applied: bool = False,
+) -> FaceBlurEligibility:
+    """
+    Decide whether Blur Face should run, prompt for confirmation, or stay disabled.
+
+    Cached anatomy regions (when present) override DICOM metadata heuristics.
+    """
+    if face_blur_already_applied:
+        return _eligibility(FaceBlurGateDecision.BLOCK, FaceBlurGateReason.ALREADY_APPLIED)
+
+    series_directory = Path(series_directory).resolve()
+    resolved_modality = modality
+    if resolved_modality is None and ds is not None:
+        resolved_modality = getattr(ds, "Modality", None)
+
+    if resolved_modality != "CT":
+        return _eligibility(FaceBlurGateDecision.BLOCK, FaceBlurGateReason.MODALITY)
+    if not enable_tseg_face:
+        return _eligibility(FaceBlurGateDecision.BLOCK, FaceBlurGateReason.FEATURE_DISABLED)
+    if geometry is None or not geometry.ts_suitable:
+        return _eligibility(FaceBlurGateDecision.BLOCK, FaceBlurGateReason.GEOMETRY)
+
+    cached = cached_region_signal(series_directory)
+    cached_eligibility = _CACHED_SIGNAL_ELIGIBILITY[cached]
+    if cached_eligibility is not None:
+        logger.debug("Face blur gate: %s (cached signal=%s)", cached_eligibility.reason.name, cached.name)
+        return cached_eligibility
+
+    meta = metadata_signal(ds)
+    meta_eligibility = _METADATA_SIGNAL_ELIGIBILITY[meta]
+    logger.debug("Face blur gate: %s (metadata signal=%s)", meta_eligibility.reason.name, meta.name)
+    return meta_eligibility
+
 
 # --- Results ----------------------------------------------------------------
 
@@ -213,9 +499,7 @@ def resolve_face_mask_path(
     if result.error is not None:
         raise RuntimeError(result.error)
     if result.face_mask_path is None or not result.face_mask_path.is_file():
-        raise FileNotFoundError(
-            f"analyze_tseg_face completed without writing a mask for {series_directory}"
-        )
+        raise FileNotFoundError(f"analyze_tseg_face completed without writing a mask for {series_directory}")
     if not face_mask_is_substantial(result.face_voxel_count):
         raise RuntimeError(face_blur_gate_message(FaceBlurGateReason.INSUFFICIENT_FACE_MASK))
     logger.info(
@@ -452,8 +736,7 @@ def blur_face_hu_volume(
     sigma_y = max(sigma_mm / row_spacing, min_sigma_px)
     sigma_x = max(sigma_mm / col_spacing, min_sigma_px)
     logger.info(
-        "Face blur: mode=%s sigma_mm=%.2f → sigma_px=(%.2f, %.2f) spacing_mm=(%.3f, %.3f) "
-        "mask_smooth_sigma_px=%.2f",
+        "Face blur: mode=%s sigma_mm=%.2f → sigma_px=(%.2f, %.2f) spacing_mm=(%.3f, %.3f) mask_smooth_sigma_px=%.2f",
         mode.value,
         sigma_mm,
         sigma_x,
@@ -608,6 +891,25 @@ def hu_stack_to_viewer_frames(
     return np.stack(frames, axis=0)
 
 
+def preview_blurred_slice_frames(
+    preview: FaceBlurPreviewResult,
+    *,
+    reference_ds: Dataset | None = None,
+    frame_dtype: np.dtype | None = None,
+) -> np.ndarray:
+    """Return the blurred slice stack from a face blur preview result."""
+    if preview.blurred_slice_frames is not None:
+        return preview.blurred_slice_frames
+    if preview.hu_after is not None:
+        return hu_stack_to_viewer_frames(
+            preview.hu_after,
+            preview.slice_paths,
+            reference_ds=reference_ds,
+            frame_dtype=frame_dtype,
+        )
+    raise ValueError("Face blur preview has no blurred slice data")
+
+
 def apply_face_blur_preview_to_series_frames(
     frames: np.ndarray,
     preview: FaceBlurPreviewResult,
@@ -617,17 +919,11 @@ def apply_face_blur_preview_to_series_frames(
     frame_dtype: np.dtype | None = None,
 ) -> np.ndarray:
     """Merge accepted blur preview into a SeriesView frame stack (slices only; projections unchanged)."""
-    if preview.blurred_slice_frames is not None:
-        blurred_slices = preview.blurred_slice_frames
-    elif preview.hu_after is not None:
-        blurred_slices = hu_stack_to_viewer_frames(
-            preview.hu_after,
-            preview.slice_paths,
-            reference_ds=reference_ds,
-            frame_dtype=frame_dtype,
-        )
-    else:
-        raise ValueError("Face blur preview has no blurred slice data")
+    blurred_slices = preview_blurred_slice_frames(
+        preview,
+        reference_ds=reference_ds,
+        frame_dtype=frame_dtype,
+    )
     updated = frames.copy()
     slice_offset = 0 if single_frame else 3
     end = slice_offset + blurred_slices.shape[0]
@@ -724,8 +1020,7 @@ def preview_face_blur(
             slice_paths = volume_context.slice_paths
             if volume_context.slice_frames.shape[0] != len(slice_paths):
                 message = (
-                    f"Preloaded slice count {volume_context.slice_frames.shape[0]} "
-                    f"!= path count {len(slice_paths)}"
+                    f"Preloaded slice count {volume_context.slice_frames.shape[0]} != path count {len(slice_paths)}"
                 )
                 return _preview_error(series_directory, slice_paths=slice_paths, error=message)
             volume_img = build_sitk_volume_from_series_frames(
@@ -849,6 +1144,14 @@ def hu_slice_to_stored_pixels(
     return stored.astype(dtype)
 
 
+_UTF8_CHARACTER_SET = "ISO_IR 192"
+
+
+def _ensure_utf8_character_set(ds: Dataset) -> None:
+    """Declare UTF-8 before writing derived text (e.g. em dash in series description)."""
+    ds.SpecificCharacterSet = _UTF8_CHARACTER_SET
+
+
 def _prepare_output_directory(output_directory: Path) -> int:
     output_directory.mkdir(parents=True, exist_ok=True)
     removed = 0
@@ -916,6 +1219,7 @@ def write_blurred_dicom_series(
                 ds.ImageType = image_type
 
         ds.PixelData = stored.tobytes()
+        _ensure_utf8_character_set(ds)
         out_path = output_directory / f"{ds.SOPInstanceUID}.dcm"
         ds.save_as(str(out_path))
         written.append(out_path)

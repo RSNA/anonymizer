@@ -64,10 +64,11 @@ def test_remove_pixel_phi_returns_empty_tuple_when_no_text(mock_dcmread: MagicMo
     ocr_reader = MagicMock()
     ocr_reader.readtext.return_value = []
 
-    modified, texts = remove_pixel_phi(Path("/tmp/test.dcm"), ocr_reader)
+    modified, texts, pixels_changed = remove_pixel_phi(Path("/tmp/test.dcm"), ocr_reader)
 
     assert modified is False
     assert texts == []
+    assert pixels_changed == 0
 
 
 def test_apply_instance_pixel_phi_delegates_to_model(mock_dataset: Dataset, tmp_path: Path) -> None:

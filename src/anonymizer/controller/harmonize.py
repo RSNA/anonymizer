@@ -23,6 +23,7 @@ from anonymizer.controller.tseg.contrast import (
     load_contrast_phase_cache,
     load_contrast_statistics,
     log_memory_usage,
+    needs_head_neck_vessel_stats,
     phase_to_iv_contrast,
     release_working_memory,
 )
@@ -40,6 +41,8 @@ from anonymizer.controller.tseg.radlex_playbook import (
     PlaybookHarmonizeAttributes,
     build_harmonized_series_description,
     build_localizer_harmonized_series_description,
+    build_playbook_attributes,
+    format_playbook_analysis_log_lines,
     is_localizer_geometry,
 )
 from anonymizer.controller.tseg.runtime import log_active_threads
@@ -99,12 +102,7 @@ def _merge_localizer_result(
     geometry: SeriesGeometryResult,
     tseg: TS_result | None,
 ) -> HarmonizedResult:
-    if (
-        tseg is not None
-        and tseg.body_parts_present.strip()
-        and tseg.contrast_phase
-        and tseg.error is None
-    ):
+    if tseg is not None and tseg.body_parts_present.strip() and tseg.contrast_phase and tseg.error is None:
         try:
             ds = _load_series_dataset(series_directory)
             description, playbook = build_harmonized_series_description(tseg, geometry, ds=ds)
@@ -242,7 +240,10 @@ def _tseg_result_from_cache(series_directory: Path) -> TS_result | None:
         logger.debug("Harmonize cache: contrast artifacts unreadable for %s: %s", series_directory, exc)
         return None
 
-    needs_head_neck = existing_stats["brain"]["volume"] > 100
+    needs_head_neck = needs_head_neck_vessel_stats(
+        existing_stats,
+        body_parts_present=regions_label,
+    )
     if not contrast_phase_cache_is_valid(
         contrast_phase_path,
         contrast_stats_path,
@@ -328,9 +329,7 @@ def harmonize_context_hint(series_directory: Path, ds: Dataset | None) -> str | 
         return None
     if series_description_is_harmonized(series_directory, ds) is not True:
         return None
-    return _(
-        "Series description already harmonized — use Clear TS Cache to re-run analysis"
-    )
+    return _("Series description already harmonized — use Clear TS Cache to re-run analysis")
 
 
 @dataclass(frozen=True)
@@ -338,6 +337,7 @@ class HarmonizeApplyOutcome:
     series_path: Path
     status: str
     message: str = ""
+    harmonized: HarmonizedResult | None = None
 
 
 @dataclass(frozen=True)
@@ -353,6 +353,10 @@ HarmonizeStudiesProgressCallback = Callable[[int, int, str, float], None]
 HarmonizeStudiesCancelledCallback = Callable[[], bool]
 HarmonizeStudiesLogCallback = Callable[[HarmonizeApplyOutcome], None]
 HarmonizeStudiesBatchHook = Callable[[], None]
+
+
+def missing_series_description_label() -> str:
+    return f"<{_('No Series Description')}>"
 
 
 def _format_progress_pct(fraction: float) -> str:
@@ -374,10 +378,32 @@ def format_harmonize_progress_message(
     if stage == "done":
         return _("Harmonize analysis complete")
 
+    if stage == "failed":
+        detail = message.strip()
+        if detail:
+            return _("Harmonize analysis failed") + f": {detail}"
+        return _("Harmonize analysis failed")
+
     if stage == "geometry" and message.startswith(geometry_prefix):
+        summary = message[len(geometry_prefix) :].strip()
+        if summary:
+            return summary + pct
         return _("Scan geometry analyzed") + pct
     if stage == "tseg" and message.startswith(geometry_prefix):
         return _("Anatomy analysis not available for this series") + pct
+
+    detail_message_stages = frozenset(
+        {
+            "regions",
+            "contrast_stats_cached",
+            "contrast_stats_hn_cached",
+            "contrast_phase_cache",
+        }
+    )
+    if stage in detail_message_stages and message:
+        return message + pct
+    if stage == "segment" and "cached" in message.lower():
+        return message + pct
 
     stage_labels: dict[str, str] = {
         "geometry": _("Analyzing scan geometry"),
@@ -418,6 +444,24 @@ def format_harmonize_progress_message(
     return _("Processing") + "…" + pct
 
 
+def log_harmonize_playbook_rows(
+    log_workflow: Callable[[str], None],
+    *,
+    tseg: TS_result,
+    geometry: SeriesGeometryResult,
+    ds: Dataset | None = None,
+) -> None:
+    """Emit Playbook table rows to the batch workflow log."""
+    attributes = build_playbook_attributes(tseg, geometry, ds=ds)
+    for line in format_playbook_analysis_log_lines(
+        attributes,
+        geometry=geometry,
+        ds=ds,
+        tseg=tseg,
+    ):
+        log_workflow(f"  {line}")
+
+
 def format_harmonize_batch_series_label(series_path: Path, ds: Dataset | None = None) -> str:
     """Compact series label for batch harmonize progress."""
     series_path = Path(series_path)
@@ -426,8 +470,11 @@ def format_harmonize_batch_series_label(series_path: Path, ds: Dataset | None = 
         series_no = ds.get("SeriesNumber")
         if description:
             if series_no not in (None, ""):
-                return _("Series") + f" #{series_no}: \"{description}\""
-            return _("Series") + f": \"{description}\""
+                return _("Series") + f' #{series_no}: "{description}"'
+            return _("Series") + f': "{description}"'
+        if series_no not in (None, ""):
+            return _("Series") + f" #{series_no}: {missing_series_description_label()}"
+        return _("Series") + f": {missing_series_description_label()}"
     return _("Series") + f" {series_path.name}"
 
 
@@ -533,14 +580,27 @@ def harmonize_and_apply_series(
     series_path = Path(series_path)
     ds = _load_ct_series_dataset(series_path)
     if ds is None:
-        return HarmonizeApplyOutcome(series_path, "failed", "Not a CT series or no DICOM files")
+        return HarmonizeApplyOutcome(
+            series_path,
+            "failed",
+            _("Not a CT series or no DICOM files"),
+        )
 
-    if series_description_is_harmonized(series_path, ds) is True:
-        return HarmonizeApplyOutcome(series_path, "skipped", "Already harmonized")
+    series_uid = str(ds.SeriesInstanceUID)
+    if anon_model is not None and anon_model.series_is_harmonized(series_uid):
+        status = anon_model.get_series_processing_status(series_uid)
+        expected = (status.harmonized_description or "").strip() if status else ""
+        current = str(ds.get("SeriesDescription", "") or "").strip()
+        if expected and current != expected:
+            apply_harmonized_description(series_path, expected, anon_model)
+        return HarmonizeApplyOutcome(series_path, "skipped", _("Already harmonized (model)"))
+
+    if anon_model is None and series_description_is_harmonized(series_path, ds) is True:
+        return HarmonizeApplyOutcome(series_path, "skipped", _("Already harmonized"))
 
     results = harmonize_series([series_path], progress=progress)
     if not results:
-        return HarmonizeApplyOutcome(series_path, "failed", "No harmonize result")
+        return HarmonizeApplyOutcome(series_path, "failed", _("No harmonize result"))
 
     merged = results[0]
     if merged.error:
@@ -548,12 +608,64 @@ def harmonize_and_apply_series(
 
     description = (merged.radlex_series_description or "").strip()
     if not description:
-        return HarmonizeApplyOutcome(series_path, "failed", "Empty harmonized description")
+        return HarmonizeApplyOutcome(series_path, "failed", _("Empty harmonized description"))
 
     if not apply_harmonized_description(series_path, description, anon_model):
-        return HarmonizeApplyOutcome(series_path, "failed", "Failed to apply description")
+        return HarmonizeApplyOutcome(series_path, "failed", _("Failed to apply description"))
 
-    return HarmonizeApplyOutcome(series_path, "ok", description)
+    return HarmonizeApplyOutcome(series_path, "ok", description, harmonized=merged)
+
+
+def format_harmonize_batch_contrast_log_lines(result: HarmonizedResult) -> list[str]:
+    """IV contrast confidence and dominant-organ HU for the AI Batch workflow log."""
+    from anonymizer.controller.tseg.config import (
+        CONTRAST_STATS_FILENAME,
+        CONTRAST_STATS_HN_FILENAME,
+    )
+    from anonymizer.controller.tseg.contrast import (
+        format_dominant_organ_hu_summary,
+        load_contrast_statistics,
+        load_contrast_stats_hn,
+    )
+    from anonymizer.controller.tseg.radlex_playbook import playbook_iv_contrast_row_values
+
+    tseg = result.tseg
+    if tseg is None or not tseg.contrast_phase:
+        return []
+
+    lines: list[str] = []
+    _element, _code, value, evidence, _source = playbook_iv_contrast_row_values(
+        tseg=tseg,
+        attributes=result.playbook,
+        geometry=result.geometry,
+    )
+    if value != "—":
+        line = f"{_('IV Contrast Phase')}: {value}"
+        if evidence and evidence != "—":
+            line += f" — {evidence}"
+        lines.append(line)
+
+    cache_dir = series_cache_dir(result.series_directory)
+    stats_path = cache_dir / CONTRAST_STATS_FILENAME
+    stats_hn_path = cache_dir / CONTRAST_STATS_HN_FILENAME
+    if stats_path.is_file() and tseg.dominant_region:
+        try:
+            stats = load_contrast_statistics(stats_path)
+            stats_hn = load_contrast_stats_hn(stats_hn_path) if stats_hn_path.is_file() else None
+            hu_summary = format_dominant_organ_hu_summary(
+                stats,
+                stats_hn,
+                dominant_region=tseg.dominant_region,
+            )
+            if hu_summary:
+                lines.append(f"{_('Dominant organ HU')}: {hu_summary}")
+        except (OSError, ValueError, KeyError, TypeError):
+            logger.debug(
+                "Harmonize batch log: contrast statistics unreadable for %s",
+                result.series_directory,
+            )
+
+    return lines
 
 
 def harmonize_studies_batch(
@@ -771,7 +883,7 @@ def harmonize_series(
                 frac_range=_TSEG_SEG_FRAC,
                 stage_label="Segmenting anatomy",
             )
-            region_result, nifti_path = analyze_tseg_regions(series_dir, progress=tseg_progress)
+            region_result, nifti_path = analyze_tseg_regions(series_dir, geometry=geometry, progress=tseg_progress)
             if region_result.body_parts_present.strip() and region_result.error is None:
                 _report(
                     "regions",
@@ -865,6 +977,13 @@ def harmonize_series(
                 series_dir,
                 merged.error,
             )
+            _report(
+                "failed",
+                merged.error,
+                1.0,
+                geometry=geometry,
+                tseg=tseg,
+            )
         else:
             logger.info(
                 "Harmonize [%d/%d] %s: description=%r body=%s contrast=%s plane=%s series_type=%s",
@@ -885,8 +1004,8 @@ def harmonize_series(
                 tseg=tseg,
                 radlex_series_description=merged.radlex_series_description,
             )
+            _report("done", "Harmonize complete", 1.0, remaining_sec=0.0)
 
-    _report("done", "Harmonize complete", 1.0, remaining_sec=0.0)
     log_memory_usage("harmonize_end")
     logger.info("Harmonize finished: %d result(s) in %.1fs", len(harmonized), time.perf_counter() - started)
     return harmonized

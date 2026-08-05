@@ -83,9 +83,23 @@ def sequential_ml_context(stage: str) -> Iterator[None]:
     logger.info("Sequential ML context start: %s", stage)
     log_active_threads(stage)
 
+    ts_libs = None
+    original_tqdm = None
+    with suppress(ImportError):
+        import totalsegmentator.libs as ts_libs
+        from tqdm import tqdm as orig_tqdm
+
+        class _NoMonitorTqdm(orig_tqdm):
+            monitor_interval = 0
+
+        original_tqdm = ts_libs.tqdm
+        ts_libs.tqdm = _NoMonitorTqdm
+
     try:
         yield
     finally:
+        if ts_libs is not None and original_tqdm is not None:
+            ts_libs.tqdm = original_tqdm
         if torch is not None and prior_intra is not None:
             torch.set_num_threads(prior_intra)
             with suppress(RuntimeError):

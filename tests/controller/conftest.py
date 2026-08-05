@@ -54,6 +54,7 @@ def temp_dir() -> Generator[str, Any, None]:
     # Remove the temporary directory after the test is done
     shutil.rmtree(temp_path)
 
+
 @pytest.fixture
 def assert_no_memory_leak():
     """
@@ -79,6 +80,7 @@ def assert_no_memory_leak():
         # Enforce the strict threshold during normal CLI or CI runs
         assert growth_mb < 5.0, f"Memory leak detected! RAM grew by {growth_mb:.2f} MB"
 
+
 @pytest.fixture
 def controller(temp_dir: str) -> Generator[ProjectController, Any, None]:
     anon_store = Path(temp_dir, LocalSCU.aet)
@@ -90,7 +92,6 @@ def controller(temp_dir: str) -> Generator[ProjectController, Any, None]:
         site_id=TEST_SITEID,
         project_name=TEST_PROJECTNAME,
         uid_root=TEST_UIDROOT,
-        remove_pixel_phi=False,
         storage_dir=anon_store,
         scu=LocalSCU,
         scp=LocalStorageSCP,

@@ -415,14 +415,8 @@ def evaluate_rows(
     existing_predictions: dict[Path, FalconPrediction] | None = None,
 ) -> tuple[EvalReport, list[FalconPrediction]]:
     cached_predictions = existing_predictions or {}
-    pending_rows = [
-        row for row in rows if row.series_path.resolve() not in cached_predictions
-    ]
-    new_predictions = (
-        predict_falcon_series([row.series_path for row in pending_rows])
-        if pending_rows
-        else []
-    )
+    pending_rows = [row for row in rows if row.series_path.resolve() not in cached_predictions]
+    new_predictions = predict_falcon_series([row.series_path for row in pending_rows]) if pending_rows else []
 
     if cached_predictions:
         logger.info(
@@ -463,9 +457,7 @@ def evaluate_rows(
             tuple(BODY_PART_LABELS),
         )
 
-        contrast_successes = [
-            (row, pred) for row, pred in successes if pred.body_part == row.body_part
-        ]
+        contrast_successes = [(row, pred) for row, pred in successes if pred.body_part == row.body_part]
         if contrast_successes:
             contrast_overall = _build_classifier_metrics(
                 [row.iv_contrast for row, _ in contrast_successes],
@@ -473,11 +465,7 @@ def evaluate_rows(
             )
 
             for body_part in BODY_PART_LABELS:
-                subset = [
-                    (row, pred)
-                    for row, pred in contrast_successes
-                    if row.body_part == body_part
-                ]
+                subset = [(row, pred) for row, pred in contrast_successes if row.body_part == body_part]
                 if not subset:
                     continue
                 contrast_by_body[body_part] = _build_classifier_metrics(
@@ -860,18 +848,12 @@ def _body_part_summary_slug(body_part: str) -> str:
 
 
 def body_part_error_summary_path(artifact_root: Path, body_part: str) -> Path:
-    return (
-        artifact_root
-        / FALCON_EVAL_BODY_PART_ERROR_SUMMARY_DIR
-        / f"{_body_part_summary_slug(body_part)}_errors.png"
-    )
+    return artifact_root / FALCON_EVAL_BODY_PART_ERROR_SUMMARY_DIR / f"{_body_part_summary_slug(body_part)}_errors.png"
 
 
 def body_part_success_summary_path(artifact_root: Path, body_part: str) -> Path:
     return (
-        artifact_root
-        / FALCON_EVAL_BODY_PART_SUCCESS_SUMMARY_DIR
-        / f"{_body_part_summary_slug(body_part)}_success.png"
+        artifact_root / FALCON_EVAL_BODY_PART_SUCCESS_SUMMARY_DIR / f"{_body_part_summary_slug(body_part)}_success.png"
     )
 
 
@@ -986,17 +968,13 @@ def filter_error_artifacts_for_category(
         return [
             artifact
             for artifact in saved_artifacts
-            if artifact.task_kind == "contrast"
-            and not artifact.row.iv_contrast
-            and artifact.prediction.iv_contrast
+            if artifact.task_kind == "contrast" and not artifact.row.iv_contrast and artifact.prediction.iv_contrast
         ]
     if category_key == "contrast_with_pred_without":
         return [
             artifact
             for artifact in saved_artifacts
-            if artifact.task_kind == "contrast"
-            and artifact.row.iv_contrast
-            and not artifact.prediction.iv_contrast
+            if artifact.task_kind == "contrast" and artifact.row.iv_contrast and not artifact.prediction.iv_contrast
         ]
     raise ValueError(f"Unknown error summary category: {category_key}")
 
@@ -1009,17 +987,13 @@ def filter_contrast_success_artifacts_for_category(
         return [
             artifact
             for artifact in saved_artifacts
-            if artifact.task_kind == "contrast"
-            and not artifact.row.iv_contrast
-            and not artifact.prediction.iv_contrast
+            if artifact.task_kind == "contrast" and not artifact.row.iv_contrast and not artifact.prediction.iv_contrast
         ]
     if category_key == "contrast_with_pred_with":
         return [
             artifact
             for artifact in saved_artifacts
-            if artifact.task_kind == "contrast"
-            and artifact.row.iv_contrast
-            and artifact.prediction.iv_contrast
+            if artifact.task_kind == "contrast" and artifact.row.iv_contrast and artifact.prediction.iv_contrast
         ]
     raise ValueError(f"Unknown contrast success summary category: {category_key}")
 
@@ -1081,16 +1055,12 @@ def _artifact_thumbnail_images(
 ) -> list[Image.Image]:
     sort_key = _artifact_confidence_sort_key
     display_artifacts = (
-        sorted(artifacts, key=sort_key, reverse=True)
-        if sort_descending
-        else sorted(artifacts, key=sort_key)
+        sorted(artifacts, key=sort_key, reverse=True) if sort_descending else sorted(artifacts, key=sort_key)
     )[:SUMMARY_MAX_ARTIFACTS]
     thumbnails: list[Image.Image] = []
     for artifact in display_artifacts:
         with Image.open(artifact.image_path) as thumbnail_source:
-            thumbnails.append(
-                thumbnail_source.resize((SUMMARY_CELL_SIZE, SUMMARY_CELL_SIZE)).copy()
-            )
+            thumbnails.append(thumbnail_source.resize((SUMMARY_CELL_SIZE, SUMMARY_CELL_SIZE)).copy())
     return thumbnails
 
 
@@ -1167,9 +1137,7 @@ def _body_part_success_candidates_by_gt(
     predictions: list[FalconPrediction],
 ) -> dict[str, list[tuple[EvalRow, FalconPrediction]]]:
     prediction_by_path = {pred.series_directory.resolve(): pred for pred in predictions}
-    candidates: dict[str, list[tuple[EvalRow, FalconPrediction]]] = {
-        body_part: [] for body_part in BODY_PART_LABELS
-    }
+    candidates: dict[str, list[tuple[EvalRow, FalconPrediction]]] = {body_part: [] for body_part in BODY_PART_LABELS}
 
     for row in rows:
         prediction = prediction_by_path.get(row.series_path.resolve())
@@ -1236,12 +1204,9 @@ def save_body_part_success_summary_matrices(
     """Build one body-part success mosaic per GT class on the fly under ``body_part/success/``."""
     candidates_by_gt = _body_part_success_candidates_by_gt(rows, predictions)
     selected_by_gt = {
-        body_part: _select_top_body_part_successes(candidates_by_gt[body_part])
-        for body_part in BODY_PART_LABELS
+        body_part: _select_top_body_part_successes(candidates_by_gt[body_part]) for body_part in BODY_PART_LABELS
     }
-    unique_rows = {
-        row for items in selected_by_gt.values() for row, _prediction in items
-    }
+    unique_rows = {row for items in selected_by_gt.values() for row, _prediction in items}
     preprocessed_by_series = _preprocess_series_for_matrix(list(unique_rows))
 
     output_paths: list[Path] = []
@@ -1292,9 +1257,7 @@ def save_success_summary_matrices(
 ) -> list[Path]:
     """Write body-part success mosaics on the fly and contrast success grids from PNGs."""
     output_paths = save_body_part_success_summary_matrices(rows, predictions, artifact_root)
-    output_paths.extend(
-        save_contrast_success_summary_matrices(artifact_root, saved_contrast_artifacts)
-    )
+    output_paths.extend(save_contrast_success_summary_matrices(artifact_root, saved_contrast_artifacts))
     return output_paths
 
 
@@ -1354,9 +1317,7 @@ def save_classification_error_artifacts(
             continue
 
         body_output_png = body_part_error_artifact_path(artifact_root, row) if needs_body_png else None
-        contrast_output_png = (
-            contrast_error_artifact_path(artifact_root, row) if needs_contrast_png else None
-        )
+        contrast_output_png = contrast_error_artifact_path(artifact_root, row) if needs_contrast_png else None
         body_png_exists = body_output_png is not None and body_output_png.is_file()
         contrast_png_exists = contrast_output_png is not None and contrast_output_png.is_file()
 
@@ -1476,9 +1437,7 @@ def save_contrast_success_artifacts(
         )
 
     for category_key, _, _ in CONTRAST_SUCCESS_SUMMARY_CATEGORIES:
-        for row, prediction in _select_top_contrast_successes(
-            candidates_by_category[category_key]
-        ):
+        for row, prediction in _select_top_contrast_successes(candidates_by_category[category_key]):
             output_png = contrast_success_artifact_path(artifact_root, row)
             if output_png.is_file():
                 record_saved_artifact(row, prediction, output_png)
@@ -1544,9 +1503,7 @@ def write_results_csv(path: Path, rows: list[EvalRow], predictions: list[FalconP
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Evaluate FALCON accuracy from first-level labeled subdirectories."
-    )
+    parser = argparse.ArgumentParser(description="Evaluate FALCON accuracy from first-level labeled subdirectories.")
     parser.add_argument(
         "--data-dir",
         type=Path,
@@ -1589,9 +1546,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     results_path = resolve_results_csv_path(data_dir, args.output, no_results_file=args.no_results_file)
-    existing_predictions = (
-        load_existing_predictions_from_csv(results_path) if results_path is not None else {}
-    )
+    existing_predictions = load_existing_predictions_from_csv(results_path) if results_path is not None else {}
 
     report, predictions = evaluate_rows(rows, existing_predictions=existing_predictions)
     print(format_report(report))
@@ -1603,12 +1558,8 @@ def main(argv: list[str] | None = None) -> int:
 
         artifact_root = data_dir / FALCON_EVAL_ARTIFACTS_DIRNAME
         saved_error_artifacts = save_classification_error_artifacts(rows, predictions, artifact_root)
-        body_error_png_count = sum(
-            1 for artifact in saved_error_artifacts if artifact.task_kind == "body_part"
-        )
-        contrast_error_png_count = sum(
-            1 for artifact in saved_error_artifacts if artifact.task_kind == "contrast"
-        )
+        body_error_png_count = sum(1 for artifact in saved_error_artifacts if artifact.task_kind == "body_part")
+        contrast_error_png_count = sum(1 for artifact in saved_error_artifacts if artifact.task_kind == "contrast")
         if body_error_png_count:
             print(
                 f"Wrote {body_error_png_count} body-part error PNG(s) under: "
@@ -1623,19 +1574,12 @@ def main(argv: list[str] | None = None) -> int:
         for summary_matrix_path in error_summary_matrix_paths:
             print(f"Wrote error summary matrix: {summary_matrix_path.resolve()}")
         body_part_error_matrices = [
-            path
-            for path in error_summary_matrix_paths
-            if FALCON_EVAL_BODY_PART_ERROR_SUMMARY_DIR in path.parents
+            path for path in error_summary_matrix_paths if FALCON_EVAL_BODY_PART_ERROR_SUMMARY_DIR in path.parents
         ]
         if body_part_error_matrices:
-            print(
-                "Body-part error mosaics: "
-                f"{(artifact_root / FALCON_EVAL_BODY_PART_ERROR_SUMMARY_DIR).resolve()}"
-            )
+            print(f"Body-part error mosaics: {(artifact_root / FALCON_EVAL_BODY_PART_ERROR_SUMMARY_DIR).resolve()}")
 
-        saved_contrast_success_artifacts = save_contrast_success_artifacts(
-            rows, predictions, artifact_root
-        )
+        saved_contrast_success_artifacts = save_contrast_success_artifacts(rows, predictions, artifact_root)
         contrast_success_png_count = len(saved_contrast_success_artifacts)
         if contrast_success_png_count:
             print(
@@ -1651,15 +1595,10 @@ def main(argv: list[str] | None = None) -> int:
         for summary_matrix_path in success_summary_matrix_paths:
             print(f"Wrote success summary matrix: {summary_matrix_path.resolve()}")
         body_part_success_matrices = [
-            path
-            for path in success_summary_matrix_paths
-            if FALCON_EVAL_BODY_PART_SUCCESS_SUMMARY_DIR in path.parents
+            path for path in success_summary_matrix_paths if FALCON_EVAL_BODY_PART_SUCCESS_SUMMARY_DIR in path.parents
         ]
         if body_part_success_matrices:
-            print(
-                "Body-part success mosaics: "
-                f"{(artifact_root / FALCON_EVAL_BODY_PART_SUCCESS_SUMMARY_DIR).resolve()}"
-            )
+            print(f"Body-part success mosaics: {(artifact_root / FALCON_EVAL_BODY_PART_SUCCESS_SUMMARY_DIR).resolve()}")
 
     return 0
 

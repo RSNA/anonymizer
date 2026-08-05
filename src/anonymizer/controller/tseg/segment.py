@@ -34,6 +34,7 @@ from anonymizer.controller.tseg.contrast import (
     estimate_contrast_remaining_sec,
     load_contrast_statistics,
     log_memory_usage,
+    needs_head_neck_vessel_stats,
     release_before_contrast,
     release_working_memory,
 )
@@ -46,6 +47,7 @@ from anonymizer.controller.tseg.dicom_geometry import (
 )
 from anonymizer.controller.tseg.radlex import format_radlex_ct_series_description
 from anonymizer.controller.tseg.runtime import sequential_ml_context
+from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +55,7 @@ logger = logging.getLogger(__name__)
 _SEG_SECONDS_PER_SLICE = 0.11
 _SEG_BASE_SECONDS = 30.0
 _FACE_SEG_ESTIMATE_SECONDS = 90.0
-_FACE_LICENSE_ERROR = (
-    "TotalSegmentator face task requires academic license (totalseg_set_license -l aca_...)"
-)
+_FACE_LICENSE_ERROR = "TotalSegmentator face task requires academic license (totalseg_set_license -l aca_...)"
 
 
 @dataclass(frozen=True)
@@ -123,6 +123,24 @@ class TS_result:
     error: str | None = None
 
 
+def format_anatomy_regions_summary(result: TS_result) -> str:
+    """Compact anatomy summary for batch progress when segmentation cache is reused."""
+    regions = result.body_parts_present.replace("+", ", ")
+    if not regions:
+        return ""
+    if result.dominant_region:
+        return f"{regions} ({_('dominant')}: {result.dominant_region})"
+    return regions
+
+
+def format_anatomy_regions_progress_message(result: TS_result, *, seg_cached: bool) -> str:
+    summary = format_anatomy_regions_summary(result)
+    if not summary:
+        return _("Summarizing anatomy regions")
+    prefix = _("Anatomy (cached segmentation)") if seg_cached else _("Anatomy")
+    return f"{prefix}: {summary}"
+
+
 @dataclass(frozen=True)
 class FaceSegResult:
     series_directory: Path
@@ -156,7 +174,7 @@ def _require_totalsegmentator():
         from totalsegmentator.python_api import totalsegmentator
     except ImportError as exc:
         raise ImportError(
-            'TotalSegmentator is required for anatomy analysis. Install with: pip install "rsna-anonymizer[tseg]"'
+            "TotalSegmentator is required for anatomy analysis. Install with: pip install rsna-anonymizer"
         ) from exc
     return totalsegmentator
 
@@ -254,14 +272,26 @@ def body_parts_present(
     present = [
         region
         for region in BODY_PARTS
-        if region_voxels.get(region, 0) >= min_voxels
-        and region_voxels[region] / total >= min_fraction
+        if region_voxels.get(region, 0) >= min_voxels and region_voxels[region] / total >= min_fraction
     ]
     return "+".join(present)
 
 
 def is_multi_region(body_parts_present_label: str) -> bool:
     return "+" in body_parts_present_label
+
+
+def cached_body_parts_label(series_directory: Path) -> str | None:
+    """ROI anatomy label from ``A_TS_SEG`` segmentation cache, if available."""
+    cache_dir = series_cache_dir(series_directory)
+    seg_dir = cache_dir / "seg"
+    structures = list(ROI_SUBSET)
+    if not _segmentation_cache_valid(seg_dir, structures):
+        return None
+    structure_voxels = collect_structure_voxels(seg_dir, structures)
+    region = dominant_region_from_voxels(structure_voxels)
+    label = body_parts_present(region.region_voxels)
+    return label or None
 
 
 def _estimate_segmentation_seconds(n_slices: int) -> float:
@@ -551,7 +581,14 @@ def estimate_tseg_contrast_remaining_sec(series_directory: Path) -> float:
     if contrast_stats_path.is_file():
         existing_stats = load_contrast_statistics(contrast_stats_path)
 
-    needs_head_neck = bool(existing_stats and existing_stats["brain"]["volume"] > 100)
+    body_parts_label = cached_body_parts_label(series_directory)
+    needs_head_neck = bool(
+        existing_stats
+        and needs_head_neck_vessel_stats(
+            existing_stats,
+            body_parts_present=body_parts_label,
+        )
+    )
     stats_hn_cached = needs_head_neck and contrast_stats_hn_path.is_file()
     phase_cached = bool(
         existing_stats is not None
@@ -580,7 +617,7 @@ def _face_cache_valid(mask_path: Path) -> bool:
 
 
 def _insufficient_face_mask_error(face_voxel_count: int) -> str | None:
-    from anonymizer.controller.blur_face_gate import (
+    from anonymizer.controller.blur_face import (
         FaceBlurGateReason,
         face_blur_gate_message,
         face_mask_is_substantial,
@@ -671,6 +708,7 @@ def _region_ts_result(
 def analyze_tseg_regions(
     series_directory: Path,
     *,
+    geometry: SeriesGeometryResult | None = None,
     progress: ProgressCallback | None = None,
 ) -> tuple[TS_result, Path | None]:
     """
@@ -687,7 +725,7 @@ def analyze_tseg_regions(
     seg_dir = work_dir / "seg"
     analysis_started = time.perf_counter()
 
-    geometry = resolve_series_geometry(series_directory)
+    geometry = geometry if geometry is not None else resolve_series_geometry(series_directory)
     logger.info(
         "TS regions: geometry plane=%s dimensionality=%s provenance=%s ts_suitable=%s",
         geometry.plane,
@@ -722,8 +760,16 @@ def analyze_tseg_regions(
                 logger.info("TS regions: wrote %s (%d slices)", nifti_path, n_slices)
 
             roi_structures = list(ROI_SUBSET)
-            if _segmentation_cache_valid(seg_dir, roi_structures):
+            seg_cached = _segmentation_cache_valid(seg_dir, roi_structures)
+            if seg_cached:
                 logger.info("TS regions: reusing cached segmentation in %s", seg_dir)
+                _report_progress(
+                    progress,
+                    stage="segment",
+                    message=_("Using cached anatomy segmentation"),
+                    fraction=0.35,
+                    started=analysis_started,
+                )
             else:
                 logger.info("TS regions: running segmentation for %s", series_directory)
                 seg_seconds = run_segmentation(
@@ -734,15 +780,15 @@ def analyze_tseg_regions(
                     n_slices=n_slices,
                 )
                 logger.info("TS regions: segmentation finished in %.1fs", seg_seconds)
+                _report_progress(
+                    progress,
+                    stage="segment",
+                    message=f"Anatomy seg: inference {seg_seconds:.1f}s",
+                    fraction=0.35,
+                    started=analysis_started,
+                )
                 release_working_memory(stage="ts_regions_after_segmentation")
 
-            _report_progress(
-                progress,
-                stage="regions",
-                message="Summarizing anatomy regions",
-                fraction=0.72,
-                started=analysis_started,
-            )
             structure_voxels = collect_structure_voxels(seg_dir, list(ROI_SUBSET))
             region = dominant_region_from_voxels(structure_voxels)
             regions_label = body_parts_present(region.region_voxels)
@@ -755,6 +801,11 @@ def analyze_tseg_regions(
                     nifti_path,
                 )
 
+            region_result = _region_ts_result(
+                series_directory,
+                region=region,
+                regions_label=regions_label,
+            )
             logger.info(
                 "TS regions: %s dominant=%s label=%s fraction=%.3f",
                 series_directory,
@@ -762,10 +813,14 @@ def analyze_tseg_regions(
                 regions_label,
                 region.region_fraction,
             )
-            return (
-                _region_ts_result(series_directory, region=region, regions_label=regions_label),
-                nifti_path,
+            _report_progress(
+                progress,
+                stage="regions",
+                message=format_anatomy_regions_progress_message(region_result, seg_cached=seg_cached),
+                fraction=0.95,
+                started=analysis_started,
             )
+            return (region_result, nifti_path)
         except Exception as exc:
             logger.exception("TS regions failed for %s: %s", series_directory, exc)
             return (_error_result(series_directory, f"{type(exc).__name__}: {exc}"), None)
@@ -795,6 +850,12 @@ def analyze_tseg_contrast(
 
     release_before_contrast(stage="ts_contrast_after_anatomy_release")
 
+    from anonymizer.controller.tseg.config import RELEASE_ANATOMY_PREDICTORS_BEFORE_CONTRAST
+    from anonymizer.controller.tseg.model_cache import clear_predictor_cache
+
+    if RELEASE_ANATOMY_PREDICTORS_BEFORE_CONTRAST:
+        clear_predictor_cache()
+
     cache_dir = series_cache_dir(series_directory)
     contrast_stats_path = cache_dir / CONTRAST_STATS_FILENAME
     contrast_stats_hn_path = cache_dir / CONTRAST_STATS_HN_FILENAME
@@ -820,17 +881,32 @@ def analyze_tseg_contrast(
 
     try:
         with sequential_ml_context("ts_contrast_pipeline"):
+            contrast_started = time.perf_counter()
             contrast = analyze_contrast_phase(
                 nifti_path,
                 existing_stats=existing_stats,
                 stats_output_path=contrast_stats_path,
                 stats_hn_output_path=contrast_stats_hn_path,
                 phase_cache_path=contrast_phase_path,
+                body_parts_present=region_result.body_parts_present or None,
                 progress=_wrap_contrast_progress(
                     progress,
                     started=analysis_started,
                     remaining_sec=remaining_sec,
                 ),
+            )
+            contrast_elapsed = time.perf_counter() - contrast_started
+            if remaining_sec == 0.0:
+                timing_message = "Contrast: cached phase"
+            else:
+                timing_message = f"Contrast: analysis {contrast_elapsed:.1f}s"
+            _report_progress(
+                progress,
+                stage="contrast",
+                message=timing_message,
+                fraction=0.95,
+                started=analysis_started,
+                remaining_sec=0.0,
             )
         radlex_description = format_radlex_ct_series_description(
             region_result.body_parts_present,

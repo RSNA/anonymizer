@@ -86,15 +86,9 @@ class ResNet9(nn.Module):
 
         if scale_norm:
             self.scale_norm_1 = (
-                nn.BatchNorm2d(128)
-                if norm_layer == "batch"
-                else nn.GroupNorm(min(num_groups[1], 128), 128)
+                nn.BatchNorm2d(128) if norm_layer == "batch" else nn.GroupNorm(min(num_groups[1], 128), 128)
             )
-            self.scale_norm_2 = (
-                nn.BatchNorm2d(256)
-                if norm_layer == "batch"
-                else nn.GroupNorm(min(groups[3], 256), 256)
-            )
+            self.scale_norm_2 = nn.BatchNorm2d(256) if norm_layer == "batch" else nn.GroupNorm(min(groups[3], 256), 256)
         else:
             self.scale_norm_1 = nn.Identity()
             self.scale_norm_2 = nn.Identity()

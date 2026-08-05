@@ -40,6 +40,15 @@ from pynetdicom.status import (
     VERIFICATION_SERVICE_CLASS_STATUS,
 )
 
+from anonymizer.controller.ai_batch_process import (
+    AiBatchCancelledCallback,
+    AiBatchMemoryCallback,
+    AiBatchProcessOptions,
+    AiBatchProgressCallback,
+    AiBatchSummary,
+    AiBatchWorkflowLogCallback,
+    ai_batch_process,
+)
 from anonymizer.controller.anonymizer import AnonymizerController
 from anonymizer.controller.dicom_C_codes import (
     C_FAILURE,
@@ -2540,7 +2549,9 @@ class ProjectController(AE):
 
         # Remove PHI data from anonymizer model:
         if not self.anonymizer.model.remove_phi(anon_pt_id, anon_study_uid):
-            logger.error(f"Critical Error removing phi data for AnonStudyUID: {anon_study_uid} AnonPatientID: {anon_pt_id}")
+            logger.error(
+                f"Critical Error removing phi data for AnonStudyUID: {anon_study_uid} AnonPatientID: {anon_pt_id}"
+            )
             return False
 
         logger.info(f"PHI data removed for StudyUID: {anon_study_uid} PatientID: {anon_pt_id} successfully")
@@ -2582,7 +2593,7 @@ class ProjectController(AE):
         return phi_csv_path
 
     def get_phi_index_records(self) -> list[PHI_IndexRecord] | None:
-        """Return PHI index rows with Harmonized status from ORM series metadata."""
+        """Return PHI index rows with study-level AI processing status from ORM metadata."""
         return self.anonymizer.model.get_phi_index()
 
     def harmonize_studies(
@@ -2601,4 +2612,27 @@ class ProjectController(AE):
             progress=progress,
             cancelled=cancelled,
             on_outcome=on_outcome,
+        )
+
+    def ai_batch_process(
+        self,
+        studies: list[tuple[str, str]],
+        options: AiBatchProcessOptions,
+        *,
+        progress: AiBatchProgressCallback | None = None,
+        cancelled: AiBatchCancelledCallback | None = None,
+        on_log: AiBatchWorkflowLogCallback | None = None,
+        memory_callback: AiBatchMemoryCallback | None = None,
+    ) -> AiBatchSummary:
+        """Run selected AI algorithms sequentially for series under selected studies."""
+        return ai_batch_process(
+            self.model.images_dir(),
+            studies,
+            options,
+            anon_model=self.anonymizer.model,
+            anon_controller=self.anonymizer,
+            progress=progress,
+            cancelled=cancelled,
+            on_log=on_log,
+            memory_callback=memory_callback,
         )

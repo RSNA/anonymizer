@@ -1,9 +1,6 @@
 import contextlib
-import copy
-import difflib
 import gc
 import logging
-import os
 import queue
 import threading
 import tkinter as tk
@@ -14,24 +11,13 @@ from tkinter import messagebox
 
 import customtkinter as ctk
 import numpy as np
-import torch
-from easyocr import Reader
 from pydicom import Dataset, dcmread
 
 from anonymizer.controller.blur_face import (
-    FaceBlurMode,
-    FaceBlurPreviewResult,
-    SeriesVolumeContext,
-    apply_face_blur_preview_to_series_frames,
-    apply_series_face_blur_metadata,
-    hu_stack_to_viewer_frames,
-    mask_slice_segmentations,
-    preview_face_blur,
-)
-from anonymizer.controller.blur_face_gate import (
     FaceBlurEligibility,
     FaceBlurGateDecision,
     FaceBlurGateReason,
+    FaceBlurMode,
     evaluate_face_blur_eligibility,
     face_blur_gate_message,
     face_blur_status_applicable,
@@ -43,25 +29,27 @@ from anonymizer.controller.create_projections import (
     save_series_frames,
 )
 from anonymizer.controller.remove_pixel_phi import (
-    LayerType,
+    OcrService,
     OCRText,
     UserRectangle,
     apply_series_view_pixel_phi,
     blackout_rectangular_areas,
     collect_series_view_pixel_phi_texts,
-    detect_text,
+    filter_ocr_detections,
     remove_text,
 )
 from anonymizer.controller.tseg.cache import clear_series_tseg_cache, tseg_cache_summary
-from anonymizer.controller.tseg.config import ENABLE_TSEG_FACE, TSEG_CACHE_DIRNAME
+from anonymizer.controller.tseg.config import TSEG_CACHE_DIRNAME
 from anonymizer.controller.tseg.dicom_geometry import (
     SeriesGeometryResult,
+    ensure_series_geometry,
     format_series_view_geometry_line,
     load_geometry_cache,
-    resolve_series_geometry,
     stackable_dicom_paths,
 )
+from anonymizer.controller.tseg.runtime_status import face_blur_allowed, get_ai_session, harmonize_allowed
 from anonymizer.model.anonymizer import AnonymizerModel, format_series_processing_status
+from anonymizer.model.project import ProjectModel
 from anonymizer.utils.memory import log_process_memory
 from anonymizer.utils.storage import (
     get_dcm_files,
@@ -71,16 +59,14 @@ from anonymizer.utils.storage import (
 )
 from anonymizer.utils.translate import _
 from anonymizer.view.blur_face_results import (
-    FACE_MASK_OVERLAY_ALPHA,
-    FACE_MASK_OVERLAY_COLOR,
     face_blur_mode_from_menu_label,
     face_blur_mode_menu_values,
-    face_review_wl_ww,
-    format_face_blur_progress_status,
-    format_face_blur_qa_summary,
 )
+from anonymizer.view.ctk_safe import mark_ctk_window_alive, mark_ctk_window_destroyed
+from anonymizer.view.face_blur_review_dialog import show_face_blur_review_dialog
 from anonymizer.view.harmonize_results import show_harmonize_results_view
 from anonymizer.view.image import ImageViewer
+from anonymizer.view.navigation import find_phi_index_parent
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +80,7 @@ def show_series_view(
     *,
     anon_model: AnonymizerModel,
     series_path: Path,
+    project_model: ProjectModel | None = None,
 ) -> "SeriesView | None":
     """Open Series View with a loading shell while DICOM pixels are read in the background."""
     if not series_path.is_dir():
@@ -104,7 +91,12 @@ def show_series_view(
         )
         return None
     log_process_memory("series_view_open", extra=str(series_path.name))
-    return SeriesView(parent, anon_model=anon_model, series_path=series_path)
+    return SeriesView(
+        parent,
+        anon_model=anon_model,
+        series_path=series_path,
+        project_model=project_model,
+    )
 
 
 # Edit Contexts:
@@ -114,10 +106,9 @@ class EditContext(StrEnum):
     # TODO: PROJECT = auto()  # apply edits to all series in project
 
 
-class SeriesView(tk.Toplevel):
+class SeriesView(ctk.CTkToplevel):
     BUTTON_WIDTH = 100
     PAD = 10
-    BLUR_POLL_MS = 200
     LOAD_POLL_MS = 100
     PROGRESS_SLICE_THRESHOLD = 400
     DEFAULT_WIDTH = 960
@@ -128,13 +119,20 @@ class SeriesView(tk.Toplevel):
     LOADING_SHELL_PAD = 12
     LOAD_PROGRESS_PULSE_MS = 180
 
-    def __init__(self, parent, anon_model: AnonymizerModel, series_path: Path):
+    def __init__(
+        self,
+        parent,
+        anon_model: AnonymizerModel,
+        series_path: Path,
+        project_model: ProjectModel | None = None,
+    ):
         super().__init__(master=parent)
+        mark_ctk_window_alive(self)
 
         self._parent = parent
         self._anon_model = anon_model
+        self._project_model = project_model
         self._series_path = series_path
-        self._ocr_reader = None  # only created if user clicks "Detect Text" button
         self.edit_context: EditContext = EditContext.FRAME
         self.detected_text: dict[int, list[OCRText]] = {}  # Store all detected text per frame
         self._whitelist_changed = False
@@ -152,18 +150,14 @@ class SeriesView(tk.Toplevel):
         self.single_frame = False
         self._dicom_wl: float | None = None
         self._dicom_ww: float | None = None
-        self._face_blur_preview_pending = False
-        self._blur_preview = None
-        self._blur_review_saved = None
         self._series_geometry: SeriesGeometryResult | None = None
         self._face_blur_eligibility_cache: FaceBlurEligibility | None = None
         self._face_blur_eligibility_geometry: SeriesGeometryResult | None = None
-        self._blur_running = False
-        self._blur_poll_after_id: str | None = None
-        self._blur_review_after_id: str | None = None
         self._rebuild_after_id: str | None = None
         self._rebuild_pending = False
         self._ui_rebuilding = False
+        self._destroyed = False
+        self._closing = False
 
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Escape>", self._escape_keypress)
@@ -185,6 +179,26 @@ class SeriesView(tk.Toplevel):
             daemon=True,
         ).start()
         self.after(self.LOAD_POLL_MS, self._poll_load_worker)
+
+    def _widget_alive(self) -> bool:
+        if getattr(self, "_destroyed", False) or getattr(self, "_closing", False):
+            return False
+        with contextlib.suppress(tk.TclError):
+            return bool(self.winfo_exists())
+        return False
+
+    @staticmethod
+    def _unregister_customtkinter_window(window: tk.Misc) -> None:
+        mark_ctk_window_destroyed(window)
+
+    def destroy(self) -> None:
+        if self._destroyed:
+            return
+        self._destroyed = True
+        self._stop_rebuild_ui()
+        self._stop_load_progress_pulse()
+        mark_ctk_window_destroyed(self)
+        super().destroy()
 
     def _show_loading_shell(self) -> None:
         self.withdraw()
@@ -294,7 +308,9 @@ class SeriesView(tk.Toplevel):
         return frames
 
     @staticmethod
-    def _load_series_data(series_path: Path) -> tuple[Dataset, np.ndarray, tuple[Path, ...], SeriesGeometryResult | None]:
+    def _load_series_data(
+        series_path: Path,
+    ) -> tuple[Dataset, np.ndarray, tuple[Path, ...], SeriesGeometryResult | None]:
         log_process_memory("load_series_data_start", extra=str(series_path.name))
         ds, series_frames, slice_paths = load_series_frames(series_path)
         if ds is None or series_frames is None:
@@ -311,7 +327,6 @@ class SeriesView(tk.Toplevel):
         else:
             frames = SeriesView._build_viewer_frames(series_frames)
             del series_frames
-            gc.collect()
             log_process_memory(
                 "after_build_viewer_frames",
                 array=frames,
@@ -330,19 +345,11 @@ class SeriesView(tk.Toplevel):
         return ds, frames, slice_paths, series_geometry
 
     def _ensure_series_geometry(self) -> SeriesGeometryResult | None:
-        if self._series_geometry is not None:
-            return self._series_geometry
-        if getattr(self._ds, "Modality", None) != "CT":
-            return None
-        self._series_geometry = load_geometry_cache(self._series_path)
-        if self._series_geometry is not None:
-            return self._series_geometry
-        try:
-            self._log_series_memory("resolve_series_geometry_start")
-            self._series_geometry = resolve_series_geometry(self._series_path)
-            self._log_series_memory("resolve_series_geometry_done")
-        except Exception as exc:
-            logger.warning("Could not resolve series geometry for %s: %s", self._series_path, exc)
+        self._series_geometry = ensure_series_geometry(
+            self._series_path,
+            ds=self._ds,
+            cached=self._series_geometry,
+        )
         return self._series_geometry
 
     def _load_worker(self) -> None:
@@ -361,7 +368,7 @@ class SeriesView(tk.Toplevel):
             self._load_queue.put(("error", SeriesLoadError(str(exc))))
 
     def _poll_load_worker(self) -> None:
-        if not self.winfo_exists() or not self._loading:
+        if not self._widget_alive() or not self._loading:
             return
 
         while True:
@@ -372,11 +379,13 @@ class SeriesView(tk.Toplevel):
 
             if kind == "done":
                 ds, frames, slice_paths, series_geometry = payload
-                self._finish_loading(
-                    ds=ds,
-                    frames=frames,
-                    slice_paths=slice_paths,
-                    series_geometry=series_geometry,
+                self.after_idle(
+                    lambda d=ds, f=frames, p=slice_paths, g=series_geometry: self._finish_loading(
+                        ds=d,
+                        frames=f,
+                        slice_paths=p,
+                        series_geometry=g,
+                    )
                 )
                 return
             if kind == "error":
@@ -384,8 +393,7 @@ class SeriesView(tk.Toplevel):
                 logger.error("Could not open series view for %s: %s", self._series_path, payload)
                 messagebox.showerror(
                     title=_("Series View"),
-                    message=_("Could not load this series.")
-                    + f"\n\n{self._series_path}\n\n{payload}",
+                    message=_("Could not load this series.") + f"\n\n{self._series_path}\n\n{payload}",
                     parent=self._parent,
                 )
                 self.destroy()
@@ -450,8 +458,6 @@ class SeriesView(tk.Toplevel):
         return self._remember_dicom_wl_ww()
 
     def _viewer_wl_ww(self) -> tuple[float, float]:
-        if self._blur_preview is not None and self._ds is not None:
-            return face_review_wl_ww(self._ds)
         return self._dicom_wl_ww()
 
     def _sync_viewer_wl_ww(self) -> None:
@@ -485,10 +491,11 @@ class SeriesView(tk.Toplevel):
         if detach_companion:
             viewer.detach_companion_stack()
         self.update_idletasks()
-        viewer._resize_to_viewport_enabled = True
+        viewer._resize_to_viewport_enabled = False
         viewer._set_initial_size()
         self._fit_window_to_content()
         viewer.sync_viewport_after_layout()
+        viewer._resize_to_viewport_enabled = True
 
     def _apply_initial_viewer_display(self) -> None:
         """Apply master-style viewer sizing once the Series View window is mapped."""
@@ -519,7 +526,7 @@ class SeriesView(tk.Toplevel):
             self.whitelist.insert(tk.END, item)
 
     def _series_interaction_allowed(self) -> bool:
-        return not self._blur_running and not self._ui_rebuilding and not self._loading
+        return not self._ui_rebuilding and not self._loading
 
     def _refresh_model_aware_toolbar_buttons(self) -> None:
         """Restore harmonize / blur / TS-cache buttons from ORM and eligibility rules."""
@@ -550,6 +557,10 @@ class SeriesView(tk.Toplevel):
                 with contextlib.suppress(tk.TclError):
                     widget.configure(state=widget_state)
 
+        if hasattr(self, "whitelist"):
+            with contextlib.suppress(tk.TclError):
+                self.whitelist.configure(state=listbox_state)
+
         if busy:
             for attr in (
                 "harmonize_button",
@@ -564,18 +575,9 @@ class SeriesView(tk.Toplevel):
         else:
             self._refresh_model_aware_toolbar_buttons()
 
-        if hasattr(self, "whitelist"):
+        if hasattr(self, "save_button") and busy:
             with contextlib.suppress(tk.TclError):
-                self.whitelist.configure(state=listbox_state)
-
-        if hasattr(self, "save_button"):
-            with contextlib.suppress(tk.TclError):
-                if busy:
-                    self.save_button.configure(state="disabled")
-                elif self._face_blur_preview_pending or self._blur_preview is not None:
-                    self.save_button.configure(state="normal")
-                else:
-                    self.save_button.configure(state="disabled")
+                self.save_button.configure(state="disabled")
 
         if hasattr(self, "image_viewer"):
             with contextlib.suppress(tk.TclError):
@@ -584,22 +586,8 @@ class SeriesView(tk.Toplevel):
         with contextlib.suppress(tk.TclError):
             self.configure(cursor="watch" if busy else "")
 
-    def _stop_blur_worker_poll(self) -> None:
-        if self._blur_poll_after_id is None:
-            return
-        with contextlib.suppress(tk.TclError):
-            self.after_cancel(self._blur_poll_after_id)
-        self._blur_poll_after_id = None
-
-    def _stop_blur_review_deferred(self) -> None:
-        if self._blur_review_after_id is None:
-            return
-        with contextlib.suppress(tk.TclError):
-            self.after_cancel(self._blur_review_after_id)
-        self._blur_review_after_id = None
-
     def _flush_pending_rebuild_ui(self) -> None:
-        if not self._rebuild_pending or self._blur_running or self._blur_preview is not None:
+        if not self._rebuild_pending:
             return
         self._rebuild_pending = False
         self._schedule_rebuild_ui()
@@ -615,9 +603,6 @@ class SeriesView(tk.Toplevel):
         """Rebuild widgets on the Tk main thread after cache clear or similar."""
         if not self.winfo_exists():
             return
-        if self._blur_running or self._blur_preview is not None:
-            self._rebuild_pending = True
-            return
         self._stop_rebuild_ui()
         self._set_series_interaction_enabled(False)
         self._rebuild_after_id = self.after_idle(self._rebuild_ui_on_main_thread)
@@ -625,9 +610,6 @@ class SeriesView(tk.Toplevel):
     def _rebuild_ui_on_main_thread(self) -> None:
         self._rebuild_after_id = None
         if not self.winfo_exists():
-            return
-        if self._blur_running or self._blur_preview is not None:
-            self._rebuild_pending = True
             return
         self._ui_rebuilding = True
         try:
@@ -638,9 +620,6 @@ class SeriesView(tk.Toplevel):
 
     def _destroy_ui(self) -> None:
         """Remove Series View widgets while keeping loaded series data in memory."""
-        self._blur_running = False
-        self._stop_blur_worker_poll()
-        self._release_blur_review_state()
         viewer = getattr(self, "image_viewer", None)
         if viewer is not None:
             self._release_image_viewer(viewer, destroy_widget=True)
@@ -684,29 +663,31 @@ class SeriesView(tk.Toplevel):
         self._sv_frame.grid_columnconfigure(1, weight=1)
 
         # Whitelist frame:
-        whitelist_frame = ctk.CTkFrame(self._sv_frame)
-        whitelist_frame.grid(row=0, column=0, sticky="nsew", padx=self.PAD, pady=self.PAD)
-        whitelist_frame.grid_columnconfigure(2, weight=1)
-        whitelist_frame.grid_rowconfigure(3, weight=1)
+        self._whitelist_frame = ctk.CTkFrame(self._sv_frame)
+        self._whitelist_frame.grid(row=0, column=0, sticky="nsew", padx=self.PAD, pady=self.PAD)
+        self._whitelist_frame.grid_columnconfigure(2, weight=1)
+        self._whitelist_frame.grid_rowconfigure(3, weight=1)
 
         # Whitelist buttons:
-        whitelist_title = ctk.CTkLabel(whitelist_frame, text=_("WHITE LIST"))
+        whitelist_title = ctk.CTkLabel(self._whitelist_frame, text=_("WHITE LIST"))
         whitelist_title.grid(row=0, columnspan=2, sticky="ew")
-        whitelist_defaults_button = ctk.CTkButton(
-            whitelist_frame, text=_("Defaults"), command=self.whitelist_defaults_button_clicked
+        self.whitelist_defaults_button = ctk.CTkButton(
+            self._whitelist_frame, text=_("Defaults"), command=self.whitelist_defaults_button_clicked
         )
-        whitelist_defaults_button.grid(row=1, column=0, sticky="ew", padx=self.PAD, pady=self.PAD)
-        whitelist_clear_button = ctk.CTkButton(whitelist_frame, text=_("Clear"), command=self.clear_whitelist)
-        whitelist_clear_button.grid(row=1, column=1, sticky="ew", padx=(0, self.PAD), pady=self.PAD)
+        self.whitelist_defaults_button.grid(row=1, column=0, sticky="ew", padx=self.PAD, pady=self.PAD)
+        self.whitelist_clear_button = ctk.CTkButton(
+            self._whitelist_frame, text=_("Clear"), command=self.clear_whitelist
+        )
+        self.whitelist_clear_button.grid(row=1, column=1, sticky="ew", padx=(0, self.PAD), pady=self.PAD)
 
         # Whitelist entry:
-        self.whitelist_entry = ctk.CTkEntry(whitelist_frame)
+        self.whitelist_entry = ctk.CTkEntry(self._whitelist_frame)
         self.whitelist_entry.bind("<Return>", self.whitelist_button_clicked_or_entry_return)
         self.whitelist_entry.grid(row=2, columnspan=3, sticky="ew")
 
-        scrollbar = ctk.CTkScrollbar(whitelist_frame, orientation="vertical")
+        scrollbar = ctk.CTkScrollbar(self._whitelist_frame, orientation="vertical")
         self.whitelist = tk.Listbox(
-            whitelist_frame,
+            self._whitelist_frame,
             border=0,
             yscrollcommand=scrollbar.set,
             bg="black",
@@ -732,10 +713,6 @@ class SeriesView(tk.Toplevel):
         )
         self.image_viewer.grid(row=0, column=1, sticky="nsew")
         self.image_viewer.detach_companion_stack()
-        self._blur_review_saved = None
-        self._blur_preview = None
-        self._blur_worker_queue = queue.Queue()
-        self._blur_running = False
 
         # Control Frame (toolbar row, status line, save row):
         self.control_frame = ctk.CTkFrame(self._sv_frame)
@@ -743,6 +720,7 @@ class SeriesView(tk.Toplevel):
         self.control_frame.grid_columnconfigure(0, weight=1)
 
         text_edit_group = ctk.CTkFrame(self.control_frame, fg_color="transparent")
+        self._text_edit_group = text_edit_group
         text_edit_group.grid(row=0, column=0, padx=(0, self.PAD), pady=self.PAD, sticky="w")
         edit_context_label = ctk.CTkLabel(text_edit_group, text=_("Text Edit Context") + ":")
         edit_context_label.grid(row=0, column=0, padx=(self.PAD, 2))
@@ -806,6 +784,7 @@ class SeriesView(tk.Toplevel):
             state=self._clear_ts_cache_button_state(),
         )
         self.clear_ts_cache_button.grid(row=0, column=3, padx=(2, self.PAD), pady=0, sticky="e")
+        self._apply_ai_feature_visibility()
 
         self._status_label = ctk.CTkLabel(
             self.control_frame,
@@ -908,6 +887,43 @@ class SeriesView(tk.Toplevel):
             text=format_series_processing_status(status, include_face_blur=include_face_blur),
         )
 
+    def _harmonize_button_visible(self) -> bool:
+        if get_ai_session().enable_harmonize:
+            return True
+        return getattr(self._ds, "Modality", None) == "CT" and tseg_cache_summary(self._series_path).exists
+
+    def _clear_ts_cache_button_visible(self) -> bool:
+        session = get_ai_session()
+        if session.enable_harmonize or session.enable_face_blur:
+            return True
+        return getattr(self._ds, "Modality", None) == "CT" and tseg_cache_summary(self._series_path).exists
+
+    def _apply_ai_feature_visibility(self) -> None:
+        session = get_ai_session()
+        face_on = session.enable_face_blur
+        if hasattr(self, "harmonize_button"):
+            if self._harmonize_button_visible():
+                self.harmonize_button.grid()
+                self._refresh_harmonize_button()
+            else:
+                self.harmonize_button.grid_remove()
+        if hasattr(self, "blur_face_button"):
+            if face_on:
+                self.blur_face_button.grid()
+                if hasattr(self, "blur_face_mode_menu"):
+                    self.blur_face_mode_menu.grid()
+                self._refresh_blur_face_ui()
+            else:
+                self.blur_face_button.grid_remove()
+                if hasattr(self, "blur_face_mode_menu"):
+                    self.blur_face_mode_menu.grid_remove()
+        if hasattr(self, "clear_ts_cache_button"):
+            if self._clear_ts_cache_button_visible():
+                self.clear_ts_cache_button.grid()
+                self._refresh_clear_ts_cache_button()
+            else:
+                self.clear_ts_cache_button.grid_remove()
+
     def update_status(self, message: str) -> None:
         """Overwrite the context line with transient operation status."""
         logger.info("Series view: %s", message)
@@ -915,6 +931,10 @@ class SeriesView(tk.Toplevel):
             self._status_label.configure(text=message)
 
     def _harmonize_button_state(self) -> str:
+        if not get_ai_session().enable_harmonize:
+            return "disabled"
+        if not harmonize_allowed():
+            return "disabled"
         if getattr(self._ds, "Modality", None) != "CT":
             return "disabled"
         anon_uid = self._anon_series_uid()
@@ -954,17 +974,14 @@ class SeriesView(tk.Toplevel):
 
     def _face_blur_eligibility(self) -> FaceBlurEligibility:
         geometry = self._ensure_series_geometry()
-        if (
-            self._face_blur_eligibility_cache is not None
-            and geometry is self._face_blur_eligibility_geometry
-        ):
+        if self._face_blur_eligibility_cache is not None and geometry is self._face_blur_eligibility_geometry:
             return self._face_blur_eligibility_cache
 
         eligibility = evaluate_face_blur_eligibility(
             self._series_path,
             ds=self._ds,
             geometry=geometry,
-            enable_tseg_face=ENABLE_TSEG_FACE,
+            enable_tseg_face=get_ai_session().enable_face_blur,
             face_blur_already_applied=(
                 self._anon_model.series_has_face_blur(str(self._ds.SeriesInstanceUID))
                 if self._ds is not None
@@ -976,10 +993,12 @@ class SeriesView(tk.Toplevel):
         return eligibility
 
     def _blur_face_toolbar_state(self) -> str:
+        if not get_ai_session().enable_face_blur:
+            return "disabled"
+        if not face_blur_allowed():
+            return "disabled"
         anon_uid = self._anon_series_uid()
         if anon_uid is not None and self._anon_model.series_has_face_blur(anon_uid):
-            return "disabled"
-        if self._blur_running or self._blur_preview is not None:
             return "disabled"
         eligibility = self._face_blur_eligibility()
         if eligibility.decision == FaceBlurGateDecision.BLOCK:
@@ -997,9 +1016,6 @@ class SeriesView(tk.Toplevel):
         if not hasattr(self, "blur_face_mode_var"):
             return FaceBlurMode.GAUSSIAN
         return face_blur_mode_from_menu_label(self.blur_face_mode_var.get())
-
-    def _blur_face_button_state(self) -> str:
-        return self._blur_face_toolbar_state()
 
     def clear_whitelist(self):
         logger.info("Clearing whitelist")
@@ -1058,96 +1074,41 @@ class SeriesView(tk.Toplevel):
             self._frames[1] = np.mean(self._frames, axis=0).astype(self._frames.dtype)
             self._frames[2] = np.max(self._frames, axis=0)
 
-    def initialise_ocr(self):
-        # Once-off initialisation of easyocr.Reader (and underlying pytorch model):
-        # if pytorch models not downloaded yet, they will be when Reader initializes
-        logging.info("OCR Reader initialising...")
-
-        model_dir = Path("assets") / "ocr" / "model"  # Default is: Path("~/.EasyOCR/model").expanduser()
-        if not model_dir.exists():
-            # TODO: notify user via status bar or messagebox
-            logger.warning(
-                f"EasyOCR model directory: {model_dir}, does not exist, EasyOCR will create it, models still to be downloaded..."
-            )
-        else:
-            logger.info(f"EasyOCR downloaded models: {os.listdir(model_dir)}")
-
-        # Initialize the EasyOCR reader with the desired language(s), if models are not in model_dir, they will be downloaded
-        # TODO: use thread for this if models not downloaded yet, provide status updates during download:
-        # TODO: optimize so reader is only initialised once - reference passed by ProjectionView or IndexView or global?
-        self._ocr_reader = Reader(
-            lang_list=["en", "de", "fr", "es"],
-            gpu=True,
-            model_storage_directory=model_dir,
-            verbose=True,
+    def process_single_frame_ocr(self, frame_index: int):
+        """Performs OCR on a single frame, filters, and stores results."""
+        results = OcrService.instance().detect_text(
+            pixels=apply_windowing(
+                self.image_viewer.current_wl,
+                self.image_viewer.current_ww,
+                self.image_viewer.images[frame_index],
+            ),
+            draw_boxes=False,
         )
-
-        logging.info("OCR Reader initialised successfully")
+        if results:
+            logger.debug(f"OCR Results:\n{pformat(results)}")
+            self.detected_text[frame_index] = results
+            self.draw_text_overlay(frame_index)
 
     def filter_text_data(self, frame_index: int, similarity_threshold: float = 0.75) -> list[OCRText]:
-        """
-        Filters the text_data for a frame based on fuzzy matching against the whitelist.
-        Keeps text if its similarity threshold to ALL whitelist items is <= 0.75.
-        # TODO: provide UX to modify similarity threshold
-        """
-        # Use unfiltered_text_data which stores the raw OCR results
+        """Apply user whitelist filtering via shared OCR filter helpers."""
         if frame_index not in self.detected_text:
             return []
 
-        # Preprocess whitelist items once
+        detections = self.detected_text[frame_index]
         whitelist_set = self.get_whitelist_set()
-        if not whitelist_set:  # If whitelist is empty, return all results
-            return self.detected_text.get(frame_index, [])
+        if not whitelist_set:
+            return detections
 
-        filtered_results = []
-        for ocr_text in self.detected_text[frame_index]:
-            if not ocr_text.text:  # Skip if OCR text is empty
-                continue
-
-            processed_ocr_text = ocr_text.text.upper().strip()
-            is_similar_to_whitelist = False
-
-            # Check similarity against each whitelist item
-            for whitelist_item in whitelist_set:
-                # Use SequenceMatcher to get the similarity ratio
-                similarity = difflib.SequenceMatcher(None, processed_ocr_text, whitelist_item).ratio()
-
-                if similarity > similarity_threshold:
-                    is_similar_to_whitelist = True
-                    logger.debug(
-                        f"'{ocr_text.text}' matched whitelist item '{whitelist_item}' "
-                        f"with similarity ratio {similarity:.2f}. Filtering out."
-                    )
-                    break  # Found a close match, no need to check further
-
-            # Keep the text only if it wasn't similar to any whitelist item
-            if not is_similar_to_whitelist:
-                filtered_results.append(ocr_text)
-
-        return filtered_results
+        return filter_ocr_detections(
+            detections,
+            whitelist=list(whitelist_set),
+            whitelist_similarity=similarity_threshold,
+        )
 
     def draw_text_overlay(self, frame_index: int):
         """Draws text boxes on the overlay for the given frame, based on filtered text_data."""
         filtered_text_data = self.filter_text_data(frame_index)  # Filter *before* drawing
         self.image_viewer.set_text_overlay_data(frame_index, filtered_text_data)
-
-    def process_single_frame_ocr(self, frame_index: int):
-        """Performs OCR on a single frame, filters, and stores results."""
-        with torch.no_grad():
-            if self._ocr_reader:
-                results = detect_text(
-                    pixels=apply_windowing(
-                        self.image_viewer.current_wl,
-                        self.image_viewer.current_ww,
-                        self.image_viewer.images[frame_index],
-                    ),
-                    ocr_reader=self._ocr_reader,
-                    draw_boxes_and_text=False,
-                )
-                if results:
-                    logger.debug(f"OCR Results:\n{pformat(results)}")
-                    self.detected_text[frame_index] = results
-                    self.draw_text_overlay(frame_index)
 
     def detect_text_for_series(self):
         """Detects text in all frames of the series."""
@@ -1161,13 +1122,6 @@ class SeriesView(tk.Toplevel):
     def detect_text_button_clicked(self):
         logger.info("Detecting text...")
 
-        if self._ocr_reader is None:
-            self.initialise_ocr()
-
-        # Check if GPU available
-        logger.info(f"Apple MPS (Metal) GPU Available: {torch.backends.mps.is_available()}")
-        logger.info(f"CUDA GPU Available: {torch.cuda.is_available()}")
-
         if self.edit_context == EditContext.FRAME:
             self.update_status(_("Detecting text in current image") + "…")
             self.process_single_frame_ocr(self.image_viewer.current_image_index)
@@ -1177,10 +1131,6 @@ class SeriesView(tk.Toplevel):
             self.update_status(_("Text detection complete"))
 
         # TODO: work out what to do beyond propagting edits in overlays when edit context is PROJECT
-
-        gc.collect()
-        if torch.backends.mps.is_available():
-            torch.mps.empty_cache()
 
     def remove_text_from_single_frame(self, frame_index: int, ocr_texts: list[OCRText]):
         logger.debug(f"Remove {len(ocr_texts)} words from frame {frame_index}")
@@ -1206,9 +1156,6 @@ class SeriesView(tk.Toplevel):
 
     def remove_text_button_clicked(self):
         logger.debug(f"Removing text, current edit context={self.edit_context}")
-
-        if self._ocr_reader is None:
-            self.initialise_ocr()
 
         if self.edit_context == EditContext.FRAME:
             ndx = self.image_viewer.current_image_index
@@ -1274,6 +1221,20 @@ class SeriesView(tk.Toplevel):
     def harmonize_description_button_clicked(self):
         if self._ds is None or getattr(self._ds, "Modality", None) != "CT":
             return
+        if not get_ai_session().enable_harmonize:
+            messagebox.showinfo(
+                title=_("Harmonize"),
+                message=_("Harmonize is not enabled. Open AI Features Setup from the Welcome screen or Help menu."),
+                parent=self,
+            )
+            return
+        if not harmonize_allowed():
+            messagebox.showinfo(
+                title=_("Harmonize"),
+                message=_("Harmonize is not ready yet. Open AI Features Setup to download models."),
+                parent=self,
+            )
+            return
 
         logger.info("Harmonize starting for %s", self._series_path)
         self.harmonize_button.configure(state="disabled")
@@ -1317,9 +1278,8 @@ class SeriesView(tk.Toplevel):
         )
         anon_uid = self._anon_series_uid()
         if anon_uid is not None and self._anon_model.series_has_face_blur(anon_uid):
-            cache_message += (
-                "\n\n"
-                + _("Face blur has already been applied; blurred pixels and Blur Face status are unchanged.")
+            cache_message += "\n\n" + _(
+                "Face blur has already been applied; blurred pixels and Blur Face status are unchanged."
             )
 
         confirmed = messagebox.askyesno(
@@ -1340,275 +1300,15 @@ class SeriesView(tk.Toplevel):
         self._series_geometry = None
         self._face_blur_eligibility_cache = None
         self._face_blur_eligibility_geometry = None
+        self.after_idle(self._finish_clear_ts_cache)
+
+    def _finish_clear_ts_cache(self) -> None:
+        if not self._widget_alive():
+            return
         self._refresh_analysis_cache_ui()
+        self._apply_ai_feature_visibility()
         self.update_status(_("Analysis cache cleared"))
         self._refresh_series_processing_status()
-
-    def _teardown_blur_review(
-        self,
-        *,
-        keep_applied_frames: bool = False,
-        restore_dicom_wl: bool = False,
-    ) -> None:
-        self._log_series_memory("blur_review_teardown_start", array=self._frames)
-        viewer = self.image_viewer
-        saved = self._blur_review_saved
-        viewer._resize_to_viewport_enabled = False
-        viewer.detach_companion_stack()
-
-        if saved is not None:
-            if keep_applied_frames and self._frames is not None:
-                viewer.images = self._frames
-                viewer.num_images = self._frames.shape[0]
-                viewer.image_height = self._frames.shape[1]
-                viewer.image_width = self._frames.shape[2]
-                viewer.small_jump = max(1, int(viewer.num_images * viewer.SMALL_JUMP_PERCENTAGE))
-                viewer.large_jump = max(1, int(viewer.num_images * viewer.LARGE_JUMP_PERCENTAGE))
-            elif not keep_applied_frames:
-                viewer.images = saved["images"]  # type: ignore[assignment]
-                viewer.num_images = int(saved["num_images"])  # type: ignore[arg-type]
-                viewer.image_height = int(saved["image_height"])  # type: ignore[arg-type]
-                viewer.image_width = int(saved["image_width"])  # type: ignore[arg-type]
-                viewer.small_jump = int(saved["small_jump"])  # type: ignore[arg-type]
-                viewer.large_jump = int(saved["large_jump"])  # type: ignore[arg-type]
-
-            viewer.overlay_data = saved["overlay_data"]  # type: ignore[assignment]
-            viewer.active_layers = set(saved["active_layers"])  # type: ignore[arg-type]
-            viewer.active_layers.discard(LayerType.SEGMENTATIONS)
-            viewer.segmentation_overlay_color = saved["segmentation_overlay_color"]  # type: ignore[assignment]
-            viewer.segmentation_overlay_alpha = saved["segmentation_overlay_alpha"]  # type: ignore[assignment]
-            if self._ds is not None:
-                if restore_dicom_wl or not keep_applied_frames:
-                    wl, ww = self._dicom_wl_ww()
-                else:
-                    wl, ww = face_review_wl_ww(self._ds)
-                viewer.set_wlww_sync(wl, ww)
-
-            saved_index = int(saved["current_image_index"])
-            if keep_applied_frames and not self.single_frame:
-                restore_index = min(saved_index + 3, viewer.num_images - 1)
-            else:
-                restore_index = min(saved_index, viewer.num_images - 1)
-            viewer.clear_cache()
-            viewer.current_image_index = restore_index
-        self._blur_review_saved = None
-        self._blur_preview = None
-        self._apply_initial_viewer_display()
-        self._log_series_memory("blur_review_teardown_done", array=self._frames)
-        self._refresh_model_aware_toolbar_buttons()
-        self._refresh_series_processing_status()
-        self._flush_pending_rebuild_ui()
-
-    def _show_blur_review(self, preview: FaceBlurPreviewResult) -> None:
-        if self._frames is None or self._ds is None:
-            return
-
-        self._blur_preview = preview
-        self._log_series_memory("blur_review_show", array=preview.blurred_slice_frames)
-        viewer = self.image_viewer
-        if viewer.playing:
-            viewer.toggle_play()
-
-        slice_stack = self._slice_stack()
-        blurred_frames = preview.blurred_slice_frames
-        if blurred_frames is None:
-            if preview.hu_after is None:
-                return
-            blurred_frames = hu_stack_to_viewer_frames(
-                preview.hu_after,
-                preview.slice_paths,
-                reference_ds=self._ds,
-                frame_dtype=slice_stack.dtype,
-            )
-
-        self._blur_review_saved = {
-            "images": viewer.images,
-            "num_images": viewer.num_images,
-            "image_height": viewer.image_height,
-            "image_width": viewer.image_width,
-            "small_jump": viewer.small_jump,
-            "large_jump": viewer.large_jump,
-            "overlay_data": viewer.overlay_data.copy(),
-            "active_layers": viewer.active_layers.copy(),
-            "segmentation_overlay_color": viewer.segmentation_overlay_color,
-            "segmentation_overlay_alpha": viewer.segmentation_overlay_alpha,
-            "current_image_index": viewer.current_image_index,
-        }
-
-        viewer._resize_to_viewport_enabled = False
-        viewer.clear_cache()
-        viewer.current_image_index = 0
-        viewer.images = slice_stack.copy()
-        viewer.num_images = slice_stack.shape[0]
-        viewer.image_height = slice_stack.shape[1]
-        viewer.image_width = slice_stack.shape[2]
-        viewer.small_jump = max(1, int(viewer.num_images * viewer.SMALL_JUMP_PERCENTAGE))
-        viewer.large_jump = max(1, int(viewer.num_images * viewer.LARGE_JUMP_PERCENTAGE))
-        viewer.overlay_data.clear()
-        viewer.active_layers.discard(LayerType.TEXT)
-        viewer.active_layers.discard(LayerType.USER_RECT)
-        viewer.active_layers.add(LayerType.SEGMENTATIONS)
-        viewer.segmentation_overlay_color = FACE_MASK_OVERLAY_COLOR
-        viewer.segmentation_overlay_alpha = FACE_MASK_OVERLAY_ALPHA
-
-        segmentations_by_slice: dict[int, list] = {}
-        for slice_index in range(preview.mask.shape[0]):
-            segmentations = mask_slice_segmentations(preview.mask, slice_index)
-            if segmentations:
-                segmentations_by_slice[slice_index] = segmentations
-        viewer.set_segmentation_overlays(segmentations_by_slice)
-
-        review_wl, review_ww = face_review_wl_ww(self._ds)
-        viewer.attach_companion_stack(
-            blurred_frames,
-            primary_label=_("Current — face region (green)"),
-            companion_label=_("Proposed face blur"),
-        )
-        viewer.set_wlww_sync(review_wl, review_ww)
-        self._apply_viewer_display_sizing()
-
-        qa_summary = format_face_blur_qa_summary(
-            preview.qa_stats,
-            sigma_mm=preview.sigma_mm,
-            slice_count=preview.slice_count,
-            blur_mode=preview.blur_mode,
-        )
-        self.update_status(
-            qa_summary
-            + " "
-            + _("Review side-by-side, then Save Pixel Changes to keep.")
-            + " "
-            + _("This change is permanent once saved.")
-        )
-        self.save_button.configure(state="normal")
-        self._refresh_blur_face_ui()
-
-    def _blur_worker(self, blur_mode, volume_context: SeriesVolumeContext) -> None:
-        def on_progress(progress) -> None:
-            self._blur_worker_queue.put(("progress", progress))
-
-        try:
-            preview = preview_face_blur(
-                self._series_path,
-                progress=on_progress,
-                volume_context=volume_context,
-                blur_mode=blur_mode,
-            )
-            self._blur_worker_queue.put(("done", preview))
-        except Exception as exc:
-            logger.exception("Face blur preview worker failed for %s", self._series_path)
-            self._blur_worker_queue.put(("error", exc))
-
-    def _launch_blur_worker(self, blur_mode: FaceBlurMode) -> None:
-        """Start the blur worker after UI lockout has settled on the main thread."""
-        if not self._blur_running or not self.winfo_exists():
-            return
-        if self._frames is None or self._ds is None:
-            self._blur_running = False
-            self._set_series_interaction_enabled(True)
-            return
-
-        geometry = self._ensure_series_geometry()
-        volume_context = SeriesVolumeContext(
-            reference_ds=copy.deepcopy(self._ds),
-            slice_frames=self._slice_stack().copy(),
-            slice_paths=self._slice_paths,
-            slice_spacing_mm=geometry.slice_spacing_mm if geometry is not None else None,
-        )
-        threading.Thread(
-            target=self._blur_worker,
-            args=(blur_mode, volume_context),
-            name="BlurFacePreviewWorker",
-            daemon=True,
-        ).start()
-        self._blur_poll_after_id = self.after(self.BLUR_POLL_MS, self._poll_blur_worker)
-
-    def _complete_blur_review(self, preview: FaceBlurPreviewResult) -> None:
-        """Show blur review on an idle tick, avoiding CTk churn during poll callbacks."""
-        self._blur_review_after_id = None
-        if not self.winfo_exists() or not self._blur_running:
-            return
-        if self._ui_rebuilding:
-            self._blur_review_after_id = self.after_idle(
-                lambda p=preview: self._complete_blur_review(p)
-            )
-            return
-
-        try:
-            self._show_blur_review(preview)
-        finally:
-            self._blur_running = False
-            self._set_series_interaction_enabled(True)
-            self._refresh_blur_face_ui()
-            self._flush_pending_rebuild_ui()
-
-    def _poll_blur_worker(self) -> None:
-        if not self.winfo_exists():
-            return
-
-        while True:
-            try:
-                kind, payload = self._blur_worker_queue.get_nowait()
-            except queue.Empty:
-                break
-
-            if kind == "progress":
-                if self._blur_running:
-                    self.update_status(format_face_blur_progress_status(payload))
-            elif kind == "done":
-                if not self._blur_running:
-                    continue
-                preview = payload
-                if preview.error is not None:
-                    self._blur_running = False
-                    messagebox.showerror(
-                        title=_("Blur Face"),
-                        message=preview.error,
-                        parent=self,
-                    )
-                    self.update_status(_("Could not blur facial features"))
-                    self._set_series_interaction_enabled(True)
-                    self._refresh_blur_face_ui()
-                    self._flush_pending_rebuild_ui()
-                    return
-                self._stop_blur_review_deferred()
-                self._blur_review_after_id = self.after_idle(
-                    lambda p=preview: self._complete_blur_review(p)
-                )
-                return
-            elif kind == "error":
-                if not self._blur_running:
-                    continue
-                self._blur_running = False
-                messagebox.showerror(
-                    title=_("Blur Face"),
-                    message=str(payload),
-                    parent=self,
-                )
-                self.update_status(_("Could not blur facial features"))
-                self._set_series_interaction_enabled(True)
-                self._refresh_blur_face_ui()
-                self._flush_pending_rebuild_ui()
-                return
-
-        if not self.winfo_exists():
-            return
-        self._blur_poll_after_id = self.after(self.BLUR_POLL_MS, self._poll_blur_worker)
-
-    def _apply_face_blur_preview(self, preview: FaceBlurPreviewResult) -> None:
-        """Merge accepted blur preview into in-memory frames (viewer rebuilt after save)."""
-        if self._frames is None:
-            return
-        self._frames = apply_face_blur_preview_to_series_frames(
-            self._frames,
-            preview,
-            single_frame=self.single_frame,
-            reference_ds=self._ds,
-            frame_dtype=self._slice_stack().dtype,
-        )
-        if not self.single_frame:
-            self.regenerate_series_projections()
-        self._face_blur_preview_pending = True
 
     def blur_face_button_clicked(self) -> None:
         anon_uid = self._anon_series_uid()
@@ -1619,7 +1319,7 @@ class SeriesView(tk.Toplevel):
                 parent=self,
             )
             return
-        if not self._series_interaction_allowed() or self._blur_running or self._blur_face_button_state() != "normal":
+        if not self._series_interaction_allowed() or self._blur_face_toolbar_state() != "normal":
             return
 
         eligibility = self._face_blur_eligibility()
@@ -1640,38 +1340,26 @@ class SeriesView(tk.Toplevel):
             )
             return
 
+        blur_mode = self._selected_face_blur_mode()
+        index_parent = find_phi_index_parent(self) or self._parent
+
         logger.info(
-            "Series View: blur face starting for %s (gate=%s)",
+            "Series View: opening face blur review for %s (gate=%s)",
             self._series_path,
             eligibility.reason.name,
         )
-        self._blur_running = True
-        self._blur_worker_queue = queue.Queue()
-        blur_mode = self._selected_face_blur_mode()
-        self.update_status(_("Preparing face blur preview") + "…")
-        self._set_series_interaction_enabled(False)
-        self.after_idle(lambda: self._launch_blur_worker(blur_mode))
+        self._on_cancel()
+        show_face_blur_review_dialog(
+            index_parent,
+            anon_model=self._anon_model,
+            series_path=self._series_path,
+            blur_mode=blur_mode,
+        )
 
     def save_series_button_clicked(self):
         if self._frames is None or self._ds is None:
             logger.error("CRITICAL: No frames or dataset to save")
             return
-
-        preview = self._blur_preview
-        had_blur_review = preview is not None and preview.error is None
-        if had_blur_review:
-            if hasattr(self, "image_viewer"):
-                with contextlib.suppress(tk.TclError):
-                    self.image_viewer.detach_companion_stack()
-            self._apply_face_blur_preview(preview)
-            logger.info(
-                "Series View: face blur applied on save for %s (slices=%d, qa=%s)",
-                self._series_path,
-                preview.slice_count,
-                "PASS"
-                if preview.qa_stats is None or preview.qa_stats.outside_clean
-                else "FAIL",
-            )
 
         # Save Whitelist:
         whitelist_set = self.get_whitelist_set()
@@ -1693,13 +1381,6 @@ class SeriesView(tk.Toplevel):
 
         if save_series_frames(self._series_path, self._frames if self.single_frame else self._frames[3:], self._ds):
             logger.info(f"Saved series frames to {self._series_path}")
-            self._face_blur_preview_pending = False
-            if had_blur_review and preview is not None:
-                apply_series_face_blur_metadata(
-                    self._anon_model,
-                    str(self._ds.SeriesInstanceUID),
-                    preview.blur_mode.value,
-                )
             if hasattr(self, "image_viewer"):
                 texts_by_frame = collect_series_view_pixel_phi_texts(self.image_viewer)
                 if texts_by_frame:
@@ -1709,14 +1390,9 @@ class SeriesView(tk.Toplevel):
                         self._slice_paths,
                         texts_by_frame,
                         projection_frame_count=projection_count,
+                        anon_series_uid=str(self._ds.SeriesInstanceUID),
                     )
-            if had_blur_review:
-                self._teardown_blur_review(keep_applied_frames=True, restore_dicom_wl=True)
-                self.save_button.configure(state="disabled")
-                self._face_blur_eligibility_cache = None
-                self._face_blur_eligibility_geometry = None
-            else:
-                self.save_button.configure(state="disabled")
+            self.save_button.configure(state="disabled")
             self._refresh_series_processing_status()
             self.update_status(_("Changes saved"))
         else:
@@ -1780,49 +1456,34 @@ class SeriesView(tk.Toplevel):
         return self._log_series_memory(f"close_{stage}", array=self._frames)
 
     def _log_series_data_size(self) -> None:
-        total_bytes = 0
-        parts: list[str] = []
-        if self._frames is not None:
-            total_bytes += self._frames.nbytes
-            parts.append(f"_frames={self._frames.nbytes / (1024 * 1024):.1f}MB")
-        preview = self._blur_preview
-        if preview is not None:
-            if preview.blurred_slice_frames is not None:
-                total_bytes += preview.blurred_slice_frames.nbytes
-                parts.append(f"blurred={preview.blurred_slice_frames.nbytes / (1024 * 1024):.1f}MB")
-            total_bytes += preview.mask.nbytes
-            parts.append(f"mask={preview.mask.nbytes / (1024 * 1024):.1f}MB")
-        if self._blur_review_saved is not None:
-            saved_images = self._blur_review_saved.get("images")
-            if isinstance(saved_images, np.ndarray):
-                total_bytes += saved_images.nbytes
-                parts.append(f"review_saved={saved_images.nbytes / (1024 * 1024):.1f}MB")
-        if total_bytes:
-            logger.info(
-                "SeriesView releasing %.1f MB of in-memory frame data (%s)",
-                total_bytes / (1024 * 1024),
-                ", ".join(parts),
-            )
+        if self._frames is None:
+            return
+        logger.info(
+            "SeriesView releasing %.1f MB of in-memory frame data (_frames=%.1fMB)",
+            self._frames.nbytes / (1024 * 1024),
+            self._frames.nbytes / (1024 * 1024),
+        )
 
     @staticmethod
-    def _drain_blur_worker_queue(worker_queue: queue.Queue[tuple[str, object]] | None = None) -> None:
-        if worker_queue is None:
-            return
-        while True:
-            try:
-                worker_queue.get_nowait()
-            except queue.Empty:
-                return
+    def _schedule_post_close_gc(parent: tk.Misc, rss_before: float | None) -> None:
+        """Run GC on the next idle tick so Tk finishes teardown first (avoids Tk 9 bus errors)."""
 
-    def _release_blur_review_state(self) -> None:
-        """Drop blur-review references without restoring viewer layout (used on window close)."""
-        self._blur_review_saved = None
-        self._blur_preview = None
-        if hasattr(self, "_blur_worker_queue"):
-            self._drain_blur_worker_queue(self._blur_worker_queue)
-        if hasattr(self, "image_viewer"):
-            with contextlib.suppress(tk.TclError):
-                self.image_viewer.detach_companion_stack()
+        def _run() -> None:
+            gc.collect()
+            gc.collect()
+            if rss_before is None:
+                return
+            rss_after = log_process_memory("series_view_close_after")
+            if rss_after is not None:
+                logger.info(
+                    "SeriesView close memory delta: %.1f MB (before %.1f MB, after %.1f MB)",
+                    rss_before - rss_after,
+                    rss_before,
+                    rss_after,
+                )
+
+        with contextlib.suppress(tk.TclError):
+            parent.after_idle(_run)
 
     def _release_image_viewer(
         self,
@@ -1845,29 +1506,18 @@ class SeriesView(tk.Toplevel):
             self._release_image_viewer(self.image_viewer)
 
     def _release_series_data(self) -> None:
-        self._blur_preview = None
-        self._blur_review_saved = None
         self._frames = None
         self._slice_paths = ()
         self._ds = None
         self._series_geometry = None
         self.detected_text.clear()
 
-    def _release_ocr_reader(self) -> None:
-        if self._ocr_reader is None:
-            return
-        del self._ocr_reader
-        self._ocr_reader = None
-        if torch.backends.mps.is_available():
-            torch.mps.empty_cache()
-        elif torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
     def _on_cancel(self):
         logger.info("_on_cancel")
-        self._blur_running = False
-        self._stop_blur_worker_poll()
-        self._stop_blur_review_deferred()
+        if getattr(self, "_closing", False):
+            return
+        self._closing = True
+        mark_ctk_window_destroyed(self)
         self._stop_rebuild_ui()
         if self._loading:
             self._loading = False
@@ -1880,23 +1530,12 @@ class SeriesView(tk.Toplevel):
         rss_before = self._log_close_memory("before")
         self._log_series_data_size()
 
-        self._release_blur_review_state()
         self._release_all_viewer_resources()
         self._release_series_data()
-        self._release_ocr_reader()
 
         with contextlib.suppress(tk.TclError):
             self.grab_release()
 
+        parent = self._parent
         self.destroy()
-        gc.collect()
-        gc.collect()
-
-        rss_after = self._log_close_memory("after")
-        if rss_before is not None and rss_after is not None:
-            logger.info(
-                "SeriesView close memory delta: %.1f MB (before %.1f MB, after %.1f MB)",
-                rss_before - rss_after,
-                rss_before,
-                rss_after,
-            )
+        self._schedule_post_close_gc(parent, rss_before)

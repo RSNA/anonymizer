@@ -1090,9 +1090,6 @@ msgstr "Cuarentena"
 msgid "Metadata Queue"
 msgstr "Cola de metadatos"
 
-msgid "Pixel PHI Queue"
-msgstr "Cola de PHI de Píxeles"
-
 msgid "online"
 msgstr "en línea"
 

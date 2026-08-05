@@ -109,6 +109,7 @@ def _load_resnet9(weights_path: Path, num_classes: int, device: torch.device) ->
     model.eval()
     return model
 
+
 def falcon_models_available() -> bool:
     return all((FALCON_MODEL_DIR / filename).is_file() for filename in FALCON_MODEL_FILES.values())
 
@@ -158,5 +159,3 @@ def load_falcon_models(device: torch.device) -> tuple[ResNet9, ResNet9, ResNet9,
     ab_model = _load_resnet9(paths["abdomen"], 1, device)
 
     return part_model, hn_model, ch_model, ab_model
-
-

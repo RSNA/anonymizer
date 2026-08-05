@@ -106,7 +106,7 @@ def test_harmonize_reports_geometry_progress(
 
     geometry_messages = [message for stage, message in progress_events if stage == "geometry"]
     assert len(geometry_messages) == 1
-    assert geometry_messages[0].startswith("Geometry analysis: axial · volume_3d · TS ok")
+    assert geometry_messages[0].startswith("Geometry analysis: Axial · Diagnostic 3D volume · TS ok")
 
 
 @pytest.mark.usefixtures("synthetic_ct_asset_dirs")
@@ -138,7 +138,9 @@ def test_harmonize_skips_tseg_for_scout_localizer(
     assert merged.playbook.body_part_code == "Ch"
     assert merged.playbook.series_type_code == "Localizer"
     tseg_messages = [message for stage, message in progress_events if stage == "tseg"]
-    assert any("Localizer and scout series are not suitable for anatomy analysis" in message for message in tseg_messages)
+    assert any(
+        "Localizer and scout series are not suitable for anatomy analysis" in message for message in tseg_messages
+    )
 
 
 @pytest.mark.usefixtures("synthetic_ct_asset_dirs")
@@ -287,22 +289,20 @@ def test_harmonize_analysis_section_renders_playbook_attributes() -> None:
         method="dicom_headers",
         notes="",
     )
-    rows = harmonize_analysis_rows(attributes, geometry=geometry)
+    rows = harmonize_analysis_rows(attributes, geometry=geometry, tseg=tseg)
     text = "\n".join(" | ".join(row) for row in rows)
     assert rows[0][1] == "Brain"
-    assert "[Brain]" not in text  # code is separate column now
+    assert "[Brain]" not in text
     assert "Brain" in text
     assert "Ax" in text
     assert "WO" in text
-    assert "region voxel fraction" in text
-    assert "5.0°" in text and "from" in text
-    assert "classifier confidence" not in text
-    assert "confidence" in text
-    assert "DICOM ImageOrientationPatient" in text
+    assert "Head (dominant: Head)" in text
+    assert "Axial · Diagnostic 3D volume · TS ok" in text
+    assert "native ·" in text and "confidence" in text
     assert "TotalSegmentator anatomy" in text
     assert "TotalSegmentator contrast" in text
+    assert "DICOM ImageOrientationPatient" in text
     assert "FALCON" not in text
-    assert "DICOM geometry" not in text
 
 
 def test_harmonize_dicom_table_includes_all_relevant_fields() -> None:

@@ -13,6 +13,8 @@ from src.anonymizer.utils.storage import (
     count_studies_series_images,
     count_study_images,
     get_dcm_files,
+    is_hidden_path,
+    list_import_directory_files,
     read_java_anonymizer_index_xlsx,
 )
 from tests.controller.paths import JAVA_GENERATED_INDEX
@@ -325,3 +327,21 @@ def test_no_active_sheet():
         # Verify the function raises ValueError
         with pytest.raises(ValueError, match="No active sheet found in the workbook"):
             read_java_anonymizer_index_xlsx("fake_filename.xlsx")
+
+
+def test_list_import_directory_files_skips_hidden_files_and_directories(temp_dir: str) -> None:
+    visible_dir = os.path.join(temp_dir, "study", "series")
+    hidden_dir = os.path.join(temp_dir, "study", ".hidden_series")
+    os.makedirs(visible_dir)
+    os.makedirs(hidden_dir)
+
+    visible_file = os.path.join(visible_dir, "instance.dcm")
+    hidden_file = os.path.join(visible_dir, ".hidden.dcm")
+    nested_hidden_file = os.path.join(hidden_dir, "instance.dcm")
+    for path in (visible_file, hidden_file, nested_hidden_file):
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("x")
+
+    assert list_import_directory_files(temp_dir) == [visible_file]
+    assert is_hidden_path(os.path.join(temp_dir, "study", ".hidden_series", "instance.dcm"))
+    assert not is_hidden_path(visible_file)

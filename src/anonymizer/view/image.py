@@ -12,6 +12,7 @@ from PIL import Image, ImageTk
 from anonymizer.controller.create_projections import apply_windowing
 from anonymizer.controller.remove_pixel_phi import LayerType, OCRText, OverlayData, Segmentation, UserRectangle
 from anonymizer.utils.translate import _
+from anonymizer.view.ctk_safe import dispose_photo_image
 from anonymizer.view.histogram import Histogram
 
 logger = logging.getLogger(__name__)
@@ -79,7 +80,7 @@ class ImageViewer(ctk.CTkFrame):
         self._companion_label: tk.Label | None = None
         self._interaction_enabled = True
         self._suppress_callbacks = False
-        self._resize_to_viewport_enabled = True
+        self._resize_to_viewport_enabled = False
 
         # Determine image properties from the last frame
         last_frame = images[-1]
@@ -262,7 +263,6 @@ class ImageViewer(ctk.CTkFrame):
         if self.control_frame is not None:
             self.control_frame.bind("<Enter>", self.mouse_enter)
 
-        self.after_idle(self._set_initial_size)
         self.update_status()
 
     def _interaction_allowed(self) -> bool:
@@ -324,9 +324,7 @@ class ImageViewer(ctk.CTkFrame):
     ) -> None:
         """Show a second image stack beside the primary canvas; existing controls drive both."""
         if images.shape[0] != self.num_images:
-            raise ValueError(
-                f"Companion stack length {images.shape[0]} does not match primary stack {self.num_images}"
-            )
+            raise ValueError(f"Companion stack length {images.shape[0]} does not match primary stack {self.num_images}")
 
         with contextlib.suppress(tk.TclError):
             self.update_idletasks()
@@ -360,14 +358,25 @@ class ImageViewer(ctk.CTkFrame):
         scroll_row = canvas_row + 1
         if self.num_images > 1:
             self.scrollbar.grid(row=scroll_row, column=0, columnspan=2, sticky="ew")
+        self._set_data_panel_visible(False)
+
+    def _set_data_panel_visible(self, visible: bool) -> None:
+        """Show or hide histogram and playback chrome (dual-pane blur review uses side-by-side canvases only)."""
+        if self.data_frame is None:
+            return
+        with contextlib.suppress(tk.TclError):
+            if visible:
+                self.data_frame.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="ns")
+                self.grid_columnconfigure(0, weight=1)
+            else:
+                if self.playing:
+                    self._stop_playback()
+                self.data_frame.grid_remove()
+                self.grid_columnconfigure(0, weight=1)
 
     def detach_companion_stack(self) -> None:
         """Remove the companion stack and restore the single-stack layout."""
-        if (
-            self.companion_canvas is None
-            and self._primary_label is None
-            and self._companion_label is None
-        ):
+        if self.companion_canvas is None and self._primary_label is None and self._companion_label is None:
             return
 
         with contextlib.suppress(tk.TclError):
@@ -397,6 +406,7 @@ class ImageViewer(ctk.CTkFrame):
         self.canvas.grid(row=0, column=0, sticky="nsew", padx=0)
         if self.num_images > 1:
             self.scrollbar.grid(row=1, column=0, sticky="ew")
+        self._set_data_panel_visible(True)
 
     def _load_companion_display(self, frame_ndx: int) -> None:
         if self._companion_images is None or self.companion_canvas is None:
@@ -425,17 +435,25 @@ class ImageViewer(ctk.CTkFrame):
         self.companion_canvas.image = photo_image  # type: ignore[attr-defined]
         if self.companion_canvas_image_item:
             self.companion_canvas.delete(self.companion_canvas_image_item)
-        self.companion_canvas_image_item = self.companion_canvas.create_image(
-            0, 0, anchor="nw", image=photo_image
-        )
+        self.companion_canvas_image_item = self.companion_canvas.create_image(0, 0, anchor="nw", image=photo_image)
         self._companion_cache[frame_ndx] = (photo_image, self.current_size)
         self._manage_companion_cache()
+
+    def update_companion_stack(self, images: np.ndarray) -> None:
+        """Replace companion pixel data without rebuilding the dual-pane layout."""
+        if not self.companion_attached:
+            raise ValueError("Companion stack is not attached")
+        if images.shape[0] != self.num_images:
+            raise ValueError(f"Companion stack length {images.shape[0]} does not match primary stack {self.num_images}")
+        self._companion_images = images
+        self._companion_cache.clear()
+        self._load_companion_display(self.current_image_index)
 
     def _remove_from_companion_cache(self, index: int) -> None:
         if index not in self._companion_cache:
             return
         photo_image, _ = self._companion_cache.pop(index)
-        del photo_image
+        dispose_photo_image(self, photo_image)
 
     def _manage_companion_cache(self) -> None:
         while len(self._companion_cache) > self.CACHE_SIZE:
@@ -544,11 +562,43 @@ class ImageViewer(ctk.CTkFrame):
                 max_height = max(1, max_height - scroll_height)
         return max_width, max_height
 
+    def _viewport_max_dimensions(self) -> tuple[int, int]:
+        """Return the max (width, height) available for one image canvas."""
+        self.update_idletasks()
+        frame_w = max(self.image_frame.winfo_width(), 1)
+        frame_h = max(self.image_frame.winfo_height(), 1)
+        if frame_w <= 1 or frame_h <= 1:
+            return 1, 1
+        scroll_h = self.scrollbar.winfo_height() if self.num_images > 1 and hasattr(self, "scrollbar") else 0
+        label_h = 0
+        if self._primary_label is not None and self._primary_label.winfo_ismapped():
+            label_h = self._primary_label.winfo_height() + 4
+        usable_h = max(1, frame_h - scroll_h - label_h)
+        if self.companion_attached:
+            col_w = max(1, (frame_w - 8) // 2)
+            return col_w, usable_h
+        return frame_w, usable_h
+
+    def _viewport_fits_native(self, max_width: int, max_height: int) -> bool:
+        """True when the viewport can show native resolution (allowing minor grid width rounding)."""
+        return max_height >= self.image_height and max_width >= self.image_width - 2
+
+    def _snap_to_native_if_grid_rounding(
+        self,
+        max_width: int,
+        max_height: int,
+        scaled_size: tuple[int, int],
+    ) -> tuple[int, int]:
+        """Use native pixels when layout rounding would otherwise undershoot native width."""
+        if scaled_size[0] < self.image_width and self._viewport_fits_native(max_width, max_height):
+            return self.image_width, self.image_height
+        return scaled_size
+
     def _set_initial_size(self) -> None:
         """Calculates and sets the initial image size based on screen size."""
         max_width, max_height = self._screen_canvas_budget()
 
-        self.current_size = self._calculate_scaled_size(max_width, max_height)
+        self.current_size = self._calculate_scaled_size(max_width, max_height, allow_upscale=False)
         self.canvas.config(width=self.current_size[0], height=self.current_size[1])
         if self.companion_canvas is not None:
             self.companion_canvas.config(width=self.current_size[0], height=self.current_size[1])
@@ -561,21 +611,24 @@ class ImageViewer(ctk.CTkFrame):
             self.canvas.focus_set()
 
     def _apply_viewport_size(self) -> None:
-        """Resize the displayed image to match the primary canvas viewport (V18 behavior)."""
-        canvas_width = self.canvas.winfo_width()
-        canvas_height = self.canvas.winfo_height()
-        if canvas_width <= 1 or canvas_height <= 1:
+        """Scale display to the available viewport while preserving aspect ratio."""
+        max_width, max_height = self._viewport_max_dimensions()
+        if max_width <= 1 or max_height <= 1:
             return
-        native = (self.image_width, self.image_height)
-        if self.current_size == native and canvas_height >= native[1] and canvas_width >= native[0] - 2:
-            # Keep View == Actual at startup; ignore minor grid rounding (e.g. 510 vs 512 px wide).
+        new_image_size = self._snap_to_native_if_grid_rounding(
+            max_width,
+            max_height,
+            self._calculate_scaled_size(max_width, max_height),
+        )
+        if new_image_size == self.current_size and self.canvas_image_item is not None:
             return
-        new_image_size = (canvas_width, canvas_height)
-        if new_image_size != self.current_size:
-            self.current_size = new_image_size
-            self._companion_cache.clear()
-            self.load_and_display_image(self.current_image_index)
-            self.update_status()
+        self.current_size = new_image_size
+        self.canvas.config(width=new_image_size[0], height=new_image_size[1])
+        if self.companion_canvas is not None:
+            self.companion_canvas.config(width=new_image_size[0], height=new_image_size[1])
+        self._companion_cache.clear()
+        self.load_and_display_image(self.current_image_index)
+        self.update_status()
 
     def sync_viewport_after_layout(self) -> None:
         """Match rendered image size to canvas viewport after grid layout settles."""
@@ -583,19 +636,25 @@ class ImageViewer(ctk.CTkFrame):
         self._apply_viewport_size()
         self.after_idle(self._apply_viewport_size)
 
-    def _calculate_scaled_size(self, max_width: int, max_height: int) -> tuple[int, int]:
-        """Calculates the scaled size, preserving aspect ratio."""
-        aspect_ratio = self.image_width / self.image_height
-        if self.image_width > max_width or self.image_height > max_height:
-            if self.image_width / max_width > self.image_height / max_height:
-                new_width = max_width
-                new_height = int(new_width / aspect_ratio)
-            else:
-                new_height = max_height
-                new_width = int(new_height * aspect_ratio)
-            return new_width, new_height
-        else:
+    def _calculate_scaled_size(
+        self,
+        max_width: int,
+        max_height: int,
+        *,
+        allow_upscale: bool = True,
+    ) -> tuple[int, int]:
+        """Calculates the scaled size to fit within max dimensions, preserving aspect ratio."""
+        if not allow_upscale and self.image_width <= max_width and self.image_height <= max_height:
             return self.image_width, self.image_height
+
+        aspect_ratio = self.image_width / self.image_height
+        if self.image_width / max_width > self.image_height / max_height:
+            new_width = max_width
+            new_height = int(new_width / aspect_ratio)
+        else:
+            new_height = max_height
+            new_width = int(new_height * aspect_ratio)
+        return new_width, new_height
 
     def toggle_layer(self, layer_name: LayerType, is_active: bool):
         if is_active:
@@ -627,7 +686,9 @@ class ImageViewer(ctk.CTkFrame):
 
     def get_dimensions_text(self) -> str:
         # View = on-screen pixel dimensions (current_size); Actual = native DICOM frame size.
-        return f"View[{self.current_size[0]}x{self.current_size[1]}] Actual[{self.images.shape[2]}x{self.images.shape[1]}]"
+        return (
+            f"View[{self.current_size[0]}x{self.current_size[1]}] Actual[{self.images.shape[2]}x{self.images.shape[1]}]"
+        )
 
     def update_status(self):
         if self.projection_label is not None:
@@ -730,11 +791,7 @@ class ImageViewer(ctk.CTkFrame):
                 if self.canvas_image_item:
                     self.canvas.delete(self.canvas_image_item)
                 self.canvas_image_item = self.canvas.create_image(0, 0, anchor="nw", image=self.photo_image)
-                if (
-                    self.current_image_index != frame_ndx
-                    and self.histogram is not None
-                    and not self.companion_attached
-                ):
+                if self.current_image_index != frame_ndx and self.histogram is not None and not self.companion_attached:
                     self.histogram.update_image(self.images[frame_ndx])
                 self.current_image_index = frame_ndx
                 self._load_companion_display(frame_ndx)
@@ -745,11 +802,7 @@ class ImageViewer(ctk.CTkFrame):
         image_array = self.images[frame_ndx].copy()
 
         # Update Histogram Data if frame change (skip during companion scroll review):
-        if (
-            self.current_image_index != frame_ndx
-            and self.histogram is not None
-            and not self.companion_attached
-        ):
+        if self.current_image_index != frame_ndx and self.histogram is not None and not self.companion_attached:
             self.histogram.update_image(self.images[frame_ndx])
 
         # --- Apply Windowing/Leveling ---
@@ -793,8 +846,8 @@ class ImageViewer(ctk.CTkFrame):
         if index not in self.image_cache:
             logger.debug(f"index: {index} not in image_cache")
             return
-        # Get the PIL Image and close.
-        __, pil_image, __ = self.image_cache.pop(index)
+        photo_image, pil_image, __ = self.image_cache.pop(index)
+        dispose_photo_image(self, photo_image)
         if hasattr(pil_image, "close"):
             pil_image.close()
 
@@ -805,11 +858,11 @@ class ImageViewer(ctk.CTkFrame):
             self.remove_from_cache(oldest_key)
 
     def clear_cache(self):
-        """Clear cached PhotoImage / PIL entries (no forced GC)."""
-        for __, (photo_image, pil_image, *__) in self.image_cache.items():
+        """Clear cached PhotoImage / PIL entries on the main thread."""
+        for __, (photo_image, pil_image, *__) in list(self.image_cache.items()):
+            dispose_photo_image(self, photo_image)
             if hasattr(pil_image, "close"):
                 pil_image.close()
-            del photo_image
 
         self.image_cache.clear()
         for index in list(self._companion_cache):
@@ -824,6 +877,7 @@ class ImageViewer(ctk.CTkFrame):
         self.playing = False
         self.detach_companion_stack()
         self.clear_cache()
+        dispose_photo_image(self, self.photo_image)
         with contextlib.suppress(tk.TclError, AttributeError):
             if self.canvas_image_item is not None:
                 self.canvas.delete(self.canvas_image_item)
@@ -867,11 +921,7 @@ class ImageViewer(ctk.CTkFrame):
         if 0 <= new_index < self.num_images:
             previous_index = self.current_image_index
             self.load_and_display_image(new_index)
-            if (
-                not self._suppress_callbacks
-                and self.on_slice_index_changed is not None
-                and new_index != previous_index
-            ):
+            if not self._suppress_callbacks and self.on_slice_index_changed is not None and new_index != previous_index:
                 self.on_slice_index_changed(new_index)
 
     def change_image_home(self, event):
