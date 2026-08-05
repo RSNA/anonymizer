@@ -26,3 +26,10 @@ jobs:
 
     - name: Ruff Linting Check
       run: uv run ruff check ./src/anonymizer/
+
+    - name: Run Unit Tests
+      env:
+        PYTHONPATH: ${{ github.workspace }}/src
+        AWS_USERNAME: ${{ secrets.AWS_USERNAME }}
+        AWS_PASSWORD: ${{ secrets.AWS_PASSWORD }}
+      run: uv run pytest tests/controller --ignore=tests/controller/tseg
