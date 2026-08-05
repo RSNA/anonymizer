@@ -33,25 +33,46 @@ python -m tkinter
 Si python + tkinter se han instalado correctamente, se abrirá una pequeña ventana GUI
 ## Instalar el paquete rsna-anonymizer desde PyPI
 
+Use [uv](https://docs.astral.sh/uv/) para las instalaciones. Es mucho más rápido que `pip` solo, sobre todo para V19, que descarga dependencias ML grandes (PyTorch, TotalSegmentator, etc.).
+
+### Una vez: instalar uv
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Windows (PowerShell): `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+
+Reinicie la terminal si no encuentra `uv`.
+
+### Crear un entorno virtual
+
+```bash
+uv venv rsna-anonymizer --python 3.12
+source rsna-anonymizer/bin/activate    # Windows: rsna-anonymizer\Scripts\activate
+```
+
+### Instalar el paquete
+
 Estable (V18):
 
 ```bash
-pip install rsna-anonymizer
+uv pip install rsna-anonymizer
 ```
 
 Versión preliminar de desarrollo V19 (requiere `--pre`; no reemplaza la instalación estable anterior):
 
 ```bash
-pip install --pre rsna-anonymizer
+uv pip install --pre rsna-anonymizer
 ```
 
 Fijar una versión dev concreta:
 
 ```bash
-pip install --pre rsna-anonymizer==19.0.0.dev2
+uv pip install --pre rsna-anonymizer==19.0.0.dev2
 ```
 
-Verificar: `pip show rsna-anonymizer` o `rsna-anonymizer --version`. Ver [CHANGELOG](CHANGELOG.md#1900dev2).
+Verificar: `uv pip show rsna-anonymizer` o `rsna-anonymizer --version`. Ver [CHANGELOG](CHANGELOG.md#1900dev2).
 
 TotalSegmentator, XGBoost y dependencias relacionadas están incluidos. Active Harmonize, Face Blur y Remove Pixel PHI por proyecto en **Configuración → Proyecto**. Descargue modelos y aplique la licencia face desde el panel AI Features.
 ## Ejecución
@@ -61,16 +82,24 @@ Necesita proporcionar una ruta a una configuración de proyecto para ejecutar en
 `rsna-anonymizer -c ruta/a/ProjectModel.json`
 ## Actualización
 
+Active primero el entorno virtual (`source rsna-anonymizer/bin/activate`).
+
 Estable:
 
 ```bash
-pip install --upgrade rsna-anonymizer
+uv pip install --upgrade rsna-anonymizer
 ```
 
 V19 dev preliminar:
 
 ```bash
-pip install --upgrade --pre rsna-anonymizer
+uv pip install --upgrade --pre rsna-anonymizer
+```
+
+Fijar una versión dev concreta:
+
+```bash
+uv pip install --upgrade --pre rsna-anonymizer==19.0.0.dev2
 ```
 ## Documentación
 [Archivos de ayuda](https://mdevans.github.io/anonymizer/index.html)
