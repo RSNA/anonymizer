@@ -38,6 +38,8 @@ class WelcomeView(ctk.CTkFrame):
     TITLED_LOGO_WIDTH = 255
     TITLED_LOGO_HEIGHT = 155
     WELCOME_TEXT_WRAP_LENGTH = 650
+    WELCOME_WINDOW_WIDTH = WELCOME_TEXT_WRAP_LENGTH + PAD * 4 + 80
+    WELCOME_WINDOW_HEIGHT = 920
 
     def __init__(self, parent: ctk.CTk, change_language_callback, ai_features_callback):
         """
@@ -77,7 +79,6 @@ class WelcomeView(ctk.CTkFrame):
         self._logo_widget: ctk.CTkLabel | None = None
         self._logo_image: ctk.CTkImage | None = None
         self._create_widgets()
-        self.grid(row=0, column=0)
 
     def release_images(self) -> None:
         """Drop logo PhotoImage references on the main thread before destroy."""

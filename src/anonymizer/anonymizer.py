@@ -57,7 +57,6 @@ def _cli_help() -> str:
 
 class Anonymizer(ctk.CTk):
     THEME_FILE = "assets/themes/rsna_theme.json"
-    WELCOME_MIN_WIDTH = 720
 
     project_open_startup_dwell_time = 100  # milliseconds
     metrics_loop_interval = 1000  # milliseconds
@@ -106,6 +105,8 @@ class Anonymizer(ctk.CTk):
         self.dashboard: Dashboard | None = None
         self._shutting_down = False
         self._import_in_progress = False
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
         self.resizable(False, False)
         self.title(self.get_title())
         self.protocol("WM_DELETE_WINDOW", self.quit_app)
@@ -115,14 +116,29 @@ class Anonymizer(ctk.CTk):
         self.after(self.project_open_startup_dwell_time, self._open_project_startup)
 
     def _fit_welcome_window(self) -> None:
-        """Size the main window to welcome content (macOS Retina/Tk 9 can under-report height)."""
+        """Apply fixed welcome dimensions via CustomTkinter scaling (not winfo_req*).
+
+        On macOS Retina + Tk 9, winfo_req* is wrong before first paint and CTk's
+        Configure handler can shrink the window back if we only set geometry once.
+        """
+        width = WelcomeView.WELCOME_WINDOW_WIDTH
+        height = WelcomeView.WELCOME_WINDOW_HEIGHT
         self.update_idletasks()
-        width = max(self.winfo_reqwidth(), self.WELCOME_MIN_WIDTH)
-        height = self.winfo_reqheight()
-        if sys.platform == "darwin":
-            height = int(height * 1.08) + 8
-        self.geometry(f"{width}x{height}")
+        self._current_width = width
+        self._current_height = height
         self.minsize(width, height)
+        self.maxsize(width, height)
+        self.geometry(f"{width}x{height}")
+        self.resizable(False, False)
+
+    def _finalize_welcome_window(self) -> None:
+        """Re-apply welcome size after CTk finishes first layout pass."""
+        if not hasattr(self, "welcome_view") or not self.welcome_view.winfo_exists():
+            return
+        self._fit_welcome_window()
+        width = WelcomeView.WELCOME_WINDOW_WIDTH
+        height = WelcomeView.WELCOME_WINDOW_HEIGHT
+        self.maxsize(width, height)
 
     def _attach_welcome_view(self) -> None:
         self.welcome_view = WelcomeView(
@@ -130,7 +146,10 @@ class Anonymizer(ctk.CTk):
             self.change_language,
             self.show_ai_features_setup_dialog,
         )
-        self.after(0, self._fit_welcome_window)
+        self.welcome_view.grid(row=0, column=0, sticky="nsew")
+        for delay_ms in (0, 50, 200):
+            self.after(delay_ms, self._fit_welcome_window)
+        self.after(400, self._finalize_welcome_window)
 
     def _init_mono_font(self) -> ctk.CTkFont:
         # Monospace font defaults:
@@ -1349,6 +1368,12 @@ def main(config: Path | None = None):
     logger.info(f"Python Version: {sys.version_info.major}.{sys.version_info.minor}")
     logger.info(f"tkinter TkVersion: {tk.TkVersion} TclVersion: {tk.TclVersion}")
     logger.info(f"Customtkinter Version: {ctk.__version__}")
+    if sys.platform == "darwin":
+        logger.info(
+            "CustomTkinter scaling: widget=%s window=%s",
+            ctk.get_widget_scaling(),
+            ctk.get_window_scaling(),
+        )
     logger.info(f"pydicom Version: {pydicom_version}, pynetdicom Version: {pynetdicom_version}")
 
     # OCR models download on demand from AI Setup dialog.
