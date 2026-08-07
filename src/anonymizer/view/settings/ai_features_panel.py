@@ -14,6 +14,8 @@ import customtkinter as ctk
 from anonymizer.controller.remove_pixel_phi import download_ocr_models, remove_ocr_models
 from anonymizer.controller.tseg.runtime_status import (
     TsWeightKind,
+    TsWeightState,
+    TsWeightStatus,
     ai_feature_status_face_blur,
     ai_feature_status_harmonize,
     ai_feature_status_remove_pixel_phi,
@@ -41,7 +43,12 @@ from anonymizer.controller.tseg.runtime_status import (
     set_ai_session,
     validate_face_license_format,
 )
-from anonymizer.utils.download_progress import end_download, get_download_progress, is_download_active
+from anonymizer.utils.storage import (
+    begin_model_download,
+    end_model_download,
+    get_model_download_progress,
+    is_model_download_active,
+)
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
@@ -422,14 +429,19 @@ class AiFeaturesPanel(ctk.CTkFrame):
     def _start_model_download(self, kind: TsWeightKind) -> None:
         if self._download_thread is not None and self._download_thread.is_alive():
             return
+        feature_key = _TS_KIND_FEATURE_KEY.get(kind)
+        if feature_key is None:
+            return
         self._pending_ts_download = kind
+        begin_model_download(feature_key, message=_("Preparing model download…"))
 
         def worker() -> None:
+            result: TsWeightState | None = None
             try:
-                download_segmentation_model(kind)
+                result = download_segmentation_model(kind)
             except Exception:
                 logger.exception("Segmentation model download failed for %s", kind)
-            self._worker_queue.put(("download_done", kind))
+            self._worker_queue.put(("download_done", (kind, result)))
 
         self._download_thread = threading.Thread(target=worker, name=f"TsegDownload-{kind}", daemon=True)
         self._download_thread.start()
@@ -438,6 +450,7 @@ class AiFeaturesPanel(ctk.CTkFrame):
     def _start_ocr_download(self) -> None:
         if self._ocr_thread is not None and self._ocr_thread.is_alive():
             return
+        begin_model_download("remove_pixel_phi", message=_("Preparing OCR model download…"))
 
         def worker() -> None:
             try:
@@ -460,41 +473,54 @@ class AiFeaturesPanel(ctk.CTkFrame):
                 ok, message = payload
                 self._on_license_applied(ok, message)
             elif kind == "download_done":
-                ts_kind = payload
+                ts_kind, result = payload
                 feature_key = _TS_KIND_FEATURE_KEY.get(ts_kind)
                 self._download_thread = None
                 self._pending_ts_download = None
                 if feature_key is not None:
-                    end_download(feature_key)
-                    refresh_weight_status(ts_kind)
+                    end_model_download(feature_key)
+                    final_state = refresh_weight_status(ts_kind)
+                    if result is not None and result.status != TsWeightStatus.READY:
+                        self._show_download_error(ts_kind, result)
+                    elif final_state.status != TsWeightStatus.READY:
+                        self._show_download_error(ts_kind, final_state)
                 self._refresh_status()
                 self.update_idletasks()
             elif kind == "ocr_done":
                 self._ocr_thread = None
-                end_download("remove_pixel_phi")
+                end_model_download("remove_pixel_phi")
+                from anonymizer.controller.remove_pixel_phi import ocr_models_ready
+
+                if not ocr_models_ready():
+                    messagebox.showerror(
+                        ai_feature_title_remove_pixel_phi(),
+                        _("OCR model download did not complete. Check your network connection and try again."),
+                        parent=self.winfo_toplevel(),
+                    )
                 self._refresh_status()
 
+    def _show_download_error(self, kind: TsWeightKind, state: TsWeightState) -> None:
+        titles = {
+            TsWeightKind.ANATOMY: ai_feature_title_harmonize,
+            TsWeightKind.FACE: ai_feature_title_face_blur,
+        }
+        title_fn = titles.get(kind)
+        if title_fn is None:
+            return
+        detail = state.detail.strip() if state.detail else _("Model download did not complete.")
+        messagebox.showerror(title_fn(), detail, parent=self.winfo_toplevel())
+
     def _feature_download_in_progress(self, key: str) -> bool:
-        if is_download_active(key):
+        if is_model_download_active(key):
             return True
-        if key == "remove_pixel_phi" and self._ocr_thread is not None and self._ocr_thread.is_alive():
+        if key == "remove_pixel_phi" and self._ocr_thread is not None:
             return True
-        if (
-            key == "enable_harmonize"
-            and self._pending_ts_download == TsWeightKind.ANATOMY
-            and self._download_thread is not None
-            and self._download_thread.is_alive()
-        ):
+        if key == "enable_harmonize" and self._pending_ts_download == TsWeightKind.ANATOMY:
             return True
-        return (
-            key == "enable_face_blur"
-            and self._pending_ts_download == TsWeightKind.FACE
-            and self._download_thread is not None
-            and self._download_thread.is_alive()
-        )
+        return key == "enable_face_blur" and self._pending_ts_download == TsWeightKind.FACE
 
     def _download_detail_message(self, key: str) -> str:
-        progress = get_download_progress(key)
+        progress = get_model_download_progress(key)
         if progress is not None and progress.message:
             return progress.message
         status = get_runtime_status()
@@ -512,7 +538,7 @@ class AiFeaturesPanel(ctk.CTkFrame):
         if progress_bar is None or detail_label is None:
             return
 
-        progress = get_download_progress(key)
+        progress = get_model_download_progress(key)
         detail_label.configure(text=self._download_detail_message(key))
 
         if progress is not None and progress.fraction is not None:

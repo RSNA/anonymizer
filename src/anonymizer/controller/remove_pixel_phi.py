@@ -99,7 +99,7 @@ def probe_ocr_models() -> tuple[OcrModelStatus, str]:
 
 def download_ocr_models(*, verbose: bool = False) -> tuple[bool, str]:
     """Download EasyOCR weights into assets/ai/ocr/model."""
-    from anonymizer.utils.download_progress import begin_download, end_download, update_download
+    from anonymizer.utils.storage import update_model_download
 
     global _ocr_downloading
     OCR_MODEL_DIR.mkdir(parents=True, exist_ok=True)
@@ -108,11 +108,10 @@ def download_ocr_models(*, verbose: bool = False) -> tuple[bool, str]:
         return True, "OCR models already downloaded."
     _ocr_downloading = True
     start_message = f"Downloading OCR models to {OCR_MODEL_DIR}"
-    begin_download("remove_pixel_phi", message=start_message)
     try:
         logger.info("Downloading OCR models to %s", OCR_MODEL_DIR)
-        update_download("remove_pixel_phi", message=start_message)
-        update_download("remove_pixel_phi", message="Downloading OCR language models…")
+        update_model_download("remove_pixel_phi", message=start_message)
+        update_model_download("remove_pixel_phi", message="Downloading OCR language models…")
         Reader(
             lang_list=list(OCR_LANGS),
             model_storage_directory=str(OCR_MODEL_DIR),
@@ -126,7 +125,6 @@ def download_ocr_models(*, verbose: bool = False) -> tuple[bool, str]:
         logger.exception("OCR model download failed")
         return False, str(exc)
     finally:
-        end_download("remove_pixel_phi")
         _ocr_downloading = False
 
 

@@ -1,17 +1,18 @@
 """
-This module provides utility functions for working with storage in the anonymizer application.
+Storage utilities for the anonymizer application.
 
-Functions:
-- count_studies_series_images(patient_path: str) -> Tuple[int, int, int]: Counts the number of studies, series, and images in a given patient directory.
-- count_study_images(base_dir: Path, anon_pt_id: str, study_uid: str) -> int: Counts the number of images stored in a given study directory.
-- read_java_anonymizer_index_xlsx(filename: str) -> List[JavaAnonymizerExportedStudy]: Read data from the Java Anonymizer exported patient index file.
-
-Classes:
-- JavaAnonymizerExportedStudy: Represents the data structure for a single exported study from the Java Anonymizer.
-
+Includes DICOM path helpers, whitelist I/O, and thread-safe progress tracking for
+AI model downloads (any feature — OCR, segmentation, future weights).
 """
 
+from __future__ import annotations
+
+import contextlib
+import io
 import os
+import sys
+import threading
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Union
@@ -299,3 +300,166 @@ def load_default_whitelist(modality_code: str) -> list[str]:
     if modality_code == "CR" or modality_code == "MG":
         modality_code = "DX"
     return load_whitelist_from_txt(default_whitelist_path(modality_code))
+
+
+# --- AI model download progress (thread-safe, feature-agnostic) ---
+
+_download_lock = threading.Lock()
+
+
+@dataclass(frozen=True)
+class DownloadProgress:
+    """Snapshot of one in-flight AI model download."""
+
+    message: str = ""
+    fraction: float | None = None
+
+
+_download_progress: dict[str, DownloadProgress] = {}
+
+
+def begin_model_download(download_id: str, *, message: str = "") -> None:
+    """Register a model download under ``download_id`` (any stable feature key)."""
+    with _download_lock:
+        _download_progress[download_id] = DownloadProgress(message=message or "Downloading…", fraction=None)
+
+
+def update_model_download(
+    download_id: str,
+    *,
+    message: str | None = None,
+    fraction: float | None | object = ...,
+) -> None:
+    """Update progress for an active download; no-op if ``download_id`` is unknown."""
+    with _download_lock:
+        current = _download_progress.get(download_id)
+        if current is None:
+            return
+        new_message = current.message if message is None else message
+        new_fraction = current.fraction if fraction is ... else fraction
+        _download_progress[download_id] = DownloadProgress(message=new_message, fraction=new_fraction)
+
+
+def end_model_download(download_id: str) -> None:
+    """Clear progress for ``download_id`` when a download finishes or fails."""
+    with _download_lock:
+        _download_progress.pop(download_id, None)
+
+
+def get_model_download_progress(download_id: str) -> DownloadProgress | None:
+    with _download_lock:
+        return _download_progress.get(download_id)
+
+
+def is_model_download_active(download_id: str) -> bool:
+    return get_model_download_progress(download_id) is not None
+
+
+def any_model_download_active() -> bool:
+    with _download_lock:
+        return bool(_download_progress)
+
+
+def _format_download_bytes(num: float) -> str:
+    if num < 1024:
+        return f"{num:.0f}B"
+    num /= 1024
+    if num < 1024:
+        return f"{num:.1f}KB"
+    num /= 1024
+    if num < 1024:
+        return f"{num:.1f}MB"
+    num /= 1024
+    return f"{num:.1f}GB"
+
+
+class _DownloadStdoutCapture(io.TextIOBase):
+    """Forward stdout while reporting stripped lines to a progress callback."""
+
+    def __init__(self, original: io.TextIOBase, on_line: Callable[[str], None]) -> None:
+        self._original = original
+        self._on_line = on_line
+        self._buffer = ""
+
+    def write(self, s: str) -> int:
+        self._original.write(s)
+        self._buffer += s
+        while "\n" in self._buffer:
+            line, self._buffer = self._buffer.split("\n", 1)
+            text = line.strip()
+            if text:
+                self._on_line(text)
+        return len(s)
+
+    def flush(self) -> None:
+        self._original.flush()
+        text = self._buffer.strip()
+        if text:
+            self._on_line(text)
+            self._buffer = ""
+
+    def __getattr__(self, name: str):
+        return getattr(self._original, name)
+
+
+@contextlib.contextmanager
+def track_tqdm_model_download(
+    download_id: str,
+    *,
+    start_message: str = "Downloading…",
+    tqdm_module: object,
+    on_progress: Callable[[str, float | None], None] | None = None,
+    manage_lifecycle: bool = True,
+) -> Iterator[None]:
+    """Capture tqdm/stdout progress while a third-party library downloads model weights.
+
+    Args:
+        download_id: Stable key for UI polling (e.g. ``remove_pixel_phi``, ``enable_harmonize``).
+        start_message: Initial status line.
+        tqdm_module: Module object whose ``tqdm`` attribute will be patched (e.g. ``totalsegmentator.libs``).
+        on_progress: Optional ``(message, fraction)`` callback on each update.
+        manage_lifecycle: When False, only report updates; caller owns begin/end_model_download.
+    """
+    from tqdm import tqdm as orig_tqdm
+
+    if manage_lifecycle or get_model_download_progress(download_id) is None:
+        begin_model_download(download_id, message=start_message)
+    if on_progress is not None:
+        on_progress(start_message, None)
+
+    def _report(message: str, *, fraction: float | None | object = ...) -> None:
+        resolved = None if fraction is ... else fraction
+        update_model_download(download_id, message=message, fraction=fraction)
+        if on_progress is not None:
+            on_progress(message, resolved)
+
+    class ProgressTqdm(orig_tqdm):
+        monitor_interval = 0
+
+        def update(self, n=1):
+            result = super().update(n)
+            if self.total:
+                fraction = min(1.0, self.n / self.total)
+                message = f"Downloading: {_format_download_bytes(self.n)}/{_format_download_bytes(self.total)}"
+            else:
+                fraction = None
+                message = f"Downloading: {_format_download_bytes(self.n)}"
+            _report(message, fraction=fraction)
+            return result
+
+        def close(self):
+            return super().close()
+
+    original_tqdm = tqdm_module.tqdm
+    tqdm_module.tqdm = ProgressTqdm
+    captured_stdout = _DownloadStdoutCapture(sys.stdout, lambda line: _report(line))
+    saved_stdout = sys.stdout
+    sys.stdout = captured_stdout
+    try:
+        yield
+    finally:
+        sys.stdout = saved_stdout
+        captured_stdout.flush()
+        tqdm_module.tqdm = original_tqdm
+        if manage_lifecycle:
+            end_model_download(download_id)

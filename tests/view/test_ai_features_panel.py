@@ -13,10 +13,11 @@ from anonymizer.controller.tseg.runtime_status import (
     TsWeightStatus,
     set_ai_session,
 )
-from anonymizer.utils.download_progress import (
-    begin_download,
-    end_download,
-    update_download,
+from anonymizer.utils.storage import (
+    begin_model_download,
+    end_model_download,
+    is_model_download_active,
+    update_model_download,
 )
 from anonymizer.view.settings.ai_features_panel import AiFeaturesPanel
 
@@ -44,18 +45,18 @@ def _make_panel(**kwargs) -> AiFeaturesPanel:
 def test_feature_download_in_progress_uses_progress_tracker() -> None:
     panel = _make_panel()
     try:
-        begin_download("enable_harmonize", message="Downloading: 10.0MB/400.0MB")
+        begin_model_download("enable_harmonize", message="Downloading: 10.0MB/400.0MB")
         assert panel._feature_download_in_progress("enable_harmonize") is True
         assert panel._download_detail_message("enable_harmonize") == "Downloading: 10.0MB/400.0MB"
     finally:
-        end_download("enable_harmonize")
+        end_model_download("enable_harmonize")
         panel.destroy()
 
 
 def test_refresh_status_shows_progress_instead_of_download_button() -> None:
     panel = _make_panel(session={"enable_harmonize": True})
     try:
-        begin_download(
+        begin_model_download(
             "enable_harmonize",
             message="Downloading model for Task 298 ...",
         )
@@ -82,15 +83,15 @@ def test_refresh_status_shows_progress_instead_of_download_button() -> None:
         assert panel._progress_bars["enable_harmonize"] is children[0]
         assert panel._progress_details["enable_harmonize"].cget("text") == ("Downloading model for Task 298 ...")
     finally:
-        end_download("enable_harmonize")
+        end_model_download("enable_harmonize")
         panel.destroy()
 
 
 def test_apply_download_progress_switches_to_determinate() -> None:
     panel = _make_panel(session={"enable_harmonize": True})
     try:
-        begin_download("enable_harmonize", message="Downloading: 50%")
-        update_download("enable_harmonize", fraction=0.5)
+        begin_model_download("enable_harmonize", message="Downloading: 50%")
+        update_model_download("enable_harmonize", fraction=0.5)
         with (
             patch(
                 "anonymizer.view.settings.ai_features_panel.harmonize_needs_download",
@@ -112,7 +113,7 @@ def test_apply_download_progress_switches_to_determinate() -> None:
         assert progress_bar.cget("mode") == "determinate"
         assert progress_bar.get() == pytest.approx(0.5)
     finally:
-        end_download("enable_harmonize")
+        end_model_download("enable_harmonize")
         panel.destroy()
 
 
@@ -120,8 +121,33 @@ def test_pending_ts_download_shows_progress_before_runtime_status() -> None:
     panel = _make_panel(session={"enable_face_blur": True})
     try:
         panel._pending_ts_download = TsWeightKind.FACE
-        panel._download_thread = MagicMock(is_alive=MagicMock(return_value=True))
         assert panel._feature_download_in_progress("enable_face_blur") is True
+    finally:
+        panel.destroy()
+
+
+def test_start_model_download_registers_progress_immediately() -> None:
+    panel = _make_panel(session={"enable_harmonize": True})
+    try:
+        with (
+            patch("anonymizer.view.settings.ai_features_panel.download_segmentation_model"),
+            patch.object(panel, "_refresh_status"),
+            patch("threading.Thread"),
+        ):
+            panel._start_model_download(TsWeightKind.ANATOMY)
+        assert is_model_download_active("enable_harmonize")
+        assert panel._pending_ts_download == TsWeightKind.ANATOMY
+    finally:
+        end_model_download("enable_harmonize")
+        panel.destroy()
+
+
+def test_pending_download_keeps_progress_after_tracker_cleared() -> None:
+    panel = _make_panel(session={"enable_harmonize": True})
+    try:
+        panel._pending_ts_download = TsWeightKind.ANATOMY
+        panel._download_thread = None
+        assert panel._feature_download_in_progress("enable_harmonize") is True
     finally:
         panel.destroy()
 
@@ -200,7 +226,7 @@ def test_drain_worker_queue_refreshes_ready_status_after_download() -> None:
             panel._refresh_status()
             assert len(panel._action_frames["enable_harmonize"].winfo_children()) == 1
 
-            panel._worker_queue.put(("download_done", TsWeightKind.ANATOMY))
+            panel._worker_queue.put(("download_done", (TsWeightKind.ANATOMY, None)))
             panel._drain_worker_queue()
 
             refresh_status.assert_called_once_with(TsWeightKind.ANATOMY)
@@ -213,7 +239,7 @@ def test_drain_worker_queue_refreshes_ready_status_after_download() -> None:
 def test_update_download_progress_refreshes_when_progress_stale() -> None:
     panel = _make_panel(session={"enable_harmonize": True})
     try:
-        begin_download("enable_harmonize", message="Downloading…")
+        begin_model_download("enable_harmonize", message="Downloading…")
         with (
             patch(
                 "anonymizer.view.settings.ai_features_panel.harmonize_needs_download",
@@ -231,7 +257,7 @@ def test_update_download_progress_refreshes_when_progress_stale() -> None:
             panel._refresh_status()
             assert "enable_harmonize" in panel._progress_bars
 
-        end_download("enable_harmonize")
+        end_model_download("enable_harmonize")
         with (
             patch(
                 "anonymizer.view.settings.ai_features_panel.harmonize_needs_download",
@@ -251,7 +277,7 @@ def test_update_download_progress_refreshes_when_progress_stale() -> None:
             refresh.assert_called_once()
             assert "enable_harmonize" not in panel._progress_bars
     finally:
-        end_download("enable_harmonize")
+        end_model_download("enable_harmonize")
         panel.destroy()
 
 

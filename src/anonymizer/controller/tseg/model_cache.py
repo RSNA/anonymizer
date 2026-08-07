@@ -435,6 +435,36 @@ def _ensure_pretrained_weights(task_id: int, *, trainer: str, model: str) -> Non
         raise RuntimeError(f"TotalSegmentator weights for task {task_id} are still missing after download")
 
 
+_TS_DOWNLOAD_ID: dict[str, str] = {
+    "anatomy": "enable_harmonize",
+    "face": "enable_face_blur",
+}
+
+
+@contextmanager
+def _track_segmentation_model_download(kind: "TsWeightKind", *, task_id: int | None = None):
+    """Wire TotalSegmentator tqdm/stdout capture to generic model download progress."""
+    from anonymizer.controller.tseg.runtime_status import update_weight_download_detail
+    from anonymizer.utils.storage import track_tqdm_model_download
+
+    download_id = _TS_DOWNLOAD_ID[kind.value]
+    start_message = f"Downloading model for Task {task_id} ..." if task_id is not None else "Downloading…"
+
+    def on_progress(message: str, _fraction: float | None) -> None:
+        update_weight_download_detail(kind, message)
+
+    import totalsegmentator.libs as ts_libs
+
+    with track_tqdm_model_download(
+        download_id,
+        start_message=start_message,
+        tqdm_module=ts_libs,
+        on_progress=on_progress,
+        manage_lifecycle=False,
+    ):
+        yield
+
+
 def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
     """Download TotalSegmentator weights for anatomy or face segmentation (no predictor preload)."""
     from anonymizer.controller.tseg.runtime_status import (
@@ -452,8 +482,6 @@ def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
     setup_nnunet()
     setup_totalseg()
 
-    from anonymizer.utils.download_progress import track_segmentation_download
-
     if kind == Kind.ANATOMY:
         task_ids = harmonize_ts_task_ids()
         if not task_ids:
@@ -461,7 +489,7 @@ def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
         for task_id in task_ids:
             trainer = trainer_for_harmonize_task(task_id)
             model = model_for_harmonize_task(task_id)
-            with track_segmentation_download(kind, task_id=task_id):
+            with _track_segmentation_model_download(kind, task_id=task_id):
                 _ensure_pretrained_weights(task_id, trainer=trainer, model=model)
         still_missing = missing_harmonize_ts_task_ids()
         if still_missing:
@@ -473,7 +501,7 @@ def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
         licensed, message = verify_face_license()
         if not licensed:
             raise RuntimeError(message)
-        with track_segmentation_download(kind, task_id=_FACE_TASK_ID):
+        with _track_segmentation_model_download(kind, task_id=_FACE_TASK_ID):
             _ensure_pretrained_weights(_FACE_TASK_ID, trainer=_FACE_TRAINER, model=_FACE_MODEL)
         if not _face_task_checkpoint_ready():
             raise RuntimeError(f"Face segmentation model is still missing after download (task {_FACE_TASK_ID})")
