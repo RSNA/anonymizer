@@ -11,27 +11,34 @@
    - Select "Add python.exe to PATH"
    - Enable "tcl/tk and IDLE"
 ### macOS
-1. Install Homebrew if not present: `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)'
-2. Install Python 3.12, Tcl/Tk, and OpenMP (required for Harmonize contrast analysis on macOS):
+1. Install Homebrew if not present: `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`
+2. Install Python **3.12** (not Homebrew's default `python3`, which may be 3.14), tkinter, and OpenMP (required for Harmonize contrast analysis on macOS):
+
+```bash
+brew install python@3.12 python-tk@3.12 libomp
 ```
-brew install python@3.12
-brew install tcl-tk
-brew install libomp
-```
+
+Homebrew's `python@3.12` does not include tkinter by itself — use **`python-tk@3.12`**.
+
 ### Linux (Ubuntu/Debian)
 1. Install the required packages:
 ```
 sudo apt update
 sudo apt install software-properties-common
 sudo add-apt-repository ppa:deadsnakes/ppa
-sudo apt install python3.12 python3.12-tk
+sudo apt install python3.12 python3.12-tk python3.12-venv
 ```
 ## Verify Installation
+Use **Python 3.12** explicitly (`python3.12`, not `python3`):
+
+```bash
+python3.12 --version
+python3.12 -m tkinter
+python3.12 -c "import tkinter as tk; print('Tk', tk.TkVersion)"
 ```
-python --version
-python -m tkinter
-```
-If python + tkinter has been installed successfully a small GUI window should open
+
+If python + tkinter has been installed successfully a small GUI window should open. On macOS, **Tk should be 9.0** for correct UI rendering with CustomTkinter 6.
+
 ## Install rsna-anonymizer from PyPI
 
 V19 is on PyPI as a pre-release (`--pre`). Use [uv](https://docs.astral.sh/uv/) — much faster than plain `pip` for large ML dependencies (PyTorch, TotalSegmentator, etc.).
@@ -46,12 +53,28 @@ Windows (PowerShell): `powershell -ExecutionPolicy ByPass -c "irm https://astral
 
 Restart the terminal if `uv` is not found.
 
+On macOS, update uv and install its managed Python 3.12 with Tcl/Tk 9 (recommended when Homebrew Python is broken or unavailable):
+
+```bash
+uv self update
+uv python install --reinstall 3.12
+```
+
 ### Create a virtual environment
 
 ```bash
 uv venv rsna-anonymizer --python 3.12
 source rsna-anonymizer/bin/activate    # Windows: rsna-anonymizer\Scripts\activate
 ```
+
+Verify **inside the activated venv** (must be Python 3.12.x and Tk 9.0 on macOS):
+
+```bash
+python --version
+python -c "import tkinter as tk; print('Tk', tk.TkVersion)"
+```
+
+If `uv venv --python 3.12` gives Tk 8.6, run `uv python install --reinstall 3.12` and recreate the venv. If Homebrew Python works, you can use `python3.12 -m venv rsna-anonymizer` and `python -m pip install --pre rsna-anonymizer` instead of `uv venv`.
 
 ### Install the package
 
@@ -61,7 +84,7 @@ uv pip install --pre rsna-anonymizer
 
 Verify: `uv pip show rsna-anonymizer` or `rsna-anonymizer --version`. See [CHANGELOG](CHANGELOG.md) for release notes.
 
-TotalSegmentator, XGBoost, and related dependencies are included. Enable AI Features per project in **Settings → Project** (or when creating a new project). Download models and accept the face license from **AI Features** on the Welcome screen.
+TotalSegmentator, XGBoost, and related dependencies are included. Download models and accept the face license from **Help → AI Features** or the **AI Features** button on the Welcome screen.
 ## Execution
 `rsna-anonymizer`
 ### Headless Mode

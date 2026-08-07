@@ -57,6 +57,7 @@ def _cli_help() -> str:
 
 class Anonymizer(ctk.CTk):
     THEME_FILE = "assets/themes/rsna_theme.json"
+    WELCOME_MIN_WIDTH = 720
 
     project_open_startup_dwell_time = 100  # milliseconds
     metrics_loop_interval = 1000  # milliseconds
@@ -96,11 +97,7 @@ class Anonymizer(ctk.CTk):
 
         self.load_config()  # may set language
         self.controller: ProjectController | None = None
-        self.welcome_view: WelcomeView = WelcomeView(
-            self,
-            self.change_language,
-            self.show_ai_features_setup_dialog,
-        )
+        self._attach_welcome_view()
         self.welcome_view.focus()
         self.query_view: QueryView | None = None
         self.export_view: ExportView | None = None
@@ -116,6 +113,24 @@ class Anonymizer(ctk.CTk):
             self.createcommand("::tk::mac::Quit", self.quit_app)
         self.menu_bar = self.create_project_closed_menu_bar()
         self.after(self.project_open_startup_dwell_time, self._open_project_startup)
+
+    def _fit_welcome_window(self) -> None:
+        """Size the main window to welcome content (macOS Retina/Tk 9 can under-report height)."""
+        self.update_idletasks()
+        width = max(self.winfo_reqwidth(), self.WELCOME_MIN_WIDTH)
+        height = self.winfo_reqheight()
+        if sys.platform == "darwin":
+            height = int(height * 1.08) + 8
+        self.geometry(f"{width}x{height}")
+        self.minsize(width, height)
+
+    def _attach_welcome_view(self) -> None:
+        self.welcome_view = WelcomeView(
+            self,
+            self.change_language,
+            self.show_ai_features_setup_dialog,
+        )
+        self.after(0, self._fit_welcome_window)
 
     def _init_mono_font(self) -> ctk.CTkFont:
         # Monospace font defaults:
@@ -197,11 +212,7 @@ class Anonymizer(ctk.CTk):
         self.save_config()
         self.welcome_view.release_images()
         self.welcome_view.destroy()
-        self.welcome_view = WelcomeView(
-            self,
-            self.change_language,
-            self.show_ai_features_setup_dialog,
-        )
+        self._attach_welcome_view()
 
     # Dashboard metrics updates from the main thread
     def metrics_loop(self):
@@ -608,11 +619,7 @@ class Anonymizer(ctk.CTk):
         # TODO: Shutdowncontroller asynchronously using Dashboard Status to provide shutdown updates (especially Anonymizer worker threads)
         self.shutdown_controller()
 
-        self.welcome_view = WelcomeView(
-            self,
-            self.change_language,
-            self.show_ai_features_setup_dialog,
-        )
+        self._attach_welcome_view()
         self.protocol("WM_DELETE_WINDOW", self.quit_app)
         self.focus_force()
 
@@ -1045,6 +1052,8 @@ class Anonymizer(ctk.CTk):
 
     def get_help_menu(self, menu_bar: tk.Menu):
         help_menu = tk.Menu(menu_bar, tearoff=0)
+        help_menu.add_command(label=_("AI Features"), command=self.show_ai_features_setup_dialog)
+        help_menu.add_separator()
         # Get all html files in assets/locale/*/html/ directory
         # Sort by filename number prefix
         html_dir = self.help_html_dir()

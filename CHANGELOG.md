@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [19.0.0.dev4]
+- Fix welcome screen clipped on macOS Retina (Tk 9): size main window after welcome layout
+- Help menu: **AI Features** opens setup (not only the Welcome screen button)
+- Readme: macOS install with `python-tk@3.12`, uv managed Python 3.12 with Tcl/Tk 9, in-venv Tk verification
+
 ## [19.0.0.dev3]
 - English AI Features help: overview after Overview, linked tool pages (not in Help menu), in-app `help:` navigation, wider layout
 - AI Features setup opened from Welcome screen only; help and UI messages updated accordingly
