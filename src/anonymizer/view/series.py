@@ -22,12 +22,7 @@ from anonymizer.controller.blur_face import (
     face_blur_gate_message,
     face_blur_status_applicable,
 )
-from anonymizer.controller.create_projections import (
-    apply_windowing,
-    get_wl_ww,
-    load_series_frames,
-    save_series_frames,
-)
+from anonymizer.controller.create_projections import invalidate_projection_cache
 from anonymizer.controller.remove_pixel_phi import (
     OcrService,
     OCRText,
@@ -37,6 +32,12 @@ from anonymizer.controller.remove_pixel_phi import (
     collect_series_view_pixel_phi_texts,
     filter_ocr_detections,
     remove_text,
+)
+from anonymizer.controller.series_io import (
+    SERIES_VIEW_PROJECTION_COUNT,
+    LoadedSeries,
+    load_series,
+    save_series_slices,
 )
 from anonymizer.controller.tseg.cache import clear_series_tseg_cache, tseg_cache_summary
 from anonymizer.controller.tseg.config import TSEG_CACHE_DIRNAME
@@ -50,6 +51,7 @@ from anonymizer.controller.tseg.dicom_geometry import (
 from anonymizer.controller.tseg.runtime_status import face_blur_allowed, get_ai_session, harmonize_allowed
 from anonymizer.model.anonymizer import AnonymizerModel, format_series_processing_status
 from anonymizer.model.project import ProjectModel
+from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.memory import log_process_memory
 from anonymizer.utils.storage import (
     get_dcm_files,
@@ -58,6 +60,7 @@ from anonymizer.utils.storage import (
     save_project_whitelist,
 )
 from anonymizer.utils.translate import _
+from anonymizer.utils.windowing import apply_windowing
 from anonymizer.view.blur_face_results import (
     face_blur_mode_from_menu_label,
     face_blur_mode_menu_values,
@@ -146,6 +149,7 @@ class SeriesView(ctk.CTkToplevel):
 
         self._ds: Dataset | None = None
         self._frames: np.ndarray | None = None
+        self._loaded: LoadedSeries | None = None
         self._slice_paths: tuple[Path, ...] = ()
         self.single_frame = False
         self._dicom_wl: float | None = None
@@ -279,62 +283,22 @@ class SeriesView(ctk.CTkToplevel):
         pos_y = max(0, min(pos_y, self.winfo_screenheight() - height))
         self.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
 
-    def _slice_stack(self) -> np.ndarray:
-        """Return the slice-only stack (no projections) from the viewer frame buffer."""
-        if self._frames is None:
-            raise SeriesLoadError("Series View has no loaded frames")
-        return self._frames if self.single_frame else self._frames[3:]
-
-    @staticmethod
-    def _build_viewer_frames(series_frames: np.ndarray) -> np.ndarray:
-        """Build projection + slice stack in one buffer (avoids an extra full-volume copy)."""
-        slice_count = series_frames.shape[0]
-        frames = np.empty((slice_count + 3,) + series_frames.shape[1:], dtype=series_frames.dtype)
-        np.copyto(frames[3:], series_frames)
-        del series_frames
-
-        proj_min = np.copy(frames[3])
-        proj_max = np.copy(frames[3])
-        proj_sum = frames[3].astype(np.float32, copy=True)
-        for slice_index in range(4, frames.shape[0]):
-            slice_frame = frames[slice_index]
-            np.minimum(proj_min, slice_frame, out=proj_min)
-            np.maximum(proj_max, slice_frame, out=proj_max)
-            proj_sum += slice_frame
-
-        frames[0] = proj_min
-        frames[2] = proj_max
-        frames[1] = (proj_sum / slice_count).astype(frames.dtype, copy=False)
-        return frames
-
     @staticmethod
     def _load_series_data(
         series_path: Path,
-    ) -> tuple[Dataset, np.ndarray, tuple[Path, ...], SeriesGeometryResult | None]:
+    ) -> tuple[LoadedSeries, np.ndarray, SeriesGeometryResult | None]:
         log_process_memory("load_series_data_start", extra=str(series_path.name))
-        ds, series_frames, slice_paths = load_series_frames(series_path)
-        if ds is None or series_frames is None:
-            raise SeriesLoadError(f"Error loading frames from {series_path}")
+        loaded = load_series(series_path)
+        frames = loaded.series_view_stack()
 
         log_process_memory(
-            "after_load_series_frames",
-            array=series_frames,
+            "after_load_series",
+            array=frames,
             extra=str(series_path.name),
         )
 
-        if series_frames.shape[0] == 1:
-            frames = series_frames
-        else:
-            frames = SeriesView._build_viewer_frames(series_frames)
-            del series_frames
-            log_process_memory(
-                "after_build_viewer_frames",
-                array=frames,
-                extra=str(series_path.name),
-            )
-
         series_geometry: SeriesGeometryResult | None = None
-        if getattr(ds, "Modality", None) == "CT":
+        if getattr(loaded.metadata, "Modality", None) == "CT":
             series_geometry = load_geometry_cache(series_path)
 
         log_process_memory(
@@ -342,7 +306,7 @@ class SeriesView(ctk.CTkToplevel):
             array=frames,
             extra=str(series_path.name),
         )
-        return ds, frames, slice_paths, series_geometry
+        return loaded, frames, series_geometry
 
     def _ensure_series_geometry(self) -> SeriesGeometryResult | None:
         self._series_geometry = ensure_series_geometry(
@@ -356,7 +320,7 @@ class SeriesView(ctk.CTkToplevel):
         self._log_series_memory("load_worker_start")
         try:
             payload = self._load_series_data(self._series_path)
-            _, frames, _, _ = payload
+            _, frames, _ = payload
             self._log_series_memory("load_worker_done", array=frames)
             self._load_queue.put(("done", payload))
         except SeriesLoadError as exc:
@@ -378,12 +342,11 @@ class SeriesView(ctk.CTkToplevel):
                 break
 
             if kind == "done":
-                ds, frames, slice_paths, series_geometry = payload
+                loaded, frames, series_geometry = payload
                 self.after_idle(
-                    lambda d=ds, f=frames, p=slice_paths, g=series_geometry: self._finish_loading(
-                        ds=d,
-                        frames=f,
-                        slice_paths=p,
+                    lambda loaded=loaded, frames=frames, g=series_geometry: self._finish_loading(
+                        loaded=loaded,
+                        frames=frames,
                         series_geometry=g,
                     )
                 )
@@ -404,19 +367,19 @@ class SeriesView(ctk.CTkToplevel):
     def _finish_loading(
         self,
         *,
-        ds: Dataset,
+        loaded: LoadedSeries,
         frames: np.ndarray,
-        slice_paths: tuple[Path, ...],
         series_geometry: SeriesGeometryResult | None,
     ) -> None:
         self._log_series_memory("finish_loading_start", array=frames)
         self._loading = False
-        self._ds = ds
+        self._loaded = loaded
+        self._ds = loaded.metadata
         self._frames = frames
-        self._slice_paths = slice_paths
+        self._slice_paths = loaded.slice_paths
         self._series_geometry = series_geometry
-        self.single_frame = frames.shape[0] == 1
-        self._remember_dicom_wl_ww(ds)
+        self.single_frame = loaded.is_single_frame
+        self._dicom_wl, self._dicom_ww = loaded.default_window
 
         self.withdraw()
         self._stop_load_progress_pulse()
@@ -838,8 +801,8 @@ class SeriesView(ctk.CTkToplevel):
 
     def load_frames(self, series_path: Path) -> tuple[Dataset, np.ndarray, tuple[Path, ...]]:
         """Loads, processes, and combines series frames and projections."""
-        ds, frames, slice_paths, _geometry = self._load_series_data(series_path)
-        return ds, frames, slice_paths
+        loaded, frames, _geometry = self._load_series_data(series_path)
+        return loaded.metadata, frames, loaded.slice_paths
 
     def _update_title(self):
         title = _("Series View")
@@ -924,11 +887,15 @@ class SeriesView(ctk.CTkToplevel):
             else:
                 self.clear_ts_cache_button.grid_remove()
 
-    def update_status(self, message: str) -> None:
-        """Overwrite the context line with transient operation status."""
-        logger.info("Series view: %s", message)
+    def update_status(self, message: str, *, debug_log: bool = False) -> None:
+        """Show transient Series View operation status (row 2, below geometry)."""
+        if debug_log:
+            logger.debug("Series view: %s", message)
+        else:
+            logger.info("Series view: %s", message)
         if hasattr(self, "_status_label"):
             self._status_label.configure(text=message)
+            self.update_idletasks()
 
     def _harmonize_button_state(self) -> str:
         if not get_ai_session().enable_harmonize:
@@ -1113,22 +1080,25 @@ class SeriesView(ctk.CTkToplevel):
     def detect_text_for_series(self):
         """Detects text in all frames of the series."""
         total_frames = self.image_viewer.num_images
-        self.update_status(_("Detecting text in all images") + "…")
+        self.update_status(_("Detecting text in all images") + "…", debug_log=True)
         for i in range(total_frames):
             self.image_viewer.load_and_display_image(i)  # Goto series start
             self.process_single_frame_ocr(i)
-            self.update_status(_("Detecting text") + f"… {_('image')} {i + 1} {_('of')} {total_frames}")
+            self.update_status(
+                _("Detecting text") + f"… {_('image')} {i + 1} {_('of')} {total_frames}",
+                debug_log=True,
+            )
 
     def detect_text_button_clicked(self):
-        logger.info("Detecting text...")
+        logger.debug("Detecting text...")
 
         if self.edit_context == EditContext.FRAME:
-            self.update_status(_("Detecting text in current image") + "…")
+            self.update_status(_("Detecting text in current image") + "…", debug_log=True)
             self.process_single_frame_ocr(self.image_viewer.current_image_index)
-            self.update_status(_("Text detection complete"))
+            self.update_status(_("Text detection complete"), debug_log=True)
         else:
             self.detect_text_for_series()
-            self.update_status(_("Text detection complete"))
+            self.update_status(_("Text detection complete"), debug_log=True)
 
         # TODO: work out what to do beyond propagting edits in overlays when edit context is PROJECT
 
@@ -1379,12 +1349,17 @@ class SeriesView(ctk.CTkToplevel):
             except Exception as e:
                 logger.error(f"Error saving whitelist: {e}")
 
-        if save_series_frames(self._series_path, self._frames if self.single_frame else self._frames[3:], self._ds):
+        if save_series_slices(
+            self._series_path,
+            self._loaded.series_view_slices_from_stack(self._frames) if self._loaded else self._frames,
+            self._ds,
+        ):
             logger.info(f"Saved series frames to {self._series_path}")
+            invalidate_projection_cache(self._series_path)
             if hasattr(self, "image_viewer"):
                 texts_by_frame = collect_series_view_pixel_phi_texts(self.image_viewer)
                 if texts_by_frame:
-                    projection_count = 0 if self.single_frame else 3
+                    projection_count = 0 if self.single_frame else SERIES_VIEW_PROJECTION_COUNT
                     apply_series_view_pixel_phi(
                         self._anon_model,
                         self._slice_paths,

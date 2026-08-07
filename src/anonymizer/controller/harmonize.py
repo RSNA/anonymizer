@@ -550,7 +550,7 @@ def apply_harmonized_description(
     anon_model: AnonymizerModel | None,
 ) -> bool:
     """Apply harmonized SeriesDescription to DICOM when needed and update the project database."""
-    from anonymizer.controller.create_projections import apply_series_description
+    from anonymizer.controller.series_io import apply_series_description
 
     description = description.strip()
     if not description:
@@ -564,6 +564,11 @@ def apply_harmonized_description(
     current = str(ds.get("SeriesDescription", "") or "").strip()
     if current != description and not apply_series_description(series_path, description):
         return False
+
+    if current != description:
+        from anonymizer.controller.create_projections import invalidate_projection_cache
+
+        invalidate_projection_cache(series_path)
 
     if anon_model is None:
         return True

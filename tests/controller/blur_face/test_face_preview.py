@@ -149,9 +149,11 @@ def test_apply_face_blur_preview_to_series_frames(
     assert preview.error is None
     assert preview.hu_after is not None
 
-    from anonymizer.controller.create_projections import load_series_frames
+    from anonymizer.controller.series_io import load_series
 
-    reference_ds, source_frames, _paths = load_series_frames(synthetic_head_series)
+    loaded = load_series(synthetic_head_series)
+
+    reference_ds, source_frames, _paths = loaded.metadata, loaded.slices, loaded.slice_paths
     slice_frames = hu_stack_to_viewer_frames(
         preview.hu_after,
         preview.slice_paths,
@@ -177,9 +179,11 @@ def test_preview_face_blur_uses_series_volume_context(
     mock_resolve: MagicMock,
     synthetic_head_series: Path,
 ) -> None:
-    from anonymizer.controller.create_projections import load_series_frames
+    from anonymizer.controller.series_io import load_series
 
-    reference_ds, frames, slice_paths = load_series_frames(synthetic_head_series)
+    loaded = load_series(synthetic_head_series)
+
+    reference_ds, frames, slice_paths = loaded.metadata, loaded.slices, loaded.slice_paths
     volume_img, _hu, paths = load_series_volume_for_blur(synthetic_head_series)
     shape = sitk.GetArrayFromImage(volume_img).shape
     mask_path = face_mask_cache_path(synthetic_head_series)

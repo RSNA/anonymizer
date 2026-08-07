@@ -6,7 +6,7 @@ import time
 import pytest
 from pydicom.dataset import Dataset
 
-# from anonymizer.controller.dicom_C_codes import (
+# from anonymizer.utils.dicom import (
 #     C_FAILURE,
 #     C_MOVE_UNKNOWN_AE,
 #     C_PENDING_A,

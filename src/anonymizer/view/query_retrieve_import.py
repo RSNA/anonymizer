@@ -8,17 +8,17 @@ from tkinter import filedialog, messagebox, ttk
 import customtkinter as ctk
 from pydicom import Dataset
 
-from anonymizer.controller.dicom_C_codes import (
-    C_FAILURE,
-    C_PENDING_A,
-    C_PENDING_B,
-    C_SUCCESS,
-)
 from anonymizer.controller.project import (
     FindStudyRequest,
     FindStudyResponse,
     ProjectController,
     StudyUIDHierarchy,
+)
+from anonymizer.utils.dicom import (
+    C_FAILURE,
+    C_PENDING_A,
+    C_PENDING_B,
+    C_SUCCESS,
 )
 from anonymizer.utils.storage import count_study_images
 from anonymizer.utils.translate import _

@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [19.0.0.dev7]
+- Fix Harmonize anatomy model download on fresh install: download weights when checkpoints are missing instead of failing dataset lookup
+- Fix project window distorted after welcome screen: resize to dashboard dimensions when a project opens
+- Welcome screen: phase lock and guard against Retina Configure drift; fixed width 730
+- AI Features: INFO-level logging through model download workflow; log when anatomy models not found
+- Series View: OCR detect progress logged at DEBUG (not per-image INFO spam)
+
 ## [19.0.0.dev6]
 - Fix AI Features Harmonize model download: keep progress visible for the full worker lifecycle and surface download failures in the dialog
 

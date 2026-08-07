@@ -25,8 +25,8 @@ from anonymizer.controller.blur_face import (
     preview_blurred_slice_frames,
     preview_face_blur,
 )
-from anonymizer.controller.create_projections import load_series_frames, save_series_frames
 from anonymizer.controller.remove_pixel_phi import LayerType
+from anonymizer.controller.series_io import load_series, save_series_slices
 from anonymizer.controller.tseg.dicom_geometry import (
     SeriesGeometryResult,
     ensure_series_geometry,
@@ -194,7 +194,8 @@ class FaceBlurReviewDialog(ctk.CTkToplevel):
     def _load_series_slices(
         series_path: Path,
     ) -> tuple[Dataset, np.ndarray, tuple[Path, ...], SeriesGeometryResult | None]:
-        ds, series_frames, slice_paths = load_series_frames(series_path)
+        loaded = load_series(series_path)
+        ds, series_frames, slice_paths = loaded.metadata, loaded.slices, loaded.slice_paths
         if ds is None or series_frames is None:
             raise FaceBlurLoadError(f"Error loading frames from {series_path}")
 
@@ -564,13 +565,17 @@ class FaceBlurReviewDialog(ctk.CTkToplevel):
             reference_ds=self._ds,
             frame_dtype=self._slice_frames.dtype if self._slice_frames is not None else None,
         )
-        if not save_series_frames(self._series_path, blurred_slices, self._ds):
+        if not save_series_slices(self._series_path, blurred_slices, self._ds):
             messagebox.showerror(
                 title=_("Save Changes Error"),
                 message=_("Failed to save changes to series frames"),
                 parent=self,
             )
             return
+
+        from anonymizer.controller.create_projections import invalidate_projection_cache
+
+        invalidate_projection_cache(self._series_path)
 
         apply_series_face_blur_metadata(
             self._anon_model,

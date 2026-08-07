@@ -50,15 +50,6 @@ from anonymizer.controller.ai_batch_process import (
     ai_batch_process,
 )
 from anonymizer.controller.anonymizer import AnonymizerController
-from anonymizer.controller.dicom_C_codes import (
-    C_FAILURE,
-    C_PENDING_A,
-    C_PENDING_B,
-    C_STORE_DATASET_ERROR,
-    C_STORE_DECODE_ERROR,
-    C_SUCCESS,
-    C_WARNING,
-)
 from anonymizer.controller.harmonize import (
     HarmonizeStudiesCancelledCallback,
     HarmonizeStudiesLogCallback,
@@ -73,6 +64,15 @@ from anonymizer.model.project import (
     DICOMRuntimeError,
     NetworkTimeouts,
     ProjectModel,
+)
+from anonymizer.utils.dicom import (
+    C_FAILURE,
+    C_PENDING_A,
+    C_PENDING_B,
+    C_STORE_DATASET_ERROR,
+    C_STORE_DECODE_ERROR,
+    C_SUCCESS,
+    C_WARNING,
 )
 from anonymizer.utils.logging import set_logging_levels
 from anonymizer.utils.translate import _

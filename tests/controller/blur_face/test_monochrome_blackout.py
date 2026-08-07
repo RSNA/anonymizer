@@ -8,15 +8,15 @@ from unittest.mock import MagicMock, patch
 import pydicom
 from pydicom.data import get_testdata_file
 
-from anonymizer.controller.create_projections import (
-    stored_grayscale_frame_to_viewer_pixels,
-    viewer_grayscale_pixels_to_stored_frame,
-)
 from anonymizer.controller.remove_pixel_phi import (
     PixelPhiRemovalMode,
     UserRectangle,
     blackout_rectangular_areas,
     remove_pixel_phi,
+)
+from anonymizer.controller.series_io import (
+    series_buffer_monochrome_to_stored,
+    stored_monochrome_to_series_buffer,
 )
 
 
@@ -34,13 +34,13 @@ def test_monochrome1_blackout_uses_viewer_space_not_stored_zero() -> None:
     ds = _monochrome1_dataset()
     stored = ds.pixel_array.copy()
 
-    viewer, modality_max = stored_grayscale_frame_to_viewer_pixels(stored, ds)
+    viewer, mono1_invert_max = stored_monochrome_to_series_buffer(stored, ds)
     viewer = viewer.copy()
     blackout_rectangular_areas(
         viewer,
         [UserRectangle(top_left=(35, 35), bottom_right=(45, 45))],
     )
-    out = viewer_grayscale_pixels_to_stored_frame(viewer, ds, modality_max=modality_max)
+    out = series_buffer_monochrome_to_stored(viewer, ds, mono1_invert_max=mono1_invert_max)
 
     assert out[40, 40] > 1500
     assert out[0, 0] == 50

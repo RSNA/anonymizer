@@ -389,7 +389,7 @@ def _face_task_checkpoint_ready() -> bool:
 def _task_checkpoint_ready(task_id: int, *, trainer: str, model: str) -> bool:
     from anonymizer.controller.tseg.runtime_status import _checkpoint_ready
 
-    return _checkpoint_ready(_resolve_task_model_folder(task_id, trainer=trainer, model=model))
+    return _checkpoint_ready(_try_resolve_task_model_folder(task_id, trainer=trainer, model=model))
 
 
 def _anatomy_task_checkpoint_ready(task_id: int) -> bool:
@@ -408,6 +408,14 @@ def _resolve_task_model_folder(task_id: int, *, trainer: str, model: str) -> Pat
     return Path(get_output_folder(task_id, trainer, _NNUNET_PLANS, model))
 
 
+def _try_resolve_task_model_folder(task_id: int, *, trainer: str, model: str) -> Path | None:
+    """Return checkpoint folder when the dataset exists, else None (not downloaded yet)."""
+    try:
+        return _resolve_task_model_folder(task_id, trainer=trainer, model=model)
+    except Exception:
+        return None
+
+
 def _remove_incomplete_dataset_dir(model_folder: Path) -> None:
     """Remove a dataset directory left behind by a failed or partial weight download."""
     dataset_dir = model_folder.parent
@@ -417,22 +425,20 @@ def _remove_incomplete_dataset_dir(model_folder: Path) -> None:
 
 
 def _ensure_pretrained_weights(task_id: int, *, trainer: str, model: str) -> None:
-    """
-    Download one TotalSegmentator task when its checkpoint is not ready.
-
-    TotalSegmentator skips download when the dataset root folder exists, even if it
-    contains no nnUNet checkpoint (e.g. after a partial download). Re-probe the
-    checkpoint path and remove stale dataset directories before downloading.
-    """
+    """Download one TotalSegmentator task when its checkpoint is not on disk."""
     from totalsegmentator.libs import download_pretrained_weights
 
-    model_folder = _resolve_task_model_folder(task_id, trainer=trainer, model=model)
     if _task_checkpoint_ready(task_id, trainer=trainer, model=model):
+        logger.info("TS weights: task %s already installed, skipping download", task_id)
         return
-    _remove_incomplete_dataset_dir(model_folder)
+    logger.info("TS weights: downloading task %s …", task_id)
+    model_folder = _try_resolve_task_model_folder(task_id, trainer=trainer, model=model)
+    if model_folder is not None:
+        _remove_incomplete_dataset_dir(model_folder)
     download_pretrained_weights(task_id)
     if not _task_checkpoint_ready(task_id, trainer=trainer, model=model):
         raise RuntimeError(f"TotalSegmentator weights for task {task_id} are still missing after download")
+    logger.info("TS weights: task %s download complete", task_id)
 
 
 _TS_DOWNLOAD_ID: dict[str, str] = {
@@ -486,6 +492,12 @@ def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
         task_ids = harmonize_ts_task_ids()
         if not task_ids:
             raise RuntimeError("Anatomy segmentation download is not supported for 1.5mm mode")
+        missing = missing_harmonize_ts_task_ids()
+        logger.info(
+            "TS weights: harmonize download starting (tasks %s, %d missing)",
+            task_ids,
+            len(missing),
+        )
         for task_id in task_ids:
             trainer = trainer_for_harmonize_task(task_id)
             model = model_for_harmonize_task(task_id)
@@ -501,6 +513,7 @@ def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
         licensed, message = verify_face_license()
         if not licensed:
             raise RuntimeError(message)
+        logger.info("TS weights: face segmentation download starting (task %s)", _FACE_TASK_ID)
         with _track_segmentation_model_download(kind, task_id=_FACE_TASK_ID):
             _ensure_pretrained_weights(_FACE_TASK_ID, trainer=_FACE_TRAINER, model=_FACE_MODEL)
         if not _face_task_checkpoint_ready():

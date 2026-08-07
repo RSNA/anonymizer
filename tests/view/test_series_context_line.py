@@ -18,6 +18,17 @@ from anonymizer.view.series import SeriesView
 from tests.controller.blur_face.test_face_blur_gate import _geometry
 
 
+def test_update_status_targets_status_label() -> None:
+    series = SeriesView.__new__(SeriesView)
+    series._status_label = MagicMock()
+    series.update_idletasks = MagicMock()
+
+    SeriesView.update_status(series, "Detecting text in current image…")
+
+    series._status_label.configure.assert_called_once_with(text="Detecting text in current image…")
+    series.update_idletasks.assert_called_once()
+
+
 def test_series_context_line_is_geometry_only() -> None:
     series = SeriesView.__new__(SeriesView)
     geometry = _geometry()

@@ -22,8 +22,8 @@ from pydicom import Dataset, dcmread
 from pydicom.uid import generate_uid
 from scipy.ndimage import median_filter
 
-from anonymizer.controller.create_projections import load_series_frames
 from anonymizer.controller.remove_pixel_phi import PolygonPoint, Segmentation
+from anonymizer.controller.series_io import load_series
 from anonymizer.controller.tseg.config import FACE_MASK_FILENAME, MIN_STRUCTURE_VOXELS, ROI_SUBSET
 from anonymizer.controller.tseg.dicom_geometry import SeriesGeometryResult, build_sitk_volume_from_series_frames
 from anonymizer.controller.tseg.segment import (
@@ -392,7 +392,7 @@ class FaceBlurResult:
 
 @dataclass(frozen=True)
 class SeriesVolumeContext:
-    """Preloaded Series View slice stack (same order and processing as ``load_series_frames``)."""
+    """Preloaded Series View slice stack (same order and processing as ``load_series``)."""
 
     reference_ds: Dataset
     slice_frames: np.ndarray
@@ -515,7 +515,7 @@ def resolve_face_mask_path(
 
 
 def hu_stack_from_series_frames(frames: np.ndarray) -> np.ndarray:
-    """Return HU values from a ``load_series_frames`` grayscale stack."""
+    """Return HU values from a ``load_series`` grayscale stack."""
     if frames.ndim != 3:
         raise ValueError(f"Face blur requires grayscale slice stack (Z, Y, X), got shape {frames.shape}")
     hu = np.asarray(frames, dtype=np.float32)
@@ -529,9 +529,10 @@ def hu_stack_from_series_frames(frames: np.ndarray) -> np.ndarray:
 
 
 def load_series_volume_for_blur(series_directory: Path) -> tuple[sitk.Image, np.ndarray, tuple[Path, ...]]:
-    """Load CT volume + HU stack via ``load_series_frames`` (Series View loader)."""
+    """Load CT volume + HU stack via ``load_series`` (Series View loader)."""
     series_directory = Path(series_directory).resolve()
-    reference_ds, frames, slice_paths = load_series_frames(series_directory)
+    loaded = load_series(series_directory)
+    reference_ds, frames, slice_paths = loaded.metadata, loaded.slices, loaded.slice_paths
     paths = tuple(slice_paths)
     if not paths:
         raise ValueError(f"No DICOM slices with pixel data found in {series_directory}")
@@ -845,10 +846,10 @@ def hu_stack_to_viewer_frames(
     reference_ds: Dataset | None = None,
     frame_dtype: np.dtype | None = None,
 ) -> np.ndarray:
-    """Convert an HU stack to per-slice frames for ``ImageViewer`` / ``save_series_frames``.
+    """Convert an HU stack to per-slice frames for ``ImageViewer`` / ``save_series_slices``.
 
     Integer ``frame_dtype`` returns stored pixels (DICOM encoding). Floating ``frame_dtype``
-    returns HU values in the same space as ``load_series_frames`` (post-modality-LUT floats).
+    returns HU values in the same space as ``load_series`` (post-modality-LUT floats).
     """
     if hu.shape[0] != len(slice_paths):
         raise ValueError(f"HU stack depth {hu.shape[0]} != slice count {len(slice_paths)}")

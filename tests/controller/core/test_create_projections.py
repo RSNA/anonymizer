@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from PIL import Image as PILImageModule
-from pydicom import Dataset, multival
+from pydicom import Dataset
 from pydicom.dataset import FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian
 
@@ -19,15 +19,7 @@ from anonymizer.controller.create_projections import (
     ProjectionImageSize,  # Tested
     ProjectionImageSizeConfig,  # Tested
     cache_projection,  # Tested
-    clip_and_cast_to_int,  # Tested
     create_projection_from_single_frame,  # Tested
-    get_wl_ww,  # Tested
-    # The following are imported by create_projections but not directly used
-    # in the tests shown below. If testing functions that use them,
-    # they might need to be mocked or their effects considered.
-    # PROJECTION_FILENAME,
-    # VALID_COLOR_SPACES,
-    # OCRText from anonymizer.controller.remove_pixel_phi is used by Projection
     normalize_uint8,  # Tested
 )
 
@@ -170,55 +162,6 @@ class TestNormalizeUint8:
         np.testing.assert_array_equal(result, np.array([[0, 255]], dtype=np.uint8))
 
 
-class TestClipAndCastToInt:
-    def test_clip_cast_uint16_no_clipping(self, caplog):
-        float_arr = np.array([0.0, 100.5, 65535.0], dtype=np.float32)
-        result = clip_and_cast_to_int(float_arr, np.uint16)
-        expected = np.array([0, 100, 65535], dtype=np.uint16)
-
-        assert result is not None, "Expected an array, not None"
-        np.testing.assert_array_equal(result, expected)
-        assert not any("Values were clipped" in record.message for record in caplog.records)
-
-    def test_clip_cast_uint16_with_clipping(self, caplog):
-        float_arr = np.array([-10.0, 300.7, 70000.0], dtype=np.float32)
-        result = clip_and_cast_to_int(float_arr, np.uint16)
-        expected = np.array([0, 300, 65535], dtype=np.uint16)
-
-        assert result is not None, "Expected an array, not None"
-        np.testing.assert_array_equal(result, expected)
-        assert any(
-            record.levelname == "WARNING"
-            and "Values were clipped during conversion to <class 'numpy.uint16'>" in record.message
-            and "Original range [-10.0..70000.0], Target range [0..65535]" in record.message
-            for record in caplog.records
-        )
-
-    def test_non_float_input(self, caplog: pytest.LogCaptureFixture):
-        int_arr = np.array([0, 100, 200], dtype=np.int32)
-        result = clip_and_cast_to_int(int_arr, np.uint8)
-        expected = np.array([0, 100, 200], dtype=np.uint8)
-
-        assert result is not None, "Expected an array, not None"
-        np.testing.assert_array_equal(result, expected)
-        assert (f"Input array dtype is not float ({int_arr.dtype}), attempting conversion anyway.") in caplog.text
-
-    def test_non_integer_target(self, caplog: pytest.LogCaptureFixture):
-        float_arr = np.array([0.0, 1.0], dtype=np.float32)
-        result = clip_and_cast_to_int(float_arr, np.float32)  # type: ignore[arg-type]
-        assert result is None
-        assert f"Target dtype {np.float32} is not an integer type." in caplog.text
-        assert any(record.levelname == "ERROR" for record in caplog.records)
-
-    def test_exception_handling(self, mocker, caplog: pytest.LogCaptureFixture):
-        mocker.patch("anonymizer.controller.create_projections.np.iinfo", side_effect=Exception("Test iinfo error"))
-        float_arr = np.array([0.0, 1.0], dtype=np.float32)
-        result = clip_and_cast_to_int(float_arr, np.uint16)
-        assert result is None  # This case correctly expects None
-        assert "Test iinfo error" in caplog.text
-        assert any(record.levelname == "ERROR" for record in caplog.records)
-
-
 class TestCacheProjection:
     def test_cache_projection_success(self, mocker, caplog: pytest.LogCaptureFixture):
         mock_proj = mocker.MagicMock(spec=Projection)
@@ -267,67 +210,6 @@ class TestCacheProjection:
         mock_open_func.assert_called_once_with(mock_path_obj, "wb")
         assert "Error saving Projection cache file, error: Test pickle error" in caplog.text
         assert any(record.levelname == "WARNING" for record in caplog.records)
-
-
-class TestGetWlWwPytest:
-    def test_get_wl_ww_present_single_value(self):
-        ds = create_basic_dataset()
-        ds.WindowCenter = 100
-        ds.WindowWidth = 200
-        wl, ww = get_wl_ww(ds)
-        assert wl == 100.0
-        assert ww == 200.0
-
-    def test_get_wl_ww_present_multivalue(self):
-        ds = create_basic_dataset()
-        ds.WindowCenter = multival.MultiValue(float, [50.5, 60])
-        ds.WindowWidth = multival.MultiValue(float, [150.0, 180])
-        wl, ww = get_wl_ww(ds)
-        assert wl == 50.5
-        assert ww == 150.0
-
-    def test_get_wl_ww_width_less_than_1(self, caplog: pytest.LogCaptureFixture):
-        ds = create_basic_dataset()
-        ds.WindowCenter = 100
-        ds.WindowWidth = 0.5
-        with caplog.at_level(logging.WARNING):
-            wl, ww = get_wl_ww(ds)
-        assert wl == 100.0
-        assert ww == 1.0
-        assert "DICOM WindowWidth (0.5) is less than 1. Setting to 1." in caplog.text
-
-    @pytest.mark.parametrize(
-        "bits_allocated, expected_wl, expected_ww",
-        [
-            (8, 127.5, 255.0),
-            (16, 32768.0, 65535.0),
-            (12, 2048.0, 4096.0),
-            (10, 512.0, 1024.0),
-            (32, 2147483648.0, 4294967295.0),
-        ],
-    )
-    def test_get_wl_ww_missing_defaults(self, bits_allocated, expected_wl, expected_ww):
-        ds = create_basic_dataset()
-        ds.BitsAllocated = bits_allocated
-        if "WindowCenter" in ds:
-            del ds.WindowCenter
-        if "WindowWidth" in ds:
-            del ds.WindowWidth
-
-        wl, ww = get_wl_ww(ds)
-        assert wl == expected_wl
-        assert ww == expected_ww
-
-    def test_get_wl_ww_missing_unsupported_bits(self):
-        ds = create_basic_dataset()
-        ds.BitsAllocated = 7
-        with pytest.raises(ValueError, match="Unsupported BitsAllocated value: 7"):
-            get_wl_ww(ds)
-
-    def test_get_wl_ww_missing_bits_allocated(self):
-        ds = create_basic_dataset()
-        with pytest.raises(ValueError, match="Unsupported BitsAllocated value: None"):
-            get_wl_ww(ds)
 
 
 class TestCreateProjectionFromSingleFrame:
@@ -415,21 +297,3 @@ class TestCreateProjectionFromSingleFrame:
         # The first argument to resize should be the tuple (width, height)
         assert resize_call_args.args[0] == (120, 120)
         assert resize_call_args.args[1] == PILImageModule.Resampling.NEAREST
-
-
-def test_apply_series_description_preserves_pixel_data(tmp_path: Path) -> None:
-    from pydicom import dcmread
-
-    from anonymizer.controller.create_projections import apply_series_description
-    from tests.controller.tseg.support.synthetic_ct import build_synthetic_chest_ct_series
-
-    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest")
-    sample_path = sorted(series_dir.glob("*.dcm"))[0]
-    before_pixels = dcmread(sample_path).pixel_array.copy()
-
-    assert apply_series_description(series_dir, "Brain Ax EarlyArt") is True
-
-    after = dcmread(sample_path)
-    assert after.SeriesDescription == "Brain Ax EarlyArt"
-    assert after.pixel_array.shape == before_pixels.shape
-    assert np.array_equal(after.pixel_array, before_pixels)

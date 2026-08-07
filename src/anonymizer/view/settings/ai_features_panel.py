@@ -428,10 +428,12 @@ class AiFeaturesPanel(ctk.CTkFrame):
 
     def _start_model_download(self, kind: TsWeightKind) -> None:
         if self._download_thread is not None and self._download_thread.is_alive():
+            logger.info("AI Features: %s model download already in progress", kind.value)
             return
         feature_key = _TS_KIND_FEATURE_KEY.get(kind)
         if feature_key is None:
             return
+        logger.info("AI Features: starting %s model download", kind.value)
         self._pending_ts_download = kind
         begin_model_download(feature_key, message=_("Preparing model download…"))
 
@@ -449,7 +451,9 @@ class AiFeaturesPanel(ctk.CTkFrame):
 
     def _start_ocr_download(self) -> None:
         if self._ocr_thread is not None and self._ocr_thread.is_alive():
+            logger.info("AI Features: OCR model download already in progress")
             return
+        logger.info("AI Features: starting OCR model download")
         begin_model_download("remove_pixel_phi", message=_("Preparing OCR model download…"))
 
         def worker() -> None:
@@ -481,9 +485,21 @@ class AiFeaturesPanel(ctk.CTkFrame):
                     end_model_download(feature_key)
                     final_state = refresh_weight_status(ts_kind)
                     if result is not None and result.status != TsWeightStatus.READY:
+                        logger.warning(
+                            "AI Features: %s model download failed: %s",
+                            ts_kind.value,
+                            result.detail or result.status.value,
+                        )
                         self._show_download_error(ts_kind, result)
                     elif final_state.status != TsWeightStatus.READY:
+                        logger.warning(
+                            "AI Features: %s model download incomplete: %s",
+                            ts_kind.value,
+                            final_state.detail or final_state.status.value,
+                        )
                         self._show_download_error(ts_kind, final_state)
+                    else:
+                        logger.info("AI Features: %s model download finished successfully", ts_kind.value)
                 self._refresh_status()
                 self.update_idletasks()
             elif kind == "ocr_done":
@@ -492,11 +508,14 @@ class AiFeaturesPanel(ctk.CTkFrame):
                 from anonymizer.controller.remove_pixel_phi import ocr_models_ready
 
                 if not ocr_models_ready():
+                    logger.warning("AI Features: OCR model download did not complete")
                     messagebox.showerror(
                         ai_feature_title_remove_pixel_phi(),
                         _("OCR model download did not complete. Check your network connection and try again."),
                         parent=self.winfo_toplevel(),
                     )
+                else:
+                    logger.info("AI Features: OCR model download finished successfully")
                 self._refresh_status()
 
     def _show_download_error(self, kind: TsWeightKind, state: TsWeightState) -> None:

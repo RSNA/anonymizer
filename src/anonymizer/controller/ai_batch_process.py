@@ -25,7 +25,6 @@ from anonymizer.controller.blur_face import (
     preview_blurred_slice_frames,
     preview_face_blur,
 )
-from anonymizer.controller.create_projections import load_series_frames, save_series_frames
 from anonymizer.controller.harmonize import (
     _load_ct_series_dataset,
     _load_series_dataset,
@@ -38,6 +37,7 @@ from anonymizer.controller.remove_pixel_phi import (
     apply_instance_pixel_phi_for_dcm,
     pixel_phi_removal_mode_display_label,
 )
+from anonymizer.controller.series_io import load_series, save_series_slices
 from anonymizer.controller.tseg.contrast import release_working_memory
 from anonymizer.controller.tseg.dicom_geometry import resolve_series_geometry, stackable_dicom_paths
 from anonymizer.controller.tseg.model_cache import (
@@ -479,7 +479,8 @@ def _prepare_ct_volume_context(series_path: Path) -> SeriesVolumeContext | None:
     with contextlib.suppress(ValueError, InvalidDicomError):
         if _load_ct_series_dataset(series_path) is None:
             return None
-        reference_ds, frames, slice_paths = load_series_frames(series_path)
+        loaded = load_series(series_path)
+        reference_ds, frames, slice_paths = loaded.metadata, loaded.slices, loaded.slice_paths
         return SeriesVolumeContext(
             reference_ds=reference_ds,
             slice_frames=frames,
@@ -889,19 +890,23 @@ def _apply_face_blur_series(
             blurred_slices = preview.blurred_slice_frames
             ds = volume_context.reference_ds
         else:
-            ds, frames, _slice_paths = load_series_frames(series_path)
+            loaded = load_series(series_path)
+            ds, frames, _slice_paths = loaded.metadata, loaded.slices, loaded.slice_paths
             blurred_slices = preview_blurred_slice_frames(
                 preview,
                 reference_ds=ds,
                 frame_dtype=frames.dtype,
             )
-        if not save_series_frames(series_path, blurred_slices, ds):
+        if not save_series_slices(series_path, blurred_slices, ds):
             return AiBatchOutcome(
                 series_path,
                 AiBatchAlgorithm.FACE_BLUR,
                 "failed",
                 _("Failed to save blurred frames"),
             )
+        from anonymizer.controller.create_projections import invalidate_projection_cache
+
+        invalidate_projection_cache(series_path)
         apply_series_face_blur_metadata(anon_model, series_uid, preview.blur_mode.value)
     except Exception as exc:
         logger.exception("Face blur batch apply failed for %s", series_path)

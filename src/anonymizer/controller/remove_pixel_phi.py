@@ -54,20 +54,22 @@ from pydicom.uid import JPEG2000Lossless
 if TYPE_CHECKING:
     from anonymizer.model.anonymizer import AnonymizerModel
 
-VALID_COLOR_SPACES = [
-    "MONOCHROME1",
-    "MONOCHROME2",
-    "RGB",
-    # "RGBA", TODO: provide support for Alpha channel?
-    "YBR_FULL",
-    "YBR_FULL_422",
-    "YBR_ICT",
-    "YBR_RCT",
-    "PALETTE COLOR",
-]
+from anonymizer.utils.dicom import SUPPORTED_PHOTOMETRIC_INTERPRETATIONS
 
 logging.getLogger("openjpeg").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
+
+
+def _ocr_bgr_from_stored_monochrome(stored: np.ndarray, ds: Dataset) -> NDArray[np.uint8]:
+    """EasyOCR input for one stored mono slice — matches Series View Detect Text."""
+    from anonymizer.controller.series_io import stored_monochrome_to_series_buffer
+    from anonymizer.utils.dicom import get_wl_ww
+    from anonymizer.utils.windowing import apply_windowing
+
+    buffer, _ = stored_monochrome_to_series_buffer(stored, ds)
+    wl, ww = get_wl_ww(ds)
+    return apply_windowing(wl, ww, buffer)
+
 
 OCR_MODEL_DIR = Path("assets/ai/ocr/model")
 OCR_LANGS = ("en", "de", "fr", "es")
@@ -105,6 +107,7 @@ def download_ocr_models(*, verbose: bool = False) -> tuple[bool, str]:
     OCR_MODEL_DIR.mkdir(parents=True, exist_ok=True)
     status, _ = probe_ocr_models()
     if status == OcrModelStatus.READY:
+        logger.info("OCR models already downloaded at %s", OCR_MODEL_DIR)
         return True, "OCR models already downloaded."
     _ocr_downloading = True
     start_message = f"Downloading OCR models to {OCR_MODEL_DIR}"
@@ -119,6 +122,7 @@ def download_ocr_models(*, verbose: bool = False) -> tuple[bool, str]:
         )
         status, detail = probe_ocr_models()
         if status == OcrModelStatus.READY:
+            logger.info("OCR models downloaded to %s", OCR_MODEL_DIR)
             return True, "OCR models downloaded."
         return False, detail or "OCR model download incomplete."
     except Exception as exc:
@@ -697,8 +701,10 @@ def remove_pixel_phi(
     if not pi:
         raise ValueError("PhotometricInterpretation attribute missing.")
 
-    if pi not in VALID_COLOR_SPACES:
-        raise ValueError(f"Invalid Photometric Interpretation: {pi}. Support Color Spaces: {VALID_COLOR_SPACES}")
+    if pi not in SUPPORTED_PHOTOMETRIC_INTERPRETATIONS:
+        raise ValueError(
+            f"Invalid Photometric Interpretation: {pi}. Supported: {SUPPORTED_PHOTOMETRIC_INTERPRETATIONS}"
+        )
 
     grayscale = False
     if pi in ["MONOCHROME1", "MONOCHROME2"]:
@@ -832,9 +838,7 @@ def remove_pixel_phi(
         frame_scale_factor = scale_factor
 
         if grayscale:
-            from anonymizer.controller.create_projections import prepare_series_view_ocr_frame
-
-            pixels = prepare_series_view_ocr_frame(stored_frame, ds)
+            pixels = _ocr_bgr_from_stored_monochrome(stored_frame, ds)
             frame_border_size = 0
             frame_scale_factor = 1.0
             logger.debug(
@@ -908,18 +912,18 @@ def remove_pixel_phi(
             logger.debug("Applying OCR bbox blackout to source pixels (Series View routine)")
             source_frame = source_pixels_decompressed_stack[frame]
             if grayscale:
-                from anonymizer.controller.create_projections import (
-                    stored_grayscale_frame_to_viewer_pixels,
-                    viewer_grayscale_pixels_to_stored_frame,
+                from anonymizer.controller.series_io import (
+                    series_buffer_monochrome_to_stored,
+                    stored_monochrome_to_series_buffer,
                 )
 
-                viewer_pixels, modality_max = stored_grayscale_frame_to_viewer_pixels(source_frame, ds)
+                viewer_pixels, mono1_invert_max = stored_monochrome_to_series_buffer(source_frame, ds)
                 viewer_pixels = viewer_pixels.copy()
                 blackout_ocr_text_areas(viewer_pixels, source_ocr_texts)
-                source_pixels_deid = viewer_grayscale_pixels_to_stored_frame(
+                source_pixels_deid = series_buffer_monochrome_to_stored(
                     viewer_pixels,
                     ds,
-                    modality_max=modality_max,
+                    mono1_invert_max=mono1_invert_max,
                 )
             else:
                 source_pixels_deid = source_frame.copy()
@@ -1009,9 +1013,9 @@ def remove_pixel_phi(
 
     ds.save_as(dcm_path)
 
-    from anonymizer.controller.create_projections import delete_series_projection_cache
+    from anonymizer.controller.create_projections import invalidate_projection_cache
 
-    delete_series_projection_cache(dcm_path.parent)
+    invalidate_projection_cache(dcm_path.parent)
 
     return True, deduped_texts, total_pixels_changed
 

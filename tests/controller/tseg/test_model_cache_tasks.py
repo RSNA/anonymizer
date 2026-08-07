@@ -78,7 +78,7 @@ def test_ensure_pretrained_weights_removes_empty_dataset_dir(tmp_path: Path) -> 
 
     with (
         patch(
-            "anonymizer.controller.tseg.model_cache._resolve_task_model_folder",
+            "anonymizer.controller.tseg.model_cache._try_resolve_task_model_folder",
             return_value=model_folder,
         ),
         patch(
@@ -100,7 +100,7 @@ def test_ensure_pretrained_weights_skips_when_checkpoint_ready(tmp_path: Path) -
 
     with (
         patch(
-            "anonymizer.controller.tseg.model_cache._resolve_task_model_folder",
+            "anonymizer.controller.tseg.model_cache._try_resolve_task_model_folder",
             return_value=model_folder,
         ),
         patch(
@@ -112,3 +112,23 @@ def test_ensure_pretrained_weights_skips_when_checkpoint_ready(tmp_path: Path) -
         _ensure_pretrained_weights(297, trainer=trainer, model=model)
 
     download.assert_not_called()
+
+
+def test_ensure_pretrained_weights_downloads_when_dataset_not_on_disk() -> None:
+    trainer = trainer_for_harmonize_task(297)
+    model = model_for_harmonize_task(297)
+
+    with (
+        patch(
+            "anonymizer.controller.tseg.model_cache._try_resolve_task_model_folder",
+            return_value=None,
+        ),
+        patch(
+            "anonymizer.controller.tseg.model_cache._task_checkpoint_ready",
+            side_effect=[False, True],
+        ),
+        patch("totalsegmentator.libs.download_pretrained_weights") as download,
+    ):
+        _ensure_pretrained_weights(297, trainer=trainer, model=model)
+
+    download.assert_called_once_with(297)

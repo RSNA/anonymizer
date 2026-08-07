@@ -1020,10 +1020,24 @@ def download_segmentation_model(
 
     probed = probe_weight_state(kind)
     if probed.status == TsWeightStatus.READY:
+        logger.info("Segmentation models: %s already installed", kind.value)
         return probed
     if probed.status == TsWeightStatus.UNAVAILABLE:
+        logger.warning("Segmentation models: %s unavailable (%s)", kind.value, probed.detail)
         return probed
+    if probed.status == TsWeightStatus.MISSING:
+        if kind == TsWeightKind.ANATOMY:
+            logger.info("Anatomy models not found (%s)", probed.detail)
+        else:
+            logger.info("Face segmentation model not found (%s)", probed.detail)
+    elif probed.status == TsWeightStatus.FAILED:
+        logger.info(
+            "Segmentation models: %s download previously failed (%s)",
+            kind.value,
+            probed.detail,
+        )
 
+    logger.info("Segmentation models: downloading %s weights …", kind.value)
     downloading = TsWeightState(
         kind=kind,
         status=TsWeightStatus.DOWNLOADING,
@@ -1037,6 +1051,7 @@ def download_segmentation_model(
     try:
         download_segmentation_model_weights(kind)
     except Exception as exc:
+        logger.warning("Segmentation models: %s download failed: %s", kind.value, exc)
         failed = TsWeightState(
             kind=kind,
             status=TsWeightStatus.FAILED,
@@ -1053,6 +1068,8 @@ def download_segmentation_model(
 
     final_state = refresh_weight_status(kind)
     get_runtime_status(force_refresh=True)
+    if final_state.status == TsWeightStatus.READY:
+        logger.info("Segmentation models: %s download finished successfully", kind.value)
     if on_complete is not None:
         on_complete(final_state)
     return final_state

@@ -8,31 +8,28 @@ import numpy as np
 import pydicom
 from pydicom.data import get_testdata_file
 
-from anonymizer.controller.create_projections import (
-    apply_windowing,
-    get_wl_ww,
-    prepare_series_view_ocr_frame,
-    stored_grayscale_frame_to_viewer_pixels,
-)
-from anonymizer.controller.remove_pixel_phi import remove_pixel_phi
+from anonymizer.controller.remove_pixel_phi import _ocr_bgr_from_stored_monochrome, remove_pixel_phi
+from anonymizer.controller.series_io import stored_monochrome_to_series_buffer
+from anonymizer.utils.dicom import get_wl_ww
+from anonymizer.utils.windowing import apply_windowing
 
 
-def test_prepare_series_view_ocr_frame_matches_detect_text_pipeline() -> None:
+def test_ocr_bgr_from_stored_monochrome_matches_detect_text_pipeline() -> None:
     ds = pydicom.dcmread(get_testdata_file("CT_small.dcm"))
     stored = ds.pixel_array.copy()
 
-    viewer_pixels, _ = stored_grayscale_frame_to_viewer_pixels(stored, ds)
+    viewer_pixels, _ = stored_monochrome_to_series_buffer(stored, ds)
     wl, ww = get_wl_ww(ds)
     expected = apply_windowing(wl, ww, viewer_pixels)
 
-    actual = prepare_series_view_ocr_frame(stored, ds)
+    actual = _ocr_bgr_from_stored_monochrome(stored, ds)
 
     assert actual.shape == expected.shape
     assert actual.dtype == expected.dtype
     assert np.array_equal(actual, expected)
 
 
-@patch("anonymizer.controller.create_projections.prepare_series_view_ocr_frame")
+@patch("anonymizer.controller.remove_pixel_phi._ocr_bgr_from_stored_monochrome")
 @patch("anonymizer.controller.remove_pixel_phi.dcmread")
 @patch("anonymizer.controller.remove_pixel_phi._easyocr_readtext")
 def test_remove_pixel_phi_grayscale_uses_series_view_ocr_frame(

@@ -38,7 +38,8 @@ class WelcomeView(ctk.CTkFrame):
     TITLED_LOGO_WIDTH = 255
     TITLED_LOGO_HEIGHT = 155
     WELCOME_TEXT_WRAP_LENGTH = 650
-    WELCOME_WINDOW_WIDTH = WELCOME_TEXT_WRAP_LENGTH + PAD * 4 + 80
+    # Text uses padx=PAD*2; width matches wraplength plus horizontal padding only.
+    WELCOME_WINDOW_WIDTH = WELCOME_TEXT_WRAP_LENGTH + PAD * 4
     WELCOME_WINDOW_HEIGHT = 920
 
     def __init__(self, parent: ctk.CTk, change_language_callback, ai_features_callback):

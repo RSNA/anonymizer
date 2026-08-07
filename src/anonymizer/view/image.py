@@ -9,9 +9,9 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-from anonymizer.controller.create_projections import apply_windowing
 from anonymizer.controller.remove_pixel_phi import LayerType, OCRText, OverlayData, Segmentation, UserRectangle
 from anonymizer.utils.translate import _
+from anonymizer.utils.windowing import apply_windowing
 from anonymizer.view.ctk_safe import dispose_photo_image
 from anonymizer.view.histogram import Histogram
 

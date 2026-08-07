@@ -98,7 +98,7 @@ def test_save_button_clicked_writes_frames_and_metadata(sample_frames: np.ndarra
     dialog._close = MagicMock()
 
     with (
-        patch("anonymizer.view.face_blur_review_dialog.save_series_frames", return_value=True) as save_frames,
+        patch("anonymizer.view.face_blur_review_dialog.save_series_slices", return_value=True) as save_frames,
         patch("anonymizer.view.face_blur_review_dialog.apply_series_face_blur_metadata") as apply_metadata,
     ):
         FaceBlurReviewDialog._save_button_clicked(dialog)

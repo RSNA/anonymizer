@@ -615,7 +615,7 @@ def build_sitk_volume_from_series_frames(
     slice_spacing_mm: float | None = None,
 ) -> sitk.Image:
     """
-    Build a 3D SimpleITK volume from a ``load_series_frames`` stack.
+    Build a 3D SimpleITK volume from a ``load_series`` stack.
 
     Uses the same geometry tags as ``build_sitk_volume_from_pydicom`` so TS and face blur
     align with Series View pixels (modality LUT, MONOCHROME1 inversion, resize).
@@ -693,7 +693,7 @@ def read_sitk_volume_from_dicom_paths(slice_paths: Sequence[Path]) -> sitk.Image
     """
     Load a DICOM stack into SimpleITK using pydicom per-slice reads.
 
-    Series View already loads the same slices via pydicom (``load_series_frames``).
+    Series View already loads the same slices via pydicom (``load_series``).
     SimpleITK ``ImageSeriesReader`` can fail on transfer syntaxes or instances that
     pydicom decodes fine, so we prefer the pydicom path for consistency.
     """

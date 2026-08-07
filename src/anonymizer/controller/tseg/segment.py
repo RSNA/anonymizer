@@ -10,7 +10,7 @@ from pathlib import Path
 
 import SimpleITK as sitk
 
-from anonymizer.controller.create_projections import load_series_frames
+from anonymizer.controller.series_io import load_series
 from anonymizer.controller.tseg.cache import resolve_series_cache_dir
 from anonymizer.controller.tseg.config import (
     BODY_PARTS,
@@ -154,7 +154,8 @@ class FaceSegResult:
 def dicom_series_to_nifti(series_directory: Path, output_path: Path) -> int:
     """Convert one DICOM series directory to NIfTI. Returns slice count."""
     series_directory = series_directory.resolve()
-    reference_ds, frames, slice_paths = load_series_frames(series_directory)
+    loaded = load_series(series_directory)
+    reference_ds, frames, slice_paths = loaded.metadata, loaded.slices, loaded.slice_paths
     n_slices = len(slice_paths)
     if n_slices < MIN_DICOM_SLICES:
         raise ValueError(f"Need at least {MIN_DICOM_SLICES} DICOM slices, got {n_slices}")

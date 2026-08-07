@@ -60,6 +60,10 @@ class Anonymizer(ctk.CTk):
 
     project_open_startup_dwell_time = 100  # milliseconds
     metrics_loop_interval = 1000  # milliseconds
+    welcome_guard_interval_ms = 500
+    welcome_size_tolerance = 0.85  # re-apply when width falls below this fraction of target
+    project_window_min_width = 900  # dashboard databoard (5 columns); independent of welcome width
+    project_window_min_height = 320
 
     def get_title(self) -> str:
         return _("RSNA DICOM Anonymizer Version").strip() + " " + get_version()
@@ -93,6 +97,10 @@ class Anonymizer(ctk.CTk):
 
         self.recent_project_dirs: list[Path] = []
         self.current_open_project_dir: Path | None = None
+        self._shutting_down = False
+        self._import_in_progress = False
+        self._welcome_window_locked = False
+        self._welcome_guard_after_id: str | None = None
 
         self.load_config()  # may set language
         self.controller: ProjectController | None = None
@@ -103,8 +111,6 @@ class Anonymizer(ctk.CTk):
         self.index_view: IndexView | None = None
         self.help_views = {}
         self.dashboard: Dashboard | None = None
-        self._shutting_down = False
-        self._import_in_progress = False
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
         self.resizable(False, False)
@@ -115,14 +121,29 @@ class Anonymizer(ctk.CTk):
         self.menu_bar = self.create_project_closed_menu_bar()
         self.after(self.project_open_startup_dwell_time, self._open_project_startup)
 
-    def _fit_welcome_window(self) -> None:
-        """Apply fixed welcome dimensions via CustomTkinter scaling (not winfo_req*).
+    def _set_scaling(self, new_widget_scaling, new_window_scaling):
+        super()._set_scaling(new_widget_scaling, new_window_scaling)
+        if self._welcome_window_locked:
+            self.after_idle(self._apply_welcome_window_size)
 
-        On macOS Retina + Tk 9, winfo_req* is wrong before first paint and CTk's
-        Configure handler can shrink the window back if we only set geometry once.
-        """
-        width = WelcomeView.WELCOME_WINDOW_WIDTH
-        height = WelcomeView.WELCOME_WINDOW_HEIGHT
+    def _welcome_target_size(self) -> tuple[int, int]:
+        """Fixed welcome window size in CTk window units (see WelcomeView constants)."""
+        return WelcomeView.WELCOME_WINDOW_WIDTH, WelcomeView.WELCOME_WINDOW_HEIGHT
+
+    def _enter_welcome_window_phase(self) -> None:
+        """Hold welcome dimensions until a project opens or the welcome view is torn down."""
+        self._cancel_welcome_window_guard()
+        self._welcome_window_locked = True
+        self._block_update_dimensions_event = True
+        self.resizable(False, False)
+
+    def _apply_welcome_window_size(self, *, log: bool = False) -> None:
+        if not self._welcome_window_locked:
+            return
+        welcome_view = getattr(self, "welcome_view", None)
+        if welcome_view is None or not welcome_view.winfo_exists():
+            return
+        width, height = self._welcome_target_size()
         self.update_idletasks()
         self._current_width = width
         self._current_height = height
@@ -130,26 +151,131 @@ class Anonymizer(ctk.CTk):
         self.maxsize(width, height)
         self.geometry(f"{width}x{height}")
         self.resizable(False, False)
+        if log:
+            self._log_welcome_window_state(width, height)
+
+    def _log_welcome_window_state(self, target_w: int, target_h: int) -> None:
+        try:
+            widget_scaling = self._get_widget_scaling()
+            window_scaling = self._get_window_scaling()
+        except Exception:
+            widget_scaling = window_scaling = "?"
+        logger.info(
+            "Welcome window: target=%sx%s current=%sx%s winfo=%sx%s scaling(widget=%s window=%s)",
+            target_w,
+            target_h,
+            self._current_width,
+            self._current_height,
+            self.winfo_width(),
+            self.winfo_height(),
+            widget_scaling,
+            window_scaling,
+        )
+
+    def _welcome_window_needs_reapply(self) -> bool:
+        target_w, _target_h = self._welcome_target_size()
+        min_w = int(target_w * self.welcome_size_tolerance)
+        if self._current_width < min_w:
+            return True
+        if self.winfo_width() > 1:
+            detected_w = self._reverse_window_scaling(self.winfo_width())
+            if detected_w < min_w:
+                return True
+        return False
+
+    def _welcome_window_guard(self) -> None:
+        if self._shutting_down or not self._welcome_window_locked:
+            return
+        welcome_view = getattr(self, "welcome_view", None)
+        if welcome_view is None or not welcome_view.winfo_exists():
+            self._cancel_welcome_window_guard()
+            return
+        if self._welcome_window_needs_reapply():
+            logger.debug("Welcome window guard: re-applying size after Configure/scaling drift")
+            self._apply_welcome_window_size()
+        self._welcome_guard_after_id = self.after(self.welcome_guard_interval_ms, self._welcome_window_guard)
+
+    def _cancel_welcome_window_guard(self) -> None:
+        if self._welcome_guard_after_id is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self._welcome_guard_after_id)
+            self._welcome_guard_after_id = None
+
+    def _release_welcome_window_constraints(self) -> None:
+        self._cancel_welcome_window_guard()
+        self._welcome_window_locked = False
+        if not self.winfo_exists():
+            return
+        self._block_update_dimensions_event = False
+        self.maxsize(1_000_000, 1_000_000)
+        self.minsize(0, 0)
+
+    def _project_window_target_size(self) -> tuple[int, int]:
+        """CTk window units for the project dashboard (not welcome dimensions)."""
+        dashboard = self.dashboard
+        if dashboard is None or not dashboard.winfo_exists():
+            return self.project_window_min_width, self.project_window_min_height
+        self.update_idletasks()
+        content_width = self._reverse_window_scaling(dashboard.winfo_reqwidth())
+        content_height = self._reverse_window_scaling(dashboard.winfo_reqheight())
+        pad = Dashboard.PAD * 2
+        width = max(content_width + pad, self.project_window_min_width)
+        height = max(content_height + pad, self.project_window_min_height)
+        return width, height
+
+    def _apply_project_window_size(self, *, log: bool = False) -> None:
+        """Resize the main window to fit the project dashboard after leaving welcome."""
+        if self._welcome_window_locked or self.dashboard is None or not self.dashboard.winfo_exists():
+            return
+        width, height = self._project_window_target_size()
+        self._current_width = width
+        self._current_height = height
+        self.minsize(width, height)
+        self.maxsize(width, height)
+        self.geometry(f"{width}x{height}")
+        self.resizable(False, False)
+        if log:
+            logger.info(
+                "Project window: size=%sx%s (dashboard req=%sx%s)",
+                width,
+                height,
+                width - Dashboard.PAD * 2,
+                height - Dashboard.PAD * 2,
+            )
 
     def _finalize_welcome_window(self) -> None:
-        """Re-apply welcome size after CTk finishes first layout pass."""
         if not hasattr(self, "welcome_view") or not self.welcome_view.winfo_exists():
             return
-        self._fit_welcome_window()
-        width = WelcomeView.WELCOME_WINDOW_WIDTH
-        height = WelcomeView.WELCOME_WINDOW_HEIGHT
-        self.maxsize(width, height)
+        self._apply_welcome_window_size(log=True)
+        self._cancel_welcome_window_guard()
+        self._welcome_window_guard()
 
     def _attach_welcome_view(self) -> None:
+        self._enter_welcome_window_phase()
         self.welcome_view = WelcomeView(
             self,
             self.change_language,
             self.show_ai_features_setup_dialog,
         )
-        self.welcome_view.grid(row=0, column=0, sticky="nsew")
-        for delay_ms in (0, 50, 200):
-            self.after(delay_ms, self._fit_welcome_window)
-        self.after(400, self._finalize_welcome_window)
+        self.welcome_view.grid(row=0, column=0, sticky="n")
+        for delay_ms in (0, 50, 200, 400):
+            self.after(delay_ms, self._apply_welcome_window_size)
+        self.after(500, self._finalize_welcome_window)
+
+    def _log_ctk_scaling(self) -> None:
+        if sys.platform != "darwin":
+            return
+        try:
+            widget_scaling = self._get_widget_scaling()
+            window_scaling = self._get_window_scaling()
+        except Exception:
+            logger.debug("CustomTkinter scaling values unavailable", exc_info=True)
+            return
+        logger.info(
+            "CustomTkinter scaling: widget=%s window=%s",
+            widget_scaling,
+            window_scaling,
+        )
 
     def _init_mono_font(self) -> ctk.CTkFont:
         # Monospace font defaults:
@@ -545,6 +671,7 @@ class Anonymizer(ctk.CTk):
 
         from anonymizer.controller.tseg.runtime_status import log_runtime_status_for_session
 
+        self._release_welcome_window_constraints()
         self.welcome_view.release_images()
         self.welcome_view.destroy()
         log_runtime_status_for_session()
@@ -565,6 +692,10 @@ class Anonymizer(ctk.CTk):
 
         self.dashboard.update_totals(self.controller.anonymizer.model.get_totals())
         self.dashboard.focus_set()
+        self._apply_project_window_size()
+        for delay_ms in (50, 200):
+            self.after(delay_ms, self._apply_project_window_size)
+        self.after(400, lambda: self._apply_project_window_size(log=True))
 
         logger.info(f"metrics_loop start interval={self.metrics_loop_interval}ms")
         self.metrics_loop()
@@ -1187,6 +1318,7 @@ def run_GUI(logs_dir):
     install_safe_scaling_tracker()
     try:
         app = Anonymizer(Path(logs_dir))
+        app._log_ctk_scaling()
         app.lift()
         app.focus_force()
         logger.info("ANONYMIZER GUI initialised successfully.")
@@ -1368,12 +1500,6 @@ def main(config: Path | None = None):
     logger.info(f"Python Version: {sys.version_info.major}.{sys.version_info.minor}")
     logger.info(f"tkinter TkVersion: {tk.TkVersion} TclVersion: {tk.TclVersion}")
     logger.info(f"Customtkinter Version: {ctk.__version__}")
-    if sys.platform == "darwin":
-        logger.info(
-            "CustomTkinter scaling: widget=%s window=%s",
-            ctk.get_widget_scaling(),
-            ctk.get_window_scaling(),
-        )
     logger.info(f"pydicom Version: {pydicom_version}, pynetdicom Version: {pynetdicom_version}")
 
     # OCR models download on demand from AI Setup dialog.
