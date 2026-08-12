@@ -43,13 +43,6 @@ def anonymizer_model(tmp_path: Path) -> AnonymizerModel:
     )
 
 
-class _DirectOcrService:
-    """Run remove_pixel_phi on the calling thread (no OCR worker)."""
-
-    def process_dicom_path(self, path: Path, **kwargs):
-        return remove_pixel_phi(path, MagicMock(), whitelist=[], **kwargs)
-
-
 def _phi_slice_path(series_dir: Path, *, burn_slice_index: int = 0) -> Path:
     return list_dcm_files(series_dir)[burn_slice_index]
 
@@ -125,7 +118,7 @@ def test_batch_pixel_phi_pipeline_updates_model_and_phi_index(
     outcome = _apply_remove_pixel_phi_series(
         series_dir,
         anon_model=anonymizer_model,
-        ocr_service=_DirectOcrService(),
+        ocr_reader=MagicMock(),
         removal_mode=PixelPhiRemovalMode.BLACKOUT,
     )
 
@@ -173,7 +166,7 @@ def test_batch_pixel_phi_leaves_unmarked_slices_unchanged(
     outcome = _apply_remove_pixel_phi_series(
         series_dir,
         anon_model=anonymizer_model,
-        ocr_service=_DirectOcrService(),
+        ocr_reader=MagicMock(),
         removal_mode=PixelPhiRemovalMode.BLACKOUT,
     )
 
@@ -201,7 +194,7 @@ def test_phi_index_digest_deduplicates_across_instances(
     outcome = _apply_remove_pixel_phi_series(
         series_dir,
         anon_model=anonymizer_model,
-        ocr_service=_DirectOcrService(),
+        ocr_reader=MagicMock(),
         removal_mode=PixelPhiRemovalMode.BLACKOUT,
     )
 

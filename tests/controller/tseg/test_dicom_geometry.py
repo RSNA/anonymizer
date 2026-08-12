@@ -436,11 +436,11 @@ def test_build_sitk_volume_from_pydicom_matches_stackable_paths(tmp_path: Path) 
 
 
 def test_build_sitk_volume_from_series_frames_matches_load_series(tmp_path: Path) -> None:
-    from anonymizer.controller.series_io import load_series
+    from anonymizer.controller.series_io import load_series_frames
 
     series_dir = build_synthetic_chest_ct_series(tmp_path / "chest")
-    loaded = load_series(series_dir)
-    reference_ds, frames, slice_paths = loaded.metadata, loaded.slices, loaded.slice_paths
+    loaded = load_series_frames(series_dir)
+    reference_ds, frames, slice_paths = loaded.metadata, loaded.frames, loaded.slice_paths
     volume = build_sitk_volume_from_series_frames(reference_ds, frames, slice_paths)
     assert volume.GetSize()[2] == len(slice_paths)
     assert volume.GetSize()[2] == frames.shape[0]

@@ -1,4 +1,5 @@
 *.dcm
+!tests/controller/assets/test_dcm_files/**/*.dcm
 *.pth
 *.dmg
 *.log

@@ -15,7 +15,7 @@ from anonymizer.controller.blur_face import (
     load_hu_stack,
     write_blurred_dicom_series,
 )
-from anonymizer.controller.series_io import load_series, save_series_slices
+from anonymizer.controller.series_io import load_series_frames, save_series_frames
 
 
 def _write_template_slice(path: Path, *, hu_value: float, instance_number: int) -> None:
@@ -71,7 +71,7 @@ def test_write_blurred_dicom_series_preserves_geometry(tmp_path: Path) -> None:
     assert np.allclose(reloaded[~mask], hu_before[~mask], atol=1.0)
 
 
-def test_save_series_slices_preserves_ct_encoding(tmp_path: Path) -> None:
+def test_save_series_frames_preserves_ct_encoding(tmp_path: Path) -> None:
     source_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
     source_dir.mkdir()
@@ -80,15 +80,15 @@ def test_save_series_slices_preserves_ct_encoding(tmp_path: Path) -> None:
     _write_template_slice(slice_paths[0], hu_value=-100.0, instance_number=1)
     _write_template_slice(slice_paths[1], hu_value=40.0, instance_number=2)
 
-    loaded = load_series(source_dir)
+    loaded = load_series_frames(source_dir)
 
-    reference_ds, frames, loaded_paths = loaded.metadata, loaded.slices, loaded.slice_paths
+    reference_ds, frames, loaded_paths = loaded.metadata, loaded.frames, loaded.slice_paths
     assert loaded_paths == slice_paths
 
     for path in slice_paths:
         shutil.copy2(path, output_dir / path.name)
 
-    assert save_series_slices(output_dir, frames, reference_ds)
+    assert save_series_frames(output_dir, frames, reference_ds)
 
     for source_path in slice_paths:
         source_ds = pydicom.dcmread(source_path)

@@ -40,7 +40,7 @@ def configure_macos_subprocess_env() -> None:
 
 def log_active_threads(stage: str) -> None:
     threads = threading.enumerate()
-    logger.info(
+    logger.debug(
         "Threads [%s]: %d active — %s",
         stage,
         len(threads),
@@ -80,7 +80,7 @@ def sequential_ml_context(stage: str) -> Iterator[None]:
     except ImportError:
         torch = None
 
-    logger.info("Sequential ML context start: %s", stage)
+    logger.debug("Sequential ML context start: %s", stage)
     log_active_threads(stage)
 
     ts_libs = None
@@ -117,4 +117,4 @@ def sequential_ml_context(stage: str) -> Iterator[None]:
             else:
                 os.environ[key] = value
 
-        logger.info("Sequential ML context end: %s", stage)
+        logger.debug("Sequential ML context end: %s", stage)

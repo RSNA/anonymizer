@@ -546,7 +546,7 @@ def map_body_part_code(
         codes.append(code)
 
     body_part_code = "+".join(codes)
-    logger.info(
+    logger.debug(
         "Playbook map body part: ts_regions=%r structures=%s → code=%s",
         body_parts_present,
         sorted(structures),
@@ -566,11 +566,11 @@ def _head_region_playbook_code(structures_present: dict[str, int]) -> str:
     if brain_voxels >= MIN_STRUCTURE_VOXELS:
         return "Brain"
     if skull_voxels >= MIN_STRUCTURE_VOXELS and brain_voxels == 0:
-        logger.info("Playbook map body part: Head region with skull/spinal cord but no brain → Head")
+        logger.debug("Playbook map body part: Head region with skull/spinal cord but no brain → Head")
         return "Head"
     if brain_voxels > 0 or skull_voxels > 0:
         return "Brain"
-    logger.info("Playbook map body part: Head region without structure detail; defaulting to Brain")
+    logger.debug("Playbook map body part: Head region without structure detail; defaulting to Brain")
     return "Brain"
 
 
@@ -589,7 +589,7 @@ def map_body_part_from_dicom(ds: Dataset) -> str:
     if body_part_examined:
         exact = _DICOM_BODY_PART_EXACT.get(body_part_examined.replace(" ", ""))
         if exact is not None:
-            logger.info("Playbook localizer body part: BodyPartExamined=%r → %s", body_part_examined, exact)
+            logger.debug("Playbook localizer body part: BodyPartExamined=%r → %s", body_part_examined, exact)
             return exact
 
     combined = " ".join(
@@ -598,7 +598,7 @@ def map_body_part_from_dicom(ds: Dataset) -> str:
     ).upper()
     for keywords, code in _DICOM_BODY_PART_KEYWORDS:
         if any(keyword in combined for keyword in keywords):
-            logger.info("Playbook localizer body part: text match %r → %s", keywords[0], code)
+            logger.debug("Playbook localizer body part: text match %r → %s", keywords[0], code)
             return code
 
     raise ValueError("Could not determine Playbook body part from DICOM metadata for this localizer series")
@@ -649,7 +649,7 @@ def map_anatomic_plane_code(geometry: SeriesGeometryResult) -> str:
     if code not in ANATOMIC_PLANE_PLAYBOOK_CODES:
         raise ValueError(f"Playbook anatomic plane code not registered: {code!r}")
 
-    logger.info(
+    logger.debug(
         "Playbook map anatomic plane: geometry.plane=%s confidence=%.3f → code=%s",
         geometry.plane,
         geometry.plane_confidence,
@@ -671,7 +671,7 @@ def map_iv_contrast_code(tseg: TS_result) -> str:
                 code,
             )
         else:
-            logger.info(
+            logger.debug(
                 "Playbook map IV contrast: ts_phase=%s iv_contrast=%s → code=%s",
                 tseg.contrast_phase,
                 tseg.iv_contrast,
@@ -680,7 +680,7 @@ def map_iv_contrast_code(tseg: TS_result) -> str:
         return _iv_contrast_playbook_code(code)
 
     code = "W" if tseg.iv_contrast else "WO"
-    logger.info(
+    logger.debug(
         "Playbook map IV contrast: no TS phase; iv_contrast=%s → code=%s",
         tseg.iv_contrast,
         code,
@@ -769,7 +769,7 @@ def format_playbook_series_description(
             len(description),
             description,
         )
-    logger.info(
+    logger.debug(
         "Playbook series description: elements=%s → %r",
         elements,
         description,

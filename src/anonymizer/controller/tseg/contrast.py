@@ -188,7 +188,7 @@ def log_memory_usage(stage: str) -> None:
         import psutil
 
         rss_mb = psutil.Process().memory_info().rss / (1024 * 1024)
-        logger.info("Memory [%s]: RSS %.0f MB", stage, rss_mb)
+        logger.debug("Memory [%s]: RSS %.0f MB", stage, rss_mb)
     except Exception:
         logger.debug("Memory [%s]: psutil unavailable", stage)
 
@@ -570,7 +570,7 @@ def _apply_hu_gate(result: dict, stats: dict, stats_hn: dict) -> dict:
 
     updated = dict(result)
     limited_fov = head_dominant_limited_fov(stats)
-    logger.info(
+    logger.debug(
         "TS contrast: HU gate iv_contrast=%s overrides XGBoost=%s (head_limited_fov=%s)",
         gate,
         xgb_iv,
@@ -655,7 +655,7 @@ def predict_contrast_phase(
                 "pi_time_max": cached.get("pi_time_max", cached["pi_time"]),
                 "stddev": cached.get("stddev", 0.0),
             }
-            logger.info(
+            logger.debug(
                 "TS contrast: reusing cached XGBoost result from %s (phase=%s pi_time=%s)",
                 phase_cache,
                 result["phase"],
@@ -673,7 +673,7 @@ def predict_contrast_phase(
     ts_device = resolve_device(device)
     nifti_path = Path(nifti_path)
 
-    logger.info(
+    logger.debug(
         "TS contrast: statistics from %s (device=%s, existing_stats=%s)",
         nifti_path,
         ts_device,
@@ -696,7 +696,7 @@ def predict_contrast_phase(
                         message="Computing organ HU statistics",
                         fraction=0.05,
                     )
-                    logger.info(
+                    logger.debug(
                         "TS contrast: running TotalSegmentator organ statistics (total task, fast=3mm, statistics=True)"
                     )
                     _, stats = totalsegmentator(
@@ -719,7 +719,7 @@ def predict_contrast_phase(
                         fraction=0.30,
                     )
                 else:
-                    logger.info("TS contrast: reusing cached organ statistics")
+                    logger.debug("TS contrast: reusing cached organ statistics")
                     stats = existing_stats
                     _emit_contrast_progress(
                         progress,
@@ -730,7 +730,7 @@ def predict_contrast_phase(
 
                 if existing_stats is None and stats_output_path is not None:
                     save_contrast_statistics(stats, stats_output_path)
-                    logger.info("TS contrast: wrote cached contrast statistics to %s", stats_output_path)
+                    logger.debug("TS contrast: wrote cached contrast statistics to %s", stats_output_path)
 
                 needs_head_neck = needs_head_neck_vessel_stats(
                     stats,
@@ -752,7 +752,7 @@ def predict_contrast_phase(
                             or stats_hn_path.stat().st_mtime >= stats_path.stat().st_mtime
                         )
                     ):
-                        logger.info("TS contrast: reusing cached head/neck vessel statistics")
+                        logger.debug("TS contrast: reusing cached head/neck vessel statistics")
                         stats_hn = load_contrast_stats_hn(stats_hn_path)
                         _emit_contrast_progress(
                             progress,
@@ -761,7 +761,7 @@ def predict_contrast_phase(
                             fraction=0.65,
                         )
                     else:
-                        logger.info(
+                        logger.debug(
                             "TS contrast: running head/neck vessel statistics "
                             "(headneck_bones_vessels task; full resolution)"
                         )
@@ -780,7 +780,7 @@ def predict_contrast_phase(
                         )
                         if stats_hn_path is not None:
                             save_contrast_stats_hn(stats_hn, stats_hn_path)
-                            logger.info(
+                            logger.debug(
                                 "TS contrast: wrote cached head/neck statistics to %s",
                                 stats_hn_path,
                             )
@@ -803,8 +803,8 @@ def predict_contrast_phase(
                 hu_features.extend(stats_hn[organ]["intensity"] for organ in CONTRAST_ORGANS_HN)
                 hu_medians = _hu_medians_from_stats(stats, CONTRAST_ORGANS)
                 hu_medians.update(_hu_medians_from_stats(stats_hn, CONTRAST_ORGANS_HN))
-                logger.info("TS contrast: HU median: %s", _format_hu_medians(hu_medians, _LOG_HU_ORGANS))
-                logger.info("TS contrast: HU features ready; running XGBoost ensemble")
+                logger.debug("TS contrast: HU median: %s", _format_hu_medians(hu_medians, _LOG_HU_ORGANS))
+                logger.debug("TS contrast: HU features ready; running XGBoost ensemble")
                 _emit_contrast_progress(
                     progress,
                     stage="contrast_xgboost",
@@ -820,7 +820,7 @@ def predict_contrast_phase(
                     fraction=0.95,
                 )
                 phase = str(result["phase"])
-                logger.info(
+                logger.debug(
                     "TS contrast: phase=%s pi_time=%s probability=%.3f iv_contrast=%s",
                     phase,
                     result["pi_time"],
@@ -830,7 +830,7 @@ def predict_contrast_phase(
 
                 if phase_cache is not None:
                     save_contrast_phase_cache(result, hu_medians=hu_medians, phase_cache_path=phase_cache)
-                    logger.info("TS contrast: wrote cached XGBoost result to %s", phase_cache)
+                    logger.debug("TS contrast: wrote cached XGBoost result to %s", phase_cache)
 
                 inference_sec = time.perf_counter() - started
                 return result, inference_sec, hu_medians

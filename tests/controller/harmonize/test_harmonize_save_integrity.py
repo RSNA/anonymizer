@@ -10,8 +10,8 @@ from pydicom import dcmread
 from anonymizer.controller.harmonize import apply_harmonized_description
 from anonymizer.controller.series_io import (
     apply_series_description,
-    load_series,
-    save_series_slices,
+    load_series_frames,
+    save_series_frames,
 )
 from tests.controller.tseg.support.synthetic_ct import build_synthetic_chest_ct_series
 
@@ -53,9 +53,9 @@ def test_harmonize_save_then_save_pixel_changes_without_edits_preserves_pixels(
 
     assert apply_series_description(series_dir, "Chest Ax Portal Venous") is True
 
-    loaded = load_series(series_dir)
+    loaded = load_series_frames(series_dir)
 
-    reference_ds, frames, _loaded_paths = loaded.metadata, loaded.slices, loaded.slice_paths
-    assert save_series_slices(series_dir, frames, reference_ds) is True
+    reference_ds, frames, _loaded_paths = loaded.metadata, loaded.frames, loaded.slice_paths
+    assert save_series_frames(series_dir, frames, reference_ds) is True
 
     _assert_series_pixels_unchanged(before, series_dir)

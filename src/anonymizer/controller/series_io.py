@@ -36,26 +36,26 @@ SERIES_VIEW_PROJECTION_COUNT = 3
 
 @dataclass(frozen=True)
 class LoadedSeries:
-    """Decoded series in series_buffer space (one row per slice)."""
+    """In-memory anatomical frame stack from load_series_frames (one row per slice file)."""
 
     metadata: Dataset
-    slices: np.ndarray
+    frames: np.ndarray
     slice_paths: tuple[Path, ...]
     default_window: tuple[float, float]
 
     @property
     def is_single_frame(self) -> bool:
-        return self.slices.shape[0] == 1
+        return self.frames.shape[0] == 1
 
     def series_view_stack(self) -> np.ndarray:
         if self.is_single_frame:
-            return self.slices
-        slice_count = self.slices.shape[0]
+            return self.frames
+        slice_count = self.frames.shape[0]
         prefix = SERIES_VIEW_PROJECTION_COUNT
         frames = np.empty(
-            (slice_count + prefix,) + self.slices.shape[1:], dtype=self.slices.dtype
+            (slice_count + prefix,) + self.frames.shape[1:], dtype=self.frames.dtype
         )
-        np.copyto(frames[prefix:], self.slices)
+        np.copyto(frames[prefix:], self.frames)
         proj_min = np.copy(frames[prefix])
         proj_max = np.copy(frames[prefix])
         proj_sum = frames[prefix].astype(np.float32, copy=True)
@@ -75,13 +75,14 @@ class LoadedSeries:
         return viewer_stack[SERIES_VIEW_PROJECTION_COUNT:]
 
 
-def load_series(series_path: Path) -> LoadedSeries:
-    """Load a DICOM series directory into series_buffer space."""
-    metadata, slices, slice_paths = _load_series_slices(series_path)
+def load_series_frames(series_path: Path) -> LoadedSeries:
+    """Load a DICOM series directory (anatomical frames only, no projections)."""
+    logger.info("load_series_frames: %s", series_path)
+    metadata, frames, slice_paths = _load_series_frames(series_path)
     default_window = get_wl_ww(metadata)
     return LoadedSeries(
         metadata=metadata,
-        slices=slices,
+        frames=frames,
         slice_paths=slice_paths,
         default_window=default_window,
     )
@@ -91,9 +92,9 @@ __all__ = [
     "LoadedSeries",
     "SERIES_VIEW_PROJECTION_COUNT",
     "apply_series_description",
-    "load_series",
+    "load_series_frames",
     "ordered_series_dcm_paths",
-    "save_series_slices",
+    "save_series_frames",
     "series_buffer_monochrome_to_stored",
     "stored_monochrome_to_series_buffer",
 ]
@@ -153,7 +154,7 @@ def clip_and_cast_to_int(
 
 def ordered_series_dcm_paths(series_path: Path) -> list[Path]:
     """
-    Return DICOM paths in the same order as ``load_series`` / face blur.
+    Return DICOM paths in the same order as ``load_series_frames`` / face blur.
 
     Uses ``stackable_dicom_paths`` (IPP stack order). Falls back to direct children
     of ``series_path`` sorted by ``InstanceNumber`` — never recursive subdirectories.
@@ -203,7 +204,7 @@ def _prepare_monochrome_stored_pixels(
     """
     Convert processed frames to stored pixels using ``ds_orig`` rescale and integer encoding.
 
-    Float input is treated as post-modality-LUT values (same as ``load_series`` output).
+    Float input is treated as post-modality-LUT values (same as ``load_series_frames`` output).
     Integer input is clipped/cast to the source slice dtype without changing rescale semantics.
     """
     target_dtype = _stored_integer_dtype(ds_orig)
@@ -230,6 +231,41 @@ def _prepare_monochrome_stored_pixels(
     )
 
 
+def _viewer_chunk_to_stored_pixels(
+    viewer_chunk: np.ndarray,
+    ds_orig: Dataset,
+    *,
+    original_stored_pixels: np.ndarray,
+) -> np.ndarray:
+    """Map Series View float frames back to stored DICOM pixels (incl. MONOCHROME1 invert)."""
+    num_frames = int(viewer_chunk.shape[0]) if viewer_chunk.ndim == 3 else 1
+    multi_source = original_stored_pixels.ndim > 2 and num_frames > 1
+
+    stored_frames: list[np.ndarray] = []
+    for frame_idx in range(num_frames):
+        viewer = viewer_chunk[frame_idx] if num_frames > 1 else viewer_chunk
+        orig_stored = (
+            original_stored_pixels[frame_idx]
+            if multi_source
+            else original_stored_pixels
+        )
+        mono1_invert_max: float | None = None
+        pi = str(getattr(ds_orig, "PhotometricInterpretation", "") or "").upper()
+        if pi == "MONOCHROME1":
+            _, mono1_invert_max = stored_monochrome_to_series_buffer(orig_stored, ds_orig)
+        stored_frames.append(
+            series_buffer_monochrome_to_stored(
+                viewer,
+                ds_orig,
+                mono1_invert_max=mono1_invert_max,
+            )
+        )
+
+    if num_frames == 1:
+        return stored_frames[0]
+    return np.stack(stored_frames, axis=0)
+
+
 def stored_monochrome_to_series_buffer(
     stored_frame: np.ndarray,
     ds: Dataset,
@@ -237,7 +273,7 @@ def stored_monochrome_to_series_buffer(
     """
     Convert one stored grayscale frame to Series View pixel space (float32).
 
-    Matches ``load_series`` monochrome handling (modality LUT, MONOCHROME1 invert).
+    Matches ``load_series_frames`` monochrome handling (modality LUT, MONOCHROME1 invert).
     Returns ``(viewer_pixels, mono1_invert_max)``; ``mono1_invert_max`` is required to map back
     for MONOCHROME1 and is ``None`` for MONOCHROME2.
     """
@@ -270,6 +306,18 @@ def series_buffer_monochrome_to_stored(
 def _pixel_data_vr(ds: Dataset) -> str:
     bits_allocated = int(getattr(ds, "BitsAllocated", 16) or 16)
     return "OW" if bits_allocated == 16 else "OB"
+
+
+def _rows_cols_from_pixel_array(pixels: np.ndarray) -> tuple[int, int]:
+    """Return DICOM (Rows, Columns) for a frame or stacked pixel array."""
+    if pixels.ndim == 2:
+        return int(pixels.shape[0]), int(pixels.shape[1])
+    if pixels.ndim >= 3 and pixels.shape[-1] in (3, 4):
+        height_axis = -3 if pixels.ndim > 3 else 0
+        return int(pixels.shape[height_axis]), int(pixels.shape[-2])
+    if pixels.ndim >= 3:
+        return int(pixels.shape[-2]), int(pixels.shape[-1])
+    raise ValueError(f"Cannot determine Rows/Columns from pixel array shape {pixels.shape}")
 
 
 def _validate_dicom_pixel_array(ds: Dataset) -> tuple[ndarray, int, int, str]:
@@ -460,7 +508,7 @@ def _validate_dicom_pixel_array(ds: Dataset) -> tuple[ndarray, int, int, str]:
     return pixels, rows, cols, pi.upper()
 
 
-def _load_series_slices(series_path: Path) -> tuple[Dataset, ndarray, tuple[Path, ...]]:
+def _load_series_frames(series_path: Path) -> tuple[Dataset, ndarray, tuple[Path, ...]]:
     """
     Loads and processes DICOM series frames from a directory, resizing to match
     the first frame's dimensions.
@@ -519,7 +567,7 @@ def _load_series_slices(series_path: Path) -> tuple[Dataset, ndarray, tuple[Path
     if not dcm_paths:
         raise ValueError(f"No DICOM files found in {series_path}")
 
-    log_process_memory("load_series_start", extra=str(series_path.name))
+    log_process_memory("load_series_frames_start", extra=str(series_path.name))
 
     processed_frames: list[ndarray] = []
     processed_paths: list[Path] = []
@@ -569,7 +617,7 @@ def _load_series_slices(series_path: Path) -> tuple[Dataset, ndarray, tuple[Path
                 current_frame_pixels = (
                     raw_pixels[frame_idx] if is_multi_frame_source else raw_pixels
                 )
-                processed_frame: ndarray | None = None
+                frame: ndarray | None = None
 
                 # Process based on the *series* interpretation determined from the first file
                 match series_pi:
@@ -586,49 +634,49 @@ def _load_series_slices(series_path: Path) -> tuple[Dataset, ndarray, tuple[Path
                         if series_pi == "MONOCHROME1":
                             try:
                                 max_val = np.max(modality_pixels)
-                                processed_frame = max_val - modality_pixels
+                                frame = max_val - modality_pixels
                             except Exception:
-                                processed_frame = modality_pixels
+                                frame = modality_pixels
                                 logger.warning(
                                     f"Could not invert MONOCHROME1 frame {frame_idx} in {dcm_path}",
                                     exc_info=True,
                                 )
                         else:
-                            processed_frame = modality_pixels
+                            frame = modality_pixels
                         if (
-                            processed_frame is not None
-                            and processed_frame.ndim == 3
-                            and processed_frame.shape[-1] == 1
+                            frame is not None
+                            and frame.ndim == 3
+                            and frame.shape[-1] == 1
                         ):
-                            processed_frame = processed_frame.squeeze(axis=-1)
+                            frame = frame.squeeze(axis=-1)
 
                     case "PALETTE COLOR":
-                        processed_frame = apply_color_lut(current_frame_pixels, ds)
-                        if processed_frame.shape[-1] == 4:
-                            processed_frame = processed_frame[..., :3]
-                        # if processed_frame.dtype != np.uint8:
-                        #     processed_frame = normalize_uint8(processed_frame)
+                        frame = apply_color_lut(current_frame_pixels, ds)
+                        if frame.shape[-1] == 4:
+                            frame = frame[..., :3]
+                        # if frame.dtype != np.uint8:
+                        #     frame = normalize_uint8(frame)
 
                     case "YBR_FULL" | "YBR_FULL_422":
-                        processed_frame = convert_color_space(
+                        frame = convert_color_space(
                             current_frame_pixels, series_pi, "RGB"
                         )
                         if (
-                            processed_frame.dtype != np.uint8
-                            or processed_frame.ndim != 3
-                            or processed_frame.shape[-1] != 3
+                            frame.dtype != np.uint8
+                            or frame.ndim != 3
+                            or frame.shape[-1] != 3
                         ):
                             raise ValueError(
                                 f"Color space conversion failed for {dcm_path} frame {frame_idx}."
                             )
 
                     case "RGB":
-                        processed_frame = current_frame_pixels
+                        frame = current_frame_pixels
 
                 # --- Resize frame AFTER processing if necessary ---
-                if processed_frame is not None:
+                if frame is not None:
                     # Resize to target size if necessary
-                    current_h, current_w = processed_frame.shape[:2]
+                    current_h, current_w = frame.shape[:2]
                     target_h, target_w = target_size
                     if current_h != target_h or current_w != target_w:
                         logger.warning(
@@ -640,13 +688,13 @@ def _load_series_slices(series_path: Path) -> tuple[Dataset, ndarray, tuple[Path
                             if (current_h > target_h or current_w > target_w)
                             else INTER_LINEAR
                         )
-                        processed_frame = resize(
-                            processed_frame,
+                        frame = resize(
+                            frame,
                             (target_w, target_h),
                             interpolation=interpolation,
                         )
 
-                    processed_frames.append(processed_frame)
+                    processed_frames.append(frame)
                     processed_paths.append(dcm_path)
                 else:
                     raise RuntimeError(
@@ -740,7 +788,7 @@ def apply_series_description(series_path: Path, description: str) -> bool:
     return success
 
 
-def save_series_slices(
+def save_series_frames(
     original_series_path: Path, processed_frames: np.ndarray, reference_ds: Dataset
 ) -> bool:
     """
@@ -766,7 +814,7 @@ def save_series_slices(
         logger.error(f"Original series path is not a directory: {original_series_path}")
         return False
 
-    # --- 1. Determine Original File Structure (stack order, same as load_series) ---
+    # --- 1. Determine Original File Structure (stack order, same as load_series_frames) ---
     try:
         original_dcm_paths = ordered_series_dcm_paths(original_series_path)
         if not original_dcm_paths:
@@ -820,6 +868,8 @@ def save_series_slices(
         try:
             ds_orig = dcmread(str(original_path), stop_before_pixels=True, force=True)
             ds_save = ds_orig.copy()
+            ds_pixels = dcmread(str(original_path), force=True)
+            original_stored_pixels = ds_pixels.pixel_array
 
             frame_chunk = processed_frames[frame_ndx : frame_ndx + num_frames_in_file]
             if frame_chunk.shape[0] != num_frames_in_file:
@@ -830,8 +880,10 @@ def save_series_slices(
 
             if series_pi in ("MONOCHROME1", "MONOCHROME2"):
                 try:
-                    final_pixel_data = _prepare_monochrome_stored_pixels(
-                        frame_chunk, ds_orig
+                    final_pixel_data = _viewer_chunk_to_stored_pixels(
+                        frame_chunk,
+                        ds_orig,
+                        original_stored_pixels=original_stored_pixels,
                     )
                 except ValueError as exc:
                     logger.error(
@@ -926,17 +978,15 @@ def save_series_slices(
                 value=final_pixel_data_to_save.tobytes(),
             )
 
-            # Use shape of data being saved for Rows/Columns metadata
-            if final_pixel_data_to_save.ndim == 2:
-                ds_save.Rows, ds_save.Columns = final_pixel_data_to_save.shape
-            elif final_pixel_data_to_save.ndim >= 3:
-                ds_save.Rows, ds_save.Columns = (
-                    final_pixel_data_to_save.shape[-2],
-                    final_pixel_data_to_save.shape[-1],
+            try:
+                ds_save.Rows, ds_save.Columns = _rows_cols_from_pixel_array(
+                    final_pixel_data_to_save
                 )
-            else:
+            except ValueError as exc:
                 logger.error(
-                    f"Unexpected shape after squeeze: {final_pixel_data_to_save.shape}"
+                    "Unexpected shape after squeeze for %s: %s",
+                    original_path.name,
+                    exc,
                 )
                 success = False
                 frame_ndx += num_frames_in_file

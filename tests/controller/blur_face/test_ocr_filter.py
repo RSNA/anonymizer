@@ -17,6 +17,7 @@ from anonymizer.controller.remove_pixel_phi import (
     blackout_ocr_text_areas,
     detect_text,
     filter_ocr_detections,
+    load_modality_whitelist,
     remove_pixel_phi,
 )
 from anonymizer.utils.memory import MemorySnapshot, format_memory_snapshot_label
@@ -62,6 +63,45 @@ def test_filter_ocr_detections_whitelist_fuzzy_match() -> None:
     detections = [_ocr("AXIAL", prob=0.9), _ocr("PATIENT NAME", prob=0.9)]
     filtered = filter_ocr_detections(detections, whitelist=["AXIL"])
     assert [item.text for item in filtered] == ["PATIENT NAME"]
+
+
+def test_filter_ocr_detections_whitelist_filters_portable(caplog) -> None:
+    detections = [_ocr("Portable", prob=0.9), _ocr("DAVIDSON", prob=0.9)]
+    import logging
+
+    with caplog.at_level(logging.DEBUG, logger="anonymizer.controller.remove_pixel_phi"):
+        filtered = filter_ocr_detections(detections, whitelist=["PORTABLE"])
+    assert [item.text for item in filtered] == ["DAVIDSON"]
+    assert "OCR whitelist filtered 1 detection(s): ['Portable']" in caplog.text
+
+
+def test_filter_ocr_detections_empty_whitelist_keeps_portable() -> None:
+    detections = [_ocr("Portable", prob=0.9), _ocr("DAVIDSON", prob=0.9)]
+    filtered = filter_ocr_detections(detections, whitelist=[])
+    assert [item.text for item in filtered] == ["Portable", "DAVIDSON"]
+
+
+def test_load_modality_whitelist_cr_includes_portable(monkeypatch: pytest.MonkeyPatch) -> None:
+    pkg_dir = Path(__file__).resolve().parents[3] / "src" / "anonymizer"
+    monkeypatch.chdir(pkg_dir)
+    whitelist = load_modality_whitelist(None, "CR")
+    assert "PORTABLE" in whitelist
+
+
+def test_load_modality_whitelist_merges_project_terms(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pkg_dir = Path(__file__).resolve().parents[3] / "src" / "anonymizer"
+    monkeypatch.chdir(pkg_dir)
+    project_dir = tmp_path / "project"
+    project_whitelist = project_dir / "whitelists" / "CR.txt"
+    project_whitelist.parent.mkdir(parents=True)
+    project_whitelist.write_text("CUSTOMTERM\n", encoding="utf-8")
+
+    whitelist = load_modality_whitelist(project_dir, "CR")
+    assert "PORTABLE" in whitelist
+    assert "CUSTOMTERM" in whitelist
 
 
 @patch("anonymizer.controller.remove_pixel_phi._easyocr_readtext")

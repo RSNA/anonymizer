@@ -2,41 +2,30 @@
 from __future__ import annotations
 
 import difflib
-import gc
 import logging
 import os
-import threading
-import time
-from collections.abc import Callable, Iterator, Mapping, Sequence
-from contextlib import contextmanager, suppress
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum, StrEnum, auto
 from pathlib import Path
-from queue import Queue
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
 from cv2 import (
-    BORDER_CONSTANT,
     CHAIN_APPROX_SIMPLE,
     COLOR_RGB2GRAY,
     FONT_HERSHEY_SIMPLEX,
     INPAINT_TELEA,
-    INTER_LINEAR,
-    NORM_MINMAX,
     RETR_TREE,
     THRESH_OTSU,
-    copyMakeBorder,
     cvtColor,
     dilate,
     drawContours,
     findContours,
     inpaint,
-    normalize,
     putText,
     rectangle,
-    resize,
     threshold,
 )
 from easyocr import Reader
@@ -63,12 +52,31 @@ logger = logging.getLogger(__name__)
 def _ocr_bgr_from_stored_monochrome(stored: np.ndarray, ds: Dataset) -> NDArray[np.uint8]:
     """EasyOCR input for one stored mono slice — matches Series View Detect Text."""
     from anonymizer.controller.series_io import stored_monochrome_to_series_buffer
+
+    viewer_pixels, _ = stored_monochrome_to_series_buffer(stored, ds)
+    return ocr_image_for_frame(ds, viewer_pixels)
+
+
+def ocr_image_for_frame(ds: Dataset, frame: np.ndarray) -> NDArray[np.uint8]:
+    """Apply DICOM WL/WW to a processed frame for EasyOCR (Series View and batch)."""
+    from cv2 import COLOR_RGB2BGR, cvtColor
+
     from anonymizer.utils.dicom import get_wl_ww
     from anonymizer.utils.windowing import apply_windowing
 
-    buffer, _ = stored_monochrome_to_series_buffer(stored, ds)
+    pi = str(ds.get("PhotometricInterpretation", "") or "").upper()
+    if frame.ndim == 3 and frame.shape[-1] == 3 and frame.dtype == np.uint8 and pi == "RGB":
+        logger.debug("ocr_image_for_frame RGB uint8 -> BGR for EasyOCR frame_shape=%s", frame.shape)
+        return cvtColor(np.ascontiguousarray(frame), COLOR_RGB2BGR)
+
     wl, ww = get_wl_ww(ds)
-    return apply_windowing(wl, ww, buffer)
+    logger.debug("ocr_image_for_frame wl=%.1f ww=%.1f frame_shape=%s", wl, ww, frame.shape)
+    return apply_windowing(wl, ww, frame)
+
+
+def build_series_view_ocr_pixels(images: np.ndarray, ds: Dataset) -> NDArray[np.uint8]:
+    """Snapshot per-frame EasyOCR inputs for Series View (DICOM WL only; no viewer WL)."""
+    return np.stack([ocr_image_for_frame(ds, frame) for frame in images])
 
 
 OCR_MODEL_DIR = Path("assets/ai/ocr/model")
@@ -271,7 +279,7 @@ def _draw_text_contours_on_mask(image: ndarray, top_left: tuple, bottom_right: t
     drawContours(mask, contours, -1, (255, 255, 255), thickness=-1)
 
 
-OCR_MIN_PROB = 0.55
+OCR_MIN_PROB = 0.49
 OCR_MIN_TEXT_LEN = 2
 OCR_MIN_BOX_PX = 10
 OCR_MIN_BOX_AREA = 200
@@ -287,6 +295,20 @@ class PixelPhiRemovalMode(StrEnum):
     BLACKOUT = "blackout"
 
 
+def pixel_phi_removal_mode_menu_values() -> tuple[str, ...]:
+    from anonymizer.utils.translate import _
+
+    return (_("Black out text"), _("Blend into background"))
+
+
+def pixel_phi_removal_mode_from_menu_label(label: str) -> PixelPhiRemovalMode:
+    from anonymizer.utils.translate import _
+
+    if label == _("Blend into background"):
+        return PixelPhiRemovalMode.INPAINT
+    return PixelPhiRemovalMode.BLACKOUT
+
+
 def pixel_phi_removal_mode_display_label(mode: PixelPhiRemovalMode) -> str:
     """Short action label for batch workflow logs."""
     from anonymizer.utils.translate import _
@@ -296,20 +318,34 @@ def pixel_phi_removal_mode_display_label(mode: PixelPhiRemovalMode) -> str:
     return _("blended")
 
 
-def _easyocr_readtext(ocr_reader: Reader, pixels: NDArray[np.uint8]) -> list:
+def _ocr_rotation_angles(modality: str | None) -> list[int]:
+    """US overlays are horizontal; other modalities may include vertical burnt-in text."""
+    if str(modality or "").upper() == "US":
+        return [0]
+    return [0, 90]
+
+
+def _easyocr_readtext(
+    ocr_reader: Reader,
+    pixels: NDArray[np.uint8],
+    *,
+    modality: str | None = None,
+) -> list:
     """Run EasyOCR with tuned parameters shared by manual and batch paths."""
+    rotation_info = _ocr_rotation_angles(modality)
     canvas_size = min(max(pixels.shape[0], pixels.shape[1]), OCR_CANVAS_SIZE_THRESHOLD)
+    logger.debug("EasyOCR readtext rotation_info=%s modality=%r", rotation_info, modality)
     return ocr_reader.readtext(
         pixels,
         canvas_size=canvas_size,
         paragraph=False,
         add_margin=0.0,
-        rotation_info=[0, 90],
-        min_size=10,
+        rotation_info=rotation_info,
+        min_size=1,
         ycenter_ths=0.7,
-        link_threshold=0.5,
+        link_threshold=0.4,
         width_ths=0.1,
-        text_threshold=0.85,
+        text_threshold=0.65,
     )
 
 
@@ -323,7 +359,8 @@ def _parse_easyocr_results(
         try:
             ocr_texts.append(OCRText.from_easyocr_result(result, img_width, img_height))
         except ValueError as exc:
-            logger.warning("Skipping invalid OCR result: %s. Error: %s", result, exc)
+            logger.warning("Skipping invalid OCR result. Error: %s", exc)
+            logger.debug("Invalid OCR result payload: %s", result)
     return ocr_texts
 
 
@@ -358,6 +395,7 @@ def filter_ocr_detections(
     """Drop OCR noise and optional whitelist-matched overlay terms."""
     filtered: list[OCRText] = []
     whitelist_items = [item.upper().strip() for item in (whitelist or []) if str(item).strip()]
+    whitelisted_hits: list[str] = []
     for ocr_text in detections:
         text = (ocr_text.text or "").strip()
         if ocr_text.prob < min_prob:
@@ -379,8 +417,42 @@ def filter_ocr_detections(
         if _is_short_numeric(text) and box_area < short_numeric_min_area:
             continue
         if whitelist_items and _ocr_text_matches_whitelist(text, whitelist_items, whitelist_similarity):
+            whitelisted_hits.append(text)
             continue
         filtered.append(ocr_text)
+    if whitelisted_hits:
+        logger.debug(
+            "OCR whitelist filtered %d detection(s): %s",
+            len(whitelisted_hits),
+            whitelisted_hits,
+        )
+    return filtered
+
+
+def filter_ocr_whitelist_only(
+    detections: Sequence[OCRText],
+    whitelist: Sequence[str] | None,
+    *,
+    whitelist_similarity: float = OCR_WHITELIST_SIMILARITY,
+) -> list[OCRText]:
+    """Drop whitelist-matched overlay terms only (Series View detect; no noise filter)."""
+    whitelist_items = [item.upper().strip() for item in (whitelist or []) if str(item).strip()]
+    if not whitelist_items:
+        return list(detections)
+    filtered: list[OCRText] = []
+    whitelisted_hits: list[str] = []
+    for ocr_text in detections:
+        text = (ocr_text.text or "").strip()
+        if _ocr_text_matches_whitelist(text, whitelist_items, whitelist_similarity):
+            whitelisted_hits.append(text)
+            continue
+        filtered.append(ocr_text)
+    if whitelisted_hits:
+        logger.debug(
+            "OCR whitelist filtered %d detection(s): %s",
+            len(whitelisted_hits),
+            whitelisted_hits,
+        )
     return filtered
 
 
@@ -423,9 +495,14 @@ def detect_text(
     draw_boxes_and_text: bool = False,
     *,
     whitelist: Sequence[str] | None = None,
+    modality: str | None = None,
+    apply_noise_filter: bool = True,
 ) -> list[OCRText] | None:
     """
-    Detect text in a 2D uint8 frame; apply shared noise (and optional whitelist) filtering.
+    Detect text in a 2D uint8 frame.
+
+    Batch removal uses noise + optional whitelist filtering. Series View detect-only
+    passes ``apply_noise_filter=False`` (V18-like: keep all EasyOCR hits; whitelist optional).
     """
     if pixels.ndim == 3:
         img_height, img_width = pixels.shape[:2]
@@ -435,12 +512,17 @@ def detect_text(
         logger.error(f"Unsupported image dimensions: {pixels.ndim}")
         return None
 
-    results = _easyocr_readtext(ocr_reader, pixels)
-    ocr_texts = filter_ocr_detections(
-        _parse_easyocr_results(results, img_width, img_height),
-        whitelist=whitelist,
+    results = _easyocr_readtext(ocr_reader, pixels, modality=modality)
+    parsed = _parse_easyocr_results(results, img_width, img_height)
+    if apply_noise_filter:
+        ocr_texts = filter_ocr_detections(parsed, whitelist=whitelist)
+    else:
+        ocr_texts = filter_ocr_whitelist_only(parsed, whitelist)
+    logger.debug(
+        "OCR detections after filter: %d (noise_filter=%s)",
+        len(ocr_texts),
+        apply_noise_filter,
     )
-    logger.debug("OCR detections after filter: %d", len(ocr_texts))
 
     if draw_boxes_and_text:
         for ocr_text in ocr_texts:
@@ -591,6 +673,21 @@ def remove_text(pixels: ndarray, windowed_frame: NDArray[np.uint8], ocr_texts: l
     )
 
 
+def remove_ocr_text_from_frame(
+    raw_pixels: ndarray,
+    windowed_frame: NDArray[np.uint8],
+    ocr_texts: list[OCRText],
+    *,
+    removal_mode: PixelPhiRemovalMode,
+) -> ndarray:
+    """Remove OCR text from one frame using blackout or inpaint (Series View)."""
+    if removal_mode is PixelPhiRemovalMode.BLACKOUT:
+        result = raw_pixels.copy()
+        blackout_ocr_text_areas(result, ocr_texts)
+        return result
+    return remove_text(raw_pixels, windowed_frame, ocr_texts)
+
+
 def blackout_rectangular_areas(pixels: ndarray, user_rects: list[UserRectangle]):
     # For user defined rectangles simply blacken out the area defined by the user_rect
     """
@@ -672,6 +769,7 @@ def remove_pixel_phi(
         Runtime Exception from OpenJPEG.encode_array
     """
     logger.debug(f"Remove burnt-in PHI from pixel data of: {dcm_path}")
+    _ = (downscale_dimension_threshold, border_size)  # legacy API; OCR uses Series View frame prep
 
     # Read the DICOM image file using pydicom which will perform any decompression required
     ds = dcmread(dcm_path)
@@ -814,15 +912,6 @@ def remove_pixel_phi(
         pixels_stack = pixels
         source_pixels_decompressed_stack = source_pixels_decompressed
 
-    # To improve OCR processing speed:
-    # TODO: Work out more precisely using "readable" text size, pixel spacing (not always present), mask blur kernel size & inpainting radius
-    # Downscale the image if its rows or cols exceeds the downscale_dimension_threshold (for now, empirically determined to 800 pixels)
-    scale_factor = 1
-    if cols > downscale_dimension_threshold:
-        scale_factor = downscale_dimension_threshold / cols
-    elif rows > downscale_dimension_threshold:
-        scale_factor = downscale_dimension_threshold / rows
-
     source_pixels_deid_stack: list | None = None
     source_pixels_changed = False
     detected_texts: list[str] = []
@@ -834,56 +923,23 @@ def remove_pixel_phi(
             logging.debug(f"Processing Frame {frame}...")
 
         stored_frame = pixels_stack[frame]
-        frame_border_size = border_size
-        frame_scale_factor = scale_factor
 
         if grayscale:
             pixels = _ocr_bgr_from_stored_monochrome(stored_frame, ds)
-            frame_border_size = 0
-            frame_scale_factor = 1.0
-            logger.debug(
-                "OCR frame prepared with Series View settings (DICOM WL/WW, no border/downscale); shape=%s",
-                pixels.shape,
-            )
         else:
-            pixels = stored_frame.copy()
-            normalize(
-                src=pixels,
-                dst=pixels,
-                alpha=0,
-                beta=255,
-                norm_type=NORM_MINMAX,
-                dtype=-1,
-                mask=None,
-            )
-            pixels = pixels.astype(np.uint8)
-
-            if frame_scale_factor < 1:
-                new_size = (int(cols * frame_scale_factor), int(rows * frame_scale_factor))
-                pixels = resize(pixels, new_size, interpolation=INTER_LINEAR)
-                logger.debug(
-                    "Downscaled OCR image with scaling factor=%.2f, new pixels.shape: %s",
-                    frame_scale_factor,
-                    pixels.shape,
-                )
-
-            pixels = copyMakeBorder(
-                pixels,
-                frame_border_size,
-                frame_border_size,
-                frame_border_size,
-                frame_border_size,
-                BORDER_CONSTANT,
-                value=[0, 0, 0],
-            )
-            logger.debug(f"Black Border of {frame_border_size}px added, new pixels.shape: {pixels.shape}")
-
-        ocr_height, ocr_width = pixels.shape[:2]
-        raw_results = _easyocr_readtext(ocr_reader, pixels)
-        ocr_texts = filter_ocr_detections(
-            _parse_easyocr_results(raw_results, ocr_width, ocr_height),
-            whitelist=effective_whitelist,
+            pixels = ocr_image_for_frame(ds, stored_frame)
+        logger.debug(
+            "OCR frame prepared with Series View settings (no border/downscale); shape=%s",
+            pixels.shape,
         )
+
+        ocr_texts = detect_text(
+            pixels,
+            ocr_reader,
+            modality=series_modality,
+            whitelist=effective_whitelist,
+            apply_noise_filter=True,
+        ) or []
 
         if not ocr_texts:
             logger.debug("No qualifying text found in frame after OCR filter")
@@ -891,16 +947,7 @@ def remove_pixel_phi(
 
         logger.debug("Text boxes retained after filter in frame: %d", len(ocr_texts))
 
-        source_ocr_texts = _map_ocr_texts_to_source_coordinates(
-            ocr_texts,
-            border_size=frame_border_size,
-            scale_factor=frame_scale_factor,
-            source_cols=cols,
-            source_rows=rows,
-        )
-        if not source_ocr_texts:
-            logger.debug("No OCR boxes mapped to source coordinates")
-            continue
+        source_ocr_texts = ocr_texts
 
         for ocr_text in source_ocr_texts:
             detected_texts.append(ocr_text.text)
@@ -938,17 +985,6 @@ def remove_pixel_phi(
                     ocr_text.bottom_right,
                     mask,
                 )
-
-            mask = (
-                mask[frame_border_size:-frame_border_size, frame_border_size : mask.shape[1] - frame_border_size]
-                if frame_border_size > 0
-                else mask
-            )
-            logger.debug(f"Remove Border from mask, new mask.shape: {mask.shape}")
-
-            if frame_scale_factor < 1:
-                mask = resize(src=mask, dsize=(cols, rows), interpolation=INTER_LINEAR)
-                logger.debug(f"Upscale mask back to original source image size, new mask.shape: {mask.shape}")
 
             kernel = np.ones((3, 3), np.uint8)
             dilated_mask = dilate(src=mask, kernel=kernel, iterations=1)
@@ -1073,13 +1109,11 @@ def apply_series_view_pixel_phi(
     return updated
 
 
-_SHUTDOWN = object()
-_WORKER_SLEEP_SECS = 0.075
-
-
 def _ocr_use_gpu() -> bool:
-    """Unified GPU policy for EasyOCR (CUDA only; EasyOCR does not use MPS via gpu=True)."""
-    return torch.cuda.is_available()
+    """True when EasyOCR can use an accelerator (CUDA or Apple MPS)."""
+    if torch.cuda.is_available():
+        return True
+    return bool(torch.backends.mps.is_available())
 
 
 def _clear_torch_caches() -> None:
@@ -1087,212 +1121,3 @@ def _clear_torch_caches() -> None:
         torch.cuda.empty_cache()
     if torch.backends.mps.is_available():
         torch.mps.empty_cache()
-
-
-@dataclass
-class _OcrJob:
-    fn: Callable[[Reader], Any] | None = None
-    done: threading.Event = field(default_factory=threading.Event)
-    result: Any = None
-    error: BaseException | None = None
-    preload_only: bool = False
-    release_reader: bool = False
-
-
-class OcrService:
-    """Single background thread owns one EasyOCR Reader for the whole process."""
-
-    _instance: OcrService | None = None
-    _instance_lock = threading.Lock()
-
-    def __init__(self) -> None:
-        self._queue: Queue[_OcrJob | object] = Queue()
-        self._session_depth = 0
-        self._session_lock = threading.Lock()
-        self._worker = threading.Thread(
-            target=self._worker_loop,
-            name="OcrServiceWorker",
-            daemon=True,
-        )
-        self._worker.start()
-
-    @classmethod
-    def instance(cls) -> OcrService:
-        with cls._instance_lock:
-            if cls._instance is None:
-                cls._instance = cls()
-            return cls._instance
-
-    @classmethod
-    def reset_for_tests(cls) -> None:
-        """Shut down and discard the singleton (tests only)."""
-        with cls._instance_lock:
-            instance = cls._instance
-            cls._instance = None
-        if instance is not None:
-            instance.shutdown()
-
-    def ensure_models(self) -> None:
-        """Ensure OCR model weights exist on disk (download if missing)."""
-        if not ocr_models_ready():
-            logger.warning("OCR models missing; downloading to %s", OCR_MODEL_DIR)
-            download_ocr_models()
-        elif OCR_MODEL_DIR.is_dir():
-            logger.debug("EasyOCR models present: %s", os.listdir(OCR_MODEL_DIR))
-
-    def process_dicom_path(
-        self,
-        path: Path,
-        *,
-        removal_mode: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT,
-        project_dir: Path | None = None,
-        modality: str | None = None,
-    ) -> tuple[bool, list[str], int]:
-        """Run remove_pixel_phi on the worker thread."""
-        path = Path(path)
-        return self._run(
-            lambda reader: remove_pixel_phi(
-                path,
-                reader,
-                removal_mode=removal_mode,
-                project_dir=project_dir,
-                modality=modality,
-            )
-        )
-
-    def detect_text(
-        self,
-        pixels: NDArray,
-        *,
-        draw_boxes: bool = False,
-    ) -> list[OCRText]:
-        """Run detect_text on the worker thread."""
-        results = self._run(
-            lambda reader: detect_text(
-                pixels,
-                reader,
-                draw_boxes_and_text=draw_boxes,
-            )
-        )
-        return results or []
-
-    @contextmanager
-    def batch_session(self, *, preload: bool = True, release: bool = False) -> Iterator[None]:
-        """Preload the reader at phase start; optionally release it when the outermost session ends."""
-        with self._session_lock:
-            self._session_depth += 1
-            entering = self._session_depth == 1
-
-        try:
-            if entering and preload:
-                self.ensure_models()
-                self._preload_reader()
-            yield
-        finally:
-            with self._session_lock:
-                self._session_depth -= 1
-                exiting = self._session_depth == 0
-            if exiting and release:
-                self._release_reader()
-
-    def pending_count(self) -> int:
-        return self._queue.qsize()
-
-    @classmethod
-    def shutdown_batch(cls) -> None:
-        """Stop the OCR worker and release loaded models after a batch OCR phase."""
-        with cls._instance_lock:
-            instance = cls._instance
-            cls._instance = None
-        if instance is None:
-            return
-        if instance._worker.is_alive():
-            with suppress(Exception):
-                instance._release_reader()
-            instance.shutdown()
-        _clear_torch_caches()
-        gc.collect()
-        logger.info("OCR batch worker stopped and models released")
-
-    def shutdown(self) -> None:
-        if not self._worker.is_alive():
-            return
-        self._queue.put(_SHUTDOWN)
-        self._worker.join(timeout=120)
-
-    def _run(self, fn: Callable[[Reader], Any]) -> Any:
-        job = _OcrJob(fn=fn)
-        self._queue.put(job)
-        job.done.wait()
-        if job.error is not None:
-            raise job.error
-        return job.result
-
-    def _preload_reader(self) -> None:
-        job = _OcrJob(preload_only=True)
-        self._queue.put(job)
-        job.done.wait()
-        if job.error is not None:
-            raise job.error
-
-    def _release_reader(self) -> None:
-        job = _OcrJob(release_reader=True)
-        self._queue.put(job)
-        job.done.wait()
-        if job.error is not None:
-            raise job.error
-
-    def _create_reader(self) -> Reader:
-        self.ensure_models()
-        logger.info(
-            "Initialising EasyOCR Reader (gpu=%s, cuda=%s, mps=%s)",
-            _ocr_use_gpu(),
-            torch.cuda.is_available(),
-            torch.backends.mps.is_available(),
-        )
-        return Reader(
-            lang_list=list(OCR_LANGS),
-            gpu=_ocr_use_gpu(),
-            model_storage_directory=str(OCR_MODEL_DIR),
-            verbose=False,
-        )
-
-    def _worker_loop(self) -> None:
-        logger.info("thread=%s start", threading.current_thread().name)
-        reader: Reader | None = None
-
-        while True:
-            time.sleep(_WORKER_SLEEP_SECS)
-            item = self._queue.get()
-            if item is _SHUTDOWN:
-                self._queue.task_done()
-                break
-
-            job = item
-            assert isinstance(job, _OcrJob)
-            try:
-                if job.release_reader:
-                    if reader is not None:
-                        del reader
-                        reader = None
-                        _clear_torch_caches()
-                        logger.info("OCR Reader released")
-                elif job.preload_only:
-                    if reader is None:
-                        reader = self._create_reader()
-                        logger.info("OCR Reader preloaded")
-                elif job.fn is not None:
-                    if reader is None:
-                        reader = self._create_reader()
-                    job.result = job.fn(reader)
-            except BaseException as exc:
-                job.error = exc
-                logger.exception("OCR job failed")
-            finally:
-                job.done.set()
-                self._queue.task_done()
-
-        if reader is not None:
-            del reader
-        _clear_torch_caches()
-        logger.info("thread=%s end", threading.current_thread().name)

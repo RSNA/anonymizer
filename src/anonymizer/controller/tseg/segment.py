@@ -10,7 +10,7 @@ from pathlib import Path
 
 import SimpleITK as sitk
 
-from anonymizer.controller.series_io import load_series
+from anonymizer.controller.series_io import load_series_frames
 from anonymizer.controller.tseg.cache import resolve_series_cache_dir
 from anonymizer.controller.tseg.config import (
     BODY_PARTS,
@@ -154,8 +154,8 @@ class FaceSegResult:
 def dicom_series_to_nifti(series_directory: Path, output_path: Path) -> int:
     """Convert one DICOM series directory to NIfTI. Returns slice count."""
     series_directory = series_directory.resolve()
-    loaded = load_series(series_directory)
-    reference_ds, frames, slice_paths = loaded.metadata, loaded.slices, loaded.slice_paths
+    loaded = load_series_frames(series_directory)
+    reference_ds, frames, slice_paths = loaded.metadata, loaded.frames, loaded.slice_paths
     n_slices = len(slice_paths)
     if n_slices < MIN_DICOM_SLICES:
         raise ValueError(f"Need at least {MIN_DICOM_SLICES} DICOM slices, got {n_slices}")
@@ -727,7 +727,7 @@ def analyze_tseg_regions(
     analysis_started = time.perf_counter()
 
     geometry = geometry if geometry is not None else resolve_series_geometry(series_directory)
-    logger.info(
+    logger.debug(
         "TS regions: geometry plane=%s dimensionality=%s provenance=%s ts_suitable=%s",
         geometry.plane,
         geometry.dimensionality,
@@ -736,10 +736,10 @@ def analyze_tseg_regions(
     )
     if not ts_regions_eligible(geometry):
         message = geometry.notes or f"Series not suitable for TotalSegmentator ({geometry.dimensionality})"
-        logger.info("TS regions: skipped for %s (%s)", series_directory, message)
+        logger.debug("TS regions: skipped for %s (%s)", series_directory, message)
         return (_error_result(series_directory, message), None)
 
-    logger.info("TS regions: starting for %s (cache=%s)", series_directory, work_dir)
+    logger.debug("TS regions: starting for %s (cache=%s)", series_directory, work_dir)
     log_memory_usage("ts_regions_start")
 
     with sequential_ml_context("ts_regions"):
@@ -753,17 +753,17 @@ def analyze_tseg_regions(
             )
             if nifti_path.is_file():
                 n_slices = _nifti_slice_count(nifti_path)
-                logger.info("TS regions: reusing cached NIfTI %s (%d slices)", nifti_path, n_slices)
+                logger.debug("TS regions: reusing cached NIfTI %s (%d slices)", nifti_path, n_slices)
             else:
-                logger.info("TS regions: converting DICOM to NIfTI: %s", series_directory)
+                logger.debug("TS regions: converting DICOM to NIfTI: %s", series_directory)
                 n_slices = dicom_series_to_nifti(series_directory, nifti_path)
                 release_working_memory(stage="ts_regions_after_dicom_to_nifti")
-                logger.info("TS regions: wrote %s (%d slices)", nifti_path, n_slices)
+                logger.debug("TS regions: wrote %s (%d slices)", nifti_path, n_slices)
 
             roi_structures = list(ROI_SUBSET)
             seg_cached = _segmentation_cache_valid(seg_dir, roi_structures)
             if seg_cached:
-                logger.info("TS regions: reusing cached segmentation in %s", seg_dir)
+                logger.debug("TS regions: reusing cached segmentation in %s", seg_dir)
                 _report_progress(
                     progress,
                     stage="segment",
@@ -772,7 +772,7 @@ def analyze_tseg_regions(
                     started=analysis_started,
                 )
             else:
-                logger.info("TS regions: running segmentation for %s", series_directory)
+                logger.debug("TS regions: running segmentation for %s", series_directory)
                 seg_seconds = run_segmentation(
                     nifti_path,
                     seg_dir,
@@ -780,7 +780,7 @@ def analyze_tseg_regions(
                     analysis_started=analysis_started,
                     n_slices=n_slices,
                 )
-                logger.info("TS regions: segmentation finished in %.1fs", seg_seconds)
+                logger.debug("TS regions: segmentation finished in %.1fs", seg_seconds)
                 _report_progress(
                     progress,
                     stage="segment",
@@ -807,7 +807,7 @@ def analyze_tseg_regions(
                 region=region,
                 regions_label=regions_label,
             )
-            logger.info(
+            logger.debug(
                 "TS regions: %s dominant=%s label=%s fraction=%.3f",
                 series_directory,
                 region.dominant_region,
@@ -865,7 +865,7 @@ def analyze_tseg_contrast(
     existing_stats = None
     if contrast_stats_path.is_file():
         existing_stats = load_contrast_statistics(contrast_stats_path)
-        logger.info("TS contrast: loaded cached contrast statistics from %s", contrast_stats_path)
+        logger.debug("TS contrast: loaded cached contrast statistics from %s", contrast_stats_path)
 
     remaining_sec = estimate_tseg_contrast_remaining_sec(series_directory)
 
@@ -877,7 +877,7 @@ def analyze_tseg_contrast(
         started=analysis_started,
         remaining_sec=remaining_sec,
     )
-    logger.info("TS contrast: starting for %s (volume=%s)", series_directory, nifti_path)
+    logger.debug("TS contrast: starting for %s (volume=%s)", series_directory, nifti_path)
     log_memory_usage("ts_contrast_before_load")
 
     try:

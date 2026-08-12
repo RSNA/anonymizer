@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import tkinter as tk
 from typing import Callable
@@ -145,12 +146,15 @@ class Histogram(ctk.CTkFrame):
 
     def _redraw(self):
         """Clears and redraws the entire histogram canvas content."""
-        if self.canvas.winfo_width() <= 1 or self.canvas.winfo_height() <= 1:
-            return
-        self.canvas.delete("all")
-        self._draw_histogram_bars()
-        self._draw_wlww_indicators()
-        self._draw_axis_labels()
+        with contextlib.suppress(tk.TclError):
+            if not self.winfo_exists() or not self.canvas.winfo_exists():
+                return
+            if self.canvas.winfo_width() <= 1 or self.canvas.winfo_height() <= 1:
+                return
+            self.canvas.delete("all")
+            self._draw_histogram_bars()
+            self._draw_wlww_indicators()
+            self._draw_axis_labels()
 
     def _draw_histogram_bars(self):
         """Draws the histogram bars on the main canvas using percentile-clipped scale."""
@@ -309,7 +313,14 @@ class Histogram(ctk.CTkFrame):
 
     # --- Event Handlers ---
     def _on_configure(self, event=None):
-        self.after_idle(self._redraw)
+        if not self.winfo_exists():
+            return
+        self.after_idle(self._redraw_idle)
+
+    def _redraw_idle(self) -> None:
+        with contextlib.suppress(tk.TclError):
+            if self.winfo_exists():
+                self._redraw()
 
     def _on_left_press(self, event):
         self._is_left_dragging = True

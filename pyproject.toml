@@ -105,6 +105,7 @@ pythonpath = ["src", "."]
 markers = [
     "falcon_memory(max_rss_delta_mb): measure RSS before/after the test and fail if delta exceeds the limit",
     "tseg_integration: run TotalSegmentator inference (slow, optional)",
+    "ocr_integration: run EasyOCR on real burnt-in PHI fixtures (slow, optional)",
     "dicom_integration: local Orthanc PACS or heavy DICOM network integration (skipped in CI)",
     "rsna_local_data: requires local RSNA_TEST_DATA directory (skipped when absent)",
     "prototyping: tests for src/prototyping scripts",

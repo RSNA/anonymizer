@@ -1,7 +1,7 @@
 """View Index projection thumbnails (Projection.pkl).
 
 Builds min/mean/max or CLAHE/edge preview images for the PHI Index.
-Series pixel I/O lives in ``series_io``; this module lazy-imports ``load_series``
+Series pixel I/O lives in ``series_io``; this module lazy-imports ``load_series_frames``
 when building uncached projections.
 """
 
@@ -226,11 +226,11 @@ def create_projection_from_series(series_path: Path) -> Projection:
 
     logger.debug(f"Create Projection from {series_path.name}")
 
-    from anonymizer.controller.series_io import load_series
+    from anonymizer.controller.series_io import load_series_frames
 
-    loaded = load_series(series_path)
+    loaded = load_series_frames(series_path)
     ds1 = loaded.metadata
-    all_series_frames = loaded.slices
+    all_series_frames = loaded.frames
 
     # Handle single frame in series:
     if all_series_frames.shape[0] == 1:

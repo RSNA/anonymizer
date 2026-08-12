@@ -5,8 +5,6 @@ from __future__ import annotations
 import contextlib
 import copy
 import logging
-import queue
-import threading
 import tkinter as tk
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,12 +24,14 @@ from anonymizer.controller.blur_face import (
     preview_face_blur,
 )
 from anonymizer.controller.remove_pixel_phi import LayerType
-from anonymizer.controller.series_io import load_series, save_series_slices
+from anonymizer.controller.runner import Algorithm
+from anonymizer.controller.series_io import load_series_frames, save_series_frames
 from anonymizer.controller.tseg.dicom_geometry import (
     SeriesGeometryResult,
     ensure_series_geometry,
     load_geometry_cache,
 )
+from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.utils.translate import _
 from anonymizer.view.blur_face_results import (
@@ -46,6 +46,7 @@ from anonymizer.view.blur_face_results import (
 from anonymizer.view.ctk_safe import mark_ctk_window_alive, mark_ctk_window_destroyed
 from anonymizer.view.harmonize_results import HarmonizeResultsView
 from anonymizer.view.image import ImageViewer
+from anonymizer.view.job_poller import LOAD_POLL_MS, STAGE_POLL_MS, start_background_job
 from anonymizer.view.navigation import return_to_phi_index
 
 logger = logging.getLogger(__name__)
@@ -62,8 +63,8 @@ class FaceBlurReviewOutcome:
 
 
 class FaceBlurReviewDialog(ctk.CTkToplevel):
-    BLUR_POLL_MS = 200
-    LOAD_POLL_MS = 100
+    BLUR_POLL_MS = STAGE_POLL_MS
+    LOAD_POLL_MS = LOAD_POLL_MS
     PAD = 10
     BUTTON_WIDTH = 100
     DEFAULT_WIDTH = 1200
@@ -100,10 +101,8 @@ class FaceBlurReviewDialog(ctk.CTkToplevel):
 
         self._loading = True
         self._blur_running = False
-        self._load_queue: queue.Queue[tuple[str, object]] = queue.Queue()
-        self._blur_worker_queue: queue.Queue[tuple[str, object]] = queue.Queue()
-        self._load_poll_after_id: str | None = None
-        self._blur_poll_after_id: str | None = None
+        self._load_work_state = WorkState()
+        self._blur_work_state = WorkState()
         self._load_progress_after_id: str | None = None
         self._load_progress_value = 0.0
         self._loading_shell: ctk.CTkFrame | None = None
@@ -120,12 +119,19 @@ class FaceBlurReviewDialog(ctk.CTkToplevel):
         self.grab_set()
         self.lift()
 
-        threading.Thread(
-            target=self._load_worker,
-            name="FaceBlurReviewLoadWorker",
-            daemon=True,
-        ).start()
-        self.after(self.LOAD_POLL_MS, self._poll_load_worker)
+        self._load_work_state.prepare_job()
+
+        def _load_worker() -> None:
+            self._run_load_job()
+
+        start_background_job(
+            self,
+            work_state=self._load_work_state,
+            algorithm=Algorithm.FACE_BLUR,
+            worker_target=_load_worker,
+            on_done=self._on_load_job_done,
+            poll_ms=self.LOAD_POLL_MS,
+        )
 
     def _widget_alive(self) -> bool:
         if self._destroyed or self._closing:
@@ -138,9 +144,9 @@ class FaceBlurReviewDialog(ctk.CTkToplevel):
         if self._destroyed:
             return
         self._destroyed = True
-        self._stop_load_poll()
-        self._stop_blur_poll()
         self._stop_load_progress_pulse()
+        self._load_work_state.request_cancel()
+        self._blur_work_state.request_cancel()
         mark_ctk_window_destroyed(self)
         super().destroy()
 
@@ -194,8 +200,8 @@ class FaceBlurReviewDialog(ctk.CTkToplevel):
     def _load_series_slices(
         series_path: Path,
     ) -> tuple[Dataset, np.ndarray, tuple[Path, ...], SeriesGeometryResult | None]:
-        loaded = load_series(series_path)
-        ds, series_frames, slice_paths = loaded.metadata, loaded.slices, loaded.slice_paths
+        loaded = load_series_frames(series_path)
+        ds, series_frames, slice_paths = loaded.metadata, loaded.frames, loaded.slice_paths
         if ds is None or series_frames is None:
             raise FaceBlurLoadError(f"Error loading frames from {series_path}")
 
@@ -204,39 +210,36 @@ class FaceBlurReviewDialog(ctk.CTkToplevel):
             series_geometry = load_geometry_cache(series_path)
         return ds, series_frames, slice_paths, series_geometry
 
-    def _load_worker(self) -> None:
+    def _run_load_job(self) -> None:
         try:
             payload = self._load_series_slices(self._series_path)
-            self._load_queue.put(("done", payload))
+            self._load_work_state.finish(payload)
         except Exception as exc:
             logger.exception("Face blur review load failed for %s", self._series_path)
-            self._load_queue.put(("error", exc))
+            self._load_work_state.fail(str(exc))
 
-    def _poll_load_worker(self) -> None:
-        self._load_poll_after_id = None
+    def _on_load_job_done(self, _algorithm: Algorithm | None, work_state: WorkState) -> None:
         if not self._widget_alive():
             return
-
-        while True:
-            try:
-                kind, payload = self._load_queue.get_nowait()
-            except queue.Empty:
-                break
-
-            if kind == "done":
-                ds, slice_frames, slice_paths, geometry = payload  # type: ignore[misc]
-                self._finish_load(ds, slice_frames, slice_paths, geometry)
-                return
-            if kind == "error":
-                messagebox.showerror(
-                    title=_("Blur Face"),
-                    message=_("Could not load this series.") + f"\n\n{payload}",
-                    parent=self,
-                )
-                self._close(cancelled=True)
-                return
-
-        self._load_poll_after_id = self.after(self.LOAD_POLL_MS, self._poll_load_worker)
+        if work_state.error:
+            messagebox.showerror(
+                title=_("Blur Face"),
+                message=_("Could not load this series.") + f"\n\n{work_state.error}",
+                parent=self,
+            )
+            self._close(cancelled=True)
+            return
+        payload = work_state.result
+        if not isinstance(payload, tuple) or len(payload) != 4:
+            messagebox.showerror(
+                title=_("Blur Face"),
+                message=_("Could not load this series."),
+                parent=self,
+            )
+            self._close(cancelled=True)
+            return
+        ds, slice_frames, slice_paths, geometry = payload
+        self._finish_load(ds, slice_frames, slice_paths, geometry)
 
     def _finish_load(
         self,
@@ -412,7 +415,7 @@ class FaceBlurReviewDialog(ctk.CTkToplevel):
         if not self._widget_alive() or self._slice_frames is None or self._ds is None:
             return
         self._blur_running = True
-        self._blur_worker_queue = queue.Queue()
+        self._blur_work_state.prepare_job()
         self._update_status(_("Preparing face blur preview") + "…")
         self._progressbar.set(0)
         self.after_idle(lambda: self._launch_blur_worker(self._blur_mode))
@@ -431,17 +434,32 @@ class FaceBlurReviewDialog(ctk.CTkToplevel):
             slice_paths=self._slice_paths,
             slice_spacing_mm=geometry.slice_spacing_mm if geometry is not None else None,
         )
-        threading.Thread(
-            target=self._blur_worker,
-            args=(blur_mode, volume_context),
-            name="BlurFacePreviewWorker",
-            daemon=True,
-        ).start()
-        self._blur_poll_after_id = self.after(self.BLUR_POLL_MS, self._poll_blur_worker)
 
-    def _blur_worker(self, blur_mode: FaceBlurMode, volume_context: SeriesVolumeContext) -> None:
+        def _blur_worker() -> None:
+            self._run_blur_job(blur_mode, volume_context)
+
+        start_background_job(
+            self,
+            work_state=self._blur_work_state,
+            algorithm=Algorithm.FACE_BLUR,
+            worker_target=_blur_worker,
+            on_tick=self._on_blur_job_tick,
+            on_done=self._on_blur_job_done,
+            poll_ms=self.BLUR_POLL_MS,
+        )
+
+    def _run_blur_job(self, blur_mode: FaceBlurMode, volume_context: SeriesVolumeContext) -> None:
+        work_state = self._blur_work_state
+
         def on_progress(progress) -> None:
-            self._blur_worker_queue.put(("progress", progress))
+            if work_state.should_cancel():
+                return
+            fraction = getattr(progress, "fraction", 0.0)
+            work_state.update_job_progress(
+                status=format_face_blur_progress_status(progress),
+                fraction=fraction,
+                detail=progress,
+            )
 
         try:
             preview = preview_face_blur(
@@ -450,57 +468,50 @@ class FaceBlurReviewDialog(ctk.CTkToplevel):
                 volume_context=volume_context,
                 blur_mode=blur_mode,
             )
-            self._blur_worker_queue.put(("done", preview))
+            if not work_state.should_cancel():
+                work_state.finish(preview)
         except Exception as exc:
             logger.exception("Face blur preview worker failed for %s", self._series_path)
-            self._blur_worker_queue.put(("error", exc))
+            work_state.fail(str(exc))
 
-    def _poll_blur_worker(self) -> None:
-        self._blur_poll_after_id = None
+    def _on_blur_job_tick(self, work_state: WorkState) -> None:
+        if not self._widget_alive() or not self._blur_running:
+            return
+        status, _done, fraction, _error, _result, _detail = work_state.read_job_ui()
+        if status:
+            self._update_status(status)
+        self._progressbar.set(min(1.0, max(0.0, fraction)))
+
+    def _on_blur_job_done(self, _algorithm: Algorithm | None, work_state: WorkState) -> None:
         if not self._widget_alive():
             return
-
-        while True:
-            try:
-                kind, payload = self._blur_worker_queue.get_nowait()
-            except queue.Empty:
-                break
-
-            if kind == "progress":
-                if self._blur_running:
-                    progress = payload
-                    self._update_status(format_face_blur_progress_status(progress))
-                    fraction = getattr(progress, "fraction", 0.0)
-                    self._progressbar.set(min(1.0, max(0.0, fraction)))
-            elif kind == "done":
-                if not self._blur_running:
-                    continue
-                preview = payload
-                if preview.error is not None:
-                    self._blur_running = False
-                    messagebox.showerror(
-                        title=_("Blur Face"),
-                        message=preview.error,
-                        parent=self,
-                    )
-                    self._close(cancelled=True)
-                    return
-                self._blur_running = False
-                self.after_idle(lambda p=preview: self._show_blur_review(p))
-                return
-            elif kind == "error":
-                if not self._blur_running:
-                    continue
-                self._blur_running = False
-                messagebox.showerror(
-                    title=_("Blur Face"),
-                    message=str(payload),
-                    parent=self,
-                )
-                self._close(cancelled=True)
-                return
-
-        self._blur_poll_after_id = self.after(self.BLUR_POLL_MS, self._poll_blur_worker)
+        if not self._blur_running:
+            return
+        if work_state.error:
+            self._blur_running = False
+            messagebox.showerror(
+                title=_("Blur Face"),
+                message=str(work_state.error),
+                parent=self,
+            )
+            self._close(cancelled=True)
+            return
+        preview = work_state.result
+        if not isinstance(preview, FaceBlurPreviewResult):
+            self._blur_running = False
+            self._close(cancelled=True)
+            return
+        if preview.error is not None:
+            self._blur_running = False
+            messagebox.showerror(
+                title=_("Blur Face"),
+                message=preview.error,
+                parent=self,
+            )
+            self._close(cancelled=True)
+            return
+        self._blur_running = False
+        self.after_idle(lambda: self._show_blur_review(preview))
 
     def _show_blur_review(self, preview: FaceBlurPreviewResult) -> None:
         if self._slice_frames is None or self._ds is None:
@@ -565,7 +576,7 @@ class FaceBlurReviewDialog(ctk.CTkToplevel):
             reference_ds=self._ds,
             frame_dtype=self._slice_frames.dtype if self._slice_frames is not None else None,
         )
-        if not save_series_slices(self._series_path, blurred_slices, self._ds):
+        if not save_series_frames(self._series_path, blurred_slices, self._ds):
             messagebox.showerror(
                 title=_("Save Changes Error"),
                 message=_("Failed to save changes to series frames"),
@@ -595,6 +606,7 @@ class FaceBlurReviewDialog(ctk.CTkToplevel):
 
     def _on_cancel(self) -> None:
         if self._blur_running:
+            self._blur_work_state.request_cancel()
             return
         self._close(cancelled=True)
 
@@ -603,8 +615,9 @@ class FaceBlurReviewDialog(ctk.CTkToplevel):
             return
         self._closing = True
         self._blur_running = False
-        self._stop_load_poll()
-        self._stop_blur_poll()
+        self._load_work_state.request_cancel()
+        self._blur_work_state.request_cancel()
+        self._stop_load_progress_pulse()
         self._outcome = FaceBlurReviewOutcome(saved=saved, cancelled=cancelled and not saved)
         if hasattr(self, "image_viewer"):
             with contextlib.suppress(tk.TclError):
@@ -621,12 +634,6 @@ class FaceBlurReviewDialog(ctk.CTkToplevel):
         with contextlib.suppress(tk.TclError):
             self.after_cancel(after_id)
         setattr(self, attr, None)
-
-    def _stop_load_poll(self) -> None:
-        self._cancel_after("_load_poll_after_id")
-
-    def _stop_blur_poll(self) -> None:
-        self._cancel_after("_blur_poll_after_id")
 
     def get_input(self) -> FaceBlurReviewOutcome:
         self.focus()

@@ -23,6 +23,7 @@ from anonymizer.controller.ai_batch_process import (
 )
 from anonymizer.controller.project import ProjectController
 from anonymizer.controller.tseg.config import BATCH_MEMORY_POLL_INTERVAL_SEC
+from anonymizer.controller.work_state import WorkState
 from anonymizer.utils.memory import (
     MemoryGuard,
     MemorySnapshot,
@@ -31,6 +32,7 @@ from anonymizer.utils.memory import (
     format_memory_snapshot_label,
 )
 from anonymizer.utils.translate import _
+from anonymizer.view.job_poller import BATCH_POLL_MS, JobPoller
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +50,7 @@ def _memory_label_color(snapshot: MemorySnapshot) -> str | None:
 class AiBatchProcessDialog(tk.Toplevel):
     """Modal dialog that runs selected AI algorithms in a background thread."""
 
-    POLL_MS = 200
+    POLL_MS = BATCH_POLL_MS
 
     def __init__(
         self,
@@ -64,9 +66,13 @@ class AiBatchProcessDialog(tk.Toplevel):
         self._cancelled = False
         self._closing = False
         self._summary: AiBatchSummary | None = None
+        self._work_state = WorkState()
         self._worker_queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self._poll_after_id: str | None = None
         self._memory_poll_stop = threading.Event()
+        self._job_poller: JobPoller | None = None
+        self._batch_fraction = 0.0
+        self._batch_phase = ""
 
         algorithms = normalize_selected_algorithms(options.algorithms)
         series_count = len(enumerate_series_for_studies(controller.model.images_dir(), studies))
@@ -208,16 +214,54 @@ class AiBatchProcessDialog(tk.Toplevel):
             return
 
         threading.Thread(
-            target=self._batch_worker,
-            name="AiBatchProcessWorker",
-            daemon=True,
-        ).start()
-        threading.Thread(
             target=self._memory_poll_worker,
             name="AiBatchMemoryPoll",
             daemon=True,
         ).start()
-        self._schedule_poll()
+        self._job_poller = JobPoller(
+            self,
+            self._work_state,
+            on_tick=self._on_batch_tick,
+            on_done=self._on_batch_done,
+            poll_ms=self.POLL_MS,
+        )
+        self._job_poller.start()
+        threading.Thread(
+            target=self._batch_worker,
+            name="AiBatchProcessWorker",
+            daemon=True,
+        ).start()
+
+    def _on_batch_tick(self, work_state: WorkState) -> None:
+        for line in work_state.drain_logs():
+            self._append_log(line)
+        if work_state.status:
+            self._progress_label.configure(text=work_state.status)
+        while True:
+            try:
+                kind, payload = self._worker_queue.get_nowait()
+            except queue.Empty:
+                break
+            if kind == "progress":
+                algorithm, algorithm_index, algorithms_total, message, fraction = payload  # type: ignore[misc]
+                self._batch_phase = format_ai_batch_phase_label(
+                    algorithm,
+                    algorithm_index=algorithm_index,
+                    algorithms_total=algorithms_total,
+                )
+                self._batch_fraction = min(1.0, max(0.0, fraction))
+                self._phase_label.configure(text=self._batch_phase)
+                self._progress_label.configure(text=message)
+                self._progressbar.set(self._batch_fraction)
+            elif kind == "memory":
+                self._update_memory_label(payload)  # type: ignore[arg-type]
+
+    def _on_batch_done(self, _algorithm, work_state: WorkState) -> None:
+        if work_state.error:
+            self._append_log(_("ERROR") + f": {work_state.error}\n")
+        if isinstance(work_state.result, AiBatchSummary):
+            self._summary = work_state.result
+        self._finish_dialog()
 
     def _memory_poll_worker(self) -> None:
         interval = max(0.5, float(BATCH_MEMORY_POLL_INTERVAL_SEC))
@@ -258,55 +302,16 @@ class AiBatchProcessDialog(tk.Toplevel):
                 cancelled=lambda: self._cancelled,
                 on_log=on_log,
                 memory_callback=on_memory,
+                work_state=self._work_state,
             )
-            self._worker_queue.put(("done", summary))
+            if not self._work_state.done:
+                self._work_state.finish(summary)
         except Exception as exc:
             logger.exception("AI batch process worker failed")
-            self._worker_queue.put(("error", exc))
+            if not self._work_state.done:
+                self._work_state.fail(str(exc))
         finally:
             self._memory_poll_stop.set()
-
-    def _schedule_poll(self) -> None:
-        if self._closing:
-            return
-        self._poll_after_id = self.after(self.POLL_MS, self._poll_worker)
-
-    def _poll_worker(self) -> None:
-        self._poll_after_id = None
-        if self._closing or not self.winfo_exists():
-            return
-
-        while True:
-            try:
-                kind, payload = self._worker_queue.get_nowait()
-            except queue.Empty:
-                break
-
-            if kind == "progress":
-                algorithm, algorithm_index, algorithms_total, message, fraction = payload  # type: ignore[misc]
-                self._phase_label.configure(
-                    text=format_ai_batch_phase_label(
-                        algorithm,
-                        algorithm_index=algorithm_index,
-                        algorithms_total=algorithms_total,
-                    )
-                )
-                self._progress_label.configure(text=message)
-                self._progressbar.set(min(1.0, max(0.0, fraction)))
-            elif kind == "log":
-                self._append_log(payload)  # type: ignore[arg-type]
-            elif kind == "memory":
-                self._update_memory_label(payload)  # type: ignore[arg-type]
-            elif kind == "done":
-                self._summary = payload  # type: ignore[assignment]
-                self._finish_dialog()
-                return
-            elif kind == "error":
-                self._append_log(_("ERROR") + f": {payload}\n")
-                self._finish_dialog()
-                return
-
-        self._schedule_poll()
 
     def _finish_dialog(self) -> None:
         if self._summary is not None and self._summary.cancelled:
@@ -325,6 +330,7 @@ class AiBatchProcessDialog(tk.Toplevel):
             self._on_close()
             return
         self._cancelled = True
+        self._work_state.request_cancel()
         self._progress_label.configure(text=_("Cancelling after current step") + "…")
 
     def _on_close(self) -> None:

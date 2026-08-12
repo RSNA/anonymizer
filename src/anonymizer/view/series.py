@@ -24,20 +24,24 @@ from anonymizer.controller.blur_face import (
 )
 from anonymizer.controller.create_projections import invalidate_projection_cache
 from anonymizer.controller.remove_pixel_phi import (
-    OcrService,
     OCRText,
     UserRectangle,
     apply_series_view_pixel_phi,
     blackout_rectangular_areas,
+    build_series_view_ocr_pixels,
     collect_series_view_pixel_phi_texts,
     filter_ocr_detections,
-    remove_text,
+    ocr_image_for_frame,
+    pixel_phi_removal_mode_from_menu_label,
+    pixel_phi_removal_mode_menu_values,
+    remove_ocr_text_from_frame,
 )
+from anonymizer.controller.runner import Algorithm, OcrEditContext, RunOptions, run_job
 from anonymizer.controller.series_io import (
     SERIES_VIEW_PROJECTION_COUNT,
     LoadedSeries,
-    load_series,
-    save_series_slices,
+    load_series_frames,
+    save_series_frames,
 )
 from anonymizer.controller.tseg.cache import clear_series_tseg_cache, tseg_cache_summary
 from anonymizer.controller.tseg.config import TSEG_CACHE_DIRNAME
@@ -49,6 +53,7 @@ from anonymizer.controller.tseg.dicom_geometry import (
     stackable_dicom_paths,
 )
 from anonymizer.controller.tseg.runtime_status import face_blur_allowed, get_ai_session, harmonize_allowed
+from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import AnonymizerModel, format_series_processing_status
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.dicom import get_wl_ww
@@ -69,6 +74,7 @@ from anonymizer.view.ctk_safe import mark_ctk_window_alive, mark_ctk_window_dest
 from anonymizer.view.face_blur_review_dialog import show_face_blur_review_dialog
 from anonymizer.view.harmonize_results import show_harmonize_results_view
 from anonymizer.view.image import ImageViewer
+from anonymizer.view.job_poller import start_background_job
 from anonymizer.view.navigation import find_phi_index_parent
 
 logger = logging.getLogger(__name__)
@@ -157,6 +163,8 @@ class SeriesView(ctk.CTkToplevel):
         self._series_geometry: SeriesGeometryResult | None = None
         self._face_blur_eligibility_cache: FaceBlurEligibility | None = None
         self._face_blur_eligibility_geometry: SeriesGeometryResult | None = None
+        self._ocr_work_state = WorkState()
+        self._ocr_poll_frame_index = -1
         self._rebuild_after_id: str | None = None
         self._rebuild_pending = False
         self._ui_rebuilding = False
@@ -288,7 +296,7 @@ class SeriesView(ctk.CTkToplevel):
         series_path: Path,
     ) -> tuple[LoadedSeries, np.ndarray, SeriesGeometryResult | None]:
         log_process_memory("load_series_data_start", extra=str(series_path.name))
-        loaded = load_series(series_path)
+        loaded = load_series_frames(series_path)
         frames = loaded.series_view_stack()
 
         log_process_memory(
@@ -509,6 +517,7 @@ class SeriesView(ctk.CTkToplevel):
         for attr in (
             "detect_button",
             "remove_button",
+            "remove_text_mode_menu",
             "blackout_button",
             "edit_context_combo_box",
             "whitelist_entry",
@@ -707,10 +716,18 @@ class SeriesView(ctk.CTkToplevel):
             text_edit_group, width=self.BUTTON_WIDTH, text=_("Remove Text"), command=self.remove_text_button_clicked
         )
         self.remove_button.grid(row=0, column=3, padx=2, pady=0)
+        self.remove_text_mode_var = tk.StringVar(value=pixel_phi_removal_mode_menu_values()[0])
+        self.remove_text_mode_menu = ctk.CTkOptionMenu(
+            text_edit_group,
+            width=140,
+            values=list(pixel_phi_removal_mode_menu_values()),
+            variable=self.remove_text_mode_var,
+        )
+        self.remove_text_mode_menu.grid(row=0, column=4, padx=2, pady=0)
         self.blackout_button = ctk.CTkButton(
             text_edit_group, width=self.BUTTON_WIDTH, text=_("Blackout Area"), command=self.blackout_button_clicked
         )
-        self.blackout_button.grid(row=0, column=4, padx=(2, self.PAD), pady=0)
+        self.blackout_button.grid(row=0, column=5, padx=(2, self.PAD), pady=0)
 
         harmonize_blur_group = ctk.CTkFrame(self.control_frame, fg_color="transparent")
         harmonize_blur_group.grid(row=0, column=1, padx=(0, self.PAD), pady=self.PAD, sticky="e")
@@ -998,7 +1015,7 @@ class SeriesView(ctk.CTkToplevel):
             self.whitelist.select_set(ndx)
         except ValueError:
             # Not in whitelist, insert:
-            logger.info(f"Adding to whitelist: {text}")
+            logger.debug(f"Adding to whitelist: {text}")
             self.whitelist.insert(0, text)
             self._whitelist_changed = True
 
@@ -1042,19 +1059,138 @@ class SeriesView(ctk.CTkToplevel):
             self._frames[2] = np.max(self._frames, axis=0)
 
     def process_single_frame_ocr(self, frame_index: int):
-        """Performs OCR on a single frame, filters, and stores results."""
-        results = OcrService.instance().detect_text(
-            pixels=apply_windowing(
-                self.image_viewer.current_wl,
-                self.image_viewer.current_ww,
-                self.image_viewer.images[frame_index],
-            ),
-            draw_boxes=False,
+        """Performs OCR on a single frame (sync fallback — prefer background detect_text job)."""
+        from easyocr import Reader
+
+        from anonymizer.controller.remove_pixel_phi import (
+            OCR_LANGS,
+            OCR_MODEL_DIR,
+            detect_text,
+            download_ocr_models,
+            ocr_models_ready,
+        )
+
+        if self._ds is None:
+            return
+        if not ocr_models_ready():
+            download_ocr_models()
+        reader = Reader(lang_list=list(OCR_LANGS), model_storage_directory=str(OCR_MODEL_DIR))
+        frame = self.image_viewer.images[frame_index]
+        bgr = ocr_image_for_frame(self._ds, frame)
+        results = detect_text(
+            bgr,
+            reader,
+            draw_boxes_and_text=False,
+            modality=str(self._ds.get("Modality", "") or ""),
+            apply_noise_filter=False,
         )
         if results:
             logger.debug(f"OCR Results:\n{pformat(results)}")
             self.detected_text[frame_index] = results
             self.draw_text_overlay(frame_index)
+
+    def _on_ocr_job_tick(self, work_state: WorkState) -> None:
+        if not self._widget_alive():
+            return
+        frame_index, status, _done, result = work_state.snapshot_progress()
+        if status:
+            self.update_status(status, debug_log=True)
+        if self.edit_context == EditContext.SERIES and frame_index != self._ocr_poll_frame_index:
+            self._ocr_poll_frame_index = frame_index
+            self.image_viewer.load_and_display_image(frame_index)
+        if isinstance(result, dict):
+            for fi, texts in result.items():
+                frame_i = int(fi)
+                if self.detected_text.get(frame_i) is not texts:
+                    self._apply_ocr_detections_for_frame(frame_i, texts)
+
+    def _apply_ocr_detections_for_frame(self, frame_i: int, texts: list) -> None:
+        self.detected_text[frame_i] = texts
+        logger.info(
+            "Series View OCR applied %d detection(s) to frame_index=%s",
+            len(texts),
+            frame_i,
+        )
+        self.draw_text_overlay(frame_i)
+
+    def _apply_ocr_detections_result(self, result: dict) -> None:
+        for fi, texts in result.items():
+            self._apply_ocr_detections_for_frame(int(fi), texts)
+
+    def _on_ocr_job_done(self, _algorithm: Algorithm | None, work_state: WorkState) -> None:
+        if not self._widget_alive():
+            return
+        _frame_index, _status, _done, result = work_state.snapshot_progress()
+        logger.info("Series View OCR job done error=%s", work_state.error)
+        if hasattr(self, "detect_text_button"):
+            self.detect_text_button.configure(state="normal")
+        if work_state.error:
+            self.update_status(_("Text detection failed") + f": {work_state.error}")
+            return
+        if isinstance(result, dict):
+            self._apply_ocr_detections_result(result)
+        self.update_status(_("Text detection complete"), debug_log=True)
+        work_state.reset()
+        self._ocr_poll_frame_index = -1
+
+    def _start_ocr_background_job(self) -> None:
+        if self._ds is None or self._frames is None:
+            return
+        logger.info("Series View starting OCR background job edit_context=%s", self.edit_context)
+        self._ocr_work_state.reset()
+        wl, ww = self._dicom_wl or 0.0, self._dicom_ww or 0.0
+        if self._ds is not None:
+            from anonymizer.utils.dicom import get_wl_ww
+
+            wl, ww = get_wl_ww(self._ds)
+        self._ocr_work_state.bind(
+            self._ds,
+            self._frames,
+            self._slice_paths,
+            (wl, ww),
+            single_frame=self.single_frame,
+        )
+        if hasattr(self, "image_viewer"):
+            self._ocr_work_state.ocr_pixels = build_series_view_ocr_pixels(
+                self.image_viewer.images,
+                self._ds,
+            )
+        edit_context = (
+            OcrEditContext.FRAME
+            if self.edit_context == EditContext.FRAME
+            else OcrEditContext.SERIES
+        )
+        if edit_context is OcrEditContext.FRAME:
+            self._ocr_work_state.frame_index = self.image_viewer.current_image_index
+        else:
+            self.detected_text.clear()
+            if hasattr(self, "image_viewer"):
+                self.image_viewer.clear_text_overlays()
+        project_dir = self._series_path.parents[3] if len(self._series_path.parents) > 3 else None
+        options = RunOptions(
+            edit_context=edit_context,
+            whitelist=[],
+            project_dir=project_dir,
+        )
+        if hasattr(self, "detect_text_button"):
+            self.detect_text_button.configure(state="disabled")
+        self._ocr_poll_frame_index = -1
+        if edit_context is OcrEditContext.FRAME:
+            self.update_status(_("Detecting text in current image") + "…", debug_log=True)
+        else:
+            self.update_status(_("Detecting text in all images") + "…", debug_log=True)
+
+        def _worker() -> None:
+            run_job(Algorithm.REMOVE_PIXEL_PHI, self._ocr_work_state, options=options)
+
+        start_background_job(
+            self,
+            work_state=self._ocr_work_state,
+            algorithm=Algorithm.REMOVE_PIXEL_PHI,
+            worker_target=_worker,
+            on_tick=self._on_ocr_job_tick,
+            on_done=self._on_ocr_job_done,
+        )
 
     def filter_text_data(self, frame_index: int, similarity_threshold: float = 0.75) -> list[OCRText]:
         """Apply user whitelist filtering via shared OCR filter helpers."""
@@ -1078,35 +1214,26 @@ class SeriesView(ctk.CTkToplevel):
         self.image_viewer.set_text_overlay_data(frame_index, filtered_text_data)
 
     def detect_text_for_series(self):
-        """Detects text in all frames of the series."""
-        total_frames = self.image_viewer.num_images
-        self.update_status(_("Detecting text in all images") + "…", debug_log=True)
-        for i in range(total_frames):
-            self.image_viewer.load_and_display_image(i)  # Goto series start
-            self.process_single_frame_ocr(i)
-            self.update_status(
-                _("Detecting text") + f"… {_('image')} {i + 1} {_('of')} {total_frames}",
-                debug_log=True,
-            )
+        """Detects text in all frames via background job (SERIES edit context)."""
+        self._start_ocr_background_job()
 
     def detect_text_button_clicked(self):
-        logger.debug("Detecting text...")
-
-        if self.edit_context == EditContext.FRAME:
-            self.update_status(_("Detecting text in current image") + "…", debug_log=True)
-            self.process_single_frame_ocr(self.image_viewer.current_image_index)
-            self.update_status(_("Text detection complete"), debug_log=True)
-        else:
-            self.detect_text_for_series()
-            self.update_status(_("Text detection complete"), debug_log=True)
-
-        # TODO: work out what to do beyond propagting edits in overlays when edit context is PROJECT
+        logger.info("Detect Text clicked edit_context=%s", self.edit_context)
+        self._start_ocr_background_job()
 
     def remove_text_from_single_frame(self, frame_index: int, ocr_texts: list[OCRText]):
         logger.debug(f"Remove {len(ocr_texts)} words from frame {frame_index}")
         raw_frame = self.image_viewer.images[frame_index]
-        windowed_frame = apply_windowing(self.image_viewer.current_wl, self.image_viewer.current_ww, raw_frame)
-        self.image_viewer.images[frame_index] = remove_text(raw_frame, windowed_frame, ocr_texts)
+        windowed_frame = ocr_image_for_frame(self._ds, raw_frame) if self._ds else apply_windowing(
+            self.image_viewer.current_wl, self.image_viewer.current_ww, raw_frame
+        )
+        removal_mode = pixel_phi_removal_mode_from_menu_label(self.remove_text_mode_var.get())
+        self.image_viewer.images[frame_index] = remove_ocr_text_from_frame(
+            raw_frame,
+            windowed_frame,
+            ocr_texts,
+            removal_mode=removal_mode,
+        )
         self.save_button.configure(state="enabled")
         ocr_texts.clear()
 
@@ -1349,7 +1476,7 @@ class SeriesView(ctk.CTkToplevel):
             except Exception as e:
                 logger.error(f"Error saving whitelist: {e}")
 
-        if save_series_slices(
+        if save_series_frames(
             self._series_path,
             self._loaded.series_view_slices_from_stack(self._frames) if self._loaded else self._frames,
             self._ds,
@@ -1492,6 +1619,8 @@ class SeriesView(ctk.CTkToplevel):
         if getattr(self, "_closing", False):
             return
         self._closing = True
+        if not self._ocr_work_state.done:
+            self._ocr_work_state.request_cancel()
         mark_ctk_window_destroyed(self)
         self._stop_rebuild_ui()
         if self._loading:

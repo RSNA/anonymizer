@@ -871,7 +871,7 @@ def harmonize_series(
             _GEOMETRY_FRAC[1],
             geometry=geometry,
         )
-        logger.info(
+        logger.debug(
             "Harmonize geometry: plane=%s dimensionality=%s provenance=%s ts_suitable=%s",
             geometry.plane,
             geometry.dimensionality,
@@ -881,7 +881,7 @@ def harmonize_series(
 
         _report("tseg", "Segmenting anatomy", _TSEG_SEG_FRAC[0], remaining_sec=60.0)
         if ts_regions_eligible(geometry):
-            logger.info("Harmonize stage 1/3: TS segmentation for %s", series_dir)
+            logger.debug("Harmonize stage 1/3: TS segmentation for %s", series_dir)
             tseg_progress = _scaled_progress(
                 progress,
                 started=started,
@@ -898,7 +898,7 @@ def harmonize_series(
                     tseg=region_result,
                 )
         else:
-            logger.info(
+            logger.debug(
                 "Harmonize stage 1/3: TS segmentation skipped for %s (%s)",
                 series_dir,
                 geometry.notes or geometry.dimensionality,
@@ -935,7 +935,7 @@ def harmonize_series(
                 _TSEG_CONTRAST_FRAC[0],
                 remaining_sec=estimate_tseg_contrast_remaining_sec(series_dir),
             )
-            logger.info("Harmonize stage 2/3: TS contrast for %s (nifti=%s)", series_dir, nifti_path)
+            logger.debug("Harmonize stage 2/3: TS contrast for %s (nifti=%s)", series_dir, nifti_path)
             contrast_progress = _scaled_progress(
                 progress,
                 started=started,

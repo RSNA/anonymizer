@@ -12,7 +12,10 @@ from anonymizer.controller.ai_batch_process import (
     AiBatchProcessOptions,
     normalize_selected_algorithms,
 )
-from anonymizer.controller.remove_pixel_phi import PixelPhiRemovalMode
+from anonymizer.controller.remove_pixel_phi import (
+    pixel_phi_removal_mode_from_menu_label,
+    pixel_phi_removal_mode_menu_values,
+)
 from anonymizer.controller.tseg.runtime_status import (
     ai_feature_description_face_blur,
     ai_feature_description_harmonize,
@@ -29,16 +32,6 @@ from anonymizer.view.blur_face_results import (
     face_blur_mode_from_menu_label,
     face_blur_mode_menu_values,
 )
-
-
-def pixel_phi_removal_mode_menu_values() -> tuple[str, ...]:
-    return (_("Black out text"), _("Blend into background"))
-
-
-def pixel_phi_removal_mode_from_menu_label(label: str) -> PixelPhiRemovalMode:
-    if label == _("Blend into background"):
-        return PixelPhiRemovalMode.INPAINT
-    return PixelPhiRemovalMode.BLACKOUT
 
 
 @dataclass(frozen=True)

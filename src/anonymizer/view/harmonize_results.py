@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import queue
-import threading
 import tkinter as tk
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -22,6 +20,7 @@ from anonymizer.controller.harmonize import (
     format_harmonize_progress_message,
     harmonize_series,
 )
+from anonymizer.controller.runner import Algorithm
 from anonymizer.controller.tseg.radlex_playbook import (
     PLAYBOOK_TREE_IIDS,
     build_localizer_playbook_attributes,
@@ -33,8 +32,10 @@ from anonymizer.controller.tseg.radlex_playbook import (
     playbook_plane_row_values,
     playbook_series_type_row_values,
 )
+from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import StudyPhiHeader
 from anonymizer.utils.translate import _
+from anonymizer.view.job_poller import STAGE_POLL_MS, start_background_job
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +106,7 @@ class HarmonizeResultsView(tk.Toplevel):
     batch header, results frames, optional error frame, footer (status + progress + buttons).
     """
 
-    ux_poll_interval_ms = 200
+    ux_poll_interval_ms = STAGE_POLL_MS
 
     PAD = 10
     ButtonWidth = 100
@@ -166,14 +167,12 @@ class HarmonizeResultsView(tk.Toplevel):
         self.accepted: bool | None = None
         self.result: HarmonizedResult | None = None
         self.error: str | None = None
-        self._harmonize_queue: queue.Queue[tuple[str, object]] = queue.Queue()
-        self._save_queue: queue.Queue[tuple[str, object]] = queue.Queue()
+        self._harmonize_work_state = WorkState()
+        self._save_work_state = WorkState()
         self._running = True
         self._saving = False
         self._closing = False
-        self._poll_after_id: str | None = None
         self._pending_save_description: str | None = None
-        self._worker_thread: threading.Thread | None = None
 
         self._bind_current_item()
 
@@ -641,8 +640,8 @@ class HarmonizeResultsView(tk.Toplevel):
         self.accepted = None
         self._running = True
         self._saving = False
-        self._harmonize_queue = queue.Queue()
-        self._save_queue = queue.Queue()
+        self._harmonize_work_state.prepare_job()
+        self._save_work_state.prepare_job()
         self._error_frame.grid_remove()
         self._radlex_value_label.configure(text="")
         self._status_label.configure(text=_("Analyzing scan geometry") + "… (0%)")
@@ -726,13 +725,21 @@ class HarmonizeResultsView(tk.Toplevel):
     def _begin_save_accepted_description(self, description: str) -> None:
         self._pending_save_description = description
         self._show_saving_state()
-        threading.Thread(
-            target=self._save_description_worker,
-            args=(self._series_path, description, str(self._ds.SeriesInstanceUID)),
-            name="HarmonizeSaveWorker",
-            daemon=True,
-        ).start()
-        self._schedule_poll(self._poll_save_progress)
+        self._save_work_state.prepare_job()
+        series_path = self._series_path
+        series_uid = str(self._ds.SeriesInstanceUID)
+
+        def _worker() -> None:
+            self._save_description_job(series_path, description, series_uid)
+
+        start_background_job(
+            self,
+            work_state=self._save_work_state,
+            algorithm=Algorithm.HARMONIZE,
+            worker_target=_worker,
+            on_done=self._on_save_job_done,
+            poll_ms=self.ux_poll_interval_ms,
+        )
 
     def _commit_saved_description(self) -> None:
         if self._pending_save_description is None:
@@ -754,39 +761,30 @@ class HarmonizeResultsView(tk.Toplevel):
         if self._on_series_description_updated is not None:
             self._on_series_description_updated()
 
-    def _save_description_worker(self, series_path: Path, description: str, series_uid: str) -> None:
+    def _save_description_job(self, series_path: Path, description: str, series_uid: str) -> None:
         try:
             if not apply_harmonized_description(series_path, description, self._anon_model):
-                self._save_queue.put(("error", _("Failed to write DICOM files or update project database.")))
+                self._save_work_state.fail(_("Failed to write DICOM files or update project database."))
                 return
-            self._save_queue.put(("done", None))
+            self._save_work_state.finish(None)
         except Exception as exc:
             logger.exception("Harmonize save failed for %s", series_path)
-            self._save_queue.put(("error", str(exc)))
+            self._save_work_state.fail(str(exc))
 
-    def _poll_save_progress(self) -> None:
-        self._poll_after_id = None
-        if not self.winfo_exists() or self._closing:
+    def _on_save_job_done(self, _algorithm: Algorithm | None, work_state: WorkState) -> None:
+        if self._closing or not self.winfo_exists():
             return
-
-        try:
-            kind, payload = self._save_queue.get_nowait()
-        except queue.Empty:
-            self._schedule_poll(self._poll_save_progress)
-            return
-
-        if kind == "done":
+        if work_state.error:
             self._finish_saving_state()
-            if self.cancelled:
-                return
-            self._commit_saved_description()
-            self.accepted = True
-            self._status_label.configure(text=_("Series description saved"))
-            self._record_outcome(accepted=True)
+            self._show_save_error(work_state.error)
             return
-
         self._finish_saving_state()
-        self._show_save_error(str(payload))
+        if self.cancelled:
+            return
+        self._commit_saved_description()
+        self.accepted = True
+        self._status_label.configure(text=_("Series description saved"))
+        self._record_outcome(accepted=True)
 
     def _show_save_error(self, message: str) -> None:
         self.error = message
@@ -801,13 +799,63 @@ class HarmonizeResultsView(tk.Toplevel):
         self._update_playbook_from_progress(progress)
 
     def _start_current_item_worker(self) -> None:
-        self._schedule_poll(self._poll_harmonize_progress)
-        self._worker_thread = threading.Thread(
-            target=self._harmonize_worker,
-            name=f"HarmonizeWorker-{self._item_index + 1}",
-            daemon=True,
+        self._harmonize_work_state.prepare_job()
+
+        def _worker() -> None:
+            self._run_harmonize_job()
+
+        start_background_job(
+            self,
+            work_state=self._harmonize_work_state,
+            algorithm=Algorithm.HARMONIZE,
+            worker_target=_worker,
+            on_tick=self._on_harmonize_job_tick,
+            on_done=self._on_harmonize_job_done,
+            poll_ms=self.ux_poll_interval_ms,
         )
-        self._worker_thread.start()
+
+    def _on_harmonize_job_tick(self, work_state: WorkState) -> None:
+        if self._closing or not self.winfo_exists():
+            return
+        _status, _done, _fraction, _error, _result, detail = work_state.read_job_ui()
+        if isinstance(detail, HarmonizeProgress):
+            self._show_harmonize_progress(detail)
+        elif work_state.status:
+            self._status_label.configure(text=work_state.status)
+            self._progressbar.set(self._batch_overall_fraction(_fraction))
+
+    def _on_harmonize_job_done(self, _algorithm: Algorithm | None, work_state: WorkState) -> None:
+        if self._closing or not self.winfo_exists():
+            return
+        if work_state.error:
+            self._show_error(work_state.error)
+            return
+        results = work_state.result
+        if not isinstance(results, list):
+            self._show_error(_("Harmonize could not analyze this series."))
+            return
+        self._finish_harmonize(results)
+
+    def _run_harmonize_job(self) -> None:
+        series_path = self._series_path
+        work_state = self._harmonize_work_state
+
+        def on_progress(progress: HarmonizeProgress) -> None:
+            if self.cancelled or work_state.should_cancel():
+                return
+            work_state.update_job_progress(
+                status=self._user_harmonize_status(progress),
+                fraction=progress.fraction,
+                detail=progress,
+            )
+
+        try:
+            results = harmonize_series([series_path], progress=on_progress)
+            if not work_state.should_cancel() and not self.cancelled:
+                work_state.finish(results)
+        except Exception as exc:
+            logger.exception("Harmonize failed for %s: %s", series_path, exc)
+            work_state.fail(str(exc))
 
     def _advance_to_next_item(self) -> None:
         if self._item_index + 1 >= self._batch_total:
@@ -832,41 +880,6 @@ class HarmonizeResultsView(tk.Toplevel):
             )
         )
         self._advance_to_next_item()
-
-    def _harmonize_worker(self) -> None:
-        series_path = self._series_path
-
-        def on_progress(progress: HarmonizeProgress) -> None:
-            self._harmonize_queue.put(("progress", progress))
-
-        try:
-            results = harmonize_series([series_path], progress=on_progress)
-            self._harmonize_queue.put(("done", results))
-        except Exception as exc:
-            logger.exception("Harmonize failed for %s: %s", series_path, exc)
-            self._harmonize_queue.put(("error", exc))
-
-    def _poll_harmonize_progress(self) -> None:
-        self._poll_after_id = None
-        if not self.winfo_exists() or self._closing or self.cancelled:
-            return
-
-        while True:
-            try:
-                kind, payload = self._harmonize_queue.get_nowait()
-            except queue.Empty:
-                break
-
-            if kind == "progress":
-                self._show_harmonize_progress(payload)
-            elif kind == "done":
-                self._finish_harmonize(payload)
-                return
-            elif kind == "error":
-                self._show_error(str(payload))
-                return
-
-        self._schedule_poll(self._poll_harmonize_progress)
 
     def _finish_harmonize(self, results: list[HarmonizedResult]) -> None:
         self._running = False
@@ -929,6 +942,8 @@ class HarmonizeResultsView(tk.Toplevel):
         if self._running:
             self.cancelled = True
             self.accepted = False
+            self._harmonize_work_state.request_cancel()
+            self._save_work_state.request_cancel()
         elif self._batch_total > 1 and len(self._outcomes) < self._batch_total:
             self.cancelled = True
         elif self.accepted is None:
@@ -939,25 +954,15 @@ class HarmonizeResultsView(tk.Toplevel):
     def _escape_keypress(self, _event=None) -> None:
         self._on_cancel()
 
-    def _schedule_poll(self, callback) -> None:
-        if self._closing:
-            return
-        self._poll_after_id = self.after(self.ux_poll_interval_ms, callback)
-
-    def _cancel_scheduled_polls(self) -> None:
-        if self._poll_after_id is not None:
-            with contextlib.suppress(tk.TclError):
-                self.after_cancel(self._poll_after_id)
-            self._poll_after_id = None
-        self._running = False
-
     def _close(self) -> None:
         if self._closing:
             return
         self._closing = True
+        self._harmonize_work_state.request_cancel()
+        self._save_work_state.request_cancel()
         with contextlib.suppress(tk.TclError):
             self.grab_release()
-        self._cancel_scheduled_polls()
+        self._running = False
         self.destroy()
 
 

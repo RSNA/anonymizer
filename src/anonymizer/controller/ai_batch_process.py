@@ -32,19 +32,19 @@ from anonymizer.controller.harmonize import (
     harmonize_and_apply_series,
 )
 from anonymizer.controller.remove_pixel_phi import (
-    OcrService,
     PixelPhiRemovalMode,
     apply_instance_pixel_phi_for_dcm,
     pixel_phi_removal_mode_display_label,
+    remove_pixel_phi,
 )
-from anonymizer.controller.series_io import load_series, save_series_slices
+from anonymizer.controller.runner import (
+    Algorithm,
+    enter_batch_phase,
+    exit_batch_phase,
+)
+from anonymizer.controller.series_io import load_series_frames, save_series_frames
 from anonymizer.controller.tseg.contrast import release_working_memory
 from anonymizer.controller.tseg.dicom_geometry import resolve_series_geometry, stackable_dicom_paths
-from anonymizer.controller.tseg.model_cache import (
-    clear_predictor_cache,
-    preload_face_models,
-    tseg_batch_session,
-)
 from anonymizer.controller.tseg.segment import AnalysisProgress
 from anonymizer.utils.memory import MemoryGuard, MemorySnapshot, capture_memory_snapshot
 from anonymizer.utils.translate import _
@@ -54,7 +54,10 @@ from anonymizer.view.blur_face_results import (
 )
 
 if TYPE_CHECKING:
+    from easyocr import Reader
+
     from anonymizer.controller.anonymizer import AnonymizerController
+    from anonymizer.controller.work_state import WorkState
     from anonymizer.model.anonymizer import AnonymizerModel
 
 logger = logging.getLogger(__name__)
@@ -71,6 +74,12 @@ CANONICAL_ALGORITHM_ORDER: tuple[AiBatchAlgorithm, ...] = (
     AiBatchAlgorithm.HARMONIZE,
     AiBatchAlgorithm.FACE_BLUR,
 )
+
+AI_BATCH_TO_RUNNER: dict[AiBatchAlgorithm, Algorithm] = {
+    AiBatchAlgorithm.REMOVE_PIXEL_PHI: Algorithm.REMOVE_PIXEL_PHI,
+    AiBatchAlgorithm.HARMONIZE: Algorithm.HARMONIZE,
+    AiBatchAlgorithm.FACE_BLUR: Algorithm.FACE_BLUR,
+}
 
 
 @dataclass(frozen=True)
@@ -469,18 +478,12 @@ def _log_workflow_progress_step(
     log_workflow(format_batch_step_subline(log_line))
 
 
-def _release_tseg_phase(*, stage: str) -> None:
-    release_working_memory(stage=stage, preserve_accelerator=True)
-    clear_predictor_cache()
-    gc.collect()
-
-
 def _prepare_ct_volume_context(series_path: Path) -> SeriesVolumeContext | None:
     with contextlib.suppress(ValueError, InvalidDicomError):
         if _load_ct_series_dataset(series_path) is None:
             return None
-        loaded = load_series(series_path)
-        reference_ds, frames, slice_paths = loaded.metadata, loaded.slices, loaded.slice_paths
+        loaded = load_series_frames(series_path)
+        reference_ds, frames, slice_paths = loaded.metadata, loaded.frames, loaded.slice_paths
         return SeriesVolumeContext(
             reference_ds=reference_ds,
             slice_frames=frames,
@@ -675,7 +678,7 @@ def _apply_remove_pixel_phi_series(
     series_path: Path,
     *,
     anon_model: AnonymizerModel,
-    ocr_service: OcrService | None = None,
+    ocr_reader: Reader,
     on_log_detail: Callable[[str], None] | None = None,
     removal_mode: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT,
     project_dir: Path | None = None,
@@ -714,12 +717,12 @@ def _apply_remove_pixel_phi_series(
     unchanged_count = 0
     all_removed_texts: list[str] = []
     total_pixels_changed = 0
-    service = ocr_service or OcrService.instance()
     instance_total = len(dcm_paths)
     for instance_index, dcm_path in enumerate(dcm_paths, start=1):
         try:
-            modified, texts, pixels_changed = service.process_dicom_path(
+            modified, texts, pixels_changed = remove_pixel_phi(
                 dcm_path,
+                ocr_reader,
                 removal_mode=removal_mode,
                 project_dir=project_dir,
                 modality=series_modality or None,
@@ -890,14 +893,14 @@ def _apply_face_blur_series(
             blurred_slices = preview.blurred_slice_frames
             ds = volume_context.reference_ds
         else:
-            loaded = load_series(series_path)
-            ds, frames, _slice_paths = loaded.metadata, loaded.slices, loaded.slice_paths
+            loaded = load_series_frames(series_path)
+            ds, frames, _slice_paths = loaded.metadata, loaded.frames, loaded.slice_paths
             blurred_slices = preview_blurred_slice_frames(
                 preview,
                 reference_ds=ds,
                 frame_dtype=frames.dtype,
             )
-        if not save_series_slices(series_path, blurred_slices, ds):
+        if not save_series_frames(series_path, blurred_slices, ds):
             return AiBatchOutcome(
                 series_path,
                 AiBatchAlgorithm.FACE_BLUR,
@@ -1022,6 +1025,7 @@ def ai_batch_process(
     cancelled: AiBatchCancelledCallback | None = None,
     on_log: AiBatchWorkflowLogCallback | None = None,
     memory_callback: AiBatchMemoryCallback | None = None,
+    work_state: WorkState | None = None,
 ) -> AiBatchSummary:
     """Run selected AI algorithms in fixed order, one algorithm phase at a time."""
     algorithms = normalize_selected_algorithms(options.algorithms)
@@ -1049,6 +1053,8 @@ def ai_batch_process(
     defer_volume_to_face_blur = AiBatchAlgorithm.HARMONIZE in algorithms and AiBatchAlgorithm.FACE_BLUR in algorithms
 
     def log_workflow(message: str) -> None:
+        if work_state is not None:
+            work_state.append_log(format_batch_workflow_log_line(message.rstrip("\n")))
         if on_log is not None:
             on_log(format_batch_workflow_log_line(message.rstrip("\n")))
 
@@ -1110,6 +1116,8 @@ def ai_batch_process(
             message,
             overall,
         )
+        if work_state is not None:
+            work_state.set_status(message)
 
     def record_outcome(
         outcome: AiBatchOutcome,
@@ -1138,6 +1146,8 @@ def ai_batch_process(
             on_log(format_batch_workflow_log_line(format_batch_outcome_subline(outcome)))
 
     def is_cancelled() -> bool:
+        if work_state is not None and work_state.should_cancel():
+            return True
         return cancelled is not None and cancelled()
 
     def mark_cancelled() -> None:
@@ -1193,62 +1203,76 @@ def ai_batch_process(
 
         emit_memory_snapshot()
 
-        if algorithm is AiBatchAlgorithm.REMOVE_PIXEL_PHI:
-            log_workflow(format_batch_step_subline(_("Preparing OCR models") + "…"))
-            ocr_service = OcrService.instance()
-            with ocr_service.batch_session(release=True):
-                for series_index, (study_index, item_study_total, series_path) in enumerate(series_items, start=1):
-                    if is_cancelled():
-                        mark_cancelled()
-                        break
-                    if check_memory_guard():
-                        break
+        runner_alg = AI_BATCH_TO_RUNNER[algorithm]
+        runner, handle = enter_batch_phase(runner_alg)
+        try:
+            if algorithm is AiBatchAlgorithm.REMOVE_PIXEL_PHI:
+                log_workflow(format_batch_step_subline(_("Preparing OCR models") + "…"))
+            elif algorithm is AiBatchAlgorithm.HARMONIZE:
+                log_workflow(format_batch_step_subline(_("Loading anatomy analysis models") + "…"))
+            else:
+                log_workflow(format_batch_step_subline(_("Loading face segmentation models") + "…"))
 
-                    ds = _handle_batch_series_preamble(
-                        series_path=series_path,
-                        pending_paths=pending_paths,
-                        algorithm=algorithm,
-                        study_index=study_index,
-                        study_total=study_total,
-                        series_index=series_index,
-                        series_total=series_total,
-                        log_workflow=log_workflow,
-                        record_outcome=record_outcome,
-                        report_progress=report_progress,
-                        algorithm_index=algorithm_index,
-                        item_study_total=item_study_total,
-                        on_step_complete=advance_completed_step,
-                        outcome_detail=outcome_detail,
-                        anon_model=anon_model,
+            for series_index, (study_index, item_study_total, series_path) in enumerate(series_items, start=1):
+                if is_cancelled():
+                    mark_cancelled()
+                    break
+                if check_memory_guard():
+                    break
+
+                ds = _handle_batch_series_preamble(
+                    series_path=series_path,
+                    pending_paths=pending_paths,
+                    algorithm=algorithm,
+                    study_index=study_index,
+                    study_total=study_total,
+                    series_index=series_index,
+                    series_total=series_total,
+                    log_workflow=log_workflow,
+                    record_outcome=record_outcome,
+                    report_progress=report_progress,
+                    algorithm_index=algorithm_index,
+                    item_study_total=item_study_total,
+                    on_step_complete=advance_completed_step,
+                    outcome_detail=outcome_detail,
+                    anon_model=anon_model,
+                )
+                if ds is None:
+                    continue
+
+                if algorithm is AiBatchAlgorithm.HARMONIZE and not defer_volume_to_face_blur:
+                    volume_context = _prepare_ct_volume_context(series_path)
+                    if volume_context is not None:
+                        volume_contexts[series_path] = volume_context
+
+                last_progress_stage: list[str | None] = [None]
+
+                def step_progress(
+                    step_fraction: float,
+                    detail: str,
+                    *,
+                    _series_index: int = series_index,
+                    _study_index: int = study_index,
+                    _study_total: int = item_study_total,
+                    _ds=ds,
+                    _algorithm=algorithm,
+                    _algorithm_index: int = algorithm_index,
+                ) -> None:
+                    report_progress(
+                        series_index=_series_index,
+                        study_index=_study_index,
+                        study_total=_study_total,
+                        algorithm=_algorithm,
+                        algorithm_index=_algorithm_index,
+                        detail=detail,
+                        step_fraction=step_fraction,
+                        ds=_ds,
                     )
-                    if ds is None:
-                        continue
 
-                    def step_progress(
-                        step_fraction: float,
-                        detail: str,
-                        *,
-                        _series_index: int = series_index,
-                        _study_index: int = study_index,
-                        _study_total: int = item_study_total,
-                        _ds=ds,
-                        _algorithm=algorithm,
-                        _algorithm_index=algorithm_index,
-                    ) -> None:
-                        report_progress(
-                            series_index=_series_index,
-                            study_index=_study_index,
-                            study_total=_study_total,
-                            algorithm=_algorithm,
-                            algorithm_index=_algorithm_index,
-                            detail=detail,
-                            step_fraction=step_fraction,
-                            ds=_ds,
-                        )
-
+                if algorithm is AiBatchAlgorithm.REMOVE_PIXEL_PHI:
                     log_workflow(format_batch_step_subline(_("Scanning instances for burnt-in text") + "…"))
                     assert anon_model is not None
-
+                    assert handle.reader is not None
                     project_dir = anon_controller.project_model.storage_dir if anon_controller is not None else None
 
                     def log_pixel_phi_detail(message: str) -> None:
@@ -1257,84 +1281,12 @@ def ai_batch_process(
                     outcome = _apply_remove_pixel_phi_series(
                         series_path,
                         anon_model=anon_model,
-                        ocr_service=ocr_service,
+                        ocr_reader=handle.reader,
                         on_log_detail=log_pixel_phi_detail,
                         removal_mode=options.pixel_phi_removal_mode,
                         project_dir=project_dir,
                     )
-                    record_outcome(
-                        outcome,
-                        study_index=study_index,
-                        study_total=study_total,
-                        series_index=series_index,
-                        algorithm=algorithm,
-                        ds=ds,
-                    )
-                    completed_steps += 1
-                    step_progress(1.0, outcome_detail(outcome))
-            log_workflow(format_batch_step_subline(_("Releasing OCR models") + "…"))
-            OcrService.shutdown_batch()
-            log_workflow(format_batch_step_subline(_("OCR worker stopped")))
-            emit_memory_snapshot()
-
-        elif algorithm is AiBatchAlgorithm.HARMONIZE:
-            log_workflow(format_batch_step_subline(_("Loading anatomy analysis models") + "…"))
-            with tseg_batch_session(preload=True):
-                for series_index, (study_index, item_study_total, series_path) in enumerate(series_items, start=1):
-                    if is_cancelled():
-                        mark_cancelled()
-                        break
-                    if check_memory_guard():
-                        break
-
-                    ds = _handle_batch_series_preamble(
-                        series_path=series_path,
-                        pending_paths=pending_paths,
-                        algorithm=algorithm,
-                        study_index=study_index,
-                        study_total=study_total,
-                        series_index=series_index,
-                        series_total=series_total,
-                        log_workflow=log_workflow,
-                        record_outcome=record_outcome,
-                        report_progress=report_progress,
-                        algorithm_index=algorithm_index,
-                        item_study_total=item_study_total,
-                        on_step_complete=advance_completed_step,
-                        outcome_detail=outcome_detail,
-                        anon_model=anon_model,
-                    )
-                    if ds is None:
-                        continue
-
-                    if not defer_volume_to_face_blur:
-                        volume_context = _prepare_ct_volume_context(series_path)
-                        if volume_context is not None:
-                            volume_contexts[series_path] = volume_context
-
-                    last_progress_stage: list[str | None] = [None]
-
-                    def step_progress(
-                        step_fraction: float,
-                        detail: str,
-                        *,
-                        _series_index: int = series_index,
-                        _study_index: int = study_index,
-                        _study_total: int = item_study_total,
-                        _ds=ds,
-                        _algorithm=algorithm,
-                        _algorithm_index=algorithm_index,
-                    ) -> None:
-                        report_progress(
-                            series_index=_series_index,
-                            study_index=_study_index,
-                            study_total=_study_total,
-                            algorithm=_algorithm,
-                            algorithm_index=_algorithm_index,
-                            detail=detail,
-                            step_fraction=step_fraction,
-                            ds=_ds,
-                        )
+                elif algorithm is AiBatchAlgorithm.HARMONIZE:
 
                     def harmonize_progress(
                         item_progress: AnalysisProgress,
@@ -1365,80 +1317,10 @@ def ai_batch_process(
                     )
                     for line in harmonize_log_lines:
                         log_workflow(format_batch_workflow_log_line(format_batch_step_subline(line)))
-                    record_outcome(
-                        outcome,
-                        study_index=study_index,
-                        study_total=study_total,
-                        series_index=series_index,
-                        algorithm=algorithm,
-                        ds=ds,
-                    )
-                    completed_steps += 1
-                    step_progress(1.0, outcome_detail(outcome))
-                    release_working_memory(stage="ai_batch_after_harmonize_series", preserve_accelerator=True)
-
-            _release_tseg_phase(stage="ai_batch_after_harmonize_phase")
-            log_workflow(format_batch_step_subline(_("Anatomy analysis models released")))
-            emit_memory_snapshot()
-
-        else:
-            log_workflow(format_batch_step_subline(_("Loading face segmentation models") + "…"))
-            with tseg_batch_session(preload=False):
-                preload_face_models()
-                for series_index, (study_index, item_study_total, series_path) in enumerate(series_items, start=1):
-                    if is_cancelled():
-                        mark_cancelled()
-                        break
-                    if check_memory_guard():
-                        break
-
-                    ds = _handle_batch_series_preamble(
-                        series_path=series_path,
-                        pending_paths=pending_paths,
-                        algorithm=algorithm,
-                        study_index=study_index,
-                        study_total=study_total,
-                        series_index=series_index,
-                        series_total=series_total,
-                        log_workflow=log_workflow,
-                        record_outcome=record_outcome,
-                        report_progress=report_progress,
-                        algorithm_index=algorithm_index,
-                        item_study_total=item_study_total,
-                        on_step_complete=advance_completed_step,
-                        outcome_detail=outcome_detail,
-                        anon_model=anon_model,
-                    )
-                    if ds is None:
-                        continue
-
+                else:
                     volume_context = volume_contexts.pop(series_path, None)
                     if volume_context is None:
                         volume_context = _prepare_ct_volume_context(series_path)
-
-                    last_progress_stage = [None]
-
-                    def step_progress(
-                        step_fraction: float,
-                        detail: str,
-                        *,
-                        _series_index: int = series_index,
-                        _study_index: int = study_index,
-                        _study_total: int = item_study_total,
-                        _ds=ds,
-                        _algorithm=algorithm,
-                        _algorithm_index=algorithm_index,
-                    ) -> None:
-                        report_progress(
-                            series_index=_series_index,
-                            study_index=_study_index,
-                            study_total=_study_total,
-                            algorithm=_algorithm,
-                            algorithm_index=_algorithm_index,
-                            detail=detail,
-                            step_fraction=step_fraction,
-                            ds=_ds,
-                        )
 
                     def face_progress(
                         item,
@@ -1457,7 +1339,6 @@ def ai_batch_process(
                         )
 
                     assert anon_model is not None
-
                     outcome = _apply_face_blur_series(
                         series_path,
                         anon_model=anon_model,
@@ -1465,26 +1346,37 @@ def ai_batch_process(
                         progress=face_progress,
                         volume_context=volume_context,
                     )
-                    record_outcome(
-                        outcome,
-                        study_index=study_index,
-                        study_total=study_total,
-                        series_index=series_index,
-                        algorithm=algorithm,
-                        ds=ds,
-                    )
-                    completed_steps += 1
-                    step_progress(1.0, outcome_detail(outcome))
                     volume_context = None
                     gc.collect()
                     release_working_memory(stage="ai_batch_after_face_blur_series", preserve_accelerator=True)
 
-            _release_tseg_phase(stage="ai_batch_after_face_blur_phase")
-            log_workflow(format_batch_step_subline(_("Face segmentation models released")))
+                record_outcome(
+                    outcome,
+                    study_index=study_index,
+                    study_total=study_total,
+                    series_index=series_index,
+                    algorithm=algorithm,
+                    ds=ds,
+                )
+                completed_steps += 1
+                step_progress(1.0, outcome_detail(outcome))
+                if algorithm is AiBatchAlgorithm.HARMONIZE:
+                    release_working_memory(stage="ai_batch_after_harmonize_series", preserve_accelerator=True)
+        finally:
+            exit_batch_phase(runner, handle)
+            if algorithm is AiBatchAlgorithm.REMOVE_PIXEL_PHI:
+                log_workflow(format_batch_step_subline(_("Releasing OCR models") + "…"))
+                log_workflow(format_batch_step_subline(_("OCR models released")))
+            elif algorithm is AiBatchAlgorithm.HARMONIZE:
+                log_workflow(format_batch_step_subline(_("Anatomy analysis models released")))
+            else:
+                log_workflow(format_batch_step_subline(_("Face segmentation models released")))
             emit_memory_snapshot()
 
         if summary.cancelled:
             break
 
     volume_contexts.clear()
+    if work_state is not None and not work_state.done:
+        work_state.finish(summary)
     return summary

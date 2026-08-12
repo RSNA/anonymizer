@@ -477,6 +477,13 @@ class ImageViewer(ctk.CTkFrame):
             self.remove_from_cache(frame_index)  # force re-rendering
             self.load_and_display_image(self.current_image_index)
 
+    def clear_text_overlays(self) -> None:
+        """Remove OCR text overlays from every frame and refresh the current view."""
+        for overlay in self.overlay_data.values():
+            overlay.ocr_texts = []
+        self.remove_from_cache(self.current_image_index)
+        self.load_and_display_image(self.current_image_index)
+
     def get_text_overlay_data(self, frame_index: int) -> list[OCRText] | None:
         """Retrieves the text overlay data for a specific frame."""
         if frame_index not in self.overlay_data:
@@ -776,14 +783,29 @@ class ImageViewer(ctk.CTkFrame):
         blended[mask] = blended[mask] * (1.0 - alpha) + overlay[mask] * alpha
         return np.clip(blended, 0, 255).astype(np.uint8)
 
+    def _opencv_frame(self, image_array: np.ndarray) -> np.ndarray:
+        """Convert series-buffer pixels to BGR for OpenCV overlay compositing."""
+        if self.is_color and image_array.ndim == 3 and image_array.shape[-1] == 3:
+            return cv2.cvtColor(image_array, cv2.COLOR_RGB2BGR)
+        return image_array
+
+    def _pil_frame(self, image_array: np.ndarray) -> np.ndarray:
+        """Convert OpenCV BGR composited frames back to RGB for PIL/Tk."""
+        if self.is_color and image_array.ndim == 3 and image_array.shape[-1] == 3:
+            return cv2.cvtColor(image_array, cv2.COLOR_BGR2RGB)
+        return image_array
+
     def load_and_display_image(self, frame_ndx: int):
         logger.debug(f"Loading and displaying image at index: {frame_ndx}")
         if not (0 <= frame_ndx < self.num_images) or self.images is None:
             logger.error(f"Invalid frame index: {frame_ndx}")
             return
 
-        # Use Cache:
-        if frame_ndx in self.image_cache:
+        # Use Cache (skip when text overlays must be composited — cache stores pre-overlay pixels).
+        has_text_overlay = (
+            frame_ndx in self.overlay_data and bool(self.overlay_data[frame_ndx].ocr_texts)
+        )
+        if frame_ndx in self.image_cache and not has_text_overlay:
             cached_image, __, cached_size = self.image_cache[frame_ndx]
             if cached_size == self.current_size:
                 self.photo_image = cached_image
@@ -799,21 +821,18 @@ class ImageViewer(ctk.CTkFrame):
                 self.update_status()
                 return
 
-        image_array = self.images[frame_ndx].copy()
-
         # Update Histogram Data if frame change (skip during companion scroll review):
         if self.current_image_index != frame_ndx and self.histogram is not None and not self.companion_attached:
             self.histogram.update_image(self.images[frame_ndx])
 
-        # --- Apply Windowing/Leveling ---
-        image_array = apply_windowing(self.current_wl, self.current_ww, image_array)
-
-        # Rendering:
+        image_array = apply_windowing(self.current_wl, self.current_ww, self.images[frame_ndx].copy())
+        if self.is_color:
+            image_array = self._opencv_frame(image_array)
         rendered_overlay = self._render_overlays(frame_ndx)
         image_array = self._composite_overlay(image_array, rendered_overlay)
 
         # Display:
-        image_pil = Image.fromarray(image_array)
+        image_pil = Image.fromarray(self._pil_frame(image_array))
         image_pil_resized = image_pil.resize(self.current_size, Image.Resampling.LANCZOS)
         self.current_size = image_pil_resized.size
         self.photo_image = ImageTk.PhotoImage(image_pil_resized)

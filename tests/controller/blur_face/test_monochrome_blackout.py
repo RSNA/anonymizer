@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pydicom
 from pydicom.data import get_testdata_file
 
@@ -15,9 +17,14 @@ from anonymizer.controller.remove_pixel_phi import (
     remove_pixel_phi,
 )
 from anonymizer.controller.series_io import (
+    load_series_frames,
+    save_series_frames,
     series_buffer_monochrome_to_stored,
     stored_monochrome_to_series_buffer,
 )
+from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
+
+DAVIDSON_CXR_SERIES_DIR = CONTROLLER_TEST_DCM_FILES_DIR / "davidson_cxr"
 
 
 def _monochrome1_dataset() -> pydicom.Dataset:
@@ -78,3 +85,25 @@ def test_remove_pixel_phi_blackout_monochrome1_writes_dark_pixels(
     after = pydicom.dcmread(dcm_path).pixel_array
     assert after[40, 40] > 1500
     assert after[0, 0] == 50
+
+
+def test_save_series_frames_monochrome1_roundtrip_preserves_viewer(tmp_path: Path) -> None:
+    if not DAVIDSON_CXR_SERIES_DIR.is_dir():
+        import pytest
+
+        pytest.skip("Davidson MONOCHROME1 fixture missing")
+
+    series_dir = tmp_path / "davidson"
+    shutil.copytree(DAVIDSON_CXR_SERIES_DIR, series_dir)
+    dcm_path = next(iter(series_dir.glob("*.dcm")))
+    stored_before = pydicom.dcmread(dcm_path).pixel_array.copy()
+
+    loaded = load_series_frames(series_dir)
+    assert str(loaded.metadata.PhotometricInterpretation).upper() == "MONOCHROME1"
+
+    assert save_series_frames(series_dir, loaded.frames.copy(), loaded.metadata)
+
+    reloaded = load_series_frames(series_dir)
+    np.testing.assert_allclose(reloaded.frames, loaded.frames, rtol=1e-4, atol=1.0)
+    stored_after = pydicom.dcmread(dcm_path).pixel_array
+    np.testing.assert_array_equal(stored_before, stored_after)

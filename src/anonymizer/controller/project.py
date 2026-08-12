@@ -57,6 +57,7 @@ from anonymizer.controller.harmonize import (
     HarmonizeStudiesSummary,
     harmonize_studies_batch,
 )
+from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import PHI_IndexRecord
 from anonymizer.model.project import (
     AuthenticationError,
@@ -2623,6 +2624,7 @@ class ProjectController(AE):
         cancelled: AiBatchCancelledCallback | None = None,
         on_log: AiBatchWorkflowLogCallback | None = None,
         memory_callback: AiBatchMemoryCallback | None = None,
+        work_state: WorkState | None = None,
     ) -> AiBatchSummary:
         """Run selected AI algorithms sequentially for series under selected studies."""
         return ai_batch_process(
@@ -2635,4 +2637,5 @@ class ProjectController(AE):
             cancelled=cancelled,
             on_log=on_log,
             memory_callback=memory_callback,
+            work_state=work_state,
         )

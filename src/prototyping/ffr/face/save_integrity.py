@@ -4,7 +4,7 @@ Run Series View face-blur + save pipeline and verify DICOM integrity.
 
 Mirrors the controller path used when the user clicks **Save Pixel Changes** in
 Series View (``preview_face_blur`` → ``apply_face_blur_preview_to_series_frames``
-→ ``save_series_slices``), writing to a separate output directory instead of
+→ ``save_series_frames``), writing to a separate output directory instead of
 overwriting the source series.
 
 Default output: ``<series_directory>/1_blurred_face``
@@ -47,9 +47,9 @@ from anonymizer.controller.blur_face import (
     resolve_face_mask_path,
 )
 from anonymizer.controller.series_io import (
-    load_series,
+    load_series_frames,
     ordered_series_dcm_paths,
-    save_series_slices,
+    save_series_frames,
 )
 from anonymizer.controller.tseg.dicom_geometry import (
     load_geometry_cache,
@@ -62,7 +62,7 @@ logger = logging.getLogger("prototyping.ffr.face.save_integrity")
 
 DEFAULT_OUTPUT_DIRNAME = "1_blurred_face"
 
-# Tags that save_series_slices may change (pixel payload and transfer syntax only).
+# Tags that save_series_frames may change (pixel payload and transfer syntax only).
 EXPECTED_PIXEL_SAVE_CHANGES: frozenset[str] = frozenset(
     {
         "PixelData",
@@ -211,9 +211,9 @@ def run_series_view_face_blur_save(
     series_directory = Path(series_directory).resolve()
     output_directory = Path(output_directory).resolve()
 
-    loaded = load_series(series_directory)
+    loaded = load_series_frames(series_directory)
 
-    reference_ds, series_frames, slice_paths = loaded.metadata, loaded.slices, loaded.slice_paths
+    reference_ds, series_frames, slice_paths = loaded.metadata, loaded.frames, loaded.slice_paths
     single_frame = series_frames.shape[0] == 1
     viewer_frames = series_frames if single_frame else _build_viewer_frames(series_frames)
 
@@ -251,9 +251,9 @@ def run_series_view_face_blur_save(
     slices_to_save = merged_frames if single_frame else merged_frames[3:]
 
     _prepare_output_slices(series_directory, output_directory, slice_paths)
-    save_ok = save_series_slices(output_directory, slices_to_save, reference_ds)
+    save_ok = save_series_frames(output_directory, slices_to_save, reference_ds)
     if not save_ok:
-        return False, "save_series_slices returned False"
+        return False, "save_series_frames returned False"
     return True, None
 
 
@@ -302,7 +302,7 @@ def _stack_sop_uids(paths: Sequence[Path]) -> list[str]:
 
 
 def _save_iteration_paths(series_directory: Path) -> list[Path]:
-    """Paths in the order ``save_series_slices`` iterates (stack order)."""
+    """Paths in the order ``save_series_frames`` iterates (stack order)."""
     return ordered_series_dcm_paths(series_directory)
 
 
@@ -318,7 +318,7 @@ def check_save_order_hazard(series_directory: Path, report: IntegrityReport) -> 
             IntegrityIssue(
                 Severity.INFO,
                 "save_order",
-                "Stack order matches save_series_slices iteration order.",
+                "Stack order matches save_series_frames iteration order.",
             )
         )
         return
@@ -333,7 +333,7 @@ def check_save_order_hazard(series_directory: Path, report: IntegrityReport) -> 
         IntegrityIssue(
             Severity.ERROR,
             "save_order",
-            "save_series_slices iteration order differs from stackable_dicom_paths() "
+            "save_series_frames iteration order differs from stackable_dicom_paths() "
             f"stack order (first mismatch at index {first_mismatch}). "
             "Processed pixels may be written to the wrong slice files.",
         )
@@ -520,10 +520,10 @@ def load_saved_output_hu_stack(output_paths: Sequence[Path]) -> np.ndarray:
 
 def load_source_hu_for_blur_pipeline(source_directory: Path, source_paths: Sequence[Path]) -> np.ndarray:
     """HU stack in stack order using the same loader as face blur / Series View."""
-    loaded = load_series(source_directory)
-    _reference_ds, frames, loaded_paths = loaded.metadata, loaded.slices, loaded.slice_paths
+    loaded = load_series_frames(source_directory)
+    _reference_ds, frames, loaded_paths = loaded.metadata, loaded.frames, loaded.slice_paths
     if tuple(loaded_paths) != tuple(source_paths):
-        raise ValueError("Source stack paths do not match load_series order")
+        raise ValueError("Source stack paths do not match load_series_frames order")
     return hu_stack_from_series_frames(frames)
 
 

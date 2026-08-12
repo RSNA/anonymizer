@@ -60,6 +60,20 @@ def _pending_anon_model() -> MagicMock:
     return model
 
 
+def _patch_batch_runners():
+    handle = MagicMock(reader=MagicMock())
+    runner = MagicMock()
+    return (
+        patch(
+            "anonymizer.controller.ai_batch_process.enter_batch_phase",
+            return_value=(runner, handle),
+        ),
+        patch("anonymizer.controller.ai_batch_process.exit_batch_phase"),
+        handle,
+        runner,
+    )
+
+
 @pytest.fixture
 def images_layout(tmp_path: Path) -> tuple[Path, list[tuple[str, str]]]:
     images_dir = tmp_path / "public"
@@ -369,23 +383,14 @@ def test_format_remove_pixel_phi_instance_detail_no_text() -> None:
 @patch("anonymizer.controller.ai_batch_process._apply_face_blur_series")
 @patch("anonymizer.controller.ai_batch_process._apply_harmonize_series")
 @patch("anonymizer.controller.ai_batch_process._apply_remove_pixel_phi_series")
-@patch("anonymizer.controller.ai_batch_process.OcrService")
-@patch("anonymizer.controller.ai_batch_process.tseg_batch_session")
 def test_ai_batch_process_runs_algorithm_phases_in_order(
-    mock_batch_session: MagicMock,
-    mock_ocr_service_cls: MagicMock,
     mock_remove: MagicMock,
     mock_harmonize: MagicMock,
     mock_face_blur: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
 ) -> None:
     images_dir, studies = images_layout
-    mock_batch_session.return_value.__enter__ = MagicMock(return_value=None)
-    mock_batch_session.return_value.__exit__ = MagicMock(return_value=False)
-    mock_ocr_instance = MagicMock()
-    mock_ocr_service_cls.instance.return_value = mock_ocr_instance
-    mock_ocr_instance.batch_session.return_value.__enter__ = MagicMock(return_value=None)
-    mock_ocr_instance.batch_session.return_value.__exit__ = MagicMock(return_value=False)
+    enter_patch, exit_patch, handle, _runner = _patch_batch_runners()
 
     series_paths = [
         images_dir / "anon_pt" / "anon_study" / "series_a",
@@ -405,6 +410,8 @@ def test_ai_batch_process_runs_algorithm_phases_in_order(
     mock_harmonize.side_effect = _harmonize
 
     with (
+        enter_patch,
+        exit_patch,
         patch(
             "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_paths[0]), (1, 1, series_paths[1])],
@@ -431,9 +438,6 @@ def test_ai_batch_process_runs_algorithm_phases_in_order(
             anon_controller=MagicMock(),
         )
 
-    mock_ocr_instance.batch_session.assert_called_once_with(release=True)
-    mock_ocr_service_cls.shutdown_batch.assert_called_once()
-
     assert call_order == [
         "remove:series_a",
         "remove:series_b",
@@ -446,23 +450,14 @@ def test_ai_batch_process_runs_algorithm_phases_in_order(
 @patch("anonymizer.controller.ai_batch_process._apply_face_blur_series")
 @patch("anonymizer.controller.ai_batch_process._apply_harmonize_series")
 @patch("anonymizer.controller.ai_batch_process._apply_remove_pixel_phi_series")
-@patch("anonymizer.controller.ai_batch_process.OcrService")
-@patch("anonymizer.controller.ai_batch_process.tseg_batch_session")
 def test_ai_batch_process_runs_algorithms_in_order_and_honours_cancel(
-    mock_batch_session: MagicMock,
-    mock_ocr_service_cls: MagicMock,
     mock_remove: MagicMock,
     mock_harmonize: MagicMock,
     mock_face_blur: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
 ) -> None:
     images_dir, studies = images_layout
-    mock_batch_session.return_value.__enter__ = MagicMock(return_value=None)
-    mock_batch_session.return_value.__exit__ = MagicMock(return_value=False)
-    mock_ocr_instance = MagicMock()
-    mock_ocr_service_cls.instance.return_value = mock_ocr_instance
-    mock_ocr_instance.batch_session.return_value.__enter__ = MagicMock(return_value=None)
-    mock_ocr_instance.batch_session.return_value.__exit__ = MagicMock(return_value=False)
+    enter_patch, exit_patch, _handle, _runner = _patch_batch_runners()
 
     series_paths = [images_dir / "anon_pt" / "anon_study" / "series_a"]
     call_order: list[str] = []
@@ -482,6 +477,8 @@ def test_ai_batch_process_runs_algorithms_in_order_and_honours_cancel(
     mock_harmonize.side_effect = _harmonize
 
     with (
+        enter_patch,
+        exit_patch,
         patch(
             "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_paths[0])],
@@ -519,25 +516,22 @@ def test_ai_batch_process_runs_algorithms_in_order_and_honours_cancel(
 
 
 @patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
-@patch("anonymizer.controller.ai_batch_process.clear_predictor_cache")
 @patch("anonymizer.controller.ai_batch_process.release_working_memory")
-@patch("anonymizer.controller.ai_batch_process.tseg_batch_session")
 def test_ai_batch_process_harmonize_only_releases_memory_after_series(
-    mock_batch_session: MagicMock,
     mock_release: MagicMock,
-    mock_clear_cache: MagicMock,
     mock_harmonize: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
 ) -> None:
     images_dir, studies = images_layout
-    mock_batch_session.return_value.__enter__ = MagicMock(return_value=None)
-    mock_batch_session.return_value.__exit__ = MagicMock(return_value=False)
+    enter_patch, exit_patch, _handle, _runner = _patch_batch_runners()
     series_path = images_dir / "anon_pt" / "anon_study" / "series_a"
     from anonymizer.controller.harmonize import HarmonizeApplyOutcome
 
     mock_harmonize.return_value = HarmonizeApplyOutcome(series_path, "ok", "Applied")
 
     with (
+        enter_patch,
+        exit_patch,
         patch(
             "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_path)],
@@ -562,31 +556,26 @@ def test_ai_batch_process_harmonize_only_releases_memory_after_series(
     assert summary.applied == 1
     mock_harmonize.assert_called_once()
     mock_release.assert_any_call(stage="ai_batch_after_harmonize_series", preserve_accelerator=True)
-    mock_release.assert_any_call(stage="ai_batch_after_harmonize_phase", preserve_accelerator=True)
-    mock_clear_cache.assert_called_once()
 
 
 @patch("anonymizer.controller.ai_batch_process._apply_remove_pixel_phi_series")
-@patch("anonymizer.controller.ai_batch_process.OcrService")
-def test_ai_batch_process_uses_ocr_service_not_anonymizer_worker(
-    mock_ocr_service_cls: MagicMock,
+def test_ai_batch_process_uses_runner_reader_for_pixel_phi(
     mock_remove: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
 ) -> None:
     images_dir, studies = images_layout
     series_path = images_dir / "anon_pt" / "anon_study" / "series_a"
+    enter_patch, exit_patch, handle, _runner = _patch_batch_runners()
     mock_remove.return_value = AiBatchOutcome(
         series_path,
         AiBatchAlgorithm.REMOVE_PIXEL_PHI,
         "ok",
         "Modified 1/1",
     )
-    mock_ocr_instance = MagicMock()
-    mock_ocr_service_cls.instance.return_value = mock_ocr_instance
-    mock_ocr_instance.batch_session.return_value.__enter__ = MagicMock(return_value=None)
-    mock_ocr_instance.batch_session.return_value.__exit__ = MagicMock(return_value=False)
 
     with (
+        enter_patch,
+        exit_patch,
         patch(
             "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_path)],
@@ -603,26 +592,61 @@ def test_ai_batch_process_uses_ocr_service_not_anonymizer_worker(
             anon_model=_pending_anon_model(),
         )
 
-    mock_ocr_instance.batch_session.assert_called_once_with(release=True)
-    mock_ocr_service_cls.shutdown_batch.assert_called_once()
     mock_remove.assert_called_once()
-    assert mock_remove.call_args.kwargs["ocr_service"] is mock_ocr_instance
+    assert mock_remove.call_args.kwargs["ocr_reader"] is handle.reader
+
+
+@patch("anonymizer.controller.ai_batch_process._apply_remove_pixel_phi_series")
+def test_ai_batch_process_forwards_pixel_phi_removal_mode(
+    mock_remove: MagicMock,
+    images_layout: tuple[Path, list[tuple[str, str]]],
+) -> None:
+    images_dir, studies = images_layout
+    series_path = images_dir / "anon_pt" / "anon_study" / "series_a"
+    enter_patch, exit_patch, _handle, _runner = _patch_batch_runners()
+    mock_remove.return_value = AiBatchOutcome(
+        series_path,
+        AiBatchAlgorithm.REMOVE_PIXEL_PHI,
+        "ok",
+        "Modified 1/1",
+    )
+
+    with (
+        enter_patch,
+        exit_patch,
+        patch(
+            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            return_value=[(1, 1, series_path)],
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            return_value=_batch_test_dataset(modality="US"),
+        ),
+    ):
+        ai_batch_process(
+            images_dir,
+            studies,
+            AiBatchProcessOptions(
+                algorithms=(AiBatchAlgorithm.REMOVE_PIXEL_PHI,),
+                pixel_phi_removal_mode=PixelPhiRemovalMode.INPAINT,
+            ),
+            anon_model=_pending_anon_model(),
+        )
+
+    assert mock_remove.call_args.kwargs["removal_mode"] is PixelPhiRemovalMode.INPAINT
 
 
 @patch("anonymizer.controller.ai_batch_process._apply_face_blur_series")
 @patch("anonymizer.controller.ai_batch_process._prepare_ct_volume_context")
 @patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
-@patch("anonymizer.controller.ai_batch_process.tseg_batch_session")
 def test_ai_batch_process_defers_volume_context_when_harmonize_and_face_blur(
-    mock_batch_session: MagicMock,
     mock_harmonize: MagicMock,
     mock_prepare_volume: MagicMock,
     mock_face_blur: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
 ) -> None:
     images_dir, studies = images_layout
-    mock_batch_session.return_value.__enter__ = MagicMock(return_value=None)
-    mock_batch_session.return_value.__exit__ = MagicMock(return_value=False)
+    enter_patch, exit_patch, _handle, _runner = _patch_batch_runners()
     series_path = images_dir / "anon_pt" / "anon_study" / "series_a"
     from anonymizer.controller.harmonize import HarmonizeApplyOutcome
 
@@ -637,6 +661,8 @@ def test_ai_batch_process_defers_volume_context_when_harmonize_and_face_blur(
     allow.decision = FaceBlurGateDecision.ALLOW
 
     with (
+        enter_patch,
+        exit_patch,
         patch(
             "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_path)],
@@ -667,9 +693,9 @@ def test_ai_batch_process_defers_volume_context_when_harmonize_and_face_blur(
 
 
 @patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
-@patch("anonymizer.controller.ai_batch_process.tseg_batch_session")
+@patch("anonymizer.controller.ai_batch_process.enter_batch_phase")
 def test_ai_batch_process_skips_harmonize_phase_when_all_harmonized(
-    mock_batch_session: MagicMock,
+    mock_enter: MagicMock,
     mock_harmonize: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
 ) -> None:
@@ -695,16 +721,16 @@ def test_ai_batch_process_skips_harmonize_phase_when_all_harmonized(
             anon_model=anon_model,
         )
 
-    mock_batch_session.assert_not_called()
+    mock_enter.assert_not_called()
     mock_harmonize.assert_not_called()
     assert summary.skipped == 0
     assert summary.processed == 0
 
 
 @patch("anonymizer.controller.ai_batch_process._apply_remove_pixel_phi_series")
-@patch("anonymizer.controller.ai_batch_process.OcrService")
+@patch("anonymizer.controller.ai_batch_process.enter_batch_phase")
 def test_ai_batch_process_skips_pixel_phi_phase_when_all_scanned(
-    mock_ocr_service_cls: MagicMock,
+    mock_enter: MagicMock,
     mock_remove: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
 ) -> None:
@@ -730,23 +756,20 @@ def test_ai_batch_process_skips_pixel_phi_phase_when_all_scanned(
             anon_model=anon_model,
         )
 
-    mock_ocr_service_cls.instance.assert_not_called()
+    mock_enter.assert_not_called()
     mock_remove.assert_not_called()
     assert summary.processed == 0
 
 
 @patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
 @patch("anonymizer.controller.ai_batch_process.MemoryGuard")
-@patch("anonymizer.controller.ai_batch_process.tseg_batch_session")
 def test_ai_batch_process_memory_guard_cancels_between_series(
-    mock_batch_session: MagicMock,
     mock_guard_cls: MagicMock,
     mock_harmonize: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
 ) -> None:
     images_dir, studies = images_layout
-    mock_batch_session.return_value.__enter__ = MagicMock(return_value=None)
-    mock_batch_session.return_value.__exit__ = MagicMock(return_value=False)
+    enter_patch, exit_patch, _handle, _runner = _patch_batch_runners()
     mock_guard_cls.return_value.check.side_effect = ["ok", "abort"]
     mock_guard_cls.return_value.should_log_warn.return_value = False
     series_paths = [
@@ -758,6 +781,8 @@ def test_ai_batch_process_memory_guard_cancels_between_series(
     mock_harmonize.side_effect = lambda series_path, **kwargs: HarmonizeApplyOutcome(series_path, "ok", "Applied")
 
     with (
+        enter_patch,
+        exit_patch,
         patch(
             "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_paths[0]), (1, 1, series_paths[1])],
