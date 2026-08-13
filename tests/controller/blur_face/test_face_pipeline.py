@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import SimpleITK as sitk
 
-from anonymizer.controller.blur_face import blur_face_series, read_reference_volume
-from anonymizer.controller.tseg.segment import face_mask_cache_path
+from anonymizer.controller.ai.blur_face import blur_face_series, read_reference_volume
+from anonymizer.controller.ai.tseg.segment import face_mask_cache_path
 
 
 def _write_mask(mask_path: Path, *, shape: tuple[int, int, int]) -> None:
@@ -19,7 +19,7 @@ def _write_mask(mask_path: Path, *, shape: tuple[int, int, int]) -> None:
     sitk.WriteImage(sitk.GetImageFromArray(array), str(mask_path))
 
 
-@patch("anonymizer.controller.blur_face.resolve_face_mask_path")
+@patch("anonymizer.controller.ai.blur_face.resolve_face_mask_path")
 def test_blur_face_series_success(
     mock_resolve: MagicMock,
     synthetic_head_series: Path,
@@ -44,7 +44,7 @@ def test_blur_face_series_success(
     assert any(out_dir.glob("*.dcm"))
 
 
-@patch("anonymizer.controller.blur_face.resolve_face_mask_path")
+@patch("anonymizer.controller.ai.blur_face.resolve_face_mask_path")
 def test_blur_face_series_returns_error(mock_resolve: MagicMock, synthetic_head_series: Path) -> None:
     mock_resolve.side_effect = RuntimeError("Series not suitable for TotalSegmentator")
 

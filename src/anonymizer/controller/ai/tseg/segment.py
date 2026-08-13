@@ -10,9 +10,8 @@ from pathlib import Path
 
 import SimpleITK as sitk
 
-from anonymizer.controller.series_io import load_series_frames
-from anonymizer.controller.tseg.cache import resolve_series_cache_dir
-from anonymizer.controller.tseg.config import (
+from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir
+from anonymizer.controller.ai.tseg.config import (
     BODY_PARTS,
     CONTRAST_PHASE_CACHE_FILENAME,
     CONTRAST_STATS_FILENAME,
@@ -27,7 +26,7 @@ from anonymizer.controller.tseg.config import (
     ROI_SUBSET,
     SEGMENTATION_MODE,
 )
-from anonymizer.controller.tseg.contrast import (
+from anonymizer.controller.ai.tseg.contrast import (
     ContrastProgressCallback,
     analyze_contrast_phase,
     contrast_phase_cache_is_valid,
@@ -38,15 +37,16 @@ from anonymizer.controller.tseg.contrast import (
     release_before_contrast,
     release_working_memory,
 )
-from anonymizer.controller.tseg.dicom_geometry import (
+from anonymizer.controller.ai.tseg.dicom_geometry import (
     SeriesGeometryResult,
     build_sitk_volume_from_series_frames,
     resolve_series_geometry,
     stackable_dicom_paths,
     ts_regions_eligible,
 )
-from anonymizer.controller.tseg.radlex import format_radlex_ct_series_description
-from anonymizer.controller.tseg.runtime import sequential_ml_context
+from anonymizer.controller.ai.tseg.radlex import format_radlex_ct_series_description
+from anonymizer.controller.ai.tseg.runtime import sequential_ml_context
+from anonymizer.controller.series_io import load_series_frames
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
@@ -618,7 +618,7 @@ def _face_cache_valid(mask_path: Path) -> bool:
 
 
 def _insufficient_face_mask_error(face_voxel_count: int) -> str | None:
-    from anonymizer.controller.blur_face import (
+    from anonymizer.controller.ai.blur_face import (
         FaceBlurGateReason,
         face_blur_gate_message,
         face_mask_is_substantial,
@@ -851,8 +851,8 @@ def analyze_tseg_contrast(
 
     release_before_contrast(stage="ts_contrast_after_anatomy_release")
 
-    from anonymizer.controller.tseg.config import RELEASE_ANATOMY_PREDICTORS_BEFORE_CONTRAST
-    from anonymizer.controller.tseg.model_cache import clear_predictor_cache
+    from anonymizer.controller.ai.tseg.config import RELEASE_ANATOMY_PREDICTORS_BEFORE_CONTRAST
+    from anonymizer.controller.ai.tseg.model_cache import clear_predictor_cache
 
     if RELEASE_ANATOMY_PREDICTORS_BEFORE_CONTRAST:
         clear_predictor_cache()

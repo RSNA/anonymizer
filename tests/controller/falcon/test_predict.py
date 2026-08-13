@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 import torch
 
-from anonymizer.controller.falcon import load_models
-from anonymizer.controller.falcon.predict import (
+from anonymizer.controller.ai.falcon import load_models
+from anonymizer.controller.ai.falcon.predict import (
     BODY_PART_MODEL_INPUT_Z_INDEX,
     FalconPrediction,
     contrast_prediction_confidence,
@@ -20,7 +20,7 @@ from tests.controller.tseg.support.synthetic_ct import SYNTHETIC_PHANTOM_VERSION
 
 
 def test_falcon_model_dir_under_anonymizer_package() -> None:
-    expected = Path(load_models.__file__).resolve().parents[2] / "assets" / "falcon" / "models"
+    expected = Path(load_models.__file__).resolve().parents[3] / "assets" / "falcon" / "models"
     assert load_models.FALCON_MODEL_DIR == expected
 
 
@@ -121,7 +121,7 @@ def test_empty_directory_list():
     assert len(predictions) == 0
 
 
-@patch("anonymizer.controller.falcon.predict.load_falcon_models")
+@patch("anonymizer.controller.ai.falcon.predict.load_falcon_models")
 def test_model_load_failure(mock_load):
     mock_load.return_value = (MagicMock(), None, MagicMock(), MagicMock())
     predictions = predict_falcon_series([SYNTHETIC_DIRS["Chest"]])
@@ -129,8 +129,8 @@ def test_model_load_failure(mock_load):
     mock_load.assert_called_once()
 
 
-@patch("anonymizer.controller.falcon.predict.load_falcon_models")
-@patch("anonymizer.controller.falcon.predict.preprocess_series")
+@patch("anonymizer.controller.ai.falcon.predict.load_falcon_models")
+@patch("anonymizer.controller.ai.falcon.predict.preprocess_series")
 def test_successful_predictions(mock_preprocess, mock_load_models, mock_models):
     mock_load_models.return_value = mock_models
     mock_preprocess.return_value = np.zeros((100, 200, 200), dtype=np.float32)
@@ -175,8 +175,8 @@ def test_contrast_prediction_confidence_without_contrast():
     assert contrast_prediction_confidence(pred) == pytest.approx(0.999, abs=0.001)
 
 
-@patch("anonymizer.controller.falcon.predict.load_falcon_models")
-@patch("anonymizer.controller.falcon.predict.preprocess_series")
+@patch("anonymizer.controller.ai.falcon.predict.load_falcon_models")
+@patch("anonymizer.controller.ai.falcon.predict.preprocess_series")
 def test_preprocessing_failure(mock_preprocess, mock_load_models, mock_models):
     mock_load_models.return_value = mock_models
     mock_preprocess.side_effect = Exception("Corrupted DICOM files")
@@ -188,9 +188,9 @@ def test_preprocessing_failure(mock_preprocess, mock_load_models, mock_models):
     assert predictions[0].radlex_series_description == ""
 
 
-@patch("anonymizer.controller.falcon.predict.load_falcon_models")
-@patch("anonymizer.controller.falcon.predict.preprocess_series")
-@patch("anonymizer.controller.falcon.predict.get_body_part_probabilities")
+@patch("anonymizer.controller.ai.falcon.predict.load_falcon_models")
+@patch("anonymizer.controller.ai.falcon.predict.preprocess_series")
+@patch("anonymizer.controller.ai.falcon.predict.get_body_part_probabilities")
 def test_inference_failure(mock_get_probs, mock_preprocess, mock_load_models, mock_models):
     mock_load_models.return_value = mock_models
     mock_preprocess.return_value = np.zeros((100, 200, 200))

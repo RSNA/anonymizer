@@ -13,7 +13,7 @@ import customtkinter as ctk
 import numpy as np
 from pydicom import Dataset, dcmread
 
-from anonymizer.controller.blur_face import (
+from anonymizer.controller.ai.blur_face import (
     FaceBlurEligibility,
     FaceBlurGateDecision,
     FaceBlurGateReason,
@@ -22,20 +22,30 @@ from anonymizer.controller.blur_face import (
     face_blur_gate_message,
     face_blur_status_applicable,
 )
-from anonymizer.controller.create_projections import invalidate_projection_cache
-from anonymizer.controller.remove_pixel_phi import (
+from anonymizer.controller.ai.remove_pixel_phi import (
     OCRText,
     UserRectangle,
     apply_series_view_pixel_phi,
     blackout_rectangular_areas,
     build_series_view_ocr_pixels,
     collect_series_view_pixel_phi_texts,
-    filter_ocr_detections,
+    filter_ocr_whitelist_only,
     ocr_image_for_frame,
     pixel_phi_removal_mode_from_menu_label,
     pixel_phi_removal_mode_menu_values,
     remove_ocr_text_from_frame,
 )
+from anonymizer.controller.ai.tseg.cache import clear_series_tseg_cache, tseg_cache_summary
+from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
+from anonymizer.controller.ai.tseg.dicom_geometry import (
+    SeriesGeometryResult,
+    ensure_series_geometry,
+    format_series_view_geometry_line,
+    load_geometry_cache,
+    stackable_dicom_paths,
+)
+from anonymizer.controller.ai.tseg.runtime_status import face_blur_allowed, get_ai_session, harmonize_allowed
+from anonymizer.controller.create_projections import invalidate_projection_cache
 from anonymizer.controller.runner import Algorithm, OcrEditContext, RunOptions, run_job
 from anonymizer.controller.series_io import (
     SERIES_VIEW_PROJECTION_COUNT,
@@ -43,16 +53,6 @@ from anonymizer.controller.series_io import (
     load_series_frames,
     save_series_frames,
 )
-from anonymizer.controller.tseg.cache import clear_series_tseg_cache, tseg_cache_summary
-from anonymizer.controller.tseg.config import TSEG_CACHE_DIRNAME
-from anonymizer.controller.tseg.dicom_geometry import (
-    SeriesGeometryResult,
-    ensure_series_geometry,
-    format_series_view_geometry_line,
-    load_geometry_cache,
-    stackable_dicom_paths,
-)
-from anonymizer.controller.tseg.runtime_status import face_blur_allowed, get_ai_session, harmonize_allowed
 from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import AnonymizerModel, format_series_processing_status
 from anonymizer.model.project import ProjectModel
@@ -1062,7 +1062,7 @@ class SeriesView(ctk.CTkToplevel):
         """Performs OCR on a single frame (sync fallback — prefer background detect_text job)."""
         from easyocr import Reader
 
-        from anonymizer.controller.remove_pixel_phi import (
+        from anonymizer.controller.ai.remove_pixel_phi import (
             OCR_LANGS,
             OCR_MODEL_DIR,
             detect_text,
@@ -1129,6 +1129,15 @@ class SeriesView(ctk.CTkToplevel):
             return
         if isinstance(result, dict):
             self._apply_ocr_detections_result(result)
+            if hasattr(self, "image_viewer") and result:
+                if self.edit_context == EditContext.FRAME:
+                    detected_frame = int(next(iter(result)))
+                    if detected_frame != self.image_viewer.current_image_index:
+                        self.image_viewer.load_and_display_image(detected_frame)
+                    else:
+                        self.image_viewer.refresh_current_image()
+                else:
+                    self.image_viewer.refresh_current_image()
         self.update_status(_("Text detection complete"), debug_log=True)
         work_state.reset()
         self._ocr_poll_frame_index = -1
@@ -1193,24 +1202,32 @@ class SeriesView(ctk.CTkToplevel):
         )
 
     def filter_text_data(self, frame_index: int, similarity_threshold: float = 0.75) -> list[OCRText]:
-        """Apply user whitelist filtering via shared OCR filter helpers."""
+        """Hide whitelist-matched terms from overlay display (detect keeps all EasyOCR hits)."""
         if frame_index not in self.detected_text:
             return []
 
         detections = self.detected_text[frame_index]
         whitelist_set = self.get_whitelist_set()
         if not whitelist_set:
-            return detections
+            return list(detections)
 
-        return filter_ocr_detections(
+        return filter_ocr_whitelist_only(
             detections,
-            whitelist=list(whitelist_set),
+            whitelist=whitelist_set,
             whitelist_similarity=similarity_threshold,
         )
 
     def draw_text_overlay(self, frame_index: int):
         """Draws text boxes on the overlay for the given frame, based on filtered text_data."""
-        filtered_text_data = self.filter_text_data(frame_index)  # Filter *before* drawing
+        filtered_text_data = self.filter_text_data(frame_index)
+        raw_count = len(self.detected_text.get(frame_index, []))
+        if raw_count != len(filtered_text_data):
+            logger.debug(
+                "Series View OCR overlay frame_index=%s: %d detection(s) stored, %d drawn after whitelist",
+                frame_index,
+                raw_count,
+                len(filtered_text_data),
+            )
         self.image_viewer.set_text_overlay_data(frame_index, filtered_text_data)
 
     def detect_text_for_series(self):

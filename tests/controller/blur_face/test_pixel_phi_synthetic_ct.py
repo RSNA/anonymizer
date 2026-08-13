@@ -10,7 +10,7 @@ import pydicom
 import pytest
 
 from anonymizer.controller.ai_batch_process import AiBatchAlgorithm, _apply_remove_pixel_phi_series
-from anonymizer.controller.remove_pixel_phi import (
+from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
     detect_text,
     remove_pixel_phi,
@@ -52,7 +52,7 @@ def _overlay_region_changed(before: np.ndarray, after: np.ndarray) -> bool:
     return not np.array_equal(before[region], after[region])
 
 
-@patch("anonymizer.controller.remove_pixel_phi._easyocr_readtext")
+@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
 def test_remove_pixel_phi_detects_and_blackouts_synthetic_phi(
     mock_readtext: MagicMock,
     tmp_path: Path,
@@ -80,7 +80,7 @@ def test_remove_pixel_phi_detects_and_blackouts_synthetic_phi(
     assert np.count_nonzero(before[overlay] > 2500) > np.count_nonzero(after[overlay] > 2500)
 
 
-@patch("anonymizer.controller.remove_pixel_phi._easyocr_readtext")
+@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
 def test_detect_text_returns_filtered_phi_from_synthetic_ct(
     mock_readtext: MagicMock,
     tmp_path: Path,
@@ -100,7 +100,7 @@ def test_detect_text_returns_filtered_phi_from_synthetic_ct(
     assert [item.text for item in results] == list(DEFAULT_BURNED_IN_PHI_LINES)
 
 
-@patch("anonymizer.controller.remove_pixel_phi._easyocr_readtext")
+@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
 def test_batch_pixel_phi_pipeline_updates_model_and_phi_index(
     mock_readtext: MagicMock,
     anonymizer_model: AnonymizerModel,
@@ -148,7 +148,7 @@ def test_batch_pixel_phi_pipeline_updates_model_and_phi_index(
     assert np.count_nonzero(before_phi[overlay] > 2500) > np.count_nonzero(after_phi[overlay] > 2500)
 
 
-@patch("anonymizer.controller.remove_pixel_phi._easyocr_readtext")
+@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
 def test_batch_pixel_phi_leaves_unmarked_slices_unchanged(
     mock_readtext: MagicMock,
     anonymizer_model: AnonymizerModel,
@@ -175,7 +175,7 @@ def test_batch_pixel_phi_leaves_unmarked_slices_unchanged(
     assert np.array_equal(pydicom.dcmread(clean_path).pixel_array, clean_before)
 
 
-@patch("anonymizer.controller.remove_pixel_phi._easyocr_readtext")
+@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
 def test_phi_index_digest_deduplicates_across_instances(
     mock_readtext: MagicMock,
     anonymizer_model: AnonymizerModel,

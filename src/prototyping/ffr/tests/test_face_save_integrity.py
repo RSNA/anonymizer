@@ -8,7 +8,7 @@ from unittest.mock import patch
 import numpy as np
 import SimpleITK as sitk
 
-from anonymizer.controller.tseg.segment import face_mask_cache_path
+from anonymizer.controller.ai.tseg.segment import face_mask_cache_path
 from prototyping.ffr.face.save_integrity import (
     default_output_directory,
     run_series_view_face_blur_save,
@@ -29,7 +29,7 @@ def test_save_integrity_passes_on_synthetic_series(
     synthetic_head_series: Path,
     tmp_path: Path,
 ) -> None:
-    from anonymizer.controller.blur_face import read_reference_volume
+    from anonymizer.controller.ai.blur_face import read_reference_volume
 
     volume_img, slice_paths = read_reference_volume(synthetic_head_series)
     shape = sitk.GetArrayFromImage(volume_img).shape

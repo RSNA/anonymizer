@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 from anonymizer.controller.runner import FaceBlurRunner, HarmonizeRunner
 
 
-@patch("anonymizer.controller.tseg.contrast.release_working_memory")
-@patch("anonymizer.controller.tseg.model_cache.tseg_batch_session")
+@patch("anonymizer.controller.ai.tseg.contrast.release_working_memory")
+@patch("anonymizer.controller.ai.tseg.model_cache.tseg_batch_session")
 def test_harmonize_runner_exit_releases_tseg_session(
     mock_session: MagicMock,
     mock_release: MagicMock,
@@ -22,10 +22,10 @@ def test_harmonize_runner_exit_releases_tseg_session(
     mock_release.assert_called_once_with(stage="batch_after_harmonize_phase", preserve_accelerator=True)
 
 
-@patch("anonymizer.controller.tseg.contrast.release_working_memory")
-@patch("anonymizer.controller.tseg.model_cache.clear_predictor_cache")
-@patch("anonymizer.controller.tseg.model_cache.preload_face_models")
-@patch("anonymizer.controller.tseg.model_cache.tseg_batch_session")
+@patch("anonymizer.controller.ai.tseg.contrast.release_working_memory")
+@patch("anonymizer.controller.ai.tseg.model_cache.clear_predictor_cache")
+@patch("anonymizer.controller.ai.tseg.model_cache.preload_face_models")
+@patch("anonymizer.controller.ai.tseg.model_cache.tseg_batch_session")
 def test_face_blur_runner_exit_releases_models(
     mock_session: MagicMock,
     _mock_preload: MagicMock,

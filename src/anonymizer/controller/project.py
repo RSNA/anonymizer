@@ -40,6 +40,13 @@ from pynetdicom.status import (
     VERIFICATION_SERVICE_CLASS_STATUS,
 )
 
+from anonymizer.controller.ai.harmonize import (
+    HarmonizeStudiesCancelledCallback,
+    HarmonizeStudiesLogCallback,
+    HarmonizeStudiesProgressCallback,
+    HarmonizeStudiesSummary,
+    harmonize_studies_batch,
+)
 from anonymizer.controller.ai_batch_process import (
     AiBatchCancelledCallback,
     AiBatchMemoryCallback,
@@ -50,13 +57,6 @@ from anonymizer.controller.ai_batch_process import (
     ai_batch_process,
 )
 from anonymizer.controller.anonymizer import AnonymizerController
-from anonymizer.controller.harmonize import (
-    HarmonizeStudiesCancelledCallback,
-    HarmonizeStudiesLogCallback,
-    HarmonizeStudiesProgressCallback,
-    HarmonizeStudiesSummary,
-    harmonize_studies_batch,
-)
 from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import PHI_IndexRecord
 from anonymizer.model.project import (

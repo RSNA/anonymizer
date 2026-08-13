@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from anonymizer.controller.remove_pixel_phi import (
+from anonymizer.controller.ai.remove_pixel_phi import (
     build_series_view_ocr_pixels,
     detect_text,
     filter_ocr_detections,
@@ -211,6 +211,7 @@ def test_nobulela_series_view_snapshot_matches_direct_ocr(nobulela_us_loaded) ->
 @pytest.mark.skipif(not ocr_models_ready(), reason="EasyOCR models not available")
 def test_nobulela_us_rgb_display_whitelist_hides_anatomy_not_phi(nobulela_us_loaded) -> None:
     """UI whitelist filters overlay display only; PHI must remain detectable in stored results."""
+    from anonymizer.controller.ai.remove_pixel_phi import filter_ocr_whitelist_only
     from anonymizer.utils.storage import load_default_whitelist
 
     loaded = nobulela_us_loaded
@@ -240,7 +241,7 @@ def test_nobulela_us_rgb_display_whitelist_hides_anatomy_not_phi(nobulela_us_loa
     repo_root = Path(__file__).resolve().parents[2]
     os.chdir(repo_root / "src" / "anonymizer")
     us_wl = load_default_whitelist("US")
-    displayed = [t.text for t in filter_ocr_detections(ws.result[0], whitelist=us_wl)]
+    displayed = [t.text for t in filter_ocr_whitelist_only(ws.result[0], whitelist=us_wl)]
     assert "NOBULELA" in displayed
     assert "8211080464089" in displayed
     assert "LIVER" not in displayed

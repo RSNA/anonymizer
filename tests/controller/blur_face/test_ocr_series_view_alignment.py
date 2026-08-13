@@ -8,7 +8,7 @@ import numpy as np
 import pydicom
 from pydicom.data import get_testdata_file
 
-from anonymizer.controller.remove_pixel_phi import _ocr_bgr_from_stored_monochrome, remove_pixel_phi
+from anonymizer.controller.ai.remove_pixel_phi import _ocr_bgr_from_stored_monochrome, remove_pixel_phi
 from anonymizer.controller.series_io import stored_monochrome_to_series_buffer
 from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.windowing import apply_windowing
@@ -29,9 +29,9 @@ def test_ocr_bgr_from_stored_monochrome_matches_detect_text_pipeline() -> None:
     assert np.array_equal(actual, expected)
 
 
-@patch("anonymizer.controller.remove_pixel_phi._ocr_bgr_from_stored_monochrome")
-@patch("anonymizer.controller.remove_pixel_phi.dcmread")
-@patch("anonymizer.controller.remove_pixel_phi._easyocr_readtext")
+@patch("anonymizer.controller.ai.remove_pixel_phi._ocr_bgr_from_stored_monochrome")
+@patch("anonymizer.controller.ai.remove_pixel_phi.dcmread")
+@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
 def test_remove_pixel_phi_grayscale_uses_series_view_ocr_frame(
     mock_readtext: MagicMock,
     mock_dcmread: MagicMock,

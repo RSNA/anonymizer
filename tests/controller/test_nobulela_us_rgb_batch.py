@@ -10,7 +10,7 @@ import pydicom
 import pytest
 
 from anonymizer.controller.ai_batch_process import AiBatchAlgorithm, _apply_remove_pixel_phi_series
-from anonymizer.controller.remove_pixel_phi import (
+from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
     detect_text,
     ocr_image_for_frame,

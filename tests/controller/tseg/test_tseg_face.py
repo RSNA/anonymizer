@@ -9,9 +9,9 @@ import numpy as np
 import pytest
 import SimpleITK as sitk
 
-from anonymizer.controller.blur_face import FaceBlurGateReason, face_blur_gate_message
-from anonymizer.controller.tseg.config import FACE_MASK_FILENAME
-from anonymizer.controller.tseg.segment import (
+from anonymizer.controller.ai.blur_face import FaceBlurGateReason, face_blur_gate_message
+from anonymizer.controller.ai.tseg.config import FACE_MASK_FILENAME
+from anonymizer.controller.ai.tseg.segment import (
     AnalysisProgress,
     FaceSegResult,
     analyze_tseg_face,
@@ -41,8 +41,8 @@ def _write_empty_face_mask(mask_path: Path) -> None:
     sitk.WriteImage(sitk.GetImageFromArray(array), str(mask_path))
 
 
-@patch("anonymizer.controller.tseg.segment.run_face_segmentation")
-@patch("anonymizer.controller.tseg.segment.dicom_series_to_nifti")
+@patch("anonymizer.controller.ai.tseg.segment.run_face_segmentation")
+@patch("anonymizer.controller.ai.tseg.segment.dicom_series_to_nifti")
 def test_analyze_tseg_face_empty_geometry_skip(
     mock_nifti: MagicMock,
     mock_run: MagicMock,
@@ -60,8 +60,8 @@ def test_analyze_tseg_face_empty_geometry_skip(
     mock_run.assert_not_called()
 
 
-@patch("anonymizer.controller.tseg.segment.run_face_segmentation")
-@patch("anonymizer.controller.tseg.segment.dicom_series_to_nifti")
+@patch("anonymizer.controller.ai.tseg.segment.run_face_segmentation")
+@patch("anonymizer.controller.ai.tseg.segment.dicom_series_to_nifti")
 def test_analyze_tseg_face_reuses_cached_nifti(
     mock_nifti: MagicMock,
     mock_run: MagicMock,
@@ -82,7 +82,7 @@ def test_analyze_tseg_face_reuses_cached_nifti(
     assert result.inference_seconds == 0.0
 
 
-@patch("anonymizer.controller.tseg.segment.run_face_segmentation")
+@patch("anonymizer.controller.ai.tseg.segment.run_face_segmentation")
 def test_analyze_tseg_face_reuses_cached_mask(
     mock_run: MagicMock,
     synthetic_head_series: Path,
@@ -98,7 +98,7 @@ def test_analyze_tseg_face_reuses_cached_mask(
     assert result.inference_seconds == 0.0
 
 
-@patch("anonymizer.controller.tseg.segment.run_face_segmentation")
+@patch("anonymizer.controller.ai.tseg.segment.run_face_segmentation")
 def test_analyze_tseg_face_runs_inference(
     mock_run: MagicMock,
     synthetic_head_series: Path,
@@ -124,7 +124,7 @@ def test_analyze_tseg_face_runs_inference(
     assert any(event.stage == "prepare" for event in progress_events)
 
 
-@patch("anonymizer.controller.tseg.segment.run_face_segmentation")
+@patch("anonymizer.controller.ai.tseg.segment.run_face_segmentation")
 def test_analyze_tseg_face_force_reruns_inference(
     mock_run: MagicMock,
     synthetic_head_series: Path,
@@ -141,7 +141,7 @@ def test_analyze_tseg_face_force_reruns_inference(
     assert result.inference_seconds == 2.0
 
 
-@patch("anonymizer.controller.tseg.segment.run_face_segmentation")
+@patch("anonymizer.controller.ai.tseg.segment.run_face_segmentation")
 def test_analyze_tseg_face_fails_on_empty_mask_after_inference(
     mock_run: MagicMock,
     synthetic_head_series: Path,
@@ -159,7 +159,7 @@ def test_analyze_tseg_face_fails_on_empty_mask_after_inference(
     mock_run.assert_called_once()
 
 
-@patch("anonymizer.controller.tseg.segment.run_face_segmentation")
+@patch("anonymizer.controller.ai.tseg.segment.run_face_segmentation")
 def test_analyze_tseg_face_fails_on_cached_empty_mask(
     mock_run: MagicMock,
     synthetic_head_series: Path,
@@ -175,7 +175,7 @@ def test_analyze_tseg_face_fails_on_cached_empty_mask(
     mock_run.assert_not_called()
 
 
-@patch("anonymizer.controller.tseg.segment.run_face_segmentation")
+@patch("anonymizer.controller.ai.tseg.segment.run_face_segmentation")
 def test_analyze_tseg_face_invalidates_stale_volume_cache(
     mock_run: MagicMock,
     synthetic_head_series: Path,
@@ -206,9 +206,9 @@ def _nifti_slice_count(nifti_path: Path) -> int:
     return int(image.GetSize()[2])
 
 
-@patch("anonymizer.controller.tseg.segment.release_working_memory")
-@patch("anonymizer.controller.tseg.segment.sequential_ml_context")
-@patch("anonymizer.controller.tseg.segment._require_totalsegmentator")
+@patch("anonymizer.controller.ai.tseg.segment.release_working_memory")
+@patch("anonymizer.controller.ai.tseg.segment.sequential_ml_context")
+@patch("anonymizer.controller.ai.tseg.segment._require_totalsegmentator")
 def test_run_face_segmentation_calls_totalsegmentator(
     mock_require: MagicMock,
     mock_context: MagicMock,

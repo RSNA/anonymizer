@@ -21,7 +21,7 @@ from pydicom.pixel_data_handlers.util import (
 from pydicom.tag import Tag
 from pydicom.uid import ExplicitVRLittleEndian
 
-from anonymizer.controller.tseg.dicom_geometry import (
+from anonymizer.controller.ai.tseg.dicom_geometry import (
     list_dicom_paths,
     stackable_dicom_paths,
 )

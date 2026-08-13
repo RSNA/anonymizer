@@ -7,8 +7,8 @@ from dataclasses import dataclass
 
 from pydicom import Dataset
 
-from anonymizer.controller.tseg.config import MIN_STRUCTURE_VOXELS
-from anonymizer.controller.tseg.dicom_geometry import (
+from anonymizer.controller.ai.tseg.config import MIN_STRUCTURE_VOXELS
+from anonymizer.controller.ai.tseg.dicom_geometry import (
     MPR_KEYWORDS,
     RENDER_KEYWORDS,
     SECONDARY_CAPTURE_SOP,
@@ -17,7 +17,7 @@ from anonymizer.controller.tseg.dicom_geometry import (
     format_geometry_summary,
     plane_label,
 )
-from anonymizer.controller.tseg.segment import TS_result
+from anonymizer.controller.ai.tseg.segment import TS_result
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
@@ -357,7 +357,7 @@ def _playbook_body_part_evidence(
     geometry: SeriesGeometryResult | None = None,
 ) -> str:
     if tseg is not None and tseg.body_parts_present.strip() and tseg.error is None:
-        from anonymizer.controller.tseg.segment import format_anatomy_regions_summary
+        from anonymizer.controller.ai.tseg.segment import format_anatomy_regions_summary
 
         return format_anatomy_regions_summary(tseg)
     if attributes is not None:
@@ -876,7 +876,7 @@ def playbook_plane_row_values(
     code = anatomic_plane_code or map_anatomic_plane_code(geometry)
     evidence = format_geometry_summary(geometry)
     if not geometry.ts_suitable:
-        from anonymizer.controller.tseg.dicom_geometry import geometry_skip_reason_label
+        from anonymizer.controller.ai.tseg.dicom_geometry import geometry_skip_reason_label
 
         evidence = f"{evidence} — {geometry_skip_reason_label(geometry)}"
     return (

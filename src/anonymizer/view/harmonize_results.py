@@ -13,15 +13,14 @@ from tkinter import ttk
 import customtkinter as ctk
 from pydicom import Dataset
 
-from anonymizer.controller.harmonize import (
+from anonymizer.controller.ai.harmonize import (
     HarmonizedResult,
     HarmonizeProgress,
     apply_harmonized_description,
     format_harmonize_progress_message,
     harmonize_series,
 )
-from anonymizer.controller.runner import Algorithm
-from anonymizer.controller.tseg.radlex_playbook import (
+from anonymizer.controller.ai.tseg.radlex_playbook import (
     PLAYBOOK_TREE_IIDS,
     build_localizer_playbook_attributes,
     harmonize_analysis_rows,
@@ -32,6 +31,7 @@ from anonymizer.controller.tseg.radlex_playbook import (
     playbook_plane_row_values,
     playbook_series_type_row_values,
 )
+from anonymizer.controller.runner import Algorithm
 from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import StudyPhiHeader
 from anonymizer.utils.translate import _

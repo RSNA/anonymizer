@@ -9,11 +9,11 @@ from tkinter import messagebox, ttk
 
 import customtkinter as ctk
 
-from anonymizer.controller.project import ProjectController
-from anonymizer.controller.tseg.runtime_status import (
+from anonymizer.controller.ai.tseg.runtime_status import (
     any_ai_batch_feature_allowed,
     get_ai_session,
 )
+from anonymizer.controller.project import ProjectController
 from anonymizer.model.anonymizer import AnonymizerModel, PHI_IndexRecord
 from anonymizer.utils.translate import _
 from anonymizer.view.ai_batch_process_dialog import AiBatchProcessDialog

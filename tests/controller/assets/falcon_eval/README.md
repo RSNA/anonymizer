@@ -16,7 +16,7 @@ falcon_eval_data/
 Run:
 
 ```bash
-poetry run python -m anonymizer.controller.falcon.eval_accuracy \
+poetry run python -m anonymizer.controller.ai.falcon.eval_accuracy \
   --data-dir /path/to/falcon_eval_data
 ```
 

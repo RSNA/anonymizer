@@ -23,8 +23,8 @@ import sys
 import time
 from pathlib import Path
 
-from anonymizer.controller.tseg.dicom_geometry import sorted_dicom_paths
-from anonymizer.controller.tseg.segment import AnalysisProgress, analyze_tseg_face, face_mask_cache_path
+from anonymizer.controller.ai.tseg.dicom_geometry import sorted_dicom_paths
+from anonymizer.controller.ai.tseg.segment import AnalysisProgress, analyze_tseg_face, face_mask_cache_path
 
 logger = logging.getLogger("ts_seg_face")
 
@@ -37,7 +37,7 @@ def _configure_logging(*, verbose: bool) -> None:
         datefmt="%H:%M:%S",
         force=True,
     )
-    logging.getLogger("anonymizer.controller.tseg").setLevel(level)
+    logging.getLogger("anonymizer.controller.ai.tseg").setLevel(level)
 
 
 def _log_progress(event: AnalysisProgress) -> None:

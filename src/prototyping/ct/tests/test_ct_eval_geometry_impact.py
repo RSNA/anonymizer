@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.tseg.dicom_geometry import resolve_series_geometry
+from anonymizer.controller.ai.tseg.dicom_geometry import resolve_series_geometry
 from prototyping.ct.ct_eval import (
     build_geometry_routing_summary,
     geometry_fields,

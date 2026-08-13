@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from anonymizer.controller.tseg.cache import (
+from anonymizer.controller.ai.tseg.cache import (
     LEGACY_TSEG_CACHE_DIRNAME,
     clear_series_tseg_cache,
     clear_tseg_series_cache,
     resolve_series_cache_dir,
     tseg_cache_summary,
 )
-from anonymizer.controller.tseg.config import TSEG_CACHE_DIRNAME
+from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
 
 
 def test_resolve_series_cache_dir_uses_new_name(tmp_path: Path) -> None:

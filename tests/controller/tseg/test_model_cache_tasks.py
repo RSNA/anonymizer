@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-from anonymizer.controller.tseg.model_cache import (
+from anonymizer.controller.ai.tseg.model_cache import (
     _ensure_pretrained_weights,
     harmonize_anatomy_task_ids,
     harmonize_contrast_task_ids,
@@ -58,11 +58,11 @@ def test_missing_harmonize_ts_task_ids_when_checkpoint_present(tmp_path: Path) -
 
     with (
         patch(
-            "anonymizer.controller.tseg.model_cache.resolve_harmonize_model_folder",
+            "anonymizer.controller.ai.tseg.model_cache.resolve_harmonize_model_folder",
             side_effect=_folder,
         ),
         patch(
-            "anonymizer.controller.tseg.model_cache.harmonize_ts_task_ids",
+            "anonymizer.controller.ai.tseg.model_cache.harmonize_ts_task_ids",
             return_value=(297, 298),
         ),
     ):
@@ -78,11 +78,11 @@ def test_ensure_pretrained_weights_removes_empty_dataset_dir(tmp_path: Path) -> 
 
     with (
         patch(
-            "anonymizer.controller.tseg.model_cache._try_resolve_task_model_folder",
+            "anonymizer.controller.ai.tseg.model_cache._try_resolve_task_model_folder",
             return_value=model_folder,
         ),
         patch(
-            "anonymizer.controller.tseg.model_cache._task_checkpoint_ready",
+            "anonymizer.controller.ai.tseg.model_cache._task_checkpoint_ready",
             side_effect=[False, True],
         ),
         patch("totalsegmentator.libs.download_pretrained_weights") as download,
@@ -100,11 +100,11 @@ def test_ensure_pretrained_weights_skips_when_checkpoint_ready(tmp_path: Path) -
 
     with (
         patch(
-            "anonymizer.controller.tseg.model_cache._try_resolve_task_model_folder",
+            "anonymizer.controller.ai.tseg.model_cache._try_resolve_task_model_folder",
             return_value=model_folder,
         ),
         patch(
-            "anonymizer.controller.tseg.model_cache._task_checkpoint_ready",
+            "anonymizer.controller.ai.tseg.model_cache._task_checkpoint_ready",
             return_value=True,
         ),
         patch("totalsegmentator.libs.download_pretrained_weights") as download,
@@ -120,11 +120,11 @@ def test_ensure_pretrained_weights_downloads_when_dataset_not_on_disk() -> None:
 
     with (
         patch(
-            "anonymizer.controller.tseg.model_cache._try_resolve_task_model_folder",
+            "anonymizer.controller.ai.tseg.model_cache._try_resolve_task_model_folder",
             return_value=None,
         ),
         patch(
-            "anonymizer.controller.tseg.model_cache._task_checkpoint_ready",
+            "anonymizer.controller.ai.tseg.model_cache._task_checkpoint_ready",
             side_effect=[False, True],
         ),
         patch("totalsegmentator.libs.download_pretrained_weights") as download,

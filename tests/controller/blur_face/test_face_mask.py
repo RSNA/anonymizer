@@ -9,14 +9,14 @@ import numpy as np
 import pytest
 import SimpleITK as sitk
 
-from anonymizer.controller.blur_face import (
+from anonymizer.controller.ai.blur_face import (
     LEGACY_FACE_MASK_REL,
     FaceBlurGateReason,
     face_blur_gate_message,
     resolve_face_mask_path,
 )
-from anonymizer.controller.tseg.config import FACE_MASK_FILENAME
-from anonymizer.controller.tseg.segment import FaceSegResult, face_mask_cache_path
+from anonymizer.controller.ai.tseg.config import FACE_MASK_FILENAME
+from anonymizer.controller.ai.tseg.segment import FaceSegResult, face_mask_cache_path
 
 
 def _write_face_mask(path: Path, *, voxel_count: int = 1500) -> None:
@@ -53,7 +53,7 @@ def test_resolve_face_mask_path_legacy_fallback(tmp_path: Path, caplog: pytest.L
     assert "legacy" in caplog.text.lower()
 
 
-@patch("anonymizer.controller.blur_face.analyze_tseg_face")
+@patch("anonymizer.controller.ai.blur_face.analyze_tseg_face")
 def test_resolve_face_mask_path_runs_segmentation(mock_analyze: MagicMock, tmp_path: Path) -> None:
     series = tmp_path / "series"
     series.mkdir()

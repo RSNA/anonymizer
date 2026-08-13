@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydicom import Dataset
 
-from anonymizer.controller.remove_pixel_phi import (
+from anonymizer.controller.ai.remove_pixel_phi import (
     OCRText,
     OverlayData,
     UserRectangle,
@@ -39,7 +39,7 @@ def test_dedupe_texts_preserves_order() -> None:
     assert _dedupe_texts(["  foo ", "bar", "foo", "", "  bar  "]) == ["foo", "bar"]
 
 
-@patch("anonymizer.controller.remove_pixel_phi.dcmread")
+@patch("anonymizer.controller.ai.remove_pixel_phi.dcmread")
 def test_remove_pixel_phi_returns_empty_tuple_when_no_text(mock_dcmread: MagicMock) -> None:
     import numpy as np
 
@@ -94,7 +94,7 @@ def test_apply_instance_pixel_phi_delegates_to_model(mock_dataset: Dataset, tmp_
         assert row.pixel_phi == "Burned, Name"
 
 
-@patch("anonymizer.controller.remove_pixel_phi.dcmread")
+@patch("anonymizer.controller.ai.remove_pixel_phi.dcmread")
 def test_apply_instance_pixel_phi_for_dcm_reads_sop_uid(
     mock_dcmread: MagicMock,
     mock_dataset: Dataset,
@@ -147,7 +147,7 @@ def test_collect_series_view_pixel_phi_texts() -> None:
     assert collect_series_view_pixel_phi_texts(viewer) == {0: ["A", "B"], 2: ["A"]}
 
 
-@patch("anonymizer.controller.remove_pixel_phi.apply_instance_pixel_phi_for_dcm")
+@patch("anonymizer.controller.ai.remove_pixel_phi.apply_instance_pixel_phi_for_dcm")
 def test_apply_series_view_pixel_phi_skips_projection_frames(mock_apply: MagicMock) -> None:
     slice_paths = [Path("/tmp/s0.dcm"), Path("/tmp/s1.dcm")]
     texts_by_frame = {0: ["proj"], 3: ["slice0"], 4: ["slice1"]}

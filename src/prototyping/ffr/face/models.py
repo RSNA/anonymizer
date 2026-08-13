@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import SimpleITK as sitk
 
-from anonymizer.controller.blur_face import QaStats
+from anonymizer.controller.ai.blur_face import QaStats
 
 
 @dataclass(frozen=True)

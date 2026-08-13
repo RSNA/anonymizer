@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from anonymizer.controller.tseg.radlex import (
+from anonymizer.controller.ai.tseg.radlex import (
     falcon_body_part_to_region_token,
     falcon_body_part_to_regions_label,
     format_radlex_ct_series_description,

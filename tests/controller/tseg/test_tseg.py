@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from anonymizer.controller.tseg.contrast import ContrastResult
-from anonymizer.controller.tseg.segment import TS_result, analyze_series
+from anonymizer.controller.ai.tseg.contrast import ContrastResult
+from anonymizer.controller.ai.tseg.segment import TS_result, analyze_series
 
 pytestmark = pytest.mark.usefixtures("synthetic_ct_asset_dirs")
 
@@ -27,10 +27,10 @@ def test_analyze_series_empty_input() -> None:
     assert analyze_series([]) == []
 
 
-@patch("anonymizer.controller.tseg.segment.analyze_contrast_phase")
-@patch("anonymizer.controller.tseg.segment.run_segmentation")
-@patch("anonymizer.controller.tseg.segment.dicom_series_to_nifti")
-@patch("anonymizer.controller.tseg.segment.collect_structure_voxels")
+@patch("anonymizer.controller.ai.tseg.segment.analyze_contrast_phase")
+@patch("anonymizer.controller.ai.tseg.segment.run_segmentation")
+@patch("anonymizer.controller.ai.tseg.segment.dicom_series_to_nifti")
+@patch("anonymizer.controller.ai.tseg.segment.collect_structure_voxels")
 def test_analyze_series_chest_mocked(
     mock_collect: MagicMock,
     mock_nifti: MagicMock,
@@ -59,10 +59,10 @@ def test_analyze_series_chest_mocked(
     mock_nifti.assert_called_once()
 
 
-@patch("anonymizer.controller.tseg.segment.analyze_contrast_phase")
-@patch("anonymizer.controller.tseg.segment.run_segmentation")
-@patch("anonymizer.controller.tseg.segment.dicom_series_to_nifti")
-@patch("anonymizer.controller.tseg.segment.collect_structure_voxels")
+@patch("anonymizer.controller.ai.tseg.segment.analyze_contrast_phase")
+@patch("anonymizer.controller.ai.tseg.segment.run_segmentation")
+@patch("anonymizer.controller.ai.tseg.segment.dicom_series_to_nifti")
+@patch("anonymizer.controller.ai.tseg.segment.collect_structure_voxels")
 def test_analyze_series_no_regions_returns_error(
     mock_collect: MagicMock,
     mock_nifti: MagicMock,

@@ -68,7 +68,7 @@ Constants live in `config.py` (`DEFAULT_FACE_BLUR_SIGMA_MM`, `MIN_FACE_BLUR_SIGM
 
 ## Layout
 
-Core blur/export/QA logic lives in ``anonymizer.controller.blur_face`` (production API).
+Core blur/export/QA logic lives in ``anonymizer.controller.ai.blur_face`` (production API).
 This package adds visualization/reporting only.
 
 ```
@@ -84,7 +84,7 @@ face/
 Production entry point:
 
 ```python
-from anonymizer.controller.blur_face import blur_face_series
+from anonymizer.controller.ai.blur_face import blur_face_series
 
 result = blur_face_series(series_directory)
 if result.error:

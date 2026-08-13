@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from anonymizer.controller.tseg.contrast import (
+from anonymizer.controller.ai.tseg.contrast import (
     CONTRAST_ORGANS_HN,
     _apply_hu_gate,
     _run_contrast_classifier,
@@ -30,11 +30,11 @@ from anonymizer.controller.tseg.contrast import (
     truncal_anatomy_present,
     verify_xgboost_runtime,
 )
-from anonymizer.controller.tseg.segment import estimate_tseg_contrast_remaining_sec, series_cache_dir
+from anonymizer.controller.ai.tseg.segment import estimate_tseg_contrast_remaining_sec, series_cache_dir
 
 
 def test_resolve_contrast_device_matches_resolve_device() -> None:
-    from anonymizer.controller.tseg.contrast import resolve_device
+    from anonymizer.controller.ai.tseg.contrast import resolve_device
 
     assert resolve_contrast_device() == resolve_device()
     assert resolve_contrast_device(None) == resolve_device(None)
@@ -65,7 +65,7 @@ def test_phase_to_iv_contrast_unknown() -> None:
 
 
 def test_verify_xgboost_runtime_ok() -> None:
-    with patch("anonymizer.controller.tseg.contrast.xgboost", create=True) as mock_xgb:
+    with patch("anonymizer.controller.ai.tseg.contrast.xgboost", create=True) as mock_xgb:
         mock_xgb.__version__ = "2.0.0"
         with patch.dict("sys.modules", {"xgboost": mock_xgb}):
             verify_xgboost_runtime()
@@ -77,11 +77,11 @@ def test_verify_xgboost_runtime_missing() -> None:
             verify_xgboost_runtime()
 
 
-@patch("anonymizer.controller.tseg.contrast.verify_xgboost_runtime")
-@patch("anonymizer.controller.tseg.contrast._contrast_classifier_pickle_path", return_value="/fake/classifier.pkl")
-@patch("anonymizer.controller.tseg.contrast._require_pi_time_to_phase")
-@patch("anonymizer.controller.tseg.contrast.open")
-@patch("anonymizer.controller.tseg.contrast.pickle.load")
+@patch("anonymizer.controller.ai.tseg.contrast.verify_xgboost_runtime")
+@patch("anonymizer.controller.ai.tseg.contrast._contrast_classifier_pickle_path", return_value="/fake/classifier.pkl")
+@patch("anonymizer.controller.ai.tseg.contrast._require_pi_time_to_phase")
+@patch("anonymizer.controller.ai.tseg.contrast.open")
+@patch("anonymizer.controller.ai.tseg.contrast.pickle.load")
 def test_run_contrast_classifier(
     mock_pickle_load: MagicMock,
     mock_open: MagicMock,
@@ -152,9 +152,9 @@ def _sample_contrast_stats(*, brain_volume: float = 0.0) -> dict:
     }
 
 
-@patch("anonymizer.controller.tseg.contrast._run_contrast_classifier")
-@patch("anonymizer.controller.tseg.contrast._require_totalsegmentator")
-@patch("anonymizer.controller.tseg.contrast._require_nibabel")
+@patch("anonymizer.controller.ai.tseg.contrast._run_contrast_classifier")
+@patch("anonymizer.controller.ai.tseg.contrast._require_totalsegmentator")
+@patch("anonymizer.controller.ai.tseg.contrast._require_nibabel")
 def test_predict_contrast_phase_reuses_existing_stats(
     mock_require_nib: MagicMock,
     mock_require_ts: MagicMock,
@@ -217,9 +217,9 @@ def test_estimate_contrast_remaining_sec(
     )
 
 
-@patch("anonymizer.controller.tseg.contrast._run_contrast_classifier")
-@patch("anonymizer.controller.tseg.contrast._require_totalsegmentator")
-@patch("anonymizer.controller.tseg.contrast._require_nibabel")
+@patch("anonymizer.controller.ai.tseg.contrast._run_contrast_classifier")
+@patch("anonymizer.controller.ai.tseg.contrast._require_totalsegmentator")
+@patch("anonymizer.controller.ai.tseg.contrast._require_nibabel")
 def test_predict_contrast_phase_reuses_phase_cache(
     mock_require_nib: MagicMock,
     mock_require_ts: MagicMock,
@@ -261,9 +261,9 @@ def test_predict_contrast_phase_reuses_phase_cache(
     assert contrast_phase_cache_is_valid(phase_path, stats_path)
 
 
-@patch("anonymizer.controller.tseg.contrast._run_contrast_classifier")
-@patch("anonymizer.controller.tseg.contrast._require_totalsegmentator")
-@patch("anonymizer.controller.tseg.contrast._require_nibabel")
+@patch("anonymizer.controller.ai.tseg.contrast._run_contrast_classifier")
+@patch("anonymizer.controller.ai.tseg.contrast._require_totalsegmentator")
+@patch("anonymizer.controller.ai.tseg.contrast._require_nibabel")
 def test_predict_contrast_phase_emits_progress_for_phase_cache(
     mock_require_nib: MagicMock,
     mock_require_ts: MagicMock,
@@ -301,9 +301,9 @@ def test_predict_contrast_phase_emits_progress_for_phase_cache(
     assert events == [("contrast_phase_cache", "Using cached contrast phase: native (liver=50 HU)", 1.0)]
 
 
-@patch("anonymizer.controller.tseg.contrast._run_contrast_classifier")
-@patch("anonymizer.controller.tseg.contrast._require_totalsegmentator")
-@patch("anonymizer.controller.tseg.contrast._require_nibabel")
+@patch("anonymizer.controller.ai.tseg.contrast._run_contrast_classifier")
+@patch("anonymizer.controller.ai.tseg.contrast._require_totalsegmentator")
+@patch("anonymizer.controller.ai.tseg.contrast._require_nibabel")
 def test_predict_contrast_phase_reuses_stats_hn_cache(
     mock_require_nib: MagicMock,
     mock_require_ts: MagicMock,
@@ -346,9 +346,9 @@ def test_predict_contrast_phase_reuses_stats_hn_cache(
     assert result["phase"] == "native"
 
 
-@patch("anonymizer.controller.tseg.contrast._run_contrast_classifier")
-@patch("anonymizer.controller.tseg.contrast._require_totalsegmentator")
-@patch("anonymizer.controller.tseg.contrast._require_nibabel")
+@patch("anonymizer.controller.ai.tseg.contrast._run_contrast_classifier")
+@patch("anonymizer.controller.ai.tseg.contrast._require_totalsegmentator")
+@patch("anonymizer.controller.ai.tseg.contrast._require_nibabel")
 def test_predict_contrast_phase_headneck_task_omits_fast(
     mock_require_nib: MagicMock,
     mock_require_ts: MagicMock,
@@ -383,9 +383,9 @@ def test_predict_contrast_phase_headneck_task_omits_fast(
     assert headneck_call_kwargs.get("fast") is not True
 
 
-@patch("anonymizer.controller.tseg.contrast._run_contrast_classifier")
-@patch("anonymizer.controller.tseg.contrast._require_totalsegmentator")
-@patch("anonymizer.controller.tseg.contrast._require_nibabel")
+@patch("anonymizer.controller.ai.tseg.contrast._run_contrast_classifier")
+@patch("anonymizer.controller.ai.tseg.contrast._require_totalsegmentator")
+@patch("anonymizer.controller.ai.tseg.contrast._require_nibabel")
 def test_predict_contrast_phase_skips_headneck_for_truncal_fov(
     mock_require_nib: MagicMock,
     mock_require_ts: MagicMock,
@@ -415,9 +415,9 @@ def test_predict_contrast_phase_skips_headneck_for_truncal_fov(
     assert mock_ts.call_args.kwargs.get("task") != "headneck_bones_vessels"
 
 
-@patch("anonymizer.controller.tseg.contrast._run_contrast_classifier")
-@patch("anonymizer.controller.tseg.contrast._require_totalsegmentator")
-@patch("anonymizer.controller.tseg.contrast._require_nibabel")
+@patch("anonymizer.controller.ai.tseg.contrast._run_contrast_classifier")
+@patch("anonymizer.controller.ai.tseg.contrast._require_totalsegmentator")
+@patch("anonymizer.controller.ai.tseg.contrast._require_nibabel")
 def test_predict_contrast_phase_skips_headneck_when_truncal_anatomy(
     mock_require_nib: MagicMock,
     mock_require_ts: MagicMock,
@@ -463,7 +463,7 @@ def test_needs_head_neck_vessel_stats_respects_truncal_anatomy() -> None:
 
 
 def test_format_dominant_organ_hu_summary_head_region() -> None:
-    from anonymizer.controller.tseg.contrast import format_dominant_organ_hu_summary
+    from anonymizer.controller.ai.tseg.contrast import format_dominant_organ_hu_summary
 
     stats = {"brain": {"intensity": 27.0, "volume": 5000.0}}
     stats_hn = {
@@ -476,7 +476,7 @@ def test_format_dominant_organ_hu_summary_head_region() -> None:
 
 
 def test_format_dominant_organ_hu_summary_skips_low_volume() -> None:
-    from anonymizer.controller.tseg.contrast import format_dominant_organ_hu_summary
+    from anonymizer.controller.ai.tseg.contrast import format_dominant_organ_hu_summary
 
     stats = {"liver": {"intensity": 50.0, "volume": 0.0}}
     assert format_dominant_organ_hu_summary(stats, None, dominant_region="Abdomen") == ""
@@ -563,24 +563,24 @@ def test_hu_gate_truncal_native() -> None:
     assert hu_gate_iv_contrast(stats, {}) is False
 
 
-@patch("anonymizer.controller.tseg.contrast.log_memory_usage")
-@patch("anonymizer.controller.tseg.contrast.release_accelerator_memory")
-@patch("anonymizer.controller.tseg.contrast.gc.collect")
+@patch("anonymizer.controller.ai.tseg.contrast.log_memory_usage")
+@patch("anonymizer.controller.ai.tseg.contrast.release_accelerator_memory")
+@patch("anonymizer.controller.ai.tseg.contrast.gc.collect")
 def test_release_before_contrast_gc_and_accelerator(
     mock_gc: MagicMock,
     mock_release_accel: MagicMock,
     _log_memory: MagicMock,
 ) -> None:
-    from anonymizer.controller.tseg.contrast import release_before_contrast
+    from anonymizer.controller.ai.tseg.contrast import release_before_contrast
 
     release_before_contrast(stage="test_before_contrast")
     mock_release_accel.assert_called_once()
     assert mock_gc.call_count == 2
 
 
-@patch("anonymizer.controller.tseg.contrast.release_working_memory")
-@patch("anonymizer.controller.tseg.contrast._require_totalsegmentator")
-@patch("anonymizer.controller.tseg.contrast._require_nibabel")
+@patch("anonymizer.controller.ai.tseg.contrast.release_working_memory")
+@patch("anonymizer.controller.ai.tseg.contrast._require_totalsegmentator")
+@patch("anonymizer.controller.ai.tseg.contrast._require_nibabel")
 def test_predict_contrast_phase_releases_memory_on_error(
     mock_nibabel: MagicMock,
     _mock_ts: MagicMock,

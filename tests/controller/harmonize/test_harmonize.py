@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from anonymizer.controller.harmonize import harmonize_series
-from anonymizer.controller.tseg.segment import TS_result
+from anonymizer.controller.ai.harmonize import harmonize_series
+from anonymizer.controller.ai.tseg.segment import TS_result
 
 
 def _tseg_region_result(series_dir: Path, *, error: str | None = None) -> TS_result:
@@ -57,9 +57,9 @@ def _head_tseg_result(series_dir: Path) -> TS_result:
 
 
 @pytest.mark.usefixtures("synthetic_ct_asset_dirs")
-@patch("anonymizer.controller.harmonize.ENABLE_TS_CONTRAST", True)
-@patch("anonymizer.controller.harmonize.analyze_tseg_contrast")
-@patch("anonymizer.controller.harmonize.analyze_tseg_regions")
+@patch("anonymizer.controller.ai.harmonize.ENABLE_TS_CONTRAST", True)
+@patch("anonymizer.controller.ai.harmonize.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.analyze_tseg_regions")
 def test_harmonize_builds_playbook_description_from_tseg_only(
     mock_regions: MagicMock,
     mock_contrast: MagicMock,
@@ -83,9 +83,9 @@ def test_harmonize_builds_playbook_description_from_tseg_only(
 
 
 @pytest.mark.usefixtures("synthetic_ct_asset_dirs")
-@patch("anonymizer.controller.harmonize.ENABLE_TS_CONTRAST", True)
-@patch("anonymizer.controller.harmonize.analyze_tseg_contrast")
-@patch("anonymizer.controller.harmonize.analyze_tseg_regions")
+@patch("anonymizer.controller.ai.harmonize.ENABLE_TS_CONTRAST", True)
+@patch("anonymizer.controller.ai.harmonize.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.analyze_tseg_regions")
 def test_harmonize_reports_geometry_progress(
     mock_regions: MagicMock,
     mock_contrast: MagicMock,
@@ -110,8 +110,8 @@ def test_harmonize_reports_geometry_progress(
 
 
 @pytest.mark.usefixtures("synthetic_ct_asset_dirs")
-@patch("anonymizer.controller.harmonize.analyze_tseg_contrast")
-@patch("anonymizer.controller.harmonize.analyze_tseg_regions")
+@patch("anonymizer.controller.ai.harmonize.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.analyze_tseg_regions")
 def test_harmonize_skips_tseg_for_scout_localizer(
     mock_regions: MagicMock,
     mock_contrast: MagicMock,
@@ -144,9 +144,9 @@ def test_harmonize_skips_tseg_for_scout_localizer(
 
 
 @pytest.mark.usefixtures("synthetic_ct_asset_dirs")
-@patch("anonymizer.controller.harmonize.ENABLE_TS_CONTRAST", False)
-@patch("anonymizer.controller.harmonize.analyze_tseg_contrast")
-@patch("anonymizer.controller.harmonize.analyze_tseg_regions")
+@patch("anonymizer.controller.ai.harmonize.ENABLE_TS_CONTRAST", False)
+@patch("anonymizer.controller.ai.harmonize.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.analyze_tseg_regions")
 def test_harmonize_requires_ts_contrast_for_playbook_merge(
     mock_regions: MagicMock,
     mock_contrast: MagicMock,
@@ -167,9 +167,9 @@ def test_harmonize_requires_ts_contrast_for_playbook_merge(
 
 
 @pytest.mark.usefixtures("synthetic_ct_asset_dirs")
-@patch("anonymizer.controller.harmonize.ENABLE_TS_CONTRAST", True)
-@patch("anonymizer.controller.harmonize.analyze_tseg_contrast")
-@patch("anonymizer.controller.harmonize.analyze_tseg_regions")
+@patch("anonymizer.controller.ai.harmonize.ENABLE_TS_CONTRAST", True)
+@patch("anonymizer.controller.ai.harmonize.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.analyze_tseg_regions")
 def test_harmonize_execution_order_seg_then_contrast(
     mock_regions: MagicMock,
     mock_contrast: MagicMock,
@@ -193,8 +193,8 @@ def test_harmonize_execution_order_seg_then_contrast(
 
 
 @pytest.mark.usefixtures("synthetic_ct_asset_dirs")
-@patch("anonymizer.controller.harmonize.analyze_tseg_contrast")
-@patch("anonymizer.controller.harmonize.analyze_tseg_regions")
+@patch("anonymizer.controller.ai.harmonize.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.analyze_tseg_regions")
 def test_harmonize_fails_when_tseg_regions_unavailable(
     mock_regions: MagicMock,
     mock_contrast: MagicMock,
@@ -224,9 +224,9 @@ def test_harmonize_fails_when_tseg_regions_unavailable(
 
 
 @pytest.mark.usefixtures("synthetic_ct_asset_dirs")
-@patch("anonymizer.controller.harmonize.ENABLE_TS_CONTRAST", True)
-@patch("anonymizer.controller.harmonize.analyze_tseg_contrast")
-@patch("anonymizer.controller.harmonize.analyze_tseg_regions")
+@patch("anonymizer.controller.ai.harmonize.ENABLE_TS_CONTRAST", True)
+@patch("anonymizer.controller.ai.harmonize.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.analyze_tseg_regions")
 def test_harmonize_fails_when_tseg_contrast_unavailable(
     mock_regions: MagicMock,
     mock_contrast: MagicMock,
@@ -256,8 +256,8 @@ def test_harmonize_fails_when_tseg_contrast_unavailable(
 
 
 def test_harmonize_analysis_section_renders_playbook_attributes() -> None:
-    from anonymizer.controller.tseg.dicom_geometry import SeriesGeometryResult
-    from anonymizer.controller.tseg.radlex_playbook import PlaybookHarmonizeAttributes, harmonize_analysis_rows
+    from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
+    from anonymizer.controller.ai.tseg.radlex_playbook import PlaybookHarmonizeAttributes, harmonize_analysis_rows
 
     tseg = _head_tseg_result(Path("/tmp/series"))
     attributes = PlaybookHarmonizeAttributes(
@@ -309,7 +309,7 @@ def test_harmonize_dicom_table_includes_all_relevant_fields() -> None:
     from pydicom import dcmread
     from pydicom.data import get_testdata_file
 
-    from anonymizer.controller.tseg.radlex_playbook import harmonize_dicom_rows
+    from anonymizer.controller.ai.tseg.radlex_playbook import harmonize_dicom_rows
 
     ds = dcmread(get_testdata_file("CT_small.dcm"))
     rows = harmonize_dicom_rows(ds)
@@ -324,13 +324,13 @@ def test_harmonize_dicom_table_includes_all_relevant_fields() -> None:
 def test_series_description_is_harmonized_when_cache_matches() -> None:
     from pydicom import Dataset
 
-    from anonymizer.controller.harmonize import series_description_is_harmonized
+    from anonymizer.controller.ai.harmonize import series_description_is_harmonized
 
     ds = Dataset()
     ds.SeriesDescription = "Ch Ax PortVen"
 
     with patch(
-        "anonymizer.controller.harmonize.harmonized_description_from_cache",
+        "anonymizer.controller.ai.harmonize.harmonized_description_from_cache",
         return_value="Ch Ax PortVen",
     ):
         assert series_description_is_harmonized(Path("/tmp/series"), ds) is True
@@ -339,13 +339,13 @@ def test_series_description_is_harmonized_when_cache_matches() -> None:
 def test_series_description_is_harmonized_unknown_without_cache() -> None:
     from pydicom import Dataset
 
-    from anonymizer.controller.harmonize import series_description_is_harmonized
+    from anonymizer.controller.ai.harmonize import series_description_is_harmonized
 
     ds = Dataset()
     ds.SeriesDescription = "Legacy Description"
 
     with patch(
-        "anonymizer.controller.harmonize.harmonized_description_from_cache",
+        "anonymizer.controller.ai.harmonize.harmonized_description_from_cache",
         return_value=None,
     ):
         assert series_description_is_harmonized(Path("/tmp/series"), ds) is None
@@ -354,14 +354,14 @@ def test_series_description_is_harmonized_unknown_without_cache() -> None:
 def test_harmonize_context_hint_when_already_harmonized() -> None:
     from pydicom import Dataset
 
-    from anonymizer.controller.harmonize import harmonize_context_hint
+    from anonymizer.controller.ai.harmonize import harmonize_context_hint
 
     ds = Dataset()
     ds.Modality = "CT"
     ds.SeriesDescription = "Ch Ax PortVen"
 
     with patch(
-        "anonymizer.controller.harmonize.series_description_is_harmonized",
+        "anonymizer.controller.ai.harmonize.series_description_is_harmonized",
         return_value=True,
     ):
         hint = harmonize_context_hint(Path("/tmp/series"), ds)
@@ -373,7 +373,7 @@ def test_harmonize_context_hint_when_already_harmonized() -> None:
 def test_harmonize_context_hint_omits_non_ct_and_unknown() -> None:
     from pydicom import Dataset
 
-    from anonymizer.controller.harmonize import harmonize_context_hint
+    from anonymizer.controller.ai.harmonize import harmonize_context_hint
 
     mr = Dataset()
     mr.Modality = "MR"
@@ -382,7 +382,7 @@ def test_harmonize_context_hint_omits_non_ct_and_unknown() -> None:
     ct = Dataset()
     ct.Modality = "CT"
     with patch(
-        "anonymizer.controller.harmonize.series_description_is_harmonized",
+        "anonymizer.controller.ai.harmonize.series_description_is_harmonized",
         return_value=None,
     ):
         assert harmonize_context_hint(Path("/tmp/series"), ct) is None

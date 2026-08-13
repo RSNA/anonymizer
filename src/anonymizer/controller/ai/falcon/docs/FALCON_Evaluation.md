@@ -11,7 +11,7 @@
 Ground truth comes from **first-level folder names** under a data root—no manifest CSV.
 
 ```bash
-poetry run python -m anonymizer.controller.falcon.eval_accuracy \
+poetry run python -m anonymizer.controller.ai.falcon.eval_accuracy \
   --data-dir /path/to/labeled_dataset
 ```
 

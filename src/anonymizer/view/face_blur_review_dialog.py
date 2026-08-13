@@ -14,7 +14,7 @@ import customtkinter as ctk
 import numpy as np
 from pydicom import Dataset
 
-from anonymizer.controller.blur_face import (
+from anonymizer.controller.ai.blur_face import (
     FaceBlurMode,
     FaceBlurPreviewResult,
     SeriesVolumeContext,
@@ -23,14 +23,14 @@ from anonymizer.controller.blur_face import (
     preview_blurred_slice_frames,
     preview_face_blur,
 )
-from anonymizer.controller.remove_pixel_phi import LayerType
-from anonymizer.controller.runner import Algorithm
-from anonymizer.controller.series_io import load_series_frames, save_series_frames
-from anonymizer.controller.tseg.dicom_geometry import (
+from anonymizer.controller.ai.remove_pixel_phi import LayerType
+from anonymizer.controller.ai.tseg.dicom_geometry import (
     SeriesGeometryResult,
     ensure_series_geometry,
     load_geometry_cache,
 )
+from anonymizer.controller.runner import Algorithm
+from anonymizer.controller.series_io import load_series_frames, save_series_frames
 from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.utils.translate import _

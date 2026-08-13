@@ -11,8 +11,8 @@ from typing import Callable
 
 import customtkinter as ctk
 
-from anonymizer.controller.remove_pixel_phi import download_ocr_models, remove_ocr_models
-from anonymizer.controller.tseg.runtime_status import (
+from anonymizer.controller.ai.remove_pixel_phi import download_ocr_models, remove_ocr_models
+from anonymizer.controller.ai.tseg.runtime_status import (
     TsWeightKind,
     TsWeightState,
     TsWeightStatus,
@@ -505,7 +505,7 @@ class AiFeaturesPanel(ctk.CTkFrame):
             elif kind == "ocr_done":
                 self._ocr_thread = None
                 end_model_download("remove_pixel_phi")
-                from anonymizer.controller.remove_pixel_phi import ocr_models_ready
+                from anonymizer.controller.ai.remove_pixel_phi import ocr_models_ready
 
                 if not ocr_models_ready():
                     logger.warning("AI Features: OCR model download did not complete")

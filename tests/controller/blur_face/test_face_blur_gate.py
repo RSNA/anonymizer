@@ -10,7 +10,7 @@ import pytest
 import SimpleITK as sitk
 from pydicom.data import get_testdata_file
 
-from anonymizer.controller.blur_face import (
+from anonymizer.controller.ai.blur_face import (
     MIN_FACE_MASK_VOXELS,
     CachedRegionSignal,
     FaceBlurEligibility,
@@ -25,9 +25,9 @@ from anonymizer.controller.blur_face import (
     face_mask_is_substantial,
     metadata_signal,
 )
-from anonymizer.controller.tseg.config import MIN_STRUCTURE_VOXELS
-from anonymizer.controller.tseg.dicom_geometry import SeriesGeometryResult, resolve_series_geometry
-from anonymizer.controller.tseg.segment import series_cache_dir
+from anonymizer.controller.ai.tseg.config import MIN_STRUCTURE_VOXELS
+from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult, resolve_series_geometry
+from anonymizer.controller.ai.tseg.segment import series_cache_dir
 from tests.controller.tseg.support.synthetic_ct import (
     build_synthetic_chest_ct_series,
     build_synthetic_head_ct_series,

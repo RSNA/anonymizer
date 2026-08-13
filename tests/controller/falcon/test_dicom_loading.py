@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.falcon.preprocessing.dicom_loading import MIN_DICOM_SLICES, get_sitk_from_dicom
-from anonymizer.controller.falcon.preprocessing.preprocess_series import preprocess_series
+from anonymizer.controller.ai.falcon.preprocessing.dicom_loading import MIN_DICOM_SLICES, get_sitk_from_dicom
+from anonymizer.controller.ai.falcon.preprocessing.preprocess_series import preprocess_series
 from tests.controller.tseg.support.synthetic_ct import build_synthetic_oriented_ct_series
 
 # Slightly oblique axial IOP (similar to real head CT with ~7° tilt).

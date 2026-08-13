@@ -6,24 +6,24 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from anonymizer.controller.remove_pixel_phi import _ocr_use_gpu
+from anonymizer.controller.ai.remove_pixel_phi import _ocr_use_gpu
 from anonymizer.controller.runner import RemovePixelPhiRunner
 
 
 def test_ocr_use_gpu_follows_cuda_or_mps_availability() -> None:
     with (
-        patch("anonymizer.controller.remove_pixel_phi.torch.cuda.is_available", return_value=True),
-        patch("anonymizer.controller.remove_pixel_phi.torch.backends.mps.is_available", return_value=False),
+        patch("anonymizer.controller.ai.remove_pixel_phi.torch.cuda.is_available", return_value=True),
+        patch("anonymizer.controller.ai.remove_pixel_phi.torch.backends.mps.is_available", return_value=False),
     ):
         assert _ocr_use_gpu() is True
     with (
-        patch("anonymizer.controller.remove_pixel_phi.torch.cuda.is_available", return_value=False),
-        patch("anonymizer.controller.remove_pixel_phi.torch.backends.mps.is_available", return_value=True),
+        patch("anonymizer.controller.ai.remove_pixel_phi.torch.cuda.is_available", return_value=False),
+        patch("anonymizer.controller.ai.remove_pixel_phi.torch.backends.mps.is_available", return_value=True),
     ):
         assert _ocr_use_gpu() is True
     with (
-        patch("anonymizer.controller.remove_pixel_phi.torch.cuda.is_available", return_value=False),
-        patch("anonymizer.controller.remove_pixel_phi.torch.backends.mps.is_available", return_value=False),
+        patch("anonymizer.controller.ai.remove_pixel_phi.torch.cuda.is_available", return_value=False),
+        patch("anonymizer.controller.ai.remove_pixel_phi.torch.backends.mps.is_available", return_value=False),
     ):
         assert _ocr_use_gpu() is False
 

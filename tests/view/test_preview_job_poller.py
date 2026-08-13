@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from anonymizer.controller.harmonize import HarmonizeProgress
+from anonymizer.controller.ai.harmonize import HarmonizeProgress
 from anonymizer.controller.runner import Algorithm
 from anonymizer.controller.work_state import WorkState
 from anonymizer.view.face_blur_review_dialog import FaceBlurReviewDialog

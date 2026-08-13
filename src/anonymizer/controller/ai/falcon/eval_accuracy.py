@@ -15,7 +15,7 @@ Example layout::
 
 Run::
 
-  poetry run python -m anonymizer.controller.falcon.eval_accuracy \\
+  poetry run python -m anonymizer.controller.ai.falcon.eval_accuracy \\
     --data-dir /data/falcon_eval
 
 Writes ``<data-dir>/falcon_eval_results.csv`` by default (override with ``--output``, skip with ``--no-results-file``).
@@ -35,19 +35,19 @@ import numpy as np
 import pydicom
 from PIL import Image, ImageDraw, ImageFont
 
-from anonymizer.controller.falcon.eval_utils import (
+from anonymizer.controller.ai.falcon.eval_utils import (
     render_body_part_model_input_thumbnail,
     save_body_part_model_input_png,
     save_contrast_model_input_png,
 )
-from anonymizer.controller.falcon.predict import (
+from anonymizer.controller.ai.falcon.predict import (
     FALCON_BODY_PARTS,
     FalconPrediction,
     contrast_prediction_confidence,
     format_confidence_percent,
     predict_falcon_series,
 )
-from anonymizer.controller.falcon.preprocessing.preprocess_series import preprocess_series
+from anonymizer.controller.ai.falcon.preprocessing.preprocess_series import preprocess_series
 
 logger = logging.getLogger(__name__)
 

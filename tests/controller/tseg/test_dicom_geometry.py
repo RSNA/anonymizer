@@ -9,8 +9,8 @@ from pathlib import Path
 import pydicom
 import pytest
 
-from anonymizer.controller.tseg.config import MIN_DICOM_SLICES
-from anonymizer.controller.tseg.dicom_geometry import (
+from anonymizer.controller.ai.tseg.config import MIN_DICOM_SLICES
+from anonymizer.controller.ai.tseg.dicom_geometry import (
     analyze_series_geometry,
     build_sitk_volume_from_pydicom,
     build_sitk_volume_from_series_frames,
@@ -40,7 +40,7 @@ from anonymizer.controller.tseg.dicom_geometry import (
     validate_uniform_slice_dimensions,
     write_geometry_cache,
 )
-from anonymizer.controller.tseg.segment import dicom_series_to_nifti
+from anonymizer.controller.ai.tseg.segment import dicom_series_to_nifti
 from tests.controller.tseg.support.synthetic_ct import (
     build_synthetic_chest_ct_series,
     build_synthetic_coronal_ct_series,
@@ -325,7 +325,7 @@ def test_format_series_view_geometry_line(tmp_path: Path) -> None:
 
 
 def test_format_geometry_progress_message_includes_skip_reason() -> None:
-    from anonymizer.controller.tseg.dicom_geometry import SeriesGeometryResult
+    from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
 
     geometry = SeriesGeometryResult(
         plane="oblique",

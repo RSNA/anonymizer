@@ -6,15 +6,15 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from anonymizer.controller.falcon.eval_utils import (
+from anonymizer.controller.ai.falcon.eval_utils import (
     BODY_PART_MODEL_INPUT_Z_INDEX,
     contrast_model_input_z_index,
     save_body_part_model_input_png,
     save_contrast_model_input_png,
     save_model_input_slice_png,
 )
-from anonymizer.controller.falcon.predict import extract_body_part_model_input_slice, extract_contrast_model_input_slice
-from anonymizer.controller.falcon.preprocessing.preprocess_series import preprocess_series
+from anonymizer.controller.ai.falcon.predict import extract_body_part_model_input_slice, extract_contrast_model_input_slice
+from anonymizer.controller.ai.falcon.preprocessing.preprocess_series import preprocess_series
 from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 from tests.controller.tseg.support.synthetic_ct import write_synthetic_phantom_assets
 

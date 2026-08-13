@@ -8,9 +8,9 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from anonymizer.controller.falcon.load_models import load_falcon_models
-from anonymizer.controller.falcon.preprocessing.preprocess_series import preprocess_series
-from anonymizer.controller.falcon.resnet9 import ResNet9
+from anonymizer.controller.ai.falcon.load_models import load_falcon_models
+from anonymizer.controller.ai.falcon.preprocessing.preprocess_series import preprocess_series
+from anonymizer.controller.ai.falcon.resnet9 import ResNet9
 
 # Determine device: GPU (CUDA) > Apple Silicon (MPS) > CPU
 if torch.cuda.is_available():

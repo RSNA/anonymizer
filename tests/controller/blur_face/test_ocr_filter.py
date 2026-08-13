@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from anonymizer.controller.ai_batch_process import format_remove_pixel_phi_instance_detail
-from anonymizer.controller.remove_pixel_phi import (
+from anonymizer.controller.ai.remove_pixel_phi import (
     OCRText,
     PixelPhiRemovalMode,
     _apply_frame_removal_mask,
@@ -17,6 +17,7 @@ from anonymizer.controller.remove_pixel_phi import (
     blackout_ocr_text_areas,
     detect_text,
     filter_ocr_detections,
+    filter_ocr_whitelist_only,
     load_modality_whitelist,
     remove_pixel_phi,
 )
@@ -69,7 +70,7 @@ def test_filter_ocr_detections_whitelist_filters_portable(caplog) -> None:
     detections = [_ocr("Portable", prob=0.9), _ocr("DAVIDSON", prob=0.9)]
     import logging
 
-    with caplog.at_level(logging.DEBUG, logger="anonymizer.controller.remove_pixel_phi"):
+    with caplog.at_level(logging.DEBUG, logger="anonymizer.controller.ai.remove_pixel_phi"):
         filtered = filter_ocr_detections(detections, whitelist=["PORTABLE"])
     assert [item.text for item in filtered] == ["DAVIDSON"]
     assert "OCR whitelist filtered 1 detection(s): ['Portable']" in caplog.text
@@ -104,7 +105,7 @@ def test_load_modality_whitelist_merges_project_terms(
     assert "CUSTOMTERM" in whitelist
 
 
-@patch("anonymizer.controller.remove_pixel_phi._easyocr_readtext")
+@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
 def test_detect_text_applies_noise_filter(mock_readtext: MagicMock) -> None:
     mock_readtext.return_value = [
         ([(0, 0), (20, 0), (20, 20), (0, 20)], ";", 0.95),
@@ -116,8 +117,8 @@ def test_detect_text_applies_noise_filter(mock_readtext: MagicMock) -> None:
     assert [item.text for item in results] == ["SMITH"]
 
 
-@patch("anonymizer.controller.remove_pixel_phi.dcmread")
-@patch("anonymizer.controller.remove_pixel_phi._easyocr_readtext")
+@patch("anonymizer.controller.ai.remove_pixel_phi.dcmread")
+@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
 def test_remove_pixel_phi_all_noise_is_no_op(
     mock_readtext: MagicMock,
     mock_dcmread: MagicMock,
@@ -188,7 +189,7 @@ def test_apply_frame_removal_blackout_requires_series_view_routine() -> None:
         )
 
 
-@patch("anonymizer.controller.remove_pixel_phi.inpaint")
+@patch("anonymizer.controller.ai.remove_pixel_phi.inpaint")
 def test_apply_frame_removal_inpaint_uses_cv2(mock_inpaint: MagicMock) -> None:
     frame = np.full((8, 8), 100, dtype=np.uint8)
     mask = np.zeros((8, 8), dtype=np.uint8)
@@ -224,3 +225,22 @@ def test_format_memory_snapshot_label_available_only() -> None:
     assert "12.5 GB" in label
     assert "RSS" not in label
     assert "total" not in label.lower()
+
+
+def test_series_view_display_filter_hides_whitelist_only_not_noise() -> None:
+    """Overlay display must not re-apply OCR noise heuristics after detect-only."""
+    detections = [
+        _ocr("LEFT", box=(10, 10, 60, 30)),
+        _ocr("CLIP", box=(70, 10, 120, 30)),
+        _ocr("9", box=(130, 10, 150, 30)),
+        _ocr("23889858", box=(160, 10, 260, 30)),
+    ]
+    us_wl = ["LEFT", "CLIP"]
+    noise_filtered = [t.text for t in filter_ocr_detections(detections, whitelist=us_wl)]
+    display_filtered = [t.text for t in filter_ocr_whitelist_only(detections, whitelist=us_wl)]
+
+    assert "LEFT" not in display_filtered
+    assert "CLIP" not in display_filtered
+    assert "9" in display_filtered
+    assert "23889858" in display_filtered
+    assert "9" not in noise_filtered

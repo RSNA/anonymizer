@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from pydicom.errors import InvalidDicomError
 
-from anonymizer.controller.blur_face import (
+from anonymizer.controller.ai.blur_face import (
     FaceBlurGateDecision,
     FaceBlurGateReason,
     FaceBlurMode,
@@ -25,27 +25,27 @@ from anonymizer.controller.blur_face import (
     preview_blurred_slice_frames,
     preview_face_blur,
 )
-from anonymizer.controller.harmonize import (
+from anonymizer.controller.ai.harmonize import (
     _load_ct_series_dataset,
     _load_series_dataset,
     format_harmonize_progress_message,
     harmonize_and_apply_series,
 )
-from anonymizer.controller.remove_pixel_phi import (
+from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
     apply_instance_pixel_phi_for_dcm,
     pixel_phi_removal_mode_display_label,
     remove_pixel_phi,
 )
+from anonymizer.controller.ai.tseg.contrast import release_working_memory
+from anonymizer.controller.ai.tseg.dicom_geometry import resolve_series_geometry, stackable_dicom_paths
+from anonymizer.controller.ai.tseg.segment import AnalysisProgress
 from anonymizer.controller.runner import (
     Algorithm,
     enter_batch_phase,
     exit_batch_phase,
 )
 from anonymizer.controller.series_io import load_series_frames, save_series_frames
-from anonymizer.controller.tseg.contrast import release_working_memory
-from anonymizer.controller.tseg.dicom_geometry import resolve_series_geometry, stackable_dicom_paths
-from anonymizer.controller.tseg.segment import AnalysisProgress
 from anonymizer.utils.memory import MemoryGuard, MemorySnapshot, capture_memory_snapshot
 from anonymizer.utils.translate import _
 from anonymizer.view.blur_face_results import (
@@ -811,7 +811,7 @@ def _apply_harmonize_series(
     anon_model: AnonymizerModel | None,
     progress: Callable[[AnalysisProgress], None] | None,
 ) -> tuple[AiBatchOutcome, list[str]]:
-    from anonymizer.controller.harmonize import format_harmonize_batch_contrast_log_lines
+    from anonymizer.controller.ai.harmonize import format_harmonize_batch_contrast_log_lines
 
     apply_outcome = harmonize_and_apply_series(series_path, anon_model=anon_model, progress=progress)
     log_lines: list[str] = []

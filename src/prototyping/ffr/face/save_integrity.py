@@ -33,7 +33,7 @@ from pydicom import Dataset, dcmread
 from pydicom.datadict import keyword_for_tag
 from pydicom.tag import Tag
 
-from anonymizer.controller.blur_face import (
+from anonymizer.controller.ai.blur_face import (
     DEFAULT_FACE_BLUR_SIGMA_MM,
     SeriesVolumeContext,
     align_mask_to_volume,
@@ -51,7 +51,7 @@ from anonymizer.controller.series_io import (
     ordered_series_dcm_paths,
     save_series_frames,
 )
-from anonymizer.controller.tseg.dicom_geometry import (
+from anonymizer.controller.ai.tseg.dicom_geometry import (
     load_geometry_cache,
     project_ipp_onto_normal,
     slice_normal_from_iop,

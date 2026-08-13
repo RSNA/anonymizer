@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterator
 
 if TYPE_CHECKING:
-    from anonymizer.controller.tseg.runtime_status import TsWeightKind
+    from anonymizer.controller.ai.tseg.runtime_status import TsWeightKind
 
 logger = logging.getLogger(__name__)
 
@@ -293,7 +293,7 @@ def harmonize_anatomy_task_ids() -> tuple[int, ...]:
     With ``roi_subset`` + ``body_seg`` (see ``run_segmentation``), TotalSegmentator
     downloads the main task (3mm/6mm/1.5mm) plus task 298 for rough ROI cropping on CT.
     """
-    from anonymizer.controller.tseg.config import SEGMENTATION_MODE
+    from anonymizer.controller.ai.tseg.config import SEGMENTATION_MODE
 
     if SEGMENTATION_MODE == "6mm":
         return (298,)
@@ -309,7 +309,7 @@ def harmonize_contrast_task_ids() -> tuple[int, ...]:
     ``predict_contrast_phase`` runs ``task=headneck_bones_vessels`` (task 776) when brain
     volume is present in organ statistics.
     """
-    from anonymizer.controller.tseg.config import ENABLE_TS_CONTRAST
+    from anonymizer.controller.ai.tseg.config import ENABLE_TS_CONTRAST
 
     if not ENABLE_TS_CONTRAST:
         return ()
@@ -375,19 +375,19 @@ def anatomy_models_ready() -> bool:
 
 
 def _harmonize_task_checkpoint_ready(task_id: int) -> bool:
-    from anonymizer.controller.tseg.runtime_status import _checkpoint_ready
+    from anonymizer.controller.ai.tseg.runtime_status import _checkpoint_ready
 
     return _checkpoint_ready(resolve_harmonize_model_folder(task_id))
 
 
 def _face_task_checkpoint_ready() -> bool:
-    from anonymizer.controller.tseg.runtime_status import _checkpoint_ready
+    from anonymizer.controller.ai.tseg.runtime_status import _checkpoint_ready
 
     return _checkpoint_ready(_resolve_task_model_folder(_FACE_TASK_ID, trainer=_FACE_TRAINER, model=_FACE_MODEL))
 
 
 def _task_checkpoint_ready(task_id: int, *, trainer: str, model: str) -> bool:
-    from anonymizer.controller.tseg.runtime_status import _checkpoint_ready
+    from anonymizer.controller.ai.tseg.runtime_status import _checkpoint_ready
 
     return _checkpoint_ready(_try_resolve_task_model_folder(task_id, trainer=trainer, model=model))
 
@@ -450,7 +450,7 @@ _TS_DOWNLOAD_ID: dict[str, str] = {
 @contextmanager
 def _track_segmentation_model_download(kind: "TsWeightKind", *, task_id: int | None = None):
     """Wire TotalSegmentator tqdm/stdout capture to generic model download progress."""
-    from anonymizer.controller.tseg.runtime_status import update_weight_download_detail
+    from anonymizer.controller.ai.tseg.runtime_status import update_weight_download_detail
     from anonymizer.utils.storage import track_tqdm_model_download
 
     download_id = _TS_DOWNLOAD_ID[kind.value]
@@ -473,10 +473,10 @@ def _track_segmentation_model_download(kind: "TsWeightKind", *, task_id: int | N
 
 def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
     """Download TotalSegmentator weights for anatomy or face segmentation (no predictor preload)."""
-    from anonymizer.controller.tseg.runtime_status import (
+    from anonymizer.controller.ai.tseg.runtime_status import (
         TsWeightKind as Kind,
     )
-    from anonymizer.controller.tseg.runtime_status import (
+    from anonymizer.controller.ai.tseg.runtime_status import (
         verify_face_license,
     )
 
@@ -530,7 +530,7 @@ def preload_face_models(*, device: str | None = None) -> None:
 
     No-op when TotalSegmentator is not installed or academic license is missing.
     """
-    from anonymizer.controller.tseg.runtime_status import verify_face_license
+    from anonymizer.controller.ai.tseg.runtime_status import verify_face_license
 
     try:
         from totalsegmentator.config import setup_nnunet, setup_totalseg
@@ -545,7 +545,7 @@ def preload_face_models(*, device: str | None = None) -> None:
         logger.debug("TS face preload skipped: %s", message)
         return
 
-    from anonymizer.controller.tseg.segment import resolve_device
+    from anonymizer.controller.ai.tseg.segment import resolve_device
 
     setup_nnunet()
     setup_totalseg()
@@ -595,7 +595,7 @@ def preload_harmonize_models(*, device: str | None = None) -> None:
         logger.debug("TS model cache preload skipped (TotalSegmentator not installed)")
         return
 
-    from anonymizer.controller.tseg.segment import resolve_device
+    from anonymizer.controller.ai.tseg.segment import resolve_device
 
     setup_nnunet()
     setup_totalseg()
@@ -651,7 +651,7 @@ def preload_harmonize_models(*, device: str | None = None) -> None:
 
 def _release_batch_working_memory() -> None:
     """Release per-series allocations after a batch without dropping cached predictors."""
-    from anonymizer.controller.tseg.contrast import log_memory_usage, release_working_memory
+    from anonymizer.controller.ai.tseg.contrast import log_memory_usage, release_working_memory
 
     release_working_memory(stage="tseg_batch_session_end", preserve_accelerator=True)
     log_memory_usage("tseg_batch_session_end")

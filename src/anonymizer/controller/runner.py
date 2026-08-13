@@ -11,7 +11,7 @@ from typing import Callable, Protocol
 
 from easyocr import Reader
 
-from anonymizer.controller.remove_pixel_phi import (
+from anonymizer.controller.ai.remove_pixel_phi import (
     OCR_LANGS,
     OCR_MODEL_DIR,
     OCRText,
@@ -243,7 +243,7 @@ class HarmonizeRunner:
     """Batch harmonize phase: owns TotalSegmentator session for the algorithm pass."""
 
     def enter_models(self) -> ModelHandle:
-        from anonymizer.controller.tseg.model_cache import tseg_batch_session
+        from anonymizer.controller.ai.tseg.model_cache import tseg_batch_session
 
         logger.info("HarmonizeRunner.enter_models")
         session = tseg_batch_session(preload=True)
@@ -251,7 +251,7 @@ class HarmonizeRunner:
         return ModelHandle(_extra={"tseg_session": session})
 
     def exit_models(self, handle: ModelHandle) -> None:
-        from anonymizer.controller.tseg.contrast import release_working_memory
+        from anonymizer.controller.ai.tseg.contrast import release_working_memory
 
         logger.info("HarmonizeRunner.exit_models")
         session = handle._extra.pop("tseg_session", None)
@@ -268,7 +268,7 @@ class FaceBlurRunner:
     """Batch face-blur phase: owns face-segmentation model preload for the algorithm pass."""
 
     def enter_models(self) -> ModelHandle:
-        from anonymizer.controller.tseg.model_cache import preload_face_models, tseg_batch_session
+        from anonymizer.controller.ai.tseg.model_cache import preload_face_models, tseg_batch_session
 
         logger.info("FaceBlurRunner.enter_models")
         session = tseg_batch_session(preload=False)
@@ -277,8 +277,8 @@ class FaceBlurRunner:
         return ModelHandle(_extra={"tseg_session": session})
 
     def exit_models(self, handle: ModelHandle) -> None:
-        from anonymizer.controller.tseg.contrast import release_working_memory
-        from anonymizer.controller.tseg.model_cache import clear_predictor_cache
+        from anonymizer.controller.ai.tseg.contrast import release_working_memory
+        from anonymizer.controller.ai.tseg.model_cache import clear_predictor_cache
 
         logger.info("FaceBlurRunner.exit_models")
         session = handle._extra.pop("tseg_session", None)

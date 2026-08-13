@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [19.0.0.dev8]
+- Unify background jobs on WorkState + JobPoller (batch, harmonize/face-blur preview, Series View OCR); poll-on-change with tiered intervals
+- Move algorithm modules under `controller/ai/`; remove unused `batch_process` shim; update imports across app, tests, and prototyping
+- Series View: fix OCR detect boxes not drawing when whitelist is loaded (display uses whitelist-only filter, not noise heuristics); refresh viewer after detect completes
+- ImageViewer: correct BGR overlay colors and per-frame overlay dimensions
+
 ## [19.0.0.dev7]
 - Fix Harmonize anatomy model download on fresh install: download weights when checkpoints are missing instead of failing dataset lookup
 - Fix project window distorted after welcome screen: resize to dashboard dimensions when a project opens

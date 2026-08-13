@@ -19,8 +19,8 @@ import numpy as np
 import SimpleITK as sitk
 from pydicom import Dataset, dcmread
 
-from anonymizer.controller.tseg.cache import resolve_series_cache_dir
-from anonymizer.controller.tseg.config import (
+from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir
+from anonymizer.controller.ai.tseg.config import (
     GEOMETRY_CACHE_FILENAME,
     LOCALIZER_MAX_SLICES,
     MIN_DICOM_SLICES,

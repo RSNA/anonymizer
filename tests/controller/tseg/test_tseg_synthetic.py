@@ -10,10 +10,10 @@ import pytest
 import SimpleITK as sitk
 from pydicom import dcmread
 
-from anonymizer.controller.tseg.config import MIN_DICOM_SLICES
-from anonymizer.controller.tseg.contrast import ContrastResult
-from anonymizer.controller.tseg.dicom_geometry import sorted_dicom_paths
-from anonymizer.controller.tseg.segment import (
+from anonymizer.controller.ai.tseg.config import MIN_DICOM_SLICES
+from anonymizer.controller.ai.tseg.contrast import ContrastResult
+from anonymizer.controller.ai.tseg.dicom_geometry import sorted_dicom_paths
+from anonymizer.controller.ai.tseg.segment import (
     TS_result,
     analyze_series,
     dicom_series_to_nifti,
@@ -122,9 +122,9 @@ def _abdomen_structure_voxels() -> dict[str, int]:
     return {"liver": 60_000, "spleen": 12_000, "kidney_left": 8_000}
 
 
-@patch("anonymizer.controller.tseg.segment.analyze_contrast_phase")
-@patch("anonymizer.controller.tseg.segment.run_segmentation")
-@patch("anonymizer.controller.tseg.segment.collect_structure_voxels")
+@patch("anonymizer.controller.ai.tseg.segment.analyze_contrast_phase")
+@patch("anonymizer.controller.ai.tseg.segment.run_segmentation")
+@patch("anonymizer.controller.ai.tseg.segment.collect_structure_voxels")
 def test_analyze_series_synthetic_chest_pipeline(
     mock_collect: MagicMock,
     mock_seg: MagicMock,
@@ -147,9 +147,9 @@ def test_analyze_series_synthetic_chest_pipeline(
     mock_contrast.assert_called_once()
 
 
-@patch("anonymizer.controller.tseg.segment.analyze_contrast_phase")
-@patch("anonymizer.controller.tseg.segment.run_segmentation")
-@patch("anonymizer.controller.tseg.segment.collect_structure_voxels")
+@patch("anonymizer.controller.ai.tseg.segment.analyze_contrast_phase")
+@patch("anonymizer.controller.ai.tseg.segment.run_segmentation")
+@patch("anonymizer.controller.ai.tseg.segment.collect_structure_voxels")
 def test_analyze_series_synthetic_head_pipeline(
     mock_collect: MagicMock,
     mock_seg: MagicMock,
@@ -167,9 +167,9 @@ def test_analyze_series_synthetic_head_pipeline(
     assert result.radlex_series_description == "CT Head+Neck With Contrast"
 
 
-@patch("anonymizer.controller.tseg.segment.analyze_contrast_phase")
-@patch("anonymizer.controller.tseg.segment.run_segmentation")
-@patch("anonymizer.controller.tseg.segment.collect_structure_voxels")
+@patch("anonymizer.controller.ai.tseg.segment.analyze_contrast_phase")
+@patch("anonymizer.controller.ai.tseg.segment.run_segmentation")
+@patch("anonymizer.controller.ai.tseg.segment.collect_structure_voxels")
 def test_analyze_series_synthetic_abdomen_pipeline(
     mock_collect: MagicMock,
     mock_seg: MagicMock,
@@ -187,9 +187,9 @@ def test_analyze_series_synthetic_abdomen_pipeline(
     assert result.radlex_series_description == "CT Abdomen Without Contrast"
 
 
-@patch("anonymizer.controller.tseg.segment.analyze_contrast_phase")
-@patch("anonymizer.controller.tseg.segment.run_segmentation")
-@patch("anonymizer.controller.tseg.segment.collect_structure_voxels")
+@patch("anonymizer.controller.ai.tseg.segment.analyze_contrast_phase")
+@patch("anonymizer.controller.ai.tseg.segment.run_segmentation")
+@patch("anonymizer.controller.ai.tseg.segment.collect_structure_voxels")
 def test_analyze_series_contrast_failure_keeps_regions(
     mock_collect: MagicMock,
     mock_seg: MagicMock,
@@ -208,9 +208,9 @@ def test_analyze_series_contrast_failure_keeps_regions(
     assert "XGBoost" in result.error
 
 
-@patch("anonymizer.controller.tseg.segment.analyze_contrast_phase")
-@patch("anonymizer.controller.tseg.segment.run_segmentation")
-@patch("anonymizer.controller.tseg.segment.collect_structure_voxels")
+@patch("anonymizer.controller.ai.tseg.segment.analyze_contrast_phase")
+@patch("anonymizer.controller.ai.tseg.segment.run_segmentation")
+@patch("anonymizer.controller.ai.tseg.segment.collect_structure_voxels")
 def test_analyze_series_same_name_different_paths_do_not_collide(
     mock_collect: MagicMock,
     mock_seg: MagicMock,

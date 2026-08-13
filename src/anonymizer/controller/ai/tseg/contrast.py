@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-from anonymizer.controller.tseg.runtime import sequential_ml_context
+from anonymizer.controller.ai.tseg.runtime import sequential_ml_context
 
 logger = logging.getLogger(__name__)
 
@@ -195,7 +195,7 @@ def log_memory_usage(stage: str) -> None:
 
 def release_working_memory(*, stage: str = "", preserve_accelerator: bool = False) -> None:
     """Release accelerator caches and run GC between harmonize pipeline stages."""
-    from anonymizer.controller.tseg.model_cache import preserve_accelerator_memory
+    from anonymizer.controller.ai.tseg.model_cache import preserve_accelerator_memory
 
     if not preserve_accelerator and not preserve_accelerator_memory():
         release_accelerator_memory()

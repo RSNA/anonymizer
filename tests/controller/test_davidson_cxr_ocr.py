@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.remove_pixel_phi import ocr_models_ready
+from anonymizer.controller.ai.remove_pixel_phi import ocr_models_ready
 from anonymizer.controller.runner import Algorithm, OcrEditContext, RemovePixelPhiRunner, RunOptions
 from anonymizer.controller.series_io import load_series_frames
 from anonymizer.controller.work_state import WorkState

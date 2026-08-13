@@ -11,14 +11,14 @@ from typing import TYPE_CHECKING
 
 from pydicom import Dataset, dcmread
 
-from anonymizer.controller.tseg.config import (
+from anonymizer.controller.ai.tseg.config import (
     CONTRAST_PHASE_CACHE_FILENAME,
     CONTRAST_STATS_FILENAME,
     CONTRAST_STATS_HN_FILENAME,
     ENABLE_TS_CONTRAST,
     ROI_SUBSET,
 )
-from anonymizer.controller.tseg.contrast import (
+from anonymizer.controller.ai.tseg.contrast import (
     contrast_phase_cache_is_valid,
     load_contrast_phase_cache,
     load_contrast_statistics,
@@ -27,7 +27,7 @@ from anonymizer.controller.tseg.contrast import (
     phase_to_iv_contrast,
     release_working_memory,
 )
-from anonymizer.controller.tseg.dicom_geometry import (
+from anonymizer.controller.ai.tseg.dicom_geometry import (
     SeriesGeometryResult,
     format_geometry_progress_message,
     geometry_analysis_progress_prefix,
@@ -36,8 +36,8 @@ from anonymizer.controller.tseg.dicom_geometry import (
     sorted_dicom_paths,
     ts_regions_eligible,
 )
-from anonymizer.controller.tseg.model_cache import tseg_batch_session
-from anonymizer.controller.tseg.radlex_playbook import (
+from anonymizer.controller.ai.tseg.model_cache import tseg_batch_session
+from anonymizer.controller.ai.tseg.radlex_playbook import (
     PlaybookHarmonizeAttributes,
     build_harmonized_series_description,
     build_localizer_harmonized_series_description,
@@ -45,8 +45,8 @@ from anonymizer.controller.tseg.radlex_playbook import (
     format_playbook_analysis_log_lines,
     is_localizer_geometry,
 )
-from anonymizer.controller.tseg.runtime import log_active_threads
-from anonymizer.controller.tseg.segment import (
+from anonymizer.controller.ai.tseg.runtime import log_active_threads
+from anonymizer.controller.ai.tseg.segment import (
     AnalysisProgress,
     ProgressCallback,
     TS_result,
@@ -58,10 +58,10 @@ from anonymizer.controller.tseg.segment import (
     estimate_tseg_contrast_remaining_sec,
     series_cache_dir,
 )
-from anonymizer.controller.tseg.segment import (
+from anonymizer.controller.ai.tseg.segment import (
     _region_ts_result as region_ts_result_from_summary,
 )
-from anonymizer.controller.tseg.segment import (
+from anonymizer.controller.ai.tseg.segment import (
     _segmentation_cache_valid as segmentation_cache_valid,
 )
 from anonymizer.utils.translate import _
@@ -623,16 +623,16 @@ def harmonize_and_apply_series(
 
 def format_harmonize_batch_contrast_log_lines(result: HarmonizedResult) -> list[str]:
     """IV contrast confidence and dominant-organ HU for the AI Batch workflow log."""
-    from anonymizer.controller.tseg.config import (
+    from anonymizer.controller.ai.tseg.config import (
         CONTRAST_STATS_FILENAME,
         CONTRAST_STATS_HN_FILENAME,
     )
-    from anonymizer.controller.tseg.contrast import (
+    from anonymizer.controller.ai.tseg.contrast import (
         format_dominant_organ_hu_summary,
         load_contrast_statistics,
         load_contrast_stats_hn,
     )
-    from anonymizer.controller.tseg.radlex_playbook import playbook_iv_contrast_row_values
+    from anonymizer.controller.ai.tseg.radlex_playbook import playbook_iv_contrast_row_values
 
     tseg = result.tseg
     if tseg is None or not tseg.contrast_phase:

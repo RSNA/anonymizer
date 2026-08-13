@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 import SimpleITK as sitk
 
-from anonymizer.controller.blur_face import (
+from anonymizer.controller.ai.blur_face import (
     FaceBlurMode,
     FaceBlurProgress,
     SeriesVolumeContext,
@@ -21,7 +21,7 @@ from anonymizer.controller.blur_face import (
     preview_face_blur,
     read_reference_volume,
 )
-from anonymizer.controller.tseg.segment import face_mask_cache_path
+from anonymizer.controller.ai.tseg.segment import face_mask_cache_path
 from anonymizer.view.blur_face_results import (
     format_face_blur_progress_status,
     format_face_blur_qa_summary,
@@ -36,7 +36,7 @@ def _write_mask(mask_path: Path, *, shape: tuple[int, int, int]) -> None:
     sitk.WriteImage(sitk.GetImageFromArray(array), str(mask_path))
 
 
-@patch("anonymizer.controller.blur_face.resolve_face_mask_path")
+@patch("anonymizer.controller.ai.blur_face.resolve_face_mask_path")
 def test_preview_face_blur_does_not_write_dicom(
     mock_resolve: MagicMock,
     synthetic_head_series: Path,
@@ -134,7 +134,7 @@ def test_face_review_wl_ww_uses_post_blur_hu() -> None:
     assert ww == pytest.approx(FACE_REVIEW_WW_HU)
 
 
-@patch("anonymizer.controller.blur_face.resolve_face_mask_path")
+@patch("anonymizer.controller.ai.blur_face.resolve_face_mask_path")
 def test_apply_face_blur_preview_to_series_frames(
     mock_resolve: MagicMock,
     synthetic_head_series: Path,
@@ -174,7 +174,7 @@ def test_apply_face_blur_preview_to_series_frames(
     assert np.array_equal(updated[:3], frames[:3])
 
 
-@patch("anonymizer.controller.blur_face.resolve_face_mask_path")
+@patch("anonymizer.controller.ai.blur_face.resolve_face_mask_path")
 def test_preview_face_blur_uses_series_volume_context(
     mock_resolve: MagicMock,
     synthetic_head_series: Path,
@@ -190,7 +190,7 @@ def test_preview_face_blur_uses_series_volume_context(
     _write_mask(mask_path, shape=shape)
     mock_resolve.return_value = mask_path
 
-    with patch("anonymizer.controller.blur_face.load_series_volume_for_blur") as mock_load:
+    with patch("anonymizer.controller.ai.blur_face.load_series_volume_for_blur") as mock_load:
         preview = preview_face_blur(
             synthetic_head_series,
             volume_context=SeriesVolumeContext(

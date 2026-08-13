@@ -1,6 +1,6 @@
-"""Shim → ``anonymizer.controller.blur_face``."""
+"""Shim → ``anonymizer.controller.ai.blur_face``."""
 
-from anonymizer.controller.blur_face import (
+from anonymizer.controller.ai.blur_face import (
     align_mask_to_volume,
     load_hu_stack,
     mask_array_from_volume,

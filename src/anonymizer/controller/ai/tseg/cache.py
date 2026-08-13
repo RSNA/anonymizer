@@ -7,7 +7,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from anonymizer.controller.tseg.config import TSEG_CACHE_DIRNAME
+from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
 
 logger = logging.getLogger(__name__)
 

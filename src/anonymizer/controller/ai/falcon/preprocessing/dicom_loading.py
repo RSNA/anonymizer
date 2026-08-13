@@ -6,7 +6,7 @@ from pathlib import Path
 
 import SimpleITK as sitk
 
-from anonymizer.controller.tseg.dicom_geometry import read_sitk_volume_from_dicom_paths, stackable_dicom_paths
+from anonymizer.controller.ai.tseg.dicom_geometry import read_sitk_volume_from_dicom_paths, stackable_dicom_paths
 
 MIN_DICOM_SLICES = 11
 

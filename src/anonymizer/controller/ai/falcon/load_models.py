@@ -7,7 +7,7 @@ import requests
 import torch
 from torch import nn
 
-from anonymizer.controller.falcon.resnet9 import ResNet9
+from anonymizer.controller.ai.falcon.resnet9 import ResNet9
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,7 @@ FALCON_UPSTREAM_COMMIT = "7c33595ff6f45e609b2b0a3f5168fec883b45f2c"
 _FALCON_RAW_BASE = (
     f"https://raw.githubusercontent.com/FintelmannLabDevelopmentTeam/Falcon/{FALCON_UPSTREAM_COMMIT}/models"
 )
-_ANONYMIZER_PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+_ANONYMIZER_PACKAGE_ROOT = Path(__file__).resolve().parents[3]
 FALCON_MODEL_DIR = _ANONYMIZER_PACKAGE_ROOT / "assets" / "falcon" / "models"
 
 FALCON_MODEL_FILES: dict[str, str] = {

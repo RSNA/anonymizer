@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from anonymizer.controller.blur_face import (
+from anonymizer.controller.ai.blur_face import (
     FaceBlurMode,
     blur_face_hu_volume,
     compute_qa_stats,

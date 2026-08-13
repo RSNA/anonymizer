@@ -10,7 +10,7 @@ import numpy as np
 import pydicom
 from pydicom.data import get_testdata_file
 
-from anonymizer.controller.remove_pixel_phi import (
+from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
     UserRectangle,
     blackout_rectangular_areas,
@@ -53,8 +53,8 @@ def test_monochrome1_blackout_uses_viewer_space_not_stored_zero() -> None:
     assert out[0, 0] == 50
 
 
-@patch("anonymizer.controller.remove_pixel_phi.dcmread")
-@patch("anonymizer.controller.remove_pixel_phi._easyocr_readtext")
+@patch("anonymizer.controller.ai.remove_pixel_phi.dcmread")
+@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
 def test_remove_pixel_phi_blackout_monochrome1_writes_dark_pixels(
     mock_readtext: MagicMock,
     mock_dcmread: MagicMock,

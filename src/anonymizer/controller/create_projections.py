@@ -30,7 +30,7 @@ from numpy import ndarray
 from PIL import Image
 from pydicom import Dataset
 
-from anonymizer.controller.remove_pixel_phi import OCRText
+from anonymizer.controller.ai.remove_pixel_phi import OCRText
 from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.windowing import apply_windowing
 

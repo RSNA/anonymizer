@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from anonymizer.controller.tseg.runtime_status import (
+from anonymizer.controller.ai.tseg.runtime_status import (
     TsegRuntimeStatus,
     TsegSetupRowKind,
     TsWeightKind,
@@ -91,7 +91,7 @@ def test_totalsegmentator_import_ok_false_without_distribution(monkeypatch: pyte
 
 
 def test_probe_runtime_status_without_totalsegmentator() -> None:
-    with patch("anonymizer.controller.tseg.runtime_status._totalsegmentator_import_ok", return_value=False):
+    with patch("anonymizer.controller.ai.tseg.runtime_status._totalsegmentator_import_ok", return_value=False):
         status = probe_runtime_status()
     assert status.totalsegmentator_available is False
     assert status.harmonize_ready is False
@@ -102,10 +102,10 @@ def test_probe_runtime_status_without_totalsegmentator() -> None:
 
 def test_harmonize_ready_requires_xgboost() -> None:
     with (
-        patch("anonymizer.controller.tseg.runtime_status._totalsegmentator_import_ok", return_value=True),
-        patch("anonymizer.controller.tseg.runtime_status._xgboost_import_ok", return_value=(False, "need libomp")),
-        patch("anonymizer.controller.tseg.runtime_status.verify_face_license", return_value=(True, "ok")),
-        patch("anonymizer.controller.tseg.runtime_status.probe_weight_state") as mock_probe,
+        patch("anonymizer.controller.ai.tseg.runtime_status._totalsegmentator_import_ok", return_value=True),
+        patch("anonymizer.controller.ai.tseg.runtime_status._xgboost_import_ok", return_value=(False, "need libomp")),
+        patch("anonymizer.controller.ai.tseg.runtime_status.verify_face_license", return_value=(True, "ok")),
+        patch("anonymizer.controller.ai.tseg.runtime_status.probe_weight_state") as mock_probe,
     ):
         mock_probe.side_effect = lambda kind: TsWeightState(
             kind=kind,
@@ -126,14 +126,14 @@ def test_probe_weight_state_ready_when_checkpoint_in_fold(tmp_path: Path) -> Non
     (fold_dir / "checkpoint_final.pth").write_bytes(b"x")
 
     with (
-        patch("anonymizer.controller.tseg.runtime_status._totalsegmentator_import_ok", return_value=True),
-        patch("anonymizer.controller.tseg.model_cache.missing_harmonize_ts_task_ids", return_value=()),
+        patch("anonymizer.controller.ai.tseg.runtime_status._totalsegmentator_import_ok", return_value=True),
+        patch("anonymizer.controller.ai.tseg.model_cache.missing_harmonize_ts_task_ids", return_value=()),
         patch(
-            "anonymizer.controller.tseg.model_cache.resolve_anatomy_model_folder",
+            "anonymizer.controller.ai.tseg.model_cache.resolve_anatomy_model_folder",
             return_value=model_folder,
         ),
         patch(
-            "anonymizer.controller.tseg.runtime_status._resolve_model_folder",
+            "anonymizer.controller.ai.tseg.runtime_status._resolve_model_folder",
             return_value=model_folder,
         ),
     ):
@@ -150,10 +150,10 @@ def test_probe_weight_state_ready_when_checkpoint_at_root(tmp_path: Path) -> Non
     (model_folder / "checkpoint_final.pth").write_bytes(b"x")
 
     with (
-        patch("anonymizer.controller.tseg.runtime_status._totalsegmentator_import_ok", return_value=True),
-        patch("anonymizer.controller.tseg.model_cache.missing_harmonize_ts_task_ids", return_value=()),
+        patch("anonymizer.controller.ai.tseg.runtime_status._totalsegmentator_import_ok", return_value=True),
+        patch("anonymizer.controller.ai.tseg.model_cache.missing_harmonize_ts_task_ids", return_value=()),
         patch(
-            "anonymizer.controller.tseg.model_cache.resolve_anatomy_model_folder",
+            "anonymizer.controller.ai.tseg.model_cache.resolve_anatomy_model_folder",
             return_value=model_folder,
         ),
     ):
@@ -168,10 +168,10 @@ def test_probe_weight_state_missing_when_crop_task_not_downloaded(tmp_path: Path
     model_folder.mkdir()
 
     with (
-        patch("anonymizer.controller.tseg.runtime_status._totalsegmentator_import_ok", return_value=True),
-        patch("anonymizer.controller.tseg.model_cache.missing_harmonize_ts_task_ids", return_value=(298,)),
+        patch("anonymizer.controller.ai.tseg.runtime_status._totalsegmentator_import_ok", return_value=True),
+        patch("anonymizer.controller.ai.tseg.model_cache.missing_harmonize_ts_task_ids", return_value=(298,)),
         patch(
-            "anonymizer.controller.tseg.model_cache.resolve_anatomy_model_folder",
+            "anonymizer.controller.ai.tseg.model_cache.resolve_anatomy_model_folder",
             return_value=model_folder,
         ),
     ):
@@ -187,9 +187,9 @@ def test_probe_weight_state_missing_when_no_checkpoint(tmp_path: Path) -> None:
     model_folder.mkdir()
 
     with (
-        patch("anonymizer.controller.tseg.runtime_status._totalsegmentator_import_ok", return_value=True),
+        patch("anonymizer.controller.ai.tseg.runtime_status._totalsegmentator_import_ok", return_value=True),
         patch(
-            "anonymizer.controller.tseg.runtime_status._resolve_model_folder",
+            "anonymizer.controller.ai.tseg.runtime_status._resolve_model_folder",
             return_value=model_folder,
         ),
     ):
@@ -210,11 +210,11 @@ def test_weight_override_downloading_visible_in_status() -> None:
     )
     set_weight_state(downloading)
     with (
-        patch("anonymizer.controller.tseg.runtime_status._totalsegmentator_import_ok", return_value=True),
-        patch("anonymizer.controller.tseg.runtime_status._xgboost_import_ok", return_value=(True, "")),
-        patch("anonymizer.controller.tseg.runtime_status.verify_face_license", return_value=(True, "ok")),
+        patch("anonymizer.controller.ai.tseg.runtime_status._totalsegmentator_import_ok", return_value=True),
+        patch("anonymizer.controller.ai.tseg.runtime_status._xgboost_import_ok", return_value=(True, "")),
+        patch("anonymizer.controller.ai.tseg.runtime_status.verify_face_license", return_value=(True, "ok")),
         patch(
-            "anonymizer.controller.tseg.runtime_status.probe_weight_state",
+            "anonymizer.controller.ai.tseg.runtime_status.probe_weight_state",
             return_value=TsWeightState(
                 kind=TsWeightKind.ANATOMY,
                 status=TsWeightStatus.MISSING,
@@ -246,8 +246,8 @@ def test_refresh_weight_status_clears_override() -> None:
         detail="",
     )
     with (
-        patch("anonymizer.controller.tseg.runtime_status._totalsegmentator_import_ok", return_value=True),
-        patch("anonymizer.controller.tseg.runtime_status.probe_weight_state", return_value=ready),
+        patch("anonymizer.controller.ai.tseg.runtime_status._totalsegmentator_import_ok", return_value=True),
+        patch("anonymizer.controller.ai.tseg.runtime_status.probe_weight_state", return_value=ready),
     ):
         state = refresh_weight_status(TsWeightKind.FACE)
     assert state.status == TsWeightStatus.READY
@@ -260,7 +260,7 @@ def test_verify_face_license_uses_offline_check(monkeypatch: pytest.MonkeyPatch)
     fake_config.has_valid_license_offline.return_value = ("yes", "valid")
     monkeypatch.setitem(sys.modules, "totalsegmentator", MagicMock())
     monkeypatch.setitem(sys.modules, "totalsegmentator.config", fake_config)
-    with patch("anonymizer.controller.tseg.runtime_status._totalsegmentator_import_ok", return_value=True):
+    with patch("anonymizer.controller.ai.tseg.runtime_status._totalsegmentator_import_ok", return_value=True):
         ok, message = verify_face_license()
     assert ok is True
     assert message == "valid"
@@ -274,8 +274,8 @@ def test_download_segmentation_model_skips_when_ready() -> None:
         model_folder=Path("/models"),
     )
     with (
-        patch("anonymizer.controller.tseg.runtime_status.probe_weight_state", return_value=ready),
-        patch("anonymizer.controller.tseg.model_cache.download_segmentation_model_weights") as mock_dl,
+        patch("anonymizer.controller.ai.tseg.runtime_status.probe_weight_state", return_value=ready),
+        patch("anonymizer.controller.ai.tseg.model_cache.download_segmentation_model_weights") as mock_dl,
     ):
         result = download_segmentation_model(TsWeightKind.ANATOMY)
     mock_dl.assert_not_called()
@@ -314,8 +314,8 @@ def test_download_segmentation_model_calls_weights_helper() -> None:
         return face_missing
 
     with (
-        patch("anonymizer.controller.tseg.runtime_status.probe_weight_state", side_effect=probe_side),
-        patch("anonymizer.controller.tseg.model_cache.download_segmentation_model_weights") as mock_dl,
+        patch("anonymizer.controller.ai.tseg.runtime_status.probe_weight_state", side_effect=probe_side),
+        patch("anonymizer.controller.ai.tseg.model_cache.download_segmentation_model_weights") as mock_dl,
     ):
         result = download_segmentation_model(TsWeightKind.ANATOMY)
     mock_dl.assert_called_once_with(TsWeightKind.ANATOMY)
@@ -342,7 +342,7 @@ def test_log_runtime_status_emits_harmonize_and_face_lines(caplog: pytest.LogCap
     )
     status.messages = {"face_license": "no license"}
 
-    with patch("anonymizer.controller.tseg.runtime_status.get_runtime_status", return_value=status):
+    with patch("anonymizer.controller.ai.tseg.runtime_status.get_runtime_status", return_value=status):
         log_runtime_status()
 
     assert any("Harmonize: available" in record.message for record in caplog.records)
@@ -351,7 +351,7 @@ def test_log_runtime_status_emits_harmonize_and_face_lines(caplog: pytest.LogCap
 
 
 def test_ai_feature_status_messages_are_clinical() -> None:
-    from anonymizer.controller.tseg.runtime_status import (
+    from anonymizer.controller.ai.tseg.runtime_status import (
         TsegRuntimeStatus,
         TsWeightKind,
         TsWeightState,
@@ -384,7 +384,7 @@ def test_ai_feature_status_messages_are_clinical() -> None:
         messages={"face_license": "ERROR: A license number has not been set so far."},
     )
 
-    with patch("anonymizer.controller.tseg.runtime_status.get_runtime_status", return_value=status):
+    with patch("anonymizer.controller.ai.tseg.runtime_status.get_runtime_status", return_value=status):
         face_msg = ai_feature_status_face_blur()
         harmonize_msg = ai_feature_status_harmonize()
 
@@ -393,10 +393,10 @@ def test_ai_feature_status_messages_are_clinical() -> None:
     assert "ERROR" not in harmonize_msg
     assert "Download models" in harmonize_msg or "Anatomy segmentation models" in harmonize_msg
 
-    from anonymizer.controller.remove_pixel_phi import OcrModelStatus
+    from anonymizer.controller.ai.remove_pixel_phi import OcrModelStatus
 
     with patch(
-        "anonymizer.controller.remove_pixel_phi.probe_ocr_models",
+        "anonymizer.controller.ai.remove_pixel_phi.probe_ocr_models",
         return_value=(OcrModelStatus.MISSING, "Not downloaded"),
     ):
         ocr_msg = ai_feature_status_remove_pixel_phi()
@@ -406,7 +406,7 @@ def test_ai_feature_status_messages_are_clinical() -> None:
 
 
 def test_harmonize_allowed_uses_session_and_runtime_status() -> None:
-    from anonymizer.controller.tseg.runtime_status import (
+    from anonymizer.controller.ai.tseg.runtime_status import (
         TsegRuntimeStatus,
         harmonize_allowed,
         set_ai_session,
@@ -438,7 +438,7 @@ def test_harmonize_allowed_uses_session_and_runtime_status() -> None:
         face_blur_ready=True,
         messages={},
     )
-    with patch("anonymizer.controller.tseg.runtime_status.get_runtime_status", return_value=ready_status):
+    with patch("anonymizer.controller.ai.tseg.runtime_status.get_runtime_status", return_value=ready_status):
         assert harmonize_allowed() is True
 
     not_ready_status = TsegRuntimeStatus(
@@ -463,7 +463,7 @@ def test_harmonize_allowed_uses_session_and_runtime_status() -> None:
         face_blur_ready=True,
         messages={},
     )
-    with patch("anonymizer.controller.tseg.runtime_status.get_runtime_status", return_value=not_ready_status):
+    with patch("anonymizer.controller.ai.tseg.runtime_status.get_runtime_status", return_value=not_ready_status):
         assert harmonize_allowed() is False
 
     missing_weights_status = TsegRuntimeStatus(
@@ -489,15 +489,15 @@ def test_harmonize_allowed_uses_session_and_runtime_status() -> None:
         messages={},
     )
     with patch(
-        "anonymizer.controller.tseg.runtime_status.get_runtime_status",
+        "anonymizer.controller.ai.tseg.runtime_status.get_runtime_status",
         return_value=missing_weights_status,
     ):
         assert harmonize_allowed() is False
 
 
 def test_init_ai_session_from_runtime_enables_downloaded_models() -> None:
-    from anonymizer.controller.remove_pixel_phi import OcrModelStatus
-    from anonymizer.controller.tseg.runtime_status import get_ai_session, init_ai_session_from_runtime, set_ai_session
+    from anonymizer.controller.ai.remove_pixel_phi import OcrModelStatus
+    from anonymizer.controller.ai.tseg.runtime_status import get_ai_session, init_ai_session_from_runtime, set_ai_session
 
     set_ai_session(remove_pixel_phi=False, enable_harmonize=False, enable_face_blur=False)
     ready_status = TsegRuntimeStatus(
@@ -524,11 +524,11 @@ def test_init_ai_session_from_runtime_enables_downloaded_models() -> None:
     )
     with (
         patch(
-            "anonymizer.controller.tseg.runtime_status.get_runtime_status",
+            "anonymizer.controller.ai.tseg.runtime_status.get_runtime_status",
             return_value=ready_status,
         ),
         patch(
-            "anonymizer.controller.remove_pixel_phi.probe_ocr_models",
+            "anonymizer.controller.ai.remove_pixel_phi.probe_ocr_models",
             return_value=(OcrModelStatus.READY, "Downloaded"),
         ),
     ):
@@ -541,7 +541,7 @@ def test_init_ai_session_from_runtime_enables_downloaded_models() -> None:
 
 
 def test_ai_feature_titles_and_descriptions_match_batch_process() -> None:
-    from anonymizer.controller.tseg.runtime_status import (
+    from anonymizer.controller.ai.tseg.runtime_status import (
         ai_feature_description_face_blur,
         ai_feature_description_harmonize,
         ai_feature_description_remove_pixel_phi,
@@ -566,8 +566,8 @@ def test_ai_feature_titles_and_descriptions_match_batch_process() -> None:
 
 
 def test_feature_has_models_helpers() -> None:
-    from anonymizer.controller.remove_pixel_phi import OcrModelStatus
-    from anonymizer.controller.tseg.runtime_status import (
+    from anonymizer.controller.ai.remove_pixel_phi import OcrModelStatus
+    from anonymizer.controller.ai.tseg.runtime_status import (
         TsegRuntimeStatus,
         face_blur_has_models,
         harmonize_has_models,
@@ -598,11 +598,11 @@ def test_feature_has_models_helpers() -> None:
     )
     with (
         patch(
-            "anonymizer.controller.tseg.runtime_status.get_runtime_status",
+            "anonymizer.controller.ai.tseg.runtime_status.get_runtime_status",
             return_value=ready_status,
         ),
         patch(
-            "anonymizer.controller.remove_pixel_phi.probe_ocr_models",
+            "anonymizer.controller.ai.remove_pixel_phi.probe_ocr_models",
             return_value=(OcrModelStatus.READY, "Downloaded"),
         ),
     ):

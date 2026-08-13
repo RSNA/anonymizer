@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-from anonymizer.controller.remove_pixel_phi import LayerType, OCRText, OverlayData, Segmentation, UserRectangle
+from anonymizer.controller.ai.remove_pixel_phi import LayerType, OCRText, OverlayData, Segmentation, UserRectangle
 from anonymizer.utils.translate import _
 from anonymizer.utils.windowing import apply_windowing
 from anonymizer.view.ctk_safe import dispose_photo_image
@@ -30,9 +30,9 @@ class ImageViewer(ctk.CTkFrame):
     SMALL_JUMP_PERCENTAGE = 0.01  # 1% of the total images
     LARGE_JUMP_PERCENTAGE = 0.10  # 10% of the total images
     MAX_SCREEN_PERCENTAGE = 0.7  # area of current screen available for displaying image
-    TEXT_BOX_COLOR = (0, 255, 0)  # RGB = green
-    USER_RECT_COLOR = (0, 0, 255)  # RGB = blue
-    SEGMENTATION_COLOR = (255, 0, 0)  # RGB = red
+    TEXT_BOX_COLOR_BGR = (0, 255, 0)  # green for OpenCV BGR overlays
+    USER_RECT_COLOR_BGR = (255, 0, 0)  # blue for OpenCV BGR overlays
+    SEGMENTATION_COLOR_BGR = (0, 0, 255)  # red for OpenCV BGR overlays
     DEFAULT_WL_SENSITIVITY = 0.75  # Pixels moved per unit change in WL (affects Beta)
     DEFAULT_WW_SENSITIVITY = 0.75  # Pixels moved per unit change in WW (affects Alpha)
 
@@ -65,7 +65,7 @@ class ImageViewer(ctk.CTkFrame):
         self.images: np.ndarray = images
         self.add_to_whitelist_callback = add_to_whitelist_callback
         self.regenerate_series_projections_callback = regenerate_series_projections_callback
-        self.segmentation_overlay_color = segmentation_overlay_color or self.SEGMENTATION_COLOR
+        self.segmentation_overlay_color = segmentation_overlay_color or self.SEGMENTATION_COLOR_BGR
         self.segmentation_overlay_alpha = min(1.0, max(0.0, segmentation_overlay_alpha))
         self.on_slice_index_changed = on_slice_index_changed
         self.on_wlww_changed = on_wlww_changed
@@ -472,10 +472,9 @@ class ImageViewer(ctk.CTkFrame):
             self.overlay_data[frame_index] = OverlayData()
 
         self.overlay_data[frame_index].ocr_texts = data
-
-        if frame_index == self.current_image_index:  # update display
-            self.remove_from_cache(frame_index)  # force re-rendering
-            self.load_and_display_image(self.current_image_index)
+        self.remove_from_cache(frame_index)
+        if frame_index == self.current_image_index:
+            self.load_and_display_image(frame_index)
 
     def clear_text_overlays(self) -> None:
         """Remove OCR text overlays from every frame and refresh the current view."""
@@ -722,38 +721,41 @@ class ImageViewer(ctk.CTkFrame):
 
     def _render_overlays(self, frame_ndx: int) -> np.ndarray:
         """Renders all active overlays for specified frame."""
+        if self.images is None or not (0 <= frame_ndx < self.num_images):
+            return np.zeros((1, 1, 3), dtype=np.uint8)
 
-        combined_overlay = np.zeros((self.image_height, self.image_width, 3), dtype=np.uint8)
+        frame_height, frame_width = self.images[frame_ndx].shape[:2]
+        combined_overlay = np.zeros((frame_height, frame_width, 3), dtype=np.uint8)
         if frame_ndx not in self.overlay_data:
             return combined_overlay
 
         overlay_data: OverlayData = self.overlay_data[frame_ndx]
 
         for layer_name in self.active_layers:
-            if layer_name == LayerType.TEXT and overlay_data.ocr_texts:
-                for text_data in overlay_data.ocr_texts:
-                    x1, y1, x2, y2 = text_data.get_bounding_box()
-                    cv2.rectangle(combined_overlay, (x1, y1), (x2, y2), self.TEXT_BOX_COLOR, 2)
-
-            elif layer_name == LayerType.SEGMENTATIONS and overlay_data.segmentations:
-                for segmentation in overlay_data.segmentations:
-                    points = np.array([(p.x, p.y) for p in segmentation.points], dtype=np.int32)
-                    cv2.fillPoly(combined_overlay, [points], self.segmentation_overlay_color)
-
-        # Iterate through the layers that are currently active/visible
-        for layer_name in self.active_layers:
             match layer_name:
                 case LayerType.TEXT:
                     if overlay_data.ocr_texts:
                         for text_data in overlay_data.ocr_texts:
                             x1, y1, x2, y2 = text_data.get_bounding_box()
-                            cv2.rectangle(combined_overlay, (x1, y1), (x2, y2), self.TEXT_BOX_COLOR, 2)
+                            cv2.rectangle(
+                                combined_overlay,
+                                (x1, y1),
+                                (x2, y2),
+                                self.TEXT_BOX_COLOR_BGR,
+                                2,
+                            )
 
                 case LayerType.USER_RECT:
                     if overlay_data.user_rects:
                         for rect in overlay_data.user_rects:
                             x1, y1, x2, y2 = rect.get_bounding_box()
-                            cv2.rectangle(combined_overlay, (x1, y1), (x2, y2), self.USER_RECT_COLOR, 2)
+                            cv2.rectangle(
+                                combined_overlay,
+                                (x1, y1),
+                                (x2, y2),
+                                self.USER_RECT_COLOR_BGR,
+                                2,
+                            )
 
                 case LayerType.SEGMENTATIONS:
                     if overlay_data.segmentations:
@@ -762,8 +764,7 @@ class ImageViewer(ctk.CTkFrame):
                             cv2.fillPoly(combined_overlay, [points], self.segmentation_overlay_color)
 
                 case _:
-                    # Handle unknown layer types if necessary
-                    logger.warning(f"Rendering not implemented for layer type: {layer_name}")
+                    logger.warning("Rendering not implemented for layer type: %s", layer_name)
 
         return combined_overlay
 

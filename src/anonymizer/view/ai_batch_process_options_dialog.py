@@ -7,16 +7,11 @@ from dataclasses import dataclass
 
 import customtkinter as ctk
 
-from anonymizer.controller.ai_batch_process import (
-    AiBatchAlgorithm,
-    AiBatchProcessOptions,
-    normalize_selected_algorithms,
-)
-from anonymizer.controller.remove_pixel_phi import (
+from anonymizer.controller.ai.remove_pixel_phi import (
     pixel_phi_removal_mode_from_menu_label,
     pixel_phi_removal_mode_menu_values,
 )
-from anonymizer.controller.tseg.runtime_status import (
+from anonymizer.controller.ai.tseg.runtime_status import (
     ai_feature_description_face_blur,
     ai_feature_description_harmonize,
     ai_feature_description_remove_pixel_phi,
@@ -26,6 +21,11 @@ from anonymizer.controller.tseg.runtime_status import (
     face_blur_allowed,
     harmonize_allowed,
     pixel_phi_allowed,
+)
+from anonymizer.controller.ai_batch_process import (
+    AiBatchAlgorithm,
+    AiBatchProcessOptions,
+    normalize_selected_algorithms,
 )
 from anonymizer.utils.translate import _
 from anonymizer.view.blur_face_results import (

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.tseg.dicom_geometry import SeriesGeometryResult
-from anonymizer.controller.tseg.segment import TS_result
+from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
+from anonymizer.controller.ai.tseg.segment import TS_result
 from prototyping.ct.ct_eval import (
     GEOMETRY_COLUMNS,
     RESULT_COLUMNS,

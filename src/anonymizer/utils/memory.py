@@ -97,7 +97,7 @@ class MemoryGuard:
         warn_available_mb: float | None = None,
         abort_available_mb: float | None = None,
     ) -> None:
-        from anonymizer.controller.tseg.config import (
+        from anonymizer.controller.ai.tseg.config import (
             BATCH_MEMORY_ABORT_AVAILABLE_MB,
             BATCH_MEMORY_WARN_AVAILABLE_MB,
         )

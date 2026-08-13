@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 from pydicom import dcmread
 
-from anonymizer.controller.harmonize import apply_harmonized_description
+from anonymizer.controller.ai.harmonize import apply_harmonized_description
 from anonymizer.controller.series_io import (
     apply_series_description,
     load_series_frames,

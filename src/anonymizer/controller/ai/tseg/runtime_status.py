@@ -58,7 +58,7 @@ def set_ai_session(
 
 def init_ai_session_from_runtime(*, force_refresh: bool = False) -> AiFeatureSession:
     """Enable session flags for features whose models are already on disk (not persisted)."""
-    from anonymizer.controller.remove_pixel_phi import ocr_models_ready
+    from anonymizer.controller.ai.remove_pixel_phi import ocr_models_ready
 
     status = get_runtime_status(force_refresh=force_refresh)
     return set_ai_session(
@@ -286,7 +286,7 @@ def build_ai_setup_rows(
     needs_tseg = enable_harmonize or enable_face_blur
 
     if enable_ocr:
-        from anonymizer.controller.remove_pixel_phi import OcrModelStatus, probe_ocr_models
+        from anonymizer.controller.ai.remove_pixel_phi import OcrModelStatus, probe_ocr_models
 
         ocr_status, ocr_detail = probe_ocr_models()
         if ocr_status == OcrModelStatus.READY:
@@ -444,7 +444,7 @@ def _build_tseg_core_rows(
 
 
 def _anatomy_task_spec() -> tuple[int, str] | None:
-    from anonymizer.controller.tseg.model_cache import harmonize_anatomy_task_ids, trainer_for_anatomy_task
+    from anonymizer.controller.ai.tseg.model_cache import harmonize_anatomy_task_ids, trainer_for_anatomy_task
 
     task_ids = harmonize_anatomy_task_ids()
     if not task_ids:
@@ -506,7 +506,7 @@ def _totalsegmentator_import_ok() -> bool:
 
 def _xgboost_import_ok() -> tuple[bool, str]:
     try:
-        from anonymizer.controller.tseg.contrast import verify_xgboost_runtime
+        from anonymizer.controller.ai.tseg.contrast import verify_xgboost_runtime
 
         verify_xgboost_runtime()
     except RuntimeError as exc:
@@ -572,7 +572,7 @@ def probe_weight_state(kind: TsWeightKind) -> TsWeightState:
         )
 
     if kind == TsWeightKind.ANATOMY:
-        from anonymizer.controller.tseg.model_cache import (
+        from anonymizer.controller.ai.tseg.model_cache import (
             harmonize_anatomy_task_ids,
             harmonize_ts_task_ids,
             missing_harmonize_ts_task_ids,
@@ -763,7 +763,7 @@ def ai_feature_summary_face_blur() -> str:
 
 
 def remove_pixel_phi_has_models() -> bool:
-    from anonymizer.controller.remove_pixel_phi import ocr_models_ready
+    from anonymizer.controller.ai.remove_pixel_phi import ocr_models_ready
 
     return ocr_models_ready()
 
@@ -779,7 +779,7 @@ def face_blur_has_models() -> bool:
 
 
 def ai_feature_status_remove_pixel_phi() -> str:
-    from anonymizer.controller.remove_pixel_phi import OcrModelStatus, probe_ocr_models
+    from anonymizer.controller.ai.remove_pixel_phi import OcrModelStatus, probe_ocr_models
 
     ocr_status, _detail = probe_ocr_models()
     if ocr_status == OcrModelStatus.READY:
@@ -797,7 +797,7 @@ def ai_feature_status_remove_pixel_phi() -> str:
 
 
 def remove_pixel_phi_needs_download() -> bool:
-    from anonymizer.controller.remove_pixel_phi import OcrModelStatus, probe_ocr_models
+    from anonymizer.controller.ai.remove_pixel_phi import OcrModelStatus, probe_ocr_models
 
     ocr_status, _ = probe_ocr_models()
     return ocr_status in {OcrModelStatus.MISSING, OcrModelStatus.FAILED}
@@ -888,7 +888,7 @@ def pixel_phi_allowed() -> bool:
     """True when Remove Pixel PHI is enabled for the session and OCR models are ready."""
     if not _ai_session.remove_pixel_phi:
         return False
-    from anonymizer.controller.remove_pixel_phi import ocr_models_ready
+    from anonymizer.controller.ai.remove_pixel_phi import ocr_models_ready
 
     return ocr_models_ready()
 
@@ -902,7 +902,7 @@ def log_runtime_status_for_session() -> None:
     """Log AI feature readiness for enabled session features only."""
     status = get_runtime_status(force_refresh=True)
     if _ai_session.remove_pixel_phi:
-        from anonymizer.controller.remove_pixel_phi import OcrModelStatus, probe_ocr_models
+        from anonymizer.controller.ai.remove_pixel_phi import OcrModelStatus, probe_ocr_models
 
         ocr_status, ocr_detail = probe_ocr_models()
         if ocr_status == OcrModelStatus.READY:
@@ -1016,7 +1016,7 @@ def download_segmentation_model(
 
     Blocks until complete; UI layers should call this from a worker thread.
     """
-    from anonymizer.controller.tseg.model_cache import download_segmentation_model_weights
+    from anonymizer.controller.ai.tseg.model_cache import download_segmentation_model_weights
 
     probed = probe_weight_state(kind)
     if probed.status == TsWeightStatus.READY:
@@ -1079,7 +1079,7 @@ def remove_segmentation_model(kind: TsWeightKind) -> bool:
     """Delete on-disk TotalSegmentator weights for one model kind."""
     import shutil
 
-    from anonymizer.controller.tseg.model_cache import (
+    from anonymizer.controller.ai.tseg.model_cache import (
         clear_predictor_cache,
         harmonize_ts_task_ids,
         resolve_harmonize_model_folder,

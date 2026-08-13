@@ -34,13 +34,13 @@ from anonymizer.controller.ai_batch_process import (
     skip_message_for_face_blur_series,
     strip_progress_pct_suffix,
 )
-from anonymizer.controller.blur_face import (
+from anonymizer.controller.ai.blur_face import (
     FaceBlurGateDecision,
     FaceBlurGateReason,
     FaceBlurMode,
     face_blur_gate_message,
 )
-from anonymizer.controller.remove_pixel_phi import PixelPhiRemovalMode
+from anonymizer.controller.ai.remove_pixel_phi import PixelPhiRemovalMode
 from tests.controller.blur_face.test_face_blur_gate import _geometry, _write_chest_region_cache
 
 
@@ -525,7 +525,7 @@ def test_ai_batch_process_harmonize_only_releases_memory_after_series(
     images_dir, studies = images_layout
     enter_patch, exit_patch, _handle, _runner = _patch_batch_runners()
     series_path = images_dir / "anon_pt" / "anon_study" / "series_a"
-    from anonymizer.controller.harmonize import HarmonizeApplyOutcome
+    from anonymizer.controller.ai.harmonize import HarmonizeApplyOutcome
 
     mock_harmonize.return_value = HarmonizeApplyOutcome(series_path, "ok", "Applied")
 
@@ -648,7 +648,7 @@ def test_ai_batch_process_defers_volume_context_when_harmonize_and_face_blur(
     images_dir, studies = images_layout
     enter_patch, exit_patch, _handle, _runner = _patch_batch_runners()
     series_path = images_dir / "anon_pt" / "anon_study" / "series_a"
-    from anonymizer.controller.harmonize import HarmonizeApplyOutcome
+    from anonymizer.controller.ai.harmonize import HarmonizeApplyOutcome
 
     mock_harmonize.return_value = HarmonizeApplyOutcome(series_path, "ok", "Applied")
     mock_face_blur.return_value = AiBatchOutcome(
@@ -776,7 +776,7 @@ def test_ai_batch_process_memory_guard_cancels_between_series(
         images_dir / "anon_pt" / "anon_study" / "series_a",
         images_dir / "anon_pt" / "anon_study" / "series_b",
     ]
-    from anonymizer.controller.harmonize import HarmonizeApplyOutcome
+    from anonymizer.controller.ai.harmonize import HarmonizeApplyOutcome
 
     mock_harmonize.side_effect = lambda series_path, **kwargs: HarmonizeApplyOutcome(series_path, "ok", "Applied")
 

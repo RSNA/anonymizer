@@ -669,7 +669,7 @@ class Anonymizer(ctk.CTk):
             f"{self.controller.model.project_name}[{self.controller.model.site_id}] => {self.controller.model.abridged_storage_dir()}"
         )
 
-        from anonymizer.controller.tseg.runtime_status import log_runtime_status_for_session
+        from anonymizer.controller.ai.tseg.runtime_status import log_runtime_status_for_session
 
         self._release_welcome_window_constraints()
         self.welcome_view.release_images()
@@ -1483,7 +1483,7 @@ def main(config: Path | None = None):
     # path[0]=="" resolves to install_dir and can shadow venv packages (e.g. totalsegmentator).
     if sys.path and sys.path[0] in ("", "."):
         sys.path.pop(0)
-    from anonymizer.controller.remove_pixel_phi import OCR_MODEL_DIR, OcrModelStatus, probe_ocr_models
+    from anonymizer.controller.ai.remove_pixel_phi import OCR_MODEL_DIR, OcrModelStatus, probe_ocr_models
 
     tseg_home = Path("assets/ai/tseg")
     tseg_weights = tseg_home / "nnunet" / "results"
@@ -1517,7 +1517,7 @@ def main(config: Path | None = None):
         )
 
     # TotalSegmentator runtime (Harmonize / Face Blur prerequisites and model cache).
-    from anonymizer.controller.tseg.runtime_status import init_ai_session_from_runtime, log_runtime_status
+    from anonymizer.controller.ai.tseg.runtime_status import init_ai_session_from_runtime, log_runtime_status
 
     log_runtime_status()
     init_ai_session_from_runtime(force_refresh=True)

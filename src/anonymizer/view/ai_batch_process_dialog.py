@@ -11,6 +11,7 @@ from tkinter import messagebox
 
 import customtkinter as ctk
 
+from anonymizer.controller.ai.tseg.config import BATCH_MEMORY_POLL_INTERVAL_SEC
 from anonymizer.controller.ai_batch_process import (
     AiBatchAlgorithm,
     AiBatchProcessOptions,
@@ -22,7 +23,6 @@ from anonymizer.controller.ai_batch_process import (
     normalize_selected_algorithms,
 )
 from anonymizer.controller.project import ProjectController
-from anonymizer.controller.tseg.config import BATCH_MEMORY_POLL_INTERVAL_SEC
 from anonymizer.controller.work_state import WorkState
 from anonymizer.utils.memory import (
     MemoryGuard,

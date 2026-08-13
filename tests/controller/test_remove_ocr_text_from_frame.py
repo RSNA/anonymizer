@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from anonymizer.controller.remove_pixel_phi import (
+from anonymizer.controller.ai.remove_pixel_phi import (
     OCRText,
     PixelPhiRemovalMode,
     remove_ocr_text_from_frame,
@@ -33,7 +33,7 @@ def test_remove_ocr_text_from_frame_blackout_zeros_boxes() -> None:
     assert raw[2:5, 2:5].max() == 100
 
 
-@patch("anonymizer.controller.remove_pixel_phi.remove_text")
+@patch("anonymizer.controller.ai.remove_pixel_phi.remove_text")
 def test_remove_ocr_text_from_frame_inpaint_calls_remove_text(mock_remove_text: MagicMock) -> None:
     raw = np.full((8, 8), 100, dtype=np.uint8)
     windowed = raw.copy()

@@ -12,7 +12,7 @@ from anonymizer.controller.ai_batch_process import (
     format_remove_pixel_phi_instance_detail,
     format_remove_pixel_phi_series_message,
 )
-from anonymizer.controller.remove_pixel_phi import (
+from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
     ocr_models_ready,
     remove_pixel_phi,

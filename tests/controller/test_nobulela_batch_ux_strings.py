@@ -12,7 +12,7 @@ from anonymizer.controller.ai_batch_process import (
     format_remove_pixel_phi_instance_detail,
     format_remove_pixel_phi_series_message,
 )
-from anonymizer.controller.remove_pixel_phi import (
+from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
     detect_text,
     ocr_image_for_frame,
@@ -108,7 +108,7 @@ def test_nobulela_live_batch_removal_matches_ux_fixture(tmp_path: Path) -> None:
 
 def test_nobulela_series_view_after_batch_shows_no_whitelist_display_survivors(tmp_path: Path) -> None:
     """After batch blackout, SV detect+default whitelist shows no green boxes."""
-    from anonymizer.controller.remove_pixel_phi import filter_ocr_detections
+    from anonymizer.controller.ai.remove_pixel_phi import filter_ocr_detections
     from anonymizer.utils.storage import load_default_whitelist
 
     os.chdir(Path(__file__).resolve().parents[2] / "src" / "anonymizer")

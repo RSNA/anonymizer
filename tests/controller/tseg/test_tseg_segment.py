@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from anonymizer.controller.tseg.dicom_geometry import SeriesGeometryResult
-from anonymizer.controller.tseg.segment import (
+from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
+from anonymizer.controller.ai.tseg.segment import (
     _segmentation_cache_valid,
     analyze_tseg_regions,
     body_parts_present,
@@ -97,8 +97,8 @@ def test_segmentation_cache_valid_requires_mask(tmp_path) -> None:
     assert _segmentation_cache_valid(seg_dir, ["brain", "liver"])
 
 
-@patch("anonymizer.controller.tseg.segment.resolve_series_geometry")
-@patch("anonymizer.controller.tseg.segment.ts_regions_eligible", return_value=False)
+@patch("anonymizer.controller.ai.tseg.segment.resolve_series_geometry")
+@patch("anonymizer.controller.ai.tseg.segment.ts_regions_eligible", return_value=False)
 def test_analyze_tseg_regions_uses_provided_geometry(
     _mock_eligible: MagicMock,
     mock_resolve: MagicMock,

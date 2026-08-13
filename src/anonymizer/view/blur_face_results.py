@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydicom import Dataset
 
-from anonymizer.controller.blur_face import FaceBlurMode, FaceBlurProgress, QaStats
+from anonymizer.controller.ai.blur_face import FaceBlurMode, FaceBlurProgress, QaStats
 from anonymizer.utils.translate import _
 
 # BGR for OpenCV overlay compositing.

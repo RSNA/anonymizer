@@ -10,7 +10,7 @@ import numpy as np
 import pydicom
 from pydicom.data import get_testdata_file
 
-from anonymizer.controller.blur_face import (
+from anonymizer.controller.ai.blur_face import (
     blur_face_hu_volume,
     load_hu_stack,
     write_blurred_dicom_series,

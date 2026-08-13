@@ -88,12 +88,12 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-from anonymizer.controller.tseg.dicom_geometry import (
+from anonymizer.controller.ai.tseg.dicom_geometry import (
     SeriesGeometryResult,
     resolve_series_geometry,
 )
-from anonymizer.controller.tseg.runtime import configure_macos_subprocess_env
-from anonymizer.controller.tseg.segment import TS_result, analyze_series
+from anonymizer.controller.ai.tseg.runtime import configure_macos_subprocess_env
+from anonymizer.controller.ai.tseg.segment import TS_result, analyze_series
 
 configure_macos_subprocess_env()
 
