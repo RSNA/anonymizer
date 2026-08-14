@@ -32,7 +32,7 @@ from anonymizer.utils.memory import (
     format_memory_snapshot_label,
 )
 from anonymizer.utils.translate import _
-from anonymizer.view.job_poller import BATCH_POLL_MS, JobPoller
+from anonymizer.view.common.job_poller import BATCH_POLL_MS, JobPoller
 
 logger = logging.getLogger(__name__)
 

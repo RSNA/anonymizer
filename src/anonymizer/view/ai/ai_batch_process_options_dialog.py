@@ -28,7 +28,7 @@ from anonymizer.controller.ai_batch_process import (
     normalize_selected_algorithms,
 )
 from anonymizer.utils.translate import _
-from anonymizer.view.blur_face_results import (
+from anonymizer.view.ai.blur_face_results import (
     face_blur_mode_from_menu_label,
     face_blur_mode_menu_values,
 )

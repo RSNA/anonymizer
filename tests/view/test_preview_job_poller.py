@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 from anonymizer.controller.ai.harmonize import HarmonizeProgress
 from anonymizer.controller.runner import Algorithm
 from anonymizer.controller.work_state import WorkState
-from anonymizer.view.face_blur_review_dialog import FaceBlurReviewDialog
-from anonymizer.view.harmonize_results import HarmonizeResultsView
+from anonymizer.view.ai.face_blur_review_dialog import FaceBlurReviewDialog
+from anonymizer.view.ai.harmonize_results import HarmonizeResultsView
 
 
 def test_harmonize_job_tick_updates_progress_from_work_state() -> None:
@@ -32,7 +32,7 @@ def test_harmonize_job_tick_updates_progress_from_work_state() -> None:
     view._update_playbook_from_progress.assert_called_once_with(progress)
 
 
-@patch("anonymizer.view.face_blur_review_dialog.start_background_job")
+@patch("anonymizer.view.ai.face_blur_review_dialog.start_background_job")
 def test_face_blur_dialog_starts_load_job_with_work_state(mock_start: MagicMock) -> None:
     import customtkinter as ctk
 
@@ -53,7 +53,7 @@ def test_face_blur_dialog_starts_load_job_with_work_state(mock_start: MagicMock)
         patch.object(FaceBlurReviewDialog, "title"),
         patch.object(FaceBlurReviewDialog, "geometry"),
         patch.object(FaceBlurReviewDialog, "resizable"),
-        patch("anonymizer.view.face_blur_review_dialog.mark_ctk_window_alive"),
+        patch("anonymizer.view.ai.face_blur_review_dialog.mark_ctk_window_alive"),
     ):
         dialog = FaceBlurReviewDialog(
             parent,

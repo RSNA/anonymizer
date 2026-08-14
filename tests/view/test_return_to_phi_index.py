@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from anonymizer.view.index import IndexView
-from anonymizer.view.navigation import find_phi_index_parent, return_to_phi_index
+from anonymizer.view.common.navigation import find_phi_index_parent, return_to_phi_index
+from anonymizer.view.project.index import IndexView
 
 
 def test_find_phi_index_parent_returns_index_ancestor() -> None:

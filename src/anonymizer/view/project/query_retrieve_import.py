@@ -22,14 +22,14 @@ from anonymizer.utils.dicom import (
 )
 from anonymizer.utils.storage import count_study_images
 from anonymizer.utils.translate import _
-from anonymizer.view.dashboard import Dashboard
-from anonymizer.view.import_studies_dialog import ImportStudiesDialog
-from anonymizer.view.ux_fields import (
+from anonymizer.view.common.ux_fields import (
     dicom_date_chars,
     patient_id_max_chars,
     patient_name_max_chars,
     str_entry,
 )
+from anonymizer.view.project.import_studies_dialog import ImportStudiesDialog
+from anonymizer.view.shell.dashboard import Dashboard
 
 logger = logging.getLogger(__name__)
 

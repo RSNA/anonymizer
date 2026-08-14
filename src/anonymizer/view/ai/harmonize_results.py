@@ -35,7 +35,7 @@ from anonymizer.controller.runner import Algorithm
 from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import StudyPhiHeader
 from anonymizer.utils.translate import _
-from anonymizer.view.job_poller import STAGE_POLL_MS, start_background_job
+from anonymizer.view.common.job_poller import STAGE_POLL_MS, start_background_job
 
 logger = logging.getLogger(__name__)
 

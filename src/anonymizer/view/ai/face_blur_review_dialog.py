@@ -34,7 +34,7 @@ from anonymizer.controller.series_io import load_series_frames, save_series_fram
 from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.utils.translate import _
-from anonymizer.view.blur_face_results import (
+from anonymizer.view.ai.blur_face_results import (
     FACE_MASK_OVERLAY_ALPHA,
     FACE_MASK_OVERLAY_COLOR,
     face_blur_mode_display_label,
@@ -43,11 +43,11 @@ from anonymizer.view.blur_face_results import (
     format_face_blur_qa_summary,
     proposed_face_blur_companion_label,
 )
-from anonymizer.view.ctk_safe import mark_ctk_window_alive, mark_ctk_window_destroyed
-from anonymizer.view.harmonize_results import HarmonizeResultsView
-from anonymizer.view.image import ImageViewer
-from anonymizer.view.job_poller import LOAD_POLL_MS, STAGE_POLL_MS, start_background_job
-from anonymizer.view.navigation import return_to_phi_index
+from anonymizer.view.ai.harmonize_results import HarmonizeResultsView
+from anonymizer.view.common.ctk_safe import mark_ctk_window_alive, mark_ctk_window_destroyed
+from anonymizer.view.common.job_poller import LOAD_POLL_MS, STAGE_POLL_MS, start_background_job
+from anonymizer.view.common.navigation import return_to_phi_index
+from anonymizer.view.series.image import ImageViewer
 
 logger = logging.getLogger(__name__)
 

@@ -22,7 +22,7 @@ from anonymizer.controller.ai.blur_face import (
     read_reference_volume,
 )
 from anonymizer.controller.ai.tseg.segment import face_mask_cache_path
-from anonymizer.view.blur_face_results import (
+from anonymizer.view.ai.blur_face_results import (
     format_face_blur_progress_status,
     format_face_blur_qa_summary,
     proposed_face_blur_companion_label,
@@ -124,7 +124,7 @@ def test_mask_slice_segmentations_smooths_jagged_mask() -> None:
 def test_face_review_wl_ww_uses_post_blur_hu() -> None:
     from pydicom import Dataset
 
-    from anonymizer.view.blur_face_results import FACE_REVIEW_WL_HU, FACE_REVIEW_WW_HU, face_review_wl_ww
+    from anonymizer.view.ai.blur_face_results import FACE_REVIEW_WL_HU, FACE_REVIEW_WW_HU, face_review_wl_ww
 
     ds = Dataset()
     ds.RescaleSlope = 1

@@ -66,16 +66,16 @@ from anonymizer.utils.storage import (
 )
 from anonymizer.utils.translate import _
 from anonymizer.utils.windowing import apply_windowing
-from anonymizer.view.blur_face_results import (
+from anonymizer.view.ai.blur_face_results import (
     face_blur_mode_from_menu_label,
     face_blur_mode_menu_values,
 )
-from anonymizer.view.ctk_safe import mark_ctk_window_alive, mark_ctk_window_destroyed
-from anonymizer.view.face_blur_review_dialog import show_face_blur_review_dialog
-from anonymizer.view.harmonize_results import show_harmonize_results_view
-from anonymizer.view.image import ImageViewer
-from anonymizer.view.job_poller import start_background_job
-from anonymizer.view.navigation import find_phi_index_parent
+from anonymizer.view.ai.face_blur_review_dialog import show_face_blur_review_dialog
+from anonymizer.view.ai.harmonize_results import show_harmonize_results_view
+from anonymizer.view.common.ctk_safe import mark_ctk_window_alive, mark_ctk_window_destroyed
+from anonymizer.view.common.job_poller import start_background_job
+from anonymizer.view.common.navigation import find_phi_index_parent
+from anonymizer.view.series.image import ImageViewer
 
 logger = logging.getLogger(__name__)
 

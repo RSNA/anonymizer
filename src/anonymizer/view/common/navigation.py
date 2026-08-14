@@ -8,7 +8,7 @@ import tkinter as tk
 
 def find_phi_index_parent(window: tk.Misc) -> tk.Misc | None:
     """Return the nearest IndexView ancestor, or None if not in that hierarchy."""
-    from anonymizer.view.index import IndexView
+    from anonymizer.view.project.index import IndexView
 
     widget: tk.Misc | None = window
     while widget is not None:

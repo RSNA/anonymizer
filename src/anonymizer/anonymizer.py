@@ -34,14 +34,14 @@ from anonymizer.utils.translate import (
     set_language,
 )
 from anonymizer.utils.version import get_version
-from anonymizer.view.dashboard import Dashboard
-from anonymizer.view.export import ExportView
-from anonymizer.view.html_view import HTMLView, is_ai_features_help
-from anonymizer.view.import_files_dialog import ImportFilesDialog
-from anonymizer.view.index import IndexView
-from anonymizer.view.query_retrieve_import import QueryView
+from anonymizer.view.common.html_view import HTMLView, is_ai_features_help
+from anonymizer.view.project.export import ExportView
+from anonymizer.view.project.import_files_dialog import ImportFilesDialog
+from anonymizer.view.project.index import IndexView
+from anonymizer.view.project.query_retrieve_import import QueryView
 from anonymizer.view.settings.settings_dialog import SettingsDialog
-from anonymizer.view.welcome import WelcomeView
+from anonymizer.view.shell.dashboard import Dashboard
+from anonymizer.view.shell.welcome import WelcomeView
 
 faulthandler.enable()
 
@@ -1158,7 +1158,7 @@ class Anonymizer(ctk.CTk):
         logger.info(f"{self.controller}")
 
     def show_ai_features_setup_dialog(self) -> None:
-        from anonymizer.view.tseg_setup_dialog import show_ai_features_setup_dialog
+        from anonymizer.view.ai.tseg_setup_dialog import show_ai_features_setup_dialog
 
         def on_changed() -> None:
             if self.index_view is not None and self.index_view.winfo_exists():
@@ -1313,7 +1313,7 @@ class Anonymizer(ctk.CTk):
 
 
 def run_GUI(logs_dir):
-    from anonymizer.view.ctk_safe import install_safe_scaling_tracker
+    from anonymizer.view.common.ctk_safe import install_safe_scaling_tracker
 
     install_safe_scaling_tracker()
     try:

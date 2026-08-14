@@ -63,7 +63,7 @@ def main() -> int:
     logs_dir = _prepare_environment()
 
     from anonymizer.anonymizer import Anonymizer
-    from anonymizer.view.ctk_safe import install_safe_scaling_tracker
+    from anonymizer.view.common.ctk_safe import install_safe_scaling_tracker
 
     install_safe_scaling_tracker()
     app = Anonymizer(logs_dir)

@@ -3,7 +3,7 @@ from customtkinter import ThemeManager
 from PIL import Image
 
 from anonymizer.utils.translate import _, get_current_language, language_to_code
-from anonymizer.view.ctk_safe import release_ctk_label_image
+from anonymizer.view.common.ctk_safe import release_ctk_label_image
 
 
 class WelcomeView(ctk.CTkFrame):

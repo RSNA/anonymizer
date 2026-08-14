@@ -20,7 +20,7 @@ from anonymizer.controller.project import (
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.storage import count_studies_series_images
 from anonymizer.utils.translate import _
-from anonymizer.view.dashboard import Dashboard
+from anonymizer.view.shell.dashboard import Dashboard
 
 logger = logging.getLogger(__name__)
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from anonymizer.view.ctk_safe import dispose_photo_image, install_safe_scaling_tracker, mark_ctk_window_destroyed
+from anonymizer.view.common.ctk_safe import dispose_photo_image, install_safe_scaling_tracker, mark_ctk_window_destroyed
 
 
 def test_install_safe_scaling_tracker_replaces_check_once() -> None:

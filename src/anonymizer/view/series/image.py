@@ -12,8 +12,8 @@ from PIL import Image, ImageTk
 from anonymizer.controller.ai.remove_pixel_phi import LayerType, OCRText, OverlayData, Segmentation, UserRectangle
 from anonymizer.utils.translate import _
 from anonymizer.utils.windowing import apply_windowing
-from anonymizer.view.ctk_safe import dispose_photo_image
-from anonymizer.view.histogram import Histogram
+from anonymizer.view.common.ctk_safe import dispose_photo_image
+from anonymizer.view.series.histogram import Histogram
 
 logger = logging.getLogger(__name__)
 

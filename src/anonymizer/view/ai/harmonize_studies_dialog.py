@@ -1,7 +1,7 @@
 """Backward-compatible import shim for harmonize-only batch progress dialog."""
 
 from anonymizer.controller.ai_batch_process import AiBatchAlgorithm, AiBatchProcessOptions
-from anonymizer.view.ai_batch_process_dialog import AiBatchProcessDialog
+from anonymizer.view.ai.ai_batch_process_dialog import AiBatchProcessDialog
 
 __all__ = ["HarmonizeStudiesDialog"]
 

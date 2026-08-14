@@ -6,12 +6,10 @@ import threading
 import time
 from unittest.mock import MagicMock
 
-import pytest
-
 from anonymizer.controller.ai.harmonize import HarmonizeProgress
 from anonymizer.controller.runner import Algorithm
 from anonymizer.controller.work_state import WorkState
-from anonymizer.view.job_poller import JobPoller, start_background_job
+from anonymizer.view.common.job_poller import JobPoller, start_background_job
 
 
 class _FakeWidget:

@@ -48,7 +48,7 @@ from anonymizer.controller.runner import (
 from anonymizer.controller.series_io import load_series_frames, save_series_frames
 from anonymizer.utils.memory import MemoryGuard, MemorySnapshot, capture_memory_snapshot
 from anonymizer.utils.translate import _
-from anonymizer.view.blur_face_results import (
+from anonymizer.view.ai.blur_face_results import (
     face_blur_mode_display_label,
     format_face_blur_progress_status,
 )

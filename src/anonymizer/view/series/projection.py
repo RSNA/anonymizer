@@ -14,7 +14,7 @@ from anonymizer.controller.create_projections import (
 )
 from anonymizer.model.anonymizer import AnonymizerModel, PHI_IndexRecord
 from anonymizer.utils.translate import _
-from anonymizer.view.series import SeriesView, show_series_view
+from anonymizer.view.series.series import SeriesView, show_series_view
 
 logger = logging.getLogger(__name__)
 

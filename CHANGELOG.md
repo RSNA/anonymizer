@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [19.0.0.dev9]
+- Reorganize flat `view/` into domain subpackages: `common`, `shell`, `project`, `series`, `ai` (alongside existing `settings`)
+- Update imports across app, controller, tests, and scripts; no compatibility shims
+
 ## [19.0.0.dev8]
 - Unify background jobs on WorkState + JobPoller (batch, harmonize/face-blur preview, Series View OCR); poll-on-change with tiered intervals
 - Move algorithm modules under `controller/ai/`; remove unused `batch_process` shim; update imports across app, tests, and prototyping

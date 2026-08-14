@@ -16,13 +16,13 @@ from anonymizer.controller.ai.tseg.runtime_status import (
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.anonymizer import AnonymizerModel, PHI_IndexRecord
 from anonymizer.utils.translate import _
-from anonymizer.view.ai_batch_process_dialog import AiBatchProcessDialog
-from anonymizer.view.ai_batch_process_options_dialog import show_ai_batch_process_options_dialog
-from anonymizer.view.ctk_safe import mark_ctk_window_alive, mark_ctk_window_destroyed
-from anonymizer.view.dashboard import Dashboard
-from anonymizer.view.delete_studies_dialog import DeleteStudiesDialog
-from anonymizer.view.projection import ProjectionView
-from anonymizer.view.series import show_series_view
+from anonymizer.view.ai.ai_batch_process_dialog import AiBatchProcessDialog
+from anonymizer.view.ai.ai_batch_process_options_dialog import show_ai_batch_process_options_dialog
+from anonymizer.view.common.ctk_safe import mark_ctk_window_alive, mark_ctk_window_destroyed
+from anonymizer.view.project.delete_studies_dialog import DeleteStudiesDialog
+from anonymizer.view.series.projection import ProjectionView
+from anonymizer.view.series.series import show_series_view
+from anonymizer.view.shell.dashboard import Dashboard
 
 logger = logging.getLogger(__name__)
 
