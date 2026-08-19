@@ -503,7 +503,7 @@ class ImageViewer(ctk.CTkFrame):
             if frame_index not in self.overlay_data:
                 self.overlay_data[frame_index] = OverlayData()
             self.overlay_data[frame_index].segmentations = segmentations
-        self.remove_from_cache(self.current_image_index)
+        self.clear_cache()
         self.load_and_display_image(self.current_image_index)
 
     def get_segmentation_overlay_data(self, frame_index: int) -> list[Segmentation] | None:
@@ -796,17 +796,20 @@ class ImageViewer(ctk.CTkFrame):
             return cv2.cvtColor(image_array, cv2.COLOR_BGR2RGB)
         return image_array
 
+    def _frame_has_composited_overlay(self, frame_ndx: int) -> bool:
+        if frame_ndx not in self.overlay_data:
+            return False
+        overlay = self.overlay_data[frame_ndx]
+        return bool(overlay.ocr_texts or overlay.segmentations or overlay.user_rects)
+
     def load_and_display_image(self, frame_ndx: int):
         logger.debug(f"Loading and displaying image at index: {frame_ndx}")
         if not (0 <= frame_ndx < self.num_images) or self.images is None:
             logger.error(f"Invalid frame index: {frame_ndx}")
             return
 
-        # Use Cache (skip when text overlays must be composited — cache stores pre-overlay pixels).
-        has_text_overlay = (
-            frame_ndx in self.overlay_data and bool(self.overlay_data[frame_ndx].ocr_texts)
-        )
-        if frame_ndx in self.image_cache and not has_text_overlay:
+        # Use Cache (skip when overlays must be composited — cache stores pre-overlay pixels).
+        if frame_ndx in self.image_cache and not self._frame_has_composited_overlay(frame_ndx):
             cached_image, __, cached_size = self.image_cache[frame_ndx]
             if cached_size == self.current_size:
                 self.photo_image = cached_image
@@ -890,6 +893,8 @@ class ImageViewer(ctk.CTkFrame):
 
     def release_resources(self) -> None:
         """Cancel playback and drop pixel caches without destroying widgets."""
+        if self.histogram is not None:
+            self.histogram.release_resources()
         if self.after_id:
             with contextlib.suppress(tk.TclError):
                 self.after_cancel(self.after_id)

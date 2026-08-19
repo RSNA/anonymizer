@@ -20,6 +20,8 @@ from anonymizer.controller.project import (
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.storage import count_studies_series_images
 from anonymizer.utils.translate import _
+from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
+from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.shell.dashboard import Dashboard
 
 logger = logging.getLogger(__name__)
@@ -67,11 +69,11 @@ class ExportView(tk.Toplevel):
         self,
         parent: Dashboard,
         project_controller: ProjectController,
-        mono_font: ctk.CTkFont,
+        fonts: AppFonts,
         title: str | None = None,
     ):
         super().__init__(master=parent)
-        self._data_font = mono_font  # get mono font from app
+        self._data_font = fonts.mono
         # Export attributes to display in the results Treeview:
         # Key: column id: (column name, width (in chars), centre justify, stretch column of resize)
         self._attr_map = {
@@ -505,4 +507,4 @@ class ExportView(tk.Toplevel):
                 self._controller.abort_export()
 
         self.grab_release()
-        self.destroy()
+        teardown_ctk_toplevel(self, parent=self.master)

@@ -35,6 +35,8 @@ from anonymizer.controller.runner import Algorithm
 from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import StudyPhiHeader
 from anonymizer.utils.translate import _
+from anonymizer.view.common.ctk_safe import mark_ctk_window_alive, teardown_ctk_toplevel
+from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.common.job_poller import STAGE_POLL_MS, start_background_job
 
 logger = logging.getLogger(__name__)
@@ -142,11 +144,12 @@ class HarmonizeResultsView(tk.Toplevel):
         parent: tk.Misc,
         *,
         items: Sequence[HarmonizeSeriesItem],
-        mono_font: ctk.CTkFont | None = None,
+        fonts: AppFonts | None = None,
         anon_model=None,
         on_series_description_updated: Callable[[], None] | None = None,
     ):
         super().__init__(master=parent)
+        mark_ctk_window_alive(self)
         if not items:
             raise ValueError("HarmonizeResultsView requires at least one series item")
 
@@ -158,11 +161,10 @@ class HarmonizeResultsView(tk.Toplevel):
         self._anon_model = anon_model
         self._on_series_description_updated = on_series_description_updated
 
-        self._data_font = mono_font or getattr(parent, "_data_font", None) or ctk.CTkFont(family="Menlo", size=12)
-        font_family = self._data_font.cget("family")
-        self._study_header_font = ctk.CTkFont(family=font_family, size=14, weight="bold")
-        self._radlex_title_font = ctk.CTkFont(family=font_family, size=13, weight="bold")
-        self._radlex_value_font = ctk.CTkFont(family=font_family, size=20, weight="bold")
+        self._data_font = fonts.mono if fonts else ctk.CTkFont(family="Menlo", size=12)
+        self._study_header_font = fonts.bold if fonts else ctk.CTkFont(size=14, weight="bold")
+        self._radlex_title_font = fonts.bold if fonts else ctk.CTkFont(size=13, weight="bold")
+        self._radlex_value_font = fonts.heading if fonts else ctk.CTkFont(size=20, weight="bold")
 
         self.accepted: bool | None = None
         self.result: HarmonizedResult | None = None
@@ -963,7 +965,8 @@ class HarmonizeResultsView(tk.Toplevel):
         with contextlib.suppress(tk.TclError):
             self.grab_release()
         self._running = False
-        self.destroy()
+        parent = self.master
+        teardown_ctk_toplevel(self, parent=parent)
 
 
 def show_harmonize_results_view(
@@ -973,7 +976,7 @@ def show_harmonize_results_view(
     series_path: Path | None = None,
     ds: Dataset | None = None,
     current_description: str | None = None,
-    mono_font: ctk.CTkFont | None = None,
+    fonts: AppFonts | None = None,
     anon_model=None,
     on_series_description_updated: Callable[[], None] | None = None,
 ) -> HarmonizeBatchOutcome:
@@ -1004,7 +1007,7 @@ def show_harmonize_results_view(
     view = HarmonizeResultsView(
         parent,
         items=items,
-        mono_font=mono_font,
+        fonts=fonts,
         anon_model=anon_model,
         on_series_description_updated=on_series_description_updated,
     )

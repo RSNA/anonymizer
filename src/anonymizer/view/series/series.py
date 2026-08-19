@@ -1,5 +1,4 @@
 import contextlib
-import gc
 import logging
 import queue
 import threading
@@ -22,6 +21,15 @@ from anonymizer.controller.ai.blur_face import (
     face_blur_gate_message,
     face_blur_status_applicable,
 )
+from anonymizer.controller.ai.ocr_whitelist_match import (
+    OcrWhitelistMatchMode,
+    OcrWhitelistMatchSettings,
+    default_whitelist_match_settings,
+    describe_match_settings,
+    match_mode_description,
+    match_mode_menu_label,
+    match_mode_menu_labels,
+)
 from anonymizer.controller.ai.remove_pixel_phi import (
     OCRText,
     UserRectangle,
@@ -30,6 +38,7 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     build_series_view_ocr_pixels,
     collect_series_view_pixel_phi_texts,
     filter_ocr_whitelist_only,
+    load_modality_whitelist,
     ocr_image_for_frame,
     pixel_phi_removal_mode_from_menu_label,
     pixel_phi_removal_mode_menu_values,
@@ -57,11 +66,13 @@ from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import AnonymizerModel, format_series_processing_status
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.dicom import get_wl_ww
-from anonymizer.utils.memory import log_process_memory
+from anonymizer.utils.memory import collect_garbage_safe, log_process_memory
 from anonymizer.utils.storage import (
     get_dcm_files,
     load_default_whitelist,
-    load_project_whitelist,
+    load_modality_whitelist_match_settings,
+    project_dir_from_series_path,
+    save_modality_whitelist_match_settings,
     save_project_whitelist,
 )
 from anonymizer.utils.translate import _
@@ -73,6 +84,7 @@ from anonymizer.view.ai.blur_face_results import (
 from anonymizer.view.ai.face_blur_review_dialog import show_face_blur_review_dialog
 from anonymizer.view.ai.harmonize_results import show_harmonize_results_view
 from anonymizer.view.common.ctk_safe import mark_ctk_window_alive, mark_ctk_window_destroyed
+from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.common.job_poller import start_background_job
 from anonymizer.view.common.navigation import find_phi_index_parent
 from anonymizer.view.series.image import ImageViewer
@@ -90,6 +102,7 @@ def show_series_view(
     anon_model: AnonymizerModel,
     series_path: Path,
     project_model: ProjectModel | None = None,
+    fonts: AppFonts | None = None,
 ) -> "SeriesView | None":
     """Open Series View with a loading shell while DICOM pixels are read in the background."""
     if not series_path.is_dir():
@@ -105,6 +118,7 @@ def show_series_view(
         anon_model=anon_model,
         series_path=series_path,
         project_model=project_model,
+        fonts=fonts,
     )
 
 
@@ -134,9 +148,11 @@ class SeriesView(ctk.CTkToplevel):
         anon_model: AnonymizerModel,
         series_path: Path,
         project_model: ProjectModel | None = None,
+        fonts: AppFonts | None = None,
     ):
         super().__init__(master=parent)
         mark_ctk_window_alive(self)
+        self._fonts = fonts
 
         self._parent = parent
         self._anon_model = anon_model
@@ -145,6 +161,8 @@ class SeriesView(ctk.CTkToplevel):
         self.edit_context: EditContext = EditContext.FRAME
         self.detected_text: dict[int, list[OCRText]] = {}  # Store all detected text per frame
         self._whitelist_changed = False
+        self._whitelist_match_changed = False
+        self._whitelist_match_settings = default_whitelist_match_settings()
         self._loading = True
         self._load_queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self._loading_shell: ctk.CTkFrame | None = None
@@ -489,12 +507,94 @@ class SeriesView(ctk.CTkToplevel):
             return []
         return [str(item) for item in self.whitelist.get(0, tk.END)]
 
+    def _log_whitelist_trace(self, action: str, *, delta: str | None = None) -> None:
+        modality = self._ds.Modality if self._ds is not None else None
+        project_dir = project_dir_from_series_path(self._series_path)
+        items = self._capture_whitelist_items()
+        logger.debug(
+            "Whitelist %s modality=%s project_dir=%s count=%d items=%s%s",
+            action,
+            modality,
+            project_dir,
+            len(items),
+            items,
+            f" delta={delta}" if delta else "",
+        )
+
+    def _load_whitelist_match_settings(self) -> None:
+        if self._ds is None or self._ds.Modality is None:
+            self._whitelist_match_settings = default_whitelist_match_settings()
+            return
+        project_dir = project_dir_from_series_path(self._series_path)
+        self._whitelist_match_settings = load_modality_whitelist_match_settings(
+            project_dir, self._ds.Modality
+        )
+        self._apply_whitelist_match_settings_to_ui()
+        self._log_whitelist_trace(
+            "match_init",
+            delta=describe_match_settings(self._whitelist_match_settings),
+        )
+
+    def _apply_whitelist_match_settings_to_ui(self) -> None:
+        if not hasattr(self, "_whitelist_match_mode_var"):
+            return
+        settings = self._whitelist_match_settings
+        self._whitelist_match_mode_var.set(match_mode_menu_label(settings.match_mode))
+        self._sync_match_dropdown_state()
+
+    def _sync_match_dropdown_state(self) -> None:
+        """Enable match dropdown only when the whitelist has entries."""
+        if not hasattr(self, "whitelist") or not hasattr(self, "_whitelist_match_mode_menu"):
+            return
+        has_items = self.whitelist.size() > 0
+        self._whitelist_match_mode_menu.configure(state="normal" if has_items else "disabled")
+
+    def _whitelist_match_settings_from_ui(self) -> OcrWhitelistMatchSettings:
+        label = self._whitelist_match_mode_var.get()
+        mode = self._match_mode_labels.get(label, OcrWhitelistMatchMode.STANDARD)
+        return OcrWhitelistMatchSettings(match_mode=mode)
+
+    def _on_whitelist_match_mode_changed(self, _choice: str | None = None) -> None:
+        self._whitelist_match_settings = self._whitelist_match_settings_from_ui()
+        self._whitelist_match_changed = True
+        self._apply_whitelist_match_settings_to_ui()
+        self._log_whitelist_trace(
+            "match_mode",
+            delta=describe_match_settings(self._whitelist_match_settings),
+        )
+        self._redraw_text_overlays_if_detected()
+
+    def _redraw_text_overlays_if_detected(self) -> None:
+        if not self.detected_text or not hasattr(self, "image_viewer"):
+            return
+        for frame_index in self.detected_text:
+            self.draw_text_overlay(frame_index)
+
+    def _show_match_tooltip(self, event: tk.Event) -> None:
+        self._hide_match_tooltip()
+        mode = self._match_mode_labels.get(
+            self._whitelist_match_mode_var.get(), OcrWhitelistMatchMode.STANDARD
+        )
+        text = match_mode_description(mode)
+        tip = tk.Toplevel(self)
+        tip.wm_overrideredirect(True)
+        tip.wm_geometry(f"+{event.x_root + 12}+{event.y_root + 12}")
+        lbl = tk.Label(tip, text=text, bg="#333333", fg="white", padx=6, pady=4, wraplength=220, justify="left")
+        lbl.pack()
+        self._match_tooltip = tip
+
+    def _hide_match_tooltip(self, _event: tk.Event | None = None) -> None:
+        if self._match_tooltip is not None:
+            self._match_tooltip.destroy()
+            self._match_tooltip = None
+
     def _restore_whitelist_items(self, items: list[str]) -> None:
         if not hasattr(self, "whitelist"):
             return
         self.whitelist.delete(0, tk.END)
         for item in items:
             self.whitelist.insert(tk.END, item)
+        self._sync_match_dropdown_state()
 
     def _series_interaction_allowed(self) -> bool:
         return not self._ui_rebuilding and not self._loading
@@ -528,6 +628,12 @@ class SeriesView(ctk.CTkToplevel):
             if widget is not None:
                 with contextlib.suppress(tk.TclError):
                     widget.configure(state=widget_state)
+
+        if not busy:
+            self._sync_match_dropdown_state()
+        elif hasattr(self, "_whitelist_match_mode_menu"):
+            with contextlib.suppress(tk.TclError):
+                self._whitelist_match_mode_menu.configure(state="disabled")
 
         if hasattr(self, "whitelist"):
             with contextlib.suppress(tk.TclError):
@@ -634,46 +740,75 @@ class SeriesView(ctk.CTkToplevel):
         self._sv_frame.grid_rowconfigure(0, weight=1)
         self._sv_frame.grid_columnconfigure(1, weight=1)
 
-        # Whitelist frame:
+        # Whitelist frame — single column, all widgets span full width
         self._whitelist_frame = ctk.CTkFrame(self._sv_frame)
         self._whitelist_frame.grid(row=0, column=0, sticky="nsew", padx=self.PAD, pady=self.PAD)
-        self._whitelist_frame.grid_columnconfigure(2, weight=1)
+        self._whitelist_frame.grid_columnconfigure(0, weight=1)
         self._whitelist_frame.grid_rowconfigure(3, weight=1)
 
-        # Whitelist buttons:
-        whitelist_title = ctk.CTkLabel(self._whitelist_frame, text=_("WHITE LIST"))
-        whitelist_title.grid(row=0, columnspan=2, sticky="ew")
-        self.whitelist_defaults_button = ctk.CTkButton(
-            self._whitelist_frame, text=_("Defaults"), command=self.whitelist_defaults_button_clicked
-        )
-        self.whitelist_defaults_button.grid(row=1, column=0, sticky="ew", padx=self.PAD, pady=self.PAD)
-        self.whitelist_clear_button = ctk.CTkButton(
-            self._whitelist_frame, text=_("Clear"), command=self.clear_whitelist
-        )
-        self.whitelist_clear_button.grid(row=1, column=1, sticky="ew", padx=(0, self.PAD), pady=self.PAD)
+        # Row 0: small title
+        ctk.CTkLabel(
+            self._whitelist_frame, text=_("Whitelist"),
+            font=self._fonts.small if self._fonts else None,
+        ).grid(row=0, column=0, sticky="w", padx=self.PAD, pady=(self.PAD, 0))
 
-        # Whitelist entry:
+        # Row 1: [Defaults] [Clear] [Match dropdown] in a toolbar sub-frame
+        toolbar = ctk.CTkFrame(self._whitelist_frame, fg_color="transparent")
+        toolbar.grid(row=1, column=0, sticky="ew", padx=self.PAD, pady=(2, 2))
+        toolbar.grid_columnconfigure(2, weight=1)
+        self.whitelist_defaults_button = ctk.CTkButton(
+            toolbar, text=_("Defaults"), width=10, command=self.whitelist_defaults_button_clicked
+        )
+        self.whitelist_defaults_button.grid(row=0, column=0, padx=(0, 2))
+        self.whitelist_clear_button = ctk.CTkButton(
+            toolbar, text=_("Clear"), width=10, command=self.clear_whitelist
+        )
+        self.whitelist_clear_button.grid(row=0, column=1, padx=(0, 2))
+
+        self._match_mode_labels = match_mode_menu_labels()
+        self._whitelist_match_mode_var = tk.StringVar(
+            value=match_mode_menu_label(OcrWhitelistMatchMode.STANDARD)
+        )
+        self._whitelist_match_mode_menu = ctk.CTkOptionMenu(
+            toolbar,
+            values=list(self._match_mode_labels.keys()),
+            variable=self._whitelist_match_mode_var,
+            width=10,
+            command=self._on_whitelist_match_mode_changed,
+        )
+        self._whitelist_match_mode_menu.grid(row=0, column=2, sticky="ew")
+        self._whitelist_match_mode_menu.configure(state="disabled")
+        self._whitelist_match_mode_menu.bind("<Enter>", self._show_match_tooltip)
+        self._whitelist_match_mode_menu.bind("<Leave>", self._hide_match_tooltip)
+        self._match_tooltip: tk.Toplevel | None = None
+
+        # Row 2: entry
         self.whitelist_entry = ctk.CTkEntry(self._whitelist_frame)
         self.whitelist_entry.bind("<Return>", self.whitelist_button_clicked_or_entry_return)
-        self.whitelist_entry.grid(row=2, columnspan=3, sticky="ew")
+        self.whitelist_entry.grid(row=2, column=0, sticky="ew", padx=self.PAD, pady=(2, 0))
 
-        scrollbar = ctk.CTkScrollbar(self._whitelist_frame, orientation="vertical")
+        # Row 3: listbox + scrollbar
+        list_frame = ctk.CTkFrame(self._whitelist_frame, fg_color="transparent")
+        list_frame.grid(row=3, column=0, sticky="nsew", padx=self.PAD)
+        list_frame.grid_columnconfigure(0, weight=1)
+        list_frame.grid_rowconfigure(0, weight=1)
+        scrollbar = ctk.CTkScrollbar(list_frame, orientation="vertical")
         self.whitelist = tk.Listbox(
-            self._whitelist_frame,
+            list_frame,
             border=0,
             yscrollcommand=scrollbar.set,
             bg="black",
             selectbackground="#004080",
             fg="white",
             selectforeground="white",
-            highlightthickness=0,  # Remove focus highlight border
-            activestyle="none",  # Remove underline on active item
+            highlightthickness=0,
+            activestyle="none",
         )
         scrollbar.configure(command=self.whitelist.yview)
         self.whitelist.bind("<Delete>", self.whitelist_delete_keypressed)
         self.whitelist.bind("<BackSpace>", self.whitelist_delete_keypressed)
-        self.whitelist.grid(row=3, columnspan=2, sticky="nsew")
-        scrollbar.grid(row=3, column=2, sticky="ns")
+        self.whitelist.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
 
         # ImageViewer:
         self.image_viewer = ImageViewer(
@@ -809,12 +944,16 @@ class SeriesView(ctk.CTkToplevel):
 
         self._refresh_blur_face_ui()
 
-        try:
-            whitelist = load_project_whitelist(self._series_path.parents[3], self._ds.Modality)
+        if self._ds is None or self._ds.Modality is None:
+            logger.error("CRITICAL: Modality not found in dataset; whitelist not loaded")
+        else:
+            project_dir = project_dir_from_series_path(self._series_path)
+            whitelist = load_modality_whitelist(project_dir, self._ds.Modality)
             for item in whitelist:
                 self.whitelist.insert(tk.END, item)
-        except Exception:
-            self.load_whitelist_defaults()
+            self._sync_match_dropdown_state()
+            self._log_whitelist_trace("init")
+            self._load_whitelist_match_settings()
 
     def load_frames(self, series_path: Path) -> tuple[Dataset, np.ndarray, tuple[Path, ...]]:
         """Loads, processes, and combines series frames and projections."""
@@ -1002,22 +1141,23 @@ class SeriesView(ctk.CTkToplevel):
         return face_blur_mode_from_menu_label(self.blur_face_mode_var.get())
 
     def clear_whitelist(self):
-        logger.info("Clearing whitelist")
         self.whitelist.delete(0, "end")
         self.whitelist_entry.delete(0, ctk.END)
         self.whitelist_entry.focus_set()
+        self._whitelist_changed = True
+        self._log_whitelist_trace("clear")
+        self._sync_match_dropdown_state()
 
     def add_to_whitelist(self, text: str):
         whitelist = self.whitelist.get(0, tk.END)
         try:
             ndx = whitelist.index(text)
-            # Already in whitelist, hightlight:
             self.whitelist.select_set(ndx)
         except ValueError:
-            # Not in whitelist, insert:
-            logger.debug(f"Adding to whitelist: {text}")
             self.whitelist.insert(0, text)
             self._whitelist_changed = True
+            self._log_whitelist_trace("add", delta=f"+{text}")
+            self._sync_match_dropdown_state()
 
     def insert_entry_into_whitelist(self):
         new_item = self.whitelist_entry.get()
@@ -1038,6 +1178,7 @@ class SeriesView(ctk.CTkToplevel):
         if not selected_indices:  # Check if anything is selected
             return
 
+        removed = [str(self.whitelist.get(i)) for i in selected_indices]
         # Delete items in reverse order to avoid index issues.
         for i in reversed(selected_indices):
             self.whitelist.delete(i)
@@ -1045,6 +1186,8 @@ class SeriesView(ctk.CTkToplevel):
             self.whitelist.activate(i - 1)
 
         self._whitelist_changed = True
+        self._log_whitelist_trace("remove", delta=f"-{removed}")
+        self._sync_match_dropdown_state()
 
     def edit_context_change(self, choice):
         logger.info(f"Edit Context changed to: {choice}")
@@ -1175,7 +1318,7 @@ class SeriesView(ctk.CTkToplevel):
             self.detected_text.clear()
             if hasattr(self, "image_viewer"):
                 self.image_viewer.clear_text_overlays()
-        project_dir = self._series_path.parents[3] if len(self._series_path.parents) > 3 else None
+        project_dir = project_dir_from_series_path(self._series_path)
         options = RunOptions(
             edit_context=edit_context,
             whitelist=[],
@@ -1201,7 +1344,7 @@ class SeriesView(ctk.CTkToplevel):
             on_done=self._on_ocr_job_done,
         )
 
-    def filter_text_data(self, frame_index: int, similarity_threshold: float = 0.75) -> list[OCRText]:
+    def filter_text_data(self, frame_index: int) -> list[OCRText]:
         """Hide whitelist-matched terms from overlay display (detect keeps all EasyOCR hits)."""
         if frame_index not in self.detected_text:
             return []
@@ -1214,19 +1357,23 @@ class SeriesView(ctk.CTkToplevel):
         return filter_ocr_whitelist_only(
             detections,
             whitelist=whitelist_set,
-            whitelist_similarity=similarity_threshold,
+            whitelist_match_settings=self._whitelist_match_settings,
         )
 
     def draw_text_overlay(self, frame_index: int):
         """Draws text boxes on the overlay for the given frame, based on filtered text_data."""
         filtered_text_data = self.filter_text_data(frame_index)
-        raw_count = len(self.detected_text.get(frame_index, []))
+        raw_detections = self.detected_text.get(frame_index, [])
+        raw_count = len(raw_detections)
         if raw_count != len(filtered_text_data):
-            logger.debug(
-                "Series View OCR overlay frame_index=%s: %d detection(s) stored, %d drawn after whitelist",
+            filtered_texts = {item.text for item in filtered_text_data}
+            filtered_out = [item.text for item in raw_detections if item.text not in filtered_texts]
+            logger.info(
+                "Series View OCR overlay frame_index=%s: %d stored, %d drawn; filtered: %s",
                 frame_index,
                 raw_count,
                 len(filtered_text_data),
+                filtered_out,
             )
         self.image_viewer.set_text_overlay_data(frame_index, filtered_text_data)
 
@@ -1352,13 +1499,12 @@ class SeriesView(ctk.CTkToplevel):
 
         logger.info("Harmonize starting for %s", self._series_path)
         self.harmonize_button.configure(state="disabled")
-        mono_font = getattr(self.master, "_data_font", None)
         show_harmonize_results_view(
             self,
             series_path=self._series_path,
             ds=self._ds,
             current_description=str(self._ds.get("SeriesDescription", "") or "").strip(),
-            mono_font=mono_font,
+            fonts=self._fonts,
             anon_model=self._anon_model,
             on_series_description_updated=self._on_series_description_updated,
         )
@@ -1470,29 +1616,48 @@ class SeriesView(ctk.CTkToplevel):
             blur_mode=blur_mode,
         )
 
+    def _persist_whitelist_if_changed(self) -> None:
+        if self._ds is None or self._ds.Modality is None:
+            if self._whitelist_changed or self._whitelist_match_changed:
+                logger.error("CRITICAL: Modality not found in dataset")
+            return
+        project_dir = project_dir_from_series_path(self._series_path)
+        if project_dir is None:
+            if self._whitelist_changed or self._whitelist_match_changed:
+                logger.error("CRITICAL: Series path does not have enough parents - cannot determine project directory")
+            return
+
+        if self._whitelist_changed:
+            whitelist_set = self.get_whitelist_set()
+            if whitelist_set:
+                try:
+                    whitelist_filepath = save_project_whitelist(project_dir, self._ds.Modality, whitelist_set)
+                    self._whitelist_changed = False
+                    self._log_whitelist_trace("save", delta=f"path={whitelist_filepath}")
+                except Exception as e:
+                    logger.error(f"Error saving whitelist: {e}")
+
+        if self._whitelist_match_changed:
+            try:
+                settings = self._whitelist_match_settings_from_ui()
+                self._whitelist_match_settings = settings
+                options_path = save_modality_whitelist_match_settings(
+                    project_dir, self._ds.Modality, settings
+                )
+                self._whitelist_match_changed = False
+                self._log_whitelist_trace(
+                    "match_save",
+                    delta=f"path={options_path} mode={describe_match_settings(settings)}",
+                )
+            except Exception as e:
+                logger.error(f"Error saving whitelist match settings: {e}")
+
     def save_series_button_clicked(self):
         if self._frames is None or self._ds is None:
             logger.error("CRITICAL: No frames or dataset to save")
             return
 
-        # Save Whitelist:
-        whitelist_set = self.get_whitelist_set()
-        if self._whitelist_changed and whitelist_set:
-            if not hasattr(self._ds, "Modality") or self._ds.Modality is None:
-                logger.error("CRITICAL: Modality not found in dataset")
-                return
-            if len(self._series_path.parents) < 4:
-                logger.error("CRITICAL: Series path does not have enough parents - cannot determine project directory")
-                return
-            try:
-                whitelist_filepath = save_project_whitelist(
-                    self._series_path.parents[3], self._ds.Modality, whitelist_set
-                )
-                logger.info(f"Saved whitelist to {whitelist_filepath}")
-                self._whitelist_changed = False
-            except Exception as e:
-                logger.error(f"Error saving whitelist: {e}")
-
+        self._persist_whitelist_if_changed()
         if save_series_frames(
             self._series_path,
             self._loaded.series_view_slices_from_stack(self._frames) if self._loaded else self._frames,
@@ -1524,10 +1689,13 @@ class SeriesView(ctk.CTkToplevel):
             self.update_status(_("Could not save changes"))
 
     def whitelist_defaults_button_clicked(self):
-        logger.info("Whitelist button clicked")
         self.clear_whitelist()
         self.load_whitelist_defaults()
         self._whitelist_changed = True
+        self._whitelist_match_settings = default_whitelist_match_settings()
+        self._whitelist_match_changed = True
+        self._apply_whitelist_match_settings_to_ui()
+        self._log_whitelist_trace("match_mode", delta=describe_match_settings(self._whitelist_match_settings))
 
     def load_whitelist_defaults(self):
         # TODO: whitelist load error message to user
@@ -1537,8 +1705,6 @@ class SeriesView(ctk.CTkToplevel):
         if self._ds.Modality is None:
             logger.error("CRITICAL: Modality not found in dataset")
             return
-
-        logger.info(f"Loading default whitelist for modality {self._ds.Modality}")
 
         try:
             whitelist = load_default_whitelist(self._ds.Modality)
@@ -1554,6 +1720,7 @@ class SeriesView(ctk.CTkToplevel):
 
         for item in whitelist:
             self.whitelist.insert(tk.END, item)
+        self._log_whitelist_trace("load_defaults")
 
     def _escape_keypress(self, event):
         logger.info("_escape_pressed")
@@ -1588,8 +1755,7 @@ class SeriesView(ctk.CTkToplevel):
         """Run GC on the next idle tick so Tk finishes teardown first (avoids Tk 9 bus errors)."""
 
         def _run() -> None:
-            gc.collect()
-            gc.collect()
+            collect_garbage_safe(generations=2)
             if rss_before is None:
                 return
             rss_after = log_process_memory("series_view_close_after")
@@ -1650,6 +1816,7 @@ class SeriesView(ctk.CTkToplevel):
 
         rss_before = self._log_close_memory("before")
         self._log_series_data_size()
+        self._persist_whitelist_if_changed()
 
         self._release_all_viewer_resources()
         self._release_series_data()

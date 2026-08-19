@@ -12,7 +12,7 @@ from pydicom import dcmread
 from pydicom.data import get_testdata_file
 
 from anonymizer.controller import series_io
-from tests.controller.support.nobulela_us_rgb_fixtures import NOBULELA_US_DCM
+from tests.controller.support.us_rgb_fixtures import US_RGB_DCM
 
 
 def test_loaded_series_exposes_frames_field() -> None:
@@ -33,9 +33,9 @@ def test_load_series_frames_and_save_roundtrip(tmp_path: Path) -> None:
     assert series_io.save_series_frames(tmp_path, loaded.frames, loaded.metadata)
 
 
-@pytest.mark.skipif(not NOBULELA_US_DCM.is_file(), reason="Nobulela US RGB fixture missing")
+@pytest.mark.skipif(not US_RGB_DCM.is_file(), reason="US RGB single-frame fixture missing")
 def test_save_series_frames_rgb_preserves_rows_columns(tmp_path: Path) -> None:
-    shutil.copy(NOBULELA_US_DCM, tmp_path / "slice.dcm")
+    shutil.copy(US_RGB_DCM, tmp_path / "slice.dcm")
     loaded = series_io.load_series_frames(tmp_path)
     assert loaded.frames.shape == (1, 600, 800, 3)
 

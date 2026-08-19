@@ -93,6 +93,7 @@ class PHI(Base):
     sex: Mapped[str | None] = mapped_column(String, default=None)
     dob: Mapped[str | None] = mapped_column(String, default=None)
     ethnic_group: Mapped[str | None] = mapped_column(String, default=None)
+    date_offset: Mapped[int | None] = mapped_column(Integer, default=None) # from lookup table
 
     studies: Mapped[list[Study] | None] = relationship(
         back_populates="patient", cascade="all, delete-orphan", init=False
@@ -109,6 +110,14 @@ class UID(Base):
     mapping_pk: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, init=False)
     anon_uid: Mapped[str] = mapped_column(String, unique=True, index=True)
     phi_uid: Mapped[str] = mapped_column(String, unique=True, index=True)
+
+
+class LookupPatient(Base):
+    __tablename__ = "lookup_patient"
+
+    patient_id: Mapped[str] = mapped_column(String, primary_key=True)
+    anon_patient_id: Mapped[str] = mapped_column(String)
+    date_offset: Mapped[int | None] = mapped_column(Integer, default=None)
 
 
 @dataclass(frozen=True)
@@ -404,6 +413,7 @@ class AnonymizerModel:
         self._add_default_PHI()
         self._load_script(script_path)
 
+
     def _ensure_schema_columns(self) -> None:
         """Add any ORM-mapped columns missing from existing SQLite databases."""
         if not self._db_url.startswith("sqlite"):
@@ -583,6 +593,8 @@ class AnonymizerModel:
             filtered_tag_keep = {k: v for k, v in self._tag_keep.items() if v != ""}
             logger.info(f"_tag_keep has {len(self._tag_keep)} entries with {len(filtered_tag_keep)} operations")
             logger.info(f"_tag_keep operations:\n{pformat(filtered_tag_keep)}")
+            self._lookup_required = any("@lookup" in operation for operation in self._tag_keep.values())
+            logger.info(f"Lookup required: {self._lookup_required}")
             return
 
         except FileNotFoundError:
@@ -597,6 +609,26 @@ class AnonymizerModel:
             # Catch other generic exceptions and log the error message
             logger.error(f"Error Parsing script file {script_path}: {str(e)}")
             raise
+
+    def reload_script(self, script_path: Path) -> None:
+        """Reload anonymization script from disk (e.g. after CTP lookup table commit)."""
+        if not script_path.exists():
+            raise FileNotFoundError(f"Script file {script_path} does not exist.")
+        self._script_path = script_path
+        self._tag_keep.clear()
+        self._load_script(script_path)
+
+    @use_session()
+    def replace_lookup_patients(self, rows: list[LookupPatient]) -> int:
+        """Replace entire lookup_patient table (settings-time CTP lookup commit)."""
+        self.session.execute(delete(LookupPatient))
+        for row in rows:
+            self.session.add(row)
+        return len(rows)
+
+    @use_session(is_read_only_operation=True)
+    def get_lookup_patient(self, patient_id: str) -> LookupPatient | None:
+        return self.session.get(LookupPatient, patient_id)
 
     @use_session(is_read_only_operation=True)
     def get_totals(self) -> Totals:
@@ -934,12 +966,21 @@ class AnonymizerModel:
 
         logger.debug("Creating PHI record for new patient_id")
 
-        # Generate a NEW anon_patient_id based on the site_id and the current patient count:
-        # Site_id/prefix is constant, for anon_patient_id string MAX works the same as numeric MAX
-        last_anon_patient_id = self.session.execute(select(func.max(PHI.anon_patient_id))).scalar_one()
-        last_phi_index = int(last_anon_patient_id.split("-")[-1]) if last_anon_patient_id else 0
-        anon_ptid = self._format_anon_patient_id(phi_index=last_phi_index + 1)
-        logger.info(f"Generated new anon_patient_id:{anon_ptid}")
+        lookup_patient = None
+        if self._lookup_required:
+            lookup_patient = self.session.get(LookupPatient, phi_ptid)
+            if lookup_patient is None:
+                msg = f"Lookup Error: PatientID '{phi_ptid}' not found in lookup table"
+                logger.error(msg)
+                raise KeyError(msg)
+            anon_ptid = lookup_patient.anon_patient_id
+            logger.info(f"Using lookup table: anon_patient_id:{anon_ptid}, date_offset:{lookup_patient.date_offset}")
+        else:
+            # Generate a NEW anon_patient_id based on the site_id and the current patient count:
+            last_anon_patient_id = self.session.execute(select(func.max(PHI.anon_patient_id))).scalar_one()
+            last_phi_index = int(last_anon_patient_id.split("-")[-1]) if last_anon_patient_id else 0
+            anon_ptid = self._format_anon_patient_id(phi_index=last_phi_index + 1)
+            logger.info(f"Generated new anon_patient_id:{anon_ptid}")
 
         new_phi: PHI = PHI(
             patient_id=phi_ptid,
@@ -948,18 +989,21 @@ class AnonymizerModel:
             sex=str(ds.get("PatientSex")) if hasattr(ds, "PatientSex") else None,
             dob=str(ds.get("PatientBirthDate")) if hasattr(ds, "PatientBirthDate") else None,
             ethnic_group=str(ds.get("EthnicGroup")) if hasattr(ds, "EthnicGroup") else None,
+            date_offset=lookup_patient.date_offset if lookup_patient is not None else None
         )
         self.session.add(new_phi)
         return new_phi
 
-    def _get_or_create_study(self, ds: Dataset, parent_phi: PHI, date_delta: int, source_name: str) -> Study:
+    def _get_or_create_study(
+        self, ds: Dataset, parent_phi: PHI, date_offset_from_hash: int, source_name: str
+    ) -> tuple[Study, int]:
         study_uid = str(ds.StudyInstanceUID)  # PK of Study
         study: Study | None = self.session.get(Study, study_uid)
 
         if study:
             logger.debug("Found existing Study record")
             if study.patient_id == parent_phi.patient_id:
-                return study
+                return study, study.anon_date_delta
             else:
                 # If the study exists but is linked to a different patient_id, raise an error
                 msg = "IntegrityError: StudyUID exists but is linked to a different patient"
@@ -975,19 +1019,21 @@ class AnonymizerModel:
         anon_acc_no = None if phi_acc_no is None or phi_acc_no == "" else self._hash_accession_number(phi_acc_no)
 
         logger.debug(f"Creating new Study record with anon_acc_no:{anon_acc_no}")
+        # Lookup table date offset stored in PHI takes precedence over hash-based date offset:
+        date_offset = parent_phi.date_offset if parent_phi.date_offset is not None else date_offset_from_hash
         new_study: Study = Study(
             study_uid=study_uid,
             anon_study_uid=self._create_anon_uid(study_uid),  # Generate a new anonymized StudyUID
             patient_id=parent_phi.patient_id,  # Set the FK to PHI's PK
             source=source_name,
             study_date=str(ds.get("StudyDate", self.DEFAULT_PHI_STUDY_DATE)),  # Default to 19000101 if not present
-            anon_date_delta=date_delta,
+            anon_date_delta=date_offset,
             accession_number=phi_acc_no,
             anon_accession_number=anon_acc_no,
             description=str(ds.get("StudyDescription")) if hasattr(ds, "StudyDescription") else None,
         )
         self.session.add(new_study)
-        return new_study
+        return new_study, date_offset
 
     def _get_or_create_series(self, ds: Dataset, parent_study_record: Study) -> Series:
         series_uid: str = str(ds.SeriesInstanceUID)  # PK of Series
@@ -1040,20 +1086,23 @@ class AnonymizerModel:
         return new_instance
 
     @use_session()
-    def capture_phi(self, source: str, ds: Dataset, date_delta: int) -> tuple[str, str, str | None]:
+    def capture_phi(
+        self, source: str, ds: Dataset, date_offset_from_hash: int
+    ) -> tuple[str, str, str | None, int]:
         """
         Capture PHI (Protected Health Information) from a DICOM dataset
 
         Args:
             source (str): The source of the dataset.
             ds (Dataset): The dataset containing the PHI.
-            date_delta (int): The anonymization date offset.
+            date_offset_from_hash (int): The date shift determined from the hash of the study date and patient ID
 
         Returns:
-            tuple[str, str, int]: A tuple containing the PHI patient ID, anonymized patient ID, and anonymized accession number.
+            tuple[str, str, str | None, int]: A tuple containing the PHI patient ID, anonymized patient ID, anonymized accession number, and date offset.
 
         Raises:
             ValueError: If core DICOM UIDs are missing in dataset
+            KeyError: If lookup table is missing for the patient ID
         """
         # ds must have attributes: StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID
         primary_uids = ["StudyInstanceUID", "SeriesInstanceUID", "SOPInstanceUID"]
@@ -1063,11 +1112,11 @@ class AnonymizerModel:
             raise ValueError(msg)
 
         phi = self._get_or_create_phi(ds)
-        study = self._get_or_create_study(ds, phi, date_delta, source)
+        study, date_offset = self._get_or_create_study(ds, phi, date_offset_from_hash, source)
         series = self._get_or_create_series(ds, study)
         self._get_or_create_instance(ds, series)
 
-        return phi.patient_id, phi.anon_patient_id, study.anon_accession_number
+        return phi.patient_id, phi.anon_patient_id, study.anon_accession_number, date_offset
 
     @use_session()
     def remove_phi(self, anon_pt_id: str, anon_study_uid: str) -> bool:

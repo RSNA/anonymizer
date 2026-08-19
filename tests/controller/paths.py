@@ -7,4 +7,6 @@ from pathlib import Path
 CONTROLLER_TESTS_ROOT = Path(__file__).resolve().parent
 CONTROLLER_ASSETS = CONTROLLER_TESTS_ROOT / "assets"
 CONTROLLER_TEST_DCM_FILES_DIR = CONTROLLER_ASSETS / "test_dcm_files"
+CTP_LOOKUP_DIR = CONTROLLER_ASSETS / "ctp_lookup"
+CTP_LOOKUP_PROPERTIES = CTP_LOOKUP_DIR / "test_dcm_files_lookup.properties"
 JAVA_GENERATED_INDEX = CONTROLLER_ASSETS / "JavaGeneratedIndex.xlsx"

@@ -6,6 +6,8 @@ from typing import Callable
 import customtkinter as ctk
 import numpy as np
 
+from anonymizer.view.common.fonts import canvas_label_font
+
 logger = logging.getLogger(__name__)
 
 
@@ -55,6 +57,8 @@ class Histogram(ctk.CTkFrame):
         self._drag_start_x = 0
         self._drag_start_wl = 0.0
         self._drag_start_ww = 1.0
+        self._teardown = False
+        self._axis_label_font = canvas_label_font(10)
 
         # --- Widget Layout ---
         self.grid_columnconfigure(0, weight=1)
@@ -88,12 +92,44 @@ class Histogram(ctk.CTkFrame):
         self.canvas.bind("<ButtonRelease-3>", self._on_right_release)
         self.bind("<Configure>", self._on_configure)
 
+    def release_resources(self) -> None:
+        """Stop redraw callbacks before widget teardown (avoids Tk GC segfaults on macOS)."""
+        if self._teardown:
+            return
+        self._teardown = True
+        self.update_callback = None
+        canvas = getattr(self, "canvas", None)
+        with contextlib.suppress(tk.TclError, AttributeError):
+            self.unbind("<Configure>")
+            if canvas is not None:
+                canvas.unbind("<ButtonPress-1>")
+                canvas.unbind("<B1-Motion>")
+                canvas.unbind("<ButtonRelease-1>")
+                canvas.unbind("<ButtonPress-3>")
+                canvas.unbind("<B3-Motion>")
+                canvas.unbind("<ButtonRelease-3>")
+                if self.winfo_exists():
+                    canvas.delete("all")
+
+    def destroy(self) -> None:
+        self.release_resources()
+        super().destroy()
+
+    def _is_active(self) -> bool:
+        if self._teardown:
+            return False
+        with contextlib.suppress(tk.TclError):
+            return bool(self.winfo_exists()) and bool(self.canvas.winfo_exists())
+        return False
+
     # --- Public Methods ---
     def update_image(self, image_frame: np.ndarray):
         """
         Updates histogram data based on a new image frame (expects grayscale)
         and triggers a redraw. Does NOT modify WL/WW internally.
         """
+        if not self._is_active():
+            return
         logger.debug(f"Updating histogram with new image data. image shape: {image_frame.shape}")
         self._calculate_histogram(image_frame)
         # Redraw using the current internal WL/WW (which should be set externally via set_wlww)
@@ -101,6 +137,8 @@ class Histogram(ctk.CTkFrame):
         self._update_labels()
 
     def set_wlww(self, wl: float, ww: float, redraw: bool = True):
+        if not self._is_active():
+            return
         logger.debug(f"Setting WL: {wl}, WW: {ww}")
         wl_changed = abs(wl - self._current_wl.get()) > 0.01
         ww_changed = abs(ww - self._current_ww.get()) > 0.01
@@ -146,9 +184,9 @@ class Histogram(ctk.CTkFrame):
 
     def _redraw(self):
         """Clears and redraws the entire histogram canvas content."""
+        if not self._is_active():
+            return
         with contextlib.suppress(tk.TclError):
-            if not self.winfo_exists() or not self.canvas.winfo_exists():
-                return
             if self.canvas.winfo_width() <= 1 or self.canvas.winfo_height() <= 1:
                 return
             self.canvas.delete("all")
@@ -203,52 +241,55 @@ class Histogram(ctk.CTkFrame):
 
     def _draw_wlww_indicators(self):
         """Draws the WL line and WW boundary lines superimposed on the histogram canvas."""
-        logger.debug("Drawing WL/WW indicators.")
-        canvas_width = self.canvas.winfo_width()
-        canvas_height = self.canvas.winfo_height()
-        if canvas_width <= 1 or canvas_height <= 1:
+        if not self._is_active():
             return
-        indicator_height = canvas_height - 15
-        if indicator_height <= 0:
-            indicator_height = canvas_height
+        logger.debug("Drawing WL/WW indicators.")
+        with contextlib.suppress(tk.TclError):
+            canvas_width = self.canvas.winfo_width()
+            canvas_height = self.canvas.winfo_height()
+            if canvas_width <= 1 or canvas_height <= 1:
+                return
+            indicator_height = canvas_height - 15
+            if indicator_height <= 0:
+                indicator_height = canvas_height
 
-        wl = self._current_wl.get()
-        ww = self._current_ww.get()
-        ww_min = wl - ww / 2.0
-        ww_max = wl + ww / 2.0
-        ww_min_x = self._intensity_to_x(ww_min, canvas_width)
-        ww_max_x = self._intensity_to_x(ww_max, canvas_width)
-        wl_x = self._intensity_to_x(wl, canvas_width)
+            wl = self._current_wl.get()
+            ww = self._current_ww.get()
+            ww_min = wl - ww / 2.0
+            ww_max = wl + ww / 2.0
+            ww_min_x = self._intensity_to_x(ww_min, canvas_width)
+            ww_max_x = self._intensity_to_x(ww_max, canvas_width)
+            wl_x = self._intensity_to_x(wl, canvas_width)
 
-        self.canvas.create_line(
-            ww_min_x,
-            0,
-            ww_min_x,
-            indicator_height,
-            fill=self._apply_appearance_mode(self.WW_BOUNDARY_LINE_COLOR),
-            width=1,
-            dash=(4, 4),
-            tags="ww_line",
-        )
-        self.canvas.create_line(
-            ww_max_x,
-            0,
-            ww_max_x,
-            indicator_height,
-            fill=self._apply_appearance_mode(self.WW_BOUNDARY_LINE_COLOR),
-            width=1,
-            dash=(4, 4),
-            tags="ww_line",
-        )
-        self.canvas.create_line(
-            wl_x,
-            0,
-            wl_x,
-            indicator_height,
-            fill=self._apply_appearance_mode(self.WL_LINE_COLOR),
-            width=2,
-            tags="wl_line",
-        )
+            self.canvas.create_line(
+                ww_min_x,
+                0,
+                ww_min_x,
+                indicator_height,
+                fill=self._apply_appearance_mode(self.WW_BOUNDARY_LINE_COLOR),
+                width=1,
+                dash=(4, 4),
+                tags="ww_line",
+            )
+            self.canvas.create_line(
+                ww_max_x,
+                0,
+                ww_max_x,
+                indicator_height,
+                fill=self._apply_appearance_mode(self.WW_BOUNDARY_LINE_COLOR),
+                width=1,
+                dash=(4, 4),
+                tags="ww_line",
+            )
+            self.canvas.create_line(
+                wl_x,
+                0,
+                wl_x,
+                indicator_height,
+                fill=self._apply_appearance_mode(self.WL_LINE_COLOR),
+                width=2,
+                tags="wl_line",
+            )
 
     def _draw_axis_labels(self):
         """Draws the min and max intensity labels on the x-axis."""
@@ -259,14 +300,19 @@ class Histogram(ctk.CTkFrame):
             return
         label_y = canvas_height - 5
         label_color = self._apply_appearance_mode(self.AXIS_LABEL_COLOR)
-        label_font = ctk.CTkFont(size=10)
         min_text = f"{self.image_min_intensity:.0f}"
         self.canvas.create_text(
-            5, label_y, text=min_text, anchor="sw", fill=label_color, font=label_font, tags="axis_label"
+            5, label_y, text=min_text, anchor="sw", fill=label_color, font=self._axis_label_font, tags="axis_label"
         )
         max_text = f"{self.image_max_intensity:.0f}"
         self.canvas.create_text(
-            canvas_width - 5, label_y, text=max_text, anchor="se", fill=label_color, font=label_font, tags="axis_label"
+            canvas_width - 5,
+            label_y,
+            text=max_text,
+            anchor="se",
+            fill=label_color,
+            font=self._axis_label_font,
+            tags="axis_label",
         )
 
     def _update_labels(self):
@@ -313,14 +359,14 @@ class Histogram(ctk.CTkFrame):
 
     # --- Event Handlers ---
     def _on_configure(self, event=None):
-        if not self.winfo_exists():
+        if not self._is_active():
             return
         self.after_idle(self._redraw_idle)
 
     def _redraw_idle(self) -> None:
-        with contextlib.suppress(tk.TclError):
-            if self.winfo_exists():
-                self._redraw()
+        if not self._is_active():
+            return
+        self._redraw()
 
     def _on_left_press(self, event):
         self._is_left_dragging = True

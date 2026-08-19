@@ -17,6 +17,8 @@ import tkinter as tk
 
 import customtkinter as ctk
 
+from anonymizer.view.common.fonts import default_char_width_px
+
 # Entry Limits:
 
 # Network Addresses:
@@ -152,7 +154,7 @@ def str_entry(
     ctk_label = ctk.CTkLabel(view, text=label)
     ctk_label.grid(row=row, column=col, padx=pad, pady=(pad, 0), sticky=sticky)
 
-    char_width_px = ctk.CTkFont().measure("A")
+    char_width_px = default_char_width_px()
     width_px = (max_chars + 3) * char_width_px if width_chars == 20 and max_chars else (width_chars + 3) * char_width_px
     if not enabled:
         ctk_entry = ctk.CTkLabel(view, textvariable=str_var)
@@ -223,19 +225,24 @@ def int_entry(
     Returns:
         ctk.IntVar: The integer variable associated with the entry field.
     """
+    # NOTE: `customtkinter.CTkEntry` reads `textvariable` during an internal callback
+    # while the user is typing. Passing a `ctk.IntVar` as `textvariable` crashes
+    # when the entry is temporarily empty (`""`) because `IntVar.get()` throws.
+    #
+    # Fix: bind the entry widget to a `ctk.StringVar` (safe for empty text) and
+    # mirror it into the returned `ctk.IntVar`.
     int_var = ctk.IntVar(view, value=initial_value)
+    text_var = ctk.StringVar(view, value=str(initial_value))
     max_chars = len(str(max))
     # TODO: why is this not accurate?
-    digit_width_px = ctk.CTkFont().measure("A")
+    digit_width_px = default_char_width_px()
     width = (max_chars + 3) * digit_width_px
     ctk_label = ctk.CTkLabel(view, text=label)
     ctk_label.grid(row=row, column=col, padx=pad, pady=(pad, 0), sticky=sticky)
     ctk_entry = ctk.CTkEntry(
         view,
         width=width,
-        # TODO: ctk docs state this should be a string var,
-        # it works with Int var but raises TclError if entry is empty
-        textvariable=int_var,
+        textvariable=text_var,
         validate="key",
         validatecommand=(
             # view.winfo_toplevel().validate_entry_cmd,  # type: ignore
@@ -247,7 +254,24 @@ def int_entry(
     )
 
     def entry_callback(event):
-        return int_entry_change(event, int_var, min, max)
+        # Keep empty text editable and avoid forcing a value while the user clears.
+        if text_var.get() == "":
+            return
+        int_entry_change(event, int_var, min, max)
+        # Normalize the visible text after range clamping on commit.
+        text_var.set(str(int_var.get()))
+
+    def _sync_int_from_text(*_args) -> None:
+        """Keep `int_var` in sync while typing without rewriting user input."""
+        text = text_var.get()
+        if text == "":
+            return
+        try:
+            value = int(text)
+        except ValueError:
+            return
+        if int_var.get() != value:
+            int_var.set(value)
 
     ctk_entry.bind("<Return>", entry_callback)
     ctk_entry.bind("<FocusOut>", entry_callback)
@@ -256,4 +280,6 @@ def int_entry(
     if focus_set:
         ctk_entry.focus_set()
 
+    # Start mirroring text->int for live clamping while typing.
+    text_var.trace_add("write", _sync_int_from_text)
     return int_var

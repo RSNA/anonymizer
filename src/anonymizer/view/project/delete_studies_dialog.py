@@ -6,6 +6,7 @@ import customtkinter as ctk
 
 from anonymizer.controller.project import ProjectController
 from anonymizer.utils.translate import _
+from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 
 logger = logging.getLogger(__name__)
 
@@ -156,12 +157,8 @@ class DeleteStudiesDialog(tk.Toplevel):
         self._on_cancel()
 
     def _on_cancel(self) -> None:
-        """
-        Handle the cancel event.
-        """
-        self.grab_release()
-        self.destroy()
         self._cancelled = True
+        teardown_ctk_toplevel(self, parent=self.master)
 
     def get_input(self) -> int:
         """

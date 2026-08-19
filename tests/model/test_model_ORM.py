@@ -96,7 +96,7 @@ def test_anonymizer_model_initialization(anonymizer_model: AnonymizerModel):
 
 def test_capture_phi_with_mock_ds1(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
     # Store:
-    ptid, anon_ptid, acc_no = anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
+    ptid, anon_ptid, acc_no, date_offset = anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_offset_from_hash=0)
     assert ptid == mock_dataset1.PatientID
     assert anon_ptid == TEST_SITEID + "-000001"
     assert acc_no
@@ -128,7 +128,7 @@ def test_capture_phi_with_mock_ds1(anonymizer_model: AnonymizerModel, mock_datas
 
 def test_capture_phi_with_mock_ds2(anonymizer_model: AnonymizerModel, mock_dataset2: Dataset):
     # Store:
-    ptid, anon_ptid, anon_acc_no = anonymizer_model.capture_phi(source="pytest", ds=mock_dataset2, date_delta=0)
+    ptid, anon_ptid, anon_acc_no, _ = anonymizer_model.capture_phi(source="pytest", ds=mock_dataset2, date_offset_from_hash=0)
     assert ptid == mock_dataset2.PatientID
     assert anon_ptid == TEST_SITEID + "-000001"
     assert anon_acc_no is None
@@ -161,13 +161,13 @@ def test_capture_phi_with_mock_ds1_and_ds2(
     anonymizer_model: AnonymizerModel, mock_dataset1: Dataset, mock_dataset2: Dataset
 ):
     # Store:
-    ptid1, anon_ptid1, anon_acc_no1 = anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
+    ptid1, anon_ptid1, anon_acc_no1, _ = anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_offset_from_hash=0)
     assert ptid1 == mock_dataset1.PatientID
     assert anon_ptid1 == TEST_SITEID + "-000001"
     assert anon_acc_no1
     assert len(anon_acc_no1) == 18
 
-    ptid2, anon_ptid2, anon_acc_no2 = anonymizer_model.capture_phi(source="pytest", ds=mock_dataset2, date_delta=0)
+    ptid2, anon_ptid2, anon_acc_no2, _ = anonymizer_model.capture_phi(source="pytest", ds=mock_dataset2, date_offset_from_hash=0)
     assert ptid2 == mock_dataset2.PatientID
     assert anon_ptid2 == TEST_SITEID + "-000002"
     assert anon_acc_no2 is None
@@ -226,7 +226,7 @@ def test_capture_phi_with_ct_small_filename(anonymizer_model: AnonymizerModel):
     assert ct1_ds
     assert ct1_ds.PatientID
     # Store:
-    ptid1, anon_ptid1, anon_acc_no1 = anonymizer_model.capture_phi(source="pytest", ds=ct1_ds, date_delta=0)
+    ptid1, anon_ptid1, anon_acc_no1, _ = anonymizer_model.capture_phi(source="pytest", ds=ct1_ds, date_offset_from_hash=0)
     assert ptid1 == ct1_ds.PatientID
     assert anon_ptid1 == TEST_SITEID + "-000001"
     assert anon_acc_no1 is None
@@ -262,7 +262,7 @@ def test_capture_phi_with_mr_brain_filename(anonymizer_model: AnonymizerModel):
     assert mr1_ds
     assert mr1_ds.PatientID
     # Store:
-    ptid1, anon_ptid1, anon_acc_no1 = anonymizer_model.capture_phi(source="pytest", ds=mr1_ds, date_delta=0)
+    ptid1, anon_ptid1, anon_acc_no1, _ = anonymizer_model.capture_phi(source="pytest", ds=mr1_ds, date_offset_from_hash=0)
     assert ptid1 == mr1_ds.PatientID
     assert anon_ptid1 == TEST_SITEID + "-000001"
     assert anon_acc_no1
@@ -303,11 +303,11 @@ def test_capture_phi_with_ct_small_and_mr_brain_filename(anonymizer_model: Anony
     assert mr1_ds
     assert mr1_ds.PatientID
     # Store:
-    ptid1, anon_ptid1, anon_acc_no1 = anonymizer_model.capture_phi(source="pytest", ds=ct1_ds, date_delta=10)
+    ptid1, anon_ptid1, anon_acc_no1, _ = anonymizer_model.capture_phi(source="pytest", ds=ct1_ds, date_offset_from_hash=10)
     assert ptid1 == ct1_ds.PatientID
     assert anon_ptid1 == TEST_SITEID + "-000001"
     assert anon_acc_no1 is None
-    ptid2, anon_ptid2, anon_acc_no2 = anonymizer_model.capture_phi(source="pytest", ds=mr1_ds, date_delta=20)
+    ptid2, anon_ptid2, anon_acc_no2, _ = anonymizer_model.capture_phi(source="pytest", ds=mr1_ds, date_offset_from_hash=20)
     assert ptid2 == mr1_ds.PatientID
     assert anon_ptid2 == TEST_SITEID + "-000002"
     assert anon_acc_no2
@@ -334,7 +334,7 @@ def test_capture_phi_with_ct_small_and_mr_brain_filename(anonymizer_model: Anony
 
 
 def test_update_series_description_by_anon_uid(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
-    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_offset_from_hash=0)
     phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
     assert phi is not None
     assert phi.studies is not None
@@ -353,7 +353,7 @@ def test_update_series_description_by_anon_uid(anonymizer_model: AnonymizerModel
 
 
 def test_set_series_harmonized_description(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
-    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_offset_from_hash=0)
     phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
     assert phi is not None
     series = phi.studies[0].series[0]
@@ -380,7 +380,7 @@ def test_set_series_harmonized_description(anonymizer_model: AnonymizerModel, mo
 def test_get_phi_index_face_blur_and_pixel_phi_columns(
     anonymizer_model: AnonymizerModel, mock_dataset1: Dataset
 ) -> None:
-    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_offset_from_hash=0)
     phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
     assert phi is not None
     series = phi.studies[0].series[0]
@@ -403,7 +403,7 @@ def test_get_phi_index_face_blur_and_pixel_phi_columns(
 
 
 def test_get_phi_index_harmonize_false_for_mr_only_study(anonymizer_model: AnonymizerModel, mock_dataset2: Dataset):
-    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset2, date_delta=0)
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset2, date_offset_from_hash=0)
 
     records = anonymizer_model.get_phi_index()
     assert records is not None
@@ -411,7 +411,7 @@ def test_get_phi_index_harmonize_false_for_mr_only_study(anonymizer_model: Anony
 
 
 def test_set_series_face_blur_algorithm(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
-    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_offset_from_hash=0)
     phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
     assert phi is not None
     series = phi.studies[0].series[0]
@@ -422,7 +422,7 @@ def test_set_series_face_blur_algorithm(anonymizer_model: AnonymizerModel, mock_
 
 
 def test_set_series_pixel_phi_scanned(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
-    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_offset_from_hash=0)
     phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
     assert phi is not None
     series = phi.studies[0].series[0]
@@ -437,7 +437,7 @@ def test_set_series_pixel_phi_scanned(anonymizer_model: AnonymizerModel, mock_da
 def test_set_instance_pixel_phi(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
     from anonymizer.model.anonymizer import Instance, _format_pixel_phi
 
-    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_offset_from_hash=0)
     phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
     assert phi is not None
     instance = phi.studies[0].series[0].instances[0]
@@ -458,7 +458,7 @@ def test_set_instance_pixel_phi(anonymizer_model: AnonymizerModel, mock_dataset1
 def test_clear_series_tseg_metadata(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
     from anonymizer.model.anonymizer import format_series_processing_status
 
-    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_offset_from_hash=0)
     phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
     assert phi is not None
     series = phi.studies[0].series[0]
@@ -484,7 +484,7 @@ def test_clear_series_tseg_metadata(anonymizer_model: AnonymizerModel, mock_data
 def test_get_series_processing_status(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
     from anonymizer.model.anonymizer import format_series_processing_status
 
-    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_delta=0)
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_offset_from_hash=0)
     phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
     assert phi is not None
     series = phi.studies[0].series[0]

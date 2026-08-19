@@ -10,6 +10,7 @@ from anonymizer.controller.project import EchoRequest, EchoResponse, ProjectCont
 from anonymizer.model.anonymizer import Totals
 from anonymizer.utils.storage import count_quarantine_images, count_studies_series_images
 from anonymizer.utils.translate import _
+from anonymizer.view.common.fonts import AppFonts
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +27,6 @@ class Dashboard(ctk.CTkFrame):
 
     Attributes:
         AWS_AUTH_TIMEOUT_SECONDS (int): The timeout duration for AWS authentication.
-        LABEL_FONT_SIZE (int): The font size for labels.
-        DATA_FONT_SIZE (int): The font size for data.
         PAD (int): The padding value.
         BUTTON_WIDTH (int): The width of buttons.
         _label_font (ctk.CTkFont): The font for labels.
@@ -47,24 +46,13 @@ class Dashboard(ctk.CTkFrame):
     """
 
     AWS_AUTH_TIMEOUT_SECONDS = 15  # must be > 2 secs
-    LABEL_FONT_SIZE = 32
-    DATA_FONT_SIZE = 48
     PAD = 20
     BUTTON_WIDTH = 100
 
-    def __init__(self, parent, query_callback, export_callback, view_callback, controller: ProjectController):
+    def __init__(self, parent, query_callback, export_callback, view_callback, controller: ProjectController, *, fonts: AppFonts):
         super().__init__(master=parent)
-        self._label_font = ctk.CTkFont(
-            family=ctk.CTkFont().cget("family"),
-            size=self.LABEL_FONT_SIZE,
-            weight="normal",
-        )
-        self._data_font = ctk.CTkFont(
-            family=parent.mono_font.cget("family"),
-            size=self.DATA_FONT_SIZE,
-            weight="normal",
-        )
-        self._mono_font = parent.mono_font
+        self._fonts = fonts
+        self._data_font = fonts.mono_large
         self._last_qsize = 0
         self._latch_max_qsize = 1
         self._query_callback = query_callback
@@ -115,11 +103,11 @@ class Dashboard(ctk.CTkFrame):
         self._databoard = ctk.CTkFrame(self)
         db_row = 0
 
-        self._label_patients = ctk.CTkLabel(self._databoard, font=self._label_font, text=_("Patients"))
-        self._label_studies = ctk.CTkLabel(self._databoard, font=self._label_font, text=_("Studies"))
-        self._label_series = ctk.CTkLabel(self._databoard, font=self._label_font, text=_("Series"))
-        self._label_images = ctk.CTkLabel(self._databoard, font=self._label_font, text=_("Images"))
-        self._label_quarantine = ctk.CTkLabel(self._databoard, font=self._label_font, text=_("Quarantine"))
+        self._label_patients = ctk.CTkLabel(self._databoard, font=self._fonts.label_large, text=_("Patients"))
+        self._label_studies = ctk.CTkLabel(self._databoard, font=self._fonts.label_large, text=_("Studies"))
+        self._label_series = ctk.CTkLabel(self._databoard, font=self._fonts.label_large, text=_("Series"))
+        self._label_images = ctk.CTkLabel(self._databoard, font=self._fonts.label_large, text=_("Images"))
+        self._label_quarantine = ctk.CTkLabel(self._databoard, font=self._fonts.label_large, text=_("Quarantine"))
 
         self._label_patients.grid(row=db_row, column=0, padx=self.PAD, pady=(self.PAD, 0))
         self._label_studies.grid(row=db_row, column=1, padx=self.PAD, pady=(self.PAD, 0))

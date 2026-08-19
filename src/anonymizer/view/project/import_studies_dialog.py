@@ -11,6 +11,7 @@ from anonymizer.controller.project import (
     StudyUIDHierarchy,
 )
 from anonymizer.utils.translate import _
+from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 
 logger = logging.getLogger(__name__)
 
@@ -262,7 +263,7 @@ class ImportStudiesDialog(tk.Toplevel):
         else:
             self._controller.abort_query()
         self.grab_release()
-        self.destroy()
+        teardown_ctk_toplevel(self, parent=self.master)
 
     def get_input(self):
         self.focus()

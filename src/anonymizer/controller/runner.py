@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import gc
 import logging
 from dataclasses import dataclass, field
 from enum import StrEnum, auto
@@ -11,6 +10,7 @@ from typing import Callable, Protocol
 
 from easyocr import Reader
 
+from anonymizer.controller.ai.ocr_whitelist_match import OcrWhitelistMatchSettings
 from anonymizer.controller.ai.remove_pixel_phi import (
     OCR_LANGS,
     OCR_MODEL_DIR,
@@ -54,6 +54,7 @@ class RunOptions:
     whitelist: list[str] | None = None
     project_dir: Path | None = None
     removal_mode: object | None = None  # PixelPhiRemovalMode when batch applies PHI removal
+    whitelist_match: OcrWhitelistMatchSettings | None = None
 
 
 @dataclass
@@ -225,6 +226,11 @@ class RemovePixelPhiRunner:
         paths = sorted(set(work_state.slice_paths))
         logger.info("RemovePixelPhiRunner batch removal: %s instance files", len(paths))
         modality = str(work_state.ds.get("Modality", "") or "") if work_state.ds else ""
+        whitelist_match = options.whitelist_match
+        if whitelist_match is None and options.project_dir is not None:
+            from anonymizer.utils.storage import load_modality_whitelist_match_settings
+
+            whitelist_match = load_modality_whitelist_match_settings(options.project_dir, modality or None)
         for index, dcm_path in enumerate(paths, start=1):
             if work_state.should_cancel():
                 return
@@ -236,6 +242,7 @@ class RemovePixelPhiRunner:
                 project_dir=options.project_dir,
                 modality=modality or None,
                 whitelist=options.whitelist,
+                whitelist_match_settings=whitelist_match,
             )
 
 
@@ -258,7 +265,6 @@ class HarmonizeRunner:
         if session is not None:
             session.__exit__(None, None, None)
         release_working_memory(stage="batch_after_harmonize_phase", preserve_accelerator=True)
-        gc.collect()
 
     def process_series(self, work_state: WorkState, handle: ModelHandle, *, options: RunOptions) -> None:
         raise NotImplementedError("Harmonize batch uses harmonize_and_apply_series from batch_process")
@@ -286,7 +292,6 @@ class FaceBlurRunner:
             session.__exit__(None, None, None)
         clear_predictor_cache()
         release_working_memory(stage="batch_after_face_blur_phase", preserve_accelerator=True)
-        gc.collect()
 
     def process_series(self, work_state: WorkState, handle: ModelHandle, *, options: RunOptions) -> None:
         raise NotImplementedError("Face blur batch uses preview_face_blur from batch_process")

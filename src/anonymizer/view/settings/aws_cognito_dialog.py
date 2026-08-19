@@ -7,6 +7,8 @@ import customtkinter as ctk
 
 from anonymizer.model.project import AWSCognito
 from anonymizer.utils.translate import _
+from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
+from anonymizer.view.common.fonts import default_char_width_px
 from anonymizer.view.common.ux_fields import str_entry
 
 logger = logging.getLogger(__name__)
@@ -60,7 +62,7 @@ class AWSCognitoDialog(tk.Toplevel):
         logger.info("_create_widgets")
         PAD = 10
 
-        char_width_px = ctk.CTkFont().measure("A")
+        char_width_px = default_char_width_px()
         logger.info(f"Font Character Width in pixels: ±{char_width_px}")
 
         self._frame = ctk.CTkFrame(self)
@@ -261,16 +263,14 @@ class AWSCognitoDialog(tk.Toplevel):
                 self.password_var.get(),
             ),
         )
-        self.grab_release()
-        self.destroy()
+        teardown_ctk_toplevel(self, parent=self.master)
 
     def _escape_keypress(self, event):
         logger.info("_escape_pressed")
         self._on_cancel()
 
     def _on_cancel(self):
-        self.grab_release()
-        self.destroy()
+        teardown_ctk_toplevel(self, parent=self.master)
 
     def get_input(self):
         self.focus()

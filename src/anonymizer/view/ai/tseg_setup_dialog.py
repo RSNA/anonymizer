@@ -8,6 +8,7 @@ from typing import Callable
 import customtkinter as ctk
 
 from anonymizer.utils.translate import _
+from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.settings.ai_features_panel import AiFeaturesPanel
 
 
@@ -93,8 +94,7 @@ class AiFeaturesSetupDialog(tk.Toplevel):
         if self._on_changed is not None:
             self._on_changed()
         self._panel.destroy()
-        self.grab_release()
-        self.destroy()
+        teardown_ctk_toplevel(self, parent=self.master)
 
 
 def show_ai_features_setup_dialog(

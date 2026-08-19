@@ -43,6 +43,12 @@ from pydicom.uid import JPEG2000Lossless
 if TYPE_CHECKING:
     from anonymizer.model.anonymizer import AnonymizerModel
 
+from anonymizer.controller.ai.ocr_whitelist_match import (
+    OcrWhitelistMatchSettings,
+    WhitelistMatchResult,
+    describe_match_settings,
+    resolve_whitelist_match,
+)
 from anonymizer.utils.dicom import SUPPORTED_PHOTOMETRIC_INTERPRETATIONS
 
 logging.getLogger("openjpeg").setLevel(logging.WARNING)
@@ -287,6 +293,7 @@ OCR_MIN_BOX_AREA_PER_CHAR = 80
 OCR_SHORT_NUMERIC_MAX_LEN = 4
 OCR_SHORT_NUMERIC_MIN_AREA = 600
 OCR_WHITELIST_SIMILARITY = 0.75
+OCR_WHITELIST_MIN_LENGTH_RATIO = 0.7
 OCR_CANVAS_SIZE_THRESHOLD = 1200
 
 
@@ -364,20 +371,86 @@ def _parse_easyocr_results(
     return ocr_texts
 
 
-def _ocr_text_matches_whitelist(text: str, whitelist: Sequence[str], similarity_threshold: float) -> bool:
+def find_whitelist_match(
+    text: str,
+    whitelist: Sequence[str],
+    similarity_threshold: float,
+    min_length_ratio: float = OCR_WHITELIST_MIN_LENGTH_RATIO,
+) -> WhitelistMatchResult:
     processed = text.upper().strip()
     if not processed:
-        return False
+        return WhitelistMatchResult(matched=False)
+    best_term: str | None = None
+    best_similarity = 0.0
     for whitelist_item in whitelist:
+        if not whitelist_item:
+            continue
+        len_processed = len(processed)
+        len_item = len(whitelist_item)
+        if len_processed and len_item:
+            length_ratio = min(len_processed, len_item) / max(len_processed, len_item)
+            if length_ratio < min_length_ratio:
+                continue
         similarity = difflib.SequenceMatcher(None, processed, whitelist_item).ratio()
-        if similarity > similarity_threshold:
-            return True
-    return False
+        if similarity > similarity_threshold and similarity > best_similarity:
+            best_similarity = similarity
+            best_term = whitelist_item
+    if best_term is not None:
+        return WhitelistMatchResult(matched=True, whitelist_term=best_term, similarity=best_similarity)
+    return WhitelistMatchResult(matched=False)
+
+
+def _ocr_text_matches_whitelist(
+    text: str,
+    whitelist: Sequence[str],
+    similarity_threshold: float,
+    min_length_ratio: float = OCR_WHITELIST_MIN_LENGTH_RATIO,
+) -> bool:
+    return find_whitelist_match(text, whitelist, similarity_threshold, min_length_ratio).matched
+
+
+def _log_whitelist_hits(
+    hits: list[tuple[str, WhitelistMatchResult]],
+    *,
+    settings: OcrWhitelistMatchSettings | None,
+    similarity_threshold: float,
+) -> None:
+    if not hits:
+        return
+    mode_label = describe_match_settings(settings)
+    for text, match in hits:
+        logger.info(
+            "OCR whitelist hid %r (matched whitelist term %r, similarity=%.3f, mode=%s, threshold=%.2f)",
+            text,
+            match.whitelist_term,
+            match.similarity,
+            mode_label,
+            similarity_threshold,
+        )
 
 
 def _is_short_numeric(text: str) -> bool:
     stripped = text.strip()
     return bool(stripped) and stripped.isdigit() and len(stripped) <= OCR_SHORT_NUMERIC_MAX_LEN
+
+
+def _filter_ct_single_char_spurious(
+    detections: Sequence[OCRText],
+    modality: str | None,
+) -> list[OCRText]:
+    """Drop single-character OCR hits on CT — anatomy/noise speckle, not burned-in PHI."""
+    if (modality or "").upper() != "CT":
+        return list(detections)
+    kept: list[OCRText] = []
+    dropped = 0
+    for ocr_text in detections:
+        if len((ocr_text.text or "").strip()) == 1:
+            dropped += 1
+            continue
+        kept.append(ocr_text)
+    if dropped:
+        logger.debug("CT OCR veracity: dropped %d single-character detection(s)", dropped)
+    return kept
 
 
 def filter_ocr_detections(
@@ -391,11 +464,15 @@ def filter_ocr_detections(
     min_box_area_per_char: float = OCR_MIN_BOX_AREA_PER_CHAR,
     short_numeric_min_area: int = OCR_SHORT_NUMERIC_MIN_AREA,
     whitelist_similarity: float = OCR_WHITELIST_SIMILARITY,
+    whitelist_min_length_ratio: float = OCR_WHITELIST_MIN_LENGTH_RATIO,
+    whitelist_match_settings: OcrWhitelistMatchSettings | None = None,
 ) -> list[OCRText]:
     """Drop OCR noise and optional whitelist-matched overlay terms."""
+    if whitelist_match_settings is not None:
+        whitelist_similarity, whitelist_min_length_ratio = resolve_whitelist_match(whitelist_match_settings)
     filtered: list[OCRText] = []
     whitelist_items = [item.upper().strip() for item in (whitelist or []) if str(item).strip()]
-    whitelisted_hits: list[str] = []
+    whitelisted_hits: list[tuple[str, WhitelistMatchResult]] = []
     for ocr_text in detections:
         text = (ocr_text.text or "").strip()
         if ocr_text.prob < min_prob:
@@ -416,16 +493,19 @@ def filter_ocr_detections(
             continue
         if _is_short_numeric(text) and box_area < short_numeric_min_area:
             continue
-        if whitelist_items and _ocr_text_matches_whitelist(text, whitelist_items, whitelist_similarity):
-            whitelisted_hits.append(text)
-            continue
+        if whitelist_items:
+            match = find_whitelist_match(
+                text, whitelist_items, whitelist_similarity, whitelist_min_length_ratio
+            )
+            if match.matched:
+                whitelisted_hits.append((text, match))
+                continue
         filtered.append(ocr_text)
-    if whitelisted_hits:
-        logger.debug(
-            "OCR whitelist filtered %d detection(s): %s",
-            len(whitelisted_hits),
-            whitelisted_hits,
-        )
+    _log_whitelist_hits(
+        whitelisted_hits,
+        settings=whitelist_match_settings,
+        similarity_threshold=whitelist_similarity,
+    )
     return filtered
 
 
@@ -434,51 +514,59 @@ def filter_ocr_whitelist_only(
     whitelist: Sequence[str] | None,
     *,
     whitelist_similarity: float = OCR_WHITELIST_SIMILARITY,
+    whitelist_min_length_ratio: float = OCR_WHITELIST_MIN_LENGTH_RATIO,
+    whitelist_match_settings: OcrWhitelistMatchSettings | None = None,
 ) -> list[OCRText]:
     """Drop whitelist-matched overlay terms only (Series View detect; no noise filter)."""
+    if whitelist_match_settings is not None:
+        whitelist_similarity, whitelist_min_length_ratio = resolve_whitelist_match(whitelist_match_settings)
     whitelist_items = [item.upper().strip() for item in (whitelist or []) if str(item).strip()]
     if not whitelist_items:
         return list(detections)
     filtered: list[OCRText] = []
-    whitelisted_hits: list[str] = []
+    whitelisted_hits: list[tuple[str, WhitelistMatchResult]] = []
     for ocr_text in detections:
         text = (ocr_text.text or "").strip()
-        if _ocr_text_matches_whitelist(text, whitelist_items, whitelist_similarity):
-            whitelisted_hits.append(text)
+        match = find_whitelist_match(text, whitelist_items, whitelist_similarity, whitelist_min_length_ratio)
+        if match.matched:
+            whitelisted_hits.append((text, match))
             continue
         filtered.append(ocr_text)
-    if whitelisted_hits:
-        logger.debug(
-            "OCR whitelist filtered %d detection(s): %s",
-            len(whitelisted_hits),
-            whitelisted_hits,
-        )
+    _log_whitelist_hits(
+        whitelisted_hits,
+        settings=whitelist_match_settings,
+        similarity_threshold=whitelist_similarity,
+    )
     return filtered
 
 
 def load_modality_whitelist(project_dir: Path | None, modality: str | None) -> list[str]:
-    """Load default and project modality whitelists for batch OCR filtering."""
+    """Load the effective modality whitelist for batch OCR filtering.
+
+    When a project whitelist file exists, it replaces packaged defaults (same as
+    Series View). Otherwise defaults are used.
+    """
     if not modality:
         return []
-    from anonymizer.utils.storage import load_default_whitelist, load_project_whitelist
+    from anonymizer.utils.storage import (
+        load_default_whitelist,
+        load_project_whitelist,
+        project_whitelist_path,
+    )
 
-    seen: set[str] = set()
-    items: list[str] = []
-    for loader, args in (
-        (load_default_whitelist, (modality,)),
-        (load_project_whitelist, (project_dir, modality)) if project_dir is not None else (None, ()),
-    ):
-        if loader is None:
-            continue
-        try:
-            for term in loader(*args):
-                key = str(term).upper().strip()
-                if key and key not in seen:
-                    seen.add(key)
-                    items.append(key)
-        except (FileNotFoundError, OSError, ValueError) as exc:
-            logger.debug("Whitelist not loaded from %s: %s", loader.__name__, exc)
-    return items
+    if project_dir is not None:
+        project_path = project_whitelist_path(project_dir, modality)
+        if project_path.is_file():
+            try:
+                return load_project_whitelist(project_dir, modality)
+            except (FileNotFoundError, OSError, ValueError) as exc:
+                logger.debug("Project whitelist not loaded for %s: %s", modality, exc)
+
+    try:
+        return load_default_whitelist(modality)
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        logger.debug("Default whitelist not loaded for %s: %s", modality, exc)
+    return []
 
 
 def _has_voi_lut(ds: Dataset) -> bool:
@@ -497,6 +585,7 @@ def detect_text(
     whitelist: Sequence[str] | None = None,
     modality: str | None = None,
     apply_noise_filter: bool = True,
+    whitelist_match_settings: OcrWhitelistMatchSettings | None = None,
 ) -> list[OCRText] | None:
     """
     Detect text in a 2D uint8 frame.
@@ -515,13 +604,19 @@ def detect_text(
     results = _easyocr_readtext(ocr_reader, pixels, modality=modality)
     parsed = _parse_easyocr_results(results, img_width, img_height)
     if apply_noise_filter:
-        ocr_texts = filter_ocr_detections(parsed, whitelist=whitelist)
+        ocr_texts = filter_ocr_detections(
+            parsed, whitelist=whitelist, whitelist_match_settings=whitelist_match_settings
+        )
     else:
-        ocr_texts = filter_ocr_whitelist_only(parsed, whitelist)
+        ocr_texts = filter_ocr_whitelist_only(
+            parsed, whitelist, whitelist_match_settings=whitelist_match_settings
+        )
+    ocr_texts = _filter_ct_single_char_spurious(ocr_texts, modality)
     logger.debug(
-        "OCR detections after filter: %d (noise_filter=%s)",
+        "OCR detections after filter: %d (noise_filter=%s modality=%s)",
         len(ocr_texts),
         apply_noise_filter,
+        modality,
     )
 
     if draw_boxes_and_text:
@@ -738,6 +833,7 @@ def remove_pixel_phi(
     project_dir: Path | None = None,
     modality: str | None = None,
     whitelist: Sequence[str] | None = None,
+    whitelist_match_settings: OcrWhitelistMatchSettings | None = None,
 ) -> tuple[bool, list[str], int]:
     """
     Description:
@@ -778,6 +874,10 @@ def remove_pixel_phi(
     effective_whitelist = (
         list(whitelist) if whitelist is not None else load_modality_whitelist(project_dir, series_modality or None)
     )
+    if whitelist_match_settings is None and project_dir is not None:
+        from anonymizer.utils.storage import load_modality_whitelist_match_settings
+
+        whitelist_match_settings = load_modality_whitelist_match_settings(project_dir, series_modality or None)
 
     logger.debug(f"Processing Image, SOPClassUID: {ds.SOPClassUID} AnonPatientID: {ds.PatientID}")
 
@@ -939,6 +1039,7 @@ def remove_pixel_phi(
             modality=series_modality,
             whitelist=effective_whitelist,
             apply_noise_filter=True,
+            whitelist_match_settings=whitelist_match_settings,
         ) or []
 
         if not ocr_texts:

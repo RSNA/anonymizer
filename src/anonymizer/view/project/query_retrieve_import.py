@@ -22,6 +22,8 @@ from anonymizer.utils.dicom import (
 )
 from anonymizer.utils.storage import count_study_images
 from anonymizer.utils.translate import _
+from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
+from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.common.ux_fields import (
     dicom_date_chars,
     patient_id_max_chars,
@@ -54,19 +56,10 @@ class QueryView(tk.Toplevel):
         self,
         parent: Dashboard,
         project_controller: ProjectController,
-        mono_font: ctk.CTkFont,
+        fonts: AppFonts,
     ):
-        """
-        Initialize the QueryView.
-
-        Args:
-            parent (Dashboard): The parent window.
-            project_controller (ProjectController): The project controller.
-            mono_font (ctk.CTkFont): The monospaced font.
-
-        """
         super().__init__(master=parent)
-        self._data_font = mono_font  # get mono font from app
+        self._data_font = fonts.mono
         # C-FIND DICOM attributes to display in the results Treeview:
         # Key: DICOM field name, Value: (display name, centre justify, stretch column of resize)
         self._attr_map = {
@@ -829,5 +822,5 @@ class QueryView(tk.Toplevel):
         else:
             self._controller.abort_query()
 
-        self.grab_release()
-        self.destroy()
+        parent = self.master
+        teardown_ctk_toplevel(self, parent=parent)

@@ -11,6 +11,7 @@ import customtkinter as ctk
 
 from anonymizer.controller.anonymizer import AnonymizerController
 from anonymizer.utils.translate import _
+from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 
 logger = logging.getLogger(__name__)
 
@@ -232,7 +233,7 @@ class ImportFilesDialog(tk.Toplevel):
             self._poll_after_id = None
         with contextlib.suppress(tk.TclError):
             self.grab_release()
-        self.destroy()
+        teardown_ctk_toplevel(self, parent=self.master)
 
     def get_input(self) -> int:
         self.focus()

@@ -18,7 +18,8 @@ from anonymizer.model.anonymizer import AnonymizerModel, PHI_IndexRecord
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.ai_batch_process_dialog import AiBatchProcessDialog
 from anonymizer.view.ai.ai_batch_process_options_dialog import show_ai_batch_process_options_dialog
-from anonymizer.view.common.ctk_safe import mark_ctk_window_alive, mark_ctk_window_destroyed
+from anonymizer.view.common.ctk_safe import mark_ctk_window_alive, teardown_ctk_toplevel
+from anonymizer.view.common.fonts import AppFonts, char_width_px
 from anonymizer.view.project.delete_studies_dialog import DeleteStudiesDialog
 from anonymizer.view.series.projection import ProjectionView
 from anonymizer.view.series.series import show_series_view
@@ -34,7 +35,7 @@ class IndexView(tk.Toplevel):
     Args:
         parent (Dashboard): The parent dashboard.
         project_controller (ProjectController): The project controller.
-        mono_font (ctk.CTkFont): The mono font.
+        mono_font (ctk.CTkFont): The mono font used for layout sizing.
         title (str | None): The title of the view.
 
     Attributes:
@@ -48,11 +49,12 @@ class IndexView(tk.Toplevel):
         self,
         parent: Dashboard,
         project_controller: ProjectController,
-        char_width_px: int,
+        fonts: AppFonts,
     ):
         super().__init__(master=parent)
         mark_ctk_window_alive(self)
-        self._char_width_px = char_width_px
+        self._fonts = fonts
+        self._char_width_px = char_width_px(fonts.mono)
         self._parent = parent
         self._controller = project_controller
         self._anon_model: AnonymizerModel = project_controller.anonymizer.model
@@ -222,10 +224,6 @@ class IndexView(tk.Toplevel):
             )
             return
 
-        options_result = show_ai_batch_process_options_dialog(self)
-        if not options_result.confirmed or options_result.options is None:
-            return
-
         studies: list[tuple[str, str]] = [
             (
                 self._phi_index[int(row)].anon_patient_id,
@@ -233,6 +231,16 @@ class IndexView(tk.Toplevel):
             )
             for row in rows_selected
         ]
+
+        options_result = show_ai_batch_process_options_dialog(
+            self,
+            project_dir=self._controller.model.storage_dir,
+            images_dir=self._controller.model.images_dir(),
+            studies=studies,
+        )
+        if not options_result.confirmed or options_result.options is None:
+            return
+
         logger.info(
             "AI Batch Process pressed for %d studies with algorithms %s",
             len(studies),
@@ -304,6 +312,7 @@ class IndexView(tk.Toplevel):
                 anon_model=self._anon_model,
                 base_dir=self._controller.model.images_dir(),
                 phi_records=selected_phi_records,
+                fonts=self._fonts,
             )
         except Exception as e:
             logger.error(f"Error creating ProjectionView: {e}")
@@ -412,6 +421,7 @@ class IndexView(tk.Toplevel):
                     anon_model=self._anon_model,
                     series_path=first_series_path,
                     project_model=self._controller.model,
+                    fonts=self._fonts,
                 )
 
     def _escape_keypress(self, event):
@@ -428,8 +438,7 @@ class IndexView(tk.Toplevel):
             app.index_view = None
 
         self.grab_release()
-        mark_ctk_window_destroyed(self)
-        self.destroy()
+        teardown_ctk_toplevel(self, parent=self.master)
 
     def get_input(self):
         """

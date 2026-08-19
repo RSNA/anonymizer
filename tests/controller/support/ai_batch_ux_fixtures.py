@@ -10,10 +10,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
-from tests.controller.support.nobulela_us_rgb_fixtures import (
-    NOBULELA_BATCH_PIXELS_CHANGED,
-    NOBULELA_BATCH_REMOVED_TEXTS,
-    NOBULELA_US_DCM,
+from tests.controller.support.us_rgb_fixtures import (
+    US_RGB_BATCH_PIXELS_CHANGED,
+    US_RGB_BATCH_REMOVED_TEXTS,
+    US_RGB_DCM,
 )
 
 US_MULTI_FRAME_DCM = (
@@ -108,15 +108,15 @@ BATCH_UX_EXPECTATIONS: tuple[BatchUxExpectation, ...] = (
         series_log_more_count=36,
     ),
     BatchUxExpectation(
-        label="Nobulela US RGB (Study 2/3 · USS ABDOMEN)",
-        dcm_path=str(NOBULELA_US_DCM),
+        label="US RGB single-frame (Study 2/3 · USS ABDOMEN)",
+        dcm_path=str(US_RGB_DCM),
         modality="US",
-        removed_texts=tuple(NOBULELA_BATCH_REMOVED_TEXTS),
-        pixels_changed=NOBULELA_BATCH_PIXELS_CHANGED,
-        instance_log_tokens=tuple(NOBULELA_BATCH_REMOVED_TEXTS[:8]),
-        series_log_tokens=tuple(NOBULELA_BATCH_REMOVED_TEXTS[:6]),
-        instance_log_more_count=16,
-        series_log_more_count=18,
+        removed_texts=tuple(US_RGB_BATCH_REMOVED_TEXTS),
+        pixels_changed=US_RGB_BATCH_PIXELS_CHANGED,
+        instance_log_tokens=tuple(US_RGB_BATCH_REMOVED_TEXTS[:8]),
+        series_log_tokens=tuple(US_RGB_BATCH_REMOVED_TEXTS[:6]),
+        instance_log_more_count=13,
+        series_log_more_count=15,
     ),
     BatchUxExpectation(
         label="Davidson CXR (Study 3/3)",

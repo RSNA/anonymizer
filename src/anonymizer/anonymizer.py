@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import pickle
-import platform
 import shutil
 import signal
 import sys
@@ -23,6 +22,7 @@ from pydicom import dcmread
 from pydicom._version import __version__ as pydicom_version  # type: ignore
 from pynetdicom._version import __version__ as pynetdicom_version  # type: ignore
 
+from anonymizer.controller.process_ctp_lookup import commit_ctp_lookup
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.project import DICOMRuntimeError, ProjectModel
 from anonymizer.utils.logging import init_logging
@@ -34,6 +34,7 @@ from anonymizer.utils.translate import (
     set_language,
 )
 from anonymizer.utils.version import get_version
+from anonymizer.view.common.fonts import AppFonts, create_app_fonts
 from anonymizer.view.common.html_view import HTMLView, is_ai_features_help
 from anonymizer.view.project.export import ExportView
 from anonymizer.view.project.import_files_dialog import ImportFilesDialog
@@ -78,6 +79,9 @@ class Anonymizer(ctk.CTk):
             ctypes.windll.shcore.SetProcessDpiAwareness(1)  # type: ignore
 
         super().__init__()
+        from anonymizer.view.common.ctk_safe import mark_ctk_window_alive
+
+        mark_ctk_window_alive(self)
         self.logs_dir: Path = logs_dir
         ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
         theme = self.THEME_FILE
@@ -87,7 +91,8 @@ class Anonymizer(ctk.CTk):
         ctk.set_default_color_theme(theme)
 
         logging.debug(f"ctk.ThemeManager.theme:\n{pformat(ThemeManager.theme)}")
-        self.mono_font = self._init_mono_font()
+        self.fonts: AppFonts = create_app_fonts()
+        self.mono_font = self.fonts.mono
 
         ctk.AppearanceModeTracker.add(self._appearance_mode_change)
         self._appearance_mode_change(ctk.get_appearance_mode())  # initialize non-ctk widget styles
@@ -127,8 +132,16 @@ class Anonymizer(ctk.CTk):
             self.after_idle(self._apply_welcome_window_size)
 
     def _welcome_target_size(self) -> tuple[int, int]:
-        """Fixed welcome window size in CTk window units (see WelcomeView constants)."""
-        return WelcomeView.WELCOME_WINDOW_WIDTH, WelcomeView.WELCOME_WINDOW_HEIGHT
+        """Welcome window size from current content (adapts to language/text length)."""
+        welcome_view = getattr(self, "welcome_view", None)
+        if welcome_view is None or not welcome_view.winfo_exists():
+            return WelcomeView.WELCOME_WINDOW_WIDTH, WelcomeView.WELCOME_WINDOW_HEIGHT
+        self.update_idletasks()
+        # Convert requested pixel size to CTk window units.
+        req_w = self._reverse_window_scaling(welcome_view.winfo_reqwidth())
+        req_h = self._reverse_window_scaling(welcome_view.winfo_reqheight())
+        # Small shell padding around welcome frame.
+        return int(req_w + 20), int(req_h + 20)
 
     def _enter_welcome_window_phase(self) -> None:
         """Hold welcome dimensions until a project opens or the welcome view is torn down."""
@@ -227,21 +240,29 @@ class Anonymizer(ctk.CTk):
         """Resize the main window to fit the project dashboard after leaving welcome."""
         if self._welcome_window_locked or self.dashboard is None or not self.dashboard.winfo_exists():
             return
-        width, height = self._project_window_target_size()
-        self._current_width = width
-        self._current_height = height
-        self.minsize(width, height)
-        self.maxsize(width, height)
-        self.geometry(f"{width}x{height}")
-        self.resizable(False, False)
-        if log:
-            logger.info(
-                "Project window: size=%sx%s (dashboard req=%sx%s)",
-                width,
-                height,
-                width - Dashboard.PAD * 2,
-                height - Dashboard.PAD * 2,
-            )
+        from anonymizer.view.common.ctk_safe import pause_scaling_tracker_check, resume_scaling_tracker_check
+
+        pause_scaling_tracker_check()
+        try:
+            width, height = self._project_window_target_size()
+            self._current_width = width
+            self._current_height = height
+            self._block_update_dimensions_event = True
+            self.minsize(width, height)
+            self.maxsize(width, height)
+            self.geometry(f"{width}x{height}")
+            self.resizable(False, False)
+            if log:
+                logger.info(
+                    "Project window: size=%sx%s (dashboard req=%sx%s)",
+                    width,
+                    height,
+                    width - Dashboard.PAD * 2,
+                    height - Dashboard.PAD * 2,
+                )
+        finally:
+            self._block_update_dimensions_event = False
+            self.after_idle(resume_scaling_tracker_check)
 
     def _finalize_welcome_window(self) -> None:
         if not hasattr(self, "welcome_view") or not self.welcome_view.winfo_exists():
@@ -256,8 +277,10 @@ class Anonymizer(ctk.CTk):
             self,
             self.change_language,
             self.show_ai_features_setup_dialog,
+            fonts=self.fonts,
         )
-        self.welcome_view.grid(row=0, column=0, sticky="n")
+        # Center the welcome panel so outer margins stay visually even.
+        self.welcome_view.grid(row=0, column=0)
         for delay_ms in (0, 50, 200, 400):
             self.after(delay_ms, self._apply_welcome_window_size)
         self.after(500, self._finalize_welcome_window)
@@ -276,32 +299,6 @@ class Anonymizer(ctk.CTk):
             widget_scaling,
             window_scaling,
         )
-
-    def _init_mono_font(self) -> ctk.CTkFont:
-        # Monospace font defaults:
-        family = "Courier New"
-        size = 12
-        weight = "normal"
-        if "Treeview" in ctk.ThemeManager.theme:
-            os_map = {"Darwin": "macOS", "Windows": "Windows", "Linux": "Linux"}
-            tv_theme = ctk.ThemeManager.theme["Treeview"]
-            if platform.system() not in os_map:
-                logger.error(f"Unsupported OS: {platform.system()}")
-                return ctk.CTkFont(family, size, weight)
-            if "font" in tv_theme:
-                if os_map[platform.system()] not in tv_theme["font"]:
-                    logger.error(f"invalid font OS specified for Treeview theme: {tv_theme}")
-                    return ctk.CTkFont(family, size, weight)
-                tv_theme_font = tv_theme["font"][os_map[platform.system()]]
-                if "family" in tv_theme_font:
-                    family = tv_theme_font["family"]
-                if "size" in tv_theme_font:
-                    size = tv_theme_font["size"]
-                if "weight" in tv_theme_font:
-                    weight = tv_theme_font["weight"]
-
-        logger.info(f"Initialised Monospace Font: {family}, {size}, {weight}")
-        return ctk.CTkFont(family, size, weight)
 
     def _appearance_mode_change(self, mode):
         logger.info(f"Appearance Mode Change: {mode}")
@@ -436,7 +433,7 @@ class Anonymizer(ctk.CTk):
             new_model=True,
             title=_("New Project Settings"),
         )
-        model, java_phi_studies = dlg.get_input()
+        model, java_phi_studies, ctp_lookup_preview = dlg.get_input()
 
         if model is None:
             logger.info("New Project Cancelled")
@@ -491,6 +488,9 @@ class Anonymizer(ctk.CTk):
 
             if java_phi_studies:
                 self.controller.anonymizer.model.process_java_phi_studies(java_phi_studies)
+
+            if ctp_lookup_preview is not None:
+                commit_ctp_lookup(self.controller, ctp_lookup_preview)
 
             self.controller.save_model()
 
@@ -674,6 +674,9 @@ class Anonymizer(ctk.CTk):
         self._release_welcome_window_constraints()
         self.welcome_view.release_images()
         self.welcome_view.destroy()
+        from anonymizer.view.common.ctk_safe import purge_stale_scaling_windows
+
+        purge_stale_scaling_windows()
         log_runtime_status_for_session()
         self.protocol("WM_DELETE_WINDOW", self.close_project)
         self.menu_bar = self.create_project_open_menu_bar()
@@ -684,6 +687,7 @@ class Anonymizer(ctk.CTk):
             export_callback=self.export,
             view_callback=self.view,
             controller=self.controller,
+            fonts=self.fonts,
         )
 
         if not self.dashboard:
@@ -825,7 +829,7 @@ class Anonymizer(ctk.CTk):
         cloned_model.project_name = f"{cloned_model.project_name} (Clone)"
 
         dlg = SettingsDialog(self, cloned_model, new_model=True, title=_("Edit Cloned Project Settings"))
-        (edited_model, null_java_phi) = dlg.get_input()
+        edited_model, null_java_phi, ctp_lookup_preview = dlg.get_input()
         if edited_model is None:
             logger.info("Edit Cloned Project Settings Cancelled")
             return
@@ -844,6 +848,9 @@ class Anonymizer(ctk.CTk):
 
             if not self.controller:
                 raise RuntimeError(_("Fatal Internal Error, Project Controller not created"))
+
+            if ctp_lookup_preview is not None:
+                commit_ctp_lookup(self.controller, ctp_lookup_preview)
 
             self.controller.save_model()
             logger.info(f"Project cloned successfully: {self.controller}")
@@ -1060,7 +1067,7 @@ class Anonymizer(ctk.CTk):
         if self.query_view:
             del self.query_view
 
-        self.query_view = QueryView(self.dashboard, self.controller, self.mono_font)
+        self.query_view = QueryView(self.dashboard, self.controller, self.fonts)
         if not self.query_view:
             logger.error("Internal Error creating QueryView")
             return
@@ -1086,7 +1093,7 @@ class Anonymizer(ctk.CTk):
         if self.export_view:
             del self.export_view
 
-        self.export_view = ExportView(self.dashboard, self.controller, self.mono_font)
+        self.export_view = ExportView(self.dashboard, self.controller, self.fonts)
         if self.export_view is None:
             logger.error("Internal Error creating ExportView")
             return
@@ -1113,7 +1120,7 @@ class Anonymizer(ctk.CTk):
         if self.index_view:
             del self.index_view
 
-        self.index_view = IndexView(self.dashboard, self.controller, self.mono_font.measure("A"))
+        self.index_view = IndexView(self.dashboard, self.controller, self.fonts)
         if self.index_view is None:
             logger.error("Internal Error creating IndexView")
             return
@@ -1145,8 +1152,8 @@ class Anonymizer(ctk.CTk):
             )
             return
 
-        dlg = SettingsDialog(self, self.controller.model, title=_("Project Settings"))
-        (edited_model, null_java_phi) = dlg.get_input()
+        dlg = SettingsDialog(self, self.controller.model, title=_("Project Settings"), project_controller=self.controller)
+        edited_model, null_java_phi, ctp_lookup_preview = dlg.get_input()
         if edited_model is None:
             logger.info("Settings Cancelled")
             return
@@ -1313,9 +1320,10 @@ class Anonymizer(ctk.CTk):
 
 
 def run_GUI(logs_dir):
-    from anonymizer.view.common.ctk_safe import install_safe_scaling_tracker
+    from anonymizer.view.common.ctk_safe import install_safe_scaling_tracker, install_safe_tk_font_destructor
 
     install_safe_scaling_tracker()
+    install_safe_tk_font_destructor()
     try:
         app = Anonymizer(Path(logs_dir))
         app._log_ctk_scaling()

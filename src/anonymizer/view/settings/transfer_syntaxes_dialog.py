@@ -8,6 +8,8 @@ from customtkinter import ThemeManager
 
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.translate import _
+from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
+from anonymizer.view.common.fonts import default_char_width_px
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +105,7 @@ class TransferSyntaxesDialog(tk.Toplevel):
         logger.info("_create_widgets")
         PAD = 10
         ButtonWidth = 100
-        char_width_px = ctk.CTkFont().measure("A")
+        char_width_px = default_char_width_px()
 
         self._tree = ttk.Treeview(
             self,
@@ -216,16 +218,14 @@ class TransferSyntaxesDialog(tk.Toplevel):
 
     def _ok_event(self, event=None):
         self._user_input = self.transfer_syntaxes
-        self.grab_release()
-        self.destroy()
+        teardown_ctk_toplevel(self, parent=self.master)
 
     def _escape_keypress(self, event):
         logger.info("_escape_pressed")
         self._on_cancel()
 
     def _on_cancel(self):
-        self.grab_release()
-        self.destroy()
+        teardown_ctk_toplevel(self, parent=self.master)
 
     def get_input(self):
         self.focus()

@@ -44,6 +44,15 @@ class QuarantineDirectories(Enum):
     INVALID_STORAGE_CLASS = _("Invalid_Storage_Class")
     CAPTURE_PHI_ERROR = _("Capture_PHI_Error")
     STORAGE_ERROR = _("Storage_Error")
+    LOOKUP_MISS = _("Lookup_Miss")
+
+
+class LookupTableMissError(Exception):
+    """Raised when a required CTP lookup patient id is not in lookup_patient."""
+
+    def __init__(self, patient_id: str):
+        self.patient_id = patient_id
+        super().__init__(f"Lookup miss for patient_id={patient_id!r}")
 
 
 class AnonymizerController:
@@ -290,6 +299,26 @@ class AnonymizerController:
 
         return days_to_increment, formatted_date
 
+    def _apply_date_offset(self, value: str, offset_days: int) -> str:
+        """Shift a DICOM date or datetime string by a fixed day offset from CTP lookup."""
+        if not value or not str(value).strip():
+            return value
+        text = str(value).strip()
+        if len(text) >= 14:
+            date_fmt = "%Y%m%d%H%M%S"
+            length = 14
+        elif len(text) >= 8:
+            date_fmt = "%Y%m%d"
+            length = 8
+        else:
+            return value
+        try:
+            dt = datetime.strptime(text[:length], date_fmt)
+            shifted = dt + timedelta(days=offset_days)
+            return shifted.strftime(date_fmt) + text[length:]
+        except ValueError:
+            return value
+
     def extract_first_digit(self, s: str) -> str | None:
         """
         Extracts the first digit from a given string.
@@ -326,7 +355,7 @@ class AnonymizerController:
         return result
 
     def _anonymize_element(
-        self, dataset: Dataset, data_element: DataElement, phi_ptid: str, anon_ptid: str, anon_acc_no: str | None
+        self, dataset: Dataset, data_element: DataElement, phi_ptid: str, anon_ptid: str, anon_acc_no: str | None, date_offset: int,
     ) -> None:
         """
         Anonymizes a data element in the dataset based on the specified operations.
@@ -334,9 +363,14 @@ class AnonymizerController:
         Args:
             dataset (dict): The dataset containing the data elements.
             data_element (DataElement): The data element to be anonymized.
+            phi_ptid (str): The PHI patient ID.
+            anon_ptid (str): The anonymized patient ID.
+            anon_acc_no (str | None): The anonymized account number.
+            date_offset (int): The date offset.
 
         Returns:
             None
+
         """
         # removes parentheses, spaces, and commas from tag
         tag = str(data_element.tag).translate(self._clean_tag_translate_table).upper()
@@ -365,6 +399,11 @@ class AnonymizerController:
         elif "@hashdate" in operation:
             _, anon_date = self._hash_date(value, phi_ptid)
             dataset[tag].value = anon_date
+        elif "@lookup" in operation:
+            if "dateoffset" in operation:
+                dataset[tag].value = self._apply_date_offset(str(value) if value is not None else "", date_offset)
+            else:
+                dataset[tag].value = anon_ptid
         elif "@round" in operation:
             # TODO: operand is named round but it is age format specific, should be renamed round_age
             # create separate operand for round that can be used for other numeric values
@@ -411,14 +450,16 @@ class AnonymizerController:
             except Exception as e:
                 logger.error(f"Error storing source file: {str(e)}")
 
-        # Calculate date delta from StudyDate and PatientID:
-        date_delta = 0
-        if hasattr(ds, "StudyDate") and hasattr(ds, "PatientID"):
-            date_delta, _ = self._hash_date(ds.StudyDate, ds.PatientID)
+        # Calculate date offset from hash of study date and patient ID
+        date_offset_from_hash, _ = self._hash_date(ds.StudyDate, ds.PatientID) if hasattr(ds, "StudyDate") and hasattr(ds, "PatientID") else (0, None)
 
         # Verify valid DICOM format then CAPTURE PHI and source into DATABASE:
         try:
-            phi_ptid, anon_ptid, anon_acc_no = self.model.capture_phi(str(source), ds, date_delta)
+            phi_ptid, anon_ptid, anon_acc_no, date_offset = self.model.capture_phi(
+                str(source), ds, date_offset_from_hash
+            )
+        except KeyError as e:
+            return self._write_dataset_to_quarantine(e, ds, QuarantineDirectories.LOOKUP_MISS)
         except ValueError as e:
             return self._write_dataset_to_quarantine(e, ds, QuarantineDirectories.INVALID_DICOM)
         except Exception as e:
@@ -441,6 +482,7 @@ class AnonymizerController:
                     phi_ptid,
                     anon_ptid,
                     None if anon_acc_no is None else str(anon_acc_no),
+                    date_offset
                 )
 
             ds.walk(pydicom_callback)  # recursive by default, recurses into embedded dataset sequences

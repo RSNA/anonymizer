@@ -564,18 +564,18 @@ def test_hu_gate_truncal_native() -> None:
 
 
 @patch("anonymizer.controller.ai.tseg.contrast.log_memory_usage")
-@patch("anonymizer.controller.ai.tseg.contrast.release_accelerator_memory")
-@patch("anonymizer.controller.ai.tseg.contrast.gc.collect")
+@patch("anonymizer.controller.ai.tseg.contrast.collect_garbage_safe")
+@patch("anonymizer.controller.ai.tseg.contrast.release_accelerator_caches")
 def test_release_before_contrast_gc_and_accelerator(
-    mock_gc: MagicMock,
     mock_release_accel: MagicMock,
+    mock_collect_gc: MagicMock,
     _log_memory: MagicMock,
 ) -> None:
     from anonymizer.controller.ai.tseg.contrast import release_before_contrast
 
     release_before_contrast(stage="test_before_contrast")
     mock_release_accel.assert_called_once()
-    assert mock_gc.call_count == 2
+    mock_collect_gc.assert_called_once_with(generations=2)
 
 
 @patch("anonymizer.controller.ai.tseg.contrast.release_working_memory")

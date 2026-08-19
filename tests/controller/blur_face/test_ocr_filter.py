@@ -9,6 +9,11 @@ import numpy as np
 import pytest
 
 from anonymizer.controller.ai_batch_process import format_remove_pixel_phi_instance_detail
+from anonymizer.controller.ai.ocr_whitelist_match import (
+    OcrWhitelistMatchMode,
+    OcrWhitelistMatchSettings,
+    resolve_whitelist_match,
+)
 from anonymizer.controller.ai.remove_pixel_phi import (
     OCRText,
     PixelPhiRemovalMode,
@@ -66,14 +71,21 @@ def test_filter_ocr_detections_whitelist_fuzzy_match() -> None:
     assert [item.text for item in filtered] == ["PATIENT NAME"]
 
 
+def test_filter_ocr_whitelist_only_table_does_not_match_portable() -> None:
+    """TABLE fuzzy-similarity to PORTABLE must not hide Portable when PORTABLE is removed."""
+    detections = [_ocr("Portable"), _ocr("DAVIDSON")]
+    filtered = filter_ocr_whitelist_only(detections, whitelist=["TABLE", "CHEST"])
+    assert [item.text for item in filtered] == ["Portable", "DAVIDSON"]
+
+
 def test_filter_ocr_detections_whitelist_filters_portable(caplog) -> None:
     detections = [_ocr("Portable", prob=0.9), _ocr("DAVIDSON", prob=0.9)]
     import logging
 
-    with caplog.at_level(logging.DEBUG, logger="anonymizer.controller.ai.remove_pixel_phi"):
+    with caplog.at_level(logging.INFO, logger="anonymizer.controller.ai.remove_pixel_phi"):
         filtered = filter_ocr_detections(detections, whitelist=["PORTABLE"])
     assert [item.text for item in filtered] == ["DAVIDSON"]
-    assert "OCR whitelist filtered 1 detection(s): ['Portable']" in caplog.text
+    assert "OCR whitelist hid 'Portable'" in caplog.text
 
 
 def test_filter_ocr_detections_empty_whitelist_keeps_portable() -> None:
@@ -89,7 +101,7 @@ def test_load_modality_whitelist_cr_includes_portable(monkeypatch: pytest.Monkey
     assert "PORTABLE" in whitelist
 
 
-def test_load_modality_whitelist_merges_project_terms(
+def test_load_modality_whitelist_uses_project_file_when_present(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -101,8 +113,29 @@ def test_load_modality_whitelist_merges_project_terms(
     project_whitelist.write_text("CUSTOMTERM\n", encoding="utf-8")
 
     whitelist = load_modality_whitelist(project_dir, "CR")
-    assert "PORTABLE" in whitelist
     assert "CUSTOMTERM" in whitelist
+    assert "PORTABLE" not in whitelist
+
+
+def test_load_modality_whitelist_project_file_replaces_defaults_without_removed_terms(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pkg_dir = Path(__file__).resolve().parents[3] / "src" / "anonymizer"
+    monkeypatch.chdir(pkg_dir)
+    from anonymizer.utils.storage import load_default_whitelist
+
+    project_dir = tmp_path / "project"
+    defaults_without_bilateral = [
+        term for term in load_default_whitelist("CR") if term != "BILATERAL"
+    ]
+    project_whitelist = project_dir / "whitelists" / "cr.txt"
+    project_whitelist.parent.mkdir(parents=True)
+    project_whitelist.write_text("\n".join(defaults_without_bilateral) + "\n", encoding="utf-8")
+
+    whitelist = load_modality_whitelist(project_dir, "CR")
+    assert "PORTABLE" in whitelist
+    assert "BILATERAL" not in whitelist
 
 
 @patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
@@ -115,6 +148,33 @@ def test_detect_text_applies_noise_filter(mock_readtext: MagicMock) -> None:
     results = detect_text(pixels, MagicMock())
     assert results is not None
     assert [item.text for item in results] == ["SMITH"]
+
+
+@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
+def test_detect_text_ct_drops_single_char_spurious(mock_readtext: MagicMock) -> None:
+    mock_readtext.return_value = [
+        ([(0, 0), (20, 0), (20, 20), (0, 20)], "0", 0.95),
+        ([(0, 0), (20, 0), (20, 20), (0, 20)], "U", 0.92),
+        ([(0, 0), (80, 0), (80, 20), (0, 20)], "SMITH", 0.92),
+    ]
+    pixels = np.zeros((64, 64), dtype=np.uint8)
+    results = detect_text(pixels, MagicMock(), modality="CT", apply_noise_filter=False)
+    assert results is not None
+    assert [item.text for item in results] == ["SMITH"]
+
+
+@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
+def test_detect_text_us_keeps_single_char_detections(mock_readtext: MagicMock) -> None:
+    """US behavior unchanged: single-character hits are not dropped by CT veracity filter."""
+    mock_readtext.return_value = [
+        ([(0, 0), (20, 0), (20, 20), (0, 20)], "0", 0.95),
+        ([(0, 0), (20, 0), (20, 20), (0, 20)], "U", 0.92),
+        ([(0, 0), (80, 0), (80, 20), (0, 20)], "SMITH", 0.92),
+    ]
+    pixels = np.zeros((64, 64), dtype=np.uint8)
+    results = detect_text(pixels, MagicMock(), modality="US", apply_noise_filter=False)
+    assert results is not None
+    assert {item.text for item in results} == {"0", "U", "SMITH"}
 
 
 @patch("anonymizer.controller.ai.remove_pixel_phi.dcmread")
@@ -244,3 +304,138 @@ def test_series_view_display_filter_hides_whitelist_only_not_noise() -> None:
     assert "9" in display_filtered
     assert "23889858" in display_filtered
     assert "9" not in noise_filtered
+
+
+def test_load_modality_whitelist_project_file_without_portable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pkg_dir = Path(__file__).resolve().parents[3] / "src" / "anonymizer"
+    monkeypatch.chdir(pkg_dir)
+    from anonymizer.utils.storage import load_default_whitelist
+
+    project_dir = tmp_path / "project"
+    defaults_without_portable = [term for term in load_default_whitelist("CR") if term != "PORTABLE"]
+    project_whitelist = project_dir / "whitelists" / "cr.txt"
+    project_whitelist.parent.mkdir(parents=True)
+    project_whitelist.write_text("\n".join(defaults_without_portable) + "\n", encoding="utf-8")
+
+    whitelist = load_modality_whitelist(project_dir, "CR")
+    assert "PORTABLE" not in whitelist
+
+
+def test_overlay_filter_includes_portable_when_defaults_omit_portable_and_port(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """DX defaults without PORTABLE/PORT must still draw Portable (TABLE must not fuzzy-match)."""
+    pkg_dir = Path(__file__).resolve().parents[3] / "src" / "anonymizer"
+    monkeypatch.chdir(pkg_dir)
+    from anonymizer.utils.storage import load_default_whitelist
+
+    project_dir = tmp_path / "project"
+    defaults_without_portable = [
+        term for term in load_default_whitelist("CR") if term not in ("PORTABLE", "PORT")
+    ]
+    project_whitelist = project_dir / "whitelists" / "cr.txt"
+    project_whitelist.parent.mkdir(parents=True)
+    project_whitelist.write_text("\n".join(defaults_without_portable) + "\n", encoding="utf-8")
+
+    detections = [_ocr("Portable"), _ocr("DAVIDSON")]
+    effective_whitelist = load_modality_whitelist(project_dir, "CR")
+    drawn = filter_ocr_whitelist_only(detections, whitelist=effective_whitelist)
+    assert "Portable" in [item.text for item in drawn]
+
+
+def test_overlay_filter_includes_portable_when_not_on_effective_whitelist(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Series View draw path: Portable shown when removed from saved project whitelist."""
+    pkg_dir = Path(__file__).resolve().parents[3] / "src" / "anonymizer"
+    monkeypatch.chdir(pkg_dir)
+
+    project_dir = tmp_path / "project"
+    project_whitelist = project_dir / "whitelists" / "cr.txt"
+    project_whitelist.parent.mkdir(parents=True)
+    # Saved project whitelist without PORTABLE or PORT (avoids fuzzy match on PORT).
+    project_whitelist.write_text("AXIAL\nCHEST\n", encoding="utf-8")
+
+    detections = [
+        _ocr("Portable"),
+        _ocr("DAVIDSON"),
+        _ocr("Semi-Upright"),
+    ]
+    effective_whitelist = load_modality_whitelist(project_dir, "CR")
+    drawn = filter_ocr_whitelist_only(detections, whitelist=effective_whitelist)
+    drawn_texts = [item.text for item in drawn]
+
+    assert "Portable" in drawn_texts
+    assert "DAVIDSON" in drawn_texts
+
+
+def test_overlay_filter_excludes_portable_when_on_whitelist() -> None:
+    detections = [_ocr("Portable"), _ocr("DAVIDSON")]
+    drawn = filter_ocr_whitelist_only(detections, whitelist=["PORTABLE", "DAVIDSON"])
+    assert [item.text for item in drawn] == []
+
+
+def test_resolve_whitelist_match_standard_preset() -> None:
+    settings = OcrWhitelistMatchSettings(match_mode=OcrWhitelistMatchMode.STANDARD)
+    similarity, length_ratio = resolve_whitelist_match(settings)
+    assert similarity == 0.75
+    assert length_ratio == 0.70
+
+
+def test_resolve_whitelist_match_custom_preset() -> None:
+    settings = OcrWhitelistMatchSettings(
+        match_mode=OcrWhitelistMatchMode.CUSTOM,
+        similarity=0.82,
+        min_length_ratio=0.65,
+    )
+    similarity, length_ratio = resolve_whitelist_match(settings)
+    assert similarity == 0.82
+    assert length_ratio == 0.65
+
+
+def test_lenient_match_mode_table_can_hide_portable() -> None:
+    detections = [_ocr("Portable"), _ocr("DAVIDSON")]
+    settings = OcrWhitelistMatchSettings(match_mode=OcrWhitelistMatchMode.LENIENT)
+    drawn = filter_ocr_whitelist_only(
+        detections,
+        whitelist=["TABLE", "CHEST"],
+        whitelist_match_settings=settings,
+    )
+    assert "Portable" not in [item.text for item in drawn]
+
+
+def test_strict_match_mode_table_does_not_hide_portable() -> None:
+    detections = [_ocr("Portable"), _ocr("DAVIDSON")]
+    settings = OcrWhitelistMatchSettings(match_mode=OcrWhitelistMatchMode.STRICT)
+    drawn = filter_ocr_whitelist_only(
+        detections,
+        whitelist=["TABLE", "CHEST"],
+        whitelist_match_settings=settings,
+    )
+    assert "Portable" in [item.text for item in drawn]
+
+
+def test_load_save_modality_whitelist_match_settings_round_trip(tmp_path: Path) -> None:
+    from anonymizer.utils.storage import (
+        load_modality_whitelist_match_settings,
+        save_modality_whitelist_match_settings,
+    )
+
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    settings = OcrWhitelistMatchSettings(
+        match_mode=OcrWhitelistMatchMode.CUSTOM,
+        similarity=0.88,
+        min_length_ratio=0.75,
+    )
+    save_modality_whitelist_match_settings(project_dir, "CR", settings)
+    loaded = load_modality_whitelist_match_settings(project_dir, "CR")
+    assert loaded.match_mode == OcrWhitelistMatchMode.CUSTOM
+    assert loaded.similarity == pytest.approx(0.88)
+    assert loaded.min_length_ratio == pytest.approx(0.75)
+

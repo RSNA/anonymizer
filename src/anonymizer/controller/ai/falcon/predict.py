@@ -1,6 +1,5 @@
 """Public FALCON API: result types, eligibility checks, and series prediction."""
 
-import gc
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,6 +10,7 @@ import torch
 from anonymizer.controller.ai.falcon.load_models import load_falcon_models
 from anonymizer.controller.ai.falcon.preprocessing.preprocess_series import preprocess_series
 from anonymizer.controller.ai.falcon.resnet9 import ResNet9
+from anonymizer.utils.memory import collect_garbage_safe
 
 # Determine device: GPU (CUDA) > Apple Silicon (MPS) > CPU
 if torch.cuda.is_available():
@@ -301,10 +301,10 @@ def predict_falcon_series(series_directories: list[Path]) -> list[FalconPredicti
                 torch.cuda.empty_cache()
             elif torch.backends.mps.is_available():
                 torch.mps.empty_cache()
-            gc.collect()
+            collect_garbage_safe()
 
     del part_model, hn_model, ch_model, ab_model
-    gc.collect()
+    collect_garbage_safe()
 
     logger.info("FALCON predict finished: {} result(s)".format(len(predictions)))
     return predictions

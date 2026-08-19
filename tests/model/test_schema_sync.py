@@ -20,6 +20,8 @@ V3_METADATA_COLUMNS = (
     ("studies", "harmonized_description"),
 )
 
+LOOKUP_PATIENT_TABLE = "lookup_patient"
+
 
 def _create_v2_shaped_db(db_path: Path) -> None:
     """Create a pre-v3 anonymizer.db schema (no metadata columns)."""
@@ -110,6 +112,26 @@ def mock_dataset() -> Dataset:
     return ds
 
 
+def test_lookup_patient_table_created_on_open(tmp_path: Path) -> None:
+    db_path = tmp_path / "fresh.db"
+    AnonymizerModel(
+        site_id=TEST_SITEID,
+        uid_root=TEST_UIDROOT,
+        script_path=SCRIPT_PATH,
+        db_url=f"sqlite:///{db_path}",
+    )
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.connect() as conn:
+        tables = {
+            row[0]
+            for row in conn.execute(
+                text("SELECT name FROM sqlite_master WHERE type='table'")
+            )
+        }
+    engine.dispose()
+    assert LOOKUP_PATIENT_TABLE in tables
+
+
 def test_ensure_schema_columns_adds_v3_metadata_columns(tmp_path: Path) -> None:
     db_path = tmp_path / "legacy_v2.db"
     _create_v2_shaped_db(db_path)
@@ -162,7 +184,7 @@ def test_get_phi_index_after_schema_sync(tmp_path: Path, mock_dataset: Dataset) 
         script_path=SCRIPT_PATH,
         db_url=f"sqlite:///{db_path}",
     )
-    model.capture_phi(source="pytest", ds=mock_dataset, date_delta=0)
+    model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=0)
 
     records = model.get_phi_index()
     assert records is not None

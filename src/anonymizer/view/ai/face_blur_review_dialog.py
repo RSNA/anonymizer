@@ -44,7 +44,7 @@ from anonymizer.view.ai.blur_face_results import (
     proposed_face_blur_companion_label,
 )
 from anonymizer.view.ai.harmonize_results import HarmonizeResultsView
-from anonymizer.view.common.ctk_safe import mark_ctk_window_alive, mark_ctk_window_destroyed
+from anonymizer.view.common.ctk_safe import mark_ctk_window_alive, teardown_ctk_toplevel
 from anonymizer.view.common.job_poller import LOAD_POLL_MS, STAGE_POLL_MS, start_background_job
 from anonymizer.view.common.navigation import return_to_phi_index
 from anonymizer.view.series.image import ImageViewer
@@ -147,7 +147,6 @@ class FaceBlurReviewDialog(ctk.CTkToplevel):
         self._stop_load_progress_pulse()
         self._load_work_state.request_cancel()
         self._blur_work_state.request_cancel()
-        mark_ctk_window_destroyed(self)
         super().destroy()
 
     def _progress_bar_width(self) -> int:
@@ -351,10 +350,10 @@ class FaceBlurReviewDialog(ctk.CTkToplevel):
         self.image_viewer.segmentation_overlay_alpha = FACE_MASK_OVERLAY_ALPHA
         self.image_viewer.active_layers.discard(LayerType.TEXT)
         self.image_viewer.active_layers.discard(LayerType.USER_RECT)
-        self.image_viewer.active_layers.add(LayerType.SEGMENTATIONS)
+        self.image_viewer.active_layers.discard(LayerType.SEGMENTATIONS)
         self.image_viewer.attach_companion_stack(
             slice_stack.copy(),
-            primary_label=_("Current — face region (green)"),
+            primary_label=_("Current"),
             companion_label=proposed_face_blur_companion_label(self._blur_mode),
         )
         self.image_viewer.set_wlww_sync(review_wl, review_ww)
@@ -533,6 +532,10 @@ class FaceBlurReviewDialog(ctk.CTkToplevel):
             segmentations = mask_slice_segmentations(preview.mask, slice_index)
             if segmentations:
                 segmentations_by_slice[slice_index] = segmentations
+
+        viewer.active_layers.add(LayerType.SEGMENTATIONS)
+        if viewer._primary_label is not None:
+            viewer._primary_label.configure(text=_("Current — face region (green)"))
         viewer.set_segmentation_overlays(segmentations_by_slice)
         viewer.update_companion_stack(blurred_frames)
 
@@ -622,9 +625,8 @@ class FaceBlurReviewDialog(ctk.CTkToplevel):
         if hasattr(self, "image_viewer"):
             with contextlib.suppress(tk.TclError):
                 self.image_viewer.release_resources()
-        with contextlib.suppress(tk.TclError):
-            self.grab_release()
-        self.destroy()
+        parent = self._parent
+        teardown_ctk_toplevel(self, parent=parent)
         return_to_phi_index(self._parent)
 
     def _cancel_after(self, attr: str) -> None:

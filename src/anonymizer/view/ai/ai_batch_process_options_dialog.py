@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import tkinter as tk
+from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 import customtkinter as ctk
 
@@ -32,6 +34,8 @@ from anonymizer.view.ai.blur_face_results import (
     face_blur_mode_from_menu_label,
     face_blur_mode_menu_values,
 )
+from anonymizer.view.ai.modality_whitelist_preview_dialog import show_modality_whitelist_preview_dialog
+from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 
 
 @dataclass(frozen=True)
@@ -42,6 +46,8 @@ class AiBatchProcessOptionsResult:
 
 class AiBatchProcessOptionsDialog(tk.Toplevel):
     PAD = 10
+    SECTION_PAD = 8
+    SECTION_GAP = 10
     BUTTON_WIDTH = 100
     BUTTON_TOP_PAD = 20
     INTRO_WRAP = 480
@@ -67,12 +73,22 @@ class AiBatchProcessOptionsDialog(tk.Toplevel):
         ),
     )
 
-    def __init__(self, parent) -> None:
+    def __init__(
+        self,
+        parent,
+        *,
+        project_dir: Path,
+        images_dir: Path,
+        studies: Sequence[tuple[str, str]],
+    ) -> None:
         super().__init__(master=parent)
+        self._project_dir = project_dir
+        self._images_dir = images_dir
+        self._studies = list(studies)
         self._result = AiBatchProcessOptionsResult(confirmed=False)
         self._vars: dict[AiBatchAlgorithm, tk.IntVar] = {}
         self._available: list[AiBatchAlgorithm] = []
-        self._hint_frames: dict[AiBatchAlgorithm, ctk.CTkFrame] = {}
+        self._section_bodies: dict[AiBatchAlgorithm, ctk.CTkFrame] = {}
 
         self.title(_("AI Batch Process"))
         self.resizable(False, False)
@@ -85,11 +101,101 @@ class AiBatchProcessOptionsDialog(tk.Toplevel):
         self.grab_set()
         self._validate_selection()
 
+    def _create_algorithm_section(self, parent: ctk.CTkFrame, row: int) -> ctk.CTkFrame:
+        section = ctk.CTkFrame(parent, border_width=1, corner_radius=8)
+        section.grid(
+            row=row,
+            column=0,
+            columnspan=2,
+            padx=self.PAD,
+            pady=(0, self.SECTION_GAP),
+            sticky="ew",
+        )
+        section.grid_columnconfigure(0, weight=1)
+        return section
+
+    def _build_pixel_phi_options(self, parent: ctk.CTkFrame, pad: int) -> None:
+        self._pixel_phi_mode_var = tk.StringVar(value=pixel_phi_removal_mode_menu_values()[0])
+        mode_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        mode_frame.grid(row=0, column=0, pady=(self.SECTION_PAD, 0), sticky="w")
+        mode_row = ctk.CTkFrame(mode_frame, fg_color="transparent")
+        mode_row.pack(anchor="w")
+        ctk.CTkLabel(mode_row, text=_("Removal method") + ":").pack(side="left", padx=(0, pad))
+        self._pixel_phi_mode_menu = ctk.CTkOptionMenu(
+            mode_row,
+            variable=self._pixel_phi_mode_var,
+            values=list(pixel_phi_removal_mode_menu_values()),
+            dynamic_resizing=False,
+        )
+        self._pixel_phi_mode_menu.pack(side="left")
+        ctk.CTkLabel(
+            mode_frame,
+            text=_("Black out is recommended for de-identification, but can influence ML training."),
+            anchor="w",
+            justify="left",
+            wraplength=self.INTRO_WRAP - pad * 4,
+            text_color="gray60",
+        ).pack(anchor="w", pady=(4, 0))
+
+        self._use_modality_whitelist_var = tk.IntVar(value=1)
+        whitelist_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        whitelist_frame.grid(row=1, column=0, pady=(self.SECTION_PAD, 0), sticky="w")
+        controls_row = ctk.CTkFrame(whitelist_frame, fg_color="transparent")
+        controls_row.pack(anchor="w")
+        self._use_modality_whitelist_checkbox = ctk.CTkCheckBox(
+            controls_row,
+            text=_("Use modality whitelist"),
+            variable=self._use_modality_whitelist_var,
+            command=self._update_pixel_phi_whitelist_controls,
+        )
+        self._use_modality_whitelist_checkbox.pack(side="left")
+        self._view_whitelist_button = ctk.CTkButton(
+            controls_row,
+            text=_("View whitelist") + "…",
+            command=self._view_whitelist_button_clicked,
+        )
+        self._view_whitelist_button.pack(side="left", padx=(pad, 0))
+        ctk.CTkLabel(
+            whitelist_frame,
+            text=_(
+                "Whitelist terms combine packaged defaults with project overrides saved in Series View."
+            ),
+            anchor="w",
+            justify="left",
+            wraplength=self.INTRO_WRAP - pad * 4,
+            text_color="gray60",
+        ).pack(anchor="w", pady=(4, 0))
+        self._pixel_phi_whitelist_disabled_label = ctk.CTkLabel(
+            whitelist_frame,
+            text=_("All detected OCR text will be removed when the whitelist is disabled."),
+            anchor="w",
+            justify="left",
+            wraplength=self.INTRO_WRAP - pad * 4,
+            text_color="gray60",
+        )
+
+    def _build_face_blur_options(self, parent: ctk.CTkFrame, pad: int) -> None:
+        self._blur_mode_var = tk.StringVar(value=face_blur_mode_menu_values()[0])
+        mode_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        mode_frame.grid(row=0, column=0, pady=(self.SECTION_PAD, 0), sticky="w")
+        mode_row = ctk.CTkFrame(mode_frame, fg_color="transparent")
+        mode_row.pack(anchor="w")
+        ctk.CTkLabel(mode_row, text=_("Face blur mode") + ":").pack(side="left", padx=(0, pad))
+        self._blur_mode_menu = ctk.CTkOptionMenu(
+            mode_row,
+            variable=self._blur_mode_var,
+            values=list(face_blur_mode_menu_values()),
+            dynamic_resizing=False,
+        )
+        self._blur_mode_menu.pack(side="left")
+
     def _create_widgets(self) -> None:
         pad = self.PAD
+        section_pad = self.SECTION_PAD
 
         self._frame = ctk.CTkFrame(self)
         self._frame.grid(row=0, column=0, padx=pad, pady=pad, sticky="nw")
+        self._frame.grid_columnconfigure(0, weight=1)
 
         row = 0
 
@@ -99,108 +205,49 @@ class AiBatchProcessOptionsDialog(tk.Toplevel):
             anchor="w",
             justify="left",
             wraplength=self.INTRO_WRAP,
-        ).grid(row=row, column=0, columnspan=2, padx=pad, pady=(pad, pad), sticky="nw")
+        ).grid(row=row, column=0, columnspan=2, padx=pad, pady=(pad, pad + self.SECTION_GAP), sticky="nw")
 
         row += 1
-
-        self._pixel_phi_mode_frame = ctk.CTkFrame(self._frame, fg_color="transparent")
-        self._pixel_phi_mode_var = tk.StringVar(value=pixel_phi_removal_mode_menu_values()[0])
-        ctk.CTkLabel(self._pixel_phi_mode_frame, text=_("Removal method") + ":").grid(
-            row=0,
-            column=0,
-            padx=(0, pad),
-            sticky="w",
-        )
-        self._pixel_phi_mode_menu = ctk.CTkOptionMenu(
-            self._pixel_phi_mode_frame,
-            variable=self._pixel_phi_mode_var,
-            values=list(pixel_phi_removal_mode_menu_values()),
-            dynamic_resizing=False,
-        )
-        self._pixel_phi_mode_menu.grid(row=0, column=1, sticky="w")
-
-        ctk.CTkLabel(
-            self._pixel_phi_mode_frame,
-            text=_("Black out is recommended for de-identification, but can influence ML training."),
-            anchor="w",
-            justify="left",
-            wraplength=self.INTRO_WRAP - pad * 2,
-            text_color="gray60",
-        ).grid(row=1, column=0, columnspan=2, padx=(0, pad), pady=(4, 0), sticky="nw")
-
-        self._blur_mode_frame = ctk.CTkFrame(self._frame, fg_color="transparent")
-        self._blur_mode_var = tk.StringVar(value=face_blur_mode_menu_values()[0])
-        ctk.CTkLabel(self._blur_mode_frame, text=_("Face blur mode") + ":").grid(
-            row=0,
-            column=0,
-            padx=(0, pad),
-            sticky="w",
-        )
-        self._blur_mode_menu = ctk.CTkOptionMenu(
-            self._blur_mode_frame,
-            variable=self._blur_mode_var,
-            values=list(face_blur_mode_menu_values()),
-            dynamic_resizing=False,
-        )
-        self._blur_mode_menu.grid(row=0, column=1, sticky="w")
-
-        sub_option_indent = pad * 2
 
         for algorithm, label, limitation, allowed_fn in self._ALGORITHM_ROWS:
             if not allowed_fn():
                 continue
             self._available.append(algorithm)
+
+            section = self._create_algorithm_section(self._frame, row)
+            row += 1
+
             var = tk.IntVar(value=1)
             self._vars[algorithm] = var
-            checkbox = ctk.CTkCheckBox(
-                self._frame,
+            ctk.CTkCheckBox(
+                section,
                 text=label,
                 variable=var,
                 command=self._validate_selection,
-            )
-            checkbox.grid(row=row, column=0, columnspan=2, padx=pad, pady=(0, 4), sticky="w")
-            row += 1
+            ).grid(row=0, column=0, padx=section_pad, pady=(section_pad, 4), sticky="w")
 
-            hint_frame = ctk.CTkFrame(self._frame, fg_color="transparent")
+            body = ctk.CTkFrame(section, fg_color="transparent")
+            body.grid(row=1, column=0, padx=section_pad, pady=(0, section_pad), sticky="nw")
+            body.grid_columnconfigure(0, weight=1)
+            self._section_bodies[algorithm] = body
+
             ctk.CTkLabel(
-                hint_frame,
+                body,
                 text=limitation,
                 anchor="w",
                 justify="left",
-                wraplength=self.INTRO_WRAP - sub_option_indent,
+                wraplength=self.INTRO_WRAP - pad * 4,
                 text_color="gray60",
             ).grid(row=0, column=0, sticky="nw")
-            hint_frame.grid(
-                row=row,
-                column=0,
-                columnspan=2,
-                padx=(sub_option_indent, pad),
-                pady=(0, 6),
-                sticky="nw",
-            )
-            self._hint_frames[algorithm] = hint_frame
-            row += 1
 
             if algorithm is AiBatchAlgorithm.REMOVE_PIXEL_PHI:
-                self._pixel_phi_mode_frame.grid(
-                    row=row,
-                    column=0,
-                    columnspan=2,
-                    padx=(sub_option_indent, pad),
-                    pady=(0, pad),
-                    sticky="nw",
-                )
-                row += 1
+                options_parent = ctk.CTkFrame(body, fg_color="transparent")
+                options_parent.grid(row=1, column=0, sticky="nw")
+                self._build_pixel_phi_options(options_parent, pad)
             elif algorithm is AiBatchAlgorithm.FACE_BLUR:
-                self._blur_mode_frame.grid(
-                    row=row,
-                    column=0,
-                    columnspan=2,
-                    padx=(sub_option_indent, pad),
-                    pady=(0, pad),
-                    sticky="nw",
-                )
-                row += 1
+                options_parent = ctk.CTkFrame(body, fg_color="transparent")
+                options_parent.grid(row=1, column=0, sticky="nw")
+                self._build_face_blur_options(options_parent, pad)
 
         button_frame = ctk.CTkFrame(self._frame, fg_color="transparent")
         button_frame.grid(
@@ -232,37 +279,46 @@ class AiBatchProcessOptionsDialog(tk.Toplevel):
             self._vars[AiBatchAlgorithm.FACE_BLUR].trace_add("write", self._update_option_visibility)
         if AiBatchAlgorithm.REMOVE_PIXEL_PHI in self._vars:
             self._vars[AiBatchAlgorithm.REMOVE_PIXEL_PHI].trace_add("write", self._update_option_visibility)
+            self._use_modality_whitelist_var.trace_add("write", self._update_pixel_phi_whitelist_controls)
         if AiBatchAlgorithm.HARMONIZE in self._vars:
             self._vars[AiBatchAlgorithm.HARMONIZE].trace_add("write", self._update_option_visibility)
         self._update_option_visibility()
 
+    def _set_section_body_visible(self, algorithm: AiBatchAlgorithm, *, visible: bool) -> None:
+        body = self._section_bodies.get(algorithm)
+        if body is None:
+            return
+        if visible:
+            body.grid()
+        else:
+            body.grid_remove()
+
     def _update_option_visibility(self, *_args) -> None:
         for algorithm, var in self._vars.items():
-            show = var.get() == 1
-            hint_frame = self._hint_frames.get(algorithm)
-            if hint_frame is not None:
-                if show:
-                    hint_frame.grid()
-                else:
-                    hint_frame.grid_remove()
-        self._update_blur_mode_visibility()
-        self._update_pixel_phi_mode_visibility()
+            self._set_section_body_visible(algorithm, visible=var.get() == 1)
+        self._update_pixel_phi_whitelist_controls()
 
-    def _update_blur_mode_visibility(self, *_args) -> None:
-        show = AiBatchAlgorithm.FACE_BLUR in self._vars and self._vars[AiBatchAlgorithm.FACE_BLUR].get() == 1
-        if show:
-            self._blur_mode_frame.grid()
-        else:
-            self._blur_mode_frame.grid_remove()
-
-    def _update_pixel_phi_mode_visibility(self, *_args) -> None:
-        show = (
-            AiBatchAlgorithm.REMOVE_PIXEL_PHI in self._vars and self._vars[AiBatchAlgorithm.REMOVE_PIXEL_PHI].get() == 1
+    def _update_pixel_phi_whitelist_controls(self, *_args) -> None:
+        pixel_phi_selected = (
+            AiBatchAlgorithm.REMOVE_PIXEL_PHI in self._vars
+            and self._vars[AiBatchAlgorithm.REMOVE_PIXEL_PHI].get() == 1
         )
-        if show:
-            self._pixel_phi_mode_frame.grid()
+        if not pixel_phi_selected or not hasattr(self, "_view_whitelist_button"):
+            return
+        use_whitelist = self._use_modality_whitelist_var.get() == 1
+        self._view_whitelist_button.configure(state="normal" if use_whitelist else "disabled")
+        if use_whitelist:
+            self._pixel_phi_whitelist_disabled_label.grid_remove()
         else:
-            self._pixel_phi_mode_frame.grid_remove()
+            self._pixel_phi_whitelist_disabled_label.pack(anchor="w", pady=(4, 0))
+
+    def _view_whitelist_button_clicked(self) -> None:
+        show_modality_whitelist_preview_dialog(
+            self,
+            project_dir=self._project_dir,
+            images_dir=self._images_dir,
+            studies=self._studies,
+        )
 
     def _selected_algorithms(self) -> tuple[AiBatchAlgorithm, ...]:
         selected = [algo for algo, var in self._vars.items() if var.get() == 1]
@@ -289,6 +345,7 @@ class AiBatchProcessOptionsDialog(tk.Toplevel):
                 algorithms=algorithms,
                 blur_mode=blur_mode,
                 pixel_phi_removal_mode=pixel_phi_removal_mode,
+                use_modality_whitelist=self._use_modality_whitelist_var.get() == 1,
             ),
         )
         self._close()
@@ -301,8 +358,8 @@ class AiBatchProcessOptionsDialog(tk.Toplevel):
         self._close()
 
     def _close(self) -> None:
-        self.grab_release()
-        self.destroy()
+        parent = self.master
+        teardown_ctk_toplevel(self, parent=parent)
 
     def get_input(self) -> AiBatchProcessOptionsResult:
         self.focus()
@@ -310,8 +367,19 @@ class AiBatchProcessOptionsDialog(tk.Toplevel):
         return self._result
 
 
-def show_ai_batch_process_options_dialog(parent) -> AiBatchProcessOptionsResult:
+def show_ai_batch_process_options_dialog(
+    parent,
+    *,
+    project_dir: Path,
+    images_dir: Path,
+    studies: Sequence[tuple[str, str]],
+) -> AiBatchProcessOptionsResult:
     if not any(allowed() for _, _, _, allowed in AiBatchProcessOptionsDialog._ALGORITHM_ROWS):
         return AiBatchProcessOptionsResult(confirmed=False)
-    dialog = AiBatchProcessOptionsDialog(parent)
+    dialog = AiBatchProcessOptionsDialog(
+        parent,
+        project_dir=project_dir,
+        images_dir=images_dir,
+        studies=studies,
+    )
     return dialog.get_input()

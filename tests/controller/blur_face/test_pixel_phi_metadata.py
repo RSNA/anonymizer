@@ -81,7 +81,7 @@ def test_apply_instance_pixel_phi_delegates_to_model(mock_dataset: Dataset, tmp_
         script_path=Path("src/anonymizer/assets/scripts/default-anonymizer.script"),
         db_url=f"sqlite:///{db_path}",
     )
-    model.capture_phi(source="pytest", ds=mock_dataset, date_delta=0)
+    model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=0)
     phi = model.get_phi_by_phi_patient_id(mock_dataset.PatientID)
     assert phi is not None
     instance = phi.studies[0].series[0].instances[0]
@@ -109,7 +109,7 @@ def test_apply_instance_pixel_phi_for_dcm_reads_sop_uid(
         script_path=Path("src/anonymizer/assets/scripts/default-anonymizer.script"),
         db_url=f"sqlite:///{db_path}",
     )
-    model.capture_phi(source="pytest", ds=mock_dataset, date_delta=0)
+    model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=0)
     phi = model.get_phi_by_phi_patient_id(mock_dataset.PatientID)
     assert phi is not None
     instance = phi.studies[0].series[0].instances[0]

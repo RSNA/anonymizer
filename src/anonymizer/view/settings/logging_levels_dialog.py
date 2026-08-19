@@ -7,6 +7,7 @@ import customtkinter as ctk
 
 from anonymizer.model.project import LoggingLevels
 from anonymizer.utils.translate import _
+from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 
 logger = logging.getLogger(__name__)
 
@@ -256,16 +257,14 @@ class LoggingLevelsDialog(tk.Toplevel):
             sql=self.sql_debug_var.get(),
             store_dicom_source=self.store_incoming_var.get(),
         )
-        self.grab_release()
-        self.destroy()
+        teardown_ctk_toplevel(self, parent=self.master)
 
     def _escape_keypress(self, event):
         logger.info("_escape_pressed")
         self._on_cancel()
 
     def _on_cancel(self):
-        self.grab_release()
-        self.destroy()
+        teardown_ctk_toplevel(self, parent=self.master)
 
     def get_input(self):
         """

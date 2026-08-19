@@ -593,9 +593,11 @@ def test_tseg_batch_session_preloads_once(
     mock_preload.assert_called_once()
 
 
-@patch("anonymizer.controller.ai.tseg.contrast.release_accelerator_memory")
+@patch("anonymizer.controller.ai.tseg.contrast.collect_garbage_safe")
+@patch("anonymizer.controller.ai.tseg.contrast.release_accelerator_caches")
 def test_release_working_memory_skips_accelerator_clear_during_batch(
-    mock_release_accelerator: MagicMock,
+    mock_release_caches: MagicMock,
+    mock_gc: MagicMock,
 ) -> None:
     from anonymizer.controller.ai.tseg.contrast import release_working_memory
     from anonymizer.controller.ai.tseg.model_cache import tseg_batch_session
@@ -604,7 +606,11 @@ def test_release_working_memory_skips_accelerator_clear_during_batch(
         with patch("anonymizer.controller.ai.tseg.model_cache._install_predictor_cache_patch"):
             with tseg_batch_session(preload=False):
                 release_working_memory(stage="during_batch")
-                mock_release_accelerator.assert_not_called()
+                mock_release_caches.assert_called()
+                mock_gc.assert_not_called()
 
+    mock_gc.reset_mock()
+    mock_release_caches.reset_mock()
     release_working_memory(stage="after_batch")
-    mock_release_accelerator.assert_called_once()
+    mock_release_caches.assert_called_once()
+    mock_gc.assert_called_once()

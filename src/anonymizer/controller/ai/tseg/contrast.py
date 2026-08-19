@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import gc
 import importlib.resources
 import json
 import logging
@@ -16,6 +15,7 @@ from pathlib import Path
 import numpy as np
 
 from anonymizer.controller.ai.tseg.runtime import sequential_ml_context
+from anonymizer.utils.memory import collect_garbage_safe, release_accelerator_caches
 
 logger = logging.getLogger(__name__)
 
@@ -166,20 +166,8 @@ def verify_xgboost_runtime() -> None:
 
 def release_accelerator_memory() -> None:
     """Release PyTorch accelerator memory after a heavy inference step."""
-    try:
-        import torch
-    except ImportError:
-        gc.collect()
-        return
-
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-        torch.cuda.synchronize()
-    elif torch.backends.mps.is_available():
-        torch.mps.empty_cache()
-        if hasattr(torch.mps, "synchronize"):
-            torch.mps.synchronize()
-    gc.collect()
+    release_accelerator_caches()
+    collect_garbage_safe()
 
 
 def log_memory_usage(stage: str) -> None:
@@ -197,9 +185,9 @@ def release_working_memory(*, stage: str = "", preserve_accelerator: bool = Fals
     """Release accelerator caches and run GC between harmonize pipeline stages."""
     from anonymizer.controller.ai.tseg.model_cache import preserve_accelerator_memory
 
+    release_accelerator_caches()
     if not preserve_accelerator and not preserve_accelerator_memory():
-        release_accelerator_memory()
-    gc.collect()
+        collect_garbage_safe()
     if stage:
         log_memory_usage(stage)
 
@@ -209,11 +197,10 @@ def release_before_contrast(*, stage: str = "before_contrast") -> None:
     Release anatomy-segmentation RAM and nnU-Net/PyTorch caches before contrast inference.
 
     Contrast loads a separate TotalSegmentator statistics pass; clearing anatomy allocations
-    first reduces peak memory. Two ``gc.collect()`` passes help drop MPS/CUDA tensor cycles.
+    first reduces peak memory. Two GC passes help drop MPS/CUDA tensor cycles on the main thread.
     """
-    release_accelerator_memory()
-    gc.collect()
-    gc.collect()
+    release_accelerator_caches()
+    collect_garbage_safe(generations=2)
     log_memory_usage(stage)
 
 

@@ -53,7 +53,7 @@ def register_series_with_anonymizer(series_dir: Path, model: AnonymizerModel) ->
 
     phi_patient_id = str(pydicom.dcmread(paths[0]).PatientID)
     for path in paths:
-        model.capture_phi(source="pytest", ds=pydicom.dcmread(path), date_delta=0)
+        model.capture_phi(source="pytest", ds=pydicom.dcmread(path), date_offset_from_hash=0)
 
     phi = model.get_phi_by_phi_patient_id(phi_patient_id)
     if phi is None:

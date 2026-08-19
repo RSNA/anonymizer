@@ -3,18 +3,25 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
 from unittest.mock import MagicMock, patch
 
 import pytest
 from pydicom.dataset import Dataset
 
+from anonymizer.controller.ai.ocr_whitelist_match import (
+    OcrWhitelistMatchMode,
+    OcrWhitelistMatchSettings,
+)
 from anonymizer.controller.ai_batch_process import (
     AiBatchAlgorithm,
     AiBatchOutcome,
     AiBatchProcessOptions,
     _apply_face_blur_series,
+    _apply_remove_pixel_phi_series,
     _log_workflow_progress_step,
     ai_batch_process,
+    effective_modality_whitelists,
     enumerate_series_for_studies,
     face_blur_skip_counts_as_complete,
     format_ai_batch_completion_summary,
@@ -27,12 +34,15 @@ from anonymizer.controller.ai_batch_process import (
     format_batch_series_header,
     format_batch_step_subline,
     format_batch_workflow_log_line,
+    format_modality_whitelist_preview,
     format_remove_pixel_phi_instance_detail,
     format_remove_pixel_phi_series_message,
+    modalities_in_selected_studies,
     normalize_selected_algorithms,
     series_needs_face_blur,
     skip_message_for_face_blur_series,
     strip_progress_pct_suffix,
+    whitelist_for_batch_ocr,
 )
 from anonymizer.controller.ai.blur_face import (
     FaceBlurGateDecision,
@@ -900,3 +910,222 @@ def test_format_ai_batch_completion_summary_face_blur_complete_not_failed() -> N
     message = format_ai_batch_completion_summary(summary)
     assert message == ("Complete: 6 series\n  Harmonize: 6 modified\n  Face De-identify: 4 modified")
     assert "Remove Burnt-in Annotation" not in message
+
+
+def test_project_dir_from_series_path_matches_batch_storage_dir(tmp_path: Path) -> None:
+    from anonymizer.utils.storage import project_dir_from_series_path
+
+    storage_dir = tmp_path / "my_project"
+    series_path = storage_dir / "public" / "anon_pt" / "anon_study" / "series_a"
+    series_path.mkdir(parents=True)
+
+    assert project_dir_from_series_path(series_path) == storage_dir
+
+
+@patch("anonymizer.controller.ai_batch_process._apply_remove_pixel_phi_series")
+def test_ai_batch_process_forwards_project_storage_dir_for_pixel_phi(
+    mock_remove: MagicMock,
+    images_layout: tuple[Path, list[tuple[str, str]]],
+) -> None:
+    images_dir, studies = images_layout
+    series_path = images_dir / "anon_pt" / "anon_study" / "series_a"
+    storage_dir = images_dir.parent
+    enter_patch, exit_patch, handle, _runner = _patch_batch_runners()
+    mock_remove.return_value = AiBatchOutcome(
+        series_path,
+        AiBatchAlgorithm.REMOVE_PIXEL_PHI,
+        "ok",
+        "Modified 1/1",
+    )
+    anon_controller = MagicMock()
+    anon_controller.project_model.storage_dir = storage_dir
+
+    with (
+        enter_patch,
+        exit_patch,
+        patch(
+            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            return_value=[(1, 1, series_path)],
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            return_value=_batch_test_dataset(modality="CR"),
+        ),
+    ):
+        ai_batch_process(
+            images_dir,
+            studies,
+            AiBatchProcessOptions(algorithms=(AiBatchAlgorithm.REMOVE_PIXEL_PHI,)),
+            anon_model=_pending_anon_model(),
+            anon_controller=anon_controller,
+        )
+
+    assert mock_remove.call_args.kwargs["project_dir"] == storage_dir
+
+
+@patch("anonymizer.controller.ai.remove_pixel_phi.load_modality_whitelist", return_value=["CUSTOMTERM"])
+@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
+def test_apply_remove_pixel_phi_series_uses_saved_modality_whitelist(
+    mock_readtext: MagicMock,
+    mock_load_whitelist: MagicMock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from anonymizer.controller.ai_batch_process import AiBatchAlgorithm, _apply_remove_pixel_phi_series
+
+    pkg_dir = Path(__file__).resolve().parents[3] / "src" / "anonymizer"
+    monkeypatch.chdir(pkg_dir)
+
+    storage_dir = tmp_path / "project"
+    series_path = storage_dir / "public" / "anon_pt" / "anon_study" / "series_a"
+    series_path.mkdir(parents=True)
+    dcm_path = series_path / "1.dcm"
+    shutil.copy(
+        Path(__file__).resolve().parents[1] / "assets" / "test_dcm_files" / "davidson_cxr" / "davidson_cxr_monochrome1_uncompressed.dcm",
+        dcm_path,
+    )
+
+    mock_readtext.return_value = [
+        ([(0, 0), (40, 0), (40, 20), (0, 20)], "CUSTOMTERM", 0.95),
+        ([(0, 0), (60, 0), (60, 20), (0, 20)], "SMITH", 0.92),
+    ]
+
+    outcome = _apply_remove_pixel_phi_series(
+        series_path,
+        anon_model=_pending_anon_model(),
+        ocr_reader=MagicMock(),
+        project_dir=storage_dir,
+    )
+
+    mock_load_whitelist.assert_called_once_with(storage_dir, "CR")
+    assert outcome.status == "ok"
+    assert outcome.algorithm is AiBatchAlgorithm.REMOVE_PIXEL_PHI
+    assert "SMITH" in outcome.message
+    assert "CUSTOMTERM" not in outcome.message
+
+
+def test_whitelist_for_batch_ocr() -> None:
+    assert whitelist_for_batch_ocr(use_modality_whitelist=True) is None
+    assert whitelist_for_batch_ocr(use_modality_whitelist=False) == []
+
+
+@patch("anonymizer.controller.ai_batch_process._load_series_dataset")
+def test_modalities_in_selected_studies_collects_unique_modalities(
+    mock_load: MagicMock,
+    images_layout: tuple[Path, list[tuple[str, str]]],
+) -> None:
+    images_dir, studies = images_layout
+    series_a = images_dir / "anon_pt" / "anon_study" / "series_a"
+    series_b = images_dir / "anon_pt" / "anon_study" / "series_b"
+
+    def _dataset_for_path(series_path: Path) -> Dataset:
+        ds = Dataset()
+        ds.Modality = "US" if series_path == series_b else "CR"
+        return ds
+
+    mock_load.side_effect = lambda path: _dataset_for_path(path)
+
+    modalities = modalities_in_selected_studies(images_dir, studies)
+
+    assert modalities == ("CR", "US")
+    assert mock_load.call_count == 2
+
+
+def test_effective_modality_whitelists_uses_project_whitelist_when_present(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pkg_dir = Path(__file__).resolve().parents[3] / "src" / "anonymizer"
+    monkeypatch.chdir(pkg_dir)
+    project_dir = tmp_path / "project"
+    project_whitelist = project_dir / "whitelists" / "cr.txt"
+    project_whitelist.parent.mkdir(parents=True)
+    project_whitelist.write_text("CUSTOMTERM\n", encoding="utf-8")
+
+    whitelists = effective_modality_whitelists(project_dir, ("CR",))
+
+    assert "CUSTOMTERM" in whitelists["CR"]
+    assert "PORTABLE" not in whitelists["CR"]
+
+
+def test_effective_modality_whitelists_excludes_removed_default_terms(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pkg_dir = Path(__file__).resolve().parents[3] / "src" / "anonymizer"
+    monkeypatch.chdir(pkg_dir)
+    from anonymizer.utils.storage import load_default_whitelist
+
+    project_dir = tmp_path / "project"
+    defaults_without_bilateral = [
+        term for term in load_default_whitelist("CR") if term != "BILATERAL"
+    ]
+    project_whitelist = project_dir / "whitelists" / "cr.txt"
+    project_whitelist.parent.mkdir(parents=True)
+    project_whitelist.write_text("\n".join(defaults_without_bilateral) + "\n", encoding="utf-8")
+
+    whitelists = effective_modality_whitelists(project_dir, ("CR",))
+
+    assert "PORTABLE" in whitelists["CR"]
+    assert "BILATERAL" not in whitelists["CR"]
+
+
+def test_format_modality_whitelist_preview_groups_by_modality() -> None:
+    text = format_modality_whitelist_preview(
+        {"CR": ["PORTABLE", "L"], "US": []},
+        no_modalities_message="none",
+        no_terms_label="(empty)",
+        match_settings_by_modality={
+            "CR": OcrWhitelistMatchSettings(match_mode=OcrWhitelistMatchMode.STANDARD),
+        },
+    )
+
+    assert "CR (2" in text
+    assert "  PORTABLE" in text
+    assert "Match strictness" in text
+    assert "US (0" in text
+    assert "(empty)" in text
+
+
+@patch("anonymizer.controller.ai_batch_process.remove_pixel_phi", return_value=(False, [], 0))
+@patch("anonymizer.controller.ai_batch_process.stackable_dicom_paths")
+@patch("anonymizer.controller.ai_batch_process._load_series_dataset")
+def test_apply_remove_pixel_phi_series_whitelist_enabled_passes_none(
+    mock_load: MagicMock,
+    mock_stackable: MagicMock,
+    mock_remove: MagicMock,
+) -> None:
+    ds = _batch_test_dataset(modality="CR")
+    mock_load.return_value = ds
+    mock_stackable.return_value = [Path("/tmp/instance.dcm")]
+
+    _apply_remove_pixel_phi_series(
+        Path("/tmp/series"),
+        anon_model=_pending_anon_model(),
+        ocr_reader=MagicMock(),
+        use_modality_whitelist=True,
+    )
+
+    assert mock_remove.call_args.kwargs["whitelist"] is None
+
+
+@patch("anonymizer.controller.ai_batch_process.remove_pixel_phi", return_value=(False, [], 0))
+@patch("anonymizer.controller.ai_batch_process.stackable_dicom_paths")
+@patch("anonymizer.controller.ai_batch_process._load_series_dataset")
+def test_apply_remove_pixel_phi_series_whitelist_disabled_passes_empty_list(
+    mock_load: MagicMock,
+    mock_stackable: MagicMock,
+    mock_remove: MagicMock,
+) -> None:
+    ds = _batch_test_dataset(modality="CR")
+    mock_load.return_value = ds
+    mock_stackable.return_value = [Path("/tmp/instance.dcm")]
+
+    _apply_remove_pixel_phi_series(
+        Path("/tmp/series"),
+        anon_model=_pending_anon_model(),
+        ocr_reader=MagicMock(),
+        use_modality_whitelist=False,
+    )
+
+    assert mock_remove.call_args.kwargs["whitelist"] == []

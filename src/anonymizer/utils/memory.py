@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
+import gc
 import logging
 import os
+import threading
 from dataclasses import dataclass
 from typing import Literal
 
@@ -144,3 +147,54 @@ def log_process_memory(
         return None
     target.info("Memory [%s]: RSS %.1f MB (%s)", stage, snapshot.rss_mb, suffix)
     return snapshot.rss_mb
+
+
+def is_main_thread() -> bool:
+    return threading.current_thread() is threading.main_thread()
+
+
+def collect_garbage_safe(*, generations: int = 1) -> None:
+    """
+    Run ``gc.collect`` only on the main thread.
+
+    Tk / PIL.ImageTk finalizers must not run on worker threads (macOS segfault risk).
+    """
+    if not is_main_thread():
+        logger.debug(
+            "Skipping gc.collect() off main thread (%s)",
+            threading.current_thread().name,
+        )
+        return
+    for _ in range(max(1, generations)):
+        gc.collect()
+
+
+def release_accelerator_caches() -> None:
+    """Release PyTorch CUDA/MPS allocator caches without invoking Python GC."""
+    try:
+        import torch
+    except ImportError:
+        return
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+    elif torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+        if hasattr(torch.mps, "synchronize"):
+            torch.mps.synchronize()
+
+
+def schedule_collect_garbage_on_tk(widget, *, generations: int = 1) -> None:
+    """Schedule a main-thread GC pass after the current Tk event (safe after dialog teardown)."""
+    import tkinter as tk
+
+    if widget is None:
+        return
+
+    def _run() -> None:
+        collect_garbage_safe(generations=generations)
+
+    with contextlib.suppress(tk.TclError):
+        if widget.winfo_exists():
+            widget.after_idle(_run)

@@ -14,6 +14,7 @@ from anonymizer.controller.create_projections import (
 )
 from anonymizer.model.anonymizer import AnonymizerModel, PHI_IndexRecord
 from anonymizer.utils.translate import _
+from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.series.series import SeriesView, show_series_view
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ class ProjectionView(tk.Toplevel):
             if series_path.is_dir()
         ]
 
-    def __init__(self, parent, anon_model: AnonymizerModel, base_dir: Path, phi_records: list[PHI_IndexRecord]):
+    def __init__(self, parent, anon_model: AnonymizerModel, base_dir: Path, phi_records: list[PHI_IndexRecord], fonts=None):
 
         if not base_dir.is_dir():
             raise ValueError(f"{base_dir} is not a valid directory")
@@ -48,6 +49,7 @@ class ProjectionView(tk.Toplevel):
         if not phi_records:
             raise ValueError("No phi_records for ProjectionView")
 
+        self._fonts = fonts
         self._anon_model = anon_model
         self._base_dir = base_dir
         self._phi_records = phi_records
@@ -365,8 +367,7 @@ class ProjectionView(tk.Toplevel):
     def _on_cancel(self):
         logger.info("_on_cancel")
         self._clear_view()
-        self.grab_release()
-        self.destroy()
+        teardown_ctk_toplevel(self, parent=self.master)
 
     def _on_image_click(self, event, projection: Projection, series_path: Path):
         logger.info(f"Projection clicked: projection: {projection}")
@@ -380,6 +381,7 @@ class ProjectionView(tk.Toplevel):
             self,
             anon_model=self._anon_model,
             series_path=series_path,
+            fonts=self._fonts,
         )
         if self._series_view is None:
             return

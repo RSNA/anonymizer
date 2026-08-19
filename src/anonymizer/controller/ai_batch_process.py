@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import contextlib
-import gc
 import logging
 import re
 from collections.abc import Callable, Sequence
@@ -31,9 +30,14 @@ from anonymizer.controller.ai.harmonize import (
     format_harmonize_progress_message,
     harmonize_and_apply_series,
 )
+from anonymizer.controller.ai.ocr_whitelist_match import (
+    OcrWhitelistMatchSettings,
+    describe_match_settings,
+)
 from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
     apply_instance_pixel_phi_for_dcm,
+    load_modality_whitelist,
     pixel_phi_removal_mode_display_label,
     remove_pixel_phi,
 )
@@ -46,7 +50,8 @@ from anonymizer.controller.runner import (
     exit_batch_phase,
 )
 from anonymizer.controller.series_io import load_series_frames, save_series_frames
-from anonymizer.utils.memory import MemoryGuard, MemorySnapshot, capture_memory_snapshot
+from anonymizer.utils.memory import MemoryGuard, MemorySnapshot, capture_memory_snapshot, collect_garbage_safe
+from anonymizer.utils.storage import load_modality_whitelist_match_settings
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.blur_face_results import (
     face_blur_mode_display_label,
@@ -87,6 +92,85 @@ class AiBatchProcessOptions:
     algorithms: tuple[AiBatchAlgorithm, ...]
     blur_mode: FaceBlurMode = FaceBlurMode.GAUSSIAN
     pixel_phi_removal_mode: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT
+    use_modality_whitelist: bool = True
+
+
+def whitelist_for_batch_ocr(*, use_modality_whitelist: bool) -> list[str] | None:
+    """Return OCR whitelist for batch removal: None loads effective whitelist, [] disables filtering."""
+    return None if use_modality_whitelist else []
+
+
+def modalities_in_selected_studies(
+    images_dir: Path,
+    studies: Sequence[tuple[str, str]],
+) -> tuple[str, ...]:
+    """Collect unique DICOM modalities for series under the selected studies."""
+    modalities: set[str] = set()
+    for anon_patient_id, anon_study_uid in studies:
+        study_path = images_dir / anon_patient_id / anon_study_uid
+        if not study_path.is_dir():
+            continue
+        for series_path in sorted(
+            (p for p in study_path.iterdir() if p.is_dir() and not p.name.startswith(".")),
+            key=lambda p: p.name,
+        ):
+            with contextlib.suppress(ValueError, InvalidDicomError, AttributeError, OSError):
+                ds = _load_series_dataset(series_path)
+                modality = str(ds.get("Modality", "") or "").strip().upper()
+                if modality:
+                    modalities.add(modality)
+    return tuple(sorted(modalities))
+
+
+def effective_modality_whitelists(
+    project_dir: Path | None,
+    modalities: Sequence[str],
+) -> dict[str, list[str]]:
+    """Return effective whitelist terms per modality (same as batch OCR uses)."""
+    return {modality: load_modality_whitelist(project_dir, modality) for modality in modalities}
+
+
+def effective_modality_whitelist_match_settings(
+    project_dir: Path | None,
+    modalities: Sequence[str],
+) -> dict[str, OcrWhitelistMatchSettings]:
+    """Return per-modality OCR whitelist match settings (sidecar or defaults)."""
+    return {
+        modality: load_modality_whitelist_match_settings(project_dir, modality) for modality in modalities
+    }
+
+
+def format_modality_whitelist_heading(modality: str, term_count: int) -> str:
+    """Single-line modality section heading for whitelist preview."""
+    term_label = _("term") if term_count == 1 else _("terms")
+    return f"{modality} ({term_count} {term_label})"
+
+
+def format_modality_whitelist_preview(
+    whitelists_by_modality: dict[str, list[str]],
+    *,
+    no_modalities_message: str,
+    no_terms_label: str,
+    match_settings_by_modality: dict[str, OcrWhitelistMatchSettings] | None = None,
+) -> str:
+    """Format read-only whitelist preview text grouped by modality."""
+    if not whitelists_by_modality:
+        return no_modalities_message
+
+    sections: list[str] = []
+    for modality in sorted(whitelists_by_modality):
+        terms = whitelists_by_modality[modality]
+        header = format_modality_whitelist_heading(modality, len(terms))
+        match_line = ""
+        if match_settings_by_modality and modality in match_settings_by_modality:
+            match_line = f"\n  {_('Match strictness')}: {describe_match_settings(match_settings_by_modality[modality])}"
+        body = (
+            "\n".join(f"  {term}" for term in terms)
+            if terms
+            else f"  {no_terms_label}"
+        )
+        sections.append(f"{header}{match_line}\n{body}")
+    return "\n\n".join(sections)
 
 
 @dataclass(frozen=True)
@@ -682,6 +766,7 @@ def _apply_remove_pixel_phi_series(
     on_log_detail: Callable[[str], None] | None = None,
     removal_mode: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT,
     project_dir: Path | None = None,
+    use_modality_whitelist: bool = True,
 ) -> AiBatchOutcome:
     try:
         ds = _load_series_dataset(series_path)
@@ -718,6 +803,8 @@ def _apply_remove_pixel_phi_series(
     all_removed_texts: list[str] = []
     total_pixels_changed = 0
     instance_total = len(dcm_paths)
+    ocr_whitelist = whitelist_for_batch_ocr(use_modality_whitelist=use_modality_whitelist)
+    whitelist_match = load_modality_whitelist_match_settings(project_dir, series_modality or None)
     for instance_index, dcm_path in enumerate(dcm_paths, start=1):
         try:
             modified, texts, pixels_changed = remove_pixel_phi(
@@ -726,6 +813,8 @@ def _apply_remove_pixel_phi_series(
                 removal_mode=removal_mode,
                 project_dir=project_dir,
                 modality=series_modality or None,
+                whitelist=ocr_whitelist,
+                whitelist_match_settings=whitelist_match,
             )
         except Exception as exc:
             logger.error("Remove Pixel PHI failed for %s: %s", dcm_path, exc)
@@ -1208,6 +1297,12 @@ def ai_batch_process(
         try:
             if algorithm is AiBatchAlgorithm.REMOVE_PIXEL_PHI:
                 log_workflow(format_batch_step_subline(_("Preparing OCR models") + "…"))
+                if not options.use_modality_whitelist:
+                    log_workflow(
+                        format_batch_step_subline(
+                            _("OCR whitelist disabled") + " — " + _("all detected text will be removed")
+                        )
+                    )
             elif algorithm is AiBatchAlgorithm.HARMONIZE:
                 log_workflow(format_batch_step_subline(_("Loading anatomy analysis models") + "…"))
             else:
@@ -1285,6 +1380,7 @@ def ai_batch_process(
                         on_log_detail=log_pixel_phi_detail,
                         removal_mode=options.pixel_phi_removal_mode,
                         project_dir=project_dir,
+                        use_modality_whitelist=options.use_modality_whitelist,
                     )
                 elif algorithm is AiBatchAlgorithm.HARMONIZE:
 
@@ -1347,7 +1443,7 @@ def ai_batch_process(
                         volume_context=volume_context,
                     )
                     volume_context = None
-                    gc.collect()
+                    collect_garbage_safe()
                     release_working_memory(stage="ai_batch_after_face_blur_series", preserve_accelerator=True)
 
                 record_outcome(
