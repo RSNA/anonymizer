@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [19.0.0.dev10]
+- Lookup table import (CTP `.properties`), settings UI, and lookup-aware `capture_phi` / anonymizer script operands
+- Theme-driven `AppFonts` replaces per-view font lifecycle; dialog teardown hardening in `ctk_safe`
+- Series View: compact whitelist toolbar, per-modality match strictness (Exact), and modality whitelist preview in AI batch options
+- CT-only OCR veracity guard drops single-character spurious detections without affecting US
+- Welcome view: restore v18-style layout and dynamic window sizing from content
+- Fix `int_entry()` empty-string CTk crash; keep blank fields editable on Return/FocusOut
+- CI: CPU-only PyTorch/torchvision on Linux (~2 GB smaller installs), uv cache tuning, and test path/cwd fixes
+
 ## [19.0.0.dev9]
 - Reorganize flat `view/` into domain subpackages: `common`, `shell`, `project`, `series`, `ai` (alongside existing `settings`)
 - Update imports across app, controller, tests, and scripts; no compatibility shims
