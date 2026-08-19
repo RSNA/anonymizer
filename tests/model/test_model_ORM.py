@@ -10,6 +10,7 @@ from tests.controller.dicom.support.test_nodes import (
     TEST_SITEID,
     TEST_UIDROOT,
 )
+from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
 
 TEST_DB_DIALECT = "sqlite"  # Database dialect
 TEST_DB_NAME = "anonymizer_model_test.db"  # Name of the test database file
@@ -33,7 +34,7 @@ def anonymizer_model() -> AnonymizerModel:
     model = AnonymizerModel(
         site_id=TEST_SITEID,
         uid_root=TEST_UIDROOT,
-        script_path=Path("src/anonymizer/assets/scripts/default-anonymizer.script"),
+        script_path=DEFAULT_ANONYMIZER_SCRIPT,
         db_url=TEST_DB_URL,  # db_url = "sqlite:///:memory:"
     )
 

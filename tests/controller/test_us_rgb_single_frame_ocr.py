@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import shutil
 from pathlib import Path
 
@@ -12,12 +11,12 @@ import pytest
 
 from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
+    _ocr_rotation_angles,
     build_series_view_ocr_pixels,
     detect_text,
     filter_ocr_whitelist_only,
     ocr_image_for_frame,
     ocr_models_ready,
-    _ocr_rotation_angles,
 )
 from anonymizer.controller.ai_batch_process import AiBatchAlgorithm, _apply_remove_pixel_phi_series
 from anonymizer.controller.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
@@ -38,9 +37,9 @@ from tests.controller.support.us_rgb_fixtures import (
     US_RGB_PROJECT_T2_SERIES_VIEW_OCR_TEXTS,
     US_RGB_SERIES_VIEW_OCR_TEXTS,
 )
+from tests.paths import DEFAULT_ANONYMIZER_SCRIPT, REPO_ROOT
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ANONYMIZER_SCRIPT = REPO_ROOT / "src/anonymizer/assets/scripts/default-anonymizer.script"
+ANONYMIZER_SCRIPT = DEFAULT_ANONYMIZER_SCRIPT
 EXPECTED_OCR_TEXTS = US_RGB_SERIES_VIEW_OCR_TEXTS
 
 pytestmark = pytest.mark.skipif(
@@ -80,8 +79,8 @@ def us_rgb_loaded():
 
 
 @pytest.fixture(autouse=True)
-def _anonymizer_assets_cwd() -> None:
-    os.chdir(REPO_ROOT / "src" / "anonymizer")
+def _anonymizer_assets_cwd(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(REPO_ROOT / "src" / "anonymizer")
 
 
 @pytest.fixture

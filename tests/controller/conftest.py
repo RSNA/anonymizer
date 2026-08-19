@@ -28,6 +28,7 @@ from tests.controller.dicom.support.test_nodes import (
     PACSSimulatorSCP,
     RemoteSCPDict,
 )
+from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
 
 
 def pytest_sessionstart(session):
@@ -97,7 +98,7 @@ def controller(temp_dir: str) -> Generator[ProjectController, Any, None]:
         scp=LocalStorageSCP,
         remote_scps=RemoteSCPDict,
         network_timeouts=NetworkTimeouts(2, 5, 5, 15),
-        anonymizer_script_path=Path("src/anonymizer/assets/scripts/default-anonymizer.script"),
+        anonymizer_script_path=DEFAULT_ANONYMIZER_SCRIPT,
     )
 
     project_controller = ProjectController(project_model)

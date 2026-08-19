@@ -16,8 +16,7 @@ from anonymizer.controller.process_ctp_lookup import (
 )
 from anonymizer.model.anonymizer import AnonymizerModel, LookupPatient
 from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT
-
-SCRIPT_PATH = Path("src/anonymizer/assets/scripts/default-anonymizer.script")
+from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
 
 
 def _write_properties(path: Path, lines: list[str]) -> None:
@@ -264,7 +263,7 @@ def test_replace_lookup_patients_replaces_all(tmp_path: Path) -> None:
     model = AnonymizerModel(
         site_id=TEST_SITEID,
         uid_root=TEST_UIDROOT,
-        script_path=SCRIPT_PATH,
+        script_path=DEFAULT_ANONYMIZER_SCRIPT,
         db_url=f"sqlite:///{db_path}",
     )
     model.replace_lookup_patients(

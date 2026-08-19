@@ -2,16 +2,11 @@
 
 from __future__ import annotations
 
-import os
 import shutil
 from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.ai_batch_process import (
-    format_remove_pixel_phi_instance_detail,
-    format_remove_pixel_phi_series_message,
-)
 from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
     detect_text,
@@ -19,6 +14,10 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     ocr_image_for_frame,
     ocr_models_ready,
     remove_pixel_phi,
+)
+from anonymizer.controller.ai_batch_process import (
+    format_remove_pixel_phi_instance_detail,
+    format_remove_pixel_phi_series_message,
 )
 from anonymizer.controller.runner import RemovePixelPhiRunner
 from anonymizer.controller.series_io import load_series_frames
@@ -84,8 +83,13 @@ def test_us_rgb_series_view_detect_is_not_batch_removal_list() -> None:
         assert text not in US_RGB_BATCH_REMOVED_TEXTS, f"{text!r} should be filtered before removal"
 
 
-def test_us_rgb_series_view_after_batch_shows_no_whitelist_display_survivors(tmp_path: Path) -> None:
-    os.chdir(Path(__file__).resolve().parents[2] / "src" / "anonymizer")
+def test_us_rgb_series_view_after_batch_shows_no_whitelist_display_survivors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from tests.paths import REPO_ROOT
+
+    monkeypatch.chdir(REPO_ROOT / "src" / "anonymizer")
     dcm_path = tmp_path / "us_rgb.dcm"
     shutil.copy(US_RGB_DCM, dcm_path)
     loaded = load_series_frames(US_RGB_DCM.parent)

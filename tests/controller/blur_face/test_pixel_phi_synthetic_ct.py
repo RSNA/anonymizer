@@ -9,12 +9,12 @@ import numpy as np
 import pydicom
 import pytest
 
-from anonymizer.controller.ai_batch_process import AiBatchAlgorithm, _apply_remove_pixel_phi_series
 from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
     detect_text,
     remove_pixel_phi,
 )
+from anonymizer.controller.ai_batch_process import AiBatchAlgorithm, _apply_remove_pixel_phi_series
 from anonymizer.model.anonymizer import AnonymizerModel, Instance
 from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT
 from tests.controller.support.pixel_phi_test_support import (
@@ -30,6 +30,7 @@ from tests.controller.tseg.support.synthetic_ct import (
     build_synthetic_single_slice_ct_series,
     list_dcm_files,
 )
+from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
 
 
 @pytest.fixture
@@ -38,7 +39,7 @@ def anonymizer_model(tmp_path: Path) -> AnonymizerModel:
     return AnonymizerModel(
         site_id=TEST_SITEID,
         uid_root=TEST_UIDROOT,
-        script_path=Path("src/anonymizer/assets/scripts/default-anonymizer.script"),
+        script_path=DEFAULT_ANONYMIZER_SCRIPT,
         db_url=f"sqlite:///{db_path}",
     )
 

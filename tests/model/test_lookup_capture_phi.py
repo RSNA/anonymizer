@@ -10,13 +10,13 @@ from pydicom import Dataset
 
 from anonymizer.model.anonymizer import AnonymizerModel, LookupPatient
 from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT
+from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
 
 TEST_DB_DIALECT = "sqlite"
 TEST_DB_NAME = "anonymizer_lookup_capture_test.db"
 TEST_DB_DIR = Path(__file__).parent / ".test_db"
 TEST_DB_FILE = TEST_DB_DIR / TEST_DB_NAME
 TEST_DB_URL = f"{TEST_DB_DIALECT}:///{TEST_DB_FILE}"
-SCRIPT_PATH = Path("src/anonymizer/assets/scripts/default-anonymizer.script")
 
 
 @pytest.fixture(scope="function")
@@ -29,7 +29,7 @@ def anonymizer_model() -> AnonymizerModel:
     return AnonymizerModel(
         site_id=TEST_SITEID,
         uid_root=TEST_UIDROOT,
-        script_path=SCRIPT_PATH,
+        script_path=DEFAULT_ANONYMIZER_SCRIPT,
         db_url=TEST_DB_URL,
     )
 

@@ -10,8 +10,7 @@ from sqlalchemy import create_engine, text
 
 from anonymizer.model.anonymizer import AnonymizerModel
 from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT
-
-SCRIPT_PATH = Path("src/anonymizer/assets/scripts/default-anonymizer.script")
+from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
 
 V3_METADATA_COLUMNS = (
     ("instances", "pixel_phi"),
@@ -117,7 +116,7 @@ def test_lookup_patient_table_created_on_open(tmp_path: Path) -> None:
     AnonymizerModel(
         site_id=TEST_SITEID,
         uid_root=TEST_UIDROOT,
-        script_path=SCRIPT_PATH,
+        script_path=DEFAULT_ANONYMIZER_SCRIPT,
         db_url=f"sqlite:///{db_path}",
     )
     engine = create_engine(f"sqlite:///{db_path}")
@@ -142,7 +141,7 @@ def test_ensure_schema_columns_adds_v3_metadata_columns(tmp_path: Path) -> None:
     AnonymizerModel(
         site_id=TEST_SITEID,
         uid_root=TEST_UIDROOT,
-        script_path=SCRIPT_PATH,
+        script_path=DEFAULT_ANONYMIZER_SCRIPT,
         db_url=f"sqlite:///{db_path}",
     )
 
@@ -158,7 +157,7 @@ def test_ensure_schema_columns_is_idempotent(tmp_path: Path) -> None:
     AnonymizerModel(
         site_id=TEST_SITEID,
         uid_root=TEST_UIDROOT,
-        script_path=SCRIPT_PATH,
+        script_path=DEFAULT_ANONYMIZER_SCRIPT,
         db_url=db_url,
     )
     columns_after_first_open = {table: _column_names(db_path, table) for table, _ in V3_METADATA_COLUMNS}
@@ -166,7 +165,7 @@ def test_ensure_schema_columns_is_idempotent(tmp_path: Path) -> None:
     AnonymizerModel(
         site_id=TEST_SITEID,
         uid_root=TEST_UIDROOT,
-        script_path=SCRIPT_PATH,
+        script_path=DEFAULT_ANONYMIZER_SCRIPT,
         db_url=db_url,
     )
     columns_after_second_open = {table: _column_names(db_path, table) for table, _ in V3_METADATA_COLUMNS}
@@ -181,7 +180,7 @@ def test_get_phi_index_after_schema_sync(tmp_path: Path, mock_dataset: Dataset) 
     model = AnonymizerModel(
         site_id=TEST_SITEID,
         uid_root=TEST_UIDROOT,
-        script_path=SCRIPT_PATH,
+        script_path=DEFAULT_ANONYMIZER_SCRIPT,
         db_url=f"sqlite:///{db_path}",
     )
     model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=0)

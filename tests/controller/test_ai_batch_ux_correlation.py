@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-import os
 import shutil
 from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.ai_batch_process import (
-    format_remove_pixel_phi_instance_detail,
-    format_remove_pixel_phi_series_message,
-)
 from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
     ocr_models_ready,
     remove_pixel_phi,
+)
+from anonymizer.controller.ai_batch_process import (
+    format_remove_pixel_phi_instance_detail,
+    format_remove_pixel_phi_series_message,
 )
 from anonymizer.controller.runner import RemovePixelPhiRunner
 from tests.controller.support.ai_batch_ux_fixtures import BATCH_UX_EXPECTATIONS, BatchUxExpectation
@@ -49,9 +48,15 @@ def _format_ux_series_log(case: BatchUxExpectation) -> str:
 
 @pytest.mark.skipif(not ocr_models_ready(), reason="EasyOCR models not available")
 @pytest.mark.parametrize("case", BATCH_UX_EXPECTATIONS, ids=lambda case: case.label)
-def test_batch_removal_matches_ux_logs(case: BatchUxExpectation, tmp_path: Path) -> None:
+def test_batch_removal_matches_ux_logs(
+    case: BatchUxExpectation,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Mirror UX: default modality whitelist, no explicit whitelist=[]."""
-    os.chdir(Path(__file__).resolve().parents[2] / "src" / "anonymizer")
+    from tests.paths import REPO_ROOT
+
+    monkeypatch.chdir(REPO_ROOT / "src" / "anonymizer")
     dcm_path = tmp_path / "instance.dcm"
     shutil.copy(case.dcm_path, dcm_path)
 

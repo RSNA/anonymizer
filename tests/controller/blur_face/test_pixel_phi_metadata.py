@@ -21,6 +21,7 @@ from anonymizer.controller.ai.remove_pixel_phi import (
 )
 from anonymizer.model.anonymizer import Instance
 from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT
+from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
 
 
 @pytest.fixture
@@ -78,7 +79,7 @@ def test_apply_instance_pixel_phi_delegates_to_model(mock_dataset: Dataset, tmp_
     model = AnonymizerModel(
         site_id=TEST_SITEID,
         uid_root=TEST_UIDROOT,
-        script_path=Path("src/anonymizer/assets/scripts/default-anonymizer.script"),
+        script_path=DEFAULT_ANONYMIZER_SCRIPT,
         db_url=f"sqlite:///{db_path}",
     )
     model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=0)
@@ -106,7 +107,7 @@ def test_apply_instance_pixel_phi_for_dcm_reads_sop_uid(
     model = AnonymizerModel(
         site_id=TEST_SITEID,
         uid_root=TEST_UIDROOT,
-        script_path=Path("src/anonymizer/assets/scripts/default-anonymizer.script"),
+        script_path=DEFAULT_ANONYMIZER_SCRIPT,
         db_url=f"sqlite:///{db_path}",
     )
     model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=0)

@@ -8,7 +8,6 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from anonymizer.controller.ai_batch_process import format_remove_pixel_phi_instance_detail
 from anonymizer.controller.ai.ocr_whitelist_match import (
     OcrWhitelistMatchMode,
     OcrWhitelistMatchSettings,
@@ -26,6 +25,7 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     load_modality_whitelist,
     remove_pixel_phi,
 )
+from anonymizer.controller.ai_batch_process import format_remove_pixel_phi_instance_detail
 from anonymizer.utils.memory import MemorySnapshot, format_memory_snapshot_label
 
 
@@ -108,7 +108,7 @@ def test_load_modality_whitelist_uses_project_file_when_present(
     pkg_dir = Path(__file__).resolve().parents[3] / "src" / "anonymizer"
     monkeypatch.chdir(pkg_dir)
     project_dir = tmp_path / "project"
-    project_whitelist = project_dir / "whitelists" / "CR.txt"
+    project_whitelist = project_dir / "whitelists" / "cr.txt"
     project_whitelist.parent.mkdir(parents=True)
     project_whitelist.write_text("CUSTOMTERM\n", encoding="utf-8")
 
