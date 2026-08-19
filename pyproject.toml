@@ -25,6 +25,7 @@ dependencies = [
     "opencv-python-headless",
     "easyocr",
     "torch",
+    "torchvision",
     "cryptography",
     "requests",
     "requests-oauthlib",
