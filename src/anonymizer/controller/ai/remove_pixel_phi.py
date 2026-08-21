@@ -5,8 +5,7 @@ import difflib
 import logging
 import os
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
-from enum import Enum, StrEnum, auto
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -49,6 +48,7 @@ from anonymizer.controller.ai.ocr_whitelist_match import (
     describe_match_settings,
     resolve_whitelist_match,
 )
+from anonymizer.controller.series_overlay import OCRText, UserRectangle
 from anonymizer.utils.dicom import SUPPORTED_PHOTOMETRIC_INTERPRETATIONS
 
 logging.getLogger("openjpeg").setLevel(logging.WARNING)
@@ -160,85 +160,34 @@ def remove_ocr_models() -> None:
     logger.info("Removed OCR models from %s", OCR_MODEL_DIR)
 
 
-@dataclass()  # Mutable, user can edit box in ImageViewer
-class OCRText:
-    text: str
-    top_left: tuple[int, int]
-    bottom_right: tuple[int, int]
-    prob: float
+def ocr_text_from_easyocr_result(result, img_width: int, img_height: int) -> OCRText:
+    """Create an OCRText from an EasyOCR result tuple (box, text, prob)."""
+    box, text, prob = result
+    if not (len(box) == 4 and all(len(point) == 2 for point in box)):
+        raise ValueError(f"Invalid box format: {box}")
 
-    @classmethod
-    def from_easyocr_result(cls, result, img_width: int, img_height: int) -> "OCRText":
-        """Creates an OCRText instance from an EasyOCR result tuple."""
-        box, text, prob = result
-        # Ensure box has exactly 4 points and they are integers
-        if not (len(box) == 4 and all(len(point) == 2 for point in box)):
-            raise ValueError(f"Invalid box format: {box}")
+    x1 = int(box[0][0])
+    y1 = int(box[0][1])
+    x2 = int(box[2][0])
+    y2 = int(box[2][1])
 
-        # Extract initial coordinates
-        x1 = int(box[0][0])
-        y1 = int(box[0][1])
-        # Use bottom-right for consistency, assuming rectangular alignment from EasyOCR
-        x2 = int(box[2][0])
-        y2 = int(box[2][1])
+    x1_clipped = max(0, x1)
+    y1_clipped = max(0, y1)
+    x2_clipped = min(img_width, x2)
+    y2_clipped = min(img_height, y2)
 
-        # --- Clip Bounding Box Coordinates ---
-        x1_clipped = max(0, x1)
-        y1_clipped = max(0, y1)
-        x2_clipped = min(img_width, x2)
-        y2_clipped = min(img_height, y2)
+    if x1_clipped >= x2_clipped or y1_clipped >= y2_clipped:
+        raise ValueError(
+            f"Bounding box became invalid after clipping. Original: [{x1},{y1},{x2},{y2}], "
+            f"Clipped: [{x1_clipped},{y1_clipped},{x2_clipped},{y2_clipped}]"
+        )
 
-        # --- Check if clipped box is still valid (has area) ---
-        if x1_clipped >= x2_clipped or y1_clipped >= y2_clipped:
-            raise ValueError(
-                f"Bounding box became invalid after clipping. Original: [{x1},{y1},{x2},{y2}], Clipped: [{x1_clipped},{y1_clipped},{x2_clipped},{y2_clipped}]"
-            )
-
-        # Use clipped coordinates
-        return cls(text=text, top_left=(x1_clipped, y1_clipped), bottom_right=(x2_clipped, y2_clipped), prob=prob)
-
-    def get_bounding_box(self) -> tuple[int, int, int, int]:
-        """Returns the bounding box as (x1, y1, x2, y2)."""
-        return (self.top_left[0], self.top_left[1], self.bottom_right[0], self.bottom_right[1])
-
-    def box_area(self) -> int:
-        x1, y1, x2, y2 = self.get_bounding_box()
-        return max(0, x2 - x1) * max(0, y2 - y1)
-
-
-# Overlay layer types:
-class LayerType(Enum):
-    TEXT = auto()  # OCR text and rectangle coordinates
-    USER_RECT = auto()  # User defined rectangle coordinates
-    SEGMENTATIONS = auto()  # polygon vertices
-    # ... other layer types ...
-
-
-@dataclass
-class UserRectangle:
-    top_left: tuple[int, int]
-    bottom_right: tuple[int, int]
-
-    def get_bounding_box(self) -> tuple[int, int, int, int]:
-        return self.top_left[0], self.top_left[1], self.bottom_right[0], self.bottom_right[1]
-
-
-@dataclass
-class PolygonPoint:
-    x: int
-    y: int
-
-
-@dataclass
-class Segmentation:
-    points: list[PolygonPoint]
-
-
-@dataclass
-class OverlayData:
-    ocr_texts: list[OCRText] = field(default_factory=list)
-    user_rects: list[UserRectangle] = field(default_factory=list)
-    segmentations: list[Segmentation] = field(default_factory=list)
+    return OCRText(
+        text=text,
+        top_left=(x1_clipped, y1_clipped),
+        bottom_right=(x2_clipped, y2_clipped),
+        prob=prob,
+    )
 
 
 def _dedupe_texts(texts: Sequence[str]) -> list[str]:
@@ -364,7 +313,7 @@ def _parse_easyocr_results(
     ocr_texts: list[OCRText] = []
     for result in results:
         try:
-            ocr_texts.append(OCRText.from_easyocr_result(result, img_width, img_height))
+            ocr_texts.append(ocr_text_from_easyocr_result(result, img_width, img_height))
         except ValueError as exc:
             logger.warning("Skipping invalid OCR result. Error: %s", exc)
             logger.debug("Invalid OCR result payload: %s", result)

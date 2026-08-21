@@ -22,7 +22,6 @@ from pydicom import Dataset, dcmread
 from pydicom.uid import generate_uid
 from scipy.ndimage import median_filter
 
-from anonymizer.controller.ai.remove_pixel_phi import PolygonPoint, Segmentation
 from anonymizer.controller.ai.tseg.config import FACE_MASK_FILENAME, MIN_STRUCTURE_VOXELS, ROI_SUBSET
 from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult, build_sitk_volume_from_series_frames
 from anonymizer.controller.ai.tseg.segment import (
@@ -36,6 +35,7 @@ from anonymizer.controller.ai.tseg.segment import (
     series_cache_dir,
 )
 from anonymizer.controller.series_io import load_series_frames
+from anonymizer.controller.series_overlay import PolygonPoint, Segmentation
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)

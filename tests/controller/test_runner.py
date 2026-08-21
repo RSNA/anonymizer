@@ -9,7 +9,7 @@ import numpy as np
 import pydicom
 from pydicom.data import get_testdata_file
 
-from anonymizer.controller.ai.remove_pixel_phi import OCRText, ocr_image_for_frame
+from anonymizer.controller.ai.remove_pixel_phi import ocr_image_for_frame
 from anonymizer.controller.runner import (
     Algorithm,
     OcrEditContext,
@@ -17,6 +17,7 @@ from anonymizer.controller.runner import (
     RunOptions,
     run_job,
 )
+from anonymizer.controller.series_overlay import OCRText
 from anonymizer.controller.work_state import WorkState
 from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.windowing import apply_windowing

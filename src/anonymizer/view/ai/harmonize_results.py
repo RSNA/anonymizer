@@ -148,6 +148,7 @@ class HarmonizeResultsView(AppToplevel):
         fonts: AppFonts | None = None,
         anon_model=None,
         on_series_description_updated: Callable[[], None] | None = None,
+        include_brain_structures: bool = False,
     ):
         super().__init__(master=parent)
         if not items:
@@ -160,6 +161,7 @@ class HarmonizeResultsView(AppToplevel):
         self.cancelled = False
         self._anon_model = anon_model
         self._on_series_description_updated = on_series_description_updated
+        self._include_brain_structures = include_brain_structures
 
         self._data_font = fonts.mono if fonts else ctk.CTkFont(family="Menlo", size=12)
         self._study_header_font = fonts.bold if fonts else ctk.CTkFont(size=14, weight="bold")
@@ -876,7 +878,11 @@ class HarmonizeResultsView(AppToplevel):
             )
 
         try:
-            results = harmonize_series([series_path], progress=on_progress)
+            results = harmonize_series(
+                [series_path],
+                progress=on_progress,
+                include_brain_structures=self._include_brain_structures,
+            )
             if not work_state.should_cancel() and not self.cancelled:
                 work_state.finish(results)
         except Exception as exc:
@@ -1003,6 +1009,7 @@ def show_harmonize_results_view(
     fonts: AppFonts | None = None,
     anon_model=None,
     on_series_description_updated: Callable[[], None] | None = None,
+    include_brain_structures: bool = False,
 ) -> HarmonizeBatchOutcome:
     """
     Open harmonize view modally; runs analysis per item and returns batch outcomes.
@@ -1034,6 +1041,7 @@ def show_harmonize_results_view(
         fonts=fonts,
         anon_model=anon_model,
         on_series_description_updated=on_series_description_updated,
+        include_brain_structures=include_brain_structures,
     )
     if view.cancelled and not view._outcomes:
         return HarmonizeBatchOutcome(outcomes=[], cancelled=True)

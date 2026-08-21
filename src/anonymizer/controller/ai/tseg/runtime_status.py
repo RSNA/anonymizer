@@ -32,6 +32,7 @@ class AiFeatureSession:
     remove_pixel_phi: bool = False
     enable_harmonize: bool = False
     enable_face_blur: bool = False
+    enable_brain_structures: bool = False
 
 
 _ai_session = AiFeatureSession()
@@ -46,13 +47,18 @@ def set_ai_session(
     remove_pixel_phi: bool | None = None,
     enable_harmonize: bool | None = None,
     enable_face_blur: bool | None = None,
+    enable_brain_structures: bool | None = None,
 ) -> AiFeatureSession:
     if remove_pixel_phi is not None:
         _ai_session.remove_pixel_phi = remove_pixel_phi
     if enable_harmonize is not None:
         _ai_session.enable_harmonize = enable_harmonize
+        if not enable_harmonize:
+            _ai_session.enable_brain_structures = False
     if enable_face_blur is not None:
         _ai_session.enable_face_blur = enable_face_blur
+    if enable_brain_structures is not None:
+        _ai_session.enable_brain_structures = bool(enable_brain_structures and _ai_session.enable_harmonize)
     return _ai_session
 
 
@@ -61,16 +67,24 @@ def init_ai_session_from_runtime(*, force_refresh: bool = False) -> AiFeatureSes
     from anonymizer.controller.ai.remove_pixel_phi import ocr_models_ready
 
     status = get_runtime_status(force_refresh=force_refresh)
+    harmonize_on = status.harmonize_ready and status.anatomy_weights.status == TsWeightStatus.READY
+    brain_on = (
+        harmonize_on
+        and status.face_license_available
+        and status.brain_structures_weights.status == TsWeightStatus.READY
+    )
     return set_ai_session(
         remove_pixel_phi=ocr_models_ready(),
-        enable_harmonize=(status.harmonize_ready and status.anatomy_weights.status == TsWeightStatus.READY),
+        enable_harmonize=harmonize_on,
         enable_face_blur=(status.face_blur_ready and status.face_weights.status == TsWeightStatus.READY),
+        enable_brain_structures=brain_on,
     )
 
 
 class TsWeightKind(StrEnum):
     ANATOMY = "anatomy"
     FACE = "face"
+    BRAIN_STRUCTURES = "brain_structures"
 
 
 class TsWeightStatus(StrEnum):
@@ -97,6 +111,7 @@ class TsegRuntimeStatus:
     face_license_available: bool
     anatomy_weights: TsWeightState
     face_weights: TsWeightState
+    brain_structures_weights: TsWeightState
     harmonize_ready: bool
     face_blur_ready: bool
     messages: dict[str, str]
@@ -109,6 +124,7 @@ class TsegSetupRowKind(StrEnum):
     OCR_MODEL = "ocr_model"
     ANATOMY_MODEL = "anatomy_model"
     FACE_MODEL = "face_model"
+    BRAIN_STRUCTURES_MODEL = "brain_structures_model"
 
 
 @dataclass(frozen=True)
@@ -452,8 +468,13 @@ def _anatomy_task_spec() -> tuple[int, str] | None:
     return task_ids[0], trainer_for_anatomy_task(task_ids[0])
 
 
-def _face_task_spec() -> tuple[int, str]:
-    return 303, "nnUNetTrainerNoMirroring"
+def _face_task_spec() -> tuple[int, str, str]:
+    return 303, "nnUNetTrainerNoMirroring", "3d_fullres"
+
+
+def _brain_structures_task_spec() -> tuple[int, str, str]:
+    # Must match TotalSegmentator python_api task == "brain_structures".
+    return 409, "nnUNetTrainer_DASegOrd0", "3d_fullres_high"
 
 
 def _anatomy_missing_detail(missing_task_ids: tuple[int, ...]) -> str:
@@ -469,6 +490,8 @@ def _anatomy_missing_detail(missing_task_ids: tuple[int, ...]) -> str:
 def _weight_detail(kind: TsWeightKind) -> str:
     if kind == TsWeightKind.ANATOMY:
         return "~400 MB per model; first Harmonize run will download if not prefetched"
+    if kind == TsWeightKind.BRAIN_STRUCTURES:
+        return "Licensed task 409; optional Harmonize detail for head CT brain sub-segments"
     return "Licensed task; first Face Blur run will download if not prefetched"
 
 
@@ -533,14 +556,14 @@ def verify_face_license() -> tuple[bool, str]:
     return False, message
 
 
-def _resolve_model_folder(task_id: int, trainer: str) -> Path | None:
+def _resolve_model_folder(task_id: int, trainer: str, model: str = _MODEL) -> Path | None:
     try:
         from totalsegmentator.config import setup_nnunet, setup_totalseg
         from totalsegmentator.nnunet import get_output_folder
 
         setup_nnunet()
         setup_totalseg()
-        return Path(get_output_folder(task_id, trainer, _PLANS, _MODEL))
+        return Path(get_output_folder(task_id, trainer, _PLANS, model))
     except ImportError:
         return None
     except Exception as exc:
@@ -607,8 +630,14 @@ def probe_weight_state(kind: TsWeightKind) -> TsWeightState:
             detail=_anatomy_missing_detail(missing),
         )
 
-    task_id, trainer = _face_task_spec()
-    model_folder = _resolve_model_folder(task_id, trainer)
+    if kind == TsWeightKind.FACE:
+        task_id, trainer, model = _face_task_spec()
+    elif kind == TsWeightKind.BRAIN_STRUCTURES:
+        task_id, trainer, model = _brain_structures_task_spec()
+    else:
+        raise ValueError(f"Unknown weight kind: {kind}")
+
+    model_folder = _resolve_model_folder(task_id, trainer, model)
     if _checkpoint_ready(model_folder):
         return TsWeightState(
             kind=kind,
@@ -693,11 +722,17 @@ def probe_runtime_status() -> TsegRuntimeStatus:
 
     anatomy_weights = _merge_weight_state(TsWeightKind.ANATOMY, probe_weight_state(TsWeightKind.ANATOMY))
     face_weights = _merge_weight_state(TsWeightKind.FACE, probe_weight_state(TsWeightKind.FACE))
+    brain_structures_weights = _merge_weight_state(
+        TsWeightKind.BRAIN_STRUCTURES,
+        probe_weight_state(TsWeightKind.BRAIN_STRUCTURES),
+    )
 
     if anatomy_weights.status == TsWeightStatus.MISSING:
         messages["anatomy_weights"] = anatomy_weights.detail
     if face_weights.status == TsWeightStatus.MISSING:
         messages["face_weights"] = face_weights.detail
+    if brain_structures_weights.status == TsWeightStatus.MISSING:
+        messages["brain_structures_weights"] = brain_structures_weights.detail
 
     harmonize_ready = totalsegmentator_available and xgboost_available
     face_blur_ready = totalsegmentator_available and face_license_available
@@ -708,6 +743,7 @@ def probe_runtime_status() -> TsegRuntimeStatus:
         face_license_available=face_license_available,
         anatomy_weights=anatomy_weights,
         face_weights=face_weights,
+        brain_structures_weights=brain_structures_weights,
         harmonize_ready=harmonize_ready,
         face_blur_ready=face_blur_ready,
         messages=messages,
@@ -734,6 +770,10 @@ def ai_feature_title_harmonize() -> str:
     return _("Harmonize")
 
 
+def ai_feature_title_brain_structures() -> str:
+    return _("Brain structures")
+
+
 def ai_feature_title_face_blur() -> str:
     return _("Face De-identify")
 
@@ -746,6 +786,13 @@ def ai_feature_description_harmonize() -> str:
     return _("CT only. Updates SeriesDescription only.")
 
 
+def ai_feature_description_brain_structures() -> str:
+    return _(
+        "Optional licensed head-CT detail (lobes, cerebellum, ventricles, …). "
+        "Uses the same academic license as Face De-identify."
+    )
+
+
 def ai_feature_description_face_blur() -> str:
     return _("CT head studies only. Blurs the segmented face region in pixel data.")
 
@@ -756,6 +803,13 @@ def ai_feature_summary_remove_pixel_phi() -> str:
 
 def ai_feature_summary_harmonize() -> str:
     return _("Analyzes CT anatomy and contrast to suggest a standardized series description using the RadLex playbook.")
+
+
+def ai_feature_summary_brain_structures() -> str:
+    return _(
+        "Adds finer brain sub-segments for Series View overlays when Harmonize runs on head CT "
+        "(requires academic license)."
+    )
 
 
 def ai_feature_summary_face_blur() -> str:
@@ -771,6 +825,11 @@ def remove_pixel_phi_has_models() -> bool:
 def harmonize_has_models() -> bool:
     status = get_runtime_status()
     return status.anatomy_weights.status == TsWeightStatus.READY
+
+
+def brain_structures_has_models() -> bool:
+    status = get_runtime_status()
+    return status.brain_structures_weights.status == TsWeightStatus.READY
 
 
 def face_blur_has_models() -> bool:
@@ -831,6 +890,51 @@ def harmonize_needs_download() -> bool:
         status.totalsegmentator_available
         and status.xgboost_available
         and status.anatomy_weights.status == TsWeightStatus.MISSING
+    )
+
+
+def ai_feature_status_brain_structures() -> str:
+    status = get_runtime_status()
+    if status.brain_structures_weights.status == TsWeightStatus.READY:
+        return _(
+            "Brain structures models are installed. Enable this option when Harmonizing head CT "
+            "to add lobe/ventricle overlays in Series View."
+        )
+    if status.brain_structures_weights.status == TsWeightStatus.DOWNLOADING:
+        return _("Brain structures models are downloading. This may take several minutes.")
+    if status.brain_structures_weights.status == TsWeightStatus.FAILED:
+        return _("The brain structures model download did not complete. Click Download models below to try again.")
+    if not status.totalsegmentator_available:
+        return _("TotalSegmentator is not available in this installation, so this option cannot run yet.")
+    if not status.face_license_available:
+        return _(
+            "A free academic TotalSegmentator license is required before brain structures models "
+            "can be downloaded (same license as Face De-identify)."
+        )
+    if status.brain_structures_weights.status == TsWeightStatus.MISSING:
+        return _("Brain structures models are not installed yet. Click Download models below to set up this option.")
+    return _("Additional setup is required before this option can be used.")
+
+
+def brain_structures_needs_download() -> bool:
+    status = get_runtime_status()
+    return (
+        status.totalsegmentator_available
+        and status.face_license_available
+        and status.brain_structures_weights.status
+        in {TsWeightStatus.MISSING, TsWeightStatus.FAILED}
+    )
+
+
+def brain_structures_allowed() -> bool:
+    """True when Harmonize is on, option enabled, license valid, and models ready."""
+    if not _ai_session.enable_harmonize or not _ai_session.enable_brain_structures:
+        return False
+    status = get_runtime_status()
+    return (
+        status.harmonize_ready
+        and status.face_license_available
+        and status.brain_structures_weights.status == TsWeightStatus.READY
     )
 
 
@@ -1061,7 +1165,7 @@ def download_segmentation_model(
         )
         set_weight_state(failed)
         final = get_runtime_status(force_refresh=True)
-        final_state = final.face_weights if kind == TsWeightKind.FACE else final.anatomy_weights
+        final_state = _weight_state_for_kind(final, kind)
         if on_complete is not None:
             on_complete(final_state)
         return final_state
@@ -1073,6 +1177,16 @@ def download_segmentation_model(
     if on_complete is not None:
         on_complete(final_state)
     return final_state
+
+
+def _weight_state_for_kind(status: TsegRuntimeStatus, kind: TsWeightKind) -> TsWeightState:
+    if kind == TsWeightKind.ANATOMY:
+        return status.anatomy_weights
+    if kind == TsWeightKind.FACE:
+        return status.face_weights
+    if kind == TsWeightKind.BRAIN_STRUCTURES:
+        return status.brain_structures_weights
+    raise ValueError(f"Unknown weight kind: {kind}")
 
 
 def remove_segmentation_model(kind: TsWeightKind) -> bool:

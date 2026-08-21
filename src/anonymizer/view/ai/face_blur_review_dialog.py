@@ -23,7 +23,6 @@ from anonymizer.controller.ai.blur_face import (
     preview_blurred_slice_frames,
     preview_face_blur,
 )
-from anonymizer.controller.ai.remove_pixel_phi import LayerType
 from anonymizer.controller.ai.tseg.dicom_geometry import (
     SeriesGeometryResult,
     ensure_series_geometry,
@@ -31,6 +30,7 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
 )
 from anonymizer.controller.runner import Algorithm
 from anonymizer.controller.series_io import load_series_frames, save_series_frames
+from anonymizer.controller.series_overlay import LayerType
 from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.utils.translate import _

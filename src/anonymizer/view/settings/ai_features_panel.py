@@ -16,16 +16,21 @@ from anonymizer.controller.ai.tseg.runtime_status import (
     TsWeightKind,
     TsWeightState,
     TsWeightStatus,
+    ai_feature_status_brain_structures,
     ai_feature_status_face_blur,
     ai_feature_status_harmonize,
     ai_feature_status_remove_pixel_phi,
+    ai_feature_summary_brain_structures,
     ai_feature_summary_face_blur,
     ai_feature_summary_harmonize,
     ai_feature_summary_remove_pixel_phi,
+    ai_feature_title_brain_structures,
     ai_feature_title_face_blur,
     ai_feature_title_harmonize,
     ai_feature_title_remove_pixel_phi,
     apply_face_license,
+    brain_structures_has_models,
+    brain_structures_needs_download,
     download_segmentation_model,
     face_blur_has_models,
     face_blur_needs_download,
@@ -76,6 +81,7 @@ _DETAIL_PADX = (26, 0)
 _TS_KIND_FEATURE_KEY = {
     TsWeightKind.ANATOMY: "enable_harmonize",
     TsWeightKind.FACE: "enable_face_blur",
+    TsWeightKind.BRAIN_STRUCTURES: "enable_brain_structures",
 }
 
 
@@ -114,6 +120,9 @@ class AiFeaturesPanel(ctk.CTkFrame):
         self._license_frame: ctk.CTkFrame | None = None
         self._license_entry: ctk.CTkEntry | None = None
         self._license_apply_button: ctk.CTkButton | None = None
+        self._brain_structures_frame: ctk.CTkFrame | None = None
+        self._brain_structures_status: ctk.CTkLabel | None = None
+        self._brain_structures_actions: ctk.CTkFrame | None = None
 
         self.columnconfigure(0, weight=1)
         self._build_features()
@@ -126,6 +135,8 @@ class AiFeaturesPanel(ctk.CTkFrame):
         session = get_ai_session()
         for _label, key in _FEATURE_LABELS:
             self._feature_vars[key].set(1 if getattr(session, key) else 0)
+        if "enable_brain_structures" in self._feature_vars:
+            self._feature_vars["enable_brain_structures"].set(1 if session.enable_brain_structures else 0)
         self._refresh_status()
 
     def apply_session(self) -> None:
@@ -133,6 +144,8 @@ class AiFeaturesPanel(ctk.CTkFrame):
             remove_pixel_phi=self._feature_vars["remove_pixel_phi"].get() == 1,
             enable_harmonize=self._feature_vars["enable_harmonize"].get() == 1,
             enable_face_blur=self._feature_vars["enable_face_blur"].get() == 1,
+            enable_brain_structures=self._feature_vars.get("enable_brain_structures", tk.IntVar(value=0)).get()
+            == 1,
         )
 
     def destroy(self) -> None:
@@ -171,6 +184,42 @@ class AiFeaturesPanel(ctk.CTkFrame):
             actions = ctk.CTkFrame(block, fg_color="transparent")
             self._action_frames[key] = actions
 
+            if key == "enable_harmonize":
+                self._brain_structures_frame = ctk.CTkFrame(block, fg_color="transparent")
+                self._brain_structures_frame.grid(row=4, column=0, sticky="ew", padx=_DETAIL_PADX, pady=(6, 0))
+                self._brain_structures_frame.columnconfigure(0, weight=1)
+                brain_var = tk.IntVar(value=1 if session.enable_brain_structures else 0)
+                self._feature_vars["enable_brain_structures"] = brain_var
+                brain_cb = ctk.CTkCheckBox(
+                    self._brain_structures_frame,
+                    text=ai_feature_title_brain_structures(),
+                    variable=brain_var,
+                    command=self._on_toggle_changed,
+                )
+                brain_cb.grid(row=0, column=0, sticky="w")
+                brain_summary = ctk.CTkLabel(
+                    self._brain_structures_frame,
+                    text=ai_feature_summary_brain_structures(),
+                    anchor="w",
+                    justify="left",
+                    wraplength=480,
+                    text_color=("gray30", "gray75"),
+                )
+                brain_summary.grid(row=1, column=0, sticky="w", pady=(2, 0))
+                self._summary_labels["enable_brain_structures"] = brain_summary
+                self._brain_structures_status = ctk.CTkLabel(
+                    self._brain_structures_frame,
+                    text="",
+                    anchor="w",
+                    justify="left",
+                    wraplength=480,
+                )
+                self._brain_structures_status.grid(row=2, column=0, sticky="w", pady=(4, 0))
+                self._status_labels["enable_brain_structures"] = self._brain_structures_status
+                self._brain_structures_actions = ctk.CTkFrame(self._brain_structures_frame, fg_color="transparent")
+                self._action_frames["enable_brain_structures"] = self._brain_structures_actions
+                self._brain_structures_frame.grid_remove()
+
             if key == "enable_face_blur":
                 self._license_frame = ctk.CTkFrame(block, fg_color="transparent")
                 self._license_frame.grid(row=4, column=0, sticky="ew", padx=_DETAIL_PADX)
@@ -186,6 +235,7 @@ class AiFeaturesPanel(ctk.CTkFrame):
             "remove_pixel_phi": ai_feature_title_remove_pixel_phi,
             "enable_harmonize": ai_feature_title_harmonize,
             "enable_face_blur": ai_feature_title_face_blur,
+            "enable_brain_structures": ai_feature_title_brain_structures,
         }
         title = titles[key]()
         message = _(
@@ -223,6 +273,24 @@ class AiFeaturesPanel(ctk.CTkFrame):
                     self._feature_vars["enable_harmonize"].set(1)
                     return
                 remove_segmentation_model(TsWeightKind.ANATOMY)
+                if brain_structures_has_models():
+                    remove_segmentation_model(TsWeightKind.BRAIN_STRUCTURES)
+                if "enable_brain_structures" in self._feature_vars:
+                    self._feature_vars["enable_brain_structures"].set(0)
+        if session.enable_brain_structures and not self._feature_enabled("enable_brain_structures"):
+            if self._feature_download_in_progress("enable_brain_structures"):
+                self._feature_vars["enable_brain_structures"].set(1)
+                messagebox.showwarning(
+                    ai_feature_title_brain_structures(),
+                    _("Wait for the brain structures model download to finish before disabling this option."),
+                    parent=self.winfo_toplevel(),
+                )
+                return
+            if brain_structures_has_models():
+                if not self._confirm_feature_disable("enable_brain_structures"):
+                    self._feature_vars["enable_brain_structures"].set(1)
+                    return
+                remove_segmentation_model(TsWeightKind.BRAIN_STRUCTURES)
         if session.enable_face_blur and not self._feature_enabled("enable_face_blur"):
             if self._feature_download_in_progress("enable_face_blur"):
                 self._feature_vars["enable_face_blur"].set(1)
@@ -266,6 +334,7 @@ class AiFeaturesPanel(ctk.CTkFrame):
             show_download=self._feature_enabled("enable_harmonize") and harmonize_needs_download(),
             download_command=lambda: self._start_model_download(TsWeightKind.ANATOMY),
         )
+        self._refresh_brain_structures_option()
         self._update_feature_status(
             "enable_face_blur",
             enabled=self._feature_enabled("enable_face_blur"),
@@ -276,6 +345,31 @@ class AiFeaturesPanel(ctk.CTkFrame):
         )
         self._refresh_license_entry()
         self._notify_layout_changed()
+
+    def _refresh_brain_structures_option(self) -> None:
+        frame = self._brain_structures_frame
+        if frame is None or "enable_brain_structures" not in self._feature_vars:
+            return
+        harmonize_on = self._feature_enabled("enable_harmonize")
+        if not harmonize_on:
+            frame.grid_remove()
+            return
+        frame.grid()
+        brain_on = self._feature_enabled("enable_brain_structures")
+        summary = self._summary_labels.get("enable_brain_structures")
+        status = self._status_labels.get("enable_brain_structures")
+        if summary is not None:
+            summary.configure(text=ai_feature_summary_brain_structures() if brain_on else "")
+        if status is not None:
+            status.configure(text=ai_feature_status_brain_structures() if brain_on else "")
+        self._update_feature_status(
+            "enable_brain_structures",
+            enabled=brain_on,
+            summary=ai_feature_summary_brain_structures(),
+            status=ai_feature_status_brain_structures(),
+            show_download=brain_on and brain_structures_needs_download(),
+            download_command=lambda: self._start_model_download(TsWeightKind.BRAIN_STRUCTURES),
+        )
 
     def _update_feature_status(
         self,
@@ -344,7 +438,10 @@ class AiFeaturesPanel(ctk.CTkFrame):
         self._license_entry = None
         self._license_apply_button = None
 
-        if not self._feature_enabled("enable_face_blur") or not face_blur_needs_license():
+        show_license = face_blur_needs_license() and (
+            self._feature_enabled("enable_face_blur") or self._feature_enabled("enable_brain_structures")
+        )
+        if not show_license:
             self._license_frame.grid_remove()
             return
 
@@ -522,6 +619,7 @@ class AiFeaturesPanel(ctk.CTkFrame):
         titles = {
             TsWeightKind.ANATOMY: ai_feature_title_harmonize,
             TsWeightKind.FACE: ai_feature_title_face_blur,
+            TsWeightKind.BRAIN_STRUCTURES: ai_feature_title_brain_structures,
         }
         title_fn = titles.get(kind)
         if title_fn is None:
@@ -536,6 +634,8 @@ class AiFeaturesPanel(ctk.CTkFrame):
             return True
         if key == "enable_harmonize" and self._pending_ts_download == TsWeightKind.ANATOMY:
             return True
+        if key == "enable_brain_structures" and self._pending_ts_download == TsWeightKind.BRAIN_STRUCTURES:
+            return True
         return key == "enable_face_blur" and self._pending_ts_download == TsWeightKind.FACE
 
     def _download_detail_message(self, key: str) -> str:
@@ -547,6 +647,8 @@ class AiFeaturesPanel(ctk.CTkFrame):
             return status.anatomy_weights.detail
         if key == "enable_face_blur":
             return status.face_weights.detail
+        if key == "enable_brain_structures":
+            return status.brain_structures_weights.detail
         if key == "remove_pixel_phi":
             return _("Downloading OCR models…")
         return _("Downloading…")
@@ -575,7 +677,7 @@ class AiFeaturesPanel(ctk.CTkFrame):
 
     def _update_download_progress(self) -> bool:
         active = False
-        for key in ("remove_pixel_phi", "enable_harmonize", "enable_face_blur"):
+        for key in ("remove_pixel_phi", "enable_harmonize", "enable_brain_structures", "enable_face_blur"):
             in_progress = self._feature_download_in_progress(key)
             if key in self._progress_bars and not in_progress:
                 self._refresh_status()

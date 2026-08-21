@@ -7,10 +7,10 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from anonymizer.controller.ai.remove_pixel_phi import (
-    OCRText,
     PixelPhiRemovalMode,
     remove_ocr_text_from_frame,
 )
+from anonymizer.controller.series_overlay import OCRText
 
 
 def _ocr_texts() -> list[OCRText]:

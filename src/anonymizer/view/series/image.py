@@ -9,7 +9,19 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-from anonymizer.controller.ai.remove_pixel_phi import LayerType, OCRText, OverlayData, Segmentation, UserRectangle
+from anonymizer.controller.ai.anatomy_overlay import (
+    bgr_to_hex,
+    latch_button_width_px,
+    structure_button_label,
+)
+from anonymizer.controller.series_overlay import (
+    LayerType,
+    OCRText,
+    OverlayData,
+    Segmentation,
+    UserRectangle,
+    render_segmentations_overlay,
+)
 from anonymizer.utils.translate import _
 from anonymizer.utils.windowing import apply_windowing
 from anonymizer.view.common.ctk_safe import dispose_photo_image
@@ -24,9 +36,16 @@ class ImageViewer(ctk.CTkFrame):
     NORMAL_FPS = 5
     MAX_FPS = 20
     PRELOAD_FRAMES = 10  # Number of frames to preload
-    PLAY_BTN_SIZE = (32, 32)
+    PLAY_BTN_SIZE = (28, 28)
     BUTTON_WIDTH = 100
-    PAD = 10
+    PAD = 6
+    DATA_PANEL_PAD = 4
+    HISTOGRAM_CANVAS_WIDTH = 220
+    HISTOGRAM_CANVAS_HEIGHT = 110
+    HISTOGRAM_CANVAS_MIN_HEIGHT = 72
+    DATA_PANEL_MIN_HEIGHT = 260
+    SEGMENTATION_BUTTON_HEIGHT = 22
+    SEGMENTATION_BUTTONS_PER_ROW = 4
     SMALL_JUMP_PERCENTAGE = 0.01  # 1% of the total images
     LARGE_JUMP_PERCENTAGE = 0.10  # 10% of the total images
     MAX_SCREEN_PERCENTAGE = 0.7  # area of current screen available for displaying image
@@ -49,6 +68,8 @@ class ImageViewer(ctk.CTkFrame):
         segmentation_overlay_alpha: float = 1.0,
         on_slice_index_changed: Callable[[int], None] | None = None,
         on_wlww_changed: Callable[[float, float], None] | None = None,
+        on_segmentation_toggle: Callable[[str, bool], None] | None = None,
+        clear_callback: Callable[[], None] | None = None,
         enable_interactive_editing: bool = True,
         show_playback_controls: bool = True,
         show_data_panel: bool = True,
@@ -69,6 +90,8 @@ class ImageViewer(ctk.CTkFrame):
         self.segmentation_overlay_alpha = min(1.0, max(0.0, segmentation_overlay_alpha))
         self.on_slice_index_changed = on_slice_index_changed
         self.on_wlww_changed = on_wlww_changed
+        self.on_segmentation_toggle = on_segmentation_toggle
+        self.clear_callback = clear_callback
         self.enable_interactive_editing = enable_interactive_editing
         self.show_playback_controls = show_playback_controls
         self.show_data_panel = show_data_panel
@@ -81,6 +104,12 @@ class ImageViewer(ctk.CTkFrame):
         self._interaction_enabled = True
         self._suppress_callbacks = False
         self._resize_to_viewport_enabled = False
+        self._active_segmentation_names: set[str] = set()
+        self._segmentation_button_meta: dict[str, tuple[int, int, int]] = {}
+        self._segmentation_buttons: dict[str, ctk.CTkButton] = {}
+        self.segmentation_frame: ctk.CTkFrame | None = None
+        self.segmentation_buttons_frame: ctk.CTkFrame | None = None
+        self.clear_ts_cache_button: ctk.CTkButton | None = None
 
         # Determine image properties from the last frame
         last_frame = images[-1]
@@ -174,21 +203,56 @@ class ImageViewer(ctk.CTkFrame):
         self.image_number_label: ctk.CTkLabel | None = None
 
         if self.show_data_panel:
-            # Data Frame:
+            # Data Frame height tracks the image canvas (with a minimum floor).
             self.data_frame = ctk.CTkFrame(self)
-            self.data_frame.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="ns")
+            self.data_frame.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="n")
             self.data_frame.grid_rowconfigure(0, weight=1)
+            self.data_frame.grid_rowconfigure(1, weight=0)
+            self.data_frame.grid_rowconfigure(2, weight=0)
 
             self.histogram = Histogram(
                 self.data_frame,
                 update_callback=self._handle_histogram_update,
             )
             self.histogram.set_wlww(self.current_wl, self.current_ww, redraw=False)
-            self.histogram.grid(row=0, column=0, padx=self.PAD, pady=self.PAD, sticky="n")
+            self.histogram.canvas.configure(
+                width=self.HISTOGRAM_CANVAS_WIDTH,
+                height=self.HISTOGRAM_CANVAS_HEIGHT,
+            )
+            self.histogram.grid(row=0, column=0, padx=self.DATA_PANEL_PAD, pady=self.DATA_PANEL_PAD, sticky="nsew")
+
+            self.segmentation_frame = ctk.CTkFrame(self.data_frame)
+            self.segmentation_frame.grid(
+                row=1, column=0, padx=self.DATA_PANEL_PAD, pady=(0, self.DATA_PANEL_PAD), sticky="ew"
+            )
+            self.segmentation_frame.grid_columnconfigure(0, weight=1)
+            header = ctk.CTkFrame(self.segmentation_frame, fg_color="transparent")
+            header.grid(row=0, column=0, sticky="ew", padx=self.DATA_PANEL_PAD, pady=(self.DATA_PANEL_PAD, 0))
+            header.grid_columnconfigure(0, weight=1)
+            ctk.CTkLabel(header, text=_("Segmentation"), anchor="w").grid(row=0, column=0, sticky="w")
+            self.clear_ts_cache_button = ctk.CTkButton(
+                header,
+                text=_("Clear"),
+                width=56,
+                height=self.SEGMENTATION_BUTTON_HEIGHT,
+                command=self._on_clear_clicked,
+            )
+            self.clear_ts_cache_button.grid(row=0, column=1, sticky="e", padx=(4, 0))
+            self.clear_ts_cache_button.grid_remove()
+
+            self.segmentation_buttons_frame = ctk.CTkFrame(
+                self.segmentation_frame,
+                fg_color="transparent",
+            )
+            self.segmentation_buttons_frame.grid(
+                row=1, column=0, sticky="ew", padx=self.DATA_PANEL_PAD, pady=self.DATA_PANEL_PAD
+            )
 
             # Control Frame for fixed width widgets
             self.control_frame = ctk.CTkFrame(self.data_frame)
-            self.control_frame.grid(row=1, column=0, padx=self.PAD, pady=self.PAD, sticky="ew")
+            self.control_frame.grid(
+                row=2, column=0, padx=self.DATA_PANEL_PAD, pady=(0, self.DATA_PANEL_PAD), sticky="ew"
+            )
             self.control_frame.grid_columnconfigure(1, weight=1)
 
             # Image Size Label:
@@ -365,8 +429,9 @@ class ImageViewer(ctk.CTkFrame):
             return
         with contextlib.suppress(tk.TclError):
             if visible:
-                self.data_frame.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="ns")
+                self.data_frame.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="n")
                 self.grid_columnconfigure(0, weight=1)
+                self._sync_data_panel_to_image_height()
             else:
                 if self.playing:
                     self._stop_playback()
@@ -464,6 +529,90 @@ class ImageViewer(ctk.CTkFrame):
 
     def set_overlay_propagation(self, propagate: bool):
         self.propagate_overlays = propagate
+
+    def _on_clear_clicked(self) -> None:
+        if self.clear_callback is not None:
+            self.clear_callback()
+
+    def set_clear_button_present(self, present: bool) -> None:
+        if self.clear_ts_cache_button is None:
+            return
+        if present:
+            self.clear_ts_cache_button.grid()
+        else:
+            self.clear_ts_cache_button.grid_remove()
+        self._sync_data_panel_to_image_height()
+
+    def get_active_segmentation_names(self) -> set[str]:
+        return set(self._active_segmentation_names)
+
+    def clear_active_segmentations(self) -> None:
+        self._active_segmentation_names.clear()
+        self._refresh_segmentation_button_styles()
+
+    def set_segmentation_structures(self, items: list[tuple[str, tuple[int, int, int]]]) -> None:
+        """Rebuild latch buttons. ``items`` are (name, color_bgr) in display order."""
+        if self.segmentation_buttons_frame is None:
+            return
+        for child in self.segmentation_buttons_frame.winfo_children():
+            child.destroy()
+        self._segmentation_buttons.clear()
+        self._segmentation_button_meta = {name: color for name, color in items}
+        still_active = {name for name in self._active_segmentation_names if name in self._segmentation_button_meta}
+        self._active_segmentation_names = still_active
+        per_row = self.SEGMENTATION_BUTTONS_PER_ROW
+        for index, (name, _color_bgr) in enumerate(items):
+            label = structure_button_label(name)
+            row, col = divmod(index, per_row)
+            button = ctk.CTkButton(
+                self.segmentation_buttons_frame,
+                text=label,
+                width=latch_button_width_px(label),
+                height=self.SEGMENTATION_BUTTON_HEIGHT,
+                anchor="center",
+                command=lambda n=name: self._toggle_segmentation_structure(n),
+            )
+            button.grid(row=row, column=col, sticky="w", padx=2, pady=2)
+            self._segmentation_buttons[name] = button
+        self._refresh_segmentation_button_styles()
+        self._sync_data_panel_to_image_height()
+
+    def _toggle_segmentation_structure(self, name: str) -> None:
+        if name not in self._segmentation_button_meta:
+            return
+        active = name not in self._active_segmentation_names
+        if active:
+            self._active_segmentation_names.add(name)
+        else:
+            self._active_segmentation_names.discard(name)
+        self._refresh_segmentation_button_styles()
+        if self.on_segmentation_toggle is not None:
+            self.on_segmentation_toggle(name, active)
+
+    def _refresh_segmentation_button_styles(self) -> None:
+        theme = ctk.ThemeManager.theme["CTkButton"]
+        standard_fg = theme["fg_color"]
+        standard_hover = theme["hover_color"]
+        for name, button in self._segmentation_buttons.items():
+            color_bgr = self._segmentation_button_meta[name]
+            outline_hex = bgr_to_hex(color_bgr)
+            active = name in self._active_segmentation_names
+            if active:
+                button.configure(
+                    fg_color="#ffffff",
+                    hover_color="#f0f0f0",
+                    border_color=outline_hex,
+                    border_width=2,
+                    text_color="#000000",
+                )
+            else:
+                button.configure(
+                    fg_color=standard_fg,
+                    hover_color=standard_hover,
+                    border_color=standard_fg,
+                    border_width=0,
+                    text_color="#ffffff",
+                )
 
     def set_text_overlay_data(self, frame_index: int, data: list[OCRText]):
         # Creates new text overlay if one doesn't exist yet:
@@ -599,6 +748,37 @@ class ImageViewer(ctk.CTkFrame):
             return self.image_width, self.image_height
         return scaled_size
 
+    def _data_panel_target_height(self) -> int:
+        """RHS panel height follows the displayed image height, floored at a usable minimum."""
+        return max(self.DATA_PANEL_MIN_HEIGHT, int(self.current_size[1]))
+
+    def _sync_data_panel_to_image_height(self) -> None:
+        """Fit histogram + segmentation + player into the image-height budget."""
+        if self.data_frame is None or self.histogram is None:
+            return
+        with contextlib.suppress(tk.TclError):
+            # Let children report natural sizes, then lock the panel to the image budget.
+            self.data_frame.grid_propagate(True)
+            self.update_idletasks()
+            content_w = max(
+                self.data_frame.winfo_reqwidth(),
+                self.HISTOGRAM_CANVAS_WIDTH + 2 * self.DATA_PANEL_PAD,
+            )
+            target_h = self._data_panel_target_height()
+            seg_h = 0
+            ctrl_h = 0
+            if self.segmentation_frame is not None and self.segmentation_frame.winfo_ismapped():
+                seg_h = max(0, self.segmentation_frame.winfo_reqheight())
+            if self.control_frame is not None and self.control_frame.winfo_ismapped():
+                ctrl_h = max(0, self.control_frame.winfo_reqheight())
+            # Pads: hist top/bottom + gaps around seg/control.
+            chrome = seg_h + ctrl_h + (4 * self.DATA_PANEL_PAD)
+            hist_h = max(self.HISTOGRAM_CANVAS_MIN_HEIGHT, target_h - chrome)
+            self.histogram.canvas.configure(width=self.HISTOGRAM_CANVAS_WIDTH, height=hist_h)
+            self.update_idletasks()
+            self.data_frame.configure(width=content_w, height=target_h)
+            self.data_frame.grid_propagate(False)
+
     def _set_initial_size(self) -> None:
         """Calculates and sets the initial image size based on screen size."""
         max_width, max_height = self._screen_canvas_budget()
@@ -611,6 +791,7 @@ class ImageViewer(ctk.CTkFrame):
         self.load_and_display_image(self.current_image_index)
         if self.histogram is not None and not self.companion_attached:
             self.histogram.update_image(self.images[self.current_image_index])
+        self._sync_data_panel_to_image_height()
         self.update_status()
         with contextlib.suppress(tk.TclError):
             self.canvas.focus_set()
@@ -626,6 +807,7 @@ class ImageViewer(ctk.CTkFrame):
             self._calculate_scaled_size(max_width, max_height),
         )
         if new_image_size == self.current_size and self.canvas_image_item is not None:
+            self._sync_data_panel_to_image_height()
             return
         self.current_size = new_image_size
         self.canvas.config(width=new_image_size[0], height=new_image_size[1])
@@ -633,6 +815,7 @@ class ImageViewer(ctk.CTkFrame):
             self.companion_canvas.config(width=new_image_size[0], height=new_image_size[1])
         self._companion_cache.clear()
         self.load_and_display_image(self.current_image_index)
+        self._sync_data_panel_to_image_height()
         self.update_status()
 
     def sync_viewport_after_layout(self) -> None:
@@ -769,9 +952,15 @@ class ImageViewer(ctk.CTkFrame):
 
                 case LayerType.SEGMENTATIONS:
                     if overlay_data.segmentations:
-                        for segmentation in overlay_data.segmentations:
-                            points = np.array([(p.x, p.y) for p in segmentation.points], dtype=np.int32)
-                            cv2.fillPoly(combined_overlay, [points], self.segmentation_overlay_color)
+                        seg_layer = render_segmentations_overlay(
+                            frame_height,
+                            frame_width,
+                            overlay_data.segmentations,
+                            default_color_bgr=self.segmentation_overlay_color,
+                        )
+                        # Combine with other layers already drawn on combined_overlay.
+                        mask = seg_layer.max(axis=2) > 0
+                        combined_overlay[mask] = seg_layer[mask]
 
                 case _:
                     logger.warning("Rendering not implemented for layer type: %s", layer_name)
@@ -781,12 +970,15 @@ class ImageViewer(ctk.CTkFrame):
     def _composite_overlay(self, image_array: np.ndarray, rendered_overlay: np.ndarray) -> np.ndarray:
         if not np.any(rendered_overlay):
             return image_array
-        if self.segmentation_overlay_alpha >= 1.0:
-            return cv2.add(image_array, rendered_overlay)
-
         mask = rendered_overlay.max(axis=2) > 0
         if not np.any(mask):
             return image_array
+        if self.segmentation_overlay_alpha >= 1.0:
+            # Opaque replace — never cv2.add (adds CT intensity into outline colors and
+            # shifts hues, e.g. liver orange ↔ yellow on bright parenchyma).
+            composited = image_array.copy()
+            composited[mask] = rendered_overlay[mask]
+            return composited
 
         blended = image_array.astype(np.float32)
         overlay = rendered_overlay.astype(np.float32)
@@ -801,8 +993,12 @@ class ImageViewer(ctk.CTkFrame):
         return image_array
 
     def _pil_frame(self, image_array: np.ndarray) -> np.ndarray:
-        """Convert OpenCV BGR composited frames back to RGB for PIL/Tk."""
-        if self.is_color and image_array.ndim == 3 and image_array.shape[-1] == 3:
+        """Convert OpenCV BGR composited frames to RGB for PIL/Tk.
+
+        ``apply_windowing`` returns BGR for grayscale CT; overlays are drawn in BGR.
+        Without this conversion, red overlays appear blue/purple on mono series.
+        """
+        if image_array.ndim == 3 and image_array.shape[-1] == 3:
             return cv2.cvtColor(image_array, cv2.COLOR_BGR2RGB)
         return image_array
 

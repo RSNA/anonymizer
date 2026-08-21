@@ -86,7 +86,7 @@ class WelcomeView(ctk.CTkFrame):
         label_welcome_text = ctk.CTkLabel(
             master=self,
             text=self.welcome_text,
-            font=self._fonts.heading,
+            font=self._fonts.body,
             justify="left",
             wraplength=self.WELCOME_TEXT_WRAP_LENGTH,
         )

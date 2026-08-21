@@ -9,9 +9,6 @@ import pytest
 from pydicom import Dataset
 
 from anonymizer.controller.ai.remove_pixel_phi import (
-    OCRText,
-    OverlayData,
-    UserRectangle,
     _dedupe_texts,
     apply_instance_pixel_phi,
     apply_instance_pixel_phi_for_dcm,
@@ -19,6 +16,7 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     collect_series_view_pixel_phi_texts,
     remove_pixel_phi,
 )
+from anonymizer.controller.series_overlay import OCRText, OverlayData, UserRectangle
 from anonymizer.model.anonymizer import Instance
 from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT
 from tests.paths import DEFAULT_ANONYMIZER_SCRIPT

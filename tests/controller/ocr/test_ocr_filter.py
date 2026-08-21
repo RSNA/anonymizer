@@ -14,7 +14,6 @@ from anonymizer.controller.ai.ocr_whitelist_match import (
     resolve_whitelist_match,
 )
 from anonymizer.controller.ai.remove_pixel_phi import (
-    OCRText,
     PixelPhiRemovalMode,
     _apply_frame_removal_mask,
     _map_ocr_texts_to_source_coordinates,
@@ -26,6 +25,7 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     remove_pixel_phi,
 )
 from anonymizer.controller.ai_batch_process import format_remove_pixel_phi_instance_detail
+from anonymizer.controller.series_overlay import OCRText
 from anonymizer.utils.memory import MemorySnapshot, format_memory_snapshot_label
 
 

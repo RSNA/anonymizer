@@ -14,13 +14,17 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     pixel_phi_removal_mode_menu_values,
 )
 from anonymizer.controller.ai.tseg.runtime_status import (
+    ai_feature_description_brain_structures,
     ai_feature_description_face_blur,
     ai_feature_description_harmonize,
     ai_feature_description_remove_pixel_phi,
+    ai_feature_title_brain_structures,
     ai_feature_title_face_blur,
     ai_feature_title_harmonize,
     ai_feature_title_remove_pixel_phi,
+    brain_structures_allowed,
     face_blur_allowed,
+    get_ai_session,
     harmonize_allowed,
     pixel_phi_allowed,
 )
@@ -190,6 +194,32 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         )
         self._blur_mode_menu.pack(side="left")
 
+    def _build_harmonize_options(self, parent: ctk.CTkFrame, pad: int) -> None:
+        session = get_ai_session()
+        offer_brain = session.enable_brain_structures and brain_structures_allowed()
+        self._include_brain_structures_var = tk.IntVar(value=1 if offer_brain else 0)
+        frame = ctk.CTkFrame(parent, fg_color="transparent")
+        frame.grid(row=0, column=0, pady=(self.SECTION_PAD, 0), sticky="w")
+        self._include_brain_structures_checkbox = ctk.CTkCheckBox(
+            frame,
+            text=ai_feature_title_brain_structures(),
+            variable=self._include_brain_structures_var,
+            state="normal" if offer_brain else "disabled",
+        )
+        self._include_brain_structures_checkbox.pack(anchor="w")
+        ctk.CTkLabel(
+            frame,
+            text=ai_feature_description_brain_structures()
+            if offer_brain
+            else _(
+                "Enable Brain structures under Harmonize in AI Features and download models to use this option."
+            ),
+            anchor="w",
+            justify="left",
+            wraplength=self.INTRO_WRAP - pad * 4,
+            text_color="gray60",
+        ).pack(anchor="w", pady=(4, 0))
+
     def _create_widgets(self) -> None:
         pad = self.PAD
         section_pad = self.SECTION_PAD
@@ -245,6 +275,10 @@ class AiBatchProcessOptionsDialog(AppToplevel):
                 options_parent = ctk.CTkFrame(body, fg_color="transparent")
                 options_parent.grid(row=1, column=0, sticky="nw")
                 self._build_pixel_phi_options(options_parent, pad)
+            elif algorithm is AiBatchAlgorithm.HARMONIZE:
+                options_parent = ctk.CTkFrame(body, fg_color="transparent")
+                options_parent.grid(row=1, column=0, sticky="nw")
+                self._build_harmonize_options(options_parent, pad)
             elif algorithm is AiBatchAlgorithm.FACE_BLUR:
                 options_parent = ctk.CTkFrame(body, fg_color="transparent")
                 options_parent.grid(row=1, column=0, sticky="nw")
@@ -340,6 +374,9 @@ class AiBatchProcessOptionsDialog(AppToplevel):
             return
         blur_mode = face_blur_mode_from_menu_label(self._blur_mode_var.get())
         pixel_phi_removal_mode = pixel_phi_removal_mode_from_menu_label(self._pixel_phi_mode_var.get())
+        include_brain = bool(
+            hasattr(self, "_include_brain_structures_var") and self._include_brain_structures_var.get() == 1
+        )
         self._result = AiBatchProcessOptionsResult(
             confirmed=True,
             options=AiBatchProcessOptions(
@@ -347,6 +384,7 @@ class AiBatchProcessOptionsDialog(AppToplevel):
                 blur_mode=blur_mode,
                 pixel_phi_removal_mode=pixel_phi_removal_mode,
                 use_modality_whitelist=self._use_modality_whitelist_var.get() == 1,
+                include_brain_structures=include_brain,
             ),
         )
         self._close()

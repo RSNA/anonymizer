@@ -329,7 +329,7 @@ def harmonize_context_hint(series_directory: Path, ds: Dataset | None) -> str | 
         return None
     if series_description_is_harmonized(series_directory, ds) is not True:
         return None
-    return _("Series description already harmonized — use Clear Cache to re-run analysis")
+    return _("Series description already harmonized — use Clear to re-run analysis")
 
 
 @dataclass(frozen=True)
@@ -580,6 +580,7 @@ def harmonize_and_apply_series(
     *,
     anon_model: AnonymizerModel | None = None,
     progress: ProgressCallback | None = None,
+    include_brain_structures: bool = False,
 ) -> HarmonizeApplyOutcome:
     """Run harmonize for one CT series and auto-apply the merged description."""
     series_path = Path(series_path)
@@ -603,7 +604,11 @@ def harmonize_and_apply_series(
     if anon_model is None and series_description_is_harmonized(series_path, ds) is True:
         return HarmonizeApplyOutcome(series_path, "skipped", _("Already harmonized"))
 
-    results = harmonize_series([series_path], progress=progress)
+    results = harmonize_series(
+        [series_path],
+        progress=progress,
+        include_brain_structures=include_brain_structures,
+    )
     if not results:
         return HarmonizeApplyOutcome(series_path, "failed", _("No harmonize result"))
 
@@ -808,6 +813,7 @@ def harmonize_series(
     series_directories: list[Path],
     *,
     progress: ProgressCallback | None = None,
+    include_brain_structures: bool = False,
 ) -> list[HarmonizedResult]:
     """
     Run harmonize sequentially per series: geometry → TS segmentation → TS contrast → Playbook merge.
@@ -888,7 +894,12 @@ def harmonize_series(
                 frac_range=_TSEG_SEG_FRAC,
                 stage_label="Segmenting anatomy",
             )
-            region_result, nifti_path = analyze_tseg_regions(series_dir, geometry=geometry, progress=tseg_progress)
+            region_result, nifti_path = analyze_tseg_regions(
+                series_dir,
+                geometry=geometry,
+                progress=tseg_progress,
+                include_brain_structures=include_brain_structures,
+            )
             if region_result.body_parts_present.strip() and region_result.error is None:
                 _report(
                     "regions",

@@ -13,6 +13,15 @@ import customtkinter as ctk
 import numpy as np
 from pydicom import Dataset, dcmread
 
+from anonymizer.controller.ai.anatomy_overlay import (
+    collect_primary_segment_voxels,
+    color_bgr_for_structure,
+    contour_mask_slice,
+    load_primary_segment_mask,
+    merge_structure_overlays,
+    order_structures_by_voxels,
+    shift_overlays_to_viewer_frames,
+)
 from anonymizer.controller.ai.blur_face import (
     CachedRegionSignal,
     FaceBlurEligibility,
@@ -34,8 +43,6 @@ from anonymizer.controller.ai.ocr_whitelist_match import (
     match_mode_menu_labels,
 )
 from anonymizer.controller.ai.remove_pixel_phi import (
-    OCRText,
-    UserRectangle,
     apply_series_view_pixel_phi,
     blackout_rectangular_areas,
     build_series_view_ocr_pixels,
@@ -47,7 +54,7 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     pixel_phi_removal_mode_menu_values,
     remove_ocr_text_from_frame,
 )
-from anonymizer.controller.ai.tseg.cache import tseg_cache_summary
+from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir, tseg_cache_summary
 from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
 from anonymizer.controller.ai.tseg.dicom_geometry import (
     SeriesGeometryResult,
@@ -56,7 +63,12 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
     load_geometry_cache,
     stackable_dicom_paths,
 )
-from anonymizer.controller.ai.tseg.runtime_status import face_blur_allowed, get_ai_session, harmonize_allowed
+from anonymizer.controller.ai.tseg.runtime_status import (
+    brain_structures_allowed,
+    face_blur_allowed,
+    get_ai_session,
+    harmonize_allowed,
+)
 from anonymizer.controller.create_projections import invalidate_projection_cache
 from anonymizer.controller.runner import Algorithm, OcrEditContext, RunOptions, run_job
 from anonymizer.controller.series_io import (
@@ -65,6 +77,7 @@ from anonymizer.controller.series_io import (
     load_series_frames,
     save_series_frames,
 )
+from anonymizer.controller.series_overlay import LayerType, OCRText, Segmentation, UserRectangle
 from anonymizer.controller.work_state import WorkState
 from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.memory import collect_garbage_safe, log_process_memory
@@ -145,7 +158,7 @@ def ocr_results_available_for_edit_context(
 
 
 def clear_cache_button_visible(*, modality: str | None, already_harmonized: bool) -> bool:
-    """Show Clear Cache only after Harmonize has been applied (PHI Index Harmonized=Yes)."""
+    """Show Clear only after Harmonize has been applied (Dataset Harmonized=Yes)."""
     return modality == "CT" and already_harmonized
 
 
@@ -174,7 +187,7 @@ def harmonize_button_visible(
     modality: str | None,
     already_harmonized: bool,
 ) -> bool:
-    """Show Harmonize Description only when it can be run (once per series until Clear Cache)."""
+    """Show Harmonize Description only when it can be run (once per series until Clear)."""
     if not harmonize_feature_on or not harmonize_models_ready:
         return False
     if modality != "CT":
@@ -238,6 +251,15 @@ class SeriesView(AppCTkToplevel):
         self._ocr_poll_frame_index = -1
         self._rebuild_after_id: str | None = None
         self._rebuild_pending = False
+        self._structure_overlay_by_name: dict[str, dict[int, list[Segmentation]]] = {}
+        self._structure_mask_by_name: dict[str, np.ndarray] = {}
+        self._structure_contour_cancel: dict[str, threading.Event] = {}
+        self._structure_contour_generation = 0
+        self._structure_contour_queue: queue.Queue[
+            tuple[str, dict[int, list[Segmentation]] | None, int, threading.Event]
+        ] = queue.Queue()
+        self._structure_contour_poll_after_id: str | None = None
+
         self._ui_rebuilding = False
         self._destroyed = False
         self._closing = False
@@ -673,7 +695,7 @@ class SeriesView(AppCTkToplevel):
         return not self._ui_rebuilding and not self._loading
 
     def _refresh_model_aware_toolbar_buttons(self) -> None:
-        """Restore harmonize / blur / Clear Cache presence from ORM and eligibility rules."""
+        """Restore harmonize / blur / Clear presence from ORM and eligibility rules."""
         self._apply_ai_feature_visibility()
 
     def _set_series_interaction_enabled(self, enabled: bool) -> None:
@@ -886,9 +908,13 @@ class SeriesView(AppCTkToplevel):
             *self._viewer_wl_ww(),
             add_to_whitelist_callback=self.add_to_whitelist,
             regenerate_series_projections_callback=self.regenerate_series_projections,
+            on_segmentation_toggle=self._on_segmentation_toggle,
+            on_slice_index_changed=self._ensure_segmentation_overlays_for_frame,
+            clear_callback=self.clear_ts_cache_button_clicked,
         )
         self.image_viewer.grid(row=0, column=1, sticky="nsew")
         self.image_viewer.detach_companion_stack()
+        self.clear_ts_cache_button = self.image_viewer.clear_ts_cache_button
         self._bind_slice_navigation_keys()
 
         # Control Frame (toolbar row, status line, save row):
@@ -952,13 +978,21 @@ class SeriesView(AppCTkToplevel):
             command=self.harmonize_description_button_clicked,
         )
         self.harmonize_button.grid(row=0, column=0, padx=(self.PAD, 2), pady=0, sticky="e")
+        self._include_brain_structures_var = tk.IntVar(value=0)
+        self.include_brain_structures_checkbox = ctk.CTkCheckBox(
+            harmonize_blur_group,
+            text=_("Brain structures"),
+            variable=self._include_brain_structures_var,
+            width=130,
+        )
+        self.include_brain_structures_checkbox.grid(row=0, column=1, padx=2, pady=0, sticky="e")
         self.blur_face_button = ctk.CTkButton(
             harmonize_blur_group,
             width=120,
             text=_("Blur Face"),
             command=self.blur_face_button_clicked,
         )
-        self.blur_face_button.grid(row=0, column=1, padx=2, pady=0, sticky="e")
+        self.blur_face_button.grid(row=0, column=2, padx=2, pady=0, sticky="e")
         self.blur_face_mode_var = tk.StringVar(value=face_blur_mode_menu_values()[0])
         self.blur_face_mode_menu = ctk.CTkOptionMenu(
             harmonize_blur_group,
@@ -966,19 +1000,12 @@ class SeriesView(AppCTkToplevel):
             values=face_blur_mode_menu_values(),
             variable=self.blur_face_mode_var,
         )
-        self.blur_face_mode_menu.grid(row=0, column=2, padx=(2, 2), pady=0, sticky="e")
-        self.clear_ts_cache_button = ctk.CTkButton(
-            harmonize_blur_group,
-            width=130,
-            text=_("Clear Cache"),
-            command=self.clear_ts_cache_button_clicked,
-        )
-        self.clear_ts_cache_button.grid(row=0, column=3, padx=(2, self.PAD), pady=0, sticky="e")
-        # Harmonize / Face Blur / Clear Cache presence is applied below (not greyed out).
+        self.blur_face_mode_menu.grid(row=0, column=3, padx=(2, self.PAD), pady=0, sticky="e")
+        # Harmonize / Face Blur presence is applied below (not greyed out). Clear lives in Segmentation panel.
         self.harmonize_button.grid_remove()
+        self.include_brain_structures_checkbox.grid_remove()
         self.blur_face_button.grid_remove()
         self.blur_face_mode_menu.grid_remove()
-        self.clear_ts_cache_button.grid_remove()
         self._apply_ai_feature_visibility()
         self._refresh_ocr_toolbar_buttons()
 
@@ -1115,7 +1142,7 @@ class SeriesView(AppCTkToplevel):
         )
 
     def _clear_ts_cache_button_visible(self) -> bool:
-        """Show Clear Cache only when Harmonize has been applied for this series."""
+        """Show Clear only after Harmonize has been applied (Dataset Harmonized=Yes)."""
         anon_uid = self._anon_series_uid()
         already_harmonized = anon_uid is not None and self._controller.series_is_harmonized(anon_uid)
         return clear_cache_button_visible(
@@ -1147,19 +1174,33 @@ class SeriesView(AppCTkToplevel):
 
     def _apply_ai_feature_visibility(self) -> None:
         changed = False
+        harmonize_visible = False
         if hasattr(self, "harmonize_button"):
+            harmonize_visible = self._harmonize_button_visible()
+            changed |= self._set_toolbar_widget_present(self.harmonize_button, harmonize_visible)
+        if hasattr(self, "include_brain_structures_checkbox"):
+            brain_visible = harmonize_visible and brain_structures_allowed()
+            was_mapped = False
+            with contextlib.suppress(tk.TclError):
+                was_mapped = bool(self.include_brain_structures_checkbox.winfo_ismapped())
             changed |= self._set_toolbar_widget_present(
-                self.harmonize_button, self._harmonize_button_visible()
+                self.include_brain_structures_checkbox, brain_visible
             )
+            if brain_visible and not was_mapped:
+                self._include_brain_structures_var.set(1)
         if hasattr(self, "blur_face_button"):
             face_visible = self._blur_face_toolbar_visible()
             changed |= self._set_toolbar_widget_present(self.blur_face_button, face_visible)
             if hasattr(self, "blur_face_mode_menu"):
                 changed |= self._set_toolbar_widget_present(self.blur_face_mode_menu, face_visible)
-        if hasattr(self, "clear_ts_cache_button"):
-            changed |= self._set_toolbar_widget_present(
-                self.clear_ts_cache_button, self._clear_ts_cache_button_visible()
-            )
+        if hasattr(self, "clear_ts_cache_button") and hasattr(self, "image_viewer"):
+            present = self._clear_ts_cache_button_visible()
+            was_present = False
+            with contextlib.suppress(tk.TclError):
+                was_present = bool(self.clear_ts_cache_button and self.clear_ts_cache_button.winfo_ismapped())
+            self.image_viewer.set_clear_button_present(present)
+            if present != was_present:
+                changed = True
         if changed:
             self._adapt_window_to_toolbar()
 
@@ -1175,8 +1216,258 @@ class SeriesView(AppCTkToplevel):
 
     def _refresh_analysis_cache_ui(self) -> None:
         self._apply_ai_feature_visibility()
+        self._refresh_segmentation_controls()
         self._show_default_context_line()
         self._refresh_series_processing_status()
+
+    def _seg_dir(self) -> Path:
+        return resolve_series_cache_dir(self._series_path) / "seg"
+
+    def _segmentation_frame_offset(self) -> int:
+        return 0 if self.single_frame else SERIES_VIEW_PROJECTION_COUNT
+
+    def _cancel_structure_contour_job(self, name: str) -> None:
+        cancel = self._structure_contour_cancel.pop(name, None)
+        if cancel is not None:
+            cancel.set()
+
+    def _clear_structure_latch_state(self, name: str | None = None) -> None:
+        if name is None:
+            for latched in list(self._structure_contour_cancel):
+                self._cancel_structure_contour_job(latched)
+            self._structure_overlay_by_name.clear()
+            self._structure_mask_by_name.clear()
+            return
+        self._cancel_structure_contour_job(name)
+        self._structure_overlay_by_name.pop(name, None)
+        self._structure_mask_by_name.pop(name, None)
+
+    def _invalidate_structure_overlays(self) -> None:
+        self._structure_contour_generation += 1
+        self._clear_structure_latch_state()
+        if hasattr(self, "image_viewer"):
+            self.image_viewer.clear_active_segmentations()
+            self.image_viewer.active_layers.discard(LayerType.SEGMENTATIONS)
+            for frame_index in list(self.image_viewer.overlay_data.keys()):
+                self.image_viewer.overlay_data[frame_index].segmentations = []
+            self.image_viewer.clear_cache()
+            self.image_viewer.load_and_display_image(self.image_viewer.current_image_index)
+
+    def _push_merged_segmentation_overlays(self) -> None:
+        if not hasattr(self, "image_viewer"):
+            return
+        merged = merge_structure_overlays(self._structure_overlay_by_name)
+        viewer_overlays = shift_overlays_to_viewer_frames(
+            merged, frame_offset=self._segmentation_frame_offset()
+        )
+        if viewer_overlays:
+            self.image_viewer.active_layers.add(LayerType.SEGMENTATIONS)
+        else:
+            self.image_viewer.active_layers.discard(LayerType.SEGMENTATIONS)
+        # Clear prior segmentation lists for all known frames, then apply merge.
+        for frame_index in list(self.image_viewer.overlay_data.keys()):
+            self.image_viewer.overlay_data[frame_index].segmentations = []
+        if viewer_overlays:
+            self.image_viewer.set_segmentation_overlays(viewer_overlays)
+        else:
+            self.image_viewer.clear_cache()
+            self.image_viewer.load_and_display_image(self.image_viewer.current_image_index)
+
+    def _anatomical_slice_for_viewer_frame(self, frame_index: int) -> int | None:
+        slice_index = frame_index - self._segmentation_frame_offset()
+        return slice_index if slice_index >= 0 else None
+
+    def _ensure_structure_slice_contoured(self, name: str, slice_index: int) -> bool:
+        """Contour one missing slice from the held mask. Returns True if cache changed."""
+        if slice_index in self._structure_overlay_by_name.get(name, {}):
+            return False
+        mask = self._structure_mask_by_name.get(name)
+        if mask is None:
+            return False
+        segs = contour_mask_slice(
+            mask,
+            slice_index,
+            structure_name=name,
+            color_bgr=color_bgr_for_structure(name),
+        )
+        cache = self._structure_overlay_by_name.setdefault(name, {})
+        if segs:
+            cache[slice_index] = segs
+            return True
+        # Remember empty slices so scrub does not re-contour them.
+        cache[slice_index] = []
+        return False
+
+    def _ensure_segmentation_overlays_for_frame(self, frame_index: int) -> None:
+        slice_index = self._anatomical_slice_for_viewer_frame(frame_index)
+        if slice_index is None or not self._structure_mask_by_name:
+            return
+        changed = False
+        for name in list(self._structure_mask_by_name):
+            changed = self._ensure_structure_slice_contoured(name, slice_index) or changed
+        if changed:
+            self._push_merged_segmentation_overlays()
+
+    def _start_structure_contour_background(
+        self,
+        name: str,
+        mask: np.ndarray,
+        *,
+        prefer_slice: int,
+        generation: int,
+    ) -> None:
+        self._cancel_structure_contour_job(name)
+        cancel = threading.Event()
+        self._structure_contour_cancel[name] = cancel
+        color = color_bgr_for_structure(name)
+        depth = int(mask.shape[0])
+        contour_queue = self._structure_contour_queue
+
+        def worker() -> None:
+            try:
+                remaining = [i for i in range(depth) if i != prefer_slice]
+                # Contour current neighborhood first for scrub responsiveness.
+                remaining.sort(key=lambda i: abs(i - prefer_slice))
+                batch: dict[int, list[Segmentation]] = {}
+                for slice_index in remaining:
+                    if cancel.is_set():
+                        return
+                    segs = contour_mask_slice(
+                        mask,
+                        slice_index,
+                        structure_name=name,
+                        color_bgr=color,
+                    )
+                    if segs:
+                        batch[slice_index] = segs
+                    if len(batch) >= 8:
+                        # Never call Tk from this thread — queue for the UI poller.
+                        contour_queue.put((name, dict(batch), generation, cancel))
+                        batch = {}
+                if batch and not cancel.is_set():
+                    contour_queue.put((name, dict(batch), generation, cancel))
+            finally:
+                # Sentinel: None marks job completion (UI drops cancel handle).
+                contour_queue.put((name, None, generation, cancel))
+
+        threading.Thread(
+            target=worker,
+            name=f"SegContour-{name}",
+            daemon=True,
+        ).start()
+        self._kick_structure_contour_poll()
+
+    def _kick_structure_contour_poll(self) -> None:
+        """Schedule UI-thread drain of contour results (Tk is not thread-safe)."""
+        if self._structure_contour_poll_after_id is not None:
+            return
+        if not self._widget_alive():
+            return
+        self._structure_contour_poll_after_id = self.after(
+            self.LOAD_POLL_MS,
+            self._poll_structure_contour_queue,
+        )
+
+    def _poll_structure_contour_queue(self) -> None:
+        self._structure_contour_poll_after_id = None
+        if not self._widget_alive():
+            return
+        updated = False
+        while True:
+            try:
+                name, snapshot, generation, cancel = self._structure_contour_queue.get_nowait()
+            except queue.Empty:
+                break
+            if cancel.is_set() or generation != self._structure_contour_generation:
+                # Drop stale work; still release cancel handle on done sentinel.
+                if snapshot is None and self._structure_contour_cancel.get(name) is cancel:
+                    self._structure_contour_cancel.pop(name, None)
+                continue
+            if snapshot is None:
+                if self._structure_contour_cancel.get(name) is cancel:
+                    self._structure_contour_cancel.pop(name, None)
+                continue
+            if name not in self._structure_mask_by_name:
+                continue
+            cache = self._structure_overlay_by_name.setdefault(name, {})
+            cache.update(snapshot)
+            updated = True
+        if updated:
+            self._push_merged_segmentation_overlays()
+        if self._structure_contour_cancel or not self._structure_contour_queue.empty():
+            self._kick_structure_contour_poll()
+
+    def _latch_structure_overlay(self, name: str, seg_dir: Path) -> None:
+        """Load mask, paint current slice, contour the rest in the background."""
+        self._cancel_structure_contour_job(name)
+        color = color_bgr_for_structure(name)
+        mask = load_primary_segment_mask(seg_dir, name)
+        self._structure_mask_by_name[name] = mask
+        frame_index = self.image_viewer.current_image_index if hasattr(self, "image_viewer") else 0
+        slice_index = self._anatomical_slice_for_viewer_frame(frame_index)
+        if slice_index is None:
+            slice_index = 0
+        initial: dict[int, list[Segmentation]] = {}
+        segs = contour_mask_slice(mask, slice_index, structure_name=name, color_bgr=color)
+        if segs:
+            initial[slice_index] = segs
+        else:
+            initial[slice_index] = []
+        self._structure_overlay_by_name[name] = initial
+        generation = self._structure_contour_generation
+        self._start_structure_contour_background(
+            name,
+            mask,
+            prefer_slice=slice_index,
+            generation=generation,
+        )
+
+    def _on_segmentation_toggle(self, name: str, active: bool) -> None:
+        if active:
+            try:
+                self._latch_structure_overlay(name, self._seg_dir())
+            except Exception:
+                logger.exception("Failed to load segmentation overlay for %s", name)
+                self._clear_structure_latch_state(name)
+                self._deactivate_segmentation_button(name)
+                return
+        else:
+            self._clear_structure_latch_state(name)
+        self._push_merged_segmentation_overlays()
+
+    def _deactivate_segmentation_button(self, name: str) -> None:
+        self.image_viewer._active_segmentation_names.discard(name)
+        self.image_viewer._refresh_segmentation_button_styles()
+        self._clear_structure_latch_state(name)
+        self._push_merged_segmentation_overlays()
+
+    def _refresh_segmentation_controls(self) -> None:
+        if not hasattr(self, "image_viewer"):
+            return
+        seg_dir = self._seg_dir()
+        if not seg_dir.is_dir():
+            self._invalidate_structure_overlays()
+            self.image_viewer.set_segmentation_structures([])
+            return
+        present = collect_primary_segment_voxels(seg_dir)
+        ordered = order_structures_by_voxels(present)
+        items = [(name, color_bgr_for_structure(name)) for name, _count in ordered]
+        previous_active = self.image_viewer.get_active_segmentation_names()
+        self.image_viewer.set_segmentation_structures(items)
+        still = previous_active & set(present)
+        self.image_viewer._active_segmentation_names = still
+        self.image_viewer._refresh_segmentation_button_styles()
+        # Reload latched masks from disk on refresh (Harmonize/Clear) — never on slice change.
+        self._structure_contour_generation += 1
+        self._clear_structure_latch_state()
+        for name in still:
+            try:
+                self._latch_structure_overlay(name, seg_dir)
+            except Exception:
+                logger.exception("Failed to refresh segmentation overlay for %s", name)
+                self.image_viewer._active_segmentation_names.discard(name)
+        self.image_viewer._refresh_segmentation_button_styles()
+        self._push_merged_segmentation_overlays()
 
     def _on_series_description_updated(self) -> None:
         self._update_title()
@@ -1634,6 +1925,10 @@ class SeriesView(AppCTkToplevel):
         logger.info("Harmonize starting for %s", self._series_path)
         with contextlib.suppress(tk.TclError):
             self.harmonize_button.grid_remove()
+            self.include_brain_structures_checkbox.grid_remove()
+        include_brain = bool(
+            brain_structures_allowed() and self._include_brain_structures_var.get() == 1
+        )
         show_harmonize_results_view(
             self,
             series_path=self._series_path,
@@ -1642,6 +1937,7 @@ class SeriesView(AppCTkToplevel):
             fonts=self._fonts,
             anon_model=self._controller.anonymizer.model,
             on_series_description_updated=self._on_series_description_updated,
+            include_brain_structures=include_brain,
         )
         self._series_geometry = None
         self._face_blur_eligibility_cache = None
@@ -1699,6 +1995,7 @@ class SeriesView(AppCTkToplevel):
     def _finish_clear_ts_cache(self) -> None:
         if not self._widget_alive():
             return
+        self._invalidate_structure_overlays()
         self._refresh_analysis_cache_ui()
         self.update_status(_("Analysis cache cleared"))
         self._refresh_series_processing_status()
@@ -2000,6 +2297,12 @@ class SeriesView(AppCTkToplevel):
         if getattr(self, "_closing", False):
             return
         self._closing = True
+        self._structure_contour_generation += 1
+        self._clear_structure_latch_state()
+        if self._structure_contour_poll_after_id is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self._structure_contour_poll_after_id)
+            self._structure_contour_poll_after_id = None
         if not self._ocr_work_state.done:
             self._ocr_work_state.request_cancel()
         mark_ctk_window_destroyed(self)

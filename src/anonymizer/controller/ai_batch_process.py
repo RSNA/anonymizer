@@ -93,6 +93,7 @@ class AiBatchProcessOptions:
     blur_mode: FaceBlurMode = FaceBlurMode.GAUSSIAN
     pixel_phi_removal_mode: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT
     use_modality_whitelist: bool = True
+    include_brain_structures: bool = False
 
 
 def whitelist_for_batch_ocr(*, use_modality_whitelist: bool) -> list[str] | None:
@@ -899,10 +900,16 @@ def _apply_harmonize_series(
     *,
     anon_model: AnonymizerModel | None,
     progress: Callable[[AnalysisProgress], None] | None,
+    include_brain_structures: bool = False,
 ) -> tuple[AiBatchOutcome, list[str]]:
     from anonymizer.controller.ai.harmonize import format_harmonize_batch_contrast_log_lines
 
-    apply_outcome = harmonize_and_apply_series(series_path, anon_model=anon_model, progress=progress)
+    apply_outcome = harmonize_and_apply_series(
+        series_path,
+        anon_model=anon_model,
+        progress=progress,
+        include_brain_structures=include_brain_structures,
+    )
     log_lines: list[str] = []
     if apply_outcome.status == "ok" and apply_outcome.harmonized is not None:
         log_lines = format_harmonize_batch_contrast_log_lines(apply_outcome.harmonized)
@@ -1410,6 +1417,7 @@ def ai_batch_process(
                         series_path,
                         anon_model=anon_model,
                         progress=harmonize_progress,
+                        include_brain_structures=options.include_brain_structures,
                     )
                     for line in harmonize_log_lines:
                         log_workflow(format_batch_workflow_log_line(format_batch_step_subline(line)))

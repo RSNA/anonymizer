@@ -14,7 +14,6 @@ from anonymizer.controller.ai.ocr_whitelist_match import OcrWhitelistMatchSettin
 from anonymizer.controller.ai.remove_pixel_phi import (
     OCR_LANGS,
     OCR_MODEL_DIR,
-    OCRText,
     _ocr_use_gpu,
     detect_text,
     download_ocr_models,
@@ -24,6 +23,7 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     remove_pixel_phi,
 )
 from anonymizer.controller.series_io import load_series_frames
+from anonymizer.controller.series_overlay import OCRText
 from anonymizer.controller.work_state import WorkState
 from anonymizer.utils.translate import _
 

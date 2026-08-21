@@ -399,6 +399,10 @@ def _anatomy_task_checkpoint_ready(task_id: int) -> bool:
 _FACE_TASK_ID = 303
 _FACE_TRAINER = "nnUNetTrainerNoMirroring"
 _FACE_MODEL = "3d_fullres"
+_BRAIN_STRUCTURES_TASK_ID = 409
+# Must match TotalSegmentator python_api task == "brain_structures".
+_BRAIN_STRUCTURES_TRAINER = "nnUNetTrainer_DASegOrd0"
+_BRAIN_STRUCTURES_MODEL = "3d_fullres_high"
 _NNUNET_PLANS = "nnUNetPlans"
 
 
@@ -444,6 +448,7 @@ def _ensure_pretrained_weights(task_id: int, *, trainer: str, model: str) -> Non
 _TS_DOWNLOAD_ID: dict[str, str] = {
     "anatomy": "enable_harmonize",
     "face": "enable_face_blur",
+    "brain_structures": "enable_brain_structures",
 }
 
 
@@ -521,7 +526,43 @@ def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
         logger.info("TS weights: face segmentation model downloaded (task %s)", _FACE_TASK_ID)
         return
 
+    if kind == Kind.BRAIN_STRUCTURES:
+        licensed, message = verify_face_license()
+        if not licensed:
+            raise RuntimeError(message)
+        logger.info(
+            "TS weights: brain_structures download starting (task %s)",
+            _BRAIN_STRUCTURES_TASK_ID,
+        )
+        with _track_segmentation_model_download(kind, task_id=_BRAIN_STRUCTURES_TASK_ID):
+            _ensure_pretrained_weights(
+                _BRAIN_STRUCTURES_TASK_ID,
+                trainer=_BRAIN_STRUCTURES_TRAINER,
+                model=_BRAIN_STRUCTURES_MODEL,
+            )
+        if not _brain_structures_task_checkpoint_ready():
+            raise RuntimeError(
+                f"Brain structures model is still missing after download (task {_BRAIN_STRUCTURES_TASK_ID})"
+            )
+        logger.info(
+            "TS weights: brain_structures model downloaded (task %s)",
+            _BRAIN_STRUCTURES_TASK_ID,
+        )
+        return
+
     raise ValueError(f"Unknown segmentation model kind: {kind}")
+
+
+def _brain_structures_task_checkpoint_ready() -> bool:
+    from anonymizer.controller.ai.tseg.runtime_status import _checkpoint_ready
+
+    return _checkpoint_ready(
+        _resolve_task_model_folder(
+            _BRAIN_STRUCTURES_TASK_ID,
+            trainer=_BRAIN_STRUCTURES_TRAINER,
+            model=_BRAIN_STRUCTURES_MODEL,
+        )
+    )
 
 
 def preload_face_models(*, device: str | None = None) -> None:

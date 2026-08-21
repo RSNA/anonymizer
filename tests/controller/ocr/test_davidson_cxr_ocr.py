@@ -134,7 +134,7 @@ def test_davidson_overlay_draw_includes_portable_when_project_whitelist_omits_it
     tmp_path: Path,
 ) -> None:
     """Detect-all + draw-filter: project cr.txt without PORTABLE must still draw Portable."""
-    from anonymizer.controller.ai.remove_pixel_phi import OCRText
+    from anonymizer.controller.series_overlay import OCRText
 
     project_dir = tmp_path / "project"
     project_whitelist = project_dir / "whitelists" / "cr.txt"

@@ -73,6 +73,7 @@ class AppFonts:
     bold: ctk.CTkFont          # 14 bold — section headers
     heading: ctk.CTkFont       # 20 bold — large headings / radlex values
     title: ctk.CTkFont         # 28 — welcome screen title
+    body: ctk.CTkFont          # 20 normal — welcome body (same weight as title)
     label_large: ctk.CTkFont   # 32 — dashboard heading labels
 
 
@@ -88,6 +89,7 @@ def create_app_fonts() -> AppFonts:
         bold=ctk.CTkFont(family=ui, size=14, weight="bold"),
         heading=ctk.CTkFont(family=ui, size=20, weight="bold"),
         title=ctk.CTkFont(family=ui, size=28),
+        body=ctk.CTkFont(family=ui, size=20),
         label_large=ctk.CTkFont(family=ui, size=32),
     )
 

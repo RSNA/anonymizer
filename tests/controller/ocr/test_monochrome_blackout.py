@@ -10,7 +10,6 @@ from pydicom.data import get_testdata_file
 
 from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
-    UserRectangle,
     blackout_rectangular_areas,
     remove_pixel_phi,
 )
@@ -18,6 +17,7 @@ from anonymizer.controller.series_io import (
     series_buffer_monochrome_to_stored,
     stored_monochrome_to_series_buffer,
 )
+from anonymizer.controller.series_overlay import UserRectangle
 
 
 def _monochrome1_dataset() -> pydicom.Dataset:

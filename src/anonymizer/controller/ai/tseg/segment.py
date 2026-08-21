@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from collections.abc import Callable
@@ -13,10 +14,13 @@ import SimpleITK as sitk
 from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir
 from anonymizer.controller.ai.tseg.config import (
     BODY_PARTS,
+    BRAIN_STRUCTURE_FILES,
+    BRAIN_STRUCTURES_TASK,
     CONTRAST_PHASE_CACHE_FILENAME,
     CONTRAST_STATS_FILENAME,
     CONTRAST_STATS_HN_FILENAME,
     ENABLE_TS_CONTRAST,
+    ENABLE_TSEG_BRAIN_STRUCTURES,
     ENABLE_TSEG_FACE,
     FACE_MASK_FILENAME,
     FACE_TASK,
@@ -24,6 +28,7 @@ from anonymizer.controller.ai.tseg.config import (
     MIN_REGION_FRACTION,
     MIN_STRUCTURE_VOXELS,
     ROI_SUBSET,
+    ROI_SUBSET_MANIFEST_FILENAME,
     SEGMENTATION_MODE,
 )
 from anonymizer.controller.ai.tseg.contrast import (
@@ -84,6 +89,32 @@ STRUCTURE_TO_REGION: dict[str, str] = {
     "heart": "Chest",
     "trachea": "Chest",
     "esophagus": "Chest",
+    "clavicula_left": "Chest",
+    "clavicula_right": "Chest",
+    **{f"rib_left_{i}": "Chest" for i in range(1, 13)},
+    **{f"rib_right_{i}": "Chest" for i in range(1, 13)},
+    **{f"vertebrae_C{i}": "Head" for i in range(1, 8)},
+    **{f"vertebrae_T{i}": "Chest" for i in range(1, 13)},
+    **{f"vertebrae_L{i}": "Abdomen" for i in range(1, 6)},
+    "vertebrae_S1": "Abdomen",
+    **{name: "Head" for name in (
+        "brainstem",
+        "subarachnoid_space",
+        "venous_sinuses",
+        "septum_pellucidum",
+        "cerebellum",
+        "caudate_nucleus",
+        "lentiform_nucleus",
+        "insular_cortex",
+        "internal_capsule",
+        "ventricle",
+        "central_sulcus",
+        "frontal_lobe",
+        "parietal_lobe",
+        "occipital_lobe",
+        "temporal_lobe",
+        "thalamus",
+    )},
     "liver": "Abdomen",
     "spleen": "Abdomen",
     "kidney_left": "Abdomen",
@@ -442,6 +473,49 @@ def run_face_segmentation(
     return time.perf_counter() - seg_started
 
 
+def run_brain_structures_segmentation(
+    nifti_path: Path,
+    output_dir: Path,
+    *,
+    device: str | None = None,
+    progress: ProgressCallback | None = None,
+    analysis_started: float | None = None,
+) -> float:
+    """Run TotalSegmentator ``brain_structures`` task. Returns inference wall time in seconds."""
+    totalsegmentator = _require_totalsegmentator()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    started = analysis_started if analysis_started is not None else time.perf_counter()
+
+    _report_progress(
+        progress,
+        stage="brain_structures",
+        message="Segmenting brain structures",
+        fraction=0.4,
+        started=started,
+        remaining_sec=45.0,
+    )
+
+    seg_started = time.perf_counter()
+    with sequential_ml_context("ts_brain_structures"):
+        totalsegmentator(
+            str(nifti_path),
+            str(output_dir),
+            task=BRAIN_STRUCTURES_TASK,
+            fast=False,
+            fastest=False,
+            quiet=True,
+            device=resolve_device(device),
+            nr_thr_resamp=1,
+            nr_thr_saving=1,
+        )
+    release_working_memory(stage="ts_brain_structures_end")
+    return time.perf_counter() - seg_started
+
+
+def _brain_structures_cache_valid(seg_dir: Path) -> bool:
+    return any((seg_dir / f"{name}.nii.gz").is_file() for name in BRAIN_STRUCTURE_FILES)
+
+
 def analyze_tseg_face(
     series_directory: Path,
     *,
@@ -640,11 +714,64 @@ def _face_error_result(series_directory: Path, error: str) -> FaceSegResult:
     )
 
 
+def _is_skeletal_roi(structure: str) -> bool:
+    return (
+        structure.startswith("vertebrae_")
+        or structure.startswith("rib_")
+        or structure.startswith("clavicula_")
+        or structure == "sacrum"
+    )
+
+
+def write_roi_subset_manifest(cache_dir: Path, structures: list[str]) -> None:
+    """Record which TotalSegmentator ROI classes were requested for this series cache."""
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    payload = {"roi_subset": sorted(structures)}
+    path = cache_dir / ROI_SUBSET_MANIFEST_FILENAME
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def _read_roi_subset_manifest(cache_dir: Path) -> set[str] | None:
+    path = cache_dir / ROI_SUBSET_MANIFEST_FILENAME
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return None
+    recorded = data.get("roi_subset") if isinstance(data, dict) else None
+    if not isinstance(recorded, list):
+        return None
+    return {str(name) for name in recorded}
+
+
 def _segmentation_cache_valid(seg_dir: Path, structures: list[str]) -> bool:
-    """True when ROI segmentation masks from a prior run are present."""
+    """True when ROI masks exist and the cache covers the currently requested ROI subset.
+
+    Soft-tissue-only legacy caches (pre-skeletal ROI expansion) are treated as stale so
+    Harmonize re-runs and Series View can latch spine / ribs / clavicles.
+    """
     if not seg_dir.is_dir():
         return False
-    return any((seg_dir / f"{structure}.nii.gz").is_file() for structure in structures)
+    if not any((seg_dir / f"{structure}.nii.gz").is_file() for structure in structures):
+        return False
+
+    cache_dir = seg_dir.parent
+    recorded = _read_roi_subset_manifest(cache_dir)
+    requested = set(structures)
+    if recorded is not None:
+        return requested <= recorded
+
+    # Legacy caches without a manifest: accept only if skeletal ROIs (when requested)
+    # already appear on disk; otherwise force a re-segment with the current subset.
+    skeletal_requested = [name for name in structures if _is_skeletal_roi(name)]
+    if skeletal_requested and not any((seg_dir / f"{name}.nii.gz").is_file() for name in skeletal_requested):
+        return False
+    try:
+        write_roi_subset_manifest(cache_dir, structures)
+    except OSError:
+        logger.debug("TS regions: could not backfill ROI subset manifest under %s", cache_dir)
+    return True
 
 
 def _nifti_slice_count(nifti_path: Path) -> int:
@@ -711,6 +838,7 @@ def analyze_tseg_regions(
     *,
     geometry: SeriesGeometryResult | None = None,
     progress: ProgressCallback | None = None,
+    include_brain_structures: bool = False,
 ) -> tuple[TS_result, Path | None]:
     """
     DICOM→NIfTI, TotalSegmentator ROI segmentation, and region summary.
@@ -780,6 +908,7 @@ def analyze_tseg_regions(
                     analysis_started=analysis_started,
                     n_slices=n_slices,
                 )
+                write_roi_subset_manifest(work_dir, roi_structures)
                 logger.debug("TS regions: segmentation finished in %.1fs", seg_seconds)
                 _report_progress(
                     progress,
@@ -791,6 +920,43 @@ def analyze_tseg_regions(
                 release_working_memory(stage="ts_regions_after_segmentation")
 
             structure_voxels = collect_structure_voxels(seg_dir, list(ROI_SUBSET))
+            if (
+                include_brain_structures
+                and ENABLE_TSEG_BRAIN_STRUCTURES
+                and structure_voxels.get("brain", 0) >= MIN_STRUCTURE_VOXELS
+                and not _brain_structures_cache_valid(seg_dir)
+            ):
+                from anonymizer.controller.ai.tseg.runtime_status import verify_face_license
+
+                licensed, license_message = verify_face_license()
+                if licensed:
+                    try:
+                        brain_seconds = run_brain_structures_segmentation(
+                            nifti_path,
+                            seg_dir,
+                            progress=progress,
+                            analysis_started=analysis_started,
+                        )
+                        logger.debug(
+                            "TS regions: brain_structures finished in %.1fs for %s",
+                            brain_seconds,
+                            series_directory,
+                        )
+                        release_working_memory(stage="ts_regions_after_brain_structures")
+                    except Exception as exc:
+                        logger.warning(
+                            "TS regions: brain_structures skipped for %s (%s)",
+                            series_directory,
+                            exc,
+                        )
+                else:
+                    logger.debug(
+                        "TS regions: brain_structures skipped (license): %s",
+                        license_message,
+                    )
+            elif include_brain_structures and not ENABLE_TSEG_BRAIN_STRUCTURES:
+                logger.debug("TS regions: brain_structures disabled in config")
+
             region = dominant_region_from_voxels(structure_voxels)
             regions_label = body_parts_present(region.region_voxels)
             del structure_voxels

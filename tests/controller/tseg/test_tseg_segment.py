@@ -94,7 +94,23 @@ def test_segmentation_cache_valid_requires_mask(tmp_path) -> None:
     seg_dir.mkdir()
     assert not _segmentation_cache_valid(seg_dir, ["brain", "liver"])
     (seg_dir / "brain.nii.gz").write_bytes(b"x")
-    assert _segmentation_cache_valid(seg_dir, ["brain", "liver"])
+    # Soft-tissue-only legacy cache is stale when skeletal ROIs are requested.
+    structures = ["brain", "liver", "vertebrae_T1", "rib_left_1", "clavicula_left"]
+    assert not _segmentation_cache_valid(seg_dir, structures)
+    (seg_dir / "vertebrae_T1.nii.gz").write_bytes(b"x")
+    assert _segmentation_cache_valid(seg_dir, structures)
+    assert (tmp_path / "roi_subset.json").is_file()
+
+
+def test_segmentation_cache_valid_respects_roi_manifest(tmp_path) -> None:
+    from anonymizer.controller.ai.tseg.segment import write_roi_subset_manifest
+
+    seg_dir = tmp_path / "seg"
+    seg_dir.mkdir()
+    (seg_dir / "liver.nii.gz").write_bytes(b"x")
+    write_roi_subset_manifest(tmp_path, ["liver", "heart"])
+    assert _segmentation_cache_valid(seg_dir, ["liver", "heart"])
+    assert not _segmentation_cache_valid(seg_dir, ["liver", "heart", "vertebrae_L1"])
 
 
 @patch("anonymizer.controller.ai.tseg.segment.resolve_series_geometry")

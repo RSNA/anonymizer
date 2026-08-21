@@ -34,6 +34,17 @@ def test_harmonize_task_776_uses_high_resolution_model() -> None:
     assert model_for_harmonize_task(776) == "3d_fullres_high"
 
 
+def test_brain_structures_weights_match_totalsegmentator_api() -> None:
+    """Readiness path must use the same trainer/model as TS python_api brain_structures."""
+    from anonymizer.controller.ai.tseg import model_cache as mc
+    from anonymizer.controller.ai.tseg.runtime_status import _brain_structures_task_spec
+
+    assert mc._BRAIN_STRUCTURES_TASK_ID == 409
+    assert mc._BRAIN_STRUCTURES_TRAINER == "nnUNetTrainer_DASegOrd0"
+    assert mc._BRAIN_STRUCTURES_MODEL == "3d_fullres_high"
+    assert _brain_structures_task_spec() == (409, "nnUNetTrainer_DASegOrd0", "3d_fullres_high")
+
+
 def test_resolve_harmonize_model_folder_returns_path() -> None:
     expected = Path("/models/Dataset297_example")
 

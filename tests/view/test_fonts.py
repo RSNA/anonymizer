@@ -62,6 +62,7 @@ def test_create_app_fonts_returns_frozen_dataclass() -> None:
     assert fonts.bold is mock_font
     assert fonts.heading is mock_font
     assert fonts.title is mock_font
+    assert fonts.body is mock_font
     assert fonts.label_large is mock_font
 
 
