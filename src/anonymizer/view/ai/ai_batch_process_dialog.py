@@ -32,6 +32,7 @@ from anonymizer.utils.memory import (
     format_memory_snapshot_label,
 )
 from anonymizer.utils.translate import _
+from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.job_poller import BATCH_POLL_MS, JobPoller
 
@@ -48,7 +49,7 @@ def _memory_label_color(snapshot: MemorySnapshot) -> str | None:
     return None
 
 
-class AiBatchProcessDialog(tk.Toplevel):
+class AiBatchProcessDialog(AppToplevel):
     """Modal dialog that runs selected AI algorithms in a background thread."""
 
     POLL_MS = BATCH_POLL_MS

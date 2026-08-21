@@ -1,7 +1,6 @@
 import logging
 import re
 import string
-import tkinter as tk
 from queue import Queue
 from tkinter import filedialog, messagebox, ttk
 
@@ -22,6 +21,7 @@ from anonymizer.utils.dicom import (
 )
 from anonymizer.utils.storage import count_study_images
 from anonymizer.utils.translate import _
+from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.common.ux_fields import (
@@ -36,7 +36,7 @@ from anonymizer.view.shell.dashboard import Dashboard
 logger = logging.getLogger(__name__)
 
 
-class QueryView(tk.Toplevel):
+class QueryView(AppToplevel):
     """
     A class representing the QueryView window for querying, retrieving, and importing studies.
 

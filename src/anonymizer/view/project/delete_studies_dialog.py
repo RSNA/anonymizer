@@ -6,12 +6,13 @@ import customtkinter as ctk
 
 from anonymizer.controller.project import ProjectController
 from anonymizer.utils.translate import _
+from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 
 logger = logging.getLogger(__name__)
 
 
-class DeleteStudiesDialog(tk.Toplevel):
+class DeleteStudiesDialog(AppToplevel):
     """
     A dialog window for deleting studies from AnonymizerModel and removing associated files from disk.
 

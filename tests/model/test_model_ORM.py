@@ -1,10 +1,11 @@
+from anonymizer.controller.phi_io import build_phi_index, format_series_processing_status
 from pathlib import Path
 
 import pytest
 from pydicom import Dataset
 from pydicom.data import get_testdata_file
 
-from src.anonymizer.model.anonymizer import PHI, AnonymizerModel, Series, Study
+from anonymizer.model.anonymizer import PHI, AnonymizerModel, Series, Study
 from tests.controller.dicom.support.test_files import ct_small_filename, mr_brain_filename
 from tests.controller.dicom.support.test_nodes import (
     TEST_SITEID,
@@ -360,9 +361,12 @@ def test_set_series_harmonized_description(anonymizer_model: AnonymizerModel, mo
     series = phi.studies[0].series[0]
     harmonized = "CT Head Neck Without Contrast"
 
-    records = anonymizer_model.get_phi_index()
+    records = build_phi_index(anonymizer_model)
     assert records is not None
     assert records[0].harmonize is False
+    assert records[0].series
+    assert records[0].series[0].anon_series_uid == series.anon_series_uid
+    assert records[0].series[0].harmonized_display() == "No"
 
     assert anonymizer_model.set_series_harmonized_description(series.anon_series_uid, harmonized) is True
     assert anonymizer_model.series_is_harmonized(series.anon_series_uid) is True
@@ -373,7 +377,68 @@ def test_set_series_harmonized_description(anonymizer_model: AnonymizerModel, mo
     assert updated.description == harmonized
     assert updated.harmonized_description == harmonized
 
-    records = anonymizer_model.get_phi_index()
+    records = build_phi_index(anonymizer_model)
+    assert records is not None
+    assert records[0].harmonize is True
+    assert records[0].series[0].harmonized_description == harmonized
+    assert records[0].series[0].harmonized_display() == harmonized
+    assert harmonized in records[0].series[0].tree_label()
+
+
+def test_set_series_harmonized_description_from_worker_thread(
+    anonymizer_model: AnonymizerModel, mock_dataset1: Dataset
+) -> None:
+    """Series View Harmonize save used to update ORM off the UI thread; registry must not leak."""
+    import concurrent.futures
+
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_offset_from_hash=0)
+    phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
+    assert phi is not None
+    series_uid = phi.studies[0].series[0].anon_series_uid
+    harmonized = "CT Chest Ax PortVen"
+
+    def _worker() -> bool:
+        return anonymizer_model.set_series_harmonized_description(series_uid, harmonized)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        assert pool.submit(_worker).result(timeout=5) is True
+        # Second call on the same worker thread must still succeed after scoped remove().
+        assert pool.submit(_worker).result(timeout=5) is True
+
+    assert anonymizer_model.series_is_harmonized(series_uid) is True
+    records = build_phi_index(anonymizer_model)
+    assert records is not None
+    assert records[0].harmonize is True
+
+
+def test_phi_index_harmonize_requires_all_ct_series(
+    anonymizer_model: AnonymizerModel, mock_dataset1: Dataset
+) -> None:
+    """PHI Index Harmonized=Yes only when every CT series in the study is harmonized."""
+    from copy import deepcopy
+
+    from pydicom.uid import generate_uid
+
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_offset_from_hash=0)
+    ds2 = deepcopy(mock_dataset1)
+    ds2.SeriesInstanceUID = generate_uid()
+    ds2.SOPInstanceUID = generate_uid()
+    ds2.SeriesDescription = "Scout"
+    anonymizer_model.capture_phi(source="pytest", ds=ds2, date_offset_from_hash=0)
+
+    phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
+    assert phi is not None
+    ct_series = [s for s in phi.studies[0].series if (s.modality or "").upper() == "CT"]
+    assert len(ct_series) >= 2
+
+    anonymizer_model.set_series_harmonized_description(ct_series[0].anon_series_uid, "CT Head")
+    records = build_phi_index(anonymizer_model)
+    assert records is not None
+    assert records[0].harmonize is False
+
+    for series in ct_series:
+        anonymizer_model.set_series_harmonized_description(series.anon_series_uid, "CT Head")
+    records = build_phi_index(anonymizer_model)
     assert records is not None
     assert records[0].harmonize is True
 
@@ -387,7 +452,7 @@ def test_get_phi_index_face_blur_and_pixel_phi_columns(
     series = phi.studies[0].series[0]
     instance = series.instances[0]
 
-    records = anonymizer_model.get_phi_index()
+    records = build_phi_index(anonymizer_model)
     assert records is not None
     assert records[0].face_blurred == ""
     assert records[0].pixel_phi_removed is False
@@ -396,7 +461,7 @@ def test_get_phi_index_face_blur_and_pixel_phi_columns(
     anonymizer_model.set_series_face_blur_algorithm(series.anon_series_uid, "gaussian")
     anonymizer_model.set_instance_pixel_phi(instance.anon_sop_instance_uid, ["Name"])
 
-    records = anonymizer_model.get_phi_index()
+    records = build_phi_index(anonymizer_model)
     assert records is not None
     assert records[0].face_blurred == "Gaussian"
     assert records[0].pixel_phi_removed is True
@@ -406,7 +471,7 @@ def test_get_phi_index_face_blur_and_pixel_phi_columns(
 def test_get_phi_index_harmonize_false_for_mr_only_study(anonymizer_model: AnonymizerModel, mock_dataset2: Dataset):
     anonymizer_model.capture_phi(source="pytest", ds=mock_dataset2, date_offset_from_hash=0)
 
-    records = anonymizer_model.get_phi_index()
+    records = build_phi_index(anonymizer_model)
     assert records is not None
     assert records[0].harmonize is False
 
@@ -457,8 +522,7 @@ def test_set_instance_pixel_phi(anonymizer_model: AnonymizerModel, mock_dataset1
 
 
 def test_clear_series_tseg_metadata(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
-    from anonymizer.model.anonymizer import format_series_processing_status
-
+    
     anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_offset_from_hash=0)
     phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
     assert phi is not None
@@ -483,8 +547,7 @@ def test_clear_series_tseg_metadata(anonymizer_model: AnonymizerModel, mock_data
 
 
 def test_get_series_processing_status(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
-    from anonymizer.model.anonymizer import format_series_processing_status
-
+    
     anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_offset_from_hash=0)
     phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
     assert phi is not None

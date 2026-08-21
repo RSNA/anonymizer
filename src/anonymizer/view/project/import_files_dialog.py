@@ -11,12 +11,13 @@ import customtkinter as ctk
 
 from anonymizer.controller.anonymizer import AnonymizerController
 from anonymizer.utils.translate import _
+from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 
 logger = logging.getLogger(__name__)
 
 
-class ImportFilesDialog(tk.Toplevel):
+class ImportFilesDialog(AppToplevel):
     """
     A dialog window for importing files and performing anonymization.
 

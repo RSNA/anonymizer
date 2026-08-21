@@ -9,6 +9,7 @@ from pydicom.dataset import Dataset
 from pynetdicom.presentation import build_context
 
 from anonymizer.controller.create_projections import PROJECTION_FILENAME, create_projection_from_series
+from anonymizer.controller.phi_io import build_phi_index
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.anonymizer import AnonymizerModel
 from tests.controller.dicom.support.helpers import send_file_to_scp, send_files_to_scp
@@ -655,7 +656,7 @@ def test_send_ct_Archibald_Doe_mr_Peter_Doe_then_delete_studies(temp_dir: str, c
     anon_ptid_2 = model.get_anon_patient_id(phi_ptid_2)
     assert anon_ptid_2 is None
     assert model.get_patient_id_count() == 1
-    assert model.get_phi_index() is None
+    assert build_phi_index(model) is None
     assert model.get_totals() == (0, 0, 0, 0)
 
 

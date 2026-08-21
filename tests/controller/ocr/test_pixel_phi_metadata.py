@@ -164,3 +164,35 @@ def test_apply_series_view_pixel_phi_skips_projection_frames(mock_apply: MagicMo
     assert mock_apply.call_count == 2
     mock_apply.assert_any_call(anon_model, slice_paths[0], ["slice0"])
     mock_apply.assert_any_call(anon_model, slice_paths[1], ["slice1"])
+
+
+@patch("anonymizer.controller.ai.remove_pixel_phi.apply_instance_pixel_phi_for_dcm")
+def test_apply_series_view_pixel_phi_merges_multiframe_same_path(mock_apply: MagicMock) -> None:
+    """Multi-frame US repeats one path per frame; merge texts instead of overwriting."""
+    multi_frame_path = Path("/tmp/us_cine.dcm")
+    # Viewer stack: 3 projections + 3 cine frames all pointing at the same DICOM file.
+    slice_paths = (multi_frame_path, multi_frame_path, multi_frame_path)
+    texts_by_frame = {
+        0: ["proj-ignored"],
+        3: ["Name", "MRN"],
+        4: ["MRN", "Acc"],
+        5: ["DOB", "Site"],
+    }
+    anon_model = MagicMock()
+    mock_apply.return_value = True
+
+    updated = apply_series_view_pixel_phi(
+        anon_model,
+        slice_paths,
+        texts_by_frame,
+        projection_frame_count=3,
+        anon_series_uid="1.2.3",
+    )
+
+    assert updated == 1
+    mock_apply.assert_called_once_with(
+        anon_model,
+        multi_frame_path,
+        ["Name", "MRN", "Acc", "DOB", "Site"],
+    )
+    anon_model.set_series_pixel_phi_scanned.assert_called_once_with("1.2.3", scanned=True)

@@ -9,7 +9,6 @@ import pytest
 
 from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
-    ocr_models_ready,
     remove_pixel_phi,
 )
 from anonymizer.controller.ai_batch_process import (
@@ -17,12 +16,16 @@ from anonymizer.controller.ai_batch_process import (
     format_remove_pixel_phi_series_message,
 )
 from anonymizer.controller.runner import RemovePixelPhiRunner
+from tests.controller.ocr.conftest import assert_dcm
 from tests.controller.support.ai_batch_ux_fixtures import BATCH_UX_EXPECTATIONS, BatchUxExpectation
 
-pytestmark = pytest.mark.skipif(
-    not all(Path(case.dcm_path).is_file() for case in BATCH_UX_EXPECTATIONS),
-    reason="One or more AI batch UX fixtures missing under tests/controller/assets/test_dcm_files",
-)
+pytestmark = pytest.mark.ocr_integration
+
+
+@pytest.fixture(autouse=True)
+def _require_ocr_and_assets(require_ocr) -> None:
+    for case in BATCH_UX_EXPECTATIONS:
+        assert_dcm(Path(case.dcm_path))
 
 
 def _format_ux_instance_log(case: BatchUxExpectation) -> str:
@@ -46,17 +49,12 @@ def _format_ux_series_log(case: BatchUxExpectation) -> str:
     )
 
 
-@pytest.mark.skipif(not ocr_models_ready(), reason="EasyOCR models not available")
 @pytest.mark.parametrize("case", BATCH_UX_EXPECTATIONS, ids=lambda case: case.label)
 def test_batch_removal_matches_ux_logs(
     case: BatchUxExpectation,
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Mirror UX: default modality whitelist, no explicit whitelist=[]."""
-    from tests.paths import REPO_ROOT
-
-    monkeypatch.chdir(REPO_ROOT / "src" / "anonymizer")
     dcm_path = tmp_path / "instance.dcm"
     shutil.copy(case.dcm_path, dcm_path)
 

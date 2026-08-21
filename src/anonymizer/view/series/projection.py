@@ -2,6 +2,7 @@ import logging
 import tkinter as tk
 from math import ceil
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import customtkinter as ctk
 from PIL import Image, ImageDraw, ImageTk
@@ -12,15 +13,19 @@ from anonymizer.controller.create_projections import (
     ProjectionImageSizeConfig,
     create_projection_from_series,
 )
-from anonymizer.model.anonymizer import AnonymizerModel, PHI_IndexRecord
+from anonymizer.controller.phi_io import PHI_IndexRecord
 from anonymizer.utils.translate import _
+from anonymizer.view.common.app_window import AppToplevel, refresh_app_window_menu
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
-from anonymizer.view.series.series import SeriesView, show_series_view
+from anonymizer.view.series.series import SeriesView
+
+if TYPE_CHECKING:
+    from anonymizer.controller.project import ProjectController
 
 logger = logging.getLogger(__name__)
 
 
-class ProjectionView(tk.Toplevel):
+class ProjectionView(AppToplevel):
     PV_FRAME_RELATIVE_SIZE = (0.9, 0.9)  # fraction of screen size (width, height)
 
     key_to_image_size_mapping: dict[str, ProjectionImageSize] = {
@@ -41,7 +46,14 @@ class ProjectionView(tk.Toplevel):
             if series_path.is_dir()
         ]
 
-    def __init__(self, parent, anon_model: AnonymizerModel, base_dir: Path, phi_records: list[PHI_IndexRecord], fonts=None):
+    def __init__(
+        self,
+        parent,
+        controller: "ProjectController",
+        base_dir: Path,
+        phi_records: list[PHI_IndexRecord],
+        fonts=None,
+    ):
 
         if not base_dir.is_dir():
             raise ValueError(f"{base_dir} is not a valid directory")
@@ -50,7 +62,7 @@ class ProjectionView(tk.Toplevel):
             raise ValueError("No phi_records for ProjectionView")
 
         self._fonts = fonts
-        self._anon_model = anon_model
+        self._controller = controller
         self._base_dir = base_dir
         self._phi_records = phi_records
 
@@ -110,6 +122,7 @@ class ProjectionView(tk.Toplevel):
             title = title + " " + _("over") + f" {self._pages} " + _("Pages")
 
         self.title(title)
+        refresh_app_window_menu(self)
 
     def _clear_view(self):
         logger.debug("Clear ProjectionView Frame")
@@ -377,9 +390,8 @@ class ProjectionView(tk.Toplevel):
             self._series_view.focus_force()
             return
 
-        self._series_view = show_series_view(
+        self._series_view = self._controller.show_series_view(
             self,
-            anon_model=self._anon_model,
             series_path=series_path,
             fonts=self._fonts,
         )

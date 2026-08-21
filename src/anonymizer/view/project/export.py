@@ -5,7 +5,6 @@ The ExportView class provides a user interface for selecting and exporting studi
 
 import logging
 import os
-import tkinter as tk
 from datetime import datetime
 from queue import Empty, Full, Queue
 from tkinter import messagebox, ttk
@@ -20,6 +19,7 @@ from anonymizer.controller.project import (
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.storage import count_studies_series_images
 from anonymizer.utils.translate import _
+from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.shell.dashboard import Dashboard
@@ -27,7 +27,7 @@ from anonymizer.view.shell.dashboard import Dashboard
 logger = logging.getLogger(__name__)
 
 
-class ExportView(tk.Toplevel):
+class ExportView(AppToplevel):
     """
     Represents a view for exporting data.
 

@@ -51,7 +51,7 @@
 			<li>Simplified DICOM client & server configuration</li>
 			<li>Incoming files are not written to a temporary local disk directory for delayed processing; instead they are kept in a memory queue.</li>
 			<li>Export to AWS S3 Object Store with AWS Cognito user authentication</li>
-			<li>Create Patient Lookup / Index in csv format with Number of Series and Number of Instances appended to each study row</li>
+			<li>Create Patient Lookup / Index in csv format with one row per series (study keys repeated) including series AI status fields</li>
 			<li>Allows concurrent import and export processes</li>
 			<li>Provides a reliable study retrieval method at all levels (Study, Series, Instance) to handle remote DICOM servers which implement asynchronous C-MOVE (eg. VNA)</li>
 			<li>Fast SQLLite datastore for Anonymizer Data Model</li>

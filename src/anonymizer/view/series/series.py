@@ -7,16 +7,19 @@ from enum import StrEnum, auto
 from pathlib import Path
 from pprint import pformat
 from tkinter import messagebox
+from typing import TYPE_CHECKING
 
 import customtkinter as ctk
 import numpy as np
 from pydicom import Dataset, dcmread
 
 from anonymizer.controller.ai.blur_face import (
+    CachedRegionSignal,
     FaceBlurEligibility,
     FaceBlurGateDecision,
     FaceBlurGateReason,
     FaceBlurMode,
+    cached_region_signal,
     evaluate_face_blur_eligibility,
     face_blur_gate_message,
     face_blur_status_applicable,
@@ -44,7 +47,7 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     pixel_phi_removal_mode_menu_values,
     remove_ocr_text_from_frame,
 )
-from anonymizer.controller.ai.tseg.cache import clear_series_tseg_cache, tseg_cache_summary
+from anonymizer.controller.ai.tseg.cache import tseg_cache_summary
 from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
 from anonymizer.controller.ai.tseg.dicom_geometry import (
     SeriesGeometryResult,
@@ -63,8 +66,6 @@ from anonymizer.controller.series_io import (
     save_series_frames,
 )
 from anonymizer.controller.work_state import WorkState
-from anonymizer.model.anonymizer import AnonymizerModel, format_series_processing_status
-from anonymizer.model.project import ProjectModel
 from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.memory import collect_garbage_safe, log_process_memory
 from anonymizer.utils.storage import (
@@ -83,11 +84,15 @@ from anonymizer.view.ai.blur_face_results import (
 )
 from anonymizer.view.ai.face_blur_review_dialog import show_face_blur_review_dialog
 from anonymizer.view.ai.harmonize_results import show_harmonize_results_view
-from anonymizer.view.common.ctk_safe import mark_ctk_window_alive, mark_ctk_window_destroyed
+from anonymizer.view.common.app_window import AppCTkToplevel, refresh_app_window_menu
+from anonymizer.view.common.ctk_safe import mark_ctk_window_destroyed
 from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.common.job_poller import start_background_job
-from anonymizer.view.common.navigation import find_phi_index_parent
+from anonymizer.view.common.navigation import find_dataset_view_parent, return_to_dataset_view
 from anonymizer.view.series.image import ImageViewer
+
+if TYPE_CHECKING:
+    from anonymizer.controller.project import ProjectController
 
 logger = logging.getLogger(__name__)
 
@@ -99,9 +104,8 @@ class SeriesLoadError(Exception):
 def show_series_view(
     parent: tk.Misc,
     *,
-    anon_model: AnonymizerModel,
+    controller: "ProjectController",
     series_path: Path,
-    project_model: ProjectModel | None = None,
     fonts: AppFonts | None = None,
 ) -> "SeriesView | None":
     """Open Series View with a loading shell while DICOM pixels are read in the background."""
@@ -115,9 +119,8 @@ def show_series_view(
     log_process_memory("series_view_open", extra=str(series_path.name))
     return SeriesView(
         parent,
-        anon_model=anon_model,
+        controller=controller,
         series_path=series_path,
-        project_model=project_model,
         fonts=fonts,
     )
 
@@ -129,7 +132,57 @@ class EditContext(StrEnum):
     # TODO: PROJECT = auto()  # apply edits to all series in project
 
 
-class SeriesView(ctk.CTkToplevel):
+def ocr_results_available_for_edit_context(
+    edit_context: EditContext,
+    *,
+    current_frame_index: int,
+    overlay_ocr_by_frame: dict[int, list],
+) -> bool:
+    """True when Detect Text left OCR overlays usable by Remove Text for the edit context."""
+    if edit_context == EditContext.FRAME:
+        return bool(overlay_ocr_by_frame.get(current_frame_index))
+    return any(texts for texts in overlay_ocr_by_frame.values())
+
+
+def clear_cache_button_visible(*, modality: str | None, already_harmonized: bool) -> bool:
+    """Show Clear Cache only after Harmonize has been applied (PHI Index Harmonized=Yes)."""
+    return modality == "CT" and already_harmonized
+
+
+def blur_face_toolbar_visible(
+    *,
+    face_blur_feature_on: bool,
+    face_blur_models_ready: bool,
+    face_blur_already_applied: bool,
+    cached_signal: CachedRegionSignal,
+    eligibility_blocked: bool,
+) -> bool:
+    """Series View Face Blur presence: Harmonize-first HEAD cache, not metadata-only."""
+    if not face_blur_feature_on or not face_blur_models_ready:
+        return False
+    if face_blur_already_applied:
+        return False
+    if cached_signal != CachedRegionSignal.HEAD:
+        return False
+    return not eligibility_blocked
+
+
+def harmonize_button_visible(
+    *,
+    harmonize_feature_on: bool,
+    harmonize_models_ready: bool,
+    modality: str | None,
+    already_harmonized: bool,
+) -> bool:
+    """Show Harmonize Description only when it can be run (once per series until Clear Cache)."""
+    if not harmonize_feature_on or not harmonize_models_ready:
+        return False
+    if modality != "CT":
+        return False
+    return not already_harmonized
+
+
+class SeriesView(AppCTkToplevel):
     BUTTON_WIDTH = 100
     PAD = 10
     LOAD_POLL_MS = 100
@@ -145,21 +198,21 @@ class SeriesView(ctk.CTkToplevel):
     def __init__(
         self,
         parent,
-        anon_model: AnonymizerModel,
+        controller: "ProjectController",
         series_path: Path,
-        project_model: ProjectModel | None = None,
         fonts: AppFonts | None = None,
     ):
         super().__init__(master=parent)
-        mark_ctk_window_alive(self)
         self._fonts = fonts
 
         self._parent = parent
-        self._anon_model = anon_model
-        self._project_model = project_model
+        self._controller = controller
         self._series_path = series_path
         self.edit_context: EditContext = EditContext.FRAME
         self.detected_text: dict[int, list[OCRText]] = {}  # Store all detected text per frame
+        # Texts removed from pixels (overlay is cleared on Remove Text before Save).
+        self._removed_pixel_phi_by_frame: dict[int, list[str]] = {}
+        self._pixel_phi_dirty = False
         self._whitelist_changed = False
         self._whitelist_match_changed = False
         self._whitelist_match_settings = default_whitelist_match_settings()
@@ -424,6 +477,7 @@ class SeriesView(ctk.CTkToplevel):
         self.focus_force()
         self._apply_initial_viewer_display()
         self._log_series_memory("after_viewer_initial_display", array=self._frames)
+        self.after_idle(self._focus_image_viewer_for_keys)
         self.after_idle(self._refresh_analysis_cache_ui)
 
     def _remember_dicom_wl_ww(self, ds: Dataset | None = None) -> tuple[float, float]:
@@ -464,13 +518,32 @@ class SeriesView(ctk.CTkToplevel):
         max_h = int(self.winfo_screenheight() * ImageViewer.MAX_SCREEN_PERCENTAGE)
         width = min(req_w, max_w)
         height = min(req_h, max_h)
-        self.minsize(min(640, width), min(480, height))
+        # Lock minsize to fitted content so the toolbar buttons cannot be clipped by shrink.
+        self.minsize(width, height)
 
         pos_x, pos_y = self.winfo_x(), self.winfo_y()
         if pos_x <= 0 and pos_y <= 0:
             self._position_near_parent(width=width, height=height)
         else:
             self.geometry(f"{width}x{height}+{max(0, pos_x)}+{max(0, pos_y)}")
+
+    def _adapt_window_to_toolbar(self) -> None:
+        """Grow minsize/geometry when toolbar buttons appear so ImageViewer layout stays correct."""
+        if not self._widget_alive() or self._loading:
+            return
+        self.update_idletasks()
+        max_w = int(self.winfo_screenwidth() * ImageViewer.MAX_SCREEN_PERCENTAGE)
+        max_h = int(self.winfo_screenheight() * ImageViewer.MAX_SCREEN_PERCENTAGE)
+        req_w = min(max(self.winfo_reqwidth(), self.DEFAULT_WIDTH), max_w)
+        req_h = min(max(self.winfo_reqheight(), self.DEFAULT_HEIGHT), max_h)
+        cur_w = max(self.winfo_width(), 1)
+        cur_h = max(self.winfo_height(), 1)
+        self.minsize(req_w, req_h)
+        if cur_w < req_w or cur_h < req_h:
+            self.geometry(f"{max(cur_w, req_w)}x{max(cur_h, req_h)}")
+            if hasattr(self, "image_viewer") and self.image_viewer is not None:
+                with contextlib.suppress(tk.TclError):
+                    self.image_viewer.sync_viewport_after_layout()
 
     def _apply_viewer_display_sizing(self, *, detach_companion: bool = False) -> None:
         """Apply V18-style viewer sizing after layout (single-pane or dual-pane)."""
@@ -600,10 +673,8 @@ class SeriesView(ctk.CTkToplevel):
         return not self._ui_rebuilding and not self._loading
 
     def _refresh_model_aware_toolbar_buttons(self) -> None:
-        """Restore harmonize / blur / TS-cache buttons from ORM and eligibility rules."""
-        self._refresh_harmonize_button()
-        self._refresh_blur_face_ui()
-        self._refresh_clear_ts_cache_button()
+        """Restore harmonize / blur / Clear Cache presence from ORM and eligibility rules."""
+        self._apply_ai_feature_visibility()
 
     def _set_series_interaction_enabled(self, enabled: bool) -> None:
         """Enable or disable Series View controls and the image viewer."""
@@ -616,8 +687,6 @@ class SeriesView(ctk.CTkToplevel):
 
         for attr in (
             "detect_button",
-            "remove_button",
-            "remove_text_mode_menu",
             "blackout_button",
             "edit_context_combo_box",
             "whitelist_entry",
@@ -631,16 +700,12 @@ class SeriesView(ctk.CTkToplevel):
 
         if not busy:
             self._sync_match_dropdown_state()
-        elif hasattr(self, "_whitelist_match_mode_menu"):
-            with contextlib.suppress(tk.TclError):
-                self._whitelist_match_mode_menu.configure(state="disabled")
-
-        if hasattr(self, "whitelist"):
-            with contextlib.suppress(tk.TclError):
-                self.whitelist.configure(state=listbox_state)
-
-        if busy:
+            self._refresh_ocr_toolbar_buttons()
+            self._refresh_model_aware_toolbar_buttons()
+        else:
             for attr in (
+                "remove_button",
+                "remove_text_mode_menu",
                 "harmonize_button",
                 "blur_face_button",
                 "blur_face_mode_menu",
@@ -650,8 +715,13 @@ class SeriesView(ctk.CTkToplevel):
                 if widget is not None:
                     with contextlib.suppress(tk.TclError):
                         widget.configure(state="disabled")
-        else:
-            self._refresh_model_aware_toolbar_buttons()
+            if hasattr(self, "_whitelist_match_mode_menu"):
+                with contextlib.suppress(tk.TclError):
+                    self._whitelist_match_mode_menu.configure(state="disabled")
+
+        if hasattr(self, "whitelist"):
+            with contextlib.suppress(tk.TclError):
+                self.whitelist.configure(state=listbox_state)
 
         if hasattr(self, "save_button") and busy:
             with contextlib.suppress(tk.TclError):
@@ -746,10 +816,9 @@ class SeriesView(ctk.CTkToplevel):
         self._whitelist_frame.grid_columnconfigure(0, weight=1)
         self._whitelist_frame.grid_rowconfigure(3, weight=1)
 
-        # Row 0: small title
+        # Row 0: title (same size as button text)
         ctk.CTkLabel(
-            self._whitelist_frame, text=_("Whitelist"),
-            font=self._fonts.small if self._fonts else None,
+            self._whitelist_frame, text=_("WHITELIST"),
         ).grid(row=0, column=0, sticky="w", padx=self.PAD, pady=(self.PAD, 0))
 
         # Row 1: [Defaults] [Clear] [Match dropdown] in a toolbar sub-frame
@@ -820,11 +889,15 @@ class SeriesView(ctk.CTkToplevel):
         )
         self.image_viewer.grid(row=0, column=1, sticky="nsew")
         self.image_viewer.detach_companion_stack()
+        self._bind_slice_navigation_keys()
 
         # Control Frame (toolbar row, status line, save row):
         self.control_frame = ctk.CTkFrame(self._sv_frame)
         self.control_frame.grid(row=1, columnspan=2, sticky="ew", padx=self.PAD, pady=self.PAD)
-        self.control_frame.grid_columnconfigure(0, weight=1)
+        # Button groups keep weight=0 so they do not compress; spacer column absorbs resize.
+        self.control_frame.grid_columnconfigure(0, weight=0)
+        self.control_frame.grid_columnconfigure(1, weight=1)
+        self.control_frame.grid_columnconfigure(2, weight=0)
 
         text_edit_group = ctk.CTkFrame(self.control_frame, fg_color="transparent")
         self._text_edit_group = text_edit_group
@@ -859,20 +932,24 @@ class SeriesView(ctk.CTkToplevel):
             variable=self.remove_text_mode_var,
         )
         self.remove_text_mode_menu.grid(row=0, column=4, padx=2, pady=0)
+        # Present only after Detect Text; start hidden so window size matches available actions.
+        self.remove_button.grid_remove()
+        self.remove_text_mode_menu.grid_remove()
         self.blackout_button = ctk.CTkButton(
             text_edit_group, width=self.BUTTON_WIDTH, text=_("Blackout Area"), command=self.blackout_button_clicked
         )
         self.blackout_button.grid(row=0, column=5, padx=(2, self.PAD), pady=0)
 
+        toolbar_spacer = ctk.CTkFrame(self.control_frame, fg_color="transparent", width=1, height=1)
+        toolbar_spacer.grid(row=0, column=1, sticky="ew")
+
         harmonize_blur_group = ctk.CTkFrame(self.control_frame, fg_color="transparent")
-        harmonize_blur_group.grid(row=0, column=1, padx=(0, self.PAD), pady=self.PAD, sticky="e")
-        harmonize_state = self._harmonize_button_state()
+        harmonize_blur_group.grid(row=0, column=2, padx=(0, self.PAD), pady=self.PAD, sticky="e")
         self.harmonize_button = ctk.CTkButton(
             harmonize_blur_group,
             width=160,
             text=_("Harmonize Description"),
             command=self.harmonize_description_button_clicked,
-            state=harmonize_state,
         )
         self.harmonize_button.grid(row=0, column=0, padx=(self.PAD, 2), pady=0, sticky="e")
         self.blur_face_button = ctk.CTkButton(
@@ -880,7 +957,6 @@ class SeriesView(ctk.CTkToplevel):
             width=120,
             text=_("Blur Face"),
             command=self.blur_face_button_clicked,
-            state="disabled",
         )
         self.blur_face_button.grid(row=0, column=1, padx=2, pady=0, sticky="e")
         self.blur_face_mode_var = tk.StringVar(value=face_blur_mode_menu_values()[0])
@@ -894,12 +970,17 @@ class SeriesView(ctk.CTkToplevel):
         self.clear_ts_cache_button = ctk.CTkButton(
             harmonize_blur_group,
             width=130,
-            text=_("Clear TS Cache"),
+            text=_("Clear Cache"),
             command=self.clear_ts_cache_button_clicked,
-            state=self._clear_ts_cache_button_state(),
         )
         self.clear_ts_cache_button.grid(row=0, column=3, padx=(2, self.PAD), pady=0, sticky="e")
+        # Harmonize / Face Blur / Clear Cache presence is applied below (not greyed out).
+        self.harmonize_button.grid_remove()
+        self.blur_face_button.grid_remove()
+        self.blur_face_mode_menu.grid_remove()
+        self.clear_ts_cache_button.grid_remove()
         self._apply_ai_feature_visibility()
+        self._refresh_ocr_toolbar_buttons()
 
         self._status_label = ctk.CTkLabel(
             self.control_frame,
@@ -911,7 +992,7 @@ class SeriesView(ctk.CTkToplevel):
         self._status_label.grid(
             row=1,
             column=0,
-            columnspan=2,
+            columnspan=3,
             padx=self.PAD,
             pady=(0, self.PAD),
             sticky="w",
@@ -926,6 +1007,7 @@ class SeriesView(ctk.CTkToplevel):
         self._series_status_label.grid(
             row=2,
             column=0,
+            columnspan=2,
             padx=self.PAD,
             pady=(0, self.PAD),
             sticky="w",
@@ -937,12 +1019,10 @@ class SeriesView(ctk.CTkToplevel):
             text=_("Save Pixel Changes"),
             command=self.save_series_button_clicked,
         )
-        self.save_button.grid(row=2, column=1, padx=self.PAD, pady=(0, self.PAD), sticky="e")
+        self.save_button.grid(row=2, column=2, padx=self.PAD, pady=(0, self.PAD), sticky="e")
         self.save_button.configure(state="disabled")
         self._show_default_context_line()
         self._refresh_series_processing_status()
-
-        self._refresh_blur_face_ui()
 
         if self._ds is None or self._ds.Modality is None:
             logger.error("CRITICAL: Modality not found in dataset; whitelist not loaded")
@@ -963,13 +1043,14 @@ class SeriesView(ctk.CTkToplevel):
     def _update_title(self):
         title = _("Series View")
         if self._ds:
-            phi = self._anon_model.get_phi_by_anon_patient_id(self._ds.PatientID)
+            phi = self._controller.get_phi_by_anon_patient_id(self._ds.PatientID)
             if phi:
                 title += (
                     f" for {phi.patient_name} PHI ID:{phi.patient_id} ANON ID: {self._ds.PatientID}"
                     + f" {self._ds.get('SeriesDescription', '')} "
                 )
         self.title(title)
+        refresh_app_window_menu(self)
 
     def _series_context_line(self) -> str:
         geometry = self._ensure_series_geometry()
@@ -993,55 +1074,94 @@ class SeriesView(ctk.CTkToplevel):
         if anon_uid is None:
             self._series_status_label.configure(text="")
             return
-        status = self._anon_model.get_series_processing_status(anon_uid)
+        status = self._controller.get_series_processing_status(anon_uid)
         if status is None:
             self._series_status_label.configure(text="")
             return
-        already_applied = self._anon_model.series_has_face_blur(anon_uid)
+        already_applied = self._controller.series_has_face_blur(anon_uid)
         include_face_blur = face_blur_status_applicable(
             self._face_blur_eligibility(),
             already_applied=already_applied,
         )
         self._series_status_label.configure(
-            text=format_series_processing_status(status, include_face_blur=include_face_blur),
+            text=self._controller.format_series_processing_status(status, include_face_blur=include_face_blur),
         )
 
     def _harmonize_button_visible(self) -> bool:
-        if get_ai_session().enable_harmonize:
-            return True
-        return getattr(self._ds, "Modality", None) == "CT" and tseg_cache_summary(self._series_path).exists
+        anon_uid = self._anon_series_uid()
+        already_harmonized = anon_uid is not None and self._controller.series_is_harmonized(anon_uid)
+        return harmonize_button_visible(
+            harmonize_feature_on=get_ai_session().enable_harmonize,
+            harmonize_models_ready=harmonize_allowed(),
+            modality=getattr(self._ds, "Modality", None),
+            already_harmonized=already_harmonized,
+        )
+
+    def _blur_face_toolbar_visible(self) -> bool:
+        anon_uid = self._anon_series_uid()
+        already_applied = anon_uid is not None and self._controller.series_has_face_blur(anon_uid)
+        cached = cached_region_signal(self._series_path)
+        eligibility = None
+        if cached == CachedRegionSignal.HEAD:
+            eligibility = self._face_blur_eligibility()
+        return blur_face_toolbar_visible(
+            face_blur_feature_on=get_ai_session().enable_face_blur,
+            face_blur_models_ready=face_blur_allowed(),
+            face_blur_already_applied=already_applied,
+            cached_signal=cached,
+            eligibility_blocked=(
+                eligibility is not None and eligibility.decision == FaceBlurGateDecision.BLOCK
+            ),
+        )
 
     def _clear_ts_cache_button_visible(self) -> bool:
-        session = get_ai_session()
-        if session.enable_harmonize or session.enable_face_blur:
+        """Show Clear Cache only when Harmonize has been applied for this series."""
+        anon_uid = self._anon_series_uid()
+        already_harmonized = anon_uid is not None and self._controller.series_is_harmonized(anon_uid)
+        return clear_cache_button_visible(
+            modality=getattr(self._ds, "Modality", None),
+            already_harmonized=already_harmonized,
+        )
+
+    def _set_toolbar_widget_present(self, widget: tk.Misc | None, present: bool) -> bool:
+        """Show or hide a toolbar widget; return True when presence changed."""
+        if widget is None:
+            return False
+        try:
+            is_mapped = bool(widget.winfo_ismapped())
+        except tk.TclError:
+            return False
+        if present and not is_mapped:
+            with contextlib.suppress(tk.TclError):
+                widget.grid()
+                widget.configure(state="normal")
             return True
-        return getattr(self._ds, "Modality", None) == "CT" and tseg_cache_summary(self._series_path).exists
+        if not present and is_mapped:
+            with contextlib.suppress(tk.TclError):
+                widget.grid_remove()
+            return True
+        if present and is_mapped and self._series_interaction_allowed():
+            with contextlib.suppress(tk.TclError):
+                widget.configure(state="normal")
+        return False
 
     def _apply_ai_feature_visibility(self) -> None:
-        session = get_ai_session()
-        face_on = session.enable_face_blur
+        changed = False
         if hasattr(self, "harmonize_button"):
-            if self._harmonize_button_visible():
-                self.harmonize_button.grid()
-                self._refresh_harmonize_button()
-            else:
-                self.harmonize_button.grid_remove()
+            changed |= self._set_toolbar_widget_present(
+                self.harmonize_button, self._harmonize_button_visible()
+            )
         if hasattr(self, "blur_face_button"):
-            if face_on:
-                self.blur_face_button.grid()
-                if hasattr(self, "blur_face_mode_menu"):
-                    self.blur_face_mode_menu.grid()
-                self._refresh_blur_face_ui()
-            else:
-                self.blur_face_button.grid_remove()
-                if hasattr(self, "blur_face_mode_menu"):
-                    self.blur_face_mode_menu.grid_remove()
+            face_visible = self._blur_face_toolbar_visible()
+            changed |= self._set_toolbar_widget_present(self.blur_face_button, face_visible)
+            if hasattr(self, "blur_face_mode_menu"):
+                changed |= self._set_toolbar_widget_present(self.blur_face_mode_menu, face_visible)
         if hasattr(self, "clear_ts_cache_button"):
-            if self._clear_ts_cache_button_visible():
-                self.clear_ts_cache_button.grid()
-                self._refresh_clear_ts_cache_button()
-            else:
-                self.clear_ts_cache_button.grid_remove()
+            changed |= self._set_toolbar_widget_present(
+                self.clear_ts_cache_button, self._clear_ts_cache_button_visible()
+            )
+        if changed:
+            self._adapt_window_to_toolbar()
 
     def update_status(self, message: str, *, debug_log: bool = False) -> None:
         """Show transient Series View operation status (row 2, below geometry)."""
@@ -1053,37 +1173,8 @@ class SeriesView(ctk.CTkToplevel):
             self._status_label.configure(text=message)
             self.update_idletasks()
 
-    def _harmonize_button_state(self) -> str:
-        if not get_ai_session().enable_harmonize:
-            return "disabled"
-        if not harmonize_allowed():
-            return "disabled"
-        if getattr(self._ds, "Modality", None) != "CT":
-            return "disabled"
-        anon_uid = self._anon_series_uid()
-        if anon_uid is not None and self._anon_model.series_is_harmonized(anon_uid):
-            return "disabled"
-        return "normal"
-
-    def _refresh_harmonize_button(self) -> None:
-        if not hasattr(self, "harmonize_button"):
-            return
-        self.harmonize_button.configure(state=self._harmonize_button_state())
-
-    def _clear_ts_cache_button_state(self) -> str:
-        if getattr(self._ds, "Modality", None) != "CT":
-            return "disabled"
-        if tseg_cache_summary(self._series_path).exists:
-            return "normal"
-        return "disabled"
-
-    def _refresh_clear_ts_cache_button(self) -> None:
-        if not hasattr(self, "clear_ts_cache_button"):
-            return
-        self.clear_ts_cache_button.configure(state=self._clear_ts_cache_button_state())
-
     def _refresh_analysis_cache_ui(self) -> None:
-        self._refresh_model_aware_toolbar_buttons()
+        self._apply_ai_feature_visibility()
         self._show_default_context_line()
         self._refresh_series_processing_status()
 
@@ -1094,6 +1185,11 @@ class SeriesView(ctk.CTkToplevel):
         self._face_blur_eligibility_geometry = None
         self._refresh_analysis_cache_ui()
         self._refresh_series_processing_status()
+        # PHI Index Harmonized column is study-level ORM state; refresh so Accept is visible.
+        index = find_dataset_view_parent(self)
+        if index is not None:
+            with contextlib.suppress(tk.TclError):
+                index._update_tree_from_phi_index()
 
     def _face_blur_eligibility(self) -> FaceBlurEligibility:
         geometry = self._ensure_series_geometry()
@@ -1106,7 +1202,7 @@ class SeriesView(ctk.CTkToplevel):
             geometry=geometry,
             enable_tseg_face=get_ai_session().enable_face_blur,
             face_blur_already_applied=(
-                self._anon_model.series_has_face_blur(str(self._ds.SeriesInstanceUID))
+                self._controller.series_has_face_blur(str(self._ds.SeriesInstanceUID))
                 if self._ds is not None
                 else False
             ),
@@ -1115,25 +1211,29 @@ class SeriesView(ctk.CTkToplevel):
         self._face_blur_eligibility_geometry = geometry
         return eligibility
 
-    def _blur_face_toolbar_state(self) -> str:
-        if not get_ai_session().enable_face_blur:
-            return "disabled"
-        if not face_blur_allowed():
-            return "disabled"
-        anon_uid = self._anon_series_uid()
-        if anon_uid is not None and self._anon_model.series_has_face_blur(anon_uid):
-            return "disabled"
-        eligibility = self._face_blur_eligibility()
-        if eligibility.decision == FaceBlurGateDecision.BLOCK:
-            return "disabled"
-        return "normal"
+    def _ocr_results_available_for_edit_context(self) -> bool:
+        """True when Detect Text has left OCR overlays usable by Remove Text for the edit context."""
+        if not hasattr(self, "image_viewer"):
+            return False
+        overlay_ocr_by_frame = {
+            frame_i: list(overlay.ocr_texts)
+            for frame_i, overlay in self.image_viewer.overlay_data.items()
+            if overlay.ocr_texts
+        }
+        return ocr_results_available_for_edit_context(
+            self.edit_context,
+            current_frame_index=self.image_viewer.current_image_index,
+            overlay_ocr_by_frame=overlay_ocr_by_frame,
+        )
 
-    def _refresh_blur_face_ui(self) -> None:
-        state = self._blur_face_toolbar_state()
-        if hasattr(self, "blur_face_button"):
-            self.blur_face_button.configure(state=state)
-        if hasattr(self, "blur_face_mode_menu"):
-            self.blur_face_mode_menu.configure(state=state)
+    def _refresh_ocr_toolbar_buttons(self) -> None:
+        """Show Remove Text + removal mode only after Detect Text produced OCR results."""
+        present = self._series_interaction_allowed() and self._ocr_results_available_for_edit_context()
+        changed = False
+        changed |= self._set_toolbar_widget_present(getattr(self, "remove_button", None), present)
+        changed |= self._set_toolbar_widget_present(getattr(self, "remove_text_mode_menu", None), present)
+        if changed:
+            self._adapt_window_to_toolbar()
 
     def _selected_face_blur_mode(self) -> FaceBlurMode:
         if not hasattr(self, "blur_face_mode_var"):
@@ -1193,6 +1293,7 @@ class SeriesView(ctk.CTkToplevel):
         logger.info(f"Edit Context changed to: {choice}")
         self.edit_context = EditContext[choice]
         self.image_viewer.set_overlay_propagation(self.edit_context == EditContext.SERIES)
+        self._refresh_ocr_toolbar_buttons()
 
     def regenerate_series_projections(self):
         if self._frames is not None and not self.single_frame:
@@ -1265,13 +1366,18 @@ class SeriesView(ctk.CTkToplevel):
             return
         _frame_index, _status, _done, result = work_state.snapshot_progress()
         logger.info("Series View OCR job done error=%s", work_state.error)
-        if hasattr(self, "detect_text_button"):
-            self.detect_text_button.configure(state="normal")
+        if hasattr(self, "detect_button"):
+            self.detect_button.configure(state="normal")
         if work_state.error:
             self.update_status(_("Text detection failed") + f": {work_state.error}")
+            self._refresh_ocr_toolbar_buttons()
             return
+        detection_count = 0
+        frames_with_text = 0
         if isinstance(result, dict):
             self._apply_ocr_detections_result(result)
+            frames_with_text = sum(1 for texts in result.values() if texts)
+            detection_count = sum(len(texts) for texts in result.values() if texts)
             if hasattr(self, "image_viewer") and result:
                 if self.edit_context == EditContext.FRAME:
                     detected_frame = int(next(iter(result)))
@@ -1281,9 +1387,23 @@ class SeriesView(ctk.CTkToplevel):
                         self.image_viewer.refresh_current_image()
                 else:
                     self.image_viewer.refresh_current_image()
-        self.update_status(_("Text detection complete"), debug_log=True)
+        if self.edit_context == EditContext.FRAME:
+            status = _("Text detection complete") + f": {detection_count} " + _("detections")
+        else:
+            frames_scanned = (
+                self.image_viewer.num_images if hasattr(self, "image_viewer") else frames_with_text
+            )
+            status = (
+                _("Text detection complete")
+                + f": {detection_count} "
+                + _("detections")
+                + f", {frames_with_text}/{frames_scanned} "
+                + _("frames with text")
+            )
+        self.update_status(status, debug_log=True)
         work_state.reset()
         self._ocr_poll_frame_index = -1
+        self._refresh_ocr_toolbar_buttons()
 
     def _start_ocr_background_job(self) -> None:
         if self._ds is None or self._frames is None:
@@ -1324,8 +1444,9 @@ class SeriesView(ctk.CTkToplevel):
             whitelist=[],
             project_dir=project_dir,
         )
-        if hasattr(self, "detect_text_button"):
-            self.detect_text_button.configure(state="disabled")
+        if hasattr(self, "detect_button"):
+            self.detect_button.configure(state="disabled")
+        self._refresh_ocr_toolbar_buttons()
         self._ocr_poll_frame_index = -1
         if edit_context is OcrEditContext.FRAME:
             self.update_status(_("Detecting text in current image") + "…", debug_log=True)
@@ -1392,14 +1513,24 @@ class SeriesView(ctk.CTkToplevel):
             self.image_viewer.current_wl, self.image_viewer.current_ww, raw_frame
         )
         removal_mode = pixel_phi_removal_mode_from_menu_label(self.remove_text_mode_var.get())
+        removed_labels = [t.text.strip() for t in ocr_texts if (t.text or "").strip()]
+        if removed_labels:
+            pending = self._removed_pixel_phi_by_frame.setdefault(frame_index, [])
+            for label in removed_labels:
+                if label not in pending:
+                    pending.append(label)
         self.image_viewer.images[frame_index] = remove_ocr_text_from_frame(
             raw_frame,
             windowed_frame,
             ocr_texts,
             removal_mode=removal_mode,
         )
+        self._pixel_phi_dirty = True
         self.save_button.configure(state="enabled")
         ocr_texts.clear()
+        # Keep Series View from redrawing removed boxes from the raw detect cache.
+        if frame_index in self.detected_text:
+            self.detected_text[frame_index] = []
 
     def remove_text_from_series(self):
         total_frames = self.image_viewer.num_images
@@ -1434,11 +1565,14 @@ class SeriesView(ctk.CTkToplevel):
             self.remove_text_from_series()
             self.update_status(_("Text removed from all images"))
 
+        self._refresh_ocr_toolbar_buttons()
+
         # TODO: Remove all in PROJECT if modality and image size constant
 
     def blackout_areas_in_single_frame(self, frame_index: int, user_rects: list[UserRectangle]):
         logger.debug(f"Blackout {len(user_rects)} rects from frame {frame_index}")
         blackout_rectangular_areas(self.image_viewer.images[frame_index], user_rects)
+        self._pixel_phi_dirty = True
         self.save_button.configure(state="enabled")
         user_rects.clear()
 
@@ -1498,14 +1632,15 @@ class SeriesView(ctk.CTkToplevel):
             return
 
         logger.info("Harmonize starting for %s", self._series_path)
-        self.harmonize_button.configure(state="disabled")
+        with contextlib.suppress(tk.TclError):
+            self.harmonize_button.grid_remove()
         show_harmonize_results_view(
             self,
             series_path=self._series_path,
             ds=self._ds,
             current_description=str(self._ds.get("SeriesDescription", "") or "").strip(),
             fonts=self._fonts,
-            anon_model=self._anon_model,
+            anon_model=self._controller.anonymizer.model,
             on_series_description_updated=self._on_series_description_updated,
         )
         self._series_geometry = None
@@ -1517,19 +1652,19 @@ class SeriesView(ctk.CTkToplevel):
     def clear_ts_cache_button_clicked(self) -> None:
         if self._ds is None or getattr(self._ds, "Modality", None) != "CT":
             return
-
-        summary = tseg_cache_summary(self._series_path)
-        if not summary.exists:
+        if not self._clear_ts_cache_button_visible():
             return
 
-        size_mb = summary.size_bytes / (1024 * 1024)
+        summary = tseg_cache_summary(self._series_path)
+        size_mb = summary.size_bytes / (1024 * 1024) if summary.exists else 0.0
         size_text = f"{size_mb:.1f} MB" if size_mb >= 0.1 else _("< 0.1 MB")
+        file_count = summary.file_count if summary.exists else 0
 
         cache_message = (
             _("Delete analysis cache for this series?")
             + "\n\n"
             + _("Removes geometry, segmentation masks, contrast analysis, and face mask under")
-            + f" {TSEG_CACHE_DIRNAME}/ ({size_text}, {summary.file_count} "
+            + f" {TSEG_CACHE_DIRNAME}/ ({size_text}, {file_count} "
             + _("files")
             + ").\n\n"
             + _("DICOM images and series description are not changed.")
@@ -1537,7 +1672,7 @@ class SeriesView(ctk.CTkToplevel):
             + _("Harmonize analysis can be re-run after clearing the cache.")
         )
         anon_uid = self._anon_series_uid()
-        if anon_uid is not None and self._anon_model.series_has_face_blur(anon_uid):
+        if anon_uid is not None and self._controller.series_has_face_blur(anon_uid):
             cache_message += "\n\n" + _(
                 "Face blur has already been applied; blurred pixels and Blur Face status are unchanged."
             )
@@ -1552,9 +1687,8 @@ class SeriesView(ctk.CTkToplevel):
             return
 
         logger.info("Clearing TS cache for %s", self._series_path)
-        clear_series_tseg_cache(
+        self._controller.clear_series_tseg_cache(
             self._series_path,
-            anon_model=self._anon_model,
             anon_series_uid=anon_uid,
         )
         self._series_geometry = None
@@ -1566,20 +1700,19 @@ class SeriesView(ctk.CTkToplevel):
         if not self._widget_alive():
             return
         self._refresh_analysis_cache_ui()
-        self._apply_ai_feature_visibility()
         self.update_status(_("Analysis cache cleared"))
         self._refresh_series_processing_status()
 
     def blur_face_button_clicked(self) -> None:
         anon_uid = self._anon_series_uid()
-        if anon_uid is not None and self._anon_model.series_has_face_blur(anon_uid):
+        if anon_uid is not None and self._controller.series_has_face_blur(anon_uid):
             messagebox.showinfo(
                 title=_("Blur Face"),
                 message=face_blur_gate_message(FaceBlurGateReason.ALREADY_APPLIED),
                 parent=self,
             )
             return
-        if not self._series_interaction_allowed() or self._blur_face_toolbar_state() != "normal":
+        if not self._series_interaction_allowed() or not self._blur_face_toolbar_visible():
             return
 
         eligibility = self._face_blur_eligibility()
@@ -1601,7 +1734,7 @@ class SeriesView(ctk.CTkToplevel):
             return
 
         blur_mode = self._selected_face_blur_mode()
-        index_parent = find_phi_index_parent(self) or self._parent
+        index_parent = find_dataset_view_parent(self) or self._parent
 
         logger.info(
             "Series View: opening face blur review for %s (gate=%s)",
@@ -1611,7 +1744,7 @@ class SeriesView(ctk.CTkToplevel):
         self._on_cancel()
         show_face_blur_review_dialog(
             index_parent,
-            anon_model=self._anon_model,
+            anon_model=self._controller.anonymizer.model,
             series_path=self._series_path,
             blur_mode=blur_mode,
         )
@@ -1667,18 +1800,34 @@ class SeriesView(ctk.CTkToplevel):
             invalidate_projection_cache(self._series_path)
             if hasattr(self, "image_viewer"):
                 texts_by_frame = collect_series_view_pixel_phi_texts(self.image_viewer)
+                for frame_index, removed in self._removed_pixel_phi_by_frame.items():
+                    merged = list(texts_by_frame.get(frame_index, []))
+                    for label in removed:
+                        if label not in merged:
+                            merged.append(label)
+                    if merged:
+                        texts_by_frame[frame_index] = merged
+                anon_series_uid = str(self._ds.SeriesInstanceUID)
                 if texts_by_frame:
                     projection_count = 0 if self.single_frame else SERIES_VIEW_PROJECTION_COUNT
                     apply_series_view_pixel_phi(
-                        self._anon_model,
+                        self._controller.anonymizer.model,
                         self._slice_paths,
                         texts_by_frame,
                         projection_frame_count=projection_count,
-                        anon_series_uid=str(self._ds.SeriesInstanceUID),
+                        anon_series_uid=anon_series_uid,
                     )
+                elif self._pixel_phi_dirty:
+                    # Blackout-only (or cleared overlays): still mark series scanned for Dataset status.
+                    self._controller.anonymizer.model.set_series_pixel_phi_scanned(
+                        anon_series_uid, scanned=True
+                    )
+            self._removed_pixel_phi_by_frame.clear()
+            self._pixel_phi_dirty = False
             self.save_button.configure(state="disabled")
             self._refresh_series_processing_status()
             self.update_status(_("Changes saved"))
+            self._on_cancel()
         else:
             logger.error(f"Failed to save series frames to {self._series_path}")
             messagebox.showerror(
@@ -1721,6 +1870,53 @@ class SeriesView(ctk.CTkToplevel):
         for item in whitelist:
             self.whitelist.insert(tk.END, item)
         self._log_whitelist_trace("load_defaults")
+
+    def _bind_slice_navigation_keys(self) -> None:
+        """Forward arrow/page keys to ImageViewer unless focus is in an editable field."""
+        if self.single_frame or self._frames is None or self._frames.shape[0] <= 1:
+            return
+        bindings = (
+            ("<Left>", "prev_image"),
+            ("<Right>", "next_image"),
+            ("<Up>", "change_image_up"),
+            ("<Down>", "change_image_down"),
+            ("<Prior>", "change_image_prior"),
+            ("<Next>", "change_image_next"),
+            ("<Home>", "change_image_home"),
+            ("<End>", "change_image_end"),
+        )
+        for sequence, method_name in bindings:
+            self.bind(sequence, lambda event, name=method_name: self._on_slice_navigation_key(event, name))
+
+    def _focus_is_text_input(self) -> bool:
+        focused = self.focus_get()
+        if focused is None:
+            return False
+        cls = focused.winfo_class()
+        if cls in {"Entry", "TEntry", "Listbox", "Text", "TCombobox"}:
+            return True
+        return isinstance(focused, (ctk.CTkEntry, ctk.CTkComboBox, ctk.CTkTextbox))
+
+    def _on_slice_navigation_key(self, event, method_name: str):
+        if self._focus_is_text_input():
+            return
+        viewer = getattr(self, "image_viewer", None)
+        if viewer is None:
+            return
+        handler = getattr(viewer, method_name, None)
+        if handler is None:
+            return
+        handler(event)
+        return "break"
+
+    def _focus_image_viewer_for_keys(self) -> None:
+        if not self._widget_alive():
+            return
+        viewer = getattr(self, "image_viewer", None)
+        if viewer is None:
+            return
+        with contextlib.suppress(tk.TclError):
+            viewer.canvas.focus_set()
 
     def _escape_keypress(self, event):
         logger.info("_escape_pressed")
@@ -1796,6 +1992,8 @@ class SeriesView(ctk.CTkToplevel):
         self._ds = None
         self._series_geometry = None
         self.detected_text.clear()
+        self._removed_pixel_phi_by_frame.clear()
+        self._pixel_phi_dirty = False
 
     def _on_cancel(self):
         logger.info("_on_cancel")
@@ -1825,5 +2023,6 @@ class SeriesView(ctk.CTkToplevel):
             self.grab_release()
 
         parent = self._parent
+        return_to_dataset_view(self)
         self.destroy()
         self._schedule_post_close_gc(parent, rss_before)

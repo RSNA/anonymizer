@@ -242,26 +242,23 @@ class ImageViewer(ctk.CTkFrame):
         if self.num_images > 1 and self.control_frame is not None:
             self.control_frame.bind("<MouseWheel>", self.on_mousewheel)
 
-        # Keys:
-        # Note: customtkinter key bindings bind to the canvas of the frame
-        # see here: https://stackoverflow.com/questions/77676235/tkinter-focus-set-on-frame
+        # Keys: bind on widgets that can hold keyboard focus.
+        # mouse_enter / _set_initial_size focus the image canvas; CTkFrame.bind alone
+        # does not receive those KeyPress events.
         if self.num_images > 1:
-            self.bind("<Left>", self.prev_image)
-            self.bind("<Right>", self.next_image)
-            self.bind("<Up>", self.change_image_up)
-            self.bind("<Down>", self.change_image_down)
-            self.bind("<Prior>", self.change_image_prior)
-            self.bind("<Next>", self.change_image_next)
-            self.bind("<Home>", self.change_image_home)
-            self.bind("<End>", self.change_image_end)
+            self._bind_slice_navigation_keys(self)
+            self._bind_slice_navigation_keys(self.canvas)
             if self.show_playback_controls:
                 self.bind("<space>", self.toggle_play)
+                self.canvas.bind("<space>", self.toggle_play)
 
         # Focus management for ImageViewer
         self.bind("<Enter>", self.mouse_enter)
         self.canvas.bind("<Enter>", self.mouse_enter)
         if self.control_frame is not None:
             self.control_frame.bind("<Enter>", self.mouse_enter)
+            if self.num_images > 1:
+                self._bind_slice_navigation_keys(self.control_frame)
 
         self.update_status()
 
@@ -354,6 +351,8 @@ class ImageViewer(ctk.CTkFrame):
         self.companion_canvas.grid(row=canvas_row, column=1, sticky="nsew", padx=(4, 0))
         self.companion_canvas.bind("<MouseWheel>", self.on_mousewheel)
         self.companion_canvas.bind("<Enter>", self.mouse_enter)
+        if self.num_images > 1:
+            self._bind_slice_navigation_keys(self.companion_canvas)
 
         scroll_row = canvas_row + 1
         if self.num_images > 1:
@@ -677,6 +676,17 @@ class ImageViewer(ctk.CTkFrame):
     def mouse_enter(self, event):
         logger.debug("mouse_enter")
         self.canvas.focus_set()
+
+    def _bind_slice_navigation_keys(self, widget: tk.Misc) -> None:
+        """Arrow / page keys change the current slice (same mapping as scrollbar)."""
+        widget.bind("<Left>", self.prev_image)
+        widget.bind("<Right>", self.next_image)
+        widget.bind("<Up>", self.change_image_up)
+        widget.bind("<Down>", self.change_image_down)
+        widget.bind("<Prior>", self.change_image_prior)
+        widget.bind("<Next>", self.change_image_next)
+        widget.bind("<Home>", self.change_image_home)
+        widget.bind("<End>", self.change_image_end)
 
     def _handle_histogram_update(self, wl: float, ww: float):
         """Callback function called by Histogram widget when WL/WW changes interactively."""

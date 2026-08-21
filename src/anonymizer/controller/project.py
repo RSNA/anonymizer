@@ -6,7 +6,6 @@ The ProjectController class handles association requests, performs DICOM queries
 The module also defines several data classes used for request and response objects, as well as data structures for organizing DICOM hierarchy.
 """
 
-import csv
 import logging
 import os
 import shutil
@@ -17,7 +16,13 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from queue import Queue
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, cast
+
+if TYPE_CHECKING:
+    import tkinter as tk
+
+    from anonymizer.view.common.fonts import AppFonts
+    from anonymizer.view.series.series import SeriesView
 
 import boto3
 from psutil import virtual_memory
@@ -57,8 +62,17 @@ from anonymizer.controller.ai_batch_process import (
     ai_batch_process,
 )
 from anonymizer.controller.anonymizer import AnonymizerController
+from anonymizer.controller.phi_io import (
+    PHI_IndexRecord,
+    build_phi_index,
+    format_series_processing_status,
+    write_lookup_csv,
+)
+from anonymizer.controller.phi_io import (
+    import_java_phi_studies as phi_io_import_java_phi_studies,
+)
 from anonymizer.controller.work_state import WorkState
-from anonymizer.model.anonymizer import PHI_IndexRecord
+from anonymizer.model.anonymizer import PHI, SeriesProcessingStatus
 from anonymizer.model.project import (
     AuthenticationError,
     DICOMNode,
@@ -76,6 +90,7 @@ from anonymizer.utils.dicom import (
     C_WARNING,
 )
 from anonymizer.utils.logging import set_logging_levels
+from anonymizer.utils.storage import JavaAnonymizerExportedStudy
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
@@ -2562,8 +2577,9 @@ class ProjectController(AE):
         """
         Create a PHI (Protected Health Information) CSV file.
 
-        This method generates a CSV file containing PHI data from the anonymizer model lookup tables.
-        The CSV file includes the fields of AnonymizerModel.PHI_IndexRecord dataclass.
+        Writes one denormalized row per series (study/patient keys repeated), matching
+        PHI_IndexRecord + PHI_SeriesIndexRecord. Studies with no series emit one row
+        with empty series columns.
 
         Returns:
             Path | str: The path to the generated PHI CSV file if successful, otherwise an error message.
@@ -2576,17 +2592,20 @@ class ProjectController(AE):
             logger.error("No Studies/PHI data in Anonymizer Model")
             return _("No Studies in Anonymizer Model")
 
+        patient_count, study_count, series_count = PHI_IndexRecord.lookup_csv_entity_counts(phi_index)
         os.makedirs(self.model.phi_export_dir(), exist_ok=True)
-        filename = f"{self.model.site_id}_{self.model.project_name}_PHI_{len(phi_index)}.csv"
+        filename = f"{self.model.site_id}_{self.model.project_name}_PHI_{patient_count}_{study_count}_{series_count}.csv"
         phi_csv_path = Path(self.model.phi_export_dir(), filename)
 
         try:
-            with open(phi_csv_path, "w", newline="") as csv_file:
-                writer = csv.writer(csv_file, delimiter=",")
-                writer.writerow(PHI_IndexRecord.get_field_titles())
-                for record in phi_index:
-                    writer.writerow(record.flatten())
-            logger.info(f"PHI saved to: {phi_csv_path}")
+            write_lookup_csv(phi_csv_path, phi_index)
+            logger.info(
+                "PHI saved to: %s (%d patients, %d studies, %d series)",
+                phi_csv_path,
+                patient_count,
+                study_count,
+                series_count,
+            )
         except Exception as e:
             logger.error(f"Error writing PHI CSV: {e}")
             return repr(e)
@@ -2594,8 +2613,60 @@ class ProjectController(AE):
         return phi_csv_path
 
     def get_phi_index_records(self) -> list[PHI_IndexRecord] | None:
-        """Return PHI index rows with study-level AI processing status from ORM metadata."""
-        return self.anonymizer.model.get_phi_index()
+        """Return PHI dataset rows with study-level AI processing status (via phi_io)."""
+        return build_phi_index(self.anonymizer.model)
+
+    def import_java_phi_studies(self, java_studies: list[JavaAnonymizerExportedStudy]) -> None:
+        """Import Java Anonymizer exported studies into the PHI ORM store."""
+        phi_io_import_java_phi_studies(self.anonymizer.model, java_studies)
+
+    def series_is_harmonized(self, anon_series_uid: str) -> bool:
+        return self.anonymizer.model.series_is_harmonized(anon_series_uid)
+
+    def series_has_face_blur(self, anon_series_uid: str) -> bool:
+        return self.anonymizer.model.series_has_face_blur(anon_series_uid)
+
+    def get_series_processing_status(self, anon_series_uid: str) -> SeriesProcessingStatus | None:
+        return self.anonymizer.model.get_series_processing_status(anon_series_uid)
+
+    def format_series_processing_status(
+        self,
+        status: SeriesProcessingStatus,
+        *,
+        include_face_blur: bool = True,
+    ) -> str:
+        return format_series_processing_status(status, include_face_blur=include_face_blur)
+
+    def get_phi_by_anon_patient_id(self, anon_patient_id: str) -> PHI | None:
+        return self.anonymizer.model.get_phi_by_anon_patient_id(anon_patient_id)
+
+    def get_totals(self):
+        return self.anonymizer.model.get_totals()
+
+    def clear_series_tseg_cache(self, series_path: Path, anon_series_uid: str | None = None) -> None:
+        from anonymizer.controller.ai.tseg.cache import clear_series_tseg_cache
+
+        clear_series_tseg_cache(
+            series_path,
+            anon_model=self.anonymizer.model,
+            anon_series_uid=anon_series_uid,
+        )
+
+    def show_series_view(
+        self,
+        parent: "tk.Misc",
+        series_path: Path,
+        fonts: "AppFonts | None" = None,
+    ) -> "SeriesView | None":
+        """Open Series View; views call this instead of constructing SeriesView with the model."""
+        from anonymizer.view.series.series import show_series_view
+
+        return show_series_view(
+            parent,
+            controller=self,
+            series_path=series_path,
+            fonts=fonts,
+        )
 
     def harmonize_studies(
         self,

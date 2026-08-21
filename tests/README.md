@@ -24,15 +24,19 @@ Defined in `pyproject.toml`:
 | Marker | Use |
 |--------|-----|
 | `tseg_integration` | TotalSegmentator inference (slow) |
+| `ocr_integration` | EasyOCR on real fixtures in `tests/controller/ocr/` (opt-in; excluded from default) |
 | `dicom_integration` | Local Orthanc or heavy DICOM network tests |
 | `rsna_local_data` | RSNA test data directory required |
 | `falcon_memory` | RSS leak guard on real FALCON inference |
 
 ```bash
 pytest tests/controller -m tseg_integration
+pytest tests/controller/ocr -m ocr_integration   # needs EasyOCR weights under assets/ai/ocr/model
 pytest tests/controller/dicom -m dicom_integration
 pytest src/prototyping -m rsna_local_data
 ```
+
+Default pytest `addopts` includes `-m "not ocr_integration"` so OCR weight-dependent tests are not collected (and do not show as skipped).
 
 ## Shared assets
 

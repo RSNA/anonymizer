@@ -12,7 +12,6 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     detect_text,
     filter_ocr_detections,
     ocr_image_for_frame,
-    ocr_models_ready,
     remove_pixel_phi,
 )
 from anonymizer.controller.ai_batch_process import (
@@ -22,6 +21,7 @@ from anonymizer.controller.ai_batch_process import (
 from anonymizer.controller.runner import RemovePixelPhiRunner
 from anonymizer.controller.series_io import load_series_frames
 from anonymizer.utils.storage import load_default_whitelist
+from tests.controller.ocr.conftest import assert_dcm
 from tests.controller.support.us_rgb_fixtures import (
     US_RGB_BATCH_PIXELS_CHANGED,
     US_RGB_BATCH_REMOVED_TEXTS,
@@ -32,14 +32,6 @@ from tests.controller.support.us_rgb_fixtures import (
     US_RGB_SERIES_VIEW_OCR_TEXTS,
     US_RGB_SERIES_VIEW_SURVIVORS_AFTER_BATCH,
 )
-
-pytestmark = [
-    pytest.mark.skipif(
-        not US_RGB_DCM.is_file(),
-        reason="US RGB single-frame fixture missing",
-    ),
-    pytest.mark.skipif(not ocr_models_ready(), reason="EasyOCR models not available"),
-]
 
 
 def test_us_rgb_batch_removed_count_matches_ux_log() -> None:
@@ -68,11 +60,11 @@ def test_us_rgb_ux_log_lines_match_fixture() -> None:
 
     assert instance_line == (
         'Instance 1/1: blacked out "mindray", "KMR", "X-RAYS", "26,05/2018", "13.09:16", "MI 0.9", "TIS 0.3", "AP" '
-        '(+13 more) (18,316 px)'
+        "(+13 more) (18,316 px)"
     )
     assert series_line == (
         'Modified 1/1 · removed: "mindray", "KMR", "X-RAYS", "26,05/2018", "13.09:16", "MI 0.9" '
-        '(+15 more) · 18,316 pixels blacked out'
+        "(+15 more) · 18,316 pixels blacked out"
     )
 
 
@@ -83,13 +75,12 @@ def test_us_rgb_series_view_detect_is_not_batch_removal_list() -> None:
         assert text not in US_RGB_BATCH_REMOVED_TEXTS, f"{text!r} should be filtered before removal"
 
 
+@pytest.mark.ocr_integration
+@pytest.mark.usefixtures("require_ocr")
 def test_us_rgb_series_view_after_batch_shows_no_whitelist_display_survivors(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from tests.paths import REPO_ROOT
-
-    monkeypatch.chdir(REPO_ROOT / "src" / "anonymizer")
+    assert_dcm(US_RGB_DCM)
     dcm_path = tmp_path / "us_rgb.dcm"
     shutil.copy(US_RGB_DCM, dcm_path)
     loaded = load_series_frames(US_RGB_DCM.parent)

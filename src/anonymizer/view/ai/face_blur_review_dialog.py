@@ -44,7 +44,8 @@ from anonymizer.view.ai.blur_face_results import (
     proposed_face_blur_companion_label,
 )
 from anonymizer.view.ai.harmonize_results import HarmonizeResultsView
-from anonymizer.view.common.ctk_safe import mark_ctk_window_alive, teardown_ctk_toplevel
+from anonymizer.view.common.app_window import AppCTkToplevel
+from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.job_poller import LOAD_POLL_MS, STAGE_POLL_MS, start_background_job
 from anonymizer.view.common.navigation import return_to_phi_index
 from anonymizer.view.series.image import ImageViewer
@@ -62,7 +63,7 @@ class FaceBlurReviewOutcome:
     cancelled: bool
 
 
-class FaceBlurReviewDialog(ctk.CTkToplevel):
+class FaceBlurReviewDialog(AppCTkToplevel):
     BLUR_POLL_MS = STAGE_POLL_MS
     LOAD_POLL_MS = LOAD_POLL_MS
     PAD = 10
@@ -83,7 +84,6 @@ class FaceBlurReviewDialog(ctk.CTkToplevel):
         blur_mode: FaceBlurMode,
     ) -> None:
         super().__init__(master=parent)
-        mark_ctk_window_alive(self)
 
         self._parent = parent
         self._anon_model = anon_model

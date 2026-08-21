@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+- Share File/Settings/Help menubar across secondary windows (fixes macOS `python3` menu) and list open windows under Window
+- Single Projection View instance from Dataset; refresh Window menu labels when Series/Projection titles update
+- Fix Series View Pixel PHI save for multi-frame files: merge all frame strings into one comma-delimited Instance digest
+- Dataset View: succinct columns (description-only Study/Series; study AI Yes/No; series Pixel PHI text; PHI/Anon ID autosize; centered cells)
+- Tighten CT Series View OCR veracity: drop short numeric and digit/symbol false positives (keep US unchanged)
+- Dataset view (renamed from PHI Index): nested study → series Treeview with per-series Harmonized / FaceBlur / PixelPHI
+- Patient Lookup CSV: one denormalized row per series (study keys repeated); filename `{site}_{project}_PHI_{patients}_{studies}_{series}.csv`; omit study AI rollups and HarmonizedDescription
+- Move PHI dataset DTOs, CSV export, and Java index import to `controller/phi_io`; views use `ProjectController` only (no View→Model)
+
 ## [19.0.0.dev10]
 - Lookup table import (CTP `.properties`), settings UI, and lookup-aware `capture_phi` / anonymizer script operands
 - Theme-driven `AppFonts` replaces per-view font lifecycle; dialog teardown hardening in `ctk_safe`

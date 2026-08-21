@@ -1,6 +1,5 @@
 import logging
 import string
-import tkinter as tk
 from typing import Union
 
 import customtkinter as ctk
@@ -8,6 +7,7 @@ import customtkinter as ctk
 from anonymizer.model.project import DICOMNode
 from anonymizer.utils.network import dns_lookup, get_local_ip_addresses
 from anonymizer.utils.translate import _
+from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import default_char_width_px
 from anonymizer.view.common.ux_fields import (
@@ -24,7 +24,7 @@ from anonymizer.view.common.ux_fields import (
 logger = logging.getLogger(__name__)
 
 
-class DICOMNodeDialog(tk.Toplevel):
+class DICOMNodeDialog(AppToplevel):
     """
     A dialog window for configuring a DICOM node.
 

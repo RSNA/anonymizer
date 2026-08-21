@@ -15,6 +15,7 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     remove_pixel_phi,
 )
 from anonymizer.controller.ai_batch_process import AiBatchAlgorithm, _apply_remove_pixel_phi_series
+from anonymizer.controller.phi_io import build_phi_index
 from anonymizer.model.anonymizer import AnonymizerModel, Instance
 from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT
 from tests.controller.support.pixel_phi_test_support import (
@@ -139,7 +140,7 @@ def test_batch_pixel_phi_pipeline_updates_model_and_phi_index(
         assert row is not None
         assert row.pixel_phi == expected_digest
 
-    records = anonymizer_model.get_phi_index()
+    records = build_phi_index(anonymizer_model)
     assert records is not None
     record = next(item for item in records if item.anon_study_uid == study.anon_study_uid)
     assert record.pixel_phi_removed is True
@@ -200,6 +201,6 @@ def test_phi_index_digest_deduplicates_across_instances(
     )
 
     assert outcome.status == "ok"
-    records = anonymizer_model.get_phi_index()
+    records = build_phi_index(anonymizer_model)
     assert records is not None
     assert records[0].pixel_phi == "SMITH^JOHN, 01-Jan-2024, ACC12345"

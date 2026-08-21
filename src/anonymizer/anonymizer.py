@@ -10,6 +10,7 @@ import signal
 import sys
 import time
 import tkinter as tk
+import weakref
 from copy import copy
 from pathlib import Path
 from pprint import pformat
@@ -36,9 +37,9 @@ from anonymizer.utils.translate import (
 from anonymizer.utils.version import get_version
 from anonymizer.view.common.fonts import AppFonts, create_app_fonts
 from anonymizer.view.common.html_view import HTMLView, is_ai_features_help
+from anonymizer.view.project.dataset import DatasetView
 from anonymizer.view.project.export import ExportView
 from anonymizer.view.project.import_files_dialog import ImportFilesDialog
-from anonymizer.view.project.index import IndexView
 from anonymizer.view.project.query_retrieve_import import QueryView
 from anonymizer.view.settings.settings_dialog import SettingsDialog
 from anonymizer.view.shell.dashboard import Dashboard
@@ -113,9 +114,11 @@ class Anonymizer(ctk.CTk):
         self.welcome_view.focus()
         self.query_view: QueryView | None = None
         self.export_view: ExportView | None = None
-        self.index_view: IndexView | None = None
+        self.dataset_view: DatasetView | None = None
         self.help_views = {}
         self.dashboard: Dashboard | None = None
+        self._app_windows: list[weakref.ref] = []
+        self._window_menu: tk.Menu | None = None
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
         self.resizable(False, False)
@@ -487,7 +490,7 @@ class Anonymizer(ctk.CTk):
                 raise RuntimeError(_("Fatal Internal Error, Project Controller not created"))
 
             if java_phi_studies:
-                self.controller.anonymizer.model.process_java_phi_studies(java_phi_studies)
+                self.controller.import_java_phi_studies(java_phi_studies)
 
             if ctp_lookup_preview is not None:
                 commit_ctp_lookup(self.controller, ctp_lookup_preview)
@@ -1101,31 +1104,31 @@ class Anonymizer(ctk.CTk):
         self.export_view.focus()
 
     def view(self):
-        logging.info("OPEN IndexView")
+        logging.info("OPEN DatasetView")
 
         if not self.controller:
             logger.error("Internal Error: no ProjectController")
             return
 
-        if self.index_view and self.index_view.winfo_exists():
-            logger.info("IndexView already OPEN")
-            self.index_view.deiconify()
-            self.index_view.focus_force()
+        if self.dataset_view and self.dataset_view.winfo_exists():
+            logger.info("DatasetView already OPEN")
+            self.dataset_view.deiconify()
+            self.dataset_view.focus_force()
             return
 
         if not self.dashboard:
             logger.error("Internal Error: no Dashboard")
             return
 
-        if self.index_view:
-            del self.index_view
+        if self.dataset_view:
+            del self.dataset_view
 
-        self.index_view = IndexView(self.dashboard, self.controller, self.fonts)
-        if self.index_view is None:
-            logger.error("Internal Error creating IndexView")
+        self.dataset_view = DatasetView(self.dashboard, self.controller, self.fonts)
+        if self.dataset_view is None:
+            logger.error("Internal Error creating DatasetView")
             return
 
-        self.index_view.focus()
+        self.dataset_view.focus()
 
     def settings(self):
         logger.info("Settings")
@@ -1168,8 +1171,8 @@ class Anonymizer(ctk.CTk):
         from anonymizer.view.ai.tseg_setup_dialog import show_ai_features_setup_dialog
 
         def on_changed() -> None:
-            if self.index_view is not None and self.index_view.winfo_exists():
-                self.index_view.refresh_ai_feature_ui()
+            if self.dataset_view is not None and self.dataset_view.winfo_exists():
+                self.dataset_view.refresh_ai_feature_ui()
 
         show_ai_features_setup_dialog(self, on_changed=on_changed)
 
@@ -1228,6 +1231,81 @@ class Anonymizer(ctk.CTk):
     def show_tseg_setup_dialog(self) -> None:
         self.show_ai_features_setup_dialog()
 
+    def _live_app_windows(self) -> list[tk.Misc]:
+        live: list[tk.Misc] = []
+        surviving: list[weakref.ref] = []
+        for ref in self._app_windows:
+            window = ref()
+            if window is None:
+                continue
+            try:
+                if not window.winfo_exists():
+                    continue
+            except tk.TclError:
+                continue
+            live.append(window)
+            surviving.append(ref)
+        self._app_windows = surviving
+        return live
+
+    def register_app_window(self, window: tk.Misc) -> None:
+        for existing in self._live_app_windows():
+            if existing is window:
+                self._attach_menu_to_window(window)
+                self.refresh_window_menu()
+                return
+        self._app_windows.append(weakref.ref(window))
+        self._attach_menu_to_window(window)
+        self.refresh_window_menu()
+
+    def unregister_app_window(self, window: tk.Misc) -> None:
+        self._app_windows = [ref for ref in self._app_windows if ref() is not None and ref() is not window]
+        self.refresh_window_menu()
+
+    def _attach_menu_to_window(self, window: tk.Misc) -> None:
+        if self.menu_bar is None:
+            return
+        try:
+            window.configure(menu=self.menu_bar)
+        except tk.TclError:
+            logger.debug("Could not attach menu_bar to %s", window, exc_info=True)
+
+    def _reattach_menu_to_registered_windows(self) -> None:
+        for window in self._live_app_windows():
+            self._attach_menu_to_window(window)
+
+    def _focus_root_window(self) -> None:
+        from anonymizer.view.common.app_window import focus_app_window
+
+        focus_app_window(self)
+
+    def refresh_window_menu(self) -> None:
+        from anonymizer.view.common.app_window import focus_app_window, window_menu_label_for
+
+        window_menu = self._window_menu
+        if window_menu is None:
+            return
+        try:
+            end = window_menu.index("end")
+        except tk.TclError:
+            return
+        if end is not None:
+            window_menu.delete(0, end)
+
+        window_menu.add_command(label=_("Dashboard"), command=self._focus_root_window)
+        for window in self._live_app_windows():
+            label = window_menu_label_for(window)
+            window_menu.add_command(
+                label=label,
+                command=lambda win=window: focus_app_window(win),
+            )
+
+    def _finalize_menu_bar(self, menu_bar: tk.Menu) -> tk.Menu:
+        self.config(menu=menu_bar)
+        self._reattach_menu_to_registered_windows()
+        self.refresh_window_menu()
+        return menu_bar
+
     def create_project_closed_menu_bar(self) -> tk.Menu:
         logger.debug("create_project_closed_menu_bar")
         menu_bar = tk.Menu(master=self)
@@ -1252,12 +1330,14 @@ class Anonymizer(ctk.CTk):
 
         menu_bar.add_cascade(label=_("File"), menu=file_menu)
 
+        window_menu = tk.Menu(menu_bar, tearoff=0)
+        menu_bar.add_cascade(label=_("Window"), menu=window_menu)
+        self._window_menu = window_menu
+
         # Help Menu:
         menu_bar.add_cascade(label=_("Help"), menu=self.get_help_menu(menu_bar))
 
-        # Attach new menu bar:
-        self.config(menu=menu_bar)
-        return menu_bar
+        return self._finalize_menu_bar(menu_bar)
 
     def create_project_open_menu_bar(self) -> tk.Menu:
         logger.debug("create_project_open_menu_bar")
@@ -1284,12 +1364,14 @@ class Anonymizer(ctk.CTk):
 
         menu_bar.add_cascade(label=_("Settings"), menu=view_menu)
 
+        window_menu = tk.Menu(menu_bar, tearoff=0)
+        menu_bar.add_cascade(label=_("Window"), menu=window_menu)
+        self._window_menu = window_menu
+
         # Help Menu:
         menu_bar.add_cascade(label=_("Help"), menu=self.get_help_menu(menu_bar))
 
-        # Attach new menu bar:
-        self.config(menu=menu_bar)
-        return menu_bar
+        return self._finalize_menu_bar(menu_bar)
 
     def disable_file_menu(self):
         logger.debug("disable_file_menu")

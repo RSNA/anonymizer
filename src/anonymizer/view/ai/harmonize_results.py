@@ -35,7 +35,8 @@ from anonymizer.controller.runner import Algorithm
 from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import StudyPhiHeader
 from anonymizer.utils.translate import _
-from anonymizer.view.common.ctk_safe import mark_ctk_window_alive, teardown_ctk_toplevel
+from anonymizer.view.common.app_window import AppToplevel
+from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.common.job_poller import STAGE_POLL_MS, start_background_job
 
@@ -97,7 +98,7 @@ class HarmonizeBatchOutcome:
         return self.outcomes[0].error if self.outcomes else None
 
 
-class HarmonizeResultsView(tk.Toplevel):
+class HarmonizeResultsView(AppToplevel):
     """
     Modal harmonize view: runs the pipeline per selected series, shows progress, then Playbook results.
 
@@ -149,7 +150,6 @@ class HarmonizeResultsView(tk.Toplevel):
         on_series_description_updated: Callable[[], None] | None = None,
     ):
         super().__init__(master=parent)
-        mark_ctk_window_alive(self)
         if not items:
             raise ValueError("HarmonizeResultsView requires at least one series item")
 
@@ -757,21 +757,38 @@ class HarmonizeResultsView(tk.Toplevel):
         proposed = (self.result.radlex_series_description or "").strip()
         if not proposed or proposed != self._current_description:
             return
-        apply_harmonized_description(self._series_path, proposed, self._anon_model)
+        # DICOM already matches; persist ORM flag on the UI thread.
+        self._persist_harmonized_metadata(proposed)
 
     def _notify_series_description_updated(self) -> None:
         if self._on_series_description_updated is not None:
             self._on_series_description_updated()
 
     def _save_description_job(self, series_path: Path, description: str, series_uid: str) -> None:
+        """Write SeriesDescription to DICOM on a worker thread (ORM update is main-thread)."""
         try:
-            if not apply_harmonized_description(series_path, description, self._anon_model):
-                self._save_work_state.fail(_("Failed to write DICOM files or update project database."))
+            # anon_model=None: avoid SQLite/scoped-session writes off the UI thread.
+            if not apply_harmonized_description(series_path, description, None):
+                self._save_work_state.fail(_("Failed to write DICOM files."))
                 return
-            self._save_work_state.finish(None)
+            self._save_work_state.finish(series_uid)
         except Exception as exc:
             logger.exception("Harmonize save failed for %s", series_path)
             self._save_work_state.fail(str(exc))
+
+    def _persist_harmonized_metadata(self, description: str) -> bool:
+        """Record series harmonized_description in the project DB (must run on UI thread)."""
+        if self._anon_model is None:
+            return True
+        series_uid = str(self._ds.SeriesInstanceUID)
+        ok = self._anon_model.set_series_harmonized_description(series_uid, description.strip())
+        if not ok:
+            logger.error(
+                "Failed to set harmonized_description for series_uid=%s description=%r",
+                series_uid,
+                description,
+            )
+        return ok
 
     def _on_save_job_done(self, _algorithm: Algorithm | None, work_state: WorkState) -> None:
         if self._closing or not self.winfo_exists():
@@ -779,6 +796,13 @@ class HarmonizeResultsView(tk.Toplevel):
         if work_state.error:
             self._finish_saving_state()
             self._show_save_error(work_state.error)
+            return
+        description = (self._pending_save_description or "").strip()
+        if description and not self._persist_harmonized_metadata(description):
+            self._finish_saving_state()
+            self._show_save_error(_("Failed to update project database."))
+            # DICOM already matches the proposal; keep in-memory UI in sync with disk.
+            self._commit_saved_description()
             return
         self._finish_saving_state()
         if self.cancelled:

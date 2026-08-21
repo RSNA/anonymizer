@@ -16,7 +16,6 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     detect_text,
     filter_ocr_whitelist_only,
     ocr_image_for_frame,
-    ocr_models_ready,
 )
 from anonymizer.controller.ai_batch_process import AiBatchAlgorithm, _apply_remove_pixel_phi_series
 from anonymizer.controller.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
@@ -25,6 +24,7 @@ from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.utils.storage import load_default_whitelist
 from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT
+from tests.controller.ocr.conftest import assert_dcm
 from tests.controller.support.pixel_phi_test_support import register_series_with_anonymizer
 from tests.controller.support.us_rgb_fixtures import (
     US_RGB_BATCH_LOG_TOKENS,
@@ -37,15 +37,10 @@ from tests.controller.support.us_rgb_fixtures import (
     US_RGB_PROJECT_T2_SERIES_VIEW_OCR_TEXTS,
     US_RGB_SERIES_VIEW_OCR_TEXTS,
 )
-from tests.paths import DEFAULT_ANONYMIZER_SCRIPT, REPO_ROOT
+from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
 
 ANONYMIZER_SCRIPT = DEFAULT_ANONYMIZER_SCRIPT
 EXPECTED_OCR_TEXTS = US_RGB_SERIES_VIEW_OCR_TEXTS
-
-pytestmark = pytest.mark.skipif(
-    not US_RGB_DCM.is_file(),
-    reason="US RGB single-frame fixture missing under tests/controller/assets/test_dcm_files/us_rgb_single_frame",
-)
 
 
 def _series_view_texts(loaded) -> list[str]:
@@ -75,16 +70,13 @@ def _series_view_texts(loaded) -> list[str]:
 
 @pytest.fixture(scope="module")
 def us_rgb_loaded():
+    assert_dcm(US_RGB_DCM)
     return load_series_frames(US_RGB_DIR)
-
-
-@pytest.fixture(autouse=True)
-def _anonymizer_assets_cwd(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.chdir(REPO_ROOT / "src" / "anonymizer")
 
 
 @pytest.fixture
 def us_rgb_batch_series(tmp_path: Path) -> Path:
+    assert_dcm(US_RGB_DCM)
     series_dir = tmp_path / "us_rgb_batch"
     series_dir.mkdir()
     shutil.copy(US_RGB_DCM, series_dir / US_RGB_DCM.name)
@@ -134,13 +126,21 @@ def test_build_series_view_ocr_pixels_rgb_matches_ocr_image_for_frame(us_rgb_loa
     assert np.array_equal(snapshot[0], expected)
 
 
-@pytest.mark.skipif(not ocr_models_ready(), reason="EasyOCR models not available")
+def test_us_rgb_project_t2_fixture_differs_from_pristine(us_rgb_loaded) -> None:
+    assert_dcm(US_RGB_PROJECT_T2_DCM)
+    damaged = load_series_frames(US_RGB_PROJECT_T2_DIR)
+    assert not np.array_equal(us_rgb_loaded.frames[0], damaged.frames[0])
+
+
+@pytest.mark.ocr_integration
+@pytest.mark.usefixtures("require_ocr")
 def test_us_rgb_ocr_detects_all_overlay_strings(us_rgb_loaded) -> None:
     texts = _series_view_texts(us_rgb_loaded)
     assert texts == EXPECTED_OCR_TEXTS, f"Expected {len(EXPECTED_OCR_TEXTS)} strings, got {len(texts)}: {texts}"
 
 
-@pytest.mark.skipif(not ocr_models_ready(), reason="EasyOCR models not available")
+@pytest.mark.ocr_integration
+@pytest.mark.usefixtures("require_ocr")
 def test_us_rgb_batch_noise_filter_drops_speckle_hits(us_rgb_loaded) -> None:
     loaded = us_rgb_loaded
     runner = RemovePixelPhiRunner()
@@ -159,7 +159,8 @@ def test_us_rgb_batch_noise_filter_drops_speckle_hits(us_rgb_loaded) -> None:
     assert len(filtered_texts) < len(unfiltered_texts)
 
 
-@pytest.mark.skipif(not ocr_models_ready(), reason="EasyOCR models not available")
+@pytest.mark.ocr_integration
+@pytest.mark.usefixtures("require_ocr")
 def test_us_rgb_batch_detect_matches_noise_filtered_expectations(us_rgb_loaded) -> None:
     loaded = us_rgb_loaded
     runner = RemovePixelPhiRunner()
@@ -174,7 +175,8 @@ def test_us_rgb_batch_detect_matches_noise_filtered_expectations(us_rgb_loaded) 
     assert texts == US_RGB_BATCH_OCR_TEXTS
 
 
-@pytest.mark.skipif(not ocr_models_ready(), reason="EasyOCR models not available")
+@pytest.mark.ocr_integration
+@pytest.mark.usefixtures("require_ocr")
 def test_us_rgb_batch_ocr_regression_after_ct_veracity_guard(us_rgb_loaded) -> None:
     """US batch OCR token list must remain unchanged by CT-only single-char filter."""
     loaded = us_rgb_loaded
@@ -190,29 +192,18 @@ def test_us_rgb_batch_ocr_regression_after_ct_veracity_guard(us_rgb_loaded) -> N
     assert texts == US_RGB_BATCH_OCR_TEXTS
 
 
-@pytest.mark.skipif(
-    not US_RGB_PROJECT_T2_DCM.is_file(),
-    reason="US RGB project t2 damaged fixture missing",
-)
-@pytest.mark.skipif(not ocr_models_ready(), reason="EasyOCR models not available")
-def test_us_rgb_project_t2_fixture_differs_from_pristine(us_rgb_loaded) -> None:
-    damaged = load_series_frames(US_RGB_PROJECT_T2_DIR)
-    assert not np.array_equal(us_rgb_loaded.frames[0], damaged.frames[0])
-
-
-@pytest.mark.skipif(
-    not US_RGB_PROJECT_T2_DCM.is_file(),
-    reason="US RGB project t2 damaged fixture missing",
-)
-@pytest.mark.skipif(not ocr_models_ready(), reason="EasyOCR models not available")
+@pytest.mark.ocr_integration
+@pytest.mark.usefixtures("require_ocr")
 def test_us_rgb_project_t2_damaged_series_view_ocr(us_rgb_loaded) -> None:
+    assert_dcm(US_RGB_PROJECT_T2_DCM)
     damaged = load_series_frames(US_RGB_PROJECT_T2_DIR)
     texts = _series_view_texts(damaged)
     assert texts == US_RGB_PROJECT_T2_SERIES_VIEW_OCR_TEXTS
     assert texts != EXPECTED_OCR_TEXTS
 
 
-@pytest.mark.skipif(not ocr_models_ready(), reason="EasyOCR models not available")
+@pytest.mark.ocr_integration
+@pytest.mark.usefixtures("require_ocr")
 def test_us_rgb_series_view_snapshot_matches_direct_ocr(us_rgb_loaded) -> None:
     loaded = us_rgb_loaded
     runner = RemovePixelPhiRunner()
@@ -252,7 +243,8 @@ def test_us_rgb_series_view_snapshot_matches_direct_ocr(us_rgb_loaded) -> None:
     assert via_runner == direct == EXPECTED_OCR_TEXTS
 
 
-@pytest.mark.skipif(not ocr_models_ready(), reason="EasyOCR models not available")
+@pytest.mark.ocr_integration
+@pytest.mark.usefixtures("require_ocr")
 def test_us_rgb_display_whitelist_hides_anatomy_labels(us_rgb_loaded) -> None:
     loaded = us_rgb_loaded
     ws = WorkState()
@@ -285,7 +277,8 @@ def test_us_rgb_display_whitelist_hides_anatomy_labels(us_rgb_loaded) -> None:
     assert "Dist" not in displayed
 
 
-@pytest.mark.skipif(not ocr_models_ready(), reason="EasyOCR models not available")
+@pytest.mark.ocr_integration
+@pytest.mark.usefixtures("require_ocr")
 def test_us_rgb_batch_blackout_preserves_rgb_dimensions(
     us_rgb_batch_series: Path,
     anonymizer_model: AnonymizerModel,
@@ -325,7 +318,8 @@ def test_us_rgb_batch_blackout_preserves_rgb_dimensions(
     assert not (before == after).all()
 
 
-@pytest.mark.skipif(not ocr_models_ready(), reason="EasyOCR models not available")
+@pytest.mark.ocr_integration
+@pytest.mark.usefixtures("require_ocr")
 def test_us_rgb_batch_inpaint_preserves_rgb_dimensions(
     us_rgb_batch_series: Path,
     anonymizer_model: AnonymizerModel,

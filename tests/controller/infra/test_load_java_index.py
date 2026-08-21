@@ -36,7 +36,7 @@ def test_read_java_anonymizer_index_xlsx(temp_dir: str, controller: ProjectContr
 def test_load_java_index_into_new_project(temp_dir: str, controller: ProjectController) -> None:
     studies: list[JavaAnonymizerExportedStudy] = read_java_anonymizer_index_xlsx(str(JAVA_GENERATED_INDEX))
 
-    controller.anonymizer.model.process_java_phi_studies(studies)
+    controller.import_java_phi_studies(studies)
     assert controller.anonymizer.model.get_patient_id_count() == 83
     assert controller.anonymizer.model.get_phi_name_by_anon_patient_id("527408-000001") == "TEST"
 
@@ -44,7 +44,7 @@ def test_load_java_index_into_new_project(temp_dir: str, controller: ProjectCont
 def test_load_java_index_into_new_project_and_import_ct_small(temp_dir: str, controller: ProjectController) -> None:
     studies: list[JavaAnonymizerExportedStudy] = read_java_anonymizer_index_xlsx(str(JAVA_GENERATED_INDEX))
 
-    controller.anonymizer.model.process_java_phi_studies(studies)
+    controller.import_java_phi_studies(studies)
     assert controller.anonymizer.model.get_patient_id_count() == 83
     assert controller.anonymizer.model.get_phi_name_by_anon_patient_id("527408-000001") == "TEST"
 

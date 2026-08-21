@@ -113,7 +113,7 @@ see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 				<li>A patient lookup file which contains the project's PHI data can be created at anytime during a project using the <i>Create Patient Lookup</i> button on the Export View.</li>
 				<li>The PHI data file is saved in CSV format to the storage directories private sub-directory here:</li>
 				<li><i><b>/private/phi_export/</b></i></li>
-				<li>The format of the lookup file follows the JAVA Anonymizer index file with the following fields appended to each study row: Number of Series, Number of Instances</li>
+				<li>The lookup file uses <b>one row per series</b>: patient and study identifiers are repeated on each row, with series fields (ANON-SeriesUID, Modality, SeriesDescription, SeriesHarmonized, Instances, FaceBlurred, PixelPHIRemoved, PixelPHI).</li>
 			</ul>
 			<img src="assets/locales/en_US/html/images/PatientLookupData.png"/>
 

@@ -164,6 +164,25 @@ def test_detect_text_ct_drops_single_char_spurious(mock_readtext: MagicMock) -> 
 
 
 @patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
+def test_detect_text_ct_drops_short_numeric_and_symbol_noise(mock_readtext: MagicMock) -> None:
+    """Series View CT detect (no noise filter) still drops slice/HU-style false positives."""
+    mock_readtext.return_value = [
+        ([(0, 0), (20, 0), (20, 20), (0, 20)], "64", 0.95),
+        ([(0, 0), (20, 0), (20, 20), (0, 20)], "04", 0.94),
+        ([(0, 0), (20, 0), (20, 20), (0, 20)], "229", 0.93),
+        ([(0, 0), (20, 0), (20, 20), (0, 20)], "9 <", 0.91),
+        ([(0, 0), (40, 0), (40, 20), (0, 20)], ">>", 0.90),
+        ([(0, 0), (100, 0), (100, 20), (0, 20)], "01.09.2012", 0.92),
+        ([(0, 0), (80, 0), (80, 20), (0, 20)], "SMITH", 0.92),
+        ([(0, 0), (60, 0), (60, 20), (0, 20)], "12345", 0.91),
+    ]
+    pixels = np.zeros((64, 64), dtype=np.uint8)
+    results = detect_text(pixels, MagicMock(), modality="CT", apply_noise_filter=False)
+    assert results is not None
+    assert [item.text for item in results] == ["01.09.2012", "SMITH", "12345"]
+
+
+@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
 def test_detect_text_us_keeps_single_char_detections(mock_readtext: MagicMock) -> None:
     """US behavior unchanged: single-character hits are not dropped by CT veracity filter."""
     mock_readtext.return_value = [
@@ -175,6 +194,19 @@ def test_detect_text_us_keeps_single_char_detections(mock_readtext: MagicMock) -
     results = detect_text(pixels, MagicMock(), modality="US", apply_noise_filter=False)
     assert results is not None
     assert {item.text for item in results} == {"0", "U", "SMITH"}
+
+
+@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
+def test_detect_text_us_keeps_short_numeric_without_ct_filter(mock_readtext: MagicMock) -> None:
+    mock_readtext.return_value = [
+        ([(0, 0), (20, 0), (20, 20), (0, 20)], "64", 0.95),
+        ([(0, 0), (20, 0), (20, 20), (0, 20)], "9 <", 0.91),
+        ([(0, 0), (80, 0), (80, 20), (0, 20)], "SMITH", 0.92),
+    ]
+    pixels = np.zeros((64, 64), dtype=np.uint8)
+    results = detect_text(pixels, MagicMock(), modality="US", apply_noise_filter=False)
+    assert results is not None
+    assert [item.text for item in results] == ["64", "9 <", "SMITH"]
 
 
 @patch("anonymizer.controller.ai.remove_pixel_phi.dcmread")

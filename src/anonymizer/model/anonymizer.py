@@ -8,7 +8,7 @@ import logging
 import xml.etree.ElementTree as ET
 from collections.abc import Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from functools import wraps
 from pathlib import Path
 from pprint import pformat
@@ -131,62 +131,6 @@ class StudyPhiHeader:
     study_description: str = ""
 
 
-@dataclass
-class PHI_IndexRecord:
-    anon_patient_id: str
-    anon_patient_name: str
-    phi_patient_name: str
-    phi_patient_id: str
-    date_offset: int
-    phi_study_date: str
-    anon_accession: str
-    phi_accession: str
-    anon_study_uid: str
-    phi_study_uid: str
-    num_series: int
-    num_instances: int
-    harmonize: bool = False
-    face_blurred: str = ""
-    pixel_phi_removed: bool = False
-    pixel_phi: str = ""
-
-    field_titles: ClassVar[dict[str, str]] = {
-        "anon_patient_id": "ANON-PatientID",
-        "anon_patient_name": "ANON-PatientName",
-        "phi_patient_name": "PHI-PatientName",
-        "phi_patient_id": "PHI-PatientID",
-        "date_offset": "DateOffset",
-        "phi_study_date": "PHI-StudyDate",
-        "anon_accession": "ANON-AccNo",
-        "phi_accession": "PHI-AccNo",
-        "anon_study_uid": "ANON-StudyUID",
-        "phi_study_uid": "PHI-StudyUID",
-        "num_series": "Series",
-        "num_instances": "Instances",
-        "harmonize": "Harmonized",
-        "face_blurred": "FaceBlurred",
-        "pixel_phi_removed": "PixelPHIRemoved",
-        "pixel_phi": "PixelPHI",
-    }
-
-    @staticmethod
-    def _display_value(value: object) -> object:
-        if isinstance(value, bool):
-            return "Yes" if value else "No"
-        return value
-
-    @classmethod
-    def get_field_titles(cls) -> list:
-        return [cls.field_titles.get(field.name) for field in fields(cls)]
-
-    def flatten(self) -> tuple:
-        return tuple(self._display_value(getattr(self, field.name)) for field in fields(self))
-
-    @classmethod
-    def get_field_names(cls) -> list:
-        return [field.name for field in fields(cls)]
-
-
 class Totals(NamedTuple):
     patients: int
     studies: int
@@ -231,8 +175,6 @@ def _format_pixel_phi(texts: Sequence[str]) -> str:
     return ", ".join(parts)
 
 
-def _format_face_blur_status_label(algorithm: str) -> str:
-    return " ".join(part.capitalize() for part in algorithm.strip().split("_"))
 
 
 @dataclass(frozen=True)
@@ -243,31 +185,6 @@ class SeriesProcessingStatus:
     face_blur_algorithm: str | None
 
 
-def format_series_processing_status(
-    status: SeriesProcessingStatus,
-    *,
-    include_face_blur: bool = True,
-) -> str:
-    """Compact one-line series processing caption for Series View control bar."""
-    total = status.pixel_phi_total_count
-    applied = status.pixel_phi_applied_count
-    if total == 0 or applied == 0:
-        pixel_phi_part = "None removed"
-    elif applied == total:
-        pixel_phi_part = "Applied"
-    else:
-        pixel_phi_part = f"Partial ({applied}/{total})"
-
-    harmonized = status.harmonized_description
-    harmonized_part = harmonized.strip() if harmonized and harmonized.strip() else "None"
-
-    base = f"Pixel PHI: {pixel_phi_part} · Harmonized: {harmonized_part}"
-    if not include_face_blur:
-        return base
-
-    face_blur = status.face_blur_algorithm
-    face_blur_part = _format_face_blur_status_label(face_blur) if face_blur and face_blur.strip() else "None"
-    return f"{base} · Face blur: {face_blur_part}"
 
 
 def _study_ct_series_all_harmonized(study: Study) -> bool:
@@ -279,39 +196,6 @@ def _study_ct_series_all_harmonized(study: Study) -> bool:
         series.harmonized_description is not None and bool(str(series.harmonized_description).strip())
         for series in ct_series
     )
-
-
-def _study_face_blur_label(study: Study) -> str:
-    """Return formatted face-blur algorithm(s) for the study, or blank when none applied."""
-    labels: list[str] = []
-    seen: set[str] = set()
-    for series in study.series or []:
-        raw = series.face_blur_algorithm_applied
-        if raw is None or not str(raw).strip():
-            continue
-        key = str(raw).strip()
-        if key in seen:
-            continue
-        seen.add(key)
-        labels.append(_format_face_blur_status_label(key))
-    return ", ".join(labels)
-
-
-def _study_pixel_phi_removed(study: Study) -> bool:
-    """Return True when any instance in the study has recorded pixel PHI removal."""
-    return bool(_study_pixel_phi_digest(study))
-
-
-def _study_pixel_phi_digest(study: Study) -> str:
-    """Return deduplicated comma-delimited pixel PHI text removed across the study."""
-    texts: list[str] = []
-    for series in study.series or []:
-        for instance in series.instances or []:
-            raw = instance.pixel_phi
-            if raw is None or not str(raw).strip():
-                continue
-            texts.extend(item.strip() for item in str(raw).split(",") if item.strip())
-    return _format_pixel_phi(texts)
 
 
 def _sqlite_column_type(column: Column) -> str | None:
@@ -478,8 +362,10 @@ class AnonymizerModel:
             session.rollback()
             raise
         finally:
-            logger.debug(f"Closing session {id(session)}.")
-            session.close()
+            # remove() closes the session and drops the thread-local registry entry so
+            # background worker threads do not reuse a closed Session.
+            logger.debug(f"Removing session {id(session)} from scoped registry.")
+            self.session_factory.remove()
 
     def _format_anon_patient_id(self, phi_index: int) -> str:
         """
@@ -690,53 +576,12 @@ class AnonymizerModel:
         )
 
     @use_session(is_read_only_operation=True)
-    def get_phi_index(self) -> list[PHI_IndexRecord] | None:
-        """
-        Retrieves fully populated PHI objects (with their studies and series)
-        using SQLAlchemy ORM eager loading and formats them into PHI_IndexRecord.
-        """
-        phi_index_records: list[PHI_IndexRecord] = []
-
-        # Eagerly load PHI.studies, and for each Study, eagerly load its Series.
-        stmt = select(PHI).options(selectinload(PHI.studies).selectinload(Study.series).selectinload(Series.instances))
-
-        # Execute the query:
-        # .scalars() gets the PHI objects directly.
-        # .all() fetches all results.
-        all_phi_instances = self.session.execute(stmt).scalars().all()
-
-        if not all_phi_instances:
-            return None
-
-        for phi in all_phi_instances:
-            if phi.studies is None:
-                continue
-
-            for study in phi.studies:
-                num_series = len(study.series)
-                num_instances = sum(len(s.instances) for s in study.series if s.instances is not None)
-
-                phi_index_record = PHI_IndexRecord(
-                    anon_patient_id=phi.anon_patient_id,
-                    anon_patient_name=phi.anon_patient_id,
-                    phi_patient_id=phi.patient_id,
-                    phi_patient_name=phi.patient_name if phi.patient_name else "",
-                    date_offset=study.anon_date_delta,
-                    phi_study_date=study.study_date,
-                    anon_accession=str(study.anon_accession_number),
-                    phi_accession=study.accession_number if study.accession_number else "",
-                    anon_study_uid=study.anon_study_uid,
-                    phi_study_uid=study.study_uid,
-                    num_series=num_series,
-                    num_instances=num_instances,
-                    harmonize=_study_ct_series_all_harmonized(study),
-                    face_blurred=_study_face_blur_label(study),
-                    pixel_phi_removed=_study_pixel_phi_removed(study),
-                    pixel_phi=_study_pixel_phi_digest(study),
-                )
-                phi_index_records.append(phi_index_record)
-
-        return phi_index_records if phi_index_records else None
+    def load_phi_with_studies_series(self) -> list[PHI]:
+        """Eager-load PHI → studies → series → instances for PHI dataset / export mapping."""
+        stmt = select(PHI).options(
+            selectinload(PHI.studies).selectinload(Study.series).selectinload(Series.instances)
+        )
+        return list(self.session.execute(stmt).scalars().all())
 
     @use_session(is_read_only_operation=True)
     def get_anon_patient_id(self, phi_patient_id: str) -> str | None:
@@ -1299,7 +1144,7 @@ class AnonymizerModel:
         )
 
     @use_session()  # The decorator manages the session and a single transaction for the whole batch
-    def process_java_phi_studies(self, java_studies: list[JavaAnonymizerExportedStudy]):
+    def persist_java_exported_studies(self, java_studies: list[JavaAnonymizerExportedStudy]):
         """
         Process a list of JavaAnonymizerExportedStudy objects and persist them
         using the SQLAlchemy ORM. The entire operation is one database transaction.
@@ -1367,3 +1212,4 @@ class AnonymizerModel:
                     )
 
         logger.info("Finished processing Java PHI studies. Committing transaction.")
+

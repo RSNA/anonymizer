@@ -1,12 +1,12 @@
 import logging
 import string
-import tkinter as tk
 from typing import Tuple, Union
 
 import customtkinter as ctk
 
 from anonymizer.model.project import AWSCognito
 from anonymizer.utils.translate import _
+from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import default_char_width_px
 from anonymizer.view.common.ux_fields import str_entry
@@ -14,7 +14,7 @@ from anonymizer.view.common.ux_fields import str_entry
 logger = logging.getLogger(__name__)
 
 
-class AWSCognitoDialog(tk.Toplevel):
+class AWSCognitoDialog(AppToplevel):
     """
     A dialog window for entering AWS Cognito credentials for exporting to S3.
 

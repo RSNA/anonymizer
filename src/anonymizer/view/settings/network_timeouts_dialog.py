@@ -1,11 +1,11 @@
 import logging
-import tkinter as tk
 from typing import Union
 
 import customtkinter as ctk
 
 from anonymizer.model.project import NetworkTimeouts
 from anonymizer.utils.translate import _
+from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import default_char_width_px
 from anonymizer.view.common.ux_fields import int_entry
@@ -13,7 +13,7 @@ from anonymizer.view.common.ux_fields import int_entry
 logger = logging.getLogger(__name__)
 
 
-class NetworkTimeoutsDialog(tk.Toplevel):
+class NetworkTimeoutsDialog(AppToplevel):
     """
     A dialog window for configuring network timeouts.
 

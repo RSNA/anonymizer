@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import tkinter as tk
 from typing import Callable
 
 import customtkinter as ctk
 
 from anonymizer.utils.translate import _
+from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.settings.ai_features_panel import AiFeaturesPanel
 
 
-class AiFeaturesSetupDialog(tk.Toplevel):
+class AiFeaturesSetupDialog(AppToplevel):
     """Modal dialog for enabling AI tools and checking setup status."""
 
     def __init__(

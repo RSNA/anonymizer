@@ -329,7 +329,7 @@ def harmonize_context_hint(series_directory: Path, ds: Dataset | None) -> str | 
         return None
     if series_description_is_harmonized(series_directory, ds) is not True:
         return None
-    return _("Series description already harmonized — use Clear TS Cache to re-run analysis")
+    return _("Series description already harmonized — use Clear Cache to re-run analysis")
 
 
 @dataclass(frozen=True)

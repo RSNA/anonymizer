@@ -4,23 +4,19 @@ from __future__ import annotations
 
 import pytest
 
-from anonymizer.controller.ai.remove_pixel_phi import ocr_models_ready
-from anonymizer.controller.runner import Algorithm, OcrEditContext, RemovePixelPhiRunner, RunOptions
+from anonymizer.controller.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
 from anonymizer.controller.series_io import load_series_frames
 from anonymizer.controller.work_state import WorkState
+from tests.controller.ocr.conftest import assert_dcm
 from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 
 US_MULTI_FRAME_DIR = CONTROLLER_TEST_DCM_FILES_DIR / "us_multi_frame_grayscale"
 US_MULTI_FRAME_DCM = US_MULTI_FRAME_DIR / "us_multi_frame_grayscale_JPG2000.dcm"
 
-pytestmark = pytest.mark.skipif(
-    not US_MULTI_FRAME_DCM.is_file(),
-    reason="US multi-frame fixture missing under tests/controller/assets/test_dcm_files/us_multi_frame_grayscale",
-)
-
 
 @pytest.fixture(scope="module")
 def us_multi_frame_loaded():
+    assert_dcm(US_MULTI_FRAME_DCM)
     return load_series_frames(US_MULTI_FRAME_DIR)
 
 
@@ -31,7 +27,8 @@ def test_us_multi_frame_loads_54_frames(us_multi_frame_loaded) -> None:
     assert str(loaded.metadata.Modality) == "US"
 
 
-@pytest.mark.skipif(not ocr_models_ready(), reason="EasyOCR models not available")
+@pytest.mark.ocr_integration
+@pytest.mark.usefixtures("require_ocr")
 @pytest.mark.parametrize(
     ("frame_index", "expected_tokens"),
     [
@@ -74,8 +71,8 @@ def test_us_multi_frame_sample_frames_have_overlay_text(
         assert token in texts, f"frame {frame_index}: expected {token!r} in {texts!r}"
 
 
-@pytest.mark.skipif(not ocr_models_ready(), reason="EasyOCR models not available")
 @pytest.mark.ocr_integration
+@pytest.mark.usefixtures("require_ocr")
 def test_us_multi_frame_series_ocr_populates_most_frames(us_multi_frame_loaded) -> None:
     """SERIES detect must populate OCR results across the cine, not only the last-polled frame."""
     loaded = us_multi_frame_loaded

@@ -35,6 +35,7 @@ from anonymizer.view.ai.blur_face_results import (
     face_blur_mode_menu_values,
 )
 from anonymizer.view.ai.modality_whitelist_preview_dialog import show_modality_whitelist_preview_dialog
+from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 
 
@@ -44,7 +45,7 @@ class AiBatchProcessOptionsResult:
     options: AiBatchProcessOptions | None = None
 
 
-class AiBatchProcessOptionsDialog(tk.Toplevel):
+class AiBatchProcessOptionsDialog(AppToplevel):
     PAD = 10
     SECTION_PAD = 8
     SECTION_GAP = 10

@@ -367,7 +367,7 @@ def test_harmonize_context_hint_when_already_harmonized() -> None:
         hint = harmonize_context_hint(Path("/tmp/series"), ds)
 
     assert hint is not None
-    assert "Clear TS Cache" in hint
+    assert "Clear Cache" in hint
 
 
 def test_harmonize_context_hint_omits_non_ct_and_unknown() -> None:

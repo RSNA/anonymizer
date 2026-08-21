@@ -8,9 +8,10 @@ Tests for `src/anonymizer/controller/` and related integration (DICOM network, s
 tests/controller/
 ├── assets/          # Shared binary fixtures (DICOM, indexes)
 ├── conftest.py      # Cross-cutting fixtures (project, SCP, temp dirs)
+├── ocr/             # remove_pixel_phi / EasyOCR (unit + asset fixtures; ocr_integration)
 ├── tseg/            # TotalSegmentator, dicom_geometry, synthetic CT support
 ├── harmonize/       # harmonize_series merge and pipeline (incl. batch helpers)
-├── blur_face/       # CT face blur, pixel PHI / OCR (remove_pixel_phi.py)
+├── blur_face/       # CT face blur (blur_face.py)
 ├── falcon/          # FALCON predict and eval
 ├── dicom/           # SCU/SCP integration tests + support modules
 ├── core/            # anonymizer.py, create_projections.py, ai_batch_process.py
@@ -41,11 +42,15 @@ from tests.controller.dicom.support.helpers import send_file_to_scp
 pytest tests/controller/tseg -q
 pytest tests/controller/harmonize -q
 pytest tests/controller/blur_face -q
+pytest tests/controller/ocr -q                       # unit + load/smoke (excludes ocr_integration by default)
+pytest tests/controller/ocr -m ocr_integration -q    # EasyOCR on real fixtures (needs weights)
 pytest tests/controller/dicom -q
 pytest tests/controller/core -q
 pytest tests/controller/infra -q
 pytest tests/controller -m tseg_integration   # slow; needs totalsegmentator (core dep in V19)
 pytest tests/controller/dicom -m dicom_integration   # local Orthanc required
 ```
+
+Default `addopts` excludes `ocr_integration` (`-m "not ocr_integration"`). Download EasyOCR models via AI Features or `download_ocr_models()` before running OCR asset tests.
 
 See also [tests/README.md](../README.md) for the full test tree and marker reference.

@@ -110,12 +110,12 @@ max-complexity = 15
 
 [tool.pytest.ini_options]
 testpaths = ["tests/controller", "tests/view", "tests/model"]
-addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model"
+addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model -m \"not ocr_integration\""
 pythonpath = ["src", "."]
 markers = [
     "falcon_memory(max_rss_delta_mb): measure RSS before/after the test and fail if delta exceeds the limit",
     "tseg_integration: run TotalSegmentator inference (slow, optional)",
-    "ocr_integration: run EasyOCR on real burnt-in PHI fixtures (slow, optional)",
+    "ocr_integration: EasyOCR on real burnt-in PHI fixtures under tests/controller/ocr (opt-in; excluded from default)",
     "dicom_integration: local Orthanc PACS or heavy DICOM network integration (skipped in CI)",
     "rsna_local_data: requires local RSNA_TEST_DATA directory (skipped when absent)",
     "prototyping: tests for src/prototyping scripts",

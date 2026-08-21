@@ -434,22 +434,42 @@ def _is_short_numeric(text: str) -> bool:
     return bool(stripped) and stripped.isdigit() and len(stripped) <= OCR_SHORT_NUMERIC_MAX_LEN
 
 
-def _filter_ct_single_char_spurious(
+def _is_ct_spurious_text(text: str) -> bool:
+    """True for CT OCR hits that are anatomy/noise, not plausible burned-in PHI."""
+    stripped = text.strip()
+    if not stripped:
+        return True
+    if len(stripped) == 1:
+        return True
+    # Slice markers / HU crumbs: pure short digit runs ("64", "04", "229").
+    if _is_short_numeric(stripped):
+        return True
+    # Digit/symbol soup with no letters ("9 <", ">>", "12/") — keep longer digit IDs/dates.
+    if not any(ch.isalpha() for ch in stripped):
+        digit_count = sum(ch.isdigit() for ch in stripped)
+        if digit_count == 0:
+            return True
+        if digit_count <= OCR_SHORT_NUMERIC_MAX_LEN and len(stripped) <= OCR_SHORT_NUMERIC_MAX_LEN + 2:
+            return True
+    return False
+
+
+def _filter_ct_spurious_detections(
     detections: Sequence[OCRText],
     modality: str | None,
 ) -> list[OCRText]:
-    """Drop single-character OCR hits on CT — anatomy/noise speckle, not burned-in PHI."""
+    """Drop CT OCR false positives: single chars, short numbers, digit/symbol noise."""
     if (modality or "").upper() != "CT":
         return list(detections)
     kept: list[OCRText] = []
     dropped = 0
     for ocr_text in detections:
-        if len((ocr_text.text or "").strip()) == 1:
+        if _is_ct_spurious_text(ocr_text.text or ""):
             dropped += 1
             continue
         kept.append(ocr_text)
     if dropped:
-        logger.debug("CT OCR veracity: dropped %d single-character detection(s)", dropped)
+        logger.debug("CT OCR veracity: dropped %d spurious detection(s)", dropped)
     return kept
 
 
@@ -611,7 +631,7 @@ def detect_text(
         ocr_texts = filter_ocr_whitelist_only(
             parsed, whitelist, whitelist_match_settings=whitelist_match_settings
         )
-    ocr_texts = _filter_ct_single_char_spurious(ocr_texts, modality)
+    ocr_texts = _filter_ct_spurious_detections(ocr_texts, modality)
     logger.debug(
         "OCR detections after filter: %d (noise_filter=%s modality=%s)",
         len(ocr_texts),
@@ -1197,13 +1217,23 @@ def apply_series_view_pixel_phi(
     projection_frame_count: int = 0,
     anon_series_uid: str | None = None,
 ) -> int:
-    """Persist pixel PHI metadata for series slices that have overlay OCR text."""
-    updated = 0
+    """Persist pixel PHI metadata for series slices that have overlay OCR text.
+
+    Multi-frame files reuse the same path once per frame in ``slice_paths``. Texts from
+    those frames are merged (deduped, first-seen order) before writing so one Instance row
+    keeps the full comma-delimited digest instead of being overwritten by the last frame.
+    """
+    texts_by_path: dict[Path, list[str]] = {}
     for frame_index, texts in texts_by_frame.items():
         slice_index = frame_index - projection_frame_count
         if slice_index < 0 or slice_index >= len(slice_paths):
             continue
-        if apply_instance_pixel_phi_for_dcm(anon_model, slice_paths[slice_index], texts):
+        bucket = texts_by_path.setdefault(slice_paths[slice_index], [])
+        bucket.extend(texts)
+
+    updated = 0
+    for dcm_path, texts in texts_by_path.items():
+        if apply_instance_pixel_phi_for_dcm(anon_model, dcm_path, _dedupe_texts(texts)):
             updated += 1
     if anon_series_uid:
         anon_model.set_series_pixel_phi_scanned(anon_series_uid, scanned=True)

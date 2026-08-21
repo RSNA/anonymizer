@@ -4,7 +4,6 @@ This module contains the SettingsDialog class, which is a dialog window for mana
 
 import logging
 import string
-import tkinter as tk
 from copy import copy
 from pathlib import Path
 from tkinter import filedialog, messagebox
@@ -21,6 +20,7 @@ from anonymizer.utils.storage import (
     read_java_anonymizer_index_xlsx,
 )
 from anonymizer.utils.translate import _, get_current_language_code
+from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import default_char_width_px
 from anonymizer.view.common.ux_fields import str_entry
@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 
 # TODO: ctk.CTkToplevel does not handle window icon on Windows
-class SettingsDialog(tk.Toplevel):
+class SettingsDialog(AppToplevel):
     """
     A dialog window for managing project settings.
 

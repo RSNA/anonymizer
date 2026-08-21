@@ -1,11 +1,12 @@
 # List of HTML Tags supported by tkhtmlview:
 # see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support
 import re
-import tkinter as tk
 from collections.abc import Callable
 
 import customtkinter as ctk
 from tkhtmlview import HTMLScrolledText
+
+from anonymizer.view.common.app_window import AppToplevel
 
 HELP_LINK_PREFIX = "help:"
 
@@ -15,7 +16,7 @@ def is_ai_features_help(html_file_path: str) -> bool:
     return "ai features" in normalized or "/ai_features/" in normalized
 
 
-class HTMLView(tk.Toplevel):
+class HTMLView(AppToplevel):
     """
     A custom Tkinter Toplevel window for displaying HTML content.
 

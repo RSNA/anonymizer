@@ -8,6 +8,7 @@ import pytest
 from pydicom import Dataset
 from sqlalchemy import create_engine, text
 
+from anonymizer.controller.phi_io import build_phi_index
 from anonymizer.model.anonymizer import AnonymizerModel
 from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT
 from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
@@ -185,7 +186,7 @@ def test_get_phi_index_after_schema_sync(tmp_path: Path, mock_dataset: Dataset) 
     )
     model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=0)
 
-    records = model.get_phi_index()
+    records = build_phi_index(model)
     assert records is not None
     assert len(records) >= 1
     assert records[-1].phi_patient_id == mock_dataset.PatientID

@@ -1,5 +1,4 @@
 import logging
-import tkinter as tk
 from tkinter import ttk
 from typing import Union
 
@@ -9,13 +8,14 @@ from customtkinter import ThemeManager
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.modalities import get_modalities
 from anonymizer.utils.translate import _
+from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import default_char_width_px
 
 logger = logging.getLogger(__name__)
 
 
-class ModalitiesDialog(tk.Toplevel):
+class ModalitiesDialog(AppToplevel):
     """
     A dialog window for selecting modalities.
 
