@@ -5,7 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-- Series View Segmentation panel: latch colored ROI overlays (outline + 20% fill) from cached TS masks; Clear moved into panel; shared `series_overlay` DTOs
+
+## [19.0.0.dev11]
+- Series View Segmentation panel: latch colored ROI overlays from cached TS masks (opaque outlines, progressive contouring, spine/ribs/clavicles); Clear moved into panel; shared `series_overlay` DTOs
+- Prefer `vertebrae_body` when present; fix brain_structures weight trainer/model paths; invalidate soft-tissue-only TS caches so skeletal segments appear after Harmonize
+- Optional brain_structures Harmonize detail (licensed task 409) via AI Features / batch options
 - Share File/Settings/Help menubar across secondary windows (fixes macOS `python3` menu) and list open windows under Window
 - Single Projection View instance from Dataset; refresh Window menu labels when Series/Projection titles update
 - Fix Series View Pixel PHI save for multi-frame files: merge all frame strings into one comma-delimited Instance digest
