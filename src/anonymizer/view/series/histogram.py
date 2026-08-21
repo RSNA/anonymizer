@@ -71,10 +71,10 @@ class Histogram(ctk.CTkFrame):
             borderwidth=0,
             highlightthickness=0,
         )
-        self.canvas.grid(row=0, column=0, padx=10, pady=(10, 5), sticky="nsew")
+        self.canvas.grid(row=0, column=0, padx=6, pady=(6, 2), sticky="nsew")
 
         self.label_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.label_frame.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="ew")
+        self.label_frame.grid(row=1, column=0, padx=6, pady=(0, 4), sticky="ew")
         self.label_frame.grid_columnconfigure((0, 1), weight=1)
 
         self.wl_label = ctk.CTkLabel(self.label_frame, text="WL: ---", anchor="w")
