@@ -5,6 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- Study Description Harmonization: after the last CT series is Harmonized, rank LOINC StudyDescription rows from Playbook series signals and TS region fractions (prefer dominant organ); auto-apply clear winners to the study and fingerprint peers; prompt only when candidates are ambiguous; persist `Study.harmonized_description`, DICOM StudyDescription `(0008,1030)`, and LOINC code in Procedure Code Sequence `(0008,1032)` (`LN`)
 
 ## [19.0.0.dev11]
 - Series View Segmentation panel: latch colored ROI overlays from cached TS masks (opaque outlines, progressive contouring, spine/ribs/clavicles); Clear moved into panel; shared `series_overlay` DTOs

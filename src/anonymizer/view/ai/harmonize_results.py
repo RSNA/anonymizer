@@ -19,6 +19,7 @@ from anonymizer.controller.ai.harmonize import (
     apply_harmonized_description,
     format_harmonize_progress_message,
     harmonize_series,
+    maybe_offer_study_description_harmonize,
 )
 from anonymizer.controller.ai.tseg.radlex_playbook import (
     PLAYBOOK_TREE_IIDS,
@@ -760,7 +761,8 @@ class HarmonizeResultsView(AppToplevel):
         if not proposed or proposed != self._current_description:
             return
         # DICOM already matches; persist ORM flag on the UI thread.
-        self._persist_harmonized_metadata(proposed)
+        if self._persist_harmonized_metadata(proposed):
+            self._maybe_offer_study_description()
 
     def _notify_series_description_updated(self) -> None:
         if self._on_series_description_updated is not None:
@@ -792,6 +794,32 @@ class HarmonizeResultsView(AppToplevel):
             )
         return ok
 
+    def _maybe_offer_study_description(self) -> None:
+        """Auto-apply or offer LOINC StudyDescription when this apply completes the study."""
+        if self._anon_model is None or self._closing or not self.winfo_exists():
+            return
+        anon_study_uid = str(self._ds.StudyInstanceUID)
+        images_dir = Path(self._series_path).resolve().parent.parent.parent
+        offer = maybe_offer_study_description_harmonize(
+            self._anon_model,
+            anon_study_uid,
+            images_dir=images_dir,
+        )
+        if offer is None:
+            return
+        from anonymizer.view.ai.study_description_dialog import resolve_and_show_study_description_offers
+
+        resolve_and_show_study_description_offers(
+            self,
+            offers=[offer],
+            images_dir=images_dir,
+            anon_model=self._anon_model,
+            on_auto_applied=lambda _offer, updated: logger.info(
+                "Auto-applied LOINC study description to %d study(ies)",
+                len(updated),
+            ),
+        )
+
     def _on_save_job_done(self, _algorithm: Algorithm | None, work_state: WorkState) -> None:
         if self._closing or not self.winfo_exists():
             return
@@ -812,6 +840,7 @@ class HarmonizeResultsView(AppToplevel):
         self._commit_saved_description()
         self.accepted = True
         self._status_label.configure(text=_("Series description saved"))
+        self._maybe_offer_study_description()
         self._record_outcome(accepted=True)
 
     def _show_save_error(self, message: str) -> None:

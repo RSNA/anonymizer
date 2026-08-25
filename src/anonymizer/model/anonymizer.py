@@ -1092,6 +1092,82 @@ class AnonymizerModel:
             return False
         return _study_ct_series_all_harmonized(study)
 
+    @use_session()
+    def set_study_harmonized_description(self, anon_study_uid: str, description: str) -> bool:
+        """Persist Study.harmonized_description (and description) for an anonymized study UID."""
+        description = description.strip()
+        if not description:
+            return False
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid)
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None:
+            logger.error("Study with anon_study_uid '%s' not found.", anon_study_uid)
+            return False
+        study.harmonized_description = description
+        study.description = description
+        return True
+
+    @use_session(is_read_only_operation=True)
+    def get_study_harmonized_description(self, anon_study_uid: str) -> str | None:
+        stmt = select(Study.harmonized_description).where(Study.anon_study_uid == anon_study_uid)
+        value = self.session.execute(stmt).scalar_one_or_none()
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    @use_session(is_read_only_operation=True)
+    def get_ct_series_harmonized_descriptions(self, anon_study_uid: str) -> list[str]:
+        """Return non-empty CT Series.harmonized_description values for a study."""
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None:
+            return []
+        descriptions: list[str] = []
+        for series in study.series or []:
+            if (series.modality or "").upper() != "CT":
+                continue
+            text = (series.harmonized_description or "").strip()
+            if text:
+                descriptions.append(text)
+        return descriptions
+
+    @use_session(is_read_only_operation=True)
+    def get_anon_patient_id_for_study(self, anon_study_uid: str) -> str | None:
+        stmt = (
+            select(Study)
+            .where(Study.anon_study_uid == anon_study_uid)
+            .options(joinedload(Study.patient))
+        )
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None or study.patient is None:
+            return None
+        return study.patient.anon_patient_id
+
+    @use_session(is_read_only_operation=True)
+    def find_studies_with_series_fingerprint(self, fingerprint: tuple[str, ...]) -> list[str]:
+        """
+        Return anon_study_uid values whose CT harmonized series descriptions match ``fingerprint``.
+
+        Fingerprint is a sorted multiset of Playbook series description strings.
+        """
+        from anonymizer.controller.ai.tseg.loinc_study import study_series_description_fingerprint
+
+        target = tuple(fingerprint)
+        stmt = select(Study).options(selectinload(Study.series))
+        studies = self.session.execute(stmt).scalars().all()
+        matches: list[str] = []
+        for study in studies:
+            descriptions = [
+                (series.harmonized_description or "").strip()
+                for series in (study.series or [])
+                if (series.modality or "").upper() == "CT"
+                and (series.harmonized_description or "").strip()
+            ]
+            if study_series_description_fingerprint(descriptions) == target:
+                matches.append(study.anon_study_uid)
+        return matches
+
     @use_session(is_read_only_operation=True)
     def series_is_harmonized(self, anon_series_uid: str) -> bool:
         stmt = select(Series.harmonized_description).where(Series.anon_series_uid == anon_series_uid)

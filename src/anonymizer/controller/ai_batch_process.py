@@ -204,6 +204,8 @@ class AiBatchSummary:
     cancelled: bool = False
     series_count: int = 0
     algorithm_totals: tuple[tuple[AiBatchAlgorithm, AiBatchAlgorithmTotals], ...] = ()
+    # Anonymized study UIDs that became fully Harmonized during this run (study desc still empty).
+    newly_harmonized_study_uids: tuple[str, ...] = ()
 
 
 AiBatchProgressCallback = Callable[
@@ -1147,6 +1149,7 @@ def ai_batch_process(
     volume_contexts: dict[Path, SeriesVolumeContext] = {}
     memory_guard = MemoryGuard()
     defer_volume_to_face_blur = AiBatchAlgorithm.HARMONIZE in algorithms and AiBatchAlgorithm.FACE_BLUR in algorithms
+    newly_harmonized_study_uids: set[str] = set()
 
     def log_workflow(message: str) -> None:
         if work_state is not None:
@@ -1237,6 +1240,7 @@ def ai_batch_process(
             cancelled=summary.cancelled,
             series_count=series_total,
             algorithm_totals=tuple(algorithm_totals.items()),
+            newly_harmonized_study_uids=tuple(sorted(newly_harmonized_study_uids)),
         )
         if on_log is not None:
             on_log(format_batch_workflow_log_line(format_batch_outcome_subline(outcome)))
@@ -1256,6 +1260,7 @@ def ai_batch_process(
             cancelled=True,
             series_count=series_total,
             algorithm_totals=tuple(algorithm_totals.items()),
+            newly_harmonized_study_uids=tuple(sorted(newly_harmonized_study_uids)),
         )
 
     def outcome_detail(outcome: AiBatchOutcome) -> str:
@@ -1421,6 +1426,15 @@ def ai_batch_process(
                     )
                     for line in harmonize_log_lines:
                         log_workflow(format_batch_workflow_log_line(format_batch_step_subline(line)))
+                    if (
+                        outcome.status == "ok"
+                        and anon_model is not None
+                    ):
+                        anon_study_uid = series_path.parent.name
+                        if anon_model.study_is_harmonized(
+                            anon_study_uid
+                        ) and not anon_model.get_study_harmonized_description(anon_study_uid):
+                            newly_harmonized_study_uids.add(anon_study_uid)
                 else:
                     volume_context = volume_contexts.pop(series_path, None)
                     if volume_context is None:

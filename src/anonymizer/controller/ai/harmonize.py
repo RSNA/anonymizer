@@ -69,6 +69,8 @@ from anonymizer.utils.translate import _
 if TYPE_CHECKING:
     from anonymizer.model.anonymizer import AnonymizerModel
 
+from anonymizer.controller.ai.tseg.loinc_study import StudyDescriptionOffer
+
 logger = logging.getLogger(__name__)
 
 HarmonizeProgress = AnalysisProgress
@@ -573,6 +575,232 @@ def apply_harmonized_description(
     if anon_model is None:
         return True
     return anon_model.set_series_harmonized_description(str(ds.SeriesInstanceUID), description)
+
+
+def study_root_for_series(series_path: Path) -> Path:
+    """Return the anonymized study directory that contains ``series_path``."""
+    return Path(series_path).resolve().parent
+
+
+def study_series_description_fingerprint(
+    anon_model: AnonymizerModel,
+    anon_study_uid: str,
+) -> tuple[str, ...]:
+    """Sorted multiset fingerprint of CT Playbook series descriptions for a study."""
+    from anonymizer.controller.ai.tseg.loinc_study import study_series_description_fingerprint as fingerprint_of
+
+    return fingerprint_of(anon_model.get_ct_series_harmonized_descriptions(anon_study_uid))
+
+
+def find_studies_with_fingerprint(
+    anon_model: AnonymizerModel,
+    fingerprint: tuple[str, ...],
+) -> list[str]:
+    """Return anon_study_uid values whose CT series Playbook set matches ``fingerprint``."""
+    return anon_model.find_studies_with_series_fingerprint(fingerprint)
+
+
+def apply_harmonized_study_description(
+    study_root: Path,
+    description: str,
+    anon_model: AnonymizerModel | None,
+    anon_study_uid: str,
+    *,
+    loinc_number: str | None = None,
+) -> bool:
+    """Write StudyDescription (+ optional LOINC ProcedureCodeSequence) and update ORM."""
+    from anonymizer.controller.series_io import apply_study_description
+
+    description = description.strip()
+    if not description:
+        return False
+    if not apply_study_description(Path(study_root), description, loinc_number=loinc_number):
+        return False
+    if anon_model is None:
+        return True
+    return anon_model.set_study_harmonized_description(anon_study_uid, description)
+
+
+def ct_series_paths_for_study(images_dir: Path, anon_patient_id: str, anon_study_uid: str) -> list[Path]:
+    """Return CT series directories under an anonymized study folder."""
+    study_root = Path(images_dir) / anon_patient_id / anon_study_uid
+    if not study_root.is_dir():
+        return []
+    return [
+        path
+        for path in sorted(study_root.iterdir())
+        if path.is_dir() and not path.name.startswith(".") and _load_ct_series_dataset(path) is not None
+    ]
+
+
+def maybe_offer_study_description_harmonize(
+    anon_model: AnonymizerModel,
+    anon_study_uid: str,
+    *,
+    images_dir: Path | None = None,
+    top_n: int = 8,
+) -> StudyDescriptionOffer | None:
+    """
+    Build a Study Description offer when the study just became fully Harmonized.
+
+    Returns None when the study is incomplete, already has a study description, or ranking fails.
+    ``offer.ambiguous`` is False when the top match can be auto-applied.
+    """
+    from anonymizer.controller.ai.tseg.loinc_study import (
+        build_study_description_ranking,
+    )
+    from anonymizer.controller.ai.tseg.loinc_study import (
+        study_series_description_fingerprint as fingerprint_of,
+    )
+
+    if not anon_model.study_is_harmonized(anon_study_uid):
+        return None
+    if anon_model.get_study_harmonized_description(anon_study_uid):
+        return None
+
+    descriptions = anon_model.get_ct_series_harmonized_descriptions(anon_study_uid)
+    fingerprint = fingerprint_of(descriptions)
+    if not fingerprint:
+        return None
+
+    series_paths: list[Path] = []
+    if images_dir is not None:
+        patient_id = anon_model.get_anon_patient_id_for_study(anon_study_uid)
+        if patient_id:
+            series_paths = ct_series_paths_for_study(Path(images_dir), patient_id, anon_study_uid)
+
+    _aggregate, matches, ambiguous = build_study_description_ranking(
+        descriptions,
+        top_n=top_n,
+        series_paths=series_paths or None,
+    )
+    if not matches:
+        return None
+
+    peers = [
+        uid
+        for uid in find_studies_with_fingerprint(anon_model, fingerprint)
+        if uid != anon_study_uid and not anon_model.get_study_harmonized_description(uid)
+    ]
+    return StudyDescriptionOffer(
+        anon_study_uid=anon_study_uid,
+        fingerprint=fingerprint,
+        matches=tuple(matches),
+        peer_study_uids=tuple(peers),
+        ambiguous=ambiguous,
+    )
+
+
+def apply_study_description_offer(
+    *,
+    images_dir: Path,
+    anon_model: AnonymizerModel,
+    offer: StudyDescriptionOffer,
+    description: str,
+    apply_to_peers: bool,
+    loinc_number: str | None = None,
+) -> list[str]:
+    """
+    Apply a chosen LOINC LongCommonName (and code) to the offer study and optionally peers.
+
+    Returns the list of anon_study_uid values successfully updated.
+    """
+    targets = [offer.anon_study_uid]
+    if apply_to_peers:
+        targets.extend(offer.peer_study_uids)
+
+    updated: list[str] = []
+    for anon_study_uid in targets:
+        if anon_model.get_study_harmonized_description(anon_study_uid):
+            continue
+        patient_id = anon_model.get_anon_patient_id_for_study(anon_study_uid)
+        if not patient_id:
+            logger.error("No patient id for study %s; skipping study description apply", anon_study_uid)
+            continue
+        study_root = Path(images_dir) / patient_id / anon_study_uid
+        if apply_harmonized_study_description(
+            study_root,
+            description,
+            anon_model,
+            anon_study_uid,
+            loinc_number=loinc_number,
+        ):
+            updated.append(anon_study_uid)
+        else:
+            logger.error("Failed to apply study description for %s", anon_study_uid)
+    return updated
+
+
+def auto_apply_study_description_offer(
+    *,
+    images_dir: Path,
+    anon_model: AnonymizerModel,
+    offer: StudyDescriptionOffer,
+) -> list[str]:
+    """Auto-apply the top-ranked match to the offer study and fingerprint peers."""
+    if not offer.matches:
+        return []
+    top = offer.matches[0]
+    return apply_study_description_offer(
+        images_dir=images_dir,
+        anon_model=anon_model,
+        offer=offer,
+        description=top.long_common_name,
+        apply_to_peers=True,
+        loinc_number=top.loinc_number,
+    )
+
+
+def group_study_description_offers_by_fingerprint(
+    offers: Sequence[StudyDescriptionOffer],
+) -> list[StudyDescriptionOffer]:
+    """Collapse offers that share a fingerprint into one offer (union of peer UIDs)."""
+    by_fp: dict[tuple[str, ...], StudyDescriptionOffer] = {}
+    for offer in offers:
+        existing = by_fp.get(offer.fingerprint)
+        if existing is None:
+            by_fp[offer.fingerprint] = offer
+            continue
+        merged_peers = set(existing.peer_study_uids)
+        merged_peers.add(offer.anon_study_uid)
+        merged_peers.update(offer.peer_study_uids)
+        merged_peers.discard(existing.anon_study_uid)
+        by_fp[offer.fingerprint] = StudyDescriptionOffer(
+            anon_study_uid=existing.anon_study_uid,
+            fingerprint=existing.fingerprint,
+            matches=existing.matches,
+            peer_study_uids=tuple(sorted(merged_peers)),
+            ambiguous=existing.ambiguous or offer.ambiguous,
+        )
+    return list(by_fp.values())
+
+
+def resolve_study_description_offers(
+    *,
+    images_dir: Path,
+    anon_model: AnonymizerModel,
+    offers: Sequence[StudyDescriptionOffer],
+) -> tuple[list[StudyDescriptionOffer], list[tuple[StudyDescriptionOffer, list[str]]]]:
+    """
+    Group by fingerprint; auto-apply clear winners; return (ambiguous_offers, auto_results).
+
+    ``auto_results`` is a list of (offer, updated_uids) for silently applied groups.
+    """
+    ambiguous: list[StudyDescriptionOffer] = []
+    auto_results: list[tuple[StudyDescriptionOffer, list[str]]] = []
+    for offer in group_study_description_offers_by_fingerprint(list(offers)):
+        if anon_model.get_study_harmonized_description(offer.anon_study_uid):
+            continue
+        if offer.ambiguous:
+            ambiguous.append(offer)
+            continue
+        updated = auto_apply_study_description_offer(
+            images_dir=images_dir,
+            anon_model=anon_model,
+            offer=offer,
+        )
+        auto_results.append((offer, updated))
+    return ambiguous, auto_results
 
 
 def harmonize_and_apply_series(

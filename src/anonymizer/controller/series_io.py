@@ -18,6 +18,7 @@ from pydicom.pixel_data_handlers.util import (
     apply_modality_lut,
     convert_color_space,
 )
+from pydicom.sequence import Sequence
 from pydicom.tag import Tag
 from pydicom.uid import ExplicitVRLittleEndian
 
@@ -92,6 +93,7 @@ __all__ = [
     "LoadedSeries",
     "SERIES_VIEW_PROJECTION_COUNT",
     "apply_series_description",
+    "apply_study_description",
     "load_series_frames",
     "ordered_series_dcm_paths",
     "save_series_frames",
@@ -786,6 +788,81 @@ def apply_series_description(series_path: Path, description: str) -> bool:
             success = False
 
     return success
+
+
+def apply_study_description(
+    study_root: Path,
+    description: str,
+    *,
+    loinc_number: str | None = None,
+) -> bool:
+    """
+    Set StudyDescription (0008,1030) on every DICOM instance under a study directory.
+
+    When ``loinc_number`` is provided, also set Procedure Code Sequence (0008,1032)
+    with Coding Scheme Designator ``LN`` (DICOM CID 102 / LOINC-RSNA Playbook).
+
+    ``study_root`` is the anonymized study folder (``images/<patient>/<study>/``) whose
+    immediate children are series directories.
+    """
+    description = description.strip()
+    if not description:
+        return False
+    loinc_code = (loinc_number or "").strip() or None
+    study_root = Path(study_root)
+    if not study_root.is_dir():
+        logger.error("Study path is not a directory %s", study_root)
+        return False
+
+    series_dirs = [
+        path
+        for path in sorted(study_root.iterdir())
+        if path.is_dir() and not path.name.startswith(".")
+    ]
+    if not series_dirs:
+        logger.error("No series directories found under study %s", study_root)
+        return False
+
+    success = True
+    updated_any = False
+    for series_path in series_dirs:
+        try:
+            dcm_paths = sorted(get_dcm_files(series_path))
+        except Exception as ex:
+            logger.error("Could not list DICOM files in %s: %s", series_path, ex)
+            success = False
+            continue
+        if not dcm_paths:
+            continue
+        for dcm_path in dcm_paths:
+            try:
+                ds = dcmread(str(dcm_path), force=True)
+                if not hasattr(ds, "PixelData"):
+                    logger.warning(
+                        "Skipping StudyDescription update for %s: no PixelData present",
+                        dcm_path.name,
+                    )
+                    continue
+                ds.StudyDescription = description
+                if loinc_code is not None:
+                    item = Dataset()
+                    item.CodeValue = loinc_code
+                    item.CodingSchemeDesignator = "LN"
+                    item.CodeMeaning = description
+                    ds.ProcedureCodeSequence = Sequence([item])
+                ds.save_as(dcm_path, write_like_original=True)
+                updated_any = True
+            except Exception as ex:
+                logger.exception("Failed to update StudyDescription on %s: %s", dcm_path, ex)
+                success = False
+
+    if updated_any:
+        logger.info(
+            "Updated StudyDescription%s on %s",
+            f" and ProcedureCodeSequence ({loinc_code})" if loinc_code else "",
+            study_root,
+        )
+    return success and updated_any
 
 
 def save_series_frames(

@@ -323,6 +323,47 @@ class AiBatchProcessDialog(AppToplevel):
         self._progressbar.set(1.0)
         self._text_box.configure(state="disabled")
         self._cancel_button.configure(text=_("Close"), command=self._on_close)
+        self._offer_study_descriptions_if_needed()
+
+    def _offer_study_descriptions_if_needed(self) -> None:
+        if self._summary is None or not self._summary.newly_harmonized_study_uids:
+            return
+        anon_model = self._controller.anonymizer.model
+        images_dir = self._controller.model.images_dir()
+
+        from anonymizer.controller.ai.harmonize import maybe_offer_study_description_harmonize
+        from anonymizer.view.ai.study_description_dialog import resolve_and_show_study_description_offers
+
+        offers = []
+        for anon_study_uid in self._summary.newly_harmonized_study_uids:
+            offer = maybe_offer_study_description_harmonize(
+                anon_model,
+                anon_study_uid,
+                images_dir=images_dir,
+            )
+            if offer is not None:
+                offers.append(offer)
+        if not offers:
+            return
+
+        def on_auto(offer, updated) -> None:
+            if not updated or not offer.matches:
+                return
+            name = offer.matches[0].long_common_name
+            self._append_log(
+                _("Auto-applied study description")
+                + f': "{name}" → {len(updated)} '
+                + (_("study") if len(updated) == 1 else _("studies"))
+                + "\n"
+            )
+
+        resolve_and_show_study_description_offers(
+            self,
+            offers=offers,
+            images_dir=images_dir,
+            anon_model=anon_model,
+            on_auto_applied=on_auto,
+        )
 
     def _escape_keypress(self, _event) -> None:
         self._on_cancel()
