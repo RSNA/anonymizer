@@ -142,7 +142,6 @@ def test_analyze_series_synthetic_chest_pipeline(
     assert result.dominant_region == "Chest"
     assert result.body_parts_present == "Chest"
     assert result.contrast_phase == "native"
-    assert result.radlex_series_description == "CT Chest Without Contrast"
     mock_seg.assert_called_once()
     mock_contrast.assert_called_once()
 
@@ -164,7 +163,6 @@ def test_analyze_series_synthetic_head_pipeline(
     result = results[0]
     assert result.error is None
     assert result.dominant_region == "Head"
-    assert result.radlex_series_description == "CT Head+Neck With Contrast"
 
 
 @patch("anonymizer.controller.ai.tseg.segment.analyze_contrast_phase")
@@ -184,7 +182,6 @@ def test_analyze_series_synthetic_abdomen_pipeline(
     result = results[0]
     assert result.error is None
     assert result.dominant_region == "Abdomen"
-    assert result.radlex_series_description == "CT Abdomen Without Contrast"
 
 
 @patch("anonymizer.controller.ai.tseg.segment.analyze_contrast_phase")

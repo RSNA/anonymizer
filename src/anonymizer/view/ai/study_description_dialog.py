@@ -12,10 +12,10 @@ from typing import Callable
 import customtkinter as ctk
 
 from anonymizer.controller.ai.harmonize import (
+    StudyDescriptionOffer,
     apply_study_description_offer,
     resolve_study_description_offers,
 )
-from anonymizer.controller.ai.tseg.loinc_study import StudyDescriptionOffer
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel

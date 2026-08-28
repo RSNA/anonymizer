@@ -67,8 +67,11 @@ class TestClipAndCastToInt:
         assert f"Target dtype {np.float32} is not an integer type." in caplog.text
         assert any(record.levelname == "ERROR" for record in caplog.records)
 
-    def test_exception_handling(self, mocker, caplog: pytest.LogCaptureFixture):
-        mocker.patch("anonymizer.controller.series_io.np.iinfo", side_effect=Exception("Test iinfo error"))
+    def test_exception_handling(self, monkeypatch, caplog: pytest.LogCaptureFixture):
+        def _raise_iinfo_error(*_args, **_kwargs):
+            raise Exception("Test iinfo error")
+
+        monkeypatch.setattr("anonymizer.controller.series_io.np.iinfo", _raise_iinfo_error)
         float_arr = np.array([0.0, 1.0], dtype=np.float32)
         result = clip_and_cast_to_int(float_arr, np.uint16)
         assert result is None

@@ -11,15 +11,12 @@ from tkinter import messagebox, ttk
 
 import customtkinter as ctk
 
-from anonymizer.controller.ai.tseg.runtime_status import (
-    any_ai_batch_feature_allowed,
-    get_ai_session,
-)
 from anonymizer.controller.phi_io import PHI_IndexRecord, PHI_SeriesIndexRecord
 from anonymizer.controller.project import ProjectController
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.ai_batch_process_dialog import AiBatchProcessDialog
 from anonymizer.view.ai.ai_batch_process_options_dialog import show_ai_batch_process_options_dialog
+from anonymizer.view.ai.features.availability import any_ai_batch_feature_allowed
 from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import AppFonts, char_width_px
@@ -251,8 +248,7 @@ class DatasetView(AppToplevel):
 
     @staticmethod
     def _any_ai_batch_feature_enabled() -> bool:
-        session = get_ai_session()
-        return session.remove_pixel_phi or session.enable_harmonize or session.enable_face_blur
+        return any_ai_batch_feature_allowed()
 
     def refresh_ai_feature_ui(self) -> None:
         if not hasattr(self, "_ai_batch_process_button"):

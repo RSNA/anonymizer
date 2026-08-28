@@ -13,21 +13,6 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     pixel_phi_removal_mode_from_menu_label,
     pixel_phi_removal_mode_menu_values,
 )
-from anonymizer.controller.ai.tseg.runtime_status import (
-    ai_feature_description_brain_structures,
-    ai_feature_description_face_blur,
-    ai_feature_description_harmonize,
-    ai_feature_description_remove_pixel_phi,
-    ai_feature_title_brain_structures,
-    ai_feature_title_face_blur,
-    ai_feature_title_harmonize,
-    ai_feature_title_remove_pixel_phi,
-    brain_structures_allowed,
-    face_blur_allowed,
-    get_ai_session,
-    harmonize_allowed,
-    pixel_phi_allowed,
-)
 from anonymizer.controller.ai_batch_process import (
     AiBatchAlgorithm,
     AiBatchProcessOptions,
@@ -38,6 +23,13 @@ from anonymizer.view.ai.blur_face_results import (
     face_blur_mode_from_menu_label,
     face_blur_mode_menu_values,
 )
+from anonymizer.view.ai.features.availability import (
+    brain_structures_allowed,
+    face_blur_allowed,
+    harmonize_allowed,
+    pixel_phi_allowed,
+)
+from anonymizer.view.ai.features.catalog import AiFeatureId, feature_description, feature_title
 from anonymizer.view.ai.modality_whitelist_preview_dialog import show_modality_whitelist_preview_dialog
 from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
@@ -60,20 +52,20 @@ class AiBatchProcessOptionsDialog(AppToplevel):
     _ALGORITHM_ROWS: tuple[tuple[AiBatchAlgorithm, str, str, callable], ...] = (
         (
             AiBatchAlgorithm.REMOVE_PIXEL_PHI,
-            ai_feature_title_remove_pixel_phi(),
-            ai_feature_description_remove_pixel_phi(),
+            feature_title(AiFeatureId.REMOVE_PIXEL_PHI.value),
+            feature_description(AiFeatureId.REMOVE_PIXEL_PHI.value),
             pixel_phi_allowed,
         ),
         (
             AiBatchAlgorithm.HARMONIZE,
-            ai_feature_title_harmonize(),
-            ai_feature_description_harmonize(),
+            feature_title(AiFeatureId.HARMONIZE.value),
+            feature_description(AiFeatureId.HARMONIZE.value),
             harmonize_allowed,
         ),
         (
             AiBatchAlgorithm.FACE_BLUR,
-            ai_feature_title_face_blur(),
-            ai_feature_description_face_blur(),
+            feature_title(AiFeatureId.FACE_BLUR.value),
+            feature_description(AiFeatureId.FACE_BLUR.value),
             face_blur_allowed,
         ),
     )
@@ -195,25 +187,34 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         self._blur_mode_menu.pack(side="left")
 
     def _build_harmonize_options(self, parent: ctk.CTkFrame, pad: int) -> None:
-        session = get_ai_session()
-        offer_brain = session.enable_brain_structures and brain_structures_allowed()
-        self._include_brain_structures_var = tk.IntVar(value=1 if offer_brain else 0)
         frame = ctk.CTkFrame(parent, fg_color="transparent")
         frame.grid(row=0, column=0, pady=(self.SECTION_PAD, 0), sticky="w")
+
+        ctk.CTkLabel(
+            frame,
+            text=_(
+                "Uses the Harmonize resolution chosen in AI Features Setup for this workstation."
+            ),
+            anchor="w",
+            justify="left",
+            wraplength=self.INTRO_WRAP - pad * 4,
+            text_color="gray60",
+        ).pack(anchor="w", pady=(0, 4))
+
+        offer_brain = brain_structures_allowed()
+        self._include_brain_structures_var = tk.IntVar(value=1 if offer_brain else 0)
         self._include_brain_structures_checkbox = ctk.CTkCheckBox(
             frame,
-            text=ai_feature_title_brain_structures(),
+            text=_("Brain structures (CT Head when present)"),
             variable=self._include_brain_structures_var,
             state="normal" if offer_brain else "disabled",
         )
-        self._include_brain_structures_checkbox.pack(anchor="w")
+        self._include_brain_structures_checkbox.pack(anchor="w", pady=(4, 0))
         ctk.CTkLabel(
             frame,
-            text=ai_feature_description_brain_structures()
+            text=feature_description(AiFeatureId.BRAIN_STRUCTURES.value)
             if offer_brain
-            else _(
-                "Enable Brain structures under Harmonize in AI Features and download models to use this option."
-            ),
+            else _("Download Brain structures models in AI Features to use this option."),
             anchor="w",
             justify="left",
             wraplength=self.INTRO_WRAP - pad * 4,

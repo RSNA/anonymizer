@@ -11,8 +11,6 @@ from typing import TYPE_CHECKING
 from numpy import ndarray
 from pydicom import Dataset
 
-from anonymizer.controller.series_io import SERIES_VIEW_PROJECTION_COUNT
-
 if TYPE_CHECKING:
     from anonymizer.controller.runner import Algorithm
 
@@ -168,23 +166,11 @@ class WorkState:
 
     def frame_count(self, algorithm: Algorithm) -> int:
         frames = self._require_frames()
-        from anonymizer.controller.runner import Algorithm as Alg
-
-        if algorithm is Alg.REMOVE_PIXEL_PHI:
-            return int(frames.shape[0])
-        if self.single_frame:
-            return int(frames.shape[0])
-        return int(frames.shape[0]) - SERIES_VIEW_PROJECTION_COUNT
+        return int(frames.shape[0])
 
     def frame_at(self, frame_index: int, algorithm: Algorithm) -> ndarray:
         frames = self._require_frames()
-        from anonymizer.controller.runner import Algorithm as Alg
-
-        if algorithm is Alg.REMOVE_PIXEL_PHI:
-            return frames[frame_index]
-        if self.single_frame:
-            return frames[frame_index]
-        return frames[frame_index + SERIES_VIEW_PROJECTION_COUNT]
+        return frames[frame_index]
 
     def snapshot_progress(self) -> tuple[int, str, bool, object | None]:
         with self._lock:

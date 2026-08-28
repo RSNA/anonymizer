@@ -9,7 +9,8 @@ import numpy as np
 import pytest
 import SimpleITK as sitk
 
-from anonymizer.controller.ai.anatomy_overlay import (
+from anonymizer.controller.ai.tseg.config import PRIMARY_SEGMENT_GROUPS, PRIMARY_SEGMENT_ORDER, ROI_SUBSET
+from anonymizer.view.series.anatomy_overlay import (
     PRIMARY_SEGMENT_COLORS_BGR,
     color_bgr_for_structure,
     ensure_roi_palette_complete,
@@ -17,7 +18,6 @@ from anonymizer.controller.ai.anatomy_overlay import (
     merge_structure_overlays,
     structure_mask_overlays_for_series,
 )
-from anonymizer.controller.ai.tseg.config import PRIMARY_SEGMENT_GROUPS, PRIMARY_SEGMENT_ORDER, ROI_SUBSET
 from anonymizer.controller.series_overlay import PolygonPoint, Segmentation
 
 
@@ -57,17 +57,15 @@ def test_primary_segments_merge_sides_and_include_skeleton() -> None:
     assert any(name.startswith("rib_") for name in PRIMARY_SEGMENT_GROUPS["ribs"])
 
 
-def test_shift_overlays_to_viewer_frames_skips_projections() -> None:
-    from anonymizer.controller.ai.anatomy_overlay import shift_overlays_to_viewer_frames
-    from anonymizer.controller.series_io import SERIES_VIEW_PROJECTION_COUNT
+def test_shift_overlays_to_viewer_frames_identity_when_no_offset() -> None:
+    from anonymizer.view.series.anatomy_overlay import shift_overlays_to_viewer_frames
 
     by_slice = {
         0: [Segmentation(points=[PolygonPoint(0, 0), PolygonPoint(1, 0), PolygonPoint(0, 1)], structure_name="brain")],
         2: [Segmentation(points=[PolygonPoint(2, 2), PolygonPoint(3, 2), PolygonPoint(2, 3)], structure_name="brain")],
     }
-    shifted = shift_overlays_to_viewer_frames(by_slice, frame_offset=SERIES_VIEW_PROJECTION_COUNT)
-    assert set(shifted.keys()) == {3, 5}
-    assert shifted[3][0].structure_name == "brain"
+    shifted = shift_overlays_to_viewer_frames(by_slice, frame_offset=0)
+    assert shifted == by_slice
 
 
 def test_primary_colors_are_distinct() -> None:
@@ -80,7 +78,7 @@ def test_primary_colors_are_distinct() -> None:
 
 
 def test_structure_button_label_and_width() -> None:
-    from anonymizer.controller.ai.anatomy_overlay import latch_button_width_px, structure_button_label
+    from anonymizer.view.series.anatomy_overlay import latch_button_width_px, structure_button_label
 
     assert structure_button_label("kidneys") == "kidneys"
     assert latch_button_width_px("heart") < latch_button_width_px("clavicles")
@@ -88,7 +86,7 @@ def test_structure_button_label_and_width() -> None:
 
 def test_heart_legend_hex_is_red() -> None:
     """Button legend and OpenCV BGR must agree: heart is red, not blue/purple."""
-    from anonymizer.controller.ai.anatomy_overlay import bgr_to_hex, color_bgr_for_structure
+    from anonymizer.view.series.anatomy_overlay import bgr_to_hex, color_bgr_for_structure
 
     heart_bgr = color_bgr_for_structure("heart")
     assert heart_bgr[2] > heart_bgr[0]  # R channel dominant in BGR layout
@@ -97,21 +95,21 @@ def test_heart_legend_hex_is_red() -> None:
 
 
 def test_order_structures_by_voxels_descending() -> None:
-    from anonymizer.controller.ai.anatomy_overlay import order_structures_by_voxels
+    from anonymizer.view.series.anatomy_overlay import order_structures_by_voxels
 
     ordered = order_structures_by_voxels({"liver": 10, "heart": 50, "brain": 50})
     assert [name for name, _ in ordered] == ["brain", "heart", "liver"]
 
 
 def test_bgr_to_hex() -> None:
-    from anonymizer.controller.ai.anatomy_overlay import bgr_to_hex
+    from anonymizer.view.series.anatomy_overlay import bgr_to_hex
 
     assert bgr_to_hex((0, 0, 255)) == "#ff0000"
     assert bgr_to_hex((255, 0, 0)) == "#0000ff"
 
 
 def test_collect_primary_segment_voxels_sums_bilateral(tmp_path: Path) -> None:
-    from anonymizer.controller.ai.anatomy_overlay import collect_primary_segment_voxels
+    from anonymizer.view.series.anatomy_overlay import collect_primary_segment_voxels
 
     seg_dir = tmp_path / "seg"
     shape = (8, 32, 32)
@@ -125,7 +123,7 @@ def test_collect_primary_segment_voxels_sums_bilateral(tmp_path: Path) -> None:
 
 
 def test_primary_segment_overlays_unions_masks(tmp_path: Path) -> None:
-    from anonymizer.controller.ai.anatomy_overlay import primary_segment_overlays_for_series
+    from anonymizer.view.series.anatomy_overlay import primary_segment_overlays_for_series
 
     seg_dir = tmp_path / "seg"
     seg_dir.mkdir(parents=True, exist_ok=True)
@@ -202,8 +200,8 @@ def test_structure_mask_overlays_missing_loader_raises(tmp_path: Path) -> None:
 
 
 def test_resolve_spine_prefers_vertebrae_body_super_segment(tmp_path: Path) -> None:
-    from anonymizer.controller.ai.anatomy_overlay import resolve_primary_segment_files
     from anonymizer.controller.ai.tseg.config import PRIMARY_SEGMENT_GROUPS
+    from anonymizer.view.series.anatomy_overlay import resolve_primary_segment_files
 
     seg_dir = tmp_path / "seg"
     seg_dir.mkdir()
@@ -214,8 +212,28 @@ def test_resolve_spine_prefers_vertebrae_body_super_segment(tmp_path: Path) -> N
     assert resolve_primary_segment_files(seg_dir, "spine") == PRIMARY_SEGMENT_GROUPS["spine"]
 
 
+def test_resolve_spine_uses_mr_combined_vertebrae(tmp_path: Path) -> None:
+    from anonymizer.view.series.anatomy_overlay import resolve_primary_segment_files
+
+    seg_dir = tmp_path / "seg"
+    seg_dir.mkdir()
+    (seg_dir / "vertebrae.nii.gz").write_bytes(b"x")
+    (seg_dir / "sacrum.nii.gz").write_bytes(b"x")
+    assert resolve_primary_segment_files(seg_dir, "spine") == ("vertebrae", "sacrum")
+
+
+def test_resolve_lungs_uses_mr_whole_lung_masks(tmp_path: Path) -> None:
+    from anonymizer.view.series.anatomy_overlay import resolve_primary_segment_files
+
+    seg_dir = tmp_path / "seg"
+    seg_dir.mkdir()
+    (seg_dir / "lung_left.nii.gz").write_bytes(b"x")
+    (seg_dir / "lung_right.nii.gz").write_bytes(b"x")
+    assert resolve_primary_segment_files(seg_dir, "lungs") == ("lung_left", "lung_right")
+
+
 def test_collect_spine_voxels_uses_super_segment_when_present(tmp_path: Path) -> None:
-    from anonymizer.controller.ai.anatomy_overlay import collect_primary_segment_voxels
+    from anonymizer.view.series.anatomy_overlay import collect_primary_segment_voxels
 
     seg_dir = tmp_path / "seg"
     shape = (8, 32, 32)
@@ -226,7 +244,7 @@ def test_collect_spine_voxels_uses_super_segment_when_present(tmp_path: Path) ->
 
 
 def test_load_primary_segment_mask_reads_reference_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from anonymizer.controller.ai import anatomy_overlay as mod
+    from anonymizer.view.series import anatomy_overlay as mod
 
     seg_dir = tmp_path / "seg"
     shape = (2, 8, 8)
@@ -251,7 +269,7 @@ def test_load_primary_segment_mask_reads_reference_once(tmp_path: Path, monkeypa
 
 
 def test_load_spine_mask_prefers_super_segment_over_vertebrae(tmp_path: Path) -> None:
-    from anonymizer.controller.ai.anatomy_overlay import load_primary_segment_mask
+    from anonymizer.view.series.anatomy_overlay import load_primary_segment_mask
 
     seg_dir = tmp_path / "seg"
     seg_dir.mkdir(parents=True, exist_ok=True)
@@ -269,7 +287,7 @@ def test_load_spine_mask_prefers_super_segment_over_vertebrae(tmp_path: Path) ->
 
 
 def test_load_spine_mask_falls_back_to_vertebrae_union(tmp_path: Path) -> None:
-    from anonymizer.controller.ai.anatomy_overlay import load_primary_segment_mask
+    from anonymizer.view.series.anatomy_overlay import load_primary_segment_mask
 
     seg_dir = tmp_path / "seg"
     seg_dir.mkdir(parents=True, exist_ok=True)
@@ -286,7 +304,7 @@ def test_load_spine_mask_falls_back_to_vertebrae_union(tmp_path: Path) -> None:
 
 
 def test_contour_mask_slice_and_remaining() -> None:
-    from anonymizer.controller.ai.anatomy_overlay import contour_mask_slice, contour_mask_slices
+    from anonymizer.view.series.anatomy_overlay import contour_mask_slice, contour_mask_slices
 
     mask = np.zeros((4, 24, 24), dtype=np.uint8)
     mask[1, 4:12, 4:12] = 1

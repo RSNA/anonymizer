@@ -13,7 +13,10 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 from pprint import pformat
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
+
+if TYPE_CHECKING:
+    from anonymizer.controller.series_io import LoadedSeries
 
 import numpy as np
 from cv2 import (
@@ -35,6 +38,17 @@ from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.windowing import apply_windowing
 
 logger = logging.getLogger(__name__)
+
+_loaded_series_cache: dict[Path, LoadedSeries] = {}
+
+
+def cache_loaded_series(series_path: Path, loaded: LoadedSeries) -> None:
+    _loaded_series_cache[series_path.resolve()] = loaded
+
+
+def take_loaded_series_cache(series_path: Path) -> LoadedSeries | None:
+    """Pop a LoadedSeries cached while building projection thumbnails (Projection View handoff)."""
+    return _loaded_series_cache.pop(series_path.resolve(), None)
 
 PROJECTION_FILENAME = "Projection.pkl"
 
@@ -229,6 +243,7 @@ def create_projection_from_series(series_path: Path) -> Projection:
     from anonymizer.controller.series_io import load_series_frames
 
     loaded = load_series_frames(series_path)
+    cache_loaded_series(series_path, loaded)
     ds1 = loaded.metadata
     all_series_frames = loaded.frames
 

@@ -92,7 +92,7 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
     SeriesGeometryResult,
     resolve_series_geometry,
 )
-from anonymizer.controller.ai.tseg.runtime import configure_macos_subprocess_env
+from anonymizer.controller.ai.tseg.ml_env import configure_macos_subprocess_env
 from anonymizer.controller.ai.tseg.segment import TS_result, analyze_series
 
 configure_macos_subprocess_env()

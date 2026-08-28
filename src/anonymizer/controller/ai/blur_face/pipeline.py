@@ -22,7 +22,7 @@ from pydicom import Dataset, dcmread
 from pydicom.uid import generate_uid
 from scipy.ndimage import median_filter
 
-from anonymizer.controller.ai.tseg.config import FACE_MASK_FILENAME, MIN_STRUCTURE_VOXELS, ROI_SUBSET
+from anonymizer.controller.ai.tseg.config import FACE_MASK_FILENAME, MIN_STRUCTURE_VOXELS
 from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult, build_sitk_volume_from_series_frames
 from anonymizer.controller.ai.tseg.segment import (
     analyze_tseg_face,
@@ -122,7 +122,7 @@ class FaceBlurEligibility:
 
 
 _REASON_MSGIDS: dict[FaceBlurGateReason, str] = {
-    FaceBlurGateReason.MODALITY: "Face blur is available for CT series only.",
+    FaceBlurGateReason.MODALITY: "Face blur is available for CT and MR series only.",
     FaceBlurGateReason.FEATURE_DISABLED: "Face blur is not enabled in this installation.",
     FaceBlurGateReason.GEOMETRY: "This series type is not suitable for face segmentation.",
     FaceBlurGateReason.CACHED_REGIONS_HEAD: "Head anatomy detected from prior segmentation.",
@@ -293,15 +293,24 @@ def cached_region_signal(series_directory: Path) -> CachedRegionSignal:
 
     Returns ``UNAVAILABLE`` when harmonize/regions has not populated the cache.
     """
+    from anonymizer.controller.ai.tseg.modality_profile import (
+        default_ct_profile,
+        resolve_profile_for_series,
+    )
+
     seg_dir = series_cache_dir(series_directory) / "seg"
     if not seg_dir.is_dir():
         return CachedRegionSignal.UNAVAILABLE
 
-    structure_voxels = collect_structure_voxels(seg_dir, list(ROI_SUBSET))
+    profile = resolve_profile_for_series(series_directory) or default_ct_profile()
+    structure_voxels = collect_structure_voxels(seg_dir, list(profile.roi_subset))
     if not any(count >= MIN_STRUCTURE_VOXELS for count in structure_voxels.values()):
         return CachedRegionSignal.UNAVAILABLE
 
-    region = dominant_region_from_voxels(structure_voxels)
+    region = dominant_region_from_voxels(
+        structure_voxels,
+        structure_to_region=profile.structure_to_region,
+    )
     regions_label = body_parts_present(region.region_voxels)
     if not regions_label:
         return CachedRegionSignal.UNAVAILABLE
@@ -337,6 +346,8 @@ def evaluate_face_blur_eligibility(
 
     Cached anatomy regions (when present) override DICOM metadata heuristics.
     """
+    from anonymizer.controller.ai.tseg.modality_profile import is_tseg_modality, normalize_modality
+
     if face_blur_already_applied:
         return _eligibility(FaceBlurGateDecision.BLOCK, FaceBlurGateReason.ALREADY_APPLIED)
 
@@ -345,12 +356,19 @@ def evaluate_face_blur_eligibility(
     if resolved_modality is None and ds is not None:
         resolved_modality = getattr(ds, "Modality", None)
 
-    if resolved_modality != "CT":
+    if not is_tseg_modality(resolved_modality):
         return _eligibility(FaceBlurGateDecision.BLOCK, FaceBlurGateReason.MODALITY)
     if not enable_tseg_face:
         return _eligibility(FaceBlurGateDecision.BLOCK, FaceBlurGateReason.FEATURE_DISABLED)
     if geometry is None or not geometry.ts_suitable:
         return _eligibility(FaceBlurGateDecision.BLOCK, FaceBlurGateReason.GEOMETRY)
+
+    # MR without face_mr weights: block clearly (CT still auto-downloads on demand).
+    if normalize_modality(resolved_modality) == "MR":
+        from anonymizer.controller.ai.tseg.model_cache import mr_face_model_ready
+
+        if not mr_face_model_ready():
+            return _eligibility(FaceBlurGateDecision.BLOCK, FaceBlurGateReason.FEATURE_DISABLED)
 
     cached = cached_region_signal(series_directory)
     cached_eligibility = _CACHED_SIGNAL_ELIGIBILITY[cached]
@@ -443,16 +461,27 @@ def resolve_face_mask_path(
     *,
     run_if_missing: bool = True,
     force_segmentation: bool = False,
+    profile=None,
 ) -> Path:
     """
     Return the face mask NIfTI for ``series_directory``.
 
-    Prefer ``<series>/A_TS_SEG/seg/face.nii.gz``. Fall back to legacy
-    ``<series>/ts_seg/face.nii.gz`` with a deprecation warning. When no mask
-    exists and ``run_if_missing`` is true, run ``analyze_tseg_face``.
+    Prefer ``<series>/A_TS_SEG/seg/face.nii.gz`` (CT) or ``face_mr.nii.gz`` (MR).
+    Fall back to legacy ``<series>/ts_seg/face.nii.gz`` with a deprecation warning.
+    When no mask exists and ``run_if_missing`` is true, run ``analyze_tseg_face``.
     """
+    from anonymizer.controller.ai.tseg.modality_profile import (
+        default_ct_profile,
+        resolve_profile_for_series,
+    )
+
     series_directory = Path(series_directory).resolve()
-    cache_path = face_mask_cache_path(series_directory)
+    resolved = profile if profile is not None else resolve_profile_for_series(series_directory)
+    if resolved is None:
+        resolved = default_ct_profile()
+    profile = resolved
+
+    cache_path = face_mask_cache_path(series_directory, profile=profile)
     legacy_path = series_directory / LEGACY_FACE_MASK_REL
     invalidate_stale_tseg_volume_cache(
         series_directory,
@@ -473,7 +502,12 @@ def resolve_face_mask_path(
         )
         raise RuntimeError(message)
 
-    if legacy_path.is_file() and not cache_path.is_file() and not force_segmentation:
+    if (
+        profile.modality == "CT"
+        and legacy_path.is_file()
+        and not cache_path.is_file()
+        and not force_segmentation
+    ):
         face_voxels = count_mask_voxels(legacy_path)
         if not face_mask_is_substantial(face_voxels):
             raise RuntimeError(face_blur_gate_message(FaceBlurGateReason.INSUFFICIENT_FACE_MASK))
@@ -495,7 +529,7 @@ def resolve_face_mask_path(
         logger.info("Face blur: force_segmentation=True; running analyze_tseg_face for %s", series_directory)
     else:
         logger.info("Face blur: mask missing; running analyze_tseg_face for %s", series_directory)
-    result = analyze_tseg_face(series_directory, force=force_segmentation)
+    result = analyze_tseg_face(series_directory, force=force_segmentation, profile=profile)
     if result.error is not None:
         raise RuntimeError(result.error)
     if result.face_mask_path is None or not result.face_mask_path.is_file():
@@ -776,6 +810,75 @@ def blur_face_hu_volume(
     return out
 
 
+def blur_face_intensity_volume(
+    volume: np.ndarray,
+    mask: np.ndarray,
+    *,
+    low_percentile: float = 20.0,
+    high_percentile: float = 40.0,
+    mask_smooth_sigma_px: float = FACE_MASK_SMOOTH_SIGMA_PX,
+) -> np.ndarray:
+    """
+    MR-safe face fill: replace in-mask voxels with intensities sampled from non-face percentiles.
+
+    CT callers should continue to use ``blur_face_hu_volume`` unchanged.
+    """
+    if volume.shape != mask.shape:
+        raise ValueError(f"Volume shape {volume.shape} != mask shape {mask.shape}")
+
+    face = mask.astype(bool)
+    outside = ~face
+    if not face.any():
+        return volume.copy()
+
+    sample = volume[outside]
+    if sample.size == 0:
+        sample = volume.ravel()
+    low = float(np.percentile(sample, low_percentile))
+    high = float(np.percentile(sample, high_percentile))
+    if high < low:
+        low, high = high, low
+    logger.info(
+        "Face blur: intensity fill from non-face percentiles [%.1f, %.1f] → [%.3f, %.3f]",
+        low_percentile,
+        high_percentile,
+        low,
+        high,
+    )
+
+    out = volume.copy().astype(np.float32, copy=False)
+    rng = np.random.default_rng()
+    for z in range(volume.shape[0]):
+        if not face[z].any():
+            continue
+        blend = smooth_face_mask_slice(face[z], smooth_sigma=mask_smooth_sigma_px)
+        fill = rng.uniform(low, high, size=volume[z].shape).astype(np.float32)
+        out[z] = fill * blend + volume[z].astype(np.float32) * (1.0 - blend)
+    return out
+
+
+def blur_face_volume_for_profile(
+    volume: np.ndarray,
+    mask: np.ndarray,
+    *,
+    profile,
+    sigma_mm: float = DEFAULT_FACE_BLUR_SIGMA_MM,
+    blur_mode: FaceBlurMode | str = DEFAULT_FACE_BLUR_MODE,
+    pixel_spacing_mm: tuple[float, float] = (1.0, 1.0),
+) -> np.ndarray:
+    """Dispatch face fill by modality profile; CT path keeps ``blur_face_hu_volume``."""
+    mode = FaceBlurMode(blur_mode)
+    if profile.face_fill == "intensity_percentile" and mode == FaceBlurMode.FILL_NOISE:
+        return blur_face_intensity_volume(volume, mask)
+    return blur_face_hu_volume(
+        volume,
+        mask,
+        sigma_mm=sigma_mm,
+        blur_mode=blur_mode,
+        pixel_spacing_mm=pixel_spacing_mm,
+    )
+
+
 # --- QA ---------------------------------------------------------------------
 
 
@@ -992,6 +1095,12 @@ def preview_face_blur(
     Does not write DICOM. Use ``apply_face_blur_preview_to_series_frames`` after user accept.
     """
     series_directory = Path(series_directory).resolve()
+    from anonymizer.controller.ai.tseg.modality_profile import (
+        default_ct_profile,
+        resolve_profile_for_series,
+    )
+
+    profile = resolve_profile_for_series(series_directory) or default_ct_profile()
     _report_face_blur_progress(
         progress,
         stage="mask",
@@ -1004,6 +1113,7 @@ def preview_face_blur(
             series_directory,
             run_if_missing=run_segmentation_if_missing,
             force_segmentation=force_segmentation,
+            profile=profile,
         )
     except (FileNotFoundError, RuntimeError) as exc:
         logger.error("Face blur preview: mask resolution failed for %s: %s", series_directory, exc)
@@ -1012,7 +1122,9 @@ def preview_face_blur(
     _report_face_blur_progress(
         progress,
         stage="volume",
-        message="Loading CT volume and aligning face mask",
+        message="Loading CT volume and aligning face mask"
+        if profile.modality == "CT"
+        else "Loading volume and aligning face mask",
         fraction=0.25,
     )
 
@@ -1069,9 +1181,10 @@ def preview_face_blur(
             message=f"Applying in-mask {FaceBlurMode(blur_mode).value} de-identification",
             fraction=0.65,
         )
-        hu_after = blur_face_hu_volume(
+        hu_after = blur_face_volume_for_profile(
             hu_before,
             mask,
+            profile=profile,
             sigma_mm=sigma_mm,
             blur_mode=blur_mode,
             pixel_spacing_mm=pixel_spacing_mm,

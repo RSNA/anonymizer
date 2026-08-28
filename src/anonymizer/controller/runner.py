@@ -10,10 +10,10 @@ from typing import Callable, Protocol
 
 from easyocr import Reader
 
-from anonymizer.controller.ai.ocr_whitelist_match import OcrWhitelistMatchSettings
 from anonymizer.controller.ai.remove_pixel_phi import (
     OCR_LANGS,
     OCR_MODEL_DIR,
+    OcrWhitelistMatchSettings,
     _ocr_use_gpu,
     detect_text,
     download_ocr_models,

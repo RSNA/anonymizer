@@ -21,29 +21,31 @@ from anonymizer.controller.ai.blur_face import (
     apply_series_face_blur_metadata,
     evaluate_face_blur_eligibility,
     face_blur_gate_message,
+    face_blur_mode_display_label,
+    format_face_blur_progress_status,
     preview_blurred_slice_frames,
     preview_face_blur,
 )
 from anonymizer.controller.ai.harmonize import (
-    _load_ct_series_dataset,
-    _load_series_dataset,
+    HarmonizeProgress,
     format_harmonize_progress_message,
     harmonize_and_apply_series,
 )
-from anonymizer.controller.ai.ocr_whitelist_match import (
-    OcrWhitelistMatchSettings,
-    describe_match_settings,
+from anonymizer.controller.ai.harmonize.pipeline import (
+    _load_series_dataset,
+    _load_tseg_series_dataset,
 )
 from anonymizer.controller.ai.remove_pixel_phi import (
+    OcrWhitelistMatchSettings,
     PixelPhiRemovalMode,
     apply_instance_pixel_phi_for_dcm,
+    describe_match_settings,
     load_modality_whitelist,
     pixel_phi_removal_mode_display_label,
     remove_pixel_phi,
 )
 from anonymizer.controller.ai.tseg.contrast import release_working_memory
 from anonymizer.controller.ai.tseg.dicom_geometry import resolve_series_geometry, stackable_dicom_paths
-from anonymizer.controller.ai.tseg.segment import AnalysisProgress
 from anonymizer.controller.runner import (
     Algorithm,
     enter_batch_phase,
@@ -53,10 +55,6 @@ from anonymizer.controller.series_io import load_series_frames, save_series_fram
 from anonymizer.utils.memory import MemoryGuard, MemorySnapshot, capture_memory_snapshot, collect_garbage_safe
 from anonymizer.utils.storage import load_modality_whitelist_match_settings
 from anonymizer.utils.translate import _
-from anonymizer.view.ai.blur_face_results import (
-    face_blur_mode_display_label,
-    format_face_blur_progress_status,
-)
 
 if TYPE_CHECKING:
     from easyocr import Reader
@@ -303,7 +301,7 @@ def format_ai_batch_completion_summary(summary: AiBatchSummary) -> str:
     return "\n".join(lines)
 
 
-def should_log_harmonize_batch_step(progress: AnalysisProgress) -> bool:
+def should_log_harmonize_batch_step(progress: HarmonizeProgress) -> bool:
     """Keep batch harmonize logs concise; manual Harmonize dialog shows every stage."""
     message = (progress.message or "").strip()
     stage = progress.stage
@@ -393,7 +391,7 @@ def face_blur_skip_counts_as_complete(outcome: AiBatchOutcome) -> bool:
             continue
         if message == face_blur_gate_message(reason):
             return True
-    return message == _("Not a CT series")
+    return message in {_("Not a CT series"), _("Not a CT/MR series")}
 
 
 def _increment_algorithm_totals(
@@ -567,7 +565,7 @@ def _log_workflow_progress_step(
 
 def _prepare_ct_volume_context(series_path: Path) -> SeriesVolumeContext | None:
     with contextlib.suppress(ValueError, InvalidDicomError):
-        if _load_ct_series_dataset(series_path) is None:
+        if _load_tseg_series_dataset(series_path) is None:
             return None
         loaded = load_series_frames(series_path)
         reference_ds, frames, slice_paths = loaded.metadata, loaded.frames, loaded.slice_paths
@@ -599,7 +597,8 @@ def algorithm_display_name(algorithm: AiBatchAlgorithm) -> str:
             return _("Harmonize")
         case AiBatchAlgorithm.FACE_BLUR:
             return _("Face De-identify")
-    return algorithm.value
+        case _:
+            return str(algorithm)
 
 
 def format_ai_batch_phase_label(
@@ -645,11 +644,11 @@ def series_needs_pixel_phi(anon_model: AnonymizerModel | None, series_path: Path
 
 def series_needs_harmonize(anon_model: AnonymizerModel | None, series_path: Path) -> bool:
     with contextlib.suppress(ValueError, InvalidDicomError, OSError):
-        if _load_ct_series_dataset(series_path) is None:
+        if _load_tseg_series_dataset(series_path) is None:
             return False
         if anon_model is None:
             return True
-        ds = _load_ct_series_dataset(series_path)
+        ds = _load_tseg_series_dataset(series_path)
         if ds is None:
             return False
         return not anon_model.series_is_harmonized(str(ds.SeriesInstanceUID))
@@ -661,7 +660,7 @@ def _face_blur_batch_eligibility(
     *,
     anon_model: AnonymizerModel | None,
 ):
-    ds = _load_ct_series_dataset(series_path)
+    ds = _load_tseg_series_dataset(series_path)
     if ds is None:
         return None
     if anon_model is not None and anon_model.series_has_face_blur(str(ds.SeriesInstanceUID)):
@@ -697,7 +696,7 @@ def skip_message_for_face_blur_series(
     with contextlib.suppress(ValueError, InvalidDicomError, OSError):
         eligibility = _face_blur_batch_eligibility(series_path, anon_model=anon_model)
         if eligibility is None:
-            return _("Not a CT series")
+            return _("Not a CT/MR series")
         if eligibility.reason is FaceBlurGateReason.ALREADY_APPLIED:
             return _("Face blur already applied")
         if eligibility.decision is not FaceBlurGateDecision.ALLOW:
@@ -901,7 +900,7 @@ def _apply_harmonize_series(
     series_path: Path,
     *,
     anon_model: AnonymizerModel | None,
-    progress: Callable[[AnalysisProgress], None] | None,
+    progress: Callable[[HarmonizeProgress], None] | None,
     include_brain_structures: bool = False,
 ) -> tuple[AiBatchOutcome, list[str]]:
     from anonymizer.controller.ai.harmonize import format_harmonize_batch_contrast_log_lines
@@ -934,13 +933,13 @@ def _apply_face_blur_series(
     progress: Callable | None,
     volume_context: SeriesVolumeContext | None = None,
 ) -> AiBatchOutcome:
-    ds = _load_ct_series_dataset(series_path)
+    ds = _load_tseg_series_dataset(series_path)
     if ds is None:
         return AiBatchOutcome(
             series_path,
             AiBatchAlgorithm.FACE_BLUR,
             "skipped",
-            _("Not a CT series"),
+            _("Not a CT/MR series"),
         )
 
     series_uid = str(ds.SeriesInstanceUID)
@@ -1126,6 +1125,8 @@ def ai_batch_process(
     work_state: WorkState | None = None,
 ) -> AiBatchSummary:
     """Run selected AI algorithms in fixed order, one algorithm phase at a time."""
+    # Harmonize uses workstation resolution from AI Features (get_ct/mr_segmentation_mode).
+
     algorithms = normalize_selected_algorithms(options.algorithms)
     if not algorithms:
         return AiBatchSummary()
@@ -1397,7 +1398,7 @@ def ai_batch_process(
                 elif algorithm is AiBatchAlgorithm.HARMONIZE:
 
                     def harmonize_progress(
-                        item_progress: AnalysisProgress,
+                        item_progress: HarmonizeProgress,
                         *,
                         _last_progress_stage: list[str | None] = last_progress_stage,
                     ) -> None:

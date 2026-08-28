@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import shutil
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 from pydicom.dataset import Dataset
 
-from anonymizer.controller.ai.ocr_whitelist_match import (
+from anonymizer.controller.ai.blur_face import (
+    FaceBlurGateDecision,
+    FaceBlurGateReason,
+    FaceBlurMode,
+    face_blur_gate_message,
+)
+from anonymizer.controller.ai.remove_pixel_phi import (
     OcrWhitelistMatchMode,
     OcrWhitelistMatchSettings,
+    PixelPhiRemovalMode,
 )
 from anonymizer.controller.ai_batch_process import (
     AiBatchAlgorithm,
@@ -44,13 +51,6 @@ from anonymizer.controller.ai_batch_process import (
     strip_progress_pct_suffix,
     whitelist_for_batch_ocr,
 )
-from anonymizer.controller.ai.blur_face import (
-    FaceBlurGateDecision,
-    FaceBlurGateReason,
-    FaceBlurMode,
-    face_blur_gate_message,
-)
-from anonymizer.controller.ai.remove_pixel_phi import PixelPhiRemovalMode
 from tests.controller.blur_face.test_face_blur_gate import _geometry, _write_chest_region_cache
 
 
@@ -431,8 +431,8 @@ def test_ai_batch_process_runs_algorithm_phases_in_order(
             return_value=_batch_test_dataset(modality="MR"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_ct_series_dataset",
-            return_value=_batch_test_dataset(),
+            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            return_value=_batch_test_dataset(modality="MR"),
         ),
     ):
         ai_batch_process(
@@ -498,8 +498,8 @@ def test_ai_batch_process_runs_algorithms_in_order_and_honours_cancel(
             return_value=_batch_test_dataset(modality="MR"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_ct_series_dataset",
-            return_value=_batch_test_dataset(),
+            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            return_value=_batch_test_dataset(modality="MR"),
         ),
     ):
         summary = ai_batch_process(
@@ -547,11 +547,11 @@ def test_ai_batch_process_harmonize_only_releases_memory_after_series(
             return_value=[(1, 1, series_path)],
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_ct_series_dataset",
+            "anonymizer.controller.ai_batch_process._load_series_dataset",
             return_value=_batch_test_dataset(),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
             return_value=_batch_test_dataset(),
         ),
     ):
@@ -594,6 +594,10 @@ def test_ai_batch_process_uses_runner_reader_for_pixel_phi(
             "anonymizer.controller.ai_batch_process._load_series_dataset",
             return_value=_batch_test_dataset(modality="MR"),
         ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            return_value=_batch_test_dataset(modality="MR"),
+        ),
     ):
         ai_batch_process(
             images_dir,
@@ -630,6 +634,10 @@ def test_ai_batch_process_forwards_pixel_phi_removal_mode(
         ),
         patch(
             "anonymizer.controller.ai_batch_process._load_series_dataset",
+            return_value=_batch_test_dataset(modality="US"),
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
             return_value=_batch_test_dataset(modality="US"),
         ),
     ):
@@ -678,11 +686,11 @@ def test_ai_batch_process_defers_volume_context_when_harmonize_and_face_blur(
             return_value=[(1, 1, series_path)],
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_ct_series_dataset",
+            "anonymizer.controller.ai_batch_process._load_series_dataset",
             return_value=_batch_test_dataset(),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
             return_value=_batch_test_dataset(),
         ),
         patch(
@@ -719,10 +727,6 @@ def test_ai_batch_process_skips_harmonize_phase_when_all_harmonized(
             "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_path)],
         ),
-        patch(
-            "anonymizer.controller.ai_batch_process._load_ct_series_dataset",
-            return_value=_batch_test_dataset(),
-        ),
     ):
         summary = ai_batch_process(
             images_dir,
@@ -756,6 +760,10 @@ def test_ai_batch_process_skips_pixel_phi_phase_when_all_scanned(
         ),
         patch(
             "anonymizer.controller.ai_batch_process._load_series_dataset",
+            return_value=_batch_test_dataset(modality="MR"),
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
             return_value=_batch_test_dataset(modality="MR"),
         ),
     ):
@@ -798,11 +806,11 @@ def test_ai_batch_process_memory_guard_cancels_between_series(
             return_value=[(1, 1, series_paths[0]), (1, 1, series_paths[1])],
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_ct_series_dataset",
+            "anonymizer.controller.ai_batch_process._load_series_dataset",
             return_value=_batch_test_dataset(),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
             return_value=_batch_test_dataset(),
         ),
     ):
@@ -818,32 +826,32 @@ def test_ai_batch_process_memory_guard_cancels_between_series(
 
 
 @patch("anonymizer.controller.ai_batch_process.resolve_series_geometry")
-@patch("anonymizer.controller.ai_batch_process._load_ct_series_dataset")
+@patch("anonymizer.controller.ai_batch_process._load_tseg_series_dataset")
 def test_series_needs_face_blur_false_for_cached_chest_abdomen(
-    mock_load_ct: MagicMock,
+    mock_load_ds: MagicMock,
     mock_geometry: MagicMock,
     tmp_path: Path,
 ) -> None:
     series_dir = tmp_path / "series"
     series_dir.mkdir()
     _write_chest_region_cache(series_dir)
-    mock_load_ct.return_value = _batch_test_dataset()
+    mock_load_ds.return_value = _batch_test_dataset()
     mock_geometry.return_value = _geometry()
 
     assert series_needs_face_blur(_pending_anon_model(), series_dir) is False
 
 
 @patch("anonymizer.controller.ai_batch_process.resolve_series_geometry")
-@patch("anonymizer.controller.ai_batch_process._load_ct_series_dataset")
+@patch("anonymizer.controller.ai_batch_process._load_tseg_series_dataset")
 def test_skip_message_for_face_blur_series_non_head(
-    mock_load_ct: MagicMock,
+    mock_load_ds: MagicMock,
     mock_geometry: MagicMock,
     tmp_path: Path,
 ) -> None:
     series_dir = tmp_path / "series"
     series_dir.mkdir()
     _write_chest_region_cache(series_dir)
-    mock_load_ct.return_value = _batch_test_dataset()
+    mock_load_ds.return_value = _batch_test_dataset()
     mock_geometry.return_value = _geometry()
 
     message = skip_message_for_face_blur_series(_pending_anon_model(), series_dir)
@@ -853,9 +861,9 @@ def test_skip_message_for_face_blur_series_non_head(
 
 @patch("anonymizer.controller.ai_batch_process.preview_face_blur")
 @patch("anonymizer.controller.ai_batch_process.resolve_series_geometry")
-@patch("anonymizer.controller.ai_batch_process._load_ct_series_dataset")
+@patch("anonymizer.controller.ai_batch_process._load_tseg_series_dataset")
 def test_apply_face_blur_series_skips_non_head_before_segmentation(
-    mock_load_ct: MagicMock,
+    mock_load_ds: MagicMock,
     mock_geometry: MagicMock,
     mock_preview: MagicMock,
     tmp_path: Path,
@@ -863,7 +871,7 @@ def test_apply_face_blur_series_skips_non_head_before_segmentation(
     series_dir = tmp_path / "series"
     series_dir.mkdir()
     _write_chest_region_cache(series_dir)
-    mock_load_ct.return_value = _batch_test_dataset()
+    mock_load_ds.return_value = _batch_test_dataset()
     mock_geometry.return_value = _geometry()
 
     outcome = _apply_face_blur_series(
@@ -951,6 +959,10 @@ def test_ai_batch_process_forwards_project_storage_dir_for_pixel_phi(
             "anonymizer.controller.ai_batch_process._load_series_dataset",
             return_value=_batch_test_dataset(modality="CR"),
         ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            return_value=_batch_test_dataset(modality="CR"),
+        ),
     ):
         ai_batch_process(
             images_dir,
@@ -1015,7 +1027,6 @@ def test_modalities_in_selected_studies_collects_unique_modalities(
     images_layout: tuple[Path, list[tuple[str, str]]],
 ) -> None:
     images_dir, studies = images_layout
-    series_a = images_dir / "anon_pt" / "anon_study" / "series_a"
     series_b = images_dir / "anon_pt" / "anon_study" / "series_b"
 
     def _dataset_for_path(series_path: Path) -> Dataset:

@@ -8,7 +8,6 @@ from pydicom.data import get_testdata_file
 from pydicom import dcmread
 
 from anonymizer.controller.runner import Algorithm
-from anonymizer.controller.series_io import SERIES_VIEW_PROJECTION_COUNT
 from anonymizer.controller.work_state import WorkState
 
 
@@ -27,15 +26,15 @@ def test_work_state_bind_and_frame_count(sample_volume) -> None:
     assert ws.frame_at(0, Algorithm.REMOVE_PIXEL_PHI).shape == frames[0].shape
 
 
-def test_work_state_multi_frame_projection_offset(sample_volume) -> None:
+def test_work_state_multi_frame_uses_direct_slice_indices(sample_volume) -> None:
     ds, one, paths = sample_volume
-    stack = np.zeros((SERIES_VIEW_PROJECTION_COUNT + 2,) + one.shape[1:], dtype=np.float32)
+    stack = np.zeros((4,) + one.shape[1:], dtype=np.float32)
     ws = WorkState()
     ws.bind(ds, stack, paths, (40.0, 400.0), single_frame=False)
-    assert ws.frame_count(Algorithm.REMOVE_PIXEL_PHI) == stack.shape[0]
-    assert ws.frame_count(Algorithm.HARMONIZE) == 2
-    anatomical = ws.frame_at(0, Algorithm.HARMONIZE)
-    assert np.shares_memory(anatomical, stack[SERIES_VIEW_PROJECTION_COUNT])
+    assert ws.frame_count(Algorithm.REMOVE_PIXEL_PHI) == 4
+    assert ws.frame_count(Algorithm.HARMONIZE) == 4
+    anatomical = ws.frame_at(2, Algorithm.HARMONIZE)
+    assert np.shares_memory(anatomical, stack[2])
 
 
 def test_work_state_snapshot_result_is_copy(sample_volume) -> None:

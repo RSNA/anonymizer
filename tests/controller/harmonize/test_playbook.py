@@ -7,7 +7,7 @@ from dataclasses import replace
 import pytest
 
 from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
-from anonymizer.controller.ai.tseg.radlex_playbook import (
+from anonymizer.controller.ai.harmonize.playbook import (
     IV_CONTRAST_PLAYBOOK_CODES,
     build_harmonized_series_description,
     build_localizer_harmonized_series_description,
@@ -69,7 +69,6 @@ def _tseg(
         iv_contrast=iv_contrast,
         contrast_phase=contrast_phase,
         phase_probability=0.88 if contrast_phase else 0.0,
-        radlex_series_description="",
         structures_present=structures_present or {},
     )
 
@@ -148,7 +147,7 @@ def test_iv_contrast_playbook_vocab_matches_radlex() -> None:
 
 
 def test_iv_contrast_labels_cover_playbook_vocab() -> None:
-    from anonymizer.controller.ai.tseg.radlex_playbook import _IV_CONTRAST_LABELS, _TS_CONTRAST_PHASE_TO_CODE
+    from anonymizer.controller.ai.harmonize.playbook import _IV_CONTRAST_LABELS, _TS_CONTRAST_PHASE_TO_CODE
 
     assert set(_IV_CONTRAST_LABELS) == IV_CONTRAST_PLAYBOOK_CODES
     assert set(_TS_CONTRAST_PHASE_TO_CODE.values()).issubset(IV_CONTRAST_PLAYBOOK_CODES)

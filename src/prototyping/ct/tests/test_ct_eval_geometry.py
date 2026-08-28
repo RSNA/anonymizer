@@ -84,7 +84,6 @@ def test_evaluate_record_includes_geometry_columns() -> None:
         iv_contrast=True,
         contrast_phase="portal_venous",
         phase_probability=0.99,
-        radlex_series_description="CT Chest With Contrast",
     )
     row = evaluate_record(
         record,

@@ -13,6 +13,7 @@ from tkinter import ttk
 import customtkinter as ctk
 from pydicom import Dataset
 
+from anonymizer.controller.ai.blur_face import MetadataSignal, metadata_signal
 from anonymizer.controller.ai.harmonize import (
     HarmonizedResult,
     HarmonizeProgress,
@@ -21,7 +22,7 @@ from anonymizer.controller.ai.harmonize import (
     harmonize_series,
     maybe_offer_study_description_harmonize,
 )
-from anonymizer.controller.ai.tseg.radlex_playbook import (
+from anonymizer.controller.ai.harmonize.playbook import (
     PLAYBOOK_TREE_IIDS,
     build_localizer_playbook_attributes,
     harmonize_analysis_rows,
@@ -32,16 +33,28 @@ from anonymizer.controller.ai.tseg.radlex_playbook import (
     playbook_plane_row_values,
     playbook_series_type_row_values,
 )
+from anonymizer.controller.ai.tseg.modality_profile import is_mr_modality
 from anonymizer.controller.runner import Algorithm
 from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import StudyPhiHeader
 from anonymizer.utils.translate import _
+from anonymizer.view.ai.features.availability import brain_structures_allowed
 from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.common.job_poller import STAGE_POLL_MS, start_background_job
 
 logger = logging.getLogger(__name__)
+
+
+def offer_brain_structures_for_series(ds: Dataset | None) -> bool:
+    """True when CT Head metadata + brain structures models allow the Harmonize dialog option."""
+    if ds is None or not brain_structures_allowed():
+        return False
+    modality = getattr(ds, "Modality", None)
+    if is_mr_modality(modality) or str(modality or "").strip().upper() != "CT":
+        return False
+    return metadata_signal(ds) == MetadataSignal.HEAD
 
 
 @dataclass(frozen=True)
@@ -162,7 +175,9 @@ class HarmonizeResultsView(AppToplevel):
         self.cancelled = False
         self._anon_model = anon_model
         self._on_series_description_updated = on_series_description_updated
-        self._include_brain_structures = include_brain_structures
+        self._include_brain_structures_var = tk.IntVar(
+            value=1 if include_brain_structures else 0
+        )
 
         self._data_font = fonts.mono if fonts else ctk.CTkFont(family="Menlo", size=12)
         self._study_header_font = fonts.bold if fonts else ctk.CTkFont(size=14, weight="bold")
@@ -199,6 +214,7 @@ class HarmonizeResultsView(AppToplevel):
         self._update_batch_header()
         self._populate_dicom_tree()
         self._clear_playbook_tree()
+        self._sync_brain_structures_option()
         self._update_window_title()
         self._show_running_state()
         self._start_current_item_worker()
@@ -293,6 +309,17 @@ class HarmonizeResultsView(AppToplevel):
             char_width_px=char_width_px,
             visible_rows=self._PLAYBOOK_TREE_VISIBLE_ROWS,
         )
+
+        self._brain_option_frame = ctk.CTkFrame(self._playbook_frame, fg_color="transparent")
+        self._brain_option_frame.grid(row=2, column=0, padx=self.PAD, pady=(0, self.PAD), sticky="w")
+        self._brain_structures_checkbox = ctk.CTkCheckBox(
+            self._brain_option_frame,
+            text=_("Include brain structures (after total anatomy)"),
+            variable=self._include_brain_structures_var,
+            width=320,
+        )
+        self._brain_structures_checkbox.pack(anchor="w")
+        self._brain_option_frame.grid_remove()
 
         self._proposal_frame = ctk.CTkFrame(self._results_frame)
         self._proposal_frame.grid(row=2, column=0, padx=0, pady=(self.PAD, 0), sticky="ew")
@@ -610,7 +637,12 @@ class HarmonizeResultsView(AppToplevel):
             except ValueError:
                 logger.debug("Playbook body part not yet mappable for %s", self._series_path)
 
-        if tseg is not None and tseg.contrast_phase:
+        if is_mr_modality(getattr(self._ds, "Modality", None)):
+            self._upsert_playbook_row(
+                PLAYBOOK_TREE_IIDS[2],
+                playbook_iv_contrast_row_values(ds=self._ds),
+            )
+        elif tseg is not None and tseg.contrast_phase:
             self._upsert_playbook_row(
                 PLAYBOOK_TREE_IIDS[2],
                 playbook_iv_contrast_row_values(tseg=tseg),
@@ -636,6 +668,22 @@ class HarmonizeResultsView(AppToplevel):
         ):
             self._upsert_playbook_row(iid, values)
 
+    def _sync_brain_structures_option(self) -> None:
+        offer = offer_brain_structures_for_series(self._ds)
+        if offer:
+            # Default checked when the CT Head option is shown.
+            if self._include_brain_structures_var.get() == 0:
+                self._include_brain_structures_var.set(1)
+            self._brain_option_frame.grid()
+        else:
+            self._include_brain_structures_var.set(0)
+            self._brain_option_frame.grid_remove()
+
+    def _include_brain_structures_for_run(self) -> bool:
+        return bool(
+            offer_brain_structures_for_series(self._ds) and self._include_brain_structures_var.get() == 1
+        )
+
     def _user_harmonize_status(self, progress: HarmonizeProgress) -> str:
         return self._status_text_for_progress(progress)
 
@@ -653,6 +701,7 @@ class HarmonizeResultsView(AppToplevel):
         self._progressbar.set(self._batch_overall_fraction(0.0))
         self._populate_dicom_tree()
         self._clear_playbook_tree()
+        self._sync_brain_structures_option()
         self._proposal_frame.grid_remove()
 
     def _show_cancel_button(self, *, enabled: bool = True) -> None:
@@ -910,7 +959,7 @@ class HarmonizeResultsView(AppToplevel):
             results = harmonize_series(
                 [series_path],
                 progress=on_progress,
-                include_brain_structures=self._include_brain_structures,
+                include_brain_structures=self._include_brain_structures_for_run(),
             )
             if not work_state.should_cancel() and not self.cancelled:
                 work_state.finish(results)

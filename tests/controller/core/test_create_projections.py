@@ -4,6 +4,7 @@
 import logging  # For caplog level checking
 import pickle
 from pathlib import Path
+from unittest.mock import ANY, MagicMock, PropertyMock, mock_open, patch
 
 # Third-Party Imports
 import numpy as np
@@ -39,9 +40,9 @@ def create_basic_dataset() -> Dataset:
 
 
 class TestProjectionDataclassPytest:
-    def test_projection_cleanup(self, mocker, caplog: pytest.LogCaptureFixture):
-        mock_img1 = mocker.MagicMock(spec=PILImageModule.Image)
-        mock_img2 = mocker.MagicMock(spec=PILImageModule.Image)
+    def test_projection_cleanup(self, caplog: pytest.LogCaptureFixture):
+        mock_img1 = MagicMock(spec=PILImageModule.Image)
+        mock_img2 = MagicMock(spec=PILImageModule.Image)
 
         projection = Projection("pid", "study", "series", "desc", proj_images=[mock_img1, mock_img2])
         with caplog.at_level(logging.DEBUG):
@@ -53,8 +54,8 @@ class TestProjectionDataclassPytest:
         assert projection.ocr is None
         assert "Cleaning up Projection for series: series" in caplog.text
 
-    def test_projection_cleanup_with_close_error(self, mocker, caplog: pytest.LogCaptureFixture):
-        mock_img1 = mocker.MagicMock(spec=PILImageModule.Image)
+    def test_projection_cleanup_with_close_error(self, caplog: pytest.LogCaptureFixture):
+        mock_img1 = MagicMock(spec=PILImageModule.Image)
         mock_img1.close.side_effect = Exception("Close error")
         projection = Projection("pid", "study", "series", "desc", proj_images=[mock_img1])
         with caplog.at_level(logging.WARNING):
@@ -62,9 +63,9 @@ class TestProjectionDataclassPytest:
         assert "Error closing image: Close error" in caplog.text
         assert projection.proj_images is None
 
-    def test_projection_context_manager(self, mocker):
-        # Patching the method on the class itself
-        mock_cleanup = mocker.patch("anonymizer.controller.create_projections.Projection.cleanup")
+    def test_projection_context_manager(self, monkeypatch):
+        mock_cleanup = MagicMock()
+        monkeypatch.setattr("anonymizer.controller.create_projections.Projection.cleanup", mock_cleanup)
         projection_instance = Projection("pid", "study", "series", "desc")
         with projection_instance as p:
             assert p is projection_instance
@@ -94,9 +95,11 @@ class TestProjectionImageSizeConfigPytest:
         with pytest.raises(ValueError, match="Scaling factor must be greater than zero."):
             ProjectionImageSizeConfig.set_scaling_factor(-1.0)
 
-    def test_set_scaling_factor_if_needed_scaling_required(self, mocker, caplog):
-        mock_set_factor = mocker.patch(
-            "anonymizer.controller.create_projections.ProjectionImageSizeConfig.set_scaling_factor"
+    def test_set_scaling_factor_if_needed_scaling_required(self, monkeypatch, caplog):
+        mock_set_factor = MagicMock()
+        monkeypatch.setattr(
+            "anonymizer.controller.create_projections.ProjectionImageSizeConfig.set_scaling_factor",
+            mock_set_factor,
         )
         original_large_width = ProjectionImageSize.LARGE.value[0]
         screen_width = (original_large_width * 3) - 100
@@ -108,9 +111,11 @@ class TestProjectionImageSizeConfigPytest:
         mock_set_factor.assert_called_once_with(expected_factor)
         assert f"Scaling factor set to {expected_factor}" in caplog.text
 
-    def test_set_scaling_factor_if_needed_no_scaling(self, mocker, caplog):
-        mock_set_factor = mocker.patch(
-            "anonymizer.controller.create_projections.ProjectionImageSizeConfig.set_scaling_factor"
+    def test_set_scaling_factor_if_needed_no_scaling(self, monkeypatch, caplog):
+        mock_set_factor = MagicMock()
+        monkeypatch.setattr(
+            "anonymizer.controller.create_projections.ProjectionImageSizeConfig.set_scaling_factor",
+            mock_set_factor,
         )
         original_large_width = ProjectionImageSize.LARGE.value[0]
         screen_width = original_large_width * 3
@@ -139,137 +144,102 @@ class TestProjectionImageSizeEnum:
 
 
 class TestNormalizeUint8:
-    def test_normalize_uint8_call(self, mocker):
-        mock_cv2_normalize = mocker.patch(
-            "anonymizer.controller.create_projections.normalize"  # Assuming normalize is cv2.normalize
-        )
+    def test_normalize_uint8_call(self):
         input_array = np.array([[0, 1000]], dtype=np.float32)
-        mock_cv2_normalize.return_value = np.array([[0, 255]], dtype=np.float32)
+        with patch("anonymizer.controller.create_projections.normalize") as mock_cv2_normalize:
+            mock_cv2_normalize.return_value = np.array([[0, 255]], dtype=np.float32)
 
-        result = normalize_uint8(input_array)
+            result = normalize_uint8(input_array)
 
-        # NORM_MINMAX from cv2 is 32
-        mock_cv2_normalize.assert_called_once_with(
-            src=input_array,
-            dst=mocker.ANY,
-            alpha=0,
-            beta=255,
-            norm_type=32,  # cv2.NORM_MINMAX
-            dtype=-1,
-            mask=None,
-        )
+            # NORM_MINMAX from cv2 is 32
+            mock_cv2_normalize.assert_called_once_with(
+                src=input_array,
+                dst=ANY,
+                alpha=0,
+                beta=255,
+                norm_type=32,  # cv2.NORM_MINMAX
+                dtype=-1,
+                mask=None,
+            )
         assert result.dtype == np.uint8
         np.testing.assert_array_equal(result, np.array([[0, 255]], dtype=np.uint8))
 
 
 class TestCacheProjection:
-    def test_cache_projection_success(self, mocker, caplog: pytest.LogCaptureFixture):
-        mock_proj = mocker.MagicMock(spec=Projection)
-        mock_path_obj = mocker.MagicMock(spec=Path)  # This is the Path object passed
+    def test_cache_projection_success(self, caplog: pytest.LogCaptureFixture):
+        mock_proj = MagicMock(spec=Projection)
+        mock_path_obj = MagicMock(spec=Path)
+        mock_open_func = mock_open()
+        with (
+            patch("anonymizer.controller.create_projections.open", mock_open_func),
+            patch("anonymizer.controller.create_projections.pickle.dump") as mock_pickle_dump,
+        ):
+            with caplog.at_level(logging.WARNING):
+                cache_projection(mock_proj, mock_path_obj)
 
-        # Patch the built-in 'open' as it's seen by the 'cache_projection'
-        # function within the 'anonymizer.controller.create_projections' module.
-        # mocker.mock_open() creates a mock suitable for replacing 'open'.
-        mock_open_func = mocker.mock_open()
-        mocker.patch("anonymizer.controller.create_projections.open", mock_open_func)
-
-        # Patch 'pickle.dump' in the context of the 'cache_projection' function
-        # (it uses the globally imported pickle)
-        mock_pickle_dump = mocker.patch("anonymizer.controller.create_projections.pickle.dump")
-
-        with caplog.at_level(logging.WARNING):
-            cache_projection(mock_proj, mock_path_obj)
-
-        # Assert that the patched 'open' was called correctly with the Path object
         mock_open_func.assert_called_once_with(mock_path_obj, "wb")
-
-        # Assert that pickle.dump was called with the projection and the file handle.
-        # The file handle is what mock_open_func() (the result of its __enter__ method) returns.
         mock_pickle_dump.assert_called_once_with(mock_proj, mock_open_func())
-
         assert not caplog.records  # No warnings expected
 
-    def test_cache_projection_pickle_error(self, mocker, caplog: pytest.LogCaptureFixture):
-        mock_proj = mocker.MagicMock(spec=Projection)
-        mock_path_obj = mocker.MagicMock(spec=Path)
+    def test_cache_projection_pickle_error(self, caplog: pytest.LogCaptureFixture):
+        mock_proj = MagicMock(spec=Projection)
+        mock_path_obj = MagicMock(spec=Path)
+        mock_open_func = mock_open()
+        with (
+            patch("anonymizer.controller.create_projections.open", mock_open_func),
+            patch(
+                "anonymizer.controller.create_projections.pickle.dump",
+                side_effect=pickle.PicklingError("Test pickle error"),
+            ),
+        ):
+            with caplog.at_level(logging.WARNING):
+                cache_projection(mock_proj, mock_path_obj)
 
-        # Patch the built-in 'open'
-        mock_open_func = mocker.mock_open()
-        mocker.patch("anonymizer.controller.create_projections.open", mock_open_func)
-
-        # Patch 'pickle.dump' and make it raise an error
-        mocker.patch(
-            "anonymizer.controller.create_projections.pickle.dump",
-            side_effect=pickle.PicklingError("Test pickle error"),
-        )
-
-        with caplog.at_level(logging.WARNING):
-            cache_projection(mock_proj, mock_path_obj)
-
-        # 'open' should still be called
         mock_open_func.assert_called_once_with(mock_path_obj, "wb")
         assert "Error saving Projection cache file, error: Test pickle error" in caplog.text
         assert any(record.levelname == "WARNING" for record in caplog.records)
 
 
 class TestCreateProjectionFromSingleFrame:
-    def test_creation_logic(self, mocker):
+    def test_creation_logic(self):
         ds = create_basic_dataset()
         frame_data = np.random.randint(0, 1000, size=(50, 50), dtype=np.int16)
 
-        # 1. Create a mock for what ProjectionImageSize.LARGE would be.
-        #    This mock needs a '.value' attribute.
-        mock_large_member_instance = mocker.MagicMock()
-        mock_large_member_instance.value = (120, 120)  # The desired (width, height)
+        mock_large_member_instance = MagicMock()
+        mock_large_member_instance.value = (120, 120)
+        mock_enum_class = MagicMock()
+        type(mock_enum_class).LARGE = PropertyMock(return_value=mock_large_member_instance)
 
-        # 2. Create a mock for the ProjectionImageSize enum class itself.
-        mock_enum_class = mocker.MagicMock()
+        mock_clahe_apply = MagicMock(return_value=np.zeros((50, 50), np.uint8))
+        mock_pil_image_instance = MagicMock()
 
-        # 3. Configure the mocked Enum class so that accessing its 'LARGE' attribute
-        #    (as if it were ProjectionImageSize.LARGE)
-        #    returns your mock_large_member_instance.
-        #    We use type() to set this up as a class-level attribute on the mock.
-        type(mock_enum_class).LARGE = mocker.PropertyMock(return_value=mock_large_member_instance)
-        # You could also mock other members like SMALL, MEDIUM if they were used.
-        # type(mock_enum_class).SMALL = mocker.PropertyMock(...)
+        with (
+            patch("anonymizer.controller.create_projections.ProjectionImageSize", new=mock_enum_class),
+            patch(
+                "anonymizer.controller.create_projections.createCLAHE",
+                return_value=MagicMock(apply=mock_clahe_apply),
+            ) as mock_create_clahe,
+            patch(
+                "anonymizer.controller.create_projections.GaussianBlur",
+                return_value=np.zeros((50, 50), np.uint8),
+            ) as mock_gaussian_blur,
+            patch(
+                "anonymizer.controller.create_projections.Canny",
+                return_value=np.zeros((50, 50), np.uint8),
+            ) as mock_canny,
+            patch(
+                "anonymizer.controller.create_projections.getStructuringElement",
+                return_value=np.array([]),
+            ) as mock_get_struct_element,
+            patch(
+                "anonymizer.controller.create_projections.dilate",
+                return_value=np.zeros((50, 50), np.uint8),
+            ) as mock_dilate,
+            patch("anonymizer.controller.create_projections.Image.fromarray") as mock_pil_fromarray,
+        ):
+            mock_pil_fromarray.return_value.convert.return_value.resize.return_value = mock_pil_image_instance
+            projection = create_projection_from_single_frame(ds, frame_data)
 
-        # 4. Patch the *actual* ProjectionImageSize class in the module under test
-        #    to be replaced by your mock_enum_class.
-        mocker.patch("anonymizer.controller.create_projections.ProjectionImageSize", new=mock_enum_class)
-
-        # --- Rest of your mocks for cv2 and PIL functions ---
-        # Ensure patch paths are correct, targeting where they are used within
-        # 'anonymizer.controller.create_projections'.
-        mock_clahe_apply = mocker.Mock(return_value=np.zeros((50, 50), np.uint8))
-        mock_create_clahe = mocker.patch(
-            "anonymizer.controller.create_projections.createCLAHE",
-            return_value=mocker.Mock(apply=mock_clahe_apply),
-        )
-        mock_gaussian_blur = mocker.patch(
-            "anonymizer.controller.create_projections.GaussianBlur",
-            return_value=np.zeros((50, 50), np.uint8),
-        )
-        mock_canny = mocker.patch(
-            "anonymizer.controller.create_projections.Canny",
-            return_value=np.zeros((50, 50), np.uint8),
-        )
-        mock_get_struct_element = mocker.patch(
-            "anonymizer.controller.create_projections.getStructuringElement", return_value=np.array([])
-        )
-        mock_dilate = mocker.patch(
-            "anonymizer.controller.create_projections.dilate", return_value=np.zeros((50, 50), np.uint8)
-        )
-
-        mock_pil_image_instance = mocker.MagicMock()
-        # Assuming 'Image' is imported as 'from PIL import Image'
-        # in 'anonymizer.controller.create_projections'
-        mock_pil_fromarray = mocker.patch("anonymizer.controller.create_projections.Image.fromarray")
-        mock_pil_fromarray.return_value.convert.return_value.resize.return_value = mock_pil_image_instance
-
-        # --- Call the function under test ---
-        projection = create_projection_from_single_frame(ds, frame_data)
-
-        # --- Assertions ---
         assert projection.patient_id == ds.PatientID
         assert projection.study_uid == ds.StudyInstanceUID
         assert projection.series_uid == ds.SeriesInstanceUID
@@ -282,18 +252,16 @@ class TestCreateProjectionFromSingleFrame:
 
         mock_create_clahe.assert_called_once_with(clipLimit=2.0, tileGridSize=(8, 8))
         mock_clahe_apply.assert_called_once()
-        mock_gaussian_blur.assert_called_once()  # Check arguments if necessary
-        mock_canny.assert_called_once()  # Check arguments if necessary
-        mock_get_struct_element.assert_called_once()  # Check arguments if necessary
-        mock_dilate.assert_called_once()  # Check arguments if necessary
+        mock_gaussian_blur.assert_called_once()
+        mock_canny.assert_called_once()
+        mock_get_struct_element.assert_called_once()
+        mock_dilate.assert_called_once()
 
         assert mock_pil_fromarray.call_count == 3
         assert mock_pil_fromarray.return_value.convert.call_count == 3
         mock_pil_fromarray.return_value.convert.assert_called_with("RGB")
 
         assert mock_pil_fromarray.return_value.convert.return_value.resize.call_count == 3
-        # Verify resize call uses the mocked value
         resize_call_args = mock_pil_fromarray.return_value.convert.return_value.resize.call_args_list[0]
-        # The first argument to resize should be the tuple (width, height)
         assert resize_call_args.args[0] == (120, 120)
         assert resize_call_args.args[1] == PILImageModule.Resampling.NEAREST

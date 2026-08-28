@@ -119,3 +119,37 @@ def test_track_tqdm_model_download_reports_tqdm_and_prints() -> None:
     assert progress_updates[0] == ("Starting custom download", None)
     assert progress_updates[1] == ("Download finished. Extracting...", None)
     assert any("Downloading:" in message and "/" in message for message, _ in progress_updates)
+
+
+def test_track_tqdm_model_download_includes_label() -> None:
+    fake_libs = MagicMock()
+    progress_updates: list[tuple[str, float | None]] = []
+
+    class FakeTqdm:
+        def __init__(self, *args, **kwargs):
+            self.total = kwargs.get("total", 0)
+            self.n = 0
+
+        def update(self, n=1):
+            self.n += n
+            return True
+
+        def close(self):
+            return None
+
+    fake_libs.tqdm = FakeTqdm
+
+    with track_tqdm_model_download(
+        "enable_harmonize",
+        label="total — CT anatomy 3 mm",
+        tqdm_module=fake_libs,
+        on_progress=lambda message, fraction: progress_updates.append((message, fraction)),
+    ):
+        bar = fake_libs.tqdm(total=1000)
+        bar.update(500)
+
+    assert progress_updates[0] == ("Downloading: total — CT anatomy 3 mm…", None)
+    assert any(
+        message.startswith("Downloading: total — CT anatomy 3 mm — ") and "/" in message
+        for message, _ in progress_updates
+    )

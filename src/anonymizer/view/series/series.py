@@ -13,15 +13,6 @@ import customtkinter as ctk
 import numpy as np
 from pydicom import Dataset, dcmread
 
-from anonymizer.controller.ai.anatomy_overlay import (
-    collect_primary_segment_voxels,
-    color_bgr_for_structure,
-    contour_mask_slice,
-    load_primary_segment_mask,
-    merge_structure_overlays,
-    order_structures_by_voxels,
-    shift_overlays_to_viewer_frames,
-)
 from anonymizer.controller.ai.blur_face import (
     CachedRegionSignal,
     FaceBlurEligibility,
@@ -33,22 +24,20 @@ from anonymizer.controller.ai.blur_face import (
     face_blur_gate_message,
     face_blur_status_applicable,
 )
-from anonymizer.controller.ai.ocr_whitelist_match import (
+from anonymizer.controller.ai.remove_pixel_phi import (
     OcrWhitelistMatchMode,
     OcrWhitelistMatchSettings,
-    default_whitelist_match_settings,
-    describe_match_settings,
-    match_mode_description,
-    match_mode_menu_label,
-    match_mode_menu_labels,
-)
-from anonymizer.controller.ai.remove_pixel_phi import (
     apply_series_view_pixel_phi,
     blackout_rectangular_areas,
     build_series_view_ocr_pixels,
     collect_series_view_pixel_phi_texts,
+    default_whitelist_match_settings,
+    describe_match_settings,
     filter_ocr_whitelist_only,
     load_modality_whitelist,
+    match_mode_description,
+    match_mode_menu_label,
+    match_mode_menu_labels,
     ocr_image_for_frame,
     pixel_phi_removal_mode_from_menu_label,
     pixel_phi_removal_mode_menu_values,
@@ -63,17 +52,12 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
     load_geometry_cache,
     stackable_dicom_paths,
 )
-from anonymizer.controller.ai.tseg.runtime_status import (
-    brain_structures_allowed,
-    face_blur_allowed,
-    get_ai_session,
-    harmonize_allowed,
-)
 from anonymizer.controller.create_projections import invalidate_projection_cache
 from anonymizer.controller.runner import Algorithm, OcrEditContext, RunOptions, run_job
 from anonymizer.controller.series_io import (
-    SERIES_VIEW_PROJECTION_COUNT,
     LoadedSeries,
+    SeriesProjections,
+    compute_series_projections,
     load_series_frames,
     save_series_frames,
 )
@@ -96,12 +80,25 @@ from anonymizer.view.ai.blur_face_results import (
     face_blur_mode_menu_values,
 )
 from anonymizer.view.ai.face_blur_review_dialog import show_face_blur_review_dialog
+from anonymizer.view.ai.features.availability import (
+    face_blur_allowed,
+    harmonize_allowed_for_modality,
+)
 from anonymizer.view.ai.harmonize_results import show_harmonize_results_view
 from anonymizer.view.common.app_window import AppCTkToplevel, refresh_app_window_menu
 from anonymizer.view.common.ctk_safe import mark_ctk_window_destroyed
 from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.common.job_poller import start_background_job
 from anonymizer.view.common.navigation import find_dataset_view_parent, return_to_dataset_view
+from anonymizer.view.series.anatomy_overlay import (
+    collect_primary_segment_voxels,
+    color_bgr_for_structure,
+    contour_mask_slice,
+    load_primary_segment_mask,
+    merge_structure_overlays,
+    order_structures_by_voxels,
+    shift_overlays_to_viewer_frames,
+)
 from anonymizer.view.series.image import ImageViewer
 
 if TYPE_CHECKING:
@@ -120,6 +117,7 @@ def show_series_view(
     controller: "ProjectController",
     series_path: Path,
     fonts: AppFonts | None = None,
+    preloaded: LoadedSeries | None = None,
 ) -> "SeriesView | None":
     """Open Series View with a loading shell while DICOM pixels are read in the background."""
     if not series_path.is_dir():
@@ -135,6 +133,7 @@ def show_series_view(
         controller=controller,
         series_path=series_path,
         fonts=fonts,
+        preloaded=preloaded,
     )
 
 
@@ -159,19 +158,20 @@ def ocr_results_available_for_edit_context(
 
 def clear_cache_button_visible(*, modality: str | None, already_harmonized: bool) -> bool:
     """Show Clear only after Harmonize has been applied (Dataset Harmonized=Yes)."""
-    return modality == "CT" and already_harmonized
+    from anonymizer.controller.ai.tseg.modality_profile import is_tseg_modality
+
+    return is_tseg_modality(modality) and already_harmonized
 
 
 def blur_face_toolbar_visible(
     *,
-    face_blur_feature_on: bool,
     face_blur_models_ready: bool,
     face_blur_already_applied: bool,
     cached_signal: CachedRegionSignal,
     eligibility_blocked: bool,
 ) -> bool:
     """Series View Face Blur presence: Harmonize-first HEAD cache, not metadata-only."""
-    if not face_blur_feature_on or not face_blur_models_ready:
+    if not face_blur_models_ready:
         return False
     if face_blur_already_applied:
         return False
@@ -182,15 +182,16 @@ def blur_face_toolbar_visible(
 
 def harmonize_button_visible(
     *,
-    harmonize_feature_on: bool,
     harmonize_models_ready: bool,
     modality: str | None,
     already_harmonized: bool,
 ) -> bool:
     """Show Harmonize Description only when it can be run (once per series until Clear)."""
-    if not harmonize_feature_on or not harmonize_models_ready:
+    from anonymizer.controller.ai.tseg.modality_profile import is_tseg_modality
+
+    if not harmonize_models_ready:
         return False
-    if modality != "CT":
+    if not is_tseg_modality(modality):
         return False
     return not already_harmonized
 
@@ -202,6 +203,7 @@ class SeriesView(AppCTkToplevel):
     PROGRESS_SLICE_THRESHOLD = 400
     DEFAULT_WIDTH = 960
     DEFAULT_HEIGHT = 640
+    MIN_IMAGE_VIEWPORT = 128
     STATUS_WRAPLENGTH = 600
     LOADING_SHELL_WIDTH = 420
     LOADING_SHELL_HEIGHT = 72
@@ -214,6 +216,8 @@ class SeriesView(AppCTkToplevel):
         controller: "ProjectController",
         series_path: Path,
         fonts: AppFonts | None = None,
+        *,
+        preloaded: LoadedSeries | None = None,
     ):
         super().__init__(master=parent)
         self._fonts = fonts
@@ -235,10 +239,15 @@ class SeriesView(AppCTkToplevel):
         self._load_progress: ctk.CTkProgressBar | None = None
         self._load_progress_after_id: str | None = None
         self._load_progress_value = 0.0
-        self._show_load_progress = self._series_needs_load_progress(series_path)
+        try:
+            self._cached_dcm_paths = stackable_dicom_paths(series_path)
+        except ValueError:
+            self._cached_dcm_paths = None
+        self._show_load_progress = len(self._cached_dcm_paths or []) > self.PROGRESS_SLICE_THRESHOLD
 
         self._ds: Dataset | None = None
         self._frames: np.ndarray | None = None
+        self._projections: SeriesProjections | None = None
         self._loaded: LoadedSeries | None = None
         self._slice_paths: tuple[Path, ...] = ()
         self.single_frame = False
@@ -261,6 +270,7 @@ class SeriesView(AppCTkToplevel):
         self._structure_contour_poll_after_id: str | None = None
 
         self._ui_rebuilding = False
+        self._startup_layout = False
         self._destroyed = False
         self._closing = False
 
@@ -278,6 +288,32 @@ class SeriesView(AppCTkToplevel):
 
         log_process_memory("series_view_init", extra=str(series_path.name))
 
+        if preloaded is not None:
+            projections = (
+                compute_series_projections(preloaded.frames)
+                if not preloaded.is_single_frame
+                else None
+            )
+            self._trace_load(
+                "preloaded",
+                slices=preloaded.frames.shape[0],
+                frame=f"{preloaded.frames.shape[2]}x{preloaded.frames.shape[1]}",
+            )
+            self.after_idle(
+                lambda: self._finish_loading(
+                    loaded=preloaded,
+                    frames=preloaded.frames,
+                    projections=projections,
+                    series_geometry=None,
+                )
+            )
+            return
+
+        self._trace_load(
+            "async_start",
+            slices=len(self._cached_dcm_paths or ()),
+            progress_shell=self._show_load_progress,
+        )
         threading.Thread(
             target=self._load_worker,
             name="SeriesViewLoadWorker",
@@ -387,10 +423,15 @@ class SeriesView(AppCTkToplevel):
     @staticmethod
     def _load_series_data(
         series_path: Path,
-    ) -> tuple[LoadedSeries, np.ndarray, SeriesGeometryResult | None]:
+        *,
+        dcm_paths: list[Path] | None = None,
+    ) -> tuple[LoadedSeries, np.ndarray, SeriesProjections | None, SeriesGeometryResult | None]:
         log_process_memory("load_series_data_start", extra=str(series_path.name))
-        loaded = load_series_frames(series_path)
-        frames = loaded.series_view_stack()
+        loaded = load_series_frames(series_path, dcm_paths=dcm_paths)
+        frames = loaded.frames
+        projections = (
+            compute_series_projections(frames) if not loaded.is_single_frame else None
+        )
 
         log_process_memory(
             "after_load_series",
@@ -399,7 +440,9 @@ class SeriesView(AppCTkToplevel):
         )
 
         series_geometry: SeriesGeometryResult | None = None
-        if getattr(loaded.metadata, "Modality", None) == "CT":
+        from anonymizer.controller.ai.tseg.modality_profile import is_tseg_modality
+
+        if is_tseg_modality(getattr(loaded.metadata, "Modality", None)):
             series_geometry = load_geometry_cache(series_path)
 
         log_process_memory(
@@ -407,7 +450,7 @@ class SeriesView(AppCTkToplevel):
             array=frames,
             extra=str(series_path.name),
         )
-        return loaded, frames, series_geometry
+        return loaded, frames, projections, series_geometry
 
     def _ensure_series_geometry(self) -> SeriesGeometryResult | None:
         self._series_geometry = ensure_series_geometry(
@@ -420,8 +463,11 @@ class SeriesView(AppCTkToplevel):
     def _load_worker(self) -> None:
         self._log_series_memory("load_worker_start")
         try:
-            payload = self._load_series_data(self._series_path)
-            _, frames, _ = payload
+            payload = self._load_series_data(
+                self._series_path,
+                dcm_paths=self._cached_dcm_paths,
+            )
+            _, frames, _, _ = payload
             self._log_series_memory("load_worker_done", array=frames)
             self._load_queue.put(("done", payload))
         except SeriesLoadError as exc:
@@ -443,16 +489,24 @@ class SeriesView(AppCTkToplevel):
                 break
 
             if kind == "done":
-                loaded, frames, series_geometry = payload
+                loaded, frames, projections, series_geometry = payload
+                self._trace_load(
+                    "worker_done",
+                    slices=frames.shape[0],
+                    frame=f"{frames.shape[2]}x{frames.shape[1]}",
+                    projections=projections is not None,
+                )
                 self.after_idle(
-                    lambda loaded=loaded, frames=frames, g=series_geometry: self._finish_loading(
+                    lambda loaded=loaded, frames=frames, projections=projections, g=series_geometry: self._finish_loading(
                         loaded=loaded,
                         frames=frames,
+                        projections=projections,
                         series_geometry=g,
                     )
                 )
                 return
             if kind == "error":
+                self._trace_load("worker_error", error=str(payload))
                 self._loading = False
                 logger.error("Could not open series view for %s: %s", self._series_path, payload)
                 messagebox.showerror(
@@ -470,21 +524,29 @@ class SeriesView(AppCTkToplevel):
         *,
         loaded: LoadedSeries,
         frames: np.ndarray,
+        projections: SeriesProjections | None,
         series_geometry: SeriesGeometryResult | None,
     ) -> None:
         self._log_series_memory("finish_loading_start", array=frames)
+        self._trace_load(
+            "finish_loading",
+            slices=frames.shape[0],
+            frame=f"{frames.shape[2]}x{frames.shape[1]}",
+            projections=projections is not None,
+        )
         self._loading = False
         self._loaded = loaded
         self._ds = loaded.metadata
         self._frames = frames
+        self._projections = projections
         self._slice_paths = loaded.slice_paths
         self._series_geometry = series_geometry
         self.single_frame = loaded.is_single_frame
         self._dicom_wl, self._dicom_ww = loaded.default_window
 
-        self.withdraw()
         self._stop_load_progress_pulse()
         if self._loading_shell is not None:
+            self.withdraw()
             self._loading_shell.destroy()
             self._loading_shell = None
             self._load_progress = None
@@ -493,19 +555,16 @@ class SeriesView(AppCTkToplevel):
         self.resizable(True, True)
         self._build_ui()
         self._log_series_memory("after_build_ui", array=self._frames)
+        self._trace_load("build_ui_done")
         self._update_title()
-        self.deiconify()
+        self._present_series_view()
         self.lift()
         self.focus_force()
-        self._apply_initial_viewer_display()
-        self._log_series_memory("after_viewer_initial_display", array=self._frames)
-        self.after_idle(self._focus_image_viewer_for_keys)
-        self.after_idle(self._refresh_analysis_cache_ui)
 
     def _remember_dicom_wl_ww(self, ds: Dataset | None = None) -> tuple[float, float]:
         """Read and cache WL/WW from DICOM headers (not viewer-adjusted values)."""
         source: Dataset | None = ds if ds is not None else self._ds
-        if self._slice_paths:
+        if source is None and self._slice_paths:
             try:
                 source = dcmread(str(self._slice_paths[0]), stop_before_pixels=True, force=True)
             except Exception as exc:
@@ -531,6 +590,113 @@ class SeriesView(AppCTkToplevel):
         wl, ww = self._viewer_wl_ww()
         self.image_viewer.set_wlww_sync(wl, ww)
 
+    def _apply_fast_startup_chrome(self) -> None:
+        """Toolbar and status chrome that does not read segmentation masks."""
+        self._apply_ai_feature_visibility()
+        self._refresh_ocr_toolbar_buttons()
+        self._show_default_context_line()
+        self._refresh_series_processing_status()
+
+    def _minimum_window_size(self) -> tuple[int, int]:
+        """Smallest window that keeps whitelist, image, histogram, and player visible."""
+        pad = self.PAD
+        whitelist_w = 200
+        viewer = getattr(self, "image_viewer", None)
+        data_w = ImageViewer.DATA_PANEL_WIDTH + (2 * ImageViewer.PAD if viewer else 12)
+        min_w = whitelist_w + self.MIN_IMAGE_VIEWPORT + data_w + 6 * pad
+
+        toolbar_h = 96
+        if hasattr(self, "control_frame"):
+            with contextlib.suppress(tk.TclError):
+                self.update_idletasks()
+                toolbar_h = max(toolbar_h, self.control_frame.winfo_reqheight())
+        image_stack_h = self.MIN_IMAGE_VIEWPORT + 24
+        rhs_h = ImageViewer.DATA_PANEL_MIN_HEIGHT
+        min_h = max(rhs_h, image_stack_h) + toolbar_h + 4 * pad
+
+        max_w = int(self.winfo_screenwidth() * ImageViewer.MAX_SCREEN_PERCENTAGE)
+        max_h = int(self.winfo_screenheight() * ImageViewer.MAX_SCREEN_PERCENTAGE)
+        return min(min_w, max_w), min(min_h, max_h)
+
+    def _size_window_for_native_image(self) -> None:
+        """While withdrawn, size the window so the image column can reach native width."""
+        if self._frames is None:
+            self._fit_window_to_content()
+            return
+        self.update_idletasks()
+        native_w = int(self._frames.shape[2])
+        native_h = int(self._frames.shape[1])
+        viewer = getattr(self, "image_viewer", None)
+        data_panel_w = 0
+        scrollbar_h = 0
+        if viewer is not None:
+            data_panel_w = viewer.DATA_PANEL_WIDTH
+            if viewer.num_images > 1 and hasattr(viewer, "scrollbar"):
+                scrollbar_h = max(viewer.scrollbar.winfo_reqheight(), 20)
+            viewer_min_w = native_w + data_panel_w + 2 * viewer.PAD
+            viewer_min_h = max(native_h, viewer.DATA_PANEL_MIN_HEIGHT) + scrollbar_h + 2 * viewer.PAD
+        else:
+            viewer_min_w = native_w
+            viewer_min_h = native_h
+        whitelist_w = self._whitelist_frame.winfo_reqwidth() if hasattr(self, "_whitelist_frame") else 0
+        chrome_w = whitelist_w + viewer_min_w + 4 * self.PAD
+        control_h = self.control_frame.winfo_reqheight() if hasattr(self, "control_frame") else 0
+        chrome_h = viewer_min_h + control_h + 4 * self.PAD + 20
+        max_w = int(self.winfo_screenwidth() * ImageViewer.MAX_SCREEN_PERCENTAGE)
+        max_h = int(self.winfo_screenheight() * ImageViewer.MAX_SCREEN_PERCENTAGE)
+        width = min(max(chrome_w, self.DEFAULT_WIDTH), max_w)
+        height = min(max(chrome_h, self.DEFAULT_HEIGHT), max_h)
+        min_w, min_h = self._minimum_window_size()
+        self.minsize(min_w, min_h)
+        pos_x, pos_y = self.winfo_x(), self.winfo_y()
+        if pos_x <= 0 and pos_y <= 0:
+            self._position_near_parent(width=width, height=height)
+        else:
+            self.geometry(f"{width}x{height}+{max(0, pos_x)}+{max(0, pos_y)}")
+
+    def _present_series_view(self) -> None:
+        """Single visible paint: fast chrome, native-aware geometry, then defer segmentation."""
+        self._startup_layout = True
+        self._apply_fast_startup_chrome()
+        self._size_window_for_native_image()
+        viewer = getattr(self, "image_viewer", None)
+
+        def _visible_startup_paint() -> None:
+            if not self._widget_alive():
+                return
+            self.deiconify()
+            self.update_idletasks()
+            self._trace_load(
+                "window_mapped",
+                geometry=f"{self.winfo_width()}x{self.winfo_height()}",
+                req=f"{self.winfo_reqwidth()}x{self.winfo_reqheight()}",
+            )
+            if viewer is not None:
+                self._trace_load("show_initial_frame")
+                viewer.show_initial_frame()
+                viewer.mark_startup_complete()
+                viewer.sync_viewport_after_layout(deferred=False)
+                self._trace_load(
+                    "startup_complete",
+                    display=viewer.get_dimensions_text(),
+                    frame_index=viewer.current_image_index,
+                    native_match=viewer.view_matches_actual(),
+                )
+            else:
+                self._trace_load("startup_complete", display="no_image_viewer")
+            self._startup_layout = False
+            self._log_series_memory("after_viewer_initial_display", array=self._frames)
+            self.after_idle(self._load_segmentation_chrome)
+            self.after_idle(self._focus_image_viewer_for_keys)
+            self.lift()
+            self.focus_force()
+
+        self.after_idle(_visible_startup_paint)
+
+    def _load_segmentation_chrome(self) -> None:
+        """Slow segmentation panel population (mask disk scan); runs after first paint."""
+        self._refresh_segmentation_controls(defer_render=True)
+
     def _fit_window_to_content(self) -> None:
         """Expand the window to fit the built UI (V18 auto-size after synchronous build)."""
         self.update_idletasks()
@@ -540,8 +706,8 @@ class SeriesView(AppCTkToplevel):
         max_h = int(self.winfo_screenheight() * ImageViewer.MAX_SCREEN_PERCENTAGE)
         width = min(req_w, max_w)
         height = min(req_h, max_h)
-        # Lock minsize to fitted content so the toolbar buttons cannot be clipped by shrink.
-        self.minsize(width, height)
+        min_w, min_h = self._minimum_window_size()
+        self.minsize(min_w, min_h)
 
         pos_x, pos_y = self.winfo_x(), self.winfo_y()
         if pos_x <= 0 and pos_y <= 0:
@@ -560,30 +726,17 @@ class SeriesView(AppCTkToplevel):
         req_h = min(max(self.winfo_reqheight(), self.DEFAULT_HEIGHT), max_h)
         cur_w = max(self.winfo_width(), 1)
         cur_h = max(self.winfo_height(), 1)
-        self.minsize(req_w, req_h)
+        min_w, min_h = self._minimum_window_size()
+        self.minsize(min_w, min_h)
         if cur_w < req_w or cur_h < req_h:
             self.geometry(f"{max(cur_w, req_w)}x{max(cur_h, req_h)}")
-            if hasattr(self, "image_viewer") and self.image_viewer is not None:
+            if (
+                not self._startup_layout
+                and hasattr(self, "image_viewer")
+                and self.image_viewer is not None
+            ):
                 with contextlib.suppress(tk.TclError):
                     self.image_viewer.sync_viewport_after_layout()
-
-    def _apply_viewer_display_sizing(self, *, detach_companion: bool = False) -> None:
-        """Apply V18-style viewer sizing after layout (single-pane or dual-pane)."""
-        if not hasattr(self, "image_viewer") or self.image_viewer is None:
-            return
-        viewer = self.image_viewer
-        if detach_companion:
-            viewer.detach_companion_stack()
-        self.update_idletasks()
-        viewer._resize_to_viewport_enabled = False
-        viewer._set_initial_size()
-        self._fit_window_to_content()
-        viewer.sync_viewport_after_layout()
-        viewer._resize_to_viewport_enabled = True
-
-    def _apply_initial_viewer_display(self) -> None:
-        """Apply master-style viewer sizing once the Series View window is mapped."""
-        self._apply_viewer_display_sizing(detach_companion=True)
 
     def _update_status_label_wraplength(self) -> None:
         if not hasattr(self, "_status_label"):
@@ -596,6 +749,11 @@ class SeriesView(AppCTkToplevel):
         if event.widget is not self or self._loading or self._ui_rebuilding:
             return
         self._update_status_label_wraplength()
+        if self._startup_layout:
+            return
+        viewer = getattr(self, "image_viewer", None)
+        if viewer is not None and viewer._startup_complete:
+            viewer.sync_viewport_after_layout()
 
     def _capture_whitelist_items(self) -> list[str]:
         if not hasattr(self, "whitelist"):
@@ -815,10 +973,8 @@ class SeriesView(AppCTkToplevel):
         self._restore_whitelist_items(whitelist_items)
 
         self._update_title()
-        self.deiconify()
+        self._present_series_view()
         self.lift()
-        self._apply_initial_viewer_display()
-        self._refresh_analysis_cache_ui()
 
     def _build_ui(self) -> None:
         assert self._ds is not None and self._frames is not None
@@ -911,6 +1067,7 @@ class SeriesView(AppCTkToplevel):
             on_segmentation_toggle=self._on_segmentation_toggle,
             on_slice_index_changed=self._ensure_segmentation_overlays_for_frame,
             clear_callback=self.clear_ts_cache_button_clicked,
+            series_projections=self._projections,
         )
         self.image_viewer.grid(row=0, column=1, sticky="nsew")
         self.image_viewer.detach_companion_stack()
@@ -978,21 +1135,13 @@ class SeriesView(AppCTkToplevel):
             command=self.harmonize_description_button_clicked,
         )
         self.harmonize_button.grid(row=0, column=0, padx=(self.PAD, 2), pady=0, sticky="e")
-        self._include_brain_structures_var = tk.IntVar(value=0)
-        self.include_brain_structures_checkbox = ctk.CTkCheckBox(
-            harmonize_blur_group,
-            text=_("Brain structures"),
-            variable=self._include_brain_structures_var,
-            width=130,
-        )
-        self.include_brain_structures_checkbox.grid(row=0, column=1, padx=2, pady=0, sticky="e")
         self.blur_face_button = ctk.CTkButton(
             harmonize_blur_group,
             width=120,
             text=_("Blur Face"),
             command=self.blur_face_button_clicked,
         )
-        self.blur_face_button.grid(row=0, column=2, padx=2, pady=0, sticky="e")
+        self.blur_face_button.grid(row=0, column=1, padx=2, pady=0, sticky="e")
         self.blur_face_mode_var = tk.StringVar(value=face_blur_mode_menu_values()[0])
         self.blur_face_mode_menu = ctk.CTkOptionMenu(
             harmonize_blur_group,
@@ -1000,14 +1149,11 @@ class SeriesView(AppCTkToplevel):
             values=face_blur_mode_menu_values(),
             variable=self.blur_face_mode_var,
         )
-        self.blur_face_mode_menu.grid(row=0, column=3, padx=(2, self.PAD), pady=0, sticky="e")
+        self.blur_face_mode_menu.grid(row=0, column=2, padx=(2, self.PAD), pady=0, sticky="e")
         # Harmonize / Face Blur presence is applied below (not greyed out). Clear lives in Segmentation panel.
         self.harmonize_button.grid_remove()
-        self.include_brain_structures_checkbox.grid_remove()
         self.blur_face_button.grid_remove()
         self.blur_face_mode_menu.grid_remove()
-        self._apply_ai_feature_visibility()
-        self._refresh_ocr_toolbar_buttons()
 
         self._status_label = ctk.CTkLabel(
             self.control_frame,
@@ -1048,7 +1194,6 @@ class SeriesView(AppCTkToplevel):
         )
         self.save_button.grid(row=2, column=2, padx=self.PAD, pady=(0, self.PAD), sticky="e")
         self.save_button.configure(state="disabled")
-        self._show_default_context_line()
         self._refresh_series_processing_status()
 
         if self._ds is None or self._ds.Modality is None:
@@ -1063,8 +1208,8 @@ class SeriesView(AppCTkToplevel):
             self._load_whitelist_match_settings()
 
     def load_frames(self, series_path: Path) -> tuple[Dataset, np.ndarray, tuple[Path, ...]]:
-        """Loads, processes, and combines series frames and projections."""
-        loaded, frames, _geometry = self._load_series_data(series_path)
+        """Loads anatomical frames (no projection prefix in the scroll stack)."""
+        loaded, frames, _projections, _geometry = self._load_series_data(series_path)
         return loaded.metadata, frames, loaded.slice_paths
 
     def _update_title(self):
@@ -1080,7 +1225,9 @@ class SeriesView(AppCTkToplevel):
         refresh_app_window_menu(self)
 
     def _series_context_line(self) -> str:
-        geometry = self._ensure_series_geometry()
+        geometry = self._series_geometry
+        if geometry is None and not self._startup_layout:
+            geometry = self._ensure_series_geometry()
         if geometry is None:
             return ""
         return format_series_view_geometry_line(geometry)
@@ -1117,10 +1264,10 @@ class SeriesView(AppCTkToplevel):
     def _harmonize_button_visible(self) -> bool:
         anon_uid = self._anon_series_uid()
         already_harmonized = anon_uid is not None and self._controller.series_is_harmonized(anon_uid)
+        modality = getattr(self._ds, "Modality", None)
         return harmonize_button_visible(
-            harmonize_feature_on=get_ai_session().enable_harmonize,
-            harmonize_models_ready=harmonize_allowed(),
-            modality=getattr(self._ds, "Modality", None),
+            harmonize_models_ready=harmonize_allowed_for_modality(modality),
+            modality=modality,
             already_harmonized=already_harmonized,
         )
 
@@ -1132,7 +1279,6 @@ class SeriesView(AppCTkToplevel):
         if cached == CachedRegionSignal.HEAD:
             eligibility = self._face_blur_eligibility()
         return blur_face_toolbar_visible(
-            face_blur_feature_on=get_ai_session().enable_face_blur,
             face_blur_models_ready=face_blur_allowed(),
             face_blur_already_applied=already_applied,
             cached_signal=cached,
@@ -1174,20 +1320,8 @@ class SeriesView(AppCTkToplevel):
 
     def _apply_ai_feature_visibility(self) -> None:
         changed = False
-        harmonize_visible = False
         if hasattr(self, "harmonize_button"):
-            harmonize_visible = self._harmonize_button_visible()
-            changed |= self._set_toolbar_widget_present(self.harmonize_button, harmonize_visible)
-        if hasattr(self, "include_brain_structures_checkbox"):
-            brain_visible = harmonize_visible and brain_structures_allowed()
-            was_mapped = False
-            with contextlib.suppress(tk.TclError):
-                was_mapped = bool(self.include_brain_structures_checkbox.winfo_ismapped())
-            changed |= self._set_toolbar_widget_present(
-                self.include_brain_structures_checkbox, brain_visible
-            )
-            if brain_visible and not was_mapped:
-                self._include_brain_structures_var.set(1)
+            changed |= self._set_toolbar_widget_present(self.harmonize_button, self._harmonize_button_visible())
         if hasattr(self, "blur_face_button"):
             face_visible = self._blur_face_toolbar_visible()
             changed |= self._set_toolbar_widget_present(self.blur_face_button, face_visible)
@@ -1214,17 +1348,15 @@ class SeriesView(AppCTkToplevel):
             self._status_label.configure(text=message)
             self.update_idletasks()
 
-    def _refresh_analysis_cache_ui(self) -> None:
-        self._apply_ai_feature_visibility()
-        self._refresh_segmentation_controls()
-        self._show_default_context_line()
-        self._refresh_series_processing_status()
+    def _refresh_analysis_cache_ui(self, *, defer_render: bool = False) -> None:
+        self._apply_fast_startup_chrome()
+        self._refresh_segmentation_controls(defer_render=defer_render)
 
     def _seg_dir(self) -> Path:
         return resolve_series_cache_dir(self._series_path) / "seg"
 
     def _segmentation_frame_offset(self) -> int:
-        return 0 if self.single_frame else SERIES_VIEW_PROJECTION_COUNT
+        return 0
 
     def _cancel_structure_contour_job(self, name: str) -> None:
         cancel = self._structure_contour_cancel.pop(name, None)
@@ -1253,25 +1385,23 @@ class SeriesView(AppCTkToplevel):
             self.image_viewer.clear_cache()
             self.image_viewer.load_and_display_image(self.image_viewer.current_image_index)
 
-    def _push_merged_segmentation_overlays(self) -> None:
+    def _push_merged_segmentation_overlays(self, *, defer_render: bool = False) -> None:
         if not hasattr(self, "image_viewer"):
             return
         merged = merge_structure_overlays(self._structure_overlay_by_name)
-        viewer_overlays = shift_overlays_to_viewer_frames(
-            merged, frame_offset=self._segmentation_frame_offset()
-        )
+        viewer_overlays = shift_overlays_to_viewer_frames(merged, frame_offset=0)
         if viewer_overlays:
             self.image_viewer.active_layers.add(LayerType.SEGMENTATIONS)
         else:
             self.image_viewer.active_layers.discard(LayerType.SEGMENTATIONS)
-        # Clear prior segmentation lists for all known frames, then apply merge.
         for frame_index in list(self.image_viewer.overlay_data.keys()):
             self.image_viewer.overlay_data[frame_index].segmentations = []
         if viewer_overlays:
             self.image_viewer.set_segmentation_overlays(viewer_overlays)
-        else:
+        elif not defer_render:
             self.image_viewer.clear_cache()
-            self.image_viewer.load_and_display_image(self.image_viewer.current_image_index)
+            if self.image_viewer._startup_complete:
+                self.image_viewer.load_and_display_image(self.image_viewer.current_image_index)
 
     def _anatomical_slice_for_viewer_frame(self, frame_index: int) -> int | None:
         slice_index = frame_index - self._segmentation_frame_offset()
@@ -1441,12 +1571,13 @@ class SeriesView(AppCTkToplevel):
         self._clear_structure_latch_state(name)
         self._push_merged_segmentation_overlays()
 
-    def _refresh_segmentation_controls(self) -> None:
+    def _refresh_segmentation_controls(self, *, defer_render: bool = False) -> None:
         if not hasattr(self, "image_viewer"):
             return
         seg_dir = self._seg_dir()
         if not seg_dir.is_dir():
-            self._invalidate_structure_overlays()
+            if self._structure_overlay_by_name or self.image_viewer.get_active_segmentation_names():
+                self._invalidate_structure_overlays()
             self.image_viewer.set_segmentation_structures([])
             return
         present = collect_primary_segment_voxels(seg_dir)
@@ -1467,7 +1598,7 @@ class SeriesView(AppCTkToplevel):
                 logger.exception("Failed to refresh segmentation overlay for %s", name)
                 self.image_viewer._active_segmentation_names.discard(name)
         self.image_viewer._refresh_segmentation_button_styles()
-        self._push_merged_segmentation_overlays()
+        self._push_merged_segmentation_overlays(defer_render=defer_render)
 
     def _on_series_description_updated(self) -> None:
         self._update_title()
@@ -1491,7 +1622,7 @@ class SeriesView(AppCTkToplevel):
             self._series_path,
             ds=self._ds,
             geometry=geometry,
-            enable_tseg_face=get_ai_session().enable_face_blur,
+            enable_tseg_face=face_blur_allowed(),
             face_blur_already_applied=(
                 self._controller.series_has_face_blur(str(self._ds.SeriesInstanceUID))
                 if self._ds is not None
@@ -1586,12 +1717,14 @@ class SeriesView(AppCTkToplevel):
         self.image_viewer.set_overlay_propagation(self.edit_context == EditContext.SERIES)
         self._refresh_ocr_toolbar_buttons()
 
-    def regenerate_series_projections(self):
+    def regenerate_series_projections(self) -> None:
         if self._frames is not None and not self.single_frame:
             logger.info("Regenerate Series Projections")
-            self._frames[0] = np.min(self._frames, axis=0)
-            self._frames[1] = np.mean(self._frames, axis=0).astype(self._frames.dtype)
-            self._frames[2] = np.max(self._frames, axis=0)
+            self._projections = compute_series_projections(self._frames)
+            if hasattr(self, "image_viewer"):
+                self.image_viewer.set_series_projections(self._projections)
+                if self.image_viewer._is_projection_mode():
+                    self.image_viewer.refresh_current_image()
 
     def process_single_frame_ocr(self, frame_index: int):
         """Performs OCR on a single frame (sync fallback — prefer background detect_text job)."""
@@ -1905,19 +2038,15 @@ class SeriesView(AppCTkToplevel):
             self.update_status(_("Blackout applied to all images"))
 
     def harmonize_description_button_clicked(self):
-        if self._ds is None or getattr(self._ds, "Modality", None) != "CT":
+        from anonymizer.controller.ai.tseg.modality_profile import is_tseg_modality
+
+        if self._ds is None or not is_tseg_modality(getattr(self._ds, "Modality", None)):
             return
-        if not get_ai_session().enable_harmonize:
+        modality = getattr(self._ds, "Modality", None)
+        if not harmonize_allowed_for_modality(modality):
             messagebox.showinfo(
                 title=_("Harmonize"),
-                message=_("Harmonize is not enabled. Click AI Features on the Welcome screen."),
-                parent=self,
-            )
-            return
-        if not harmonize_allowed():
-            messagebox.showinfo(
-                title=_("Harmonize"),
-                message=_("Harmonize is not ready yet. Click AI Features on the Welcome screen to download models."),
+                message=_("Harmonize is not ready yet. Click AI Features to download models."),
                 parent=self,
             )
             return
@@ -1925,10 +2054,6 @@ class SeriesView(AppCTkToplevel):
         logger.info("Harmonize starting for %s", self._series_path)
         with contextlib.suppress(tk.TclError):
             self.harmonize_button.grid_remove()
-            self.include_brain_structures_checkbox.grid_remove()
-        include_brain = bool(
-            brain_structures_allowed() and self._include_brain_structures_var.get() == 1
-        )
         show_harmonize_results_view(
             self,
             series_path=self._series_path,
@@ -1937,7 +2062,6 @@ class SeriesView(AppCTkToplevel):
             fonts=self._fonts,
             anon_model=self._controller.anonymizer.model,
             on_series_description_updated=self._on_series_description_updated,
-            include_brain_structures=include_brain,
         )
         self._series_geometry = None
         self._face_blur_eligibility_cache = None
@@ -1946,7 +2070,9 @@ class SeriesView(AppCTkToplevel):
         self._refresh_series_processing_status()
 
     def clear_ts_cache_button_clicked(self) -> None:
-        if self._ds is None or getattr(self._ds, "Modality", None) != "CT":
+        from anonymizer.controller.ai.tseg.modality_profile import is_tseg_modality
+
+        if self._ds is None or not is_tseg_modality(getattr(self._ds, "Modality", None)):
             return
         if not self._clear_ts_cache_button_visible():
             return
@@ -2090,7 +2216,7 @@ class SeriesView(AppCTkToplevel):
         self._persist_whitelist_if_changed()
         if save_series_frames(
             self._series_path,
-            self._loaded.series_view_slices_from_stack(self._frames) if self._loaded else self._frames,
+            self._frames,
             self._ds,
         ):
             logger.info(f"Saved series frames to {self._series_path}")
@@ -2106,12 +2232,11 @@ class SeriesView(AppCTkToplevel):
                         texts_by_frame[frame_index] = merged
                 anon_series_uid = str(self._ds.SeriesInstanceUID)
                 if texts_by_frame:
-                    projection_count = 0 if self.single_frame else SERIES_VIEW_PROJECTION_COUNT
                     apply_series_view_pixel_phi(
                         self._controller.anonymizer.model,
                         self._slice_paths,
                         texts_by_frame,
-                        projection_frame_count=projection_count,
+                        projection_frame_count=0,
                         anon_series_uid=anon_series_uid,
                     )
                 elif self._pixel_phi_dirty:
@@ -2218,6 +2343,12 @@ class SeriesView(AppCTkToplevel):
     def _escape_keypress(self, event):
         logger.info("_escape_pressed")
         self._on_cancel()
+
+    def _trace_load(self, step: str, **details: object) -> None:
+        """Structured INFO trace for Series View open / startup sequencing."""
+        parts = [f"step={step}", f"series={self._series_path.name}"]
+        parts.extend(f"{key}={value}" for key, value in details.items())
+        logger.info("SeriesView load: %s", " ".join(parts))
 
     def _log_series_memory(
         self,

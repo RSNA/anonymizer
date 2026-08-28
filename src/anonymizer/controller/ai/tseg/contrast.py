@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-from anonymizer.controller.ai.tseg.runtime import sequential_ml_context
+from anonymizer.controller.ai.tseg.ml_env import sequential_ml_context
 from anonymizer.utils.memory import collect_garbage_safe, release_accelerator_caches
 
 logger = logging.getLogger(__name__)

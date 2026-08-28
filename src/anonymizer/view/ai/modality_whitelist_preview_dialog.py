@@ -8,7 +8,7 @@ from pathlib import Path
 
 import customtkinter as ctk
 
-from anonymizer.controller.ai.ocr_whitelist_match import OcrWhitelistMatchSettings, describe_match_settings
+from anonymizer.controller.ai.remove_pixel_phi import OcrWhitelistMatchSettings, describe_match_settings
 from anonymizer.controller.ai_batch_process import (
     effective_modality_whitelist_match_settings,
     effective_modality_whitelists,

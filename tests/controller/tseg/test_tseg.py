@@ -55,7 +55,6 @@ def test_analyze_series_chest_mocked(
     assert result.error is None
     assert result.dominant_region == "Chest"
     assert result.body_parts_present == "Chest"
-    assert result.radlex_series_description == "CT Chest Without Contrast"
     mock_nifti.assert_called_once()
 
 

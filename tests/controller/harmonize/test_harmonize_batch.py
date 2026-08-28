@@ -41,7 +41,7 @@ def _ct_dataset() -> Dataset:
     return ds
 
 
-@patch("anonymizer.controller.ai.harmonize._load_ct_series_dataset")
+@patch("anonymizer.controller.ai.harmonize.pipeline._load_ct_series_dataset")
 def test_enumerate_ct_series_for_studies_filters_non_ct(
     mock_load: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
@@ -59,7 +59,7 @@ def test_enumerate_ct_series_for_studies_filters_non_ct(
     assert series_paths[0].name == "series_ct"
 
 
-@patch("anonymizer.controller.ai.harmonize._load_ct_series_dataset")
+@patch("anonymizer.controller.ai.harmonize.pipeline._load_tseg_series_dataset")
 def test_study_harmonize_status_true_when_all_ct_series_harmonized(
     mock_load: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
@@ -72,7 +72,7 @@ def test_study_harmonize_status_true_when_all_ct_series_harmonized(
     mock_load.assert_not_called()
 
 
-@patch("anonymizer.controller.ai.harmonize._load_ct_series_dataset")
+@patch("anonymizer.controller.ai.harmonize.pipeline._load_tseg_series_dataset")
 def test_study_harmonize_status_false_when_any_ct_series_not_harmonized(
     mock_load: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
@@ -85,7 +85,7 @@ def test_study_harmonize_status_false_when_any_ct_series_not_harmonized(
     mock_load.assert_not_called()
 
 
-@patch("anonymizer.controller.ai.harmonize._load_ct_series_dataset")
+@patch("anonymizer.controller.ai.harmonize.pipeline._load_tseg_series_dataset")
 def test_study_harmonize_status_false_when_no_ct_series(
     mock_load: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
@@ -98,8 +98,8 @@ def test_study_harmonize_status_false_when_no_ct_series(
     mock_load.assert_not_called()
 
 
-@patch("anonymizer.controller.ai.harmonize.harmonize_series")
-@patch("anonymizer.controller.ai.harmonize._load_ct_series_dataset")
+@patch("anonymizer.controller.ai.harmonize.pipeline.harmonize_series")
+@patch("anonymizer.controller.ai.harmonize.pipeline._load_tseg_series_dataset")
 def test_harmonize_and_apply_series_skips_when_model_harmonized(
     mock_load: MagicMock,
     mock_harmonize: MagicMock,
@@ -121,9 +121,9 @@ def test_harmonize_and_apply_series_skips_when_model_harmonized(
     mock_harmonize.assert_not_called()
 
 
-@patch("anonymizer.controller.ai.harmonize.harmonize_series")
-@patch("anonymizer.controller.ai.harmonize.series_description_is_harmonized", return_value=True)
-@patch("anonymizer.controller.ai.harmonize._load_ct_series_dataset")
+@patch("anonymizer.controller.ai.harmonize.pipeline.harmonize_series")
+@patch("anonymizer.controller.ai.harmonize.pipeline.series_description_is_harmonized", return_value=True)
+@patch("anonymizer.controller.ai.harmonize.pipeline._load_tseg_series_dataset")
 def test_harmonize_and_apply_series_skips_already_harmonized(
     mock_load: MagicMock,
     mock_is_harmonized: MagicMock,
@@ -142,10 +142,10 @@ def test_harmonize_and_apply_series_skips_already_harmonized(
     mock_harmonize.assert_not_called()
 
 
-@patch("anonymizer.controller.ai.harmonize.apply_harmonized_description", return_value=True)
-@patch("anonymizer.controller.ai.harmonize.harmonize_series")
-@patch("anonymizer.controller.ai.harmonize.series_description_is_harmonized", return_value=False)
-@patch("anonymizer.controller.ai.harmonize._load_ct_series_dataset")
+@patch("anonymizer.controller.ai.harmonize.pipeline.apply_harmonized_description", return_value=True)
+@patch("anonymizer.controller.ai.harmonize.pipeline.harmonize_series")
+@patch("anonymizer.controller.ai.harmonize.pipeline.series_description_is_harmonized", return_value=False)
+@patch("anonymizer.controller.ai.harmonize.pipeline._load_tseg_series_dataset")
 def test_harmonize_and_apply_series_applies_merged_description(
     mock_load: MagicMock,
     _mock_is_harmonized: MagicMock,
@@ -170,7 +170,7 @@ def test_harmonize_and_apply_series_applies_merged_description(
 
 
 @patch("anonymizer.controller.series_io.apply_series_description", return_value=True)
-@patch("anonymizer.controller.ai.harmonize._load_series_dataset")
+@patch("anonymizer.controller.ai.harmonize.pipeline._load_series_dataset")
 def test_apply_harmonized_description_uses_set_series_harmonized_description(
     mock_load: MagicMock,
     _mock_apply_dicom: MagicMock,
@@ -189,7 +189,7 @@ def test_apply_harmonized_description_uses_set_series_harmonized_description(
 
 
 @patch("anonymizer.controller.series_io.apply_series_description", return_value=True)
-@patch("anonymizer.controller.ai.harmonize._load_series_dataset")
+@patch("anonymizer.controller.ai.harmonize.pipeline._load_series_dataset")
 def test_apply_harmonized_description_skips_dicom_when_unchanged(
     mock_load: MagicMock,
     mock_apply_dicom: MagicMock,
@@ -209,9 +209,9 @@ def test_apply_harmonized_description_skips_dicom_when_unchanged(
     anon_model.set_series_harmonized_description.assert_called_once_with("1.2.3", "Ch Ax PortVen")
 
 
-@patch("anonymizer.controller.ai.harmonize.tseg_batch_session")
-@patch("anonymizer.controller.ai.harmonize.harmonize_and_apply_series")
-@patch("anonymizer.controller.ai.harmonize.enumerate_ct_series_for_studies")
+@patch("anonymizer.controller.ai.harmonize.pipeline.tseg_batch_session")
+@patch("anonymizer.controller.ai.harmonize.pipeline.harmonize_and_apply_series")
+@patch("anonymizer.controller.ai.harmonize.pipeline.enumerate_tseg_series_for_studies")
 def test_harmonize_studies_batch_honours_cancel(
     mock_enumerate: MagicMock,
     mock_apply_series: MagicMock,
@@ -399,7 +399,6 @@ def test_format_anatomy_regions_summary_includes_dominant_region() -> None:
             iv_contrast=False,
             contrast_phase="",
             phase_probability=0.0,
-            radlex_series_description="",
         )
     )
     assert summary == "Head, Chest (dominant: Head)"
@@ -407,7 +406,7 @@ def test_format_anatomy_regions_summary_includes_dominant_region() -> None:
 
 def test_format_playbook_analysis_log_lines_match_table() -> None:
     from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
-    from anonymizer.controller.ai.tseg.radlex_playbook import (
+    from anonymizer.controller.ai.harmonize.playbook import (
         PlaybookHarmonizeAttributes,
         format_playbook_analysis_log_lines,
         harmonize_analysis_rows,
@@ -422,7 +421,6 @@ def test_format_playbook_analysis_log_lines_match_table() -> None:
         iv_contrast=True,
         contrast_phase="portal_venous",
         phase_probability=0.91,
-        radlex_series_description="",
     )
     geometry = SeriesGeometryResult(
         plane="axial",
@@ -467,7 +465,7 @@ def test_format_playbook_analysis_log_lines_match_table() -> None:
 def test_format_harmonize_batch_contrast_log_lines(tmp_path: Path) -> None:
     from anonymizer.controller.ai.harmonize import HarmonizedResult, format_harmonize_batch_contrast_log_lines
     from anonymizer.controller.ai.tseg.contrast import save_contrast_statistics
-    from anonymizer.controller.ai.tseg.radlex_playbook import PlaybookHarmonizeAttributes
+    from anonymizer.controller.ai.harmonize.playbook import PlaybookHarmonizeAttributes
     from anonymizer.controller.ai.tseg.segment import series_cache_dir
 
     series_dir = tmp_path / "series"
@@ -493,7 +491,6 @@ def test_format_harmonize_batch_contrast_log_lines(tmp_path: Path) -> None:
         iv_contrast=True,
         contrast_phase="portal_venous",
         phase_probability=0.91,
-        radlex_series_description="Abd Ax C+",
     )
     result = HarmonizedResult(
         series_directory=series_dir,
@@ -542,9 +539,9 @@ def test_format_harmonize_batch_contrast_log_lines(tmp_path: Path) -> None:
     assert "Determining contrast phase" in text
 
 
-@patch("anonymizer.controller.ai.harmonize.tseg_batch_session")
-@patch("anonymizer.controller.ai.harmonize.harmonize_and_apply_series")
-@patch("anonymizer.controller.ai.harmonize.enumerate_ct_series_for_studies")
+@patch("anonymizer.controller.ai.harmonize.pipeline.tseg_batch_session")
+@patch("anonymizer.controller.ai.harmonize.pipeline.harmonize_and_apply_series")
+@patch("anonymizer.controller.ai.harmonize.pipeline.enumerate_tseg_series_for_studies")
 def test_harmonize_studies_batch_uses_tseg_batch_session_and_hooks(
     mock_enumerate: MagicMock,
     mock_apply_series: MagicMock,

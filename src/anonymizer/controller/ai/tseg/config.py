@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+from typing import Literal
+
+logger = logging.getLogger(__name__)
+
 MIN_DICOM_SLICES = 4
 MIN_STRUCTURE_VOXELS = 1000
 MIN_REGION_FRACTION = 0.15
@@ -99,7 +104,62 @@ PRIMARY_SEGMENT_PREFERRED_FILES: dict[str, tuple[str, ...]] = {
     "spine": _SPINE_SUPER_SEGMENT_FILES,
 }
 
-SEGMENTATION_MODE = "3mm"
+DEFAULT_SEGMENTATION_MODE = "3mm"
+SEGMENTATION_MODE = DEFAULT_SEGMENTATION_MODE  # back-compat alias for the default
+
+SegmentationMode = Literal["1.5mm", "3mm", "6mm"]
+_VALID_SEGMENTATION_MODES: frozenset[str] = frozenset({"1.5mm", "3mm", "6mm"})
+
+# Ephemeral process defaults for download UI / callers that have not set a per-run mode.
+_ct_segmentation_mode: SegmentationMode = DEFAULT_SEGMENTATION_MODE  # type: ignore[assignment]
+_mr_segmentation_mode: SegmentationMode = DEFAULT_SEGMENTATION_MODE  # type: ignore[assignment]
+
+
+def normalize_segmentation_mode(value: object | None) -> SegmentationMode:
+    text = str(value or "").strip().lower().replace(" ", "")
+    if text in _VALID_SEGMENTATION_MODES:
+        return text  # type: ignore[return-value]
+    return DEFAULT_SEGMENTATION_MODE  # type: ignore[return-value]
+
+
+def get_ct_segmentation_mode() -> SegmentationMode:
+    return _ct_segmentation_mode
+
+
+def get_mr_segmentation_mode() -> SegmentationMode:
+    return _mr_segmentation_mode
+
+
+def set_ct_segmentation_mode(mode: object | None) -> SegmentationMode:
+    global _ct_segmentation_mode
+    _ct_segmentation_mode = normalize_segmentation_mode(mode)
+    return _ct_segmentation_mode
+
+
+def set_mr_segmentation_mode(mode: object | None) -> SegmentationMode:
+    global _mr_segmentation_mode
+    _mr_segmentation_mode = normalize_segmentation_mode(mode)
+    return _mr_segmentation_mode
+
+
+def clear_segmentation_mode_cache() -> None:
+    """Reset ephemeral CT/MR modes to the default (tests / process cleanup)."""
+    global _ct_segmentation_mode, _mr_segmentation_mode
+    _ct_segmentation_mode = DEFAULT_SEGMENTATION_MODE  # type: ignore[assignment]
+    _mr_segmentation_mode = DEFAULT_SEGMENTATION_MODE  # type: ignore[assignment]
+
+
+def segmentation_mode_for_modality(modality: object | None) -> SegmentationMode:
+    code = str(modality or "").strip().upper()
+    if code in {"MR", "MRI"}:
+        return get_mr_segmentation_mode()
+    return get_ct_segmentation_mode()
+
+
+def is_multi_model_segmentation_mode(mode: object | None) -> bool:
+    """1.5 mm uses multiple nnUNet tasks; predictor preload is skipped."""
+    return normalize_segmentation_mode(mode) == "1.5mm"
+
 
 # Per-series cache directory (NIfTI volume, ROI seg masks, contrast statistics JSON).
 TSEG_CACHE_DIRNAME = "A_TS_SEG"
@@ -116,7 +176,7 @@ OBLIQUE_DOT_THRESHOLD = 0.866  # ~30° from nearest cardinal plane
 PLANE_AMBIGUITY_DOT_DELTA = 0.05
 
 # Head/neck vessel stats (when brain present) + XGBoost after organ HU statistics.
-# Set False on low-memory hosts to fall back to FALCON for contrast.
+# Set False on low-memory hosts to skip TS contrast analysis.
 ENABLE_TS_CONTRAST = True
 
 # Licensed TotalSegmentator ``face`` task (Dataset303; academic ``aca_*`` license).

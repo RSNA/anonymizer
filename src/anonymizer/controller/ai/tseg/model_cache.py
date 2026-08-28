@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterator
 
 if TYPE_CHECKING:
-    from anonymizer.controller.ai.tseg.runtime_status import TsWeightKind
+    from anonymizer.controller.ai.tseg.readiness import TsWeightKind
 
 logger = logging.getLogger(__name__)
 
@@ -288,18 +288,90 @@ def _anatomy_preload_trainer() -> str:
 
 def harmonize_anatomy_task_ids() -> tuple[int, ...]:
     """
-    TotalSegmentator task IDs downloaded during harmonize anatomy segmentation.
+    TotalSegmentator task IDs for CT harmonize anatomy at the selected resolution.
 
     With ``roi_subset`` + ``body_seg`` (see ``run_segmentation``), TotalSegmentator
     downloads the main task (3mm/6mm/1.5mm) plus task 298 for rough ROI cropping on CT.
     """
-    from anonymizer.controller.ai.tseg.config import SEGMENTATION_MODE
+    from anonymizer.controller.ai.tseg.config import get_ct_segmentation_mode
 
-    if SEGMENTATION_MODE == "6mm":
+    return ct_anatomy_task_ids_for_mode(get_ct_segmentation_mode())
+
+
+def ct_anatomy_task_ids_for_mode(mode: object | None) -> tuple[int, ...]:
+    from anonymizer.controller.ai.tseg.config import normalize_segmentation_mode
+
+    normalized = normalize_segmentation_mode(mode)
+    if normalized == "6mm":
         return (298,)
-    if SEGMENTATION_MODE == "1.5mm":
+    if normalized == "1.5mm":
         return (291, 292, 293, 294, 295, 298)
     return (297, 298)
+
+
+def mr_anatomy_task_ids() -> tuple[int, ...]:
+    """
+    MR ``total_mr`` task IDs for the selected resolution.
+
+    1.5 mm includes crop companion task 852 (same pattern as CT including 298).
+    """
+    from anonymizer.controller.ai.tseg.config import get_mr_segmentation_mode
+
+    return mr_anatomy_task_ids_for_mode(get_mr_segmentation_mode())
+
+
+def mr_anatomy_task_ids_for_mode(mode: object | None) -> tuple[int, ...]:
+    from anonymizer.controller.ai.tseg.config import normalize_segmentation_mode
+
+    normalized = normalize_segmentation_mode(mode)
+    if normalized == "6mm":
+        return (853,)
+    if normalized == "1.5mm":
+        return (850, 851, 852)
+    return (852,)
+
+
+def installed_ct_segmentation_modes() -> tuple[str, ...]:
+    """Return CT resolutions whose full anatomy (+contrast) packs are on disk."""
+    from anonymizer.controller.ai.tseg.config import ENABLE_TS_CONTRAST
+
+    contrast = (776,) if ENABLE_TS_CONTRAST else ()
+
+    def _ready(task_ids: tuple[int, ...]) -> bool:
+        return bool(task_ids) and all(_harmonize_task_checkpoint_ready(task_id) for task_id in task_ids)
+
+    installed: list[str] = []
+    for mode in ("1.5mm", "3mm", "6mm"):
+        if _ready(ct_anatomy_task_ids_for_mode(mode) + contrast):
+            installed.append(mode)
+    return tuple(installed)
+
+
+def installed_mr_segmentation_modes() -> tuple[str, ...]:
+    """Return MR resolutions whose full anatomy packs are on disk."""
+
+    def _ready(task_ids: tuple[int, ...]) -> bool:
+        return bool(task_ids) and all(_harmonize_task_checkpoint_ready(task_id) for task_id in task_ids)
+
+    installed: list[str] = []
+    for mode in ("1.5mm", "3mm", "6mm"):
+        if _ready(mr_anatomy_task_ids_for_mode(mode)):
+            installed.append(mode)
+    return tuple(installed)
+
+
+def mr_face_task_id() -> int:
+    return 856
+
+
+def face_task_ids() -> tuple[int, ...]:
+    """CT ``face`` task IDs for Face Blur (CT download group)."""
+    return (_FACE_TASK_ID,)
+
+
+def mr_face_task_ids() -> tuple[int, ...]:
+    """MR ``face_mr`` task IDs for Face Blur (MR download group)."""
+    return (mr_face_task_id(),)
 
 
 def harmonize_contrast_task_ids() -> tuple[int, ...]:
@@ -307,7 +379,7 @@ def harmonize_contrast_task_ids() -> tuple[int, ...]:
     TotalSegmentator task IDs for harmonize IV contrast (head/neck vessel statistics).
 
     ``predict_contrast_phase`` runs ``task=headneck_bones_vessels`` (task 776) when brain
-    volume is present in organ statistics.
+    volume is present in organ statistics. CT-only — never used for MR.
     """
     from anonymizer.controller.ai.tseg.config import ENABLE_TS_CONTRAST
 
@@ -317,13 +389,20 @@ def harmonize_contrast_task_ids() -> tuple[int, ...]:
 
 
 def harmonize_ts_task_ids() -> tuple[int, ...]:
-    """All TotalSegmentator weight tasks required for harmonize (segmentation + contrast)."""
+    """CT TotalSegmentator weight tasks required for CT harmonize (segmentation + contrast)."""
     return harmonize_anatomy_task_ids() + harmonize_contrast_task_ids()
 
 
+def harmonize_feature_task_ids() -> tuple[int, ...]:
+    """CT Harmonize AI Feature download group (anatomy + contrast). MR is a separate kind."""
+    return harmonize_ts_task_ids()
+
 def trainer_for_harmonize_task(task_id: int) -> str:
+    # Must match TotalSegmentator python_api trainers (CT total=4000epochs, MR total_mr=2000epochs).
     if task_id in (297, 298):
         return "nnUNetTrainer_4000epochs_NoMirroring"
+    if task_id in (850, 851, 852, 853):
+        return "nnUNetTrainer_2000epochs_NoMirroring"
     if task_id in (291, 292, 293, 294, 295):
         return "nnUNetTrainerNoMirroring"
     if task_id == 776:
@@ -363,6 +442,7 @@ def resolve_anatomy_model_folder(task_id: int) -> Path | None:
 
 
 def missing_harmonize_ts_task_ids() -> tuple[int, ...]:
+    """Missing CT-only harmonize tasks (segmentation + contrast)."""
     return tuple(task_id for task_id in harmonize_ts_task_ids() if not _harmonize_task_checkpoint_ready(task_id))
 
 
@@ -370,24 +450,96 @@ def missing_anatomy_task_ids() -> tuple[int, ...]:
     return missing_harmonize_ts_task_ids()
 
 
+def missing_mr_anatomy_task_ids() -> tuple[int, ...]:
+    return tuple(task_id for task_id in mr_anatomy_task_ids() if not _harmonize_task_checkpoint_ready(task_id))
+
+
+def missing_harmonize_feature_task_ids() -> tuple[int, ...]:
+    """Missing CT Harmonize AI Feature tasks (anatomy + contrast)."""
+    return missing_harmonize_ts_task_ids()
+
+
+def missing_face_feature_task_ids() -> tuple[int, ...]:
+    """Missing CT face tasks for the Face Blur CT download group."""
+    return tuple(
+        task_id
+        for task_id in face_task_ids()
+        if not _task_checkpoint_ready(task_id, trainer=_FACE_TRAINER, model=_FACE_MODEL)
+    )
+
+
+def missing_mr_face_task_ids() -> tuple[int, ...]:
+    """Missing MR face_mr tasks for the Face Blur MR download group."""
+    return tuple(
+        task_id
+        for task_id in mr_face_task_ids()
+        if not _task_checkpoint_ready(task_id, trainer=_FACE_MR_TRAINER, model=_FACE_MODEL)
+    )
+
+
 def anatomy_models_ready() -> bool:
+    """CT anatomy+contrast weights ready (per-series CT path)."""
     return not missing_harmonize_ts_task_ids()
 
 
+def mr_anatomy_models_ready() -> bool:
+    return not missing_mr_anatomy_task_ids()
+
+
+def ct_face_models_ready() -> bool:
+    return not missing_face_feature_task_ids()
+
+
+def mr_face_models_ready() -> bool:
+    return not missing_mr_face_task_ids()
+
+
+def harmonize_feature_models_ready() -> bool:
+    """True when at least one Harmonize modality group (CT or MR) is installed."""
+    return anatomy_models_ready() or mr_anatomy_models_ready()
+
+
+def face_feature_models_ready() -> bool:
+    """True when at least one Face Blur modality group (CT or MR) is installed."""
+    return ct_face_models_ready() or mr_face_models_ready()
+
+def profile_anatomy_weights_ready(profile) -> bool:
+    """Return whether anatomy weights for ``profile`` are on disk."""
+    if profile.modality == "CT":
+        return anatomy_models_ready()
+    return all(_harmonize_task_checkpoint_ready(task_id) for task_id in profile.anatomy_task_ids)
+
+
+def profile_face_weights_ready(profile) -> bool:
+    """Return whether face-segmentation weights for ``profile`` are on disk."""
+    if profile.modality == "CT":
+        return _face_task_checkpoint_ready()
+    return _task_checkpoint_ready(
+        profile.face_task_id,
+        trainer=_FACE_MR_TRAINER,
+        model=_FACE_MODEL,
+    )
+
+
 def _harmonize_task_checkpoint_ready(task_id: int) -> bool:
-    from anonymizer.controller.ai.tseg.runtime_status import _checkpoint_ready
+    from anonymizer.controller.ai.tseg.readiness import _checkpoint_ready
 
     return _checkpoint_ready(resolve_harmonize_model_folder(task_id))
 
 
 def _face_task_checkpoint_ready() -> bool:
-    from anonymizer.controller.ai.tseg.runtime_status import _checkpoint_ready
+    """CT face task 303 only (per-series CT path)."""
+    from anonymizer.controller.ai.tseg.readiness import _checkpoint_ready
 
     return _checkpoint_ready(_resolve_task_model_folder(_FACE_TASK_ID, trainer=_FACE_TRAINER, model=_FACE_MODEL))
 
 
+def mr_face_model_ready() -> bool:
+    return _task_checkpoint_ready(mr_face_task_id(), trainer=_FACE_MR_TRAINER, model=_FACE_MODEL)
+
+
 def _task_checkpoint_ready(task_id: int, *, trainer: str, model: str) -> bool:
-    from anonymizer.controller.ai.tseg.runtime_status import _checkpoint_ready
+    from anonymizer.controller.ai.tseg.readiness import _checkpoint_ready
 
     return _checkpoint_ready(_try_resolve_task_model_folder(task_id, trainer=trainer, model=model))
 
@@ -398,6 +550,8 @@ def _anatomy_task_checkpoint_ready(task_id: int) -> bool:
 
 _FACE_TASK_ID = 303
 _FACE_TRAINER = "nnUNetTrainerNoMirroring"
+# Must match TotalSegmentator python_api task == "face_mr".
+_FACE_MR_TRAINER = "nnUNetTrainer_2000epochs_NoMirroring"
 _FACE_MODEL = "3d_fullres"
 _BRAIN_STRUCTURES_TASK_ID = 409
 # Must match TotalSegmentator python_api task == "brain_structures".
@@ -446,31 +600,35 @@ def _ensure_pretrained_weights(task_id: int, *, trainer: str, model: str) -> Non
 
 
 _TS_DOWNLOAD_ID: dict[str, str] = {
-    "anatomy": "enable_harmonize",
-    "face": "enable_face_blur",
+    "anatomy": "harmonize_ct_models",
+    "anatomy_mr": "harmonize_mr_models",
+    "face": "face_ct_models",
+    "face_mr": "face_mr_models",
     "brain_structures": "enable_brain_structures",
 }
+
+
+def ts_task_download_label(task_id: int) -> str:
+    """Technical label for download progress (clinician copy lives in the view layer)."""
+    return f"Model {task_id}"
 
 
 @contextmanager
 def _track_segmentation_model_download(kind: "TsWeightKind", *, task_id: int | None = None):
     """Wire TotalSegmentator tqdm/stdout capture to generic model download progress."""
-    from anonymizer.controller.ai.tseg.runtime_status import update_weight_download_detail
     from anonymizer.utils.storage import track_tqdm_model_download
 
     download_id = _TS_DOWNLOAD_ID[kind.value]
-    start_message = f"Downloading model for Task {task_id} ..." if task_id is not None else "Downloading…"
-
-    def on_progress(message: str, _fraction: float | None) -> None:
-        update_weight_download_detail(kind, message)
+    label = ts_task_download_label(task_id) if task_id is not None else ""
+    start_message = f"Downloading: {label}…" if label else "Downloading…"
 
     import totalsegmentator.libs as ts_libs
 
     with track_tqdm_model_download(
         download_id,
         start_message=start_message,
+        label=label,
         tqdm_module=ts_libs,
-        on_progress=on_progress,
         manage_lifecycle=False,
     ):
         yield
@@ -478,10 +636,10 @@ def _track_segmentation_model_download(kind: "TsWeightKind", *, task_id: int | N
 
 def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
     """Download TotalSegmentator weights for anatomy or face segmentation (no predictor preload)."""
-    from anonymizer.controller.ai.tseg.runtime_status import (
+    from anonymizer.controller.ai.tseg.readiness import (
         TsWeightKind as Kind,
     )
-    from anonymizer.controller.ai.tseg.runtime_status import (
+    from anonymizer.controller.ai.tseg.readiness import (
         verify_face_license,
     )
 
@@ -495,11 +653,9 @@ def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
 
     if kind == Kind.ANATOMY:
         task_ids = harmonize_ts_task_ids()
-        if not task_ids:
-            raise RuntimeError("Anatomy segmentation download is not supported for 1.5mm mode")
         missing = missing_harmonize_ts_task_ids()
         logger.info(
-            "TS weights: harmonize download starting (tasks %s, %d missing)",
+            "TS weights: CT harmonize download starting (tasks %s, %d missing)",
             task_ids,
             len(missing),
         )
@@ -510,20 +666,57 @@ def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
                 _ensure_pretrained_weights(task_id, trainer=trainer, model=model)
         still_missing = missing_harmonize_ts_task_ids()
         if still_missing:
-            raise RuntimeError(f"Harmonize models are still missing after download (tasks {still_missing})")
-        logger.info("TS weights: harmonize models downloaded (tasks %s)", task_ids)
+            raise RuntimeError(f"CT Harmonize models are still missing after download (tasks {still_missing})")
+        logger.info("TS weights: CT harmonize models downloaded (tasks %s)", task_ids)
+        return
+
+    if kind == Kind.ANATOMY_MR:
+        task_ids = mr_anatomy_task_ids()
+        missing = missing_mr_anatomy_task_ids()
+        logger.info(
+            "TS weights: MR harmonize download starting (tasks %s, %d missing)",
+            task_ids,
+            len(missing),
+        )
+        for task_id in task_ids:
+            trainer = trainer_for_harmonize_task(task_id)
+            model = model_for_harmonize_task(task_id)
+            with _track_segmentation_model_download(kind, task_id=task_id):
+                _ensure_pretrained_weights(task_id, trainer=trainer, model=model)
+        still_missing = missing_mr_anatomy_task_ids()
+        if still_missing:
+            raise RuntimeError(f"MR Harmonize models are still missing after download (tasks {still_missing})")
+        logger.info("TS weights: MR harmonize models downloaded (tasks %s)", task_ids)
         return
 
     if kind == Kind.FACE:
         licensed, message = verify_face_license()
         if not licensed:
             raise RuntimeError(message)
-        logger.info("TS weights: face segmentation download starting (task %s)", _FACE_TASK_ID)
-        with _track_segmentation_model_download(kind, task_id=_FACE_TASK_ID):
-            _ensure_pretrained_weights(_FACE_TASK_ID, trainer=_FACE_TRAINER, model=_FACE_MODEL)
-        if not _face_task_checkpoint_ready():
-            raise RuntimeError(f"Face segmentation model is still missing after download (task {_FACE_TASK_ID})")
-        logger.info("TS weights: face segmentation model downloaded (task %s)", _FACE_TASK_ID)
+        task_ids = face_task_ids()
+        logger.info("TS weights: CT face segmentation download starting (tasks %s)", task_ids)
+        for task_id in task_ids:
+            with _track_segmentation_model_download(kind, task_id=task_id):
+                _ensure_pretrained_weights(task_id, trainer=_FACE_TRAINER, model=_FACE_MODEL)
+        still_missing = missing_face_feature_task_ids()
+        if still_missing:
+            raise RuntimeError(f"CT face models are still missing after download (tasks {still_missing})")
+        logger.info("TS weights: CT face models downloaded (tasks %s)", task_ids)
+        return
+
+    if kind == Kind.FACE_MR:
+        licensed, message = verify_face_license()
+        if not licensed:
+            raise RuntimeError(message)
+        task_ids = mr_face_task_ids()
+        logger.info("TS weights: MR face segmentation download starting (tasks %s)", task_ids)
+        for task_id in task_ids:
+            with _track_segmentation_model_download(kind, task_id=task_id):
+                _ensure_pretrained_weights(task_id, trainer=_FACE_MR_TRAINER, model=_FACE_MODEL)
+        still_missing = missing_mr_face_task_ids()
+        if still_missing:
+            raise RuntimeError(f"MR face models are still missing after download (tasks {still_missing})")
+        logger.info("TS weights: MR face models downloaded (tasks %s)", task_ids)
         return
 
     if kind == Kind.BRAIN_STRUCTURES:
@@ -554,7 +747,7 @@ def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
 
 
 def _brain_structures_task_checkpoint_ready() -> bool:
-    from anonymizer.controller.ai.tseg.runtime_status import _checkpoint_ready
+    from anonymizer.controller.ai.tseg.readiness import _checkpoint_ready
 
     return _checkpoint_ready(
         _resolve_task_model_folder(
@@ -571,7 +764,7 @@ def preload_face_models(*, device: str | None = None) -> None:
 
     No-op when TotalSegmentator is not installed or academic license is missing.
     """
-    from anonymizer.controller.ai.tseg.runtime_status import verify_face_license
+    from anonymizer.controller.ai.tseg.readiness import verify_face_license
 
     try:
         from totalsegmentator.config import setup_nnunet, setup_totalseg
@@ -591,7 +784,6 @@ def preload_face_models(*, device: str | None = None) -> None:
     setup_nnunet()
     setup_totalseg()
 
-    download_pretrained_weights(_FACE_TASK_ID)
     resolved = _resolve_totalseg_device(resolve_device(device))
     import torch
     import totalsegmentator.nnunet as nnunet_module
@@ -604,29 +796,43 @@ def preload_face_models(*, device: str | None = None) -> None:
     else:
         torch_device = torch.device("mps")
 
-    model_folder = get_output_folder(_FACE_TASK_ID, _FACE_TRAINER, "nnUNetPlans", "3d_fullres")
-    try:
-        _get_or_create_predictor(
-            model_folder=model_folder,
-            folds=[0],
-            checkpoint_name="checkpoint_final.pth",
-            device=torch_device,
-            step_size=0.5,
-            disable_tta=True,
-            nnunet_module=nnunet_module,
-            nnUNetPredictor=nnUNetPredictor,
-            quiet=True,
-        )
-        logger.info("TS model cache: face segmentation model preloaded (task %s)", _FACE_TASK_ID)
-    except Exception as exc:
-        logger.warning("TS face preload failed: %s", exc)
+    preloaded: list[int] = []
+    task_ids: list[int] = []
+    if ct_face_models_ready():
+        task_ids.extend(face_task_ids())
+    if mr_face_models_ready():
+        task_ids.extend(mr_face_task_ids())
+    if not task_ids:
+        logger.debug("TS face preload skipped (no CT/MR face weights installed)")
+        return
+    for task_id in task_ids:
+        download_pretrained_weights(task_id)
+        trainer = _FACE_TRAINER if task_id in face_task_ids() else _FACE_MR_TRAINER
+        model_folder = get_output_folder(task_id, trainer, "nnUNetPlans", "3d_fullres")
+        try:
+            _get_or_create_predictor(
+                model_folder=model_folder,
+                folds=[0],
+                checkpoint_name="checkpoint_final.pth",
+                device=torch_device,
+                step_size=0.5,
+                disable_tta=True,
+                nnunet_module=nnunet_module,
+                nnUNetPredictor=nnUNetPredictor,
+                quiet=True,
+            )
+            preloaded.append(task_id)
+        except Exception as exc:
+            logger.warning("TS face preload failed for task %s: %s", task_id, exc)
+    if preloaded:
+        logger.info("TS model cache: face segmentation models preloaded (tasks %s)", preloaded)
 
 
 def preload_harmonize_models(*, device: str | None = None) -> None:
     """
-    Eager-load TotalSegmentator weights used by harmonize anatomy segmentation.
+    Eager-load installed TotalSegmentator harmonize weights (CT and/or MR).
 
-    Safe to call when TotalSegmentator is not installed (no-op).
+    Does not download missing modality groups. Safe when TotalSegmentator is absent (no-op).
     """
     try:
         from totalsegmentator.config import setup_nnunet, setup_totalseg
@@ -650,18 +856,37 @@ def preload_harmonize_models(*, device: str | None = None) -> None:
         torch_device = torch.device("cuda")
     else:
         torch_device = torch.device("mps")
-    task_ids = harmonize_ts_task_ids()
-    if not task_ids:
-        logger.info("TS model cache preload skipped for 1.5mm mode (multi-model)")
+
+    from anonymizer.controller.ai.tseg.config import (
+        get_ct_segmentation_mode,
+        get_mr_segmentation_mode,
+        is_multi_model_segmentation_mode,
+    )
+
+    download_task_ids: list[int] = []
+    anatomy_task_ids: list[int] = []
+    if anatomy_models_ready():
+        download_task_ids.extend(harmonize_ts_task_ids())
+        if not is_multi_model_segmentation_mode(get_ct_segmentation_mode()):
+            anatomy_task_ids.extend(harmonize_anatomy_task_ids())
+        else:
+            logger.info("TS model cache: skipping CT predictor preload for 1.5mm multi-model mode")
+    if mr_anatomy_models_ready():
+        download_task_ids.extend(mr_anatomy_task_ids())
+        if not is_multi_model_segmentation_mode(get_mr_segmentation_mode()):
+            anatomy_task_ids.extend(mr_anatomy_task_ids())
+        else:
+            logger.info("TS model cache: skipping MR predictor preload for 1.5mm multi-model mode")
+    if not download_task_ids:
+        logger.debug("TS harmonize preload skipped (no CT/MR anatomy weights installed)")
         return
 
     import totalsegmentator.nnunet as nnunet_module
     from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
 
-    for task_id in task_ids:
+    for task_id in download_task_ids:
         download_pretrained_weights(task_id)
 
-    anatomy_task_ids = harmonize_anatomy_task_ids()
     preloaded: list[int] = []
     for task_id in anatomy_task_ids:
         trainer = trainer_for_harmonize_task(task_id)
@@ -685,7 +910,7 @@ def preload_harmonize_models(*, device: str | None = None) -> None:
     if preloaded:
         logger.info(
             "TS model cache: harmonize segmentation models preloaded (tasks %s, loaded %s)",
-            task_ids,
+            download_task_ids,
             preloaded,
         )
 

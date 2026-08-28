@@ -59,6 +59,7 @@ class Histogram(ctk.CTkFrame):
         self._drag_start_ww = 1.0
         self._teardown = False
         self._axis_label_font = canvas_label_font(10)
+        self._last_canvas_size: tuple[int, int] | None = None
 
         # --- Widget Layout ---
         self.grid_columnconfigure(0, weight=1)
@@ -90,7 +91,15 @@ class Histogram(ctk.CTkFrame):
         self.canvas.bind("<ButtonPress-3>", self._on_right_press)
         self.canvas.bind("<B3-Motion>", self._on_right_drag)
         self.canvas.bind("<ButtonRelease-3>", self._on_right_release)
-        self.bind("<Configure>", self._on_configure)
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
+
+    def refresh_display(self) -> None:
+        """Redraw after programmatic canvas resize (layout may not emit a useful Configure)."""
+        if not self._is_active():
+            return
+        self._last_canvas_size = (self.canvas.winfo_width(), self.canvas.winfo_height())
+        self._redraw()
+        self._update_labels()
 
     def release_resources(self) -> None:
         """Stop redraw callbacks before widget teardown (avoids Tk GC segfaults on macOS)."""
@@ -100,8 +109,8 @@ class Histogram(ctk.CTkFrame):
         self.update_callback = None
         canvas = getattr(self, "canvas", None)
         with contextlib.suppress(tk.TclError, AttributeError):
-            self.unbind("<Configure>")
             if canvas is not None:
+                canvas.unbind("<Configure>")
                 canvas.unbind("<ButtonPress-1>")
                 canvas.unbind("<B1-Motion>")
                 canvas.unbind("<ButtonRelease-1>")
@@ -358,9 +367,15 @@ class Histogram(ctk.CTkFrame):
         return max(self.image_min_intensity, min(self.image_max_intensity, intensity))
 
     # --- Event Handlers ---
-    def _on_configure(self, event=None):
-        if not self._is_active():
+    def _on_canvas_configure(self, event=None) -> None:
+        if not self._is_active() or event is None:
             return
+        if event.width <= 1 or event.height <= 1:
+            return
+        size = (event.width, event.height)
+        if size == self._last_canvas_size:
+            return
+        self._last_canvas_size = size
         self.after_idle(self._redraw_idle)
 
     def _redraw_idle(self) -> None:

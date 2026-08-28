@@ -85,7 +85,7 @@ class ProjectModel:
     """
 
     # Project Model Version Control
-    MODEL_VERSION = 7
+    MODEL_VERSION = 9
 
     # SQLite DB configuration for SQLAlchemy
     # TODO: expand for other supported databases (PostgreSQL, MySQL, etc.)

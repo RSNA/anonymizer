@@ -15,6 +15,7 @@ from anonymizer.controller.ai.blur_face import (
     SeriesVolumeContext,
     apply_face_blur_preview_to_series_frames,
     compute_qa_stats,
+    format_face_blur_progress_status,
     hu_stack_to_viewer_frames,
     load_series_volume_for_blur,
     mask_slice_segmentations,
@@ -23,7 +24,6 @@ from anonymizer.controller.ai.blur_face import (
 )
 from anonymizer.controller.ai.tseg.segment import face_mask_cache_path
 from anonymizer.view.ai.blur_face_results import (
-    format_face_blur_progress_status,
     format_face_blur_qa_summary,
     proposed_face_blur_companion_label,
 )

@@ -32,7 +32,26 @@ from anonymizer.utils.storage import get_dcm_files
 
 logger = logging.getLogger(__name__)
 
-SERIES_VIEW_PROJECTION_COUNT = 3
+SERIES_VIEW_PROJECTION_COUNT = 3  # deprecated: projections are no longer in the scroll stack
+
+
+@dataclass(frozen=True)
+class SeriesProjections:
+    """Min / mean / max planes derived from anatomical slices (not scrolled with the stack)."""
+
+    minimum: np.ndarray
+    mean: np.ndarray
+    maximum: np.ndarray
+
+
+def compute_series_projections(frames: np.ndarray) -> SeriesProjections:
+    """Compute min, mean, and max projection planes from an anatomical slice stack."""
+    if frames.ndim < 3 or frames.shape[0] < 1:
+        raise ValueError(f"Expected slice stack (N, H, W), got shape {frames.shape}")
+    minimum = np.min(frames, axis=0)
+    maximum = np.max(frames, axis=0)
+    mean = np.mean(frames, axis=0).astype(frames.dtype, copy=False)
+    return SeriesProjections(minimum=minimum, mean=mean, maximum=maximum)
 
 
 @dataclass(frozen=True)
@@ -76,10 +95,14 @@ class LoadedSeries:
         return viewer_stack[SERIES_VIEW_PROJECTION_COUNT:]
 
 
-def load_series_frames(series_path: Path) -> LoadedSeries:
+def load_series_frames(
+    series_path: Path,
+    *,
+    dcm_paths: list[Path] | None = None,
+) -> LoadedSeries:
     """Load a DICOM series directory (anatomical frames only, no projections)."""
     logger.info("load_series_frames: %s", series_path)
-    metadata, frames, slice_paths = _load_series_frames(series_path)
+    metadata, frames, slice_paths = _load_series_frames(series_path, dcm_paths=dcm_paths)
     default_window = get_wl_ww(metadata)
     return LoadedSeries(
         metadata=metadata,
@@ -91,7 +114,9 @@ def load_series_frames(series_path: Path) -> LoadedSeries:
 
 __all__ = [
     "LoadedSeries",
+    "SeriesProjections",
     "SERIES_VIEW_PROJECTION_COUNT",
+    "compute_series_projections",
     "apply_series_description",
     "apply_study_description",
     "load_series_frames",
@@ -510,7 +535,11 @@ def _validate_dicom_pixel_array(ds: Dataset) -> tuple[ndarray, int, int, str]:
     return pixels, rows, cols, pi.upper()
 
 
-def _load_series_frames(series_path: Path) -> tuple[Dataset, ndarray, tuple[Path, ...]]:
+def _load_series_frames(
+    series_path: Path,
+    *,
+    dcm_paths: list[Path] | None = None,
+) -> tuple[Dataset, ndarray, tuple[Path, ...]]:
     """
     Loads and processes DICOM series frames from a directory, resizing to match
     the first frame's dimensions.
@@ -542,29 +571,30 @@ def _load_series_frames(series_path: Path) -> tuple[Dataset, ndarray, tuple[Path
     if not series_path.is_dir():
         raise FileNotFoundError(f"Provided path is not a directory: {series_path}")
 
-    try:
-        dcm_paths = stackable_dicom_paths(series_path)
-    except ValueError as exc:
-        logger.warning(
-            "Falling back to legacy DICOM listing for %s: %s", series_path, exc
-        )
+    if dcm_paths is None:
         try:
-            dcm_paths = sorted(get_dcm_files(series_path))
-        except PermissionError as e:
-            logger.error(f"Permission denied accessing {series_path}: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Error listing files in {series_path}: {e}")
-            raise ValueError(f"Could not list files in directory: {series_path}") from e
-
-        def get_instance_number(path: Path) -> int:
+            dcm_paths = stackable_dicom_paths(series_path)
+        except ValueError as exc:
+            logger.warning(
+                "Falling back to legacy DICOM listing for %s: %s", series_path, exc
+            )
             try:
-                ds_header = dcmread(str(path), stop_before_pixels=True, force=True)
-                return int(ds_header.get("InstanceNumber", 999999))
-            except (ValueError, TypeError, InvalidDicomError):
-                return 999999
+                dcm_paths = sorted(get_dcm_files(series_path))
+            except PermissionError as e:
+                logger.error(f"Permission denied accessing {series_path}: {e}")
+                raise
+            except Exception as e:
+                logger.error(f"Error listing files in {series_path}: {e}")
+                raise ValueError(f"Could not list files in directory: {series_path}") from e
 
-        dcm_paths.sort(key=get_instance_number)
+            def get_instance_number(path: Path) -> int:
+                try:
+                    ds_header = dcmread(str(path), stop_before_pixels=True, force=True)
+                    return int(ds_header.get("InstanceNumber", 999999))
+                except (ValueError, TypeError, InvalidDicomError):
+                    return 999999
+
+            dcm_paths.sort(key=get_instance_number)
 
     if not dcm_paths:
         raise ValueError(f"No DICOM files found in {series_path}")

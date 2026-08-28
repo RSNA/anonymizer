@@ -8,12 +8,9 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from anonymizer.controller.ai.ocr_whitelist_match import (
+from anonymizer.controller.ai.remove_pixel_phi import (
     OcrWhitelistMatchMode,
     OcrWhitelistMatchSettings,
-    resolve_whitelist_match,
-)
-from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
     _apply_frame_removal_mask,
     _map_ocr_texts_to_source_coordinates,
@@ -23,6 +20,7 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     filter_ocr_whitelist_only,
     load_modality_whitelist,
     remove_pixel_phi,
+    resolve_whitelist_match,
 )
 from anonymizer.controller.ai_batch_process import format_remove_pixel_phi_instance_detail
 from anonymizer.controller.series_overlay import OCRText

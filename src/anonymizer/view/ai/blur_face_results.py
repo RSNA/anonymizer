@@ -1,10 +1,17 @@
-"""Face blur status formatting and review constants."""
+"""Face blur review UI helpers and constants."""
 
 from __future__ import annotations
 
 from pydicom import Dataset
 
-from anonymizer.controller.ai.blur_face import FaceBlurMode, FaceBlurProgress, QaStats
+from anonymizer.controller.ai.blur_face import (
+    FACE_BLUR_MODE_LABELS,
+    FaceBlurMode,
+    FaceBlurProgress,
+    QaStats,
+    face_blur_mode_display_label,
+    format_face_blur_progress_status,
+)
 from anonymizer.utils.translate import _
 
 # BGR for OpenCV overlay compositing.
@@ -13,13 +20,6 @@ FACE_MASK_OVERLAY_ALPHA = 0.35
 # CT window in Hounsfield units for reviewing blurred facial features.
 FACE_REVIEW_WL_HU = -250.0
 FACE_REVIEW_WW_HU = 2500.0
-
-FACE_BLUR_MODE_LABELS: dict[FaceBlurMode, str] = {
-    FaceBlurMode.GAUSSIAN: "Gaussian blur",
-    FaceBlurMode.MEDIAN: "Median filter",
-    FaceBlurMode.PIXELATE: "Pixelate",
-    FaceBlurMode.FILL_NOISE: "Noise fill",
-}
 
 
 def face_blur_mode_menu_values() -> tuple[str, ...]:
@@ -31,10 +31,6 @@ def face_blur_mode_from_menu_label(label: str) -> FaceBlurMode:
         if label == _(mode_label):
             return mode
     return FaceBlurMode.GAUSSIAN
-
-
-def face_blur_mode_display_label(mode: FaceBlurMode) -> str:
-    return _(FACE_BLUR_MODE_LABELS[mode])
 
 
 def proposed_face_blur_companion_label(mode: FaceBlurMode) -> str:
@@ -62,26 +58,20 @@ def format_face_blur_qa_summary(
     return _("QA PASS") + f" ({mode_label})" + f", {slice_count} " + _("slices") + f", σ={sigma_mm:.1f} mm."
 
 
-def format_face_blur_progress_status(
-    progress: FaceBlurProgress,
-    *,
-    include_pct: bool = True,
-) -> str:
-    pct_text = ""
-    if include_pct:
-        pct = min(100, max(0, int(round(progress.fraction * 100))))
-        pct_text = f" ({pct}%)"
-    stage_labels = {
-        "mask": _("Resolving face segmentation mask"),
-        "volume": _("Loading CT volume and aligning face mask"),
-        "load_hu": _("Loading Hounsfield unit stack"),
-        "blur": _("Applying in-mask face de-identification"),
-        "qa": _("Checking pixels outside face mask"),
-        "done": _("Ready"),
-    }
-    if progress.stage in stage_labels:
-        return stage_labels[progress.stage] + "…" + pct_text
-    message = (progress.message or "").strip()
-    if message:
-        return message + pct_text
-    return _("Processing face blur") + "…" + pct_text
+__all__ = [
+    "FACE_BLUR_MODE_LABELS",
+    "FACE_MASK_OVERLAY_ALPHA",
+    "FACE_MASK_OVERLAY_COLOR",
+    "FACE_REVIEW_WL_HU",
+    "FACE_REVIEW_WW_HU",
+    "FaceBlurMode",
+    "FaceBlurProgress",
+    "QaStats",
+    "face_blur_mode_display_label",
+    "face_blur_mode_from_menu_label",
+    "face_blur_mode_menu_values",
+    "face_review_wl_ww",
+    "format_face_blur_progress_status",
+    "format_face_blur_qa_summary",
+    "proposed_face_blur_companion_label",
+]

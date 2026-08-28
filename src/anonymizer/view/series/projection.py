@@ -12,6 +12,7 @@ from anonymizer.controller.create_projections import (
     ProjectionImageSize,
     ProjectionImageSizeConfig,
     create_projection_from_series,
+    take_loaded_series_cache,
 )
 from anonymizer.controller.phi_io import PHI_IndexRecord
 from anonymizer.utils.translate import _
@@ -394,6 +395,7 @@ class ProjectionView(AppToplevel):
             self,
             series_path=series_path,
             fonts=self._fonts,
+            preloaded=take_loaded_series_cache(series_path),
         )
         if self._series_view is None:
             return

@@ -17,6 +17,7 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
     format_geometry_summary,
     plane_label,
 )
+from anonymizer.controller.ai.tseg.modality_profile import is_mr_modality
 from anonymizer.controller.ai.tseg.segment import TS_result
 from anonymizer.utils.translate import _
 
@@ -194,6 +195,39 @@ _TS_CONTRAST_PHASE_TO_CODE: dict[str, str] = {
     "excretory": "Excretory",
     "dynamic": "Dyn",
 }
+
+# MR has no TotalSegmentator IV-phase classifier; infer W/WO from DICOM headers.
+_MR_WITHOUT_CONTRAST_KEYWORDS: tuple[str, ...] = (
+    "WITHOUT CONTRAST",
+    "W/O CONTRAST",
+    "WO CONTRAST",
+    "W/O",
+    "PRECONTRAST",
+    "PRE-CONTRAST",
+    "PRE CONTRAST",
+    "NONCONTRAST",
+    "NON-CONTRAST",
+    "NON CONTRAST",
+    "PRE GAD",
+    "PRE-GAD",
+    "NO CONTRAST",
+)
+_MR_WITH_CONTRAST_KEYWORDS: tuple[str, ...] = (
+    "WITH CONTRAST",
+    "W/ CONTRAST",
+    "W CONTRAST",
+    "POST GAD",
+    "POST-GAD",
+    "GADOLINIUM",
+    "POSTCONTRAST",
+    "POST-CONTRAST",
+    "POST CONTRAST",
+    "CONTRAST ENHANCED",
+    "CONTRAST-ENHANCED",
+    "+C",
+    " C+",
+    "CE-",
+)
 
 _BODY_PART_LABELS: dict[str, str] = {
     "Ch": "Chest",
@@ -658,6 +692,44 @@ def map_anatomic_plane_code(geometry: SeriesGeometryResult) -> str:
     return code
 
 
+def map_mr_iv_contrast_from_dicom(ds: Dataset) -> tuple[str, str]:
+    """
+    Infer Playbook ``W`` / ``WO`` for MR from DICOM headers only.
+
+    Returns ``(iv_contrast_code, evidence)``. Prefer explicit without-contrast text,
+    then bolus tags, then with-contrast text; default ``WO`` when none are present.
+    """
+    agent = str(ds.get("ContrastBolusAgent") or "").strip()
+    route = str(ds.get("ContrastBolusRoute") or "").strip()
+    volume = str(ds.get("ContrastBolusVolume") or "").strip()
+    text = _normalized_dicom_text(
+        ds.get("SeriesDescription"),
+        ds.get("ProtocolName"),
+        ds.get("StudyDescription"),
+        ds.get("DerivationDescription"),
+    )
+
+    if _contains_dicom_keyword(text, _MR_WITHOUT_CONTRAST_KEYWORDS):
+        matched = next(k for k in _MR_WITHOUT_CONTRAST_KEYWORDS if k in text)
+        return _iv_contrast_playbook_code("WO"), _("Series/protocol text") + f": {matched}"
+
+    if agent:
+        return _iv_contrast_playbook_code("W"), _("ContrastBolusAgent") + f": {agent}"
+    if route:
+        return _iv_contrast_playbook_code("W"), _("ContrastBolusRoute") + f": {route}"
+    if volume and volume not in {"0", "0.0"}:
+        return _iv_contrast_playbook_code("W"), _("ContrastBolusVolume") + f": {volume}"
+
+    if _contains_dicom_keyword(text, _MR_WITH_CONTRAST_KEYWORDS):
+        matched = next(k for k in _MR_WITH_CONTRAST_KEYWORDS if k in text)
+        return _iv_contrast_playbook_code("W"), _("Series/protocol text") + f": {matched}"
+
+    return (
+        _iv_contrast_playbook_code("WO"),
+        _("No contrast indicators in DICOM headers"),
+    )
+
+
 def map_iv_contrast_code(tseg: TS_result) -> str:
     """Map TS contrast phase to a Playbook IV contrast code from ``IV_CONTRAST_PLAYBOOK_CODES``."""
     phase = (tseg.contrast_phase or "").strip().lower()
@@ -696,9 +768,22 @@ def build_playbook_attributes(
 ) -> PlaybookHarmonizeAttributes:
     body_part_code = map_body_part_code(tseg.body_parts_present, tseg.structures_present)
     anatomic_plane_code = map_anatomic_plane_code(geometry)
-    iv_contrast_code = map_iv_contrast_code(tseg)
     series_type_code = map_series_type_code(ds, geometry)
 
+    if ds is not None and is_mr_modality(ds.get("Modality")):
+        iv_contrast_code, _evidence = map_mr_iv_contrast_from_dicom(ds)
+        return PlaybookHarmonizeAttributes(
+            body_part_code=body_part_code,
+            anatomic_plane_code=anatomic_plane_code,
+            iv_contrast_code=iv_contrast_code,
+            series_type_code=series_type_code,
+            body_part_confidence=tseg.region_fraction,
+            plane_confidence=geometry.plane_confidence,
+            contrast_confidence=None,
+            contrast_phase="",
+        )
+
+    iv_contrast_code = map_iv_contrast_code(tseg)
     return PlaybookHarmonizeAttributes(
         body_part_code=body_part_code,
         anatomic_plane_code=anatomic_plane_code,
@@ -895,7 +980,25 @@ def playbook_iv_contrast_row_values(
     *,
     tseg: TS_result | None = None,
     geometry: SeriesGeometryResult | None = None,
+    ds: Dataset | None = None,
 ) -> tuple[str, str, str, str, str]:
+    """Playbook table row for IV contrast (CT phase classifier or MR DICOM headers)."""
+    if ds is not None and is_mr_modality(ds.get("Modality")):
+        if attributes is not None:
+            code = attributes.iv_contrast_code
+            evidence = map_mr_iv_contrast_from_dicom(ds)[1]
+        else:
+            code, evidence = map_mr_iv_contrast_from_dicom(ds)
+        if iv_evidence:
+            evidence = iv_evidence
+        return (
+            _("IV Contrast"),
+            code,
+            iv_contrast_label(code),
+            evidence,
+            _("DICOM metadata"),
+        )
+
     if attributes is not None:
         phase = attributes.contrast_phase or ""
         if attributes.iv_contrast_code != "WO" and attributes.contrast_phase:
@@ -983,7 +1086,7 @@ def harmonize_analysis_rows(
     return [
         playbook_body_part_row_values(attributes, geometry=geometry, tseg=tseg),
         playbook_plane_row_values(geometry, attributes.anatomic_plane_code),
-        playbook_iv_contrast_row_values(attributes, geometry=geometry, tseg=tseg),
+        playbook_iv_contrast_row_values(attributes, geometry=geometry, tseg=tseg, ds=ds),
         playbook_series_type_row_values(attributes=attributes, ds=ds, geometry=geometry),
     ]
 

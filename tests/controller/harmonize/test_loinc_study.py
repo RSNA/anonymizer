@@ -14,7 +14,7 @@ from anonymizer.controller.ai.harmonize import (
     group_study_description_offers_by_fingerprint,
     resolve_study_description_offers,
 )
-from anonymizer.controller.ai.tseg.loinc_study import (
+from anonymizer.controller.ai.harmonize.loinc_study import (
     LoincStudyMatch,
     StudyDescriptionOffer,
     aggregate_study_from_series_descriptions,
@@ -282,7 +282,7 @@ def test_resolve_auto_applies_clear_fingerprint_peers():
             return True
 
         mp.setattr(
-            "anonymizer.controller.ai.harmonize.apply_harmonized_study_description",
+            "anonymizer.controller.ai.harmonize.pipeline.apply_harmonized_study_description",
             fake_apply,
         )
         ambiguous, auto_results = resolve_study_description_offers(
@@ -318,7 +318,7 @@ def test_auto_apply_study_description_offer_uses_top_match():
             return True
 
         mp.setattr(
-            "anonymizer.controller.ai.harmonize.apply_harmonized_study_description",
+            "anonymizer.controller.ai.harmonize.pipeline.apply_harmonized_study_description",
             fake_apply,
         )
         updated = auto_apply_study_description_offer(

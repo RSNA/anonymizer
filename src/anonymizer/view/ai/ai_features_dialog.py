@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 import customtkinter as ctk
 
 from anonymizer.utils.translate import _
+from anonymizer.view.ai.features.panel import AiFeaturesPanel
 from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
-from anonymizer.view.settings.ai_features_panel import AiFeaturesPanel
 
 
 class AiFeaturesSetupDialog(AppToplevel):
-    """Modal dialog for enabling AI tools and checking setup status."""
+    """Modal dialog for AI model download, remove, and license setup."""
 
     def __init__(
         self,
@@ -37,12 +37,9 @@ class AiFeaturesSetupDialog(AppToplevel):
         frame.grid(row=0, column=0, padx=pad, pady=pad, sticky="nw")
         frame.columnconfigure(0, weight=1)
 
-        intro = _(
-            "Select the AI tools you want to use. When a tool is enabled, its status is shown below. "
-            "Download models or apply a license when prompted."
-        )
-        ctk.CTkLabel(frame, text=intro, wraplength=520, justify="left").grid(
-            row=0, column=0, padx=pad, pady=(pad, 8), sticky="nw"
+        intro = _("Download models and choose Harmonize resolution for this workstation.")
+        ctk.CTkLabel(frame, text=intro, wraplength=480, justify="left").grid(
+            row=0, column=0, padx=pad, pady=(pad, 4), sticky="nw"
         )
 
         self._panel = AiFeaturesPanel(
@@ -50,16 +47,16 @@ class AiFeaturesSetupDialog(AppToplevel):
             on_layout_changed=self._schedule_fit_to_content,
             on_flags_changed=self._notify_changed,
         )
-        self._panel.grid(row=1, column=0, padx=pad, pady=(0, 8), sticky="nw")
+        self._panel.grid(row=1, column=0, padx=pad, pady=(0, 4), sticky="nw")
 
-        self._close_button = ctk.CTkButton(frame, text=_("Close"), command=self._on_close)
+        self._close_button = ctk.CTkButton(frame, text=_("Close"), width=80, command=self._on_close)
         self._close_button.grid(row=2, column=0, padx=pad, pady=(0, pad), sticky="e")
 
         self.wait_visibility()
         self._schedule_fit_to_content()
         self.grab_set()
 
-    _MIN_WIDTH = 560
+    _MIN_WIDTH = 480
 
     def _schedule_fit_to_content(self) -> None:
         if self._closing:

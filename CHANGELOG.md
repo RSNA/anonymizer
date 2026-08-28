@@ -5,6 +5,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- AI Features Setup: more compact dialog (short copy, size-only resolution menu on title row with Remove/Download)
+- AI Features Harmonize status: one-line “In use / also installed” (drop task inventory bullets); Remove button label shortened to “Remove”
+- Harmonize resolution: AI Features picks one active CT and one active MR workstation resolution (picker always visible; Download when the selected pack is missing); Series View and AI Batch no longer choose resolution per run
+- Brain structures: opt-in moved to Harmonize Description Dialog for CT Head only (after total anatomy); removed from Series View toolbar
+- MR Harmonize Description dialog: IV Contrast row from DICOM headers (not CT contrast phase / TotalSegmentator); label/source/evidence updated accordingly
+- MR Harmonize: skip contrast-phase analysis (no MR IV model); Series View latch uses `total_mr` `vertebrae` / whole-lung masks; combined vertebrae no longer force Chest body-part codes
+- Move AI Features UX into `view/ai/features/` (catalog, availability, panel); rename setup dialog to `ai_features_dialog`; delete `controller/ai/features`
+- Drop ProjectModel-persisted AI Feature enable flags and resolutions; Harmonize resolution is process/session workstation choice in AI Features (not ProjectModel)
+- AI Features setup is models/license/download/remove only (no enable checkboxes)
+- Simplify AI model readiness: on-demand path.exists checks replace TsWeightState/TsegRuntimeStatus caches, AiFeatureSession, and disable lifecycle
+- Fold OCR whitelist match presets into `remove_pixel_phi.py` (drop `ocr_whitelist_match.py`)
+- Move Series View overlay DTOs and anatomy mask→polygon helpers to `view/series` (`series_overlay`, `anatomy_overlay`)
+- Narrow `tseg` to TotalSegmentator CT/MR segmentation runtime; move Playbook/LOINC Harmonize terminology into `controller/ai/harmonize/` (`pipeline`, `playbook`, `loinc_study`); drop description formatting from `TS_result`
+- AI Features: state fixed Face (1.5 mm) and Brain structures (0.5×0.5×1 mm) resolutions; tighten dialog copy (less duplication)
+- AI Features Harmonize: per-modality anatomy resolution picker (1.5 / 3 / 6 mm) for CT and MR downloads and runs; clinician-friendly CT/MR model copy (no blur-algorithm wording on Face model cards)
+- AI Features Harmonize / Face Blur: separate CT and MR model download sections
+- Fix MR model readiness: probe task 852 / face_mr 856 with TotalSegmentator's `nnUNetTrainer_2000epochs_NoMirroring` (not CT trainers)
+- MRI Harmonize / Face Blur: additive modality profile (`total_mr` / `face_mr`) keeps CT paths, caches, and contrast unchanged; MR skips contrast, uses intensity face fill, separate `face_mr.nii.gz` cache, and LOINC `MR ` study ranking
 - Study Description Harmonization: after the last CT series is Harmonized, rank LOINC StudyDescription rows from Playbook series signals and TS region fractions (prefer dominant organ); auto-apply clear winners to the study and fingerprint peers; prompt only when candidates are ambiguous; persist `Study.harmonized_description`, DICOM StudyDescription `(0008,1030)`, and LOINC code in Procedure Code Sequence `(0008,1032)` (`LN`)
 
 ## [19.0.0.dev11]

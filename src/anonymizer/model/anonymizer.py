@@ -187,15 +187,22 @@ class SeriesProcessingStatus:
 
 
 
-def _study_ct_series_all_harmonized(study: Study) -> bool:
-    """Return True when every CT series in the study has a harmonized_description."""
-    ct_series = [series for series in (study.series or []) if (series.modality or "").upper() == "CT"]
-    if not ct_series:
+def _study_tseg_series_all_harmonized(study: Study) -> bool:
+    """Return True when every CT|MR series in the study has a harmonized_description."""
+    from anonymizer.controller.ai.tseg.modality_profile import series_is_tseg_eligible
+
+    tseg_series = [series for series in (study.series or []) if series_is_tseg_eligible(series.modality)]
+    if not tseg_series:
         return False
     return all(
         series.harmonized_description is not None and bool(str(series.harmonized_description).strip())
-        for series in ct_series
+        for series in tseg_series
     )
+
+
+def _study_ct_series_all_harmonized(study: Study) -> bool:
+    """Backward-compatible alias for ``_study_tseg_series_all_harmonized``."""
+    return _study_tseg_series_all_harmonized(study)
 
 
 def _sqlite_column_type(column: Column) -> str | None:
@@ -1118,14 +1125,16 @@ class AnonymizerModel:
 
     @use_session(is_read_only_operation=True)
     def get_ct_series_harmonized_descriptions(self, anon_study_uid: str) -> list[str]:
-        """Return non-empty CT Series.harmonized_description values for a study."""
+        """Return non-empty CT|MR Series.harmonized_description values for a study."""
+        from anonymizer.controller.ai.tseg.modality_profile import series_is_tseg_eligible
+
         stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
         study = self.session.execute(stmt).scalar_one_or_none()
         if study is None:
             return []
         descriptions: list[str] = []
         for series in study.series or []:
-            if (series.modality or "").upper() != "CT":
+            if not series_is_tseg_eligible(series.modality):
                 continue
             text = (series.harmonized_description or "").strip()
             if text:
@@ -1147,11 +1156,12 @@ class AnonymizerModel:
     @use_session(is_read_only_operation=True)
     def find_studies_with_series_fingerprint(self, fingerprint: tuple[str, ...]) -> list[str]:
         """
-        Return anon_study_uid values whose CT harmonized series descriptions match ``fingerprint``.
+        Return anon_study_uid values whose CT|MR harmonized series descriptions match ``fingerprint``.
 
         Fingerprint is a sorted multiset of Playbook series description strings.
         """
-        from anonymizer.controller.ai.tseg.loinc_study import study_series_description_fingerprint
+        from anonymizer.controller.ai.harmonize.loinc_study import study_series_description_fingerprint
+        from anonymizer.controller.ai.tseg.modality_profile import series_is_tseg_eligible
 
         target = tuple(fingerprint)
         stmt = select(Study).options(selectinload(Study.series))
@@ -1161,7 +1171,7 @@ class AnonymizerModel:
             descriptions = [
                 (series.harmonized_description or "").strip()
                 for series in (study.series or [])
-                if (series.modality or "").upper() == "CT"
+                if series_is_tseg_eligible(series.modality)
                 and (series.harmonized_description or "").strip()
             ]
             if study_series_description_fingerprint(descriptions) == target:

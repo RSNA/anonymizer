@@ -11,6 +11,14 @@ from typing import TYPE_CHECKING
 
 from pydicom import Dataset, dcmread
 
+from anonymizer.controller.ai.harmonize.playbook import (
+    PlaybookHarmonizeAttributes,
+    build_harmonized_series_description,
+    build_localizer_harmonized_series_description,
+    build_playbook_attributes,
+    format_playbook_analysis_log_lines,
+    is_localizer_geometry,
+)
 from anonymizer.controller.ai.tseg.config import (
     CONTRAST_PHASE_CACHE_FILENAME,
     CONTRAST_STATS_FILENAME,
@@ -36,16 +44,9 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
     sorted_dicom_paths,
     ts_regions_eligible,
 )
+from anonymizer.controller.ai.tseg.ml_env import log_active_threads
+from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
 from anonymizer.controller.ai.tseg.model_cache import tseg_batch_session
-from anonymizer.controller.ai.tseg.radlex_playbook import (
-    PlaybookHarmonizeAttributes,
-    build_harmonized_series_description,
-    build_localizer_harmonized_series_description,
-    build_playbook_attributes,
-    format_playbook_analysis_log_lines,
-    is_localizer_geometry,
-)
-from anonymizer.controller.ai.tseg.runtime import log_active_threads
 from anonymizer.controller.ai.tseg.segment import (
     AnalysisProgress,
     ProgressCallback,
@@ -69,11 +70,26 @@ from anonymizer.utils.translate import _
 if TYPE_CHECKING:
     from anonymizer.model.anonymizer import AnonymizerModel
 
-from anonymizer.controller.ai.tseg.loinc_study import StudyDescriptionOffer
+from anonymizer.controller.ai.harmonize.loinc_study import StudyDescriptionOffer
 
 logger = logging.getLogger(__name__)
 
-HarmonizeProgress = AnalysisProgress
+
+@dataclass(frozen=True)
+class HarmonizeProgress:
+    """Progress event for Harmonize UI/batch (includes Playbook description when ready)."""
+
+    stage: str
+    message: str
+    fraction: float
+    elapsed_sec: float
+    remaining_sec: float | None = None
+    geometry: SeriesGeometryResult | None = None
+    tseg: TS_result | None = None
+    radlex_series_description: str | None = None
+
+
+HarmonizeProgressCallback = Callable[[HarmonizeProgress], None]
 
 # Progress fractions for sequential harmonize stages (single-threaded worker).
 _GEOMETRY_FRAC = (0.0, 0.08)
@@ -141,6 +157,12 @@ def _merge_localizer_result(
     )
 
 
+def _contrast_phase_required(series_directory: Path) -> bool:
+    """CT (and unknown modalities) require contrast phase; MR profiles skip it."""
+    profile = resolve_profile_for_series(series_directory)
+    return profile is None or profile.enable_contrast_phase
+
+
 def _merge_result(
     series_directory: Path,
     tseg: TS_result | None,
@@ -178,7 +200,7 @@ def _merge_result(
             error=tseg.error,
         )
 
-    if not tseg.contrast_phase:
+    if not tseg.contrast_phase and _contrast_phase_required(series_directory):
         return HarmonizedResult(
             series_directory=series_directory,
             radlex_series_description="",
@@ -210,15 +232,20 @@ def _merge_result(
 
 
 def _tseg_result_from_cache(series_directory: Path) -> TS_result | None:
-    """Rebuild anatomy + contrast TS_result from ``A_TS_SEG`` without running ML."""
+    """Rebuild anatomy (+ contrast when required) TS_result from ``A_TS_SEG`` without running ML."""
     cache_dir = series_cache_dir(series_directory)
     seg_dir = cache_dir / "seg"
-    structures = list(ROI_SUBSET)
+    profile = resolve_profile_for_series(series_directory)
+    structures = list(profile.roi_subset if profile is not None else ROI_SUBSET)
     if not segmentation_cache_valid(seg_dir, structures):
         return None
 
     structure_voxels = collect_structure_voxels(seg_dir, structures)
-    region = dominant_region_from_voxels(structure_voxels)
+    structure_to_region = profile.structure_to_region if profile is not None else None
+    region = dominant_region_from_voxels(
+        structure_voxels,
+        structure_to_region=structure_to_region,
+    )
     regions_label = body_parts_present(region.region_voxels)
     if not regions_label:
         return None
@@ -228,6 +255,9 @@ def _tseg_result_from_cache(series_directory: Path) -> TS_result | None:
         region=region,
         regions_label=regions_label,
     )
+
+    if profile is not None and not profile.enable_contrast_phase:
+        return region_result
 
     contrast_stats_path = cache_dir / CONTRAST_STATS_FILENAME
     contrast_stats_hn_path = cache_dir / CONTRAST_STATS_HN_FILENAME
@@ -264,7 +294,6 @@ def _tseg_result_from_cache(series_directory: Path) -> TS_result | None:
         iv_contrast=phase_to_iv_contrast(phase),
         contrast_phase=phase,
         phase_probability=float(cached.get("probability", 0.0)),
-        radlex_series_description="",
         structures_present=dict(region_result.structures_present),
     )
 
@@ -298,7 +327,9 @@ def harmonized_description_from_cache(
         description = (merged.radlex_series_description or "").strip()
         return description or None
 
-    if not ts_regions_eligible(geometry) or not ENABLE_TS_CONTRAST:
+    if not ts_regions_eligible(geometry):
+        return None
+    if _contrast_phase_required(series_directory) and not ENABLE_TS_CONTRAST:
         return None
 
     tseg = _tseg_result_from_cache(series_directory)
@@ -327,7 +358,9 @@ def series_description_is_harmonized(series_directory: Path, ds: Dataset) -> boo
 
 def harmonize_context_hint(series_directory: Path, ds: Dataset | None) -> str | None:
     """Optional Series View geometry-line suffix when harmonization is already up to date."""
-    if ds is None or getattr(ds, "Modality", None) != "CT":
+    from anonymizer.controller.ai.tseg.modality_profile import is_tseg_modality
+
+    if ds is None or not is_tseg_modality(getattr(ds, "Modality", None)):
         return None
     if series_description_is_harmonized(series_directory, ds) is not True:
         return None
@@ -367,7 +400,7 @@ def _format_progress_pct(fraction: float) -> str:
 
 
 def format_harmonize_progress_message(
-    progress: AnalysisProgress,
+    progress: HarmonizeProgress,
     *,
     include_pct: bool = True,
 ) -> str:
@@ -424,12 +457,11 @@ def format_harmonize_progress_message(
         "merge": _("Building standardized series description"),
     }
 
-    if stage in stage_labels:
-        return stage_labels[stage] + "…" + pct
-
     known_messages = {
         "Starting contrast phase analysis": _("Starting contrast phase analysis"),
         "Contrast phase analysis complete": _("Contrast phase analysis complete"),
+        "Reading IV contrast from DICOM": _("Reading IV contrast from DICOM"),
+        "Contrast phase not applicable": _("Reading IV contrast from DICOM"),
         "Segmenting anatomy": _("Segmenting anatomy (TotalSegmentator)"),
         "Preparing CT volume": _("Preparing CT volume"),
         "Summarizing anatomy regions": _("Summarizing anatomy regions"),
@@ -437,8 +469,12 @@ def format_harmonize_progress_message(
         "Harmonized description ready": _("Standardized series description ready"),
         "Analyzing contrast phase": _("Determining contrast phase"),
     }
+    # Prefer specific pipeline messages (e.g. MR DICOM contrast) over generic stage labels.
     if message in known_messages:
-        return known_messages[message] + pct
+        return known_messages[message] + "…" + pct
+
+    if stage in stage_labels:
+        return stage_labels[stage] + "…" + pct
 
     if message:
         return message + pct
@@ -513,11 +549,29 @@ def _iter_study_series_dirs(
 
 
 def _load_ct_series_dataset(series_path: Path) -> Dataset | None:
+    """Load series dataset only when modality is CT (CT-only callers)."""
+    from pydicom.errors import InvalidDicomError
+
     try:
         ds = _load_series_dataset(series_path)
-    except ValueError:
+    except (ValueError, OSError, InvalidDicomError):
         return None
     if getattr(ds, "Modality", None) != "CT":
+        return None
+    return ds
+
+
+def _load_tseg_series_dataset(series_path: Path) -> Dataset | None:
+    """Load series dataset when modality has a TSEG profile (CT or MR)."""
+    from pydicom.errors import InvalidDicomError
+
+    from anonymizer.controller.ai.tseg.modality_profile import profile_for_modality
+
+    try:
+        ds = _load_series_dataset(series_path)
+    except (ValueError, OSError, InvalidDicomError):
+        return None
+    if profile_for_modality(getattr(ds, "Modality", None)) is None:
         return None
     return ds
 
@@ -534,12 +588,24 @@ def enumerate_ct_series_for_studies(
     return ct_series
 
 
+def enumerate_tseg_series_for_studies(
+    images_dir: Path,
+    studies: Sequence[tuple[str, str]],
+) -> list[Path]:
+    """Return CT|MR series directories under the selected anonymized studies."""
+    series_list: list[Path] = []
+    for series_path in _iter_study_series_dirs(images_dir, studies):
+        if _load_tseg_series_dataset(series_path) is not None:
+            series_list.append(series_path)
+    return series_list
+
+
 def study_harmonize_status(
     anon_model: "AnonymizerModel",
     anon_study_uid: str,
 ) -> bool:
     """
-    Return True when every eligible CT series in the study is harmonized.
+    Return True when every eligible CT|MR series in the study is harmonized.
 
     Uses ORM ``Series.harmonized_description`` metadata (no filesystem or TS cache reads).
     """
@@ -587,7 +653,7 @@ def study_series_description_fingerprint(
     anon_study_uid: str,
 ) -> tuple[str, ...]:
     """Sorted multiset fingerprint of CT Playbook series descriptions for a study."""
-    from anonymizer.controller.ai.tseg.loinc_study import study_series_description_fingerprint as fingerprint_of
+    from anonymizer.controller.ai.harmonize.loinc_study import study_series_description_fingerprint as fingerprint_of
 
     return fingerprint_of(anon_model.get_ct_series_harmonized_descriptions(anon_study_uid))
 
@@ -633,6 +699,18 @@ def ct_series_paths_for_study(images_dir: Path, anon_patient_id: str, anon_study
     ]
 
 
+def tseg_series_paths_for_study(images_dir: Path, anon_patient_id: str, anon_study_uid: str) -> list[Path]:
+    """Return CT|MR series directories under an anonymized study folder."""
+    study_root = Path(images_dir) / anon_patient_id / anon_study_uid
+    if not study_root.is_dir():
+        return []
+    return [
+        path
+        for path in sorted(study_root.iterdir())
+        if path.is_dir() and not path.name.startswith(".") and _load_tseg_series_dataset(path) is not None
+    ]
+
+
 def maybe_offer_study_description_harmonize(
     anon_model: AnonymizerModel,
     anon_study_uid: str,
@@ -646,10 +724,10 @@ def maybe_offer_study_description_harmonize(
     Returns None when the study is incomplete, already has a study description, or ranking fails.
     ``offer.ambiguous`` is False when the top match can be auto-applied.
     """
-    from anonymizer.controller.ai.tseg.loinc_study import (
+    from anonymizer.controller.ai.harmonize.loinc_study import (
         build_study_description_ranking,
     )
-    from anonymizer.controller.ai.tseg.loinc_study import (
+    from anonymizer.controller.ai.harmonize.loinc_study import (
         study_series_description_fingerprint as fingerprint_of,
     )
 
@@ -664,15 +742,23 @@ def maybe_offer_study_description_harmonize(
         return None
 
     series_paths: list[Path] = []
+    loinc_prefix = "CT "
     if images_dir is not None:
         patient_id = anon_model.get_anon_patient_id_for_study(anon_study_uid)
         if patient_id:
-            series_paths = ct_series_paths_for_study(Path(images_dir), patient_id, anon_study_uid)
+            series_paths = tseg_series_paths_for_study(Path(images_dir), patient_id, anon_study_uid)
+            from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
+
+            # Prefer MR LOINC when the study is MR-only; mixed/CT studies keep CT ranking.
+            profiles = [resolve_profile_for_series(p) for p in series_paths]
+            if profiles and all(p is not None and p.modality == "MR" for p in profiles):
+                loinc_prefix = "MR "
 
     _aggregate, matches, ambiguous = build_study_description_ranking(
         descriptions,
         top_n=top_n,
         series_paths=series_paths or None,
+        loinc_prefix=loinc_prefix,
     )
     if not matches:
         return None
@@ -807,17 +893,17 @@ def harmonize_and_apply_series(
     series_path: Path,
     *,
     anon_model: AnonymizerModel | None = None,
-    progress: ProgressCallback | None = None,
+    progress: HarmonizeProgressCallback | None = None,
     include_brain_structures: bool = False,
 ) -> HarmonizeApplyOutcome:
-    """Run harmonize for one CT series and auto-apply the merged description."""
+    """Run harmonize for one CT|MR series and auto-apply the merged description."""
     series_path = Path(series_path)
-    ds = _load_ct_series_dataset(series_path)
+    ds = _load_tseg_series_dataset(series_path)
     if ds is None:
         return HarmonizeApplyOutcome(
             series_path,
             "failed",
-            _("Not a CT series or no DICOM files"),
+            _("Not a CT/MR series or no DICOM files"),
         )
 
     series_uid = str(ds.SeriesInstanceUID)
@@ -855,7 +941,8 @@ def harmonize_and_apply_series(
 
 
 def format_harmonize_batch_contrast_log_lines(result: HarmonizedResult) -> list[str]:
-    """IV contrast confidence and dominant-organ HU for the AI Batch workflow log."""
+    """IV contrast row (and CT organ HU) for the AI Batch workflow log."""
+    from anonymizer.controller.ai.harmonize.playbook import playbook_iv_contrast_row_values
     from anonymizer.controller.ai.tseg.config import (
         CONTRAST_STATS_FILENAME,
         CONTRAST_STATS_HN_FILENAME,
@@ -865,23 +952,37 @@ def format_harmonize_batch_contrast_log_lines(result: HarmonizedResult) -> list[
         load_contrast_statistics,
         load_contrast_stats_hn,
     )
-    from anonymizer.controller.ai.tseg.radlex_playbook import playbook_iv_contrast_row_values
+    from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
 
     tseg = result.tseg
-    if tseg is None or not tseg.contrast_phase:
+    if tseg is None:
+        return []
+
+    profile = resolve_profile_for_series(result.series_directory)
+    is_mr = profile is not None and not profile.enable_contrast_phase
+    if not is_mr and not tseg.contrast_phase:
         return []
 
     lines: list[str] = []
-    _element, _code, value, evidence, _source = playbook_iv_contrast_row_values(
+    try:
+        ds = _load_series_dataset(result.series_directory)
+    except ValueError:
+        ds = None
+
+    element, _code, value, evidence, _source = playbook_iv_contrast_row_values(
         tseg=tseg,
         attributes=result.playbook,
         geometry=result.geometry,
+        ds=ds,
     )
     if value != "—":
-        line = f"{_('IV Contrast Phase')}: {value}"
+        line = f"{element}: {value}"
         if evidence and evidence != "—":
             line += f" — {evidence}"
         lines.append(line)
+
+    if is_mr:
+        return lines
 
     cache_dir = series_cache_dir(result.series_directory)
     stats_path = cache_dir / CONTRAST_STATS_FILENAME
@@ -917,13 +1018,13 @@ def harmonize_studies_batch(
     on_batch_start: HarmonizeStudiesBatchHook | None = None,
     on_batch_end: HarmonizeStudiesBatchHook | None = None,
 ) -> HarmonizeStudiesSummary:
-    """Harmonize all CT series under selected studies, auto-applying descriptions."""
-    series_paths = enumerate_ct_series_for_studies(images_dir, studies)
+    """Harmonize all CT|MR series under selected studies, auto-applying descriptions."""
+    series_paths = enumerate_tseg_series_for_studies(images_dir, studies)
     total = len(series_paths)
     summary = HarmonizeStudiesSummary()
 
     if progress is not None and total == 0:
-        progress(0, 0, _("No CT series found for selected studies"), 1.0)
+        progress(0, 0, _("No CT/MR series found for selected studies"), 1.0)
 
     with tseg_batch_session(preload=True):
         if on_batch_start is not None:
@@ -944,7 +1045,7 @@ def harmonize_studies_batch(
                     break
 
                 try:
-                    ds = _load_ct_series_dataset(series_path)
+                    ds = _load_tseg_series_dataset(series_path)
                 except (OSError, ValueError):
                     ds = None
                 base_fraction = index / total if total else 1.0
@@ -1009,7 +1110,7 @@ def harmonize_studies_batch(
 
 
 def _scaled_progress(
-    callback: ProgressCallback | None,
+    callback: HarmonizeProgressCallback | None,
     *,
     started: float,
     frac_range: tuple[float, float],
@@ -1022,7 +1123,7 @@ def _scaled_progress(
 
     def wrapped(progress: AnalysisProgress) -> None:
         callback(
-            AnalysisProgress(
+            HarmonizeProgress(
                 stage=progress.stage,
                 message=progress.message or stage_label,
                 fraction=frac_start + progress.fraction * span,
@@ -1030,7 +1131,7 @@ def _scaled_progress(
                 remaining_sec=progress.remaining_sec,
                 geometry=progress.geometry,
                 tseg=progress.tseg,
-                radlex_series_description=progress.radlex_series_description,
+                radlex_series_description=None,
             )
         )
 
@@ -1040,7 +1141,7 @@ def _scaled_progress(
 def harmonize_series(
     series_directories: list[Path],
     *,
-    progress: ProgressCallback | None = None,
+    progress: HarmonizeProgressCallback | None = None,
     include_brain_structures: bool = False,
 ) -> list[HarmonizedResult]:
     """
@@ -1050,7 +1151,7 @@ def harmonize_series(
     ``geometry.ts_suitable`` is false (localizers, single-slice 2D, derived 3D renders, etc.).
 
     Series descriptions are built only from TotalSegmentator anatomy and contrast plus DICOM geometry
-    (Playbook body part, IV contrast phase, anatomic plane). FALCON is not used.
+    (Playbook body part, IV contrast phase, anatomic plane).
     """
     if not series_directories:
         return []
@@ -1156,14 +1257,16 @@ def harmonize_series(
                 iv_contrast=False,
                 contrast_phase="",
                 phase_probability=0.0,
-                radlex_series_description="",
                 error=geometry.notes or f"TS skipped ({geometry.dimensionality})",
             )
             nifti_path = None
 
         tseg: TS_result | None = region_result
+        series_profile = resolve_profile_for_series(series_dir)
+        run_contrast = bool(series_profile is None or series_profile.enable_contrast_phase)
         if (
-            ENABLE_TS_CONTRAST
+            run_contrast
+            and ENABLE_TS_CONTRAST
             and nifti_path is not None
             and region_result.body_parts_present.strip()
             and region_result.error is None
@@ -1190,6 +1293,16 @@ def harmonize_series(
             _report(
                 "contrast",
                 "Contrast phase analysis complete",
+                _TSEG_CONTRAST_FRAC[1],
+                geometry=geometry,
+                tseg=tseg,
+            )
+        elif series_profile is not None and not series_profile.enable_contrast_phase:
+            # MR: IV contrast comes from DICOM headers in Playbook merge (not TS phase ML).
+            logger.debug("Harmonize: contrast phase skipped for modality %s", series_profile.modality)
+            _report(
+                "contrast",
+                "Reading IV contrast from DICOM",
                 _TSEG_CONTRAST_FRAC[1],
                 geometry=geometry,
                 tseg=tseg,

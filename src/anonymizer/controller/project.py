@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, cast
 if TYPE_CHECKING:
     import tkinter as tk
 
+    from anonymizer.controller.series_io import LoadedSeries
     from anonymizer.view.common.fonts import AppFonts
     from anonymizer.view.series.series import SeriesView
 
@@ -2657,6 +2658,7 @@ class ProjectController(AE):
         parent: "tk.Misc",
         series_path: Path,
         fonts: "AppFonts | None" = None,
+        preloaded: LoadedSeries | None = None,
     ) -> "SeriesView | None":
         """Open Series View; views call this instead of constructing SeriesView with the model."""
         from anonymizer.view.series.series import show_series_view
@@ -2666,6 +2668,7 @@ class ProjectController(AE):
             controller=self,
             series_path=series_path,
             fonts=fonts,
+            preloaded=preloaded,
         )
 
     def harmonize_studies(

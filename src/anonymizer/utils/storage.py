@@ -23,10 +23,6 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.workbook.child import _WorkbookChild
 from openpyxl.worksheet.worksheet import Worksheet
 
-from anonymizer.controller.ai.ocr_whitelist_match import (
-    OcrWhitelistMatchSettings,
-    default_whitelist_match_settings,
-)
 from anonymizer.utils.translate import get_current_language_code
 
 logger = logging.getLogger(__name__)
@@ -246,8 +242,13 @@ def project_whitelist_options_path(project_dir: Path, modality_code: str) -> Pat
 def load_modality_whitelist_match_settings(
     project_dir: Path | None,
     modality_code: str | None,
-) -> OcrWhitelistMatchSettings:
+):
     """Load per-modality OCR whitelist match settings from sidecar JSON."""
+    from anonymizer.controller.ai.remove_pixel_phi import (
+        OcrWhitelistMatchSettings,
+        default_whitelist_match_settings,
+    )
+
     if not modality_code or project_dir is None:
         return default_whitelist_match_settings()
     options_path = project_whitelist_options_path(project_dir, modality_code)
@@ -263,7 +264,7 @@ def load_modality_whitelist_match_settings(
 def save_modality_whitelist_match_settings(
     project_dir: Path,
     modality_code: str,
-    settings: OcrWhitelistMatchSettings,
+    settings,
 ) -> Path:
     """Persist per-modality OCR whitelist match settings to sidecar JSON."""
     if not project_dir.is_dir():
@@ -461,6 +462,7 @@ def track_tqdm_model_download(
     download_id: str,
     *,
     start_message: str = "Downloading…",
+    label: str = "",
     tqdm_module: object,
     on_progress: Callable[[str, float | None], None] | None = None,
     manage_lifecycle: bool = True,
@@ -469,17 +471,24 @@ def track_tqdm_model_download(
 
     Args:
         download_id: Stable key for UI polling (e.g. ``remove_pixel_phi``, ``enable_harmonize``).
-        start_message: Initial status line.
+        start_message: Initial status line (used when ``label`` is empty).
+        label: Optional model name shown after ``Downloading:`` with byte progress.
         tqdm_module: Module object whose ``tqdm`` attribute will be patched (e.g. ``totalsegmentator.libs``).
         on_progress: Optional ``(message, fraction)`` callback on each update.
         manage_lifecycle: When False, only report updates; caller owns begin/end_model_download.
     """
     from tqdm import tqdm as orig_tqdm
 
+    resolved_start = f"Downloading: {label}…" if label else start_message
     if manage_lifecycle or get_model_download_progress(download_id) is None:
-        begin_model_download(download_id, message=start_message)
+        begin_model_download(download_id, message=resolved_start)
     if on_progress is not None:
-        on_progress(start_message, None)
+        on_progress(resolved_start, None)
+
+    def _progress_message(byte_part: str) -> str:
+        if label:
+            return f"Downloading: {label} — {byte_part}"
+        return f"Downloading: {byte_part}"
 
     def _report(message: str, *, fraction: float | None | object = ...) -> None:
         resolved = None if fraction is ... else fraction
@@ -494,11 +503,11 @@ def track_tqdm_model_download(
             result = super().update(n)
             if self.total:
                 fraction = min(1.0, self.n / self.total)
-                message = f"Downloading: {_format_download_bytes(self.n)}/{_format_download_bytes(self.total)}"
+                byte_part = f"{_format_download_bytes(self.n)}/{_format_download_bytes(self.total)}"
             else:
                 fraction = None
-                message = f"Downloading: {_format_download_bytes(self.n)}"
-            _report(message, fraction=fraction)
+                byte_part = _format_download_bytes(self.n)
+            _report(_progress_message(byte_part), fraction=fraction)
             return result
 
         def close(self):

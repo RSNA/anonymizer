@@ -113,13 +113,18 @@ def test_segmentation_cache_valid_respects_roi_manifest(tmp_path) -> None:
     assert not _segmentation_cache_valid(seg_dir, ["liver", "heart", "vertebrae_L1"])
 
 
+@patch("anonymizer.controller.ai.tseg.modality_profile.resolve_profile_for_series")
 @patch("anonymizer.controller.ai.tseg.segment.resolve_series_geometry")
 @patch("anonymizer.controller.ai.tseg.segment.ts_regions_eligible", return_value=False)
 def test_analyze_tseg_regions_uses_provided_geometry(
     _mock_eligible: MagicMock,
     mock_resolve: MagicMock,
+    mock_profile: MagicMock,
     tmp_path: Path,
 ) -> None:
+    from anonymizer.controller.ai.tseg.modality_profile import default_ct_profile
+
+    mock_profile.return_value = default_ct_profile()
     geometry = SeriesGeometryResult(
         plane="axial",
         plane_confidence=0.95,

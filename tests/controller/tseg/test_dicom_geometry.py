@@ -294,10 +294,10 @@ def test_ensure_series_geometry_returns_cached_without_reload(tmp_path: Path) ->
     assert ensure_series_geometry(series_dir, cached=geometry) is geometry
 
 
-def test_ensure_series_geometry_skips_non_ct_modality(tmp_path: Path) -> None:
+def test_ensure_series_geometry_skips_non_tseg_modality(tmp_path: Path) -> None:
     series_dir = build_synthetic_chest_ct_series(tmp_path / "chest")
 
-    assert ensure_series_geometry(series_dir, modality="MR") is None
+    assert ensure_series_geometry(series_dir, modality="US") is None
 
 
 def test_ensure_series_geometry_loads_cache_then_resolves(tmp_path: Path) -> None:

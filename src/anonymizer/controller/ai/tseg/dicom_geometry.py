@@ -872,14 +872,16 @@ def ensure_series_geometry(
     modality: str | None = None,
     cached: SeriesGeometryResult | None = None,
 ) -> SeriesGeometryResult | None:
-    """Return CT series geometry from memory, cache, or on-demand analysis."""
+    """Return CT|MR series geometry from memory, cache, or on-demand analysis."""
+    from anonymizer.controller.ai.tseg.modality_profile import is_tseg_modality
+
     if cached is not None:
         return cached
 
     resolved_modality = modality
     if resolved_modality is None and ds is not None:
         resolved_modality = getattr(ds, "Modality", None)
-    if resolved_modality != "CT":
+    if not is_tseg_modality(resolved_modality):
         return None
 
     series_directory = Path(series_directory)

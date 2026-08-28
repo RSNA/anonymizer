@@ -672,7 +672,7 @@ class Anonymizer(ctk.CTk):
             f"{self.controller.model.project_name}[{self.controller.model.site_id}] => {self.controller.model.abridged_storage_dir()}"
         )
 
-        from anonymizer.controller.ai.tseg.runtime_status import log_runtime_status_for_session
+        from anonymizer.controller.ai.tseg.readiness import log_runtime_status
 
         self._release_welcome_window_constraints()
         self.welcome_view.release_images()
@@ -680,7 +680,7 @@ class Anonymizer(ctk.CTk):
         from anonymizer.view.common.ctk_safe import purge_stale_scaling_windows
 
         purge_stale_scaling_windows()
-        log_runtime_status_for_session()
+        log_runtime_status()
         self.protocol("WM_DELETE_WINDOW", self.close_project)
         self.menu_bar = self.create_project_open_menu_bar()
 
@@ -1168,7 +1168,7 @@ class Anonymizer(ctk.CTk):
         logger.info(f"{self.controller}")
 
     def show_ai_features_setup_dialog(self) -> None:
-        from anonymizer.view.ai.tseg_setup_dialog import show_ai_features_setup_dialog
+        from anonymizer.view.ai.ai_features_dialog import show_ai_features_setup_dialog
 
         def on_changed() -> None:
             if self.dataset_view is not None and self.dataset_view.winfo_exists():
@@ -1227,9 +1227,6 @@ class Anonymizer(ctk.CTk):
             )
 
         return help_menu
-
-    def show_tseg_setup_dialog(self) -> None:
-        self.show_ai_features_setup_dialog()
 
     def _live_app_windows(self) -> list[tk.Misc]:
         live: list[tk.Misc] = []
@@ -1607,10 +1604,9 @@ def main(config: Path | None = None):
         )
 
     # TotalSegmentator runtime (Harmonize / Face Blur prerequisites and model cache).
-    from anonymizer.controller.ai.tseg.runtime_status import init_ai_session_from_runtime, log_runtime_status
+    from anonymizer.controller.ai.tseg.readiness import log_runtime_status
 
     log_runtime_status()
-    init_ai_session_from_runtime(force_refresh=True)
 
     if config:
         run_HEADLESS(config)

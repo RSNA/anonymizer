@@ -134,10 +134,24 @@ def test_cached_region_signal_multi_region(tmp_path: Path) -> None:
 def test_evaluate_blocks_non_ct(tmp_path: Path) -> None:
     series_dir = build_synthetic_head_ct_series(tmp_path / "head")
     ds = pydicom.dcmread(next(series_dir.glob("*.dcm")))
-    ds.Modality = "MR"
+    ds.Modality = "US"
     result = evaluate_face_blur_eligibility(series_dir, ds=ds, geometry=_geometry())
     assert result.decision == FaceBlurGateDecision.BLOCK
     assert result.reason == FaceBlurGateReason.MODALITY
+
+
+def test_evaluate_allows_mr_when_head_cached_and_weights_ready(tmp_path: Path) -> None:
+    """MR is eligible when face_mr weights are present (CT path unchanged)."""
+    from unittest.mock import patch
+
+    series_dir = build_synthetic_head_ct_series(tmp_path / "head")
+    _write_head_region_cache(series_dir)
+    ds = pydicom.dcmread(next(series_dir.glob("*.dcm")))
+    ds.Modality = "MR"
+    with patch("anonymizer.controller.ai.tseg.model_cache.mr_face_model_ready", return_value=True):
+        result = evaluate_face_blur_eligibility(series_dir, ds=ds, geometry=_geometry())
+    assert result.decision == FaceBlurGateDecision.ALLOW
+    assert result.reason == FaceBlurGateReason.CACHED_REGIONS_HEAD
 
 
 def test_evaluate_blocks_when_feature_disabled(tmp_path: Path) -> None:

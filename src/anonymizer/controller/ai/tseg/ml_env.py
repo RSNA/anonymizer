@@ -1,4 +1,4 @@
-"""Single-threaded ML runtime helpers for harmonize / tseg pipeline stages."""
+"""ML execution environment: thread limits and sequential TotalSegmentator/nnUNet context."""
 
 from __future__ import annotations
 

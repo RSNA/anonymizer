@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from anonymizer.controller.ai.tseg.radlex_playbook import (
+from anonymizer.controller.ai.harmonize.playbook import (
     ANATOMIC_PLANE_PLAYBOOK_CODES,
     BODY_PART_PLAYBOOK_CODES,
     IV_CONTRAST_PLAYBOOK_CODES,
@@ -232,7 +232,19 @@ def load_loinc_study_descriptions(csv_path: str | None = None) -> tuple[tuple[st
 
 
 def load_ct_loinc_study_descriptions(csv_path: str | None = None) -> tuple[tuple[str, str], ...]:
-    return tuple((code, name) for code, name in load_loinc_study_descriptions(csv_path) if name.startswith("CT "))
+    return load_loinc_study_descriptions_for_prefix("CT ", csv_path=csv_path)
+
+
+def load_loinc_study_descriptions_for_prefix(
+    loinc_prefix: str,
+    csv_path: str | None = None,
+) -> tuple[tuple[str, str], ...]:
+    """Return LOINC rows whose LongCommonName starts with ``loinc_prefix`` (e.g. ``CT `` / ``MR ``)."""
+    return tuple(
+        (code, name)
+        for code, name in load_loinc_study_descriptions(csv_path)
+        if name.startswith(loinc_prefix)
+    )
 
 
 def study_series_description_fingerprint(descriptions: list[str] | tuple[str, ...]) -> tuple[str, ...]:
@@ -307,7 +319,10 @@ def _sort_anatomy(parts: Sequence[str]) -> tuple[str, ...]:
 
 def series_region_voxel_counts(series_path: Path) -> dict[str, int]:
     """Return TS region voxel counts from the series seg cache, or empty if unavailable."""
-    from anonymizer.controller.ai.tseg.config import ROI_SUBSET
+    from anonymizer.controller.ai.tseg.modality_profile import (
+        default_ct_profile,
+        resolve_profile_for_series,
+    )
     from anonymizer.controller.ai.tseg.segment import (
         _segmentation_cache_valid,
         collect_structure_voxels,
@@ -316,12 +331,21 @@ def series_region_voxel_counts(series_path: Path) -> dict[str, int]:
     )
 
     series_path = Path(series_path)
+    profile = resolve_profile_for_series(series_path) or default_ct_profile()
     seg_dir = series_cache_dir(series_path) / "seg"
-    structures = list(ROI_SUBSET)
-    if not _segmentation_cache_valid(seg_dir, structures):
+    structures = list(profile.roi_subset)
+    if not _segmentation_cache_valid(
+        seg_dir,
+        structures,
+        anatomy_task=profile.anatomy_task,
+        modality=profile.modality,
+    ):
         return {}
     structure_voxels = collect_structure_voxels(seg_dir, structures)
-    region = dominant_region_from_voxels(structure_voxels)
+    region = dominant_region_from_voxels(
+        structure_voxels,
+        structure_to_region=profile.structure_to_region,
+    )
     return {name: count for name, count in region.region_voxels.items() if count > 0}
 
 
@@ -447,18 +471,30 @@ def _contrast_suffixes(contrast_family: str) -> list[str]:
     return ["WO contrast", "W contrast IV"]
 
 
-def build_canonical_loinc_phrases(aggregate: StudyDescriptionAggregate) -> list[str]:
-    """Build preferred then full-union CT LongCommonName candidates."""
+def build_canonical_loinc_phrases(
+    aggregate: StudyDescriptionAggregate,
+    *,
+    loinc_prefix: str = "CT ",
+) -> list[str]:
+    """Build preferred then full-union LongCommonName candidates for ``loinc_prefix``."""
     suffixes = _contrast_suffixes(aggregate.contrast_family)
     phrases: list[str] = []
     seen: set[str] = set()
+    modality_label = loinc_prefix.strip() or "CT"
+
+    def _map_part(part: str) -> str:
+        # LOINC StudyDescription uses Brain (not Head) for MR neuro exams.
+        if modality_label.upper() == "MR" and part == "Head":
+            return "Brain"
+        return part
 
     def _add(parts: tuple[str, ...]) -> None:
-        anatomy = _anatomy_phrase(parts)
+        mapped = tuple(_map_part(p) for p in parts)
+        anatomy = _anatomy_phrase(mapped)
         if not anatomy:
             return
         for suffix in suffixes:
-            phrase = f"CT {anatomy} {suffix}"
+            phrase = f"{modality_label} {anatomy} {suffix}"
             key = _normalize_name(phrase)
             if key not in seen:
                 seen.add(key)
@@ -505,16 +541,20 @@ def _name_matches_anatomy_part(name: str, part: str) -> bool:
 
 
 def _primary_loinc_anatomy_phrase(name: str) -> str:
-    """Return the leading anatomy phrase of a CT LongCommonName (before contrast / and CT)."""
+    """Return the leading anatomy phrase of a LOINC LongCommonName (before contrast / and CT|MR)."""
     normalized = _normalize_name(name)
-    if not normalized.startswith("ct "):
+    for prefix in ("ct ", "mr "):
+        if normalized.startswith(prefix):
+            rest = normalized[len(prefix) :]
+            break
+    else:
         return ""
-    rest = normalized[3:]
     cut_points = [
         rest.find(" wo contrast"),
         rest.find(" w contrast"),
         rest.find(" wo and w"),
         rest.find(" and ct "),
+        rest.find(" and mr "),
         rest.find(" for "),
     ]
     cut = min((p for p in cut_points if p >= 0), default=-1)
@@ -611,7 +651,7 @@ def _score_loinc_name(name: str, aggregate: StudyDescriptionAggregate, canonical
             return 900.0 - index * 10.0
 
     tokens = _tokenize_loinc_name(name)
-    if "ct" not in tokens:
+    if "ct" not in tokens and "mr" not in tokens:
         return -1e9
 
     target_parts = aggregate.preferred_anatomy_parts or aggregate.anatomy_parts
@@ -718,7 +758,9 @@ def ranking_is_ambiguous(
         part = next(iter(preferred))
         if not _synonyms_for_anatomy(part).isdisjoint(top_anatomy):
             # Prefer simple single-region names without compound "and CT …" extras.
-            if " and ct " not in _normalize_name(top.long_common_name):
+            if " and ct " not in _normalize_name(top.long_common_name) and " and mr " not in _normalize_name(
+                top.long_common_name
+            ):
                 top_contrast = _name_contrast_family(top.long_common_name)
                 if top_contrast is None or top_contrast == aggregate.contrast_family or (
                     aggregate.contrast_family == "W" and top_contrast == "W"
@@ -740,8 +782,9 @@ def rank_loinc_study_descriptions(
     csv_path: str | None = None,
     region_fractions: Mapping[str, float] | None = None,
     series_paths: Sequence[Path] | None = None,
+    loinc_prefix: str = "CT ",
 ) -> list[LoincStudyMatch]:
-    """Rank CT LOINC StudyDescription rows for the given Playbook series descriptions."""
+    """Rank LOINC StudyDescription rows for the given Playbook series descriptions."""
     fractions = dict(region_fractions) if region_fractions is not None else None
     if fractions is None and series_paths:
         fractions = aggregate_region_fractions(series_paths)
@@ -766,9 +809,9 @@ def rank_loinc_study_descriptions(
                         series_descriptions=aggregate.series_descriptions,
                     )
 
-    canonicals = build_canonical_loinc_phrases(aggregate)
+    canonicals = build_canonical_loinc_phrases(aggregate, loinc_prefix=loinc_prefix)
     scored: list[LoincStudyMatch] = []
-    for code, name in load_ct_loinc_study_descriptions(csv_path):
+    for code, name in load_loinc_study_descriptions_for_prefix(loinc_prefix, csv_path=csv_path):
         score = _score_loinc_name(name, aggregate, canonicals)
         if score < MIN_MATCH_SCORE:
             continue
@@ -784,6 +827,7 @@ def rank_loinc_study_descriptions(
     scored.sort(key=lambda item: (-item.score, item.long_common_name, item.loinc_number))
     return scored[: max(1, top_n)] if scored else []
 
+
 def build_study_description_ranking(
     series_descriptions: list[str] | tuple[str, ...],
     *,
@@ -791,6 +835,7 @@ def build_study_description_ranking(
     csv_path: str | None = None,
     region_fractions: Mapping[str, float] | None = None,
     series_paths: Sequence[Path] | None = None,
+    loinc_prefix: str = "CT ",
 ) -> tuple[StudyDescriptionAggregate, list[LoincStudyMatch], bool]:
     """Return aggregate, ranked matches, and whether ranking is ambiguous."""
     fractions = dict(region_fractions) if region_fractions is not None else None
@@ -806,6 +851,7 @@ def build_study_description_ranking(
         top_n=top_n,
         csv_path=csv_path,
         region_fractions=fractions,
+        loinc_prefix=loinc_prefix,
     )
     ambiguous = ranking_is_ambiguous(matches, aggregate)
     return aggregate, matches, ambiguous

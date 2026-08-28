@@ -30,6 +30,7 @@ from anonymizer.controller.ai.tseg.config import (
     ROI_SUBSET,
     ROI_SUBSET_MANIFEST_FILENAME,
     SEGMENTATION_MODE,
+    segmentation_mode_for_modality,
 )
 from anonymizer.controller.ai.tseg.contrast import (
     ContrastProgressCallback,
@@ -49,8 +50,7 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
     stackable_dicom_paths,
     ts_regions_eligible,
 )
-from anonymizer.controller.ai.tseg.radlex import format_radlex_ct_series_description
-from anonymizer.controller.ai.tseg.runtime import sequential_ml_context
+from anonymizer.controller.ai.tseg.ml_env import sequential_ml_context
 from anonymizer.controller.series_io import load_series_frames
 from anonymizer.utils.translate import _
 
@@ -72,7 +72,6 @@ class AnalysisProgress:
     remaining_sec: float | None = None
     geometry: SeriesGeometryResult | None = None
     tseg: TS_result | None = None
-    radlex_series_description: str | None = None
 
 
 ProgressCallback = Callable[[AnalysisProgress], None]
@@ -149,7 +148,6 @@ class TS_result:
     iv_contrast: bool
     contrast_phase: str
     phase_probability: float
-    radlex_series_description: str
     structures_present: dict[str, int] = field(default_factory=dict)
     error: str | None = None
 
@@ -243,14 +241,20 @@ def collect_structure_voxels(segmentation_dir: Path, structures: list[str]) -> d
     return counts
 
 
-def region_from_structure(name: str) -> str | None:
-    return STRUCTURE_TO_REGION.get(name)
+def region_from_structure(
+    name: str,
+    *,
+    structure_to_region: dict[str, str] | None = None,
+) -> str | None:
+    mapping = structure_to_region if structure_to_region is not None else STRUCTURE_TO_REGION
+    return mapping.get(name)
 
 
 def dominant_region_from_voxels(
     structure_voxels: dict[str, int],
     *,
     min_voxels: int = MIN_STRUCTURE_VOXELS,
+    structure_to_region: dict[str, str] | None = None,
 ) -> RegionResult:
     """Pick the region with the largest summed structure voxel count."""
     region_voxels = {region: 0 for region in BODY_PARTS}
@@ -259,7 +263,7 @@ def dominant_region_from_voxels(
     for structure, count in structure_voxels.items():
         if count < min_voxels:
             continue
-        region = region_from_structure(structure)
+        region = region_from_structure(structure, structure_to_region=structure_to_region)
         if region is None:
             continue
         structures_present[structure] = count
@@ -381,13 +385,18 @@ def run_segmentation(
     mode: str = SEGMENTATION_MODE,
     device: str | None = None,
     roi_subset: list[str] | None = None,
+    task: str | None = None,
     progress: ProgressCallback | None = None,
     analysis_started: float | None = None,
     n_slices: int | None = None,
 ) -> float:
-    """Run TotalSegmentator ``total`` task for anatomy regions. Returns inference wall time in seconds."""
+    """Run TotalSegmentator anatomy task. Returns inference wall time in seconds.
+
+    Defaults match today's CT path (``task=\"total\"``, ``ROI_SUBSET``).
+    """
     totalsegmentator = _require_totalsegmentator()
     subset = roi_subset or list(ROI_SUBSET)
+    anatomy_task = task or "total"
     output_dir.mkdir(parents=True, exist_ok=True)
     started = analysis_started if analysis_started is not None else time.perf_counter()
     estimate = _estimate_segmentation_seconds(n_slices or 100)
@@ -398,7 +407,7 @@ def run_segmentation(
         raise ValueError(f"Unsupported TS mode: {mode!r}")
 
     kwargs: dict = {
-        "task": "total",
+        "task": anatomy_task,
         "body_seg": True,
         "roi_subset": subset,
         "device": resolve_device(device),
@@ -436,11 +445,18 @@ def run_face_segmentation(
     device: str | None = None,
     progress: ProgressCallback | None = None,
     analysis_started: float | None = None,
+    face_task: str | None = None,
+    face_mask_filename: str | None = None,
 ) -> float:
-    """Run TotalSegmentator ``face`` task. Returns inference wall time in seconds."""
+    """Run TotalSegmentator face task. Returns inference wall time in seconds.
+
+    Defaults match today's CT path (``face`` / ``face.nii.gz``).
+    """
     totalsegmentator = _require_totalsegmentator()
     output_dir.mkdir(parents=True, exist_ok=True)
-    face_path = output_dir / FACE_MASK_FILENAME
+    mask_name = face_mask_filename or FACE_MASK_FILENAME
+    task_name = face_task or FACE_TASK
+    face_path = output_dir / mask_name
     started = analysis_started if analysis_started is not None else time.perf_counter()
 
     _report_progress(
@@ -457,7 +473,7 @@ def run_face_segmentation(
         totalsegmentator(
             str(nifti_path),
             str(output_dir),
-            task=FACE_TASK,
+            task=task_name,
             fast=False,
             fastest=False,
             quiet=True,
@@ -521,13 +537,20 @@ def analyze_tseg_face(
     *,
     progress: ProgressCallback | None = None,
     force: bool = False,
+    profile=None,
 ) -> FaceSegResult:
     """
-    DICOM→NIfTI, TotalSegmentator ``face`` task, and cached face mask path.
+    DICOM→NIfTI, TotalSegmentator face task, and cached face mask path.
 
-    Reuses ``<series_directory>/.tseg_cache/volume.nii.gz`` when present (same as
-    anatomy regions). Face mask is cached at ``seg/face.nii.gz``.
+    Reuses ``<series_directory>/A_TS_SEG/volume.nii.gz`` when present (same as
+    anatomy regions). Face mask is cached at ``seg/face.nii.gz`` (CT) or
+    ``seg/face_mr.nii.gz`` (MR).
     """
+    from anonymizer.controller.ai.tseg.modality_profile import (
+        resolve_profile_for_series,
+    )
+    from anonymizer.controller.ai.tseg.model_cache import profile_face_weights_ready
+
     series_directory = Path(series_directory)
     if not ENABLE_TSEG_FACE:
         return _face_error_result(
@@ -535,27 +558,39 @@ def analyze_tseg_face(
             "Face segmentation is disabled (ENABLE_TSEG_FACE=False)",
         )
 
+    resolved = profile if profile is not None else resolve_profile_for_series(series_directory)
+    if resolved is None:
+        return _face_error_result(series_directory, "Unsupported modality for face segmentation")
+    profile = resolved
+
+    if profile.modality != "CT" and not profile_face_weights_ready(profile):
+        return _face_error_result(
+            series_directory,
+            f"TotalSegmentator {profile.face_task} weights (task {profile.face_task_id}) are not installed",
+        )
+
     work_dir = series_cache_dir(series_directory)
     work_dir.mkdir(parents=True, exist_ok=True)
     nifti_path = work_dir / "volume.nii.gz"
     seg_dir = work_dir / "seg"
-    mask_path = face_mask_cache_path(series_directory)
+    mask_path = face_mask_cache_path(series_directory, profile=profile)
     analysis_started = time.perf_counter()
 
     geometry = resolve_series_geometry(series_directory)
     logger.info(
-        "TS face: geometry plane=%s dimensionality=%s provenance=%s ts_suitable=%s",
+        "TS face: geometry plane=%s dimensionality=%s provenance=%s ts_suitable=%s modality=%s",
         geometry.plane,
         geometry.dimensionality,
         geometry.provenance,
         geometry.ts_suitable,
+        profile.modality,
     )
     if not ts_regions_eligible(geometry):
         message = geometry.notes or f"Series not suitable for TotalSegmentator ({geometry.dimensionality})"
         logger.info("TS face: skipped for %s (%s)", series_directory, message)
         return _face_error_result(series_directory, message)
 
-    logger.info("TS face: starting for %s (cache=%s)", series_directory, work_dir)
+    logger.info("TS face: starting for %s (cache=%s task=%s)", series_directory, work_dir, profile.face_task)
     log_memory_usage("ts_face_start")
     invalidate_stale_tseg_volume_cache(series_directory, nifti_path, face_mask_path=mask_path)
 
@@ -564,7 +599,7 @@ def analyze_tseg_face(
             _report_progress(
                 progress,
                 stage="prepare",
-                message="Preparing CT volume",
+                message="Preparing CT volume" if profile.modality == "CT" else "Preparing volume",
                 fraction=0.05,
                 started=analysis_started,
             )
@@ -587,6 +622,8 @@ def analyze_tseg_face(
                     seg_dir,
                     progress=progress,
                     analysis_started=analysis_started,
+                    face_task=profile.face_task,
+                    face_mask_filename=profile.face_mask_filename,
                 )
                 logger.info("TS face: segmentation finished in %.1fs", inference_seconds)
                 release_working_memory(stage="ts_face_after_segmentation")
@@ -635,7 +672,6 @@ def _error_result(series_directory: Path, error: str) -> TS_result:
         iv_contrast=False,
         contrast_phase="",
         phase_probability=0.0,
-        radlex_series_description="",
         error=error,
     )
 
@@ -682,9 +718,12 @@ def estimate_tseg_contrast_remaining_sec(series_directory: Path) -> float:
     )
 
 
-def face_mask_cache_path(series_directory: Path) -> Path:
-    """Cached face mask under ``<series>/A_TS_SEG/seg/face.nii.gz``."""
-    return series_cache_dir(series_directory) / "seg" / FACE_MASK_FILENAME
+def face_mask_cache_path(series_directory: Path, *, profile=None) -> Path:
+    """Cached face mask under ``<series>/A_TS_SEG/seg/`` (CT ``face.nii.gz`` / MR ``face_mr.nii.gz``)."""
+    from anonymizer.controller.ai.tseg.modality_profile import default_ct_profile
+
+    resolved = profile if profile is not None else default_ct_profile()
+    return series_cache_dir(series_directory) / "seg" / resolved.face_mask_filename
 
 
 def _face_cache_valid(mask_path: Path) -> bool:
@@ -719,19 +758,29 @@ def _is_skeletal_roi(structure: str) -> bool:
         structure.startswith("vertebrae_")
         or structure.startswith("rib_")
         or structure.startswith("clavicula_")
-        or structure == "sacrum"
+        or structure in {"sacrum", "vertebrae"}
     )
 
 
-def write_roi_subset_manifest(cache_dir: Path, structures: list[str]) -> None:
+def write_roi_subset_manifest(
+    cache_dir: Path,
+    structures: list[str],
+    *,
+    anatomy_task: str = "total",
+    modality: str = "CT",
+) -> None:
     """Record which TotalSegmentator ROI classes were requested for this series cache."""
     cache_dir.mkdir(parents=True, exist_ok=True)
-    payload = {"roi_subset": sorted(structures)}
+    payload = {
+        "roi_subset": sorted(structures),
+        "anatomy_task": anatomy_task,
+        "modality": modality,
+    }
     path = cache_dir / ROI_SUBSET_MANIFEST_FILENAME
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
-def _read_roi_subset_manifest(cache_dir: Path) -> set[str] | None:
+def _read_roi_subset_manifest(cache_dir: Path) -> tuple[set[str], str | None, str | None] | None:
     path = cache_dir / ROI_SUBSET_MANIFEST_FILENAME
     if not path.is_file():
         return None
@@ -739,17 +788,32 @@ def _read_roi_subset_manifest(cache_dir: Path) -> set[str] | None:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, TypeError, ValueError):
         return None
-    recorded = data.get("roi_subset") if isinstance(data, dict) else None
+    if not isinstance(data, dict):
+        return None
+    recorded = data.get("roi_subset")
     if not isinstance(recorded, list):
         return None
-    return {str(name) for name in recorded}
+    anatomy_task = data.get("anatomy_task")
+    modality = data.get("modality")
+    return (
+        {str(name) for name in recorded},
+        str(anatomy_task) if anatomy_task is not None else None,
+        str(modality) if modality is not None else None,
+    )
 
 
-def _segmentation_cache_valid(seg_dir: Path, structures: list[str]) -> bool:
+def _segmentation_cache_valid(
+    seg_dir: Path,
+    structures: list[str],
+    *,
+    anatomy_task: str = "total",
+    modality: str = "CT",
+) -> bool:
     """True when ROI masks exist and the cache covers the currently requested ROI subset.
 
     Soft-tissue-only legacy caches (pre-skeletal ROI expansion) are treated as stale so
     Harmonize re-runs and Series View can latch spine / ribs / clavicles.
+    Manifest modality/task must match so a CT cache is never accepted for MR (and vice versa).
     """
     if not seg_dir.is_dir():
         return False
@@ -757,18 +821,27 @@ def _segmentation_cache_valid(seg_dir: Path, structures: list[str]) -> bool:
         return False
 
     cache_dir = seg_dir.parent
-    recorded = _read_roi_subset_manifest(cache_dir)
+    recorded_bundle = _read_roi_subset_manifest(cache_dir)
     requested = set(structures)
-    if recorded is not None:
+    if recorded_bundle is not None:
+        recorded, recorded_task, recorded_modality = recorded_bundle
+        if recorded_task is not None and recorded_task != anatomy_task:
+            return False
+        if recorded_modality is not None and recorded_modality != modality:
+            return False
+        # Legacy manifests without modality/task: only accept for CT ``total``.
+        if recorded_task is None and recorded_modality is None and (anatomy_task != "total" or modality != "CT"):
+            return False
         return requested <= recorded
 
-    # Legacy caches without a manifest: accept only if skeletal ROIs (when requested)
-    # already appear on disk; otherwise force a re-segment with the current subset.
+    # Legacy caches without a manifest: CT total only.
+    if anatomy_task != "total" or modality != "CT":
+        return False
     skeletal_requested = [name for name in structures if _is_skeletal_roi(name)]
     if skeletal_requested and not any((seg_dir / f"{name}.nii.gz").is_file() for name in skeletal_requested):
         return False
     try:
-        write_roi_subset_manifest(cache_dir, structures)
+        write_roi_subset_manifest(cache_dir, structures, anatomy_task=anatomy_task, modality=modality)
     except OSError:
         logger.debug("TS regions: could not backfill ROI subset manifest under %s", cache_dir)
     return True
@@ -828,7 +901,6 @@ def _region_ts_result(
         iv_contrast=False,
         contrast_phase="",
         phase_probability=0.0,
-        radlex_series_description="",
         structures_present=dict(region.structures_present),
     )
 
@@ -839,6 +911,7 @@ def analyze_tseg_regions(
     geometry: SeriesGeometryResult | None = None,
     progress: ProgressCallback | None = None,
     include_brain_structures: bool = False,
+    profile=None,
 ) -> tuple[TS_result, Path | None]:
     """
     DICOM→NIfTI, TotalSegmentator ROI segmentation, and region summary.
@@ -846,28 +919,51 @@ def analyze_tseg_regions(
     Intermediate artifacts are cached under ``<series_directory>/A_TS_SEG/`` and
     reused when present. Returns ``(result, nifti_path)``. Contrast fields on
     ``result`` are empty when regions succeeded; contrast uses a separate pass.
+
+    ``profile`` defaults to the series modality profile (CT when omitted and
+    series is CT). CT defaults match pre-MR behavior.
     """
+    from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
+    from anonymizer.controller.ai.tseg.model_cache import profile_anatomy_weights_ready
+
     series_directory = Path(series_directory)
+    resolved = profile if profile is not None else resolve_profile_for_series(series_directory)
+    if resolved is None:
+        return (_error_result(series_directory, "Unsupported modality for TotalSegmentator"), None)
+    profile = resolved
+
+    if profile.modality != "CT" and not profile_anatomy_weights_ready(profile):
+        missing = ", ".join(str(task_id) for task_id in profile.anatomy_task_ids)
+        return (
+            _error_result(
+                series_directory,
+                f"TotalSegmentator {profile.anatomy_task} weights missing (tasks {missing})",
+            ),
+            None,
+        )
+
     work_dir = series_cache_dir(series_directory)
     work_dir.mkdir(parents=True, exist_ok=True)
     nifti_path = work_dir / "volume.nii.gz"
     seg_dir = work_dir / "seg"
     analysis_started = time.perf_counter()
+    roi_structures = list(profile.roi_subset)
 
     geometry = geometry if geometry is not None else resolve_series_geometry(series_directory)
     logger.debug(
-        "TS regions: geometry plane=%s dimensionality=%s provenance=%s ts_suitable=%s",
+        "TS regions: geometry plane=%s dimensionality=%s provenance=%s ts_suitable=%s modality=%s",
         geometry.plane,
         geometry.dimensionality,
         geometry.provenance,
         geometry.ts_suitable,
+        profile.modality,
     )
     if not ts_regions_eligible(geometry):
         message = geometry.notes or f"Series not suitable for TotalSegmentator ({geometry.dimensionality})"
         logger.debug("TS regions: skipped for %s (%s)", series_directory, message)
         return (_error_result(series_directory, message), None)
 
-    logger.debug("TS regions: starting for %s (cache=%s)", series_directory, work_dir)
+    logger.debug("TS regions: starting for %s (cache=%s task=%s)", series_directory, work_dir, profile.anatomy_task)
     log_memory_usage("ts_regions_start")
 
     with sequential_ml_context("ts_regions"):
@@ -875,7 +971,7 @@ def analyze_tseg_regions(
             _report_progress(
                 progress,
                 stage="prepare",
-                message="Preparing CT volume",
+                message="Preparing CT volume" if profile.modality == "CT" else "Preparing volume",
                 fraction=0.05,
                 started=analysis_started,
             )
@@ -888,8 +984,12 @@ def analyze_tseg_regions(
                 release_working_memory(stage="ts_regions_after_dicom_to_nifti")
                 logger.debug("TS regions: wrote %s (%d slices)", nifti_path, n_slices)
 
-            roi_structures = list(ROI_SUBSET)
-            seg_cached = _segmentation_cache_valid(seg_dir, roi_structures)
+            seg_cached = _segmentation_cache_valid(
+                seg_dir,
+                roi_structures,
+                anatomy_task=profile.anatomy_task,
+                modality=profile.modality,
+            )
             if seg_cached:
                 logger.debug("TS regions: reusing cached segmentation in %s", seg_dir)
                 _report_progress(
@@ -904,11 +1004,19 @@ def analyze_tseg_regions(
                 seg_seconds = run_segmentation(
                     nifti_path,
                     seg_dir,
+                    mode=segmentation_mode_for_modality(profile.modality),
                     progress=progress,
                     analysis_started=analysis_started,
                     n_slices=n_slices,
+                    roi_subset=roi_structures,
+                    task=profile.anatomy_task,
                 )
-                write_roi_subset_manifest(work_dir, roi_structures)
+                write_roi_subset_manifest(
+                    work_dir,
+                    roi_structures,
+                    anatomy_task=profile.anatomy_task,
+                    modality=profile.modality,
+                )
                 logger.debug("TS regions: segmentation finished in %.1fs", seg_seconds)
                 _report_progress(
                     progress,
@@ -919,14 +1027,15 @@ def analyze_tseg_regions(
                 )
                 release_working_memory(stage="ts_regions_after_segmentation")
 
-            structure_voxels = collect_structure_voxels(seg_dir, list(ROI_SUBSET))
+            structure_voxels = collect_structure_voxels(seg_dir, roi_structures)
             if (
                 include_brain_structures
+                and profile.modality == "CT"
                 and ENABLE_TSEG_BRAIN_STRUCTURES
                 and structure_voxels.get("brain", 0) >= MIN_STRUCTURE_VOXELS
                 and not _brain_structures_cache_valid(seg_dir)
             ):
-                from anonymizer.controller.ai.tseg.runtime_status import verify_face_license
+                from anonymizer.controller.ai.tseg.readiness import verify_face_license
 
                 licensed, license_message = verify_face_license()
                 if licensed:
@@ -957,7 +1066,10 @@ def analyze_tseg_regions(
             elif include_brain_structures and not ENABLE_TSEG_BRAIN_STRUCTURES:
                 logger.debug("TS regions: brain_structures disabled in config")
 
-            region = dominant_region_from_voxels(structure_voxels)
+            region = dominant_region_from_voxels(
+                structure_voxels,
+                structure_to_region=profile.structure_to_region,
+            )
             regions_label = body_parts_present(region.region_voxels)
             del structure_voxels
 
@@ -1075,10 +1187,6 @@ def analyze_tseg_contrast(
                 started=analysis_started,
                 remaining_sec=0.0,
             )
-        radlex_description = format_radlex_ct_series_description(
-            region_result.body_parts_present,
-            contrast.iv_contrast,
-        )
         _report_progress(
             progress,
             stage="contrast",
@@ -1096,7 +1204,6 @@ def analyze_tseg_contrast(
             iv_contrast=contrast.iv_contrast,
             contrast_phase=contrast.phase,
             phase_probability=contrast.probability,
-            radlex_series_description=radlex_description,
             structures_present=dict(region_result.structures_present),
         )
     except Exception as contrast_exc:
@@ -1110,7 +1217,6 @@ def analyze_tseg_contrast(
             iv_contrast=False,
             contrast_phase="",
             phase_probability=0.0,
-            radlex_series_description="",
             structures_present=dict(region_result.structures_present),
             error=f"{type(contrast_exc).__name__}: {contrast_exc}",
         )
@@ -1125,7 +1231,11 @@ def analyze_series(
 ) -> list[TS_result]:
     """
     Run TotalSegmentator anatomy and XGBoost contrast analysis on CT series directories.
+
+    MR series skip contrast phase (no IV phase model) and return ``native`` / WO.
     """
+    from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
+
     if not series_directories:
         logger.error("No series directories provided for anatomy analysis.")
         return []
@@ -1136,8 +1246,11 @@ def analyze_series(
     for series_dir in series_directories:
         series_dir = Path(series_dir)
         region_result, nifti_path = analyze_tseg_regions(series_dir, progress=progress)
+        profile = resolve_profile_for_series(series_dir)
+        run_contrast = profile is None or profile.enable_contrast_phase
         if (
-            ENABLE_TS_CONTRAST
+            run_contrast
+            and ENABLE_TS_CONTRAST
             and nifti_path is not None
             and region_result.body_parts_present.strip()
             and region_result.error is None
@@ -1150,6 +1263,8 @@ def analyze_series(
                     progress=progress,
                 )
             )
+        elif profile is not None and not profile.enable_contrast_phase:
+            results.append(region_result)
         else:
             if not ENABLE_TS_CONTRAST and region_result.body_parts_present.strip():
                 logger.info("TS contrast skipped (ENABLE_TS_CONTRAST=False) for %s", series_dir)

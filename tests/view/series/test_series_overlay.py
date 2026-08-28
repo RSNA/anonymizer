@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from anonymizer.controller.series_overlay import (
-    COLORED_SEGMENTATION_OUTLINE_THICKNESS,
-    COLORED_SEGMENTATION_OUTLINE_UNDERLAY_THICKNESS,
     LayerType,
     OCRText,
     OverlayData,
     PolygonPoint,
     Segmentation,
     UserRectangle,
+)
+from anonymizer.view.series.series_overlay import (
+    COLORED_SEGMENTATION_OUTLINE_THICKNESS,
+    COLORED_SEGMENTATION_OUTLINE_UNDERLAY_BGR,
+    COLORED_SEGMENTATION_OUTLINE_UNDERLAY_THICKNESS,
     render_segmentations_overlay,
 )
 
@@ -96,8 +99,6 @@ def test_colored_outline_is_opaque_solid_not_additive() -> None:
 
 
 def test_colored_outline_draws_black_understroke() -> None:
-    from anonymizer.controller.series_overlay import COLORED_SEGMENTATION_OUTLINE_UNDERLAY_BGR
-
     color = (0, 0, 255)
     overlay = render_segmentations_overlay(
         50,
@@ -113,7 +114,7 @@ def test_colored_outline_draws_black_understroke() -> None:
 
 
 def test_primary_head_colors_are_distinct() -> None:
-    from anonymizer.controller.ai.anatomy_overlay import color_bgr_for_structure
+    from anonymizer.view.series.anatomy_overlay import color_bgr_for_structure
 
     colors = {
         color_bgr_for_structure("brain"),
