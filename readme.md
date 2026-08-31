@@ -130,7 +130,7 @@ Test layout mirrors source: `tests/controller/` → `src/anonymizer/controller/`
 
 ```bash
 uv sync --group dev
-uv run pytest tests/controller/tseg -q                             # may download TS weights
+uv run pytest tests/controller/tseg -q                             # mocked unit tests (CI-safe)
 uv run pytest tests/controller tests/model -q   # CI suite (no view)
 uv run pytest src/prototyping -q              # prototyping only
 uv run pytest -q                              # full local suite (controller + view + model)
@@ -138,7 +138,7 @@ uv run pytest -q                              # full local suite (controller + v
 
 Optional: create `tests/controller/.env` with `AWS_USERNAME` and `AWS_PASSWORD` for S3 upload tests.
 
-Markers (`tseg_integration`, `dicom_integration`, `rsna_local_data`) are documented in `pyproject.toml` and `tests/README.md`.
+Markers (`tseg_integration` is prototyping-only, plus `dicom_integration`, `rsna_local_data`) are documented in `pyproject.toml` and `tests/README.md`.
 ### Translations
 Languages for 17.3: `en_US, de, es, fr`
 #### Ensure gettext is installed:

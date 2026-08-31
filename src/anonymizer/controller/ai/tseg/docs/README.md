@@ -84,7 +84,7 @@ See [TotalSegmentator academic licensing](https://backend.totalsegmentator.com/l
 
 Geometry gating matches anatomy regions (`ts_regions_eligible`); head-series eligibility is handled by Face Blur. Set `ENABLE_TSEG_FACE = False` in `config.py` to disable the API.
 
-Optional integration tests: `pytest tests/controller/tseg/test_tseg_face.py -m tseg_integration` (real TS ``face`` inference; slow).
+Controller unit tests under `tests/controller/tseg/` mock TotalSegmentator (no weight download). Optional local TS inference smoke: `pytest src/prototyping -m tseg_integration` (slow; not in CI).
 
 ## Downstream AI Features
 

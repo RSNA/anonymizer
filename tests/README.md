@@ -11,7 +11,7 @@
 
 ```bash
 uv sync --extra tseg --group dev
-uv run pytest tests/controller/tseg -q                             # may download TS weights
+uv run pytest tests/controller/tseg -q                             # mocked unit tests (CI-safe)
 uv run pytest tests/controller tests/model -q   # CI suite (no view)
 uv run pytest src/prototyping -q              # prototyping only
 uv run pytest -q                              # full local suite (controller + view + model)
@@ -23,14 +23,14 @@ Defined in `pyproject.toml`:
 
 | Marker | Use |
 |--------|-----|
-| `tseg_integration` | TotalSegmentator inference (slow) |
+| `tseg_integration` | TotalSegmentator inference in prototyping (slow; not in CI) |
 | `ocr_integration` | EasyOCR on real fixtures in `tests/controller/ocr/` (opt-in; excluded from default) |
 | `dicom_integration` | Local Orthanc or heavy DICOM network tests |
 | `rsna_local_data` | RSNA test data directory required |
 | `falcon_memory` | RSS leak guard on real FALCON inference |
 
 ```bash
-pytest tests/controller -m tseg_integration
+pytest src/prototyping -m tseg_integration
 pytest tests/controller/ocr -m ocr_integration   # needs EasyOCR weights under assets/ai/ocr/model
 pytest tests/controller/dicom -m dicom_integration
 pytest src/prototyping -m rsna_local_data
