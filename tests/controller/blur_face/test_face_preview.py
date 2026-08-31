@@ -36,7 +36,7 @@ def _write_mask(mask_path: Path, *, shape: tuple[int, int, int]) -> None:
     sitk.WriteImage(sitk.GetImageFromArray(array), str(mask_path))
 
 
-@patch("anonymizer.controller.ai.blur_face.resolve_face_mask_path")
+@patch("anonymizer.controller.ai.blur_face.pipeline.resolve_face_mask_path")
 def test_preview_face_blur_does_not_write_dicom(
     mock_resolve: MagicMock,
     synthetic_head_series: Path,
@@ -134,7 +134,7 @@ def test_face_review_wl_ww_uses_post_blur_hu() -> None:
     assert ww == pytest.approx(FACE_REVIEW_WW_HU)
 
 
-@patch("anonymizer.controller.ai.blur_face.resolve_face_mask_path")
+@patch("anonymizer.controller.ai.blur_face.pipeline.resolve_face_mask_path")
 def test_apply_face_blur_preview_to_series_frames(
     mock_resolve: MagicMock,
     synthetic_head_series: Path,
@@ -174,7 +174,7 @@ def test_apply_face_blur_preview_to_series_frames(
     assert np.array_equal(updated[:3], frames[:3])
 
 
-@patch("anonymizer.controller.ai.blur_face.resolve_face_mask_path")
+@patch("anonymizer.controller.ai.blur_face.pipeline.resolve_face_mask_path")
 def test_preview_face_blur_uses_series_volume_context(
     mock_resolve: MagicMock,
     synthetic_head_series: Path,

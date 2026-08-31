@@ -2658,7 +2658,7 @@ class ProjectController(AE):
         parent: "tk.Misc",
         series_path: Path,
         fonts: "AppFonts | None" = None,
-        preloaded: LoadedSeries | None = None,
+        preloaded: "LoadedSeries | None" = None,
     ) -> "SeriesView | None":
         """Open Series View; views call this instead of constructing SeriesView with the model."""
         from anonymizer.view.series.series import show_series_view

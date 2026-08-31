@@ -53,7 +53,7 @@ def test_resolve_face_mask_path_legacy_fallback(tmp_path: Path, caplog: pytest.L
     assert "legacy" in caplog.text.lower()
 
 
-@patch("anonymizer.controller.ai.blur_face.analyze_tseg_face")
+@patch("anonymizer.controller.ai.blur_face.pipeline.analyze_tseg_face")
 def test_resolve_face_mask_path_runs_segmentation(mock_analyze: MagicMock, tmp_path: Path) -> None:
     series = tmp_path / "series"
     series.mkdir()
