@@ -144,6 +144,16 @@ class EditContext(StrEnum):
     # TODO: PROJECT = auto()  # apply edits to all series in project
 
 
+def _option_menu_width_for_labels(values: list[str], *, height: int = 28) -> int:
+    """Pixel width for CTkOptionMenu to fit the widest label plus the dropdown button."""
+    if not values:
+        return height
+    font = ctk.CTkFont()
+    corner_radius = 6
+    text_width = max(int(font.measure(value)) for value in values)
+    return text_width + height + max(corner_radius, 3) + 6
+
+
 def ocr_results_available_for_edit_context(
     edit_context: EditContext,
     *,
@@ -259,6 +269,7 @@ class SeriesView(AppCTkToplevel):
         self._ocr_work_state = WorkState()
         self._ocr_poll_frame_index = -1
         self._rebuild_after_id: str | None = None
+        self._min_window_size: tuple[int, int] | None = None
         self._rebuild_pending = False
         self._structure_overlay_by_name: dict[str, dict[int, list[Segmentation]]] = {}
         self._structure_mask_by_name: dict[str, np.ndarray] = {}
@@ -289,11 +300,7 @@ class SeriesView(AppCTkToplevel):
         log_process_memory("series_view_init", extra=str(series_path.name))
 
         if preloaded is not None:
-            projections = (
-                compute_series_projections(preloaded.frames)
-                if not preloaded.is_single_frame
-                else None
-            )
+            projections = compute_series_projections(preloaded.frames) if not preloaded.is_single_frame else None
             self._trace_load(
                 "preloaded",
                 slices=preloaded.frames.shape[0],
@@ -429,9 +436,7 @@ class SeriesView(AppCTkToplevel):
         log_process_memory("load_series_data_start", extra=str(series_path.name))
         loaded = load_series_frames(series_path, dcm_paths=dcm_paths)
         frames = loaded.frames
-        projections = (
-            compute_series_projections(frames) if not loaded.is_single_frame else None
-        )
+        projections = compute_series_projections(frames) if not loaded.is_single_frame else None
 
         log_process_memory(
             "after_load_series",
@@ -497,11 +502,13 @@ class SeriesView(AppCTkToplevel):
                     projections=projections is not None,
                 )
                 self.after_idle(
-                    lambda loaded=loaded, frames=frames, projections=projections, g=series_geometry: self._finish_loading(
-                        loaded=loaded,
-                        frames=frames,
-                        projections=projections,
-                        series_geometry=g,
+                    lambda loaded=loaded, frames=frames, projections=projections, g=series_geometry: (
+                        self._finish_loading(
+                            loaded=loaded,
+                            frames=frames,
+                            projections=projections,
+                            series_geometry=g,
+                        )
                     )
                 )
                 return
@@ -553,6 +560,7 @@ class SeriesView(AppCTkToplevel):
             self.update_idletasks()
 
         self.resizable(True, True)
+        self._clear_window_maxsize_cap()
         self._build_ui()
         self._log_series_memory("after_build_ui", array=self._frames)
         self._trace_load("build_ui_done")
@@ -597,57 +605,71 @@ class SeriesView(AppCTkToplevel):
         self._show_default_context_line()
         self._refresh_series_processing_status()
 
+    def _maximum_window_size(self) -> tuple[int, int]:
+        """Screen-bounded maximum; window may grow freely up to this limit."""
+        return (
+            int(self.winfo_screenwidth() * ImageViewer.MAX_SCREEN_PERCENTAGE),
+            int(self.winfo_screenheight() * ImageViewer.MAX_SCREEN_PERCENTAGE),
+        )
+
+    def _clamp_to_screen(self, size: tuple[int, int]) -> tuple[int, int]:
+        max_w, max_h = self._maximum_window_size()
+        return min(size[0], max_w), min(size[1], max_h)
+
+    def _clear_window_maxsize_cap(self) -> None:
+        """CustomTkinter requires numeric maxsize; uncapped toplevels leave _max_width None and break geometry()."""
+        max_w, max_h = self._maximum_window_size()
+        with contextlib.suppress(tk.TclError):
+            self.maxsize(max_w, max_h)
+
+    def _window_size_for_canvas(self, canvas_size: tuple[int, int]) -> tuple[int, int]:
+        """Window size required when the image canvas is exactly ``canvas_size``.
+
+        Tk sums the real chrome (whitelist, RHS controls, toolbar, padding), which is the
+        only measurement that stays correct as fonts, translations, toolbar buttons and
+        segmentation controls change. Startup and chrome changes only: never called from
+        the resize path, because it briefly reconfigures the canvas to take the reading.
+        """
+        viewer = getattr(self, "image_viewer", None)
+        if viewer is None:
+            return self._clamp_to_screen((self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT))
+        restore = viewer.current_size
+        try:
+            viewer.canvas.config(width=canvas_size[0], height=canvas_size[1])
+            self.update_idletasks()
+            required = (self.winfo_reqwidth(), self.winfo_reqheight())
+            viewer.canvas.config(width=restore[0], height=restore[1])
+            self.update_idletasks()
+        except tk.TclError:
+            return self._clamp_to_screen((self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT))
+        return self._clamp_to_screen(required)
+
     def _minimum_window_size(self) -> tuple[int, int]:
         """Smallest window that keeps whitelist, image, histogram, and player visible."""
-        pad = self.PAD
-        whitelist_w = 200
-        viewer = getattr(self, "image_viewer", None)
-        data_w = ImageViewer.DATA_PANEL_WIDTH + (2 * ImageViewer.PAD if viewer else 12)
-        min_w = whitelist_w + self.MIN_IMAGE_VIEWPORT + data_w + 6 * pad
+        return self._window_size_for_canvas((self.MIN_IMAGE_VIEWPORT, self.MIN_IMAGE_VIEWPORT))
 
-        toolbar_h = 96
-        if hasattr(self, "control_frame"):
-            with contextlib.suppress(tk.TclError):
-                self.update_idletasks()
-                toolbar_h = max(toolbar_h, self.control_frame.winfo_reqheight())
-        image_stack_h = self.MIN_IMAGE_VIEWPORT + 24
-        rhs_h = ImageViewer.DATA_PANEL_MIN_HEIGHT
-        min_h = max(rhs_h, image_stack_h) + toolbar_h + 4 * pad
+    def _native_window_dimensions(self) -> tuple[int, int]:
+        """Window size that shows the native image at 1:1 alongside the real chrome."""
+        if self._frames is None:
+            return self._clamp_to_screen((self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT))
+        return self._window_size_for_canvas((int(self._frames.shape[2]), int(self._frames.shape[1])))
 
-        max_w = int(self.winfo_screenwidth() * ImageViewer.MAX_SCREEN_PERCENTAGE)
-        max_h = int(self.winfo_screenheight() * ImageViewer.MAX_SCREEN_PERCENTAGE)
-        return min(min_w, max_w), min(min_h, max_h)
+    def _refresh_minimum_window_size(self) -> tuple[int, int]:
+        """Re-probe and apply minsize after chrome changes; cache for the resize clamp."""
+        min_size = self._minimum_window_size()
+        self._min_window_size = min_size
+        with contextlib.suppress(tk.TclError):
+            self.minsize(*min_size)
+        return min_size
 
     def _size_window_for_native_image(self) -> None:
-        """While withdrawn, size the window so the image column can reach native width."""
+        """While withdrawn, size the window so the image column can reach native resolution."""
         if self._frames is None:
             self._fit_window_to_content()
             return
-        self.update_idletasks()
-        native_w = int(self._frames.shape[2])
-        native_h = int(self._frames.shape[1])
-        viewer = getattr(self, "image_viewer", None)
-        data_panel_w = 0
-        scrollbar_h = 0
-        if viewer is not None:
-            data_panel_w = viewer.DATA_PANEL_WIDTH
-            if viewer.num_images > 1 and hasattr(viewer, "scrollbar"):
-                scrollbar_h = max(viewer.scrollbar.winfo_reqheight(), 20)
-            viewer_min_w = native_w + data_panel_w + 2 * viewer.PAD
-            viewer_min_h = max(native_h, viewer.DATA_PANEL_MIN_HEIGHT) + scrollbar_h + 2 * viewer.PAD
-        else:
-            viewer_min_w = native_w
-            viewer_min_h = native_h
-        whitelist_w = self._whitelist_frame.winfo_reqwidth() if hasattr(self, "_whitelist_frame") else 0
-        chrome_w = whitelist_w + viewer_min_w + 4 * self.PAD
-        control_h = self.control_frame.winfo_reqheight() if hasattr(self, "control_frame") else 0
-        chrome_h = viewer_min_h + control_h + 4 * self.PAD + 20
-        max_w = int(self.winfo_screenwidth() * ImageViewer.MAX_SCREEN_PERCENTAGE)
-        max_h = int(self.winfo_screenheight() * ImageViewer.MAX_SCREEN_PERCENTAGE)
-        width = min(max(chrome_w, self.DEFAULT_WIDTH), max_w)
-        height = min(max(chrome_h, self.DEFAULT_HEIGHT), max_h)
-        min_w, min_h = self._minimum_window_size()
-        self.minsize(min_w, min_h)
+        width, height = self._native_window_dimensions()
+        min_w, min_h = self._refresh_minimum_window_size()
+        width, height = max(width, min_w), max(height, min_h)
         pos_x, pos_y = self.winfo_x(), self.winfo_y()
         if pos_x <= 0 and pos_y <= 0:
             self._position_near_parent(width=width, height=height)
@@ -655,10 +677,9 @@ class SeriesView(AppCTkToplevel):
             self.geometry(f"{width}x{height}+{max(0, pos_x)}+{max(0, pos_y)}")
 
     def _present_series_view(self) -> None:
-        """Single visible paint: fast chrome, native-aware geometry, then defer segmentation."""
+        """Single visible paint: size window for native, then one aspect-preserving layout."""
         self._startup_layout = True
         self._apply_fast_startup_chrome()
-        self._size_window_for_native_image()
         viewer = getattr(self, "image_viewer", None)
 
         def _visible_startup_paint() -> None:
@@ -666,16 +687,18 @@ class SeriesView(AppCTkToplevel):
                 return
             self.deiconify()
             self.update_idletasks()
-            self._trace_load(
-                "window_mapped",
-                geometry=f"{self.winfo_width()}x{self.winfo_height()}",
-                req=f"{self.winfo_reqwidth()}x{self.winfo_reqheight()}",
-            )
+            self._clear_window_maxsize_cap()
+            # Chrome first, so Tk's requested size already includes the real RHS and
+            # toolbar when the window is sized for the native image.
+            if viewer is not None:
+                viewer.apply_fixed_chrome(refresh_histogram=True)
+            self._size_window_for_native_image()
+            self.update_idletasks()
             if viewer is not None:
                 self._trace_load("show_initial_frame")
                 viewer.show_initial_frame()
                 viewer.mark_startup_complete()
-                viewer.sync_viewport_after_layout(deferred=False)
+                viewer.fit_to_viewport(force=True)
                 self._trace_load(
                     "startup_complete",
                     display=viewer.get_dimensions_text(),
@@ -696,6 +719,12 @@ class SeriesView(AppCTkToplevel):
     def _load_segmentation_chrome(self) -> None:
         """Slow segmentation panel population (mask disk scan); runs after first paint."""
         self._refresh_segmentation_controls(defer_render=True)
+        viewer = getattr(self, "image_viewer", None)
+        if viewer is not None:
+            viewer.apply_fixed_chrome()
+            self._refresh_minimum_window_size()
+            # Segmentation chrome must not change image display size.
+            viewer.fit_to_viewport(force=True)
 
     def _fit_window_to_content(self) -> None:
         """Expand the window to fit the built UI (V18 auto-size after synchronous build)."""
@@ -706,8 +735,7 @@ class SeriesView(AppCTkToplevel):
         max_h = int(self.winfo_screenheight() * ImageViewer.MAX_SCREEN_PERCENTAGE)
         width = min(req_w, max_w)
         height = min(req_h, max_h)
-        min_w, min_h = self._minimum_window_size()
-        self.minsize(min_w, min_h)
+        self._refresh_minimum_window_size()
 
         pos_x, pos_y = self.winfo_x(), self.winfo_y()
         if pos_x <= 0 and pos_y <= 0:
@@ -726,17 +754,12 @@ class SeriesView(AppCTkToplevel):
         req_h = min(max(self.winfo_reqheight(), self.DEFAULT_HEIGHT), max_h)
         cur_w = max(self.winfo_width(), 1)
         cur_h = max(self.winfo_height(), 1)
-        min_w, min_h = self._minimum_window_size()
-        self.minsize(min_w, min_h)
+        self._refresh_minimum_window_size()
         if cur_w < req_w or cur_h < req_h:
             self.geometry(f"{max(cur_w, req_w)}x{max(cur_h, req_h)}")
-            if (
-                not self._startup_layout
-                and hasattr(self, "image_viewer")
-                and self.image_viewer is not None
-            ):
-                with contextlib.suppress(tk.TclError):
-                    self.image_viewer.sync_viewport_after_layout()
+        viewer = getattr(self, "image_viewer", None)
+        if viewer is not None and viewer._startup_complete:
+            viewer.fit_to_viewport(force=True)
 
     def _update_status_label_wraplength(self) -> None:
         if not hasattr(self, "_status_label"):
@@ -753,7 +776,7 @@ class SeriesView(AppCTkToplevel):
             return
         viewer = getattr(self, "image_viewer", None)
         if viewer is not None and viewer._startup_complete:
-            viewer.sync_viewport_after_layout()
+            viewer._request_viewport_fit()
 
     def _capture_whitelist_items(self) -> list[str]:
         if not hasattr(self, "whitelist"):
@@ -779,9 +802,7 @@ class SeriesView(AppCTkToplevel):
             self._whitelist_match_settings = default_whitelist_match_settings()
             return
         project_dir = project_dir_from_series_path(self._series_path)
-        self._whitelist_match_settings = load_modality_whitelist_match_settings(
-            project_dir, self._ds.Modality
-        )
+        self._whitelist_match_settings = load_modality_whitelist_match_settings(project_dir, self._ds.Modality)
         self._apply_whitelist_match_settings_to_ui()
         self._log_whitelist_trace(
             "match_init",
@@ -825,9 +846,7 @@ class SeriesView(AppCTkToplevel):
 
     def _show_match_tooltip(self, event: tk.Event) -> None:
         self._hide_match_tooltip()
-        mode = self._match_mode_labels.get(
-            self._whitelist_match_mode_var.get(), OcrWhitelistMatchMode.STANDARD
-        )
+        mode = self._match_mode_labels.get(self._whitelist_match_mode_var.get(), OcrWhitelistMatchMode.STANDARD)
         text = match_mode_description(mode)
         tip = tk.Toplevel(self)
         tip.wm_overrideredirect(True)
@@ -996,7 +1015,8 @@ class SeriesView(AppCTkToplevel):
 
         # Row 0: title (same size as button text)
         ctk.CTkLabel(
-            self._whitelist_frame, text=_("WHITELIST"),
+            self._whitelist_frame,
+            text=_("WHITELIST"),
         ).grid(row=0, column=0, sticky="w", padx=self.PAD, pady=(self.PAD, 0))
 
         # Row 1: [Defaults] [Clear] [Match dropdown] in a toolbar sub-frame
@@ -1007,15 +1027,11 @@ class SeriesView(AppCTkToplevel):
             toolbar, text=_("Defaults"), width=10, command=self.whitelist_defaults_button_clicked
         )
         self.whitelist_defaults_button.grid(row=0, column=0, padx=(0, 2))
-        self.whitelist_clear_button = ctk.CTkButton(
-            toolbar, text=_("Clear"), width=10, command=self.clear_whitelist
-        )
+        self.whitelist_clear_button = ctk.CTkButton(toolbar, text=_("Clear"), width=10, command=self.clear_whitelist)
         self.whitelist_clear_button.grid(row=0, column=1, padx=(0, 2))
 
         self._match_mode_labels = match_mode_menu_labels()
-        self._whitelist_match_mode_var = tk.StringVar(
-            value=match_mode_menu_label(OcrWhitelistMatchMode.STANDARD)
-        )
+        self._whitelist_match_mode_var = tk.StringVar(value=match_mode_menu_label(OcrWhitelistMatchMode.STANDARD))
         self._whitelist_match_mode_menu = ctk.CTkOptionMenu(
             toolbar,
             values=list(self._match_mode_labels.keys()),
@@ -1087,17 +1103,20 @@ class SeriesView(AppCTkToplevel):
         text_edit_group.grid(row=0, column=0, padx=(0, self.PAD), pady=self.PAD, sticky="w")
         edit_context_label = ctk.CTkLabel(text_edit_group, text=_("Text Edit Context") + ":")
         edit_context_label.grid(row=0, column=0, padx=(self.PAD, 2))
-        self.edit_context_combo_box = ctk.CTkComboBox(
+        edit_context_values = [
+            member.value.upper()
+            for member in EditContext
+            if not (self.single_frame and member == EditContext.SERIES)
+        ]
+        self._edit_context_var = tk.StringVar(value=EditContext.FRAME.upper())
+        self.edit_context_combo_box = ctk.CTkOptionMenu(
             text_edit_group,
-            state="readonly",
-            values=[
-                member.value.upper()
-                for member in EditContext
-                if not (self.single_frame and member == EditContext.SERIES)
-            ],
+            variable=self._edit_context_var,
+            values=edit_context_values,
             command=self.edit_context_change,
+            dynamic_resizing=False,
+            width=_option_menu_width_for_labels(edit_context_values),
         )
-        self.edit_context_combo_box.set(EditContext.FRAME.upper())
         self.edit_context_combo_box.grid(row=0, column=1, padx=(0, 8))
         self.detect_button = ctk.CTkButton(
             text_edit_group, width=self.BUTTON_WIDTH, text=_("Detect Text"), command=self.detect_text_button_clicked
@@ -1282,9 +1301,7 @@ class SeriesView(AppCTkToplevel):
             face_blur_models_ready=face_blur_allowed(),
             face_blur_already_applied=already_applied,
             cached_signal=cached,
-            eligibility_blocked=(
-                eligibility is not None and eligibility.decision == FaceBlurGateDecision.BLOCK
-            ),
+            eligibility_blocked=(eligibility is not None and eligibility.decision == FaceBlurGateDecision.BLOCK),
         )
 
     def _clear_ts_cache_button_visible(self) -> bool:
@@ -1814,9 +1831,7 @@ class SeriesView(AppCTkToplevel):
         if self.edit_context == EditContext.FRAME:
             status = _("Text detection complete") + f": {detection_count} " + _("detections")
         else:
-            frames_scanned = (
-                self.image_viewer.num_images if hasattr(self, "image_viewer") else frames_with_text
-            )
+            frames_scanned = self.image_viewer.num_images if hasattr(self, "image_viewer") else frames_with_text
             status = (
                 _("Text detection complete")
                 + f": {detection_count} "
@@ -1851,11 +1866,7 @@ class SeriesView(AppCTkToplevel):
                 self.image_viewer.images,
                 self._ds,
             )
-        edit_context = (
-            OcrEditContext.FRAME
-            if self.edit_context == EditContext.FRAME
-            else OcrEditContext.SERIES
-        )
+        edit_context = OcrEditContext.FRAME if self.edit_context == EditContext.FRAME else OcrEditContext.SERIES
         if edit_context is OcrEditContext.FRAME:
             self._ocr_work_state.frame_index = self.image_viewer.current_image_index
         else:
@@ -1933,8 +1944,10 @@ class SeriesView(AppCTkToplevel):
     def remove_text_from_single_frame(self, frame_index: int, ocr_texts: list[OCRText]):
         logger.debug(f"Remove {len(ocr_texts)} words from frame {frame_index}")
         raw_frame = self.image_viewer.images[frame_index]
-        windowed_frame = ocr_image_for_frame(self._ds, raw_frame) if self._ds else apply_windowing(
-            self.image_viewer.current_wl, self.image_viewer.current_ww, raw_frame
+        windowed_frame = (
+            ocr_image_for_frame(self._ds, raw_frame)
+            if self._ds
+            else apply_windowing(self.image_viewer.current_wl, self.image_viewer.current_ww, raw_frame)
         )
         removal_mode = pixel_phi_removal_mode_from_menu_label(self.remove_text_mode_var.get())
         removed_labels = [t.text.strip() for t in ocr_texts if (t.text or "").strip()]
@@ -2197,9 +2210,7 @@ class SeriesView(AppCTkToplevel):
             try:
                 settings = self._whitelist_match_settings_from_ui()
                 self._whitelist_match_settings = settings
-                options_path = save_modality_whitelist_match_settings(
-                    project_dir, self._ds.Modality, settings
-                )
+                options_path = save_modality_whitelist_match_settings(project_dir, self._ds.Modality, settings)
                 self._whitelist_match_changed = False
                 self._log_whitelist_trace(
                     "match_save",
@@ -2241,9 +2252,7 @@ class SeriesView(AppCTkToplevel):
                     )
                 elif self._pixel_phi_dirty:
                     # Blackout-only (or cleared overlays): still mark series scanned for Dataset status.
-                    self._controller.anonymizer.model.set_series_pixel_phi_scanned(
-                        anon_series_uid, scanned=True
-                    )
+                    self._controller.anonymizer.model.set_series_pixel_phi_scanned(anon_series_uid, scanned=True)
             self._removed_pixel_phi_by_frame.clear()
             self._pixel_phi_dirty = False
             self.save_button.configure(state="disabled")

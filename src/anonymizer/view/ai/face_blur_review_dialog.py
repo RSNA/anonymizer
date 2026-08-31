@@ -265,9 +265,9 @@ class FaceBlurReviewDialog(AppCTkToplevel):
         self.geometry(f"{self.DEFAULT_WIDTH}x{self.DEFAULT_HEIGHT}")
         self._build_ui()
         self._position_near_parent(width=self.DEFAULT_WIDTH, height=self.DEFAULT_HEIGHT)
-        self._apply_fixed_viewer_sizing()
         self.deiconify()
         self.lift()
+        self.after_idle(self._apply_fixed_viewer_sizing)
         self.after_idle(self._start_blur_worker)
 
     def _position_near_parent(self, *, width: int | None = None, height: int | None = None) -> None:
@@ -551,23 +551,16 @@ class FaceBlurReviewDialog(AppCTkToplevel):
         self._update_status(qa_summary + " — " + _("Review side-by-side, then Save to keep."))
         self._progressbar.set(1.0)
         self._save_button.configure(state="normal")
+        self.update_idletasks()
+        viewer.fit_to_viewport(force=True, fill_viewport=True)
 
     def _apply_fixed_viewer_sizing(self) -> None:
         if not hasattr(self, "image_viewer") or self.image_viewer is None:
             return
-        viewer = self.image_viewer
-        viewer._resize_to_viewport_enabled = False
         self.update_idletasks()
-        max_width, max_height = viewer._viewport_max_dimensions()
-        if max_width <= 1 or max_height <= 1:
-            return
-        size = viewer._calculate_scaled_size(max_width, max_height, allow_upscale=False)
-        viewer.current_size = size
-        viewer.canvas.config(width=size[0], height=size[1])
-        if viewer.companion_canvas is not None:
-            viewer.companion_canvas.config(width=size[0], height=size[1])
-        viewer._companion_cache.clear()
-        viewer.load_and_display_image(viewer.current_image_index)
+        viewer = self.image_viewer
+        viewer.fit_to_viewport(force=True, fill_viewport=True)
+        viewer.mark_startup_complete()
 
     def _save_button_clicked(self) -> None:
         preview = self._preview

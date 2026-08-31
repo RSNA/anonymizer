@@ -1,7 +1,6 @@
 import contextlib
 import logging
 import tkinter as tk
-from dataclasses import dataclass
 from tkinter import ttk
 from typing import Callable, Literal
 
@@ -34,17 +33,6 @@ logger = logging.getLogger(__name__)
 ProjectionMode = Literal["slice", "min", "mean", "max"]
 
 
-@dataclass(frozen=True)
-class DataPanelLayout:
-    """Computed vertical budget for the RHS histogram / segmentation / controls stack."""
-
-    panel_width: int
-    panel_height: int
-    histogram_height: int
-    segmentation_buttons_height: int
-    show_segmentation_buttons: bool
-
-
 class ImageViewer(ctk.CTkFrame):
     CACHE_SIZE = 50  # Maximum number of images to keep in cache
     MIN_FPS = 1
@@ -57,15 +45,8 @@ class ImageViewer(ctk.CTkFrame):
     DATA_PANEL_PAD = 4
     HISTOGRAM_CANVAS_WIDTH = 220
     HISTOGRAM_CANVAS_HEIGHT = 110
-    HISTOGRAM_CANVAS_MIN_HEIGHT = 72
-    HISTOGRAM_WIDGET_CHROME = 30
-    DATA_PANEL_WIDTH = HISTOGRAM_CANVAS_WIDTH + 2 * DATA_PANEL_PAD
-    DATA_PANEL_MIN_HEIGHT = 260
-    CONTROL_CHROME_MIN_HEIGHT = 130
     SEGMENTATION_BUTTON_HEIGHT = 22
     SEGMENTATION_BUTTONS_PER_ROW = 2
-    SEGMENTATION_HEADER_HEIGHT = 36
-    SEGMENTATION_EMPTY_HEIGHT = 0
     SEGMENTATION_SCROLL_MIN_HEIGHT = 80
     SEGMENTATION_SCROLL_MAX_HEIGHT = 140
     SMALL_JUMP_PERCENTAGE = 0.01  # 1% of the total images
@@ -133,7 +114,6 @@ class ImageViewer(ctk.CTkFrame):
         self._series_projections = series_projections
         self._projection_buttons: dict[str, ctk.CTkButton] = {}
         self._suppress_callbacks = False
-        self._resize_to_viewport_enabled = False
         self._active_segmentation_names: set[str] = set()
         self._segmentation_button_meta: dict[str, tuple[int, int, int]] = {}
         self._segmentation_buttons: dict[str, ctk.CTkButton] = {}
@@ -143,6 +123,8 @@ class ImageViewer(ctk.CTkFrame):
         self._last_hist_canvas_height: int | None = None
         self._last_viewport_size: tuple[int, int] | None = None
         self._segmentation_scroll_height: int = self.SEGMENTATION_SCROLL_MIN_HEIGHT
+        self._viewport_fit_pending = False
+        self._pending_viewport_size: tuple[int, int] | None = None
 
         # Determine image properties from the last frame
         last_frame = images[-1]
@@ -208,20 +190,25 @@ class ImageViewer(ctk.CTkFrame):
         self.ctk_pause_icon = ctk.CTkImage(light_image=pause_image, dark_image=pause_image, size=self.PLAY_BTN_SIZE)
 
         # --- UI Elements ---
-        # --- Grid Layout ---
-        self.grid_rowconfigure(0, weight=1)  # Image label row expands
-        self.grid_columnconfigure(0, weight=1)  # Image label column expands
+        # Image column absorbs all slack (weight=1); RHS chrome takes its natural
+        # width (weight=0), so Tk never squeezes the controls to fit a guessed size.
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        if self.show_data_panel:
+            self.grid_columnconfigure(1, weight=0)
 
-        # Image Frame:
-        self.image_frame = ctk.CTkFrame(self)
+        # Black surround: the canvas is sized exactly to the pixmap and centred, so any
+        # slack left over by aspect-preserving scaling reads as viewport, not as dead UI.
+        self.image_frame = ctk.CTkFrame(self, fg_color="black")
         self.image_frame.grid(row=0, column=0, sticky="nsew")
-        self.image_frame.grid_rowconfigure(0, weight=1)  # Image label row expands
-        self.image_frame.grid_columnconfigure(0, weight=1)  # Image label column expands
+        self.image_frame.grid_rowconfigure(0, weight=1)
+        self.image_frame.grid_columnconfigure(0, weight=1)
+        self.image_frame.bind("<Configure>", self._on_image_frame_configure)
+        self._bind_slice_navigation_pointer(self.image_frame)
 
-        # Canvas (holds current frame pixels)
         self.canvas = tk.Canvas(self.image_frame, bg="black", borderwidth=0, highlightthickness=0)
-        self.canvas_image_item = None  # Add this attribute to store the ID of the image on the canvas
-        self.canvas.grid(row=0, column=0, sticky="nsew")
+        self.canvas_image_item = None
+        self.canvas.grid(row=0, column=0, sticky="")
 
         # Scrollbar (command detached until startup completes)
         if self.num_images > 1:
@@ -237,12 +224,14 @@ class ImageViewer(ctk.CTkFrame):
         self.image_number_label: ctk.CTkLabel | None = None
 
         if self.show_data_panel:
-            # Data Frame height tracks the image canvas (with a minimum floor).
+            # Natural size, top-aligned. Never pinned: the control row is wider than the
+            # histogram, and pinning it to the histogram width clips the playback controls.
             self.data_frame = ctk.CTkFrame(self)
-            self.data_frame.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="nsew")
+            self.data_frame.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="n")
             self.data_frame.grid_rowconfigure(0, weight=0)
             self.data_frame.grid_rowconfigure(1, weight=0)
             self.data_frame.grid_rowconfigure(2, weight=0)
+            self.data_frame.grid_columnconfigure(0, weight=1)
 
             self.histogram = Histogram(
                 self.data_frame,
@@ -346,10 +335,10 @@ class ImageViewer(ctk.CTkFrame):
 
             self.image_number_label = ctk.CTkLabel(self.control_frame, text="", font=("Courier Bold", 14))
             self.image_number_label.grid(row=1, column=3, sticky="s", padx=(0, self.PAD))
+            self.apply_fixed_chrome()
 
         # Event binding:
-        # Mouse:
-        self.bind("<Configure>", self.on_resize)
+        # Live resize is driven by image_frame <Configure> → fit_to_viewport().
         self.bind("<MouseWheel>", self.on_mousewheel)
         self.canvas.bind("<MouseWheel>", self.on_mousewheel)
         if self.enable_interactive_editing:
@@ -363,7 +352,7 @@ class ImageViewer(ctk.CTkFrame):
             self.control_frame.bind("<MouseWheel>", self.on_mousewheel)
 
         # Keys: bind on widgets that can hold keyboard focus.
-        # mouse_enter / _set_initial_size focus the image canvas; CTkFrame.bind alone
+        # mouse_enter / apply_initial_layout focus the image canvas; CTkFrame.bind alone
         # does not receive those KeyPress events.
         if self.num_images > 1:
             self._bind_slice_navigation_keys(self)
@@ -402,10 +391,10 @@ class ImageViewer(ctk.CTkFrame):
         with contextlib.suppress(tk.TclError):
             self.scrollbar.configure(command=self._scroll_command)
 
-    def show_initial_frame(self) -> None:
+    def show_initial_frame(self, *, viewport_budget: tuple[int, int] | None = None) -> None:
         """Single startup paint after parent geometry is final."""
         logger.info("SeriesView ImageViewer: step=show_initial_frame")
-        self.apply_initial_layout()
+        self.apply_initial_layout(viewport_budget=viewport_budget)
 
     def schedule_initial_display(self, *, on_complete: Callable[[], None] | None = None) -> None:
         """Deferred first paint after the parent window is mapped (legacy / tests)."""
@@ -539,26 +528,26 @@ class ImageViewer(ctk.CTkFrame):
             if primary_label:
                 self._primary_label = tk.Label(self.image_frame, text=primary_label, anchor="w")
                 self._primary_label.grid(row=0, column=0, sticky="w", padx=4, pady=(0, 4))
+                self._bind_slice_navigation_pointer(self._primary_label)
             if companion_label:
                 self._companion_label = tk.Label(self.image_frame, text=companion_label, anchor="w")
                 self._companion_label.grid(row=0, column=1, sticky="w", padx=4, pady=(0, 4))
+                self._bind_slice_navigation_pointer(self._companion_label)
             canvas_row = 1
             self.image_frame.grid_rowconfigure(0, weight=0)
             self.image_frame.grid_rowconfigure(canvas_row, weight=1)
         else:
             self.image_frame.grid_rowconfigure(0, weight=1)
 
-        self.canvas.grid(row=canvas_row, column=0, sticky="nsew", padx=(0, 4))
+        self.canvas.grid(row=canvas_row, column=0, sticky="", padx=(0, 4))
         self.companion_canvas = tk.Canvas(self.image_frame, bg="black", borderwidth=0, highlightthickness=0)
-        self.companion_canvas.grid(row=canvas_row, column=1, sticky="nsew", padx=(4, 0))
-        self.companion_canvas.bind("<MouseWheel>", self.on_mousewheel)
-        self.companion_canvas.bind("<Enter>", self.mouse_enter)
-        if self.num_images > 1:
-            self._bind_slice_navigation_keys(self.companion_canvas)
+        self.companion_canvas.grid(row=canvas_row, column=1, sticky="", padx=(4, 0))
+        self._bind_slice_navigation_pointer(self.companion_canvas)
 
         scroll_row = canvas_row + 1
         if self.num_images > 1:
             self.scrollbar.grid(row=scroll_row, column=0, columnspan=2, sticky="ew")
+            self._bind_slice_navigation_pointer(self.scrollbar)
         self._set_data_panel_visible(False)
 
     def _set_data_panel_visible(self, visible: bool) -> None:
@@ -569,7 +558,7 @@ class ImageViewer(ctk.CTkFrame):
             if visible:
                 self.data_frame.grid(row=0, column=1, padx=self.PAD, pady=self.PAD, sticky="n")
                 self.grid_columnconfigure(0, weight=1)
-                self._sync_data_panel_to_image_height()
+                self.apply_fixed_chrome()
             else:
                 if self.playing:
                     self._stop_playback()
@@ -605,7 +594,7 @@ class ImageViewer(ctk.CTkFrame):
         self.image_frame.grid_columnconfigure(1, weight=0)
         self.image_frame.grid_rowconfigure(0, weight=1)
         self.image_frame.grid_rowconfigure(1, weight=0)
-        self.canvas.grid(row=0, column=0, sticky="nsew", padx=0)
+        self.canvas.grid(row=0, column=0, sticky="", padx=0)
         if self.num_images > 1:
             self.scrollbar.grid(row=1, column=0, sticky="ew")
         self._set_data_panel_visible(True)
@@ -679,7 +668,7 @@ class ImageViewer(ctk.CTkFrame):
             self.clear_ts_cache_button.grid()
         else:
             self.clear_ts_cache_button.grid_remove()
-        self._sync_data_panel_to_image_height()
+        self.apply_fixed_chrome()
 
     def get_active_segmentation_names(self) -> set[str]:
         return set(self._active_segmentation_names)
@@ -716,7 +705,7 @@ class ImageViewer(ctk.CTkFrame):
             button.grid(row=row, column=col, sticky="w", padx=2, pady=2)
             self._segmentation_buttons[name] = button
         self._refresh_segmentation_button_styles()
-        self._sync_data_panel_to_image_height()
+        self.apply_fixed_chrome()
 
     def _toggle_segmentation_structure(self, name: str) -> None:
         if name not in self._segmentation_button_meta:
@@ -857,8 +846,8 @@ class ImageViewer(ctk.CTkFrame):
                 max_height = max(1, max_height - scroll_height)
         return max_width, max_height
 
-    def _viewport_max_dimensions(self) -> tuple[int, int]:
-        """Return the max (width, height) available for one image canvas."""
+    def viewport_size(self) -> tuple[int, int]:
+        """Space available to one image canvas inside the image column."""
         self.update_idletasks()
         frame_w = max(self.image_frame.winfo_width(), 1)
         frame_h = max(self.image_frame.winfo_height(), 1)
@@ -884,7 +873,7 @@ class ImageViewer(ctk.CTkFrame):
         max_height: int,
         scaled_size: tuple[int, int],
     ) -> tuple[int, int]:
-        """Use native pixels at open when the viewport can hold them (no upscale)."""
+        """Use native pixels when the viewport can hold them (no upscale)."""
         if self._viewport_fits_native(max_width, max_height):
             return self.image_width, self.image_height
         return scaled_size
@@ -894,9 +883,9 @@ class ImageViewer(ctk.CTkFrame):
         max_width: int,
         max_height: int,
         *,
-        allow_upscale: bool = True,
+        allow_upscale: bool = False,
     ) -> tuple[int, int] | None:
-        """Aspect-preserving display size for a viewport."""
+        """Aspect-preserving display size for a viewport (never above native by default)."""
         if max_width <= 1 or max_height <= 1:
             return None
         scaled = self._calculate_scaled_size(max_width, max_height, allow_upscale=allow_upscale)
@@ -908,309 +897,204 @@ class ImageViewer(ctk.CTkFrame):
         """True when on-screen pixels match native DICOM frame dimensions."""
         return self.current_size == (self.image_width, self.image_height)
 
-    def _data_panel_target_height(self) -> int:
-        """Ideal RHS height when the image column has room (matches displayed image height)."""
-        return max(self.DATA_PANEL_MIN_HEIGHT, int(self.current_size[1]))
+    def _dimensions_label_width(self) -> int:
+        """Pixels needed for the widest dimensions text this series can show.
 
-    def _data_panel_available_height(self) -> int:
-        """Height budget for RHS widgets — uses the live data panel when mapped."""
-        self.update_idletasks()
-        if self.data_frame is not None:
-            df_h = max(self.data_frame.winfo_height(), 0)
-            if df_h > 1:
-                return df_h
-        target = self._data_panel_target_height()
-        if self.image_frame is None:
-            return target
-        frame_h = max(self.image_frame.winfo_height(), 0)
-        if frame_h <= 1:
-            return target
-        scroll_h = 0
-        if self.num_images > 1 and hasattr(self, "scrollbar"):
-            scroll_h = max(0, self.scrollbar.winfo_height())
-        usable = max(0, frame_h - scroll_h)
-        if usable <= 1:
-            return target
-        return max(self.DATA_PANEL_MIN_HEIGHT, min(target, usable))
+        Reserve width for the largest upscale the viewport can reach so the RHS does
+        not shift as the digit count changes while scaling.
+        """
+        if self.image_size_label is None:
+            return 0
+        max_w, max_h = self._screen_canvas_budget()
+        upscale_w, upscale_h = self._calculate_scaled_size(max_w, max_h, allow_upscale=True)
+        widest = f"View[{upscale_w}x{upscale_h}] Actual[{self.image_width}x{self.image_height}]"
+        with contextlib.suppress(tk.TclError, AttributeError):
+            return int(self.image_size_label.cget("font").measure(widest)) + 4
+        return 0
 
-    def _control_chrome_height(self) -> int:
-        if self.control_frame is None:
-            return self.CONTROL_CHROME_MIN_HEIGHT
-        with contextlib.suppress(tk.TclError):
-            if not self.control_frame.winfo_ismapped():
-                return self.CONTROL_CHROME_MIN_HEIGHT
-            actual = max(0, self.control_frame.winfo_height())
-            if actual > 1:
-                return actual
-            measured = max(0, self.control_frame.winfo_reqheight())
-            if measured > 0:
-                return measured
-        return self.CONTROL_CHROME_MIN_HEIGHT
+    def _viewport_from_frame_event(self, frame_width: int, frame_height: int) -> tuple[int, int]:
+        """Map an image_frame Configure event to the canvas viewport."""
+        scroll_h = self.scrollbar.winfo_height() if self.num_images > 1 and hasattr(self, "scrollbar") else 0
+        label_h = 0
+        if self._primary_label is not None and self._primary_label.winfo_ismapped():
+            label_h = self._primary_label.winfo_height() + 4
+        usable_h = max(1, frame_height - scroll_h - label_h)
+        if self.companion_attached:
+            col_w = max(1, (frame_width - 8) // 2)
+            return col_w, usable_h
+        return frame_width, usable_h
 
-    def _layout_stack_height(self, layout: DataPanelLayout) -> int:
-        padding = 4 * self.DATA_PANEL_PAD
-        stack = (
-            layout.histogram_height
-            + self.HISTOGRAM_WIDGET_CHROME
-            + padding
-            + self._control_chrome_height()
-        )
-        if layout.show_segmentation_buttons:
-            stack += self.SEGMENTATION_HEADER_HEIGHT + layout.segmentation_buttons_height
-        return stack
+    def _request_viewport_fit(self, viewport: tuple[int, int] | None = None) -> None:
+        """Coalesce rapid image_frame Configure events (never cancel-and-re-arm)."""
+        if viewport is not None:
+            self._pending_viewport_size = viewport
+        if self._viewport_fit_pending:
+            return
+        self._viewport_fit_pending = True
 
-    def _compute_data_panel_layout(self) -> DataPanelLayout:
-        """V18-style budget: player chrome fixed at bottom, histogram flex, segmentation capped."""
-        available_h = self._data_panel_available_height()
-        panel_w = self.DATA_PANEL_WIDTH
-        padding = 4 * self.DATA_PANEL_PAD
-        ctrl_h = self._control_chrome_height()
-        has_buttons = bool(self._segmentation_button_meta)
-        min_hist = self.HISTOGRAM_CANVAS_MIN_HEIGHT
-        label_chrome = self.HISTOGRAM_WIDGET_CHROME
-        reserved = ctrl_h + padding + label_chrome
-        flex = max(0, available_h - reserved)
+        def _run() -> None:
+            self._viewport_fit_pending = False
+            pending_viewport = self._pending_viewport_size
+            self._pending_viewport_size = None
+            with contextlib.suppress(tk.TclError):
+                if pending_viewport is not None:
+                    self.fit_to_viewport(viewport=pending_viewport)
+                else:
+                    self.fit_to_viewport()
 
-        seg_buttons_h = 0
-        show_seg = False
-        if has_buttons and flex > min_hist:
-            header_h = self.SEGMENTATION_HEADER_HEIGHT
-            flex_after_header = max(0, flex - header_h)
-            candidate = min(
-                self.SEGMENTATION_SCROLL_MAX_HEIGHT,
-                max(0, flex_after_header - min_hist),
-            )
-            if candidate >= self.SEGMENTATION_SCROLL_MIN_HEIGHT:
-                seg_buttons_h = candidate
-                show_seg = True
+        self.after_idle(_run)
 
-        seg_budget = 0
-        if show_seg:
-            seg_budget = self.SEGMENTATION_HEADER_HEIGHT + seg_buttons_h
-        hist_h = max(0, flex - seg_budget)
-        hist_h = min(self.HISTOGRAM_CANVAS_HEIGHT, hist_h)
-        if hist_h >= min_hist:
-            hist_h = max(min_hist, hist_h)
-        elif show_seg and hist_h < min_hist:
-            show_seg = False
-            seg_buttons_h = 0
-            hist_h = max(0, flex)
+    def _on_image_frame_configure(self, event: tk.Event) -> None:
+        """Repaint when the image column changes size (V18-style geometry coupling)."""
+        if event.widget is not self.image_frame:
+            return
+        if not self._startup_complete:
+            return
+        if event.width <= 1 or event.height <= 1:
+            return
+        self._request_viewport_fit(self._viewport_from_frame_event(event.width, event.height))
 
-        layout = DataPanelLayout(
-            panel_width=panel_w,
-            panel_height=available_h,
-            histogram_height=hist_h,
-            segmentation_buttons_height=seg_buttons_h,
-            show_segmentation_buttons=show_seg,
-        )
-        while layout.show_segmentation_buttons and self._layout_stack_height(layout) > available_h + 1:
-            show_seg = False
-            seg_buttons_h = 0
-            hist_h = max(0, flex)
-            layout = DataPanelLayout(
-                panel_width=panel_w,
-                panel_height=available_h,
-                histogram_height=hist_h,
-                segmentation_buttons_height=seg_buttons_h,
-                show_segmentation_buttons=show_seg,
-            )
-        while self._layout_stack_height(layout) > available_h + 1 and layout.histogram_height > 0:
-            hist_h = max(0, layout.histogram_height - 8)
-            layout = DataPanelLayout(
-                panel_width=panel_w,
-                panel_height=available_h,
-                histogram_height=hist_h,
-                segmentation_buttons_height=layout.segmentation_buttons_height,
-                show_segmentation_buttons=layout.show_segmentation_buttons,
-            )
-        return layout
+    def _rhs_children(self) -> tuple[ctk.CTkBaseClass | ctk.CTkFrame, ...]:
+        """Mapped RHS chrome widgets, top to bottom."""
+        children = (self.histogram, self.segmentation_frame, self.control_frame)
+        return tuple(child for child in children if child is not None and child.winfo_ismapped())
 
-    def _apply_data_panel_layout(self, layout: DataPanelLayout, *, refresh_histogram: bool = False) -> None:
+    def apply_fixed_chrome(self, *, refresh_histogram: bool = False) -> None:
+        """Apply the RHS widgets' declared sizes. Never called from image resize.
+
+        The panel itself is deliberately left at its natural size: Tk sums the children,
+        which is the only measurement guaranteed to fit them.
+        """
         if self.data_frame is None or self.histogram is None:
             return
+        show_segmentation = bool(self._segmentation_button_meta)
         with contextlib.suppress(tk.TclError):
-            self._segmentation_scroll_height = layout.segmentation_buttons_height
             self.histogram.canvas.configure(
                 width=self.HISTOGRAM_CANVAS_WIDTH,
-                height=layout.histogram_height,
+                height=self.HISTOGRAM_CANVAS_HEIGHT,
             )
-            if layout.histogram_height != self._last_hist_canvas_height:
-                self._last_hist_canvas_height = layout.histogram_height
+            if self._last_hist_canvas_height != self.HISTOGRAM_CANVAS_HEIGHT:
+                self._last_hist_canvas_height = self.HISTOGRAM_CANVAS_HEIGHT
                 if refresh_histogram:
                     self.histogram.refresh_display()
             if self.segmentation_buttons_frame is not None:
-                if layout.show_segmentation_buttons:
+                if show_segmentation:
+                    self._segmentation_scroll_height = self.SEGMENTATION_SCROLL_MAX_HEIGHT
                     if self.segmentation_frame is not None:
                         self.segmentation_frame.grid()
                     self.segmentation_buttons_frame.grid()
-                    if layout.segmentation_buttons_height > 0:
-                        self.segmentation_buttons_frame.configure(
-                            width=self.HISTOGRAM_CANVAS_WIDTH,
-                            height=layout.segmentation_buttons_height,
-                        )
-                    else:
-                        self.segmentation_buttons_frame.grid_remove()
+                    self.segmentation_buttons_frame.configure(
+                        width=self.HISTOGRAM_CANVAS_WIDTH,
+                        height=self._segmentation_scroll_height,
+                    )
                 else:
+                    self._segmentation_scroll_height = 0
                     self.segmentation_buttons_frame.grid_remove()
                     if self.segmentation_frame is not None:
                         self.segmentation_frame.grid_remove()
+            if self.image_size_label is not None:
+                label_width = self._dimensions_label_width()
+                if label_width > 0:
+                    self.image_size_label.configure(width=label_width)
             if self.control_frame is not None:
                 self.control_frame.grid(row=2, column=0, sticky="ew")
             self.update_idletasks()
-            self.data_frame.configure(width=layout.panel_width)
-            self.data_frame.grid_propagate(True)
 
-    def _sync_data_panel_to_image_height(self, *, refresh_histogram: bool = False) -> None:
-        """Fit histogram + segmentation + player into the image-height budget."""
-        if self.data_frame is None or self.histogram is None:
-            return
-        with contextlib.suppress(tk.TclError):
-            self.data_frame.grid_propagate(True)
-            suppress_segmentation = False
-            for pass_idx in range(6):
-                self.update_idletasks()
-                layout = self._compute_data_panel_layout()
-                if suppress_segmentation and layout.show_segmentation_buttons:
-                    available_h = layout.panel_height
-                    padding = 4 * self.DATA_PANEL_PAD
-                    flex = max(
-                        0,
-                        available_h
-                        - self._control_chrome_height()
-                        - padding
-                        - self.HISTOGRAM_WIDGET_CHROME,
-                    )
-                    layout = DataPanelLayout(
-                        panel_width=layout.panel_width,
-                        panel_height=available_h,
-                        histogram_height=max(0, flex),
-                        segmentation_buttons_height=0,
-                        show_segmentation_buttons=False,
-                    )
-                self._apply_data_panel_layout(
-                    layout,
-                    refresh_histogram=refresh_histogram and pass_idx == 0,
-                )
-                self.update_idletasks()
-                if self.player_fits_data_panel():
-                    break
-                if layout.show_segmentation_buttons:
-                    suppress_segmentation = True
-                    continue
-                if layout.histogram_height > 0:
-                    available_h = self._data_panel_available_height()
-                    padding = 4 * self.DATA_PANEL_PAD
-                    flex = max(
-                        0,
-                        available_h
-                        - self._control_chrome_height()
-                        - padding
-                        - self.HISTOGRAM_WIDGET_CHROME,
-                    )
-                    layout = DataPanelLayout(
-                        panel_width=layout.panel_width,
-                        panel_height=available_h,
-                        histogram_height=max(0, flex),
-                        segmentation_buttons_height=0,
-                        show_segmentation_buttons=False,
-                    )
-                    self._apply_data_panel_layout(layout, refresh_histogram=False)
-                    if self.player_fits_data_panel():
-                        break
-
-    def player_fits_data_panel(self) -> bool:
-        """True when the playback/control row is within the visible RHS panel."""
+    def chrome_fully_visible(self) -> bool:
+        """True when every RHS widget fits inside the panel on both axes."""
         if self.data_frame is None or self.control_frame is None:
             return False
         self.update_idletasks()
-        panel_h = max(self.data_frame.winfo_height(), 0)
-        if panel_h <= 1:
+        panel_w = self.data_frame.winfo_width()
+        panel_h = self.data_frame.winfo_height()
+        if panel_w <= 1 or panel_h <= 1:
             return False
-        bottom = self.control_frame.winfo_y() + self.control_frame.winfo_height()
-        return bottom <= panel_h + 2
+        # Requested sizes, not allocated: a clipped child still reports the allocated size.
+        return all(
+            child.winfo_x() + child.winfo_reqwidth() <= panel_w + 2
+            and child.winfo_y() + child.winfo_reqheight() <= panel_h + 2
+            for child in self._rhs_children()
+        )
 
-    def _paint_at_display_size(self, new_size: tuple[int, int], *, refresh_histogram: bool = True) -> None:
-        """Resize canvases and render the current frame at ``new_size``."""
-        if new_size == self.current_size and self.canvas_image_item is not None:
-            self._sync_data_panel_to_image_height()
-            self.update_status()
-            return
-        self.current_size = new_size
-        self.canvas.config(width=new_size[0], height=new_size[1])
+    def set_display_size(self, size: tuple[int, int], *, refresh_histogram: bool = False) -> bool:
+        """Resize canvases to ``size`` and repaint if changed. Does not touch RHS chrome."""
+        if size[0] <= 0 or size[1] <= 0:
+            return False
+        if size == self.current_size and self.canvas_image_item is not None:
+            self.update_idletasks()
+            canvas_matches = self.canvas.winfo_width() == size[0] and self.canvas.winfo_height() == size[1]
+            companion_matches = self.companion_canvas is None or (
+                self.companion_canvas.winfo_width() == size[0] and self.companion_canvas.winfo_height() == size[1]
+            )
+            if canvas_matches and companion_matches:
+                return False
+        self.current_size = size
+        self.canvas.config(width=size[0], height=size[1])
         if self.companion_canvas is not None:
-            self.companion_canvas.config(width=new_size[0], height=new_size[1])
+            self.companion_canvas.config(width=size[0], height=size[1])
         self._companion_cache.clear()
         self.load_and_display_image(self.current_image_index)
-        self._sync_data_panel_to_image_height(refresh_histogram=refresh_histogram)
         if self.histogram is not None and not self.companion_attached:
             self.histogram.update_image(self._display_pixels(self.current_image_index))
+            if refresh_histogram:
+                self.histogram.refresh_display()
         self.update_status()
+        return True
 
-    def apply_initial_layout(self) -> None:
-        """Single post-map layout: fit viewport (or screen budget), render once."""
-        self.update_idletasks()
-        max_width, max_height = self._viewport_max_dimensions()
-        viewport_source = "mapped"
+    def fit_to_viewport(
+        self,
+        *,
+        force: bool = False,
+        viewport: tuple[int, int] | None = None,
+        refresh_histogram: bool = False,
+        fill_viewport: bool = True,
+    ) -> bool:
+        """Fit the canvas to the image column, preserving aspect ratio.
+
+        When ``fill_viewport`` is True the image scales up to fill the viewport (including
+        past native). Startup uses ``fill_viewport=False`` so the first paint stays 1:1
+        when the window already fits the native frame.
+        """
+        max_width, max_height = viewport if viewport is not None else self.viewport_size()
         if max_width <= 1 or max_height <= 1:
             max_width, max_height = self._screen_canvas_budget()
-            viewport_source = "screen_budget"
-        new_size = self._resolve_display_size(max_width, max_height, allow_upscale=False)
+        new_size = self._resolve_display_size(max_width, max_height, allow_upscale=fill_viewport)
         if new_size is None:
-            logger.info(
-                "SeriesView ImageViewer: step=apply_initial_layout skipped viewport=%dx%d source=%s",
-                max_width,
-                max_height,
-                viewport_source,
-            )
-            return
+            return False
+        viewport_size = (max_width, max_height)
+        if (
+            not force
+            and viewport_size == self._last_viewport_size
+            and new_size == self.current_size
+            and self.canvas_image_item is not None
+        ):
+            return False
+        self._last_viewport_size = viewport_size
+        if not force and new_size == self.current_size and self.canvas_image_item is not None:
+            return False
+        return self.set_display_size(new_size, refresh_histogram=refresh_histogram)
+
+    def apply_initial_layout(self, *, viewport_budget: tuple[int, int] | None = None) -> None:
+        """Single post-map layout: fit the viewport (or an explicit budget) and render once."""
+        painted = self.fit_to_viewport(
+            force=True,
+            viewport=viewport_budget,
+            refresh_histogram=True,
+            fill_viewport=False,
+        )
         logger.info(
-            "SeriesView ImageViewer: step=apply_initial_layout viewport=%dx%d source=%s "
-            "view=%dx%d actual=%dx%d native_match=%s frame=%d",
-            max_width,
-            max_height,
-            viewport_source,
-            new_size[0],
-            new_size[1],
+            "SeriesView ImageViewer: step=apply_initial_layout viewport=%dx%d view=%dx%d "
+            "actual=%dx%d native_match=%s frame=%d painted=%s",
+            *(self._last_viewport_size or (0, 0)),
+            *self.current_size,
             self.image_width,
             self.image_height,
-            new_size == (self.image_width, self.image_height),
+            self.view_matches_actual(),
             self.current_image_index,
+            painted,
         )
-        self._paint_at_display_size(new_size, refresh_histogram=True)
-        self._last_viewport_size = self._viewport_max_dimensions()
         with contextlib.suppress(tk.TclError):
             self.canvas.focus_set()
-
-    def _set_initial_size(self) -> None:
-        """Backward-compatible alias for apply_initial_layout."""
-        self.apply_initial_layout()
-
-    def _apply_viewport_size(self) -> None:
-        """Scale display to the available viewport while preserving aspect ratio."""
-        if not self._startup_complete:
-            return
-        max_width, max_height = self._viewport_max_dimensions()
-        viewport = (max_width, max_height)
-        if viewport == self._last_viewport_size:
-            return
-        new_size = self._resolve_display_size(max_width, max_height, allow_upscale=False)
-        if new_size is None:
-            return
-        if new_size == self.current_size and self.canvas_image_item is not None:
-            self._last_viewport_size = viewport
-            self._sync_data_panel_to_image_height()
-            return
-        self._last_viewport_size = viewport
-        self._paint_at_display_size(new_size, refresh_histogram=True)
-
-    def sync_viewport_after_layout(self, *, deferred: bool = True) -> None:
-        """Match rendered image size to canvas viewport after grid layout settles."""
-        if not self._startup_complete:
-            return
-        self.update_idletasks()
-        self._apply_viewport_size()
-        if deferred:
-            self.after_idle(self._apply_viewport_size)
 
     def _calculate_scaled_size(
         self,
@@ -1247,6 +1131,13 @@ class ImageViewer(ctk.CTkFrame):
     def mouse_enter(self, event):
         logger.debug("mouse_enter")
         self.canvas.focus_set()
+
+    def _bind_slice_navigation_pointer(self, widget: tk.Misc) -> None:
+        """Scroll wheel and keyboard slice navigation when the pointer is over a widget."""
+        widget.bind("<MouseWheel>", self.on_mousewheel)
+        widget.bind("<Enter>", self.mouse_enter)
+        if self.num_images > 1:
+            self._bind_slice_navigation_keys(widget)
 
     def _bind_slice_navigation_keys(self, widget: tk.Misc) -> None:
         """Arrow / page keys change the current slice (same mapping as scrollbar)."""
@@ -1404,11 +1295,7 @@ class ImageViewer(ctk.CTkFrame):
         use_cache = not self._is_projection_mode()
 
         # Use Cache (skip when overlays must be composited — cache stores pre-overlay pixels).
-        if (
-            use_cache
-            and frame_ndx in self.image_cache
-            and not self._frame_has_composited_overlay(frame_ndx)
-        ):
+        if use_cache and frame_ndx in self.image_cache and not self._frame_has_composited_overlay(frame_ndx):
             cached_image, __, cached_size = self.image_cache[frame_ndx]
             if cached_size == self.current_size:
                 self.photo_image = cached_image
@@ -1416,11 +1303,7 @@ class ImageViewer(ctk.CTkFrame):
                 if self.canvas_image_item:
                     self.canvas.delete(self.canvas_image_item)
                 self.canvas_image_item = self.canvas.create_image(0, 0, anchor="nw", image=self.photo_image)
-                if (
-                    self.current_image_index != frame_ndx
-                    and self.histogram is not None
-                    and not self.companion_attached
-                ):
+                if self.current_image_index != frame_ndx and self.histogram is not None and not self.companion_attached:
                     self.histogram.update_image(display_pixels)
                 self.current_image_index = frame_ndx
                 self._load_companion_display(frame_ndx)
@@ -1428,11 +1311,7 @@ class ImageViewer(ctk.CTkFrame):
                 self.update_status()
                 return
 
-        if (
-            self.current_image_index != frame_ndx
-            and self.histogram is not None
-            and not self.companion_attached
-        ):
+        if self.current_image_index != frame_ndx and self.histogram is not None and not self.companion_attached:
             self.histogram.update_image(display_pixels)
 
         image_array = apply_windowing(self.current_wl, self.current_ww, display_pixels.copy())
@@ -1536,13 +1415,6 @@ class ImageViewer(ctk.CTkFrame):
             self.change_image(self.current_image_index - 1)
         else:
             self.change_image(self.current_image_index + 1)
-
-    def on_resize(self, event=None) -> None:
-        if not self._startup_complete:
-            return
-        if event is not None and event.widget is not self:
-            return
-        self._apply_viewport_size()
 
     def prev_image(self, event):
         self.change_image(self.current_image_index - 1)

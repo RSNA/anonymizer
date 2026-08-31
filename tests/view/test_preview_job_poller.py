@@ -66,3 +66,16 @@ def test_face_blur_dialog_starts_load_job_with_work_state(mock_start: MagicMock)
     call_kwargs = mock_start.call_args.kwargs
     assert call_kwargs["algorithm"] is Algorithm.FACE_BLUR
     assert call_kwargs["work_state"] is dialog._load_work_state
+
+
+def test_apply_fixed_viewer_sizing_marks_startup_complete() -> None:
+    """Blur Face review must enable slice scrolling after its fixed layout pass."""
+    dialog = FaceBlurReviewDialog.__new__(FaceBlurReviewDialog)
+    viewer = MagicMock()
+    dialog.image_viewer = viewer
+    dialog.update_idletasks = MagicMock()
+
+    FaceBlurReviewDialog._apply_fixed_viewer_sizing(dialog)
+
+    viewer.fit_to_viewport.assert_called_once_with(force=True, fill_viewport=True)
+    viewer.mark_startup_complete.assert_called_once()

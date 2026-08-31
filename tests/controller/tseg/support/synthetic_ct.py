@@ -124,6 +124,35 @@ def build_synthetic_chest_ct_series(
     )
 
 
+def build_synthetic_wide_ct_series(
+    output_dir: Path,
+    *,
+    num_slices: int = DEFAULT_PHANTOM_SLICE_COUNT,
+    rows: int = DEFAULT_PHANTOM_MATRIX,
+    cols: int = 2 * DEFAULT_PHANTOM_MATRIX,
+    series_uid: str | None = None,
+    study_uid: str | None = None,
+    sop_instance_uid_prefix: str | None = None,
+) -> Path:
+    """Non-square chest phantom (default 256 rows x 512 columns).
+
+    Square frames cannot detect width/height transposition in aspect-ratio maths, so
+    Series View layout tests need a series whose two axes differ.
+    """
+    return _build_phantom_series(
+        output_dir,
+        slice_generator=_chest_hu_slice,
+        num_slices=num_slices,
+        series_uid=series_uid,
+        study_uid=study_uid,
+        sop_instance_uid_prefix=sop_instance_uid_prefix,
+        body_part_examined="CHEST",
+        series_description="Synthetic wide CT phantom",
+        rows=rows,
+        cols=cols,
+    )
+
+
 def build_synthetic_abdomen_ct_series(
     output_dir: Path,
     *,
@@ -346,6 +375,8 @@ def _build_phantom_series(
     sop_instance_uid_prefix: str | None = None,
     body_part_examined: str,
     series_description: str,
+    rows: int = DEFAULT_PHANTOM_MATRIX,
+    cols: int = DEFAULT_PHANTOM_MATRIX,
 ) -> Path:
     _validate_slice_count(num_slices)
 
@@ -357,7 +388,6 @@ def _build_phantom_series(
     resolved_series_uid = series_uid or generate_uid()
     resolved_study_uid = study_uid or generate_uid()
 
-    rows = cols = DEFAULT_PHANTOM_MATRIX
     pixel_spacing = DEFAULT_PIXEL_SPACING_MM
     slice_thickness = DEFAULT_SLICE_THICKNESS_MM
     origin = [-cols / 2 * pixel_spacing[1], -rows / 2 * pixel_spacing[0], 0.0]
