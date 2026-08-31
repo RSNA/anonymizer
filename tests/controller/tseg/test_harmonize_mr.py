@@ -73,7 +73,7 @@ def test_face_blur_eligibility_allows_mr_when_weights_ready(tmp_path: Path):
     series.mkdir()
     with (
         patch(
-            "anonymizer.controller.ai.blur_face.cached_region_signal",
+            "anonymizer.controller.ai.blur_face.pipeline.cached_region_signal",
             return_value=CachedRegionSignal.HEAD,
         ),
         patch("anonymizer.controller.ai.tseg.model_cache.mr_face_model_ready", return_value=True),
@@ -173,7 +173,7 @@ def test_blur_dispatch_mr_fill_noise_uses_intensity():
     mask = np.zeros((2, 16, 16), dtype=bool)
     mask[:, 4:12, 4:12] = True
     with patch(
-        "anonymizer.controller.ai.blur_face.blur_face_intensity_volume",
+        "anonymizer.controller.ai.blur_face.pipeline.blur_face_intensity_volume",
         wraps=blur_face_intensity_volume,
     ) as intensity:
         blur_face_volume_for_profile(

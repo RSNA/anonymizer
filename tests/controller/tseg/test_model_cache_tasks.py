@@ -42,12 +42,10 @@ def _install_fake_totalsegmentator(
     }
 
 
-def test_ts_task_download_label_uses_cli_task_name() -> None:
-    assert ts_task_download_label(297) == "CT anatomy 3 mm"
-    assert ts_task_download_label(303) == "CT face 1.5 mm"
-    assert "brain" in ts_task_download_label(409).lower()
-    assert "total" not in ts_task_download_label(297)
-    assert "face_mr" not in ts_task_download_label(856)
+def test_ts_task_download_label_uses_technical_model_id() -> None:
+    """Controller progress uses task ids; clinician-friendly names live in the view layer."""
+    assert ts_task_download_label(297) == "Model 297"
+    assert ts_task_download_label(303) == "Model 303"
     assert ts_task_download_label(999) == "Model 999"
 
 
