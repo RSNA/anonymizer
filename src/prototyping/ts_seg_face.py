@@ -9,7 +9,7 @@ Usage::
     uv run python src/prototyping/ts_seg_face.py /path/to/ct_head_series
     uv run python src/prototyping/ts_seg_face.py /path/to/ct_head_series --force
 
-Writes ``<series>/A_TS_SEG/seg/face.nii.gz`` (reuses ``A_TS_SEG/volume.nii.gz`` when present).
+Writes ``<series>/0_TS_SEG/seg/face.nii.gz`` (reuses ``0_TS_SEG/volume.nii.gz`` when present).
 
 Licensed weights (Dataset303) download on first run. See:
 https://backend.totalsegmentator.com/license-academic/
@@ -83,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Re-run face segmentation even when A_TS_SEG/seg/face.nii.gz exists",
+        help="Re-run face segmentation even when 0_TS_SEG/seg/face.nii.gz exists",
     )
     parser.add_argument(
         "-v",

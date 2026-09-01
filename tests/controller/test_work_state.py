@@ -84,6 +84,8 @@ def test_work_state_cancel() -> None:
     assert not ws.should_cancel()
     ws.request_cancel()
     assert ws.should_cancel()
+    ws.request_cancel()
+    assert ws.should_cancel()
 
 
 def test_work_state_update_job_progress_and_read_ui() -> None:

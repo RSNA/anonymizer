@@ -18,7 +18,7 @@ from anonymizer.controller.phi_io import PHI_IndexRecord
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel, refresh_app_window_menu
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
-from anonymizer.view.series.series import SeriesView
+from anonymizer.view.series.series import SeriesView, show_series_view
 
 if TYPE_CHECKING:
     from anonymizer.controller.project import ProjectController
@@ -391,8 +391,9 @@ class ProjectionView(AppToplevel):
             self._series_view.focus_force()
             return
 
-        self._series_view = self._controller.show_series_view(
+        self._series_view = show_series_view(
             self,
+            controller=self._controller,
             series_path=series_path,
             fonts=self._fonts,
             preloaded=take_loaded_series_cache(series_path),

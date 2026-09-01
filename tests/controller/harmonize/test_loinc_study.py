@@ -331,6 +331,31 @@ def test_auto_apply_study_description_offer_uses_top_match():
     assert seen["loinc"] == "42274-1"
 
 
+def test_aggregate_breast_postprocess_mr_series():
+    aggregate = aggregate_study_from_series_descriptions(
+        [
+            "Breast Ax WO Postprocess",
+            "Breast Ax WO Postprocess",
+        ]
+    )
+    assert aggregate.anatomy_parts == ("Breast",)
+    assert aggregate.contrast_family == "WO"
+    assert aggregate.diagnostic_series_count == 2
+
+
+@pytest.mark.skipif(not _CSV.is_file(), reason="LOINC StudyDescription CSV missing")
+def test_rank_mr_breast_study_description():
+    _aggregate, matches, ambiguous = build_study_description_ranking(
+        ["Breast Ax WO Postprocess"],
+        top_n=5,
+        loinc_prefix="MR ",
+    )
+    assert _aggregate.anatomy_parts == ("Breast",)
+    assert matches
+    assert all(match.long_common_name.startswith("MR Breast") for match in matches)
+    assert any("WO contrast" in match.long_common_name for match in matches)
+
+
 def test_maybe_offer_only_when_study_complete_and_description_empty():
     from anonymizer.controller.ai.harmonize import maybe_offer_study_description_harmonize
 

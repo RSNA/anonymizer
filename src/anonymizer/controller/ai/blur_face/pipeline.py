@@ -289,7 +289,7 @@ def metadata_signal(ds: Dataset | None) -> MetadataSignal:
 
 def cached_region_signal(series_directory: Path) -> CachedRegionSignal:
     """
-    Infer head vs non-head from cached TotalSegmentator ROI masks (``A_TS_SEG/seg/``).
+    Infer head vs non-head from cached TotalSegmentator ROI masks (``0_TS_SEG/seg/``).
 
     Returns ``UNAVAILABLE`` when harmonize/regions has not populated the cache.
     """
@@ -466,7 +466,7 @@ def resolve_face_mask_path(
     """
     Return the face mask NIfTI for ``series_directory``.
 
-    Prefer ``<series>/A_TS_SEG/seg/face.nii.gz`` (CT) or ``face_mr.nii.gz`` (MR).
+    Prefer ``<series>/0_TS_SEG/seg/face.nii.gz`` (CT) or ``face_mr.nii.gz`` (MR).
     Fall back to legacy ``<series>/ts_seg/face.nii.gz`` with a deprecation warning.
     When no mask exists and ``run_if_missing`` is true, run ``analyze_tseg_face``.
     """

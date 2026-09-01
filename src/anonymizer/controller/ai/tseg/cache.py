@@ -12,6 +12,38 @@ from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
 logger = logging.getLogger(__name__)
 
 LEGACY_TSEG_CACHE_DIRNAME = ".tseg_cache"
+PREVIOUS_TSEG_CACHE_DIRNAME = "A_TS_SEG"
+
+
+def _migrate_cache_dir(source: Path, target: Path) -> Path:
+    """Rename ``source`` to ``target`` when possible; otherwise keep using ``source``."""
+    try:
+        source.rename(target)
+        logger.info("Migrated TS cache %s -> %s", source.name, target.name)
+        return target
+    except OSError as exc:
+        logger.warning("Could not migrate TS cache to %s: %s; using legacy path", target.name, exc)
+        return source
+
+
+def resolve_series_cache_dir(series_directory: Path) -> Path:
+    """
+    Return the TS cache directory for a series, migrating legacy cache folders when needed.
+
+    New caches are written under ``0_TS_SEG/`` at the series root (visible, sorts first).
+    """
+    series_directory = Path(series_directory).resolve()
+    cache_dir = series_directory / TSEG_CACHE_DIRNAME
+
+    if cache_dir.is_dir():
+        return cache_dir
+
+    for legacy_name in (PREVIOUS_TSEG_CACHE_DIRNAME, LEGACY_TSEG_CACHE_DIRNAME):
+        legacy_dir = series_directory / legacy_name
+        if legacy_dir.is_dir():
+            return _migrate_cache_dir(legacy_dir, cache_dir)
+
+    return cache_dir
 
 
 @dataclass(frozen=True)
@@ -20,31 +52,6 @@ class TsegCacheSummary:
     exists: bool
     file_count: int
     size_bytes: int
-
-
-def resolve_series_cache_dir(series_directory: Path) -> Path:
-    """
-    Return the TS cache directory for a series, migrating legacy ``.tseg_cache`` when needed.
-
-    New caches are written under ``A_TS_SEG/`` at the series root (visible, sorts first).
-    """
-    series_directory = Path(series_directory).resolve()
-    cache_dir = series_directory / TSEG_CACHE_DIRNAME
-    legacy_dir = series_directory / LEGACY_TSEG_CACHE_DIRNAME
-
-    if cache_dir.is_dir():
-        return cache_dir
-
-    if legacy_dir.is_dir():
-        try:
-            legacy_dir.rename(cache_dir)
-            logger.info("Migrated TS cache %s -> %s", legacy_dir.name, cache_dir.name)
-        except OSError as exc:
-            logger.warning("Could not migrate TS cache to %s: %s; using legacy path", cache_dir.name, exc)
-            return legacy_dir
-        return cache_dir
-
-    return cache_dir
 
 
 def _measure_tree(directory: Path) -> tuple[int, int]:
@@ -101,7 +108,7 @@ def clear_tseg_series_cache(series_directory: Path) -> bool:
     series_directory = Path(series_directory).resolve()
     removed = False
 
-    for dirname in (TSEG_CACHE_DIRNAME, LEGACY_TSEG_CACHE_DIRNAME):
+    for dirname in (TSEG_CACHE_DIRNAME, PREVIOUS_TSEG_CACHE_DIRNAME, LEGACY_TSEG_CACHE_DIRNAME):
         cache_dir = series_directory / dirname
         if not cache_dir.is_dir():
             continue

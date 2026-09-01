@@ -284,6 +284,119 @@ def build_synthetic_scout_ct_series(output_dir: Path, *, num_slices: int = 5) ->
     )
 
 
+def build_synthetic_haste_sag_series(output_dir: Path, *, num_slices: int = 26) -> Path:
+    """Sagittal MR HASTE survey (localizer-style naming, many thick slices)."""
+    return build_synthetic_oriented_ct_series(
+        output_dir,
+        num_slices=num_slices,
+        image_orientation=[0.0, 1.0, 0.0, 0.0, 0.0, -1.0],
+        stack_delta=[-9.6, 0.0, 0.0],
+        image_type=["ORIGINAL", "PRIMARY", "OTHER"],
+        series_description="LIVER-PELVIS/HASTE_SAG_POS",
+        body_part_examined="ABDOMEN",
+        require_falcon_min_slices=False,
+    )
+
+
+def build_synthetic_breast_adc_mr_series(output_dir: Path, *, num_slices: int = 60) -> Path:
+    """Derived secondary axial breast ADC map (parametric MR, not anatomical)."""
+    series_dir = build_synthetic_oriented_ct_series(
+        output_dir,
+        num_slices=num_slices,
+        image_orientation=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+        stack_delta=[0.0, 0.0, 2.5],
+        image_type=["DERIVED", "SECONDARY", "AXIAL"],
+        series_description="ADC = short int value x 0.2E-06 (units: 10E-03 mm^2/s)",
+        body_part_examined="BREAST",
+        require_falcon_min_slices=False,
+    )
+    for path in series_dir.glob("*.dcm"):
+        dataset = pydicom.dcmread(path)
+        dataset.Modality = "MR"
+        dataset.save_as(path)
+    return series_dir
+
+
+def build_synthetic_breast_mr_anatomical_series(output_dir: Path, *, num_slices: int = 60) -> Path:
+    """Native breast MR volume (no breast class in total_mr ROI)."""
+    series_dir = build_synthetic_oriented_ct_series(
+        output_dir,
+        num_slices=num_slices,
+        image_orientation=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+        stack_delta=[0.0, 0.0, 2.5],
+        image_type=["ORIGINAL", "PRIMARY", "AXIAL"],
+        series_description="T2 AXIAL BREAST",
+        body_part_examined="BREAST",
+        require_falcon_min_slices=False,
+    )
+    for path in series_dir.glob("*.dcm"):
+        dataset = pydicom.dcmread(path)
+        dataset.Modality = "MR"
+        dataset.save_as(path)
+    return series_dir
+
+
+def build_synthetic_ct_perfusion_map_series(output_dir: Path, *, num_slices: int = 40) -> Path:
+    """Derived CT perfusion map (CBF) — parametric, not anatomical."""
+    return build_synthetic_oriented_ct_series(
+        output_dir,
+        num_slices=num_slices,
+        image_orientation=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+        stack_delta=[0.0, 0.0, 5.0],
+        image_type=["DERIVED", "SECONDARY", "AXIAL"],
+        series_description="CBF PERFUSION MAP",
+        body_part_examined="BRAIN",
+        require_falcon_min_slices=False,
+    )
+
+
+def build_synthetic_survey_mr_series(output_dir: Path, *, num_slices: int = 40) -> Path:
+    """Thick-slice MR survey classified as localizer."""
+    series_dir = build_synthetic_oriented_ct_series(
+        output_dir,
+        num_slices=num_slices,
+        image_orientation=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+        stack_delta=[0.0, 0.0, 8.0],
+        image_type=["ORIGINAL", "PRIMARY", "AXIAL"],
+        series_description="ABDOMEN SURVEY STIR",
+        body_part_examined="ABDOMEN",
+        require_falcon_min_slices=False,
+    )
+    for path in series_dir.glob("*.dcm"):
+        dataset = pydicom.dcmread(path)
+        dataset.Modality = "MR"
+        dataset.save_as(path)
+    return series_dir
+
+
+def build_synthetic_fused_pet_ct_series(output_dir: Path, *, num_slices: int = 40) -> Path:
+    """PET/CT fusion series — metadata harmonize as Fused."""
+    return build_synthetic_oriented_ct_series(
+        output_dir,
+        num_slices=num_slices,
+        image_orientation=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+        stack_delta=[0.0, 0.0, 3.0],
+        image_type=["DERIVED", "SECONDARY", "AXIAL"],
+        series_description="PET/CT FUSION",
+        body_part_examined="CHEST",
+        require_falcon_min_slices=False,
+    )
+
+
+def build_synthetic_bolus_monitor_series(output_dir: Path, *, num_slices: int = 20) -> Path:
+    """Bolus monitoring series — metadata harmonize as Monitoring."""
+    return build_synthetic_oriented_ct_series(
+        output_dir,
+        num_slices=num_slices,
+        image_orientation=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+        stack_delta=[0.0, 0.0, 3.0],
+        image_type=["ORIGINAL", "PRIMARY", "AXIAL"],
+        series_description="BOLUS MONITOR",
+        body_part_examined="CHEST",
+        require_falcon_min_slices=False,
+    )
+
+
 def build_synthetic_derived_coronal_mpr_series(
     output_dir: Path,
     *,

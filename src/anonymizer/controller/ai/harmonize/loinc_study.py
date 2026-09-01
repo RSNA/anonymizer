@@ -43,6 +43,7 @@ _BODY_PART_TO_LOINC_ANATOMY: dict[str, tuple[str, ...]] = {
     "CSp": ("Cervical spine",),
     "TSp": ("Thoracic spine",),
     "LSp": ("Lumbar spine",),
+    "Breast": ("Breast",),
 }
 
 # Substrings in a LongCommonName that satisfy a preferred LOINC anatomy part.
@@ -58,6 +59,7 @@ _LOINC_ANATOMY_MATCH_PHRASES: dict[str, tuple[str, ...]] = {
     "Cervical spine": ("cervical spine", "cervical"),
     "Thoracic spine": ("thoracic spine", "thoracic"),
     "Lumbar spine": ("lumbar spine", "lumbar"),
+    "Breast": ("breast",),
 }
 
 # Legacy token synonyms used for foreign-anatomy detection among ranked regions.
@@ -72,6 +74,7 @@ _LOINC_ANATOMY_SYNONYMS: dict[str, frozenset[str]] = {
     "Cervical spine": frozenset({"Cervical", "Spine"}),
     "Thoracic spine": frozenset({"Thoracic", "Spine"}),
     "Lumbar spine": frozenset({"Lumbar", "Spine"}),
+    "Breast": frozenset({"Breast"}),
 }
 
 # Specialty / extremity phrases that must never pad top-N when not evidenced.
@@ -103,7 +106,6 @@ _UNRELATED_ANATOMY_PHRASES: frozenset[str] = frozenset(
         "pituitary",
         "sella",
         "thyroid",
-        "breast",
         "heart",
         "coronary",
         "kidney",
@@ -134,6 +136,7 @@ _ANATOMY_RANK: dict[str, int] = {
     "Thoracic spine": 7,
     "Lumbar spine": 8,
     "Spine": 9,
+    "Breast": 10,
 }
 
 _ANATOMY_TOKEN_NAMES: frozenset[str] = frozenset(
@@ -148,6 +151,7 @@ _ANATOMY_TOKEN_NAMES: frozenset[str] = frozenset(
         "Cervical",
         "Thoracic",
         "Lumbar",
+        "Breast",
     }
 )
 
@@ -251,6 +255,11 @@ def study_series_description_fingerprint(descriptions: list[str] | tuple[str, ..
     """Sorted multiset of non-empty series Playbook descriptions."""
     cleaned = [str(d).strip() for d in descriptions if str(d).strip()]
     return tuple(sorted(cleaned))
+
+
+def fingerprint_for_harmonized_study(anon_model, anon_study_uid: str) -> tuple[str, ...]:
+    """Fingerprint of harmonized CT|MR series descriptions stored for a study."""
+    return study_series_description_fingerprint(anon_model.get_ct_series_harmonized_descriptions(anon_study_uid))
 
 
 def _split_playbook_tokens(description: str) -> list[str]:

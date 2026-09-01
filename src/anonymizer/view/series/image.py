@@ -897,6 +897,17 @@ class ImageViewer(ctk.CTkFrame):
         """True when on-screen pixels match native DICOM frame dimensions."""
         return self.current_size == (self.image_width, self.image_height)
 
+    def startup_needs_upscale_fill(self) -> bool:
+        """True when a follow-up startup paint with ``fill_viewport=True`` would resize the image."""
+        viewport = self._last_viewport_size
+        if viewport is None or viewport[0] <= 1 or viewport[1] <= 1:
+            viewport = self.viewport_size()
+        if viewport[0] <= 1 or viewport[1] <= 1:
+            viewport = self._screen_canvas_budget()
+        conservative = self._resolve_display_size(viewport[0], viewport[1], allow_upscale=False)
+        filled = self._resolve_display_size(viewport[0], viewport[1], allow_upscale=True)
+        return conservative is not None and filled is not None and conservative != filled
+
     def _dimensions_label_width(self) -> int:
         """Pixels needed for the widest dimensions text this series can show.
 

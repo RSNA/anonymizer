@@ -144,6 +144,9 @@ class WorkState:
 
     def request_cancel(self) -> None:
         with self._lock:
+            if self.cancel_requested:
+                logger.debug("WorkState.request_cancel (already requested)")
+                return
             logger.info("WorkState.request_cancel")
             self.cancel_requested = True
 

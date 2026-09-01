@@ -12,12 +12,15 @@ from typing import TYPE_CHECKING
 from pydicom import Dataset, dcmread
 
 from anonymizer.controller.ai.harmonize.playbook import (
+    MetadataHarmonizeRoute,
     PlaybookHarmonizeAttributes,
     build_harmonized_series_description,
     build_localizer_harmonized_series_description,
+    build_metadata_harmonized_series_description,
     build_playbook_attributes,
     format_playbook_analysis_log_lines,
     is_localizer_geometry,
+    resolve_metadata_harmonize_route,
 )
 from anonymizer.controller.ai.tseg.config import (
     CONTRAST_PHASE_CACHE_FILENAME,
@@ -48,6 +51,7 @@ from anonymizer.controller.ai.tseg.ml_env import log_active_threads
 from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
 from anonymizer.controller.ai.tseg.model_cache import tseg_batch_session
 from anonymizer.controller.ai.tseg.segment import (
+    HARMONIZE_CANCELLED_MESSAGE,
     AnalysisProgress,
     ProgressCallback,
     TS_result,
@@ -57,6 +61,7 @@ from anonymizer.controller.ai.tseg.segment import (
     collect_structure_voxels,
     dominant_region_from_voxels,
     estimate_tseg_contrast_remaining_sec,
+    harmonize_cancel_requested,
     series_cache_dir,
 )
 from anonymizer.controller.ai.tseg.segment import (
@@ -157,6 +162,35 @@ def _merge_localizer_result(
     )
 
 
+def _merge_metadata_result(
+    series_directory: Path,
+    geometry: SeriesGeometryResult,
+    tseg: TS_result | None,
+    *,
+    ds: Dataset,
+    route: MetadataHarmonizeRoute,
+) -> HarmonizedResult:
+    try:
+        description, playbook = build_metadata_harmonized_series_description(ds, geometry, route)
+    except ValueError as exc:
+        logger.warning("Harmonize metadata merge failed for %s: %s", series_directory, exc)
+        return HarmonizedResult(
+            series_directory=series_directory,
+            radlex_series_description="",
+            tseg=tseg,
+            geometry=geometry,
+            error=str(exc),
+        )
+
+    return HarmonizedResult(
+        series_directory=series_directory,
+        radlex_series_description=description,
+        tseg=tseg,
+        geometry=geometry,
+        playbook=playbook,
+    )
+
+
 def _contrast_phase_required(series_directory: Path) -> bool:
     """CT (and unknown modalities) require contrast phase; MR profiles skip it."""
     profile = resolve_profile_for_series(series_directory)
@@ -181,7 +215,37 @@ def _merge_result(
     if is_localizer_geometry(geometry):
         return _merge_localizer_result(series_directory, geometry, tseg)
 
+    try:
+        ds = _load_series_dataset(series_directory)
+    except ValueError as exc:
+        return HarmonizedResult(
+            series_directory=series_directory,
+            radlex_series_description="",
+            tseg=tseg,
+            geometry=geometry,
+            error=str(exc),
+        )
+
+    metadata_route = resolve_metadata_harmonize_route(ds, geometry)
+    if metadata_route is not None:
+        return _merge_metadata_result(
+            series_directory,
+            geometry,
+            tseg,
+            ds=ds,
+            route=metadata_route,
+        )
+
     if tseg is None or not tseg.body_parts_present.strip():
+        anatomy_fallback = resolve_metadata_harmonize_route(ds, geometry, tseg=tseg)
+        if anatomy_fallback is not None:
+            return _merge_metadata_result(
+                series_directory,
+                geometry,
+                tseg,
+                ds=ds,
+                route=anatomy_fallback,
+            )
         error = tseg.error if tseg is not None and tseg.error else "TotalSegmentator anatomy analysis unavailable"
         return HarmonizedResult(
             series_directory=series_directory,
@@ -232,7 +296,7 @@ def _merge_result(
 
 
 def _tseg_result_from_cache(series_directory: Path) -> TS_result | None:
-    """Rebuild anatomy (+ contrast when required) TS_result from ``A_TS_SEG`` without running ML."""
+    """Rebuild anatomy (+ contrast when required) TS_result from ``0_TS_SEG`` without running ML."""
     cache_dir = series_cache_dir(series_directory)
     seg_dir = cache_dir / "seg"
     profile = resolve_profile_for_series(series_directory)
@@ -328,7 +392,25 @@ def harmonized_description_from_cache(
         return description or None
 
     if not ts_regions_eligible(geometry):
-        return None
+        try:
+            ds = _load_series_dataset(series_directory)
+        except ValueError:
+            return None
+        metadata_route = resolve_metadata_harmonize_route(ds, geometry)
+        if metadata_route is None:
+            return None
+        merged = _merge_metadata_result(
+            series_directory,
+            geometry,
+            None,
+            ds=ds,
+            route=metadata_route,
+        )
+        if merged.error:
+            return None
+        description = (merged.radlex_series_description or "").strip()
+        return description or None
+
     if _contrast_phase_required(series_directory) and not ENABLE_TS_CONTRAST:
         return None
 
@@ -386,6 +468,7 @@ class HarmonizeStudiesSummary:
 
 HarmonizeStudiesProgressCallback = Callable[[int, int, str, float], None]
 HarmonizeStudiesCancelledCallback = Callable[[], bool]
+HarmonizeCancelledCallback = HarmonizeStudiesCancelledCallback
 HarmonizeStudiesLogCallback = Callable[[HarmonizeApplyOutcome], None]
 HarmonizeStudiesBatchHook = Callable[[], None]
 
@@ -653,9 +736,9 @@ def study_series_description_fingerprint(
     anon_study_uid: str,
 ) -> tuple[str, ...]:
     """Sorted multiset fingerprint of CT Playbook series descriptions for a study."""
-    from anonymizer.controller.ai.harmonize.loinc_study import study_series_description_fingerprint as fingerprint_of
+    from anonymizer.controller.ai.harmonize.loinc_study import fingerprint_for_harmonized_study
 
-    return fingerprint_of(anon_model.get_ct_series_harmonized_descriptions(anon_study_uid))
+    return fingerprint_for_harmonized_study(anon_model, anon_study_uid)
 
 
 def find_studies_with_fingerprint(
@@ -726,9 +809,7 @@ def maybe_offer_study_description_harmonize(
     """
     from anonymizer.controller.ai.harmonize.loinc_study import (
         build_study_description_ranking,
-    )
-    from anonymizer.controller.ai.harmonize.loinc_study import (
-        study_series_description_fingerprint as fingerprint_of,
+        fingerprint_for_harmonized_study,
     )
 
     if not anon_model.study_is_harmonized(anon_study_uid):
@@ -737,7 +818,7 @@ def maybe_offer_study_description_harmonize(
         return None
 
     descriptions = anon_model.get_ct_series_harmonized_descriptions(anon_study_uid)
-    fingerprint = fingerprint_of(descriptions)
+    fingerprint = fingerprint_for_harmonized_study(anon_model, anon_study_uid)
     if not fingerprint:
         return None
 
@@ -922,6 +1003,7 @@ def harmonize_and_apply_series(
         [series_path],
         progress=progress,
         include_brain_structures=include_brain_structures,
+        anon_model=anon_model,
     )
     if not results:
         return HarmonizeApplyOutcome(series_path, "failed", _("No harmonize result"))
@@ -1143,11 +1225,13 @@ def harmonize_series(
     *,
     progress: HarmonizeProgressCallback | None = None,
     include_brain_structures: bool = False,
+    anon_model=None,
+    cancelled: HarmonizeCancelledCallback | None = None,
 ) -> list[HarmonizedResult]:
     """
     Run harmonize sequentially per series: geometry → TS segmentation → TS contrast → Playbook merge.
 
-    Geometry is cached under ``<series>/A_TS_SEG/geometry.json``. TotalSegmentator is skipped when
+    Geometry is cached under ``<series>/0_TS_SEG/geometry.json``. TotalSegmentator is skipped when
     ``geometry.ts_suitable`` is false (localizers, single-slice 2D, derived 3D renders, etc.).
 
     Series descriptions are built only from TotalSegmentator anatomy and contrast plus DICOM geometry
@@ -1176,9 +1260,11 @@ def harmonize_series(
         geometry: SeriesGeometryResult | None = None,
         tseg: TS_result | None = None,
         radlex_series_description: str | None = None,
-    ) -> None:
+    ) -> bool:
+        if harmonize_cancel_requested(cancelled):
+            return False
         if progress is None:
-            return
+            return True
         progress(
             HarmonizeProgress(
                 stage=stage,
@@ -1191,21 +1277,30 @@ def harmonize_series(
                 radlex_series_description=radlex_series_description,
             )
         )
+        return not harmonize_cancel_requested(cancelled)
 
     harmonized: list[HarmonizedResult] = []
     n_series = len(series_directories)
 
     for index, series_dir in enumerate(series_directories, start=1):
+        if harmonize_cancel_requested(cancelled):
+            logger.info("Harmonize: cancelled before series %d/%d", index, n_series)
+            break
         series_dir = Path(series_dir)
         logger.info("=== Harmonize [%d/%d] %s ===", index, n_series, series_dir)
 
         geometry = resolve_series_geometry(series_dir)
-        _report(
+        if harmonize_cancel_requested(cancelled):
+            logger.info("Harmonize: cancelled after geometry for %s", series_dir)
+            break
+        if not _report(
             "geometry",
             format_geometry_progress_message(geometry),
             _GEOMETRY_FRAC[1],
             geometry=geometry,
-        )
+        ):
+            logger.info("Harmonize: cancelled during geometry report for %s", series_dir)
+            break
         logger.debug(
             "Harmonize geometry: plane=%s dimensionality=%s provenance=%s ts_suitable=%s",
             geometry.plane,
@@ -1215,6 +1310,9 @@ def harmonize_series(
         )
 
         _report("tseg", "Segmenting anatomy", _TSEG_SEG_FRAC[0], remaining_sec=60.0)
+        if harmonize_cancel_requested(cancelled):
+            logger.info("Harmonize: cancelled before TS segmentation for %s", series_dir)
+            break
         if ts_regions_eligible(geometry):
             logger.debug("Harmonize stage 1/3: TS segmentation for %s", series_dir)
             tseg_progress = _scaled_progress(
@@ -1228,7 +1326,11 @@ def harmonize_series(
                 geometry=geometry,
                 progress=tseg_progress,
                 include_brain_structures=include_brain_structures,
+                cancelled=cancelled,
             )
+            if harmonize_cancel_requested(cancelled) or region_result.error == HARMONIZE_CANCELLED_MESSAGE:
+                logger.info("Harmonize: cancelled during TS regions for %s", series_dir)
+                break
             if region_result.body_parts_present.strip() and region_result.error is None:
                 _report(
                     "regions",
@@ -1260,6 +1362,10 @@ def harmonize_series(
                 error=geometry.notes or f"TS skipped ({geometry.dimensionality})",
             )
             nifti_path = None
+
+        if harmonize_cancel_requested(cancelled):
+            logger.info("Harmonize: cancelled before contrast for %s", series_dir)
+            break
 
         tseg: TS_result | None = region_result
         series_profile = resolve_profile_for_series(series_dir)
@@ -1314,6 +1420,14 @@ def harmonize_series(
         else:
             logger.warning("Harmonize skipping TS contrast (no regions detected)")
 
+        if harmonize_cancel_requested(cancelled):
+            logger.info("Harmonize: cancelled before merge for %s", series_dir)
+            break
+
+        from anonymizer.controller.ai.tseg.seg_retention import evict_tseg_volume
+
+        evict_tseg_volume(series_dir, anon_model=anon_model)
+
         release_working_memory(stage="harmonize_after_tseg_contrast")
 
         _report(
@@ -1364,5 +1478,8 @@ def harmonize_series(
             _report("done", "Harmonize complete", 1.0, remaining_sec=0.0)
 
     log_memory_usage("harmonize_end")
-    logger.info("Harmonize finished: %d result(s) in %.1fs", len(harmonized), time.perf_counter() - started)
+    if harmonize_cancel_requested(cancelled):
+        logger.info("Harmonize finished (cancelled): %d partial result(s) in %.1fs", len(harmonized), time.perf_counter() - started)
+    else:
+        logger.info("Harmonize finished: %d result(s) in %.1fs", len(harmonized), time.perf_counter() - started)
     return harmonized

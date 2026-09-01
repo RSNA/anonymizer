@@ -109,6 +109,131 @@ def test_harmonize_reports_geometry_progress(
 @pytest.mark.usefixtures("synthetic_ct_asset_dirs")
 @patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast")
 @patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions")
+def test_harmonize_skips_tseg_for_haste_sag_localizer(
+    mock_regions: MagicMock,
+    mock_contrast: MagicMock,
+    tmp_path: Path,
+) -> None:
+    from tests.controller.tseg.support.synthetic_ct import build_synthetic_haste_sag_series
+
+    haste_dir = build_synthetic_haste_sag_series(tmp_path / "haste_sag")
+    progress_events: list[tuple[str, str]] = []
+
+    def on_progress(progress) -> None:
+        progress_events.append((progress.stage, progress.message))
+
+    results = harmonize_series([haste_dir], progress=on_progress)
+
+    mock_regions.assert_not_called()
+    mock_contrast.assert_not_called()
+    merged = results[0]
+    assert merged.geometry is not None
+    assert merged.geometry.dimensionality == "localizer_2d"
+    assert merged.geometry.ts_suitable is False
+    assert merged.error is None
+    assert merged.playbook is not None
+    assert merged.playbook.series_type_code == "Localizer"
+    tseg_messages = [message for stage, message in progress_events if stage == "tseg"]
+    assert any(
+        "Localizer and scout series are not suitable for anatomy analysis" in message for message in tseg_messages
+    )
+
+
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions")
+def test_harmonize_skips_tseg_for_breast_adc_postprocess(
+    mock_regions: MagicMock,
+    mock_contrast: MagicMock,
+    tmp_path: Path,
+) -> None:
+    from tests.controller.tseg.support.synthetic_ct import build_synthetic_breast_adc_mr_series
+
+    adc_dir = build_synthetic_breast_adc_mr_series(tmp_path / "adc")
+    results = harmonize_series([adc_dir])
+
+    mock_regions.assert_not_called()
+    mock_contrast.assert_not_called()
+    merged = results[0]
+    assert merged.geometry is not None
+    assert merged.geometry.ts_suitable is False
+    assert merged.error is None
+    assert merged.playbook is not None
+    assert merged.playbook.body_part_code == "Breast"
+    assert merged.playbook.anatomic_plane_code == "Ax"
+    assert merged.playbook.series_type_code == "Postprocess"
+    assert "Postprocess" in merged.radlex_series_description
+
+
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions")
+def test_harmonize_skips_tseg_for_breast_anatomical_mr(
+    mock_regions: MagicMock,
+    mock_contrast: MagicMock,
+    tmp_path: Path,
+) -> None:
+    from tests.controller.tseg.support.synthetic_ct import build_synthetic_breast_mr_anatomical_series
+
+    breast_dir = build_synthetic_breast_mr_anatomical_series(tmp_path / "breast_t2")
+    results = harmonize_series([breast_dir])
+
+    mock_regions.assert_not_called()
+    mock_contrast.assert_not_called()
+    merged = results[0]
+    assert merged.error is None
+    assert merged.playbook is not None
+    assert merged.playbook.body_part_code == "Breast"
+    assert merged.playbook.anatomic_plane_code == "Ax"
+    assert merged.playbook.series_type_code == ""
+    assert merged.radlex_series_description == "Breast Ax W"
+
+
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions")
+def test_harmonize_metadata_merge_for_fused_series(
+    mock_regions: MagicMock,
+    mock_contrast: MagicMock,
+    tmp_path: Path,
+) -> None:
+    from tests.controller.tseg.support.synthetic_ct import build_synthetic_fused_pet_ct_series
+
+    fused_dir = build_synthetic_fused_pet_ct_series(tmp_path / "fused")
+    results = harmonize_series([fused_dir])
+
+    mock_regions.assert_not_called()
+    merged = results[0]
+    assert merged.error is None
+    assert merged.playbook is not None
+    assert merged.playbook.series_type_code == "Fused"
+    assert "Fused" in merged.radlex_series_description
+
+
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions")
+def test_harmonize_metadata_merge_for_bolus_monitoring(
+    mock_regions: MagicMock,
+    mock_contrast: MagicMock,
+    tmp_path: Path,
+) -> None:
+    from tests.controller.tseg.support.synthetic_ct import build_synthetic_bolus_monitor_series
+
+    monitor_dir = build_synthetic_bolus_monitor_series(tmp_path / "monitor")
+    results = harmonize_series([monitor_dir])
+
+    mock_regions.assert_not_called()
+    merged = results[0]
+    assert merged.error is None
+    assert merged.playbook is not None
+    assert merged.playbook.series_type_code == "Monitoring"
+    assert merged.radlex_series_description == "Ch WO Monitoring"
+
+
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions")
 def test_harmonize_skips_tseg_for_scout_localizer(
     mock_regions: MagicMock,
     mock_contrast: MagicMock,
@@ -138,6 +263,30 @@ def test_harmonize_skips_tseg_for_scout_localizer(
     assert any(
         "Localizer and scout series are not suitable for anatomy analysis" in message for message in tseg_messages
     )
+
+
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions")
+def test_harmonize_single_slice_topogram_as_localizer(
+    mock_regions: MagicMock,
+    mock_contrast: MagicMock,
+    tmp_path: Path,
+) -> None:
+    from tests.controller.tseg.support.synthetic_ct import build_synthetic_scout_ct_series
+
+    topogram_dir = build_synthetic_scout_ct_series(tmp_path / "topogram", num_slices=1)
+    results = harmonize_series([topogram_dir])
+
+    mock_regions.assert_not_called()
+    mock_contrast.assert_not_called()
+    merged = results[0]
+    assert merged.error is None
+    assert merged.geometry is not None
+    assert merged.geometry.dimensionality == "localizer_2d"
+    assert merged.playbook is not None
+    assert merged.playbook.series_type_code == "Localizer"
+    assert "Localizer" in merged.radlex_series_description
 
 
 @pytest.mark.usefixtures("synthetic_ct_asset_dirs")
@@ -192,7 +341,7 @@ def test_harmonize_execution_order_seg_then_contrast(
 @pytest.mark.usefixtures("synthetic_ct_asset_dirs")
 @patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast")
 @patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions")
-def test_harmonize_fails_when_tseg_regions_unavailable(
+def test_harmonize_falls_back_to_dicom_when_tseg_regions_unavailable(
     mock_regions: MagicMock,
     mock_contrast: MagicMock,
     synthetic_chest_series: Path,
@@ -214,8 +363,45 @@ def test_harmonize_fails_when_tseg_regions_unavailable(
 
     results = harmonize_series([synthetic_chest_series])
     merged = results[0]
+    assert merged.error is None
+    assert merged.radlex_series_description == "Ch Ax WO"
+    assert merged.playbook is not None
+    assert merged.playbook.body_part_code == "Ch"
+    mock_contrast.assert_not_called()
+
+
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions")
+def test_harmonize_fails_when_tseg_and_dicom_body_part_unavailable(
+    mock_regions: MagicMock,
+    mock_contrast: MagicMock,
+    synthetic_chest_series: Path,
+) -> None:
+    mock_regions.return_value = (
+        TS_result(
+            series_directory=synthetic_chest_series,
+            dominant_region="",
+            body_parts_present="",
+            multi_region=False,
+            region_fraction=0.0,
+            iv_contrast=False,
+            contrast_phase="",
+            phase_probability=0.0,
+            error="segmentation failed",
+        ),
+        None,
+    )
+
+    with patch(
+        "anonymizer.controller.ai.harmonize.playbook.map_body_part_from_dicom",
+        side_effect=ValueError("Could not determine Playbook body part"),
+    ):
+        results = harmonize_series([synthetic_chest_series])
+
+    merged = results[0]
     assert merged.radlex_series_description == ""
-    assert merged.error is not None
+    assert merged.error == "segmentation failed"
     mock_contrast.assert_not_called()
 
 

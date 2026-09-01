@@ -1,7 +1,7 @@
 """DICOM series geometry: acquisition plane, 2D/3D dimensionality, and provenance.
 
 Used by the tseg pipeline and Harmonize to sort slices correctly, cache metadata under
-``A_TS_SEG/geometry.json``, and decide whether TotalSegmentator should run.
+``0_TS_SEG/geometry.json``, and decide whether TotalSegmentator should run.
 """
 
 from __future__ import annotations
@@ -22,11 +22,23 @@ from pydicom import Dataset, dcmread
 from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir
 from anonymizer.controller.ai.tseg.config import (
     GEOMETRY_CACHE_FILENAME,
+    GEOMETRY_CACHE_VERSION,
     LOCALIZER_MAX_SLICES,
     MIN_DICOM_SLICES,
     MIN_THROUGH_PLANE_EXTENT_MM,
     OBLIQUE_DOT_THRESHOLD,
     PLANE_AMBIGUITY_DOT_DELTA,
+)
+from anonymizer.controller.ai.tseg.series_classification import (
+    MPR_KEYWORDS,
+    RENDER_KEYWORDS,
+    TsSkipCategory,
+    contains_keyword,
+    description_suggests_localizer,
+    description_suggests_parametric_map,
+    evaluate_ts_suitability,
+    infer_survey_localizer_dimensionality,
+    normalized_series_text,
 )
 from anonymizer.utils.translate import _
 
@@ -54,10 +66,6 @@ PLANE_AXES_LPS: dict[str, tuple[float, float, float]] = {
     "coronal": (0.0, 1.0, 0.0),
     "sagittal": (1.0, 0.0, 0.0),
 }
-
-MPR_KEYWORDS = ("MPR", "REFORMAT", "REFORMATTED", "OBLIQUE", "CURVED")
-RENDER_KEYWORDS = ("MIP", "MINIP", "VR", "VRT", "3D", "SSD", "AVERAGE", "THICK SLAB")
-LOCALIZER_KEYWORDS = ("SCOUT", "TOPO", "TOPOGRAM", "SCANOGRAM", "LOCALIZER", "SURVIEW", "PLAN")
 
 SECONDARY_CAPTURE_SOP = "1.2.840.10008.5.1.4.1.1.7"
 IMAGE_STORAGE_SOP_PREFIX = "1.2.840.10008.5.1.4.1.1."
@@ -97,6 +105,7 @@ class SeriesGeometryResult:
     metadata_suspect: bool
     method: str
     notes: str
+    ts_skip_category: TsSkipCategory | None = None
 
 
 def _looks_like_dicom(path: Path) -> bool:
@@ -188,11 +197,11 @@ def classify_plane(
 
 
 def _normalized_text(*parts: str | None) -> str:
-    return " ".join(part.strip().upper() for part in parts if part and str(part).strip())
+    return normalized_series_text(*parts)
 
 
 def _contains_keyword(text: str, keywords: tuple[str, ...]) -> bool:
-    return any(keyword in text for keyword in keywords)
+    return contains_keyword(text, keywords)
 
 
 def _image_type_values(header: Dataset) -> tuple[str, ...] | None:
@@ -305,30 +314,26 @@ def infer_dimensionality(
     if not headers:
         return "unknown"
 
-    header = headers[0]
-    description_text = _normalized_text(
-        series_description or getattr(header, "SeriesDescription", None),
-        getattr(header, "ProtocolName", None),
-    )
-    image_type = _image_type_values(header)
-    sop_class = str(getattr(header, "SOPClassUID", ""))
+    sop_class = str(getattr(headers[0], "SOPClassUID", ""))
 
     if sop_class == SECONDARY_CAPTURE_SOP:
         return "projection_2d"
 
-    number_of_frames = int(getattr(header, "NumberOfFrames", 1) or 1)
+    number_of_frames = int(getattr(headers[0], "NumberOfFrames", 1) or 1)
     if number_of_frames > 1 and stack.n_slices == 1:
         return "multiframe_volume"
 
     if stack.n_slices <= 1:
+        if description_suggests_localizer(headers, series_description=series_description):
+            return "localizer_2d"
         return "single_slice_2d"
 
-    if image_type and any(token in image_type for token in ("LOCALIZER", "SCOUT", "TOPOGRAM")):
-        return "localizer_2d"
-    if _contains_keyword(description_text, LOCALIZER_KEYWORDS):
+    if description_suggests_localizer(headers, series_description=series_description):
         return "localizer_2d"
 
     if stack.n_slices >= MIN_DICOM_SLICES:
+        if infer_survey_localizer_dimensionality(headers, stack, series_description=series_description):
+            return "localizer_2d"
         return "volume_3d"
 
     if stack.n_slices <= LOCALIZER_MAX_SLICES:
@@ -342,21 +347,6 @@ def infer_dimensionality(
 def ts_regions_eligible(geometry: SeriesGeometryResult) -> bool:
     """Return True when TotalSegmentator anatomy segmentation should run."""
     return geometry.ts_suitable
-
-
-def _build_ts_suitable(
-    dimensionality: DimensionalityLabel,
-    provenance: ProvenanceLabel,
-) -> tuple[bool, str]:
-    if dimensionality in {"localizer_2d", "single_slice_2d", "projection_2d"}:
-        return False, f"Not a diagnostic 3D volume ({dimensionality})"
-    if dimensionality == "unknown":
-        return False, "Could not classify series dimensionality"
-    if provenance == "derived_3d_render":
-        return False, "Derived 3D render (MIP/VR) is not suitable for organ segmentation"
-    if dimensionality in {"volume_3d", "multiframe_volume"}:
-        return True, ""
-    return False, f"Unsupported dimensionality: {dimensionality}"
 
 
 def read_series_headers(series_directory: Path) -> list[Dataset]:
@@ -772,13 +762,22 @@ def analyze_series_geometry(series_directory: Path) -> SeriesGeometryResult:
     stack = compute_stack_metrics(headers, slice_normal)
     provenance, provenance_confidence, image_type, source_uids = infer_provenance(headers)
     dimensionality = infer_dimensionality(headers, stack)
-    ts_suitable, notes = _build_ts_suitable(dimensionality, provenance)
+    suitability = evaluate_ts_suitability(
+        dimensionality=dimensionality,
+        provenance=provenance,
+        headers=headers,
+        stack=stack,
+    )
+    ts_suitable = suitability.suitable
+    notes = suitability.notes
+    ts_skip_category = suitability.skip_category
 
     if dimension_error is not None:
         # Mixed matrix sizes cannot be stacked by SimpleITK ImageSeriesReader.
         ts_suitable = False
         metadata_suspect = True
         notes = dimension_error
+        ts_skip_category = None
         logger.warning("Rejecting series for TS (%s): %s", series_directory, dimension_error)
     elif metadata_suspect and ts_suitable:
         notes = notes or "Plane classification unavailable; TS may be unreliable"
@@ -801,6 +800,7 @@ def analyze_series_geometry(series_directory: Path) -> SeriesGeometryResult:
         metadata_suspect=metadata_suspect,
         method=method,
         notes=notes,
+        ts_skip_category=ts_skip_category,
     )
 
 
@@ -814,8 +814,11 @@ def geometry_cache_path(series_directory: Path) -> Path:
 
 def geometry_to_dict(geometry: SeriesGeometryResult) -> dict:
     payload = asdict(geometry)
+    payload["version"] = GEOMETRY_CACHE_VERSION
     payload["image_type"] = list(geometry.image_type) if geometry.image_type else None
     payload["source_series_uids"] = list(geometry.source_series_uids)
+    if geometry.ts_skip_category is not None:
+        payload["ts_skip_category"] = geometry.ts_skip_category
     if geometry.slice_normal_lps is not None:
         payload["slice_normal_lps"] = list(geometry.slice_normal_lps)
     return payload
@@ -843,6 +846,7 @@ def geometry_from_dict(payload: dict) -> SeriesGeometryResult:
         metadata_suspect=bool(payload.get("metadata_suspect", False)),
         method=str(payload.get("method", "cached")),
         notes=str(payload.get("notes", "")),
+        ts_skip_category=payload.get("ts_skip_category"),
     )
 
 
@@ -859,6 +863,8 @@ def load_geometry_cache(series_directory: Path) -> SeriesGeometryResult | None:
         return None
     try:
         payload = json.loads(cache_path.read_text(encoding="utf-8"))
+        if int(payload.get("version", 0)) != GEOMETRY_CACHE_VERSION:
+            return None
         return geometry_from_dict(payload)
     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
         logger.warning("Ignoring invalid geometry cache %s: %s", cache_path, exc)
@@ -943,15 +949,30 @@ def ts_suitability_label(ts_suitable: bool) -> str:
 
 def geometry_skip_reason_label(geometry: SeriesGeometryResult) -> str:
     """Plain-language reason anatomy segmentation is unavailable."""
-    if geometry.dimensionality == "localizer_2d":
+    category = geometry.ts_skip_category
+    if category == "localizer" or geometry.dimensionality == "localizer_2d":
         return _("Localizer and scout series are not suitable for anatomy analysis")
-    if geometry.dimensionality == "single_slice_2d":
+    if category == "parametric_map" or (geometry.notes and "parametric map" in geometry.notes.lower()):
+        return _("Parametric maps are not suitable for anatomy analysis")
+    if category == "body_part_no_roi":
+        return _("This body part is not covered by anatomy segmentation models")
+    if category == "angio_sequence":
+        return _("Angiographic series are not suitable for anatomy analysis")
+    if category == "spectroscopy":
+        return _("MR spectroscopy is not suitable for anatomy analysis")
+    if category == "monitoring":
+        return _("Monitoring series are not suitable for anatomy analysis")
+    if category == "dose_report":
+        return _("Dose report series are not suitable for anatomy analysis")
+    if category == "fused":
+        return _("Fused multimodality series are not suitable for anatomy analysis")
+    if category == "single_slice" or geometry.dimensionality == "single_slice_2d":
         return _("Single-slice series are not suitable for anatomy analysis")
-    if geometry.dimensionality == "projection_2d":
+    if category == "projection" or geometry.dimensionality == "projection_2d":
         return _("Projection images are not suitable for anatomy analysis")
-    if geometry.provenance == "derived_3d_render":
+    if category == "derived_3d_render" or geometry.provenance == "derived_3d_render":
         return _("3D renderings (MIP or VR) are not suitable for anatomy analysis")
-    if geometry.dimensionality == "unknown":
+    if category == "unknown_dimensionality" or geometry.dimensionality == "unknown":
         return _("Series type could not be determined for anatomy analysis")
     return _("This series is not suitable for anatomy analysis")
 
@@ -990,10 +1011,12 @@ def resolve_series_geometry(
     use_cache: bool = True,
     write_cache: bool = True,
 ) -> SeriesGeometryResult:
-    """Load cached geometry or analyze headers and optionally persist to ``A_TS_SEG/geometry.json``."""
+    """Load cached geometry or analyze headers and optionally persist to ``0_TS_SEG/geometry.json``."""
     series_directory = Path(series_directory).resolve()
     if use_cache:
         cached = load_geometry_cache(series_directory)
+        if cached is not None and _geometry_cache_is_stale(cached, series_directory):
+            cached = None
         if cached is not None:
             return cached
 
@@ -1001,3 +1024,41 @@ def resolve_series_geometry(
     if write_cache:
         write_geometry_cache(series_directory, geometry)
     return geometry
+
+
+def _geometry_cache_is_stale(cached: SeriesGeometryResult, series_directory: Path) -> bool:
+    """Return True when cached geometry disagrees with updated classification rules."""
+    try:
+        headers = read_series_headers(series_directory)
+    except ValueError:
+        return False
+    if not headers:
+        return False
+
+    if description_suggests_localizer(headers) and cached.dimensionality != "localizer_2d":
+        return True
+    if cached.ts_suitable and description_suggests_parametric_map(headers):
+        return True
+
+    if cached.dimensionality == "volume_3d" and cached.ts_suitable:
+        try:
+            slice_normal = slice_normal_from_iop(headers[0].ImageOrientationPatient)
+        except (AttributeError, TypeError, ValueError):
+            slice_normal = None
+        stack = compute_stack_metrics(headers, slice_normal)
+        if infer_survey_localizer_dimensionality(headers, stack):
+            return True
+
+    if cached.ts_suitable:
+        suitability = evaluate_ts_suitability(
+            dimensionality=cached.dimensionality,
+            provenance=cached.provenance,
+            headers=headers,
+            stack=compute_stack_metrics(
+                headers,
+                cached.slice_normal_lps,
+            ),
+        )
+        if not suitability.suitable:
+            return True
+    return False

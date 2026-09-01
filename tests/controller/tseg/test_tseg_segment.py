@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
+from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
 from anonymizer.controller.ai.tseg.segment import (
     _segmentation_cache_valid,
     analyze_tseg_regions,
@@ -86,7 +87,7 @@ def test_resolve_device_auto_cpu(_cuda: object, _mps: object) -> None:
 def test_series_cache_dir_under_series(tmp_path) -> None:
     series = tmp_path / "1.2.3"
     series.mkdir()
-    assert series_cache_dir(series) == series / "A_TS_SEG"
+    assert series_cache_dir(series) == series / TSEG_CACHE_DIRNAME
 
 
 def test_segmentation_cache_valid_requires_mask(tmp_path) -> None:

@@ -60,6 +60,23 @@ BRAIN_STRUCTURE_FILES: tuple[str, ...] = (
 )
 
 # Files requested from TotalSegmentator ``total`` task (must be real class names).
+ROI_SUBSET_HEAD: tuple[str, ...] = (
+    *_HEAD_BRAIN_FILES,
+    *_HEAD_SKULL_FILES,
+    *_HEAD_SPINAL_CORD_FILES,
+    *tuple(f"vertebrae_C{i}" for i in range(1, 8)),
+    *_CLAVICLE_FILES,
+    "trachea",
+)
+
+ROI_SUBSET_CHEST: tuple[str, ...] = (
+    *ROI_SUBSET_HEAD,
+    "heart",
+    *_LUNG_LOBE_FILES,
+    *_RIB_FILES,
+    *tuple(f"vertebrae_T{i}" for i in range(1, 13)),
+)
+
 ROI_SUBSET: tuple[str, ...] = (
     *_HEAD_BRAIN_FILES,
     *_HEAD_SKULL_FILES,
@@ -76,6 +93,12 @@ ROI_SUBSET: tuple[str, ...] = (
     *_RIB_FILES,
     *_CLAVICLE_FILES,
 )
+
+ROI_SUBSET_FULL: tuple[str, ...] = ROI_SUBSET
+
+ROI_TIER_HEAD = "HEAD"
+ROI_TIER_CHEST = "CHEST"
+ROI_TIER_FULL = "FULL"
 
 # Series View latch groups: one UI label → one or more TS mask files (no L/R split in the UI).
 # Head: whole brain + brain_structures subs (when licensed task has run) + skull/cord.
@@ -162,16 +185,21 @@ def is_multi_model_segmentation_mode(mode: object | None) -> bool:
 
 
 # Per-series cache directory (NIfTI volume, ROI seg masks, contrast statistics JSON).
-TSEG_CACHE_DIRNAME = "A_TS_SEG"
+TSEG_CACHE_DIRNAME = "0_TS_SEG"
 GEOMETRY_CACHE_FILENAME = "geometry.json"
+GEOMETRY_CACHE_VERSION = 2
 ROI_SUBSET_MANIFEST_FILENAME = "roi_subset.json"
 CONTRAST_STATS_FILENAME = "contrast_stats.json"
 CONTRAST_STATS_HN_FILENAME = "contrast_stats_hn.json"
 CONTRAST_PHASE_CACHE_FILENAME = "contrast_phase.json"
+STRUCTURE_VOXELS_FILENAME = "structure_voxels.json"
+PRIMARY_SEGMENT_VOXELS_FILENAME = "primary_segment_voxels.json"
+MASK_GEOMETRY_FILENAME = "mask_geometry.json"
 
 # DICOM geometry heuristics (plane, localizer vs volume).
 LOCALIZER_MAX_SLICES = 10
 MIN_THROUGH_PLANE_EXTENT_MM = 30.0
+SURVEY_MIN_SLICE_SPACING_MM = 6.0
 OBLIQUE_DOT_THRESHOLD = 0.866  # ~30° from nearest cardinal plane
 PLANE_AMBIGUITY_DOT_DELTA = 0.05
 

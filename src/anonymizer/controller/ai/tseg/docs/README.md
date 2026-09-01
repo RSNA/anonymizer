@@ -65,12 +65,18 @@ Each ML stage uses `sequential_ml_context` to force `OMP/MKL=1`, `torch.set_num_
 | `ml_env.py` | Sequential ML thread/env helpers |
 | `cache.py` / `config.py` | Per-series cache paths and constants |
 
-Per-series cache under ``<series>/A_TS_SEG/``:
+Per-series cache under ``<series>/0_TS_SEG/``:
 
-- `geometry.json` — geometry/provenance
-- `volume.nii.gz` — converted NIfTI
-- `seg/*.nii.gz` — ROI masks and licensed task masks
-- `contrast_stats.json` / `contrast_phase.json` — organ HU stats and phase (CT)
+- `geometry.json` — geometry/provenance (includes `n_slices` for stale checks)
+- `roi_subset.json` — requested ROI classes and tier (`HEAD` / `CHEST` / `FULL`)
+- `structure_voxels.json` — per-structure voxel counts (harmonize / LOINC; masks optional)
+- `primary_segment_voxels.json` — latch-group voxel counts (Series View buttons)
+- `mask_geometry.json` — NIfTI grid metadata for overlay resampling without `volume.nii.gz`
+- `volume.nii.gz` — ephemeral DICOM→NIfTI input (evicted after pipeline completes)
+- `seg/*.nii.gz` — latch-essential masks only (pruned after segmentation)
+- `contrast_stats.json` / `contrast_stats_hn.json` / `contrast_phase.json` — organ HU stats and phase (CT)
+
+**Retention contract:** harmonize and future normative analytics use JSON sidecars only. Full 3D masks are kept solely for Series View latch overlays. Legacy caches are compacted lazily on first read (sidecars written, unused masks removed).
 
 ### Face segmentation (licensed task)
 

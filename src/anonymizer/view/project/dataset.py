@@ -22,6 +22,7 @@ from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import AppFonts, char_width_px
 from anonymizer.view.project.delete_studies_dialog import DeleteStudiesDialog
 from anonymizer.view.series.projection import ProjectionView
+from anonymizer.view.series.series import show_series_view
 from anonymizer.view.shell.dashboard import Dashboard
 
 logger = logging.getLogger(__name__)
@@ -581,8 +582,9 @@ class DatasetView(AppToplevel):
                 parent=self,
             )
             return
-        self._controller.show_series_view(
+        show_series_view(
             self,
+            controller=self._controller,
             series_path=series_path,
             fonts=self._fonts,
         )

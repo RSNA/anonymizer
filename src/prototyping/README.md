@@ -12,7 +12,7 @@ src/prototyping/
 ├── ffr/             # facial feature removal (CT face blur POC, legacy volume scripts)
 │   └── face/        # face blur viz POC (QA gallery + report.html)
 ├── deid/            # deprecated shims → use ocr/ or ffr/
-├── ts_seg_face.py   # licensed TS face CLI → <series>/A_TS_SEG/seg/face.nii.gz
+├── ts_seg_face.py   # licensed TS face CLI → <series>/0_TS_SEG/seg/face.nii.gz
 ├── dicom/           # DICOM transcoding, H.264, network spikes
 ├── fhir/            # Epic / HAPI FHIR experiments
 ├── aws/             # S3 import/export helpers
@@ -40,7 +40,7 @@ uv run python src/prototyping/ts_seg_face.py /path/to/ct_head_series --force
 uv sync --extra tseg --group dev --group prototyping-viz
 uv run python -m prototyping.ffr.face /path/to/ct_head_series
 # → opens <series>/ts_seg/viz_poc/report.html in a browser
-# (runs face segmentation first if A_TS_SEG/seg/face.nii.gz is missing)
+# (runs face segmentation first if 0_TS_SEG/seg/face.nii.gz is missing)
 ```
 
 ## Promotion to production

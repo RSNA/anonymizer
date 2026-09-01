@@ -15,6 +15,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
+from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
 from anonymizer.controller.series_io import compute_series_projections, load_series_frames
 from anonymizer.view.series import series as series_mod
 from anonymizer.view.series.image import ImageViewer
@@ -237,7 +238,7 @@ def test_segmentation_chrome_adds_buttons_without_resizing_the_image(
 ) -> None:
     """Deferred segmentation chrome must not disturb the image or clip the player."""
     series_dir = build_synthetic_chest_ct_series(tmp_path / "chest", num_slices=FALCON_MIN_SLICES)
-    _write_mask(series_dir / "A_TS_SEG" / "seg" / "brain.nii.gz")
+    _write_mask(series_dir / TSEG_CACHE_DIRNAME / "seg" / "brain.nii.gz")
     loaded = load_series_frames(series_dir)
     monkeypatch.setattr(
         series_mod,

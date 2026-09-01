@@ -16,6 +16,11 @@ from anonymizer.controller.ai.tseg.config import (
     PRIMARY_SEGMENT_PREFERRED_FILES,
     ROI_SUBSET,
 )
+from anonymizer.controller.ai.tseg.seg_retention import (
+    read_mask_geometry,
+    read_primary_segment_voxels,
+    sitk_image_from_mask_geometry,
+)
 from anonymizer.controller.series_overlay import PolygonPoint, Segmentation
 
 # Distinct saturated BGR colors for latch overlays (visually separable on CT).
@@ -144,6 +149,16 @@ def collect_primary_segment_voxels(
     min_voxels: int = MIN_STRUCTURE_VOXELS,
 ) -> dict[str, int]:
     """Sum voxels across TS files for each primary UI group (bilateral / multi-part merged)."""
+    seg_dir = Path(seg_dir)
+    cache_dir = seg_dir.parent
+    cached = read_primary_segment_voxels(cache_dir)
+    if cached is not None:
+        return {
+            name: int(count)
+            for name, count in cached.items()
+            if int(count) >= min_voxels
+        }
+
     present: dict[str, int] = {}
     for group_name in PRIMARY_SEGMENT_GROUPS:
         files = resolve_primary_segment_files(seg_dir, group_name)
@@ -205,9 +220,16 @@ def load_structure_mask_array(
     try:
         reference = reference_image
         owned_reference = False
-        if reference is None and reference_volume_path is not None and Path(reference_volume_path).is_file():
-            reference = sitk.ReadImage(str(reference_volume_path))
-            owned_reference = True
+        if reference is None:
+            if reference_volume_path is not None and Path(reference_volume_path).is_file():
+                reference = sitk.ReadImage(str(reference_volume_path))
+                owned_reference = True
+            else:
+                cache_dir = Path(mask_path).parent.parent
+                geometry = read_mask_geometry(cache_dir)
+                if geometry is not None:
+                    reference = sitk_image_from_mask_geometry(geometry)
+                    owned_reference = True
         try:
             return _mask_array_from_image(image, reference=reference)
         finally:
@@ -215,6 +237,25 @@ def load_structure_mask_array(
                 del reference
     finally:
         del image
+
+
+def _reference_image_for_masks(
+    seg_dir: Path,
+    *,
+    reference_volume_path: Path | None = None,
+) -> tuple[sitk.Image | None, bool]:
+    """Return a resampling reference image and whether the caller owns it."""
+    if reference_volume_path is not None and Path(reference_volume_path).is_file():
+        return sitk.ReadImage(str(reference_volume_path)), True
+
+    candidate = seg_dir.parent / "volume.nii.gz"
+    if candidate.is_file():
+        return sitk.ReadImage(str(candidate)), True
+
+    geometry = read_mask_geometry(seg_dir.parent)
+    if geometry is not None:
+        return sitk_image_from_mask_geometry(geometry), True
+    return None, False
 
 
 def load_primary_segment_mask(
@@ -225,14 +266,11 @@ def load_primary_segment_mask(
 ) -> np.ndarray:
     """Union preferred or fallback TS masks for a primary group into one binary volume."""
     files = resolve_primary_segment_files(seg_dir, group_name)
-    if reference_volume_path is None:
-        candidate = seg_dir.parent / "volume.nii.gz"
-        reference_volume_path = candidate if candidate.is_file() else None
-
-    reference: sitk.Image | None = None
+    reference, owned_reference = _reference_image_for_masks(
+        seg_dir,
+        reference_volume_path=reference_volume_path,
+    )
     try:
-        if reference_volume_path is not None and Path(reference_volume_path).is_file():
-            reference = sitk.ReadImage(str(reference_volume_path))
         combined: np.ndarray | None = None
         for file_stem in files:
             mask_path = seg_dir / f"{file_stem}.nii.gz"
@@ -248,7 +286,7 @@ def load_primary_segment_mask(
             raise FileNotFoundError(f"No masks found for primary segment {group_name!r} under {seg_dir}")
         return combined
     finally:
-        if reference is not None:
+        if owned_reference and reference is not None:
             del reference
 
 

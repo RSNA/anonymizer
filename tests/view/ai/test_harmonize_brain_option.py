@@ -1,12 +1,17 @@
-"""Harmonize Description Dialog brain-structures offer (CT Head only)."""
+"""Harmonize Description Dialog brain-structures prompt (CT Head only)."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 from pydicom import Dataset
 
-from anonymizer.view.ai.harmonize_results import offer_brain_structures_for_series
+from anonymizer.controller.ai.blur_face.pipeline import CachedRegionSignal
+from anonymizer.view.ai.harmonize_results import (
+    series_is_ct_head_candidate,
+    should_prompt_brain_structures_for_series,
+)
 
 
 def _ds(*, modality: str = "CT", body_part: str = "HEAD", series: str = "BRAIN AX") -> Dataset:
@@ -17,31 +22,57 @@ def _ds(*, modality: str = "CT", body_part: str = "HEAD", series: str = "BRAIN A
     return ds
 
 
-def test_offer_brain_structures_ct_head_when_ready() -> None:
+def test_series_is_ct_head_candidate_from_metadata(tmp_path: Path) -> None:
+    series = tmp_path / "head"
+    series.mkdir()
+    assert series_is_ct_head_candidate(series, _ds()) is True
+
+
+def test_series_is_ct_head_candidate_rejects_mr_and_chest_ct(tmp_path: Path) -> None:
+    series = tmp_path / "chest"
+    series.mkdir()
+    assert series_is_ct_head_candidate(series, _ds(modality="MR")) is False
+    assert series_is_ct_head_candidate(
+        series,
+        _ds(body_part="CHEST", series="CHEST CT W CONTRAST"),
+    ) is False
+
+
+def test_series_is_ct_head_candidate_uses_cached_head_signal(tmp_path: Path) -> None:
+    series = tmp_path / "cached_head"
+    series.mkdir()
+    with patch(
+        "anonymizer.controller.ai.blur_face.pipeline.cached_region_signal",
+        return_value=CachedRegionSignal.HEAD,
+    ):
+        assert series_is_ct_head_candidate(series, _ds(body_part="CHEST")) is True
+
+
+def test_should_prompt_brain_structures_ct_head_when_ready(tmp_path: Path) -> None:
+    series = tmp_path / "head"
+    series.mkdir()
     with patch(
         "anonymizer.view.ai.harmonize_results.brain_structures_allowed",
         return_value=True,
     ):
-        assert offer_brain_structures_for_series(_ds()) is True
+        assert should_prompt_brain_structures_for_series(series, _ds()) is True
 
 
-def test_offer_brain_structures_rejects_mr_and_chest() -> None:
+def test_should_prompt_brain_structures_rejects_mr_chest_and_missing_models(tmp_path: Path) -> None:
+    series = tmp_path / "series"
+    series.mkdir()
     with patch(
         "anonymizer.view.ai.harmonize_results.brain_structures_allowed",
         return_value=True,
     ):
-        assert offer_brain_structures_for_series(_ds(modality="MR")) is False
-        assert (
-            offer_brain_structures_for_series(
-                _ds(body_part="CHEST", series="CHEST CT W CONTRAST")
-            )
-            is False
-        )
+        assert should_prompt_brain_structures_for_series(series, _ds(modality="MR")) is False
+        assert should_prompt_brain_structures_for_series(
+            series,
+            _ds(body_part="CHEST", series="CHEST CT W CONTRAST"),
+        ) is False
 
-
-def test_offer_brain_structures_requires_models() -> None:
     with patch(
         "anonymizer.view.ai.harmonize_results.brain_structures_allowed",
         return_value=False,
     ):
-        assert offer_brain_structures_for_series(_ds()) is False
+        assert should_prompt_brain_structures_for_series(series, _ds()) is False

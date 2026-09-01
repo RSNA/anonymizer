@@ -676,6 +676,18 @@ class SeriesView(AppCTkToplevel):
         else:
             self.geometry(f"{width}x{height}+{max(0, pos_x)}+{max(0, pos_y)}")
 
+    def _size_window_for_startup_paint(self) -> None:
+        """Pick a stable window size before the first visible image paint."""
+        if self._frames is None:
+            self._fit_window_to_content()
+            return
+        native_w, native_h = int(self._frames.shape[2]), int(self._frames.shape[1])
+        max_w, max_h = self._maximum_window_size()
+        if native_w > max_w or native_h > max_h:
+            self._fit_window_to_content()
+            return
+        self._size_window_for_native_image()
+
     def _present_series_view(self) -> None:
         """Single visible paint: size window for native, then one aspect-preserving layout."""
         self._startup_layout = True
@@ -692,13 +704,14 @@ class SeriesView(AppCTkToplevel):
             # toolbar when the window is sized for the native image.
             if viewer is not None:
                 viewer.apply_fixed_chrome(refresh_histogram=True)
-            self._size_window_for_native_image()
+            self._size_window_for_startup_paint()
             self.update_idletasks()
             if viewer is not None:
                 self._trace_load("show_initial_frame")
                 viewer.show_initial_frame()
                 viewer.mark_startup_complete()
-                viewer.fit_to_viewport(force=True)
+                if viewer.startup_needs_upscale_fill():
+                    viewer.fit_to_viewport(force=True)
                 self._trace_load(
                     "startup_complete",
                     display=viewer.get_dimensions_text(),
@@ -707,24 +720,31 @@ class SeriesView(AppCTkToplevel):
                 )
             else:
                 self._trace_load("startup_complete", display="no_image_viewer")
-            self._startup_layout = False
             self._log_series_memory("after_viewer_initial_display", array=self._frames)
-            self.after_idle(self._load_segmentation_chrome)
-            self.after_idle(self._focus_image_viewer_for_keys)
             self.lift()
             self.focus_force()
+            self.after_idle(self._finish_startup_sequence)
 
         self.after_idle(_visible_startup_paint)
+
+    def _finish_startup_sequence(self) -> None:
+        """Complete deferred startup work after the first paint (segmentation chrome, configure unlock)."""
+        if not self._widget_alive():
+            return
+        self._load_segmentation_chrome()
+        self._startup_layout = False
+        self.after_idle(self._focus_image_viewer_for_keys)
 
     def _load_segmentation_chrome(self) -> None:
         """Slow segmentation panel population (mask disk scan); runs after first paint."""
         self._refresh_segmentation_controls(defer_render=True)
         viewer = getattr(self, "image_viewer", None)
         if viewer is not None:
+            needs_layout = bool(viewer._segmentation_button_meta)
             viewer.apply_fixed_chrome()
             self._refresh_minimum_window_size()
-            # Segmentation chrome must not change image display size.
-            viewer.fit_to_viewport(force=True)
+            if needs_layout:
+                viewer.fit_to_viewport(force=True)
 
     def _fit_window_to_content(self) -> None:
         """Expand the window to fit the built UI (V18 auto-size after synchronous build)."""

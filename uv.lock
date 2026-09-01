@@ -1647,7 +1647,7 @@ wheels = [
 
 [[package]]
 name = "rsna-anonymizer"
-version = "19.0.0.dev11"
+version = "19.0.0.dev12"
 source = { editable = "." }
 dependencies = [
     { name = "bidict" },

@@ -6,6 +6,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import numpy as np
+import pytest
+from pydicom import Dataset
 
 from anonymizer.controller.ai.blur_face import (
     CachedRegionSignal,
@@ -205,6 +207,40 @@ def test_loinc_mr_prefix_ranks_mr_rows():
     assert all(m.long_common_name.startswith("MR ") for m in matches)
 
 
+def test_mr_combined_vertebrae_excluded_from_static_profile():
+    profile = mr_modality_profile()
+    assert "vertebrae" not in profile.structure_to_region
+
+
+@pytest.mark.parametrize(
+    ("series_description", "expected_region"),
+    [
+        ("THORACIC SPINE STIR", "Chest"),
+        ("LUMBAR SPINE T2", "Abdomen"),
+        ("CERVICAL SPINE T1", "Head"),
+        ("", "Chest"),
+    ],
+)
+def test_infer_mr_vertebrae_region_from_metadata(series_description: str, expected_region: str) -> None:
+    from anonymizer.controller.ai.tseg.modality_profile import infer_mr_vertebrae_region
+
+    ds = Dataset()
+    ds.SeriesDescription = series_description
+    assert infer_mr_vertebrae_region(ds) == expected_region
+
+
+def test_mr_vertebrae_mask_maps_to_playbook_region() -> None:
+    from anonymizer.controller.ai.tseg.modality_profile import mr_structure_to_region_for_series
+    from anonymizer.controller.ai.tseg.segment import body_parts_present, dominant_region_from_voxels
+
+    ds = Dataset()
+    ds.SeriesDescription = "THORACIC SPINE T2"
+    mapping = mr_structure_to_region_for_series(ds)
+    region = dominant_region_from_voxels({"vertebrae": 50_000}, structure_to_region=mapping)
+    assert region.dominant_region == "Chest"
+    assert body_parts_present(region.region_voxels) == "Chest"
+
+
 def test_mr_harmonize_skips_contrast_and_merges_wo(tmp_path: Path):
     from anonymizer.controller.ai.harmonize import harmonize_series
     from anonymizer.controller.ai.tseg.segment import TS_result
@@ -305,7 +341,62 @@ def test_mr_iv_contrast_row_uses_dicom_not_ts_phase():
     assert row_evidence != "native"
 
 
-def test_mr_combined_vertebrae_excluded_from_region_map():
+def test_mr_harmonize_falls_back_to_dicom_when_ts_regions_empty(tmp_path: Path):
+    from anonymizer.controller.ai.harmonize import harmonize_series
+    from anonymizer.controller.ai.tseg.segment import TS_result
+
+    series = tmp_path / "mr_spine"
+    series.mkdir()
+    (series / "1.dcm").write_bytes(b"")
+
+    ds = MagicMock()
+    ds.Modality = "MR"
+    ds.SeriesDescription = "THORACIC SPINE T2"
+    ds.ProtocolName = ""
+    ds.StudyDescription = ""
+    ds.BodyPartExamined = ""
+    ds.DerivationDescription = ""
+    ds.ContrastBolusAgent = ""
+    ds.ContrastBolusRoute = ""
+    ds.ContrastBolusVolume = ""
+    ds.ImageType = ["ORIGINAL", "PRIMARY", "AXIAL"]
+    ds.get = lambda key, default=None: getattr(ds, key, default)
+
+    geometry = _geometry()
+    failed_regions = TS_result(
+        series_directory=series,
+        dominant_region="",
+        body_parts_present="",
+        multi_region=False,
+        region_fraction=0.0,
+        iv_contrast=False,
+        contrast_phase="",
+        phase_probability=0.0,
+        error="No anatomy regions detected in volume",
+    )
+
+    with (
+        patch("anonymizer.controller.ai.harmonize.pipeline.resolve_series_geometry", return_value=geometry),
+        patch(
+            "anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions",
+            return_value=(failed_regions, series / "vol.nii.gz"),
+        ),
+        patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast") as mock_contrast,
+        patch("anonymizer.controller.ai.harmonize.pipeline.resolve_profile_for_series", return_value=mr_modality_profile()),
+        patch("anonymizer.controller.ai.harmonize.pipeline._load_series_dataset", return_value=ds),
+        patch("anonymizer.controller.ai.harmonize.pipeline.ENABLE_TS_CONTRAST", True),
+    ):
+        results = harmonize_series([series])
+
+    merged = results[0]
+    assert merged.error is None
+    assert merged.playbook is not None
+    assert merged.playbook.body_part_code == "Spine"
+    assert merged.playbook.iv_contrast_code == "WO"
+    assert "Spine" in merged.radlex_series_description
+    mock_contrast.assert_not_called()
+
+
     profile = mr_modality_profile()
     assert "vertebrae" not in profile.structure_to_region
     assert profile.structure_to_region["lung_left"] == "Chest"

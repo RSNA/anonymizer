@@ -46,11 +46,21 @@ from anonymizer.controller.ai.tseg.contrast import (
 from anonymizer.controller.ai.tseg.dicom_geometry import (
     SeriesGeometryResult,
     build_sitk_volume_from_series_frames,
+    load_geometry_cache,
     resolve_series_geometry,
     stackable_dicom_paths,
     ts_regions_eligible,
 )
 from anonymizer.controller.ai.tseg.ml_env import sequential_ml_context
+from anonymizer.controller.ai.tseg.seg_retention import (
+    compact_seg_cache_if_needed,
+    evict_tseg_volume,
+    finalize_seg_cache,
+    read_structure_voxels,
+    resolve_harmonize_roi_subset,
+    structure_voxels_sidecar_valid,
+    widen_roi_tier,
+)
 from anonymizer.controller.series_io import load_series_frames
 from anonymizer.utils.translate import _
 
@@ -61,6 +71,13 @@ _SEG_SECONDS_PER_SLICE = 0.11
 _SEG_BASE_SECONDS = 30.0
 _FACE_SEG_ESTIMATE_SECONDS = 90.0
 _FACE_LICENSE_ERROR = "TotalSegmentator face task requires academic license (totalseg_set_license -l aca_...)"
+
+# Returned in ``TS_result.error`` when harmonize cancellation is requested cooperatively.
+HARMONIZE_CANCELLED_MESSAGE = "Cancelled"
+
+
+def harmonize_cancel_requested(cancelled: Callable[[], bool] | None) -> bool:
+    return cancelled is not None and cancelled()
 
 
 @dataclass(frozen=True)
@@ -230,7 +247,7 @@ def count_mask_voxels(mask_path: Path) -> int:
         del image
 
 
-def collect_structure_voxels(segmentation_dir: Path, structures: list[str]) -> dict[str, int]:
+def collect_structure_voxels_from_masks(segmentation_dir: Path, structures: list[str]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for structure in structures:
         mask_path = segmentation_dir / f"{structure}.nii.gz"
@@ -239,6 +256,16 @@ def collect_structure_voxels(segmentation_dir: Path, structures: list[str]) -> d
             continue
         counts[structure] = count_mask_voxels(mask_path)
     return counts
+
+
+def collect_structure_voxels(segmentation_dir: Path, structures: list[str]) -> dict[str, int]:
+    seg_dir = Path(segmentation_dir)
+    cache_dir = seg_dir.parent
+    compact_seg_cache_if_needed(cache_dir, seg_dir, structures)
+    cached = read_structure_voxels(cache_dir)
+    if cached is not None and set(structures) <= set(cached.keys()):
+        return {structure: int(cached.get(structure, 0)) for structure in structures}
+    return collect_structure_voxels_from_masks(seg_dir, structures)
 
 
 def region_from_structure(
@@ -318,7 +345,7 @@ def is_multi_region(body_parts_present_label: str) -> bool:
 
 
 def cached_body_parts_label(series_directory: Path) -> str | None:
-    """ROI anatomy label from ``A_TS_SEG`` segmentation cache, if available."""
+    """ROI anatomy label from ``0_TS_SEG`` segmentation cache, if available."""
     cache_dir = series_cache_dir(series_directory)
     seg_dir = cache_dir / "seg"
     structures = list(ROI_SUBSET)
@@ -389,6 +416,7 @@ def run_segmentation(
     progress: ProgressCallback | None = None,
     analysis_started: float | None = None,
     n_slices: int | None = None,
+    cancelled: Callable[[], bool] | None = None,
 ) -> float:
     """Run TotalSegmentator anatomy task. Returns inference wall time in seconds.
 
@@ -429,6 +457,10 @@ def run_segmentation(
         started=started,
         remaining_sec=estimate,
     )
+
+    if harmonize_cancel_requested(cancelled):
+        logger.info("TS segmentation: cancelled before inference for %s", nifti_path)
+        return 0.0
 
     seg_started = time.perf_counter()
     with sequential_ml_context("ts_segmentation"):
@@ -542,7 +574,7 @@ def analyze_tseg_face(
     """
     DICOM→NIfTI, TotalSegmentator face task, and cached face mask path.
 
-    Reuses ``<series_directory>/A_TS_SEG/volume.nii.gz`` when present (same as
+    Reuses ``<series_directory>/0_TS_SEG/volume.nii.gz`` when present (same as
     anatomy regions). Face mask is cached at ``seg/face.nii.gz`` (CT) or
     ``seg/face_mr.nii.gz`` (MR).
     """
@@ -677,12 +709,12 @@ def _error_result(series_directory: Path, error: str) -> TS_result:
 
 
 def series_cache_dir(series_directory: Path) -> Path:
-    """Per-series cache under ``<series>/A_TS_SEG/`` (NIfTI, seg masks, contrast stats)."""
+    """Per-series cache under ``<series>/0_TS_SEG/`` (NIfTI, seg masks, contrast stats)."""
     return resolve_series_cache_dir(series_directory)
 
 
 def estimate_tseg_contrast_remaining_sec(series_directory: Path) -> float:
-    """Rough ETA for contrast analysis from per-series ``A_TS_SEG`` state."""
+    """Rough ETA for contrast analysis from per-series ``0_TS_SEG`` state."""
     cache_dir = series_cache_dir(series_directory)
     contrast_stats_path = cache_dir / CONTRAST_STATS_FILENAME
     contrast_stats_hn_path = cache_dir / CONTRAST_STATS_HN_FILENAME
@@ -719,7 +751,7 @@ def estimate_tseg_contrast_remaining_sec(series_directory: Path) -> float:
 
 
 def face_mask_cache_path(series_directory: Path, *, profile=None) -> Path:
-    """Cached face mask under ``<series>/A_TS_SEG/seg/`` (CT ``face.nii.gz`` / MR ``face_mr.nii.gz``)."""
+    """Cached face mask under ``<series>/0_TS_SEG/seg/`` (CT ``face.nii.gz`` / MR ``face_mr.nii.gz``)."""
     from anonymizer.controller.ai.tseg.modality_profile import default_ct_profile
 
     resolved = profile if profile is not None else default_ct_profile()
@@ -768,14 +800,17 @@ def write_roi_subset_manifest(
     *,
     anatomy_task: str = "total",
     modality: str = "CT",
+    roi_tier: str | None = None,
 ) -> None:
     """Record which TotalSegmentator ROI classes were requested for this series cache."""
     cache_dir.mkdir(parents=True, exist_ok=True)
-    payload = {
+    payload: dict = {
         "roi_subset": sorted(structures),
         "anatomy_task": anatomy_task,
         "modality": modality,
     }
+    if roi_tier is not None:
+        payload["roi_tier"] = roi_tier
     path = cache_dir / ROI_SUBSET_MANIFEST_FILENAME
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
@@ -817,8 +852,6 @@ def _segmentation_cache_valid(
     """
     if not seg_dir.is_dir():
         return False
-    if not any((seg_dir / f"{structure}.nii.gz").is_file() for structure in structures):
-        return False
 
     cache_dir = seg_dir.parent
     recorded_bundle = _read_roi_subset_manifest(cache_dir)
@@ -832,10 +865,18 @@ def _segmentation_cache_valid(
         # Legacy manifests without modality/task: only accept for CT ``total``.
         if recorded_task is None and recorded_modality is None and (anatomy_task != "total" or modality != "CT"):
             return False
-        return requested <= recorded
+        if not requested <= recorded:
+            return False
+        if structure_voxels_sidecar_valid(cache_dir, structures):
+            return True
+        return any((seg_dir / f"{structure}.nii.gz").is_file() for structure in structures)
 
     # Legacy caches without a manifest: CT total only.
     if anatomy_task != "total" or modality != "CT":
+        return False
+    if structure_voxels_sidecar_valid(cache_dir, structures):
+        return True
+    if not any((seg_dir / f"{structure}.nii.gz").is_file() for structure in structures):
         return False
     skeletal_requested = [name for name in structures if _is_skeletal_roi(name)]
     if skeletal_requested and not any((seg_dir / f"{name}.nii.gz").is_file() for name in skeletal_requested):
@@ -855,13 +896,24 @@ def _nifti_slice_count(nifti_path: Path) -> int:
         del image
 
 
+def _expected_stackable_slice_count(series_directory: Path) -> int | None:
+    try:
+        return len(stackable_dicom_paths(series_directory))
+    except ValueError:
+        return None
+
+
 def _tseg_volume_cache_stale(series_directory: Path, nifti_path: Path) -> bool:
     """True when cached ``volume.nii.gz`` no longer matches the stackable DICOM slice count."""
-    if not nifti_path.is_file():
+    expected_slices = _expected_stackable_slice_count(series_directory)
+    if expected_slices is None:
         return False
-    expected_slices = len(stackable_dicom_paths(series_directory))
-    cached_slices = _nifti_slice_count(nifti_path)
-    return cached_slices != expected_slices
+    if nifti_path.is_file():
+        return _nifti_slice_count(nifti_path) != expected_slices
+    geometry = load_geometry_cache(series_directory)
+    if geometry is not None:
+        return geometry.n_slices != expected_slices
+    return False
 
 
 def invalidate_stale_tseg_volume_cache(
@@ -912,17 +964,22 @@ def analyze_tseg_regions(
     progress: ProgressCallback | None = None,
     include_brain_structures: bool = False,
     profile=None,
+    cancelled: Callable[[], bool] | None = None,
 ) -> tuple[TS_result, Path | None]:
     """
     DICOM→NIfTI, TotalSegmentator ROI segmentation, and region summary.
 
-    Intermediate artifacts are cached under ``<series_directory>/A_TS_SEG/`` and
+    Intermediate artifacts are cached under ``<series_directory>/0_TS_SEG/`` and
     reused when present. Returns ``(result, nifti_path)``. Contrast fields on
     ``result`` are empty when regions succeeded; contrast uses a separate pass.
 
     ``profile`` defaults to the series modality profile (CT when omitted and
     series is CT). CT defaults match pre-MR behavior.
     """
+    if harmonize_cancel_requested(cancelled):
+        logger.info("TS regions: cancelled before start for %s", series_directory)
+        return (_error_result(series_directory, HARMONIZE_CANCELLED_MESSAGE), None)
+
     from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
     from anonymizer.controller.ai.tseg.model_cache import profile_anatomy_weights_ready
 
@@ -947,7 +1004,12 @@ def analyze_tseg_regions(
     nifti_path = work_dir / "volume.nii.gz"
     seg_dir = work_dir / "seg"
     analysis_started = time.perf_counter()
-    roi_structures = list(profile.roi_subset)
+    roi_tier: str | None = None
+    if profile.modality == "CT":
+        roi_subset, roi_tier = resolve_harmonize_roi_subset(series_directory)
+        roi_structures = list(roi_subset)
+    else:
+        roi_structures = list(profile.roi_subset)
 
     geometry = geometry if geometry is not None else resolve_series_geometry(series_directory)
     logger.debug(
@@ -968,143 +1030,228 @@ def analyze_tseg_regions(
 
     with sequential_ml_context("ts_regions"):
         try:
-            _report_progress(
-                progress,
-                stage="prepare",
-                message="Preparing CT volume" if profile.modality == "CT" else "Preparing volume",
-                fraction=0.05,
-                started=analysis_started,
+            return _analyze_tseg_regions_impl(
+                series_directory=series_directory,
+                work_dir=work_dir,
+                nifti_path=nifti_path,
+                seg_dir=seg_dir,
+                roi_structures=roi_structures,
+                roi_tier=roi_tier,
+                profile=profile,
+                geometry=geometry,
+                progress=progress,
+                include_brain_structures=include_brain_structures,
+                analysis_started=analysis_started,
+                cancelled=cancelled,
             )
-            if nifti_path.is_file():
-                n_slices = _nifti_slice_count(nifti_path)
-                logger.debug("TS regions: reusing cached NIfTI %s (%d slices)", nifti_path, n_slices)
-            else:
-                logger.debug("TS regions: converting DICOM to NIfTI: %s", series_directory)
-                n_slices = dicom_series_to_nifti(series_directory, nifti_path)
-                release_working_memory(stage="ts_regions_after_dicom_to_nifti")
-                logger.debug("TS regions: wrote %s (%d slices)", nifti_path, n_slices)
-
-            seg_cached = _segmentation_cache_valid(
-                seg_dir,
-                roi_structures,
-                anatomy_task=profile.anatomy_task,
-                modality=profile.modality,
-            )
-            if seg_cached:
-                logger.debug("TS regions: reusing cached segmentation in %s", seg_dir)
-                _report_progress(
-                    progress,
-                    stage="segment",
-                    message=_("Using cached anatomy segmentation"),
-                    fraction=0.35,
-                    started=analysis_started,
-                )
-            else:
-                logger.debug("TS regions: running segmentation for %s", series_directory)
-                seg_seconds = run_segmentation(
-                    nifti_path,
-                    seg_dir,
-                    mode=segmentation_mode_for_modality(profile.modality),
-                    progress=progress,
-                    analysis_started=analysis_started,
-                    n_slices=n_slices,
-                    roi_subset=roi_structures,
-                    task=profile.anatomy_task,
-                )
-                write_roi_subset_manifest(
-                    work_dir,
-                    roi_structures,
-                    anatomy_task=profile.anatomy_task,
-                    modality=profile.modality,
-                )
-                logger.debug("TS regions: segmentation finished in %.1fs", seg_seconds)
-                _report_progress(
-                    progress,
-                    stage="segment",
-                    message=f"Anatomy seg: inference {seg_seconds:.1f}s",
-                    fraction=0.35,
-                    started=analysis_started,
-                )
-                release_working_memory(stage="ts_regions_after_segmentation")
-
-            structure_voxels = collect_structure_voxels(seg_dir, roi_structures)
-            if (
-                include_brain_structures
-                and profile.modality == "CT"
-                and ENABLE_TSEG_BRAIN_STRUCTURES
-                and structure_voxels.get("brain", 0) >= MIN_STRUCTURE_VOXELS
-                and not _brain_structures_cache_valid(seg_dir)
-            ):
-                from anonymizer.controller.ai.tseg.readiness import verify_face_license
-
-                licensed, license_message = verify_face_license()
-                if licensed:
-                    try:
-                        brain_seconds = run_brain_structures_segmentation(
-                            nifti_path,
-                            seg_dir,
-                            progress=progress,
-                            analysis_started=analysis_started,
-                        )
-                        logger.debug(
-                            "TS regions: brain_structures finished in %.1fs for %s",
-                            brain_seconds,
-                            series_directory,
-                        )
-                        release_working_memory(stage="ts_regions_after_brain_structures")
-                    except Exception as exc:
-                        logger.warning(
-                            "TS regions: brain_structures skipped for %s (%s)",
-                            series_directory,
-                            exc,
-                        )
-                else:
-                    logger.debug(
-                        "TS regions: brain_structures skipped (license): %s",
-                        license_message,
-                    )
-            elif include_brain_structures and not ENABLE_TSEG_BRAIN_STRUCTURES:
-                logger.debug("TS regions: brain_structures disabled in config")
-
-            region = dominant_region_from_voxels(
-                structure_voxels,
-                structure_to_region=profile.structure_to_region,
-            )
-            regions_label = body_parts_present(region.region_voxels)
-            del structure_voxels
-
-            if not regions_label:
-                logger.warning("TS regions: no anatomy regions detected for %s", series_directory)
-                return (
-                    _error_result(series_directory, "No anatomy regions detected in volume"),
-                    nifti_path,
-                )
-
-            region_result = _region_ts_result(
-                series_directory,
-                region=region,
-                regions_label=regions_label,
-            )
-            logger.debug(
-                "TS regions: %s dominant=%s label=%s fraction=%.3f",
-                series_directory,
-                region.dominant_region,
-                regions_label,
-                region.region_fraction,
-            )
-            _report_progress(
-                progress,
-                stage="regions",
-                message=format_anatomy_regions_progress_message(region_result, seg_cached=seg_cached),
-                fraction=0.95,
-                started=analysis_started,
-            )
-            return (region_result, nifti_path)
         except Exception as exc:
             logger.exception("TS regions failed for %s: %s", series_directory, exc)
             return (_error_result(series_directory, f"{type(exc).__name__}: {exc}"), None)
         finally:
             release_working_memory(stage="ts_regions_end")
+
+
+def _analyze_tseg_regions_impl(
+    *,
+    series_directory: Path,
+    work_dir: Path,
+    nifti_path: Path,
+    seg_dir: Path,
+    roi_structures: list[str],
+    roi_tier: str | None,
+    profile,
+    geometry: SeriesGeometryResult,
+    progress: ProgressCallback | None,
+    include_brain_structures: bool,
+    analysis_started: float,
+    cancelled: Callable[[], bool] | None = None,
+) -> tuple[TS_result, Path | None]:
+    current_tier = roi_tier
+    current_structures = list(roi_structures)
+
+    while True:
+        if harmonize_cancel_requested(cancelled):
+            logger.info("TS regions: cancelled during analysis for %s", series_directory)
+            return (_error_result(series_directory, HARMONIZE_CANCELLED_MESSAGE), nifti_path)
+
+        _report_progress(
+            progress,
+            stage="prepare",
+            message="Preparing CT volume" if profile.modality == "CT" else "Preparing volume",
+            fraction=0.05,
+            started=analysis_started,
+        )
+        if nifti_path.is_file():
+            n_slices = _nifti_slice_count(nifti_path)
+            logger.debug("TS regions: reusing cached NIfTI %s (%d slices)", nifti_path, n_slices)
+        else:
+            if harmonize_cancel_requested(cancelled):
+                logger.info("TS regions: cancelled before DICOM→NIfTI for %s", series_directory)
+                return (_error_result(series_directory, HARMONIZE_CANCELLED_MESSAGE), None)
+            logger.debug("TS regions: converting DICOM to NIfTI: %s", series_directory)
+            n_slices = dicom_series_to_nifti(series_directory, nifti_path)
+            release_working_memory(stage="ts_regions_after_dicom_to_nifti")
+            logger.debug("TS regions: wrote %s (%d slices)", nifti_path, n_slices)
+            if harmonize_cancel_requested(cancelled):
+                logger.info("TS regions: cancelled after DICOM→NIfTI for %s", series_directory)
+                return (_error_result(series_directory, HARMONIZE_CANCELLED_MESSAGE), nifti_path)
+
+        seg_cached = _segmentation_cache_valid(
+            seg_dir,
+            current_structures,
+            anatomy_task=profile.anatomy_task,
+            modality=profile.modality,
+        )
+        if seg_cached:
+            logger.debug("TS regions: reusing cached segmentation in %s", seg_dir)
+            _report_progress(
+                progress,
+                stage="segment",
+                message=_("Using cached anatomy segmentation"),
+                fraction=0.35,
+                started=analysis_started,
+            )
+        else:
+            if harmonize_cancel_requested(cancelled):
+                logger.info("TS regions: cancelled before segmentation for %s", series_directory)
+                return (_error_result(series_directory, HARMONIZE_CANCELLED_MESSAGE), nifti_path)
+            logger.debug("TS regions: running segmentation for %s", series_directory)
+            seg_seconds = run_segmentation(
+                nifti_path,
+                seg_dir,
+                mode=segmentation_mode_for_modality(profile.modality),
+                progress=progress,
+                analysis_started=analysis_started,
+                n_slices=n_slices,
+                roi_subset=current_structures,
+                task=profile.anatomy_task,
+                cancelled=cancelled,
+            )
+            if harmonize_cancel_requested(cancelled):
+                logger.info("TS regions: cancelled after segmentation for %s", series_directory)
+                return (_error_result(series_directory, HARMONIZE_CANCELLED_MESSAGE), nifti_path)
+            write_roi_subset_manifest(
+                work_dir,
+                current_structures,
+                anatomy_task=profile.anatomy_task,
+                modality=profile.modality,
+                roi_tier=current_tier,
+            )
+            logger.debug("TS regions: segmentation finished in %.1fs", seg_seconds)
+            _report_progress(
+                progress,
+                stage="segment",
+                message=f"Anatomy seg: inference {seg_seconds:.1f}s",
+                fraction=0.35,
+                started=analysis_started,
+            )
+            release_working_memory(stage="ts_regions_after_segmentation")
+
+        count_structures = list(
+            dict.fromkeys(current_structures + list(BRAIN_STRUCTURE_FILES))
+        )
+        structure_voxels = collect_structure_voxels(seg_dir, count_structures)
+        if (
+            include_brain_structures
+            and profile.modality == "CT"
+            and ENABLE_TSEG_BRAIN_STRUCTURES
+            and structure_voxels.get("brain", 0) >= MIN_STRUCTURE_VOXELS
+            and not _brain_structures_cache_valid(seg_dir)
+        ):
+            from anonymizer.controller.ai.tseg.readiness import verify_face_license
+
+            licensed, license_message = verify_face_license()
+            if licensed:
+                if harmonize_cancel_requested(cancelled):
+                    logger.info("TS regions: cancelled before brain structures for %s", series_directory)
+                    return (_error_result(series_directory, HARMONIZE_CANCELLED_MESSAGE), nifti_path)
+                try:
+                    brain_seconds = run_brain_structures_segmentation(
+                        nifti_path,
+                        seg_dir,
+                        progress=progress,
+                        analysis_started=analysis_started,
+                    )
+                    logger.debug(
+                        "TS regions: brain_structures finished in %.1fs for %s",
+                        brain_seconds,
+                        series_directory,
+                    )
+                    release_working_memory(stage="ts_regions_after_brain_structures")
+                    structure_voxels = collect_structure_voxels_from_masks(seg_dir, count_structures)
+                except Exception as exc:
+                    logger.warning(
+                        "TS regions: brain_structures skipped for %s (%s)",
+                        series_directory,
+                        exc,
+                    )
+            else:
+                logger.debug(
+                    "TS regions: brain_structures skipped (license): %s",
+                    license_message,
+                )
+        elif include_brain_structures and not ENABLE_TSEG_BRAIN_STRUCTURES:
+            logger.debug("TS regions: brain_structures disabled in config")
+
+        finalize_seg_cache(work_dir, seg_dir, structure_voxels)
+
+        structure_to_region = profile.structure_to_region
+        if profile.modality == "MR":
+            from anonymizer.controller.ai.tseg.modality_profile import (
+                load_series_header_dataset,
+                mr_structure_to_region_for_series,
+            )
+
+            header_ds = load_series_header_dataset(series_directory)
+            structure_to_region = mr_structure_to_region_for_series(header_ds)
+
+        region = dominant_region_from_voxels(
+            structure_voxels,
+            structure_to_region=structure_to_region,
+        )
+        regions_label = body_parts_present(region.region_voxels)
+
+        if not regions_label and current_tier is not None:
+            widened = widen_roi_tier(current_tier)
+            if widened is not None:
+                wider_subset, wider_tier = widened
+                logger.info(
+                    "TS regions: widening ROI tier %s -> %s for %s",
+                    current_tier,
+                    wider_tier,
+                    series_directory,
+                )
+                current_tier = wider_tier
+                current_structures = list(wider_subset)
+                continue
+
+        if not regions_label:
+            logger.warning("TS regions: no anatomy regions detected for %s", series_directory)
+            return (
+                _error_result(series_directory, "No anatomy regions detected in volume"),
+                nifti_path,
+            )
+
+        region_result = _region_ts_result(
+            series_directory,
+            region=region,
+            regions_label=regions_label,
+        )
+        logger.debug(
+            "TS regions: %s dominant=%s label=%s fraction=%.3f",
+            series_directory,
+            region.dominant_region,
+            regions_label,
+            region.region_fraction,
+        )
+        _report_progress(
+            progress,
+            stage="regions",
+            message=format_anatomy_regions_progress_message(region_result, seg_cached=seg_cached),
+            fraction=0.95,
+            started=analysis_started,
+        )
+        return (region_result, nifti_path if nifti_path.is_file() else None)
 
 
 def analyze_tseg_contrast(
@@ -1117,7 +1264,7 @@ def analyze_tseg_contrast(
     """
     Run TotalSegmentator organ HU statistics + XGBoost contrast-phase classification.
 
-    Contrast organ statistics are cached under ``<series>/A_TS_SEG/contrast_stats.json``;
+    Contrast organ statistics are cached under ``<series>/0_TS_SEG/contrast_stats.json``;
     head/neck vessel statistics under ``contrast_stats_hn.json``; XGBoost output under
     ``contrast_phase.json``.
     """
@@ -1263,11 +1410,14 @@ def analyze_series(
                     progress=progress,
                 )
             )
+            evict_tseg_volume(series_dir)
         elif profile is not None and not profile.enable_contrast_phase:
+            evict_tseg_volume(series_dir)
             results.append(region_result)
         else:
             if not ENABLE_TS_CONTRAST and region_result.body_parts_present.strip():
                 logger.info("TS contrast skipped (ENABLE_TS_CONTRAST=False) for %s", series_dir)
+            evict_tseg_volume(series_dir)
             results.append(region_result)
 
     logger.info("Anatomy analysis finished: %d result(s)", len(results))

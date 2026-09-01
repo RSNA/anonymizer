@@ -16,14 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from queue import Queue
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, cast
-
-if TYPE_CHECKING:
-    import tkinter as tk
-
-    from anonymizer.controller.series_io import LoadedSeries
-    from anonymizer.view.common.fonts import AppFonts
-    from anonymizer.view.series.series import SeriesView
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import boto3
 from psutil import virtual_memory
@@ -2651,24 +2644,6 @@ class ProjectController(AE):
             series_path,
             anon_model=self.anonymizer.model,
             anon_series_uid=anon_series_uid,
-        )
-
-    def show_series_view(
-        self,
-        parent: "tk.Misc",
-        series_path: Path,
-        fonts: "AppFonts | None" = None,
-        preloaded: "LoadedSeries | None" = None,
-    ) -> "SeriesView | None":
-        """Open Series View; views call this instead of constructing SeriesView with the model."""
-        from anonymizer.view.series.series import show_series_view
-
-        return show_series_view(
-            parent,
-            controller=self,
-            series_path=series_path,
-            fonts=fonts,
-            preloaded=preloaded,
         )
 
     def harmonize_studies(

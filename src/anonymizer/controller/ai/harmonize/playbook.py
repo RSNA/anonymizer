@@ -19,6 +19,7 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
 )
 from anonymizer.controller.ai.tseg.modality_profile import is_mr_modality
 from anonymizer.controller.ai.tseg.segment import TS_result
+from anonymizer.controller.ai.tseg.series_classification import metadata_diagnostic_fallback_allowed
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
@@ -124,6 +125,8 @@ SERIES_TYPE_PLAYBOOK_CODES: frozenset[str] = frozenset(
     }
 )
 
+METADATA_HARMONIZE_SERIES_TYPES: frozenset[str] = SERIES_TYPE_PLAYBOOK_CODES
+
 STRUCTURED_REPORT_SOP_PREFIX = "1.2.840.10008.5.1.4.1.1.88"
 
 _TSEG_REGION_TO_BODY_PART_CODE: dict[str, str] = {
@@ -154,6 +157,8 @@ _DICOM_BODY_PART_EXACT: dict[str, str] = {
     "EXTREMITY": "LExt",
     "UPPEREXTREMITY": "UExt",
     "LOWEREXTREMITY": "LExt",
+    "BREAST": "Breast",
+    "MAMM": "Breast",
 }
 
 # Keyword groups searched in DICOM text fields when ``BodyPartExamined`` is absent.
@@ -168,6 +173,7 @@ _DICOM_BODY_PART_KEYWORDS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("CSPINE", "C-SPINE", "C SPINE"), "CSp"),
     (("TSPINE", "T-SPINE", "T SPINE"), "TSp"),
     (("LSPINE", "L-SPINE", "L SPINE"), "LSp"),
+    (("BREAST", "MAMM"), "Breast"),
 )
 
 # TS ROI structures used to refine Playbook body-part codes within the Head region.
@@ -317,6 +323,15 @@ _SCREENSHOT_KEYWORDS: tuple[str, ...] = (
     "SCREEN CAPTURE",
     "CAPTURED IMAGE",
 )
+
+
+@dataclass(frozen=True)
+class MetadataHarmonizeRoute:
+    """Build a Playbook description from DICOM metadata without TS anatomy regions."""
+
+    series_type_code: str
+    include_plane: bool
+    iv_contrast_from_dicom: bool
 
 
 @dataclass(frozen=True)
@@ -612,6 +627,65 @@ def is_localizer_geometry(geometry: SeriesGeometryResult) -> bool:
     return geometry.dimensionality == "localizer_2d"
 
 
+def _metadata_route_for_series_type(series_type_code: str, ds: Dataset) -> MetadataHarmonizeRoute:
+    if series_type_code == "Localizer":
+        return MetadataHarmonizeRoute("Localizer", include_plane=False, iv_contrast_from_dicom=False)
+    if series_type_code in {"Radiation_Dose", "Contrast_Dose", "Monitoring", "Screenshot"}:
+        return MetadataHarmonizeRoute(series_type_code, include_plane=False, iv_contrast_from_dicom=False)
+    return MetadataHarmonizeRoute(
+        series_type_code,
+        include_plane=True,
+        iv_contrast_from_dicom=is_mr_modality(ds.get("Modality")),
+    )
+
+
+def resolve_metadata_harmonize_route(
+    ds: Dataset,
+    geometry: SeriesGeometryResult,
+    *,
+    tseg: TS_result | None = None,
+) -> MetadataHarmonizeRoute | None:
+    """
+    Return a metadata-only harmonize route, or ``None`` when TS anatomy merge is required.
+
+    Localizers are handled separately (optional TS fallback) in the harmonize pipeline.
+    When ``tseg`` is passed, anatomy analysis may have run but produced no Playbook body
+    regions; DICOM metadata is used as a fallback when a body part can be inferred.
+    """
+    if is_localizer_geometry(geometry):
+        return None
+
+    series_type = map_series_type_code(ds, geometry)
+    if series_type in METADATA_HARMONIZE_SERIES_TYPES:
+        return _metadata_route_for_series_type(series_type, ds)
+
+    if not geometry.ts_suitable and metadata_diagnostic_fallback_allowed(geometry.ts_skip_category):
+        return MetadataHarmonizeRoute(
+            "",
+            include_plane=True,
+            iv_contrast_from_dicom=is_mr_modality(ds.get("Modality")),
+        )
+
+    if (
+        tseg is not None
+        and geometry.ts_suitable
+        and not tseg.body_parts_present.strip()
+    ):
+        try:
+            map_body_part_from_dicom(ds)
+        except ValueError:
+            return None
+        logger.info(
+            "Playbook harmonize: using DICOM metadata fallback (TS anatomy regions unavailable)",
+        )
+        return MetadataHarmonizeRoute(
+            "",
+            include_plane=True,
+            iv_contrast_from_dicom=is_mr_modality(ds.get("Modality")),
+        )
+    return None
+
+
 def map_body_part_from_dicom(ds: Dataset) -> str:
     """
     Map DICOM metadata to a Playbook body-part code for localizer/scout series.
@@ -638,16 +712,22 @@ def map_body_part_from_dicom(ds: Dataset) -> str:
     raise ValueError("Could not determine Playbook body part from DICOM metadata for this localizer series")
 
 
-def build_localizer_playbook_attributes(
+def build_metadata_playbook_attributes(
     ds: Dataset,
     geometry: SeriesGeometryResult,
+    route: MetadataHarmonizeRoute,
 ) -> PlaybookHarmonizeAttributes:
     body_part_code = map_body_part_from_dicom(ds)
+    anatomic_plane_code = map_anatomic_plane_code(geometry) if route.include_plane else ""
+    if route.iv_contrast_from_dicom:
+        iv_contrast_code, _evidence = map_mr_iv_contrast_from_dicom(ds)
+    else:
+        iv_contrast_code = "WO"
     return PlaybookHarmonizeAttributes(
         body_part_code=body_part_code,
-        anatomic_plane_code="",
-        iv_contrast_code="WO",
-        series_type_code="Localizer",
+        anatomic_plane_code=anatomic_plane_code,
+        iv_contrast_code=iv_contrast_code,
+        series_type_code=route.series_type_code,
         body_part_confidence=None,
         plane_confidence=geometry.plane_confidence,
         contrast_confidence=None,
@@ -655,13 +735,52 @@ def build_localizer_playbook_attributes(
     )
 
 
+def build_metadata_harmonized_series_description(
+    ds: Dataset,
+    geometry: SeriesGeometryResult,
+    route: MetadataHarmonizeRoute,
+) -> tuple[str, PlaybookHarmonizeAttributes]:
+    attributes = build_metadata_playbook_attributes(ds, geometry, route)
+    description = format_playbook_series_description(attributes, geometry)
+    return description, attributes
+
+
+def build_localizer_playbook_attributes(
+    ds: Dataset,
+    geometry: SeriesGeometryResult,
+) -> PlaybookHarmonizeAttributes:
+    return build_metadata_playbook_attributes(
+        ds,
+        geometry,
+        _metadata_route_for_series_type("Localizer", ds),
+    )
+
+
 def build_localizer_harmonized_series_description(
     ds: Dataset,
     geometry: SeriesGeometryResult,
 ) -> tuple[str, PlaybookHarmonizeAttributes]:
-    attributes = build_localizer_playbook_attributes(ds, geometry)
-    description = format_playbook_series_description(attributes, geometry)
-    return description, attributes
+    route = _metadata_route_for_series_type("Localizer", ds)
+    return build_metadata_harmonized_series_description(ds, geometry, route)
+
+
+def build_postprocess_playbook_attributes(
+    ds: Dataset,
+    geometry: SeriesGeometryResult,
+) -> PlaybookHarmonizeAttributes:
+    return build_metadata_playbook_attributes(
+        ds,
+        geometry,
+        _metadata_route_for_series_type("Postprocess", ds),
+    )
+
+
+def build_postprocess_harmonized_series_description(
+    ds: Dataset,
+    geometry: SeriesGeometryResult,
+) -> tuple[str, PlaybookHarmonizeAttributes]:
+    route = _metadata_route_for_series_type("Postprocess", ds)
+    return build_metadata_harmonized_series_description(ds, geometry, route)
 
 
 def map_anatomic_plane_code(geometry: SeriesGeometryResult) -> str:

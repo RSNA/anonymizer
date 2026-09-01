@@ -42,10 +42,12 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
 )
 from anonymizer.controller.ai.tseg.segment import dicom_series_to_nifti
 from tests.controller.tseg.support.synthetic_ct import (
+    build_synthetic_breast_adc_mr_series,
     build_synthetic_chest_ct_series,
     build_synthetic_coronal_ct_series,
     build_synthetic_derived_coronal_mpr_series,
     build_synthetic_derived_mip_series,
+    build_synthetic_haste_sag_series,
     build_synthetic_oblique_ct_series,
     build_synthetic_sagittal_ct_series,
     build_synthetic_scout_ct_series,
@@ -167,6 +169,26 @@ def test_infer_dimensionality_single_slice(tmp_path: Path) -> None:
     assert infer_dimensionality(headers, stack) == "single_slice_2d"
 
 
+def test_infer_dimensionality_single_slice_topogram_is_localizer(tmp_path: Path) -> None:
+    series_dir = build_synthetic_scout_ct_series(tmp_path / "topogram", num_slices=1)
+    for path in series_dir.glob("*.dcm"):
+        dataset = pydicom.dcmread(path)
+        dataset.SeriesDescription = "Topogram 1.0 T20s"
+        dataset.BodyPartExamined = "CHEST"
+        dataset.save_as(path)
+    headers = read_series_headers(series_dir)
+    stack = compute_stack_metrics(headers, (0.0, 0.0, 1.0))
+    assert infer_dimensionality(headers, stack) == "localizer_2d"
+
+
+def test_analyze_series_geometry_single_slice_topogram(tmp_path: Path) -> None:
+    series_dir = build_synthetic_scout_ct_series(tmp_path / "topogram_geom", num_slices=1)
+    geometry = analyze_series_geometry(series_dir)
+    assert geometry.dimensionality == "localizer_2d"
+    assert geometry.ts_suitable is False
+    assert geometry.ts_skip_category == "localizer"
+
+
 def test_sorted_dicom_paths_sagittal_orders_along_stack(tmp_path: Path) -> None:
     series_dir = build_synthetic_sagittal_ct_series(tmp_path / "sagittal")
     paths = sorted_dicom_paths(series_dir)
@@ -241,6 +263,60 @@ def test_analyze_series_geometry_scout_not_ts_suitable(tmp_path: Path) -> None:
     assert geometry.dimensionality == "localizer_2d"
     assert geometry.ts_suitable is False
     assert ts_regions_eligible(geometry) is False
+
+
+def test_analyze_series_geometry_haste_sag_not_ts_suitable(tmp_path: Path) -> None:
+    series_dir = build_synthetic_haste_sag_series(tmp_path / "haste_sag")
+    geometry = analyze_series_geometry(series_dir)
+    assert geometry.plane == "sagittal"
+    assert geometry.n_slices == 26
+    assert geometry.dimensionality == "localizer_2d"
+    assert geometry.ts_suitable is False
+    assert ts_regions_eligible(geometry) is False
+
+
+def test_analyze_series_geometry_breast_adc_parametric_not_ts_suitable(tmp_path: Path) -> None:
+    series_dir = build_synthetic_breast_adc_mr_series(tmp_path / "adc")
+    geometry = analyze_series_geometry(series_dir)
+    assert geometry.plane == "axial"
+    assert geometry.provenance == "derived_secondary"
+    assert geometry.dimensionality == "volume_3d"
+    assert geometry.n_slices == 60
+    assert geometry.ts_suitable is False
+    assert "parametric" in geometry.notes.lower()
+    assert ts_regions_eligible(geometry) is False
+
+
+def test_resolve_series_geometry_refreshes_stale_haste_sag_cache(tmp_path: Path) -> None:
+    series_dir = build_synthetic_haste_sag_series(tmp_path / "haste_sag")
+    stale = geometry_from_dict(
+        {
+            "plane": "sagittal",
+            "plane_confidence": 1.0,
+            "slice_normal_lps": [-1.0, 0.0, 0.0],
+            "plane_angles_deg": {"axial": 90.0, "coronal": 90.0, "sagittal": 0.0},
+            "dimensionality": "volume_3d",
+            "n_slices": 26,
+            "through_plane_extent_mm": 240.0,
+            "slice_spacing_mm": 9.6,
+            "spacing_regularity": 1.0,
+            "provenance": "original",
+            "provenance_confidence": 0.95,
+            "image_type": ["ORIGINAL", "PRIMARY", "OTHER"],
+            "source_series_uids": [],
+            "ts_suitable": True,
+            "metadata_suspect": False,
+            "method": "dicom_iop",
+            "notes": "",
+        }
+    )
+    write_geometry_cache(series_dir, stale)
+
+    geometry = resolve_series_geometry(series_dir)
+
+    assert geometry.dimensionality == "localizer_2d"
+    assert geometry.ts_suitable is False
+    assert load_geometry_cache(series_dir) == geometry
 
 
 def test_analyze_series_geometry_mip_not_ts_suitable(tmp_path: Path) -> None:

@@ -108,7 +108,7 @@ class FaceBlurReviewDialog(AppCTkToplevel):
         self._loading_shell: ctk.CTkFrame | None = None
         self._load_progress: ctk.CTkProgressBar | None = None
 
-        self.title(_("Blur Face"))
+        self._set_dialog_title()
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Escape>", self._escape_keypress)
 
@@ -133,6 +133,12 @@ class FaceBlurReviewDialog(AppCTkToplevel):
             poll_ms=self.LOAD_POLL_MS,
         )
 
+    def _dialog_title(self) -> str:
+        return f"{_('Blur Face')} — {face_blur_mode_display_label(self._blur_mode)}"
+
+    def _set_dialog_title(self) -> None:
+        self.title(self._dialog_title())
+
     def _widget_alive(self) -> bool:
         if self._destroyed or self._closing:
             return False
@@ -145,8 +151,9 @@ class FaceBlurReviewDialog(AppCTkToplevel):
             return
         self._destroyed = True
         self._stop_load_progress_pulse()
-        self._load_work_state.request_cancel()
-        self._blur_work_state.request_cancel()
+        if not self._closing:
+            self._load_work_state.request_cancel()
+            self._blur_work_state.request_cancel()
         super().destroy()
 
     def _progress_bar_width(self) -> int:
@@ -369,17 +376,11 @@ class FaceBlurReviewDialog(AppCTkToplevel):
             anchor="w",
             justify="left",
         )
-        self._status_label.grid(row=0, column=0, columnspan=5, sticky="ew", pady=(0, self.PAD))
+        self._status_label.grid(row=0, column=0, columnspan=4, sticky="ew", pady=(0, self.PAD))
 
         self._progressbar = ctk.CTkProgressBar(footer, width=self._progress_bar_width())
         self._progressbar.grid(row=1, column=0, sticky="w", pady=(0, self.PAD))
         self._progressbar.set(0)
-
-        ctk.CTkLabel(
-            footer,
-            text=face_blur_mode_display_label(self._blur_mode),
-            anchor="w",
-        ).grid(row=1, column=2, padx=(self.PAD, self.PAD), sticky="e")
 
         self._cancel_button = ctk.CTkButton(
             footer,
@@ -387,7 +388,7 @@ class FaceBlurReviewDialog(AppCTkToplevel):
             text=_("Cancel"),
             command=self._on_cancel,
         )
-        self._cancel_button.grid(row=1, column=3, padx=(0, self.PAD), sticky="e")
+        self._cancel_button.grid(row=1, column=2, padx=(0, self.PAD), sticky="e")
 
         self._save_button = ctk.CTkButton(
             footer,
@@ -396,7 +397,7 @@ class FaceBlurReviewDialog(AppCTkToplevel):
             command=self._save_button_clicked,
             state="disabled",
         )
-        self._save_button.grid(row=1, column=4, sticky="e")
+        self._save_button.grid(row=1, column=3, sticky="e")
 
     def _update_status(self, message: str) -> None:
         if hasattr(self, "_status_label"):

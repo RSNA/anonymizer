@@ -6,6 +6,7 @@ from pathlib import Path
 
 from anonymizer.controller.ai.tseg.cache import (
     LEGACY_TSEG_CACHE_DIRNAME,
+    PREVIOUS_TSEG_CACHE_DIRNAME,
     clear_series_tseg_cache,
     clear_tseg_series_cache,
     resolve_series_cache_dir,
@@ -35,6 +36,19 @@ def test_resolve_series_cache_dir_migrates_legacy(tmp_path: Path) -> None:
     assert not legacy.exists()
 
 
+def test_resolve_series_cache_dir_migrates_previous_name(tmp_path: Path) -> None:
+    previous = tmp_path / PREVIOUS_TSEG_CACHE_DIRNAME
+    previous.mkdir()
+    (previous / "geometry.json").write_text("{}", encoding="utf-8")
+
+    resolved = resolve_series_cache_dir(tmp_path)
+
+    assert resolved == tmp_path / TSEG_CACHE_DIRNAME
+    assert resolved.is_dir()
+    assert (resolved / "geometry.json").is_file()
+    assert not previous.exists()
+
+
 def test_tseg_cache_summary_empty_series(tmp_path: Path) -> None:
     summary = tseg_cache_summary(tmp_path)
 
@@ -53,12 +67,17 @@ def test_clear_tseg_series_cache_removes_new_and_legacy(tmp_path: Path) -> None:
     legacy_cache.mkdir()
     (legacy_cache / "geometry.json").write_text("{}", encoding="utf-8")
 
+    previous_cache = tmp_path / PREVIOUS_TSEG_CACHE_DIRNAME
+    previous_cache.mkdir()
+    (previous_cache / "volume.nii.gz").write_bytes(b"y" * 64)
+
     dicom = tmp_path / "slice.dcm"
     dicom.write_bytes(b"DICOM")
 
     assert clear_tseg_series_cache(tmp_path) is True
     assert not new_cache.exists()
     assert not legacy_cache.exists()
+    assert not previous_cache.exists()
     assert dicom.is_file()
     assert tseg_cache_summary(tmp_path).exists is False
 

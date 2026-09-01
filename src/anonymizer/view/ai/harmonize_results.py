@@ -8,12 +8,11 @@ import tkinter as tk
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
 import customtkinter as ctk
 from pydicom import Dataset
 
-from anonymizer.controller.ai.blur_face import MetadataSignal, metadata_signal
 from anonymizer.controller.ai.harmonize import (
     HarmonizedResult,
     HarmonizeProgress,
@@ -39,6 +38,7 @@ from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import StudyPhiHeader
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.features.availability import brain_structures_allowed
+from anonymizer.view.ai.features.catalog import AiFeatureId, feature_description
 from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import AppFonts
@@ -47,14 +47,38 @@ from anonymizer.view.common.job_poller import STAGE_POLL_MS, start_background_jo
 logger = logging.getLogger(__name__)
 
 
-def offer_brain_structures_for_series(ds: Dataset | None) -> bool:
-    """True when CT Head metadata + brain structures models allow the Harmonize dialog option."""
-    if ds is None or not brain_structures_allowed():
+def brain_structures_option_available_for_series(ds: Dataset | None) -> bool:
+    """True when manual Harmonize can offer the brain-structures option (CT series only)."""
+    if ds is None:
         return False
     modality = getattr(ds, "Modality", None)
-    if is_mr_modality(modality) or str(modality or "").strip().upper() != "CT":
+    if is_mr_modality(modality):
+        return False
+    return str(modality or "").strip().upper() == "CT"
+
+
+def series_is_ct_head_candidate(series_path: Path, ds: Dataset | None) -> bool:
+    """True when cached anatomy or DICOM metadata indicates a head-dominant CT study."""
+    if not brain_structures_option_available_for_series(ds):
+        return False
+    from anonymizer.controller.ai.blur_face.pipeline import (
+        CachedRegionSignal,
+        MetadataSignal,
+        cached_region_signal,
+        metadata_signal,
+    )
+
+    region_signal = cached_region_signal(series_path)
+    if region_signal == CachedRegionSignal.HEAD:
+        return True
+    if region_signal in (CachedRegionSignal.NON_HEAD, CachedRegionSignal.MULTI_REGION):
         return False
     return metadata_signal(ds) == MetadataSignal.HEAD
+
+
+def should_prompt_brain_structures_for_series(series_path: Path, ds: Dataset | None) -> bool:
+    """True when Harmonize should ask whether to run detailed brain structure segmentation."""
+    return series_is_ct_head_candidate(series_path, ds) and brain_structures_allowed()
 
 
 @dataclass(frozen=True)
@@ -175,9 +199,7 @@ class HarmonizeResultsView(AppToplevel):
         self.cancelled = False
         self._anon_model = anon_model
         self._on_series_description_updated = on_series_description_updated
-        self._include_brain_structures_var = tk.IntVar(
-            value=1 if include_brain_structures else 0
-        )
+        self._include_brain_structures_for_current_run = False
 
         self._data_font = fonts.mono if fonts else ctk.CTkFont(family="Menlo", size=12)
         self._study_header_font = fonts.bold if fonts else ctk.CTkFont(size=14, weight="bold")
@@ -214,7 +236,6 @@ class HarmonizeResultsView(AppToplevel):
         self._update_batch_header()
         self._populate_dicom_tree()
         self._clear_playbook_tree()
-        self._sync_brain_structures_option()
         self._update_window_title()
         self._show_running_state()
         self._start_current_item_worker()
@@ -309,17 +330,6 @@ class HarmonizeResultsView(AppToplevel):
             char_width_px=char_width_px,
             visible_rows=self._PLAYBOOK_TREE_VISIBLE_ROWS,
         )
-
-        self._brain_option_frame = ctk.CTkFrame(self._playbook_frame, fg_color="transparent")
-        self._brain_option_frame.grid(row=2, column=0, padx=self.PAD, pady=(0, self.PAD), sticky="w")
-        self._brain_structures_checkbox = ctk.CTkCheckBox(
-            self._brain_option_frame,
-            text=_("Include brain structures (after total anatomy)"),
-            variable=self._include_brain_structures_var,
-            width=320,
-        )
-        self._brain_structures_checkbox.pack(anchor="w")
-        self._brain_option_frame.grid_remove()
 
         self._proposal_frame = ctk.CTkFrame(self._results_frame)
         self._proposal_frame.grid(row=2, column=0, padx=0, pady=(self.PAD, 0), sticky="ew")
@@ -668,20 +678,17 @@ class HarmonizeResultsView(AppToplevel):
         ):
             self._upsert_playbook_row(iid, values)
 
-    def _sync_brain_structures_option(self) -> None:
-        offer = offer_brain_structures_for_series(self._ds)
-        if offer:
-            # Default checked when the CT Head option is shown.
-            if self._include_brain_structures_var.get() == 0:
-                self._include_brain_structures_var.set(1)
-            self._brain_option_frame.grid()
-        else:
-            self._include_brain_structures_var.set(0)
-            self._brain_option_frame.grid_remove()
-
-    def _include_brain_structures_for_run(self) -> bool:
-        return bool(
-            offer_brain_structures_for_series(self._ds) and self._include_brain_structures_var.get() == 1
+    def _prompt_brain_structures_for_current_series(self) -> bool:
+        if not should_prompt_brain_structures_for_series(self._series_path, self._ds):
+            return False
+        description = feature_description(AiFeatureId.BRAIN_STRUCTURES.value)
+        return messagebox.askyesno(
+            title=_("Brain structures"),
+            message=_("This appears to be a CT head study. Run detailed brain structure segmentation?")
+            + "\n\n"
+            + description,
+            default="no",
+            parent=self,
         )
 
     def _user_harmonize_status(self, progress: HarmonizeProgress) -> str:
@@ -701,7 +708,7 @@ class HarmonizeResultsView(AppToplevel):
         self._progressbar.set(self._batch_overall_fraction(0.0))
         self._populate_dicom_tree()
         self._clear_playbook_tree()
-        self._sync_brain_structures_option()
+        self._include_brain_structures_for_current_run = False
         self._proposal_frame.grid_remove()
 
     def _show_cancel_button(self, *, enabled: bool = True) -> None:
@@ -905,6 +912,7 @@ class HarmonizeResultsView(AppToplevel):
         self._update_playbook_from_progress(progress)
 
     def _start_current_item_worker(self) -> None:
+        self._include_brain_structures_for_current_run = self._prompt_brain_structures_for_current_series()
         self._harmonize_work_state.prepare_job()
 
         def _worker() -> None:
@@ -933,6 +941,8 @@ class HarmonizeResultsView(AppToplevel):
     def _on_harmonize_job_done(self, _algorithm: Algorithm | None, work_state: WorkState) -> None:
         if self._closing or not self.winfo_exists():
             return
+        if self.cancelled or work_state.should_cancel() or work_state.result is None:
+            return
         if work_state.error:
             self._show_error(work_state.error)
             return
@@ -946,8 +956,11 @@ class HarmonizeResultsView(AppToplevel):
         series_path = self._series_path
         work_state = self._harmonize_work_state
 
+        def _is_cancelled() -> bool:
+            return self.cancelled or work_state.should_cancel()
+
         def on_progress(progress: HarmonizeProgress) -> None:
-            if self.cancelled or work_state.should_cancel():
+            if _is_cancelled():
                 return
             work_state.update_job_progress(
                 status=self._user_harmonize_status(progress),
@@ -959,13 +972,21 @@ class HarmonizeResultsView(AppToplevel):
             results = harmonize_series(
                 [series_path],
                 progress=on_progress,
-                include_brain_structures=self._include_brain_structures_for_run(),
+                include_brain_structures=self._include_brain_structures_for_current_run,
+                anon_model=self._anon_model,
+                cancelled=_is_cancelled,
             )
-            if not work_state.should_cancel() and not self.cancelled:
-                work_state.finish(results)
         except Exception as exc:
-            logger.exception("Harmonize failed for %s: %s", series_path, exc)
-            work_state.fail(str(exc))
+            if not _is_cancelled():
+                logger.exception("Harmonize failed for %s: %s", series_path, exc)
+                work_state.fail(str(exc))
+            return
+
+        if _is_cancelled():
+            logger.info("Harmonize worker finished after cancel for %s", series_path)
+            work_state.finish(None)
+        else:
+            work_state.finish(results)
 
     def _advance_to_next_item(self) -> None:
         if self._item_index + 1 >= self._batch_total:

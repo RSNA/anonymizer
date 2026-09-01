@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [19.0.0.dev12]
+- Harmonize: cooperative cancellation (skip contrast/merge after cancel; in-flight TotalSegmentator inference still runs to completion)
+- Harmonize: DICOM metadata body-part fallback when TotalSegmentator finds no Playbook regions
+- DICOM geometry: single-slice topogram/scout with LOCALIZER ImageType or topogram naming classifies as localizer (not `single_slice_2d`)
+- TS cache retention (`seg_retention`): keep volume NIfTI for CT head until face blur is applied; compact legacy seg caches
+- Centralize TS skip / metadata harmonize classification in `series_classification.py`
 - AI Features Setup: more compact dialog (short copy, size-only resolution menu on title row with Remove/Download)
 - AI Features Harmonize status: one-line “In use / also installed” (drop task inventory bullets); Remove button label shortened to “Remove”
 - Harmonize resolution: AI Features picks one active CT and one active MR workstation resolution (picker always visible; Download when the selected pack is missing); Series View and AI Batch no longer choose resolution per run

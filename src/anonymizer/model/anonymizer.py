@@ -29,6 +29,7 @@ from sqlalchemy.orm import (
     sessionmaker,
 )
 
+from anonymizer.utils.modalities import series_is_tseg_eligible
 from anonymizer.utils.storage import JavaAnonymizerExportedStudy
 
 logger = logging.getLogger(__name__)
@@ -189,8 +190,6 @@ class SeriesProcessingStatus:
 
 def _study_tseg_series_all_harmonized(study: Study) -> bool:
     """Return True when every CT|MR series in the study has a harmonized_description."""
-    from anonymizer.controller.ai.tseg.modality_profile import series_is_tseg_eligible
-
     tseg_series = [series for series in (study.series or []) if series_is_tseg_eligible(series.modality)]
     if not tseg_series:
         return False
@@ -1126,8 +1125,6 @@ class AnonymizerModel:
     @use_session(is_read_only_operation=True)
     def get_ct_series_harmonized_descriptions(self, anon_study_uid: str) -> list[str]:
         """Return non-empty CT|MR Series.harmonized_description values for a study."""
-        from anonymizer.controller.ai.tseg.modality_profile import series_is_tseg_eligible
-
         stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
         study = self.session.execute(stmt).scalar_one_or_none()
         if study is None:
@@ -1160,9 +1157,6 @@ class AnonymizerModel:
 
         Fingerprint is a sorted multiset of Playbook series description strings.
         """
-        from anonymizer.controller.ai.harmonize.loinc_study import study_series_description_fingerprint
-        from anonymizer.controller.ai.tseg.modality_profile import series_is_tseg_eligible
-
         target = tuple(fingerprint)
         stmt = select(Study).options(selectinload(Study.series))
         studies = self.session.execute(stmt).scalars().all()
@@ -1174,7 +1168,7 @@ class AnonymizerModel:
                 if series_is_tseg_eligible(series.modality)
                 and (series.harmonized_description or "").strip()
             ]
-            if study_series_description_fingerprint(descriptions) == target:
+            if tuple(sorted(descriptions)) == target:
                 matches.append(study.anon_study_uid)
         return matches
 

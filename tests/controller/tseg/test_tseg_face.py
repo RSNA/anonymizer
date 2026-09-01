@@ -10,7 +10,7 @@ import pytest
 import SimpleITK as sitk
 
 from anonymizer.controller.ai.blur_face import FaceBlurGateReason, face_blur_gate_message
-from anonymizer.controller.ai.tseg.config import FACE_MASK_FILENAME
+from anonymizer.controller.ai.tseg.config import FACE_MASK_FILENAME, TSEG_CACHE_DIRNAME
 from anonymizer.controller.ai.tseg.segment import (
     AnalysisProgress,
     FaceSegResult,
@@ -248,5 +248,5 @@ def test_run_face_segmentation_calls_totalsegmentator(
 
 
 def test_face_mask_cache_path(synthetic_head_series: Path) -> None:
-    expected = synthetic_head_series.resolve() / "A_TS_SEG" / "seg" / FACE_MASK_FILENAME
+    expected = synthetic_head_series.resolve() / TSEG_CACHE_DIRNAME / "seg" / FACE_MASK_FILENAME
     assert face_mask_cache_path(synthetic_head_series) == expected
