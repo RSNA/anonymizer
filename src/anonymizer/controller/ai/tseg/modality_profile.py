@@ -16,9 +16,8 @@ from anonymizer.controller.ai.tseg.config import (
     FACE_TASK,
     ROI_SUBSET,
 )
-from anonymizer.utils.modalities import (
-    normalize_modality,
-)
+from anonymizer.utils import modalities as _modalities
+from anonymizer.utils.modalities import normalize_modality
 
 FaceFillMode = Literal["hu_band", "intensity_percentile"]
 
@@ -83,6 +82,14 @@ def is_ct_modality(value: object | None) -> bool:
 
 def is_mr_modality(value: object | None) -> bool:
     return normalize_modality(value) == "MR"
+
+
+def is_tseg_modality(value: object | None) -> bool:
+    return _modalities.is_tseg_modality(value)
+
+
+def series_is_tseg_eligible(modality: object | None) -> bool:
+    return _modalities.series_is_tseg_eligible(modality)
 
 
 def _ct_structure_to_region() -> dict[str, str]:
