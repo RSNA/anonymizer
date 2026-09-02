@@ -3,7 +3,6 @@ import logging
 import queue
 import threading
 import tkinter as tk
-from enum import StrEnum, auto
 from pathlib import Path
 from pprint import pformat
 from tkinter import messagebox
@@ -27,6 +26,7 @@ from anonymizer.controller.ai.blur_face import (
 from anonymizer.controller.ai.remove_pixel_phi import (
     OcrWhitelistMatchMode,
     OcrWhitelistMatchSettings,
+    PixelPhiRemovalMode,
     apply_series_view_pixel_phi,
     blackout_rectangular_areas,
     build_series_view_ocr_pixels,
@@ -38,9 +38,10 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     match_mode_description,
     match_mode_menu_label,
     match_mode_menu_labels,
+    normalize_pixel_phi_removal_mode,
     ocr_image_for_frame,
-    pixel_phi_removal_mode_from_menu_label,
-    pixel_phi_removal_mode_menu_values,
+    pixel_phi_removal_mode_menu_labels,
+    pixel_phi_removal_mode_option_label,
     remove_ocr_text_from_frame,
 )
 from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir, tseg_cache_summary
@@ -53,7 +54,15 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
     stackable_dicom_paths,
 )
 from anonymizer.controller.create_projections import invalidate_projection_cache
-from anonymizer.controller.runner import Algorithm, OcrEditContext, RunOptions, run_job
+from anonymizer.controller.runner import (
+    Algorithm,
+    OcrEditContext,
+    RunOptions,
+    edit_context_display_label,
+    edit_context_menu_values,
+    normalize_edit_context,
+    run_job,
+)
 from anonymizer.controller.series_io import (
     LoadedSeries,
     SeriesProjections,
@@ -90,6 +99,7 @@ from anonymizer.view.common.ctk_safe import mark_ctk_window_destroyed
 from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.common.job_poller import start_background_job
 from anonymizer.view.common.navigation import find_dataset_view_parent, return_to_dataset_view
+from anonymizer.view.common.tooltip import bind_hover_tooltip
 from anonymizer.view.series.anatomy_overlay import (
     collect_primary_segment_voxels,
     color_bgr_for_structure,
@@ -137,13 +147,6 @@ def show_series_view(
     )
 
 
-# Edit Contexts:
-class EditContext(StrEnum):
-    FRAME = auto()  # apply edits to current frame only
-    SERIES = auto()  # apply edits to every frame in series
-    # TODO: PROJECT = auto()  # apply edits to all series in project
-
-
 def _option_menu_width_for_labels(values: list[str], *, height: int = 28) -> int:
     """Pixel width for CTkOptionMenu to fit the widest label plus the dropdown button."""
     if not values:
@@ -155,13 +158,13 @@ def _option_menu_width_for_labels(values: list[str], *, height: int = 28) -> int
 
 
 def ocr_results_available_for_edit_context(
-    edit_context: EditContext,
+    edit_context: OcrEditContext,
     *,
     current_frame_index: int,
     overlay_ocr_by_frame: dict[int, list],
 ) -> bool:
     """True when Detect Text left OCR overlays usable by Remove Text for the edit context."""
-    if edit_context == EditContext.FRAME:
+    if edit_context is OcrEditContext.FRAME:
         return bool(overlay_ocr_by_frame.get(current_frame_index))
     return any(texts for texts in overlay_ocr_by_frame.values())
 
@@ -235,7 +238,7 @@ class SeriesView(AppCTkToplevel):
         self._parent = parent
         self._controller = controller
         self._series_path = series_path
-        self.edit_context: EditContext = EditContext.FRAME
+        self.edit_context: OcrEditContext = OcrEditContext.FRAME
         self.detected_text: dict[int, list[OCRText]] = {}  # Store all detected text per frame
         # Texts removed from pixels (overlay is cleared on Remove Text before Save).
         self._removed_pixel_phi_by_frame: dict[int, list[str]] = {}
@@ -864,22 +867,6 @@ class SeriesView(AppCTkToplevel):
         for frame_index in self.detected_text:
             self.draw_text_overlay(frame_index)
 
-    def _show_match_tooltip(self, event: tk.Event) -> None:
-        self._hide_match_tooltip()
-        mode = self._match_mode_labels.get(self._whitelist_match_mode_var.get(), OcrWhitelistMatchMode.STANDARD)
-        text = match_mode_description(mode)
-        tip = tk.Toplevel(self)
-        tip.wm_overrideredirect(True)
-        tip.wm_geometry(f"+{event.x_root + 12}+{event.y_root + 12}")
-        lbl = tk.Label(tip, text=text, bg="#333333", fg="white", padx=6, pady=4, wraplength=220, justify="left")
-        lbl.pack()
-        self._match_tooltip = tip
-
-    def _hide_match_tooltip(self, _event: tk.Event | None = None) -> None:
-        if self._match_tooltip is not None:
-            self._match_tooltip.destroy()
-            self._match_tooltip = None
-
     def _restore_whitelist_items(self, items: list[str]) -> None:
         if not hasattr(self, "whitelist"):
             return
@@ -1061,9 +1048,16 @@ class SeriesView(AppCTkToplevel):
         )
         self._whitelist_match_mode_menu.grid(row=0, column=2, sticky="ew")
         self._whitelist_match_mode_menu.configure(state="disabled")
-        self._whitelist_match_mode_menu.bind("<Enter>", self._show_match_tooltip)
-        self._whitelist_match_mode_menu.bind("<Leave>", self._hide_match_tooltip)
-        self._match_tooltip: tk.Toplevel | None = None
+        bind_hover_tooltip(
+            self._whitelist_match_mode_menu,
+            lambda: match_mode_description(
+                self._match_mode_labels.get(
+                    self._whitelist_match_mode_var.get(),
+                    OcrWhitelistMatchMode.STANDARD,
+                )
+            ),
+            parent=self,
+        )
 
         # Row 2: entry
         self.whitelist_entry = ctk.CTkEntry(self._whitelist_frame)
@@ -1123,19 +1117,19 @@ class SeriesView(AppCTkToplevel):
         text_edit_group.grid(row=0, column=0, padx=(0, self.PAD), pady=self.PAD, sticky="w")
         edit_context_label = ctk.CTkLabel(text_edit_group, text=_("Text Edit Context") + ":")
         edit_context_label.grid(row=0, column=0, padx=(self.PAD, 2))
-        edit_context_values = [
-            member.value.upper()
-            for member in EditContext
-            if not (self.single_frame and member == EditContext.SERIES)
+        edit_context_labels = [
+            edit_context_display_label(member)
+            for member in edit_context_menu_values()
+            if not (self.single_frame and member is OcrEditContext.SERIES)
         ]
-        self._edit_context_var = tk.StringVar(value=EditContext.FRAME.upper())
+        self._edit_context_var = tk.StringVar(value=edit_context_display_label(OcrEditContext.FRAME))
         self.edit_context_combo_box = ctk.CTkOptionMenu(
             text_edit_group,
             variable=self._edit_context_var,
-            values=edit_context_values,
+            values=edit_context_labels,
             command=self.edit_context_change,
             dynamic_resizing=False,
-            width=_option_menu_width_for_labels(edit_context_values),
+            width=_option_menu_width_for_labels(edit_context_labels),
         )
         self.edit_context_combo_box.grid(row=0, column=1, padx=(0, 8))
         self.detect_button = ctk.CTkButton(
@@ -1146,11 +1140,14 @@ class SeriesView(AppCTkToplevel):
             text_edit_group, width=self.BUTTON_WIDTH, text=_("Remove Text"), command=self.remove_text_button_clicked
         )
         self.remove_button.grid(row=0, column=3, padx=2, pady=0)
-        self.remove_text_mode_var = tk.StringVar(value=pixel_phi_removal_mode_menu_values()[0])
+        removal_mode_labels = list(pixel_phi_removal_mode_menu_labels())
+        self.remove_text_mode_var = tk.StringVar(
+            value=pixel_phi_removal_mode_option_label(PixelPhiRemovalMode.BLACKOUT)
+        )
         self.remove_text_mode_menu = ctk.CTkOptionMenu(
             text_edit_group,
-            width=140,
-            values=list(pixel_phi_removal_mode_menu_values()),
+            width=max(140, _option_menu_width_for_labels(removal_mode_labels)),
+            values=removal_mode_labels,
             variable=self.remove_text_mode_var,
         )
         self.remove_text_mode_menu.grid(row=0, column=4, padx=2, pady=0)
@@ -1748,10 +1745,15 @@ class SeriesView(AppCTkToplevel):
         self._log_whitelist_trace("remove", delta=f"-{removed}")
         self._sync_match_dropdown_state()
 
+    def _resolve_edit_context(self) -> OcrEditContext:
+        if hasattr(self, "_edit_context_var"):
+            self.edit_context = normalize_edit_context(self._edit_context_var.get())
+        return self.edit_context
+
     def edit_context_change(self, choice):
         logger.info(f"Edit Context changed to: {choice}")
-        self.edit_context = EditContext[choice]
-        self.image_viewer.set_overlay_propagation(self.edit_context == EditContext.SERIES)
+        self.edit_context = normalize_edit_context(choice)
+        self.image_viewer.set_overlay_propagation(self.edit_context is OcrEditContext.SERIES)
         self._refresh_ocr_toolbar_buttons()
 
     def regenerate_series_projections(self) -> None:
@@ -1800,7 +1802,7 @@ class SeriesView(AppCTkToplevel):
         frame_index, status, _done, result = work_state.snapshot_progress()
         if status:
             self.update_status(status, debug_log=True)
-        if self.edit_context == EditContext.SERIES and frame_index != self._ocr_poll_frame_index:
+        if self.edit_context is OcrEditContext.SERIES and frame_index != self._ocr_poll_frame_index:
             self._ocr_poll_frame_index = frame_index
             self.image_viewer.load_and_display_image(frame_index)
         if isinstance(result, dict):
@@ -1840,7 +1842,7 @@ class SeriesView(AppCTkToplevel):
             frames_with_text = sum(1 for texts in result.values() if texts)
             detection_count = sum(len(texts) for texts in result.values() if texts)
             if hasattr(self, "image_viewer") and result:
-                if self.edit_context == EditContext.FRAME:
+                if self.edit_context is OcrEditContext.FRAME:
                     detected_frame = int(next(iter(result)))
                     if detected_frame != self.image_viewer.current_image_index:
                         self.image_viewer.load_and_display_image(detected_frame)
@@ -1848,7 +1850,7 @@ class SeriesView(AppCTkToplevel):
                         self.image_viewer.refresh_current_image()
                 else:
                     self.image_viewer.refresh_current_image()
-        if self.edit_context == EditContext.FRAME:
+        if self.edit_context is OcrEditContext.FRAME:
             status = _("Text detection complete") + f": {detection_count} " + _("detections")
         else:
             frames_scanned = self.image_viewer.num_images if hasattr(self, "image_viewer") else frames_with_text
@@ -1867,7 +1869,8 @@ class SeriesView(AppCTkToplevel):
     def _start_ocr_background_job(self) -> None:
         if self._ds is None or self._frames is None:
             return
-        logger.info("Series View starting OCR background job edit_context=%s", self.edit_context)
+        edit_context = self._resolve_edit_context()
+        logger.info("Series View starting OCR background job edit_context=%s", edit_context)
         self._ocr_work_state.reset()
         wl, ww = self._dicom_wl or 0.0, self._dicom_ww or 0.0
         if self._ds is not None:
@@ -1886,7 +1889,6 @@ class SeriesView(AppCTkToplevel):
                 self.image_viewer.images,
                 self._ds,
             )
-        edit_context = OcrEditContext.FRAME if self.edit_context == EditContext.FRAME else OcrEditContext.SERIES
         if edit_context is OcrEditContext.FRAME:
             self._ocr_work_state.frame_index = self.image_viewer.current_image_index
         else:
@@ -1958,7 +1960,7 @@ class SeriesView(AppCTkToplevel):
         self._start_ocr_background_job()
 
     def detect_text_button_clicked(self):
-        logger.info("Detect Text clicked edit_context=%s", self.edit_context)
+        logger.info("Detect Text clicked edit_context=%s", self._resolve_edit_context())
         self._start_ocr_background_job()
 
     def remove_text_from_single_frame(self, frame_index: int, ocr_texts: list[OCRText]):
@@ -1969,7 +1971,7 @@ class SeriesView(AppCTkToplevel):
             if self._ds
             else apply_windowing(self.image_viewer.current_wl, self.image_viewer.current_ww, raw_frame)
         )
-        removal_mode = pixel_phi_removal_mode_from_menu_label(self.remove_text_mode_var.get())
+        removal_mode = normalize_pixel_phi_removal_mode(self.remove_text_mode_var.get())
         removed_labels = [t.text.strip() for t in ocr_texts if (t.text or "").strip()]
         if removed_labels:
             pending = self._removed_pixel_phi_by_frame.setdefault(frame_index, [])
@@ -2004,9 +2006,10 @@ class SeriesView(AppCTkToplevel):
         self.image_viewer.load_and_display_image(0)
 
     def remove_text_button_clicked(self):
-        logger.debug(f"Removing text, current edit context={self.edit_context}")
+        edit_context = self._resolve_edit_context()
+        logger.debug(f"Removing text, current edit context={edit_context}")
 
-        if self.edit_context == EditContext.FRAME:
+        if edit_context is OcrEditContext.FRAME:
             ndx = self.image_viewer.current_image_index
             ocr_texts = self.image_viewer.overlay_data[ndx].ocr_texts
             if not ocr_texts:
@@ -2051,7 +2054,7 @@ class SeriesView(AppCTkToplevel):
     def blackout_button_clicked(self):
         logger.debug(f"Blackout text, current edit context[{self.edit_context}]")
 
-        if self.edit_context == EditContext.FRAME:
+        if self._resolve_edit_context() is OcrEditContext.FRAME:
             ndx = self.image_viewer.current_image_index
             user_rects = self.image_viewer.overlay_data[ndx].user_rects
             if not user_rects:

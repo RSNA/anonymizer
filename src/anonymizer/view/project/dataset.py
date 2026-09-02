@@ -17,11 +17,12 @@ from anonymizer.utils.translate import _
 from anonymizer.view.ai.ai_batch_process_dialog import AiBatchProcessDialog
 from anonymizer.view.ai.ai_batch_process_options_dialog import show_ai_batch_process_options_dialog
 from anonymizer.view.ai.features.availability import any_ai_batch_feature_allowed
-from anonymizer.view.common.app_window import AppToplevel
+from anonymizer.view.common.app_window import AppToplevel, focus_app_window
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import AppFonts, char_width_px
+from anonymizer.view.common.tooltip import MotionTooltipController, bind_hover_tooltip
 from anonymizer.view.project.delete_studies_dialog import DeleteStudiesDialog
-from anonymizer.view.series.projection import ProjectionView
+from anonymizer.view.series.projection import ProjectionView, projection_study_uids
 from anonymizer.view.series.series import show_series_view
 from anonymizer.view.shell.dashboard import Dashboard
 
@@ -118,8 +119,11 @@ class DatasetView(AppToplevel):
         self._series_parent_by_uid: dict[str, str] = {}
         self._expanded_study_uids: set[str] = set()
         self._projection_view: ProjectionView | None = None
+        self._projection_open_in_progress = False
+        self._projection_destroy_binding: str | None = None
+        self._last_tree_activate: tuple[str, int] | None = None
 
-        self.title("View Dataset")
+        self.title(_("View Dataset"))
         self.resizable(True, True)
         self.lift()
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
@@ -154,6 +158,7 @@ class DatasetView(AppToplevel):
         self._tree.bind("<ButtonPress-3>", self._on_tree_right_click)
         self._tree.bind("<<TreeviewOpen>>", self._on_tree_open)
         self._tree.bind("<<TreeviewClose>>", self._on_tree_close)
+        MotionTooltipController(self._tree, self._tree_row_tooltip_text, parent=self).bind()
 
         self._tree.heading("#0", text=_("Study / Series"))
         self._tree.column("#0", width=20 * self._char_width_px, stretch=False, anchor="w")
@@ -163,7 +168,7 @@ class DatasetView(AppToplevel):
         stretch_fields = {"pixel_phi_removed"}
         for col_idx, title in enumerate(col_names):
             field_name = col_fields[col_idx]
-            self._tree.heading(field_name, text=_(title))
+            self._tree.heading(field_name, text=title)
             width_chars = max(len(title), 8) + 2
             if field_name == "modality":
                 width_chars = max(width_chars, 12)
@@ -206,6 +211,11 @@ class DatasetView(AppToplevel):
             command=self._view_projections_button_pressed,
         )
         self._view_projections_button.grid(row=0, column=2, padx=PAD, pady=PAD, sticky="e")
+        bind_hover_tooltip(
+            self._view_projections_button,
+            _("Open projections for the selected studies (or double-click a study in the list)."),
+            parent=self,
+        )
 
         self._create_phi_button = ctk.CTkButton(
             self._button_frame,
@@ -412,40 +422,90 @@ class DatasetView(AppToplevel):
         self._tree.column("phi_patient_id", width=(max_phi + pad) * self._char_width_px)
         self._tree.column("anon_patient_id", width=(max_anon + pad) * self._char_width_px)
 
-    def _close_projection_view(self) -> None:
-        if self._projection_view is None:
-            return
+    def _projection_view_is_alive(self) -> bool:
+        view = self._projection_view
+        if view is None:
+            return False
         try:
-            if self._projection_view.winfo_exists():
-                self._projection_view.destroy()
+            return bool(view.winfo_exists())
+        except Exception:
+            return False
+
+    def _clear_projection_view_ref(self, _event=None) -> None:
+        self._projection_view = None
+
+    def _close_projection_view(self) -> None:
+        if not self._projection_view_is_alive():
+            self._projection_view = None
+            return
+        view = self._projection_view
+        assert view is not None
+        try:
+            binding = getattr(self, "_projection_destroy_binding", None)
+            if binding:
+                view.unbind("<Destroy>", binding)
+        except Exception:
+            logger.debug("Could not unbind ProjectionView destroy handler", exc_info=True)
+        try:
+            view.destroy()
         except Exception:
             logger.debug("ProjectionView already closed", exc_info=True)
         self._projection_view = None
+        self._projection_destroy_binding = None
 
     def _open_projection_view(self, phi_records: list[PHI_IndexRecord]) -> None:
-        """Open Projection View for ``phi_records``, replacing any existing instance."""
+        """Open or update a single Projection View for ``phi_records``."""
         if not phi_records:
             logger.error("No Studies selected")
             return
-        self._close_projection_view()
-        try:
-            self._projection_view = ProjectionView(
-                self,
-                controller=self._controller,
-                base_dir=self._controller.model.images_dir(),
-                phi_records=phi_records,
-                fonts=self._fonts,
-            )
-        except Exception as e:
-            logger.error("Error creating ProjectionView: %s", e)
-            messagebox.showerror(
-                title=_("Error Creating Projection View"),
-                message=str(e),
-                parent=self,
-            )
-            self._projection_view = None
+
+        requested_uids = projection_study_uids(phi_records)
+        existing = self._projection_view
+        if self._projection_view_is_alive() and existing is not None:
+            if existing.study_uids() == requested_uids:
+                focus_app_window(existing)
+                return
+            try:
+                existing.load_phi_records(phi_records)
+                focus_app_window(existing)
+                return
+            except Exception as e:
+                logger.error("Error updating ProjectionView: %s", e)
+                messagebox.showerror(
+                    title=_("Error Creating Projection View"),
+                    message=str(e),
+                    parent=self,
+                )
+                self._close_projection_view()
+                return
+
+        if self._projection_open_in_progress:
             return
-        self._projection_view.focus()
+        self._projection_open_in_progress = True
+        try:
+            self._close_projection_view()
+            try:
+                view = ProjectionView(
+                    self,
+                    controller=self._controller,
+                    base_dir=self._controller.model.images_dir(),
+                    phi_records=phi_records,
+                    fonts=self._fonts,
+                )
+            except Exception as e:
+                logger.error("Error creating ProjectionView: %s", e)
+                messagebox.showerror(
+                    title=_("Error Creating Projection View"),
+                    message=str(e),
+                    parent=self,
+                )
+                self._projection_view = None
+                return
+            self._projection_view = view
+            self._projection_destroy_binding = view.bind("<Destroy>", self._clear_projection_view_ref, add="+")
+            focus_app_window(view)
+        finally:
+            self._projection_open_in_progress = False
 
     def _view_projections_button_pressed(self):
         if self._phi_index is None:
@@ -531,24 +591,36 @@ class DatasetView(AppToplevel):
         if study_uid is not None:
             self._expanded_study_uids.discard(study_uid)
 
+    def _tree_row_tooltip_text(self, event) -> str | None:
+        iid = self._tree.identify_row(event.y)
+        if not iid:
+            return None
+        if parse_series_tree_iid(iid) is not None:
+            return _("Double-click or right-click to open Series View")
+        if parse_study_tree_iid(iid) is not None:
+            return _("Double-click or right-click to view study projections")
+        return None
+
     def _on_tree_double_click(self, event) -> None:
         iid = self._tree.identify_row(event.y)
         if not iid:
             return
+        activate = (iid, getattr(event, "time", None))
+        if activate == getattr(self, "_last_tree_activate", None):
+            return
+        self._last_tree_activate = activate
+
         series_uid = parse_series_tree_iid(iid)
         if series_uid is not None:
             self._open_series_by_uid(series_uid)
             return
-        # Study row: toggle expand/collapse
         study_uid = parse_study_tree_iid(iid)
         if study_uid is None:
             return
-        if self._tree.item(iid, "open"):
-            self._tree.item(iid, open=False)
-            self._expanded_study_uids.discard(study_uid)
-        else:
-            self._tree.item(iid, open=True)
-            self._expanded_study_uids.add(study_uid)
+        record = self._studies_by_uid.get(study_uid)
+        if record is None:
+            return
+        self._open_projection_view([record])
 
     def _on_tree_right_click(self, event) -> None:
         iid = self._tree.identify_row(event.y)

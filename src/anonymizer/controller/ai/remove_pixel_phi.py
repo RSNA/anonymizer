@@ -14,6 +14,7 @@ import numpy as np
 import torch
 from cv2 import (
     CHAIN_APPROX_SIMPLE,
+    COLOR_BGR2GRAY,
     COLOR_RGB2GRAY,
     FONT_HERSHEY_SIMPLEX,
     INPAINT_TELEA,
@@ -219,35 +220,38 @@ class OcrModelStatus(StrEnum):
 
 def probe_ocr_models() -> tuple[OcrModelStatus, str]:
     """Return OCR model cache status under assets/ai/ocr/model."""
+    from anonymizer.utils.translate import _
+
     if _ocr_downloading:
-        return OcrModelStatus.DOWNLOADING, "Downloading OCR models…"
+        return OcrModelStatus.DOWNLOADING, _("Downloading OCR models…")
     if not OCR_MODEL_DIR.is_dir():
-        return OcrModelStatus.MISSING, "Not downloaded"
+        return OcrModelStatus.MISSING, _("Not downloaded")
     try:
         models = [name for name in os.listdir(OCR_MODEL_DIR) if not name.startswith(".")]
     except OSError as exc:
         return OcrModelStatus.FAILED, str(exc)
     if len(models) < _MIN_OCR_MODEL_FILES:
-        return OcrModelStatus.MISSING, "Not downloaded"
-    return OcrModelStatus.READY, "Downloaded"
+        return OcrModelStatus.MISSING, _("Not downloaded")
+    return OcrModelStatus.READY, _("Downloaded")
 
 
 def download_ocr_models(*, verbose: bool = False) -> tuple[bool, str]:
     """Download EasyOCR weights into assets/ai/ocr/model."""
     from anonymizer.utils.storage import update_model_download
+    from anonymizer.utils.translate import _
 
     global _ocr_downloading
     OCR_MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    status, _ = probe_ocr_models()
+    status, _ignored = probe_ocr_models()
     if status == OcrModelStatus.READY:
         logger.info("OCR models already downloaded at %s", OCR_MODEL_DIR)
-        return True, "OCR models already downloaded."
+        return True, _("OCR models already downloaded.")
     _ocr_downloading = True
-    start_message = f"Downloading OCR models to {OCR_MODEL_DIR}"
+    start_message = _("Downloading OCR models to {path}").format(path=OCR_MODEL_DIR)
     try:
         logger.info("Downloading OCR models to %s", OCR_MODEL_DIR)
         update_model_download("remove_pixel_phi", message=start_message)
-        update_model_download("remove_pixel_phi", message="Downloading OCR language models…")
+        update_model_download("remove_pixel_phi", message=_("Downloading OCR language models…"))
         Reader(
             lang_list=list(OCR_LANGS),
             model_storage_directory=str(OCR_MODEL_DIR),
@@ -256,8 +260,8 @@ def download_ocr_models(*, verbose: bool = False) -> tuple[bool, str]:
         status, detail = probe_ocr_models()
         if status == OcrModelStatus.READY:
             logger.info("OCR models downloaded to %s", OCR_MODEL_DIR)
-            return True, "OCR models downloaded."
-        return False, detail or "OCR model download incomplete."
+            return True, _("OCR models downloaded.")
+        return False, detail or _("OCR model download incomplete.")
     except Exception as exc:
         logger.exception("OCR model download failed")
         return False, str(exc)
@@ -320,7 +324,14 @@ def _dedupe_texts(texts: Sequence[str]) -> list[str]:
     return deduped
 
 
-def _draw_text_contours_on_mask(image: ndarray, top_left: tuple, bottom_right: tuple, mask: NDArray[np.uint8]) -> None:
+def _draw_text_contours_on_mask(
+    image: ndarray,
+    top_left: tuple,
+    bottom_right: tuple,
+    mask: NDArray[np.uint8],
+    *,
+    is_bgr: bool = False,
+) -> None:
     """
     Draws text contours onto the provided mask (mutates the input mask).
 
@@ -329,6 +340,7 @@ def _draw_text_contours_on_mask(image: ndarray, top_left: tuple, bottom_right: t
         top_left: The top-left coordinates of the region to extract.
         bottom_right: The bottom-right coordinates of the region to extract.
         mask: The mask that will be modified by drawing contours. [*Mutable*]
+        is_bgr: When True, ``image`` is BGR (EasyOCR path); otherwise RGB.
     """
     # Sub-image contour masking:
     # Extracting coordinates
@@ -341,7 +353,8 @@ def _draw_text_contours_on_mask(image: ndarray, top_left: tuple, bottom_right: t
     sub_image = image[y1:y2, x1:x2]
     # If RGB image, then convert sub_image to grayscale for contour detection
     if sub_image.shape[-1] == 3:
-        sub_image = cvtColor(sub_image, COLOR_RGB2GRAY)
+        gray_code = COLOR_BGR2GRAY if is_bgr else COLOR_RGB2GRAY
+        sub_image = cvtColor(sub_image, gray_code)
     # Threshold the grayscale sub-image:
     _, thresh = threshold(sub_image, 0, 255, THRESH_OTSU)
     # Find contours within the sub-image
@@ -370,18 +383,47 @@ class PixelPhiRemovalMode(StrEnum):
     BLACKOUT = "blackout"
 
 
-def pixel_phi_removal_mode_menu_values() -> tuple[str, ...]:
+def pixel_phi_removal_mode_menu_values() -> tuple[PixelPhiRemovalMode, ...]:
+    """Language-agnostic internal codes for removal-mode picker state."""
+    return (PixelPhiRemovalMode.BLACKOUT, PixelPhiRemovalMode.INPAINT)
+
+
+def pixel_phi_removal_mode_option_label(mode: PixelPhiRemovalMode) -> str:
+    """Translated combobox label for a removal mode (not used for menu state)."""
     from anonymizer.utils.translate import _
 
-    return (_("Black out text"), _("Blend into background"))
+    if mode is PixelPhiRemovalMode.BLACKOUT:
+        return _("Black out text")
+    return _("Blend into background")
+
+
+def pixel_phi_removal_mode_menu_labels() -> tuple[str, ...]:
+    """Translated combobox labels in canonical order."""
+    return tuple(pixel_phi_removal_mode_option_label(mode) for mode in pixel_phi_removal_mode_menu_values())
+
+
+def normalize_pixel_phi_removal_mode(
+    value: object | None,
+    *,
+    default: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT,
+) -> PixelPhiRemovalMode:
+    """Resolve combobox text or internal code to ``PixelPhiRemovalMode``."""
+    text = str(value or "").strip()
+    if not text:
+        return default
+    lowered = text.lower().replace(" ", "")
+    if lowered in (PixelPhiRemovalMode.BLACKOUT, "blackout"):
+        return PixelPhiRemovalMode.BLACKOUT
+    if lowered in (PixelPhiRemovalMode.INPAINT, "inpaint"):
+        return PixelPhiRemovalMode.INPAINT
+    for mode in pixel_phi_removal_mode_menu_values():
+        if text == pixel_phi_removal_mode_option_label(mode):
+            return mode
+    return default
 
 
 def pixel_phi_removal_mode_from_menu_label(label: str) -> PixelPhiRemovalMode:
-    from anonymizer.utils.translate import _
-
-    if label == _("Blend into background"):
-        return PixelPhiRemovalMode.INPAINT
-    return PixelPhiRemovalMode.BLACKOUT
+    return normalize_pixel_phi_removal_mode(label)
 
 
 def pixel_phi_removal_mode_display_label(mode: PixelPhiRemovalMode) -> str:
@@ -807,13 +849,34 @@ def _encode_decompressed_frame_for_save(
     if not ds.file_meta.TransferSyntaxUID.is_compressed:
         return frame_pixels
     encoded = frame_pixels
-    if not grayscale and pi != "RGB":
-        encoded = convert_color_space(arr=encoded, current=pi, desired="RGB", per_frame=True)
+    if not grayscale:
+        if encoded.ndim != 3 or encoded.shape[-1] not in (3, 4):
+            raise ValueError(
+                f"Expected color frame (rows, cols, 3|4), got shape {encoded.shape}"
+            )
+        if pi != "RGB":
+            encoded = convert_color_space(arr=encoded, current=pi, desired="RGB", per_frame=True)
     return encode_array(
         arr=encoded,
         photometric_interpretation=2 if grayscale else 1,
         use_mct=False,
     )
+
+
+def _validate_color_frames_match_dicom(
+    frames: Sequence[ndarray],
+    *,
+    rows: int,
+    cols: int,
+    samples_per_pixel: int,
+) -> None:
+    expected = (rows, cols, samples_per_pixel)
+    for index, frame in enumerate(frames):
+        if frame.shape != expected:
+            raise ValueError(
+                f"Frame {index} shape {frame.shape} does not match DICOM "
+                f"Rows={rows}, Columns={cols}, SamplesPerPixel={samples_per_pixel}"
+            )
 
 
 def remove_text(pixels: ndarray, windowed_frame: NDArray[np.uint8], ocr_texts: list[OCRText]) -> ndarray:
@@ -1173,6 +1236,7 @@ def remove_pixel_phi(
                     ocr_text.top_left,
                     ocr_text.bottom_right,
                     mask,
+                    is_bgr=True,
                 )
 
             kernel = np.ones((3, 3), np.uint8)
@@ -1213,6 +1277,17 @@ def remove_pixel_phi(
     if not source_pixels_changed or total_pixels_changed <= 0 or source_pixels_deid_stack is None:
         logger.debug("No changes made to pixel data")
         return False, deduped_texts, 0
+
+    if not grayscale:
+        samples = int(ds.get("SamplesPerPixel", 3) or 3)
+        ds.SamplesPerPixel = samples
+        ds.PlanarConfiguration = 0
+        _validate_color_frames_match_dicom(
+            source_pixels_deid_stack,
+            rows=int(rows),
+            cols=int(cols),
+            samples_per_pixel=samples,
+        )
 
     if is_compressed:
         if not grayscale and pi != "RGB":

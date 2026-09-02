@@ -9,6 +9,7 @@ from pydicom.dataset import FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian
 
 from anonymizer.controller.series_io import (
+    _rows_cols_from_pixel_array,
     apply_series_description,
     clip_and_cast_to_int,
 )
@@ -77,6 +78,29 @@ class TestClipAndCastToInt:
         assert result is None
         assert "Test iinfo error" in caplog.text
         assert any(record.levelname == "ERROR" for record in caplog.records)
+
+
+@pytest.mark.parametrize(
+    ("shape", "expected"),
+    [
+        ((600, 800), (600, 800)),
+        ((852, 1136, 3), (852, 1136)),
+        ((1, 600, 800, 3), (600, 800)),
+        ((5, 600, 800, 3), (600, 800)),
+        ((5, 600, 800), (600, 800)),
+    ],
+)
+def test_rows_cols_from_pixel_array(shape: tuple[int, ...], expected: tuple[int, int]) -> None:
+    pixels = np.zeros(shape, dtype=np.uint8)
+    assert _rows_cols_from_pixel_array(pixels) == expected
+
+
+def test_rows_cols_from_pixel_array_rejects_old_rgb_bug_assignment() -> None:
+    """Regression: shape[-2], shape[-1] on (H, W, 3) wrote Columns=3."""
+    pixels = np.zeros((852, 1136, 3), dtype=np.uint8)
+    buggy_rows, buggy_cols = pixels.shape[-2], pixels.shape[-1]
+    assert (buggy_rows, buggy_cols) == (1136, 3)
+    assert _rows_cols_from_pixel_array(pixels) == (852, 1136)
 
 
 def test_apply_series_description_preserves_pixel_data(tmp_path: Path) -> None:

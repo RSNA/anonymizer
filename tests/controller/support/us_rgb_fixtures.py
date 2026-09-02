@@ -2,12 +2,40 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from openjpeg.utils import encode_array
+from pydicom import dcmread
+from pydicom.encaps import encapsulate
+from pydicom.uid import JPEG2000Lossless
+
 from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 
 US_RGB_DIR = CONTROLLER_TEST_DCM_FILES_DIR / "us_rgb_single_frame"
 US_RGB_DCM = US_RGB_DIR / "US_RGB_SingleFrame.dcm"
 US_RGB_PROJECT_T2_DIR = CONTROLLER_TEST_DCM_FILES_DIR / "us_rgb_single_frame_project_t2"
 US_RGB_PROJECT_T2_DCM = US_RGB_PROJECT_T2_DIR / "US_RGB_SingleFrame_project_t2_damaged.dcm"
+
+
+def make_jpeg2000_rgb_dicom(
+    dest_path: Path,
+    *,
+    source: Path = US_RGB_DCM,
+) -> Path:
+    """Write a JPEG2000-lossless RGB copy of ``source`` to ``dest_path``."""
+    ds = dcmread(source)
+    encoded = encode_array(
+        arr=ds.pixel_array,
+        photometric_interpretation=1,
+        use_mct=False,
+    )
+    ds.PixelData = encapsulate([encoded])
+    ds.file_meta.TransferSyntaxUID = JPEG2000Lossless
+    ds["PixelData"].is_undefined_length = True
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    ds.save_as(dest_path)
+    return dest_path
+
 
 # Series View detect-only: no noise filter; includes EasyOCR speckle hits.
 US_RGB_SERIES_VIEW_OCR_TEXTS = [

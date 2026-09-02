@@ -10,8 +10,10 @@ from pathlib import Path
 import customtkinter as ctk
 
 from anonymizer.controller.ai.remove_pixel_phi import (
-    pixel_phi_removal_mode_from_menu_label,
-    pixel_phi_removal_mode_menu_values,
+    PixelPhiRemovalMode,
+    normalize_pixel_phi_removal_mode,
+    pixel_phi_removal_mode_menu_labels,
+    pixel_phi_removal_mode_option_label,
 )
 from anonymizer.controller.ai_batch_process import (
     AiBatchAlgorithm,
@@ -112,7 +114,10 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         return section
 
     def _build_pixel_phi_options(self, parent: ctk.CTkFrame, pad: int) -> None:
-        self._pixel_phi_mode_var = tk.StringVar(value=pixel_phi_removal_mode_menu_values()[0])
+        removal_labels = list(pixel_phi_removal_mode_menu_labels())
+        self._pixel_phi_mode_var = tk.StringVar(
+            value=pixel_phi_removal_mode_option_label(PixelPhiRemovalMode.BLACKOUT)
+        )
         mode_frame = ctk.CTkFrame(parent, fg_color="transparent")
         mode_frame.grid(row=0, column=0, pady=(self.SECTION_PAD, 0), sticky="w")
         mode_row = ctk.CTkFrame(mode_frame, fg_color="transparent")
@@ -121,7 +126,7 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         self._pixel_phi_mode_menu = ctk.CTkOptionMenu(
             mode_row,
             variable=self._pixel_phi_mode_var,
-            values=list(pixel_phi_removal_mode_menu_values()),
+            values=removal_labels,
             dynamic_resizing=False,
         )
         self._pixel_phi_mode_menu.pack(side="left")
@@ -374,7 +379,7 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         if not algorithms:
             return
         blur_mode = face_blur_mode_from_menu_label(self._blur_mode_var.get())
-        pixel_phi_removal_mode = pixel_phi_removal_mode_from_menu_label(self._pixel_phi_mode_var.get())
+        pixel_phi_removal_mode = normalize_pixel_phi_removal_mode(self._pixel_phi_mode_var.get())
         include_brain = bool(
             hasattr(self, "_include_brain_structures_var") and self._include_brain_structures_var.get() == 1
         )

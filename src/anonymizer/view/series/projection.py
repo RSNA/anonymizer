@@ -18,12 +18,58 @@ from anonymizer.controller.phi_io import PHI_IndexRecord
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel, refresh_app_window_menu
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
+from anonymizer.view.common.tooltip import bind_hover_tooltip
 from anonymizer.view.series.series import SeriesView, show_series_view
 
 if TYPE_CHECKING:
     from anonymizer.controller.project import ProjectController
 
 logger = logging.getLogger(__name__)
+
+
+def format_projection_view_title(
+    phi_records: list[PHI_IndexRecord],
+    total_series: int,
+    pages: int,
+) -> str:
+    """Build the ProjectionView window title."""
+    if len(phi_records) == 1:
+        title = _("View") + " " + phi_records[0].tree_label()
+        title = title + " " + _("with") + f" {total_series} " + _("Series")
+    else:
+        title = (
+            _("View")
+            + f" {len(phi_records)} "
+            + _("Studies")
+            + " "
+            + _("with")
+            + f" {total_series} "
+            + _("Series")
+        )
+    if pages > 1:
+        title = title + " " + _("over") + f" {pages} " + _("Pages")
+    return title
+
+
+def projection_study_uids(phi_records: list[PHI_IndexRecord]) -> tuple[str, ...]:
+    """Stable study UID ordering for comparing ProjectionView requests."""
+    return tuple(sorted(record.anon_study_uid for record in phi_records))
+
+
+def series_paths_for_phi_records(base_dir: Path, phi_records: list[PHI_IndexRecord]) -> list[Path]:
+    """Resolve on-disk series directories for the given study index records."""
+    series_paths: list[Path] = []
+    for phi_record in phi_records:
+        patient_dir = base_dir / Path(phi_record.anon_patient_id)
+        if not patient_dir.is_dir():
+            continue
+        study_dir = patient_dir / phi_record.anon_study_uid
+        if not study_dir.is_dir():
+            continue
+        for series_path in study_dir.iterdir():
+            if series_path.is_dir():
+                series_paths.append(series_path)
+    return series_paths
 
 
 class ProjectionView(AppToplevel):
@@ -36,16 +82,12 @@ class ProjectionView(AppToplevel):
     }
     DEFAULT_SIZE = "S"
 
-    def _get_series_paths(self) -> list[Path]:
-        return [
-            series_path
-            for phi_record in self._phi_records
-            if (self._base_dir / Path(phi_record.anon_patient_id)).is_dir()
-            for study_path in (self._base_dir / Path(phi_record.anon_patient_id)).iterdir()
-            if study_path.is_dir() and study_path.name == phi_record.anon_study_uid
-            for series_path in study_path.iterdir()
-            if series_path.is_dir()
-        ]
+    @property
+    def phi_records(self) -> list[PHI_IndexRecord]:
+        return self._phi_records
+
+    def study_uids(self) -> tuple[str, ...]:
+        return projection_study_uids(self._phi_records)
 
     def __init__(
         self,
@@ -67,7 +109,7 @@ class ProjectionView(AppToplevel):
         self._base_dir = base_dir
         self._phi_records = phi_records
 
-        self._series_paths = self._get_series_paths()
+        self._series_paths = series_paths_for_phi_records(base_dir, phi_records)
         if not self._series_paths:
             raise ValueError("No series paths found for study list")
 
@@ -108,20 +150,27 @@ class ProjectionView(AppToplevel):
 
         self._update_image_size(self.DEFAULT_SIZE)  # sets self._image_size, initialise PixelView and populates frame
 
+    def load_phi_records(self, phi_records: list[PHI_IndexRecord]) -> None:
+        """Replace the displayed studies without recreating the window."""
+        if not phi_records:
+            raise ValueError("No phi_records for ProjectionView")
+        series_paths = series_paths_for_phi_records(self._base_dir, phi_records)
+        if not series_paths:
+            raise ValueError("No series paths found for study list")
+        if projection_study_uids(phi_records) == self.study_uids() and series_paths == self._series_paths:
+            return
+
+        self._phi_records = phi_records
+        self._series_paths = series_paths
+        self._total_series = len(series_paths)
+        self._page_number = 1
+
+        self._calc_layout()
+        self._update_title()
+        self._populate_px_frame()
+
     def _update_title(self):
-        title = (
-            _("View")
-            + f" {len(self._phi_records)} "
-            + (_("Studies") if len(self._phi_records) > 1 else _("Study"))
-            + " "
-            + _("with")
-            + f" {self._total_series} "
-            + _("Series")
-        )
-
-        if self._pages > 1:
-            title = title + " " + _("over") + f" {self._pages} " + _("Pages")
-
+        title = format_projection_view_title(self._phi_records, self._total_series, self._pages)
         self.title(title)
         refresh_app_window_menu(self)
 
@@ -157,8 +206,15 @@ class ProjectionView(AppToplevel):
         self._paging_frame.grid(row=1, column=0, padx=PAD, pady=(0, PAD), sticky="ew")
         self._paging_frame.grid_columnconfigure(0, weight=1)
 
+        self._instruction_label = ctk.CTkLabel(
+            self._paging_frame,
+            text=_("Click a projection to open Series View."),
+            text_color="gray60",
+        )
+        self._instruction_label.grid(row=0, column=0, columnspan=3, padx=PAD, pady=(0, 4), sticky="w")
+
         self._page_label = ctk.CTkLabel(self._paging_frame, text="Page ...")
-        self._page_label.grid(row=0, column=1, padx=PAD, pady=0, sticky="e")
+        self._page_label.grid(row=1, column=1, padx=PAD, pady=0, sticky="e")
 
         # CTkSlider widget is created in _calc_layout if self._pages > 1
 
@@ -167,7 +223,7 @@ class ProjectionView(AppToplevel):
             self._paging_frame, values=["S", "M", "L"], command=self._update_image_size
         )
         self._image_size_button.set(self.DEFAULT_SIZE)
-        self._image_size_button.grid(row=0, column=2)
+        self._image_size_button.grid(row=1, column=2)
 
     def _calc_layout(self):
         combined_width = 3 * self._image_size.width()
@@ -187,7 +243,7 @@ class ProjectionView(AppToplevel):
                 number_of_steps=self._pages - 1,
                 command=self._on_page_slider,
             )
-            self._page_slider.grid(row=0, column=0, padx=10, pady=0, sticky="we")
+            self._page_slider.grid(row=1, column=0, padx=10, pady=0, sticky="we")
             self._page_slider.set(0)
         else:
             if self._page_slider:
@@ -342,6 +398,8 @@ class ProjectionView(AppToplevel):
         label.photo_image = combined_image  # type: ignore
 
         if projection and series_path:
+            label.configure(cursor="hand2")
+            bind_hover_tooltip(label, _("Open Series View"), parent=self)
             label.bind(
                 "<Button-1>",
                 lambda event, k=projection, sp=series_path: self._on_image_click(event, k, sp),

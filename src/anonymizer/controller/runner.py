@@ -44,8 +44,51 @@ CANONICAL_ALGORITHM_ORDER: tuple[Algorithm, ...] = (
 
 
 class OcrEditContext(StrEnum):
-    FRAME = "FRAME"
-    SERIES = "SERIES"
+    """Language-agnostic Series View OCR scope (combobox stores these codes)."""
+
+    FRAME = "frame"
+    SERIES = "series"
+
+
+def edit_context_menu_values() -> tuple[OcrEditContext, ...]:
+    """Internal codes for the Text Edit Context picker (never pass through gettext)."""
+    return (OcrEditContext.FRAME, OcrEditContext.SERIES)
+
+
+def edit_context_display_label(context: OcrEditContext) -> str:
+    """Translated combobox label for an edit context (not used for menu state)."""
+    if context is OcrEditContext.FRAME:
+        return _("FRAME")
+    return _("SERIES")
+
+
+def edit_context_menu_labels() -> tuple[str, ...]:
+    """Translated combobox labels in canonical order."""
+    return tuple(edit_context_display_label(member) for member in edit_context_menu_values())
+
+
+def normalize_edit_context(
+    value: object | None,
+    *,
+    default: OcrEditContext = OcrEditContext.FRAME,
+) -> OcrEditContext:
+    """Resolve combobox / legacy label text to ``OcrEditContext``."""
+    text = str(value or "").strip()
+    if not text:
+        return default
+    lowered = text.lower().replace(" ", "")
+    if lowered in (OcrEditContext.FRAME, "frame"):
+        return OcrEditContext.FRAME
+    if lowered in (OcrEditContext.SERIES, "series"):
+        return OcrEditContext.SERIES
+    for member in edit_context_menu_values():
+        if text == edit_context_display_label(member):
+            return member
+    legacy = {
+        "FRAME": OcrEditContext.FRAME,
+        "SERIES": OcrEditContext.SERIES,
+    }
+    return legacy.get(text, default)
 
 
 @dataclass
