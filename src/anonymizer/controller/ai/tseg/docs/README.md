@@ -76,7 +76,7 @@ Per-series cache under ``<series>/0_TS_SEG/``:
 - `seg/*.nii.gz` — latch-essential masks only (pruned after segmentation)
 - `contrast_stats.json` / `contrast_stats_hn.json` / `contrast_phase.json` — organ HU stats and phase (CT)
 
-**Retention contract:** harmonize and future normative analytics use JSON sidecars only. Full 3D masks are kept solely for Series View latch overlays. Legacy caches are compacted lazily on first read (sidecars written, unused masks removed).
+**Retention contract:** harmonize and future normative analytics use JSON sidecars only. Full 3D masks are kept solely for Series View latch overlays. Segmentation writes sidecars on completion; caches without a current ``roi_subset.json`` manifest are treated as stale.
 
 ### Face segmentation (licensed task)
 

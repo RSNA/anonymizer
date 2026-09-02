@@ -29,9 +29,8 @@ def _study(uid: str) -> PHI_IndexRecord:
 
 def _dataset_view() -> DatasetView:
     view = DatasetView.__new__(DatasetView)
-    view._projection_view = None
+    view._projection_views = {}
     view._projection_open_in_progress = False
-    view._projection_destroy_binding = None
     view._controller = MagicMock()
     view._controller.model.images_dir.return_value = MagicMock()
     view._fonts = MagicMock()
@@ -45,28 +44,35 @@ def test_open_projection_view_reuses_existing_same_study(mock_focus: MagicMock) 
     study = _study("study-1")
     existing = MagicMock()
     existing.winfo_exists.return_value = True
-    existing.study_uids.return_value = ("study-1",)
-    view._projection_view = existing
+    view._projection_views[("study-1",)] = existing
 
     view._open_projection_view([study])
 
-    existing.load_phi_records.assert_not_called()
     mock_focus.assert_called_once_with(existing)
 
 
+@patch("anonymizer.view.project.dataset.ProjectionView")
 @patch("anonymizer.view.project.dataset.focus_app_window")
-def test_open_projection_view_updates_existing_different_study(mock_focus: MagicMock) -> None:
+def test_open_projection_view_keeps_existing_for_different_study(
+    mock_focus: MagicMock,
+    mock_projection_cls: MagicMock,
+) -> None:
     view = _dataset_view()
     existing = MagicMock()
     existing.winfo_exists.return_value = True
-    existing.study_uids.return_value = ("study-1",)
-    view._projection_view = existing
+    view._projection_views[("study-1",)] = existing
+    new_view = MagicMock()
+    mock_projection_cls.return_value = new_view
     next_study = _study("study-2")
 
     view._open_projection_view([next_study])
 
-    existing.load_phi_records.assert_called_once_with([next_study])
-    mock_focus.assert_called_once_with(existing)
+    existing.load_phi_records.assert_not_called()
+    existing.destroy.assert_not_called()
+    mock_projection_cls.assert_called_once()
+    mock_focus.assert_called_once_with(new_view)
+    assert view._projection_views[("study-1",)] is existing
+    assert view._projection_views[("study-2",)] is new_view
 
 
 @patch("anonymizer.view.project.dataset.ProjectionView")

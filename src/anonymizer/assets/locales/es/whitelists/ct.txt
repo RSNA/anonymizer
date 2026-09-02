@@ -1,31 +1,31 @@
-# Whitelist for common terms found on CT images
-# One term/phrase per line. Case-insensitive matching is assumed after loading.
-# Lines starting with # are comments and will be ignored.
+# Lista blanca de términos habituales en imágenes CT
+# Un término/frase por línea. La coincidencia no distingue mayúsculas/minúsculas al cargar.
+# Las líneas que comienzan con # son comentarios y se ignorarán.
 
-# --- Laterality ---
+# --- Lateralidad ---
 L
 R
-LEFT
-RIGHT
+IZQUIERDA
+DERECHA
 LT
 RT
 BILATERAL
 
-# --- Orientation / Position ---
+# --- Orientación / Posición ---
 AX
 AXIAL
 COR
 CORONAL
 SAG
-SAGITTAL
-OBLIQUE
-SUPINE
-PRONE
-DECUBITUS
-ERECT
-SEMI-ERECT
-HEAD FIRST
-FEET FIRST
+SAGITAL
+OBLICUO
+SUPINO
+PRONO
+DECÚBITO
+ERECTO
+SEMIERECTO
+CABEZA PRIMERO
+PIES PRIMERO
 HF
 FF
 HFS
@@ -33,36 +33,36 @@ FFS
 HFP
 FFP
 
-# --- Anatomy (Very General - Add specific non-PHI terms carefully) ---
-HEAD
-NECK
-CHEST
+# --- Anatomía (muy general: añadir términos no PHI específicos con cuidado) ---
+CABEZA
+CUELLO
+TÓRAX
 ABDOMEN
 PELVIS
-SPINE
-EXTREMITY
-BRAIN
-LUNG
-LIVER
-KIDNEY
-HEART
+COLUMNA
+EXTREMIDAD
+CEREBRO
+PULMÓN
+HÍGADO
+RIÑÓN
+CORAZÓN
 AORTA
-VESSEL
+VASO
 
-# --- Scanner / Technical Parameters ---
+# --- Escáner / Parámetros técnicos ---
 CT
-SCAN
+ESCANEO
 SCOUT
-TOPOGRAM
+TOPOGRAMA
 SURVIEW
-SCANOGRAM
-HELICAL
-SEQUENTIAL
-VOLUME
+SCANOGRAMA
+HELICOIDAL
+SECUENCIAL
+VOLUMEN
 ACQ
 RECON
-SLICE
-THICKNESS
+CORTE
+GROSOR
 SL
 THK
 FOV
@@ -70,104 +70,101 @@ DFOV
 ZOOM
 WW
 WL
-WINDOW
-LEVEL
-WIDTH
+VENTANA
+NIVEL
+ANCHO
 KV
 KVP
 MA
 MAS
 TIME
-ROT TIME
-ROTATION
+TIEMPO DE ROTACIÓN
+ROTACIÓN
 PITCH
-NOISE
-INDEX
+RUIDO
+ÍNDICE
 CTDI
 CTDI VOL
 DLP
 KERNEL
-FILTER
-STANDARD
-SOFT
-BONE
-LUNG
-EDGE
-SHARP
-SMOOTH
-ITERATIVE
+FILTRO
+ESTÁNDAR
+SUAVE
+HUESO
+BORDE
+NÍTIDO
+ITERATIVO
 IR
 ASIR
 MBIR
 IMR
-EXPOSURE
+EXPOSICIÓN
 
-# --- Contrast / Timing ---
-CONTRAST
+# --- Contraste / Momento ---
+CONTRASTE
 CONT
-WITH CONTRAST
-W CONTRAST
+CON CONTRASTE
+C/ CONTRASTE
 W/C
-WITHOUT CONTRAST
-WO CONTRAST
-NON CON
-NON-CON
+SIN CONTRASTE
+S/ CONTRASTE
+SIN CONTR.
 PRE
 POST
-PRE CONTRAST
-POST CONTRAST
+PRECONTRASTE
+POSTCONTRASTE
 ARTERIAL
 ART
-VENOUS
+VENOSO
 VEN
-DELAY
-DELAYED
-NEPHROGRAPHIC
-EXCRETORY
+RETRASO
+RETARDADO
+NEFROGÉNICO
+EXCRETOR
 PORTAL
 PV
 ORAL
 IV
 BOLUS
-INJECTION
+INYECCIÓN
 
-# --- Measurements / Units ---
+# --- Medidas / Unidades ---
 MM
 CM
-HU # Hounsfield Unit
-SUV # Standardized Uptake Value (PET/CT)
+HU # Unidad Hounsfield
+SUV # Valor de captación estandarizado (PET/TC)
 
-# --- Miscellaneous ---
-SERIES
-IMAGE
+# --- Varios ---
+SERIE
+IMAGEN
 IMG
 NO
 NUM
-NUMBER
-SCAN DATE
-SCAN TIME
-ACQ DATE
-ACQ TIME
-TABLE
-HEIGHT
+NÚMERO
+FECHA DE ESCANEO
+HORA DE ESCANEO
+FECHA DE ADQUISICIÓN
+HORA DE ADQUISICIÓN
+MESA
+ALTURA
 POS
-POSITION
+POSICIÓN
 REF
-REFERENCE
-NONE
+REFERENCIA
+NINGUNO
 N/A
-VARIOUS
-SEE REPORT
-CLINICAL HISTORY
-PROTOCOL
+VARIOS
+VER INFORME
+HISTORIA CLÍNICA
+PROTOCOLO
 AUTO
 
-# --- Common Artifacts / Descriptions (Use cautiously) ---
-MOTION
-ARTIFACT
+# --- Artefactos / descripciones comunes (usar con precaución) ---
+MOVIMIENTO
+ARTEFACTO
 METAL
-STREAKING
-BEAM HARDENING
+RAYAS
+ENDURECIMIENTO DEL HAZ
 
-# --- Add institution-specific, non-PHI identifiers if necessary ---
-# E.g., SCANNER01, RAD_ROOM_A, PROTOCOL_ABC
+# --- Añadir identificadores institucionales no PHI si es necesario ---
+# P. ej., SCANNER01, RAD_ROOM_A, PROTOCOL_ABC

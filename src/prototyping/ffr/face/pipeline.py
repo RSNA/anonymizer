@@ -29,7 +29,7 @@ def run_face_viz_poc(series_directory: Path) -> Path:
     """
     Load series + face mask, blur in memory, render QA viz modes.
 
-    Face mask is read from ``.tseg_cache/seg/face.nii.gz`` (or legacy ``ts_seg/face.nii.gz``).
+Face mask is read from ``<series>/0_TS_SEG/seg/face.nii.gz``.
     If missing, ``analyze_tseg_face`` runs when TotalSegmentator is available.
 
     Returns path to ``ts_seg/viz_poc/report.html``. Also writes blurred DICOM to

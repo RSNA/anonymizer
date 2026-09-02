@@ -16,7 +16,6 @@ from anonymizer.controller.ai.tseg.config import (
     FACE_TASK,
     ROI_SUBSET,
 )
-from anonymizer.utils import modalities as _modalities
 from anonymizer.utils.modalities import normalize_modality
 
 FaceFillMode = Literal["hu_band", "intensity_percentile"]
@@ -74,22 +73,6 @@ class TsegModalityProfile:
     face_fill: FaceFillMode
     loinc_prefix: str
     face_mask_filename: str
-
-
-def is_ct_modality(value: object | None) -> bool:
-    return normalize_modality(value) == "CT"
-
-
-def is_mr_modality(value: object | None) -> bool:
-    return normalize_modality(value) == "MR"
-
-
-def is_tseg_modality(value: object | None) -> bool:
-    return _modalities.is_tseg_modality(value)
-
-
-def series_is_tseg_eligible(modality: object | None) -> bool:
-    return _modalities.series_is_tseg_eligible(modality)
 
 
 def _ct_structure_to_region() -> dict[str, str]:
@@ -270,11 +253,6 @@ def load_series_header_dataset(series_directory: object) -> Dataset | None:
         return dcmread(paths[0], stop_before_pixels=True)
     except OSError:
         return None
-
-
-def default_ct_profile() -> TsegModalityProfile:
-    """Explicit CT default for call sites that omit ``profile`` (back-compat)."""
-    return ct_modality_profile()
 
 
 # Stable CT task-id snapshot for invariant tests (3mm default mode).

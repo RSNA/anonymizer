@@ -541,7 +541,7 @@ def test_clear_series_tseg_metadata(anonymizer_model: AnonymizerModel, mock_data
     assert status.harmonized_description is None
     assert status.face_blur_algorithm == "gaussian"
     assert status.pixel_phi_applied_count == 1
-    assert format_series_processing_status(status) == ("Pixel PHI: Applied · Harmonized: None · Face blur: Gaussian")
+    assert format_series_processing_status(status) == ("Pixel PHI: Applied | Harmonized: None | Face blur: Gaussian")
 
     assert anonymizer_model.clear_series_tseg_metadata("missing-uid") is False
 
@@ -562,9 +562,9 @@ def test_get_series_processing_status(anonymizer_model: AnonymizerModel, mock_da
     assert status.pixel_phi_total_count == 1
     assert status.harmonized_description is None
     assert status.face_blur_algorithm is None
-    assert format_series_processing_status(status) == ("Pixel PHI: None removed · Harmonized: None · Face blur: None")
+    assert format_series_processing_status(status) == ("Pixel PHI: None removed | Harmonized: None | Face blur: None")
     assert format_series_processing_status(status, include_face_blur=False) == (
-        "Pixel PHI: None removed · Harmonized: None"
+        "Pixel PHI: None removed | Harmonized: None"
     )
 
     harmonized = "CT Head Without Contrast"
@@ -579,5 +579,5 @@ def test_get_series_processing_status(anonymizer_model: AnonymizerModel, mock_da
     assert status.harmonized_description == harmonized
     assert status.face_blur_algorithm == "gaussian"
     assert format_series_processing_status(status) == (
-        f"Pixel PHI: Applied · Harmonized: {harmonized} · Face blur: Gaussian"
+        f"Pixel PHI: Applied | Harmonized: {harmonized} | Face blur: Gaussian"
     )

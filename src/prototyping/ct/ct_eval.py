@@ -27,7 +27,7 @@ Flags
 Outputs
 -------
 **``ct_eval_results.csv``** — one row per series. Prediction columns plus DICOM geometry
-(from ``.tseg_cache/geometry.json``, resolved before TS when missing):
+(from ``0_TS_SEG/geometry.json``, resolved before TS when missing):
 
 +-------------------------------+------------------------------------------+
 | Column                        | Meaning                                  |

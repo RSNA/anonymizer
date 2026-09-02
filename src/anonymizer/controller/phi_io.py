@@ -19,6 +19,7 @@ from anonymizer.model.anonymizer import (
     Study,
 )
 from anonymizer.utils.storage import JavaAnonymizerExportedStudy
+from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
@@ -47,22 +48,25 @@ def format_series_processing_status(
     total = status.pixel_phi_total_count
     applied = status.pixel_phi_applied_count
     if total == 0 or applied == 0:
-        pixel_phi_part = "None removed"
+        pixel_phi_part = _("None removed")
     elif applied == total:
-        pixel_phi_part = "Applied"
+        pixel_phi_part = _("Applied")
     else:
-        pixel_phi_part = f"Partial ({applied}/{total})"
+        pixel_phi_part = _("Partial ({applied}/{total})").format(applied=applied, total=total)
 
     harmonized = status.harmonized_description
-    harmonized_part = harmonized.strip() if harmonized and harmonized.strip() else "None"
+    harmonized_part = harmonized.strip() if harmonized and harmonized.strip() else _("None")
 
-    base = f"Pixel PHI: {pixel_phi_part} · Harmonized: {harmonized_part}"
+    base = _("Pixel PHI: {pixel_phi} | Harmonized: {harmonized}").format(
+        pixel_phi=pixel_phi_part,
+        harmonized=harmonized_part,
+    )
     if not include_face_blur:
         return base
 
     face_blur = status.face_blur_algorithm
-    face_blur_part = _format_face_blur_status_label(face_blur) if face_blur and face_blur.strip() else "None"
-    return f"{base} · Face blur: {face_blur_part}"
+    face_blur_part = _format_face_blur_status_label(face_blur) if face_blur and face_blur.strip() else _("None")
+    return _("{base} | Face blur: {face_blur}").format(base=base, face_blur=face_blur_part)
 
 
 @dataclass
@@ -131,18 +135,7 @@ class PHI_IndexRecord:
         "face_blurred",
         "pixel_phi_removed",
     )
-    TREE_DISPLAY_TITLES: ClassVar[dict[str, str]] = {
-        "phi_patient_id": "PHI ID",
-        "anon_patient_id": "Anon ID",
-        "phi_accession": "Acc No",
-        "date_offset": "Offset",
-        "modality": "Modality",
-        "num_series": "Series",
-        "num_instances": "Images",
-        "harmonize": "Harmonized",
-        "face_blurred": "Face blur",
-        "pixel_phi_removed": "Pixel PHI",
-    }
+    # View Dataset tree columns (see get_tree_display_titles).
 
     field_titles: ClassVar[dict[str, str]] = {
         "anon_patient_id": "ANON-PatientID",
@@ -168,7 +161,7 @@ class PHI_IndexRecord:
     @staticmethod
     def _display_value(value: object) -> object:
         if isinstance(value, bool):
-            return "Yes" if value else "No"
+            return _("Yes") if value else _("No")
         return value
 
     @classmethod
@@ -185,7 +178,19 @@ class PHI_IndexRecord:
 
     @classmethod
     def get_tree_display_titles(cls) -> list[str]:
-        return [cls.TREE_DISPLAY_TITLES[name] for name in cls.TREE_DISPLAY_FIELDS]
+        titles = {
+            "phi_patient_id": _("PHI ID"),
+            "anon_patient_id": _("Anon ID"),
+            "phi_accession": _("Acc No"),
+            "date_offset": _("Offset"),
+            "modality": _("Modality"),
+            "num_series": _("Series"),
+            "num_instances": _("Images"),
+            "harmonize": _("Harmonized"),
+            "face_blurred": _("Face blur"),
+            "pixel_phi_removed": _("Pixel PHI"),
+        }
+        return [titles[name] for name in cls.TREE_DISPLAY_FIELDS]
 
     def modalities_display(self) -> str:
         """Comma-delimited unique series modalities in first-seen order."""

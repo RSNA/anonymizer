@@ -1,199 +1,195 @@
-# Whitelist for common terms found on MRI images
-# One term/phrase per line. Case-insensitive matching is assumed after loading.
-# Lines starting with # are comments and will be ignored.
+# Liste blanche de termes courants sur les images IRM
+# Un terme/une expression par ligne. La correspondance est insensible à la casse au chargement.
+# Les lignes commençant par # sont des commentaires et seront ignorées.
 
-# --- Laterality ---
+# --- Latéralité ---
 L
 R
-LEFT
-RIGHT
+GAUCHE
+DROITE
 LT
 RT
-BILATERAL
+BILATÉRAL
 
 # --- Orientation / Position ---
 AX
 AXIAL
-TRA # Transverse
+TRA # Transversal
 COR
 CORONAL
 SAG
 SAGITTAL
 OBLIQUE
-SUPINE
-PRONE
-HEAD FIRST
-FEET FIRST
+DÉCUBITUS DORSAL
+DÉCUBITUS VENTRAL
+TÊTE EN PREMIER
+PIEDS EN PREMIER
 HF
 FF
 
-# --- Anatomy (Very General - Add specific non-PHI terms carefully) ---
-HEAD
-BRAIN
-NECK
-SPINE
+# --- Anatomie (très générale – n'ajouter que des termes non PHI spécifiques avec prudence) ---
+TÊTE
+CERVEAU
+COU
+COLONNE
 CERVICAL
-THORACIC
-LUMBAR
-CHEST
+THORACIQUE
+LOMBAIRE
+THORAX
 ABDOMEN
-PELVIS
-HIP
-KNEE
-ANKLE
-FOOT
-SHOULDER
-ELBOW
-WRIST
-HAND
-EXTREMITY
-LIVER
-MRCP # Magnetic Resonance Cholangiopancreatography
-MRA # Magnetic Resonance Angiography
-MRV # Magnetic Resonance Venography
+BASSIN
+HANCHE
+GENOU
+CHEVILLE
+PIED
+ÉPAULE
+COUDE
+POIGNET
+MAIN
+EXTRÉMITÉ
+FOIE
+MRCP # Cholangiopancréatographie par résonance magnétique
+MRA # Angiographie par résonance magnétique
+MRV # Venographie par résonance magnétique
 
-# --- Scanner / Technical Parameters ---
+# --- Scanner / Paramètres techniques ---
 MR
 MRI
 MAGNETOM
 SIGNA
-FIELD STRENGTH
+INTENSITÉ DU CHAMP
 TESLA
-T # Tesla unit
+T # Unité tesla
 1.5T
 3T
-COIL
-HEAD COIL
-BODY COIL
-SPINE COIL
-EXTREMITY COIL
-KNEE COIL
-SHOULDER COIL
-ARRAY
-PHASE ARRAY
-SURFACE COIL
-TR # Repetition Time
-TE # Echo Time
-TI # Inversion Time
-FLIP ANGLE
+BOBINE
+BOBINE TÊTE
+BOBINE CORPS
+BOBINE RACHIS
+BOBINE EXTRÉMITÉ
+BOBINE GENOU
+BOBINE ÉPAULE
+RÉSEAU
+RÉSEAU DE PHASE
+BOBINE SURFACE
+TR # Temps de répétition
+TE # Temps d'écho
+TI # Temps d'inversion
+ANGLE DE FLIP
 FA
 FOV
-MATRIX
-SLICE
-THICKNESS
+MATRICE
+COUPE
+ÉPAISSEUR
 SL
 THK
-GAP
-NEX # Number of Excitations
-NSA # Number of Signals Averaged
-AVG # Averages
-BW # Bandwidth
-RESOLUTION
+INTERLIGNE
+NEX # Nombre d'excitations
+NSA # Nombre de signaux moyennés
+AVG # Moyennes
+BW # Bande passante
+RÉSOLUTION
 ACQ
 RECON
-ECHO # Echo Number
-PHASE # Phase Encoding Direction
-FREQ # Frequency Encoding Direction
-FAT SAT
+ÉCHO # Numéro d'écho
+PHASE # Direction de codage de phase
+FRÉQ # Direction de codage de fréquence
+SATURATION GRAISSE
 FS
-FAT SUPPRESSED
-WATER EXCITATION
-STIR # Short Tau Inversion Recovery
-FLAIR # Fluid Attenuated Inversion Recovery
+SUPPRESSION GRAISSE
+EXCITATION EAU
+STIR # Récupération d'inversion à tau court
+FLAIR # Récupération d'inversion atténuée des fluides
 T1
 T2
-PD # Proton Density
-T1W # T1 Weighted
-T2W # T2 Weighted
-PDW # PD Weighted
-DWI # Diffusion Weighted Imaging
-ADC # Apparent Diffusion Coefficient
-B VALUE
+PD # Densité protonique
+T1W # Pondéré T1
+T2W # Pondéré T2
+PDW # Pondéré PD
+DWI # Imagerie de diffusion pondérée
+ADC # Coefficient de diffusion apparent
+VALEUR B
 TRACE
-GRE # Gradient Echo
-SE # Spin Echo
-FSE # Fast Spin Echo
-TSE # Turbo Spin Echo
-EPI # Echo Planar Imaging
-MPRAGE # Magnetization Prepared Rapid Gradient Echo
-VIBE # Volumetric Interpolated Breath-hold Examination
-LAVA # Liver Acquisition with Volume Acceleration
-THRIVE # T1 High Resolution Isotropic Volume Examination
+GRE # Écho de gradient
+SE # Écho de spin
+FSE # Écho de spin rapide
+TSE # Écho de spin turbo
+EPI # Imagerie écho-planar
+MPRAGE # Écho de gradient rapide préparé en magnétisation
+VIBE # Examen volumique interpolé en apnée
+LAVA # Acquisition hépatique avec accélération volumique
+THRIVE # Examen volumique isotrope T1 haute résolution
 PROP # Propeller / Blade
-MOTION CORRECTION
+CORRECTION DE MOUVEMENT
 MOCO
-PARALLEL IMAGING
+IMAGERIE PARALLÈLE
 SENSE
 GRAPPA
 IPAT
 ASSET
 
-# --- Contrast / Timing ---
-CONTRAST
+# --- Contraste / Timing ---
+CONTRASTE
 CONT
 GAD # Gadolinium
 GD
-WITH CONTRAST
-W CONTRAST
+AVEC CONTRASTE
+AVEC CONTR.
 W/C
-WITHOUT CONTRAST
-WO CONTRAST
-NON CON
-NON-CON
-PRE
+SANS CONTRASTE
+SANS CONTR.
+PRÉ
 POST
-PRE CONTRAST
-POST CONTRAST
-DYNAMIC
-ARTERIAL
-VENOUS
-DELAYED
-SUBTRACTION
+PRÉ-CONTRASTE
+POST-CONTRASTE
+DYNAMIQUE
+ARTÉRIEL
+VEINEUX
+DIFFÉRÉ
+SOUSTRACTION
 SUB
 
-# --- Measurements / Units ---
+# --- Mesures / Unités ---
 MM
 CM
-MS # Milliseconds
-SEC # Seconds
+MS # Millisecondes
+SEC # Secondes
 HZ # Hertz
-DEG # Degrees
+DEG # Degrés
 
-# --- Miscellaneous ---
-SERIES
+# --- Divers ---
+SÉRIE
 IMAGE
 IMG
 NO
 NUM
-NUMBER
-SCAN DATE
-SCAN TIME
-ACQ DATE
-ACQ TIME
+NUMÉRO
+DATE D'ACQUISITION
+HEURE D'ACQUISITION
 TABLE
-HEIGHT
+HAUTEUR
 POS
 POSITION
 REF
-REFERENCE
-NONE
+RÉFÉRENCE
+AUCUN
 N/A
-VARIOUS
-SEE REPORT
-CLINICAL HISTORY
-PROTOCOL
+DIVERS
+VOIR RAPPORT
+ANTÉCÉDENTS CLINIQUES
+PROTOCOLE
 AUTO
 
-# --- Common Artifacts / Descriptions (Use cautiously) ---
-MOTION
-ARTIFACT
-FLOW
-GHOSTING
-METAL
-SUSCEPTIBILITY
-CHEMICAL SHIFT
-WRAPAROUND
+# --- Artefacts / descriptions courants (à utiliser avec prudence) ---
+MOUVEMENT
+ARTEFACT
+FLUX
+FANTÔME
+MÉTAL
+SUSCEPTIBILITÉ
+DÉPLACEMENT CHIMIQUE
+REPLIEMENT
 ALIASING
 
-# --- Add institution-specific, non-PHI identifiers if necessary ---
-# E.g., MRI_SCANNER_A, PROTOCOL_BRAIN_TUMOR
+# --- Ajouter des identifiants institutionnels non PHI si nécessaire ---
+# P. ex. MRI_SCANNER_A, PROTOCOL_BRAIN_TUMOR

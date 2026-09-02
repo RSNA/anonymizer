@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from pydicom import Dataset
 
@@ -14,12 +14,14 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
     SECONDARY_CAPTURE_SOP,
     PlaneLabel,
     SeriesGeometryResult,
+    dimensionality_label,
     format_geometry_summary,
     plane_label,
+    provenance_label,
 )
-from anonymizer.controller.ai.tseg.modality_profile import is_mr_modality
 from anonymizer.controller.ai.tseg.segment import TS_result
 from anonymizer.controller.ai.tseg.series_classification import metadata_diagnostic_fallback_allowed
+from anonymizer.utils.modalities import is_mr_modality
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
@@ -124,6 +126,14 @@ SERIES_TYPE_PLAYBOOK_CODES: frozenset[str] = frozenset(
         "Contrast_Dose",
     }
 )
+
+# RSNA RadLex Series Playbook slice-thickness buckets (CT Sandbox / RSNA FAQ).
+SLICE_THICKNESS_PLAYBOOK_CODES: frozenset[str] = frozenset({"Recon", "Thin", "Std", "Thick"})
+# SeriesNameV4 emits only non-default thickness tokens (Med/Std omitted; Recon omitted in v1).
+SLICE_THICKNESS_EMITTED_CODES: frozenset[str] = frozenset({"Thin", "Thick"})
+_SLICE_THICKNESS_REGULARITY_MIN = 0.85
+
+SERIES_TYPE_MODIFIER_PLAYBOOK_CODES: frozenset[str] = frozenset({"MPR"})
 
 METADATA_HARMONIZE_SERIES_TYPES: frozenset[str] = SERIES_TYPE_PLAYBOOK_CODES
 
@@ -235,7 +245,7 @@ _MR_WITH_CONTRAST_KEYWORDS: tuple[str, ...] = (
     "CE-",
 )
 
-_BODY_PART_LABELS: dict[str, str] = {
+_BODY_PART_MSGIDS: dict[str, str] = {
     "Ch": "Chest",
     "Abd": "Abdomen",
     "Head": "Head",
@@ -243,7 +253,7 @@ _BODY_PART_LABELS: dict[str, str] = {
     "CAP": "Chest abdomen pelvis",
 }
 
-_PLANE_LABELS: dict[str, str] = {
+_PLANE_MSGIDS: dict[str, str] = {
     "Ax": "Axial",
     "Sag": "Sagittal",
     "Cor": "Coronal",
@@ -253,7 +263,7 @@ _PLANE_LABELS: dict[str, str] = {
     "Rad_Obl": "Oblique",
 }
 
-_IV_CONTRAST_LABELS: dict[str, str] = {
+_IV_CONTRAST_MSGIDS: dict[str, str] = {
     "WO": "Without contrast",
     "W": "With contrast",
     "EarlyArt": "Early arterial",
@@ -270,7 +280,14 @@ _IV_CONTRAST_LABELS: dict[str, str] = {
     "Dyn": "Dynamic",
 }
 
-_SERIES_TYPE_DEFINITIONS: dict[str, str] = {
+_SLICE_THICKNESS_MSGIDS: dict[str, str] = {
+    "Recon": "Reconstruction (< 1 mm)",
+    "Thin": "Thin ( 1 mm and < 2.5 mm)",
+    "Std": "Standard ( 2.5 mm and  5 mm)",
+    "Thick": "Thick ( 5 mm)",
+}
+
+_SERIES_TYPE_MSGIDS: dict[str, str] = {
     "Localizer": "Exam localizer",
     "Radiation_Dose": "Radiation dose sheet",
     "Monitoring": "Used for tracking the contrast bolus or heart rhythm",
@@ -278,6 +295,10 @@ _SERIES_TYPE_DEFINITIONS: dict[str, str] = {
     "Screenshot": "Images saved by radiologists",
     "Fused": "PET/CT fusion and multi spectral energies fused together",
     "Contrast_Dose": "Contrast dose sheet",
+}
+
+_SERIES_TYPE_MODIFIER_MSGIDS: dict[str, str] = {
+    "MPR": "Multiplanar reformat",
 }
 
 _RADIATION_DOSE_KEYWORDS: tuple[str, ...] = (
@@ -344,6 +365,9 @@ class PlaybookHarmonizeAttributes:
     plane_confidence: float | None
     contrast_confidence: float | None
     contrast_phase: str
+    slice_thickness_code: str = ""
+    slice_thickness_mm: float | None = None
+    series_type_modifier_code: str = ""
 
 
 _PLANE_CODE_TO_CARDINAL: dict[str, PlaneLabel] = {
@@ -395,8 +419,28 @@ def _format_classifier_confidence(probability: float | None) -> str:
     return f"{probability * 100.0:.2f}% " + _("confidence")
 
 
+def _playbook_localized(mapping: dict[str, str], code: str) -> str:
+    return _(mapping.get(code, code))
+
+
 def _humanize_contrast_phase(phase: str) -> str:
-    return str(phase or "").strip().replace("_", " ")
+    normalized = str(phase or "").strip().lower().replace("_", " ")
+    phase_msgids = {
+        "native": "Native",
+        "arterial": "Arterial",
+        "venous": "Venous",
+        "delayed": "Delayed",
+        "nephrogenic": "Nephrogenic",
+        "cortomedullary": "Cortomedullary",
+        "equilibrium": "Equilibrium",
+        "excretory": "Excretory",
+        "dynamic": "Dynamic",
+    }
+    if normalized in phase_msgids:
+        return _(phase_msgids[normalized])
+    if normalized:
+        return normalized
+    return ""
 
 
 def _playbook_body_part_evidence(
@@ -434,15 +478,15 @@ def _playbook_iv_contrast_evidence(
 
 
 def body_part_label(code: str) -> str:
-    return _(_BODY_PART_LABELS.get(code, code))
+    return _playbook_localized(_BODY_PART_MSGIDS, code)
 
 
 def anatomic_plane_label(code: str) -> str:
-    return _(_PLANE_LABELS.get(code, code))
+    return _playbook_localized(_PLANE_MSGIDS, code)
 
 
 def iv_contrast_label(code: str) -> str:
-    return _(_IV_CONTRAST_LABELS.get(code, code))
+    return _playbook_localized(_IV_CONTRAST_MSGIDS, code)
 
 
 def _iv_contrast_playbook_code(code: str) -> str:
@@ -454,7 +498,13 @@ def _iv_contrast_playbook_code(code: str) -> str:
 def series_type_label(code: str) -> str:
     if not code:
         return "—"
-    return _(_SERIES_TYPE_DEFINITIONS.get(code, code))
+    return _playbook_localized(_SERIES_TYPE_MSGIDS, code)
+
+
+def series_type_modifier_label(code: str) -> str:
+    if not code:
+        return "—"
+    return _playbook_localized(_SERIES_TYPE_MODIFIER_MSGIDS, code)
 
 
 def _normalized_dicom_text(*values: object) -> str:
@@ -543,9 +593,12 @@ def _series_type_evidence(
     if code == "Localizer":
         return _("Localizer geometry classification"), _("DICOM geometry")
     if geometry is not None and code == "Postprocess":
-        return f"{geometry.provenance} · {geometry.provenance_confidence:.0%}", _("DICOM geometry")
+        return (
+            f"{provenance_label(geometry.provenance)} · {geometry.provenance_confidence:.0%}",
+            _("DICOM geometry"),
+        )
     if geometry is not None and code == "Screenshot":
-        return geometry.dimensionality, _("DICOM geometry")
+        return dimensionality_label(geometry.dimensionality), _("DICOM geometry")
 
     if ds is not None:
         image_type = _dicom_field_display(ds, "ImageType")
@@ -565,6 +618,70 @@ def _series_type_evidence(
         return " ".join(geometry.image_type), _("DICOM geometry")
 
     return "—", _("DICOM metadata")
+
+
+def map_series_type_modifier_code(
+    ds: Dataset | None,
+    geometry: SeriesGeometryResult,
+    *,
+    series_type_code: str,
+) -> str:
+    """
+    Map DICOM metadata and geometry to a Playbook Series Type Modifier code.
+
+    Standard diagnostic originals and special series types return an empty string.
+    """
+    if series_type_code in SERIES_TYPE_PLAYBOOK_CODES:
+        return ""
+
+    text = _normalized_dicom_text(
+        ds.get("SeriesDescription") if ds is not None else None,
+        ds.get("StudyDescription") if ds is not None else None,
+        ds.get("ProtocolName") if ds is not None else None,
+        ds.get("DerivationDescription") if ds is not None else None,
+    )
+    image_type = _series_image_type_tokens(ds, geometry)
+
+    if geometry.provenance == "derived_3d_render":
+        return ""
+    if _contains_dicom_keyword(text, RENDER_KEYWORDS) and not _contains_dicom_keyword(text, MPR_KEYWORDS):
+        return ""
+
+    if geometry.provenance == "derived_reformat":
+        return "MPR"
+
+    if image_type:
+        is_derived = image_type[0] == "DERIVED"
+        is_secondary = "SECONDARY" in image_type
+        is_reformatted = "REFORMATTED" in image_type
+        if (is_derived and is_secondary and _contains_dicom_keyword(text, MPR_KEYWORDS)) or (
+            is_reformatted and _contains_dicom_keyword(text, MPR_KEYWORDS)
+        ):
+            return "MPR"
+
+    return ""
+
+
+def should_emit_series_type_modifier(code: str) -> bool:
+    """Return whether a series-type modifier token belongs in the SeriesDescription string."""
+    if not code:
+        return False
+    return False  # SeriesNameV4 omits MPR from output strings in v1.
+
+
+def _attach_series_type_modifier(
+    attributes: PlaybookHarmonizeAttributes,
+    geometry: SeriesGeometryResult,
+    ds: Dataset | None,
+) -> PlaybookHarmonizeAttributes:
+    detected = map_series_type_modifier_code(
+        ds,
+        geometry,
+        series_type_code=attributes.series_type_code,
+    )
+    if detected == attributes.series_type_modifier_code:
+        return attributes
+    return replace(attributes, series_type_modifier_code=detected)
 
 
 def map_body_part_code(
@@ -625,6 +742,125 @@ def _head_region_playbook_code(structures_present: dict[str, int]) -> str:
 
 def is_localizer_geometry(geometry: SeriesGeometryResult) -> bool:
     return geometry.dimensionality == "localizer_2d"
+
+
+def map_slice_thickness_bucket(mm: float) -> str:
+    """Map effective through-plane thickness (mm) to a Playbook slice-thickness bucket."""
+    if mm < 1.0:
+        return "Recon"
+    if mm < 2.5:
+        return "Thin"
+    if mm <= 5.0:
+        return "Std"
+    return "Thick"
+
+
+def slice_thickness_label(code: str) -> str:
+    if not code:
+        return "—"
+    return _playbook_localized(_SLICE_THICKNESS_MSGIDS, code)
+
+
+def _dicom_slice_thickness_mm(ds: Dataset) -> float | None:
+    for keyword in ("SliceThickness", "SpacingBetweenSlices"):
+        raw = ds.get(keyword)
+        if raw is None or str(raw).strip() == "":
+            continue
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if value > 0.0:
+            return value
+    return None
+
+
+def effective_slice_thickness_mm(
+    geometry: SeriesGeometryResult,
+    ds: Dataset | None = None,
+) -> float | None:
+    """
+    Effective through-plane thickness (mm) for Playbook bucketing.
+
+    Prefer regular IPP-derived spacing; fall back to DICOM thickness tags when spacing
+    is irregular or the stack is too short.
+    """
+    if (
+        geometry.slice_spacing_mm is not None
+        and geometry.n_slices >= 2
+        and geometry.spacing_regularity is not None
+        and geometry.spacing_regularity >= _SLICE_THICKNESS_REGULARITY_MIN
+    ):
+        return geometry.slice_spacing_mm
+
+    if ds is not None:
+        return _dicom_slice_thickness_mm(ds)
+    return None
+
+
+def should_emit_slice_thickness(
+    bucket: str,
+    geometry: SeriesGeometryResult,
+    series_type_code: str,
+) -> bool:
+    """Return whether a slice-thickness token belongs in the SeriesDescription string."""
+    if bucket not in SLICE_THICKNESS_EMITTED_CODES:
+        return False
+    if geometry.dimensionality != "volume_3d":
+        return False
+    if series_type_code:
+        return False
+    return not is_localizer_geometry(geometry)
+
+
+def resolve_slice_thickness_for_playbook(
+    geometry: SeriesGeometryResult,
+    ds: Dataset | None,
+    *,
+    series_type_code: str,
+) -> tuple[str, float | None, str]:
+    """
+    Return ``(emitted_code, mm, bucket)`` for harmonize.
+
+    ``emitted_code`` is empty when the bucket is omitted from SeriesNameV4 (Std/Recon v1).
+    """
+    mm = effective_slice_thickness_mm(geometry, ds)
+    if mm is None:
+        return "", None, ""
+    bucket = map_slice_thickness_bucket(mm)
+    emitted = bucket if should_emit_slice_thickness(bucket, geometry, series_type_code) else ""
+    return emitted, mm, bucket
+
+
+def _attach_slice_thickness(
+    attributes: PlaybookHarmonizeAttributes,
+    geometry: SeriesGeometryResult,
+    ds: Dataset | None,
+) -> PlaybookHarmonizeAttributes:
+    emitted, mm, _bucket = resolve_slice_thickness_for_playbook(
+        geometry,
+        ds,
+        series_type_code=attributes.series_type_code,
+    )
+    if emitted == attributes.slice_thickness_code and mm == attributes.slice_thickness_mm:
+        return attributes
+    return replace(
+        attributes,
+        slice_thickness_code=emitted,
+        slice_thickness_mm=mm,
+    )
+
+
+def _finalize_playbook_attributes(
+    attributes: PlaybookHarmonizeAttributes,
+    geometry: SeriesGeometryResult,
+    ds: Dataset | None,
+) -> PlaybookHarmonizeAttributes:
+    return _attach_series_type_modifier(
+        _attach_slice_thickness(attributes, geometry, ds),
+        geometry,
+        ds,
+    )
 
 
 def _metadata_route_for_series_type(series_type_code: str, ds: Dataset) -> MetadataHarmonizeRoute:
@@ -723,7 +959,7 @@ def build_metadata_playbook_attributes(
         iv_contrast_code, _evidence = map_mr_iv_contrast_from_dicom(ds)
     else:
         iv_contrast_code = "WO"
-    return PlaybookHarmonizeAttributes(
+    attributes = PlaybookHarmonizeAttributes(
         body_part_code=body_part_code,
         anatomic_plane_code=anatomic_plane_code,
         iv_contrast_code=iv_contrast_code,
@@ -733,6 +969,7 @@ def build_metadata_playbook_attributes(
         contrast_confidence=None,
         contrast_phase="native",
     )
+    return _finalize_playbook_attributes(attributes, geometry, ds)
 
 
 def build_metadata_harmonized_series_description(
@@ -891,7 +1128,7 @@ def build_playbook_attributes(
 
     if ds is not None and is_mr_modality(ds.get("Modality")):
         iv_contrast_code, _evidence = map_mr_iv_contrast_from_dicom(ds)
-        return PlaybookHarmonizeAttributes(
+        attributes = PlaybookHarmonizeAttributes(
             body_part_code=body_part_code,
             anatomic_plane_code=anatomic_plane_code,
             iv_contrast_code=iv_contrast_code,
@@ -901,9 +1138,10 @@ def build_playbook_attributes(
             contrast_confidence=None,
             contrast_phase="",
         )
+        return _finalize_playbook_attributes(attributes, geometry, ds)
 
     iv_contrast_code = map_iv_contrast_code(tseg)
-    return PlaybookHarmonizeAttributes(
+    attributes = PlaybookHarmonizeAttributes(
         body_part_code=body_part_code,
         anatomic_plane_code=anatomic_plane_code,
         iv_contrast_code=iv_contrast_code,
@@ -913,6 +1151,7 @@ def build_playbook_attributes(
         contrast_confidence=tseg.phase_probability if tseg.contrast_phase else None,
         contrast_phase=tseg.contrast_phase,
     )
+    return _finalize_playbook_attributes(attributes, geometry, ds)
 
 
 def playbook_series_description_elements(
@@ -925,8 +1164,9 @@ def playbook_series_description_elements(
     Ordered Playbook CT series-name elements implemented by harmonize.
 
     Full CT convention order (RSNA spreadsheet): Laterality, Body Part, Body Part
-    Modifier, Maneuvers, Anatomic Plane, IV Contrast, … Harmonize currently emits
-    Body Part → Anatomic Plane → IV Contrast → Series Type (when applicable).
+    Modifier, Maneuvers, Anatomic Plane, IV Contrast, Slice Thickness, … Harmonize
+    currently emits Body Part → Anatomic Plane → IV Contrast → Slice Thickness (Thin/Thick
+    only when non-default) → Series Type (when applicable).
 
     For single-modality CT exams the ``CT`` modality prefix is omitted per Playbook rules.
     """
@@ -940,6 +1180,9 @@ def playbook_series_description_elements(
 
     if attributes.iv_contrast_code:
         elements.append(attributes.iv_contrast_code)
+
+    if attributes.slice_thickness_code:
+        elements.append(attributes.slice_thickness_code)
 
     if attributes.series_type_code:
         elements.append(attributes.series_type_code)
@@ -956,10 +1199,9 @@ def format_playbook_series_description(
     """
     Build the Playbook-compliant CT series description string.
 
-    Element order: ``{BodyPart[+…]} {AnatomicPlane} {IVContrastPhase} {SeriesType}``.
-    ``WO`` is emitted for native (without contrast) series per RadLex Playbook vocabulary.
-    Series Type is omitted for standard diagnostic volumes. Modality is omitted for
-    single-modality CT per Playbook rules. Localizers omit anatomic plane.
+    Element order: ``{BodyPart[+…]} {AnatomicPlane} {IVContrastPhase} [{Thin|Thick}] {SeriesType}``.
+    Standard-range thickness (≥2.5 mm and <5 mm) and sub-1 mm reconstructions are omitted
+    per RSNA CT Sandbox SeriesNameV4. ``WO`` is emitted for native series.
     """
     elements = playbook_series_description_elements(
         attributes,
@@ -1017,6 +1259,8 @@ def harmonize_dicom_rows(ds: Dataset) -> list[tuple[str, str, str]]:
         (_("SOP Class UID"), "(0008,0016)", _dicom_field_display(ds, "SOPClassUID")),
         (_("Derivation Description"), "(0008,2111)", _dicom_field_display(ds, "DerivationDescription")),
         (_("Body Part Examined"), "(0018,0015)", _dicom_field_display(ds, "BodyPartExamined")),
+        (_("Slice Thickness"), "(0018,0050)", _dicom_field_display(ds, "SliceThickness")),
+        (_("Spacing Between Slices"), "(0018,0088)", _dicom_field_display(ds, "SpacingBetweenSlices")),
         (_("Protocol Name"), "(0018,1030)", _dicom_field_display(ds, "ProtocolName")),
         (_("Scanning Sequence"), "(0018,0020)", _dicom_field_display(ds, "ScanningSequence")),
         (_("Image Orientation Patient"), "(0020,0037)", _dicom_field_display(ds, "ImageOrientationPatient")),
@@ -1158,6 +1402,80 @@ def playbook_iv_contrast_row_values(
     return (_("IV Contrast Phase"), "—", "—", "—", "—")
 
 
+def _slice_thickness_evidence(
+    *,
+    mm: float | None,
+    bucket: str,
+    emitted: str,
+    geometry: SeriesGeometryResult | None,
+    ds: Dataset | None,
+) -> str:
+    parts: list[str] = []
+    if mm is not None:
+        parts.append(f"{mm:g} mm")
+    if bucket:
+        parts.append(slice_thickness_label(bucket))
+    if geometry is not None and geometry.slice_spacing_mm is not None:
+        parts.append(_("IPP spacing") + f" {geometry.slice_spacing_mm:g} mm")
+    if ds is not None:
+        tag_mm = _dicom_slice_thickness_mm(ds)
+        if tag_mm is not None:
+            parts.append(_("SliceThickness tag") + f" {tag_mm:g} mm")
+    if bucket and not emitted:
+        parts.append(_("Omitted (standard or recon bucket)"))
+    return " · ".join(parts) if parts else "—"
+
+
+def playbook_slice_thickness_row_values(
+    attributes: PlaybookHarmonizeAttributes | None = None,
+    *,
+    geometry: SeriesGeometryResult | None = None,
+    ds: Dataset | None = None,
+) -> tuple[str, str, str, str, str]:
+    if attributes is not None and geometry is not None:
+        emitted, mm, bucket = resolve_slice_thickness_for_playbook(
+            geometry,
+            ds,
+            series_type_code=attributes.series_type_code,
+        )
+        if mm is None:
+            return (_("Slice Thickness"), "—", "—", "—", _("DICOM metadata"))
+        code = emitted or "—"
+        value = slice_thickness_label(bucket) if bucket else "—"
+        if emitted:
+            value = slice_thickness_label(emitted)
+        evidence = _slice_thickness_evidence(
+            mm=mm,
+            bucket=bucket,
+            emitted=emitted,
+            geometry=geometry,
+            ds=ds,
+        )
+        return (
+            _("Slice Thickness"),
+            code,
+            value,
+            evidence,
+            _("DICOM metadata"),
+        )
+    if geometry is not None:
+        emitted, mm, bucket = resolve_slice_thickness_for_playbook(
+            geometry,
+            ds,
+            series_type_code=map_series_type_code(ds, geometry),
+        )
+        if mm is None:
+            return (_("Slice Thickness"), "—", "—", "—", _("DICOM metadata"))
+        return (
+            _("Slice Thickness"),
+            emitted or "—",
+            slice_thickness_label(emitted or bucket),
+            _slice_thickness_evidence(mm=mm, bucket=bucket, emitted=emitted, geometry=geometry, ds=ds),
+            _("DICOM metadata"),
+        )
+    return (_("Slice Thickness"), "—", "—", "—", "—")
+
+
 def playbook_series_type_row_values(
     series_type_code: str = "",
     attributes: PlaybookHarmonizeAttributes | None = None,
@@ -1186,11 +1504,56 @@ def playbook_series_type_row_values(
     )
 
 
-PLAYBOOK_TREE_IIDS: tuple[str, str, str, str] = (
+def playbook_series_type_modifier_row_values(
+    attributes: PlaybookHarmonizeAttributes | None = None,
+    *,
+    ds: Dataset | None = None,
+    geometry: SeriesGeometryResult | None = None,
+) -> tuple[str, str, str, str, str]:
+    series_type_code = attributes.series_type_code if attributes is not None else ""
+    if geometry is not None and not series_type_code:
+        series_type_code = map_series_type_code(ds, geometry)
+
+    detected = ""
+    if attributes is not None:
+        detected = attributes.series_type_modifier_code
+    elif geometry is not None:
+        detected = map_series_type_modifier_code(
+            ds,
+            geometry,
+            series_type_code=series_type_code,
+        )
+
+    if not detected:
+        return (
+            _("Series Type Modifier"),
+            "—",
+            "—",
+            _("Omitted for standard diagnostic volumes"),
+            _("RadLex Playbook"),
+        )
+
+    evidence_parts = [series_type_modifier_label(detected)]
+    if geometry is not None:
+        evidence_parts.insert(0, provenance_label(geometry.provenance))
+    if not should_emit_series_type_modifier(detected):
+        evidence_parts.append(_("Omitted per SeriesNameV4"))
+    return (
+        _("Series Type Modifier"),
+        detected,
+        series_type_modifier_label(detected),
+        " · ".join(evidence_parts),
+        _("DICOM geometry"),
+    )
+
+
+PLAYBOOK_TREE_IIDS: tuple[str, str, str, str, str, str] = (
     "playbook_body_part",
     "playbook_plane",
     "playbook_iv_contrast",
+    "playbook_slice_thickness",
     "playbook_series_type",
+    "playbook_series_type_modifier",
 )
 
 
@@ -1206,7 +1569,9 @@ def harmonize_analysis_rows(
         playbook_body_part_row_values(attributes, geometry=geometry, tseg=tseg),
         playbook_plane_row_values(geometry, attributes.anatomic_plane_code),
         playbook_iv_contrast_row_values(attributes, geometry=geometry, tseg=tseg, ds=ds),
+        playbook_slice_thickness_row_values(attributes, geometry=geometry, ds=ds),
         playbook_series_type_row_values(attributes=attributes, ds=ds, geometry=geometry),
+        playbook_series_type_modifier_row_values(attributes=attributes, ds=ds, geometry=geometry),
     ]
 
 

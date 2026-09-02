@@ -50,6 +50,14 @@ def test_parse_playbook_series_description():
     assert localizer["is_localizer"] is True
     assert localizer["contrast"] == "WO"
 
+    thin = parse_playbook_series_description("Ch Ax WO Thin")
+    assert thin["slice_thickness"] == "Thin"
+    assert thin["plane"] == "Ax"
+    assert thin["contrast"] == "WO"
+
+    mpr = parse_playbook_series_description("Brain Sag WO MPR")
+    assert mpr["series_type_modifier"] == "MPR"
+
 
 def test_aggregate_chest_abdomen_with_contrast():
     aggregate = aggregate_study_from_series_descriptions(

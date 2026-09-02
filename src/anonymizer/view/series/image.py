@@ -918,7 +918,12 @@ class ImageViewer(ctk.CTkFrame):
             return 0
         max_w, max_h = self._screen_canvas_budget()
         upscale_w, upscale_h = self._calculate_scaled_size(max_w, max_h, allow_upscale=True)
-        widest = f"View[{upscale_w}x{upscale_h}] Actual[{self.image_width}x{self.image_height}]"
+        widest = _("View[{vw}x{vh}] Actual[{aw}x{ah}]").format(
+            vw=upscale_w,
+            vh=upscale_h,
+            aw=self.image_width,
+            ah=self.image_height,
+        )
         with contextlib.suppress(tk.TclError, AttributeError):
             return int(self.image_size_label.cget("font").measure(widest)) + 4
         return 0
@@ -1175,8 +1180,11 @@ class ImageViewer(ctk.CTkFrame):
 
     def get_dimensions_text(self) -> str:
         # View = on-screen pixel dimensions (current_size); Actual = native DICOM frame size.
-        return (
-            f"View[{self.current_size[0]}x{self.current_size[1]}] Actual[{self.images.shape[2]}x{self.images.shape[1]}]"
+        return _("View[{vw}x{vh}] Actual[{aw}x{ah}]").format(
+            vw=self.current_size[0],
+            vh=self.current_size[1],
+            aw=self.images.shape[2],
+            ah=self.images.shape[1],
         )
 
     def update_status(self):

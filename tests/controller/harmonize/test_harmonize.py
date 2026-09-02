@@ -83,6 +83,34 @@ def test_harmonize_builds_playbook_description_from_tseg_only(
 @patch("anonymizer.controller.ai.harmonize.pipeline.ENABLE_TS_CONTRAST", True)
 @patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast")
 @patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions")
+def test_harmonize_mpr_reformat_detects_modifier_not_in_description(
+    mock_regions: MagicMock,
+    mock_contrast: MagicMock,
+    tmp_path: Path,
+) -> None:
+    from tests.controller.tseg.support.synthetic_ct import build_synthetic_derived_coronal_mpr_series
+
+    mpr_dir = build_synthetic_derived_coronal_mpr_series(tmp_path / "mpr")
+    nifti = mpr_dir / "volume.nii.gz"
+    mock_regions.return_value = (_tseg_region_result(mpr_dir), nifti)
+    mock_contrast.return_value = _tseg_result(mpr_dir)
+
+    merged = harmonize_series([mpr_dir])[0]
+
+    assert merged.error is None
+    assert merged.playbook is not None
+    assert merged.geometry is not None
+    assert merged.geometry.provenance == "derived_reformat"
+    assert merged.playbook.series_type_modifier_code == "MPR"
+    assert merged.playbook.series_type_code == ""
+    assert "MPR" not in merged.radlex_series_description
+    assert merged.radlex_series_description == "Ch Cor PortVen"
+
+
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
+@patch("anonymizer.controller.ai.harmonize.pipeline.ENABLE_TS_CONTRAST", True)
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions")
 def test_harmonize_reports_geometry_progress(
     mock_regions: MagicMock,
     mock_contrast: MagicMock,
@@ -186,6 +214,8 @@ def test_harmonize_skips_tseg_for_breast_anatomical_mr(
     assert merged.playbook.body_part_code == "Breast"
     assert merged.playbook.anatomic_plane_code == "Ax"
     assert merged.playbook.series_type_code == ""
+    assert merged.playbook.slice_thickness_code == ""
+    assert merged.playbook.series_type_modifier_code == ""
     assert merged.radlex_series_description == "Breast Ax W"
 
 
@@ -472,6 +502,15 @@ def test_harmonize_analysis_section_renders_playbook_attributes() -> None:
     )
     rows = harmonize_analysis_rows(attributes, geometry=geometry, tseg=tseg)
     text = "\n".join(" | ".join(row) for row in rows)
+    assert len(rows) == 6
+    assert [row[0] for row in rows] == [
+        "Body Part",
+        "Anatomic Plane",
+        "IV Contrast Phase",
+        "Slice Thickness",
+        "Series Type",
+        "Series Type Modifier",
+    ]
     assert rows[0][1] == "Brain"
     assert "[Brain]" not in text
     assert "Brain" in text
@@ -479,7 +518,7 @@ def test_harmonize_analysis_section_renders_playbook_attributes() -> None:
     assert "WO" in text
     assert "Head (dominant: Head)" in text
     assert "Axial · Diagnostic 3D volume · TS ok" in text
-    assert "native ·" in text and "confidence" in text
+    assert "Native ·" in text and "confidence" in text
     assert "TotalSegmentator anatomy" in text
     assert "TotalSegmentator contrast" in text
     assert "DICOM ImageOrientationPatient" in text
@@ -497,7 +536,9 @@ def test_harmonize_dicom_table_includes_all_relevant_fields() -> None:
     labels = [row[0] for row in rows]
     assert "(geometry)" not in "".join(row[1] for row in rows)
     assert "Acquisition plane" not in labels
-    assert len(rows) == 16
+    assert "Slice Thickness" in labels
+    assert "Spacing Between Slices" in labels
+    assert len(rows) == 18
     assert any(row[2] == "—" for row in rows)
     assert any(row[2] != "—" for row in rows)
 

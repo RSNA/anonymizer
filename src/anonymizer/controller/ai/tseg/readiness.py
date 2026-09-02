@@ -86,15 +86,15 @@ def face_license_available() -> bool:
 
 def verify_face_license() -> tuple[bool, str]:
     if not totalsegmentator_available():
-        return False, f"TotalSegmentator not installed. Install with: {_TSEG_INSTALL_HINT}"
+        return False, _("TotalSegmentator not installed. Install with: {hint}").format(hint=_TSEG_INSTALL_HINT)
     try:
         from totalsegmentator.config import has_valid_license_offline
     except ImportError as exc:
-        return False, f"TotalSegmentator license check unavailable: {exc}"
+        return False, _("TotalSegmentator license check unavailable: {error}").format(error=exc)
     try:
         valid, message = has_valid_license_offline()
     except Exception as exc:
-        return False, f"License check failed: {exc}"
+        return False, _("License check failed: {error}").format(error=exc)
     if valid == "yes":
         return True, message
     return False, message
@@ -421,16 +421,3 @@ def log_runtime_status() -> None:
         "  Brain structures model: %s",
         "downloaded" if brain_structures_ready() else "not downloaded",
     )
-
-
-# Back-compat aliases used by older call sites during migration.
-def _checkpoint_ready(model_folder: Path | None) -> bool:
-    return checkpoint_ready(model_folder)
-
-
-def _resolve_model_folder(task_id: int, trainer: str, model: str = _MODEL) -> Path | None:
-    return resolve_model_folder(task_id, trainer, model)
-
-
-def _totalsegmentator_import_ok() -> bool:
-    return totalsegmentator_available()

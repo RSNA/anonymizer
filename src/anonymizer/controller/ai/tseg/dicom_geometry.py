@@ -879,7 +879,7 @@ def ensure_series_geometry(
     cached: SeriesGeometryResult | None = None,
 ) -> SeriesGeometryResult | None:
     """Return CT|MR series geometry from memory, cache, or on-demand analysis."""
-    from anonymizer.controller.ai.tseg.modality_profile import is_tseg_modality
+    from anonymizer.utils.modalities import is_tseg_modality
 
     if cached is not None:
         return cached

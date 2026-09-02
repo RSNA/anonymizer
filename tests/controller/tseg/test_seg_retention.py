@@ -11,7 +11,6 @@ import SimpleITK as sitk
 from anonymizer.controller.ai.tseg.config import ROI_SUBSET_HEAD, ROI_TIER_HEAD
 from anonymizer.controller.ai.tseg.seg_retention import (
     aggregate_primary_segment_voxels,
-    compact_seg_cache_if_needed,
     compute_latch_mask_keep_set,
     finalize_seg_cache,
     prune_seg_cache,
@@ -80,18 +79,6 @@ def test_collect_primary_segment_voxels_reads_json(tmp_path: Path) -> None:
 
     present = collect_primary_segment_voxels(seg_dir)
     assert present == {"brain": 5000, "skull": 3000}
-
-
-def test_compact_legacy_cache_builds_sidecars(tmp_path: Path) -> None:
-    cache_dir = tmp_path / "0_TS_SEG"
-    seg_dir = cache_dir / "seg"
-    _write_mask(seg_dir / "brain.nii.gz", 5000)
-    _write_mask(seg_dir / "liver.nii.gz", 0)
-
-    assert compact_seg_cache_if_needed(cache_dir, seg_dir, ["brain", "liver"]) is True
-    assert read_structure_voxels(cache_dir) is not None
-    assert (seg_dir / "brain.nii.gz").is_file()
-    assert not (seg_dir / "liver.nii.gz").is_file()
 
 
 def test_load_primary_segment_mask_uses_mask_geometry_without_volume(tmp_path: Path) -> None:

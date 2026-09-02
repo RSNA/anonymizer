@@ -30,12 +30,14 @@ from anonymizer.controller.ai.harmonize.playbook import (
     playbook_body_part_row_values,
     playbook_iv_contrast_row_values,
     playbook_plane_row_values,
+    playbook_series_type_modifier_row_values,
     playbook_series_type_row_values,
+    playbook_slice_thickness_row_values,
 )
-from anonymizer.controller.ai.tseg.modality_profile import is_mr_modality
 from anonymizer.controller.runner import Algorithm
 from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import StudyPhiHeader
+from anonymizer.utils.modalities import is_mr_modality
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.features.availability import brain_structures_allowed
 from anonymizer.view.ai.features.catalog import AiFeatureId, feature_description
@@ -163,18 +165,18 @@ class HarmonizeResultsView(AppToplevel):
     _FOOTER_HEIGHT_PX = 44
 
     _dicom_attr_map: dict[str, tuple[str, int, bool, bool]] = {
-        "field": (_("Field"), 30, False, False),
-        "tag": (_("Tag"), 13, False, False),
-        "value": (_("Value"), 65, False, True),
+        "field": ("Field", 30, False, False),
+        "tag": ("Tag", 13, False, False),
+        "value": ("Value", 65, False, True),
     }
     _dicom_column_keys = list(_dicom_attr_map.keys())
 
     _playbook_attr_map: dict[str, tuple[str, int, bool, bool]] = {
-        "element": (_("Element"), 20, False, False),
-        "code": (_("Code"), 13, False, False),
-        "value": (_("Value"), 22, False, False),
-        "evidence": (_("Evidence"), 34, False, True),
-        "source": (_("Source"), 34, False, True),
+        "element": ("Element", 20, False, False),
+        "code": ("Code", 13, False, False),
+        "value": ("Value", 22, False, False),
+        "evidence": ("Evidence", 34, False, True),
+        "source": ("Source", 34, False, True),
     }
     _playbook_column_keys = list(_playbook_attr_map.keys())
 
@@ -535,6 +537,19 @@ class HarmonizeResultsView(AppToplevel):
         chrome_px = header_px + dicom_px + playbook_px + proposal_px + self._FOOTER_HEIGHT_PX + (self.PAD * 3)
         return max(720, chrome_px)
 
+    @staticmethod
+    def _column_heading(msgid: str) -> str:
+        headings = {
+            "Field": _("Field"),
+            "Tag": _("Tag"),
+            "Value": _("Value"),
+            "Element": _("Element"),
+            "Code": _("Code"),
+            "Evidence": _("Evidence"),
+            "Source": _("Source"),
+        }
+        return headings.get(msgid, _(msgid))
+
     def _build_treeview(
         self,
         parent: ctk.CTkFrame,
@@ -557,7 +572,7 @@ class HarmonizeResultsView(AppToplevel):
 
         for col in column_keys:
             col_name, col_width_chars, center, stretch = attr_map[col]
-            tree.heading(col, text=col_name)
+            tree.heading(col, text=HarmonizeResultsView._column_heading(col_name))
             width_px = int(max(col_width_chars, len(col_name)) * char_width_px)
             tree.column(
                 col,
@@ -634,7 +649,15 @@ class HarmonizeResultsView(AppToplevel):
             )
             self._upsert_playbook_row(
                 PLAYBOOK_TREE_IIDS[3],
+                playbook_slice_thickness_row_values(geometry=progress.geometry, ds=self._ds),
+            )
+            self._upsert_playbook_row(
+                PLAYBOOK_TREE_IIDS[4],
                 playbook_series_type_row_values(ds=self._ds, geometry=progress.geometry),
+            )
+            self._upsert_playbook_row(
+                PLAYBOOK_TREE_IIDS[5],
+                playbook_series_type_modifier_row_values(geometry=progress.geometry, ds=self._ds),
             )
 
         tseg = progress.tseg

@@ -8,15 +8,17 @@ from anonymizer.controller.ai.tseg.modality_profile import (
     CT_FACE_TASK_ID,
     ROI_SUBSET_MR,
     ct_modality_profile,
+    mr_modality_profile,
+    profile_for_modality,
+)
+from anonymizer.controller.ai.tseg.segment import STRUCTURE_TO_REGION
+from anonymizer.utils.modalities import (
     is_ct_modality,
     is_mr_modality,
     is_tseg_modality,
-    mr_modality_profile,
     normalize_modality,
-    profile_for_modality,
     series_is_tseg_eligible,
 )
-from anonymizer.controller.ai.tseg.segment import STRUCTURE_TO_REGION
 
 
 def test_normalize_modality_maps_mri():

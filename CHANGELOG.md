@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- Harmonize: RSNA Playbook slice-thickness tokens (`Thin`, `Thick`) inferred from DICOM geometry/tags; standard-range thickness omitted per CT Sandbox SeriesNameV4
+- Harmonize: detect Series Type Modifier (`MPR` for derived reformats); show in dialog, omit from description per SeriesNameV4
 
 ## [19.0.0.dev12]
 - Harmonize: cooperative cancellation (skip contrast/merge after cancel; in-flight TotalSegmentator inference still runs to completion)

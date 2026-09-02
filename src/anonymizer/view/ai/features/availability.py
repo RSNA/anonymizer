@@ -14,13 +14,10 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     probe_ocr_models,
 )
 from anonymizer.controller.ai.tseg.config import (
-    DEFAULT_SEGMENTATION_MODE,
-    SegmentationMode,
     get_ct_segmentation_mode,
     get_mr_segmentation_mode,
     normalize_segmentation_mode,
 )
-from anonymizer.controller.ai.tseg.modality_profile import is_mr_modality
 from anonymizer.controller.ai.tseg.model_cache import (
     ct_face_models_ready,
     face_task_ids,
@@ -45,6 +42,7 @@ from anonymizer.controller.ai.tseg.readiness import (
     ts_academic_license_url,
     xgboost_available,
 )
+from anonymizer.utils.modalities import is_mr_modality
 from anonymizer.utils.storage import (
     any_model_download_active,
     begin_model_download,
@@ -85,7 +83,7 @@ _FRIENDLY_TASK_LABELS: dict[int, str] = {
     297: "CT anatomy 3 mm",
     298: "CT crop / 6 mm",
     303: "CT face 1.5 mm",
-    409: "CT brain structures 0.5×0.5×1 mm",
+    409: "CT brain structures 0.5 x 0.5 x 1 mm",
     776: "CT contrast (head/neck)",
     852: "MR anatomy 3 mm",
     853: "MR anatomy 6 mm",
@@ -212,23 +210,17 @@ def face_mr_needs_download() -> bool:
 # --- Status lines ---
 
 
-def _segmentation_mode_short_label(mode: object | None) -> str:
-    return {
-        "1.5mm": "1.5 mm",
-        "3mm": "3 mm",
-        "6mm": "6 mm",
-    }[normalize_segmentation_mode(mode)]
-
-
 def _harmonize_resolution_status(*, active: object | None, installed: tuple[str, ...]) -> str:
     """Compact status; dropdown already shows the active resolution."""
+    from anonymizer.controller.ai.tseg.config import segmentation_mode_display
+
     active_mode = normalize_segmentation_mode(active)
     installed_modes = tuple(normalize_segmentation_mode(mode) for mode in installed)
     if not installed_modes:
         return _("Not installed.")
     if active_mode not in installed_modes:
         return _("Download selected resolution.")
-    others = [_segmentation_mode_short_label(mode) for mode in installed_modes if mode != active_mode]
+    others = [segmentation_mode_display(mode) for mode in installed_modes if mode != active_mode]
     if others:
         return _("Also installed: {others}.").format(others=", ".join(others))
     return ""
@@ -283,7 +275,7 @@ def ai_feature_status_harmonize_mr() -> str:
 
 def ai_feature_status_brain_structures() -> str:
     if brain_structures_has_models():
-        return _("Installed (0.5×0.5×1 mm).")
+        return _("Installed (0.5 x 0.5 x 1 mm).")
     if _download_in_progress(DOWNLOAD_ID_BRAIN):
         return _("Downloading…")
     if not totalsegmentator_available():
@@ -418,48 +410,12 @@ def format_installed_inventory_status(
     if group in {AiModelGroupId.FACE_CT, AiModelGroupId.FACE_MR}:
         return _("Installed: 1.5 mm.")
     if group == AiModelGroupId.BRAIN_STRUCTURES:
-        return _("Installed: 0.5×0.5×1 mm.")
+        return _("Installed: 0.5 x 0.5 x 1 mm.")
     if not resolution_line:
         lines.append(_("Installed."))
     for item in inventory:
         lines.append(f"• {item}")
     return "\n".join(lines)
-
-
-# --- Segmentation mode menus ---
-
-
-def segmentation_mode_menu_values() -> tuple[str, ...]:
-    return (_("1.5 mm"), _("3 mm"), _("6 mm"))
-
-
-def segmentation_mode_menu_label(mode: object | None) -> str:
-    return _(_segmentation_mode_short_label(mode))
-
-
-def segmentation_mode_from_menu_label(label: object | None) -> SegmentationMode:
-    text = str(label or "").strip().lower()
-    if text.startswith("1.5"):
-        return "1.5mm"
-    if text.startswith("6"):
-        return "6mm"
-    if text.startswith("3"):
-        return "3mm"
-    return DEFAULT_SEGMENTATION_MODE  # type: ignore[return-value]
-
-
-def default_installed_segmentation_mode(modes: tuple[str, ...] | list[str]) -> SegmentationMode:
-    """Prefer 3 mm when installed; otherwise the first installed mode."""
-    normalized = tuple(normalize_segmentation_mode(mode) for mode in modes)
-    if "3mm" in normalized:
-        return "3mm"  # type: ignore[return-value]
-    if normalized:
-        return normalized[0]
-    return DEFAULT_SEGMENTATION_MODE  # type: ignore[return-value]
-
-
-def installed_segmentation_mode_menu_values(modes: tuple[str, ...] | list[str]) -> tuple[str, ...]:
-    return tuple(segmentation_mode_menu_label(mode) for mode in modes)
 
 
 # --- License UX ---
@@ -520,15 +476,18 @@ class AiFeatureDownloadManager:
         worker: Callable[[], object],
         *,
         on_complete: Callable[[DownloadCompleteEvent], None],
-        preparing_message: str = "Preparing model download…",
+        preparing_message: str | None = None,
     ) -> bool:
         """Start a download if idle. Returns False when another download is already running."""
+        from anonymizer.utils.translate import _
+
+        resolved_preparing = preparing_message or _("Preparing model download…")
         with self._lock:
             if self.busy():
                 logger.info("AI Features: download already in progress (requested %s)", download_id)
                 return False
             self._pending_download_id = download_id
-            begin_model_download(download_id, message=preparing_message)
+            begin_model_download(download_id, message=resolved_preparing)
 
             def run() -> None:
                 result: object = None

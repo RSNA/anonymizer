@@ -171,7 +171,7 @@ def ocr_results_available_for_edit_context(
 
 def clear_cache_button_visible(*, modality: str | None, already_harmonized: bool) -> bool:
     """Show Clear only after Harmonize has been applied (Dataset Harmonized=Yes)."""
-    from anonymizer.controller.ai.tseg.modality_profile import is_tseg_modality
+    from anonymizer.utils.modalities import is_tseg_modality
 
     return is_tseg_modality(modality) and already_harmonized
 
@@ -200,7 +200,7 @@ def harmonize_button_visible(
     already_harmonized: bool,
 ) -> bool:
     """Show Harmonize Description only when it can be run (once per series until Clear)."""
-    from anonymizer.controller.ai.tseg.modality_profile import is_tseg_modality
+    from anonymizer.utils.modalities import is_tseg_modality
 
     if not harmonize_models_ready:
         return False
@@ -448,7 +448,7 @@ class SeriesView(AppCTkToplevel):
         )
 
         series_geometry: SeriesGeometryResult | None = None
-        from anonymizer.controller.ai.tseg.modality_profile import is_tseg_modality
+        from anonymizer.utils.modalities import is_tseg_modality
 
         if is_tseg_modality(getattr(loaded.metadata, "Modality", None)):
             series_geometry = load_geometry_cache(series_path)
@@ -2074,7 +2074,7 @@ class SeriesView(AppCTkToplevel):
             self.update_status(_("Blackout applied to all images"))
 
     def harmonize_description_button_clicked(self):
-        from anonymizer.controller.ai.tseg.modality_profile import is_tseg_modality
+        from anonymizer.utils.modalities import is_tseg_modality
 
         if self._ds is None or not is_tseg_modality(getattr(self._ds, "Modality", None)):
             return
@@ -2106,7 +2106,7 @@ class SeriesView(AppCTkToplevel):
         self._refresh_series_processing_status()
 
     def clear_ts_cache_button_clicked(self) -> None:
-        from anonymizer.controller.ai.tseg.modality_profile import is_tseg_modality
+        from anonymizer.utils.modalities import is_tseg_modality
 
         if self._ds is None or not is_tseg_modality(getattr(self._ds, "Modality", None)):
             return

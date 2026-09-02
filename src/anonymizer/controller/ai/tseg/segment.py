@@ -53,7 +53,6 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
 )
 from anonymizer.controller.ai.tseg.ml_env import sequential_ml_context
 from anonymizer.controller.ai.tseg.seg_retention import (
-    compact_seg_cache_if_needed,
     evict_tseg_volume,
     finalize_seg_cache,
     read_structure_voxels,
@@ -261,7 +260,6 @@ def collect_structure_voxels_from_masks(segmentation_dir: Path, structures: list
 def collect_structure_voxels(segmentation_dir: Path, structures: list[str]) -> dict[str, int]:
     seg_dir = Path(segmentation_dir)
     cache_dir = seg_dir.parent
-    compact_seg_cache_if_needed(cache_dir, seg_dir, structures)
     cached = read_structure_voxels(cache_dir)
     if cached is not None and set(structures) <= set(cached.keys()):
         return {structure: int(cached.get(structure, 0)) for structure in structures}
@@ -752,9 +750,9 @@ def estimate_tseg_contrast_remaining_sec(series_directory: Path) -> float:
 
 def face_mask_cache_path(series_directory: Path, *, profile=None) -> Path:
     """Cached face mask under ``<series>/0_TS_SEG/seg/`` (CT ``face.nii.gz`` / MR ``face_mr.nii.gz``)."""
-    from anonymizer.controller.ai.tseg.modality_profile import default_ct_profile
+    from anonymizer.controller.ai.tseg.modality_profile import ct_modality_profile
 
-    resolved = profile if profile is not None else default_ct_profile()
+    resolved = profile if profile is not None else ct_modality_profile()
     return series_cache_dir(series_directory) / "seg" / resolved.face_mask_filename
 
 
@@ -782,15 +780,6 @@ def _face_error_result(series_directory: Path, error: str) -> FaceSegResult:
         face_voxel_count=0,
         inference_seconds=0.0,
         error=error,
-    )
-
-
-def _is_skeletal_roi(structure: str) -> bool:
-    return (
-        structure.startswith("vertebrae_")
-        or structure.startswith("rib_")
-        or structure.startswith("clavicula_")
-        or structure in {"sacrum", "vertebrae"}
     )
 
 
@@ -844,48 +833,24 @@ def _segmentation_cache_valid(
     anatomy_task: str = "total",
     modality: str = "CT",
 ) -> bool:
-    """True when ROI masks exist and the cache covers the currently requested ROI subset.
-
-    Soft-tissue-only legacy caches (pre-skeletal ROI expansion) are treated as stale so
-    Harmonize re-runs and Series View can latch spine / ribs / clavicles.
-    Manifest modality/task must match so a CT cache is never accepted for MR (and vice versa).
-    """
+    """True when ROI masks exist and the cache covers the requested ROI subset."""
     if not seg_dir.is_dir():
         return False
 
     cache_dir = seg_dir.parent
     recorded_bundle = _read_roi_subset_manifest(cache_dir)
     requested = set(structures)
-    if recorded_bundle is not None:
-        recorded, recorded_task, recorded_modality = recorded_bundle
-        if recorded_task is not None and recorded_task != anatomy_task:
-            return False
-        if recorded_modality is not None and recorded_modality != modality:
-            return False
-        # Legacy manifests without modality/task: only accept for CT ``total``.
-        if recorded_task is None and recorded_modality is None and (anatomy_task != "total" or modality != "CT"):
-            return False
-        if not requested <= recorded:
-            return False
-        if structure_voxels_sidecar_valid(cache_dir, structures):
-            return True
-        return any((seg_dir / f"{structure}.nii.gz").is_file() for structure in structures)
+    if recorded_bundle is None:
+        return False
 
-    # Legacy caches without a manifest: CT total only.
-    if anatomy_task != "total" or modality != "CT":
+    recorded, recorded_task, recorded_modality = recorded_bundle
+    if recorded_task != anatomy_task or recorded_modality != modality:
+        return False
+    if not requested <= recorded:
         return False
     if structure_voxels_sidecar_valid(cache_dir, structures):
         return True
-    if not any((seg_dir / f"{structure}.nii.gz").is_file() for structure in structures):
-        return False
-    skeletal_requested = [name for name in structures if _is_skeletal_roi(name)]
-    if skeletal_requested and not any((seg_dir / f"{name}.nii.gz").is_file() for name in skeletal_requested):
-        return False
-    try:
-        write_roi_subset_manifest(cache_dir, structures, anatomy_task=anatomy_task, modality=modality)
-    except OSError:
-        logger.debug("TS regions: could not backfill ROI subset manifest under %s", cache_dir)
-    return True
+    return any((seg_dir / f"{structure}.nii.gz").is_file() for structure in structures)
 
 
 def _nifti_slice_count(nifti_path: Path) -> int:
@@ -1107,7 +1072,7 @@ def _analyze_tseg_regions_impl(
             _report_progress(
                 progress,
                 stage="segment",
-                message=_("Using cached anatomy segmentation"),
+                message="Using cached anatomy segmentation",
                 fraction=0.35,
                 started=analysis_started,
             )

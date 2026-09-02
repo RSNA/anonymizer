@@ -116,6 +116,14 @@ def normalize_modality(value: object | None) -> str:
     return text
 
 
+def is_ct_modality(value: object | None) -> bool:
+    return normalize_modality(value) == "CT"
+
+
+def is_mr_modality(value: object | None) -> bool:
+    return normalize_modality(value) == "MR"
+
+
 def is_tseg_modality(value: object | None) -> bool:
     return normalize_modality(value) in {"CT", "MR"}
 

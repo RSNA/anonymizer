@@ -1,173 +1,173 @@
-# Whitelist for common terms found on Ultrasound (US) images
-# One term/phrase per line. Case-insensitive matching is assumed after loading.
-# Lines starting with # are comments and will be ignored.
+# Lista blanca de términos habituales en imágenes de ultrasonido
+# Un término/frase por línea. La coincidencia no distingue mayúsculas/minúsculas al cargar.
+# Las líneas que comienzan con # son comentarios y se ignorarán.
 
-# --- Laterality ---
+# --- Lateralidad ---
 L
 R
-LEFT
-RIGHT
+IZQUIERDA
+DERECHA
 LT
 RT
 BILATERAL
 BILAT
 
-# --- Orientation / Position ---
-SAG # Sagittal
-TRV # Transverse
-TRA # Transverse
+# --- Orientación / Posición ---
+SAG # Sagital
+TRV # Transversal
+TRA # Transversal
 COR # Coronal
-LONG # Longitudinal
+LONGITUDINAL # Longitudinal
 AXIAL
 AX
-OBLIQUE
-SUPINE
-PRONE
-DECUBITUS
-LLD # Left Lateral Decubitus
-RLD # Right Lateral Decubitus
-ERECT
-SEMI-ERECT
-SITTING
+OBLICUO
+SUPINO
+PRONO
+DECÚBITO
+LLD # Decúbito lateral izquierdo
+RLD # Decúbito lateral derecho
+ERECTO
+SEMIERECTO
+SENTADO
 
-# --- Anatomy (Very General - Add specific non-PHI terms carefully) ---
-HEAD
-NECK
-THYROID
-CAROTID
-CHEST
-BREAST
+# --- Anatomía (muy general: añadir términos no PHI específicos con cuidado) ---
+CABEZA
+CUELLO
+TIROIDES
+CARÓTIDA
+TÓRAX
+MAMA
 ABDOMEN
-LIVER
-GALLBLADDER
+HÍGADO
+VESÍCULA BILIAR
 GB
-CBD # Common Bile Duct
-PANCREAS
-SPLEEN
-KIDNEY
+CBD # Conducto biliar común
+PÁNCREAS
+BAZO
+RIÑÓN
 RENAL
 AORTA
 IVC
 PELVIS
-UTERUS
-OVARY
-PROSTATE
-TESTIS
-SCROTUM
-BLADDER
-EXTREMITY
-ARM
-LEG
-VENOUS
+ÚTERO
+OVARIO
+PRÓSTATA
+TESTÍCULO
+ESCROTO
+VEJIGA
+EXTREMIDAD
+BRAZO
+PIERNA
+VENOSO
 ARTERIAL
-DVT # Deep Vein Thrombosis
-APPENDIX
-HEART # Echocardiography terms often differ significantly
+DVT # Trombosis venosa profunda
+APÉNDICE
+CORAZÓN # Los términos de ecocardiografía suelen diferir
 FETAL
-OB # Obstetrics
-GYN # Gynecology
+OB # Obstetricia
+GYN # Ginecología
 
-# --- Scanner / Technical Parameters ---
+# --- Escáner / Parámetros técnicos ---
 US
-ULTRA SOUND
+ULTRASONIDO
 SONO
-SONOGRAM
-PROBE
-TRANSDUCER
-LINEAR
-CURVED
+SONOGRAMA
+SONDA
+TRANSDUCTOR
+LINEAL
+CURVO
 SECTOR
-ENDO # Endocavitary (e.g., Endovaginal, Endorectal)
+ENDO # Endocavitario (p. ej., endovaginal, endorrectal)
 EV # Endovaginal
-ER # Endorectal
-FREQ # Frequency
+ER # Endorrectal
+FREQ # Frecuencia
 MHZ # Megahertz
 GAIN
-TGC # Time Gain Compensation
-DEPTH
-FOCUS
+TGC # Compensación de ganancia temporal
+PROFUNDIDAD
+ENFOQUE
 FOV
 ZOOM
-HARMONIC
-THI # Tissue Harmonic Imaging
-COMPOUND
-POWER
+ARMÓNICO
+THI # Imagen armónica tisular
+COMPUESTO
+POTENCIA
 DOPPLER
 COLOR
-CD # Color Doppler
-PWR # Power Doppler
-PW # Pulsed Wave Doppler
-CW # Continuous Wave Doppler
-SPECTRAL
+CD # Doppler color
+PWR # Doppler de potencia
+PW # Doppler pulsado
+CW # Doppler continuo
+ESPECTRAL
 VEL # Velocity
-PRF # Pulse Repetition Frequency
-FILTER
-SCALE
-ANGLE
+PRF # Frecuencia de repetición de pulso
+FILTRO
+ESCALA
+ÁNGULO
 CURSOR
-CALIPER
-MEASURE
+CALIBRADOR
+MEDICIÓN
 DIST # Distance
-AREA
-VOLUME
+ÁREA
+VOLUMEN
 VOL
-MI # Mechanical Index
-TIS # Thermal Index Soft Tissue
-TIB # Thermal Index Bone
-TIC # Thermal Index Cranial Bone
-FR # Frame Rate
-FPS # Frames Per Second
-GRAYSCALE
-B MODE
-M MODE
+MI # Índice mecánico
+TIS # Índice térmico tejidos blandos
+TIB # Índice térmico hueso
+TIC # Índice térmico hueso craneal
+FR # Velocidad de fotogramas
+FPS # Fotogramas por segundo
+ESCALA DE GRISES
+MODO B
+MODO M
 
-# --- Measurements / Units ---
+# --- Medidas / Unidades ---
 MM
 CM
-M/S # Meters per second
-CM/S # Centimeters per second
+M/S # Metros por segundo
+CM/S # Centímetros por segundo
 KHZ # Kilohertz
 HZ # Hertz
-DEG # Degrees
+DEG # Grados
 
-# --- Miscellaneous ---
-SERIES
-IMAGE
+# --- Varios ---
+SERIE
+IMAGEN
 IMG
 CINE
-LOOP
+BUCLE
 CLIP
-VIEW
-PLANE
-SCAN
+VISTA
+PLANO
+ESCANEO
 NO
 NUM
-NUMBER
-EXAM DATE
-EXAM TIME
-ACQ DATE
-ACQ TIME
+NÚMERO
+FECHA DE EXAMEN
+HORA DE EXAMEN
+FECHA DE ADQUISICIÓN
+HORA DE ADQUISICIÓN
 POS
-POSITION
+POSICIÓN
 REF
-REFERENCE
-NONE
+REFERENCIA
+NINGUNO
 N/A
-VARIOUS
-SEE REPORT
-CLINICAL HISTORY
-PROTOCOL
+VARIOS
+VER INFORME
+HISTORIA CLÍNICA
+PROTOCOLO
 AUTO
-FREEZE
-PRINT
-STORE
+CONGELAR
+IMPRIMIR
+GUARDAR
 
-# --- Common Artifacts / Descriptions (Use cautiously) ---
-SHADOWING
-ENHANCEMENT
-REVERBERATION
-MIRROR
-ARTIFACT
+# --- Artefactos / descripciones comunes (usar con precaución) ---
+SOMBRA
+REALCE
+REVERBERACIÓN
+ESPEJO
+ARTEFACTO
 
-# --- Add institution-specific, non-PHI identifiers if necessary ---
-# E.g., US_ROOM_3, SONOGRAPHER_ID_XYZ
+# --- Añadir identificadores institucionales no PHI si es necesario ---
+# P. ej., US_ROOM_3, SONOGRAPHER_ID_XYZ

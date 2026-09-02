@@ -15,6 +15,7 @@ from anonymizer.controller.ai.remove_pixel_phi import ocr_models_ready
 from anonymizer.controller.ai.tseg.config import (
     get_ct_segmentation_mode,
     get_mr_segmentation_mode,
+    segmentation_mode_menu_values,
     set_ct_segmentation_mode,
     set_mr_segmentation_mode,
 )
@@ -23,6 +24,7 @@ from anonymizer.controller.ai.tseg.readiness import (
     get_stored_face_license,
     weight_kind_ready,
 )
+from anonymizer.utils.app_state import persist_ai_features_preferences
 from anonymizer.utils.storage import get_model_download_progress
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.features.availability import (
@@ -30,9 +32,6 @@ from anonymizer.view.ai.features.availability import (
     face_blur_needs_license,
     face_license_request_instructions,
     get_download_manager,
-    segmentation_mode_from_menu_label,
-    segmentation_mode_menu_label,
-    segmentation_mode_menu_values,
     validate_face_license_format,
 )
 from anonymizer.view.ai.features.catalog import (
@@ -101,17 +100,21 @@ class AiFeaturesPanel(ctk.CTkFrame):
     def sync_from_runtime(self) -> None:
         """Refresh status from on-disk weights."""
         if self._ct_mode_var is not None:
-            self._ct_mode_var.set(segmentation_mode_menu_label(get_ct_segmentation_mode()))
+            self._ct_mode_var.set(get_ct_segmentation_mode())
         if self._mr_mode_var is not None:
-            self._mr_mode_var.set(segmentation_mode_menu_label(get_mr_segmentation_mode()))
+            self._mr_mode_var.set(get_mr_segmentation_mode())
         self._refresh_status()
 
     def apply_session(self) -> None:
-        """Apply ephemeral download resolution selections (no project persistence)."""
+        """Apply and persist workstation Harmonize resolution selections."""
         if self._ct_mode_var is not None:
-            set_ct_segmentation_mode(segmentation_mode_from_menu_label(self._ct_mode_var.get()))
+            set_ct_segmentation_mode(self._ct_mode_var.get())
         if self._mr_mode_var is not None:
-            set_mr_segmentation_mode(segmentation_mode_from_menu_label(self._mr_mode_var.get()))
+            set_mr_segmentation_mode(self._mr_mode_var.get())
+        persist_ai_features_preferences()
+
+    def _persist_segmentation_modes(self) -> None:
+        persist_ai_features_preferences()
 
     def destroy(self) -> None:
         self._destroyed = True
@@ -141,14 +144,14 @@ class AiFeaturesPanel(ctk.CTkFrame):
 
         if group.has_resolution_picker:
             if group.id == AiModelGroupId.HARMONIZE_CT:
-                self._ct_mode_var = tk.StringVar(value=segmentation_mode_menu_label(get_ct_segmentation_mode()))
+                self._ct_mode_var = tk.StringVar(value=get_ct_segmentation_mode())
                 mode_var = self._ct_mode_var
 
                 def on_changed(_value: str | None = None) -> None:
                     self._on_segmentation_mode_changed(modality="CT")
 
             else:
-                self._mr_mode_var = tk.StringVar(value=segmentation_mode_menu_label(get_mr_segmentation_mode()))
+                self._mr_mode_var = tk.StringVar(value=get_mr_segmentation_mode())
                 mode_var = self._mr_mode_var
 
                 def on_changed(_value: str | None = None) -> None:
@@ -198,9 +201,10 @@ class AiFeaturesPanel(ctk.CTkFrame):
 
     def _on_segmentation_mode_changed(self, *, modality: str) -> None:
         if modality == "CT" and self._ct_mode_var is not None:
-            set_ct_segmentation_mode(segmentation_mode_from_menu_label(self._ct_mode_var.get()))
+            set_ct_segmentation_mode(self._ct_mode_var.get())
         elif modality == "MR" and self._mr_mode_var is not None:
-            set_mr_segmentation_mode(segmentation_mode_from_menu_label(self._mr_mode_var.get()))
+            set_mr_segmentation_mode(self._mr_mode_var.get())
+        self._persist_segmentation_modes()
         self._refresh_status()
 
     def _build_features(self) -> None:
@@ -316,9 +320,9 @@ class AiFeaturesPanel(ctk.CTkFrame):
         resolution_frame = self._resolution_frames.get(key)
         if resolution_frame is not None:
             if group.id == AiModelGroupId.HARMONIZE_CT and self._ct_mode_var is not None:
-                self._ct_mode_var.set(segmentation_mode_menu_label(get_ct_segmentation_mode()))
+                self._ct_mode_var.set(get_ct_segmentation_mode())
             if group.id == AiModelGroupId.HARMONIZE_MR and self._mr_mode_var is not None:
-                self._mr_mode_var.set(segmentation_mode_menu_label(get_mr_segmentation_mode()))
+                self._mr_mode_var.set(get_mr_segmentation_mode())
             resolution_frame.grid()
         self._update_feature_status(
             key,

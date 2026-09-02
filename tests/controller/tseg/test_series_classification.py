@@ -48,6 +48,24 @@ def test_breast_anatomical_mr_skips_ts_for_body_part(tmp_path: Path) -> None:
 def test_angio_sequence_detection() -> None:
     assert description_suggests_angio_sequence("BRAIN TOF MRA WO")
     assert not description_suggests_angio_sequence("CHEST T2 AXIAL")
+    assert description_suggests_angio_sequence("CTA CHEST AXIAL")
+    assert not description_suggests_angio_sequence("PE CHEST 2.5MM")
+
+
+def test_cta_study_description_does_not_skip_diagnostic_chest_series(tmp_path: Path) -> None:
+    """A CTA-labeled study must not block TS on a non-angio chest series."""
+    from pydicom import dcmread
+
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "pe_chest")
+    for path in series_dir.glob("*.dcm"):
+        ds = dcmread(path)
+        ds.StudyDescription = "CTA CHEST W/O & W IV CON"
+        ds.SeriesDescription = "PE CHEST 2.5mm"
+        ds.save_as(path)
+
+    geometry = analyze_series_geometry(series_dir)
+    assert geometry.ts_suitable is True
+    assert geometry.ts_skip_category is None
 
 
 def test_adc_still_parametric_when_derived(tmp_path: Path) -> None:

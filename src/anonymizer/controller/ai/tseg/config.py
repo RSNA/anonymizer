@@ -11,6 +11,47 @@ MIN_DICOM_SLICES = 4
 MIN_STRUCTURE_VOXELS = 1000
 MIN_REGION_FRACTION = 0.15
 
+# Per-series cache directory (NIfTI volume, ROI seg masks, contrast statistics JSON).
+TSEG_CACHE_DIRNAME = "0_TS_SEG"
+GEOMETRY_CACHE_FILENAME = "geometry.json"
+GEOMETRY_CACHE_VERSION = 3
+ROI_SUBSET_MANIFEST_FILENAME = "roi_subset.json"
+CONTRAST_STATS_FILENAME = "contrast_stats.json"
+CONTRAST_STATS_HN_FILENAME = "contrast_stats_hn.json"
+CONTRAST_PHASE_CACHE_FILENAME = "contrast_phase.json"
+STRUCTURE_VOXELS_FILENAME = "structure_voxels.json"
+PRIMARY_SEGMENT_VOXELS_FILENAME = "primary_segment_voxels.json"
+MASK_GEOMETRY_FILENAME = "mask_geometry.json"
+
+# DICOM geometry heuristics (plane, localizer vs volume).
+LOCALIZER_MAX_SLICES = 10
+MIN_THROUGH_PLANE_EXTENT_MM = 30.0
+SURVEY_MIN_SLICE_SPACING_MM = 6.0
+OBLIQUE_DOT_THRESHOLD = 0.866  # ~30° from nearest cardinal plane
+PLANE_AMBIGUITY_DOT_DELTA = 0.05
+
+# Head/neck vessel stats (when brain present) + XGBoost after organ HU statistics.
+# Set False on low-memory hosts to skip TS contrast analysis.
+ENABLE_TS_CONTRAST = True
+
+# Licensed TotalSegmentator ``face`` task (Dataset303; academic ``aca_*`` license).
+FACE_TASK = "face"
+FACE_MASK_FILENAME = "face.nii.gz"
+ENABLE_TSEG_FACE = True
+
+# Licensed TotalSegmentator ``brain_structures`` task (Dataset409; same academic license).
+BRAIN_STRUCTURES_TASK = "brain_structures"
+ENABLE_TSEG_BRAIN_STRUCTURES = True
+
+# Release anatomy nnUNet predictors before contrast statistics (low-memory batch mode).
+RELEASE_ANATOMY_PREDICTORS_BEFORE_CONTRAST = False
+
+# AI batch process memory guard thresholds (MB).
+BATCH_MEMORY_WARN_AVAILABLE_MB = 3_000
+BATCH_MEMORY_ABORT_AVAILABLE_MB = 1_024
+BATCH_MEMORY_POLL_INTERVAL_SEC = 2.0
+
+
 BODY_PARTS: tuple[str, ...] = ("Head", "Chest", "Abdomen")
 
 # TotalSegmentator ``total`` filenames used for region analysis + overlay groups.
@@ -132,16 +173,50 @@ SEGMENTATION_MODE = DEFAULT_SEGMENTATION_MODE  # back-compat alias for the defau
 
 SegmentationMode = Literal["1.5mm", "3mm", "6mm"]
 _VALID_SEGMENTATION_MODES: frozenset[str] = frozenset({"1.5mm", "3mm", "6mm"})
+SEGMENTATION_MODES: tuple[SegmentationMode, ...] = ("1.5mm", "3mm", "6mm")
 
-# Ephemeral process defaults for download UI / callers that have not set a per-run mode.
+# Fixed ASCII labels for status text only (never menu state; not passed through gettext).
+_SEGMENTATION_MODE_DISPLAY: dict[SegmentationMode, str] = {
+    "1.5mm": "1.5 mm",
+    "3mm": "3 mm",
+    "6mm": "6 mm",
+}
+
+# Workstation defaults; restored from .anonymizer_state.json at startup (see utils.app_state).
 _ct_segmentation_mode: SegmentationMode = DEFAULT_SEGMENTATION_MODE  # type: ignore[assignment]
 _mr_segmentation_mode: SegmentationMode = DEFAULT_SEGMENTATION_MODE  # type: ignore[assignment]
 
 
 def normalize_segmentation_mode(value: object | None) -> SegmentationMode:
-    text = str(value or "").strip().lower().replace(" ", "")
+    text = str(value or "").strip().lower().replace(" ", "").replace(",", ".")
     if text in _VALID_SEGMENTATION_MODES:
         return text  # type: ignore[return-value]
+    return DEFAULT_SEGMENTATION_MODE  # type: ignore[return-value]
+
+
+def segmentation_mode_display(mode: object | None) -> str:
+    """Human-readable spacing for status lines (not used for menu state)."""
+    return _SEGMENTATION_MODE_DISPLAY[normalize_segmentation_mode(mode)]
+
+
+def segmentation_mode_menu_values() -> tuple[SegmentationMode, ...]:
+    """Internal mode codes for resolution pickers (language-agnostic)."""
+    return SEGMENTATION_MODES
+
+
+def installed_segmentation_mode_menu_values(modes: tuple[str, ...] | list[str]) -> tuple[SegmentationMode, ...]:
+    """Installed subset of ``segmentation_mode_menu_values()`` in canonical order."""
+    installed = {normalize_segmentation_mode(mode) for mode in modes}
+    return tuple(mode for mode in SEGMENTATION_MODES if mode in installed)
+
+
+def default_installed_segmentation_mode(modes: tuple[str, ...] | list[str]) -> SegmentationMode:
+    """Prefer 3 mm when installed; otherwise the first installed mode."""
+    normalized = tuple(normalize_segmentation_mode(mode) for mode in modes)
+    if "3mm" in normalized:
+        return "3mm"  # type: ignore[return-value]
+    if normalized:
+        return normalized[0]
     return DEFAULT_SEGMENTATION_MODE  # type: ignore[return-value]
 
 
@@ -166,7 +241,7 @@ def set_mr_segmentation_mode(mode: object | None) -> SegmentationMode:
 
 
 def clear_segmentation_mode_cache() -> None:
-    """Reset ephemeral CT/MR modes to the default (tests / process cleanup)."""
+    """Reset CT/MR modes to the default (tests / process cleanup)."""
     global _ct_segmentation_mode, _mr_segmentation_mode
     _ct_segmentation_mode = DEFAULT_SEGMENTATION_MODE  # type: ignore[assignment]
     _mr_segmentation_mode = DEFAULT_SEGMENTATION_MODE  # type: ignore[assignment]
@@ -184,42 +259,3 @@ def is_multi_model_segmentation_mode(mode: object | None) -> bool:
     return normalize_segmentation_mode(mode) == "1.5mm"
 
 
-# Per-series cache directory (NIfTI volume, ROI seg masks, contrast statistics JSON).
-TSEG_CACHE_DIRNAME = "0_TS_SEG"
-GEOMETRY_CACHE_FILENAME = "geometry.json"
-GEOMETRY_CACHE_VERSION = 2
-ROI_SUBSET_MANIFEST_FILENAME = "roi_subset.json"
-CONTRAST_STATS_FILENAME = "contrast_stats.json"
-CONTRAST_STATS_HN_FILENAME = "contrast_stats_hn.json"
-CONTRAST_PHASE_CACHE_FILENAME = "contrast_phase.json"
-STRUCTURE_VOXELS_FILENAME = "structure_voxels.json"
-PRIMARY_SEGMENT_VOXELS_FILENAME = "primary_segment_voxels.json"
-MASK_GEOMETRY_FILENAME = "mask_geometry.json"
-
-# DICOM geometry heuristics (plane, localizer vs volume).
-LOCALIZER_MAX_SLICES = 10
-MIN_THROUGH_PLANE_EXTENT_MM = 30.0
-SURVEY_MIN_SLICE_SPACING_MM = 6.0
-OBLIQUE_DOT_THRESHOLD = 0.866  # ~30° from nearest cardinal plane
-PLANE_AMBIGUITY_DOT_DELTA = 0.05
-
-# Head/neck vessel stats (when brain present) + XGBoost after organ HU statistics.
-# Set False on low-memory hosts to skip TS contrast analysis.
-ENABLE_TS_CONTRAST = True
-
-# Licensed TotalSegmentator ``face`` task (Dataset303; academic ``aca_*`` license).
-FACE_TASK = "face"
-FACE_MASK_FILENAME = "face.nii.gz"
-ENABLE_TSEG_FACE = True
-
-# Licensed TotalSegmentator ``brain_structures`` task (Dataset409; same academic license).
-BRAIN_STRUCTURES_TASK = "brain_structures"
-ENABLE_TSEG_BRAIN_STRUCTURES = True
-
-# Release anatomy nnUNet predictors before contrast statistics (low-memory batch mode).
-RELEASE_ANATOMY_PREDICTORS_BEFORE_CONTRAST = False
-
-# AI batch process memory guard thresholds (MB).
-BATCH_MEMORY_WARN_AVAILABLE_MB = 3_000
-BATCH_MEMORY_ABORT_AVAILABLE_MB = 1_024
-BATCH_MEMORY_POLL_INTERVAL_SEC = 2.0

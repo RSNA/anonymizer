@@ -11,39 +11,10 @@ from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
 
 logger = logging.getLogger(__name__)
 
-LEGACY_TSEG_CACHE_DIRNAME = ".tseg_cache"
-PREVIOUS_TSEG_CACHE_DIRNAME = "A_TS_SEG"
-
-
-def _migrate_cache_dir(source: Path, target: Path) -> Path:
-    """Rename ``source`` to ``target`` when possible; otherwise keep using ``source``."""
-    try:
-        source.rename(target)
-        logger.info("Migrated TS cache %s -> %s", source.name, target.name)
-        return target
-    except OSError as exc:
-        logger.warning("Could not migrate TS cache to %s: %s; using legacy path", target.name, exc)
-        return source
-
 
 def resolve_series_cache_dir(series_directory: Path) -> Path:
-    """
-    Return the TS cache directory for a series, migrating legacy cache folders when needed.
-
-    New caches are written under ``0_TS_SEG/`` at the series root (visible, sorts first).
-    """
-    series_directory = Path(series_directory).resolve()
-    cache_dir = series_directory / TSEG_CACHE_DIRNAME
-
-    if cache_dir.is_dir():
-        return cache_dir
-
-    for legacy_name in (PREVIOUS_TSEG_CACHE_DIRNAME, LEGACY_TSEG_CACHE_DIRNAME):
-        legacy_dir = series_directory / legacy_name
-        if legacy_dir.is_dir():
-            return _migrate_cache_dir(legacy_dir, cache_dir)
-
-    return cache_dir
+    """Return the TS cache directory for a series (``0_TS_SEG/`` at the series root)."""
+    return Path(series_directory).resolve() / TSEG_CACHE_DIRNAME
 
 
 @dataclass(frozen=True)
@@ -68,11 +39,8 @@ def _measure_tree(directory: Path) -> tuple[int, int]:
 
 
 def tseg_cache_summary(series_directory: Path) -> TsegCacheSummary:
-    """Summarize the on-disk TS cache for a series (includes legacy dir if not yet migrated)."""
-    series_directory = Path(series_directory).resolve()
+    """Summarize the on-disk TS cache for a series."""
     cache_dir = resolve_series_cache_dir(series_directory)
-    legacy_dir = series_directory / LEGACY_TSEG_CACHE_DIRNAME
-
     if cache_dir.is_dir():
         file_count, size_bytes = _measure_tree(cache_dir)
         return TsegCacheSummary(
@@ -81,16 +49,6 @@ def tseg_cache_summary(series_directory: Path) -> TsegCacheSummary:
             file_count=file_count,
             size_bytes=size_bytes,
         )
-
-    if legacy_dir.is_dir():
-        file_count, size_bytes = _measure_tree(legacy_dir)
-        return TsegCacheSummary(
-            path=legacy_dir,
-            exists=True,
-            file_count=file_count,
-            size_bytes=size_bytes,
-        )
-
     return TsegCacheSummary(
         path=cache_dir,
         exists=False,
@@ -101,22 +59,16 @@ def tseg_cache_summary(series_directory: Path) -> TsegCacheSummary:
 
 def clear_tseg_series_cache(series_directory: Path) -> bool:
     """
-    Remove harmonize / TotalSegmentator cache directories for a series.
+    Remove harmonize / TotalSegmentator cache for a series.
 
     Does not modify DICOM images or series metadata. Returns True when a cache dir was removed.
     """
-    series_directory = Path(series_directory).resolve()
-    removed = False
-
-    for dirname in (TSEG_CACHE_DIRNAME, PREVIOUS_TSEG_CACHE_DIRNAME, LEGACY_TSEG_CACHE_DIRNAME):
-        cache_dir = series_directory / dirname
-        if not cache_dir.is_dir():
-            continue
-        shutil.rmtree(cache_dir)
-        logger.info("Cleared TS cache at %s", cache_dir)
-        removed = True
-
-    return removed
+    cache_dir = resolve_series_cache_dir(series_directory)
+    if not cache_dir.is_dir():
+        return False
+    shutil.rmtree(cache_dir)
+    logger.info("Cleared TS cache at %s", cache_dir)
+    return True
 
 
 def clear_series_tseg_cache(

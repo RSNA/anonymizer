@@ -10,7 +10,6 @@ import pytest
 import SimpleITK as sitk
 
 from anonymizer.controller.ai.blur_face import (
-    LEGACY_FACE_MASK_REL,
     FaceBlurGateReason,
     face_blur_gate_message,
     resolve_face_mask_path,
@@ -33,24 +32,9 @@ def test_resolve_face_mask_path_prefers_cache(tmp_path: Path) -> None:
     series = tmp_path / "series"
     series.mkdir()
     cache = face_mask_cache_path(series)
-    legacy = series / LEGACY_FACE_MASK_REL
     _write_face_mask(cache)
-    _write_face_mask(legacy)
 
     assert resolve_face_mask_path(series) == cache
-
-
-def test_resolve_face_mask_path_legacy_fallback(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-    series = tmp_path / "series"
-    series.mkdir()
-    legacy = series / LEGACY_FACE_MASK_REL
-    _write_face_mask(legacy)
-
-    with caplog.at_level("WARNING"):
-        resolved = resolve_face_mask_path(series, run_if_missing=False)
-
-    assert resolved == legacy
-    assert "legacy" in caplog.text.lower()
 
 
 @patch("anonymizer.controller.ai.blur_face.pipeline.analyze_tseg_face")

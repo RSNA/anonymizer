@@ -9,17 +9,26 @@ import pytest
 from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
 from anonymizer.controller.ai.harmonize.playbook import (
     IV_CONTRAST_PLAYBOOK_CODES,
+    PLAYBOOK_TREE_IIDS,
+    SERIES_TYPE_MODIFIER_PLAYBOOK_CODES,
+    SLICE_THICKNESS_EMITTED_CODES,
+    SLICE_THICKNESS_PLAYBOOK_CODES,
     build_harmonized_series_description,
     build_localizer_harmonized_series_description,
     build_playbook_attributes,
+    effective_slice_thickness_mm,
     format_playbook_series_description,
     harmonize_analysis_rows,
     map_anatomic_plane_code,
     map_body_part_code,
     map_iv_contrast_code,
+    map_series_type_modifier_code,
+    map_slice_thickness_bucket,
     map_series_type_code,
     playbook_iv_contrast_row_values,
+    resolve_slice_thickness_for_playbook,
     series_type_label,
+    should_emit_series_type_modifier,
 )
 from anonymizer.controller.ai.tseg.segment import TS_result
 
@@ -147,9 +156,9 @@ def test_iv_contrast_playbook_vocab_matches_radlex() -> None:
 
 
 def test_iv_contrast_labels_cover_playbook_vocab() -> None:
-    from anonymizer.controller.ai.harmonize.playbook import _IV_CONTRAST_LABELS, _TS_CONTRAST_PHASE_TO_CODE
+    from anonymizer.controller.ai.harmonize.playbook import _IV_CONTRAST_MSGIDS, _TS_CONTRAST_PHASE_TO_CODE
 
-    assert set(_IV_CONTRAST_LABELS) == IV_CONTRAST_PLAYBOOK_CODES
+    assert set(_IV_CONTRAST_MSGIDS) == IV_CONTRAST_PLAYBOOK_CODES
     assert set(_TS_CONTRAST_PHASE_TO_CODE.values()).issubset(IV_CONTRAST_PLAYBOOK_CODES)
 
 
@@ -286,3 +295,125 @@ def test_map_series_type_code(
 def test_series_type_label_uses_playbook_definition() -> None:
     assert series_type_label("Localizer") == "Exam localizer"
     assert series_type_label("") == "—"
+
+
+@pytest.mark.parametrize(
+    ("mm", "expected"),
+    [
+        (0.75, "Recon"),
+        (1.0, "Thin"),
+        (2.0, "Thin"),
+        (2.5, "Std"),
+        (3.0, "Std"),
+        (4.9, "Std"),
+        (5.0, "Std"),
+        (5.1, "Thick"),
+        (8.0, "Thick"),
+    ],
+)
+def test_map_slice_thickness_bucket(mm: float, expected: str) -> None:
+    assert map_slice_thickness_bucket(mm) == expected
+    assert expected in SLICE_THICKNESS_PLAYBOOK_CODES
+
+
+def test_standard_thickness_omitted_from_series_description() -> None:
+    geometry = _geometry(plane="axial")
+    attributes = build_playbook_attributes(
+        _tseg(body_parts_present="Head", contrast_phase="native", structures_present={"brain": 50000}),
+        geometry,
+    )
+    assert attributes.slice_thickness_mm == 5.0
+    assert attributes.slice_thickness_code == ""
+    assert format_playbook_series_description(attributes, geometry) == "Brain Ax WO"
+
+
+def test_thin_thickness_appended_after_iv_contrast() -> None:
+    geometry = replace(_geometry(plane="axial"), slice_spacing_mm=1.0)
+    attributes = build_playbook_attributes(
+        _tseg(body_parts_present="Head", contrast_phase="native", structures_present={"brain": 50000}),
+        geometry,
+    )
+    assert attributes.slice_thickness_code == "Thin"
+    assert format_playbook_series_description(attributes, geometry) == "Brain Ax WO Thin"
+
+
+def test_thick_thickness_appended_after_iv_contrast() -> None:
+    geometry = replace(_geometry(plane="axial"), slice_spacing_mm=8.0)
+    attributes = build_playbook_attributes(
+        _tseg(body_parts_present="Chest", contrast_phase="portal_venous", iv_contrast=True),
+        geometry,
+    )
+    assert attributes.slice_thickness_code == "Thick"
+    assert format_playbook_series_description(attributes, geometry) == "Ch Ax PortVen Thick"
+
+
+def test_localizer_omits_slice_thickness_token() -> None:
+    geometry = replace(_geometry(plane="axial"), dimensionality="localizer_2d", slice_spacing_mm=1.0)
+    attributes = build_playbook_attributes(
+        _tseg(body_parts_present="Chest", contrast_phase="native"),
+        geometry,
+    )
+    assert attributes.slice_thickness_code == ""
+    assert format_playbook_series_description(attributes, geometry) == "Ch WO Localizer"
+
+
+def test_effective_slice_thickness_prefers_regular_spacing() -> None:
+    geometry = _geometry(plane="axial")
+    from pydicom import Dataset
+
+    ds = Dataset()
+    ds.SliceThickness = 1.25
+    assert effective_slice_thickness_mm(geometry, ds) == 5.0
+
+
+def test_effective_slice_thickness_falls_back_to_dicom_tag() -> None:
+    geometry = replace(_geometry(plane="axial"), spacing_regularity=0.5)
+    from pydicom import Dataset
+
+    ds = Dataset()
+    ds.SliceThickness = 1.0
+    assert effective_slice_thickness_mm(geometry, ds) == 1.0
+    emitted, mm, bucket = resolve_slice_thickness_for_playbook(geometry, ds, series_type_code="")
+    assert mm == 1.0
+    assert bucket == "Thin"
+    assert emitted == "Thin"
+
+
+def test_harmonize_analysis_rows_include_slice_thickness() -> None:
+    geometry = replace(_geometry(plane="axial"), slice_spacing_mm=1.0)
+    attributes = build_playbook_attributes(
+        _tseg(body_parts_present="Chest", contrast_phase="native"),
+        geometry,
+    )
+    rows = harmonize_analysis_rows(attributes, geometry=geometry)
+    assert len(rows) == len(PLAYBOOK_TREE_IIDS) == 6
+    assert rows[3][0] == "Slice Thickness"
+    assert rows[3][1] == "Thin"
+    assert rows[3][1] in SLICE_THICKNESS_EMITTED_CODES
+    assert rows[4][0] == "Series Type"
+    assert rows[5][0] == "Series Type Modifier"
+
+
+def test_map_series_type_modifier_code_mpr_for_derived_reformat() -> None:
+    geometry = replace(_geometry(plane="coronal"), provenance="derived_reformat")
+    assert map_series_type_modifier_code(None, geometry, series_type_code="") == "MPR"
+    assert map_series_type_modifier_code(None, geometry, series_type_code="") in SERIES_TYPE_MODIFIER_PLAYBOOK_CODES
+
+
+def test_map_series_type_modifier_code_omitted_for_postprocess() -> None:
+    geometry = replace(_geometry(), provenance="derived_3d_render")
+    ds = __import__("pydicom").Dataset()
+    ds.SeriesDescription = "Chest MIP"
+    assert map_series_type_code(ds, geometry) == "Postprocess"
+    assert map_series_type_modifier_code(ds, geometry, series_type_code="Postprocess") == ""
+
+
+def test_series_type_modifier_omitted_from_series_description() -> None:
+    geometry = replace(_geometry(plane="coronal"), provenance="derived_reformat")
+    attributes = build_playbook_attributes(
+        _tseg(body_parts_present="Chest", contrast_phase="native"),
+        geometry,
+    )
+    assert attributes.series_type_modifier_code == "MPR"
+    assert should_emit_series_type_modifier("MPR") is False
+    assert "MPR" not in format_playbook_series_description(attributes, geometry)

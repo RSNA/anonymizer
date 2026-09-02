@@ -22,6 +22,7 @@ class AiFeaturesSetupDialog(AppToplevel):
         on_changed: Callable[[], None] | None = None,
     ) -> None:
         super().__init__(master=parent)
+        self.withdraw()
         self._closing = False
         self._on_changed = on_changed
 
@@ -52,8 +53,9 @@ class AiFeaturesSetupDialog(AppToplevel):
         self._close_button = ctk.CTkButton(frame, text=_("Close"), width=80, command=self._on_close)
         self._close_button.grid(row=2, column=0, padx=pad, pady=(0, pad), sticky="e")
 
+        self._fit_to_content()
+        self.deiconify()
         self.wait_visibility()
-        self._schedule_fit_to_content()
         self.grab_set()
 
     _MIN_WIDTH = 480

@@ -49,7 +49,9 @@ from anonymizer.controller.ai.harmonize.playbook import (
     playbook_body_part_row_values,
     playbook_iv_contrast_row_values,
     playbook_plane_row_values,
+    playbook_series_type_modifier_row_values,
     playbook_series_type_row_values,
+    playbook_slice_thickness_row_values,
 )
 
 __all__ = [
@@ -93,6 +95,8 @@ __all__ = [
     "playbook_body_part_row_values",
     "playbook_iv_contrast_row_values",
     "playbook_plane_row_values",
+    "playbook_slice_thickness_row_values",
+    "playbook_series_type_modifier_row_values",
     "playbook_series_type_row_values",
     "resolve_study_description_offers",
     "series_description_is_harmonized",

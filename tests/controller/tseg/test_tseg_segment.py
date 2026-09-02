@@ -90,17 +90,17 @@ def test_series_cache_dir_under_series(tmp_path) -> None:
     assert series_cache_dir(series) == series / TSEG_CACHE_DIRNAME
 
 
-def test_segmentation_cache_valid_requires_mask(tmp_path) -> None:
+def test_segmentation_cache_valid_requires_manifest_and_masks(tmp_path) -> None:
+    from anonymizer.controller.ai.tseg.segment import write_roi_subset_manifest
+
     seg_dir = tmp_path / "seg"
     seg_dir.mkdir()
     assert not _segmentation_cache_valid(seg_dir, ["brain", "liver"])
+    write_roi_subset_manifest(tmp_path, ["brain", "liver"])
+    assert not _segmentation_cache_valid(seg_dir, ["brain", "liver"])
     (seg_dir / "brain.nii.gz").write_bytes(b"x")
-    # Soft-tissue-only legacy cache is stale when skeletal ROIs are requested.
-    structures = ["brain", "liver", "vertebrae_T1", "rib_left_1", "clavicula_left"]
-    assert not _segmentation_cache_valid(seg_dir, structures)
-    (seg_dir / "vertebrae_T1.nii.gz").write_bytes(b"x")
-    assert _segmentation_cache_valid(seg_dir, structures)
-    assert (tmp_path / "roi_subset.json").is_file()
+    (seg_dir / "liver.nii.gz").write_bytes(b"x")
+    assert _segmentation_cache_valid(seg_dir, ["brain", "liver"])
 
 
 def test_segmentation_cache_valid_respects_roi_manifest(tmp_path) -> None:
@@ -123,9 +123,9 @@ def test_analyze_tseg_regions_uses_provided_geometry(
     mock_profile: MagicMock,
     tmp_path: Path,
 ) -> None:
-    from anonymizer.controller.ai.tseg.modality_profile import default_ct_profile
+    from anonymizer.controller.ai.tseg.modality_profile import ct_modality_profile
 
-    mock_profile.return_value = default_ct_profile()
+    mock_profile.return_value = ct_modality_profile()
     geometry = SeriesGeometryResult(
         plane="axial",
         plane_confidence=0.95,

@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from anonymizer.controller.ai.tseg.cache import (
-    LEGACY_TSEG_CACHE_DIRNAME,
-    PREVIOUS_TSEG_CACHE_DIRNAME,
     clear_series_tseg_cache,
     clear_tseg_series_cache,
     resolve_series_cache_dir,
@@ -15,38 +14,12 @@ from anonymizer.controller.ai.tseg.cache import (
 from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
 
 
-def test_resolve_series_cache_dir_uses_new_name(tmp_path: Path) -> None:
+def test_resolve_series_cache_dir_uses_standard_name(tmp_path: Path) -> None:
     cache = tmp_path / TSEG_CACHE_DIRNAME
     cache.mkdir()
     (cache / "geometry.json").write_text("{}", encoding="utf-8")
 
     assert resolve_series_cache_dir(tmp_path) == cache
-
-
-def test_resolve_series_cache_dir_migrates_legacy(tmp_path: Path) -> None:
-    legacy = tmp_path / LEGACY_TSEG_CACHE_DIRNAME
-    legacy.mkdir()
-    (legacy / "geometry.json").write_text("{}", encoding="utf-8")
-
-    resolved = resolve_series_cache_dir(tmp_path)
-
-    assert resolved == tmp_path / TSEG_CACHE_DIRNAME
-    assert resolved.is_dir()
-    assert (resolved / "geometry.json").is_file()
-    assert not legacy.exists()
-
-
-def test_resolve_series_cache_dir_migrates_previous_name(tmp_path: Path) -> None:
-    previous = tmp_path / PREVIOUS_TSEG_CACHE_DIRNAME
-    previous.mkdir()
-    (previous / "geometry.json").write_text("{}", encoding="utf-8")
-
-    resolved = resolve_series_cache_dir(tmp_path)
-
-    assert resolved == tmp_path / TSEG_CACHE_DIRNAME
-    assert resolved.is_dir()
-    assert (resolved / "geometry.json").is_file()
-    assert not previous.exists()
 
 
 def test_tseg_cache_summary_empty_series(tmp_path: Path) -> None:
@@ -58,33 +31,21 @@ def test_tseg_cache_summary_empty_series(tmp_path: Path) -> None:
     assert summary.path == tmp_path / TSEG_CACHE_DIRNAME
 
 
-def test_clear_tseg_series_cache_removes_new_and_legacy(tmp_path: Path) -> None:
-    new_cache = tmp_path / TSEG_CACHE_DIRNAME
-    new_cache.mkdir()
-    (new_cache / "volume.nii.gz").write_bytes(b"x" * 128)
-
-    legacy_cache = tmp_path / LEGACY_TSEG_CACHE_DIRNAME
-    legacy_cache.mkdir()
-    (legacy_cache / "geometry.json").write_text("{}", encoding="utf-8")
-
-    previous_cache = tmp_path / PREVIOUS_TSEG_CACHE_DIRNAME
-    previous_cache.mkdir()
-    (previous_cache / "volume.nii.gz").write_bytes(b"y" * 64)
+def test_clear_tseg_series_cache_removes_cache(tmp_path: Path) -> None:
+    cache = tmp_path / TSEG_CACHE_DIRNAME
+    cache.mkdir()
+    (cache / "volume.nii.gz").write_bytes(b"x" * 128)
 
     dicom = tmp_path / "slice.dcm"
     dicom.write_bytes(b"DICOM")
 
     assert clear_tseg_series_cache(tmp_path) is True
-    assert not new_cache.exists()
-    assert not legacy_cache.exists()
-    assert not previous_cache.exists()
+    assert not cache.exists()
     assert dicom.is_file()
     assert tseg_cache_summary(tmp_path).exists is False
 
 
 def test_clear_series_tseg_cache_updates_model_metadata(tmp_path: Path) -> None:
-    from unittest.mock import MagicMock
-
     cache = tmp_path / TSEG_CACHE_DIRNAME
     cache.mkdir()
     (cache / "geometry.json").write_text("{}", encoding="utf-8")

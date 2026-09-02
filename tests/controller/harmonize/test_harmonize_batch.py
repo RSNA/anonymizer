@@ -453,6 +453,7 @@ def test_format_playbook_analysis_log_lines_match_table() -> None:
     )
     rows = harmonize_analysis_rows(attributes, geometry=geometry, tseg=tseg)
     lines = format_playbook_analysis_log_lines(attributes, geometry=geometry, tseg=tseg)
+    assert len(rows) == 6
     assert len(lines) >= 3
     assert "Head, Abdomen (dominant: Abdomen)" in rows[0][3]
     assert "Axial · Diagnostic 3D volume · TS ok" in rows[1][3]

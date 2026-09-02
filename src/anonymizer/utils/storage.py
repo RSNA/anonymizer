@@ -23,7 +23,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.workbook.child import _WorkbookChild
 from openpyxl.worksheet.worksheet import Worksheet
 
-from anonymizer.utils.translate import get_current_language_code
+from anonymizer.utils.translate import _, get_current_language_code
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ def count_series(base_dir: str, patient_ids: Optional[list[str]] = None) -> int:
         if not patient_path.exists():
             continue
 
-        for root, dirs, _ in os.walk(patient_path):
+        for root, dirs, _files in os.walk(patient_path):
             if root != str(object=patient_path):  # Count series in subdirectories only
                 total_series += len(dirs)
 
@@ -143,7 +143,7 @@ def count_study_images(base_dir: Path, anon_pt_id: str, study_uid: str) -> int:
     study_path = Path(base_dir, anon_pt_id, study_uid)
     image_count = 0
 
-    for _, _, files in os.walk(study_path):
+    for _root, _dirs, files in os.walk(study_path):
         for file in files:
             if file.endswith(DICOM_FILE_SUFFIX):
                 image_count += 1
@@ -166,7 +166,7 @@ def count_quarantine_images(quarantine_path: Path) -> int:
         return 0
 
     image_count = 0
-    for _, _, files in os.walk(quarantine_path):
+    for _root, _dirs, files in os.walk(quarantine_path):
         for file in files:
             if file.__contains__(DICOM_FILE_SUFFIX):
                 image_count += 1
@@ -376,7 +376,7 @@ _download_progress: dict[str, DownloadProgress] = {}
 def begin_model_download(download_id: str, *, message: str = "") -> None:
     """Register a model download under ``download_id`` (any stable feature key)."""
     with _download_lock:
-        _download_progress[download_id] = DownloadProgress(message=message or "Downloading…", fraction=None)
+        _download_progress[download_id] = DownloadProgress(message=message or _("Downloading…"), fraction=None)
 
 
 def update_model_download(
@@ -461,7 +461,7 @@ class _DownloadStdoutCapture(io.TextIOBase):
 def track_tqdm_model_download(
     download_id: str,
     *,
-    start_message: str = "Downloading…",
+    start_message: str | None = None,
     label: str = "",
     tqdm_module: object,
     on_progress: Callable[[str, float | None], None] | None = None,
@@ -479,7 +479,8 @@ def track_tqdm_model_download(
     """
     from tqdm import tqdm as orig_tqdm
 
-    resolved_start = f"Downloading: {label}…" if label else start_message
+    resolved_start_message = start_message or _("Downloading…")
+    resolved_start = _("Downloading: {label}…").format(label=label) if label else resolved_start_message
     if manage_lifecycle or get_model_download_progress(download_id) is None:
         begin_model_download(download_id, message=resolved_start)
     if on_progress is not None:
@@ -487,8 +488,8 @@ def track_tqdm_model_download(
 
     def _progress_message(byte_part: str) -> str:
         if label:
-            return f"Downloading: {label} — {byte_part}"
-        return f"Downloading: {byte_part}"
+            return _("Downloading: {label} — {byte_part}").format(label=label, byte_part=byte_part)
+        return _("Downloading: {byte_part}").format(byte_part=byte_part)
 
     def _report(message: str, *, fraction: float | None | object = ...) -> None:
         resolved = None if fraction is ... else fraction

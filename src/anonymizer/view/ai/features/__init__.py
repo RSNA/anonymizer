@@ -2,23 +2,24 @@
 
 from __future__ import annotations
 
+from anonymizer.controller.ai.tseg.config import (
+    default_installed_segmentation_mode,
+    installed_segmentation_mode_menu_values,
+    segmentation_mode_display,
+    segmentation_mode_menu_values,
+)
 from anonymizer.view.ai.features.availability import (
     AiFeatureDownloadManager,
     DownloadCompleteEvent,
     any_ai_batch_feature_allowed,
     brain_structures_allowed,
     collapse_inventory_labels,
-    default_installed_segmentation_mode,
     face_blur_allowed,
     friendly_task_label,
     get_download_manager,
     harmonize_allowed,
     harmonize_allowed_for_modality,
-    installed_segmentation_mode_menu_values,
     pixel_phi_allowed,
-    segmentation_mode_from_menu_label,
-    segmentation_mode_menu_label,
-    segmentation_mode_menu_values,
 )
 from anonymizer.view.ai.features.catalog import (
     AiFeatureId,
@@ -67,8 +68,7 @@ __all__ = [
     "installed_segmentation_mode_menu_values",
     "model_group_spec",
     "pixel_phi_allowed",
-    "segmentation_mode_from_menu_label",
-    "segmentation_mode_menu_label",
+    "segmentation_mode_display",
     "segmentation_mode_menu_values",
     "top_level_features",
     "weight_kind_for_download_id",

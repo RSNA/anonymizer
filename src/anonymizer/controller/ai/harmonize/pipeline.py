@@ -209,7 +209,7 @@ def _merge_result(
             radlex_series_description="",
             tseg=tseg,
             geometry=None,
-            error="Series geometry is required for Playbook harmonization",
+            error=_("Series geometry is required for Playbook harmonization"),
         )
 
     if is_localizer_geometry(geometry):
@@ -246,7 +246,7 @@ def _merge_result(
                 ds=ds,
                 route=anatomy_fallback,
             )
-        error = tseg.error if tseg is not None and tseg.error else "TotalSegmentator anatomy analysis unavailable"
+        error = tseg.error if tseg is not None and tseg.error else _("TotalSegmentator anatomy analysis unavailable")
         return HarmonizedResult(
             series_directory=series_directory,
             radlex_series_description="",
@@ -270,7 +270,7 @@ def _merge_result(
             radlex_series_description="",
             tseg=tseg,
             geometry=geometry,
-            error="TotalSegmentator contrast phase is required for Playbook harmonization",
+            error=_("TotalSegmentator contrast phase is required for Playbook harmonization"),
         )
 
     try:
@@ -440,7 +440,7 @@ def series_description_is_harmonized(series_directory: Path, ds: Dataset) -> boo
 
 def harmonize_context_hint(series_directory: Path, ds: Dataset | None) -> str | None:
     """Optional Series View geometry-line suffix when harmonization is already up to date."""
-    from anonymizer.controller.ai.tseg.modality_profile import is_tseg_modality
+    from anonymizer.utils.modalities import is_tseg_modality
 
     if ds is None or not is_tseg_modality(getattr(ds, "Modality", None)):
         return None
@@ -510,6 +510,30 @@ def format_harmonize_progress_message(
     if stage == "tseg" and message.startswith(geometry_prefix):
         return _("Anatomy analysis not available for this series") + pct
 
+    known_messages = {
+        "Starting contrast phase analysis": _("Starting contrast phase analysis"),
+        "Contrast phase analysis complete": _("Contrast phase analysis complete"),
+        "Reading IV contrast from DICOM": _("Reading IV contrast from DICOM"),
+        "Contrast phase not applicable": _("Reading IV contrast from DICOM"),
+        "Segmenting anatomy": _("Segmenting anatomy (TotalSegmentator)"),
+        "Segmenting face mask": _("Segmenting face mask"),
+        "Segmenting brain structures": _("Segmenting brain structures"),
+        "Preparing CT volume": _("Preparing CT volume"),
+        "Preparing volume": _("Preparing volume"),
+        "Using cached anatomy segmentation": _("Using cached anatomy segmentation"),
+        "Summarizing anatomy regions": _("Summarizing anatomy regions"),
+        "Building harmonized description": _("Building standardized series description"),
+        "Harmonized description ready": _("Standardized series description ready"),
+        "Analyzing contrast phase": _("Determining contrast phase"),
+        "Computing organ HU statistics": _("Computing organ HU statistics"),
+        "Organ HU statistics complete": _("Organ HU statistics complete"),
+        "Computing head/neck vessel statistics": _("Computing head/neck vessel statistics"),
+        "Head/neck vessel statistics complete": _("Head/neck vessel statistics complete"),
+        "Head/neck statistics not required": _("Head/neck statistics not required"),
+        "Classifying contrast phase (XGBoost)": _("Classifying contrast phase (XGBoost)"),
+        "Contrast phase classification complete": _("Contrast phase classification complete"),
+    }
+
     detail_message_stages = frozenset(
         {
             "regions",
@@ -519,9 +543,9 @@ def format_harmonize_progress_message(
         }
     )
     if stage in detail_message_stages and message:
-        return message + pct
+        return known_messages.get(message, _(message)) + pct
     if stage == "segment" and "cached" in message.lower():
-        return message + pct
+        return known_messages.get(message, _(message)) + pct
 
     stage_labels: dict[str, str] = {
         "geometry": _("Analyzing scan geometry"),
@@ -540,18 +564,6 @@ def format_harmonize_progress_message(
         "merge": _("Building standardized series description"),
     }
 
-    known_messages = {
-        "Starting contrast phase analysis": _("Starting contrast phase analysis"),
-        "Contrast phase analysis complete": _("Contrast phase analysis complete"),
-        "Reading IV contrast from DICOM": _("Reading IV contrast from DICOM"),
-        "Contrast phase not applicable": _("Reading IV contrast from DICOM"),
-        "Segmenting anatomy": _("Segmenting anatomy (TotalSegmentator)"),
-        "Preparing CT volume": _("Preparing CT volume"),
-        "Summarizing anatomy regions": _("Summarizing anatomy regions"),
-        "Building harmonized description": _("Building standardized series description"),
-        "Harmonized description ready": _("Standardized series description ready"),
-        "Analyzing contrast phase": _("Determining contrast phase"),
-    }
     # Prefer specific pipeline messages (e.g. MR DICOM contrast) over generic stage labels.
     if message in known_messages:
         return known_messages[message] + "…" + pct
@@ -560,7 +572,7 @@ def format_harmonize_progress_message(
         return stage_labels[stage] + "…" + pct
 
     if message:
-        return message + pct
+        return known_messages.get(message, _(message)) + pct
 
     return _("Processing") + "…" + pct
 
@@ -1359,7 +1371,7 @@ def harmonize_series(
                 iv_contrast=False,
                 contrast_phase="",
                 phase_probability=0.0,
-                error=geometry.notes or f"TS skipped ({geometry.dimensionality})",
+                error=geometry.notes or _("TS skipped ({dimensionality})").format(dimensionality=geometry.dimensionality),
             )
             nifti_path = None
 
@@ -1457,7 +1469,7 @@ def harmonize_series(
             )
         else:
             logger.info(
-                "Harmonize [%d/%d] %s: description=%r body=%s contrast=%s plane=%s series_type=%s",
+                "Harmonize [%d/%d] %s: description=%r body=%s contrast=%s plane=%s thickness=%s series_type=%s modifier=%s",
                 index,
                 n_series,
                 series_dir,
@@ -1465,7 +1477,9 @@ def harmonize_series(
                 merged.playbook.body_part_code if merged.playbook else "",
                 merged.playbook.iv_contrast_code if merged.playbook else "",
                 merged.playbook.anatomic_plane_code if merged.playbook else "",
+                merged.playbook.slice_thickness_code if merged.playbook else "",
                 merged.playbook.series_type_code if merged.playbook else "",
+                merged.playbook.series_type_modifier_code if merged.playbook else "",
             )
             _report(
                 "merge",

@@ -1,137 +1,135 @@
-# Whitelist for common terms found on DX/CR (X-Ray) images
-# One term/phrase per line. Case-insensitive matching is assumed after loading.
-# Lines starting with # are comments and will be ignored.
+# Liste blanche de termes courants sur les images DX/CR (rayons X)
+# Un terme/une expression par ligne. La correspondance est insensible à la casse au chargement.
+# Les lignes commençant par # sont des commentaires et seront ignorées.
 
-# --- Laterality ---
+# --- Latéralité ---
 L
 R
-LEFT
-RIGHT
+GAUCHE
+DROITE
 LT
 RT
-BILATERAL
+BILATÉRAL
 BILAT
 
 # --- Orientation / Position ---
-AP # Anteroposterior
-PA # Posteroanterior
-LAT # Lateral
+AP # Antéropostérieur
+PA # Postéro-antérieur
+LAT # Latéral
 OBL # Oblique
-DECUB # Decubitus
-SUPINE
-PRONE
-ERECT
-SEMI-ERECT
-STANDING
-SITTING
-RECUMBENT
-WEIGHT BEARING
+DECUB # Décubitus
+DÉCUBITUS DORSAL
+DÉCUBITUS VENTRAL
+DEBOUT
+SEMI-DEBOUT
+ASSIS
+COUCHÉ
+APPUI
 WB
-NON WEIGHT BEARING
+SANS APPUI
 NWB
 PORTABLE
 PORT
-BEDSIDE
+AU LIT
 MOBILE
 INSPIRATION
 EXPIRATION
 FLEXION
 EXTENSION
-INTERNAL ROTATION
-EXTERNAL ROTATION
+ROTATION INTERNE
+ROTATION EXTERNE
 AXIAL
 CEPHALAD
 CAUDAD
 
-# --- Anatomy (Very General - Add specific non-PHI terms carefully) ---
-HEAD
-SKULL
-NECK
-CHEST
-CXR # Chest X-Ray
-KUB # Kidneys, Ureters, Bladder
+# --- Anatomie (très générale – n'ajouter que des termes non PHI spécifiques avec prudence) ---
+TÊTE
+CRÂNE
+COU
+THORAX
+CXR # Radiographie thoracique
+KUB # Reins, uretères, vessie
 ABDOMEN
-PELVIS
-SPINE
+BASSIN
+COLONNE
 CERVICAL
-THORACIC
-LUMBAR
+THORACIQUE
+LOMBAIRE
 SACRUM
 COCCYX
-SHOULDER
-ELBOW
-WRIST
-HAND
-HIP
-KNEE
-ANKLE
-FOOT
-EXTREMITY
-UPPER
-LOWER
-RIBS
+ÉPAULE
+COUDE
+POIGNET
+MAIN
+HANCHE
+GENOU
+CHEVILLE
+PIED
+EXTRÉMITÉ
+SUPÉRIEUR
+INFÉRIEUR
+CÔTES
 
-# --- Technical Parameters ---
+# --- Paramètres techniques ---
 DX
 CR
 DR
 XRAY
 X-RAY
-PORTABLE
-GRID
-NO GRID
-AEC # Automatic Exposure Control
-MANUAL
+GRILLE
+SANS GRILLE
+AEC # Contrôle automatique d'exposition
+MANUEL
 KV
 KVP
 MA
 MAS
-EXPOSURE
+EXPOSITION
 TIME
-SID # Source-to-Image Distance
-FFD # Film-Focus Distance
-MAG # Magnification
+SID # Distance source-image
+FFD # Distance film-foyer
+MAG # Grossissement
 TECH
-TECHNOLOGIST
+MANIPULATEUR
 SCOUT
 
-# --- Miscellaneous ---
-SERIES
+# --- Divers ---
+SÉRIE
 IMAGE
 IMG
-VIEW
+VUE
 PROJECTION
 NO
 NUM
-NUMBER
-EXAM DATE
-EXAM TIME
+NUMÉRO
+DATE D'EXAMEN
+HEURE D'EXAMEN
 TABLE
-HEIGHT
+HAUTEUR
 POS
 POSITION
 REF
-REFERENCE
-NONE
+RÉFÉRENCE
+AUCUN
 N/A
-VARIOUS
-SEE REPORT
-CLINICAL HISTORY
-COMPARISON
-PREVIOUS
-PRIOR
+DIVERS
+VOIR RAPPORT
+ANTÉCÉDENTS CLINIQUES
+COMPARAISON
+PRÉCÉDENT
+ANTÉRIEUR
 
-# --- Common Artifacts / Descriptions (Use cautiously) ---
-MOTION
-ARTIFACT
-BLUR
-CLOTHING
-JEWELRY
-FOREIGN BODY
+# --- Artefacts / descriptions courants (à utiliser avec prudence) ---
+MOUVEMENT
+ARTEFACT
+FLOU
+VÊTEMENTS
+BIJOUX
+CORPS ÉTRANGER
 IMPLANT
 PACEMAKER
-LINE
+LIGNE
 TUBE
 
-# --- Add institution-specific, non-PHI identifiers if necessary ---
-# E.g., XRAY_ROOM_1, PORTABLE_UNIT_3
+# --- Ajouter des identifiants institutionnels non PHI si nécessaire ---
+# P. ex. XRAY_ROOM_1, PORTABLE_UNIT_3

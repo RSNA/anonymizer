@@ -22,7 +22,7 @@ from pydicom import Dataset, dcmread
 from pydicom.uid import generate_uid
 from scipy.ndimage import median_filter
 
-from anonymizer.controller.ai.tseg.config import FACE_MASK_FILENAME, MIN_STRUCTURE_VOXELS
+from anonymizer.controller.ai.tseg.config import MIN_STRUCTURE_VOXELS
 from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult, build_sitk_volume_from_series_frames
 from anonymizer.controller.ai.tseg.segment import (
     analyze_tseg_face,
@@ -64,8 +64,6 @@ MAX_MEDIAN_KERNEL_PX = 15
 # Soft-tissue HU band for ``fill_noise`` mode.
 FACE_BLUR_NOISE_HU_MIN = 20.0
 FACE_BLUR_NOISE_HU_MAX = 60.0
-
-LEGACY_FACE_MASK_REL = Path("ts_seg") / FACE_MASK_FILENAME
 
 
 class FaceBlurMode(StrEnum):
@@ -294,7 +292,7 @@ def cached_region_signal(series_directory: Path) -> CachedRegionSignal:
     Returns ``UNAVAILABLE`` when harmonize/regions has not populated the cache.
     """
     from anonymizer.controller.ai.tseg.modality_profile import (
-        default_ct_profile,
+        ct_modality_profile,
         resolve_profile_for_series,
     )
 
@@ -302,7 +300,7 @@ def cached_region_signal(series_directory: Path) -> CachedRegionSignal:
     if not seg_dir.is_dir():
         return CachedRegionSignal.UNAVAILABLE
 
-    profile = resolve_profile_for_series(series_directory) or default_ct_profile()
+    profile = resolve_profile_for_series(series_directory) or ct_modality_profile()
     structure_voxels = collect_structure_voxels(seg_dir, list(profile.roi_subset))
     if not any(count >= MIN_STRUCTURE_VOXELS for count in structure_voxels.values()):
         return CachedRegionSignal.UNAVAILABLE
@@ -346,7 +344,7 @@ def evaluate_face_blur_eligibility(
 
     Cached anatomy regions (when present) override DICOM metadata heuristics.
     """
-    from anonymizer.controller.ai.tseg.modality_profile import is_tseg_modality, normalize_modality
+    from anonymizer.utils.modalities import is_tseg_modality, normalize_modality
 
     if face_blur_already_applied:
         return _eligibility(FaceBlurGateDecision.BLOCK, FaceBlurGateReason.ALREADY_APPLIED)
@@ -466,23 +464,21 @@ def resolve_face_mask_path(
     """
     Return the face mask NIfTI for ``series_directory``.
 
-    Prefer ``<series>/0_TS_SEG/seg/face.nii.gz`` (CT) or ``face_mr.nii.gz`` (MR).
-    Fall back to legacy ``<series>/ts_seg/face.nii.gz`` with a deprecation warning.
+    Uses ``<series>/0_TS_SEG/seg/face.nii.gz`` (CT) or ``face_mr.nii.gz`` (MR).
     When no mask exists and ``run_if_missing`` is true, run ``analyze_tseg_face``.
     """
     from anonymizer.controller.ai.tseg.modality_profile import (
-        default_ct_profile,
+        ct_modality_profile,
         resolve_profile_for_series,
     )
 
     series_directory = Path(series_directory).resolve()
     resolved = profile if profile is not None else resolve_profile_for_series(series_directory)
     if resolved is None:
-        resolved = default_ct_profile()
+        resolved = ct_modality_profile()
     profile = resolved
 
     cache_path = face_mask_cache_path(series_directory, profile=profile)
-    legacy_path = series_directory / LEGACY_FACE_MASK_REL
     invalidate_stale_tseg_volume_cache(
         series_directory,
         series_cache_dir(series_directory) / "volume.nii.gz",
@@ -502,26 +498,9 @@ def resolve_face_mask_path(
         )
         raise RuntimeError(message)
 
-    if (
-        profile.modality == "CT"
-        and legacy_path.is_file()
-        and not cache_path.is_file()
-        and not force_segmentation
-    ):
-        face_voxels = count_mask_voxels(legacy_path)
-        if not face_mask_is_substantial(face_voxels):
-            raise RuntimeError(face_blur_gate_message(FaceBlurGateReason.INSUFFICIENT_FACE_MASK))
-        logger.warning(
-            "Using legacy face mask at %s; new cache path is %s. "
-            "Re-run face segmentation to migrate. Legacy lookup will be removed in a follow-up.",
-            legacy_path,
-            cache_path,
-        )
-        return legacy_path
-
     if not run_if_missing:
         raise FileNotFoundError(
-            f"Face mask not found at {cache_path} (or legacy {legacy_path}). "
+            f"Face mask not found at {cache_path}. "
             "Run face segmentation first (ts_seg_face.py or analyze_tseg_face)."
         )
 
@@ -1096,11 +1075,11 @@ def preview_face_blur(
     """
     series_directory = Path(series_directory).resolve()
     from anonymizer.controller.ai.tseg.modality_profile import (
-        default_ct_profile,
+        ct_modality_profile,
         resolve_profile_for_series,
     )
 
-    profile = resolve_profile_for_series(series_directory) or default_ct_profile()
+    profile = resolve_profile_for_series(series_directory) or ct_modality_profile()
     _report_face_blur_progress(
         progress,
         stage="mask",

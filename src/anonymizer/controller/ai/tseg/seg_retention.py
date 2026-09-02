@@ -256,44 +256,6 @@ def finalize_seg_cache(
     return primary_counts
 
 
-def count_structure_voxels_from_masks(seg_dir: Path, structures: list[str]) -> dict[str, int]:
-    """Count mask voxels on disk (legacy cache compaction)."""
-    seg_dir = Path(seg_dir)
-    counts: dict[str, int] = {}
-    for structure in structures:
-        mask_path = seg_dir / f"{structure}.nii.gz"
-        if not mask_path.is_file():
-            counts[structure] = 0
-            continue
-        image = sitk.ReadImage(str(mask_path))
-        try:
-            array = sitk.GetArrayFromImage(image)
-            counts[structure] = int((array > 0).sum())
-        finally:
-            del image
-    return counts
-
-
-def compact_seg_cache_if_needed(
-    cache_dir: Path,
-    seg_dir: Path,
-    structures: list[str],
-) -> bool:
-    """Build sidecars from a legacy full mask cache and prune when JSON is missing."""
-    cache_dir = Path(cache_dir)
-    seg_dir = Path(seg_dir)
-    if read_structure_voxels(cache_dir) is not None:
-        return False
-    if not seg_dir.is_dir() or not any(seg_dir.glob("*.nii.gz")):
-        return False
-
-    all_structures = list(dict.fromkeys(structures + list(BRAIN_STRUCTURE_FILES)))
-    structure_voxels = count_structure_voxels_from_masks(seg_dir, all_structures)
-    finalize_seg_cache(cache_dir, seg_dir, structure_voxels)
-    logger.info("TS cache: compacted legacy seg cache under %s", cache_dir)
-    return True
-
-
 def resolve_harmonize_roi_subset(series_directory: Path) -> tuple[tuple[str, ...], str]:
     """Choose CT ROI tier from DICOM metadata (HEAD / CHEST / FULL)."""
     from pydicom import dcmread
@@ -370,7 +332,8 @@ def is_ct_head_series(series_directory: Path) -> bool:
         metadata_signal,
     )
     from anonymizer.controller.ai.tseg.dicom_geometry import sorted_dicom_paths
-    from anonymizer.controller.ai.tseg.modality_profile import is_ct_modality, resolve_profile_for_series
+    from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
+    from anonymizer.utils.modalities import is_ct_modality
 
     profile = resolve_profile_for_series(series_directory)
     if profile is None or not is_ct_modality(profile.modality):
@@ -433,8 +396,3 @@ def evict_tseg_volume(series_directory: Path, anon_model=None) -> bool:
     except OSError as exc:
         logger.warning("TS cache: could not evict volume for %s: %s", series_directory, exc)
         return False
-
-
-def maybe_evict_tseg_volume(series_directory: Path, *, anon_model=None, **_kwargs) -> bool:
-    """Backward-compatible alias for :func:`evict_tseg_volume`."""
-    return evict_tseg_volume(series_directory, anon_model=anon_model)

@@ -63,6 +63,8 @@ see https://github.com/bauripalash/tkhtmlview?tab=readme-ov-file#html-support --
 		<li>Non-CT modalities (MR, US, XR) are not supported.</li>
 		<li>First run on a large study takes longer; later runs use cached segmentation where possible.</li>
 		<li>Harmonize does not replace clinical reporting or protocol naming from the original site.</li>
+		<li>Slice thickness tokens (<i>Thin</i>, <i>Thick</i>) are added only for non-standard thickness per the RSNA CT Sandbox SeriesNameV4 rules; routine diagnostic thickness (about 2.5–5&nbsp;mm) is omitted from the series name.</li>
+		<li>Series Type Modifier (e.g. <i>MPR</i> on derived reformats) is detected and shown in the Harmonize dialog but omitted from the proposed description per SeriesNameV4.</li>
 	</ul>
 
 	<h2>Related help pages</h2>

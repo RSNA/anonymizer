@@ -71,7 +71,9 @@ class Anonymizer(ctk.CTk):
         return _("RSNA DICOM Anonymizer Version").strip() + " " + get_version()
 
     def get_app_state_path(self) -> Path:
-        return self.logs_dir / ".anonymizer_state.json"
+        from anonymizer.utils.app_state import get_app_state_path
+
+        return get_app_state_path()
 
     def __init__(self, logs_dir: Path):
         if sys.platform.startswith("win"):
@@ -374,6 +376,8 @@ class Anonymizer(ctk.CTk):
         self.after(self.metrics_loop_interval, self.metrics_loop)
 
     def load_config(self):
+        from anonymizer.utils.app_state import ai_features_from_state, apply_ai_features_preferences
+
         logger.info(f"Load Config (App State): {self.get_app_state_path()}")
         try:
             with open(self.get_app_state_path().as_posix(), "r") as config_file:
@@ -393,6 +397,7 @@ class Anonymizer(ctk.CTk):
                 self.current_open_project_dir = config_data.get("current_open_project_dir")
                 if not os.path.exists(str(self.current_open_project_dir)):
                     self.current_open_project_dir = None
+                apply_ai_features_preferences(ai_features_from_state(config_data))
         except FileNotFoundError:
             warn_msg = (
                 "Config file not found: "
@@ -402,13 +407,17 @@ class Anonymizer(ctk.CTk):
             logger.warning(warn_msg)
 
     def save_config(self):
+        from anonymizer.utils.app_state import merge_ai_features_into_state
+
         logger.info(f"Save Config (App State): {self.get_app_state_path()}")
         try:
-            config_data = {
-                "language": get_current_language(),
-                "recent_project_dirs": [str(path) for path in self.recent_project_dirs],
-                "current_open_project_dir": str(self.current_open_project_dir) or "",
-            }
+            config_data = merge_ai_features_into_state(
+                {
+                    "language": get_current_language(),
+                    "recent_project_dirs": [str(path) for path in self.recent_project_dirs],
+                    "current_open_project_dir": str(self.current_open_project_dir) or "",
+                }
+            )
             app_state_path = self.get_app_state_path()
             app_state_path.parent.mkdir(parents=True, exist_ok=True)
             with open(app_state_path.as_posix(), "w") as config_file:
@@ -1607,6 +1616,10 @@ def main(config: Path | None = None):
     from anonymizer.controller.ai.tseg.readiness import log_runtime_status
 
     log_runtime_status()
+
+    from anonymizer.utils.app_state import apply_ai_features_preferences
+
+    apply_ai_features_preferences()
 
     if config:
         run_HEADLESS(config)

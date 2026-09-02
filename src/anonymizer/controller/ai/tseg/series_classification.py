@@ -222,6 +222,25 @@ def series_description_text(
     )
 
 
+def series_level_description_text(
+    headers: list[Dataset],
+    *,
+    series_description: str | None = None,
+) -> str:
+    """Series/protocol naming only (study description excluded).
+
+    Study-level labels such as ``CTA CHEST`` must not suppress TotalSegmentator on
+    unrelated diagnostic series in the same exam (e.g. ``PE CHEST 2.5mm``).
+    """
+    if not headers:
+        return ""
+    header = headers[0]
+    return normalized_series_text(
+        series_description or getattr(header, "SeriesDescription", None),
+        getattr(header, "ProtocolName", None),
+    )
+
+
 def description_suggests_localizer(
     headers: list[Dataset],
     *,
@@ -324,7 +343,7 @@ def evaluate_ts_suitability(
     Evaluation order mirrors clinical priority: dimensionality and provenance first,
     then derived parametric maps, then body-part and sequence-type gaps.
     """
-    description_text = series_description_text(headers, series_description=series_description)
+    description_text = series_level_description_text(headers, series_description=series_description)
 
     if dimensionality == "localizer_2d":
         return TsSuitability(False, "localizer", f"Not a diagnostic 3D volume ({dimensionality})")

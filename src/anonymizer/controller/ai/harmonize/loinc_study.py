@@ -14,7 +14,9 @@ from anonymizer.controller.ai.harmonize.playbook import (
     ANATOMIC_PLANE_PLAYBOOK_CODES,
     BODY_PART_PLAYBOOK_CODES,
     IV_CONTRAST_PLAYBOOK_CODES,
+    SERIES_TYPE_MODIFIER_PLAYBOOK_CODES,
     SERIES_TYPE_PLAYBOOK_CODES,
+    SLICE_THICKNESS_PLAYBOOK_CODES,
 )
 from anonymizer.utils.translate import get_current_language_code
 
@@ -273,6 +275,8 @@ def parse_playbook_series_description(description: str) -> dict[str, object]:
     contrast = ""
     series_type = ""
     plane = ""
+    slice_thickness = ""
+    series_type_modifier = ""
 
     if not tokens:
         return {
@@ -280,6 +284,8 @@ def parse_playbook_series_description(description: str) -> dict[str, object]:
             "contrast": contrast,
             "series_type": series_type,
             "plane": plane,
+            "slice_thickness": slice_thickness,
+            "series_type_modifier": series_type_modifier,
             "is_localizer": False,
         }
 
@@ -296,12 +302,18 @@ def parse_playbook_series_description(description: str) -> dict[str, object]:
             contrast = tok
         elif tok in ANATOMIC_PLANE_PLAYBOOK_CODES:
             plane = tok
+        elif tok in SLICE_THICKNESS_PLAYBOOK_CODES:
+            slice_thickness = tok
+        elif tok in SERIES_TYPE_MODIFIER_PLAYBOOK_CODES:
+            series_type_modifier = tok
 
     return {
         "body_parts": body_parts,
         "contrast": contrast,
         "series_type": series_type,
         "plane": plane,
+        "slice_thickness": slice_thickness,
+        "series_type_modifier": series_type_modifier,
         "is_localizer": series_type == "Localizer",
     }
 
@@ -329,7 +341,7 @@ def _sort_anatomy(parts: Sequence[str]) -> tuple[str, ...]:
 def series_region_voxel_counts(series_path: Path) -> dict[str, int]:
     """Return TS region voxel counts from the series seg cache, or empty if unavailable."""
     from anonymizer.controller.ai.tseg.modality_profile import (
-        default_ct_profile,
+        ct_modality_profile,
         resolve_profile_for_series,
     )
     from anonymizer.controller.ai.tseg.segment import (
@@ -340,7 +352,7 @@ def series_region_voxel_counts(series_path: Path) -> dict[str, int]:
     )
 
     series_path = Path(series_path)
-    profile = resolve_profile_for_series(series_path) or default_ct_profile()
+    profile = resolve_profile_for_series(series_path) or ct_modality_profile()
     seg_dir = series_cache_dir(series_path) / "seg"
     structures = list(profile.roi_subset)
     if not _segmentation_cache_valid(

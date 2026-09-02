@@ -522,16 +522,16 @@ def profile_face_weights_ready(profile) -> bool:
 
 
 def _harmonize_task_checkpoint_ready(task_id: int) -> bool:
-    from anonymizer.controller.ai.tseg.readiness import _checkpoint_ready
+    from anonymizer.controller.ai.tseg.readiness import checkpoint_ready
 
-    return _checkpoint_ready(resolve_harmonize_model_folder(task_id))
+    return checkpoint_ready(resolve_harmonize_model_folder(task_id))
 
 
 def _face_task_checkpoint_ready() -> bool:
     """CT face task 303 only (per-series CT path)."""
-    from anonymizer.controller.ai.tseg.readiness import _checkpoint_ready
+    from anonymizer.controller.ai.tseg.readiness import checkpoint_ready
 
-    return _checkpoint_ready(_resolve_task_model_folder(_FACE_TASK_ID, trainer=_FACE_TRAINER, model=_FACE_MODEL))
+    return checkpoint_ready(_resolve_task_model_folder(_FACE_TASK_ID, trainer=_FACE_TRAINER, model=_FACE_MODEL))
 
 
 def mr_face_model_ready() -> bool:
@@ -539,9 +539,9 @@ def mr_face_model_ready() -> bool:
 
 
 def _task_checkpoint_ready(task_id: int, *, trainer: str, model: str) -> bool:
-    from anonymizer.controller.ai.tseg.readiness import _checkpoint_ready
+    from anonymizer.controller.ai.tseg.readiness import checkpoint_ready
 
-    return _checkpoint_ready(_try_resolve_task_model_folder(task_id, trainer=trainer, model=model))
+    return checkpoint_ready(_try_resolve_task_model_folder(task_id, trainer=trainer, model=model))
 
 
 def _anatomy_task_checkpoint_ready(task_id: int) -> bool:
@@ -610,17 +610,20 @@ _TS_DOWNLOAD_ID: dict[str, str] = {
 
 def ts_task_download_label(task_id: int) -> str:
     """Technical label for download progress (clinician copy lives in the view layer)."""
-    return f"Model {task_id}"
+    from anonymizer.utils.translate import _
+
+    return _("Model {task_id}").format(task_id=task_id)
 
 
 @contextmanager
 def _track_segmentation_model_download(kind: "TsWeightKind", *, task_id: int | None = None):
     """Wire TotalSegmentator tqdm/stdout capture to generic model download progress."""
     from anonymizer.utils.storage import track_tqdm_model_download
+    from anonymizer.utils.translate import _
 
     download_id = _TS_DOWNLOAD_ID[kind.value]
     label = ts_task_download_label(task_id) if task_id is not None else ""
-    start_message = f"Downloading: {label}…" if label else "Downloading…"
+    start_message = _("Downloading: {label}…").format(label=label) if label else _("Downloading…")
 
     import totalsegmentator.libs as ts_libs
 
@@ -747,9 +750,9 @@ def download_segmentation_model_weights(kind: "TsWeightKind") -> None:
 
 
 def _brain_structures_task_checkpoint_ready() -> bool:
-    from anonymizer.controller.ai.tseg.readiness import _checkpoint_ready
+    from anonymizer.controller.ai.tseg.readiness import checkpoint_ready
 
-    return _checkpoint_ready(
+    return checkpoint_ready(
         _resolve_task_model_folder(
             _BRAIN_STRUCTURES_TASK_ID,
             trainer=_BRAIN_STRUCTURES_TRAINER,

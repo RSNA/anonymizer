@@ -118,9 +118,8 @@ class DatasetView(AppToplevel):
         self._series_by_uid: dict[str, tuple[PHI_IndexRecord, PHI_SeriesIndexRecord]] = {}
         self._series_parent_by_uid: dict[str, str] = {}
         self._expanded_study_uids: set[str] = set()
-        self._projection_view: ProjectionView | None = None
+        self._projection_views: dict[tuple[str, ...], ProjectionView] = {}
         self._projection_open_in_progress = False
-        self._projection_destroy_binding: str | None = None
         self._last_tree_activate: tuple[str, int] | None = None
 
         self.title(_("View Dataset"))
@@ -422,68 +421,45 @@ class DatasetView(AppToplevel):
         self._tree.column("phi_patient_id", width=(max_phi + pad) * self._char_width_px)
         self._tree.column("anon_patient_id", width=(max_anon + pad) * self._char_width_px)
 
-    def _projection_view_is_alive(self) -> bool:
-        view = self._projection_view
+    def _projection_view_for(self, study_uids: tuple[str, ...]) -> ProjectionView | None:
+        view = self._projection_views.get(study_uids)
         if view is None:
-            return False
+            return None
         try:
-            return bool(view.winfo_exists())
+            if view.winfo_exists():
+                return view
         except Exception:
-            return False
+            pass
+        self._projection_views.pop(study_uids, None)
+        return None
 
-    def _clear_projection_view_ref(self, _event=None) -> None:
-        self._projection_view = None
+    def _forget_projection_view(self, study_uids: tuple[str, ...], _event=None) -> None:
+        self._projection_views.pop(study_uids, None)
 
-    def _close_projection_view(self) -> None:
-        if not self._projection_view_is_alive():
-            self._projection_view = None
-            return
-        view = self._projection_view
-        assert view is not None
-        try:
-            binding = getattr(self, "_projection_destroy_binding", None)
-            if binding:
-                view.unbind("<Destroy>", binding)
-        except Exception:
-            logger.debug("Could not unbind ProjectionView destroy handler", exc_info=True)
-        try:
-            view.destroy()
-        except Exception:
-            logger.debug("ProjectionView already closed", exc_info=True)
-        self._projection_view = None
-        self._projection_destroy_binding = None
+    def _close_projection_views(self) -> None:
+        for study_uids in list(self._projection_views):
+            view = self._projection_views.pop(study_uids)
+            try:
+                view.destroy()
+            except Exception:
+                logger.debug("ProjectionView already closed", exc_info=True)
 
     def _open_projection_view(self, phi_records: list[PHI_IndexRecord]) -> None:
-        """Open or update a single Projection View for ``phi_records``."""
+        """Open or focus a Projection View for ``phi_records`` (one window per study set)."""
         if not phi_records:
             logger.error("No Studies selected")
             return
 
-        requested_uids = projection_study_uids(phi_records)
-        existing = self._projection_view
-        if self._projection_view_is_alive() and existing is not None:
-            if existing.study_uids() == requested_uids:
-                focus_app_window(existing)
-                return
-            try:
-                existing.load_phi_records(phi_records)
-                focus_app_window(existing)
-                return
-            except Exception as e:
-                logger.error("Error updating ProjectionView: %s", e)
-                messagebox.showerror(
-                    title=_("Error Creating Projection View"),
-                    message=str(e),
-                    parent=self,
-                )
-                self._close_projection_view()
-                return
+        study_uids = projection_study_uids(phi_records)
+        existing = self._projection_view_for(study_uids)
+        if existing is not None:
+            focus_app_window(existing)
+            return
 
         if self._projection_open_in_progress:
             return
         self._projection_open_in_progress = True
         try:
-            self._close_projection_view()
             try:
                 view = ProjectionView(
                     self,
@@ -499,10 +475,13 @@ class DatasetView(AppToplevel):
                     message=str(e),
                     parent=self,
                 )
-                self._projection_view = None
                 return
-            self._projection_view = view
-            self._projection_destroy_binding = view.bind("<Destroy>", self._clear_projection_view_ref, add="+")
+            self._projection_views[study_uids] = view
+            view.bind(
+                "<Destroy>",
+                lambda _event, uids=study_uids: self._forget_projection_view(uids),
+                add="+",
+            )
             focus_app_window(view)
         finally:
             self._projection_open_in_progress = False
@@ -637,7 +616,7 @@ class DatasetView(AppToplevel):
         record = self._studies_by_uid.get(study_uid)
         if record is None:
             return
-        # Prefer Projection View for multi-series studies (single shared instance).
+        # Prefer Projection View for multi-series studies.
         self._open_projection_view([record])
 
     def _open_series_by_uid(self, anon_series_uid: str) -> None:
@@ -667,7 +646,7 @@ class DatasetView(AppToplevel):
 
     def _on_cancel(self):
         logger.info("_on_cancel")
-        self._close_projection_view()
+        self._close_projection_views()
 
         app = self.winfo_toplevel()
         if getattr(app, "dataset_view", None) is self:
