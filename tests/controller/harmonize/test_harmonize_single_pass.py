@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+import pytest
+
+from anonymizer.controller.ai.harmonize import harmonize_series
 from anonymizer.controller.ai.harmonize.timings import HarmonizeStageTimings
 from anonymizer.controller.ai.tseg.contrast import structure_voxels_from_organ_stats
 from anonymizer.controller.ai.tseg.segment import (
     NO_ANATOMY_REGIONS_ERROR,
+    TS_result,
     _ts_result_from_structure_voxels,
     analyze_tseg_ct_single_pass,
 )
@@ -66,3 +70,48 @@ def test_harmonize_stage_timings_as_log_dict() -> None:
     payload = timing.as_log_dict()
     assert payload["single_pass"] is True
     assert payload["anatomy_sec"] == 10.0
+
+
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
+@patch("anonymizer.controller.ai.harmonize.pipeline.ENABLE_TS_CONTRAST", True)
+@patch("anonymizer.controller.ai.tseg.config.ENABLE_CT_HARMONIZE_SINGLE_PASS", True)
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_ct_single_pass")
+def test_harmonize_prefers_ct_single_pass_when_enabled(
+    mock_single_pass: MagicMock,
+    mock_regions: MagicMock,
+    mock_contrast: MagicMock,
+    synthetic_chest_series: Path,
+) -> None:
+    region = TS_result(
+        series_directory=synthetic_chest_series,
+        dominant_region="Chest",
+        body_parts_present="Chest",
+        multi_region=False,
+        region_fraction=0.9,
+        iv_contrast=False,
+        contrast_phase="",
+        phase_probability=0.0,
+    )
+    nifti = synthetic_chest_series / "volume.nii.gz"
+    mock_single_pass.return_value = (region, nifti, True)
+    mock_contrast.return_value = TS_result(
+        series_directory=synthetic_chest_series,
+        dominant_region="Chest",
+        body_parts_present="Chest",
+        multi_region=False,
+        region_fraction=0.9,
+        iv_contrast=True,
+        contrast_phase="portal_venous",
+        phase_probability=0.88,
+    )
+
+    results = harmonize_series([synthetic_chest_series])
+    merged = results[0]
+
+    assert merged.error is None
+    assert merged.radlex_series_description == "Ch Ax PortVen"
+    mock_single_pass.assert_called_once()
+    mock_regions.assert_not_called()
+    mock_contrast.assert_called_once()

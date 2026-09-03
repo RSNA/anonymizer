@@ -11,6 +11,15 @@ from anonymizer.controller.ai.harmonize import harmonize_series
 from anonymizer.controller.ai.tseg.segment import NO_ANATOMY_REGIONS_ERROR, TS_result
 
 
+@pytest.fixture(autouse=True)
+def _disable_ct_harmonize_single_pass(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep dual-pass region mocks on the ROI anatomy path (single-pass covered elsewhere)."""
+    monkeypatch.setattr(
+        "anonymizer.controller.ai.tseg.config.ENABLE_CT_HARMONIZE_SINGLE_PASS",
+        False,
+    )
+
+
 def _tseg_region_result(series_dir: Path, *, error: str | None = None) -> TS_result:
     return TS_result(
         series_directory=series_dir,
