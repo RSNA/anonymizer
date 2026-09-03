@@ -141,7 +141,12 @@ def test_run_face_segmentation_passes_face_mr(tmp_path: Path):
     totalseg = MagicMock()
     out = tmp_path / "seg"
     out.mkdir()
-    (out / "face_mr.nii.gz").write_bytes(b"x")
+
+    def _write_ts_face_output(*_args, **_kwargs):
+        # TotalSegmentator writes class label "face" even for task face_mr.
+        (out / "face.nii.gz").write_bytes(b"x")
+
+    totalseg.side_effect = _write_ts_face_output
     with (
         patch(
             "anonymizer.controller.ai.tseg.segment._require_totalsegmentator",
@@ -156,6 +161,8 @@ def test_run_face_segmentation_passes_face_mr(tmp_path: Path):
             face_mask_filename="face_mr.nii.gz",
         )
     assert totalseg.call_args.kwargs["task"] == "face_mr"
+    assert (out / "face_mr.nii.gz").is_file()
+    assert not (out / "face.nii.gz").exists()
 
 
 def test_blur_face_intensity_volume_fills_mask():

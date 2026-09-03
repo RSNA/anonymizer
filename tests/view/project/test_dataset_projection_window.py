@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from anonymizer.controller.phi_io import PHI_IndexRecord
-from anonymizer.view.project.dataset import DatasetView, study_tree_iid
+from anonymizer.view.project.dataset import DatasetView
 
 
 def _study(uid: str) -> PHI_IndexRecord:
@@ -34,7 +33,6 @@ def _dataset_view() -> DatasetView:
     view._controller = MagicMock()
     view._controller.model.images_dir.return_value = MagicMock()
     view._fonts = MagicMock()
-    view._last_tree_activate = None
     return view
 
 
@@ -85,17 +83,3 @@ def test_open_projection_view_blocks_concurrent_create(mock_focus: MagicMock, mo
 
     mock_projection_cls.assert_not_called()
     mock_focus.assert_not_called()
-
-
-def test_tree_double_click_ignores_duplicate_event() -> None:
-    view = _dataset_view()
-    view._tree = MagicMock()
-    view._studies_by_uid = {"study-1": _study("study-1")}
-    view._open_projection_view = MagicMock()
-    view._tree.identify_row.return_value = study_tree_iid("study-1")
-    event = SimpleNamespace(y=4, time=12345)
-
-    view._on_tree_double_click(event)
-    view._on_tree_double_click(event)
-
-    view._open_projection_view.assert_called_once()

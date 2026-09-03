@@ -44,6 +44,7 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     pixel_phi_removal_mode_display_label,
     remove_pixel_phi,
 )
+from anonymizer.controller.ai.tseg.config import segmentation_mode_for_modality
 from anonymizer.controller.ai.tseg.contrast import release_working_memory
 from anonymizer.controller.ai.tseg.dicom_geometry import resolve_series_geometry, stackable_dicom_paths
 from anonymizer.controller.runner import (
@@ -1401,10 +1402,14 @@ def ai_batch_process(
                         item_progress: HarmonizeProgress,
                         *,
                         _last_progress_stage: list[str | None] = last_progress_stage,
+                        _ds=ds,
                     ) -> None:
                         message = format_harmonize_progress_message(
                             item_progress,
                             include_pct=False,
+                            segmentation_mode=segmentation_mode_for_modality(
+                                getattr(_ds, "Modality", None) if _ds is not None else None
+                            ),
                         )
                         _log_workflow_progress_step(
                             log_workflow,

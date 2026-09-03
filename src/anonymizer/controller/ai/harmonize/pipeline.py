@@ -486,12 +486,30 @@ def format_harmonize_progress_message(
     progress: HarmonizeProgress,
     *,
     include_pct: bool = True,
+    segmentation_mode: object | None = None,
 ) -> str:
     """Translate harmonize pipeline stages to clinician-friendly status text."""
+    from anonymizer.controller.ai.tseg.config import segmentation_mode_display
+
     message = (progress.message or "").strip()
     stage = progress.stage
     geometry_prefix = geometry_analysis_progress_prefix()
     pct = _format_progress_pct(progress.fraction) if include_pct else ""
+    resolution = (
+        segmentation_mode_display(segmentation_mode) if segmentation_mode is not None else None
+    )
+
+    def _segmenting_anatomy_label() -> str:
+        base = _("Segmenting anatomy (TotalSegmentator)")
+        if resolution is None:
+            return base
+        return f"{base} · {resolution}"
+
+    def _cached_anatomy_label() -> str:
+        base = _("Using cached anatomy segmentation")
+        if resolution is None:
+            return base
+        return f"{base} · {resolution}"
 
     if stage == "done":
         return _("Harmonize analysis complete")
@@ -515,12 +533,12 @@ def format_harmonize_progress_message(
         "Contrast phase analysis complete": _("Contrast phase analysis complete"),
         "Reading IV contrast from DICOM": _("Reading IV contrast from DICOM"),
         "Contrast phase not applicable": _("Reading IV contrast from DICOM"),
-        "Segmenting anatomy": _("Segmenting anatomy (TotalSegmentator)"),
+        "Segmenting anatomy": _segmenting_anatomy_label(),
         "Segmenting face mask": _("Segmenting face mask"),
         "Segmenting brain structures": _("Segmenting brain structures"),
         "Preparing CT volume": _("Preparing CT volume"),
         "Preparing volume": _("Preparing volume"),
-        "Using cached anatomy segmentation": _("Using cached anatomy segmentation"),
+        "Using cached anatomy segmentation": _cached_anatomy_label(),
         "Summarizing anatomy regions": _("Summarizing anatomy regions"),
         "Building harmonized description": _("Building standardized series description"),
         "Harmonized description ready": _("Standardized series description ready"),
@@ -550,7 +568,7 @@ def format_harmonize_progress_message(
     stage_labels: dict[str, str] = {
         "geometry": _("Analyzing scan geometry"),
         "prepare": _("Preparing CT volume"),
-        "segment": _("Segmenting anatomy (TotalSegmentator)"),
+        "segment": _segmenting_anatomy_label(),
         "regions": _("Summarizing anatomy regions"),
         "tseg": _("Analyzing anatomy"),
         "contrast": _("Determining contrast phase"),
@@ -620,8 +638,13 @@ def format_harmonize_batch_progress_text(
     ds: Dataset | None = None,
 ) -> str:
     """Full batch progress line: series position, context, and friendly stage."""
+    from anonymizer.controller.ai.tseg.config import segmentation_mode_for_modality
+
     series_label = format_harmonize_batch_series_label(series_path, ds)
-    stage_text = format_harmonize_progress_message(progress)
+    stage_text = format_harmonize_progress_message(
+        progress,
+        segmentation_mode=segmentation_mode_for_modality(getattr(ds, "Modality", None) if ds else None),
+    )
     if total > 1:
         position = _("Series") + f" {series_index}/{total}"
         return f"{position} · {series_label} · {stage_text}"

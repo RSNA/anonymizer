@@ -320,6 +320,12 @@ msgstr ""
 msgid "Downloading: {byte_part}"
 msgstr "Téléchargement : {byte_part}"
 
+msgid "FRAME"
+msgstr "IMAGE"
+
+msgid "SERIES"
+msgstr "SÉRIE"
+
 msgid "Detecting text"
 msgstr "Détection de texte"
 
@@ -1300,12 +1306,6 @@ msgstr "Vue des séries"
 msgid "Could not load this series."
 msgstr "Impossible de charger cette série."
 
-msgid "FRAME"
-msgstr "IMAGE"
-
-msgid "SERIES"
-msgstr "SÉRIE"
-
 msgid "Loading series"
 msgstr "Chargement de la série"
 
@@ -1390,6 +1390,13 @@ msgstr ""
 msgid "Harmonize is not ready yet. Click AI Features to download models."
 msgstr "Harmonize n'est pas encore prêt. Cliquez sur Fonctions IA pour télécharger les modèles."
 
+#, fuzzy
+msgid "Harmonize is already open for this series."
+msgstr "Harmonize n'a pas pu analyser cette série."
+
+msgid "Harmonize is already running for another series. Finish or cancel it first."
+msgstr ""
+
 msgid "< 0.1 MB"
 msgstr ""
 
@@ -1429,17 +1436,23 @@ msgstr ""
 msgid "View"
 msgstr "Vue"
 
-msgid "Studies"
-msgstr "Études"
-
 msgid "with"
 msgstr "avec"
+
+msgid "Studies"
+msgstr "Études"
 
 msgid "over"
 msgstr "sur"
 
 msgid "Pages"
 msgstr "Pages"
+
+msgid "Click a projection to open Series View."
+msgstr "Cliquez sur une projection pour ouvrir la vue série."
+
+msgid "Open Series View"
+msgstr "Ouvrir la vue série"
 
 msgid "Page"
 msgstr "Page"
@@ -2043,23 +2056,8 @@ msgstr "Traitement par lots IA"
 msgid "View Projections"
 msgstr "Afficher les projections"
 
-msgid "Double-click a study to view projections. Double-click a series to open Series View. Right-click either for the same action."
-msgstr "Double-cliquez sur une étude pour afficher les projections. Double-cliquez sur une série pour ouvrir la vue série. Un clic droit sur l'un ou l'autre a le même effet."
-
-msgid "Double-click or right-click to view study projections"
-msgstr "Double-clic ou clic droit pour afficher les projections de l'étude"
-
-msgid "Double-click or right-click to open Series View"
-msgstr "Double-clic ou clic droit pour ouvrir la vue série"
-
-msgid "Open projections for the selected studies (or double-click a study in the list)."
-msgstr "Ouvrir les projections des études sélectionnées (ou double-cliquez sur une étude dans la liste)."
-
-msgid "Click a projection to open Series View."
-msgstr "Cliquez sur une projection pour ouvrir la vue série."
-
-msgid "Open Series View"
-msgstr "Ouvrir la vue série"
+msgid "Open projections for the selected studies."
+msgstr "Ouvrir les projections des études sélectionnées."
 
 msgid "Create Patient Lookup"
 msgstr "Créer une Recherche de Patient"
@@ -2108,6 +2106,12 @@ msgstr "Les études sélectionnées seront définitivement supprimées du jeu de
 
 msgid "Are you sure?"
 msgstr "Êtes-vous sûr ?"
+
+msgid "Right-click to open Series View"
+msgstr "Clic droit pour ouvrir la vue série"
+
+msgid "Right-click to view study projections"
+msgstr "Clic droit pour afficher les projections de l'étude"
 
 msgid "Series Not Found"
 msgstr ""
@@ -2364,15 +2368,6 @@ msgstr "Installé : 1,5 mm."
 msgid "Installed: 0.5 x 0.5 x 1 mm."
 msgstr "Installé : 0,5 x 0,5 x 1 mm."
 
-msgid "1.5 mm"
-msgstr "1,5 mm"
-
-msgid "3 mm"
-msgstr "3 mm"
-
-msgid "6 mm"
-msgstr "6 mm"
-
 #, python-brace-format
 msgid "Free academic license (aca_) from {url}"
 msgstr ""
@@ -2484,6 +2479,18 @@ msgstr "Appliquer également aux autres études ayant les mêmes descriptions de
 
 msgid "Apply"
 msgstr ""
+
+#~ msgid "Double-click a study to view projections. Double-click a series to open Series View. Right-click either for the same action."
+#~ msgstr "Double-cliquez sur une étude pour afficher les projections. Double-cliquez sur une série pour ouvrir la vue série. Un clic droit sur l'un ou l'autre a le même effet."
+
+#~ msgid "1.5 mm"
+#~ msgstr "1,5 mm"
+
+#~ msgid "3 mm"
+#~ msgstr "3 mm"
+
+#~ msgid "6 mm"
+#~ msgstr "6 mm"
 
 #, fuzzy
 #~ msgid "CT and MR. Updates SeriesDescription only."

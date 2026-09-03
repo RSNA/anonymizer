@@ -52,29 +52,18 @@ def _navigation_view() -> DatasetView:
     view._tree = MagicMock()
     view._open_projection_view = MagicMock()
     view._open_series_by_uid = MagicMock()
-    view._last_tree_activate = None
     return view
 
 
-def test_double_click_series_opens_series_view() -> None:
+def test_right_click_series_opens_series_view() -> None:
     view = _navigation_view()
     view._tree.identify_row.return_value = series_tree_iid("series-1")
 
-    view._on_tree_double_click(SimpleNamespace(y=12, time=1))
+    view._on_tree_right_click(SimpleNamespace(y=12))
 
+    view._tree.selection_set.assert_called_once_with(series_tree_iid("series-1"))
     view._open_series_by_uid.assert_called_once_with("series-1")
     view._open_projection_view.assert_not_called()
-
-
-def test_double_click_study_opens_projection_view() -> None:
-    view = _navigation_view()
-    study = view._studies_by_uid["study-1"]
-    view._tree.identify_row.return_value = study_tree_iid("study-1")
-
-    view._on_tree_double_click(SimpleNamespace(y=12, time=1))
-
-    view._open_projection_view.assert_called_once_with([study])
-    view._open_series_by_uid.assert_not_called()
 
 
 def test_right_click_study_opens_projection_view() -> None:
@@ -86,16 +75,17 @@ def test_right_click_study_opens_projection_view() -> None:
 
     view._tree.selection_set.assert_called_once_with(study_tree_iid("study-1"))
     view._open_projection_view.assert_called_once_with([study])
+    view._open_series_by_uid.assert_not_called()
 
 
 def test_tree_row_tooltip_text_by_row_type() -> None:
     view = _navigation_view()
 
     view._tree.identify_row.return_value = study_tree_iid("study-1")
-    assert view._tree_row_tooltip_text(SimpleNamespace(y=1)) is not None
+    assert view._tree_row_tooltip_text(SimpleNamespace(y=1)) == "Right-click to view study projections"
 
     view._tree.identify_row.return_value = series_tree_iid("series-1")
-    assert view._tree_row_tooltip_text(SimpleNamespace(y=1)) is not None
+    assert view._tree_row_tooltip_text(SimpleNamespace(y=1)) == "Right-click to open Series View"
 
     view._tree.identify_row.return_value = ""
     assert view._tree_row_tooltip_text(SimpleNamespace(y=1)) is None

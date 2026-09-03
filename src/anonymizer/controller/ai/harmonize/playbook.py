@@ -19,7 +19,7 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
     plane_label,
     provenance_label,
 )
-from anonymizer.controller.ai.tseg.segment import TS_result
+from anonymizer.controller.ai.tseg.segment import TS_result, anatomy_metadata_fallback_allowed
 from anonymizer.controller.ai.tseg.series_classification import metadata_diagnostic_fallback_allowed
 from anonymizer.utils.modalities import is_mr_modality
 from anonymizer.utils.translate import _
@@ -906,6 +906,7 @@ def resolve_metadata_harmonize_route(
         tseg is not None
         and geometry.ts_suitable
         and not tseg.body_parts_present.strip()
+        and anatomy_metadata_fallback_allowed(tseg)
     ):
         try:
             map_body_part_from_dicom(ds)
@@ -1273,14 +1274,28 @@ def harmonize_dicom_rows(ds: Dataset) -> list[tuple[str, str, str]]:
     return rows
 
 
+def _totalsegmentator_anatomy_source(*, ds: Dataset | None = None) -> str:
+    """Body Part source label including the active workstation resolution."""
+    from anonymizer.controller.ai.tseg.config import (
+        segmentation_mode_display,
+        segmentation_mode_for_modality,
+    )
+
+    modality = getattr(ds, "Modality", None) if ds is not None else None
+    resolution = segmentation_mode_display(segmentation_mode_for_modality(modality))
+    return _("TotalSegmentator anatomy") + f" ({resolution})"
+
+
 def playbook_body_part_row_values(
     attributes: PlaybookHarmonizeAttributes | None = None,
     *,
     tseg: TS_result | None = None,
     geometry: SeriesGeometryResult | None = None,
+    ds: Dataset | None = None,
 ) -> tuple[str, str, str, str, str]:
+    anatomy_source = _totalsegmentator_anatomy_source(ds=ds)
     if attributes is not None:
-        source = _("TotalSegmentator anatomy")
+        source = anatomy_source
         evidence = _playbook_body_part_evidence(
             tseg=tseg,
             attributes=attributes,
@@ -1302,7 +1317,7 @@ def playbook_body_part_row_values(
             code,
             body_part_label(code),
             _playbook_body_part_evidence(tseg=tseg),
-            _("TotalSegmentator anatomy"),
+            anatomy_source,
         )
     return (_("Body Part"), "—", "—", "—", "—")
 
@@ -1566,7 +1581,7 @@ def harmonize_analysis_rows(
 ) -> list[tuple[str, str, str, str, str]]:
     """Return ``(element, code, value, evidence, source)`` rows for harmonize results UI."""
     return [
-        playbook_body_part_row_values(attributes, geometry=geometry, tseg=tseg),
+        playbook_body_part_row_values(attributes, geometry=geometry, tseg=tseg, ds=ds),
         playbook_plane_row_values(geometry, attributes.anatomic_plane_code),
         playbook_iv_contrast_row_values(attributes, geometry=geometry, tseg=tseg, ds=ds),
         playbook_slice_thickness_row_values(attributes, geometry=geometry, ds=ds),

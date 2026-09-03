@@ -3,6 +3,7 @@ import logging
 import queue
 import threading
 import tkinter as tk
+from dataclasses import dataclass
 from pathlib import Path
 from pprint import pformat
 from tkinter import messagebox
@@ -53,6 +54,7 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
     load_geometry_cache,
     stackable_dicom_paths,
 )
+from anonymizer.controller.ai.tseg.seg_retention import read_primary_segment_voxels
 from anonymizer.controller.create_projections import invalidate_projection_cache
 from anonymizer.controller.runner import (
     Algorithm,
@@ -93,7 +95,13 @@ from anonymizer.view.ai.features.availability import (
     face_blur_allowed,
     harmonize_allowed_for_modality,
 )
-from anonymizer.view.ai.harmonize_results import show_harmonize_results_view
+from anonymizer.view.ai.harmonize_results import (
+    HarmonizeBatchOutcome,
+    focus_harmonize_view,
+    get_any_open_harmonize_view,
+    get_open_harmonize_view,
+    show_harmonize_results_view,
+)
 from anonymizer.view.common.app_window import AppCTkToplevel, refresh_app_window_menu
 from anonymizer.view.common.ctk_safe import mark_ctk_window_destroyed
 from anonymizer.view.common.fonts import AppFonts
@@ -209,6 +217,17 @@ def harmonize_button_visible(
     return not already_harmonized
 
 
+@dataclass(frozen=True)
+class SeriesViewStartupSpec:
+    """Precomputed startup layout from native frame size, screen budget, and chrome."""
+
+    native_size: tuple[int, int]
+    display_size: tuple[int, int]
+    window_size: tuple[int, int]
+    canvas_budget: tuple[int, int]
+    segmentation_reserved: bool = False
+
+
 class SeriesView(AppCTkToplevel):
     BUTTON_WIDTH = 100
     PAD = 10
@@ -282,9 +301,11 @@ class SeriesView(AppCTkToplevel):
             tuple[str, dict[int, list[Segmentation]] | None, int, threading.Event]
         ] = queue.Queue()
         self._structure_contour_poll_after_id: str | None = None
+        self._harmonize_view = None
 
         self._ui_rebuilding = False
         self._startup_layout = False
+        self._startup_segmentation_reserved = False
         self._destroyed = False
         self._closing = False
 
@@ -569,8 +590,6 @@ class SeriesView(AppCTkToplevel):
         self._trace_load("build_ui_done")
         self._update_title()
         self._present_series_view()
-        self.lift()
-        self.focus_force()
 
     def _remember_dicom_wl_ww(self, ds: Dataset | None = None) -> tuple[float, float]:
         """Read and cache WL/WW from DICOM headers (not viewer-adjusted values)."""
@@ -679,74 +698,154 @@ class SeriesView(AppCTkToplevel):
         else:
             self.geometry(f"{width}x{height}+{max(0, pos_x)}+{max(0, pos_y)}")
 
-    def _size_window_for_startup_paint(self) -> None:
-        """Pick a stable window size before the first visible image paint."""
+    def _size_window_for_startup_paint(self, window_size: tuple[int, int]) -> None:
+        """Apply a predetermined window size before the first visible image paint."""
+        self._apply_startup_geometry(window_size)
+
+    def _apply_startup_geometry(self, window_size: tuple[int, int]) -> None:
+        pos_x, pos_y = self.winfo_x(), self.winfo_y()
+        if pos_x <= 0 and pos_y <= 0:
+            self._position_near_parent(width=window_size[0], height=window_size[1])
+        else:
+            self.geometry(f"{window_size[0]}x{window_size[1]}+{max(0, pos_x)}+{max(0, pos_y)}")
+
+    @staticmethod
+    def _format_trace_size(size: tuple[int, int]) -> str:
+        return f"{size[0]}x{size[1]}"
+
+    def _startup_canvas_budget(self) -> tuple[int, int]:
+        """Drawable image area inside the current window geometry (startup only; not viewport_size)."""
+        viewer = self.image_viewer
+        self.update_idletasks()
+        frame_w = viewer.image_frame.winfo_width()
+        frame_h = viewer.image_frame.winfo_height()
+        if frame_w <= 1 or frame_h <= 1:
+            frame_w = viewer.image_frame.winfo_reqwidth()
+            frame_h = viewer.image_frame.winfo_reqheight()
+        return viewer._viewport_from_frame_event(max(frame_w, 1), max(frame_h, 1))
+
+    def _compute_startup_window_size(self) -> tuple[int, int]:
+        """Window outer size from native frame, chrome, and screen estate (no viewport probe)."""
         if self._frames is None:
-            self._fit_window_to_content()
-            return
-        native_w, native_h = int(self._frames.shape[2]), int(self._frames.shape[1])
+            return self._clamp_to_screen((self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT))
+        viewer = getattr(self, "image_viewer", None)
+        native_window = self._native_window_dimensions()
         max_w, max_h = self._maximum_window_size()
-        if native_w > max_w or native_h > max_h:
-            self._fit_window_to_content()
-            return
-        self._size_window_for_native_image()
+        min_w, min_h = self._refresh_minimum_window_size()
+        if native_window[0] <= max_w and native_window[1] <= max_h:
+            return max(native_window[0], min_w), max(native_window[1], min_h)
+        if viewer is None:
+            return self._clamp_to_screen((max_w, max_h))
+        screen_canvas = viewer._screen_canvas_budget()
+        return self._window_size_for_canvas(screen_canvas)
+
+    def _build_startup_spec(self) -> SeriesViewStartupSpec | None:
+        """Predetermined startup sizes after chrome is fixed and window geometry is applied."""
+        if self._frames is None:
+            return None
+        viewer = getattr(self, "image_viewer", None)
+        if viewer is None:
+            return None
+        native_w, native_h = int(self._frames.shape[2]), int(self._frames.shape[1])
+        native_size = (native_w, native_h)
+        window_size = self._compute_startup_window_size()
+        canvas_budget = self._startup_canvas_budget()
+        display_size = viewer._resolve_display_size(
+            canvas_budget[0],
+            canvas_budget[1],
+            allow_upscale=True,
+        )
+        if display_size is None:
+            display_size = native_size
+        return SeriesViewStartupSpec(
+            native_size=native_size,
+            display_size=display_size,
+            window_size=window_size,
+            canvas_budget=canvas_budget,
+            segmentation_reserved=self._startup_segmentation_reserved,
+        )
 
     def _present_series_view(self) -> None:
-        """Single visible paint: size window for native, then one aspect-preserving layout."""
+        """Linear startup while withdrawn: size → paint → seg chrome → show → done."""
+        if not self._widget_alive():
+            return
         self._startup_layout = True
         self._apply_fast_startup_chrome()
         viewer = getattr(self, "image_viewer", None)
 
-        def _visible_startup_paint() -> None:
-            if not self._widget_alive():
-                return
+        self._clear_window_maxsize_cap()
+        reserve_segmentation = self._seg_dir_likely_has_structures()
+        self._startup_segmentation_reserved = reserve_segmentation
+        if viewer is not None:
+            viewer.apply_fixed_chrome(
+                refresh_histogram=True,
+                reserve_segmentation_chrome=reserve_segmentation,
+            )
+        self.update_idletasks()
+        window_size = self._compute_startup_window_size()
+        self._size_window_for_startup_paint(window_size)
+        self.update_idletasks()
+        spec = self._build_startup_spec()
+        if spec is None:
+            self._load_segmentation_chrome()
             self.deiconify()
-            self.update_idletasks()
-            self._clear_window_maxsize_cap()
-            # Chrome first, so Tk's requested size already includes the real RHS and
-            # toolbar when the window is sized for the native image.
+            self._trace_load("startup_complete", display="no_frames", viewable=1)
             if viewer is not None:
-                viewer.apply_fixed_chrome(refresh_histogram=True)
-            self._size_window_for_startup_paint()
-            self.update_idletasks()
-            if viewer is not None:
-                self._trace_load("show_initial_frame")
-                viewer.show_initial_frame()
                 viewer.mark_startup_complete()
-                if viewer.startup_needs_upscale_fill():
-                    viewer.fit_to_viewport(force=True)
-                self._trace_load(
-                    "startup_complete",
-                    display=viewer.get_dimensions_text(),
-                    frame_index=viewer.current_image_index,
-                    native_match=viewer.view_matches_actual(),
-                )
-            else:
-                self._trace_load("startup_complete", display="no_image_viewer")
-            self._log_series_memory("after_viewer_initial_display", array=self._frames)
+            self._startup_layout = False
             self.lift()
             self.focus_force()
-            self.after_idle(self._finish_startup_sequence)
-
-        self.after_idle(_visible_startup_paint)
-
-    def _finish_startup_sequence(self) -> None:
-        """Complete deferred startup work after the first paint (segmentation chrome, configure unlock)."""
-        if not self._widget_alive():
+            self._focus_image_viewer_for_keys()
             return
+
+        native_text = self._format_trace_size(spec.native_size)
+        display_text = self._format_trace_size(spec.display_size)
+        window_text = self._format_trace_size(spec.window_size)
+        canvas_text = self._format_trace_size(spec.canvas_budget)
+        self._trace_load(
+            "startup_spec",
+            native=native_text,
+            display=display_text,
+            window=window_text,
+            canvas=canvas_text,
+            seg_reserved=int(spec.segmentation_reserved),
+            viewable=0,
+        )
+        self._trace_load("geometry_applied", window=window_text, viewable=0)
+        if viewer is not None:
+            self._trace_load("startup_paint", display=display_text, viewable=0)
+            viewer.set_display_size(spec.display_size, refresh_histogram=True)
+            self._trace_load("startup_painted", display=display_text, viewable=0, frame_index=0)
         self._load_segmentation_chrome()
+        self._trace_load("seg_chrome", viewable=0)
+        self.deiconify()
+        self.update_idletasks()
+        self._trace_load("deiconify", viewable=1)
+        if viewer is not None:
+            self._trace_load(
+                "startup_complete",
+                display=display_text,
+                native_match=viewer.view_matches_actual(),
+                viewable=1,
+            )
+        else:
+            self._trace_load("startup_complete", display="no_image_viewer", viewable=1)
+        self._log_series_memory("after_viewer_initial_display", array=self._frames)
+        if viewer is not None:
+            viewer.mark_startup_complete()
         self._startup_layout = False
-        self.after_idle(self._focus_image_viewer_for_keys)
+        self.lift()
+        self.focus_force()
+        self._focus_image_viewer_for_keys()
 
     def _load_segmentation_chrome(self) -> None:
-        """Slow segmentation panel population (mask disk scan); runs after first paint."""
+        """Populate segmentation panel controls before the window is shown."""
         self._refresh_segmentation_controls(defer_render=True)
         viewer = getattr(self, "image_viewer", None)
         if viewer is not None:
-            needs_layout = bool(viewer._segmentation_button_meta)
             viewer.apply_fixed_chrome()
             self._refresh_minimum_window_size()
-            if needs_layout:
+            if bool(viewer._segmentation_button_meta) and not self._startup_segmentation_reserved:
                 viewer.fit_to_viewport(force=True)
 
     def _fit_window_to_content(self) -> None:
@@ -1388,6 +1487,15 @@ class SeriesView(AppCTkToplevel):
 
     def _seg_dir(self) -> Path:
         return resolve_series_cache_dir(self._series_path) / "seg"
+
+    def _seg_dir_likely_has_structures(self) -> bool:
+        """Fast check for harmonized segmentation masks without reading NIfTI volumes."""
+        seg_dir = self._seg_dir()
+        if not seg_dir.is_dir():
+            return False
+        if read_primary_segment_voxels(seg_dir.parent):
+            return True
+        return any(seg_dir.glob("*.nii.gz"))
 
     def _segmentation_frame_offset(self) -> int:
         return 0
@@ -2073,6 +2181,18 @@ class SeriesView(AppCTkToplevel):
             self.blackout_areas_in_series()
             self.update_status(_("Blackout applied to all images"))
 
+    def _on_harmonize_closed(self, _outcome: HarmonizeBatchOutcome) -> None:
+        """Re-enable Series View after Harmonize closes (Accept, Cancel, or destroy)."""
+        self._harmonize_view = None
+        if not self.winfo_exists() or getattr(self, "_destroyed", False) or getattr(self, "_closing", False):
+            return
+        self._set_series_interaction_enabled(True)
+        self._series_geometry = None
+        self._face_blur_eligibility_cache = None
+        self._face_blur_eligibility_geometry = None
+        self._refresh_analysis_cache_ui()
+        self._refresh_series_processing_status()
+
     def harmonize_description_button_clicked(self):
         from anonymizer.utils.modalities import is_tseg_modality
 
@@ -2087,10 +2207,38 @@ class SeriesView(AppCTkToplevel):
             )
             return
 
+        existing = getattr(self, "_harmonize_view", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    focus_harmonize_view(existing)
+                    return
+            except tk.TclError:
+                pass
+            self._harmonize_view = None
+
+        series_uid = str(getattr(self._ds, "SeriesInstanceUID", "") or "").strip()
+        series_key = series_uid or str(self._series_path.resolve())
+        open_elsewhere = get_open_harmonize_view(series_key) or get_any_open_harmonize_view()
+        if open_elsewhere is not None:
+            same_series = get_open_harmonize_view(series_key) is open_elsewhere
+            messagebox.showinfo(
+                title=_("Harmonize"),
+                message=(
+                    _("Harmonize is already open for this series.")
+                    if same_series
+                    else _("Harmonize is already running for another series. Finish or cancel it first.")
+                ),
+                parent=self,
+            )
+            focus_harmonize_view(open_elsewhere)
+            return
+
         logger.info("Harmonize starting for %s", self._series_path)
         with contextlib.suppress(tk.TclError):
             self.harmonize_button.grid_remove()
-        show_harmonize_results_view(
+        self._set_series_interaction_enabled(False)
+        self._harmonize_view = show_harmonize_results_view(
             self,
             series_path=self._series_path,
             ds=self._ds,
@@ -2098,12 +2246,8 @@ class SeriesView(AppCTkToplevel):
             fonts=self._fonts,
             anon_model=self._controller.anonymizer.model,
             on_series_description_updated=self._on_series_description_updated,
+            on_closed=self._on_harmonize_closed,
         )
-        self._series_geometry = None
-        self._face_blur_eligibility_cache = None
-        self._face_blur_eligibility_geometry = None
-        self._refresh_analysis_cache_ui()
-        self._refresh_series_processing_status()
 
     def clear_ts_cache_button_clicked(self) -> None:
         from anonymizer.utils.modalities import is_tseg_modality

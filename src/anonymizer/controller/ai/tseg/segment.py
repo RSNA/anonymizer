@@ -73,6 +73,14 @@ _FACE_LICENSE_ERROR = "TotalSegmentator face task requires academic license (tot
 
 # Returned in ``TS_result.error`` when harmonize cancellation is requested cooperatively.
 HARMONIZE_CANCELLED_MESSAGE = "Cancelled"
+NO_ANATOMY_REGIONS_ERROR = "No anatomy regions detected in volume"
+
+
+def anatomy_metadata_fallback_allowed(tseg: TS_result) -> bool:
+    """True when TS anatomy finished without regions but did not fail (infra/license/cancel)."""
+    if not tseg.error:
+        return True
+    return tseg.error == NO_ANATOMY_REGIONS_ERROR
 
 
 def harmonize_cancel_requested(cancelled: Callable[[], bool] | None) -> bool:
@@ -512,6 +520,13 @@ def run_face_segmentation(
             nr_thr_saving=1,
         )
     release_working_memory(stage="ts_face_segmentation_end")
+
+    # TotalSegmentator face and face_mr both emit class label "face" → face.nii.gz.
+    # Keep modality-specific cache names (face_mr.nii.gz) by renaming when needed.
+    if not face_path.is_file() and mask_name != FACE_MASK_FILENAME:
+        ts_face_path = output_dir / FACE_MASK_FILENAME
+        if ts_face_path.is_file():
+            ts_face_path.replace(face_path)
 
     if not face_path.is_file():
         raise FileNotFoundError(f"TotalSegmentator did not write {face_path}")
@@ -1193,7 +1208,7 @@ def _analyze_tseg_regions_impl(
         if not regions_label:
             logger.warning("TS regions: no anatomy regions detected for %s", series_directory)
             return (
-                _error_result(series_directory, "No anatomy regions detected in volume"),
+                _error_result(series_directory, NO_ANATOMY_REGIONS_ERROR),
                 nifti_path,
             )
 

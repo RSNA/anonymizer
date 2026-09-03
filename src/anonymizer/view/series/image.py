@@ -352,7 +352,7 @@ class ImageViewer(ctk.CTkFrame):
             self.control_frame.bind("<MouseWheel>", self.on_mousewheel)
 
         # Keys: bind on widgets that can hold keyboard focus.
-        # mouse_enter / apply_initial_layout focus the image canvas; CTkFrame.bind alone
+        # mouse_enter focuses the image canvas; CTkFrame.bind alone
         # does not receive those KeyPress events.
         if self.num_images > 1:
             self._bind_slice_navigation_keys(self)
@@ -391,17 +391,12 @@ class ImageViewer(ctk.CTkFrame):
         with contextlib.suppress(tk.TclError):
             self.scrollbar.configure(command=self._scroll_command)
 
-    def show_initial_frame(self, *, viewport_budget: tuple[int, int] | None = None) -> None:
-        """Single startup paint after parent geometry is final."""
-        logger.info("SeriesView ImageViewer: step=show_initial_frame")
-        self.apply_initial_layout(viewport_budget=viewport_budget)
-
     def schedule_initial_display(self, *, on_complete: Callable[[], None] | None = None) -> None:
         """Deferred first paint after the parent window is mapped (legacy / tests)."""
-        logger.info("SeriesView ImageViewer: step=schedule_initial_display")
 
         def _run() -> None:
-            self.show_initial_frame()
+            self.set_display_size((self.image_width, self.image_height), refresh_histogram=True)
+            self.mark_startup_complete()
             if on_complete is not None:
                 on_complete()
 
@@ -449,12 +444,6 @@ class ImageViewer(ctk.CTkFrame):
         self._reattach_scrollbar_command()
         if self.num_images > 1:
             self.update_scrollbar()
-        logger.info(
-            "SeriesView ImageViewer: step=startup_complete frame=%d/%d %s",
-            self.current_image_index + 1,
-            self.num_images,
-            self.get_dimensions_text(),
-        )
 
     def set_interaction_enabled(self, enabled: bool) -> None:
         """Enable or disable viewer navigation, windowing, and editing."""
@@ -897,17 +886,6 @@ class ImageViewer(ctk.CTkFrame):
         """True when on-screen pixels match native DICOM frame dimensions."""
         return self.current_size == (self.image_width, self.image_height)
 
-    def startup_needs_upscale_fill(self) -> bool:
-        """True when a follow-up startup paint with ``fill_viewport=True`` would resize the image."""
-        viewport = self._last_viewport_size
-        if viewport is None or viewport[0] <= 1 or viewport[1] <= 1:
-            viewport = self.viewport_size()
-        if viewport[0] <= 1 or viewport[1] <= 1:
-            viewport = self._screen_canvas_budget()
-        conservative = self._resolve_display_size(viewport[0], viewport[1], allow_upscale=False)
-        filled = self._resolve_display_size(viewport[0], viewport[1], allow_upscale=True)
-        return conservative is not None and filled is not None and conservative != filled
-
     def _dimensions_label_width(self) -> int:
         """Pixels needed for the widest dimensions text this series can show.
 
@@ -975,7 +953,7 @@ class ImageViewer(ctk.CTkFrame):
         children = (self.histogram, self.segmentation_frame, self.control_frame)
         return tuple(child for child in children if child is not None and child.winfo_ismapped())
 
-    def apply_fixed_chrome(self, *, refresh_histogram: bool = False) -> None:
+    def apply_fixed_chrome(self, *, refresh_histogram: bool = False, reserve_segmentation_chrome: bool = False) -> None:
         """Apply the RHS widgets' declared sizes. Never called from image resize.
 
         The panel itself is deliberately left at its natural size: Tk sums the children,
@@ -983,7 +961,7 @@ class ImageViewer(ctk.CTkFrame):
         """
         if self.data_frame is None or self.histogram is None:
             return
-        show_segmentation = bool(self._segmentation_button_meta)
+        show_segmentation = bool(self._segmentation_button_meta) or reserve_segmentation_chrome
         with contextlib.suppress(tk.TclError):
             self.histogram.canvas.configure(
                 width=self.HISTOGRAM_CANVAS_WIDTH,
@@ -1089,28 +1067,6 @@ class ImageViewer(ctk.CTkFrame):
         if not force and new_size == self.current_size and self.canvas_image_item is not None:
             return False
         return self.set_display_size(new_size, refresh_histogram=refresh_histogram)
-
-    def apply_initial_layout(self, *, viewport_budget: tuple[int, int] | None = None) -> None:
-        """Single post-map layout: fit the viewport (or an explicit budget) and render once."""
-        painted = self.fit_to_viewport(
-            force=True,
-            viewport=viewport_budget,
-            refresh_histogram=True,
-            fill_viewport=False,
-        )
-        logger.info(
-            "SeriesView ImageViewer: step=apply_initial_layout viewport=%dx%d view=%dx%d "
-            "actual=%dx%d native_match=%s frame=%d painted=%s",
-            *(self._last_viewport_size or (0, 0)),
-            *self.current_size,
-            self.image_width,
-            self.image_height,
-            self.view_matches_actual(),
-            self.current_image_index,
-            painted,
-        )
-        with contextlib.suppress(tk.TclError):
-            self.canvas.focus_set()
 
     def _calculate_scaled_size(
         self,
@@ -1304,6 +1260,16 @@ class ImageViewer(ctk.CTkFrame):
         overlay = self.overlay_data[frame_ndx]
         return bool(overlay.ocr_texts or overlay.segmentations or overlay.user_rects)
 
+    def _install_canvas_image(self, photo_image: ImageTk.PhotoImage) -> None:
+        """Show a pixmap on the canvas without delete/recreate flicker when the item already exists."""
+        self.photo_image = photo_image
+        self.canvas.image = photo_image  # type: ignore[attr-defined]
+        if self.canvas_image_item is not None:
+            with contextlib.suppress(tk.TclError):
+                self.canvas.itemconfig(self.canvas_image_item, image=photo_image)
+                return
+        self.canvas_image_item = self.canvas.create_image(0, 0, anchor="nw", image=photo_image)
+
     def load_and_display_image(self, frame_ndx: int):
         logger.debug(f"Loading and displaying image at index: {frame_ndx}")
         if not (0 <= frame_ndx < self.num_images) or self.images is None:
@@ -1317,11 +1283,7 @@ class ImageViewer(ctk.CTkFrame):
         if use_cache and frame_ndx in self.image_cache and not self._frame_has_composited_overlay(frame_ndx):
             cached_image, __, cached_size = self.image_cache[frame_ndx]
             if cached_size == self.current_size:
-                self.photo_image = cached_image
-                self.canvas.image = self.photo_image  # type: ignore # Keep a reference, crucially important for Tkinter.
-                if self.canvas_image_item:
-                    self.canvas.delete(self.canvas_image_item)
-                self.canvas_image_item = self.canvas.create_image(0, 0, anchor="nw", image=self.photo_image)
+                self._install_canvas_image(cached_image)
                 if self.current_image_index != frame_ndx and self.histogram is not None and not self.companion_attached:
                     self.histogram.update_image(display_pixels)
                 self.current_image_index = frame_ndx
@@ -1348,12 +1310,7 @@ class ImageViewer(ctk.CTkFrame):
         image_pil.close()
         del image_array
 
-        # --- Display image on Canvas ---
-        # Keep a reference to the PhotoImage to prevent garbage collection
-        self.canvas.image = self.photo_image  # type: ignore
-        if self.canvas_image_item:
-            self.canvas.delete(self.canvas_image_item)
-        self.canvas_image_item = self.canvas.create_image(0, 0, anchor="nw", image=self.photo_image)
+        self._install_canvas_image(self.photo_image)
 
         # Caching: Store BOTH PhotoImage & resized PIL.Image (slice frames only)
         if not self._is_projection_mode():

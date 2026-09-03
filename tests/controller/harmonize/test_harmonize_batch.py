@@ -357,9 +357,23 @@ def test_format_harmonize_progress_message_segment_stage() -> None:
             message="Segmenting anatomy",
             fraction=0.25,
             elapsed_sec=2.0,
+        ),
+        segmentation_mode="3mm",
+    )
+    assert "Segmenting anatomy (TotalSegmentator) · 3 mm" in message
+
+
+def test_format_harmonize_progress_message_segment_stage_without_mode() -> None:
+    message = format_harmonize_progress_message(
+        AnalysisProgress(
+            stage="segment",
+            message="Segmenting anatomy",
+            fraction=0.25,
+            elapsed_sec=2.0,
         )
     )
-    assert "Segmenting anatomy (TotalSegmentator)" in message
+    assert message.startswith("Segmenting anatomy (TotalSegmentator)")
+    assert "·" not in message.split("…")[0]
 
 
 def test_format_harmonize_progress_message_failed_stage() -> None:

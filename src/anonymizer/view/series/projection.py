@@ -66,7 +66,7 @@ def series_paths_for_phi_records(base_dir: Path, phi_records: list[PHI_IndexReco
         study_dir = patient_dir / phi_record.anon_study_uid
         if not study_dir.is_dir():
             continue
-        for series_path in study_dir.iterdir():
+        for series_path in sorted(study_dir.iterdir(), key=lambda path: path.name):
             if series_path.is_dir():
                 series_paths.append(series_path)
     return series_paths
@@ -114,6 +114,7 @@ class ProjectionView(AppToplevel):
             raise ValueError("No series paths found for study list")
 
         super().__init__(master=parent)
+        self.withdraw()
 
         self._total_series = len(self._series_paths)
 
@@ -148,7 +149,36 @@ class ProjectionView(AppToplevel):
         # Bind mousewheel for page control:
         self.bind("<MouseWheel>", self._mouse_wheel)
 
-        self._update_image_size(self.DEFAULT_SIZE)  # sets self._image_size, initialise PixelView and populates frame
+        self._image_size = self.key_to_image_size_mapping[self.DEFAULT_SIZE]
+        self._trace_startup("widgets_done", viewable=0)
+        self._present_projection_grid()
+
+    def _trace_startup(self, step: str, **fields: object) -> None:
+        parts = [f"step={step}"]
+        for key, value in fields.items():
+            parts.append(f"{key}={value}")
+        logger.info("ProjectionView startup: %s", " ".join(parts))
+
+    def _present_projection_grid(self) -> None:
+        """Linear startup: layout and populate while hidden, then show once."""
+        self._calc_layout()
+        self._update_title()
+        self._trace_startup(
+            "populate_start",
+            page=self._page_number,
+            size=self._image_size.name,
+            viewable=0,
+        )
+        self._populate_px_frame()
+        self._trace_startup(
+            "populate_done",
+            page=self._page_number,
+            thumbnails=min(self._rows * self._cols, self._total_series),
+            viewable=0,
+        )
+        self.update_idletasks()
+        self.deiconify()
+        self._trace_startup("deiconify", viewable=1)
 
     def load_phi_records(self, phi_records: list[PHI_IndexRecord]) -> None:
         """Replace the displayed studies without recreating the window."""
@@ -165,9 +195,8 @@ class ProjectionView(AppToplevel):
         self._total_series = len(series_paths)
         self._page_number = 1
 
-        self._calc_layout()
-        self._update_title()
-        self._populate_px_frame()
+        self.withdraw()
+        self._present_projection_grid()
 
     def _update_title(self):
         title = format_projection_view_title(self._phi_records, self._total_series, self._pages)
@@ -430,7 +459,7 @@ class ProjectionView(AppToplevel):
 
                 series_ndx += 1
 
-        self._pv_frame.update()
+        self.update_idletasks()
 
     def _escape_keypress(self, event):
         logger.info("_escape_pressed")

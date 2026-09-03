@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from anonymizer.controller.ai.harmonize import harmonize_series
-from anonymizer.controller.ai.tseg.segment import TS_result
+from anonymizer.controller.ai.tseg.segment import NO_ANATOMY_REGIONS_ERROR, TS_result
 
 
 def _tseg_region_result(series_dir: Path, *, error: str | None = None) -> TS_result:
@@ -371,7 +371,7 @@ def test_harmonize_execution_order_seg_then_contrast(
 @pytest.mark.usefixtures("synthetic_ct_asset_dirs")
 @patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast")
 @patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions")
-def test_harmonize_falls_back_to_dicom_when_tseg_regions_unavailable(
+def test_harmonize_falls_back_to_dicom_when_tseg_regions_empty(
     mock_regions: MagicMock,
     mock_contrast: MagicMock,
     synthetic_chest_series: Path,
@@ -386,7 +386,7 @@ def test_harmonize_falls_back_to_dicom_when_tseg_regions_unavailable(
             iv_contrast=False,
             contrast_phase="",
             phase_probability=0.0,
-            error="segmentation failed",
+            error=NO_ANATOMY_REGIONS_ERROR,
         ),
         None,
     )
@@ -397,6 +397,37 @@ def test_harmonize_falls_back_to_dicom_when_tseg_regions_unavailable(
     assert merged.radlex_series_description == "Ch Ax WO"
     assert merged.playbook is not None
     assert merged.playbook.body_part_code == "Ch"
+    mock_contrast.assert_not_called()
+
+
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions")
+def test_harmonize_fails_when_segmentation_errors(
+    mock_regions: MagicMock,
+    mock_contrast: MagicMock,
+    synthetic_chest_series: Path,
+) -> None:
+    mock_regions.return_value = (
+        TS_result(
+            series_directory=synthetic_chest_series,
+            dominant_region="",
+            body_parts_present="",
+            multi_region=False,
+            region_fraction=0.0,
+            iv_contrast=False,
+            contrast_phase="",
+            phase_probability=0.0,
+            error="EOFError: Compressed file ended before the end-of-stream marker was reached",
+        ),
+        None,
+    )
+
+    results = harmonize_series([synthetic_chest_series])
+    merged = results[0]
+    assert merged.radlex_series_description == ""
+    assert merged.error is not None
+    assert "EOFError" in merged.error
     mock_contrast.assert_not_called()
 
 
@@ -519,7 +550,7 @@ def test_harmonize_analysis_section_renders_playbook_attributes() -> None:
     assert "Head (dominant: Head)" in text
     assert "Axial · Diagnostic 3D volume · TS ok" in text
     assert "Native ·" in text and "confidence" in text
-    assert "TotalSegmentator anatomy" in text
+    assert "TotalSegmentator anatomy (3 mm)" in text
     assert "TotalSegmentator contrast" in text
     assert "DICOM ImageOrientationPatient" in text
     assert "FALCON" not in text

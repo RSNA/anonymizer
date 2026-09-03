@@ -120,7 +120,6 @@ class DatasetView(AppToplevel):
         self._expanded_study_uids: set[str] = set()
         self._projection_views: dict[tuple[str, ...], ProjectionView] = {}
         self._projection_open_in_progress = False
-        self._last_tree_activate: tuple[str, int] | None = None
 
         self.title(_("View Dataset"))
         self.resizable(True, True)
@@ -153,7 +152,6 @@ class DatasetView(AppToplevel):
             height=30,
         )
         self._tree.grid(row=0, column=0, columnspan=11, sticky="nswe")
-        self._tree.bind("<Double-1>", self._on_tree_double_click)
         self._tree.bind("<ButtonPress-3>", self._on_tree_right_click)
         self._tree.bind("<<TreeviewOpen>>", self._on_tree_open)
         self._tree.bind("<<TreeviewClose>>", self._on_tree_close)
@@ -212,7 +210,7 @@ class DatasetView(AppToplevel):
         self._view_projections_button.grid(row=0, column=2, padx=PAD, pady=PAD, sticky="e")
         bind_hover_tooltip(
             self._view_projections_button,
-            _("Open projections for the selected studies (or double-click a study in the list)."),
+            _("Open projections for the selected studies."),
             parent=self,
         )
 
@@ -575,31 +573,10 @@ class DatasetView(AppToplevel):
         if not iid:
             return None
         if parse_series_tree_iid(iid) is not None:
-            return _("Double-click or right-click to open Series View")
+            return _("Right-click to open Series View")
         if parse_study_tree_iid(iid) is not None:
-            return _("Double-click or right-click to view study projections")
+            return _("Right-click to view study projections")
         return None
-
-    def _on_tree_double_click(self, event) -> None:
-        iid = self._tree.identify_row(event.y)
-        if not iid:
-            return
-        activate = (iid, getattr(event, "time", None))
-        if activate == getattr(self, "_last_tree_activate", None):
-            return
-        self._last_tree_activate = activate
-
-        series_uid = parse_series_tree_iid(iid)
-        if series_uid is not None:
-            self._open_series_by_uid(series_uid)
-            return
-        study_uid = parse_study_tree_iid(iid)
-        if study_uid is None:
-            return
-        record = self._studies_by_uid.get(study_uid)
-        if record is None:
-            return
-        self._open_projection_view([record])
 
     def _on_tree_right_click(self, event) -> None:
         iid = self._tree.identify_row(event.y)

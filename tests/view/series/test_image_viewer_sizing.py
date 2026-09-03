@@ -118,20 +118,6 @@ def test_fit_to_viewport_upscales_to_fill_viewport(tk_root: tk.Tk, width: int, h
     assert_pixmap_matches_display(viewer)
 
 
-def test_startup_needs_upscale_fill_when_viewport_is_larger_than_native(tk_root: tk.Tk) -> None:
-    viewer = _viewer(tk_root, width=256, height=256)
-    _give_viewport(viewer, width=900, height=700)
-    viewer.fit_to_viewport(force=True, fill_viewport=False)
-    assert viewer.startup_needs_upscale_fill() is True
-
-
-def test_startup_needs_upscale_fill_false_when_only_downscale_is_possible(tk_root: tk.Tk) -> None:
-    viewer = _viewer(tk_root, width=2140, height=1760)
-    _give_viewport(viewer, width=1232, height=843)
-    viewer.fit_to_viewport(force=True, fill_viewport=False)
-    assert viewer.startup_needs_upscale_fill() is False
-
-
 def test_fit_to_viewport_falls_back_to_screen_budget_when_unmapped(tk_root: tk.Tk) -> None:
     """Startup runs before the frame has a size; the paint must still happen."""
     viewer = _viewer(tk_root, width=64, height=64)

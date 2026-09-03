@@ -48,6 +48,53 @@ from anonymizer.view.common.job_poller import STAGE_POLL_MS, start_background_jo
 
 logger = logging.getLogger(__name__)
 
+# In-flight Harmonize windows keyed by anon SeriesInstanceUID (or resolved series path).
+# At most one Harmonize dialog may be open app-wide (TotalSegmentator is not process-safe concurrently).
+_open_harmonize_by_series_key: dict[str, HarmonizeResultsView] = {}
+
+
+def _series_key_for_items(items: Sequence[HarmonizeSeriesItem]) -> str:
+    first = items[0]
+    uid = str(getattr(first.ds, "SeriesInstanceUID", "") or "").strip()
+    if uid:
+        return uid
+    return str(Path(first.series_path).resolve())
+
+
+def focus_harmonize_view(view: HarmonizeResultsView) -> None:
+    """Bring an existing Harmonize window forward."""
+    with contextlib.suppress(tk.TclError):
+        if not view.winfo_exists():
+            return
+        view.deiconify()
+        view.lift()
+        view.focus_force()
+
+
+def get_open_harmonize_view(series_key: str) -> HarmonizeResultsView | None:
+    view = _open_harmonize_by_series_key.get(series_key)
+    if view is None:
+        return None
+    try:
+        if view.winfo_exists():
+            return view
+    except tk.TclError:
+        pass
+    _open_harmonize_by_series_key.pop(series_key, None)
+    return None
+
+
+def get_any_open_harmonize_view() -> HarmonizeResultsView | None:
+    """Return any live Harmonize window (at most one should exist app-wide)."""
+    for key, view in list(_open_harmonize_by_series_key.items()):
+        try:
+            if view.winfo_exists():
+                return view
+        except tk.TclError:
+            pass
+        _open_harmonize_by_series_key.pop(key, None)
+    return None
+
 
 def brain_structures_option_available_for_series(ds: Dataset | None) -> bool:
     """True when manual Harmonize can offer the brain-structures option (CT series only)."""
@@ -140,7 +187,11 @@ class HarmonizeBatchOutcome:
 
 class HarmonizeResultsView(AppToplevel):
     """
-    Modal harmonize view: runs the pipeline per selected series, shows progress, then Playbook results.
+    Series View–scoped dialog (blocks launching Series View only): runs the pipeline per
+    selected series, shows progress, then Playbook results.
+
+    Does not use application-wide ``grab_set`` / ``wait_window`` so Dataset and other
+    windows remain usable. The launching Series View disables its own controls while open.
 
     A study-description header at the top updates as the view iterates through a batch of series
     (single-series use passes one ``HarmonizeSeriesItem``).
@@ -188,6 +239,7 @@ class HarmonizeResultsView(AppToplevel):
         fonts: AppFonts | None = None,
         anon_model=None,
         on_series_description_updated: Callable[[], None] | None = None,
+        on_closed: Callable[[HarmonizeBatchOutcome], None] | None = None,
         include_brain_structures: bool = False,
     ):
         super().__init__(master=parent)
@@ -201,7 +253,10 @@ class HarmonizeResultsView(AppToplevel):
         self.cancelled = False
         self._anon_model = anon_model
         self._on_series_description_updated = on_series_description_updated
+        self._on_closed = on_closed
+        self._series_key = _series_key_for_items(self._items)
         self._include_brain_structures_for_current_run = False
+        self._closed_notified = False
 
         self._data_font = fonts.mono if fonts else ctk.CTkFont(family="Menlo", size=12)
         self._study_header_font = fonts.bold if fonts else ctk.CTkFont(size=14, weight="bold")
@@ -224,9 +279,12 @@ class HarmonizeResultsView(AppToplevel):
         self.resizable(True, True)
         self.minsize(self.MIN_WIDTH, self._min_height)
         self.geometry(f"{self.MIN_WIDTH}x{self._min_height}")
+        with contextlib.suppress(tk.TclError):
+            self.transient(parent)
         self.lift()
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Escape>", self._escape_keypress)
+        self.bind("<Destroy>", self._on_destroy, add="+")
 
         self.grid_rowconfigure(0, weight=0)
         self.grid_rowconfigure(1, weight=1)
@@ -240,11 +298,28 @@ class HarmonizeResultsView(AppToplevel):
         self._clear_playbook_tree()
         self._update_window_title()
         self._show_running_state()
+        _open_harmonize_by_series_key[self._series_key] = self
         self._start_current_item_worker()
 
-        self.wait_visibility()
-        self.grab_set()
-        parent.wait_window(self)
+    def batch_outcome(self) -> HarmonizeBatchOutcome:
+        """Snapshot of recorded outcomes for ``on_closed`` / tests."""
+        if self.cancelled and not self._outcomes:
+            return HarmonizeBatchOutcome(outcomes=[], cancelled=True)
+        if self.cancelled:
+            return HarmonizeBatchOutcome(outcomes=list(self._outcomes), cancelled=True)
+        if self._outcomes:
+            return HarmonizeBatchOutcome(outcomes=list(self._outcomes), cancelled=False)
+        return HarmonizeBatchOutcome(
+            outcomes=[
+                HarmonizeSeriesOutcome(
+                    item=self._items[self._item_index],
+                    accepted=self.accepted,
+                    result=self.result,
+                    error=self.error,
+                )
+            ],
+            cancelled=self.cancelled,
+        )
 
     @property
     def _current_item(self) -> HarmonizeSeriesItem:
@@ -665,7 +740,7 @@ class HarmonizeResultsView(AppToplevel):
             try:
                 self._upsert_playbook_row(
                     PLAYBOOK_TREE_IIDS[0],
-                    playbook_body_part_row_values(tseg=tseg),
+                    playbook_body_part_row_values(tseg=tseg, ds=self._ds),
                 )
             except ValueError:
                 logger.debug("Playbook body part not yet mappable for %s", self._series_path)
@@ -715,7 +790,12 @@ class HarmonizeResultsView(AppToplevel):
         )
 
     def _user_harmonize_status(self, progress: HarmonizeProgress) -> str:
-        return self._status_text_for_progress(progress)
+        from anonymizer.controller.ai.tseg.config import segmentation_mode_for_modality
+
+        return format_harmonize_progress_message(
+            progress,
+            segmentation_mode=segmentation_mode_for_modality(getattr(self._ds, "Modality", None)),
+        )
 
     def _reset_item_ui(self) -> None:
         self.result = None
@@ -1108,6 +1188,24 @@ class HarmonizeResultsView(AppToplevel):
     def _escape_keypress(self, _event=None) -> None:
         self._on_cancel()
 
+    def _on_destroy(self, event: tk.Event) -> None:
+        if event.widget is not self:
+            return
+        if self._closing:
+            if _open_harmonize_by_series_key.get(self._series_key) is self:
+                _open_harmonize_by_series_key.pop(self._series_key, None)
+            return
+        # Parent Series View destroy cascades without WM_DELETE_WINDOW.
+        self._harmonize_work_state.request_cancel()
+        self._save_work_state.request_cancel()
+        if _open_harmonize_by_series_key.get(self._series_key) is self:
+            _open_harmonize_by_series_key.pop(self._series_key, None)
+        if self._on_closed is not None and not self._closed_notified:
+            self._closed_notified = True
+            self._closing = True
+            self._running = False
+            self._on_closed(self.batch_outcome())
+
     def _close(self) -> None:
         if self._closing:
             return
@@ -1117,8 +1215,15 @@ class HarmonizeResultsView(AppToplevel):
         with contextlib.suppress(tk.TclError):
             self.grab_release()
         self._running = False
+        if _open_harmonize_by_series_key.get(self._series_key) is self:
+            _open_harmonize_by_series_key.pop(self._series_key, None)
+        outcome = self.batch_outcome()
+        on_closed = self._on_closed
         parent = self.master
         teardown_ctk_toplevel(self, parent=parent)
+        if on_closed is not None and not self._closed_notified:
+            self._closed_notified = True
+            on_closed(outcome)
 
 
 def show_harmonize_results_view(
@@ -1131,13 +1236,17 @@ def show_harmonize_results_view(
     fonts: AppFonts | None = None,
     anon_model=None,
     on_series_description_updated: Callable[[], None] | None = None,
+    on_closed: Callable[[HarmonizeBatchOutcome], None] | None = None,
     include_brain_structures: bool = False,
-) -> HarmonizeBatchOutcome:
+) -> HarmonizeResultsView:
     """
-    Open harmonize view modally; runs analysis per item and returns batch outcomes.
+    Open Harmonize as a Series View–scoped dialog (non-blocking for the rest of the app).
 
     Pass ``items`` for multi-series batches (e.g. from a study-selection view), or the legacy
     ``series_path`` / ``ds`` / ``current_description`` arguments for a single series.
+
+    If a Harmonize window is already open for any series, focuses it and returns that view
+    without starting a second job. Callers should pass ``on_closed`` for post-close UI refresh.
     """
     if items is None:
         if series_path is None or ds is None:
@@ -1157,30 +1266,18 @@ def show_harmonize_results_view(
             )
         ]
 
-    view = HarmonizeResultsView(
+    series_key = _series_key_for_items(items)
+    existing = get_open_harmonize_view(series_key) or get_any_open_harmonize_view()
+    if existing is not None:
+        focus_harmonize_view(existing)
+        return existing
+
+    return HarmonizeResultsView(
         parent,
         items=items,
         fonts=fonts,
         anon_model=anon_model,
         on_series_description_updated=on_series_description_updated,
+        on_closed=on_closed,
         include_brain_structures=include_brain_structures,
-    )
-    if view.cancelled and not view._outcomes:
-        return HarmonizeBatchOutcome(outcomes=[], cancelled=True)
-    if view.cancelled:
-        return HarmonizeBatchOutcome(outcomes=view._outcomes, cancelled=True)
-    if view._outcomes:
-        return HarmonizeBatchOutcome(outcomes=view._outcomes, cancelled=False)
-
-    # Window closed before recording (e.g. escape during first run).
-    return HarmonizeBatchOutcome(
-        outcomes=[
-            HarmonizeSeriesOutcome(
-                item=view._items[view._item_index],
-                accepted=view.accepted,
-                result=view.result,
-                error=view.error,
-            )
-        ],
-        cancelled=view.cancelled,
     )
