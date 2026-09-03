@@ -34,6 +34,10 @@ PLANE_AMBIGUITY_DOT_DELTA = 0.05
 # Set False on low-memory hosts to skip TS contrast analysis.
 ENABLE_TS_CONTRAST = True
 
+# CT Harmonize: one total+statistics pass supplies anatomy regions and contrast organ HU.
+# Set False to force the legacy ROI anatomy pass then a separate contrast statistics pass.
+ENABLE_CT_HARMONIZE_SINGLE_PASS = True
+
 # Licensed TotalSegmentator ``face`` task (Dataset303; academic ``aca_*`` license).
 FACE_TASK = "face"
 FACE_MASK_FILENAME = "face.nii.gz"

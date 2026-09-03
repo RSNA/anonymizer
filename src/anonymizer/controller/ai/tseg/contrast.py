@@ -482,6 +482,23 @@ def _organ_stat(stats: dict, organ: str, field: str) -> float:
     return float(stats.get(organ, {}).get(field, 0.0))
 
 
+def structure_voxels_from_organ_stats(stats: dict) -> dict[str, int]:
+    """
+    Map TotalSegmentator organ statistics volumes (mm³) to structure mass for body-part logic.
+
+    Volume is used as a relative mass proxy (same units across structures) so
+    ``dominant_region_from_voxels`` / ``body_parts_present`` ratios remain meaningful.
+    """
+    from anonymizer.controller.ai.tseg.segment import STRUCTURE_TO_REGION
+
+    counts: dict[str, int] = {}
+    for structure in STRUCTURE_TO_REGION:
+        volume = _organ_stat(stats, structure, "volume")
+        if volume > 0:
+            counts[structure] = int(volume)
+    return counts
+
+
 def truncal_fov_present(stats: dict) -> bool:
     """True when chest/abdomen contrast organs are segmented with non-trivial volume."""
     return any(_organ_stat(stats, organ, "volume") > _MIN_ORGAN_VOLUME_MM3 for organ in _TRUNCAL_FOV_ORGANS)

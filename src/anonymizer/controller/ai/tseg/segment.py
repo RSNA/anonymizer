@@ -42,6 +42,8 @@ from anonymizer.controller.ai.tseg.contrast import (
     needs_head_neck_vessel_stats,
     release_before_contrast,
     release_working_memory,
+    save_contrast_statistics,
+    structure_voxels_from_organ_stats,
 )
 from anonymizer.controller.ai.tseg.dicom_geometry import (
     SeriesGeometryResult,
@@ -53,12 +55,15 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
 )
 from anonymizer.controller.ai.tseg.ml_env import sequential_ml_context
 from anonymizer.controller.ai.tseg.seg_retention import (
+    aggregate_primary_segment_voxels,
     evict_tseg_volume,
     finalize_seg_cache,
     read_structure_voxels,
     resolve_harmonize_roi_subset,
     structure_voxels_sidecar_valid,
     widen_roi_tier,
+    write_primary_segment_voxels,
+    write_structure_voxels,
 )
 from anonymizer.controller.series_io import load_series_frames
 from anonymizer.utils.translate import _
@@ -1232,6 +1237,192 @@ def _analyze_tseg_regions_impl(
             started=analysis_started,
         )
         return (region_result, nifti_path if nifti_path.is_file() else None)
+
+
+def _ts_result_from_structure_voxels(
+    series_directory: Path,
+    structure_voxels: dict[str, int],
+) -> TS_result:
+    region = dominant_region_from_voxels(structure_voxels)
+    regions_label = body_parts_present(region.region_voxels)
+    if not regions_label.strip():
+        return _error_result(series_directory, NO_ANATOMY_REGIONS_ERROR)
+    return _region_ts_result(
+        series_directory,
+        region=region,
+        regions_label=regions_label,
+    )
+
+
+def analyze_tseg_ct_single_pass(
+    series_directory: Path,
+    *,
+    geometry: SeriesGeometryResult | None = None,
+    progress: ProgressCallback | None = None,
+    include_brain_structures: bool = False,
+    cancelled: Callable[[], bool] | None = None,
+) -> tuple[TS_result, Path | None, bool]:
+    """
+    CT Harmonize path: one full ``total``+``statistics=True`` pass.
+
+    Writes ``contrast_stats.json`` and anatomy sidecars from organ volumes, then returns a
+    region ``TS_result`` (contrast phase still applied by ``analyze_tseg_contrast``, which
+    reuses the stats cache). Returns ``(result, nifti_path, used_single_pass)``.
+    """
+    from anonymizer.controller.ai.tseg.config import ROI_SUBSET_FULL, ROI_TIER_FULL
+    from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
+
+    series_directory = Path(series_directory)
+    if harmonize_cancel_requested(cancelled):
+        return (_error_result(series_directory, HARMONIZE_CANCELLED_MESSAGE), None, False)
+
+    profile = resolve_profile_for_series(series_directory)
+    if profile is None or profile.modality != "CT" or not ENABLE_TS_CONTRAST:
+        return (_error_result(series_directory, "CT single-pass not applicable"), None, False)
+
+    geometry = geometry if geometry is not None else resolve_series_geometry(series_directory)
+    if not ts_regions_eligible(geometry):
+        message = geometry.notes or f"Series not suitable for TotalSegmentator ({geometry.dimensionality})"
+        return (_error_result(series_directory, message), None, False)
+
+    work_dir = series_cache_dir(series_directory)
+    work_dir.mkdir(parents=True, exist_ok=True)
+    nifti_path = work_dir / "volume.nii.gz"
+    seg_dir = work_dir / "seg"
+    contrast_stats_path = work_dir / CONTRAST_STATS_FILENAME
+    analysis_started = time.perf_counter()
+
+    invalidate_stale_tseg_volume_cache(series_directory, nifti_path)
+
+    with sequential_ml_context("ts_ct_single_pass"):
+        try:
+            _report_progress(
+                progress,
+                stage="prepare",
+                message="Preparing CT volume",
+                fraction=0.05,
+                started=analysis_started,
+            )
+            if nifti_path.is_file():
+                n_slices = _nifti_slice_count(nifti_path)
+                logger.info("TS single-pass: reusing cached NIfTI %s (%d slices)", nifti_path, n_slices)
+            else:
+                if harmonize_cancel_requested(cancelled):
+                    return (_error_result(series_directory, HARMONIZE_CANCELLED_MESSAGE), None, False)
+                logger.info("TS single-pass: converting DICOM to NIfTI: %s", series_directory)
+                n_slices = dicom_series_to_nifti(series_directory, nifti_path)
+                release_working_memory(stage="ts_single_pass_after_dicom_to_nifti")
+                logger.info("TS single-pass: wrote %s (%d slices)", nifti_path, n_slices)
+
+            if harmonize_cancel_requested(cancelled):
+                return (_error_result(series_directory, HARMONIZE_CANCELLED_MESSAGE), nifti_path, False)
+
+            cached_stats = None
+            if contrast_stats_path.is_file():
+                cached_stats = load_contrast_statistics(contrast_stats_path)
+            cached_voxels = read_structure_voxels(work_dir)
+            if cached_stats is not None and cached_voxels:
+                region_result = _ts_result_from_structure_voxels(series_directory, cached_voxels)
+                if region_result.error is None:
+                    logger.info("TS single-pass: reusing cached stats/anatomy sidecars for %s", series_directory)
+                    _report_progress(
+                        progress,
+                        stage="regions",
+                        message=format_anatomy_regions_progress_message(region_result, seg_cached=True),
+                        fraction=0.95,
+                        started=analysis_started,
+                    )
+                    return (region_result, nifti_path, True)
+
+            _report_progress(
+                progress,
+                stage="segment",
+                message="Segmenting anatomy",
+                fraction=0.12,
+                started=analysis_started,
+                remaining_sec=_estimate_segmentation_seconds(n_slices),
+            )
+            totalsegmentator = _require_totalsegmentator()
+            ts_device = resolve_device(None)
+            from anonymizer.controller.ai.tseg.contrast import _require_nibabel
+
+            ct_img = _require_nibabel().load(nifti_path)
+            logger.info(
+                "TS single-pass: running TotalSegmentator total+statistics (fast=3mm) for %s",
+                series_directory,
+            )
+            _, stats = totalsegmentator(
+                ct_img,
+                None,
+                ml=True,
+                fast=True,
+                statistics=True,
+                roi_subset=None,
+                statistics_exclude_masks_at_border=False,
+                quiet=True,
+                stats_aggregation="median",
+                nr_thr_resamp=1,
+                nr_thr_saving=1,
+                device=ts_device,
+            )
+            if not isinstance(stats, dict) or not stats:
+                return (
+                    _error_result(series_directory, "TotalSegmentator statistics returned empty result"),
+                    nifti_path,
+                    False,
+                )
+
+            save_contrast_statistics(stats, contrast_stats_path)
+            structure_voxels = structure_voxels_from_organ_stats(stats)
+            # Ensure ROI_SUBSET keys exist for cache validity checks.
+            for structure in ROI_SUBSET_FULL:
+                structure_voxels.setdefault(structure, 0)
+
+            write_roi_subset_manifest(
+                work_dir,
+                list(ROI_SUBSET_FULL),
+                anatomy_task=profile.anatomy_task,
+                modality=profile.modality,
+                roi_tier=ROI_TIER_FULL,
+            )
+            write_structure_voxels(work_dir, structure_voxels)
+            primary_counts = aggregate_primary_segment_voxels(structure_voxels, seg_dir)
+            write_primary_segment_voxels(work_dir, primary_counts)
+
+            if (
+                include_brain_structures
+                and ENABLE_TSEG_BRAIN_STRUCTURES
+                and structure_voxels.get("brain", 0) >= MIN_STRUCTURE_VOXELS
+            ):
+                from anonymizer.controller.ai.tseg.readiness import verify_face_license
+
+                licensed, license_message = verify_face_license()
+                if licensed:
+                    try:
+                        run_brain_structures_segmentation(
+                            nifti_path,
+                            seg_dir,
+                            progress=progress,
+                            analysis_started=analysis_started,
+                        )
+                    except Exception as exc:
+                        logger.warning("TS single-pass: brain_structures failed for %s: %s", series_directory, exc)
+                else:
+                    logger.debug("TS single-pass: brain_structures skipped (license): %s", license_message)
+
+            region_result = _ts_result_from_structure_voxels(series_directory, structure_voxels)
+            _report_progress(
+                progress,
+                stage="regions",
+                message=format_anatomy_regions_progress_message(region_result, seg_cached=False),
+                fraction=0.95,
+                started=analysis_started,
+            )
+            release_working_memory(stage="ts_single_pass_end")
+            return (region_result, nifti_path if nifti_path.is_file() else None, True)
+        except Exception as exc:
+            logger.exception("TS single-pass failed for %s: %s", series_directory, exc)
+            return (_error_result(series_directory, f"{type(exc).__name__}: {exc}"), None, False)
 
 
 def analyze_tseg_contrast(

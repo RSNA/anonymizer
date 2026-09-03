@@ -891,7 +891,12 @@ def preload_harmonize_models(*, device: str | None = None) -> None:
         download_pretrained_weights(task_id)
 
     preloaded: list[int] = []
-    for task_id in anatomy_task_ids:
+    preload_task_ids = list(anatomy_task_ids)
+    if anatomy_models_ready():
+        for task_id in harmonize_contrast_task_ids():
+            if task_id not in preload_task_ids:
+                preload_task_ids.append(task_id)
+    for task_id in preload_task_ids:
         trainer = trainer_for_harmonize_task(task_id)
         model = model_for_harmonize_task(task_id)
         model_folder = get_output_folder(task_id, trainer, "nnUNetPlans", model)

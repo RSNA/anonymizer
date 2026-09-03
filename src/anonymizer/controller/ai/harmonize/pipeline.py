@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from pydicom import Dataset, dcmread
 
+import anonymizer.controller.ai.tseg.config as tseg_config
 from anonymizer.controller.ai.harmonize.playbook import (
     MetadataHarmonizeRoute,
     PlaybookHarmonizeAttributes,
@@ -22,6 +23,7 @@ from anonymizer.controller.ai.harmonize.playbook import (
     is_localizer_geometry,
     resolve_metadata_harmonize_route,
 )
+from anonymizer.controller.ai.harmonize.timings import HarmonizeStageTimings, HarmonizeTimingCollector
 from anonymizer.controller.ai.tseg.config import (
     CONTRAST_PHASE_CACHE_FILENAME,
     CONTRAST_STATS_FILENAME,
@@ -56,6 +58,7 @@ from anonymizer.controller.ai.tseg.segment import (
     ProgressCallback,
     TS_result,
     analyze_tseg_contrast,
+    analyze_tseg_ct_single_pass,
     analyze_tseg_regions,
     body_parts_present,
     collect_structure_voxels,
@@ -1262,9 +1265,13 @@ def harmonize_series(
     include_brain_structures: bool = False,
     anon_model=None,
     cancelled: HarmonizeCancelledCallback | None = None,
+    timing_collector: HarmonizeTimingCollector | None = None,
 ) -> list[HarmonizedResult]:
     """
     Run harmonize sequentially per series: geometry → TS segmentation → TS contrast → Playbook merge.
+
+    For CT with contrast enabled, anatomy and organ HU statistics share one TotalSegmentator
+    ``total``+``statistics`` pass when possible (MR and contrast-off keep the ROI anatomy path).
 
     Geometry is cached under ``<series>/0_TS_SEG/geometry.json``. TotalSegmentator is skipped when
     ``geometry.ts_suitable`` is false (localizers, single-slice 2D, derived 3D renders, etc.).
@@ -1323,8 +1330,12 @@ def harmonize_series(
             break
         series_dir = Path(series_dir)
         logger.info("=== Harmonize [%d/%d] %s ===", index, n_series, series_dir)
+        series_started = time.perf_counter()
+        timing = HarmonizeStageTimings(series_directory=str(series_dir))
 
+        stage_t0 = time.perf_counter()
         geometry = resolve_series_geometry(series_dir)
+        timing.geometry_sec = time.perf_counter() - stage_t0
         if harmonize_cancel_requested(cancelled):
             logger.info("Harmonize: cancelled after geometry for %s", series_dir)
             break
@@ -1348,7 +1359,64 @@ def harmonize_series(
         if harmonize_cancel_requested(cancelled):
             logger.info("Harmonize: cancelled before TS segmentation for %s", series_dir)
             break
-        if ts_regions_eligible(geometry):
+
+        region_result: TS_result
+        nifti_path: Path | None
+        used_single_pass = False
+        series_profile = resolve_profile_for_series(series_dir)
+        use_ct_single_pass = bool(
+            tseg_config.ENABLE_CT_HARMONIZE_SINGLE_PASS
+            and ts_regions_eligible(geometry)
+            and ENABLE_TS_CONTRAST
+            and series_profile is not None
+            and series_profile.modality == "CT"
+            and series_profile.enable_contrast_phase
+        )
+
+        stage_t0 = time.perf_counter()
+        if use_ct_single_pass:
+            logger.debug("Harmonize stage 1/3: CT single-pass total+statistics for %s", series_dir)
+            tseg_progress = _scaled_progress(
+                progress,
+                started=started,
+                frac_range=_TSEG_SEG_FRAC,
+                stage_label="Segmenting anatomy",
+            )
+            region_result, nifti_path, used_single_pass = analyze_tseg_ct_single_pass(
+                series_dir,
+                geometry=geometry,
+                progress=tseg_progress,
+                include_brain_structures=include_brain_structures,
+                cancelled=cancelled,
+            )
+            if not used_single_pass or region_result.error:
+                logger.info(
+                    "Harmonize: CT single-pass unavailable (%s); falling back to ROI anatomy for %s",
+                    region_result.error or "not applicable",
+                    series_dir,
+                )
+                region_result, nifti_path = analyze_tseg_regions(
+                    series_dir,
+                    geometry=geometry,
+                    progress=tseg_progress,
+                    include_brain_structures=include_brain_structures,
+                    cancelled=cancelled,
+                )
+                used_single_pass = False
+            timing.anatomy_sec = time.perf_counter() - stage_t0
+            timing.single_pass = used_single_pass
+            if harmonize_cancel_requested(cancelled) or region_result.error == HARMONIZE_CANCELLED_MESSAGE:
+                logger.info("Harmonize: cancelled during TS regions for %s", series_dir)
+                break
+            if region_result.body_parts_present.strip() and region_result.error is None:
+                _report(
+                    "regions",
+                    "Anatomy regions summarized",
+                    _TSEG_SEG_FRAC[1],
+                    geometry=geometry,
+                    tseg=region_result,
+                )
+        elif ts_regions_eligible(geometry):
             logger.debug("Harmonize stage 1/3: TS segmentation for %s", series_dir)
             tseg_progress = _scaled_progress(
                 progress,
@@ -1363,6 +1431,7 @@ def harmonize_series(
                 include_brain_structures=include_brain_structures,
                 cancelled=cancelled,
             )
+            timing.anatomy_sec = time.perf_counter() - stage_t0
             if harmonize_cancel_requested(cancelled) or region_result.error == HARMONIZE_CANCELLED_MESSAGE:
                 logger.info("Harmonize: cancelled during TS regions for %s", series_dir)
                 break
@@ -1375,6 +1444,7 @@ def harmonize_series(
                     tseg=region_result,
                 )
         else:
+            timing.anatomy_sec = time.perf_counter() - stage_t0
             logger.debug(
                 "Harmonize stage 1/3: TS segmentation skipped for %s (%s)",
                 series_dir,
@@ -1403,8 +1473,8 @@ def harmonize_series(
             break
 
         tseg: TS_result | None = region_result
-        series_profile = resolve_profile_for_series(series_dir)
         run_contrast = bool(series_profile is None or series_profile.enable_contrast_phase)
+        stage_t0 = time.perf_counter()
         if (
             run_contrast
             and ENABLE_TS_CONTRAST
@@ -1454,6 +1524,7 @@ def harmonize_series(
             logger.warning("Harmonize skipping TS contrast (regions error): %s", region_result.error)
         else:
             logger.warning("Harmonize skipping TS contrast (no regions detected)")
+        timing.contrast_sec = time.perf_counter() - stage_t0
 
         if harmonize_cancel_requested(cancelled):
             logger.info("Harmonize: cancelled before merge for %s", series_dir)
@@ -1473,7 +1544,18 @@ def harmonize_series(
             geometry=geometry,
             tseg=tseg,
         )
+        stage_t0 = time.perf_counter()
         merged = _merge_result(series_dir, tseg, geometry=geometry)
+        timing.merge_sec = time.perf_counter() - stage_t0
+        timing.total_sec = time.perf_counter() - series_started
+        timing.body_parts_present = (tseg.body_parts_present if tseg else "") or ""
+        timing.contrast_phase = (tseg.contrast_phase if tseg else "") or ""
+        timing.radlex_series_description = merged.radlex_series_description or ""
+        timing.error = merged.error
+        logger.info("Harmonize timings: %s", timing.as_log_dict())
+        if timing_collector is not None:
+            timing_collector.add(timing)
+
         harmonized.append(merged)
         if merged.error:
             logger.warning(

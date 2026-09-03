@@ -53,16 +53,19 @@ from anonymizer.controller.ai.harmonize.playbook import (
     playbook_series_type_row_values,
     playbook_slice_thickness_row_values,
 )
+from anonymizer.controller.ai.harmonize.timings import HarmonizeStageTimings, HarmonizeTimingCollector
 
 __all__ = [
     "HarmonizeApplyOutcome",
     "HarmonizeProgress",
     "HarmonizeProgressCallback",
+    "HarmonizeStageTimings",
     "HarmonizeStudiesBatchHook",
     "HarmonizeStudiesCancelledCallback",
     "HarmonizeStudiesLogCallback",
     "HarmonizeStudiesProgressCallback",
     "HarmonizeStudiesSummary",
+    "HarmonizeTimingCollector",
     "HarmonizedResult",
     "PLAYBOOK_TREE_IIDS",
     "PlaybookHarmonizeAttributes",

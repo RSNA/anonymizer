@@ -1072,13 +1072,16 @@ class HarmonizeResultsView(AppToplevel):
             )
 
         try:
-            results = harmonize_series(
-                [series_path],
-                progress=on_progress,
-                include_brain_structures=self._include_brain_structures_for_current_run,
-                anon_model=self._anon_model,
-                cancelled=_is_cancelled,
-            )
+            from anonymizer.controller.ai.tseg.model_cache import tseg_batch_session
+
+            with tseg_batch_session(preload=True):
+                results = harmonize_series(
+                    [series_path],
+                    progress=on_progress,
+                    include_brain_structures=self._include_brain_structures_for_current_run,
+                    anon_model=self._anon_model,
+                    cancelled=_is_cancelled,
+                )
         except Exception as exc:
             if not _is_cancelled():
                 logger.exception("Harmonize failed for %s: %s", series_path, exc)
