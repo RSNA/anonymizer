@@ -20,11 +20,13 @@ if TYPE_CHECKING:
 
 import numpy as np
 from cv2 import (
+    COLOR_RGB2GRAY,
     MORPH_RECT,
     NORM_MINMAX,
     Canny,
     GaussianBlur,
     createCLAHE,
+    cvtColor,
     dilate,
     getStructuringElement,
     normalize,
@@ -172,23 +174,37 @@ def cache_projection(projection: Projection, projection_file_path: Path) -> None
     return
 
 
+def _single_frame_to_uint8_gray(frame: ndarray) -> ndarray:
+    """Window a single frame to ``uint8`` grayscale for CLAHE / Canny.
+
+    Color ultrasound frames from ``load_series_frames`` are RGB ``(H, W, 3)``;
+    OpenCV CLAHE requires ``CV_8UC1`` or ``CV_16UC1``.
+    """
+    frame_float = frame.astype(np.float32)
+    min_val, max_val = float(np.min(frame_float)), float(np.max(frame_float))
+    ww_safe = max(1.0, max_val - min_val)
+    windowed = np.clip(((frame_float - min_val) / ww_safe) * 255.0, 0, 255).astype(np.uint8)
+
+    if windowed.ndim == 2:
+        return windowed
+    if windowed.ndim == 3 and windowed.shape[-1] == 3:
+        return cvtColor(windowed, COLOR_RGB2GRAY)
+    if windowed.ndim == 3 and windowed.shape[-1] == 1:
+        return windowed.squeeze(axis=-1)
+    raise ValueError(f"Unsupported single-frame shape for projections: {windowed.shape}")
+
+
 def create_projection_from_single_frame(ds: Dataset, frame: ndarray) -> Projection:
     # [mean,clahe,edge] for single-frame
-    # Window using max & min values and convert to uint8
-    frame_float = frame.astype(np.float32)
-    min_val, max_val = np.min(frame_float), np.max(frame_float)
-    ww = max_val - min_val
-    ww_safe = max(1.0, float(ww))  # Avoid division by zero
-    output_float = ((frame_float - min_val) / ww_safe) * 255.0
-    medium_contrast = np.clip(output_float, 0, 255).astype(np.uint8)
-    logger.debug(f"medium_contrast: pixels.value.range:[{medium_contrast.min(), medium_contrast.max()}]")
+    gray = _single_frame_to_uint8_gray(frame)
+    logger.debug("single-frame gray: shape=%s range=[%s,%s]", gray.shape, gray.min(), gray.max())
 
     # Apply CLAHE for enhanced contrast
     clahe = createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    gray_clahe = clahe.apply(medium_contrast)
+    gray_clahe = clahe.apply(gray)
 
     # Apply Gaussian Blur to reduce noise
-    blurred = GaussianBlur(medium_contrast, (5, 5), 0)
+    blurred = GaussianBlur(gray, (5, 5), 0)
 
     # Apply Canny edge detection with adjusted thresholds
     edges = Canny(blurred, threshold1=100, threshold2=200)
@@ -207,7 +223,7 @@ def create_projection_from_single_frame(ds: Dataset, frame: ndarray) -> Projecti
             ),
             Image.Resampling.NEAREST,
         )
-        for img in [medium_contrast, gray_clahe, edges_dilated]
+        for img in [gray, gray_clahe, edges_dilated]
     ]
 
     return Projection(

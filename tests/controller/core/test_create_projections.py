@@ -252,6 +252,9 @@ class TestCreateProjectionFromSingleFrame:
 
         mock_create_clahe.assert_called_once_with(clipLimit=2.0, tileGridSize=(8, 8))
         mock_clahe_apply.assert_called_once()
+        clahe_src = mock_clahe_apply.call_args.args[0]
+        assert clahe_src.ndim == 2
+        assert clahe_src.dtype == np.uint8
         mock_gaussian_blur.assert_called_once()
         mock_canny.assert_called_once()
         mock_get_struct_element.assert_called_once()
@@ -265,3 +268,16 @@ class TestCreateProjectionFromSingleFrame:
         resize_call_args = mock_pil_fromarray.return_value.convert.return_value.resize.call_args_list[0]
         assert resize_call_args.args[0] == (120, 120)
         assert resize_call_args.args[1] == PILImageModule.Resampling.NEAREST
+
+    def test_rgb_ultrasound_frame_runs_clahe(self):
+        """Color US frames are HxWx3; CLAHE requires single-channel uint8."""
+        ds = create_basic_dataset()
+        frame = np.random.randint(0, 255, size=(40, 50, 3), dtype=np.uint8)
+
+        projection = create_projection_from_single_frame(ds, frame)
+
+        assert projection.proj_images is not None
+        assert len(projection.proj_images) == 3
+        for img in projection.proj_images:
+            assert img.mode == "RGB"
+            assert img.size == ProjectionImageSize.LARGE.value
