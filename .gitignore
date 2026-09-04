@@ -1,32 +1,95 @@
-*.dcm
-*.pth
-*.dmg
-*.log
-*.tmp
-*.DS_Store
-*.pem
+# --- Python ---
 __pycache__/
 *.py[cod]
-*.log
-*.env
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+.eggs/
+
+# Virtual environments (repo-local and readme-named)
+.venv/
+venv/
+ENV/
+env/
+rsna-anonymizer/
+
+# --- Tooling / tests / coverage ---
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+.cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.dmypy.json
+dmypy.json
+
+# --- Packaging / build ---
+build/
+dist/
+wheels/
+src/build/
+src/dist/
 *.spec
-*.zip
-*.coverage
+**/versionfile.txt
+
+# --- Secrets / local runtime ---
+.env
+.env.*
+!.env.example
+*.pem
+.anonymizer_state.json
 *.anonymizer_state.json
 *.db
 ProjectModel.json
-htmlcov/*
-dist/*
-build/*
-src/build/*
-src/dist/*
-src/logs/*
-src/certs/*
-src/assets/ocr/*
-dicom/*
-phi_imgs/*
-**/versionfile.txt
+
+# --- OS / editors ---
+.DS_Store
+Thumbs.db
+.idea/
+# .vscode/ is intentionally tracked (shared launch/settings)
+.cursor/
+
+# --- Logs / temp ---
+*.log
+*.tmp
+tests/controller/tmp/
+src/logs/
+src/certs/
+
+# --- gettext / editor backups ---
+*~
+*.po~
+*.mo~
+*.swp
+*.swo
+
+# --- App / ML artifacts (downloaded or local PHI) ---
+*.dcm
+!tests/controller/assets/test_dcm_files/**/*.dcm
+*.pth
+*.dmg
+*.zip
+src/anonymizer/assets/ai/ocr/
+src/anonymizer/assets/ai/tseg/
+src/anonymizer/assets/falcon/models/
+dicom/
+phi_imgs/
 **/radon_results.txt
+
+# --- Legacy ---
 Pipfile.lock
+
+# Local interpreter pin (pyproject.toml is the source of truth)
 .python-version
 
+# --- MkDocs ---
+site/
+.cache/
+docs/.capture_work/

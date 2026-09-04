@@ -26,12 +26,9 @@ from pathlib import Path
 from queue import Queue
 from shutil import copyfile
 
-import torch
-from easyocr import Reader
 from pydicom import DataElement, Dataset, Sequence, dcmread
 from pydicom.errors import InvalidDicomError
 
-from anonymizer.controller.remove_pixel_phi import remove_pixel_phi
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.model.project import DICOMNode, ProjectModel
 from anonymizer.utils.storage import DICOM_FILE_SUFFIX
@@ -47,6 +44,15 @@ class QuarantineDirectories(Enum):
     INVALID_STORAGE_CLASS = _("Invalid_Storage_Class")
     CAPTURE_PHI_ERROR = _("Capture_PHI_Error")
     STORAGE_ERROR = _("Storage_Error")
+    LOOKUP_MISS = _("Lookup_Miss")
+
+
+class LookupTableMissError(Exception):
+    """Raised when a required CTP lookup patient id is not in lookup_patient."""
+
+    def __init__(self, patient_id: str):
+        self.patient_id = patient_id
+        super().__init__(f"Lookup miss for patient_id={patient_id!r}")
 
 
 class AnonymizerController:
@@ -104,7 +110,6 @@ class AnonymizerController:
         logger.info(f"Anonymizer Model initialised from script: {project_model.anonymizer_script_path}")
 
         self._anon_ds_Q: Queue = Queue()  # queue for dataset workers
-        self._anon_px_Q: Queue = Queue()  # queue for pixel phi workers
         self._worker_threads = []
 
         # Spawn Anonymizer DATASET worker threads:
@@ -117,16 +122,6 @@ class AnonymizerController:
             ds_worker.start()
             self._worker_threads.append(ds_worker)
 
-        # Spawn Remove Pixel PHI Thread:
-        if self.project_model.remove_pixel_phi:
-            px_worker = threading.Thread(
-                target=self._anonymizer_pixel_phi_worker,
-                name="AnonPixelWorker_1",
-                args=(self._anon_px_Q,),
-            )
-            px_worker.start()
-            self._worker_threads.append(px_worker)
-
         self._active = True
         logger.info("Anonymizer Controller initialised")
 
@@ -138,10 +133,10 @@ class AnonymizerController:
         return False
 
     def idle(self) -> bool:
-        return self._anon_ds_Q.empty() and self._anon_px_Q.empty()
+        return self._anon_ds_Q.empty()
 
-    def queued(self) -> tuple[int, int]:
-        return (self._anon_ds_Q.qsize(), self._anon_px_Q.qsize())
+    def queued(self) -> int:
+        return self._anon_ds_Q.qsize()
 
     def _stop_worker_threads(self):
         logger.info("Stopping Anonymizer Worker Threads")
@@ -156,10 +151,6 @@ class AnonymizerController:
 
         # Wait for all sentinal values to be processed
         self._anon_ds_Q.join()
-
-        if self.project_model.remove_pixel_phi:
-            self._anon_px_Q.put(None)
-            self._anon_px_Q.join()
 
         # Wait for all worker threads to finish
         for worker in self._worker_threads:
@@ -308,6 +299,26 @@ class AnonymizerController:
 
         return days_to_increment, formatted_date
 
+    def _apply_date_offset(self, value: str, offset_days: int) -> str:
+        """Shift a DICOM date or datetime string by a fixed day offset from CTP lookup."""
+        if not value or not str(value).strip():
+            return value
+        text = str(value).strip()
+        if len(text) >= 14:
+            date_fmt = "%Y%m%d%H%M%S"
+            length = 14
+        elif len(text) >= 8:
+            date_fmt = "%Y%m%d"
+            length = 8
+        else:
+            return value
+        try:
+            dt = datetime.strptime(text[:length], date_fmt)
+            shifted = dt + timedelta(days=offset_days)
+            return shifted.strftime(date_fmt) + text[length:]
+        except ValueError:
+            return value
+
     def extract_first_digit(self, s: str) -> str | None:
         """
         Extracts the first digit from a given string.
@@ -344,7 +355,7 @@ class AnonymizerController:
         return result
 
     def _anonymize_element(
-        self, dataset: Dataset, data_element: DataElement, phi_ptid: str, anon_ptid: str, anon_acc_no: str | None
+        self, dataset: Dataset, data_element: DataElement, phi_ptid: str, anon_ptid: str, anon_acc_no: str | None, date_offset: int,
     ) -> None:
         """
         Anonymizes a data element in the dataset based on the specified operations.
@@ -352,9 +363,14 @@ class AnonymizerController:
         Args:
             dataset (dict): The dataset containing the data elements.
             data_element (DataElement): The data element to be anonymized.
+            phi_ptid (str): The PHI patient ID.
+            anon_ptid (str): The anonymized patient ID.
+            anon_acc_no (str | None): The anonymized account number.
+            date_offset (int): The date offset.
 
         Returns:
             None
+
         """
         # removes parentheses, spaces, and commas from tag
         tag = str(data_element.tag).translate(self._clean_tag_translate_table).upper()
@@ -383,6 +399,11 @@ class AnonymizerController:
         elif "@hashdate" in operation:
             _, anon_date = self._hash_date(value, phi_ptid)
             dataset[tag].value = anon_date
+        elif "@lookup" in operation:
+            if "dateoffset" in operation:
+                dataset[tag].value = self._apply_date_offset(str(value) if value is not None else "", date_offset)
+            else:
+                dataset[tag].value = anon_ptid
         elif "@round" in operation:
             # TODO: operand is named round but it is age format specific, should be renamed round_age
             # create separate operand for round that can be used for other numeric values
@@ -429,14 +450,16 @@ class AnonymizerController:
             except Exception as e:
                 logger.error(f"Error storing source file: {str(e)}")
 
-        # Calculate date delta from StudyDate and PatientID:
-        date_delta = 0
-        if hasattr(ds, "StudyDate") and hasattr(ds, "PatientID"):
-            date_delta, _ = self._hash_date(ds.StudyDate, ds.PatientID)
+        # Calculate date offset from hash of study date and patient ID
+        date_offset_from_hash, _ = self._hash_date(ds.StudyDate, ds.PatientID) if hasattr(ds, "StudyDate") and hasattr(ds, "PatientID") else (0, None)
 
         # Verify valid DICOM format then CAPTURE PHI and source into DATABASE:
         try:
-            phi_ptid, anon_ptid, anon_acc_no = self.model.capture_phi(str(source), ds, date_delta)
+            phi_ptid, anon_ptid, anon_acc_no, date_offset = self.model.capture_phi(
+                str(source), ds, date_offset_from_hash
+            )
+        except KeyError as e:
+            return self._write_dataset_to_quarantine(e, ds, QuarantineDirectories.LOOKUP_MISS)
         except ValueError as e:
             return self._write_dataset_to_quarantine(e, ds, QuarantineDirectories.INVALID_DICOM)
         except Exception as e:
@@ -459,6 +482,7 @@ class AnonymizerController:
                     phi_ptid,
                     anon_ptid,
                     None if anon_acc_no is None else str(anon_acc_no),
+                    date_offset
                 )
 
             ds.walk(pydicom_callback)  # recursive by default, recurses into embedded dataset sequences
@@ -488,10 +512,6 @@ class AnonymizerController:
             # see options for write_like_original=True
             ds.save_as(filename, write_like_original=False)
 
-            # If enabled for project, and this file contains pixeldata, queue this file for pixel PHI scanning and removal:
-            # TODO: implement modality specific, via project settings, pixel phi removal
-            if self.project_model.remove_pixel_phi and "PixelData" in ds:
-                self._anon_px_Q.put(filename)
             return None
 
         except Exception as e:
@@ -587,56 +607,5 @@ class AnonymizerController:
                 break
             self.anonymize(source, ds)
             ds_Q.task_done()
-
-        logger.info(f"thread={threading.current_thread().name} end")
-
-    def _anonymizer_pixel_phi_worker(self, px_Q: Queue) -> None:
-        logger.info(f"thread={threading.current_thread().name} start")
-
-        # Once-off initialisation of easyocr.Reader (and underlying pytorch model):
-        # if pytorch models not downloaded yet, they will be when Reader initializes
-        model_dir = Path("assets") / "ocr" / "model"  # Default is: Path("~/.EasyOCR/model").expanduser()
-        if not model_dir.exists():
-            logger.warning(
-                f"EasyOCR model directory: {model_dir}, does not exist, EasyOCR will create it, models still to be downloaded..."
-            )
-        else:
-            logger.info(f"EasyOCR downloaded models: {os.listdir(model_dir)}")
-
-        # Initialize the EasyOCR reader with the desired language(s), if models are not in model_dir, they will be downloaded
-        ocr_reader = Reader(
-            lang_list=["en", "de", "fr", "es"],
-            model_storage_directory=model_dir,
-            verbose=False,
-        )
-
-        logging.info("OCR Reader initialised successfully")
-
-        # Check if GPU available
-        logger.info(f"Apple MPS (Metal) GPU Available: {torch.backends.mps.is_available()}")
-        logger.info(f"CUDA GPU Available: {torch.cuda.is_available()}")
-
-        while True:
-            time.sleep(self.WORKER_THREAD_SLEEP_SECS)
-
-            path = px_Q.get()  # Blocks by default
-            if path is None:  # sentinel value set by _stop_worker_threads
-                px_Q.task_done()
-                break
-
-            try:
-                remove_pixel_phi(path, ocr_reader)
-            except Exception as e:
-                logger.error(repr(e))
-
-            px_Q.task_done()
-
-        # Cleanup resources used for Pixel PHI Neural back-end
-        if ocr_reader:
-            del ocr_reader
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()  # Clear GPU memory cache
-        if torch.backends.mps.is_available():
-            torch.mps.empty_cache()
 
         logger.info(f"thread={threading.current_thread().name} end")

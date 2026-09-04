@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RSNA DICOM Anonymizer Harmonize</title>
+    <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+	<h1>Harmonize</h1>
+	<p>
+	Research datasets often use inconsistent <b>Series Description</b> names for similar exams (“CHEST WO”, “CT thorax”, etc.).
+	<b>Harmonize</b> analyzes a <b>CT series</b> and suggests a standardized description based on which body regions are visible and whether IV contrast appears to be present.
+	Descriptions follow the RSNA Radiology Playbook (RadLex) style, for example combining regions like <i>Chest+Abdomen</i> and contrast such as <i>IV Contrast</i>.
+	</p>
+	<p>
+	<b>Important:</b> Harmonize only updates the <b>SeriesDescription</b> DICOM tag. It does not change the pixel data.
+	</p>
+
+	<h2>What you need before using it</h2>
+	<ol>
+		<li>On the <b>Welcome</b> screen, click <b>AI Features</b>.</li>
+		<li>Check <b>Harmonize</b>.</li>
+		<li>Click <b>Download</b> for anatomy segmentation models if prompted (this may take several minutes and requires internet once).</li>
+		<li>On macOS, install <i>libomp</i> via Homebrew if the status mentions XGBoost or OpenMP.</li>
+		<li>Save your settings.</li>
+	</ol>
+
+	<h2>Which studies qualify</h2>
+	<ul>
+		<li><b>Modality:</b> CT only.</li>
+		<li><b>Geometry:</b> Standard axial (or suitable) multi-slice volumes work best. Scout images, MIP series, or very short stacks may be skipped or produce limited results.</li>
+		<li>The series must already be imported into your project.</li>
+	</ul>
+
+	<h2>How it works (in plain terms)</h2>
+	<ol>
+		<li>The tool builds a 3D view of the CT series.</li>
+		<li>It runs anatomy segmentation to see which structures (lungs, liver, brain, etc.) are present.</li>
+		<li>It estimates whether the exam used IV contrast (contrast phase analysis).</li>
+		<li>It combines region and contrast information into a suggested <b>SeriesDescription</b> string.</li>
+		<li>Results are cached on disk so repeating Harmonize on the same series is faster unless you force a refresh.</li>
+	</ol>
+
+	<h2>Using Series View (one series)</h2>
+	<ol>
+		<li>Open <b>Series View</b> for a CT series.</li>
+		<li>Click <b>Harmonize Description</b>.</li>
+		<li>A dialog shows the suggested description, body regions found, and contrast information.</li>
+		<li>Choose <b>Apply</b> to write the new description to the anonymized series metadata, or cancel to leave tags unchanged.</li>
+	</ol>
+
+	<h2>Batch processing many studies</h2>
+	<p>See <a href="ai batch process.html">AI Batch Process</a>. Select <b>Harmonize</b> in the batch dialog. For each eligible CT series, the tool computes or reuses a harmonized description and applies it automatically.</p>
+
+	<h2>Clearing cached results</h2>
+	<ul>
+		<li>If you re-import slices or change a series, cached harmonize data may be stale.</li>
+		<li>Series View and batch processing can force re-analysis when needed; cache folders live under each series directory in storage.</li>
+	</ul>
+
+	<h2>Limitations and tips</h2>
+	<ul>
+		<li>Harmonize is a suggestion tool — review descriptions before publishing a dataset.</li>
+		<li>Non-CT modalities (MR, US, XR) are not supported.</li>
+		<li>First run on a large study takes longer; later runs use cached segmentation where possible.</li>
+		<li>Harmonize does not replace clinical reporting or protocol naming from the original site.</li>
+	</ul>
+
+	<h2>Related help pages</h2>
+	<ul>
+		<li><a href="../2_ai features.html">AI Features</a></li>
+		<li><a href="ai batch process.html">AI Batch Process</a></li>
+	</ul>
+
+</body>
+</html>

@@ -1,137 +1,134 @@
-# Whitelist for common terms found on DX/CR (X-Ray) images
-# One term/phrase per line. Case-insensitive matching is assumed after loading.
-# Lines starting with # are comments and will be ignored.
+# Freigabeliste für häufige Begriffe auf DX/CR-Röntgenbildern
+# Ein Begriff/Ausdruck pro Zeile. Groß-/Kleinschreibung wird beim Laden ignoriert.
+# Zeilen, die mit # beginnen, sind Kommentare und werden ignoriert.
 
-# --- Laterality ---
+# --- Seitigkeit ---
 L
 R
-LEFT
-RIGHT
+LINKS
+RECHTS
 LT
 RT
-BILATERAL
-BILAT
+BEIDSEITIG
 
-# --- Orientation / Position ---
-AP # Anteroposterior
-PA # Posteroanterior
+# --- Orientierung / Position ---
+AP # Anterior-posterior
+PA # Posterior-anterior
 LAT # Lateral
-OBL # Oblique
-DECUB # Decubitus
-SUPINE
-PRONE
-ERECT
-SEMI-ERECT
-STANDING
-SITTING
-RECUMBENT
-WEIGHT BEARING
+OBL # Schräg
+DECUB # Seitenlage
+RÜCKENLAGE
+BAUCHLAGE
+AUFRECHT
+HALBAUFRECHT
+STEHEND
+SITZEND
+LIEGEND
+BELASTUNG
 WB
-NON WEIGHT BEARING
+OHNE BELASTUNG
 NWB
-PORTABLE
+MOBIL
 PORT
-BEDSIDE
-MOBILE
-INSPIRATION
-EXPIRATION
+BETTSEITIG
+EINATMUNG
+AUSATMUNG
 FLEXION
 EXTENSION
-INTERNAL ROTATION
-EXTERNAL ROTATION
+INNENROTATION
+AUSSENROTATION
 AXIAL
 CEPHALAD
 CAUDAD
 
-# --- Anatomy (Very General - Add specific non-PHI terms carefully) ---
-HEAD
-SKULL
-NECK
-CHEST
-CXR # Chest X-Ray
-KUB # Kidneys, Ureters, Bladder
+# --- Anatomie (sehr allgemein – nur spezifische Nicht-PHI-Begriffe sorgfältig hinzufügen) ---
+KOPF
+SCHÄDEL
+HALS
+THORAX
+CXR # Thoraxröntgen
+KUB # Nieren, Harnleiter, Blase
 ABDOMEN
-PELVIS
-SPINE
-CERVICAL
-THORACIC
-LUMBAR
-SACRUM
-COCCYX
-SHOULDER
-ELBOW
-WRIST
+BECKEN
+WIRBELSÄULE
+ZERVIKAL
+THORAKAL
+LUMBAL
+KREUZBEIN
+STEISSBEIN
+SCHULTER
+ELLBOGEN
+HANDGELENK
 HAND
-HIP
-KNEE
-ANKLE
-FOOT
-EXTREMITY
-UPPER
-LOWER
-RIBS
+HÜFTE
+KNIE
+KNÖCHEL
+FUSS
+EXTREMITÄT
+OBER
+UNTER
+RIPPEN
 
-# --- Technical Parameters ---
+# --- Technische Parameter ---
 DX
 CR
 DR
 XRAY
 X-RAY
-PORTABLE
-GRID
-NO GRID
-AEC # Automatic Exposure Control
-MANUAL
+RASTER
+OHNE RASTER
+AEC # Automatische Belichtungssteuerung
+MANUELL
 KV
 KVP
 MA
 MAS
-EXPOSURE
+EXPOSITION
 TIME
-SID # Source-to-Image Distance
-FFD # Film-Focus Distance
-MAG # Magnification
+SID # Quelle-Bild-Abstand
+FFD # Film-Fokus-Abstand
+MAG # Vergrößerung
 TECH
-TECHNOLOGIST
-SCOUT
+MTA
+ÜBERSICHT
 
-# --- Miscellaneous ---
-SERIES
-IMAGE
+# --- Verschiedenes ---
+SERIE
+BILD
 IMG
-VIEW
-PROJECTION
+ANSICHT
+PROJEKTION
 NO
 NUM
-NUMBER
-EXAM DATE
-EXAM TIME
-TABLE
-HEIGHT
+NUMMER
+UNTERSUCHUNGSDATUM
+UNTERSUCHUNGSZEIT
+TISCH
+HÖHE
 POS
 POSITION
 REF
-REFERENCE
-NONE
+REFERENZ
+KEINE
 N/A
-VARIOUS
-SEE REPORT
-CLINICAL HISTORY
-COMPARISON
-PREVIOUS
-PRIOR
+VERSCHIEDEN
+SIEHE BEFUND
+KLINISCHE ANAMNESE
+VERGLEICH
+VORHERIG
+FRÜHER
 
-# --- Common Artifacts / Descriptions (Use cautiously) ---
-MOTION
-ARTIFACT
-BLUR
-CLOTHING
-JEWELRY
-FOREIGN BODY
-IMPLANT
-PACEMAKER
-LINE
+# --- Häufige Artefakte / Beschreibungen (vorsichtig verwenden) ---
+BEWEGUNG
+ARTEFAKT
+UNSCHÄRFE
+KLEIDUNG
+SCHMUCK
+FREMDKÖRPER
+IMPLANTAT
+HERZSCHRITTMACHER
+LEITUNG
 TUBE
 
-# --- Add institution-specific, non-PHI identifiers if necessary ---
-# E.g., XRAY_ROOM_1, PORTABLE_UNIT_3
+# --- Institutionsbezogene Nicht-PHI-Kennungen bei Bedarf hinzufügen ---
+# Z. B. XRAY_ROOM_1, MOBILE_UNIT_3

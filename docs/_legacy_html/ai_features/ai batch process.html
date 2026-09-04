@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RSNA DICOM Anonymizer AI Batch Process</title>
+    <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+	<h1>AI Batch Process</h1>
+	<p>
+	<b>AI Batch Process</b> runs one or more enabled AI Features on <b>many studies at once</b> from the Dataset view, instead of opening each series manually in Series View.
+	It is useful after import when you want to harmonize descriptions, remove burnt-in text, or blur faces across an entire cohort.
+	</p>
+
+	<h2>Before you start</h2>
+	<ol>
+		<li>Open a project and import the studies you want to process.</li>
+		<li>On the <b>Welcome</b> screen, click <b>AI Features</b> and enable the tools you need (see <a href="../2_ai features.html">AI Features</a>).</li>
+		<li>Complete downloads and the face license if using Face De-identify.</li>
+		<li>Confirm each enabled tool shows a ready status.</li>
+	</ol>
+
+	<h2>Starting a batch run</h2>
+	<ol>
+		<li>On the dashboard, open the <b>Dataset</b> view (patient/study list).</li>
+		<li>Select one or more studies (or patients) using the same selection methods as for export.</li>
+		<li>Click <b>AI Batch Process</b>.</li>
+		<li>In the options dialog, check each algorithm you want to run:</li>
+		<ul>
+			<li><a href="remove burnt-in annotation.html">Remove Burnt-in Annotation</a> — choose black out or blend mode.</li>
+			<li><a href="harmonize.html">Harmonize</a> — CT series descriptions only.</li>
+			<li><a href="face de-identify.html">Face De-identify</a> — head CT face blur.</li>
+		</ul>
+		<li>Click <b>Start</b>. A progress dialog shows the current study, series, and phase.</li>
+	</ol>
+
+	<h2>Order of operations</h2>
+	<p>When you select multiple tools, the batch runner processes them in this order for each series:</p>
+	<ol>
+		<li>Remove Burnt-in Annotation (if selected)</li>
+		<li>Harmonize (if selected)</li>
+		<li>Face De-identify (if selected)</li>
+	</ol>
+	<p>This order avoids re-reading pixels after they have been modified and keeps memory use predictable on large jobs.</p>
+
+	<h2>What happens during processing</h2>
+	<ul>
+		<li>Each series is evaluated. If a tool does not apply (wrong modality, already done, not ready), it is skipped and noted in the log.</li>
+		<li>You can cancel between series; the current series may finish its active step before stopping.</li>
+		<li>A summary at the end lists completed, skipped, and failed items.</li>
+		<li>Detailed lines are written to the project log file for troubleshooting.</li>
+	</ul>
+
+	<h2>After batch completes</h2>
+	<ul>
+		<li>Spot-check representative series in Series View or Dataset projections.</li>
+		<li>Export anonymized data when satisfied (see Help/Operation).</li>
+		<li>Re-running batch on the same studies usually skips work already recorded in project metadata (for example pixel-PHI already scanned), unless you clear caches or force reprocessing.</li>
+	</ul>
+
+	<h2>Common messages</h2>
+	<ul>
+		<li><b>No AI features are enabled</b> — on the Welcome screen, click <b>AI Features</b> and turn on at least one tool.</li>
+		<li><b>AI features are not ready</b> — open <b>AI Features</b> from the Welcome screen and finish model downloads or license steps.</li>
+		<li><b>Skipped (not CT)</b> — Harmonize or Face De-identify was selected but the series is another modality.</li>
+		<li><b>Skipped (already harmonized / already scanned)</b> — previous batch or manual run recorded completion; safe to ignore unless you intentionally want to redo work.</li>
+	</ul>
+
+	<h2>Related help pages</h2>
+	<ul>
+		<li><a href="../2_ai features.html">AI Features</a> — enable tools and downloads</li>
+		<li><a href="remove burnt-in annotation.html">Remove Burnt-in Annotation</a></li>
+		<li><a href="harmonize.html">Harmonize</a></li>
+		<li><a href="face de-identify.html">Face De-identify</a></li>
+	</ul>
+
+</body>
+</html>

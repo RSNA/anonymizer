@@ -1,0 +1,432 @@
+# UNIT TESTS for controller/anonymize.py
+# use pytest from terminal to show full logging output
+
+import os
+from copy import deepcopy
+from pathlib import Path
+from time import sleep
+
+import pytest
+from pydicom import dcmread
+from pydicom.data import get_testdata_file
+from pydicom.dataset import Dataset
+
+from anonymizer.controller.anonymizer import AnonymizerController, QuarantineDirectories
+from anonymizer.controller.project import ProjectController
+from tests.controller.dicom.support.test_files import (
+    cr1_filename,
+    ct_small_filename,
+    # mr_small_filename,
+    # mr_small_implicit_filename,
+    # mr_small_bigendian_filename,
+    # CR_STUDY_3_SERIES_3_IMAGES,
+    # CT_STUDY_1_SERIES_4_IMAGES,
+    # MR_STUDY_3_SERIES_11_IMAGES,
+    hash_cr1_SeriesInstanceUID,
+    hash_cr1_SOPInstanceUID,
+    hash_cr1_StudyInstanceUID,
+)
+from tests.controller.dicom.support.test_nodes import LocalSCU
+
+
+# Test a valid date before 19000101
+def test_valid_date_before_19000101(controller):
+    anon = controller.anonymizer
+    input_date = "18991231"
+    assert not anon.valid_date(input_date)
+    assert anon._hash_date(input_date, "12345") == (0, anon.DEFAULT_ANON_DATE)
+
+
+# Test a valid date on or after 19000101
+def test_valid_date_on_or_after_19000101(controller):
+    anon = controller.anonymizer
+    assert anon.valid_date("19010101")
+    assert anon.valid_date("19801228")
+    assert anon.valid_date("19660307")
+    assert anon.valid_date("20231212")
+    assert anon.valid_date("20220101")
+
+
+# Test an invalid date format
+def test_invalid_date_format(controller):
+    anon = controller.anonymizer
+    assert not anon.valid_date("01-01-2022")
+    assert not anon.valid_date("2001-01-02")
+    assert not anon.valid_date("01/01/2022")
+    assert not anon.valid_date("0101192")
+
+
+# Test an invalid date value (not a valid date)
+def test_invalid_date_value(controller):
+    anon = controller.anonymizer
+    assert not anon.valid_date("20220230")
+    assert not anon.valid_date("20220231")
+    assert not anon.valid_date("20220431")
+    assert not anon.valid_date("20220631")
+    assert not anon.valid_date("99991232")
+
+
+# Test with a known date and PatientID
+def test_valid_date_hashing(controller):
+    anon = controller.anonymizer
+    assert anon._hash_date("20220101", "12345")[1] == "20220921"
+    assert anon._hash_date("20220101", "67890")[1] == "20250815"
+    assert anon._hash_date("19000101", "123456789")[1] == "19080814"
+    assert anon._hash_date("19000101", "1234567890")[1] == "19080412"
+
+
+def test_valid_date_hash_patient_id_range(controller):
+    anon = controller.anonymizer
+    for i in range(100):
+        _, hdate = anon._hash_date("20100202", str(i))
+        assert anon.valid_date(hdate)
+
+
+def test_uid_hashing_is_deterministic_and_unique(controller: ProjectController):
+    """
+    Tests the core idempotent property:
+    1. The same input always produces the same output.
+    2. A different input produces a different output.
+    """
+    model = controller.anonymizer.model
+    orig_uid_1 = "1.2.3.4.5"
+    orig_uid_2 = "1.2.3.4.5.6"  # A different UID
+
+    # Call the function twice with the same input
+    hash_1a = model._create_anon_uid(orig_uid_1)
+    hash_1b = model._create_anon_uid(orig_uid_1)
+
+    # Call with the different input
+    hash_2 = model._create_anon_uid(orig_uid_2)
+
+    # Test for idempotency
+    assert hash_1a == hash_1b
+
+    # Test for uniqueness
+    assert hash_1a != hash_2
+
+
+def test_uid_hash_format_and_length(controller: ProjectController):
+    """
+    Tests that the generated UID is always compliant:
+    1. Starts with the correct prefix.
+    2. Is 64 characters or less.
+    3. The hashed part is numeric.
+    """
+    model = controller.anonymizer.model
+    orig_uid = "1.2.840.113619.1.2.3.4.5.6.7.8.9.10"
+    hashed_uid = model._create_anon_uid(orig_uid)
+
+    expected_prefix = f"{model._uid_prefix}.2."
+
+    # 1. Check prefix
+    assert hashed_uid.startswith(expected_prefix)
+
+    # 2. Check max length
+    assert len(hashed_uid) <= model.DICOM_UID_MAX_LEN
+
+    # 3. Check that the hash part is numeric
+    hash_part = hashed_uid.replace(expected_prefix, "")
+    assert hash_part.isnumeric()
+    assert len(hash_part) > 0  # Ensure it's not empty
+
+
+def test_uid_hashing_raises_error_if_prefix_too_long(controller: ProjectController):
+    """
+    Tests the ValueError check. If the project prefix is so long
+    that it's impossible to generate a valid UID, it must fail.
+    """
+    # `uid_root` = `self._uid_prefix` + ".1" (adds 2 chars)
+    # `prefix` = `uid_root` + "." (adds 1 char)
+    # Total added: 3 chars.
+
+    # A prefix of 61 chars will work (61 + 3 = 64).
+    # `len(prefix)` will be 64. `max_len <= len(prefix)` will be `64 <= 64`,
+    # which is True, so it will raise the error.
+
+    # Let's test the boundary:
+    # A prefix of 60 chars. `prefix` length = 63. `max_len <= 63` is False. OK.
+    model = controller.anonymizer.model
+    prefix_60_chars = "1." * 30
+    model._uid_prefix = prefix_60_chars
+    model._create_anon_uid("1.2.3")  # Should not raise
+
+    # A prefix of 61 chars. `prefix` length = 64. `max_len <= 64` is True. Raise.
+    prefix_61_chars = "1.2" + ("." * 59)
+    assert len(prefix_61_chars) == 62
+    model._uid_prefix = prefix_61_chars
+
+    with pytest.raises(ValueError, match="is too short to accommodate"):
+        model._create_anon_uid("1.2.3")
+
+
+def test_anonymize_dataset_without_PatientID(controller: ProjectController):
+    anonymizer: AnonymizerController = controller.anonymizer
+    ds = get_testdata_file(cr1_filename, read=True)
+    assert isinstance(ds, Dataset)
+    assert ds
+    assert ds.PatientID
+    # Remove PatientID field
+    del ds.PatientID
+    phi_ds = deepcopy(ds)
+    anonymizer.anonymize_dataset_ex(LocalSCU, ds)
+    sleep(1)
+    store_dir = controller.model.images_dir()
+    dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
+
+    SITEID = controller.model.site_id
+    UIDROOT = controller.model.uid_root
+
+    anon_pt_id = SITEID + "-000000"
+    assert len(dirlist) == 1
+    assert dirlist[0] == anon_pt_id
+    anon_filename = anonymizer.local_storage_path(store_dir, ds)
+    anon_ds = dcmread(anon_filename)
+    assert isinstance(anon_ds, Dataset)
+    assert anon_ds.PatientID == anon_pt_id
+    assert anon_ds.PatientName == anon_pt_id
+    assert len(anon_ds.AccessionNumber) == 18
+    assert anon_ds.StudyDate != phi_ds.StudyDate
+    assert anon_ds.StudyDate == anonymizer.DEFAULT_ANON_DATE
+    assert anon_ds.SOPClassUID == phi_ds.SOPClassUID
+
+    assert anon_ds.StudyInstanceUID == hash_cr1_StudyInstanceUID
+    assert anon_ds.SeriesInstanceUID == hash_cr1_SeriesInstanceUID
+    assert anon_ds.SOPInstanceUID == hash_cr1_SOPInstanceUID
+    assert controller.anonymizer.model.get_phi_name_by_anon_patient_id(anon_pt_id) is None
+    phi = controller.anonymizer.model.get_phi_by_anon_patient_id(anon_pt_id)
+    if phi:
+        assert phi.patient_id == ""
+
+
+def test_anonymize_dataset_with_blank_PatientID_1_study(controller):
+    anonymizer: AnonymizerController = controller.anonymizer
+    ds = get_testdata_file(cr1_filename, read=True)
+    assert isinstance(ds, Dataset)
+    assert ds
+    assert ds.PatientID
+    # Set Blank PatientID
+    ds.PatientID = ""
+    phi_ds = deepcopy(ds)
+    anonymizer.anonymize_dataset_ex(LocalSCU, ds)
+    sleep(0.5)
+    store_dir = controller.model.images_dir()
+    dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
+
+    SITEID = controller.model.site_id
+    UIDROOT = controller.model.uid_root
+
+    anon_pt_id = SITEID + "-000000"
+    assert len(dirlist) == 1
+    assert dirlist[0] == anon_pt_id
+    anon_filename = anonymizer.local_storage_path(store_dir, ds)
+    anon_ds = dcmread(anon_filename)
+    assert isinstance(anon_ds, Dataset)
+    assert anon_ds.PatientID == anon_pt_id
+    assert anon_ds.PatientName == anon_pt_id
+    assert len(anon_ds.AccessionNumber) == 18
+    assert anon_ds.StudyDate != phi_ds.StudyDate
+    assert anon_ds.StudyDate == anonymizer.DEFAULT_ANON_DATE
+    assert anon_ds.SOPClassUID == phi_ds.SOPClassUID
+    assert anon_ds.StudyInstanceUID == hash_cr1_StudyInstanceUID
+    assert anon_ds.SeriesInstanceUID == hash_cr1_SeriesInstanceUID
+    assert anon_ds.SOPInstanceUID == hash_cr1_SOPInstanceUID
+    assert controller.anonymizer.model.get_phi_name_by_anon_patient_id(anon_pt_id) is None
+
+    phi = controller.anonymizer.model.get_phi_by_anon_patient_id(anon_pt_id)
+    if phi:
+        assert phi.patient_id == ""
+
+
+def test_anonymize_dataset_with_blank_PatientID_2_studies(controller: ProjectController):
+    anonymizer: AnonymizerController = controller.anonymizer
+    ds1 = get_testdata_file(cr1_filename, read=True)
+    assert isinstance(ds1, Dataset)
+    assert ds1
+    assert ds1.PatientID
+    # Set Blank PatientID
+    ds1.PatientID = ""
+    phi_ds1 = deepcopy(ds1)
+    anonymizer.anonymize_dataset_ex(LocalSCU, ds1)
+    sleep(0.5)
+
+    ds2 = get_testdata_file(ct_small_filename, read=True)
+    assert isinstance(ds2, Dataset)
+    assert ds2
+    assert ds2.PatientID
+    # Delete PatientID attribute
+    del ds2.PatientID
+    phi_ds2 = deepcopy(ds2)
+    anonymizer.anonymize_dataset_ex(LocalSCU, ds2)
+
+    sleep(0.5)
+    store_dir = controller.model.images_dir()
+    dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
+
+    SITEID = controller.model.site_id
+    UIDROOT = controller.model.uid_root
+
+    # 1 Patient directory with 2 Studies:
+    anon_pt_id = SITEID + "-000000"
+    assert len(dirlist) == 1
+    assert dirlist[0] == anon_pt_id
+
+    anon_filename1 = anonymizer.local_storage_path(store_dir, ds1)
+    anon_ds1 = dcmread(anon_filename1)
+    assert isinstance(anon_ds1, Dataset)
+    assert anon_ds1.PatientID == anon_pt_id
+    assert anon_ds1.PatientName == anon_pt_id
+    assert len(anon_ds1.AccessionNumber) == 18
+    assert anon_ds1.StudyDate != phi_ds1.StudyDate
+    assert anon_ds1.StudyDate == anonymizer.DEFAULT_ANON_DATE
+    assert anon_ds1.SOPClassUID == phi_ds1.SOPClassUID
+    assert anon_ds1.file_meta.TransferSyntaxUID == phi_ds1.file_meta.TransferSyntaxUID
+    assert f"{UIDROOT}.{SITEID}." in anon_ds1.StudyInstanceUID
+    assert f"{UIDROOT}.{SITEID}." in anon_ds1.SeriesInstanceUID
+    assert f"{UIDROOT}.{SITEID}." in anon_ds1.SOPInstanceUID
+
+    anon_filename2 = anonymizer.local_storage_path(store_dir, ds2)
+    anon_ds2 = dcmread(anon_filename2)
+    assert isinstance(anon_ds2, Dataset)
+    assert anon_ds2.PatientID == anon_pt_id
+    assert anon_ds2.PatientName == anon_pt_id
+    assert anon_ds2.AccessionNumber == ""
+    assert anon_ds2.StudyDate != phi_ds2.StudyDate
+    assert anon_ds2.StudyDate == anonymizer.DEFAULT_ANON_DATE
+    assert anon_ds2.SOPClassUID == phi_ds2.SOPClassUID
+    assert anon_ds2.file_meta.TransferSyntaxUID == phi_ds2.file_meta.TransferSyntaxUID
+    assert f"{UIDROOT}.{SITEID}." in anon_ds2.StudyInstanceUID
+    assert f"{UIDROOT}.{SITEID}." in anon_ds2.SeriesInstanceUID
+    assert f"{UIDROOT}.{SITEID}." in anon_ds2.SOPInstanceUID
+
+    anon_pt_dir = Path(store_dir, anon_pt_id).as_posix()
+    anon_ptid_dirlist = [d for d in os.listdir(anon_pt_dir) if os.path.isdir(os.path.join(anon_pt_dir, d))]
+    assert len(anon_ptid_dirlist) == 2
+    assert anon_ds1.StudyInstanceUID in anon_ptid_dirlist
+    assert anon_ds2.StudyInstanceUID in anon_ptid_dirlist
+
+    assert controller.anonymizer.model.get_phi_name_by_anon_patient_id(anon_pt_id) is None
+    phi = controller.anonymizer.model.get_phi_by_anon_patient_id(anon_pt_id)
+    if phi:
+        assert phi.patient_id == ""
+
+
+def test_anonymize_dataset_with_PatientID_1_study(controller):
+    anonymizer: AnonymizerController = controller.anonymizer
+    ds = get_testdata_file(cr1_filename, read=True)
+    assert isinstance(ds, Dataset)
+    assert ds
+    assert ds.PatientID
+    phi_ds = deepcopy(ds)
+    anonymizer.anonymize_dataset_ex(LocalSCU, ds)
+    sleep(0.5)
+    store_dir = controller.model.images_dir()
+    dirlist = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
+
+    SITEID = controller.model.site_id
+    UIDROOT = controller.model.uid_root
+
+    anon_pt_id = SITEID + "-000001"
+    assert len(dirlist) == 1
+    assert dirlist[0] == anon_pt_id
+    anon_filename = anonymizer.local_storage_path(store_dir, ds)
+    anon_ds = dcmread(anon_filename)
+    assert isinstance(anon_ds, Dataset)
+    assert anon_ds.PatientID == anon_pt_id
+    assert anon_ds.PatientID != phi_ds.PatientID
+    assert anon_ds.PatientName == anon_pt_id
+    assert len(anon_ds.AccessionNumber) == 18
+    assert anon_ds.StudyDate != phi_ds.StudyDate
+    assert anon_ds.StudyDate == anonymizer._hash_date(phi_ds.StudyDate, phi_ds.PatientID)[1]
+    assert anon_ds.SOPClassUID == phi_ds.SOPClassUID
+    assert anon_ds.StudyInstanceUID == hash_cr1_StudyInstanceUID
+    assert anon_ds.SeriesInstanceUID == hash_cr1_SeriesInstanceUID
+    assert anon_ds.SOPInstanceUID == hash_cr1_SOPInstanceUID
+
+    assert controller.anonymizer.model.get_phi_name_by_anon_patient_id(anon_pt_id) == phi_ds.PatientName
+    phi = controller.anonymizer.model.get_phi_by_anon_patient_id(anon_pt_id)
+    assert phi
+    assert phi.patient_id == phi_ds.PatientID
+
+
+# QUARANTINE Tests:
+def test_anonymize_file_not_found(temp_dir: str, controller: ProjectController):
+    anonymizer: AnonymizerController = controller.anonymizer
+
+    error_msg, ds = anonymizer.anonymize_file(Path("unknown_file.dcm"))
+
+    assert error_msg
+    assert "No such file" in error_msg
+    assert ds is None
+
+    error_msg, ds = anonymizer.anonymize_file(Path(temp_dir))
+
+    assert error_msg
+    assert "Is a directory" in error_msg or "Permission denied" in error_msg or "Errno 13" in error_msg
+    assert ds is None
+
+
+def test_anonymize_invalid_dicom_file(temp_dir: str, controller: ProjectController):
+    anonymizer: AnonymizerController = controller.anonymizer
+
+    test_filename = "test_file.txt"
+    test_file_path = Path(temp_dir, test_filename)
+    with open(test_file_path, "w") as f:
+        f.write("Testing Anonymizer")
+
+    error_msg, ds = anonymizer.anonymize_file(test_file_path)
+
+    assert error_msg
+    assert "File is missing DICOM File Meta" in error_msg
+    assert ds is None
+
+    # Ensure file is moved to correct quarantine directory:
+    qpath = Path(anonymizer.get_quarantine_path(), QuarantineDirectories.INVALID_DICOM.value)
+    assert qpath.exists()
+
+
+def test_anonymize_dicom_missing_attributes(temp_dir: str, controller: ProjectController):
+    anonymizer: AnonymizerController = controller.anonymizer
+
+    cr1 = get_testdata_file(cr1_filename, read=True)
+    assert isinstance(cr1, Dataset)
+    assert cr1
+    assert cr1.SOPClassUID
+    del cr1.SOPClassUID  # remove required attribute
+    test_filename = "test.dcm"
+    test_dcm_file_path = Path(temp_dir, test_filename)
+    cr1.save_as(test_dcm_file_path)
+
+    error_msg, ds = anonymizer.anonymize_file(test_dcm_file_path)
+
+    assert error_msg
+    assert "Missing Attributes" in error_msg
+    assert ds == cr1
+
+    # Ensure file is moved to correct quarantine directory:
+    qpath = Path(anonymizer.get_quarantine_path(), QuarantineDirectories.MISSING_ATTRIBUTES.value)
+    assert qpath.exists()
+
+
+def test_anonymize_storage_error(controller: ProjectController):
+    anonymizer: AnonymizerController = controller.anonymizer
+
+    cr1 = get_testdata_file(cr1_filename, read=True)
+    assert isinstance(cr1, Dataset)
+    assert cr1
+    assert cr1.SOPClassUID
+    del cr1.file_meta  # remove file_meta
+
+    error_msg = anonymizer.anonymize("Unit Testing", cr1)
+
+    assert error_msg
+    assert "Storage Error" in error_msg
+
+    # Ensure file is moved to correct quarantine directory:
+    qpath = Path(anonymizer.get_quarantine_path(), QuarantineDirectories.STORAGE_ERROR.value)
+    assert qpath.exists()
+    filename: Path = anonymizer.local_storage_path(qpath, cr1)
+    assert filename.exists()
+
+
+# TODO: Transcoding tests here

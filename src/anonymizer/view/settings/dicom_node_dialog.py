@@ -1,6 +1,5 @@
 import logging
 import string
-import tkinter as tk
 from typing import Union
 
 import customtkinter as ctk
@@ -8,7 +7,10 @@ import customtkinter as ctk
 from anonymizer.model.project import DICOMNode
 from anonymizer.utils.network import dns_lookup, get_local_ip_addresses
 from anonymizer.utils.translate import _
-from anonymizer.view.ux_fields import (
+from anonymizer.view.common.app_window import AppToplevel
+from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
+from anonymizer.view.common.fonts import default_char_width_px
+from anonymizer.view.common.ux_fields import (
     aet_max_chars,
     aet_min_chars,
     int_entry,
@@ -22,7 +24,7 @@ from anonymizer.view.ux_fields import (
 logger = logging.getLogger(__name__)
 
 
-class DICOMNodeDialog(tk.Toplevel):
+class DICOMNodeDialog(AppToplevel):
     """
     A dialog window for configuring a DICOM node.
 
@@ -53,7 +55,7 @@ class DICOMNodeDialog(tk.Toplevel):
         logger.debug("_create_widgets")
         PAD = 10
 
-        char_width_px = ctk.CTkFont().measure("A")
+        char_width_px = default_char_width_px()
         logger.debug(f"Font Character Width in pixels: ±{char_width_px}")
 
         self._frame = ctk.CTkFrame(self)
@@ -208,25 +210,14 @@ class DICOMNodeDialog(tk.Toplevel):
             self.aet_var.get(),
             self.address.local,
         )
-        self.grab_release()
-        self.destroy()
+        teardown_ctk_toplevel(self, parent=self.master)
 
     def _escape_keypress(self, event):
-        """
-        Event handler for the Escape key press.
-
-        Args:
-            event: The event object.
-        """
         logger.info("_escape_pressed")
         self._on_cancel()
 
     def _on_cancel(self):
-        """
-        Event handler for the Cancel button click.
-        """
-        self.grab_release()
-        self.destroy()
+        teardown_ctk_toplevel(self, parent=self.master)
 
     def get_input(self):
         """

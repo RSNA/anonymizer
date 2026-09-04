@@ -4,7 +4,6 @@ This module contains the SettingsDialog class, which is a dialog window for mana
 
 import logging
 import string
-import tkinter as tk
 from copy import copy
 from pathlib import Path
 from tkinter import filedialog, messagebox
@@ -12,7 +11,8 @@ from typing import List, Tuple
 
 import customtkinter as ctk
 
-from anonymizer.controller.project import DICOMNode
+from anonymizer.controller.process_ctp_lookup import CtpLookupPreview
+from anonymizer.controller.project import DICOMNode, ProjectController
 from anonymizer.model.project import AWSCognito, ProjectModel
 from anonymizer.utils.logging import set_logging_levels
 from anonymizer.utils.storage import (
@@ -20,20 +20,24 @@ from anonymizer.utils.storage import (
     read_java_anonymizer_index_xlsx,
 )
 from anonymizer.utils.translate import _, get_current_language_code
+from anonymizer.view.common.app_window import AppToplevel
+from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
+from anonymizer.view.common.fonts import default_char_width_px
+from anonymizer.view.common.ux_fields import str_entry
 from anonymizer.view.settings.aws_cognito_dialog import AWSCognitoDialog
 from anonymizer.view.settings.dicom_node_dialog import DICOMNodeDialog
 from anonymizer.view.settings.logging_levels_dialog import LoggingLevelsDialog
+from anonymizer.view.settings.lookup_table_dialog import LookupTableDialog
 from anonymizer.view.settings.modalites_dialog import ModalitiesDialog
 from anonymizer.view.settings.network_timeouts_dialog import NetworkTimeoutsDialog
 from anonymizer.view.settings.sop_classes_dialog import SOPClassesDialog
 from anonymizer.view.settings.transfer_syntaxes_dialog import TransferSyntaxesDialog
-from anonymizer.view.ux_fields import str_entry
 
 logger = logging.getLogger(__name__)
 
 
 # TODO: ctk.CTkToplevel does not handle window icon on Windows
-class SettingsDialog(tk.Toplevel):
+class SettingsDialog(AppToplevel):
     """
     A dialog window for managing project settings.
 
@@ -50,16 +54,23 @@ class SettingsDialog(tk.Toplevel):
         model: ProjectModel,
         new_model: bool = False,
         title: str | None = None,
+        project_controller: ProjectController | None = None,
     ):
         super().__init__(master=parent)
         self.model: ProjectModel = copy(model)
+        self.project_controller = project_controller
         self.java_phi_studies: List[JavaAnonymizerExportedStudy] = []
+        self._ctp_lookup_preview: CtpLookupPreview | None = None
         self.new_model = new_model  # to restrict editing for existing projects, eg. SITE_ID & storage directory changes
         if title is None:
             title = _("Project Settings")
         self.title(title)
         self.resizable(False, False)
-        self._user_input: Tuple[ProjectModel | None, List[JavaAnonymizerExportedStudy] | None] = (None, None)
+        self._user_input: Tuple[
+            ProjectModel | None,
+            List[JavaAnonymizerExportedStudy] | None,
+            CtpLookupPreview | None,
+        ] = (None, None, None)
         self._create_widgets()
         self.wait_visibility()
         self.lift()
@@ -74,7 +85,7 @@ class SettingsDialog(tk.Toplevel):
         max_chars = 20
         uid_max_chars = 30
 
-        char_width_px = ctk.CTkFont().measure("A")
+        char_width_px = default_char_width_px()
         logger.debug(f"Font Character Width in pixels: {char_width_px}")
 
         self._frame = ctk.CTkFrame(self)
@@ -139,23 +150,6 @@ class SettingsDialog(tk.Toplevel):
             sticky="nw",
             enabled=self.new_model,
         )
-        row += 1
-
-        remove_pixel_phi_label = ctk.CTkLabel(self._frame, text=_("Remove Pixel PHI") + ":")
-        remove_pixel_phi_label.grid(row=row, column=0, padx=PAD, pady=(PAD, 0), sticky="nw")
-
-        self._remove_pixel_phi_checkbox = ctk.CTkCheckBox(self._frame, text="")
-        if self.model.remove_pixel_phi:
-            self._remove_pixel_phi_checkbox.select()
-
-        self._remove_pixel_phi_checkbox.grid(
-            row=row,
-            column=1,
-            padx=PAD,
-            pady=PAD,
-            sticky="nw",
-        )
-
         row += 1
 
         servers_label = ctk.CTkLabel(self._frame, text=_("DICOM Servers") + ":")
@@ -310,6 +304,17 @@ class SettingsDialog(tk.Toplevel):
 
         row += 1
 
+        self._lookup_table_label = ctk.CTkLabel(self._frame, text=_("Patient Lookup Table") + ":")
+        self._lookup_table_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
+        self._lookup_table_button = ctk.CTkButton(
+            self._frame,
+            text=_("Load Patient Lookup Table"),
+            command=self._open_lookup_table_dialog,
+        )
+        self._lookup_table_button.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw")
+
+        row += 1
+
         # Logging Levels:
         self._logging_levels_label = ctk.CTkLabel(self._frame, text=_("Logging Levels") + ":")
         self._logging_levels_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
@@ -454,6 +459,24 @@ class SettingsDialog(tk.Toplevel):
             self._script_file_button.configure(text=path)
             logger.info(f"Anonymizer Script File updated: {self.model.anonymizer_script_path}")
 
+    def _open_lookup_table_dialog(self) -> None:
+        def on_script_path_changed(script_path: Path) -> None:
+            self.model.anonymizer_script_path = script_path
+            if self.new_model:
+                return
+            if hasattr(self, "_script_file_button"):
+                self._script_file_button.configure(text=str(self.model.abridged_script_path()))
+
+        def on_pending_preview(preview: CtpLookupPreview) -> None:
+            self._ctp_lookup_preview = preview
+
+        LookupTableDialog(
+            self,
+            project_controller=self.project_controller,
+            on_script_path_changed=on_script_path_changed,
+            on_pending_preview=on_pending_preview if self.project_controller is None else None,
+        )
+
     def _set_logging_levels_dialog(self):
         dlg = LoggingLevelsDialog(self, self.model.logging_levels)
         levels = dlg.get_input()
@@ -527,19 +550,16 @@ class SettingsDialog(tk.Toplevel):
         self.model.language_code = get_current_language_code()
         self.model.project_name = self.project_name_var.get()
         self.model.uid_root = self.uidroot_var.get()
-        self.model.remove_pixel_phi = self._remove_pixel_phi_checkbox.get() == 1
-        self._user_input = self.model, self.java_phi_studies
+        self._user_input = self.model, self.java_phi_studies, self._ctp_lookup_preview
 
-        self.grab_release()
-        self.destroy()
+        teardown_ctk_toplevel(self, parent=self.master)
 
     def _escape_keypress(self, event):
         logger.info("_escape_pressed")
         self._on_cancel()
 
     def _on_cancel(self):
-        self.grab_release()
-        self.destroy()
+        teardown_ctk_toplevel(self, parent=self.master)
 
     def get_input(self):
         self.focus()

@@ -6,15 +6,16 @@ and anonymization lookups. It also includes SQLAlchemy ORM classes for Series, S
 import hashlib
 import logging
 import xml.etree.ElementTree as ET
+from collections.abc import Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from functools import wraps
 from pathlib import Path
 from pprint import pformat
 from typing import ClassVar, NamedTuple
 
 from pydicom import Dataset
-from sqlalchemy import ForeignKey, Integer, String, create_engine, delete, func, select, text
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, create_engine, delete, func, select, text
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -28,10 +29,10 @@ from sqlalchemy.orm import (
     sessionmaker,
 )
 
+from anonymizer.utils.modalities import series_is_tseg_eligible
 from anonymizer.utils.storage import JavaAnonymizerExportedStudy
 
 logger = logging.getLogger(__name__)
-
 
 
 class Base(MappedAsDataclass, DeclarativeBase):
@@ -44,6 +45,7 @@ class Instance(Base):
     anon_sop_instance_uid: Mapped[str] = mapped_column(String, unique=True, index=True)
     series_uid: Mapped[str] = mapped_column(String, ForeignKey("series.series_uid"))
     series: Mapped["Series"] = relationship(back_populates="instances", init=False)
+    pixel_phi: Mapped[str | None] = mapped_column(String, default=None)
 
 
 class Series(Base):
@@ -55,6 +57,9 @@ class Series(Base):
     study: Mapped["Study"] = relationship(back_populates="series", init=False)
     modality: Mapped[str | None] = mapped_column(String)
     description: Mapped[str | None] = mapped_column(String, default=None)
+    harmonized_description: Mapped[str | None] = mapped_column(String, default=None)
+    face_blur_algorithm_applied: Mapped[str | None] = mapped_column(String, default=None)
+    pixel_phi_scanned: Mapped[bool] = mapped_column(Boolean, default=False)
 
     instances: Mapped[list["Instance"]] = relationship(
         back_populates="series", cascade="all, delete-orphan", init=False
@@ -74,6 +79,7 @@ class Study(Base):
     accession_number: Mapped[str | None] = mapped_column(String, index=True)
     anon_accession_number: Mapped[str | None] = mapped_column(String, index=True)
     description: Mapped[str | None] = mapped_column(String, default=None)
+    harmonized_description: Mapped[str | None] = mapped_column(String, default=None)
     target_instance_count: Mapped[int] = mapped_column(Integer, default=0)
 
     series: Mapped[list[Series]] = relationship(back_populates="study", cascade="all, delete-orphan", init=False)
@@ -88,6 +94,7 @@ class PHI(Base):
     sex: Mapped[str | None] = mapped_column(String, default=None)
     dob: Mapped[str | None] = mapped_column(String, default=None)
     ethnic_group: Mapped[str | None] = mapped_column(String, default=None)
+    date_offset: Mapped[int | None] = mapped_column(Integer, default=None) # from lookup table
 
     studies: Mapped[list[Study] | None] = relationship(
         back_populates="patient", cascade="all, delete-orphan", init=False
@@ -106,46 +113,23 @@ class UID(Base):
     phi_uid: Mapped[str] = mapped_column(String, unique=True, index=True)
 
 
-@dataclass
-class PHI_IndexRecord:
-    anon_patient_id: str
-    anon_patient_name: str
-    phi_patient_name: str
-    phi_patient_id: str
-    date_offset: int
-    phi_study_date: str
-    anon_accession: str
-    phi_accession: str
-    anon_study_uid: str
-    phi_study_uid: str
-    num_series: int
-    num_instances: int
+class LookupPatient(Base):
+    __tablename__ = "lookup_patient"
 
-    field_titles: ClassVar[dict[str, str]] = {
-        "anon_patient_id": "ANON-PatientID",
-        "anon_patient_name": "ANON-PatientName",
-        "phi_patient_name": "PHI-PatientName",
-        "phi_patient_id": "PHI-PatientID",
-        "date_offset": "DateOffset",
-        "phi_study_date": "PHI-StudyDate",
-        "anon_accession": "ANON-AccNo",
-        "phi_accession": "PHI-AccNo",
-        "anon_study_uid": "ANON-StudyUID",
-        "phi_study_uid": "PHI-StudyUID",
-        "num_series": "Series",
-        "num_instances": "Instances",
-    }
+    patient_id: Mapped[str] = mapped_column(String, primary_key=True)
+    anon_patient_id: Mapped[str] = mapped_column(String)
+    date_offset: Mapped[int | None] = mapped_column(Integer, default=None)
 
-    @classmethod
-    def get_field_titles(cls) -> list:
-        return [cls.field_titles.get(field.name) for field in fields(cls)]
 
-    def flatten(self) -> tuple:
-        return tuple(getattr(self, field.name) for field in fields(self))
+@dataclass(frozen=True)
+class StudyPhiHeader:
+    """PHI study/patient fields for display headers (not anonymized DICOM tags)."""
 
-    @classmethod
-    def get_field_names(cls) -> list:
-        return [field.name for field in fields(cls)]
+    patient_name: str = ""
+    patient_id: str = ""
+    study_date: str = ""
+    accession_number: str = ""
+    study_description: str = ""
 
 
 class Totals(NamedTuple):
@@ -181,13 +165,88 @@ class MissingSessionError(RuntimeError):
         super().__init__(message)
 
 
+def _format_pixel_phi(texts: Sequence[str]) -> str:
+    seen: set[str] = set()
+    parts: list[str] = []
+    for item in texts:
+        stripped = item.strip()
+        if stripped and stripped not in seen:
+            seen.add(stripped)
+            parts.append(stripped)
+    return ", ".join(parts)
+
+
+
+
+@dataclass(frozen=True)
+class SeriesProcessingStatus:
+    pixel_phi_applied_count: int
+    pixel_phi_total_count: int
+    harmonized_description: str | None
+    face_blur_algorithm: str | None
+
+
+
+
+def _study_tseg_series_all_harmonized(study: Study) -> bool:
+    """Return True when every CT|MR series in the study has a harmonized_description."""
+    tseg_series = [series for series in (study.series or []) if series_is_tseg_eligible(series.modality)]
+    if not tseg_series:
+        return False
+    return all(
+        series.harmonized_description is not None and bool(str(series.harmonized_description).strip())
+        for series in tseg_series
+    )
+
+
+def _study_ct_series_all_harmonized(study: Study) -> bool:
+    """Backward-compatible alias for ``_study_tseg_series_all_harmonized``."""
+    return _study_tseg_series_all_harmonized(study)
+
+
+def _sqlite_column_type(column: Column) -> str | None:
+    """Map a SQLAlchemy column to a SQLite ADD COLUMN type, or None if unsupported."""
+    column_type = column.type
+    if isinstance(column_type, String):
+        return "TEXT"
+    if isinstance(column_type, Integer):
+        return "INTEGER"
+    if isinstance(column_type, Boolean):
+        return "INTEGER"
+    logger.warning(
+        "SQLite schema sync: unsupported column type %r for %s.%s",
+        column_type,
+        column.table.name,
+        column.name,
+    )
+    return None
+
+
+def _sqlite_add_column_sql(table_name: str, column: Column) -> str | None:
+    sqlite_type = _sqlite_column_type(column)
+    if sqlite_type is None:
+        return None
+
+    parts = [f"ALTER TABLE {table_name} ADD COLUMN {column.name} {sqlite_type}"]
+    if not column.nullable and column.default is not None:
+        default = column.default.arg if hasattr(column.default, "arg") else column.default
+        if isinstance(default, bool):
+            default = int(default)
+        parts.append(f"DEFAULT {default!r}" if isinstance(default, str) else f"DEFAULT {default}")
+    return " ".join(parts)
+
+
 class AnonymizerModel:
     """
     The Anonymizer data model class to store PHI (Protected Health Information) with anonymized key lookups.
+
+    ``MODEL_VERSION`` tracks the code release schema generation. Existing project SQLite databases are
+    upgraded on open by ``_ensure_schema_columns``, which adds any ORM-mapped columns missing from
+    older ``anonymizer.db`` files. Bumping ``MODEL_VERSION`` alone does not migrate the database.
     """
 
     # Model Version Control
-    MODEL_VERSION = 2
+    MODEL_VERSION = 3
     MAX_PATIENTS = 1000000  # 1 million patients
     # The primary key value for the PHI record representing studies with no/empty PatientID
     DEFAULT_PHI_PATIENT_ID_PK_VALUE: ClassVar[str] = ""  # "" is used as the primary key for the default PHI record
@@ -238,10 +297,38 @@ class AnonymizerModel:
 
         # Create tables IFF they don't exist
         Base.metadata.create_all(self.engine)
+        self._ensure_schema_columns()
 
         # Default PHI record: (patient_id=DEFAULT_PHI_PATIENT_ID_PK_VALUE, anon_patient_id = site_id + "-000000")
         self._add_default_PHI()
         self._load_script(script_path)
+
+
+    def _ensure_schema_columns(self) -> None:
+        """Add any ORM-mapped columns missing from existing SQLite databases."""
+        if not self._db_url.startswith("sqlite"):
+            logger.debug("SQLite schema sync skipped for non-sqlite database URL.")
+            return
+
+        with self.engine.connect() as conn:
+            for table in Base.metadata.sorted_tables:
+                table_exists = conn.execute(
+                    text("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = :name"),
+                    {"name": table.name},
+                ).fetchone()
+                if table_exists is None:
+                    continue
+
+                existing_columns = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table.name})"))}
+                for column in table.columns:
+                    if column.name in existing_columns:
+                        continue
+                    add_column_sql = _sqlite_add_column_sql(table.name, column)
+                    if add_column_sql is None:
+                        continue
+                    conn.execute(text(add_column_sql))
+                    logger.info("SQLite schema sync: added %s.%s", table.name, column.name)
+            conn.commit()
 
     def _get_class_name(self) -> str:
         return self.__class__.__name__
@@ -281,8 +368,10 @@ class AnonymizerModel:
             session.rollback()
             raise
         finally:
-            logger.debug(f"Closing session {id(session)}.")
-            session.close()
+            # remove() closes the session and drops the thread-local registry entry so
+            # background worker threads do not reuse a closed Session.
+            logger.debug(f"Removing session {id(session)} from scoped registry.")
+            self.session_factory.remove()
 
     def _format_anon_patient_id(self, phi_index: int) -> str:
         """
@@ -396,6 +485,8 @@ class AnonymizerModel:
             filtered_tag_keep = {k: v for k, v in self._tag_keep.items() if v != ""}
             logger.info(f"_tag_keep has {len(self._tag_keep)} entries with {len(filtered_tag_keep)} operations")
             logger.info(f"_tag_keep operations:\n{pformat(filtered_tag_keep)}")
+            self._lookup_required = any("@lookup" in operation for operation in self._tag_keep.values())
+            logger.info(f"Lookup required: {self._lookup_required}")
             return
 
         except FileNotFoundError:
@@ -410,6 +501,26 @@ class AnonymizerModel:
             # Catch other generic exceptions and log the error message
             logger.error(f"Error Parsing script file {script_path}: {str(e)}")
             raise
+
+    def reload_script(self, script_path: Path) -> None:
+        """Reload anonymization script from disk (e.g. after CTP lookup table commit)."""
+        if not script_path.exists():
+            raise FileNotFoundError(f"Script file {script_path} does not exist.")
+        self._script_path = script_path
+        self._tag_keep.clear()
+        self._load_script(script_path)
+
+    @use_session()
+    def replace_lookup_patients(self, rows: list[LookupPatient]) -> int:
+        """Replace entire lookup_patient table (settings-time CTP lookup commit)."""
+        self.session.execute(delete(LookupPatient))
+        for row in rows:
+            self.session.add(row)
+        return len(rows)
+
+    @use_session(is_read_only_operation=True)
+    def get_lookup_patient(self, patient_id: str) -> LookupPatient | None:
+        return self.session.get(LookupPatient, patient_id)
 
     @use_session(is_read_only_operation=True)
     def get_totals(self) -> Totals:
@@ -455,49 +566,28 @@ class AnonymizerModel:
         return phi.patient_name if phi else None
 
     @use_session(is_read_only_operation=True)
-    def get_phi_index(self) -> list[PHI_IndexRecord] | None:
-        """
-        Retrieves fully populated PHI objects (with their studies and series)
-        using SQLAlchemy ORM eager loading and formats them into PHI_IndexRecord.
-        """
-        phi_index_records: list[PHI_IndexRecord] = []
-
-        # Eagerly load PHI.studies, and for each Study, eagerly load its Series.
-        stmt = select(PHI).options(selectinload(PHI.studies).selectinload(Study.series).selectinload(Series.instances))
-
-        # Execute the query:
-        # .scalars() gets the PHI objects directly.
-        # .all() fetches all results.
-        all_phi_instances = self.session.execute(stmt).scalars().all()
-
-        if not all_phi_instances:
+    def get_study_phi_header_by_anon_study_uid(self, anon_study_uid: str) -> StudyPhiHeader | None:
+        """Resolve PHI patient/study metadata for a stored anonymized study UID."""
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(joinedload(Study.patient))
+        study = self.session.execute(stmt).unique().scalar_one_or_none()
+        if study is None or study.patient is None:
             return None
+        patient = study.patient
+        return StudyPhiHeader(
+            patient_name=str(patient.patient_name or ""),
+            patient_id=str(patient.patient_id or ""),
+            study_date=str(study.study_date or ""),
+            accession_number=str(study.accession_number or ""),
+            study_description=str(study.description or ""),
+        )
 
-        for phi in all_phi_instances:
-            if phi.studies is None:
-                continue
-
-            for study in phi.studies:
-                num_series = len(study.series)
-                num_instances = sum(len(s.instances) for s in study.series if s.instances is not None)
-
-                phi_index_record = PHI_IndexRecord(
-                    anon_patient_id=phi.anon_patient_id,
-                    anon_patient_name=phi.anon_patient_id,
-                    phi_patient_id=phi.patient_id,
-                    phi_patient_name=phi.patient_name if phi.patient_name else "",
-                    date_offset=study.anon_date_delta,
-                    phi_study_date=study.study_date,
-                    anon_accession=str(study.anon_accession_number),
-                    phi_accession=study.accession_number if study.accession_number else "",
-                    anon_study_uid=study.anon_study_uid,
-                    phi_study_uid=study.study_uid,
-                    num_series=num_series,
-                    num_instances=num_instances,
-                )
-                phi_index_records.append(phi_index_record)
-
-        return phi_index_records if phi_index_records else None
+    @use_session(is_read_only_operation=True)
+    def load_phi_with_studies_series(self) -> list[PHI]:
+        """Eager-load PHI → studies → series → instances for PHI dataset / export mapping."""
+        stmt = select(PHI).options(
+            selectinload(PHI.studies).selectinload(Study.series).selectinload(Series.instances)
+        )
+        return list(self.session.execute(stmt).scalars().all())
 
     @use_session(is_read_only_operation=True)
     def get_anon_patient_id(self, phi_patient_id: str) -> str | None:
@@ -554,7 +644,7 @@ class AnonymizerModel:
         available_digits = max_len - len(prefix)
 
         # Calculate the MD5 hash (for a deterministic 128-bit mapping)
-        phi_uid_hash = hashlib.md5(phi_uid.encode('utf-8'))
+        phi_uid_hash = hashlib.md5(phi_uid.encode("utf-8"))
 
         # Convert the 128-bit hash to a large integer
         phi_uid_hash_int = int(phi_uid_hash.hexdigest(), 16)
@@ -610,7 +700,7 @@ class AnonymizerModel:
         stmt = delete(UID).where(UID.anon_uid == anon_uid)
         result = self.session.execute(stmt)
         if result.rowcount > 0:
-            logger.info(f"Deleted UID record for anon_uid: {anon_uid}")
+            logger.debug(f"Deleted UID record for anon_uid: {anon_uid}")
 
     @use_session(is_read_only_operation=True)
     def get_anon_acc_no(self, phi_acc_no: str) -> str | None:
@@ -726,13 +816,22 @@ class AnonymizerModel:
             return phi
 
         logger.debug("Creating PHI record for new patient_id")
-        
-        # Generate a NEW anon_patient_id based on the site_id and the current patient count:
-        # Site_id/prefix is constant, for anon_patient_id string MAX works the same as numeric MAX
-        last_anon_patient_id = self.session.execute(select(func.max(PHI.anon_patient_id))).scalar_one()
-        last_phi_index = int(last_anon_patient_id.split("-")[-1]) if last_anon_patient_id else 0
-        anon_ptid = self._format_anon_patient_id(phi_index=last_phi_index+1)
-        logger.info(f"Generated new anon_patient_id:{anon_ptid}")
+
+        lookup_patient = None
+        if self._lookup_required:
+            lookup_patient = self.session.get(LookupPatient, phi_ptid)
+            if lookup_patient is None:
+                msg = f"Lookup Error: PatientID '{phi_ptid}' not found in lookup table"
+                logger.error(msg)
+                raise KeyError(msg)
+            anon_ptid = lookup_patient.anon_patient_id
+            logger.info(f"Using lookup table: anon_patient_id:{anon_ptid}, date_offset:{lookup_patient.date_offset}")
+        else:
+            # Generate a NEW anon_patient_id based on the site_id and the current patient count:
+            last_anon_patient_id = self.session.execute(select(func.max(PHI.anon_patient_id))).scalar_one()
+            last_phi_index = int(last_anon_patient_id.split("-")[-1]) if last_anon_patient_id else 0
+            anon_ptid = self._format_anon_patient_id(phi_index=last_phi_index + 1)
+            logger.info(f"Generated new anon_patient_id:{anon_ptid}")
 
         new_phi: PHI = PHI(
             patient_id=phi_ptid,
@@ -741,18 +840,21 @@ class AnonymizerModel:
             sex=str(ds.get("PatientSex")) if hasattr(ds, "PatientSex") else None,
             dob=str(ds.get("PatientBirthDate")) if hasattr(ds, "PatientBirthDate") else None,
             ethnic_group=str(ds.get("EthnicGroup")) if hasattr(ds, "EthnicGroup") else None,
+            date_offset=lookup_patient.date_offset if lookup_patient is not None else None
         )
         self.session.add(new_phi)
         return new_phi
 
-    def _get_or_create_study(self, ds: Dataset, parent_phi: PHI, date_delta: int, source_name: str) -> Study:
+    def _get_or_create_study(
+        self, ds: Dataset, parent_phi: PHI, date_offset_from_hash: int, source_name: str
+    ) -> tuple[Study, int]:
         study_uid = str(ds.StudyInstanceUID)  # PK of Study
         study: Study | None = self.session.get(Study, study_uid)
 
         if study:
             logger.debug("Found existing Study record")
             if study.patient_id == parent_phi.patient_id:
-                return study
+                return study, study.anon_date_delta
             else:
                 # If the study exists but is linked to a different patient_id, raise an error
                 msg = "IntegrityError: StudyUID exists but is linked to a different patient"
@@ -768,19 +870,21 @@ class AnonymizerModel:
         anon_acc_no = None if phi_acc_no is None or phi_acc_no == "" else self._hash_accession_number(phi_acc_no)
 
         logger.debug(f"Creating new Study record with anon_acc_no:{anon_acc_no}")
+        # Lookup table date offset stored in PHI takes precedence over hash-based date offset:
+        date_offset = parent_phi.date_offset if parent_phi.date_offset is not None else date_offset_from_hash
         new_study: Study = Study(
             study_uid=study_uid,
             anon_study_uid=self._create_anon_uid(study_uid),  # Generate a new anonymized StudyUID
             patient_id=parent_phi.patient_id,  # Set the FK to PHI's PK
             source=source_name,
             study_date=str(ds.get("StudyDate", self.DEFAULT_PHI_STUDY_DATE)),  # Default to 19000101 if not present
-            anon_date_delta=date_delta,
+            anon_date_delta=date_offset,
             accession_number=phi_acc_no,
             anon_accession_number=anon_acc_no,
             description=str(ds.get("StudyDescription")) if hasattr(ds, "StudyDescription") else None,
         )
         self.session.add(new_study)
-        return new_study
+        return new_study, date_offset
 
     def _get_or_create_series(self, ds: Dataset, parent_study_record: Study) -> Series:
         series_uid: str = str(ds.SeriesInstanceUID)  # PK of Series
@@ -833,20 +937,23 @@ class AnonymizerModel:
         return new_instance
 
     @use_session()
-    def capture_phi(self, source: str, ds: Dataset, date_delta: int) -> tuple[str, str, str | None]:
+    def capture_phi(
+        self, source: str, ds: Dataset, date_offset_from_hash: int
+    ) -> tuple[str, str, str | None, int]:
         """
         Capture PHI (Protected Health Information) from a DICOM dataset
 
         Args:
             source (str): The source of the dataset.
             ds (Dataset): The dataset containing the PHI.
-            date_delta (int): The anonymization date offset.
+            date_offset_from_hash (int): The date shift determined from the hash of the study date and patient ID
 
         Returns:
-            tuple[str, str, int]: A tuple containing the PHI patient ID, anonymized patient ID, and anonymized accession number.
+            tuple[str, str, str | None, int]: A tuple containing the PHI patient ID, anonymized patient ID, anonymized accession number, and date offset.
 
         Raises:
             ValueError: If core DICOM UIDs are missing in dataset
+            KeyError: If lookup table is missing for the patient ID
         """
         # ds must have attributes: StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID
         primary_uids = ["StudyInstanceUID", "SeriesInstanceUID", "SOPInstanceUID"]
@@ -856,11 +963,11 @@ class AnonymizerModel:
             raise ValueError(msg)
 
         phi = self._get_or_create_phi(ds)
-        study = self._get_or_create_study(ds, phi, date_delta, source)
+        study, date_offset = self._get_or_create_study(ds, phi, date_offset_from_hash, source)
         series = self._get_or_create_series(ds, study)
         self._get_or_create_instance(ds, series)
 
-        return phi.patient_id, phi.anon_patient_id, study.anon_accession_number
+        return phi.patient_id, phi.anon_patient_id, study.anon_accession_number, date_offset
 
     @use_session()
     def remove_phi(self, anon_pt_id: str, anon_study_uid: str) -> bool:
@@ -913,8 +1020,211 @@ class AnonymizerModel:
 
         return True
 
+    @use_session()
+    def update_series_description_by_anon_uid(self, anon_series_uid: str, description: str) -> bool:
+        """
+        Update the stored series description for the series matching an anonymized SeriesInstanceUID.
+
+        Args:
+            anon_series_uid: Anonymized SeriesInstanceUID (directory name under public storage).
+            description: New series description text.
+
+        Returns:
+            True if a series row was found and updated, False otherwise.
+        """
+        stmt = select(Series).where(Series.anon_series_uid == anon_series_uid)
+        series = self.session.execute(stmt).scalar_one_or_none()
+        if series is None:
+            logger.error("Series with anon_series_uid '%s' not found.", anon_series_uid)
+            return False
+        series.description = description
+        return True
+
+    @use_session()
+    def set_series_harmonized_description(self, anon_series_uid: str, description: str) -> bool:
+        stmt = select(Series).where(Series.anon_series_uid == anon_series_uid)
+        series = self.session.execute(stmt).scalar_one_or_none()
+        if series is None:
+            logger.error("Series with anon_series_uid '%s' not found.", anon_series_uid)
+            return False
+        series.harmonized_description = description
+        series.description = description
+        return True
+
+    @use_session()
+    def set_series_face_blur_algorithm(self, anon_series_uid: str, algorithm: str) -> bool:
+        stmt = select(Series).where(Series.anon_series_uid == anon_series_uid)
+        series = self.session.execute(stmt).scalar_one_or_none()
+        if series is None:
+            logger.error("Series with anon_series_uid '%s' not found.", anon_series_uid)
+            return False
+        series.face_blur_algorithm_applied = algorithm
+        return True
+
+    @use_session()
+    def set_instance_pixel_phi(self, anon_sop_instance_uid: str, texts: Sequence[str]) -> bool:
+        formatted = _format_pixel_phi(texts)
+        if not formatted:
+            return False
+        stmt = select(Instance).where(Instance.anon_sop_instance_uid == anon_sop_instance_uid)
+        instance = self.session.execute(stmt).scalar_one_or_none()
+        if instance is None:
+            logger.error("Instance with anon_sop_instance_uid '%s' not found.", anon_sop_instance_uid)
+            return False
+        instance.pixel_phi = formatted
+        return True
+
+    @use_session()
+    def clear_series_tseg_metadata(self, anon_series_uid: str) -> bool:
+        """
+        Clear TS-analysis harmonize metadata for a series after its on-disk cache was removed.
+
+        Clears harmonized_description only. Face blur and instance pixel_phi are unchanged.
+        """
+        stmt = select(Series).where(Series.anon_series_uid == anon_series_uid)
+        series = self.session.execute(stmt).scalar_one_or_none()
+        if series is None:
+            logger.error("Series with anon_series_uid '%s' not found.", anon_series_uid)
+            return False
+        series.harmonized_description = None
+        return True
+
+    @use_session(is_read_only_operation=True)
+    def study_is_harmonized(self, anon_study_uid: str) -> bool:
+        """Return True when every CT series in the study has harmonized_description set."""
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None:
+            return False
+        return _study_ct_series_all_harmonized(study)
+
+    @use_session()
+    def set_study_harmonized_description(self, anon_study_uid: str, description: str) -> bool:
+        """Persist Study.harmonized_description (and description) for an anonymized study UID."""
+        description = description.strip()
+        if not description:
+            return False
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid)
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None:
+            logger.error("Study with anon_study_uid '%s' not found.", anon_study_uid)
+            return False
+        study.harmonized_description = description
+        study.description = description
+        return True
+
+    @use_session(is_read_only_operation=True)
+    def get_study_harmonized_description(self, anon_study_uid: str) -> str | None:
+        stmt = select(Study.harmonized_description).where(Study.anon_study_uid == anon_study_uid)
+        value = self.session.execute(stmt).scalar_one_or_none()
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    @use_session(is_read_only_operation=True)
+    def get_ct_series_harmonized_descriptions(self, anon_study_uid: str) -> list[str]:
+        """Return non-empty CT|MR Series.harmonized_description values for a study."""
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None:
+            return []
+        descriptions: list[str] = []
+        for series in study.series or []:
+            if not series_is_tseg_eligible(series.modality):
+                continue
+            text = (series.harmonized_description or "").strip()
+            if text:
+                descriptions.append(text)
+        return descriptions
+
+    @use_session(is_read_only_operation=True)
+    def get_anon_patient_id_for_study(self, anon_study_uid: str) -> str | None:
+        stmt = (
+            select(Study)
+            .where(Study.anon_study_uid == anon_study_uid)
+            .options(joinedload(Study.patient))
+        )
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None or study.patient is None:
+            return None
+        return study.patient.anon_patient_id
+
+    @use_session(is_read_only_operation=True)
+    def find_studies_with_series_fingerprint(self, fingerprint: tuple[str, ...]) -> list[str]:
+        """
+        Return anon_study_uid values whose CT|MR harmonized series descriptions match ``fingerprint``.
+
+        Fingerprint is a sorted multiset of Playbook series description strings.
+        """
+        target = tuple(fingerprint)
+        stmt = select(Study).options(selectinload(Study.series))
+        studies = self.session.execute(stmt).scalars().all()
+        matches: list[str] = []
+        for study in studies:
+            descriptions = [
+                (series.harmonized_description or "").strip()
+                for series in (study.series or [])
+                if series_is_tseg_eligible(series.modality)
+                and (series.harmonized_description or "").strip()
+            ]
+            if tuple(sorted(descriptions)) == target:
+                matches.append(study.anon_study_uid)
+        return matches
+
+    @use_session(is_read_only_operation=True)
+    def series_is_harmonized(self, anon_series_uid: str) -> bool:
+        stmt = select(Series.harmonized_description).where(Series.anon_series_uid == anon_series_uid)
+        value = self.session.execute(stmt).scalar_one_or_none()
+        return value is not None and bool(str(value).strip())
+
+    @use_session(is_read_only_operation=True)
+    def series_has_face_blur(self, anon_series_uid: str) -> bool:
+        stmt = select(Series.face_blur_algorithm_applied).where(Series.anon_series_uid == anon_series_uid)
+        value = self.session.execute(stmt).scalar_one_or_none()
+        return value is not None and bool(str(value).strip())
+
+    @use_session(is_read_only_operation=True)
+    def series_pixel_phi_scanned(self, anon_series_uid: str) -> bool:
+        stmt = select(Series.pixel_phi_scanned).where(Series.anon_series_uid == anon_series_uid)
+        value = self.session.execute(stmt).scalar_one_or_none()
+        return bool(value)
+
+    @use_session()
+    def set_series_pixel_phi_scanned(self, anon_series_uid: str, *, scanned: bool = True) -> bool:
+        stmt = select(Series).where(Series.anon_series_uid == anon_series_uid)
+        series = self.session.execute(stmt).scalar_one_or_none()
+        if series is None:
+            logger.error("Series with anon_series_uid '%s' not found.", anon_series_uid)
+            return False
+        series.pixel_phi_scanned = scanned
+        return True
+
+    @use_session()
+    def clear_series_pixel_phi_scan(self, anon_series_uid: str) -> bool:
+        return self.set_series_pixel_phi_scanned(anon_series_uid, scanned=False)
+
+    @use_session(is_read_only_operation=True)
+    def get_series_processing_status(self, anon_series_uid: str) -> SeriesProcessingStatus | None:
+        stmt = select(Series).where(Series.anon_series_uid == anon_series_uid).options(selectinload(Series.instances))
+        series = self.session.execute(stmt).scalar_one_or_none()
+        if series is None:
+            return None
+
+        instances = series.instances or []
+        total = len(instances)
+        applied = sum(
+            1 for instance in instances if instance.pixel_phi is not None and bool(str(instance.pixel_phi).strip())
+        )
+        return SeriesProcessingStatus(
+            pixel_phi_applied_count=applied,
+            pixel_phi_total_count=total,
+            harmonized_description=series.harmonized_description,
+            face_blur_algorithm=series.face_blur_algorithm_applied,
+        )
+
     @use_session()  # The decorator manages the session and a single transaction for the whole batch
-    def process_java_phi_studies(self, java_studies: list[JavaAnonymizerExportedStudy]):
+    def persist_java_exported_studies(self, java_studies: list[JavaAnonymizerExportedStudy]):
         """
         Process a list of JavaAnonymizerExportedStudy objects and persist them
         using the SQLAlchemy ORM. The entire operation is one database transaction.
@@ -952,7 +1262,9 @@ class AnonymizerModel:
                 logger.debug(f"Creating new Study for study_uid '{java_study.PHI_StudyInstanceUID}'.")
 
                 # Add Study UID mapping:
-                self.session.add(UID(phi_uid=java_study.PHI_StudyInstanceUID, anon_uid=java_study.ANON_StudyInstanceUID))
+                self.session.add(
+                    UID(phi_uid=java_study.PHI_StudyInstanceUID, anon_uid=java_study.ANON_StudyInstanceUID)
+                )
 
                 study_record = Study(
                     study_uid=java_study.PHI_StudyInstanceUID,
@@ -980,3 +1292,4 @@ class AnonymizerModel:
                     )
 
         logger.info("Finished processing Java PHI studies. Committing transaction.")
+

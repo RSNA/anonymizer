@@ -1,15 +1,16 @@
+import contextlib
 import ctypes
 import faulthandler
 import json
 import logging
 import os
 import pickle
-import platform
 import shutil
 import signal
 import sys
 import time
 import tkinter as tk
+import weakref
 from copy import copy
 from pathlib import Path
 from pprint import pformat
@@ -22,9 +23,11 @@ from pydicom import dcmread
 from pydicom._version import __version__ as pydicom_version  # type: ignore
 from pynetdicom._version import __version__ as pynetdicom_version  # type: ignore
 
+from anonymizer.controller.process_ctp_lookup import commit_ctp_lookup
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.project import DICOMRuntimeError, ProjectModel
 from anonymizer.utils.logging import init_logging
+from anonymizer.utils.storage import is_hidden_path, list_import_directory_files
 from anonymizer.utils.translate import (
     _,
     get_current_language,
@@ -32,18 +35,26 @@ from anonymizer.utils.translate import (
     set_language,
 )
 from anonymizer.utils.version import get_version
-from anonymizer.view.dashboard import Dashboard
-from anonymizer.view.export import ExportView
-from anonymizer.view.html_view import HTMLView
-from anonymizer.view.import_files_dialog import ImportFilesDialog
-from anonymizer.view.index import IndexView
-from anonymizer.view.query_retrieve_import import QueryView
+from anonymizer.view.common.fonts import AppFonts, create_app_fonts
+from anonymizer.view.common.help_docs import help_menu_topics, open_help_page
+from anonymizer.view.project.dataset import DatasetView
+from anonymizer.view.project.export import ExportView
+from anonymizer.view.project.import_files_dialog import ImportFilesDialog
+from anonymizer.view.project.query_retrieve_import import QueryView
 from anonymizer.view.settings.settings_dialog import SettingsDialog
-from anonymizer.view.welcome import WelcomeView
+from anonymizer.view.shell.dashboard import Dashboard
+from anonymizer.view.shell.welcome import WelcomeView
 
 faulthandler.enable()
 
 logger = logging.getLogger()  # ROOT logger
+
+
+def _cli_help() -> str:
+    return _(
+        "RSNA DICOM Anonymizer {version}\n\n"
+        "This application reads a configuration file if provided and runs headless or launches a GUI."
+    ).format(version=get_version())
 
 
 class Anonymizer(ctk.CTk):
@@ -51,20 +62,29 @@ class Anonymizer(ctk.CTk):
 
     project_open_startup_dwell_time = 100  # milliseconds
     metrics_loop_interval = 1000  # milliseconds
+    welcome_guard_interval_ms = 500
+    welcome_size_tolerance = 0.85  # re-apply when width falls below this fraction of target
+    project_window_min_width = 900  # dashboard databoard (5 columns); independent of welcome width
+    project_window_min_height = 320
 
     def get_title(self) -> str:
         return _("RSNA DICOM Anonymizer Version").strip() + " " + get_version()
 
     def get_app_state_path(self) -> Path:
-        return self.logs_dir / ".anonymizer_state.json"
+        from anonymizer.utils.app_state import get_app_state_path
+
+        return get_app_state_path()
 
     def __init__(self, logs_dir: Path):
         if sys.platform.startswith("win"):
             # Enable DPI awareness for Windows (improves scaling on high-DPI/4K monitors)
-            #ctk.deactivate_automatic_dpi_awareness()  # TODO: implement dpi awareness for all views for Windows OS
-            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+            # ctk.deactivate_automatic_dpi_awareness()  # TODO: implement dpi awareness for all views for Windows OS
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)  # type: ignore
 
         super().__init__()
+        from anonymizer.view.common.ctk_safe import mark_ctk_window_alive
+
+        mark_ctk_window_alive(self)
         self.logs_dir: Path = logs_dir
         ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
         theme = self.THEME_FILE
@@ -73,8 +93,9 @@ class Anonymizer(ctk.CTk):
             theme = "dark-blue"
         ctk.set_default_color_theme(theme)
 
-        logging.info(f"ctk.ThemeManager.theme:\n{pformat(ThemeManager.theme)}")
-        self.mono_font = self._init_mono_font()
+        logging.debug(f"ctk.ThemeManager.theme:\n{pformat(ThemeManager.theme)}")
+        self.fonts: AppFonts = create_app_fonts()
+        self.mono_font = self.fonts.mono
 
         ctk.AppearanceModeTracker.add(self._appearance_mode_change)
         self._appearance_mode_change(ctk.get_appearance_mode())  # initialize non-ctk widget styles
@@ -84,46 +105,205 @@ class Anonymizer(ctk.CTk):
 
         self.recent_project_dirs: list[Path] = []
         self.current_open_project_dir: Path | None = None
+        self._shutting_down = False
+        self._import_in_progress = False
+        self._welcome_window_locked = False
+        self._welcome_guard_after_id: str | None = None
 
         self.load_config()  # may set language
         self.controller: ProjectController | None = None
-        self.welcome_view: WelcomeView = WelcomeView(self, self.change_language)
+        self._attach_welcome_view()
         self.welcome_view.focus()
         self.query_view: QueryView | None = None
         self.export_view: ExportView | None = None
-        self.index_view: IndexView | None = None
-        self.help_views = {}
+        self.dataset_view: DatasetView | None = None
+
         self.dashboard: Dashboard | None = None
+        self._app_windows: list[weakref.ref] = []
+        self._window_menu: tk.Menu | None = None
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
         self.resizable(False, False)
         self.title(self.get_title())
+        self.protocol("WM_DELETE_WINDOW", self.quit_app)
+        if sys.platform == "darwin":
+            self.createcommand("::tk::mac::Quit", self.quit_app)
         self.menu_bar = self.create_project_closed_menu_bar()
         self.after(self.project_open_startup_dwell_time, self._open_project_startup)
 
-    def _init_mono_font(self) -> ctk.CTkFont:
-        # Monospace font defaults:
-        family = "Courier New"
-        size = 12
-        weight = "normal"
-        if "Treeview" in ctk.ThemeManager.theme:
-            os_map = {"Darwin": "macOS", "Windows": "Windows", "Linux": "Linux"}
-            tv_theme = ctk.ThemeManager.theme["Treeview"]
-            if platform.system() not in os_map:
-                logger.error(f"Unsupported OS: {platform.system()}")
-                return ctk.CTkFont(family, size, weight)
-            if "font" in tv_theme:
-                if os_map[platform.system()] not in tv_theme["font"]:
-                    logger.error(f"invalid font OS specified for Treeview theme: {tv_theme}")
-                    return ctk.CTkFont(family, size, weight)
-                tv_theme_font = tv_theme["font"][os_map[platform.system()]]
-                if "family" in tv_theme_font:
-                    family = tv_theme_font["family"]
-                if "size" in tv_theme_font:
-                    size = tv_theme_font["size"]
-                if "weight" in tv_theme_font:
-                    weight = tv_theme_font["weight"]
+    def _set_scaling(self, new_widget_scaling, new_window_scaling):
+        super()._set_scaling(new_widget_scaling, new_window_scaling)
+        if self._welcome_window_locked:
+            self.after_idle(self._apply_welcome_window_size)
 
-        logger.info(f"Initialised Monospace Font: {family}, {size}, {weight}")
-        return ctk.CTkFont(family, size, weight)
+    def _welcome_target_size(self) -> tuple[int, int]:
+        """Welcome window size from current content (adapts to language/text length)."""
+        welcome_view = getattr(self, "welcome_view", None)
+        if welcome_view is None or not welcome_view.winfo_exists():
+            return WelcomeView.WELCOME_WINDOW_WIDTH, WelcomeView.WELCOME_WINDOW_HEIGHT
+        self.update_idletasks()
+        # Convert requested pixel size to CTk window units.
+        req_w = self._reverse_window_scaling(welcome_view.winfo_reqwidth())
+        req_h = self._reverse_window_scaling(welcome_view.winfo_reqheight())
+        # Small shell padding around welcome frame.
+        return int(req_w + 20), int(req_h + 20)
+
+    def _enter_welcome_window_phase(self) -> None:
+        """Hold welcome dimensions until a project opens or the welcome view is torn down."""
+        self._cancel_welcome_window_guard()
+        self._welcome_window_locked = True
+        self._block_update_dimensions_event = True
+        self.resizable(False, False)
+
+    def _apply_welcome_window_size(self, *, log: bool = False) -> None:
+        if not self._welcome_window_locked:
+            return
+        welcome_view = getattr(self, "welcome_view", None)
+        if welcome_view is None or not welcome_view.winfo_exists():
+            return
+        width, height = self._welcome_target_size()
+        self.update_idletasks()
+        self._current_width = width
+        self._current_height = height
+        self.minsize(width, height)
+        self.maxsize(width, height)
+        self.geometry(f"{width}x{height}")
+        self.resizable(False, False)
+        if log:
+            self._log_welcome_window_state(width, height)
+
+    def _log_welcome_window_state(self, target_w: int, target_h: int) -> None:
+        try:
+            widget_scaling = self._get_widget_scaling()
+            window_scaling = self._get_window_scaling()
+        except Exception:
+            widget_scaling = window_scaling = "?"
+        logger.info(
+            "Welcome window: target=%sx%s current=%sx%s winfo=%sx%s scaling(widget=%s window=%s)",
+            target_w,
+            target_h,
+            self._current_width,
+            self._current_height,
+            self.winfo_width(),
+            self.winfo_height(),
+            widget_scaling,
+            window_scaling,
+        )
+
+    def _welcome_window_needs_reapply(self) -> bool:
+        target_w, _target_h = self._welcome_target_size()
+        min_w = int(target_w * self.welcome_size_tolerance)
+        if self._current_width < min_w:
+            return True
+        if self.winfo_width() > 1:
+            detected_w = self._reverse_window_scaling(self.winfo_width())
+            if detected_w < min_w:
+                return True
+        return False
+
+    def _welcome_window_guard(self) -> None:
+        if self._shutting_down or not self._welcome_window_locked:
+            return
+        welcome_view = getattr(self, "welcome_view", None)
+        if welcome_view is None or not welcome_view.winfo_exists():
+            self._cancel_welcome_window_guard()
+            return
+        if self._welcome_window_needs_reapply():
+            logger.debug("Welcome window guard: re-applying size after Configure/scaling drift")
+            self._apply_welcome_window_size()
+        self._welcome_guard_after_id = self.after(self.welcome_guard_interval_ms, self._welcome_window_guard)
+
+    def _cancel_welcome_window_guard(self) -> None:
+        if self._welcome_guard_after_id is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self._welcome_guard_after_id)
+            self._welcome_guard_after_id = None
+
+    def _release_welcome_window_constraints(self) -> None:
+        self._cancel_welcome_window_guard()
+        self._welcome_window_locked = False
+        if not self.winfo_exists():
+            return
+        self._block_update_dimensions_event = False
+        self.maxsize(1_000_000, 1_000_000)
+        self.minsize(0, 0)
+
+    def _project_window_target_size(self) -> tuple[int, int]:
+        """CTk window units for the project dashboard (not welcome dimensions)."""
+        dashboard = self.dashboard
+        if dashboard is None or not dashboard.winfo_exists():
+            return self.project_window_min_width, self.project_window_min_height
+        self.update_idletasks()
+        content_width = self._reverse_window_scaling(dashboard.winfo_reqwidth())
+        content_height = self._reverse_window_scaling(dashboard.winfo_reqheight())
+        pad = Dashboard.PAD * 2
+        width = max(content_width + pad, self.project_window_min_width)
+        height = max(content_height + pad, self.project_window_min_height)
+        return width, height
+
+    def _apply_project_window_size(self, *, log: bool = False) -> None:
+        """Resize the main window to fit the project dashboard after leaving welcome."""
+        if self._welcome_window_locked or self.dashboard is None or not self.dashboard.winfo_exists():
+            return
+        from anonymizer.view.common.ctk_safe import pause_scaling_tracker_check, resume_scaling_tracker_check
+
+        pause_scaling_tracker_check()
+        try:
+            width, height = self._project_window_target_size()
+            self._current_width = width
+            self._current_height = height
+            self._block_update_dimensions_event = True
+            self.minsize(width, height)
+            self.maxsize(width, height)
+            self.geometry(f"{width}x{height}")
+            self.resizable(False, False)
+            if log:
+                logger.info(
+                    "Project window: size=%sx%s (dashboard req=%sx%s)",
+                    width,
+                    height,
+                    width - Dashboard.PAD * 2,
+                    height - Dashboard.PAD * 2,
+                )
+        finally:
+            self._block_update_dimensions_event = False
+            self.after_idle(resume_scaling_tracker_check)
+
+    def _finalize_welcome_window(self) -> None:
+        if not hasattr(self, "welcome_view") or not self.welcome_view.winfo_exists():
+            return
+        self._apply_welcome_window_size(log=True)
+        self._cancel_welcome_window_guard()
+        self._welcome_window_guard()
+
+    def _attach_welcome_view(self) -> None:
+        self._enter_welcome_window_phase()
+        self.welcome_view = WelcomeView(
+            self,
+            self.change_language,
+            self.show_ai_features_setup_dialog,
+            fonts=self.fonts,
+        )
+        # Center the welcome panel so outer margins stay visually even.
+        self.welcome_view.grid(row=0, column=0)
+        for delay_ms in (0, 50, 200, 400):
+            self.after(delay_ms, self._apply_welcome_window_size)
+        self.after(500, self._finalize_welcome_window)
+
+    def _log_ctk_scaling(self) -> None:
+        if sys.platform != "darwin":
+            return
+        try:
+            widget_scaling = self._get_widget_scaling()
+            window_scaling = self._get_window_scaling()
+        except Exception:
+            logger.debug("CustomTkinter scaling values unavailable", exc_info=True)
+            return
+        logger.info(
+            "CustomTkinter scaling: widget=%s window=%s",
+            widget_scaling,
+            window_scaling,
+        )
 
     def _appearance_mode_change(self, mode):
         logger.info(f"Appearance Mode Change: {mode}")
@@ -172,13 +352,14 @@ class Anonymizer(ctk.CTk):
     def change_language(self, language):
         logger.info(f"Change Language to: {language}")
         set_language(language)
-        self.help_views = {}
+
         self.title(self.get_title())
         self.recent_project_dirs = []
         self.menu_bar = self.create_project_closed_menu_bar()  # resets Help Menu
         self.save_config()
+        self.welcome_view.release_images()
         self.welcome_view.destroy()
-        self.welcome_view = WelcomeView(self, self.change_language)
+        self._attach_welcome_view()
 
     # Dashboard metrics updates from the main thread
     def metrics_loop(self):
@@ -188,13 +369,16 @@ class Anonymizer(ctk.CTk):
 
         # Update dashboard if anonymizer model has changed:
         if self.dashboard:
-            self.dashboard.update_anonymizer_queues(*self.controller.anonymizer.queued())
+            self.dashboard.update_anonymizer_queues(self.controller.anonymizer.queued())
             if self.controller.anonymizer.model_changed():
                 self.dashboard.update_totals(self.controller.anonymizer.model.get_totals())
 
         self.after(self.metrics_loop_interval, self.metrics_loop)
 
     def load_config(self):
+        from anonymizer.controller.ai.tseg.config import apply_ai_features_preferences
+        from anonymizer.utils.app_state import ai_features_from_state
+
         logger.info(f"Load Config (App State): {self.get_app_state_path()}")
         try:
             with open(self.get_app_state_path().as_posix(), "r") as config_file:
@@ -214,6 +398,7 @@ class Anonymizer(ctk.CTk):
                 self.current_open_project_dir = config_data.get("current_open_project_dir")
                 if not os.path.exists(str(self.current_open_project_dir)):
                     self.current_open_project_dir = None
+                apply_ai_features_preferences(ai_features_from_state(config_data))
         except FileNotFoundError:
             warn_msg = (
                 "Config file not found: "
@@ -223,13 +408,17 @@ class Anonymizer(ctk.CTk):
             logger.warning(warn_msg)
 
     def save_config(self):
+        from anonymizer.controller.ai.tseg.config import merge_ai_features_into_state
+
         logger.info(f"Save Config (App State): {self.get_app_state_path()}")
         try:
-            config_data = {
-                "language": get_current_language(),
-                "recent_project_dirs": [str(path) for path in self.recent_project_dirs],
-                "current_open_project_dir": str(self.current_open_project_dir) or "",
-            }
+            config_data = merge_ai_features_into_state(
+                {
+                    "language": get_current_language(),
+                    "recent_project_dirs": [str(path) for path in self.recent_project_dirs],
+                    "current_open_project_dir": str(self.current_open_project_dir) or "",
+                }
+            )
             app_state_path = self.get_app_state_path()
             app_state_path.parent.mkdir(parents=True, exist_ok=True)
             with open(app_state_path.as_posix(), "w") as config_file:
@@ -257,7 +446,7 @@ class Anonymizer(ctk.CTk):
             new_model=True,
             title=_("New Project Settings"),
         )
-        model, java_phi_studies = dlg.get_input()
+        model, java_phi_studies, ctp_lookup_preview = dlg.get_input()
 
         if model is None:
             logger.info("New Project Cancelled")
@@ -311,7 +500,10 @@ class Anonymizer(ctk.CTk):
                 raise RuntimeError(_("Fatal Internal Error, Project Controller not created"))
 
             if java_phi_studies:
-                self.controller.anonymizer.model.process_java_phi_studies(java_phi_studies)
+                self.controller.import_java_phi_studies(java_phi_studies)
+
+            if ctp_lookup_preview is not None:
+                commit_ctp_lookup(self.controller, ctp_lookup_preview)
 
             self.controller.save_model()
 
@@ -490,7 +682,15 @@ class Anonymizer(ctk.CTk):
             f"{self.controller.model.project_name}[{self.controller.model.site_id}] => {self.controller.model.abridged_storage_dir()}"
         )
 
+        from anonymizer.controller.ai.tseg.readiness import log_runtime_status
+
+        self._release_welcome_window_constraints()
+        self.welcome_view.release_images()
         self.welcome_view.destroy()
+        from anonymizer.view.common.ctk_safe import purge_stale_scaling_windows
+
+        purge_stale_scaling_windows()
+        log_runtime_status()
         self.protocol("WM_DELETE_WINDOW", self.close_project)
         self.menu_bar = self.create_project_open_menu_bar()
 
@@ -500,6 +700,7 @@ class Anonymizer(ctk.CTk):
             export_callback=self.export,
             view_callback=self.view,
             controller=self.controller,
+            fonts=self.fonts,
         )
 
         if not self.dashboard:
@@ -508,9 +709,49 @@ class Anonymizer(ctk.CTk):
 
         self.dashboard.update_totals(self.controller.anonymizer.model.get_totals())
         self.dashboard.focus_set()
+        self._apply_project_window_size()
+        for delay_ms in (50, 200):
+            self.after(delay_ms, self._apply_project_window_size)
+        self.after(400, lambda: self._apply_project_window_size(log=True))
 
         logger.info(f"metrics_loop start interval={self.metrics_loop_interval}ms")
         self.metrics_loop()
+
+    def _project_close_blocked(self) -> tuple[str, str] | None:
+        """Return (title, message) when project shutdown must wait, else None."""
+        if self.query_view and self.query_view.busy():
+            return (
+                _("Query Busy"),
+                _("Query is busy, please wait for query to complete before closing project."),
+            )
+        if self.export_view and self.export_view.busy():
+            return (
+                _("Export Busy"),
+                _("Export is busy, please wait for export to complete before closing project."),
+            )
+        if self.controller and not self.controller.anonymizer.idle():
+            return (
+                _("Anonymizer Workers Busy"),
+                _("Anonymizer queues are not empty, please wait for workers to process files before closing project."),
+            )
+        return None
+
+    def quit_app(self, event=None) -> None:
+        """Gracefully stop workers and exit (File/Exit, Cmd-Q, signals)."""
+        if self._shutting_down:
+            return
+        logger.info("quit_app")
+        blocked = self._project_close_blocked()
+        if blocked:
+            title, message = blocked
+            logger.info("%s, cannot quit application", title)
+            messagebox.showerror(title=title, message=message, parent=self)
+            return
+        self._shutting_down = True
+        if self.controller:
+            self.shutdown_controller()
+        self.save_config()
+        self.quit()
 
     def shutdown_controller(self):
         logger.info("shutdown_controller")
@@ -518,58 +759,38 @@ class Anonymizer(ctk.CTk):
         if self.dashboard:
             self.dashboard.destroy()
             self.dashboard = None
-        if self.controller:
-            self.controller.stop_scp()
-            self.controller.shutdown()
-            self.controller.save_model()
-            self.controller.anonymizer.stop()
-            if self.query_view:
-                self.query_view.destroy()
-                self.query_view = None
-            if self.export_view:
-                self.export_view.destroy()
-                self.export_view = None
+        if not self.controller:
+            return
+        self.controller.stop_scp()
+        self.controller.shutdown()
+        self.controller.save_model()
+        self.controller.anonymizer.stop()
+        if self.query_view:
+            self.query_view.destroy()
+            self.query_view = None
+        if self.export_view:
+            self.export_view.destroy()
+            self.export_view = None
+        self.controller = None
 
     def close_project(self, event=None):
         logger.info("Close Project")
-        if self.query_view and self.query_view.busy():
-            logger.info("QueryView busy, cannot close project")
-            messagebox.showerror(
-                title=_("Query Busy"),
-                message=_("Query is busy, please wait for query to complete before closing project."),
-                parent=self,
-            )
-            return
-        if self.export_view and self.export_view.busy():
-            logger.info("ExportView busy, cannot close project")
-            messagebox.showerror(
-                title=_("Export Busy"),
-                message=_("Export is busy, please wait for export to complete before closing project."),
-                parent=self,
-            )
-            return
-
-        if self.controller and not self.controller.anonymizer.idle():
-            logger.info("Anonymizer busy, cannot close project")
-            messagebox.showerror(
-                title=_("Anonymizer Workers Busy"),
-                message=_(
-                    "Anonymizer queues are not empty, please wait for workers to process files before closing project."
-                ),
-                parent=self,
-            )
+        blocked = self._project_close_blocked()
+        if blocked:
+            title, message = blocked
+            logger.info("%s, cannot close project", title)
+            messagebox.showerror(title=title, message=message, parent=self)
             return
 
         # TODO: Do not allow project close if Import Files/Import Directory is busy
         # TODO: Shutdowncontroller asynchronously using Dashboard Status to provide shutdown updates (especially Anonymizer worker threads)
         self.shutdown_controller()
 
-        self.welcome_view = WelcomeView(self, self.change_language)
-        self.protocol("WM_DELETE_WINDOW", self.quit)
+        self._attach_welcome_view()
+        self.protocol("WM_DELETE_WINDOW", self.quit_app)
         self.focus_force()
 
         self.current_open_project_dir = None
-        self.controller = None
         self.menu_bar = self.create_project_closed_menu_bar()
         self.title(self.get_title())
         self.save_config()
@@ -621,7 +842,7 @@ class Anonymizer(ctk.CTk):
         cloned_model.project_name = f"{cloned_model.project_name} (Clone)"
 
         dlg = SettingsDialog(self, cloned_model, new_model=True, title=_("Edit Cloned Project Settings"))
-        (edited_model, null_java_phi) = dlg.get_input()
+        edited_model, null_java_phi, ctp_lookup_preview = dlg.get_input()
         if edited_model is None:
             logger.info("Edit Cloned Project Settings Cancelled")
             return
@@ -640,6 +861,9 @@ class Anonymizer(ctk.CTk):
 
             if not self.controller:
                 raise RuntimeError(_("Fatal Internal Error, Project Controller not created"))
+
+            if ctp_lookup_preview is not None:
+                commit_ctp_lookup(self.controller, ctp_lookup_preview)
 
             self.controller.save_model()
             logger.info(f"Project cloned successfully: {self.controller}")
@@ -667,29 +891,34 @@ class Anonymizer(ctk.CTk):
             logger.error("Internal Error: no ProjectController")
             return
 
-        self.disable_file_menu()
-
-        file_extension_filters = [
-            ("dcm Files", "*.dcm"),
-            ("dicom Files", "*.dicom"),
-            ("All Files", "*.*"),
-        ]
-        msg = _("Select DICOM Files to Import & Anonymize")
-        file_paths = filedialog.askopenfilenames(
-            title=msg,
-            defaultextension=".dcm",
-            filetypes=file_extension_filters,
-            parent=self,
-        )
-
-        if not file_paths:
-            logger.info("Import Files Cancelled")
-            self.enable_file_menu()
+        if not self._begin_import():
             return
 
-        dlg = ImportFilesDialog(self, self.controller.anonymizer, file_paths)
-        dlg.get_input()
-        self.enable_file_menu()
+        self.disable_file_menu()
+        try:
+            self.update_idletasks()
+
+            file_extension_filters = [
+                ("dcm Files", "*.dcm"),
+                ("dicom Files", "*.dicom"),
+                ("All Files", "*.*"),
+            ]
+            msg = _("Select DICOM Files to Import & Anonymize")
+            file_paths = filedialog.askopenfilenames(
+                title=msg,
+                defaultextension=".dcm",
+                filetypes=file_extension_filters,
+                parent=self,
+            )
+
+            if not file_paths:
+                logger.info("Import Files Cancelled")
+                return
+
+            dlg = ImportFilesDialog(self, self.controller.anonymizer, file_paths)
+            dlg.get_input()
+        finally:
+            self._end_import()
 
     def import_directory(self, event=None):
         logging.info("Import Directory")
@@ -702,136 +931,134 @@ class Anonymizer(ctk.CTk):
             logger.error("Internal Error: no Dashboard")
             return
 
-        self.disable_file_menu()  # TODO: try finally to ensure self.enable_file_menu() is called
-
-        msg = _("Select DICOM Directory to Import & Anonymize")
-        root_dir = filedialog.askdirectory(
-            title=msg,
-            mustexist=True,
-            parent=self,
-        )
-        logger.info(root_dir)
-
-        if not root_dir:
-            logger.info("Import Directory Cancelled")
-            self.enable_file_menu()
+        if not self._begin_import():
             return
 
-        file_paths = []
-        # Handle reading DICOMDIR files in Media Storage Directory (eg. CD/DVD/USB Drive)
-        dicomdir_file = os.path.join(root_dir, "DICOMDIR")
-        if os.path.exists(dicomdir_file):
-            try:
-                ds = dcmread(fp=dicomdir_file)
-                root_dir = Path(str(ds.filename)).resolve().parent
-                msg = _("Reading DICOMDIR Root directory" + f": {Path(root_dir).stem}...")
-                logger.info(msg)
-                self.dashboard.set_status(msg)
+        self.disable_file_menu()
+        try:
+            self.update_idletasks()
 
-                # Iterate through the PATIENT records
-                for patient in ds.patient_records:
-                    logger.info(f"PATIENT: PatientID={patient.PatientID}, PatientName={patient.PatientName}")
-
-                    # Find all the STUDY records for the patient
-                    studies = [ii for ii in patient.children if ii.DirectoryRecordType == "STUDY"]
-                    for study in studies:
-                        descr = study.StudyDescription or "(no value available)"
-                        logging.info(
-                            f"{'  ' * 1}STUDY: StudyID={study.StudyID}, "
-                            f"StudyDate={study.StudyDate}, StudyDescription={descr}"
-                        )
-
-                        # Find all the SERIES records in the study
-                        all_series = [ii for ii in study.children if ii.DirectoryRecordType == "SERIES"]
-                        for series in all_series:
-                            # Find all the IMAGE records in the series
-                            images = [ii for ii in series.children if ii.DirectoryRecordType == "IMAGE"]
-                            plural = ("", "s")[len(images) > 1]
-
-                            descr = getattr(series, "SeriesDescription", "(no value available)")
-                            logging.info(
-                                f"{'  ' * 2}SERIES: SeriesNumber={series.SeriesNumber}, "
-                                f"Modality={series.Modality}, SeriesDescription={descr} - "
-                                f"{len(images)} SOP Instance{plural}"
-                            )
-
-                            # Get the absolute file path to each instance
-                            # Each IMAGE contains a relative file path to the root directory
-                            elems = [ii["ReferencedFileID"] for ii in images]
-                            # Make sure the relative file path is always a list of str
-                            paths = [[ee.value] if ee.VM == 1 else ee.value for ee in elems]
-                            paths = [f"{root_dir}/{Path(*fp)}" for fp in paths]
-
-                            # List the instance file paths for this series
-                            for fp in paths:
-                                logger.info(f"{'  ' * 3}IMAGE: Path={os.fspath(fp)}")
-
-                            file_paths.extend(paths)
-
-            except Exception as e:
-                msg_prefix = _("Error reading DICOMDIR file")
-                msg_detail = f"{dicomdir_file}, {str(e)}"
-                logger.error(msg_prefix + ": " + msg_detail)
-                self.dashboard.set_status(msg_prefix)
-
-                messagebox.showerror(
-                    title=_("Import Directory Error"),
-                    message=msg_prefix + "\n\n" + msg_detail,
-                    parent=self,
-                )
-                self.enable_file_menu()
-                return
-        else:
-            msg = _("Reading filenames from") + f" {Path(root_dir).stem}..."
-            logger.info(msg)
-            self.dashboard.set_status(msg)
-            # TODO OPTIMIZE: use Python Generator to handle massive directory trees
-            file_paths = [
-                os.path.join(root, file)
-                for root, _, files in os.walk(root_dir)
-                for file in files
-                if not file.startswith(".")
-            ]
-
-        if len(file_paths) == 0:
-            msg = _("No files found in") + f" {root_dir}"
-            logger.info(msg)
-            messagebox.showerror(
-                title=_("Import Directory Error"),
-                message=msg,
+            msg = _("Select DICOM Directory to Import & Anonymize")
+            root_dir = filedialog.askdirectory(
+                title=msg,
+                mustexist=True,
                 parent=self,
             )
-            self.dashboard.set_status(msg)
-            self.enable_file_menu()
-            return
+            logger.info(root_dir)
 
-        msg = (
-            f"{len(file_paths)} "
-            + _("filenames read from")
-            + f"\n\n{root_dir}\n\n"
-            + _("Do you want to initiate import?")
-        )
-        if not messagebox.askyesno(
-            title=_("Import Directory"),
-            message=msg,
-            parent=self,
-        ):
-            msg = _("Import Directory Cancelled")
+            if not root_dir:
+                logger.info("Import Directory Cancelled")
+                return
+
+            file_paths = []
+            # Handle reading DICOMDIR files in Media Storage Directory (eg. CD/DVD/USB Drive)
+            dicomdir_file = os.path.join(root_dir, "DICOMDIR")
+            if os.path.exists(dicomdir_file):
+                try:
+                    ds = dcmread(fp=dicomdir_file)
+                    root_dir = Path(str(ds.filename)).resolve().parent
+                    msg = _("Reading DICOMDIR Root directory" + f": {Path(root_dir).stem}...")
+                    logger.info(msg)
+                    self.dashboard.set_status(msg)
+
+                    # Iterate through the PATIENT records
+                    for patient in ds.patient_records:
+                        logger.info(f"PATIENT: PatientID={patient.PatientID}, PatientName={patient.PatientName}")
+
+                        # Find all the STUDY records for the patient
+                        studies = [ii for ii in patient.children if ii.DirectoryRecordType == "STUDY"]
+                        for study in studies:
+                            descr = study.StudyDescription or "(no value available)"
+                            logging.info(
+                                f"{'  ' * 1}STUDY: StudyID={study.StudyID}, "
+                                f"StudyDate={study.StudyDate}, StudyDescription={descr}"
+                            )
+
+                            # Find all the SERIES records in the study
+                            all_series = [ii for ii in study.children if ii.DirectoryRecordType == "SERIES"]
+                            for series in all_series:
+                                # Find all the IMAGE records in the series
+                                images = [ii for ii in series.children if ii.DirectoryRecordType == "IMAGE"]
+                                plural = ("", "s")[len(images) > 1]
+
+                                descr = getattr(series, "SeriesDescription", "(no value available)")
+                                logging.info(
+                                    f"{'  ' * 2}SERIES: SeriesNumber={series.SeriesNumber}, "
+                                    f"Modality={series.Modality}, SeriesDescription={descr} - "
+                                    f"{len(images)} SOP Instance{plural}"
+                                )
+
+                                # Get the absolute file path to each instance
+                                # Each IMAGE contains a relative file path to the root directory
+                                elems = [ii["ReferencedFileID"] for ii in images]
+                                # Make sure the relative file path is always a list of str
+                                paths = [[ee.value] if ee.VM == 1 else ee.value for ee in elems]
+                                paths = [f"{root_dir}/{Path(*fp)}" for fp in paths]
+
+                                # List the instance file paths for this series
+                                for fp in paths:
+                                    if is_hidden_path(fp):
+                                        continue
+                                    logger.info(f"{'  ' * 3}IMAGE: Path={os.fspath(fp)}")
+                                    file_paths.append(fp)
+
+                except Exception as e:
+                    msg_prefix = _("Error reading DICOMDIR file")
+                    msg_detail = f"{dicomdir_file}, {str(e)}"
+                    logger.error(msg_prefix + ": " + msg_detail)
+                    self.dashboard.set_status(msg_prefix)
+
+                    messagebox.showerror(
+                        title=_("Import Directory Error"),
+                        message=msg_prefix + "\n\n" + msg_detail,
+                        parent=self,
+                    )
+                    return
+            else:
+                msg = _("Reading filenames from") + f" {Path(root_dir).stem}..."
+                logger.info(msg)
+                self.dashboard.set_status(msg)
+                # TODO OPTIMIZE: use Python Generator to handle massive directory trees
+                file_paths = list_import_directory_files(root_dir)
+
+            if len(file_paths) == 0:
+                msg = _("No files found in") + f" {root_dir}"
+                logger.info(msg)
+                messagebox.showerror(
+                    title=_("Import Directory Error"),
+                    message=msg,
+                    parent=self,
+                )
+                self.dashboard.set_status(msg)
+                return
+
+            msg = (
+                f"{len(file_paths)} "
+                + _("filenames read from")
+                + f"\n\n{root_dir}\n\n"
+                + _("Do you want to initiate import?")
+            )
+            if not messagebox.askyesno(
+                title=_("Import Directory"),
+                message=msg,
+                parent=self,
+            ):
+                msg = _("Import Directory Cancelled")
+                logger.info(msg)
+                self.dashboard.set_status(msg)
+                return
+
+            msg = _("Importing") + f" {len(file_paths)} {_('file') if len(file_paths) == 1 else _('files')}"
             logger.info(msg)
             self.dashboard.set_status(msg)
-            self.enable_file_menu()
-            return
 
-        msg = _("Importing") + f" {len(file_paths)} {_('file') if len(file_paths) == 1 else _('files')}"
-        logger.info(msg)
-        self.dashboard.set_status(msg)
-
-        dlg = ImportFilesDialog(self, self.controller.anonymizer, sorted(file_paths))
-        files_processed = dlg.get_input()
-        msg = _("Files processed") + f": {files_processed}"
-        logger.info(msg)
-        self.dashboard.set_status(msg)
-        self.enable_file_menu()
+            dlg = ImportFilesDialog(self, self.controller.anonymizer, sorted(file_paths))
+            files_processed = dlg.get_input()
+            msg = _("Files processed") + f": {files_processed}"
+            logger.info(msg)
+            self.dashboard.set_status(msg)
+        finally:
+            self._end_import()
 
     def query_retrieve(self):
         logging.info("OPEN QueryView")
@@ -853,7 +1080,7 @@ class Anonymizer(ctk.CTk):
         if self.query_view:
             del self.query_view
 
-        self.query_view = QueryView(self.dashboard, self.controller, self.mono_font)
+        self.query_view = QueryView(self.dashboard, self.controller, self.fonts)
         if not self.query_view:
             logger.error("Internal Error creating QueryView")
             return
@@ -879,7 +1106,7 @@ class Anonymizer(ctk.CTk):
         if self.export_view:
             del self.export_view
 
-        self.export_view = ExportView(self.dashboard, self.controller, self.mono_font)
+        self.export_view = ExportView(self.dashboard, self.controller, self.fonts)
         if self.export_view is None:
             logger.error("Internal Error creating ExportView")
             return
@@ -887,31 +1114,31 @@ class Anonymizer(ctk.CTk):
         self.export_view.focus()
 
     def view(self):
-        logging.info("OPEN IndexView")
+        logging.info("OPEN DatasetView")
 
         if not self.controller:
             logger.error("Internal Error: no ProjectController")
             return
 
-        if self.index_view and self.index_view.winfo_exists():
-            logger.info("IndexView already OPEN")
-            self.index_view.deiconify()
-            self.index_view.focus_force()
+        if self.dataset_view and self.dataset_view.winfo_exists():
+            logger.info("DatasetView already OPEN")
+            self.dataset_view.deiconify()
+            self.dataset_view.focus_force()
             return
 
         if not self.dashboard:
             logger.error("Internal Error: no Dashboard")
             return
 
-        if self.index_view:
-            del self.index_view
+        if self.dataset_view:
+            del self.dataset_view
 
-        self.index_view = IndexView(self.dashboard, self.controller, self.mono_font.measure("A"))
-        if self.index_view is None:
-            logger.error("Internal Error creating IndexView")
+        self.dataset_view = DatasetView(self.dashboard, self.controller, self.fonts)
+        if self.dataset_view is None:
+            logger.error("Internal Error creating DatasetView")
             return
 
-        self.index_view.focus()
+        self.dataset_view.focus()
 
     def settings(self):
         logger.info("Settings")
@@ -938,59 +1165,121 @@ class Anonymizer(ctk.CTk):
             )
             return
 
-        dlg = SettingsDialog(self, self.controller.model, title=_("Project Settings"))
-        (edited_model, null_java_phi) = dlg.get_input()
+        dlg = SettingsDialog(self, self.controller.model, title=_("Project Settings"), project_controller=self.controller)
+        edited_model, null_java_phi, ctp_lookup_preview = dlg.get_input()
         if edited_model is None:
             logger.info("Settings Cancelled")
             return
 
         logger.info("User Edited ProjectModel")
 
-        # Some settings change require the project to be closed and re-opened:
-        # TODO: elegantly open and close project, see clone project above
-        if self.controller.model.remove_pixel_phi != edited_model.remove_pixel_phi:
-            messagebox.showwarning(
-                title=_("Project restart"),
-                message=_("The settings change will take effect when the project is next opened."),
-                parent=self,
-            )
-
         self.controller.update_model(edited_model)
 
         logger.info(f"{self.controller}")
 
-    def help_filename_to_title(self, filename):
-        words = filename.stem.split("_")[1].split()
-        return " ".join(word.capitalize() for word in words)
+    def show_ai_features_setup_dialog(self) -> None:
+        from anonymizer.view.ai.ai_features_dialog import show_ai_features_setup_dialog
 
-    def show_help_view(self, html_file_path):
-        view_name = self.help_filename_to_title(html_file_path)
+        def on_changed() -> None:
+            if self.dataset_view is not None and self.dataset_view.winfo_exists():
+                self.dataset_view.refresh_ai_feature_ui()
 
-        if view_name in self.help_views:
-            view = self.help_views[view_name]
-            if view.winfo_exists():
-                logger.info(f"{view.title} already OPEN")
-                view.deiconify()
-                return
+        show_ai_features_setup_dialog(self, on_changed=on_changed)
 
-        self.help_views[view_name] = HTMLView(self, title=view_name, html_file_path=html_file_path.as_posix())
-        self.help_views[view_name].focus()
+    def open_user_manual(self, slug: str = "") -> None:
+        """Open the clinician user manual (browser, with local site/ fallback)."""
+        if not open_help_page(slug):
+            messagebox.showwarning(
+                title=_("Help"),
+                message=_("Could not open the user manual in a browser. Check your network or build docs locally (mkdocs serve)."),
+                parent=self,
+            )
 
     def get_help_menu(self, menu_bar: tk.Menu):
         help_menu = tk.Menu(menu_bar, tearoff=0)
-        # Get all html files in assets/locale/*/html/ directory
-        # Sort by filename number prefix
-        html_dir = Path("assets/locales/" + str(get_current_language_code() or "en_US") + "/html/")
-        html_file_paths = sorted(html_dir.glob("*.html"), key=lambda path: int(path.stem.split("_")[0]))
-
-        for __, html_file_path in enumerate(html_file_paths):
-            label = self.help_filename_to_title(html_file_path)
+        help_menu.add_command(label=_("User Manual"), command=lambda: self.open_user_manual(""))
+        help_menu.add_separator()
+        for label, slug in help_menu_topics():
             help_menu.add_command(
                 label=label,
-                command=lambda path=html_file_path: self.show_help_view(path),
+                command=lambda s=slug: self.open_user_manual(s),
+            )
+        return help_menu
+
+    def _live_app_windows(self) -> list[tk.Misc]:
+        live: list[tk.Misc] = []
+        surviving: list[weakref.ref] = []
+        for ref in self._app_windows:
+            window = ref()
+            if window is None:
+                continue
+            try:
+                if not window.winfo_exists():
+                    continue
+            except tk.TclError:
+                continue
+            live.append(window)
+            surviving.append(ref)
+        self._app_windows = surviving
+        return live
+
+    def register_app_window(self, window: tk.Misc) -> None:
+        for existing in self._live_app_windows():
+            if existing is window:
+                self._attach_menu_to_window(window)
+                self.refresh_window_menu()
+                return
+        self._app_windows.append(weakref.ref(window))
+        self._attach_menu_to_window(window)
+        self.refresh_window_menu()
+
+    def unregister_app_window(self, window: tk.Misc) -> None:
+        self._app_windows = [ref for ref in self._app_windows if ref() is not None and ref() is not window]
+        self.refresh_window_menu()
+
+    def _attach_menu_to_window(self, window: tk.Misc) -> None:
+        if self.menu_bar is None:
+            return
+        try:
+            window.configure(menu=self.menu_bar)
+        except tk.TclError:
+            logger.debug("Could not attach menu_bar to %s", window, exc_info=True)
+
+    def _reattach_menu_to_registered_windows(self) -> None:
+        for window in self._live_app_windows():
+            self._attach_menu_to_window(window)
+
+    def _focus_root_window(self) -> None:
+        from anonymizer.view.common.app_window import focus_app_window
+
+        focus_app_window(self)
+
+    def refresh_window_menu(self) -> None:
+        from anonymizer.view.common.app_window import focus_app_window, window_menu_label_for
+
+        window_menu = self._window_menu
+        if window_menu is None:
+            return
+        try:
+            end = window_menu.index("end")
+        except tk.TclError:
+            return
+        if end is not None:
+            window_menu.delete(0, end)
+
+        window_menu.add_command(label=_("Dashboard"), command=self._focus_root_window)
+        for window in self._live_app_windows():
+            label = window_menu_label_for(window)
+            window_menu.add_command(
+                label=label,
+                command=lambda win=window: focus_app_window(win),
             )
 
-        return help_menu
+    def _finalize_menu_bar(self, menu_bar: tk.Menu) -> tk.Menu:
+        self.config(menu=menu_bar)
+        self._reattach_menu_to_registered_windows()
+        self.refresh_window_menu()
+        return menu_bar
 
     def create_project_closed_menu_bar(self) -> tk.Menu:
         logger.debug("create_project_closed_menu_bar")
@@ -1012,16 +1301,18 @@ class Anonymizer(ctk.CTk):
 
         file_menu.add_separator()
 
-        file_menu.add_command(label=_("Exit"), command=self.quit)
+        file_menu.add_command(label=_("Exit"), command=self.quit_app)
 
         menu_bar.add_cascade(label=_("File"), menu=file_menu)
+
+        window_menu = tk.Menu(menu_bar, tearoff=0)
+        menu_bar.add_cascade(label=_("Window"), menu=window_menu)
+        self._window_menu = window_menu
 
         # Help Menu:
         menu_bar.add_cascade(label=_("Help"), menu=self.get_help_menu(menu_bar))
 
-        # Attach new menu bar:
-        self.config(menu=menu_bar)
-        return menu_bar
+        return self._finalize_menu_bar(menu_bar)
 
     def create_project_open_menu_bar(self) -> tk.Menu:
         logger.debug("create_project_open_menu_bar")
@@ -1038,7 +1329,7 @@ class Anonymizer(ctk.CTk):
         file_menu.add_command(label=_("Close Project"), command=self.close_project)
 
         file_menu.add_separator()
-        file_menu.add_command(label=_("Exit"), command=self.quit)
+        file_menu.add_command(label=_("Exit"), command=self.quit_app)
 
         menu_bar.add_cascade(label=_("File"), menu=file_menu)
 
@@ -1048,12 +1339,14 @@ class Anonymizer(ctk.CTk):
 
         menu_bar.add_cascade(label=_("Settings"), menu=view_menu)
 
+        window_menu = tk.Menu(menu_bar, tearoff=0)
+        menu_bar.add_cascade(label=_("Window"), menu=window_menu)
+        self._window_menu = window_menu
+
         # Help Menu:
         menu_bar.add_cascade(label=_("Help"), menu=self.get_help_menu(menu_bar))
 
-        # Attach new menu bar:
-        self.config(menu=menu_bar)
-        return menu_bar
+        return self._finalize_menu_bar(menu_bar)
 
     def disable_file_menu(self):
         logger.debug("disable_file_menu")
@@ -1067,16 +1360,45 @@ class Anonymizer(ctk.CTk):
         if self.menu_bar:
             self.menu_bar.entryconfig(_("File"), state="normal")
 
+    def _begin_import(self) -> bool:
+        if self._import_in_progress:
+            messagebox.showwarning(
+                title=_("Import"),
+                message=_("An import is already in progress."),
+                parent=self,
+            )
+            return False
+        self._import_in_progress = True
+        return True
+
+    def _end_import(self) -> None:
+        self._import_in_progress = False
+        self.enable_file_menu()
+
 
 def run_GUI(logs_dir):
+    from anonymizer.view.common.ctk_safe import install_safe_scaling_tracker, install_safe_tk_font_destructor
+
+    install_safe_scaling_tracker()
+    install_safe_tk_font_destructor()
     try:
         app = Anonymizer(Path(logs_dir))
+        app._log_ctk_scaling()
         app.lift()
         app.focus_force()
         logger.info("ANONYMIZER GUI initialised successfully.")
     except Exception as e:
         logger.exception(f"Error initialising ANONYMIZER GUI, exiting: {str(e)}")
         sys.exit(1)
+
+    def _signal_quit(signum, _frame) -> None:
+        logger.info("Signal %s received, scheduling graceful quit", signum)
+        if app.winfo_exists():
+            app.after(0, app.quit_app)
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        with contextlib.suppress(ValueError, OSError):
+            signal.signal(sig, _signal_quit)
 
     logger.info("ANONYMIZER GUI MAINLOOP...")
     try:
@@ -1125,26 +1447,26 @@ def load_model(json_filepath: Path) -> ProjectModel:
             raise RuntimeError(f"Project Model datafile: {json_filepath} corrupt\n\n{str(e1)}") from e1
 
 
-def run_HEADLESS(project_model_path: Path):
+def create_headless_controller(project_model_path: Path) -> ProjectController | None:
     if not project_model_path.exists():
         logger.error(_("Project Model file not found") + f": {project_model_path}")
-        return
+        return None
 
     if not project_model_path.is_file():
         logger.error(_("Project Model path is not a file") + f": {project_model_path}")
-        return
+        return None
 
     try:
         file_model = load_model(project_model_path)
     except Exception as e:
         logger.error(f"Error loading Project Model: {str(e)}")
-        return
+        return None
 
     logger.info(f"Project Model succesfully loaded from: {project_model_path}")
 
     if not hasattr(file_model, "version"):
         logger.error("Project Model missing version")
-        return
+        return None
 
     logger.info(_("Project Model loaded successfully, version") + f": {file_model.version}")
 
@@ -1154,11 +1476,9 @@ def run_HEADLESS(project_model_path: Path):
             + f": {file_model.version} != {ProjectModel.MODEL_VERSION} "
             + _("upgrading accordingly")
         )
-        model = ProjectModel()  # new default model
-        # TODO: Handle 2 level nested classes/dicts copying by attribute
-        # to handle addition or nested fields and deletion of attributes in new model
-        model.__dict__.update(file_model.__dict__)  # copy over corresponding attributes from the old model (file_model)
-        model.version = ProjectModel.MODEL_VERSION  # update to latest version
+        model = ProjectModel()
+        model.__dict__.update(file_model.__dict__)
+        model.version = ProjectModel.MODEL_VERSION
     else:
         model = file_model
 
@@ -1173,6 +1493,98 @@ def run_HEADLESS(project_model_path: Path):
 
     except Exception as e:
         logger.error(f"Error creating Project Controller: {str(e)}")
+        return None
+
+    return controller
+
+
+def run_HEADLESS_AI_BATCH(project_model_path: Path, ai_batch_path: Path) -> int:
+    """Run one-shot AI batch for studies in a project, then exit."""
+    from anonymizer.controller.ai_batch_config import (
+        AiBatchConfig,
+        AiBatchConfigError,
+        resolve_ai_batch_studies,
+        validate_ai_batch_config_gates,
+    )
+    from anonymizer.controller.ai_batch_process import format_ai_batch_completion_summary
+
+    controller = create_headless_controller(project_model_path)
+    if controller is None:
+        return 1
+
+    try:
+        batch_config = AiBatchConfig.from_path(ai_batch_path)
+        batch_config.apply_segmentation_modes()
+        validate_ai_batch_config_gates(batch_config)
+        studies = resolve_ai_batch_studies(
+            batch_config,
+            images_dir=controller.model.images_dir(),
+            anon_model=controller.anonymizer.model,
+        )
+    except AiBatchConfigError as exc:
+        logger.error("AI batch configuration error: %s", exc)
+        controller.shutdown()
+        controller.anonymizer.stop()
+        return 1
+
+    if not studies:
+        logger.error("No studies resolved for AI batch")
+        controller.shutdown()
+        controller.anonymizer.stop()
+        return 1
+
+    logger.info(
+        "AI batch starting: %d studies, algorithms=%s",
+        len(studies),
+        [algorithm.value for algorithm in batch_config.algorithms],
+    )
+
+    def on_log(message: str) -> None:
+        print(message, flush=True)
+
+    def on_progress(
+        series_index: int,
+        series_total: int,
+        algorithm,
+        algorithm_index: int,
+        algorithms_total: int,
+        detail: str,
+        step_fraction: float,
+    ) -> None:
+        print(
+            f"[{step_fraction * 100:.0f}%] {algorithm.value} ({algorithm_index}/{algorithms_total}) "
+            f"series {series_index}/{series_total}: {detail}",
+            flush=True,
+        )
+
+    summary = controller.ai_batch_process(
+        list(studies),
+        batch_config.to_options(),
+        progress=on_progress,
+        on_log=on_log,
+    )
+    print(format_ai_batch_completion_summary(summary), flush=True)
+
+    controller.shutdown()
+    controller.save_model()
+    controller.anonymizer.stop()
+
+    if summary.cancelled or summary.failed > 0:
+        return 1
+    return 0
+
+
+def run_HEADLESS(project_model_path: Path):
+    if not project_model_path.exists():
+        logger.error(_("Project Model file not found") + f": {project_model_path}")
+        return
+
+    if not project_model_path.is_file():
+        logger.error(_("Project Model path is not a file") + f": {project_model_path}")
+        return
+
+    controller = create_headless_controller(project_model_path)
+    if controller is None:
         return
 
     logger.info(f"{controller}")
@@ -1211,20 +1623,43 @@ def run_HEADLESS(project_model_path: Path):
     controller.anonymizer.stop()
 
 
-@click.command()
+@click.command(help=_cli_help())
+@click.version_option(version=get_version(), prog_name="RSNA DICOM Anonymizer")
 @click.option(
     "--config",
     "-c",
     type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=Path),
     help=_("Path to the configuration file. If not provided, the GUI will be launched."),
 )
-def main(config: Path | None = None):
-    """
-    This application reads a configuration file if provided and runs headless or launches a GUI.
-    """
+@click.option(
+    "--ai-batch",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=Path),
+    default=None,
+    help=_("Path to AiBatchConfig.json for headless AI batch processing."),
+)
+@click.option(
+    "--ai-batch-run",
+    is_flag=True,
+    default=False,
+    help=_("Run AI batch once using --ai-batch, then exit (requires -c)."),
+)
+def main(config: Path | None = None, ai_batch: Path | None = None, ai_batch_run: bool = False):
     install_dir = os.path.dirname(os.path.realpath(__file__))
     logs_dir = init_logging()
     os.chdir(install_dir)
+    # path[0]=="" resolves to install_dir and can shadow venv packages (e.g. totalsegmentator).
+    if sys.path and sys.path[0] in ("", "."):
+        sys.path.pop(0)
+    from anonymizer.controller.ai.remove_pixel_phi import OCR_MODEL_DIR, OcrModelStatus, probe_ocr_models
+
+    tseg_home = Path("assets/ai/tseg")
+    tseg_weights = tseg_home / "nnunet" / "results"
+    OCR_MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    tseg_home.mkdir(parents=True, exist_ok=True)
+    tseg_weights.mkdir(parents=True, exist_ok=True)
+    os.environ["TOTALSEG_HOME_DIR"] = str(tseg_home.resolve())
+    os.environ["TOTALSEG_WEIGHTS_PATH"] = str(tseg_weights.resolve())
+
     logger.info(f"Running from {install_dir}")
     logger.info(f"Python Optimization Level [0,1,2]: {sys.flags.optimize}")
     logger.info(f"Starting ANONYMIZER Version {get_version()}")
@@ -1234,22 +1669,34 @@ def main(config: Path | None = None):
     logger.info(f"Customtkinter Version: {ctk.__version__}")
     logger.info(f"pydicom Version: {pydicom_version}, pynetdicom Version: {pynetdicom_version}")
 
-    ocr_model_dir = Path("assets/ocr/model")
-    if not ocr_model_dir.exists():
-        logger.warning("Downloading OCR models...")
-        from easyocr import Reader
-
-        Reader(
-            lang_list=["en", "de", "fr", "es"],
-            model_storage_directory=ocr_model_dir,
-            verbose=True,
-        )
-    models = os.listdir(ocr_model_dir)
-    if len(models) < 2:
-        logger.error("Error downloading OCR detection and recognition models")
-        ocr_model_dir.unlink()
+    # OCR models download on demand from AI Setup dialog.
+    ocr_status, ocr_detail = probe_ocr_models()
+    if ocr_status == OcrModelStatus.READY:
+        try:
+            file_count = len([p for p in OCR_MODEL_DIR.iterdir() if not p.name.startswith(".")])
+        except OSError:
+            file_count = 0
+        logger.info("OCR models: downloaded (%d files)", file_count)
     else:
-        logger.info(f"OCR downloaded models: {models}")
+        logger.info(
+            "OCR models: %s (enable Remove Pixel PHI in AI Features setup to download)",
+            ocr_detail,
+        )
+
+    # TotalSegmentator runtime (Harmonize / Face Blur prerequisites and model cache).
+    from anonymizer.controller.ai.tseg.readiness import log_runtime_status
+
+    log_runtime_status()
+
+    from anonymizer.controller.ai.tseg.config import apply_ai_features_preferences
+
+    apply_ai_features_preferences()
+
+    if ai_batch_run:
+        if config is None or ai_batch is None:
+            logger.error("--ai-batch-run requires both -c/--config and --ai-batch")
+            sys.exit(2)
+        sys.exit(run_HEADLESS_AI_BATCH(config, ai_batch))
 
     if config:
         run_HEADLESS(config)

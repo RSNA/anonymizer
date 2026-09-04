@@ -1,10 +1,13 @@
 name: Tests
 
 on:
-  workflow_dispatch:  # Enables manual trigger
+  workflow_dispatch:
   pull_request:
   push:
-  
+    branches:
+      - "**"
+    tags-ignore:
+      - "**"
 
 jobs:
   test:
@@ -17,60 +20,32 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          uv.lock
+          pyproject.toml
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-
-    - name: Install Poetry
-      run: |
-        curl -sSL https://install.python-poetry.org | python3 -
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-    - name: List files in root
-      run: ls -la
-
-    - name: Print working directory
-      run: pwd
-
-    - name: Check readme permissions
-      run: ls -l readme.md
+      run: uv python install ${{ matrix.python-version }}
 
     - name: Install dependencies
-      run: poetry install --with dev --verbose
+      run: uv sync --group dev --locked --python ${{ matrix.python-version }}
 
-    - name: Ruff Linting and Formatting Check  
-      run: poetry run ruff check ./src/anonymizer/ --fix
+    - name: Minimize uv cache
+      if: always()
+      run: uv cache prune --ci
+
+    - name: Ruff Linting Check
+      run: uv run --python ${{ matrix.python-version }} ruff check ./src/anonymizer/
 
     - name: Run Unit Tests
       env:
         PYTHONPATH: ${{ github.workspace }}/src
         AWS_USERNAME: ${{ secrets.AWS_USERNAME }}
         AWS_PASSWORD: ${{ secrets.AWS_PASSWORD }}
-      run: |
-  
-        # Run tests with text coverage report
-        poetry run pytest 
-        
-        # > test_coverage_output.txt
-        
-        # # Print the contents of test_coverage_output.txt
-        # echo "Test & Coverage Report:"
-        # cat test_coverage_output.txt
-
-        # # Get the coverage percentage from the output
-        # coverage_percentage=$(grep "TOTAL" test_coverage_output.txt | awk '{print $4}' | tr -d '%')
-
-        # threshold=10
-
-        # # Check if coverage meets the threshold
-        # if (( coverage_percentage >= threshold )); then
-        #   echo "Coverage is above $threshold%: $coverage_percentage%"
-        #   exit 0  # Exit with success
-        # else
-        #   echo "Coverage is below $threshold%: $coverage_percentage%. Tests failed."
-        #   exit 1  # Exit with failure
-        # fi
-  
+      run: uv run --python ${{ matrix.python-version }} pytest tests/controller tests/model

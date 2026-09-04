@@ -1,31 +1,31 @@
-# Whitelist for common terms found on CT images
-# One term/phrase per line. Case-insensitive matching is assumed after loading.
-# Lines starting with # are comments and will be ignored.
+# Freigabeliste für häufige Begriffe auf CT-Bildern
+# Ein Begriff/Ausdruck pro Zeile. Groß-/Kleinschreibung wird beim Laden ignoriert.
+# Zeilen, die mit # beginnen, sind Kommentare und werden ignoriert.
 
-# --- Laterality ---
+# --- Seitigkeit ---
 L
 R
-LEFT
-RIGHT
+LINKS
+RECHTS
 LT
 RT
-BILATERAL
+BEIDSEITIG
 
-# --- Orientation / Position ---
+# --- Orientierung / Position ---
 AX
 AXIAL
 COR
-CORONAL
+KORONAL
 SAG
 SAGITTAL
-OBLIQUE
-SUPINE
-PRONE
-DECUBITUS
-ERECT
-SEMI-ERECT
-HEAD FIRST
-FEET FIRST
+SCHRÄG
+RÜCKENLAGE
+BAUCHLAGE
+SEITENLAGE
+AUFRECHT
+HALBAUFRECHT
+KOPF VORAUS
+FÜSSE VORAUS
 HF
 FF
 HFS
@@ -33,36 +33,36 @@ FFS
 HFP
 FFP
 
-# --- Anatomy (Very General - Add specific non-PHI terms carefully) ---
-HEAD
-NECK
-CHEST
+# --- Anatomie (sehr allgemein – nur spezifische Nicht-PHI-Begriffe sorgfältig hinzufügen) ---
+KOPF
+HALS
+THORAX
 ABDOMEN
-PELVIS
-SPINE
-EXTREMITY
-BRAIN
-LUNG
-LIVER
-KIDNEY
-HEART
+BECKEN
+WIRBELSÄULE
+EXTREMITÄT
+GEHIRN
+LUNGE
+LEBER
+NIERE
+HERZ
 AORTA
-VESSEL
+GEFÄSS
 
-# --- Scanner / Technical Parameters ---
+# --- Scanner / Technische Parameter ---
 CT
 SCAN
-SCOUT
-TOPOGRAM
+ÜBERSICHT
+TOPOGRAMM
 SURVIEW
-SCANOGRAM
-HELICAL
-SEQUENTIAL
-VOLUME
+SCANOGRAMM
+SPIRAL
+SEQUENZIELL
+VOLUMEN
 ACQ
 RECON
-SLICE
-THICKNESS
+SCHICHT
+DICKE
 SL
 THK
 FOV
@@ -70,18 +70,18 @@ DFOV
 ZOOM
 WW
 WL
-WINDOW
-LEVEL
-WIDTH
+FENSTER
+STUFE
+BREITE
 KV
 KVP
 MA
 MAS
 TIME
-ROT TIME
+ROTATIONSZEIT
 ROTATION
 PITCH
-NOISE
+RAUSCHEN
 INDEX
 CTDI
 CTDI VOL
@@ -89,85 +89,83 @@ DLP
 KERNEL
 FILTER
 STANDARD
-SOFT
-BONE
-LUNG
-EDGE
-SHARP
-SMOOTH
-ITERATIVE
+WEICH
+KNOCHE
+KANTE
+SCHARF
+GLATT
+ITERATIV
 IR
 ASIR
 MBIR
 IMR
-EXPOSURE
+EXPOSITION
 
-# --- Contrast / Timing ---
-CONTRAST
+# --- Kontrast / Zeitpunkt ---
+KONTRAST
 CONT
-WITH CONTRAST
-W CONTRAST
+MIT KONTRAST
+M. KONTRAST
 W/C
-WITHOUT CONTRAST
-WO CONTRAST
-NON CON
-NON-CON
-PRE
-POST
-PRE CONTRAST
-POST CONTRAST
-ARTERIAL
+OHNE KONTRAST
+O. KONTRAST
+OHNE KM
+VOR
+NACH
+VOR KONTRAST
+NACH KONTRAST
+ARTERIELL
 ART
-VENOUS
+VENÖS
 VEN
-DELAY
-DELAYED
-NEPHROGRAPHIC
-EXCRETORY
+VERZÖGERUNG
+VERZÖGERT
+NEPHROGRAPHISCH
+EXKRETORISCH
 PORTAL
 PV
 ORAL
 IV
 BOLUS
-INJECTION
+INJEKTION
 
-# --- Measurements / Units ---
+# --- Messungen / Einheiten ---
 MM
 CM
-HU # Hounsfield Unit
-SUV # Standardized Uptake Value (PET/CT)
+HU # Hounsfield-Einheit
+SUV # Standardisierter Uptake-Wert (PET/CT)
 
-# --- Miscellaneous ---
-SERIES
-IMAGE
+# --- Verschiedenes ---
+SERIE
+BILD
 IMG
 NO
 NUM
-NUMBER
-SCAN DATE
-SCAN TIME
-ACQ DATE
-ACQ TIME
-TABLE
-HEIGHT
+NUMMER
+SCAN-DATUM
+SCAN-ZEIT
+ERFASSUNGSDATUM
+ERFASSUNGSZEIT
+TISCH
+HÖHE
 POS
 POSITION
 REF
-REFERENCE
-NONE
+REFERENZ
+KEINE
 N/A
-VARIOUS
-SEE REPORT
-CLINICAL HISTORY
-PROTOCOL
+VERSCHIEDEN
+SIEHE BEFUND
+KLINISCHE ANAMNESE
+PROTOKOLL
 AUTO
 
-# --- Common Artifacts / Descriptions (Use cautiously) ---
-MOTION
-ARTIFACT
-METAL
-STREAKING
-BEAM HARDENING
+# --- Häufige Artefakte / Beschreibungen (vorsichtig verwenden) ---
+BEWEGUNG
+ARTEFAKT
+METALL
+STREIFEN
+STRAHLENHÄRTUNG
 
-# --- Add institution-specific, non-PHI identifiers if necessary ---
-# E.g., SCANNER01, RAD_ROOM_A, PROTOCOL_ABC
+# --- Institutionsbezogene Nicht-PHI-Kennungen bei Bedarf hinzufügen ---
+# Z. B. SCANNER01, RAD_ROOM_A, PROTOKOLL_ABC

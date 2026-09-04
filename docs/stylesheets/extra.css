@@ -1,0 +1,7 @@
+/* Keep help screenshots at captured logical size (do not stretch small dialogs). */
+.md-typeset p > img,
+.md-typeset li > img {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+}

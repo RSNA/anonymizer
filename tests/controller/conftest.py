@@ -1,20 +1,25 @@
 # tests/conftest.py
+import gc
 import os
 import shutil
+import sys
 import tempfile
 
 # Add the src directory to sys.path dynamically
 #  sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any
 
+import psutil
 import pytest
 
-import tests.controller.dicom_pacs_simulator_scp as pacs_simulator_scp
+import tests.controller.dicom.support.pacs_simulator_scp as pacs_simulator_scp
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.project import NetworkTimeouts, ProjectModel
 from anonymizer.utils.logging import init_logging
-from tests.controller.dicom_test_nodes import (
+from anonymizer.utils.translate import set_language_code
+from tests.controller.dicom.support.test_nodes import (
     TEST_PROJECTNAME,
     TEST_SITEID,
     TEST_UIDROOT,
@@ -23,11 +28,20 @@ from tests.controller.dicom_test_nodes import (
     PACSSimulatorSCP,
     RemoteSCPDict,
 )
+from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
+
 
 def pytest_sessionstart(session):
     """Runs before the test session begins."""
     # Initialise logging without file handler:
     init_logging(file_handler=False)
+    set_language_code("en_US")
+
+
+@pytest.fixture(autouse=True)
+def _english_translations() -> None:
+    """Ensure gettext is initialized for controller code that calls _()."""
+    set_language_code("en_US")
 
 
 @pytest.fixture
@@ -43,6 +57,32 @@ def temp_dir() -> Generator[str, Any, None]:
 
 
 @pytest.fixture
+def assert_no_memory_leak():
+    """
+    Measures the OS-level memory of the current test process.
+    Skips the strict assertion if running inside a debugger (like VSCode).
+    """
+    process = psutil.Process(os.getpid())
+    mem_before = process.memory_info().rss
+
+    yield
+
+    gc.collect()
+    mem_after = process.memory_info().rss
+    growth_mb = (mem_after - mem_before) / (1024 * 1024)
+
+    # Check if a debugger trace function is active
+    is_debugging = sys.gettrace() is not None
+
+    if is_debugging:
+        # Just print/log the growth, don't fail the test
+        print(f"\n[Debugger Active] Memory growth bypassed: {growth_mb:.2f} MB")
+    else:
+        # Enforce the strict threshold during normal CLI or CI runs
+        assert growth_mb < 5.0, f"Memory leak detected! RAM grew by {growth_mb:.2f} MB"
+
+
+@pytest.fixture
 def controller(temp_dir: str) -> Generator[ProjectController, Any, None]:
     anon_store = Path(temp_dir, LocalSCU.aet)
     # Make sure storage directory exists:
@@ -53,13 +93,12 @@ def controller(temp_dir: str) -> Generator[ProjectController, Any, None]:
         site_id=TEST_SITEID,
         project_name=TEST_PROJECTNAME,
         uid_root=TEST_UIDROOT,
-        remove_pixel_phi=False,
         storage_dir=anon_store,
         scu=LocalSCU,
         scp=LocalStorageSCP,
         remote_scps=RemoteSCPDict,
         network_timeouts=NetworkTimeouts(2, 5, 5, 15),
-        anonymizer_script_path=Path("src/anonymizer/assets/scripts/default-anonymizer.script"),
+        anonymizer_script_path=DEFAULT_ANONYMIZER_SCRIPT,
     )
 
     project_controller = ProjectController(project_model)

@@ -1,0 +1,309 @@
+# Help screenshot catalog — source of truth for UX coverage and capture.
+# Capture: uv run python src/prototyping/capture_help_screenshots.py --language en_US
+#
+# Output: docs/<lang>/<workflow.id>/<shots_dir>/<file>
+# severity: required | soft | orthanc
+
+fixtures:
+  test_dcm_files: tests/controller/assets/test_dcm_files
+  davidson_cxr: tests/controller/assets/test_dcm_files/davidson_cxr
+  Brain_Ax_EarlyArt: tests/controller/assets/test_dcm_files/Brain_Ax_EarlyArt
+  ctp_lookup: tests/controller/assets/ctp_lookup/test_dcm_files_lookup.properties
+
+languages:
+  en_US: en
+
+orthanc:
+  host: 127.0.0.1
+  port: 4242
+  aet: ORTHANC
+
+workflows:
+  - id: 02-install
+    doc: 02-install/index.md
+    title: Install and first launch
+    shots_dir: shots
+    shots:
+      - id: Welcome
+        file: Welcome.png
+        window: WelcomeView
+        severity: required
+        deps: [language]
+        ux_elements: [Welcome screen, Language selector, New Project / Open / AI Features]
+        caption: "Welcome screen after first launch."
+
+  - id: 04-create-project
+    doc: 04-create-project/index.md
+    title: Create a project
+    shots_dir: shots
+    shots:
+      - id: NewProjectSettings
+        file: NewProjectSettings.png
+        window: SettingsDialog
+        severity: required
+        deps: [language, temp_storage]
+        ux_elements:
+          - Project Name
+          - Storage Directory
+          - Site ID / UID Root
+          - Local Server / Query Server / Export Server buttons
+          - AWS Cognito
+          - Network Timeouts
+          - Modalities / Storage Classes / Transfer Syntaxes
+          - Patient Lookup Table / Logging Levels
+        caption: "New Project Settings — identity, storage, and network before create."
+      - id: LocalServer
+        file: LocalServer.png
+        window: DICOMNodeDialog
+        severity: required
+        deps: [project]
+        ux_elements: [Local Server AE Title, IP, Port]
+        caption: "Local Server — AE Title and port this computer uses to receive images."
+      - id: QueryServer
+        file: QueryServer.png
+        window: DICOMNodeDialog
+        severity: required
+        deps: [project]
+        ux_elements: [Query Server AE Title, IP, Port]
+        caption: "Query Server — hospital archive used by Dashboard Search."
+      - id: ExportServer
+        file: ExportServer.png
+        window: DICOMNodeDialog
+        severity: required
+        deps: [project]
+        ux_elements: [Export Server AE Title, IP, Port]
+        caption: "Export Server setting — destination used when you Send."
+      - id: AWSCognito
+        file: AWSCognito.png
+        window: AWSCognitoDialog
+        severity: required
+        deps: [project]
+        ux_elements: [AWS Cognito credentials fields]
+        caption: "AWS Cognito credentials for S3 Send (optional)."
+      - id: NetworkTimeouts
+        file: NetworkTimeouts.png
+        window: NetworkTimeoutsDialog
+        severity: required
+        deps: [project]
+        ux_elements: [TCP / ACSE / DIMSE / Network timeouts]
+        caption: "Network Timeouts for slow archives."
+      - id: Modalities
+        file: Modalities.png
+        window: ModalitiesDialog
+        severity: required
+        deps: [project]
+        ux_elements: [Modality checkboxes]
+        caption: "Select modalities allowed in this project."
+      - id: StorageClasses
+        file: StorageClasses.png
+        window: SOPClassesDialog
+        severity: required
+        deps: [project]
+        ux_elements: [Storage class list]
+        caption: "Storage Classes derived from modalities."
+      - id: TransferSyntaxes
+        file: TransferSyntaxes.png
+        window: TransferSyntaxesDialog
+        severity: required
+        deps: [project]
+        ux_elements: [Transfer syntax list]
+        caption: "Transfer Syntaxes accepted for receive/import."
+      - id: LookupTable
+        file: LookupTable.png
+        window: LookupTableDialog
+        severity: required
+        deps: [project, fixture:ctp_lookup]
+        ux_elements: [Properties path, Preview summary, Script changes, Accept]
+        caption: "Patient Lookup Table preview from CTP properties."
+      - id: LoggingLevels
+        file: LoggingLevels.png
+        window: LoggingLevelsDialog
+        severity: required
+        deps: [project]
+        ux_elements: [Anonymizer / pynetdicom / pydicom / SQL levels]
+        caption: "Logging Levels for troubleshooting."
+      - id: Dashboard
+        file: Dashboard.png
+        window: Dashboard
+        severity: required
+        deps: [project]
+        ux_elements: [Search, View, Send buttons, Totals]
+        caption: "Dashboard after project create — Search, View, Send."
+
+  - id: 05-search
+    doc: 05-search/index.md
+    title: Search
+    shots_dir: shots
+    shots:
+      - id: ImportDavidson_Progress
+        file: ImportDavidson_Progress.png
+        window: ImportFilesDialog
+        severity: required
+        deps: [project, fixture:davidson_cxr]
+        ux_elements: [Import progress, Cancel, Importing davidson_cxr]
+        caption: "Import Files while processing davidson_cxr (Cancel still available)."
+      - id: ImportDavidson_Done
+        file: ImportDavidson_Done.png
+        window: ImportFilesDialog
+        severity: required
+        deps: [project, fixture:davidson_cxr]
+        ux_elements: [Success PHI → anonymized Patient ID, Close]
+        caption: "Import finished — PHI Patient ID mapped to anonymized ID."
+      - id: OrthancCT_Query
+        file: OrthancCT_Query.png
+        window: QueryView
+        severity: orthanc
+        deps: [project, orthanc]
+        ux_elements: [Modality CT, Query results, Doe^Archibald selected]
+        caption: "CT query results — Doe^Archibald head CT selected."
+      - id: OrthancCT_Importing
+        file: OrthancCT_Importing.png
+        window: ImportStudiesDialog
+        severity: orthanc
+        deps: [project, orthanc]
+        ux_elements: [Import progress, Import Finished / Close]
+        caption: "Import Studies dialog after C-MOVE of Doe^Archibald."
+      - id: OrthancCT_Imported
+        file: OrthancCT_Imported.png
+        window: QueryView
+        severity: orthanc
+        deps: [project, orthanc]
+        ux_elements: [Green imported row, Imported count]
+        caption: "Doe^Archibald highlighted green after successful import."
+
+  - id: 06-view
+    doc: 06-view/index.md
+    title: View
+    shots_dir: shots
+    shots:
+      - id: Dataset
+        file: Dataset.png
+        window: DatasetView
+        severity: required
+        deps: [project, imported, fixture:davidson_cxr, fixture:Brain_Ax_EarlyArt]
+        ux_elements: [Study/Series tree, AI status columns, Selection, AI Batch Process]
+        caption: "Dataset tree with davidson_cxr, Brain_Ax_EarlyArt, and other test_dcm_files studies expanded."
+      - id: SeriesView_Review
+        file: SeriesView_Review.png
+        window: SeriesView
+        severity: required
+        deps: [project, fixture:davidson_cxr]
+        ux_elements: [Image viewport, Frame navigator, Toolbar]
+        caption: "Series View reviewing davidson_cxr (before Process tools)."
+
+  - id: 07-process/01-ai-features-setup
+    doc: 07-process/01-ai-features-setup/index.md
+    title: "7.1 AI Features setup"
+    shots_dir: shots
+    shots:
+      - id: AiFeaturesSetup
+        file: AiFeaturesSetup.png
+        window: AiFeaturesSetupDialog
+        severity: required
+        deps: [language]
+        ux_elements: [Download rows, Harmonize resolution, License]
+        caption: "AI Features setup — download models before Process tool demos."
+
+  - id: 07-process/02-remove-burned-in-text
+    doc: 07-process/02-remove-burned-in-text/index.md
+    title: "7.2 Remove burned-in text"
+    shots_dir: shots
+    shots:
+      - id: Process_RemovePixel_Whitelist
+        file: Process_RemovePixel_Whitelist.png
+        window: SeriesView
+        severity: soft
+        deps: [project, fixture:davidson_cxr, ocr_models]
+        recipe:
+          whitelist: default
+          edit_context: frame
+          actions: []
+        ux_elements: [Default Whitelist, Frame edit context]
+        caption: "davidson_cxr — default whitelist and Frame edit context."
+      - id: Process_RemovePixel_Detect
+        file: Process_RemovePixel_Detect.png
+        window: SeriesView
+        severity: soft
+        deps: [project, fixture:davidson_cxr, ocr_models]
+        recipe:
+          whitelist: default
+          edit_context: frame
+          actions: [detect_text]
+        ux_elements: [Detect Text overlays]
+        caption: "davidson_cxr after Detect Text (Frame, default whitelist)."
+      - id: Process_RemovePixel_Remove
+        file: Process_RemovePixel_Remove.png
+        window: SeriesView
+        severity: soft
+        deps: [project, fixture:davidson_cxr, ocr_models]
+        recipe:
+          whitelist: default
+          edit_context: frame
+          actions: [detect_text, remove_text]
+        ux_elements: [Remove Text]
+        caption: "davidson_cxr after Remove Text."
+
+  - id: 07-process/03-harmonize-names
+    doc: 07-process/03-harmonize-names/index.md
+    title: "7.3 Harmonize names"
+    shots_dir: shots
+    shots:
+      - id: Process_Harmonize_Description
+        file: Process_Harmonize_Description.png
+        window: HarmonizeResultsView
+        severity: soft
+        deps: [project, fixture:Brain_Ax_EarlyArt, tseg_models]
+        recipe:
+          actions: [harmonize_description]
+        ux_elements: [Harmonize Description results]
+        caption: "Brain_Ax_EarlyArt after Harmonize Description."
+      - id: Process_Harmonize_BrainFeatures
+        file: Process_Harmonize_BrainFeatures.png
+        window: HarmonizeResultsView
+        severity: soft
+        deps: [project, fixture:Brain_Ax_EarlyArt, tseg_models]
+        recipe:
+          actions: [harmonize_description, segment_brain_features]
+        ux_elements: [Segment Brain Features]
+        caption: "Brain_Ax_EarlyArt Harmonize with Segment Brain Features."
+
+  - id: 07-process/04-blur-faces
+    doc: 07-process/04-blur-faces/index.md
+    title: "7.4 Blur faces"
+    shots_dir: shots
+    shots:
+      - id: Process_FaceBlur_Gaussian
+        file: Process_FaceBlur_Gaussian.png
+        window: FaceBlurReviewDialog
+        severity: soft
+        deps: [project, fixture:Brain_Ax_EarlyArt, face_models]
+        recipe:
+          blur_mode: gaussian
+        ux_elements: [Face Blur review, Gaussian mode]
+        caption: "Brain_Ax_EarlyArt Face Blur review (Gaussian)."
+
+  - id: 07-process/05-run-on-many-studies
+    doc: 07-process/05-run-on-many-studies/index.md
+    title: "7.5 Run on many studies"
+    shots_dir: shots
+    shots:
+      - id: AiBatchOptions
+        file: AiBatchOptions.png
+        window: AiBatchProcessOptionsDialog
+        severity: soft
+        deps: [project, imported, fixture:davidson_cxr, fixture:Brain_Ax_EarlyArt]
+        ux_elements: [Algorithm checkboxes, Modes]
+        caption: "AI Batch options with davidson_cxr and Brain_Ax_EarlyArt imported."
+
+  - id: 08-send
+    doc: 08-send/index.md
+    title: Send
+    shots_dir: shots
+    shots:
+      - id: SendView
+        file: SendView.png
+        window: ExportView
+        severity: required
+        deps: [project, imported]
+        ux_elements: [Patient list, Send action, Status]
+        caption: "Send anonymized patients to the configured destination."

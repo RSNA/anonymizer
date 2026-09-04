@@ -4,6 +4,119 @@ All notable changes to this project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [19.0.1]
+- First official V19 release
+- Clinician user manual: MkDocs Material site under `docs/en/` (English only for now), GitHub Pages workflow, Help menu opens the published manual in the browser (local `site/` fallback)
+- Headless AI batch: companion `AiBatchConfig.json` plus `--ai-batch` / `--ai-batch-run` CLI flags (one-shot batch; SCP unchanged)
+- Support Python 3.11 as well as 3.12 (`requires-python >=3.11,<3.13`; Ruff `py311`; CI matrix on both; docs updated) — ports [#38](https://github.com/RSNA/anonymizer/pull/38)
+- Harmonize: RSNA Playbook slice-thickness tokens (`Thin`, `Thick`) inferred from DICOM geometry/tags; standard-range thickness omitted per CT Sandbox SeriesNameV4
+- Harmonize: detect Series Type Modifier (`MPR` for derived reformats); show in dialog, omit from description per SeriesNameV4
+- Harmonize: CT anatomy + contrast in one TotalSegmentator `total`+`statistics` pass (MR / contrast-off stay dual-path); cooperative UX and stage timings
+- Harmonize / AI Features: persist workstation CT/MR resolution prefs in app state; Playbook gettext tokens; locale catalog refresh
+- Series / Projection: faster startup path; harden Harmonize results UX and Series View load/latch behavior
+- View Projections: convert RGB ultrasound single frames to grayscale before CLAHE/Canny (fixes OpenCV assert on color US)
+- MVC: AI feature gates in `controller/ai/feature_availability.py`; AI prefs helpers in `tseg.config`; `resolve_primary_segment_files` in `seg_retention`; whitelist match I/O in `remove_pixel_phi`; memory warn/abort defaults in `utils.memory`
+- Move developer scripts (`dev_anonymizer`, welcome sizing check, Harmonize benchmark) under `src/prototyping/`; simplify PyPI install docs (uv-first)
+- Docs: refresh `class_diagram.md` for V19 MVC + AI packages; package flowcharts under `docs/mvc/`
+
+## [19.0.0.dev12]
+- Harmonize: cooperative cancellation (skip contrast/merge after cancel; in-flight TotalSegmentator inference still runs to completion)
+- Harmonize: DICOM metadata body-part fallback when TotalSegmentator finds no Playbook regions
+- DICOM geometry: single-slice topogram/scout with LOCALIZER ImageType or topogram naming classifies as localizer (not `single_slice_2d`)
+- TS cache retention (`seg_retention`): keep volume NIfTI for CT head until face blur is applied; compact legacy seg caches
+- Centralize TS skip / metadata harmonize classification in `series_classification.py`
+- AI Features Setup: more compact dialog (short copy, size-only resolution menu on title row with Remove/Download)
+- AI Features Harmonize status: one-line “In use / also installed” (drop task inventory bullets); Remove button label shortened to “Remove”
+- Harmonize resolution: AI Features picks one active CT and one active MR workstation resolution (picker always visible; Download when the selected pack is missing); Series View and AI Batch no longer choose resolution per run
+- Brain structures: opt-in moved to Harmonize Description Dialog for CT Head only (after total anatomy); removed from Series View toolbar
+- MR Harmonize Description dialog: IV Contrast row from DICOM headers (not CT contrast phase / TotalSegmentator); label/source/evidence updated accordingly
+- MR Harmonize: skip contrast-phase analysis (no MR IV model); Series View latch uses `total_mr` `vertebrae` / whole-lung masks; combined vertebrae no longer force Chest body-part codes
+- Move AI Features UX into `view/ai/features/` (catalog, availability, panel); rename setup dialog to `ai_features_dialog`; delete `controller/ai/features`
+- Drop ProjectModel-persisted AI Feature enable flags and resolutions; Harmonize resolution is process/session workstation choice in AI Features (not ProjectModel)
+- AI Features setup is models/license/download/remove only (no enable checkboxes)
+- Simplify AI model readiness: on-demand path.exists checks replace TsWeightState/TsegRuntimeStatus caches, AiFeatureSession, and disable lifecycle
+- Fold OCR whitelist match presets into `remove_pixel_phi.py` (drop `ocr_whitelist_match.py`)
+- Move Series View overlay DTOs and anatomy mask→polygon helpers to `view/series` (`series_overlay`, `anatomy_overlay`)
+- Narrow `tseg` to TotalSegmentator CT/MR segmentation runtime; move Playbook/LOINC Harmonize terminology into `controller/ai/harmonize/` (`pipeline`, `playbook`, `loinc_study`); drop description formatting from `TS_result`
+- AI Features: state fixed Face (1.5 mm) and Brain structures (0.5×0.5×1 mm) resolutions; tighten dialog copy (less duplication)
+- AI Features Harmonize: per-modality anatomy resolution picker (1.5 / 3 / 6 mm) for CT and MR downloads and runs; clinician-friendly CT/MR model copy (no blur-algorithm wording on Face model cards)
+- AI Features Harmonize / Face Blur: separate CT and MR model download sections
+- Fix MR model readiness: probe task 852 / face_mr 856 with TotalSegmentator's `nnUNetTrainer_2000epochs_NoMirroring` (not CT trainers)
+- MRI Harmonize / Face Blur: additive modality profile (`total_mr` / `face_mr`) keeps CT paths, caches, and contrast unchanged; MR skips contrast, uses intensity face fill, separate `face_mr.nii.gz` cache, and LOINC `MR ` study ranking
+- Study Description Harmonization: after the last CT series is Harmonized, rank LOINC StudyDescription rows from Playbook series signals and TS region fractions (prefer dominant organ); auto-apply clear winners to the study and fingerprint peers; prompt only when candidates are ambiguous; persist `Study.harmonized_description`, DICOM StudyDescription `(0008,1030)`, and LOINC code in Procedure Code Sequence `(0008,1032)` (`LN`)
+
+## [19.0.0.dev11]
+- Series View Segmentation panel: latch colored ROI overlays from cached TS masks (opaque outlines, progressive contouring, spine/ribs/clavicles); Clear moved into panel; shared `series_overlay` DTOs
+- Prefer `vertebrae_body` when present; fix brain_structures weight trainer/model paths; invalidate soft-tissue-only TS caches so skeletal segments appear after Harmonize
+- Optional brain_structures Harmonize detail (licensed task 409) via AI Features / batch options
+- Share File/Settings/Help menubar across secondary windows (fixes macOS `python3` menu) and list open windows under Window
+- Single Projection View instance from Dataset; refresh Window menu labels when Series/Projection titles update
+- Fix Series View Pixel PHI save for multi-frame files: merge all frame strings into one comma-delimited Instance digest
+- Dataset View: succinct columns (description-only Study/Series; study AI Yes/No; series Pixel PHI text; PHI/Anon ID autosize; centered cells)
+- Tighten CT Series View OCR veracity: drop short numeric and digit/symbol false positives (keep US unchanged)
+- Dataset view (renamed from PHI Index): nested study → series Treeview with per-series Harmonized / FaceBlur / PixelPHI
+- Patient Lookup CSV: one denormalized row per series (study keys repeated); filename `{site}_{project}_PHI_{patients}_{studies}_{series}.csv`; omit study AI rollups and HarmonizedDescription
+- Move PHI dataset DTOs, CSV export, and Java index import to `controller/phi_io`; views use `ProjectController` only (no View→Model)
+
+## [19.0.0.dev10]
+- Lookup table import (CTP `.properties`), settings UI, and lookup-aware `capture_phi` / anonymizer script operands
+- Theme-driven `AppFonts` replaces per-view font lifecycle; dialog teardown hardening in `ctk_safe`
+- Series View: compact whitelist toolbar, per-modality match strictness (Exact), and modality whitelist preview in AI batch options
+- CT-only OCR veracity guard drops single-character spurious detections without affecting US
+- Welcome view: restore v18-style layout and dynamic window sizing from content
+- Fix `int_entry()` empty-string CTk crash; keep blank fields editable on Return/FocusOut
+- CI: CPU-only PyTorch/torchvision on Linux (~2 GB smaller installs), uv cache tuning, and test path/cwd fixes
+
+## [19.0.0.dev9]
+- Reorganize flat `view/` into domain subpackages: `common`, `shell`, `project`, `series`, `ai` (alongside existing `settings`)
+- Update imports across app, controller, tests, and scripts; no compatibility shims
+
+## [19.0.0.dev8]
+- Unify background jobs on WorkState + JobPoller (batch, harmonize/face-blur preview, Series View OCR); poll-on-change with tiered intervals
+- Move algorithm modules under `controller/ai/`; remove unused `batch_process` shim; update imports across app, tests, and prototyping
+- Series View: fix OCR detect boxes not drawing when whitelist is loaded (display uses whitelist-only filter, not noise heuristics); refresh viewer after detect completes
+- ImageViewer: correct BGR overlay colors and per-frame overlay dimensions
+
+## [19.0.0.dev7]
+- Fix Harmonize anatomy model download on fresh install: download weights when checkpoints are missing instead of failing dataset lookup
+- Fix project window distorted after welcome screen: resize to dashboard dimensions when a project opens
+- Welcome screen: phase lock and guard against Retina Configure drift; fixed width 730
+- AI Features: INFO-level logging through model download workflow; log when anatomy models not found
+- Series View: OCR detect progress logged at DEBUG (not per-image INFO spam)
+
+## [19.0.0.dev6]
+- Fix AI Features Harmonize model download: keep progress visible for the full worker lifecycle and surface download failures in the dialog
+
+## [19.0.0.dev5]
+- Fix welcome window still clipped on macOS: use fixed CTk dimensions instead of winfo_req*, re-apply after layout
+
+## [19.0.0.dev4]
+- Fix welcome screen clipped on macOS Retina (Tk 9): size main window after welcome layout
+- Help menu: **AI Features** opens setup (not only the Welcome screen button)
+- Readme: macOS install with `python-tk@3.12`, uv managed Python 3.12 with Tcl/Tk 9, in-venv Tk verification
+
+## [19.0.0.dev3]
+- English AI Features help: overview after Overview, linked tool pages (not in Help menu), in-app `help:` navigation, wider layout
+- AI Features setup opened from Welcome screen only; help and UI messages updated accordingly
+- Remove Burnt-in Annotation help: click green rectangles after Detect Text to whitelist text
+- Readmes document uv-based install and upgrade for faster V19 setup
+
+## [19.0.0.dev2]
+- AI batch processing (harmonize, face blur, remove pixel PHI) with progress UI and memory guards
+- Batch OCR and MONOCHROME1 blackout aligned with Series View pixel pipeline
+- Series View load stability fix; blur export UTF-8 character set
+- CI runs controller (including tseg) and model tests; view tests remain local-only
+- Controller test layout reorganized under blur_face/, core/, and harmonize/
+
+## [19.0.0.dev1]
+- PyPI development pre-release of V19 (install with `pip install --pre rsna-anonymizer`)
+- Series View processing status, harmonize batch, face blur metadata, and RadLex Playbook updates on V19
+
+## [19.0.0]
+- Implement FALCON for CT body part and intra-venous contrast detection from pixel data
+
 ## [18.0.7]
 ### Changed
 - Bugfix: controller/project.py.get_study_uid_hierarchy was insisting C-FIND[series] responses contained SOPClassUID, some PACS/VNA's do not return this, not mandatory as per DICOM Standard

@@ -1,4 +1,5 @@
-from typing import Dict, Tuple
+
+from __future__ import annotations
 
 from anonymizer.utils.translate import _
 
@@ -9,7 +10,7 @@ from anonymizer.utils.translate import _
 
 
 # Description dynamically updated due to language dependency
-def get_modalities() -> Dict[str, Tuple[str, list[str]]]:
+def get_modalities() -> dict[str, tuple[str, list[str]]]:
 
     return {
         "CR": (_("Computed Radiography"), ["1.2.840.10008.5.1.4.1.1.1"]),
@@ -105,3 +106,28 @@ def get_modalities() -> Dict[str, Tuple[str, list[str]]]:
     #     "SEG",
     #     "REG",
     #     "KO", _("Key Object Selection")
+
+
+def normalize_modality(value: object | None) -> str:
+    """Return uppercase modality code; map MRI → MR."""
+    text = str(value or "").strip().upper()
+    if text == "MRI":
+        return "MR"
+    return text
+
+
+def is_ct_modality(value: object | None) -> bool:
+    return normalize_modality(value) == "CT"
+
+
+def is_mr_modality(value: object | None) -> bool:
+    return normalize_modality(value) == "MR"
+
+
+def is_tseg_modality(value: object | None) -> bool:
+    return normalize_modality(value) in {"CT", "MR"}
+
+
+def series_is_tseg_eligible(modality: object | None) -> bool:
+    """ORM / study-complete helper: CT or MR series participate in TSEG Harmonize."""
+    return is_tseg_modality(modality)

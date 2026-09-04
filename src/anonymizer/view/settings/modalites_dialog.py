@@ -1,5 +1,4 @@
 import logging
-import tkinter as tk
 from tkinter import ttk
 from typing import Union
 
@@ -9,11 +8,14 @@ from customtkinter import ThemeManager
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.modalities import get_modalities
 from anonymizer.utils.translate import _
+from anonymizer.view.common.app_window import AppToplevel
+from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
+from anonymizer.view.common.fonts import default_char_width_px
 
 logger = logging.getLogger(__name__)
 
 
-class ModalitiesDialog(tk.Toplevel):
+class ModalitiesDialog(AppToplevel):
     """
     A dialog window for selecting modalities.
 
@@ -69,7 +71,7 @@ class ModalitiesDialog(tk.Toplevel):
         logger.info("_create_widgets")
         PAD = 10
         ButtonWidth = 100
-        char_width_px = ctk.CTkFont().measure("A")
+        char_width_px = default_char_width_px()
 
         self._tree = ttk.Treeview(
             self,
@@ -79,15 +81,9 @@ class ModalitiesDialog(tk.Toplevel):
         )
         # Bind a callback function to item selection
         self._tree.bind("<<TreeviewSelect>>", self.on_item_select)
-        selected_bg_color = self.root._apply_appearance_mode(
-            ThemeManager.theme["Treeview"]["selected_bg_color"]
-        )
-        selected_color = self.root._apply_appearance_mode(
-            ThemeManager.theme["Treeview"]["selected_color"]
-        )
-        self._tree.tag_configure(
-            "green", foreground=selected_color, background=selected_bg_color
-        )
+        selected_bg_color = self.root._apply_appearance_mode(ThemeManager.theme["Treeview"]["selected_bg_color"])
+        selected_color = self.root._apply_appearance_mode(ThemeManager.theme["Treeview"]["selected_color"])
+        self._tree.tag_configure("green", foreground=selected_color, background=selected_bg_color)
         self._tree.grid(row=0, column=0, columnspan=2, sticky="nswe")
 
         # Set tree column headers, width and justifications
@@ -137,13 +133,9 @@ class ModalitiesDialog(tk.Toplevel):
             text=_("Default"),
             command=self._default_selection_button_pressed,
         )
-        self._default_selection_button.grid(
-            row=0, column=1, padx=PAD, pady=PAD, sticky="w"
-        )
+        self._default_selection_button.grid(row=0, column=1, padx=PAD, pady=PAD, sticky="w")
 
-        self._ok_button = ctk.CTkButton(
-            self._button_frame, width=100, text=_("Ok"), command=self._ok_event
-        )
+        self._ok_button = ctk.CTkButton(self._button_frame, width=100, text=_("Ok"), command=self._ok_event)
         self._ok_button.grid(
             row=0,
             column=2,
@@ -189,16 +181,14 @@ class ModalitiesDialog(tk.Toplevel):
 
     def _ok_event(self, event=None):
         self._user_input = self.modalities
-        self.grab_release()
-        self.destroy()
+        teardown_ctk_toplevel(self, parent=self.master)
 
     def _escape_keypress(self, event):
         logger.info("_escape_pressed")
         self._on_cancel()
 
     def _on_cancel(self):
-        self.grab_release()
-        self.destroy()
+        teardown_ctk_toplevel(self, parent=self.master)
 
     def get_input(self):
         self.focus()

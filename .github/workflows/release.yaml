@@ -8,6 +8,7 @@ on:
       - "[0-9]+.[0-9]+.[0-9]+a[0-9]+"
       - "[0-9]+.[0-9]+.[0-9]+b[0-9]+"
       - "[0-9]+.[0-9]+.[0-9]+rc[0-9]+"
+      - "[0-9]+.[0-9]+.[0-9]+.dev[0-9]+"
 
 env:
   PACKAGE_NAME: "rsna-anonymizer"
@@ -21,15 +22,16 @@ jobs:
       suffix: ${{ steps.release.outputs.suffix }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Extract tag and Details
         id: release
         run: |
           if [ "${{ github.ref_type }}" = "tag" ]; then
             TAG_NAME=${GITHUB_REF#refs/tags/}
-            NEW_VERSION=$(echo $TAG_NAME | awk -F'-' '{print $1}')
-            SUFFIX=$(echo $TAG_NAME | grep -oP '[a-z]+[0-9]+' || echo "")
+            TAG_NAME=${TAG_NAME#v}
+            NEW_VERSION=$TAG_NAME
+            SUFFIX=$(echo "$TAG_NAME" | grep -oE '(a|b|rc|\.dev)[0-9]+' | tail -n 1 || echo "")
             echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
             echo "suffix=$SUFFIX" >> "$GITHUB_OUTPUT"
             echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
@@ -44,55 +46,88 @@ jobs:
   check_pypi:
     needs: details
     runs-on: ubuntu-latest
+    outputs:
+      already_on_pypi: ${{ steps.check.outputs.already_on_pypi }}
     steps:
-      - name: Fetch information from PyPI
+      - name: Validate PyPI version availability
+        id: check
+        env:
+          NEW_VERSION: ${{ needs.details.outputs.new_version }}
         run: |
-          response=$(curl -s https://pypi.org/pypi/${{ env.PACKAGE_NAME }}/json || echo "{}")
-          latest_previous_version=$(echo $response | jq --raw-output "select(.releases != null) | .releases | keys_unsorted | last")
-          if [ -z "$latest_previous_version" ]; then
-            echo "Package not found on PyPI."
-            latest_previous_version="0.0.0"
+          response=$(curl -s "https://pypi.org/pypi/${{ env.PACKAGE_NAME }}/json" || echo "{}")
+          if echo "$response" | jq -e --arg v "$NEW_VERSION" '.releases[$v] != null' >/dev/null; then
+            echo "Version $NEW_VERSION is already published on PyPI; skipping PyPI upload."
+            echo "already_on_pypi=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-          echo "Latest version on PyPI: $latest_previous_version"
-          echo "latest_previous_version=$latest_previous_version" >> $GITHUB_ENV
+          echo "already_on_pypi=false" >> "$GITHUB_OUTPUT"
 
-      - name: Compare versions and exit if not newer
-        run: |
-          NEW_VERSION=${{ needs.details.outputs.new_version }}
-          LATEST_VERSION=$latest_previous_version
-          if [ "$(printf '%s\n' "$LATEST_VERSION" "$NEW_VERSION" | sort -rV | head -n 1)" != "$NEW_VERSION" ] || [ "$NEW_VERSION" == "$LATEST_VERSION" ]; then
-            echo "The new version $NEW_VERSION is not greater than the latest version $LATEST_VERSION on PyPI."
-            exit 1
-          else
-            echo "The new version $NEW_VERSION is greater than the latest version $LATEST_VERSION on PyPI."
+          if echo "$NEW_VERSION" | grep -qE '(a|b|rc|\.dev)[0-9]+$'; then
+            echo "Pre-release $NEW_VERSION is not yet on PyPI; continuing."
+            exit 0
           fi
+
+          latest_stable=$(echo "$response" | jq -r '
+            [.releases | keys[] | select(test("(a|b|rc|\\.dev)[0-9]+$") | not)]
+            | sort_by(.) | last // "0.0.0"
+          ')
+          echo "Latest stable on PyPI: $latest_stable"
+          if [ "$(printf '%s\n' "$latest_stable" "$NEW_VERSION" | sort -rV | head -n 1)" != "$NEW_VERSION" ] || [ "$NEW_VERSION" = "$latest_stable" ]; then
+            echo "Stable version $NEW_VERSION is not newer than latest stable $latest_stable on PyPI."
+            exit 1
+          fi
+          echo "Stable version $NEW_VERSION is newer than $latest_stable on PyPI."
 
   setup_and_build:
     needs: [details, check_pypi]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+
+      - name: Detect build backend
+        id: backend
+        run: |
+          if grep -q '^\[tool\.poetry\]' pyproject.toml; then
+            echo "backend=poetry" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend=hatch" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install Poetry
+      - name: Build with Poetry (master / V18)
+        if: steps.backend.outputs.backend == 'poetry'
         run: |
           curl -sSL https://install.python-poetry.org | python3 -
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Set project version with Poetry
-        run: |
-          poetry version ${{ needs.details.outputs.new_version }}
-
-      - name: Install dependencies
-        run: poetry install --no-interaction
-
-      - name: Build source and wheel distribution
-        run: |
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          poetry version "${{ needs.details.outputs.new_version }}"
+          poetry install --no-interaction
           poetry build
+
+      - name: Install uv
+        if: steps.backend.outputs.backend == 'hatch'
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build with uv (V19+)
+        if: steps.backend.outputs.backend == 'hatch'
+        env:
+          NEW_VERSION: ${{ needs.details.outputs.new_version }}
+        run: |
+          pyproject_version=$(python - <<'PY'
+          import tomllib
+          from pathlib import Path
+          data = tomllib.loads(Path("pyproject.toml").read_text())
+          print(data["project"]["version"])
+          PY
+          )
+          if [ "$pyproject_version" != "$NEW_VERSION" ]; then
+            echo "pyproject.toml version ($pyproject_version) must match tag ($NEW_VERSION) for hatch builds."
+            exit 1
+          fi
+          uv build
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -102,7 +137,8 @@ jobs:
 
   pypi_publish:
     name: Upload release to PyPI
-    needs: [setup_and_build, details]
+    needs: [setup_and_build, details, check_pypi]
+    if: needs.check_pypi.outputs.already_on_pypi != 'true'
     runs-on: ubuntu-latest
     environment:
       name: release
@@ -125,8 +161,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -136,11 +171,16 @@ jobs:
           name: dist
           path: dist/
 
-      - name: Create GitHub Release
-        id: create_release
+      - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ needs.details.outputs.tag_name }}
         run: |
-          gh release create ${{ needs.details.outputs.tag_name }} dist/* --title ${{ needs.details.outputs.tag_name }} --generate-notes
-
-  
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Release $TAG_NAME already exists; uploading/replacing dist assets."
+            gh release upload "$TAG_NAME" dist/* --clobber
+          else
+            gh release create "$TAG_NAME" dist/* \
+              --title "$TAG_NAME" \
+              --generate-notes
+          fi

@@ -10,6 +10,16 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+#, python-brace-format
+msgid ""
+"RSNA DICOM Anonymizer {version}\n"
+"\n"
+"This application reads a configuration file if provided and runs headless or launches a GUI."
+msgstr ""
+"RSNA DICOM Anonymisierer {version}\n"
+"\n"
+"Diese Anwendung liest eine Konfigurationsdatei, falls angegeben, und wird headless ausgeführt oder startet eine GUI."
+
 msgid "RSNA DICOM Anonymizer Version"
 msgstr "RSNA DICOM Anonymisierer Version"
 
@@ -157,11 +167,11 @@ msgstr "Der Export ist beschäftigt, bitte warten Sie, bis der Export abgeschlos
 msgid "Project Settings"
 msgstr "Projekteinstellungen"
 
-msgid "Project restart"
-msgstr "Projektneustart"
+msgid "AI Features"
+msgstr "KI-Funktionen"
 
-msgid "The settings change will take effect when the project is next opened."
-msgstr "Die Änderung der Einstellungen wird beim nächsten Öffnen des Projekts wirksam."
+msgid "Dashboard"
+msgstr "Dashboard"
 
 msgid "New Project"
 msgstr "Neues Projekt"
@@ -177,6 +187,9 @@ msgstr "Beenden"
 
 msgid "File"
 msgstr "Datei"
+
+msgid "Window"
+msgstr "Fenster"
 
 msgid "Help"
 msgstr "Hilfe"
@@ -195,6 +208,12 @@ msgstr "Projekt"
 
 msgid "Settings"
 msgstr "Einstellungen"
+
+msgid "Import"
+msgstr "Importieren"
+
+msgid "An import is already in progress."
+msgstr "Ein Import wird bereits ausgeführt."
 
 msgid "Project Model file not found"
 msgstr "Projektmodelldatei nicht gefunden"
@@ -225,6 +244,24 @@ msgstr "RSNA Anonymisierer"
 
 msgid "logs"
 msgstr "logs"
+
+msgid "Memory available"
+msgstr "Verfügbarer Speicher"
+
+msgid "OCR"
+msgstr "OCR"
+
+msgid "harmonize"
+msgstr "harmonisieren"
+
+msgid "face blur"
+msgstr "Gesichtsunschärfe"
+
+msgid "batch"
+msgstr "Stapel"
+
+msgid "Recommended available memory per series for batch run with"
+msgstr "Empfohlener verfügbarer Speicher pro Serie für Stapellauf mit"
 
 msgid "Computed Radiography"
 msgstr "Computerisierte Radiographie"
@@ -271,6 +308,39 @@ msgstr "Andere"
 msgid "Document"
 msgstr "Dokument"
 
+msgid "Downloading"
+msgstr "Wird heruntergeladen"
+
+#, python-brace-format
+msgid "Downloading: {label}"
+msgstr "Wird heruntergeladen: {label}"
+
+#, python-brace-format
+msgid "Downloading: {label}  {byte_part}"
+msgstr "Wird heruntergeladen: {label}  {byte_part}"
+
+#, python-brace-format
+msgid "Downloading: {byte_part}"
+msgstr "Wird heruntergeladen: {byte_part}"
+
+msgid "FRAME"
+msgstr "EINZELBILD"
+
+msgid "SERIES"
+msgstr "SERIE"
+
+msgid "Detecting text"
+msgstr "Texterkennung"
+
+msgid "image"
+msgstr "Bild"
+
+msgid "of"
+msgstr "von"
+
+msgid "Scanning instances for burnt-in text"
+msgstr "Instanzen werden nach eingebranntem Text durchsucht"
+
 msgid "Invalid_DICOM"
 msgstr "Ungültiges_DICOM"
 
@@ -289,6 +359,9 @@ msgstr "PHI_Erfassungs_Fehler"
 msgid "Storage_Error"
 msgstr "Speicher_Fehler"
 
+msgid "Lookup_Miss"
+msgstr "Lookup_Fehlschlag"
+
 msgid "incoming"
 msgstr "eingehend"
 
@@ -306,6 +379,836 @@ msgstr "Instanz bereits gespeichert"
 
 msgid "Storage Class mismatch"
 msgstr "Speicherklassendifferenz"
+
+msgid "None removed"
+msgstr "Nichts entfernt"
+
+msgid "Applied"
+msgstr "Angewendet"
+
+#, python-brace-format
+msgid "Partial ({applied}/{total})"
+msgstr "Teilweise ({applied}/{total})"
+
+msgid "None"
+msgstr "Keine"
+
+#, python-brace-format
+msgid "Pixel PHI: {pixel_phi} | Harmonized: {harmonized}"
+msgstr "Pixel-PHI: {pixel_phi} | Harmonisiert: {harmonized}"
+
+#, python-brace-format
+msgid "{base} | Face blur: {face_blur}"
+msgstr "{base} | Gesichtsunschärfe: {face_blur}"
+
+msgid "Yes"
+msgstr "Ja"
+
+msgid "No"
+msgstr "Nein"
+
+msgid "PHI ID"
+msgstr "PHI-ID"
+
+msgid "Anon ID"
+msgstr "Anonymisierte ID"
+
+msgid "Acc No"
+msgstr "Acc-Nr."
+
+msgid "Offset"
+msgstr "Versatz"
+
+msgid "Modality"
+msgstr "Modalität"
+
+msgid "Series"
+msgstr "Serien"
+
+msgid "Images"
+msgstr "Bilder"
+
+msgid "Harmonized"
+msgstr "Harmonisiert"
+
+msgid "Face blur"
+msgstr "Gesichtsunschärfe"
+
+msgid "Pixel PHI"
+msgstr "Pixel-PHI"
+
+msgid "term"
+msgstr "Begriff"
+
+msgid "terms"
+msgstr "Begriffe"
+
+msgid "Match strictness"
+msgstr "Übereinstimmungsstrenge"
+
+msgid "No Series Description"
+msgstr "Keine Serienbeschreibung"
+
+msgid "Study"
+msgstr "Studie"
+
+msgid "series"
+msgstr "Serien"
+
+msgid "Complete"
+msgstr "Abgeschlossen"
+
+msgid "modified"
+msgstr "geändert"
+
+msgid "Face blur already applied"
+msgstr "Gesichtsunschärfe bereits angewendet"
+
+msgid "Not a CT series"
+msgstr "Keine CT-Serie"
+
+msgid "Not a CT/MR series"
+msgstr "Keine CT/MR-Serie"
+
+msgid "Skipped"
+msgstr "Übersprungen"
+
+msgid "Failed"
+msgstr "Fehlgeschlagen"
+
+msgid "Unknown error"
+msgstr "Unbekannter Fehler"
+
+msgid "more"
+msgstr "mehr"
+
+msgid "Modified"
+msgstr "Geändert"
+
+msgid "removed"
+msgstr "entfernt"
+
+msgid "pixels blacked out"
+msgstr "Pixel geschwärzt"
+
+msgid "pixels modified"
+msgstr "Pixel geändert"
+
+msgid "Instance"
+msgstr "Instanz"
+
+msgid "px"
+msgstr "px"
+
+msgid "detected"
+msgstr "erkannt"
+
+msgid "pixels unchanged"
+msgstr "Pixel unverändert"
+
+msgid "no burnt-in text detected"
+msgstr "kein eingebrannter Text erkannt"
+
+msgid "Remove Burnt-in Annotation"
+msgstr "Eingebrannte Annotation entfernen"
+
+msgid "Harmonize"
+msgstr "Harmonisieren"
+
+msgid "Face De-identify"
+msgstr "Gesichts-De-Identifikation"
+
+msgid "Pixel PHI already scanned"
+msgstr "Pixel-PHI bereits gescannt"
+
+msgid "Already harmonized (model)"
+msgstr "Bereits harmonisiert (Modell)"
+
+msgid "Already processed"
+msgstr "Bereits verarbeitet"
+
+msgid "No DICOM files found"
+msgstr "Keine DICOM-Dateien gefunden"
+
+msgid "instances"
+msgstr "Instanzen"
+
+msgid "No burnt-in text detected"
+msgstr "Kein eingebrannter Text erkannt"
+
+msgid "instances scanned"
+msgstr "Instanzen gescannt"
+
+msgid "QA FAIL"
+msgstr "QS FEHLGESCHLAGEN"
+
+msgid "pixels changed outside the face mask"
+msgstr "Pixel außerhalb der Gesichtsmaske geändert"
+
+msgid "Failed to save blurred frames"
+msgstr "Verwischte Bilder konnten nicht gespeichert werden"
+
+msgid "No series found for selected studies"
+msgstr "Keine Serien für ausgewählte Studien gefunden"
+
+msgid "Stopped: low memory"
+msgstr "Gestoppt: zu wenig Speicher"
+
+msgid "available"
+msgstr "verfügbar"
+
+msgid "Memory warning"
+msgstr "Speicherwarnung"
+
+msgid "All series already processed  skipping phase"
+msgstr "Alle Serien bereits verarbeitet  Phase wird übersprungen"
+
+msgid "Phase skipped"
+msgstr "Phase übersprungen"
+
+msgid "Preparing OCR models"
+msgstr "OCR-Modelle werden vorbereitet"
+
+msgid "OCR whitelist disabled"
+msgstr "OCR-Freigabeliste deaktiviert"
+
+msgid "all detected text will be removed"
+msgstr "der gesamte erkannte Text wird entfernt"
+
+msgid "Loading anatomy analysis models"
+msgstr "Anatomieanalyse-Modelle werden geladen"
+
+msgid "Loading face segmentation models"
+msgstr "Gesichtssegmentierungs-Modelle werden geladen"
+
+msgid "Releasing OCR models"
+msgstr "OCR-Modelle werden freigegeben"
+
+msgid "OCR models released"
+msgstr "OCR-Modelle freigegeben"
+
+msgid "Anatomy analysis models released"
+msgstr "Anatomieanalyse-Modelle freigegeben"
+
+msgid "Face segmentation models released"
+msgstr "Gesichtssegmentierungs-Modelle freigegeben"
+
+msgid "Exact match only"
+msgstr "Nur exakte Übereinstimmung"
+
+msgid "Strict"
+msgstr "Strikt"
+
+msgid "Standard"
+msgstr "Standard"
+
+msgid "Lenient"
+msgstr "Tolerant"
+
+msgid "Custom"
+msgstr "Benutzerdefiniert"
+
+msgid "Exact"
+msgstr "Exakt"
+
+msgid "Only hide text identical to a whitelist entry."
+msgstr "Nur Text ausblenden, der einem Freigabelisten-Eintrag exakt entspricht."
+
+msgid "Allow only very small OCR differences."
+msgstr "Nur sehr geringe OCR-Abweichungen zulassen."
+
+msgid "Tolerates minor OCR errors (e.g. AXIL matches AXIAL)."
+msgstr "Toleriert geringe OCR-Fehler (z. B. AXIL entspricht AXIAL)."
+
+msgid "More tolerance for noisy OCR and short markers."
+msgstr "Mehr Toleranz bei verrauschter OCR und kurzen Markern."
+
+msgid "Set match closeness manually."
+msgstr "Übereinstimmungsstrenge manuell festlegen."
+
+msgid "Downloading OCR models"
+msgstr "OCR-Modelle werden heruntergeladen"
+
+msgid "Not downloaded"
+msgstr "Nicht heruntergeladen"
+
+msgid "Downloaded"
+msgstr "Heruntergeladen"
+
+msgid "OCR models already downloaded."
+msgstr "OCR-Modelle bereits heruntergeladen."
+
+#, python-brace-format
+msgid "Downloading OCR models to {path}"
+msgstr "OCR-Modelle werden nach {path} heruntergeladen"
+
+msgid "Downloading OCR language models"
+msgstr "OCR-Sprachmodelle werden heruntergeladen"
+
+msgid "OCR models downloaded."
+msgstr "OCR-Modelle heruntergeladen."
+
+msgid "OCR model download incomplete."
+msgstr "OCR-Modell-Download unvollständig."
+
+msgid "Black out text"
+msgstr "Text schwärzen"
+
+msgid "Blend into background"
+msgstr "In den Hintergrund einblenden"
+
+msgid "blacked out"
+msgstr "geschwärzt"
+
+msgid "blended"
+msgstr "eingeblendet"
+
+msgid "region voxel fraction"
+msgstr "Regions-Voxelanteil"
+
+msgid "from"
+msgstr "von"
+
+msgid "confidence"
+msgstr "Konfidenz"
+
+msgid "Body part from DICOM fields"
+msgstr "Körperregion aus DICOM-Feldern"
+
+msgid "Omitted for standard diagnostic volumes"
+msgstr "Für Standard-Diagnostikvolumen weggelassen"
+
+msgid "RadLex Playbook"
+msgstr "RadLex-Playbook"
+
+msgid "Localizer geometry classification"
+msgstr "Localizer-Geometrieklassifikation"
+
+msgid "DICOM geometry"
+msgstr "DICOM-Geometrie"
+
+msgid "DICOM ImageType"
+msgstr "DICOM ImageType"
+
+msgid "DICOM SeriesDescription"
+msgstr "DICOM SeriesDescription"
+
+msgid "DICOM ProtocolName"
+msgstr "DICOM-ProtocolName"
+
+msgid "DICOM DerivationDescription"
+msgstr "DICOM DerivationDescription"
+
+msgid "DICOM metadata"
+msgstr "DICOM-Metadaten"
+
+msgid "Series/protocol text"
+msgstr "Serien-/Protokolltext"
+
+msgid "ContrastBolusAgent"
+msgstr "Kontrastmittel"
+
+msgid "ContrastBolusRoute"
+msgstr "Applikationsweg des Kontrastmittels"
+
+msgid "ContrastBolusVolume"
+msgstr "Kontrastmittelvolumen"
+
+msgid "No contrast indicators in DICOM headers"
+msgstr "Keine Kontrasthinweise in DICOM-Headern"
+
+msgid "Study Description"
+msgstr "Studienbeschreibung"
+
+msgid "Series Description"
+msgstr "Serienbeschreibung"
+
+msgid "Series Number"
+msgstr "Seriennummer"
+
+msgid "Image Type"
+msgstr "Bildtyp"
+
+msgid "SOP Class UID"
+msgstr "SOP-Klassen-UID"
+
+msgid "Derivation Description"
+msgstr "Ableitungsbeschreibung"
+
+msgid "Body Part Examined"
+msgstr "Untersuchte Körperregion"
+
+msgid "Slice Thickness"
+msgstr "Schichtdicke"
+
+msgid "Spacing Between Slices"
+msgstr "Schichtabstand"
+
+msgid "Protocol Name"
+msgstr "Protokollname"
+
+msgid "Scanning Sequence"
+msgstr "Scanning-Sequenz"
+
+msgid "Image Orientation Patient"
+msgstr "Bildorientierung Patient"
+
+msgid "Patient Orientation"
+msgstr "Patientenorientierung"
+
+msgid "View Position"
+msgstr "Projektionsrichtung"
+
+msgid "Contrast Bolus Agent"
+msgstr "Kontrastmittel"
+
+msgid "Contrast Bolus Route"
+msgstr "Applikationsweg des Kontrastmittels"
+
+msgid "Contrast Bolus Volume"
+msgstr "Kontrastmittelvolumen"
+
+msgid "TotalSegmentator anatomy"
+msgstr "TotalSegmentator-Anatomie"
+
+msgid "Body Part"
+msgstr "Körperregion"
+
+msgid "Anatomic Plane"
+msgstr "Anatomische Ebene"
+
+msgid "Omitted"
+msgstr "Ausgelassen"
+
+msgid "RadLex Playbook localizer rule"
+msgstr "RadLex-Playbook-Localizer-Regel"
+
+msgid "DICOM ImageOrientationPatient"
+msgstr "DICOM ImageOrientationPatient"
+
+msgid "IV Contrast"
+msgstr "IV-Kontrastmittel"
+
+msgid "TotalSegmentator contrast"
+msgstr "TotalSegmentator-Kontrast"
+
+msgid "Native (assumed for localizer)"
+msgstr "Nativ (für Localizer angenommen)"
+
+msgid "IV Contrast Phase"
+msgstr "IV-Kontrastphase"
+
+msgid "IPP spacing"
+msgstr "IPP-Abstand"
+
+msgid "SliceThickness tag"
+msgstr "SliceThickness-Tag"
+
+msgid "Omitted (standard or recon bucket)"
+msgstr "Weggelassen (Standard- oder Rekonstruktionsgruppe)"
+
+msgid "Series Type"
+msgstr "Serientyp"
+
+msgid "Standard diagnostic"
+msgstr "Standarddiagnostik"
+
+msgid "Series Type Modifier"
+msgstr "Serientyp-Modifikator"
+
+msgid "Omitted per SeriesNameV4"
+msgstr "Gemäß SeriesNameV4 ausgelassen"
+
+msgid "Not available"
+msgstr "Nicht verfügbar"
+
+msgid "Chest"
+msgstr "Thorax"
+
+msgid "Abdomen"
+msgstr "Abdomen"
+
+msgid "Head"
+msgstr "Kopf"
+
+msgid "Brain"
+msgstr "Gehirn"
+
+msgid "Chest abdomen pelvis"
+msgstr "Thorax Abdomen Becken"
+
+msgid "Axial"
+msgstr "Axial"
+
+msgid "Sagittal"
+msgstr "Sagittal"
+
+msgid "Coronal"
+msgstr "Koronal"
+
+msgid "Axial oblique"
+msgstr "Axial schräg"
+
+msgid "Sagittal oblique"
+msgstr "Sagittal schräg"
+
+msgid "Coronal oblique"
+msgstr "Koronal schräg"
+
+msgid "Oblique"
+msgstr "Schräg"
+
+msgid "Without contrast"
+msgstr "Ohne Kontrast"
+
+msgid "With contrast"
+msgstr "Mit Kontrastmittel"
+
+msgid "Early arterial"
+msgstr "Früharteriell"
+
+msgid "Late arterial"
+msgstr "Spätarteriell"
+
+msgid "Portal venous"
+msgstr "Portalvenös"
+
+msgid "Arterial"
+msgstr "Arteriell"
+
+msgid "Venous"
+msgstr "Venös"
+
+msgid "Delayed"
+msgstr "Spät"
+
+msgid "Pulmonary arterial"
+msgstr "Pulmonalarteriell"
+
+msgid "Nephrogenic"
+msgstr "Nephrogen"
+
+msgid "Cortomedullary"
+msgstr "Kortikomedullär"
+
+msgid "Equilibrium"
+msgstr "Gleichgewicht"
+
+msgid "Excretory"
+msgstr "Exkretorisch"
+
+msgid "Dynamic"
+msgstr "Dynamisch"
+
+msgid "Reconstruction (< 1 mm)"
+msgstr "Rekonstruktion (< 1 mm)"
+
+msgid "Thin ( 1 mm and < 2.5 mm)"
+msgstr "Dünn (≥ 1 mm und < 2,5 mm)"
+
+msgid "Standard ( 2.5 mm and  5 mm)"
+msgstr "Standard (≥ 2,5 mm und ≤ 5 mm)"
+
+msgid "Thick ( 5 mm)"
+msgstr "Dick (> 5 mm)"
+
+msgid "Exam localizer"
+msgstr "Untersuchungs-Localizer"
+
+msgid "Radiation dose sheet"
+msgstr "Strahlendosisblatt"
+
+msgid "Used for tracking the contrast bolus or heart rhythm"
+msgstr "Wird zur Verfolgung des Kontrastmittelbolus oder des Herzrhythmus verwendet"
+
+msgid "More than plane reformat; includes 3D lab outputs and AI outputs"
+msgstr "Mehr als planare Reformatierung; umfasst 3D-Laborausgaben und KI-Ausgaben"
+
+msgid "Images saved by radiologists"
+msgstr "Von Radiologen gespeicherte Bilder"
+
+msgid "PET/CT fusion and multi spectral energies fused together"
+msgstr "PET/CT-Fusion und fusionierte multispektrale Energien"
+
+msgid "Contrast dose sheet"
+msgstr "Kontrastmitteldosisblatt"
+
+msgid "Multiplanar reformat"
+msgstr "Multiplanare Rekonstruktion"
+
+msgid "Native"
+msgstr "Nativ"
+
+msgid "Series geometry is required for Playbook harmonization"
+msgstr "Seriengeometrie ist für die Playbook-Harmonisierung erforderlich"
+
+msgid "TotalSegmentator anatomy analysis unavailable"
+msgstr "TotalSegmentator-Anatomieanalyse nicht verfügbar"
+
+msgid "TotalSegmentator contrast phase is required for Playbook harmonization"
+msgstr "TotalSegmentator-Kontrastphase ist für die Playbook-Harmonisierung erforderlich"
+
+msgid "Series description already harmonized  use Clear to re-run analysis"
+msgstr "Serienbeschreibung bereits harmonisiert  Leeren verwenden, um Analyse erneut auszuführen"
+
+msgid "Harmonize analysis complete"
+msgstr "Harmonize-Analyse abgeschlossen"
+
+msgid "Harmonize analysis failed"
+msgstr "Harmonize-Analyse fehlgeschlagen"
+
+msgid "Scan geometry analyzed"
+msgstr "Scangeometrie analysiert"
+
+msgid "Anatomy analysis not available for this series"
+msgstr "Anatomieanalyse für diese Serie nicht verfügbar"
+
+msgid "Starting contrast phase analysis"
+msgstr "Kontrastphasenanalyse wird gestartet"
+
+msgid "Contrast phase analysis complete"
+msgstr "Kontrastphasenanalyse abgeschlossen"
+
+msgid "Reading IV contrast from DICOM"
+msgstr "IV-Kontrastmittel aus DICOM lesen"
+
+msgid "Segmenting anatomy (TotalSegmentator)"
+msgstr "Anatomie wird segmentiert (TotalSegmentator)"
+
+msgid "Segmenting face mask"
+msgstr "Gesichtsmaske wird segmentiert"
+
+msgid "Segmenting brain structures"
+msgstr "Gehirnstrukturen werden segmentiert"
+
+msgid "Preparing CT volume"
+msgstr "CT-Volumen wird vorbereitet"
+
+msgid "Preparing volume"
+msgstr "Volumen wird vorbereitet"
+
+msgid "Using cached anatomy segmentation"
+msgstr "Zwischengespeicherte Anatomiesegmentierung wird verwendet"
+
+msgid "Summarizing anatomy regions"
+msgstr "Anatomiebereiche werden zusammengefasst"
+
+msgid "Building standardized series description"
+msgstr "Standardisierte Serienbeschreibung wird erstellt"
+
+msgid "Standardized series description ready"
+msgstr "Standardisierte Serienbeschreibung bereit"
+
+msgid "Determining contrast phase"
+msgstr "Kontrastphase wird bestimmt"
+
+msgid "Computing organ HU statistics"
+msgstr "Organ-HU-Statistiken werden berechnet"
+
+msgid "Organ HU statistics complete"
+msgstr "Organ-HU-Statistiken abgeschlossen"
+
+msgid "Computing head/neck vessel statistics"
+msgstr "Kopf-/Halsgefäß-Statistiken werden berechnet"
+
+msgid "Head/neck vessel statistics complete"
+msgstr "Kopf-/Halsgefäß-Statistiken abgeschlossen"
+
+msgid "Head/neck statistics not required"
+msgstr "Kopf-/Hals-Statistiken nicht erforderlich"
+
+msgid "Classifying contrast phase (XGBoost)"
+msgstr "Kontrastphase wird klassifiziert (XGBoost)"
+
+msgid "Contrast phase classification complete"
+msgstr "Kontrastphasenklassifikation abgeschlossen"
+
+msgid "Analyzing scan geometry"
+msgstr "Scangeometrie wird analysiert"
+
+msgid "Analyzing anatomy"
+msgstr "Anatomie wird analysiert"
+
+msgid "Using cached organ HU statistics"
+msgstr "Zwischengespeicherte Organ-HU-Statistiken werden verwendet"
+
+msgid "Using cached head/neck vessel statistics"
+msgstr "Zwischengespeicherte Kopf-/Halsgefäß-Statistiken werden verwendet"
+
+msgid "Classifying contrast phase"
+msgstr "Kontrastphase wird klassifiziert"
+
+msgid "Using cached contrast phase classification"
+msgstr "Zwischengespeicherte Kontrastphasenklassifikation wird verwendet"
+
+msgid "Processing"
+msgstr "Verarbeitung"
+
+msgid "Not a CT/MR series or no DICOM files"
+msgstr "Keine CT/MR-Serie oder keine DICOM-Dateien"
+
+msgid "Already harmonized"
+msgstr "Bereits harmonisiert"
+
+msgid "No harmonize result"
+msgstr "Kein Harmonize-Ergebnis"
+
+msgid "Empty harmonized description"
+msgstr "Leere harmonisierte Beschreibung"
+
+msgid "Failed to apply description"
+msgstr "Beschreibung konnte nicht angewendet werden"
+
+msgid "Dominant organ HU"
+msgstr "Dominante Organ-HU"
+
+msgid "No CT/MR series found for selected studies"
+msgstr "Keine CT/MR-Serien für ausgewählte Studien gefunden"
+
+msgid "Applied standardized description"
+msgstr "Standardisierte Beschreibung angewendet"
+
+#, python-brace-format
+msgid "TS skipped ({dimensionality})"
+msgstr "TS übersprungen ({dimensionality})"
+
+msgid "Suitable for segmentation and anatomy analysis"
+msgstr "Für Segmentierung und Anatomieanalyse geeignet"
+
+msgid "Not suitable for segmentation and anatomy analysis"
+msgstr "Nicht für Segmentierung und Anatomieanalyse geeignet"
+
+msgid "Localizer and scout series are not suitable for anatomy analysis"
+msgstr "Localizer- und Scout-Serien sind für die Anatomieanalyse nicht geeignet"
+
+msgid "Parametric maps are not suitable for anatomy analysis"
+msgstr "Parametrische Karten sind für die Anatomieanalyse nicht geeignet"
+
+msgid "This body part is not covered by anatomy segmentation models"
+msgstr "Dieser Körperteil wird nicht von Anatomiesegmentierungs-Modellen abgedeckt"
+
+msgid "Angiographic series are not suitable for anatomy analysis"
+msgstr "Angiografische Serien sind für Anatomieanalyse nicht geeignet"
+
+msgid "MR spectroscopy is not suitable for anatomy analysis"
+msgstr "MR-Spektroskopie ist für die Anatomieanalyse nicht geeignet"
+
+msgid "Monitoring series are not suitable for anatomy analysis"
+msgstr "Überwachungsserien sind für die Anatomieanalyse nicht geeignet"
+
+msgid "Dose report series are not suitable for anatomy analysis"
+msgstr "Dosisberichtserien sind für die Anatomieanalyse nicht geeignet"
+
+msgid "Fused multimodality series are not suitable for anatomy analysis"
+msgstr "Fusionierte multimodale Serien sind für die Anatomieanalyse nicht geeignet"
+
+msgid "Single-slice series are not suitable for anatomy analysis"
+msgstr "Einzelschicht-Serien sind für die Anatomieanalyse nicht geeignet"
+
+msgid "Projection images are not suitable for anatomy analysis"
+msgstr "Projektionsbilder sind für die Anatomieanalyse nicht geeignet"
+
+msgid "3D renderings (MIP or VR) are not suitable for anatomy analysis"
+msgstr "3D-Renderings (MIP oder VR) sind für die Anatomieanalyse nicht geeignet"
+
+msgid "Series type could not be determined for anatomy analysis"
+msgstr "Serientyp konnte für die Anatomieanalyse nicht bestimmt werden"
+
+msgid "This series is not suitable for anatomy analysis"
+msgstr "Diese Serie ist für die Anatomieanalyse nicht geeignet"
+
+msgid "Geometry analysis"
+msgstr "Geometrieanalyse"
+
+msgid "TS ok"
+msgstr "TS ok"
+
+msgid "TS skip"
+msgstr "TS übersprungen"
+
+msgid "Provenance"
+msgstr "Herkunft"
+
+msgid "Geometry"
+msgstr "Geometrie"
+
+msgid "dominant"
+msgstr "dominant"
+
+msgid "Anatomy (cached segmentation)"
+msgstr "Anatomie (zwischengespeicherte Segmentierung)"
+
+msgid "Anatomy"
+msgstr "Anatomie"
+
+#, python-brace-format
+msgid "TotalSegmentator not installed. Install with: {hint}"
+msgstr "TotalSegmentator nicht installiert. Installation mit: {hint}"
+
+#, python-brace-format
+msgid "TotalSegmentator license check unavailable: {error}"
+msgstr "TotalSegmentator-Lizenzprüfung nicht verfügbar: {error}"
+
+#, python-brace-format
+msgid "License check failed: {error}"
+msgstr "Lizenzprüfung fehlgeschlagen: {error}"
+
+msgid "Enter your academic license number (aca_...)."
+msgstr "Geben Sie Ihre akademische Lizenznummer ein (aca_...)."
+
+msgid "License number must start with aca_."
+msgstr "Die Lizenznummer muss mit aca_ beginnen."
+
+msgid "License number must be exactly 18 characters (aca_ plus 14 characters)."
+msgstr "Die Lizenznummer muss genau 18 Zeichen lang sein (aca_ plus 14 Zeichen)."
+
+#, python-brace-format
+msgid "TotalSegmentator license setup unavailable: {error}"
+msgstr "TotalSegmentator-Lizenzeinrichtung nicht verfügbar: {error}"
+
+#, python-brace-format
+msgid "Could not validate license online ({error}). Check your network connection and try again."
+msgstr "Lizenz konnte nicht online validiert werden ({error}). Überprüfen Sie Ihre Netzwerkverbindung und versuchen Sie es erneut."
+
+#, python-brace-format
+msgid "Invalid license number. Check the value or request a free academic license at {url}"
+msgstr "Ungültige Lizenznummer. Überprüfen Sie den Wert oder fordern Sie eine kostenlose akademische Lizenz unter {url} an"
+
+#, python-brace-format
+msgid "Could not read TotalSegmentator config: {error}"
+msgstr "TotalSegmentator-Konfiguration konnte nicht gelesen werden: {error}"
+
+#, python-brace-format
+msgid "Could not save TotalSegmentator config: {error}"
+msgstr "TotalSegmentator-Konfiguration konnte nicht gespeichert werden: {error}"
+
+msgid "Academic license saved."
+msgstr "Akademische Lizenz gespeichert."
+
+#, python-brace-format
+msgid "Model {task_id}"
+msgstr "Modell {task_id}"
+
+msgid "Resolving face segmentation mask"
+msgstr "Gesichtssegmentierungsmaske wird aufgelöst"
+
+msgid "Loading CT volume and aligning face mask"
+msgstr "CT-Volumen wird geladen und Gesichtsmaske ausgerichtet"
+
+msgid "Loading Hounsfield unit stack"
+msgstr "Hounsfield-Einheiten-Stapel wird geladen"
+
+msgid "Applying in-mask face de-identification"
+msgstr "Gesichts-De-Identifikation innerhalb der Maske wird angewendet"
+
+msgid "Checking pixels outside face mask"
+msgstr "Pixel außerhalb der Gesichtsmaske werden überprüft"
+
+msgid "Ready"
+msgstr "Bereit"
+
+msgid "Processing face blur"
+msgstr "Gesichtsverwischung wird verarbeitet"
 
 msgid "DICOM C-STORE scp is already running on"
 msgstr "DICOM C-STORE SCP läuft bereits auf"
@@ -396,6 +1299,190 @@ msgstr "phi_export"
 
 msgid "quarantine"
 msgstr "quarantäne"
+
+msgid "Series View"
+msgstr "Serienansicht"
+
+msgid "Could not load this series."
+msgstr "Diese Serie konnte nicht geladen werden."
+
+msgid "Loading series"
+msgstr "Serie wird geladen"
+
+msgid "WHITELIST"
+msgstr "Freigabeliste"
+
+msgid "Defaults"
+msgstr "Standard"
+
+msgid "Clear"
+msgstr "Zurücksetzen"
+
+msgid "Text Edit Context"
+msgstr "Textbearbeitungskontext"
+
+msgid "Detect Text"
+msgstr "Text erkennen"
+
+msgid "Remove Text"
+msgstr "Text entfernen"
+
+msgid "Blackout Area"
+msgstr "Bereich schwärzen"
+
+msgid "Harmonize Description"
+msgstr "Beschreibung harmonisieren"
+
+msgid "Blur Face"
+msgstr "Gesicht verwischen"
+
+msgid "Save Pixel Changes"
+msgstr "Pixeländerungen speichern"
+
+msgid "Text detection failed"
+msgstr "Texterkennung fehlgeschlagen"
+
+msgid "Text detection complete"
+msgstr "Texterkennung abgeschlossen"
+
+msgid "detections"
+msgstr "Erkennungen"
+
+msgid "frames with text"
+msgstr "Bilder mit Text"
+
+msgid "Detecting text in current image"
+msgstr "Texterkennung im aktuellen Bild"
+
+msgid "Detecting text in all images"
+msgstr "Texterkennung in allen Bildern"
+
+msgid "No text detected in current frame to remove"
+msgstr "Kein Text im aktuellen Bild zum Entfernen erkannt"
+
+msgid "Removing text from current image"
+msgstr "Text aus aktuellem Bild entfernen"
+
+msgid "Text removed from current image"
+msgstr "Text aus aktuellem Bild entfernt"
+
+msgid "Removing text from all images"
+msgstr "Text aus allen Bildern entfernen"
+
+msgid "Text removed from all images"
+msgstr "Text aus allen Bildern entfernt"
+
+msgid "No blackout area(s) in current frame"
+msgstr "Keine geschwärzten Bereiche im aktuellen Bild"
+
+msgid "Applying blackout to current image"
+msgstr "Schwärzung auf aktuelles Bild anwenden"
+
+msgid "Blackout applied to current image"
+msgstr "Schwärzung auf aktuelles Bild angewendet"
+
+msgid "Applying blackout to all images"
+msgstr "Schwärzung auf alle Bilder anwenden"
+
+msgid "Blackout applied to all images"
+msgstr "Schwärzung auf alle Bilder angewendet"
+
+msgid "Harmonize is not ready yet. Click AI Features to download models."
+msgstr "Harmonize ist noch nicht bereit. Klicken Sie auf KI-Funktionen, um Modelle herunterzuladen."
+
+msgid "Harmonize is already open for this series."
+msgstr "Harmonize ist für diese Serie bereits geöffnet."
+
+msgid "Harmonize is already running for another series. Finish or cancel it first."
+msgstr "Harmonize wird bereits für eine andere Serie ausgeführt. Bitte zuerst beenden oder abbrechen."
+
+msgid "< 0.1 MB"
+msgstr "< 0,1 MB"
+
+msgid "Delete analysis cache for this series?"
+msgstr "Analyse-Cache für diese Serie löschen?"
+
+msgid "Removes geometry, segmentation masks, contrast analysis, and face mask under"
+msgstr "Entfernt Geometrie, Segmentierungsmasken, Kontrastanalyse und Gesichtsmaske unter"
+
+msgid "DICOM images and series description are not changed."
+msgstr "DICOM-Bilder und Serienbeschreibung werden nicht geändert."
+
+msgid "Harmonize analysis can be re-run after clearing the cache."
+msgstr "Harmonize-Analyse kann nach dem Leeren des Caches erneut ausgeführt werden."
+
+msgid "Face blur has already been applied; blurred pixels and Blur Face status are unchanged."
+msgstr "Gesichtsunschärfe wurde bereits angewendet; verwischte Pixel und Status \"Gesicht verwischen\" bleiben unverändert."
+
+msgid "Clear Analysis Cache"
+msgstr "Analyse-Cache leeren"
+
+msgid "Analysis cache cleared"
+msgstr "Analyse-Cache geleert"
+
+msgid "Changes saved"
+msgstr "Änderungen gespeichert"
+
+msgid "Save Changes Error"
+msgstr "Fehler beim Speichern"
+
+msgid "Failed to save changes to series frames"
+msgstr "Speichern der Änderungen an den Serienbildern fehlgeschlagen"
+
+msgid "Could not save changes"
+msgstr "Änderungen konnten nicht gespeichert werden"
+
+msgid "View"
+msgstr "Ansicht"
+
+msgid "with"
+msgstr "mit"
+
+msgid "Studies"
+msgstr "Studien"
+
+msgid "over"
+msgstr "über"
+
+msgid "Pages"
+msgstr "Seiten"
+
+msgid "Click a projection to open Series View."
+msgstr "Klicken Sie auf eine Projektion, um die Serienansicht zu öffnen."
+
+msgid "Open Series View"
+msgstr "Serienansicht öffnen"
+
+msgid "Page"
+msgstr "Seite"
+
+msgid "Segmentation"
+msgstr "Segmentierung"
+
+msgid "MIN"
+msgstr "MIN"
+
+msgid "MEAN"
+msgstr "MITTEL"
+
+msgid "MAX"
+msgstr "MAX"
+
+msgid "SLICE"
+msgstr "SCHICHT"
+
+#, python-brace-format
+msgid "View[{vw}x{vh}] Actual[{aw}x{ah}]"
+msgstr "Ansicht[{vw}x{vh}] Tatsächlich[{aw}x{ah}]"
+
+msgid "MIN PROJECTION"
+msgstr "MIN-PROJEKTION"
+
+msgid "MEAN PROJECTION"
+msgstr "MITTELWERT-PROJEKTION"
+
+msgid "MAX PROJECTION"
+msgstr "MAX-PROJEKTION"
 
 msgid "Logging Levels"
 msgstr "Protokollierungsstufen"
@@ -535,9 +1622,6 @@ msgstr "Projektname"
 msgid "UID Root"
 msgstr "UID-Wurzel"
 
-msgid "Remove Pixel PHI"
-msgstr "Pixel-PHI entfernen"
-
 msgid "DICOM Servers"
 msgstr "DICOM-Server"
 
@@ -573,6 +1657,12 @@ msgstr "Transfersyntaxen"
 
 msgid "Script File"
 msgstr "Skriptdatei"
+
+msgid "Patient Lookup Table"
+msgstr "Patienten-Nachschlagetabelle"
+
+msgid "Load Patient Lookup Table"
+msgstr "Patienten-Nachschlagetabelle laden"
 
 msgid "Set Logging Levels"
 msgstr "Protokollierungsstufen festlegen"
@@ -622,50 +1712,141 @@ msgstr "Bitte geben Sie Ihren Projektnamen ein und konfigurieren Sie alle weiter
 msgid "The Java Index data will be processed into the Python Anonymizer database when the project is created."
 msgstr "Die Java Indexdaten werden in die Python Anonymisierer Datenbank verarbeitet, wenn das Projekt erstellt wird."
 
-msgid "View Projections"
-msgstr "Projektionen anzeigen"
+msgid "Properties file"
+msgstr "Eigenschaftsdatei"
 
-msgid "Create Patient Lookup"
-msgstr "Patientensuche erstellen"
+msgid "Browse"
+msgstr "Durchsuchen"
 
-msgid "Refresh"
-msgstr "Aktualisieren"
+msgid "Select a .properties file to preview."
+msgstr "Wählen Sie eine .properties-Datei zur Vorschau aus."
 
-msgid "Clear Selection"
-msgstr "Auswahl aufheben"
+msgid "Script changes"
+msgstr "Skriptänderungen"
 
-msgid "Delete"
-msgstr "Löschen"
+msgid "Accept"
+msgstr "Übernehmen"
 
-msgid "Error Creating PHI CSV File"
-msgstr "Fehler beim Erstellen der PHI-CSV-Datei"
+msgid "Cancel"
+msgstr "Abbrechen"
 
-msgid "PHI CSV File Created"
-msgstr "PHI-CSV-Datei erstellt"
+msgid "Select CTP Lookup Properties File"
+msgstr "CTP-Lookup-Eigenschaftendatei auswählen"
 
-msgid "PHI Lookup Data saved to"
-msgstr "PHI-Suchdaten gespeichert in"
+msgid "Properties Files"
+msgstr "Eigenschaftsdateien"
 
-msgid "No Studies in Anonymizer Model for PHI Index"
-msgstr "Keine Studien im Anonymisierer-Modell für PHI-Index"
+msgid "Validation failed."
+msgstr "Validierung fehlgeschlagen."
 
-msgid "Deletion Error"
-msgstr "Fehler beim Löschen"
+msgid "Patient Lookup Table Error"
+msgstr "Fehler in der Patienten-Lookup-Tabelle"
 
-msgid "No studies selected for deletion."
-msgstr "Keine Studien zum Löschen ausgewählt."
+#, python-brace-format
+msgid "Patients: {patients}  |  With date offset: {offsets}"
+msgstr "Patienten: {patients}  |  Mit Datumsversatz: {offsets}"
 
-msgid "Use SHIFT+Click and/or CMD/CTRL+Click to select multiple studies."
-msgstr "Verwenden Sie SHIFT+Klick und/oder CMD/CTRL+Klick, um mehrere Studien auszuwählen."
+msgid "No script tag changes required."
+msgstr "Keine Änderungen der Skript-Tags erforderlich."
 
-msgid "Confirm Study Deletion"
-msgstr "Löschen der Studie bestätigen"
+msgid "Lookup table and project script were updated successfully."
+msgstr "Lookup-Tabelle und Projektskript wurden erfolgreich aktualisiert."
 
-msgid "Selected studies will be permanently deleted from PHI Index and all associated anonymized files deleted from local storage directory"
-msgstr "Ausgewählte Studien werden dauerhaft aus dem PHI-Index und alle zugehörigen anonymisierten Dateien aus dem lokalen Speicherverzeichnis gelöscht"
+msgid "Lookup table will be loaded when the project is created."
+msgstr "Die Nachschlagetabelle wird beim Erstellen des Projekts geladen."
 
-msgid "Are you sure?"
-msgstr "Sind Sie sicher?"
+msgid "Search"
+msgstr "Suchen"
+
+msgid "Send"
+msgstr "Senden"
+
+msgid "Patients"
+msgstr "Patienten"
+
+msgid "Quarantine"
+msgstr "Quarantäne"
+
+msgid "Metadata Queue"
+msgstr "Metadaten-Warteschlange"
+
+msgid "online"
+msgstr "online"
+
+msgid "Connection Error"
+msgstr "Verbindungsfehler"
+
+msgid "Server Failed DICOM ECHO"
+msgstr "Server hat DICOM ECHO fehlgeschlagen"
+
+msgid "Check Project Settings"
+msgstr "Projekteinstellungen prüfen"
+
+msgid "Ensure the remote server is setup to allow the local server for echo and storage services."
+msgstr "Stellen Sie sicher, dass der Remote-Server so eingerichtet ist, dass der lokale Server für Echo- und Speicherdienste zugelassen wird."
+
+msgid "offline"
+msgstr "offline"
+
+msgid "Checking Query DICOM Server is online"
+msgstr "Prüfen, ob der DICOM-Bildarchiv (Q/R-Server) online ist"
+
+msgid "Waiting for AWS Authentication"
+msgstr "Warten auf AWS-Authentifizierung"
+
+msgid "Checking Export DICOM Server is online"
+msgstr "Prüfen, ob der Export-DICOM-Server online ist"
+
+msgid "AWS Authentication Failed"
+msgstr "AWS-Authentifizierung fehlgeschlagen"
+
+msgid "Check Project Settings/AWS Cognito and ensure all parameters are correct."
+msgstr "Überprüfen Sie die Projekteinstellungen/AWS Cognito und stellen Sie sicher, dass alle Parameter korrekt sind."
+
+msgid "AWS Authenticated"
+msgstr "AWS authentifiziert"
+
+msgid "Welcome"
+msgstr "Willkommen"
+
+msgid "The RSNA DICOM Anonymizer program is a free open-source tool for curating and de-identifying DICOM studies."
+msgstr "Das RSNA DICOM Anonymisierer Programm ist ein kostenloses Open-Source-Tool zur Kuratierung und De-Identifizierung von DICOM Studien."
+
+msgid "Easy to use, advanced DICOM expertise not required!"
+msgstr "Einfach zu bedienen, fortgeschrittene DICOM-Kenntnisse sind nicht erforderlich!"
+
+msgid ""
+"Remove protected identity and health information (PHI/PII) from DICOM metadata. "
+"Optional AI can remove burned-in text on all modalities, and blur faces on head CT/MR."
+msgstr ""
+"Remove protected identity and health information (PHI/PII) from DICOM metadata. "
+"Optional AI can remove burned-in text on all modalities, and blur faces on head CT/MR."
+
+msgid ""
+"For CT and MR, optionally harmonize study descriptions using LOINC study names "
+"and series descriptions using the RSNA RadLex Playbook."
+msgstr ""
+"For CT and MR, optionally harmonize study descriptions using LOINC study names "
+"and series descriptions using the RSNA RadLex Playbook."
+
+msgid "Open Help → User Manual → Start here for how to configure and use the program."
+msgstr "Open Help → User Manual → Start here for how to configure and use the program."
+
+msgid "Use the AI Features button on this screen to download models and set Harmonize resolution."
+msgstr "Use the AI Features button on this screen to download models and set Harmonize resolution."
+
+msgid "Select File → New Project to start."
+msgstr "Select File → New Project to start."
+
+msgid "LOINC"
+msgstr "LOINC"
+
+msgid "RSNA RadLex Playbook"
+msgstr "RSNA RadLex Playbook"
+
+
+msgid "SPONSOR MESSAGE"
+msgstr "Die Entwicklung von Anonymzer wurde im Rahmen des Projekts „Medical Imaging and Data Resource Center (MIDRC)“ unterstützt, das vom National Institute of Biomedical Imaging and Bioengineering (NIBIB) der National Institutes of Health unter Vertrag 75N92020D00021 sowie durch die Advanced Research Projects Agency for Health (ARPA-H) finanziert wird."
 
 msgid "Importing Study"
 msgstr "Studie importieren"
@@ -679,17 +1860,11 @@ msgstr "Importieren von"
 msgid "Retrieving Study Metadata at"
 msgstr "Abrufen von Studien-Metadaten bei"
 
-msgid "Cancel"
-msgstr "Abbrechen"
-
 msgid "No studies to retrieve"
 msgstr "Keine Studien zum Abrufen"
 
 msgid "Close"
 msgstr "Schließen"
-
-msgid "of"
-msgstr "von"
 
 msgid "Study Metadata"
 msgstr "Studien-Metadaten"
@@ -709,20 +1884,11 @@ msgstr "Abrufen von Studien-Metadaten abgeschlossen"
 msgid "No instances to import"
 msgstr "Keine Instanzen zum Importieren"
 
-msgid "Study"
-msgstr "Studie"
-
-msgid "Studies"
-msgstr "Studien"
-
 msgid "at"
 msgstr "bei"
 
 msgid "level"
 msgstr "Ebene"
-
-msgid "Images"
-msgstr "Bilder"
 
 msgid "Import Finished"
 msgstr "Import abgeschlossen"
@@ -733,92 +1899,11 @@ msgstr "Das Abbrechen des Verschiebevorgangs kann Übertragungen vom Remote-Serv
 msgid "Are you sure you want to continue?"
 msgstr "Sind Sie sicher, dass Sie fortfahren möchten?"
 
-msgid "WHITE LIST"
-msgstr "WEISSE LISTE"
-
-msgid "Defaults"
-msgstr "Standard"
-
-msgid "Clear"
-msgstr "Zurücksetzen"
-
-msgid "Edit Context"
-msgstr "Kontext bearbeiten"
-
-msgid "Detect Text"
-msgstr "Text erkennen"
-
-msgid "Remove Text"
-msgstr "Text entfernen"
-
-msgid "Blackout Area"
-msgstr "Bereich schwärzen"
-
-msgid "Save Changes"
-msgstr "Änderungen speichern"
-
-msgid "Series View"
-msgstr "Serienansicht"
-
-msgid "Detecting text in all frames"
-msgstr "Text wird in allen Bildern erkannt"
-
-msgid "OCR on frame"
-msgstr "OCR auf Bild"
-
-msgid "OCR on current frame"
-msgstr "OCR auf aktuellem Bild"
-
-msgid "complete"
-msgstr "abgeschlossen"
-
-msgid "OCR on all frames"
-msgstr "OCR auf allen Bildern"
-
-msgid "No text detected in current frame to remove"
-msgstr "Kein Text im aktuellen Bild zum Entfernen erkannt"
-
-msgid "Removing text from current frame"
-msgstr "Text wird aus dem aktuellen Bild entfernt"
-
-msgid "Text removed from current frame"
-msgstr "Text aus dem aktuellen Bild entfernt"
-
-msgid "Removing text from all frames in series"
-msgstr "Text wird aus allen Bildern der Serie entfernt"
-
-msgid "Text removed from all frames in series"
-msgstr "Text aus allen Bildern der Serie entfernt"
-
-msgid "No blackout area(s) in current frame"
-msgstr "Keine geschwärzten Bereiche im aktuellen Bild"
-
-msgid "Blackout areas in current frame"
-msgstr "Geschwärzte Bereiche im aktuellen Bild"
-
-msgid "Areas blacked out in current frame"
-msgstr "Bereiche im aktuellen Bild geschwärzt"
-
-msgid "Blackout areas in all frames of series"
-msgstr "Geschwärzte Bereiche in allen Bildern der Serie"
-
-msgid "Areas blacked out in all frames of series"
-msgstr "Bereiche in allen Bildern der Serie geschwärzt"
-
-msgid "Changes saved successfully"
-msgstr "Änderungen erfolgreich gespeichert"
-
-msgid "Failed to save changes to series frames"
-msgstr "Speichern der Änderungen an den Serienbildern fehlgeschlagen"
-
 msgid "Patient Name"
 msgstr "Patientenname"
 
 msgid "Anonymized ID"
 msgstr "Anonymisierte ID"
-
-msgid "Series"
-msgstr "Serien"
 
 msgid "Date Time"
 msgstr "Datum Uhrzeit"
@@ -832,14 +1917,14 @@ msgstr "Letzter Exportfehler"
 msgid "Export"
 msgstr "Export"
 
-msgid "Processing"
-msgstr "Verarbeitung"
-
-msgid "Patients"
-msgstr "Patienten"
-
 msgid "Cancel Export"
 msgstr "Export abbrechen"
+
+msgid "Refresh"
+msgstr "Aktualisieren"
+
+msgid "Clear Selection"
+msgstr "Auswahl aufheben"
 
 msgid "Processed"
 msgstr "Verarbeitet"
@@ -852,9 +1937,6 @@ msgstr "Export fehlgeschlagen"
 
 msgid "patient(s)"
 msgstr "Patient(en)"
-
-msgid "Connection Error"
-msgstr "Verbindungsfehler"
 
 msgid "Export Server Failed DICOM C-ECHO"
 msgstr "Export-Server hat DICOM C-ECHO fehlgeschlagen"
@@ -886,9 +1968,6 @@ msgstr "Patienten-ID"
 msgid "Date"
 msgstr "Datum"
 
-msgid "Study Description"
-msgstr "Studienbeschreibung"
-
 msgid "Accession No."
 msgstr "Zugangsnummer"
 
@@ -904,9 +1983,6 @@ msgstr "Studieninstanz-UID"
 msgid "STUDY"
 msgstr "STUDIE"
 
-msgid "SERIES"
-msgstr "SERIE"
-
 msgid "Query, Retrieve & Import Studies"
 msgstr "Studien abfragen, abrufen und importieren"
 
@@ -915,9 +1991,6 @@ msgstr "Zugangsnummer(n)"
 
 msgid "Study Date"
 msgstr "Studiendatum"
-
-msgid "Modality"
-msgstr "Modalität"
 
 msgid "Load Accession Numbers"
 msgstr "Zugangsnummern laden"
@@ -985,102 +2058,487 @@ msgstr "AccNos"
 msgid "Cancel active Query?"
 msgstr "Aktive Abfrage abbrechen?"
 
-msgid "Search"
-msgstr "Suchen"
+msgid "View Dataset"
+msgstr "Datensatz anzeigen"
 
-msgid "View"
-msgstr "Ansicht"
+msgid "Study / Series"
+msgstr "Studie / Serie"
 
-msgid "Send"
-msgstr "Senden"
+msgid "AI Batch Process"
+msgstr "KI-Stapelverarbeitung"
 
-msgid "Quarantine"
-msgstr "Quarantäne"
+msgid "View Projections"
+msgstr "Projektionen anzeigen"
 
-msgid "Metadata Queue"
-msgstr "Metadaten-Warteschlange"
+msgid "Open projections for the selected studies."
+msgstr "Projektionen für die ausgewählten Studien öffnen."
 
-msgid "Pixel PHI Queue"
-msgstr "Pixel-PHI-Warteschlange"
+msgid "Create Patient Lookup"
+msgstr "Patientensuche erstellen"
 
-msgid "online"
-msgstr "online"
+msgid "Delete"
+msgstr "Löschen"
 
-msgid "Server Failed DICOM ECHO"
-msgstr "Server hat DICOM ECHO fehlgeschlagen"
+msgid "No AI features are enabled. Click AI Features on the Welcome screen."
+msgstr "Keine KI-Funktionen aktiviert. Klicken Sie auf dem Willkommensbildschirm auf KI-Funktionen."
 
-msgid "Check Project Settings"
-msgstr "Projekteinstellungen prüfen"
+msgid "AI features are not ready yet. Click AI Features on the Welcome screen to download models."
+msgstr "KI-Funktionen sind noch nicht bereit. Klicken Sie auf dem Willkommensbildschirm auf KI-Funktionen, um Modelle herunterzuladen."
 
-msgid "Ensure the remote server is setup to allow the local server for echo and storage services."
-msgstr "Stellen Sie sicher, dass der Remote-Server so eingerichtet ist, dass der lokale Server für Echo- und Speicherdienste zugelassen wird."
+msgid "No studies selected for AI batch processing."
+msgstr "Keine Studien für die KI-Stapelverarbeitung ausgewählt."
 
-msgid "offline"
-msgstr "offline"
+msgid "Use SHIFT+Click and/or CMD/CTRL+Click to select multiple studies."
+msgstr "Verwenden Sie SHIFT+Klick und/oder CMD/CTRL+Klick, um mehrere Studien auszuwählen."
 
-msgid "Checking Query DICOM Server is online"
-msgstr "Prüfen, ob der DICOM-Bildarchiv (Q/R-Server) online ist"
+msgid "Error Creating PHI CSV File"
+msgstr "Fehler beim Erstellen der PHI-CSV-Datei"
 
-msgid "Waiting for AWS Authentication"
-msgstr "Warten auf AWS-Authentifizierung"
+msgid "PHI CSV File Created"
+msgstr "PHI-CSV-Datei erstellt"
 
-msgid "Checking Export DICOM Server is online"
-msgstr "Prüfen, ob der Export-DICOM-Server online ist"
+msgid "PHI Lookup Data saved to"
+msgstr "PHI-Suchdaten gespeichert in"
 
-msgid "AWS Authentication Failed"
-msgstr "AWS-Authentifizierung fehlgeschlagen"
+msgid "No Studies in Anonymizer Model for Dataset"
+msgstr "Keine Studien im Anonymisierer-Modell für den Datensatz"
 
-msgid "Check Project Settings/AWS Cognito and ensure all parameters are correct."
-msgstr "Überprüfen Sie die Projekteinstellungen/AWS Cognito und stellen Sie sicher, dass alle Parameter korrekt sind."
+msgid "Error Creating Projection View"
+msgstr "Fehler beim Erstellen der Projektionsansicht"
 
-msgid "AWS Authenticated"
-msgstr "AWS authentifiziert"
+msgid "Deletion Error"
+msgstr "Fehler beim Löschen"
 
-msgid "Welcome"
-msgstr "Willkommen"
+msgid "No studies selected for deletion."
+msgstr "Keine Studien zum Löschen ausgewählt."
 
-msgid "The RSNA DICOM Anonymizer program is a free open-source tool for curating and de-identifying DICOM studies."
-msgstr "Das RSNA DICOM Anonymisierer Programm ist ein kostenloses Open-Source-Tool zur Kuratierung und De-Identifizierung von DICOM Studien."
+msgid "Confirm Study Deletion"
+msgstr "Löschen der Studie bestätigen"
 
-msgid "Easy to use, advanced DICOM expertise not required!"
-msgstr "Einfach zu bedienen, fortgeschrittene DICOM-Kenntnisse sind nicht erforderlich!"
+msgid "Selected studies will be permanently deleted from Dataset and all associated anonymized files deleted from local storage directory"
+msgstr "Ausgewählte Studien werden dauerhaft aus dem Datensatz gelöscht und alle zugehörigen anonymisierten Dateien aus dem lokalen Speicherverzeichnis entfernt"
 
-msgid "Use it to ensure privacy by removing protected identity & health information (PHI/PII) from both metadata and burnt into pixel data."
-msgstr "Verwenden Sie es, um die Privatsphäre zu schützen, indem Sie geschützte Identitäts- und Gesundheitsinformationen (PHI/PII) sowohl aus Metadaten als auch aus in Pixeldaten eingebetteten Informationen entfernen."
+msgid "Are you sure?"
+msgstr "Sind Sie sicher?"
 
-msgid "Go to Help/Overview for a quick overview."
-msgstr "Gehen Sie zu Hilfe/Überblick für einen schnellen Überblick."
+msgid "Right-click to open Series View"
+msgstr "Rechtsklick, um die Serienansicht zu öffnen"
 
-msgid "Go to Help/Project settings for instructions on how to configure the program."
-msgstr "Gehen Sie zu Hilfe/Projekteinstellungen für Anweisungen zur Konfiguration des Programms."
+msgid "Right-click to view study projections"
+msgstr "Rechtsklick, um Studienprojektionen anzuzeigen"
 
-msgid "Go to Help/Operation for instructions on how to use the program."
-msgstr "Gehen Sie zu Hilfe/Bedienung für Anweisungen zur Verwendung des Programms."
+msgid "Series Not Found"
+msgstr "Serie nicht gefunden"
 
-msgid "Select File/New Project to start."
-msgstr "Wählen Sie Datei/Neues Projekt, um zu starten."
+msgid "Series directory not found on disk"
+msgstr "Serienverzeichnis auf der Festplatte nicht gefunden"
 
-msgid "SPONSOR MESSAGE"
-msgstr "Die Entwicklung von Anonymzer wurde im Rahmen des Projekts „Medical Imaging and Data Resource Center (MIDRC)“ unterstützt, das vom National Institute of Biomedical Imaging and Bioengineering (NIBIB) der National Institutes of Health unter Vertrag 75N92020D00021 sowie durch die Advanced Research Projects Agency for Health (ARPA-H) finanziert wird."
+msgid "ERROR"
+msgstr "FEHLER"
 
-msgid "with"
-msgstr "mit"
+msgid "Cancelling after current file"
+msgstr "Abbruch nach aktueller Datei"
 
-msgid "over"
-msgstr "über"
+msgid "DICOM"
+msgstr "DICOM"
 
-msgid "Pages"
-msgstr "Seiten"
+msgid "Playbook harmonization"
+msgstr "Playbook-Harmonisierung"
 
-msgid "Page"
-msgstr "Seite"
+msgid "RadLex Series Description"
+msgstr "RadLex-Serienbeschreibung"
 
-msgid "MIN PROJECTION"
-msgstr "MIN-PROJEKTION"
+msgid "OK"
+msgstr "OK"
 
-msgid "MEAN PROJECTION"
-msgstr "MITTELWERT-PROJEKTION"
+msgid "(no study description)"
+msgstr "(keine Studienbeschreibung)"
 
-msgid "MAX PROJECTION"
-msgstr "MAX-PROJEKTION"
+msgid "(no series description)"
+msgstr "(keine Serienbeschreibung)"
+
+msgid "Patient"
+msgstr "Patient"
+
+msgid "ID"
+msgstr "ID"
+
+msgid "Accession"
+msgstr "Zugangsnummer"
+
+msgid "Batch"
+msgstr "Stapel"
+
+msgid "Field"
+msgstr "Feld"
+
+msgid "Tag"
+msgstr "Tag"
+
+msgid "Value"
+msgstr "Wert"
+
+msgid "Element"
+msgstr "Element"
+
+msgid "Evidence"
+msgstr "Nachweis"
+
+msgid "Source"
+msgstr "Quelle"
+
+msgid "Brain structures"
+msgstr "Hirnstrukturen"
+
+msgid "This appears to be a CT head study. Run detailed brain structure segmentation?"
+msgstr "Dies scheint eine Schädel-CT-Studie zu sein. Detaillierte Gehirnstruktursegmentierung ausführen?"
+
+msgid "Harmonize failed"
+msgstr "Harmonisieren fehlgeschlagen"
+
+msgid "Skip"
+msgstr "Überspringen"
+
+msgid "Saving series description to DICOM"
+msgstr "Serienbeschreibung in DICOM speichern"
+
+msgid "Failed to write DICOM files."
+msgstr "DICOM-Dateien konnten nicht geschrieben werden."
+
+msgid "Failed to update project database."
+msgstr "Aktualisierung der Projektdatenbank fehlgeschlagen."
+
+msgid "Series description saved"
+msgstr "Serienbeschreibung gespeichert"
+
+msgid "Could not save series description"
+msgstr "Serienbeschreibung konnte nicht gespeichert werden."
+
+msgid "Harmonize could not analyze this series."
+msgstr "Harmonize konnte diese Serie nicht analysieren."
+
+msgid "(empty)"
+msgstr "(leer)"
+
+msgid "Series description already up to date"
+msgstr "Serienbeschreibung bereits aktuell"
+
+msgid "No harmonized description to save."
+msgstr "Keine harmonisierte Beschreibung zum Speichern."
+
+msgid "Removal method"
+msgstr "Entfernungsmethode"
+
+msgid "Black out is recommended for de-identification, but can influence ML training."
+msgstr "Schwärzen wird für die De-Identifikation empfohlen, kann jedoch das ML-Training beeinflussen."
+
+msgid "Use modality whitelist"
+msgstr "Modalitäts-Freigabeliste verwenden"
+
+msgid "View whitelist"
+msgstr "Freigabeliste anzeigen"
+
+msgid "Whitelist terms combine packaged defaults with project overrides saved in Series View."
+msgstr "Freigabelisten-Begriffe kombinieren Paket-Standards mit in der Serienansicht gespeicherten Projekteinstellungen."
+
+msgid "All detected OCR text will be removed when the whitelist is disabled."
+msgstr "Wenn die Freigabeliste deaktiviert ist, wird der gesamte erkannte OCR-Text entfernt."
+
+msgid "Face blur mode"
+msgstr "Gesichtsunschärfe-Modus"
+
+msgid "Uses the Harmonize resolution chosen in AI Features Setup for this workstation."
+msgstr "Verwendet die in der KI-Funktionen-Einrichtung gewählte Harmonize-Auflösung für diesen Arbeitsplatz."
+
+msgid "Brain structures (CT Head when present)"
+msgstr "Gehirnstrukturen (Schädel-CT wenn vorhanden)"
+
+msgid "Download Brain structures models in AI Features to use this option."
+msgstr "Laden Sie Gehirnstrukturmodelle in den KI-Funktionen herunter, um diese Option zu verwenden."
+
+msgid "Select AI algorithms to run on the selected studies."
+msgstr "Wählen Sie KI-Algorithmen aus, die auf den ausgewählten Studien ausgeführt werden sollen."
+
+msgid "CT models"
+msgstr "CT-Modelle"
+
+msgid "MR models"
+msgstr "MR-Modelle"
+
+msgid "OCR burnt-in text removal."
+msgstr "OCR-Entfernung eingebrannter Texte."
+
+msgid "Standardize SeriesDescription (CT/MR)."
+msgstr "SeriesDescription standardisieren (CT/MR)."
+
+msgid "Optional CT Head detail after total anatomy (academic license)."
+msgstr "Optionale Schädel-CT-Details nach der Gesamtanatomie (akademische Lizenz)."
+
+msgid "Blur face on head CT/MR (academic license)."
+msgstr "Gesicht bei Schädel-CT/MR verwischen (akademische Lizenz)."
+
+msgid "RadLex series naming from anatomy."
+msgstr "RadLex-Serienbenennung aus Anatomie."
+
+msgid "CT Head detail in Harmonize Description."
+msgstr "Schädel-CT-Details in Harmonize-Beschreibung."
+
+msgid "Head CT/MR face de-identify."
+msgstr "Gesichts-De-Identifikation bei Schädel-CT/MR."
+
+msgid "Wait for the current model download to finish before starting another."
+msgstr "Warten Sie, bis der aktuelle Modell-Download abgeschlossen ist, bevor Sie einen weiteren starten."
+
+msgid "Download"
+msgstr "Herunterladen"
+
+msgid "Remove"
+msgstr "Entfernen"
+
+msgid "The downloaded models for this tool will be removed from disk. Are you sure?"
+msgstr "Die heruntergeladenen Modelle für dieses Tool werden von der Festplatte gelöscht. Sind Sie sicher?"
+
+msgid "Apply license"
+msgstr "Lizenz anwenden"
+
+msgid "Validating"
+msgstr "Wird validiert"
+
+msgid "License not saved"
+msgstr "Lizenz nicht gespeichert"
+
+msgid "License saved"
+msgstr "Lizenz gespeichert"
+
+msgid "Preparing model download"
+msgstr "Modell-Download wird vorbereitet"
+
+msgid "Model download did not complete."
+msgstr "Modell-Download nicht abgeschlossen."
+
+msgid "OCR model download did not complete. Check your network connection and try again."
+msgstr "OCR-Modell-Download wurde nicht abgeschlossen. Überprüfen Sie Ihre Netzwerkverbindung und versuchen Sie es erneut."
+
+msgid "Downloading. This may take several minutes."
+msgstr "Wird heruntergeladen. Dies kann mehrere Minuten dauern."
+
+msgid "Not installed."
+msgstr "Nicht installiert."
+
+msgid "Download selected resolution."
+msgstr "Ausgewählte Auflösung herunterladen."
+
+#, python-brace-format
+msgid "Also installed: {others}."
+msgstr "Auch installiert: {others}."
+
+msgid "Installed."
+msgstr "Installiert."
+
+msgid "Download failed."
+msgstr "Download fehlgeschlagen."
+
+msgid "Setup required."
+msgstr "Einrichtung erforderlich."
+
+msgid "TotalSegmentator unavailable."
+msgstr "TotalSegmentator nicht verfügbar."
+
+msgid "OpenMP required (e.g. brew install libomp)."
+msgstr "OpenMP erforderlich (z. B. brew install libomp)."
+
+msgid "Installed (0.5 x 0.5 x 1 mm)."
+msgstr "Installiert (0,5 x 0,5 x 1 mm)."
+
+msgid "Academic license required."
+msgstr "Akademische Lizenz erforderlich."
+
+msgid "Installed (1.5 mm)."
+msgstr "Installiert (1,5 mm)."
+
+#, python-brace-format
+msgid "CT anatomy 1.5 mm (part {n}/5)"
+msgstr "CT-Anatomie 1,5 mm (Teil {n}/5)"
+
+#, python-brace-format
+msgid "MR anatomy 1.5 mm (part {n}/2)"
+msgstr "MR-Anatomie 1,5 mm (Teil {n}/2)"
+
+msgid "CT anatomy 1.5 mm (parts 15)"
+msgstr "CT-Anatomie 1,5 mm (Teile 1-5)"
+
+msgid "MR anatomy 1.5 mm (parts 12)"
+msgstr "MR-Anatomie 1,5 mm (Teile 1-2)"
+
+msgid "OCR models"
+msgstr "OCR-Modelle"
+
+msgid "Installed. Test in Series View before batch use."
+msgstr "Installiert. In der Serienansicht testen, bevor die Stapelverarbeitung verwendet wird."
+
+msgid "Installed: 1.5 mm."
+msgstr "Installiert: 1,5 mm."
+
+msgid "Installed: 0.5 x 0.5 x 1 mm."
+msgstr "Installiert: 0,5 x 0,5 x 1 mm."
+
+#, python-brace-format
+msgid "Free academic license (aca_) from {url}"
+msgstr "Kostenlose akademische Lizenz (aca_) von {url}"
+
+msgid "AI Features Setup"
+msgstr "KI-Funktionen einrichten"
+
+msgid "Download models and choose Harmonize resolution for this workstation."
+msgstr "Modelle herunterladen und Harmonize-Auflösung für diesen Arbeitsplatz wählen."
+
+msgid "algorithm"
+msgstr "Algorithmus"
+
+msgid "algorithms"
+msgstr "Algorithmen"
+
+msgid "Available memory"
+msgstr "Verfügbarer Speicher"
+
+msgid "Recommended"
+msgstr "Empfohlen"
+
+msgid "Continue anyway?"
+msgstr "Trotzdem fortfahren?"
+
+msgid "Insufficient memory"
+msgstr "Unzureichender Speicher"
+
+msgid "Low memory warning"
+msgstr "Warnung: wenig Speicher"
+
+msgid "No algorithms selected."
+msgstr "Keine Algorithmen ausgewählt."
+
+msgid "AI batch process cancelled before start."
+msgstr "KI-Stapelverarbeitung vor dem Start abgebrochen."
+
+msgid "AI batch process cancelled."
+msgstr "KI-Stapelverarbeitung abgebrochen."
+
+msgid "Auto-applied study description"
+msgstr "Studienbeschreibung automatisch angewendet"
+
+msgid "Cancelling after current step"
+msgstr "Wird nach aktuellem Schritt abgebrochen"
+
+msgid "Current"
+msgstr "Aktuell"
+
+msgid "Preparing face blur preview"
+msgstr "Vorschau für Gesichtsunschärfe wird vorbereitet"
+
+msgid "Save"
+msgstr "Speichern"
+
+msgid "Current  face region (green)"
+msgstr "Aktuell  Gesichtsbereich (grün)"
+
+msgid "Review side-by-side, then Save to keep."
+msgstr "Nebeneinander überprüfen, dann Speichern wählen, um Änderungen beizubehalten."
+
+msgid "Modality Whitelist"
+msgstr "Modalitäten-Whitelist"
+
+msgid ""
+"No modalities found in the selected studies.\n"
+"\n"
+"Verify your study selection includes series with readable DICOM files."
+msgstr ""
+"Keine Modalitäten in den ausgewählten Studien gefunden.\n"
+"\n"
+"Stellen Sie sicher, dass Ihre Studienauswahl Serien mit lesbaren DICOM-Dateien enthält."
+
+msgid "(no whitelist terms)"
+msgstr "(keine Freigabelisten-Begriffe)"
+
+msgid "Effective OCR whitelist terms and match strictness for selected studies (project settings when saved, otherwise modality defaults)."
+msgstr "Effektive OCR-Freigabelisten-Begriffe und Übereinstimmungsstrenge für ausgewählte Studien (Projekteinstellungen wenn gespeichert, sonst Modalitäts-Standards)."
+
+msgid "Read-only. Edit whitelist terms in Series View before running batch."
+msgstr "Nur Lesen. Freigabelisten-Begriffe vor der Stapelverarbeitung in der Serienansicht bearbeiten."
+
+msgid "Proposed face blur using"
+msgstr "Vorgeschlagene Gesichtsunschärfe mit"
+
+msgid "Quality assurance pending."
+msgstr "Qualitätssicherung ausstehend."
+
+msgid "QA PASS"
+msgstr "QS BESTANDEN"
+
+msgid "slices"
+msgstr "Schichten"
+
+msgid "Study Description (LOINC)"
+msgstr "Studienbeschreibung (LOINC)"
+
+msgid "Several LOINC study descriptions are close matches. Choose one."
+msgstr "Mehrere LOINC-Studienbeschreibungen stimmen weitgehend überein. Wählen Sie eine aus."
+
+msgid "Series descriptions"
+msgstr "Serienbeschreibungen"
+
+msgid "Study description"
+msgstr "Studienbeschreibung"
+
+msgid "No LOINC matches"
+msgstr "Keine LOINC-Übereinstimmungen"
+
+msgid "Also apply to other studies with the same series descriptions"
+msgstr "Auch auf andere Studien mit denselben Serienbeschreibungen anwenden"
+
+msgid "Apply"
+msgstr "Anwenden"
+
+msgid "User Manual"
+msgstr "Benutzerhandbuch"
+
+msgid "Start here"
+msgstr "Hier starten"
+
+msgid "Install and first launch"
+msgstr "Installation und erster Start"
+
+msgid "Create a project"
+msgstr "Projekt anlegen"
+
+msgid "Bring images in"
+msgstr "Bilder holen"
+
+msgid "Dataset"
+msgstr "Datensatz"
+
+msgid "AI Features setup"
+msgstr "KI-Funktionen einrichten"
+
+msgid "Remove burned-in text"
+msgstr "Eingebrannten Text entfernen"
+
+msgid "Harmonize names"
+msgstr "Namen harmonisieren"
+
+msgid "Blur faces"
+msgstr "Gesichter unscharf machen"
+
+msgid "Run on many studies"
+msgstr "Auf vielen Studien ausführen"
+
+msgid "Run without the window"
+msgstr "Ohne Fenster ausführen"
+
+msgid "Troubleshooting"
+msgstr "Fehlerbehebung"
+
+msgid "Tutorials"
+msgstr "Tutorials"
+
+msgid "Could not open the user manual in a browser. Check your network or build docs locally (mkdocs serve)."
+msgstr "Das Benutzerhandbuch konnte nicht im Browser geöffnet werden. Prüfen Sie das Netzwerk oder bauen Sie die Docs lokal (mkdocs serve)."
 

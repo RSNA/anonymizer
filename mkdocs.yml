@@ -1,0 +1,103 @@
+site_name: RSNA DICOM Anonymizer
+site_description: Clinician user manual for the RSNA DICOM Anonymizer (V19)
+site_url: https://rsna.github.io/anonymizer/
+repo_url: https://github.com/RSNA/anonymizer
+repo_name: RSNA/anonymizer
+edit_uri: edit/V19/docs/
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.media
+    - toc.follow
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+  - i18n:
+      docs_structure: folder
+      fallback_to_default: true
+      reconfigure_material: true
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/RSNA/anonymizer
+
+exclude_docs: |
+  _legacy_html/**
+  tutorials/scripts/**
+  **/shots/.gitkeep
+
+nav:
+  - Home: index.md
+  - 1. Start here: 01-start-here/index.md
+  - 2. Install and first launch: 02-install/index.md
+  - 3. Words we use: 03-words-we-use/index.md
+  - 4. Create a project: 04-create-project/index.md
+  - 5. Search: 05-search/index.md
+  - 6. View:
+      - Dataset: 06-view/index.md
+      - Series: 06-view/series.md
+  - 7. Process:
+      - 07-process/index.md
+      - 7.1 AI Features setup: 07-process/01-ai-features-setup/index.md
+      - 7.2 Remove burned-in text: 07-process/02-remove-burned-in-text/index.md
+      - 7.3 Harmonize names: 07-process/03-harmonize-names/index.md
+      - 7.4 Blur faces: 07-process/04-blur-faces/index.md
+      - 7.5 Run on many studies: 07-process/05-run-on-many-studies/index.md
+  - 8. Send: 08-send/index.md
+  - 9. Run without the window: 09-headless/index.md
+  - Reference:
+      - De-identification protocol: deidentification-protocol.md
+      - Troubleshooting: troubleshooting.md
+      - Tutorials:
+          - Overview: tutorials/index.md
+          - T1 Install: tutorials/t1-install.md
+          - T2 Project import: tutorials/t2-project-import.md
+          - T3 Burned-in text: tutorials/t3-burned-in.md
+          - T4 Harmonize: tutorials/t4-harmonize.md
+          - T5 Face blur: tutorials/t5-face-blur.md
+          - T6 Batch: tutorials/t6-batch.md
+      - Screenshots style guide: screenshots-style-guide.md
+      - License: license.md

@@ -1,173 +1,172 @@
-# Whitelist for common terms found on Ultrasound (US) images
-# One term/phrase per line. Case-insensitive matching is assumed after loading.
-# Lines starting with # are comments and will be ignored.
+# Freigabeliste für häufige Begriffe auf Ultraschallbildern
+# Ein Begriff/Ausdruck pro Zeile. Groß-/Kleinschreibung wird beim Laden ignoriert.
+# Zeilen, die mit # beginnen, sind Kommentare und werden ignoriert.
 
-# --- Laterality ---
+# --- Seitigkeit ---
 L
 R
-LEFT
-RIGHT
+LINKS
+RECHTS
 LT
 RT
-BILATERAL
-BILAT
+BEIDSEITIG
 
-# --- Orientation / Position ---
+# --- Orientierung / Position ---
 SAG # Sagittal
-TRV # Transverse
-TRA # Transverse
-COR # Coronal
+TRV # Querschnitt
+TRA # Querschnitt
+COR # Koronal
 LONG # Longitudinal
 AXIAL
 AX
-OBLIQUE
-SUPINE
-PRONE
-DECUBITUS
-LLD # Left Lateral Decubitus
-RLD # Right Lateral Decubitus
-ERECT
-SEMI-ERECT
-SITTING
+SCHRÄG
+RÜCKENLAGE
+BAUCHLAGE
+SEITENLAGE
+LLD # Linke Seitenlage
+RLD # Rechte Seitenlage
+AUFRECHT
+HALBAUFRECHT
+SITZEND
 
-# --- Anatomy (Very General - Add specific non-PHI terms carefully) ---
-HEAD
-NECK
-THYROID
-CAROTID
-CHEST
-BREAST
+# --- Anatomie (sehr allgemein – nur spezifische Nicht-PHI-Begriffe sorgfältig hinzufügen) ---
+KOPF
+HALS
+SCHILDDRÜSE
+HALSSCHLAGADER
+THORAX
+BRUST
 ABDOMEN
-LIVER
-GALLBLADDER
+LEBER
+GALLENBLASE
 GB
-CBD # Common Bile Duct
-PANCREAS
-SPLEEN
-KIDNEY
-RENAL
+CBD # Ductus choledochus
+BAUCHSPEICHELDRÜSE
+MILZ
+NIERE
+NIEREN
 AORTA
 IVC
-PELVIS
-UTERUS
-OVARY
-PROSTATE
-TESTIS
-SCROTUM
-BLADDER
-EXTREMITY
+BECKEN
+GEBÄRMUTTER
+EIERSTOCK
+PROSTATA
+HODEN
+HODENSACK
+BLASE
+EXTREMITÄT
 ARM
-LEG
-VENOUS
-ARTERIAL
-DVT # Deep Vein Thrombosis
-APPENDIX
-HEART # Echocardiography terms often differ significantly
+BEIN
+VENÖS
+ARTERIELL
+DVT # Tiefe Venenthrombose
+WURMFORTSATZ
+HERZ # Echokardiografie-Begriffe unterscheiden sich oft deutlich
 FETAL
-OB # Obstetrics
-GYN # Gynecology
+OB # Geburtshilfe
+GYN # Gynäkologie
 
-# --- Scanner / Technical Parameters ---
+# --- Scanner / Technische Parameter ---
 US
-ULTRA SOUND
+ULTRASCHALL
 SONO
-SONOGRAM
-PROBE
-TRANSDUCER
+SONOGRAMM
+SONDE
+WANDLER
 LINEAR
-CURVED
-SECTOR
-ENDO # Endocavitary (e.g., Endovaginal, Endorectal)
+GEKRÜMMT
+SEKTOR
+ENDO # Endokavitär (z. B. endovaginal, endorektal)
 EV # Endovaginal
-ER # Endorectal
-FREQ # Frequency
+ER # Endorektal
+FREQ # Frequenz
 MHZ # Megahertz
 GAIN
-TGC # Time Gain Compensation
-DEPTH
-FOCUS
+TGC # Zeitverstärkungskompensation
+TIEFE
+FOKUS
 FOV
 ZOOM
-HARMONIC
-THI # Tissue Harmonic Imaging
+HARMONISCH
+THI # Gewebe-Harmonische Bildgebung
 COMPOUND
-POWER
+LEISTUNG
 DOPPLER
-COLOR
-CD # Color Doppler
-PWR # Power Doppler
-PW # Pulsed Wave Doppler
-CW # Continuous Wave Doppler
-SPECTRAL
+FARBE
+CD # Farbdoppler
+PWR # Power-Doppler
+PW # Puls-Doppler
+CW # Kontinuierlicher Wellen-Doppler
+SPEKTRAL
 VEL # Velocity
-PRF # Pulse Repetition Frequency
+PRF # Puls-Wiederholungsfrequenz
 FILTER
-SCALE
-ANGLE
+SKALA
+WINKEL
 CURSOR
-CALIPER
-MEASURE
+SCHIEBE
+MESSUNG
 DIST # Distance
-AREA
-VOLUME
+FLÄCHE
+VOLUMEN
 VOL
-MI # Mechanical Index
-TIS # Thermal Index Soft Tissue
-TIB # Thermal Index Bone
-TIC # Thermal Index Cranial Bone
-FR # Frame Rate
-FPS # Frames Per Second
-GRAYSCALE
-B MODE
-M MODE
+MI # Mechanischer Index
+TIS # Thermischer Index Weichteil
+TIB # Thermischer Index Knochen
+TIC # Thermischer Index Schädelknochen
+FR # Bildrate
+FPS # Bilder pro Sekunde
+GRAUSTUFEN
+B-MODUS
+M-MODUS
 
-# --- Measurements / Units ---
+# --- Messungen / Einheiten ---
 MM
 CM
-M/S # Meters per second
-CM/S # Centimeters per second
+M/S # Meter pro Sekunde
+CM/S # Zentimeter pro Sekunde
 KHZ # Kilohertz
 HZ # Hertz
-DEG # Degrees
+DEG # Grad
 
-# --- Miscellaneous ---
-SERIES
-IMAGE
+# --- Verschiedenes ---
+SERIE
+BILD
 IMG
 CINE
-LOOP
+SCHLEIFE
 CLIP
-VIEW
-PLANE
+ANSICHT
+EBENE
 SCAN
 NO
 NUM
-NUMBER
-EXAM DATE
-EXAM TIME
-ACQ DATE
-ACQ TIME
+NUMMER
+UNTERSUCHUNGSDATUM
+UNTERSUCHUNGSZEIT
+ERFASSUNGSDATUM
+ERFASSUNGSZEIT
 POS
 POSITION
 REF
-REFERENCE
-NONE
+REFERENZ
+KEINE
 N/A
-VARIOUS
-SEE REPORT
-CLINICAL HISTORY
-PROTOCOL
+VERSCHIEDEN
+SIEHE BEFUND
+KLINISCHE ANAMNESE
+PROTOKOLL
 AUTO
-FREEZE
-PRINT
-STORE
+EINFRIEREN
+DRUCK
+SPEICHERN
 
-# --- Common Artifacts / Descriptions (Use cautiously) ---
-SHADOWING
-ENHANCEMENT
-REVERBERATION
-MIRROR
-ARTIFACT
+# --- Häufige Artefakte / Beschreibungen (vorsichtig verwenden) ---
+SCHATTEN
+VERSTÄRKUNG
+NACHKLANG
+SPIEGEL
+ARTEFAKT
 
-# --- Add institution-specific, non-PHI identifiers if necessary ---
-# E.g., US_ROOM_3, SONOGRAPHER_ID_XYZ
+# --- Institutionsbezogene Nicht-PHI-Kennungen bei Bedarf hinzufügen ---
+# Z. B. US_ROOM_3, SONOGRAPHER_ID_XYZ

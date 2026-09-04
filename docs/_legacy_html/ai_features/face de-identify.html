@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RSNA DICOM Anonymizer Face De-identify</title>
+    <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+	<h1>Face De-identify</h1>
+	<p>
+	On some <b>head CT</b> scans, facial features in the reconstructed images could allow someone to recognize a patient even after DICOM tags are removed.
+	<b>Face De-identify</b> finds the face region in the scan, blurs those voxels, and saves updated images suitable for research sharing.
+	</p>
+
+	<h2>What you need before using it</h2>
+	<ol>
+		<li>On the <b>Welcome</b> screen, click <b>AI Features</b>.</li>
+		<li>Check <b>Face De-identify</b>.</li>
+		<li>Click <b>Download</b> for the face segmentation model if prompted.</li>
+		<li>Accept the <b>academic license</b> when prompted (required by the segmentation software vendor). This is a one-time acknowledgement on your machine.</li>
+		<li>Save your settings.</li>
+	</ol>
+
+	<h2>Which studies qualify</h2>
+	<ul>
+		<li><b>Modality:</b> CT only.</li>
+		<li><b>Anatomy:</b> Head or head-and-neck coverage where a face segmentation is feasible.</li>
+		<li>Very small fields of view, corrupted stacks, or non-diagnostic scouts may be skipped with a message explaining why.</li>
+	</ul>
+
+	<h2>How it works (in plain terms)</h2>
+	<ol>
+		<li>The tool converts the CT series into a 3D volume.</li>
+		<li>It runs a face segmentation model to locate voxels belonging to the face.</li>
+		<li>It blurs those voxels using the blur mode you selected (see below).</li>
+		<li>Blurred slices are written as a new DICOM series (or update path used by your workflow) while preserving geometry and unrelated anatomy.</li>
+		<li>Segmentation masks are cached so re-running on the same series is faster.</li>
+	</ol>
+
+	<h2>Blur modes</h2>
+	<ul>
+		<li><b>Gaussian blur</b> — smooth blur inside the face mask (common default).</li>
+		<li><b>Mean / median blur</b> — alternative smoothing styles; choose in Series View or batch options if available.</li>
+	</ul>
+	<p>After batch or automatic blur, open the <b>Face blur review</b> dialog when offered to confirm coverage on sample slices before export.</p>
+
+	<h2>Using Series View (one series)</h2>
+	<ol>
+		<li>Open <b>Series View</b> for a qualifying head CT series.</li>
+		<li>Run face blur from the series actions (when enabled and ready).</li>
+		<li>Review axial slices in the review dialog: check that the face is covered and that critical anatomy outside the mask is unchanged.</li>
+		<li>Accept or re-run with <b>force</b> if you changed inputs and need a fresh segmentation.</li>
+	</ol>
+
+	<h2>Batch processing many studies</h2>
+	<p>See <a href="ai batch process.html">AI Batch Process</a>. Select <b>Face De-identify</b> in the batch dialog. Ineligible series are skipped and counted in the batch summary.</p>
+
+	<h2>Limitations and tips</h2>
+	<ul>
+		<li>Designed for CT head data — not for plain radiographs or MRI facial sequences.</li>
+		<li>Always review a subset of blurred series; segmentation can miss unusual positioning or extreme anatomy.</li>
+		<li>Blurring reduces recognizability but is not a guarantee against all re-identification risk.</li>
+		<li>Face model download and license acceptance require internet once; processing itself is local.</li>
+	</ul>
+
+	<h2>Related help pages</h2>
+	<ul>
+		<li><a href="../2_ai features.html">AI Features</a></li>
+		<li><a href="ai batch process.html">AI Batch Process</a></li>
+	</ul>
+
+</body>
+</html>

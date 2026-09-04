@@ -24,7 +24,7 @@ from anonymizer.utils.translate import _
 LOG_FILENAME = "anonymizer.log"
 LOG_SIZE = 1024 * 1024 * 100  # 100 MB
 LOG_BACKUP_COUNT = 10
-LOG_DEFAULT_LEVEL = logging.DEBUG
+LOG_DEFAULT_LEVEL = logging.INFO
 LOG_FORMAT = "{asctime} {levelname} {threadName} {name}.{funcName}.{lineno} {message}"
 
 
