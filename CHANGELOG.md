@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [19.0.3]
+- Harmonize CT single-pass: keep multilabel segmentation in memory and write only Series View latch masks (fixes missing overlays after stats-only caches)
+- Refuse to publish anatomy JSON without on-disk masks; heal incomplete caches; Clear required before re-Harmonize when masks remain
+- Brain structures prompt for ambiguous anonymized CT (default No); skip ROI fallback after cancel
+- Series View: show Segmentation thickness from cache; cancel-after-step UX for Harmonize / Face Blur
+
 ## [19.0.2]
 - Help menu: User Manual (browser), Tutorials (YouTube), License (in-app HTMLView); drop per-chapter menu entries
 - GitHub Pages: serve MkDocs Actions build at site root so user-manual landing links work
