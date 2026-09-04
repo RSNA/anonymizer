@@ -41,6 +41,7 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     apply_instance_pixel_phi_for_dcm,
     describe_match_settings,
     load_modality_whitelist,
+    load_modality_whitelist_match_settings,
     pixel_phi_removal_mode_display_label,
     remove_pixel_phi,
 )
@@ -54,7 +55,6 @@ from anonymizer.controller.runner import (
 )
 from anonymizer.controller.series_io import load_series_frames, save_series_frames
 from anonymizer.utils.memory import MemoryGuard, MemorySnapshot, capture_memory_snapshot, collect_garbage_safe
-from anonymizer.utils.storage import load_modality_whitelist_match_settings
 from anonymizer.utils.translate import _
 
 if TYPE_CHECKING:

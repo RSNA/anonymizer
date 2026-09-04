@@ -18,6 +18,7 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     detect_text,
     download_ocr_models,
     load_modality_whitelist,
+    load_modality_whitelist_match_settings,
     ocr_image_for_frame,
     ocr_models_ready,
     remove_pixel_phi,
@@ -271,8 +272,6 @@ class RemovePixelPhiRunner:
         modality = str(work_state.ds.get("Modality", "") or "") if work_state.ds else ""
         whitelist_match = options.whitelist_match
         if whitelist_match is None and options.project_dir is not None:
-            from anonymizer.utils.storage import load_modality_whitelist_match_settings
-
             whitelist_match = load_modality_whitelist_match_settings(options.project_dir, modality or None)
         for index, dcm_path in enumerate(paths, start=1):
             if work_state.should_cancel():

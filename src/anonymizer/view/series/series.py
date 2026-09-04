@@ -24,6 +24,10 @@ from anonymizer.controller.ai.blur_face import (
     face_blur_gate_message,
     face_blur_status_applicable,
 )
+from anonymizer.controller.ai.feature_availability import (
+    face_blur_allowed,
+    harmonize_allowed_for_modality,
+)
 from anonymizer.controller.ai.remove_pixel_phi import (
     OcrWhitelistMatchMode,
     OcrWhitelistMatchSettings,
@@ -36,6 +40,7 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     describe_match_settings,
     filter_ocr_whitelist_only,
     load_modality_whitelist,
+    load_modality_whitelist_match_settings,
     match_mode_description,
     match_mode_menu_label,
     match_mode_menu_labels,
@@ -44,6 +49,7 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     pixel_phi_removal_mode_menu_labels,
     pixel_phi_removal_mode_option_label,
     remove_ocr_text_from_frame,
+    save_modality_whitelist_match_settings,
 )
 from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir, tseg_cache_summary
 from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
@@ -79,9 +85,7 @@ from anonymizer.utils.memory import collect_garbage_safe, log_process_memory
 from anonymizer.utils.storage import (
     get_dcm_files,
     load_default_whitelist,
-    load_modality_whitelist_match_settings,
     project_dir_from_series_path,
-    save_modality_whitelist_match_settings,
     save_project_whitelist,
 )
 from anonymizer.utils.translate import _
@@ -91,10 +95,6 @@ from anonymizer.view.ai.blur_face_results import (
     face_blur_mode_menu_values,
 )
 from anonymizer.view.ai.face_blur_review_dialog import show_face_blur_review_dialog
-from anonymizer.view.ai.features.availability import (
-    face_blur_allowed,
-    harmonize_allowed_for_modality,
-)
 from anonymizer.view.ai.harmonize_results import (
     HarmonizeBatchOutcome,
     focus_harmonize_view,

@@ -13,6 +13,7 @@ from tkinter import messagebox, ttk
 import customtkinter as ctk
 from pydicom import Dataset
 
+from anonymizer.controller.ai.feature_availability import brain_structures_allowed
 from anonymizer.controller.ai.harmonize import (
     HarmonizedResult,
     HarmonizeProgress,
@@ -39,7 +40,6 @@ from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import StudyPhiHeader
 from anonymizer.utils.modalities import is_mr_modality
 from anonymizer.utils.translate import _
-from anonymizer.view.ai.features.availability import brain_structures_allowed
 from anonymizer.view.ai.features.catalog import AiFeatureId, feature_description
 from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel

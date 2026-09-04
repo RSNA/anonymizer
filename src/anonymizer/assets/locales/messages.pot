@@ -1800,20 +1800,35 @@ msgstr ""
 msgid "Easy to use, advanced DICOM expertise not required!"
 msgstr ""
 
-msgid "Use it to ensure privacy by removing protected identity & health information (PHI/PII) from both metadata and burnt into pixel data."
+msgid ""
+"Remove protected identity and health information (PHI/PII) from DICOM metadata. "
+"Optional AI can remove burned-in text on all modalities, and blur faces on head CT/MR."
 msgstr ""
+"Remove protected identity and health information (PHI/PII) from DICOM metadata. "
+"Optional AI can remove burned-in text on all modalities, and blur faces on head CT/MR."
 
-msgid "Go to Help/Overview for a quick overview."
+msgid ""
+"For CT and MR, optionally harmonize study descriptions using LOINC study names "
+"and series descriptions using the RSNA RadLex Playbook."
 msgstr ""
+"For CT and MR, optionally harmonize study descriptions using LOINC study names "
+"and series descriptions using the RSNA RadLex Playbook."
 
-msgid "Go to Help/Project settings for instructions on how to configure the program."
-msgstr ""
+msgid "Open Help → User Manual → Start here for how to configure and use the program."
+msgstr "Open Help → User Manual → Start here for how to configure and use the program."
 
-msgid "Go to Help/Operation for instructions on how to use the program."
-msgstr ""
+msgid "Use the AI Features button on this screen to download models and set Harmonize resolution."
+msgstr "Use the AI Features button on this screen to download models and set Harmonize resolution."
 
-msgid "Select File/New Project to start."
-msgstr ""
+msgid "Select File → New Project to start."
+msgstr "Select File → New Project to start."
+
+msgid "LOINC"
+msgstr "LOINC"
+
+msgid "RSNA RadLex Playbook"
+msgstr "RSNA RadLex Playbook"
+
 
 msgid "SPONSOR MESSAGE"
 msgstr ""

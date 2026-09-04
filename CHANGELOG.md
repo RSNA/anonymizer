@@ -5,8 +5,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [19.0.1]
+- First official V19 release
+- Clinician user manual: MkDocs Material site under `docs/en/` (English only for now), GitHub Pages workflow, Help menu opens the published manual in the browser (local `site/` fallback)
+- Headless AI batch: companion `AiBatchConfig.json` plus `--ai-batch` / `--ai-batch-run` CLI flags (one-shot batch; SCP unchanged)
+- Support Python 3.11 as well as 3.12 (`requires-python >=3.11,<3.13`; Ruff `py311`; CI matrix on both; docs updated) — ports [#38](https://github.com/RSNA/anonymizer/pull/38)
 - Harmonize: RSNA Playbook slice-thickness tokens (`Thin`, `Thick`) inferred from DICOM geometry/tags; standard-range thickness omitted per CT Sandbox SeriesNameV4
 - Harmonize: detect Series Type Modifier (`MPR` for derived reformats); show in dialog, omit from description per SeriesNameV4
+- Harmonize: CT anatomy + contrast in one TotalSegmentator `total`+`statistics` pass (MR / contrast-off stay dual-path); cooperative UX and stage timings
+- Harmonize / AI Features: persist workstation CT/MR resolution prefs in app state; Playbook gettext tokens; locale catalog refresh
+- Series / Projection: faster startup path; harden Harmonize results UX and Series View load/latch behavior
+- View Projections: convert RGB ultrasound single frames to grayscale before CLAHE/Canny (fixes OpenCV assert on color US)
+- MVC: AI feature gates in `controller/ai/feature_availability.py`; AI prefs helpers in `tseg.config`; `resolve_primary_segment_files` in `seg_retention`; whitelist match I/O in `remove_pixel_phi`; memory warn/abort defaults in `utils.memory`
+- Move developer scripts (`dev_anonymizer`, welcome sizing check, Harmonize benchmark) under `src/prototyping/`; simplify PyPI install docs (uv-first)
+- Docs: refresh `class_diagram.md` for V19 MVC + AI packages; package flowcharts under `docs/mvc/`
 
 ## [19.0.0.dev12]
 - Harmonize: cooperative cancellation (skip contrast/merge after cancel; in-flight TotalSegmentator inference still runs to completion)

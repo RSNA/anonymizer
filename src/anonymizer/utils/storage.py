@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import contextlib
 import io
-import json
 import logging
 import os
 import sys
@@ -237,42 +236,6 @@ def project_whitelist_path(project_dir: Path, modality_code: str) -> Path:
 
 def project_whitelist_options_path(project_dir: Path, modality_code: str) -> Path:
     return project_dir / Path("whitelists/" + modality_code.lower() + ".options.json")
-
-
-def load_modality_whitelist_match_settings(
-    project_dir: Path | None,
-    modality_code: str | None,
-):
-    """Load per-modality OCR whitelist match settings from sidecar JSON."""
-    from anonymizer.controller.ai.remove_pixel_phi import (
-        OcrWhitelistMatchSettings,
-        default_whitelist_match_settings,
-    )
-
-    if not modality_code or project_dir is None:
-        return default_whitelist_match_settings()
-    options_path = project_whitelist_options_path(project_dir, modality_code)
-    if options_path.is_file():
-        try:
-            data = json.loads(options_path.read_text(encoding="utf-8"))
-            return OcrWhitelistMatchSettings.from_dict(data)
-        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
-            logger.warning("Could not load whitelist match settings from %s: %s", options_path, exc)
-    return default_whitelist_match_settings()
-
-
-def save_modality_whitelist_match_settings(
-    project_dir: Path,
-    modality_code: str,
-    settings,
-) -> Path:
-    """Persist per-modality OCR whitelist match settings to sidecar JSON."""
-    if not project_dir.is_dir():
-        raise ValueError(f"{project_dir} is not a valid directory")
-    filepath = project_whitelist_options_path(project_dir, modality_code)
-    filepath.parent.mkdir(parents=True, exist_ok=True)
-    filepath.write_text(json.dumps(settings.to_dict(), indent=2) + "\n", encoding="utf-8")
-    return filepath
 
 
 def project_dir_from_series_path(series_path: Path) -> Path | None:

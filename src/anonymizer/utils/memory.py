@@ -12,9 +12,15 @@ from typing import Literal
 
 import numpy as np
 
+from anonymizer.utils.translate import _
+
 logger = logging.getLogger(__name__)
 
 MemoryPressure = Literal["ok", "warn", "abort"]
+
+# Default AI batch MemoryGuard thresholds (available RAM, MB).
+BATCH_MEMORY_WARN_AVAILABLE_MB = 3_000
+BATCH_MEMORY_ABORT_AVAILABLE_MB = 1_024
 
 
 @dataclass(frozen=True)
@@ -57,8 +63,6 @@ def capture_memory_snapshot() -> MemorySnapshot | None:
 
 def format_memory_snapshot_label(snapshot: MemorySnapshot) -> str:
     """User-facing one-line memory summary for batch dialog."""
-    from anonymizer.utils.translate import _
-
     return _("Memory available") + f": {snapshot.available_mb / 1024:.1f} GB"
 
 
@@ -69,8 +73,6 @@ def estimate_batch_resources(
     includes_face_blur: bool,
 ) -> BatchResourceEstimate:
     """Heuristic minimum available system memory (MB) for one AI batch series."""
-    from anonymizer.utils.translate import _
-
     base_mb = 1_500.0
     if includes_pixel_phi:
         base_mb += 1_500.0
@@ -100,11 +102,6 @@ class MemoryGuard:
         warn_available_mb: float | None = None,
         abort_available_mb: float | None = None,
     ) -> None:
-        from anonymizer.controller.ai.tseg.config import (
-            BATCH_MEMORY_ABORT_AVAILABLE_MB,
-            BATCH_MEMORY_WARN_AVAILABLE_MB,
-        )
-
         self._warn_available_mb = (
             warn_available_mb if warn_available_mb is not None else float(BATCH_MEMORY_WARN_AVAILABLE_MB)
         )
@@ -165,7 +162,7 @@ def collect_garbage_safe(*, generations: int = 1) -> None:
             threading.current_thread().name,
         )
         return
-    for _ in range(max(1, generations)):
+    for _generation in range(max(1, generations)):
         gc.collect()
 
 

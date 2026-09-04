@@ -1,4 +1,4 @@
-"""AI Features availability: gates, status, inventory, download manager, license UX."""
+"""AI Features availability: status, inventory, download manager, license UX."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
 
+from anonymizer.controller.ai import feature_availability as feature_gates
 from anonymizer.controller.ai.remove_pixel_phi import (
     OcrModelStatus,
     ocr_models_ready,
@@ -32,17 +33,12 @@ from anonymizer.controller.ai.tseg.model_cache import (
 )
 from anonymizer.controller.ai.tseg.readiness import (
     TsWeightKind,
-    anatomy_ct_ready,
-    anatomy_mr_ready,
     brain_structures_ready,
-    face_ct_ready,
     face_license_available,
-    face_mr_ready,
     totalsegmentator_available,
     ts_academic_license_url,
     xgboost_available,
 )
-from anonymizer.utils.modalities import is_mr_modality
 from anonymizer.utils.storage import (
     any_model_download_active,
     begin_model_download,
@@ -91,123 +87,11 @@ _FRIENDLY_TASK_LABELS: dict[int, str] = {
 }
 
 
-# --- Readiness gates ---
-
-
-def pixel_phi_allowed() -> bool:
-    return ocr_models_ready()
-
-
-def harmonize_allowed() -> bool:
-    """True when TotalSegmentator can run Harmonize for any installed CT or MR pack."""
-    if not totalsegmentator_available():
-        return False
-    if installed_mr_segmentation_modes():
-        return True
-    return bool(installed_ct_segmentation_modes()) and xgboost_available()
-
-
-def harmonize_allowed_for_modality(modality: object | None) -> bool:
-    """True when Harmonize models for ``modality`` are installed and runnable."""
-    if not totalsegmentator_available():
-        return False
-    if is_mr_modality(modality):
-        return bool(installed_mr_segmentation_modes())
-    return bool(installed_ct_segmentation_modes()) and xgboost_available()
-
-
-def face_blur_allowed() -> bool:
-    return totalsegmentator_available() and face_license_available() and (face_ct_ready() or face_mr_ready())
-
-
-def brain_structures_allowed() -> bool:
-    return (
-        totalsegmentator_available()
-        and xgboost_available()
-        and face_license_available()
-        and brain_structures_ready()
-    )
-
-
-def any_ai_batch_feature_allowed() -> bool:
-    return pixel_phi_allowed() or harmonize_allowed() or face_blur_allowed()
-
-
-# --- Model presence / needs-download ---
+# --- Status lines ---
 
 
 def _download_in_progress(download_id: str) -> bool:
     return get_model_download_progress(download_id) is not None
-
-
-def remove_pixel_phi_has_models() -> bool:
-    return ocr_models_ready()
-
-
-def harmonize_has_models() -> bool:
-    return bool(installed_ct_segmentation_modes() or installed_mr_segmentation_modes())
-
-
-def harmonize_ct_has_models() -> bool:
-    return bool(installed_ct_segmentation_modes())
-
-
-def harmonize_mr_has_models() -> bool:
-    return bool(installed_mr_segmentation_modes())
-
-
-def brain_structures_has_models() -> bool:
-    return brain_structures_ready()
-
-
-def face_blur_has_models() -> bool:
-    return face_ct_ready() or face_mr_ready()
-
-
-def face_ct_has_models() -> bool:
-    return face_ct_ready()
-
-
-def face_mr_has_models() -> bool:
-    return face_mr_ready()
-
-
-def remove_pixel_phi_needs_download() -> bool:
-    ocr_status, _ = probe_ocr_models()
-    return ocr_status in {OcrModelStatus.MISSING, OcrModelStatus.FAILED}
-
-
-def harmonize_ct_needs_download() -> bool:
-    """True when the active CT workstation resolution pack is not on disk."""
-    return (
-        totalsegmentator_available()
-        and xgboost_available()
-        and not anatomy_ct_ready(get_ct_segmentation_mode())
-    )
-
-
-def harmonize_mr_needs_download() -> bool:
-    """True when the active MR workstation resolution pack is not on disk."""
-    return totalsegmentator_available() and not anatomy_mr_ready(get_mr_segmentation_mode())
-
-
-def brain_structures_needs_download() -> bool:
-    return totalsegmentator_available() and face_license_available() and not brain_structures_has_models()
-
-
-def face_blur_needs_license() -> bool:
-    return totalsegmentator_available() and not face_license_available()
-
-
-def face_ct_needs_download() -> bool:
-    return totalsegmentator_available() and face_license_available() and not face_ct_has_models()
-
-
-def face_mr_needs_download() -> bool:
-    return totalsegmentator_available() and face_license_available() and not face_mr_has_models()
-
-
-# --- Status lines ---
 
 
 def _harmonize_resolution_status(*, active: object | None, installed: tuple[str, ...]) -> str:
@@ -274,7 +158,7 @@ def ai_feature_status_harmonize_mr() -> str:
 
 
 def ai_feature_status_brain_structures() -> str:
-    if brain_structures_has_models():
+    if feature_gates.brain_structures_has_models():
         return _("Installed (0.5 x 0.5 x 1 mm).")
     if _download_in_progress(DOWNLOAD_ID_BRAIN):
         return _("Downloading…")
@@ -309,14 +193,14 @@ def _face_modality_status(*, ready: bool, downloading: bool) -> str:
 
 def ai_feature_status_face_ct() -> str:
     return _face_modality_status(
-        ready=face_ct_has_models(),
+        ready=feature_gates.face_ct_has_models(),
         downloading=_download_in_progress(DOWNLOAD_ID_FACE_CT),
     )
 
 
 def ai_feature_status_face_mr() -> str:
     return _face_modality_status(
-        ready=face_mr_has_models(),
+        ready=feature_gates.face_mr_has_models(),
         downloading=_download_in_progress(DOWNLOAD_ID_FACE_MR),
     )
 
@@ -530,8 +414,8 @@ def _install_feature_registry() -> None:
             title=partial(feature_title, AiFeatureId.REMOVE_PIXEL_PHI.value),
             summary=partial(feature_summary, AiFeatureId.REMOVE_PIXEL_PHI.value),
             status=ai_feature_status_remove_pixel_phi,
-            needs_download=remove_pixel_phi_needs_download,
-            has_models=remove_pixel_phi_has_models,
+            needs_download=feature_gates.remove_pixel_phi_needs_download,
+            has_models=feature_gates.remove_pixel_phi_has_models,
             download=download_ocr,
             remove=remove_ocr,
         ),
@@ -541,8 +425,8 @@ def _install_feature_registry() -> None:
             title=partial(feature_title, AiModelGroupId.HARMONIZE_CT.value),
             summary=partial(feature_summary, AiModelGroupId.HARMONIZE_CT.value),
             status=ai_feature_status_harmonize_ct,
-            needs_download=harmonize_ct_needs_download,
-            has_models=harmonize_ct_has_models,
+            needs_download=feature_gates.harmonize_ct_needs_download,
+            has_models=feature_gates.harmonize_ct_has_models,
             download=lambda: download_kind(TsWeightKind.ANATOMY),
             remove=lambda: remove_kind(TsWeightKind.ANATOMY),
             has_resolution_picker=True,
@@ -553,8 +437,8 @@ def _install_feature_registry() -> None:
             title=partial(feature_title, AiModelGroupId.HARMONIZE_MR.value),
             summary=partial(feature_summary, AiModelGroupId.HARMONIZE_MR.value),
             status=ai_feature_status_harmonize_mr,
-            needs_download=harmonize_mr_needs_download,
-            has_models=harmonize_mr_has_models,
+            needs_download=feature_gates.harmonize_mr_needs_download,
+            has_models=feature_gates.harmonize_mr_has_models,
             download=lambda: download_kind(TsWeightKind.ANATOMY_MR),
             remove=lambda: remove_kind(TsWeightKind.ANATOMY_MR),
             has_resolution_picker=True,
@@ -565,8 +449,8 @@ def _install_feature_registry() -> None:
             title=partial(feature_title, AiFeatureId.BRAIN_STRUCTURES.value),
             summary=partial(feature_summary, AiFeatureId.BRAIN_STRUCTURES.value),
             status=ai_feature_status_brain_structures,
-            needs_download=brain_structures_needs_download,
-            has_models=brain_structures_has_models,
+            needs_download=feature_gates.brain_structures_needs_download,
+            has_models=feature_gates.brain_structures_has_models,
             download=lambda: download_kind(TsWeightKind.BRAIN_STRUCTURES),
             remove=lambda: remove_kind(TsWeightKind.BRAIN_STRUCTURES),
         ),
@@ -576,8 +460,8 @@ def _install_feature_registry() -> None:
             title=partial(feature_title, AiModelGroupId.FACE_CT.value),
             summary=partial(feature_summary, AiModelGroupId.FACE_CT.value),
             status=ai_feature_status_face_ct,
-            needs_download=face_ct_needs_download,
-            has_models=face_ct_has_models,
+            needs_download=feature_gates.face_ct_needs_download,
+            has_models=feature_gates.face_ct_has_models,
             download=lambda: download_kind(TsWeightKind.FACE),
             remove=lambda: remove_kind(TsWeightKind.FACE),
         ),
@@ -587,8 +471,8 @@ def _install_feature_registry() -> None:
             title=partial(feature_title, AiModelGroupId.FACE_MR.value),
             summary=partial(feature_summary, AiModelGroupId.FACE_MR.value),
             status=ai_feature_status_face_mr,
-            needs_download=face_mr_needs_download,
-            has_models=face_mr_has_models,
+            needs_download=feature_gates.face_mr_needs_download,
+            has_models=feature_gates.face_mr_has_models,
             download=lambda: download_kind(TsWeightKind.FACE_MR),
             remove=lambda: remove_kind(TsWeightKind.FACE_MR),
         ),

@@ -451,7 +451,7 @@ def test_strict_match_mode_table_does_not_hide_portable() -> None:
 
 
 def test_load_save_modality_whitelist_match_settings_round_trip(tmp_path: Path) -> None:
-    from anonymizer.utils.storage import (
+    from anonymizer.controller.ai.remove_pixel_phi import (
         load_modality_whitelist_match_settings,
         save_modality_whitelist_match_settings,
     )

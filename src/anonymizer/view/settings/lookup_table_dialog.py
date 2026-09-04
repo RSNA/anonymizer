@@ -87,16 +87,21 @@ class LookupTableDialog(AppToplevel):
         )
         if not path:
             return
-        self._path_var.set(path)
+        self.load_properties_path(Path(path))
+
+    def load_properties_path(self, path: Path, *, show_errors: bool = True) -> bool:
+        """Load and preview a CTP ``.properties`` file (used by Browse and automation)."""
+        self._path_var.set(str(path))
         try:
-            self._preview = preview_ctp_lookup(Path(path))
+            self._preview = preview_ctp_lookup(path)
         except LookupPropertiesError as exc:
             self._preview = None
             self._accept_button.configure(state="disabled")
             self._summary_label.configure(text=_("Validation failed."))
             self._set_changes_text(str(exc))
-            messagebox.showerror(_("Patient Lookup Table Error"), str(exc), parent=self)
-            return
+            if show_errors:
+                messagebox.showerror(_("Patient Lookup Table Error"), str(exc), parent=self)
+            return False
 
         patient_count = len(self._preview.rows)
         offset_count = sum(1 for row in self._preview.rows if row.date_offset is not None)
@@ -113,6 +118,7 @@ class LookupTableDialog(AppToplevel):
             lines = [_("No script tag changes required.")]
         self._set_changes_text("\n".join(lines))
         self._accept_button.configure(state="normal")
+        return True
 
     def _set_changes_text(self, text: str) -> None:
         self._changes_box.configure(state="normal")

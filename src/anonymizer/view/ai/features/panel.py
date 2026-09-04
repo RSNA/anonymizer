@@ -11,10 +11,12 @@ from tkinter import messagebox
 
 import customtkinter as ctk
 
+from anonymizer.controller.ai.feature_availability import face_blur_needs_license
 from anonymizer.controller.ai.remove_pixel_phi import ocr_models_ready
 from anonymizer.controller.ai.tseg.config import (
     get_ct_segmentation_mode,
     get_mr_segmentation_mode,
+    persist_ai_features_preferences,
     segmentation_mode_menu_values,
     set_ct_segmentation_mode,
     set_mr_segmentation_mode,
@@ -24,12 +26,10 @@ from anonymizer.controller.ai.tseg.readiness import (
     get_stored_face_license,
     weight_kind_ready,
 )
-from anonymizer.utils.app_state import persist_ai_features_preferences
 from anonymizer.utils.storage import get_model_download_progress
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.features.availability import (
     DownloadCompleteEvent,
-    face_blur_needs_license,
     face_license_request_instructions,
     get_download_manager,
     validate_face_license_format,

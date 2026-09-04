@@ -3,7 +3,16 @@
 from __future__ import annotations
 
 import logging
-from typing import Literal
+from typing import Any, Literal
+
+from anonymizer.utils.app_state import (
+    AI_FEATURES_SECTION,
+    CT_SEGMENTATION_MODE_KEY,
+    MR_SEGMENTATION_MODE_KEY,
+    ai_features_from_state,
+    read_app_state,
+    write_app_state,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,9 +59,7 @@ ENABLE_TSEG_BRAIN_STRUCTURES = True
 # Release anatomy nnUNet predictors before contrast statistics (low-memory batch mode).
 RELEASE_ANATOMY_PREDICTORS_BEFORE_CONTRAST = False
 
-# AI batch process memory guard thresholds (MB).
-BATCH_MEMORY_WARN_AVAILABLE_MB = 3_000
-BATCH_MEMORY_ABORT_AVAILABLE_MB = 1_024
+# AI batch process memory guard poll interval (MB thresholds live in utils.memory).
 BATCH_MEMORY_POLL_INTERVAL_SEC = 2.0
 
 
@@ -173,7 +180,6 @@ PRIMARY_SEGMENT_PREFERRED_FILES: dict[str, tuple[str, ...]] = {
 }
 
 DEFAULT_SEGMENTATION_MODE = "3mm"
-SEGMENTATION_MODE = DEFAULT_SEGMENTATION_MODE  # back-compat alias for the default
 
 SegmentationMode = Literal["1.5mm", "3mm", "6mm"]
 _VALID_SEGMENTATION_MODES: frozenset[str] = frozenset({"1.5mm", "3mm", "6mm"})
@@ -262,4 +268,33 @@ def is_multi_model_segmentation_mode(mode: object | None) -> bool:
     """1.5 mm uses multiple nnUNet tasks; predictor preload is skipped."""
     return normalize_segmentation_mode(mode) == "1.5mm"
 
+
+def current_ai_features_preferences() -> dict[str, str]:
+    return {
+        CT_SEGMENTATION_MODE_KEY: get_ct_segmentation_mode(),
+        MR_SEGMENTATION_MODE_KEY: get_mr_segmentation_mode(),
+    }
+
+
+def apply_ai_features_preferences(prefs: dict[str, Any] | None = None) -> None:
+    """Load CT/MR Harmonize resolution preferences into the runtime config module."""
+    if prefs is None:
+        prefs = ai_features_from_state(read_app_state())
+    if CT_SEGMENTATION_MODE_KEY in prefs:
+        set_ct_segmentation_mode(prefs[CT_SEGMENTATION_MODE_KEY])
+    if MR_SEGMENTATION_MODE_KEY in prefs:
+        set_mr_segmentation_mode(prefs[MR_SEGMENTATION_MODE_KEY])
+
+
+def persist_ai_features_preferences() -> None:
+    """Merge current CT/MR segmentation modes into ``.anonymizer_state.json``."""
+    state = read_app_state()
+    state[AI_FEATURES_SECTION] = current_ai_features_preferences()
+    write_app_state(state)
+
+
+def merge_ai_features_into_state(state: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(state)
+    merged[AI_FEATURES_SECTION] = current_ai_features_preferences()
+    return merged
 

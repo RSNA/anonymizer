@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from anonymizer.controller.ai.feature_availability import harmonize_ct_needs_download
 from anonymizer.controller.ai.tseg.config import clear_segmentation_mode_cache, set_ct_segmentation_mode
-from anonymizer.view.ai.features.availability import (
-    ai_feature_status_harmonize_ct,
-    harmonize_ct_needs_download,
-)
+from anonymizer.view.ai.features.availability import ai_feature_status_harmonize_ct
 
 
 def test_harmonize_ct_needs_download_is_mode_aware() -> None:
@@ -16,17 +14,17 @@ def test_harmonize_ct_needs_download_is_mode_aware() -> None:
     try:
         set_ct_segmentation_mode("3mm")
         with (
-            patch("anonymizer.view.ai.features.availability.totalsegmentator_available", return_value=True),
-            patch("anonymizer.view.ai.features.availability.xgboost_available", return_value=True),
-            patch("anonymizer.view.ai.features.availability.anatomy_ct_ready", return_value=False) as ready,
+            patch("anonymizer.controller.ai.feature_availability.totalsegmentator_available", return_value=True),
+            patch("anonymizer.controller.ai.feature_availability.xgboost_available", return_value=True),
+            patch("anonymizer.controller.ai.feature_availability.anatomy_ct_ready", return_value=False) as ready,
         ):
             assert harmonize_ct_needs_download() is True
             ready.assert_called_with("3mm")
 
         with (
-            patch("anonymizer.view.ai.features.availability.totalsegmentator_available", return_value=True),
-            patch("anonymizer.view.ai.features.availability.xgboost_available", return_value=True),
-            patch("anonymizer.view.ai.features.availability.anatomy_ct_ready", return_value=True),
+            patch("anonymizer.controller.ai.feature_availability.totalsegmentator_available", return_value=True),
+            patch("anonymizer.controller.ai.feature_availability.xgboost_available", return_value=True),
+            patch("anonymizer.controller.ai.feature_availability.anatomy_ct_ready", return_value=True),
         ):
             assert harmonize_ct_needs_download() is False
     finally:

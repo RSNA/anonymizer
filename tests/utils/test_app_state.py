@@ -8,9 +8,12 @@ from pathlib import Path
 import pytest
 
 from anonymizer.controller.ai.tseg.config import (
+    apply_ai_features_preferences,
     clear_segmentation_mode_cache,
     get_ct_segmentation_mode,
     get_mr_segmentation_mode,
+    merge_ai_features_into_state,
+    persist_ai_features_preferences,
     set_ct_segmentation_mode,
     set_mr_segmentation_mode,
 )
@@ -29,7 +32,7 @@ def isolated_app_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def test_persist_and_apply_ai_features_preferences(isolated_app_state: Path) -> None:
     set_ct_segmentation_mode("1.5mm")
     set_mr_segmentation_mode("6mm")
-    app_state.persist_ai_features_preferences()
+    persist_ai_features_preferences()
 
     data = json.loads(isolated_app_state.read_text(encoding="utf-8"))
     assert data["ai_features"] == {
@@ -41,13 +44,13 @@ def test_persist_and_apply_ai_features_preferences(isolated_app_state: Path) -> 
     assert get_ct_segmentation_mode() == "3mm"
     assert get_mr_segmentation_mode() == "3mm"
 
-    app_state.apply_ai_features_preferences()
+    apply_ai_features_preferences()
     assert get_ct_segmentation_mode() == "1.5mm"
     assert get_mr_segmentation_mode() == "6mm"
 
 
 def test_merge_ai_features_preserves_other_state_keys() -> None:
-    merged = app_state.merge_ai_features_into_state(
+    merged = merge_ai_features_into_state(
         {
             "language": "de",
             "recent_project_dirs": ["/tmp/project"],
@@ -73,6 +76,6 @@ def test_apply_ai_features_ignores_invalid_modes(isolated_app_state: Path) -> No
         encoding="utf-8",
     )
     clear_segmentation_mode_cache()
-    app_state.apply_ai_features_preferences()
+    apply_ai_features_preferences()
     assert get_ct_segmentation_mode() == "3mm"
     assert get_mr_segmentation_mode() == "6mm"

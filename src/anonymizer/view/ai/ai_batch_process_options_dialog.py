@@ -9,6 +9,12 @@ from pathlib import Path
 
 import customtkinter as ctk
 
+from anonymizer.controller.ai.feature_availability import (
+    brain_structures_allowed,
+    face_blur_allowed,
+    harmonize_allowed,
+    pixel_phi_allowed,
+)
 from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
     normalize_pixel_phi_removal_mode,
@@ -24,12 +30,6 @@ from anonymizer.utils.translate import _
 from anonymizer.view.ai.blur_face_results import (
     face_blur_mode_from_menu_label,
     face_blur_mode_menu_values,
-)
-from anonymizer.view.ai.features.availability import (
-    brain_structures_allowed,
-    face_blur_allowed,
-    harmonize_allowed,
-    pixel_phi_allowed,
 )
 from anonymizer.view.ai.features.catalog import AiFeatureId, feature_description, feature_title
 from anonymizer.view.ai.modality_whitelist_preview_dialog import show_modality_whitelist_preview_dialog

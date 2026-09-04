@@ -13,12 +13,12 @@ from anonymizer.controller.ai.tseg.config import (
     MIN_STRUCTURE_VOXELS,
     PRIMARY_SEGMENT_GROUPS,
     PRIMARY_SEGMENT_ORDER,
-    PRIMARY_SEGMENT_PREFERRED_FILES,
     ROI_SUBSET,
 )
 from anonymizer.controller.ai.tseg.seg_retention import (
     read_mask_geometry,
     read_primary_segment_voxels,
+    resolve_primary_segment_files,
     sitk_image_from_mask_geometry,
 )
 from anonymizer.controller.series_overlay import PolygonPoint, Segmentation
@@ -106,41 +106,6 @@ def structure_button_label(structure_name: str) -> str:
 def latch_button_width_px(label: str) -> int:
     """Compact CTk button width fitting the label text."""
     return max(36, len(label) * 7 + 18)
-
-
-def resolve_primary_segment_files(seg_dir: Path, group_name: str) -> tuple[str, ...]:
-    """Prefer a on-disk super-segment when configured; else the multi-file group list.
-
-    MR ``total_mr`` writes combined ``vertebrae`` / whole-lung masks instead of CT
-    per-vertebra and lobe files; detect those when the CT multi-file packs are absent.
-    """
-    fallback = PRIMARY_SEGMENT_GROUPS.get(group_name)
-    if not fallback:
-        raise KeyError(f"Unknown primary segment group: {group_name}")
-    preferred = PRIMARY_SEGMENT_PREFERRED_FILES.get(group_name)
-    if preferred and all((seg_dir / f"{stem}.nii.gz").is_file() for stem in preferred):
-        return preferred
-
-    if group_name == "spine" and (seg_dir / "vertebrae.nii.gz").is_file():
-        has_ct_vertebrae = any(
-            stem.startswith("vertebrae_") and (seg_dir / f"{stem}.nii.gz").is_file() for stem in fallback
-        )
-        if not has_ct_vertebrae:
-            stems = ["vertebrae"]
-            if (seg_dir / "sacrum.nii.gz").is_file():
-                stems.append("sacrum")
-            return tuple(stems)
-
-    if group_name == "lungs":
-        has_lobe = any((seg_dir / f"{stem}.nii.gz").is_file() for stem in fallback)
-        if not has_lobe:
-            mr_lungs = tuple(
-                stem for stem in ("lung_left", "lung_right") if (seg_dir / f"{stem}.nii.gz").is_file()
-            )
-            if mr_lungs:
-                return mr_lungs
-
-    return fallback
 
 
 def collect_primary_segment_voxels(

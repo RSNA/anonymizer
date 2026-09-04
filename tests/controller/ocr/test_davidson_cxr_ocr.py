@@ -9,11 +9,11 @@ import pytest
 from anonymizer.controller.ai.remove_pixel_phi import (
     filter_ocr_whitelist_only,
     load_modality_whitelist,
+    load_modality_whitelist_match_settings,
 )
 from anonymizer.controller.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
 from anonymizer.controller.series_io import load_series_frames
 from anonymizer.controller.work_state import WorkState
-from anonymizer.utils.storage import load_modality_whitelist_match_settings
 from tests.controller.ocr.conftest import assert_dcm
 from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 

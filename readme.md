@@ -1,155 +1,157 @@
 # RSNA DICOM Anonymizer (V19)
-[![de](https://img.shields.io/badge/lang-de-blue.svg)](readme.de.md)
-[![es](https://img.shields.io/badge/lang-es-blue.svg)](readme.es.md)
-[![fr](https://img.shields.io/badge/lang-fr-blue.svg)](readme.fr.md)
 [![Tests](https://github.com/RSNA/anonymizer/actions/workflows/tests.yaml/badge.svg)](https://github.com/RSNA/anonymizer/actions/workflows/tests.yaml)
 
-## Install Python with tkinter (GUI library)
-### Windows
-1. Download Python 3.12 from [python.org](https://www.python.org/downloads/) (pytorch does not currently support 3.13)
-2. Run installer
-   - Select "Add python.exe to PATH"
-   - Enable "tcl/tk and IDLE"
-### macOS
-1. Install Homebrew if not present: `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`
-2. Install Python **3.12** (not Homebrew's default `python3`, which may be 3.14), tkinter, and OpenMP (required for Harmonize contrast analysis on macOS):
+**Version 19.0.1** is the first official V19 release on the `master` branch and PyPI. Requires **Python 3.11 or 3.12** with **tkinter** built in. Python 3.13 is not supported.
+
+## Install
+
+You need three things: **uv**, a Python **3.11/3.12** environment that includes **tkinter**, and (on macOS, for AI Features) **libomp**.
+
+### 1. Install uv
+
+[uv](https://docs.astral.sh/uv/) installs Python, creates the venv, and pulls large AI dependencies.
 
 ```bash
-brew install python@3.12 python-tk@3.12 libomp
-```
-
-Homebrew's `python@3.12` does not include tkinter by itself — use **`python-tk@3.12`**.
-
-### Linux (Ubuntu/Debian)
-1. Install the required packages:
-```
-sudo apt update
-sudo apt install software-properties-common
-sudo add-apt-repository ppa:deadsnakes/ppa
-sudo apt install python3.12 python3.12-tk python3.12-venv
-```
-## Verify Installation
-Use **Python 3.12** explicitly (`python3.12`, not `python3`):
-
-```bash
-python3.12 --version
-python3.12 -m tkinter
-python3.12 -c "import tkinter as tk; print('Tk', tk.TkVersion)"
-```
-
-If python + tkinter has been installed successfully a small GUI window should open. On macOS, **Tk should be 9.0** for correct UI rendering with CustomTkinter 6.
-
-## Install rsna-anonymizer from PyPI
-
-V19 is on PyPI as a pre-release (`--pre`). Use [uv](https://docs.astral.sh/uv/) — much faster than plain `pip` for large ML dependencies (PyTorch, TotalSegmentator, etc.).
-
-### One-time: install uv
-
-```bash
+# macOS / Linux
 curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows (PowerShell)
+irm https://astral.sh/uv/install.ps1 | iex
 ```
 
-Windows (PowerShell): `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
-
-Restart the terminal if `uv` is not found.
-
-On macOS, update uv and install its managed Python 3.12 with Tcl/Tk 9 (recommended when Homebrew Python is broken or unavailable):
+Confirm uv is on your PATH:
 
 ```bash
-uv self update
-uv python install --reinstall 3.12
+uv --version
 ```
 
-### Create a virtual environment
+### 2. Install Python with tkinter, then the app
+
+The desktop UI needs **tkinter**. Install a Python that ships with it, then create the venv and install **19.0.1**:
+
+| Platform | Ensure tkinter is available |
+| --- | --- |
+| **Windows** | Install Python 3.11 or 3.12 from [python.org](https://www.python.org/downloads/) with **Add to PATH** and **tcl/tk and IDLE** checked |
+| **macOS** | Prefer `uv python install 3.12` (Tk 9.x). Or Homebrew: `brew install python@3.12 python-tk@3.12` |
+| **Linux** | `sudo apt install python3.12 python3.12-tk python3.12-venv` (or the matching `python3.11` / `python3.11-tk` / `python3.11-venv` packages) |
 
 ```bash
-uv venv rsna-anonymizer --python 3.12
-source rsna-anonymizer/bin/activate    # Windows: rsna-anonymizer\Scripts\activate
+uv python install 3.12                     # or: 3.11
+uv venv rsna-anonymizer --python 3.12      # or: --python 3.11
+source rsna-anonymizer/bin/activate        # Windows: rsna-anonymizer\Scripts\activate
+
+uv pip install rsna-anonymizer             # version 19.0.1
 ```
 
-Verify **inside the activated venv** (must be Python 3.12.x and Tk 9.0 on macOS):
+### 3. Verify the install
 
 ```bash
-python --version
-python -c "import tkinter as tk; print('Tk', tk.TkVersion)"
+python --version          # 3.11.x or 3.12.x
+python -m tkinter         # a small Tk window must open — required for the UI
+rsna-anonymizer --version # should report 19.0.1
 ```
 
-If `uv venv --python 3.12` gives Tk 8.6, run `uv python install --reinstall 3.12` and recreate the venv. If Homebrew Python works, you can use `python3.12 -m venv rsna-anonymizer` and `python -m pip install --pre rsna-anonymizer` instead of `uv venv`.
+If `python -m tkinter` fails, the venv’s Python was built without Tk: fix the platform step above, recreate the venv, and reinstall.
 
-### Install the package
+### 4. macOS only — OpenMP for AI Features
+
+On macOS, **AI Features** that use TotalSegmentator / Harmonize contrast analysis need the C++ OpenMP runtime **`libomp`**. Install it once with Homebrew before you download or run those models:
 
 ```bash
-uv pip install --pre rsna-anonymizer
+brew install libomp
 ```
 
-Verify: `uv pip show rsna-anonymizer` or `rsna-anonymizer --version`. See [CHANGELOG](CHANGELOG.md) for release notes.
+Without `libomp`, Harmonize contrast can crash (for example exit code 139 / XGBoost OpenMP errors). Face blur and other AI tools that depend on the same stack can be affected. Linux and Windows normally do not need this step.
 
-TotalSegmentator, XGBoost, and related dependencies are included. Download models and accept the face license from **Help → AI Features** or the **AI Features** button on the Welcome screen.
-## Execution
-`rsna-anonymizer`
-### Headless Mode
-You need to provide a path to a project configuration to run in headless mode
-`rsna-anonymizer -c path/to/ProjectModel.json`
-## Upgrading
-
-Activate the virtual environment first (`source rsna-anonymizer/bin/activate`).
+### 5. Run
 
 ```bash
-uv pip install --upgrade --pre rsna-anonymizer
+rsna-anonymizer
 ```
+
+On first launch, use the Welcome screen **AI Features** button to download models and accept the face license when needed.
+
+## Run (modes)
+
+```bash
+rsna-anonymizer
+rsna-anonymizer -c path/to/ProjectModel.json   # headless DICOM receive
+rsna-anonymizer -c path/to/ProjectModel.json --ai-batch path/to/AiBatchConfig.json --ai-batch-run
+```
+
+Headless AI batch uses a companion [`AiBatchConfig.json`](docs/examples/AiBatchConfig.json) (algorithms, modes, study selection, CT/MR resolution). OCR whitelists remain under the project `whitelists/` directory.
+
+## Upgrade
+
+```bash
+source rsna-anonymizer/bin/activate
+uv pip install --upgrade rsna-anonymizer
+```
+
+See [CHANGELOG](CHANGELOG.md) for release notes.
+
 ## Documentation
-[Help files](https://rsna.github.io/anonymizer)
+
+[Clinician user manual](https://rsna.github.io/anonymizer) (MkDocs Material, English). Build locally: `uv sync --group docs && uv run mkdocs serve`.
+
 ## Development
-### Setup
-1. Setup python environment (3.12) which includes Tkinter, recommend using pyenv with MacOS & Linux
-2. Ensure python is installed with Tkinter: `python -m tkinter`, a small GUI window should open
-3. Install [uv](https://docs.astral.sh/uv/): `curl -LsSf https://astral.sh/uv/install.sh | sh`
-4. Clone repository (for V19 work, checkout branch `V19` before syncing)
-5. Create virtual environment and install dependencies: `uv sync --group dev`
-6. macOS Harmonize contrast: `brew install libomp` when using XGBoost/TotalSegmentator contrast
-7. Enable Git pre-commit hooks (Ruff lint, same rules as CI): `uv run pre-commit install`
 
-For hot-reload during UI work: `uv run python scripts/dev_anonymizer.py` (requires [watchexec](https://github.com/watchexec/watchexec)).
+```bash
+git clone https://github.com/RSNA/anonymizer.git
+cd anonymizer
+git checkout V19          # for V19 work
+uv sync --group dev
+uv run pre-commit install
+uv run rsna-anonymizer
+```
 
-Hooks run on every `git commit`, including commits from the VS Code / Cursor Source Control UI. To skip once: `git commit --no-verify`.
+macOS AI Features: `brew install libomp` (OpenMP runtime for Harmonize contrast / TotalSegmentator).
+
+Hot-reload UI work: `uv run python src/prototyping/dev_anonymizer.py` (optional [watchexec](https://github.com/watchexec/watchexec); falls back to `watchfiles`).
+
+Experimental CLIs live under [`src/prototyping/`](src/prototyping/README.md).
 
 ### Linting (Ruff)
-Configuration: `[tool.ruff]` in `pyproject.toml` (scope: `src/anonymizer/`).
+
+Config: `[tool.ruff]` in `pyproject.toml` (scope: `src/anonymizer/`).
 
 ```bash
 uv run ruff check ./src/anonymizer/
-uv run ruff check ./src/anonymizer/ --fix   # safe auto-fixes only; not run in CI
+uv run ruff check ./src/anonymizer/ --fix   # safe auto-fixes; not used in CI
 uv run pre-commit run ruff-check --all-files
 ```
 
-CI runs `ruff check` without `--fix`. Pre-commit uses the same check on staged Python files under `src/anonymizer/`.
+### Unit testing
 
-### Unit Testing
-
-Test layout mirrors source: `tests/controller/` → `src/anonymizer/controller/`, prototyping tests live under `src/prototyping/*/tests/`. See [tests/README.md](tests/README.md).
+Layout mirrors source: `tests/controller/` → `src/anonymizer/controller/`. Prototyping tests: `src/prototyping/*/tests/`. See [tests/README.md](tests/README.md).
 
 ```bash
-uv sync --group dev
-uv run pytest tests/controller/tseg -q                             # mocked unit tests (CI-safe)
+uv run pytest tests/controller/tseg -q
 uv run pytest tests/controller tests/model -q   # CI suite (no view)
-uv run pytest src/prototyping -q              # prototyping only
-uv run pytest -q                              # full local suite (controller + view + model)
+uv run pytest src/prototyping -q
+uv run pytest -q                                # full local suite
 ```
 
-Optional: create `tests/controller/.env` with `AWS_USERNAME` and `AWS_PASSWORD` for S3 upload tests.
+Optional: `tests/controller/.env` with `AWS_USERNAME` / `AWS_PASSWORD` for S3 upload tests. Markers are documented in `pyproject.toml` and `tests/README.md`.
 
-Markers (`tseg_integration` is prototyping-only, plus `dicom_integration`, `rsna_local_data`) are documented in `pyproject.toml` and `tests/README.md`.
 ### Translations
-Languages for 17.3: `en_US, de, es, fr`
-#### Ensure gettext is installed:
-1. Windows: [Install instructions](https://mlocati.github.io/articles/gettext-iconv-windows.html) or `choco install gettext`
-2. Mac OSX: `brew install gettext`
-3. Linux: `sudo apt-get install gettext`
-#### Extracting messages from source files:
+
+Languages: `en_US`, `de`, `es`, `fr`. Install gettext (`brew install gettext`, `choco install gettext`, or `apt install gettext`), then:
+
+```bash
 cd src/anonymizer/assets/locales/
 ./extract_translations.sh
-#### Updating translations:
-cd src/anonymizer/assets/locales/
 ./update_translations.sh
-### Software Architecture
-Full class diagram on github [here](class_diagram.md)
+```
+
+### Software architecture
+
+[Class diagram](class_diagram.md)
+
+### User manual (MkDocs)
+
+```bash
+uv sync --group docs
+uv run mkdocs serve          # http://127.0.0.1:8000
+uv run mkdocs build --strict
+```

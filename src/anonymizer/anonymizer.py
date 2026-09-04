@@ -36,7 +36,7 @@ from anonymizer.utils.translate import (
 )
 from anonymizer.utils.version import get_version
 from anonymizer.view.common.fonts import AppFonts, create_app_fonts
-from anonymizer.view.common.html_view import HTMLView, is_ai_features_help
+from anonymizer.view.common.help_docs import help_menu_topics, open_help_page
 from anonymizer.view.project.dataset import DatasetView
 from anonymizer.view.project.export import ExportView
 from anonymizer.view.project.import_files_dialog import ImportFilesDialog
@@ -117,7 +117,7 @@ class Anonymizer(ctk.CTk):
         self.query_view: QueryView | None = None
         self.export_view: ExportView | None = None
         self.dataset_view: DatasetView | None = None
-        self.help_views = {}
+
         self.dashboard: Dashboard | None = None
         self._app_windows: list[weakref.ref] = []
         self._window_menu: tk.Menu | None = None
@@ -352,7 +352,7 @@ class Anonymizer(ctk.CTk):
     def change_language(self, language):
         logger.info(f"Change Language to: {language}")
         set_language(language)
-        self.help_views = {}
+
         self.title(self.get_title())
         self.recent_project_dirs = []
         self.menu_bar = self.create_project_closed_menu_bar()  # resets Help Menu
@@ -376,7 +376,8 @@ class Anonymizer(ctk.CTk):
         self.after(self.metrics_loop_interval, self.metrics_loop)
 
     def load_config(self):
-        from anonymizer.utils.app_state import ai_features_from_state, apply_ai_features_preferences
+        from anonymizer.controller.ai.tseg.config import apply_ai_features_preferences
+        from anonymizer.utils.app_state import ai_features_from_state
 
         logger.info(f"Load Config (App State): {self.get_app_state_path()}")
         try:
@@ -407,7 +408,7 @@ class Anonymizer(ctk.CTk):
             logger.warning(warn_msg)
 
     def save_config(self):
-        from anonymizer.utils.app_state import merge_ai_features_into_state
+        from anonymizer.controller.ai.tseg.config import merge_ai_features_into_state
 
         logger.info(f"Save Config (App State): {self.get_app_state_path()}")
         try:
@@ -1185,56 +1186,24 @@ class Anonymizer(ctk.CTk):
 
         show_ai_features_setup_dialog(self, on_changed=on_changed)
 
-    def help_path_to_title(self, html_file_path: Path) -> str:
-        stem = html_file_path.stem
-        prefix, _, remainder = stem.partition("_")
-        label = remainder if prefix.isdigit() and remainder else stem
-        return " ".join(word.capitalize() for word in label.split())
-
-    def help_html_dir(self) -> Path:
-        return Path("assets/locales/" + str(get_current_language_code() or "en_US") + "/html/")
-
-    def resolve_help_link(self, relative_path: str) -> Path:
-        return (self.help_html_dir() / relative_path).resolve()
-
-    def show_help_view(self, html_file_path: Path):
-        view_name = self.help_path_to_title(html_file_path)
-
-        if view_name in self.help_views:
-            view = self.help_views[view_name]
-            if view.winfo_exists():
-                logger.info(f"{view.title} already OPEN")
-                view.deiconify()
-                return
-
-        self.help_views[view_name] = HTMLView(
-            self,
-            title=view_name,
-            html_file_path=html_file_path.as_posix(),
-            on_help_link=self._open_linked_help_page,
-            wide_layout=is_ai_features_help(html_file_path.as_posix()),
-        )
-        self.help_views[view_name].focus()
-
-    def _open_linked_help_page(self, relative_path: str) -> None:
-        self.show_help_view(self.resolve_help_link(relative_path))
+    def open_user_manual(self, slug: str = "") -> None:
+        """Open the clinician user manual (browser, with local site/ fallback)."""
+        if not open_help_page(slug):
+            messagebox.showwarning(
+                title=_("Help"),
+                message=_("Could not open the user manual in a browser. Check your network or build docs locally (mkdocs serve)."),
+                parent=self,
+            )
 
     def get_help_menu(self, menu_bar: tk.Menu):
         help_menu = tk.Menu(menu_bar, tearoff=0)
-        help_menu.add_command(label=_("AI Features"), command=self.show_ai_features_setup_dialog)
+        help_menu.add_command(label=_("User Manual"), command=lambda: self.open_user_manual(""))
         help_menu.add_separator()
-        # Get all html files in assets/locale/*/html/ directory
-        # Sort by filename number prefix
-        html_dir = self.help_html_dir()
-        html_file_paths = sorted(html_dir.glob("*.html"), key=lambda path: int(path.stem.split("_")[0]))
-
-        for __, html_file_path in enumerate(html_file_paths):
-            label = self.help_path_to_title(html_file_path)
+        for label, slug in help_menu_topics():
             help_menu.add_command(
                 label=label,
-                command=lambda path=html_file_path: self.show_help_view(path),
+                command=lambda s=slug: self.open_user_manual(s),
             )
-
         return help_menu
 
     def _live_app_windows(self) -> list[tk.Misc]:
@@ -1478,26 +1447,26 @@ def load_model(json_filepath: Path) -> ProjectModel:
             raise RuntimeError(f"Project Model datafile: {json_filepath} corrupt\n\n{str(e1)}") from e1
 
 
-def run_HEADLESS(project_model_path: Path):
+def create_headless_controller(project_model_path: Path) -> ProjectController | None:
     if not project_model_path.exists():
         logger.error(_("Project Model file not found") + f": {project_model_path}")
-        return
+        return None
 
     if not project_model_path.is_file():
         logger.error(_("Project Model path is not a file") + f": {project_model_path}")
-        return
+        return None
 
     try:
         file_model = load_model(project_model_path)
     except Exception as e:
         logger.error(f"Error loading Project Model: {str(e)}")
-        return
+        return None
 
     logger.info(f"Project Model succesfully loaded from: {project_model_path}")
 
     if not hasattr(file_model, "version"):
         logger.error("Project Model missing version")
-        return
+        return None
 
     logger.info(_("Project Model loaded successfully, version") + f": {file_model.version}")
 
@@ -1507,11 +1476,9 @@ def run_HEADLESS(project_model_path: Path):
             + f": {file_model.version} != {ProjectModel.MODEL_VERSION} "
             + _("upgrading accordingly")
         )
-        model = ProjectModel()  # new default model
-        # TODO: Handle 2 level nested classes/dicts copying by attribute
-        # to handle addition or nested fields and deletion of attributes in new model
-        model.__dict__.update(file_model.__dict__)  # copy over corresponding attributes from the old model (file_model)
-        model.version = ProjectModel.MODEL_VERSION  # update to latest version
+        model = ProjectModel()
+        model.__dict__.update(file_model.__dict__)
+        model.version = ProjectModel.MODEL_VERSION
     else:
         model = file_model
 
@@ -1526,6 +1493,98 @@ def run_HEADLESS(project_model_path: Path):
 
     except Exception as e:
         logger.error(f"Error creating Project Controller: {str(e)}")
+        return None
+
+    return controller
+
+
+def run_HEADLESS_AI_BATCH(project_model_path: Path, ai_batch_path: Path) -> int:
+    """Run one-shot AI batch for studies in a project, then exit."""
+    from anonymizer.controller.ai_batch_config import (
+        AiBatchConfig,
+        AiBatchConfigError,
+        resolve_ai_batch_studies,
+        validate_ai_batch_config_gates,
+    )
+    from anonymizer.controller.ai_batch_process import format_ai_batch_completion_summary
+
+    controller = create_headless_controller(project_model_path)
+    if controller is None:
+        return 1
+
+    try:
+        batch_config = AiBatchConfig.from_path(ai_batch_path)
+        batch_config.apply_segmentation_modes()
+        validate_ai_batch_config_gates(batch_config)
+        studies = resolve_ai_batch_studies(
+            batch_config,
+            images_dir=controller.model.images_dir(),
+            anon_model=controller.anonymizer.model,
+        )
+    except AiBatchConfigError as exc:
+        logger.error("AI batch configuration error: %s", exc)
+        controller.shutdown()
+        controller.anonymizer.stop()
+        return 1
+
+    if not studies:
+        logger.error("No studies resolved for AI batch")
+        controller.shutdown()
+        controller.anonymizer.stop()
+        return 1
+
+    logger.info(
+        "AI batch starting: %d studies, algorithms=%s",
+        len(studies),
+        [algorithm.value for algorithm in batch_config.algorithms],
+    )
+
+    def on_log(message: str) -> None:
+        print(message, flush=True)
+
+    def on_progress(
+        series_index: int,
+        series_total: int,
+        algorithm,
+        algorithm_index: int,
+        algorithms_total: int,
+        detail: str,
+        step_fraction: float,
+    ) -> None:
+        print(
+            f"[{step_fraction * 100:.0f}%] {algorithm.value} ({algorithm_index}/{algorithms_total}) "
+            f"series {series_index}/{series_total}: {detail}",
+            flush=True,
+        )
+
+    summary = controller.ai_batch_process(
+        list(studies),
+        batch_config.to_options(),
+        progress=on_progress,
+        on_log=on_log,
+    )
+    print(format_ai_batch_completion_summary(summary), flush=True)
+
+    controller.shutdown()
+    controller.save_model()
+    controller.anonymizer.stop()
+
+    if summary.cancelled or summary.failed > 0:
+        return 1
+    return 0
+
+
+def run_HEADLESS(project_model_path: Path):
+    if not project_model_path.exists():
+        logger.error(_("Project Model file not found") + f": {project_model_path}")
+        return
+
+    if not project_model_path.is_file():
+        logger.error(_("Project Model path is not a file") + f": {project_model_path}")
+        return
+
+    controller = create_headless_controller(project_model_path)
+    if controller is None:
         return
 
     logger.info(f"{controller}")
@@ -1572,7 +1631,19 @@ def run_HEADLESS(project_model_path: Path):
     type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=Path),
     help=_("Path to the configuration file. If not provided, the GUI will be launched."),
 )
-def main(config: Path | None = None):
+@click.option(
+    "--ai-batch",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=Path),
+    default=None,
+    help=_("Path to AiBatchConfig.json for headless AI batch processing."),
+)
+@click.option(
+    "--ai-batch-run",
+    is_flag=True,
+    default=False,
+    help=_("Run AI batch once using --ai-batch, then exit (requires -c)."),
+)
+def main(config: Path | None = None, ai_batch: Path | None = None, ai_batch_run: bool = False):
     install_dir = os.path.dirname(os.path.realpath(__file__))
     logs_dir = init_logging()
     os.chdir(install_dir)
@@ -1617,9 +1688,15 @@ def main(config: Path | None = None):
 
     log_runtime_status()
 
-    from anonymizer.utils.app_state import apply_ai_features_preferences
+    from anonymizer.controller.ai.tseg.config import apply_ai_features_preferences
 
     apply_ai_features_preferences()
+
+    if ai_batch_run:
+        if config is None or ai_batch is None:
+            logger.error("--ai-batch-run requires both -c/--config and --ai-batch")
+            sys.exit(2)
+        sys.exit(run_HEADLESS_AI_BATCH(config, ai_batch))
 
     if config:
         run_HEADLESS(config)

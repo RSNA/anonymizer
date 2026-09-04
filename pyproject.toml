@@ -4,12 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rsna-anonymizer"
-version = "19.0.0.dev12"
+version = "19.0.1"
 description = "RSNA DICOM Anonymizer"
 readme = "readme.md"
 license = { text = "RSNA-MIRC Public License" }
 authors = [{ name = "Algorhythm Software", email = "michael@dx.life" }]
-requires-python = ">=3.12.0,<3.13.0"
+requires-python = ">=3.11.0,<3.13.0"
 dependencies = [
     "numpy<2.0.0",
     "customtkinter",
@@ -73,13 +73,17 @@ dev = [
     "watchfiles>=1.0.0",
     "setuptools>=70,<82",
 ]
+docs = [
+    "mkdocs-material>=9.5.0",
+    "mkdocs-static-i18n>=1.2.0",
+]
 prototyping-viz = [
     "matplotlib>=3.8.0",
     "scikit-image>=0.22.0",
 ]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py311"
 line-length = 120
 
 [tool.ruff.lint]

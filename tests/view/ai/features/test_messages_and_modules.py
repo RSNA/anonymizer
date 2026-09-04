@@ -9,9 +9,11 @@ import pytest
 
 from anonymizer.controller.ai.tseg import ml_env, readiness
 from anonymizer.controller.ai.tseg.config import (
+    apply_ai_features_preferences,
     clear_segmentation_mode_cache,
     get_ct_segmentation_mode,
     get_mr_segmentation_mode,
+    persist_ai_features_preferences,
     set_ct_segmentation_mode,
     set_mr_segmentation_mode,
 )
@@ -81,10 +83,10 @@ def test_segmentation_modes_persist_in_app_state(tmp_path: Path, monkeypatch: py
         assert get_ct_segmentation_mode() == "3mm"
         set_ct_segmentation_mode("1.5mm")
         set_mr_segmentation_mode("6mm")
-        app_state.persist_ai_features_preferences()
+        persist_ai_features_preferences()
 
         clear_segmentation_mode_cache()
-        app_state.apply_ai_features_preferences()
+        apply_ai_features_preferences()
         assert get_ct_segmentation_mode() == "1.5mm"
         assert get_mr_segmentation_mode() == "6mm"
     finally:

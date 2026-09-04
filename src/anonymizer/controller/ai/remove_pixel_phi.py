@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import difflib
+import json
 import logging
 import os
 from collections.abc import Mapping, Sequence
@@ -15,6 +16,7 @@ import torch
 from cv2 import (
     CHAIN_APPROX_SIMPLE,
     COLOR_BGR2GRAY,
+    COLOR_RGB2BGR,
     COLOR_RGB2GRAY,
     FONT_HERSHEY_SIMPLEX,
     INPAINT_TELEA,
@@ -44,8 +46,22 @@ from pydicom.uid import JPEG2000Lossless
 if TYPE_CHECKING:
     from anonymizer.model.anonymizer import AnonymizerModel
 
+from anonymizer.controller.create_projections import invalidate_projection_cache
+from anonymizer.controller.series_io import (
+    series_buffer_monochrome_to_stored,
+    stored_monochrome_to_series_buffer,
+)
 from anonymizer.controller.series_overlay import OCRText, UserRectangle
-from anonymizer.utils.dicom import SUPPORTED_PHOTOMETRIC_INTERPRETATIONS
+from anonymizer.utils.dicom import SUPPORTED_PHOTOMETRIC_INTERPRETATIONS, get_wl_ww
+from anonymizer.utils.storage import (
+    load_default_whitelist,
+    load_project_whitelist,
+    project_whitelist_options_path,
+    project_whitelist_path,
+    update_model_download,
+)
+from anonymizer.utils.translate import _
+from anonymizer.utils.windowing import apply_windowing
 
 logging.getLogger("openjpeg").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -107,6 +123,37 @@ def default_whitelist_match_settings() -> OcrWhitelistMatchSettings:
     return OcrWhitelistMatchSettings()
 
 
+def load_modality_whitelist_match_settings(
+    project_dir: Path | None,
+    modality_code: str | None,
+) -> OcrWhitelistMatchSettings:
+    """Load per-modality OCR whitelist match settings from sidecar JSON."""
+    if not modality_code or project_dir is None:
+        return default_whitelist_match_settings()
+    options_path = project_whitelist_options_path(project_dir, modality_code)
+    if options_path.is_file():
+        try:
+            data = json.loads(options_path.read_text(encoding="utf-8"))
+            return OcrWhitelistMatchSettings.from_dict(data)
+        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            logger.warning("Could not load whitelist match settings from %s: %s", options_path, exc)
+    return default_whitelist_match_settings()
+
+
+def save_modality_whitelist_match_settings(
+    project_dir: Path,
+    modality_code: str,
+    settings: OcrWhitelistMatchSettings,
+) -> Path:
+    """Persist per-modality OCR whitelist match settings to sidecar JSON."""
+    if not project_dir.is_dir():
+        raise ValueError(f"{project_dir} is not a valid directory")
+    filepath = project_whitelist_options_path(project_dir, modality_code)
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    filepath.write_text(json.dumps(settings.to_dict(), indent=2) + "\n", encoding="utf-8")
+    return filepath
+
+
 def resolve_whitelist_match(
     settings: OcrWhitelistMatchSettings | None,
 ) -> tuple[float, float]:
@@ -121,8 +168,6 @@ def resolve_whitelist_match(
 
 def describe_match_settings(settings: OcrWhitelistMatchSettings | None) -> str:
     """User-facing label for logs and batch preview."""
-    from anonymizer.utils.translate import _
-
     if settings is None:
         settings = default_whitelist_match_settings()
     labels = {
@@ -140,8 +185,6 @@ def describe_match_settings(settings: OcrWhitelistMatchSettings | None) -> str:
 
 def match_mode_menu_labels() -> dict[str, OcrWhitelistMatchMode]:
     """Map translated menu label -> mode (for Series View OptionMenu)."""
-    from anonymizer.utils.translate import _
-
     return {
         _("Exact"): OcrWhitelistMatchMode.EXACT,
         _("Strict"): OcrWhitelistMatchMode.STRICT,
@@ -151,8 +194,6 @@ def match_mode_menu_labels() -> dict[str, OcrWhitelistMatchMode]:
 
 
 def match_mode_menu_label(mode: OcrWhitelistMatchMode) -> str:
-    from anonymizer.utils.translate import _
-
     reverse = {
         OcrWhitelistMatchMode.EXACT: _("Exact"),
         OcrWhitelistMatchMode.STRICT: _("Strict"),
@@ -163,8 +204,6 @@ def match_mode_menu_label(mode: OcrWhitelistMatchMode) -> str:
 
 
 def match_mode_description(mode: OcrWhitelistMatchMode) -> str:
-    from anonymizer.utils.translate import _
-
     descriptions = {
         OcrWhitelistMatchMode.EXACT: _("Only hide text identical to a whitelist entry."),
         OcrWhitelistMatchMode.STRICT: _("Allow only very small OCR differences."),
@@ -177,19 +216,12 @@ def match_mode_description(mode: OcrWhitelistMatchMode) -> str:
 
 def _ocr_bgr_from_stored_monochrome(stored: np.ndarray, ds: Dataset) -> NDArray[np.uint8]:
     """EasyOCR input for one stored mono slice — matches Series View Detect Text."""
-    from anonymizer.controller.series_io import stored_monochrome_to_series_buffer
-
     viewer_pixels, _ = stored_monochrome_to_series_buffer(stored, ds)
     return ocr_image_for_frame(ds, viewer_pixels)
 
 
 def ocr_image_for_frame(ds: Dataset, frame: np.ndarray) -> NDArray[np.uint8]:
     """Apply DICOM WL/WW to a processed frame for EasyOCR (Series View and batch)."""
-    from cv2 import COLOR_RGB2BGR, cvtColor
-
-    from anonymizer.utils.dicom import get_wl_ww
-    from anonymizer.utils.windowing import apply_windowing
-
     pi = str(ds.get("PhotometricInterpretation", "") or "").upper()
     if frame.ndim == 3 and frame.shape[-1] == 3 and frame.dtype == np.uint8 and pi == "RGB":
         logger.debug("ocr_image_for_frame RGB uint8 -> BGR for EasyOCR frame_shape=%s", frame.shape)
@@ -220,8 +252,6 @@ class OcrModelStatus(StrEnum):
 
 def probe_ocr_models() -> tuple[OcrModelStatus, str]:
     """Return OCR model cache status under assets/ai/ocr/model."""
-    from anonymizer.utils.translate import _
-
     if _ocr_downloading:
         return OcrModelStatus.DOWNLOADING, _("Downloading OCR models…")
     if not OCR_MODEL_DIR.is_dir():
@@ -237,8 +267,6 @@ def probe_ocr_models() -> tuple[OcrModelStatus, str]:
 
 def download_ocr_models(*, verbose: bool = False) -> tuple[bool, str]:
     """Download EasyOCR weights into assets/ai/ocr/model."""
-    from anonymizer.utils.storage import update_model_download
-    from anonymizer.utils.translate import _
 
     global _ocr_downloading
     OCR_MODEL_DIR.mkdir(parents=True, exist_ok=True)
@@ -390,8 +418,6 @@ def pixel_phi_removal_mode_menu_values() -> tuple[PixelPhiRemovalMode, ...]:
 
 def pixel_phi_removal_mode_option_label(mode: PixelPhiRemovalMode) -> str:
     """Translated combobox label for a removal mode (not used for menu state)."""
-    from anonymizer.utils.translate import _
-
     if mode is PixelPhiRemovalMode.BLACKOUT:
         return _("Black out text")
     return _("Blend into background")
@@ -428,8 +454,6 @@ def pixel_phi_removal_mode_from_menu_label(label: str) -> PixelPhiRemovalMode:
 
 def pixel_phi_removal_mode_display_label(mode: PixelPhiRemovalMode) -> str:
     """Short action label for batch workflow logs."""
-    from anonymizer.utils.translate import _
-
     if mode is PixelPhiRemovalMode.BLACKOUT:
         return _("blacked out")
     return _("blended")
@@ -678,11 +702,6 @@ def load_modality_whitelist(project_dir: Path | None, modality: str | None) -> l
     """
     if not modality:
         return []
-    from anonymizer.utils.storage import (
-        load_default_whitelist,
-        load_project_whitelist,
-        project_whitelist_path,
-    )
 
     if project_dir is not None:
         project_path = project_whitelist_path(project_dir, modality)
@@ -1026,8 +1045,6 @@ def remove_pixel_phi(
         list(whitelist) if whitelist is not None else load_modality_whitelist(project_dir, series_modality or None)
     )
     if whitelist_match_settings is None and project_dir is not None:
-        from anonymizer.utils.storage import load_modality_whitelist_match_settings
-
         whitelist_match_settings = load_modality_whitelist_match_settings(project_dir, series_modality or None)
 
     logger.debug(f"Processing Image, SOPClassUID: {ds.SOPClassUID} AnonPatientID: {ds.PatientID}")
@@ -1211,11 +1228,6 @@ def remove_pixel_phi(
             logger.debug("Applying OCR bbox blackout to source pixels (Series View routine)")
             source_frame = source_pixels_decompressed_stack[frame]
             if grayscale:
-                from anonymizer.controller.series_io import (
-                    series_buffer_monochrome_to_stored,
-                    stored_monochrome_to_series_buffer,
-                )
-
                 viewer_pixels, mono1_invert_max = stored_monochrome_to_series_buffer(source_frame, ds)
                 viewer_pixels = viewer_pixels.copy()
                 blackout_ocr_text_areas(viewer_pixels, source_ocr_texts)
@@ -1312,8 +1324,6 @@ def remove_pixel_phi(
         ds.PixelData = np.stack(source_pixels_deid_stack, axis=0).tobytes()
 
     ds.save_as(dcm_path)
-
-    from anonymizer.controller.create_projections import invalidate_projection_cache
 
     invalidate_projection_cache(dcm_path.parent)
 

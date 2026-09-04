@@ -1813,23 +1813,38 @@ msgstr "The RSNA DICOM Anonymizer program is a free open-source tool for curatin
 msgid "Easy to use, advanced DICOM expertise not required!"
 msgstr "Easy to use, advanced DICOM expertise not required!"
 
-msgid "Use it to ensure privacy by removing protected identity & health information (PHI/PII) from both metadata and burnt into pixel data."
-msgstr "Use it to ensure privacy by removing protected identity & health information (PHI/PII) from both metadata and burnt into pixel data."
+msgid ""
+"Remove protected identity and health information (PHI/PII) from DICOM metadata. "
+"Optional AI can remove burned-in text on all modalities, and blur faces on head CT/MR."
+msgstr ""
+"Remove protected identity and health information (PHI/PII) from DICOM metadata. "
+"Optional AI can remove burned-in text on all modalities, and blur faces on head CT/MR."
 
-msgid "Go to Help/Overview for a quick overview."
-msgstr "Go to Help/Overview for a quick overview."
+msgid ""
+"For CT and MR, optionally harmonize study descriptions using LOINC study names "
+"and series descriptions using the RSNA RadLex Playbook."
+msgstr ""
+"For CT and MR, optionally harmonize study descriptions using LOINC study names "
+"and series descriptions using the RSNA RadLex Playbook."
 
-msgid "Go to Help/Project settings for instructions on how to configure the program."
-msgstr "Go to Help/Project settings for instructions on how to configure the program."
+msgid "Open Help → User Manual → Start here for how to configure and use the program."
+msgstr "Open Help → User Manual → Start here for how to configure and use the program."
 
-msgid "Go to Help/Operation for instructions on how to use the program."
-msgstr "Go to Help/Operation for instructions on how to use the program."
+msgid "Use the AI Features button on this screen to download models and set Harmonize resolution."
+msgstr "Use the AI Features button on this screen to download models and set Harmonize resolution."
 
-msgid "Select File/New Project to start."
-msgstr "Select File/New Project to start."
+msgid "Select File → New Project to start."
+msgstr "Select File → New Project to start."
+
+msgid "LOINC"
+msgstr "LOINC"
+
+msgid "RSNA RadLex Playbook"
+msgstr "RSNA RadLex Playbook"
+
 
 msgid "SPONSOR MESSAGE"
-msgstr "SPONSOR MESSAGE"
+msgstr "Development of Anonymizer was supported under the Medical Imaging and Data Resource Center (MIDRC) project, funded by the National Institute of Biomedical Imaging and Bioengineering (NIBIB) of the National Institutes of Health under contract 75N92020D00021 and by the Advanced Research Projects Agency for Health (ARPA-H)."
 
 msgid "Importing Study"
 msgstr "Importing Study"
@@ -2479,72 +2494,48 @@ msgstr "Also apply to other studies with the same series descriptions"
 msgid "Apply"
 msgstr "Apply"
 
-#~ msgid "Double-click a study to view projections. Double-click a series to open Series View. Right-click either for the same action."
-#~ msgstr "Double-click a study to view projections. Double-click a series to open Series View. Right-click either for the same action."
+msgid "User Manual"
+msgstr "User Manual"
 
-#~ msgid "1.5 mm"
-#~ msgstr "1.5 mm"
+msgid "Start here"
+msgstr "Start here"
 
-#~ msgid "3 mm"
-#~ msgstr "3 mm"
+msgid "Install and first launch"
+msgstr "Install and first launch"
 
-#~ msgid "6 mm"
-#~ msgstr "6 mm"
+msgid "Create a project"
+msgstr "Create a project"
 
-#, fuzzy
-#~ msgid "CT and MR. Updates SeriesDescription only."
-#~ msgstr "Failed to save series description."
+msgid "Bring images in"
+msgstr "Bring images in"
 
-#~ msgid "Project restart"
-#~ msgstr "Project restart"
+msgid "Dataset"
+msgstr "Dataset"
 
-#~ msgid "FALCON prediction"
-#~ msgstr "FALCON prediction"
+msgid "AI Features setup"
+msgstr "AI Features setup"
 
-#~ msgid "IV contrast confidence"
-#~ msgstr "IV contrast confidence"
+msgid "Remove burned-in text"
+msgstr "Remove burned-in text"
 
-#~ msgid "OCR on frame"
-#~ msgstr "OCR on frame"
+msgid "Harmonize names"
+msgstr "Harmonize names"
 
-#~ msgid "OCR on current frame"
-#~ msgstr "OCR on current frame"
+msgid "Blur faces"
+msgstr "Blur faces"
 
-#~ msgid "OCR on all frames"
-#~ msgstr "OCR on all frames"
+msgid "Run on many studies"
+msgstr "Run on many studies"
 
-#~ msgid "Blackout areas in all frames of series"
-#~ msgstr "Blackout areas in all frames of series"
+msgid "Run without the window"
+msgstr "Run without the window"
 
-#~ msgid "Areas blacked out in all frames of series"
-#~ msgstr "Areas blacked out in all frames of series"
+msgid "Troubleshooting"
+msgstr "Troubleshooting"
 
-#~ msgid "Running FALCON analysis..."
-#~ msgstr "Running FALCON analysis..."
+msgid "Tutorials"
+msgstr "Tutorials"
 
-#~ msgid "FALCON Error"
-#~ msgstr "FALCON Error"
+msgid "Could not open the user manual in a browser. Check your network or build docs locally (mkdocs serve)."
+msgstr "Could not open the user manual in a browser. Check your network or build docs locally (mkdocs serve)."
 
-#~ msgid "Failed to load FALCON models."
-#~ msgstr "Failed to load FALCON models."
-
-#~ msgid "FALCON Results"
-#~ msgstr "FALCON Results"
-
-#~ msgid "Current Series Description already matches the FALCON prediction."
-#~ msgstr "Current Series Description already matches the FALCON prediction."
-
-#~ msgid "Proposed Series Description"
-#~ msgstr "Proposed Series Description"
-
-#~ msgid "FALCON description applied"
-#~ msgstr "FALCON description applied"
-
-#~ msgid "FALCON description not applied"
-#~ msgstr "FALCON description not applied"
-
-#~ msgid "Pixel changes saved successfully"
-#~ msgstr "Pixel changes saved successfully"
-
-#~ msgid "Use Save Changes to write to the series files."
-#~ msgstr "Failed to save changes to series frames"

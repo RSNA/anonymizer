@@ -19,6 +19,7 @@ from anonymizer.controller.ai.tseg.config import (
     CONTRAST_PHASE_CACHE_FILENAME,
     CONTRAST_STATS_FILENAME,
     CONTRAST_STATS_HN_FILENAME,
+    DEFAULT_SEGMENTATION_MODE,
     ENABLE_TS_CONTRAST,
     ENABLE_TSEG_BRAIN_STRUCTURES,
     ENABLE_TSEG_FACE,
@@ -29,7 +30,6 @@ from anonymizer.controller.ai.tseg.config import (
     MIN_STRUCTURE_VOXELS,
     ROI_SUBSET,
     ROI_SUBSET_MANIFEST_FILENAME,
-    SEGMENTATION_MODE,
     segmentation_mode_for_modality,
 )
 from anonymizer.controller.ai.tseg.contrast import (
@@ -420,7 +420,7 @@ def run_segmentation(
     nifti_path: Path,
     output_dir: Path,
     *,
-    mode: str = SEGMENTATION_MODE,
+    mode: str = DEFAULT_SEGMENTATION_MODE,
     device: str | None = None,
     roi_subset: list[str] | None = None,
     task: str | None = None,

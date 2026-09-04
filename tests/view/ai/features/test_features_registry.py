@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 from unittest.mock import patch
 
+from anonymizer.controller.ai.feature_availability import harmonize_allowed, pixel_phi_allowed
 from anonymizer.controller.ai.tseg.readiness import TsWeightKind
 from anonymizer.view.ai.features.availability import (
     AiFeatureDownloadManager,
@@ -12,8 +13,6 @@ from anonymizer.view.ai.features.availability import (
     collapse_inventory_labels,
     format_installed_inventory_status,
     friendly_task_label,
-    harmonize_allowed,
-    pixel_phi_allowed,
 )
 from anonymizer.view.ai.features.catalog import (
     AiModelGroupId,
@@ -95,19 +94,19 @@ def test_download_manager_single_flight() -> None:
 
 def test_allowed_gates_are_readiness_only() -> None:
     with patch(
-        "anonymizer.view.ai.features.availability.ocr_models_ready",
+        "anonymizer.controller.ai.feature_availability.ocr_models_ready",
         return_value=True,
     ):
         assert pixel_phi_allowed() is True
     with (
-        patch("anonymizer.view.ai.features.availability.totalsegmentator_available", return_value=True),
-        patch("anonymizer.view.ai.features.availability.xgboost_available", return_value=True),
+        patch("anonymizer.controller.ai.feature_availability.totalsegmentator_available", return_value=True),
+        patch("anonymizer.controller.ai.feature_availability.xgboost_available", return_value=True),
         patch(
-            "anonymizer.view.ai.features.availability.installed_ct_segmentation_modes",
+            "anonymizer.controller.ai.feature_availability.installed_ct_segmentation_modes",
             return_value=("3mm",),
         ),
         patch(
-            "anonymizer.view.ai.features.availability.installed_mr_segmentation_modes",
+            "anonymizer.controller.ai.feature_availability.installed_mr_segmentation_modes",
             return_value=(),
         ),
     ):

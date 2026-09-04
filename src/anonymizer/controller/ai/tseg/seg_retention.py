@@ -7,11 +7,14 @@ import logging
 from pathlib import Path
 
 import SimpleITK as sitk
+from pydicom import dcmread
 
+from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir
 from anonymizer.controller.ai.tseg.config import (
     BRAIN_STRUCTURE_FILES,
     FACE_MASK_FILENAME,
     MIN_STRUCTURE_VOXELS,
+    PRIMARY_SEGMENT_GROUPS,
     PRIMARY_SEGMENT_ORDER,
     PRIMARY_SEGMENT_PREFERRED_FILES,
     ROI_SUBSET_CHEST,
@@ -22,6 +25,9 @@ from anonymizer.controller.ai.tseg.config import (
     ROI_TIER_FULL,
     ROI_TIER_HEAD,
 )
+from anonymizer.controller.ai.tseg.dicom_geometry import sorted_dicom_paths
+from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
+from anonymizer.utils.modalities import is_ct_modality
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +52,41 @@ def _read_json_dict(path: Path) -> dict | None:
 def _write_json_dict(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def resolve_primary_segment_files(seg_dir: Path, group_name: str) -> tuple[str, ...]:
+    """Prefer a on-disk super-segment when configured; else the multi-file group list.
+
+    MR ``total_mr`` writes combined ``vertebrae`` / whole-lung masks instead of CT
+    per-vertebra and lobe files; detect those when the CT multi-file packs are absent.
+    """
+    fallback = PRIMARY_SEGMENT_GROUPS.get(group_name)
+    if not fallback:
+        raise KeyError(f"Unknown primary segment group: {group_name}")
+    preferred = PRIMARY_SEGMENT_PREFERRED_FILES.get(group_name)
+    if preferred and all((seg_dir / f"{stem}.nii.gz").is_file() for stem in preferred):
+        return preferred
+
+    if group_name == "spine" and (seg_dir / "vertebrae.nii.gz").is_file():
+        has_ct_vertebrae = any(
+            stem.startswith("vertebrae_") and (seg_dir / f"{stem}.nii.gz").is_file() for stem in fallback
+        )
+        if not has_ct_vertebrae:
+            stems = ["vertebrae"]
+            if (seg_dir / "sacrum.nii.gz").is_file():
+                stems.append("sacrum")
+            return tuple(stems)
+
+    if group_name == "lungs":
+        has_lobe = any((seg_dir / f"{stem}.nii.gz").is_file() for stem in fallback)
+        if not has_lobe:
+            mr_lungs = tuple(
+                stem for stem in ("lung_left", "lung_right") if (seg_dir / f"{stem}.nii.gz").is_file()
+            )
+            if mr_lungs:
+                return mr_lungs
+
+    return fallback
 
 
 def read_structure_voxels(cache_dir: Path) -> dict[str, int] | None:
@@ -149,8 +190,6 @@ def aggregate_primary_segment_voxels(
     min_voxels: int = MIN_STRUCTURE_VOXELS,
 ) -> dict[str, int]:
     """Sum per-structure counts into primary latch groups."""
-    from anonymizer.view.series.anatomy_overlay import resolve_primary_segment_files
-
     seg_dir = Path(seg_dir)
     present: dict[str, int] = {}
     for group_name in PRIMARY_SEGMENT_ORDER:
@@ -169,8 +208,6 @@ def compute_latch_mask_keep_set(
     min_voxels: int = MIN_STRUCTURE_VOXELS,
 ) -> set[str]:
     """Mask file stems required for Series View latch overlays and licensed tasks."""
-    from anonymizer.view.series.anatomy_overlay import resolve_primary_segment_files
-
     seg_dir = Path(seg_dir)
     keep: set[str] = set()
 
@@ -258,10 +295,7 @@ def finalize_seg_cache(
 
 def resolve_harmonize_roi_subset(series_directory: Path) -> tuple[tuple[str, ...], str]:
     """Choose CT ROI tier from DICOM metadata (HEAD / CHEST / FULL)."""
-    from pydicom import dcmread
-
     from anonymizer.controller.ai.blur_face.pipeline import MetadataSignal, metadata_signal
-    from anonymizer.controller.ai.tseg.dicom_geometry import sorted_dicom_paths
 
     series_directory = Path(series_directory)
     try:
@@ -306,10 +340,6 @@ def widen_roi_tier(tier: str) -> tuple[tuple[str, ...], str] | None:
 
 
 def _series_instance_uid(series_directory: Path) -> str | None:
-    from pydicom import dcmread
-
-    from anonymizer.controller.ai.tseg.dicom_geometry import sorted_dicom_paths
-
     try:
         paths = sorted_dicom_paths(series_directory)
     except ValueError:
@@ -323,17 +353,13 @@ def _series_instance_uid(series_directory: Path) -> str | None:
 
 def is_ct_head_series(series_directory: Path) -> bool:
     """True for CT series classified as head-dominant (face-blur candidate)."""
-    from pydicom import dcmread
-
+    # Lazy: blur_face.pipeline imports segment, which imports this module.
     from anonymizer.controller.ai.blur_face.pipeline import (
         CachedRegionSignal,
         MetadataSignal,
         cached_region_signal,
         metadata_signal,
     )
-    from anonymizer.controller.ai.tseg.dicom_geometry import sorted_dicom_paths
-    from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
-    from anonymizer.utils.modalities import is_ct_modality
 
     profile = resolve_profile_for_series(series_directory)
     if profile is None or not is_ct_modality(profile.modality):
@@ -376,9 +402,7 @@ def evict_tseg_volume(series_directory: Path, anon_model=None) -> bool:
     (``face_blur_algorithm_applied`` in the project DB), so the face task can reuse
     the cached NIfTI without a DICOM reconversion.
     """
-    from anonymizer.controller.ai.tseg.segment import series_cache_dir
-
-    cache_dir = series_cache_dir(series_directory)
+    cache_dir = resolve_series_cache_dir(series_directory)
     volume_path = cache_dir / "volume.nii.gz"
     if not volume_path.is_file():
         return False

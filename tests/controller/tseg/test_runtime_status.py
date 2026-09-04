@@ -232,39 +232,39 @@ def test_log_runtime_status_does_not_raise() -> None:
 
 
 def test_project_ai_gates_use_ready_checks() -> None:
-    from anonymizer.view.ai.features.availability import face_blur_allowed, harmonize_allowed
+    from anonymizer.controller.ai.feature_availability import face_blur_allowed, harmonize_allowed
 
     with (
-        patch("anonymizer.view.ai.features.availability.totalsegmentator_available", return_value=True),
-        patch("anonymizer.view.ai.features.availability.xgboost_available", return_value=True),
+        patch("anonymizer.controller.ai.feature_availability.totalsegmentator_available", return_value=True),
+        patch("anonymizer.controller.ai.feature_availability.xgboost_available", return_value=True),
         patch(
-            "anonymizer.view.ai.features.availability.installed_ct_segmentation_modes",
+            "anonymizer.controller.ai.feature_availability.installed_ct_segmentation_modes",
             return_value=("3mm",),
         ),
         patch(
-            "anonymizer.view.ai.features.availability.installed_mr_segmentation_modes",
+            "anonymizer.controller.ai.feature_availability.installed_mr_segmentation_modes",
             return_value=(),
         ),
-        patch("anonymizer.view.ai.features.availability.face_ct_ready", return_value=True),
-        patch("anonymizer.view.ai.features.availability.face_mr_ready", return_value=False),
-        patch("anonymizer.view.ai.features.availability.face_license_available", return_value=True),
+        patch("anonymizer.controller.ai.feature_availability.face_ct_ready", return_value=True),
+        patch("anonymizer.controller.ai.feature_availability.face_mr_ready", return_value=False),
+        patch("anonymizer.controller.ai.feature_availability.face_license_available", return_value=True),
     ):
         assert harmonize_allowed() is True
         assert face_blur_allowed() is True
     with (
-        patch("anonymizer.view.ai.features.availability.totalsegmentator_available", return_value=True),
-        patch("anonymizer.view.ai.features.availability.xgboost_available", return_value=True),
+        patch("anonymizer.controller.ai.feature_availability.totalsegmentator_available", return_value=True),
+        patch("anonymizer.controller.ai.feature_availability.xgboost_available", return_value=True),
         patch(
-            "anonymizer.view.ai.features.availability.installed_ct_segmentation_modes",
+            "anonymizer.controller.ai.feature_availability.installed_ct_segmentation_modes",
             return_value=(),
         ),
         patch(
-            "anonymizer.view.ai.features.availability.installed_mr_segmentation_modes",
+            "anonymizer.controller.ai.feature_availability.installed_mr_segmentation_modes",
             return_value=(),
         ),
-        patch("anonymizer.view.ai.features.availability.face_ct_ready", return_value=False),
-        patch("anonymizer.view.ai.features.availability.face_mr_ready", return_value=False),
-        patch("anonymizer.view.ai.features.availability.face_license_available", return_value=True),
+        patch("anonymizer.controller.ai.feature_availability.face_ct_ready", return_value=False),
+        patch("anonymizer.controller.ai.feature_availability.face_mr_ready", return_value=False),
+        patch("anonymizer.controller.ai.feature_availability.face_license_available", return_value=True),
     ):
         assert harmonize_allowed() is False
         assert face_blur_allowed() is False
