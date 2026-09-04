@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [19.0.2]
+- Help menu: User Manual (browser), Tutorials (YouTube), License (in-app HTMLView); drop per-chapter menu entries
+- GitHub Pages: serve MkDocs Actions build at site root so user-manual landing links work
+- Restore US RGB `project_t2` OCR test DICOM fixture deleted in 19.0.1
+
 ## [19.0.1]
 - First official V19 release
 - Clinician user manual: MkDocs Material site under `docs/en/` (English only for now), GitHub Pages workflow, Help menu opens the published manual in the browser (local `site/` fallback)
