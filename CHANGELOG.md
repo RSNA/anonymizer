@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [19.0.4]
+- Tests: align face-blur gate and mocked TotalSegmentator fixtures with JSON sidecars and mask-required `finalize_seg_cache` (CI green after 19.0.3)
+
 ## [19.0.3]
 - Harmonize CT single-pass: keep multilabel segmentation in memory and write only Series View latch masks (fixes missing overlays after stats-only caches)
 - Refuse to publish anatomy JSON without on-disk masks; heal incomplete caches; Clear required before re-Harmonize when masks remain
