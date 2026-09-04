@@ -27,6 +27,7 @@ from anonymizer.controller.ai.blur_face import (
 )
 from anonymizer.controller.ai.tseg.config import MIN_STRUCTURE_VOXELS
 from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult, resolve_series_geometry
+from anonymizer.controller.ai.tseg.seg_retention import write_structure_voxels
 from anonymizer.controller.ai.tseg.segment import series_cache_dir
 from tests.controller.tseg.support.synthetic_ct import (
     build_synthetic_chest_ct_series,
@@ -74,22 +75,37 @@ def _write_structure_mask(seg_dir: Path, name: str, voxel_count: int) -> None:
 
 
 def _write_head_region_cache(series_dir: Path) -> None:
-    seg_dir = series_cache_dir(series_dir) / "seg"
-    _write_structure_mask(seg_dir, "brain", 8000)
+    cache_dir = series_cache_dir(series_dir)
+    seg_dir = cache_dir / "seg"
+    voxels = {"brain": 8000}
+    _write_structure_mask(seg_dir, "brain", voxels["brain"])
+    write_structure_voxels(cache_dir, voxels)
 
 
 def _write_chest_region_cache(series_dir: Path) -> None:
-    seg_dir = series_cache_dir(series_dir) / "seg"
-    _write_structure_mask(seg_dir, "heart", 6000)
-    _write_structure_mask(seg_dir, "lung_upper_lobe_left", 5000)
-    _write_structure_mask(seg_dir, "lung_upper_lobe_right", 5000)
+    cache_dir = series_cache_dir(series_dir)
+    seg_dir = cache_dir / "seg"
+    voxels = {
+        "heart": 6000,
+        "lung_upper_lobe_left": 5000,
+        "lung_upper_lobe_right": 5000,
+    }
+    for name, count in voxels.items():
+        _write_structure_mask(seg_dir, name, count)
+    write_structure_voxels(cache_dir, voxels)
 
 
 def _write_multi_region_cache(series_dir: Path) -> None:
-    seg_dir = series_cache_dir(series_dir) / "seg"
-    _write_structure_mask(seg_dir, "brain", 4000)
-    _write_structure_mask(seg_dir, "heart", 4000)
-    _write_structure_mask(seg_dir, "lung_upper_lobe_left", 4000)
+    cache_dir = series_cache_dir(series_dir)
+    seg_dir = cache_dir / "seg"
+    voxels = {
+        "brain": 4000,
+        "heart": 4000,
+        "lung_upper_lobe_left": 4000,
+    }
+    for name, count in voxels.items():
+        _write_structure_mask(seg_dir, name, count)
+    write_structure_voxels(cache_dir, voxels)
 
 
 @pytest.mark.parametrize(

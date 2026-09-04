@@ -9,6 +9,7 @@ import pytest
 
 from anonymizer.controller.ai.tseg.contrast import ContrastResult
 from anonymizer.controller.ai.tseg.segment import TS_result, analyze_series
+from tests.controller.tseg.support.stub_seg_masks import write_stub_overlay_masks
 
 pytestmark = pytest.mark.usefixtures("synthetic_ct_asset_dirs")
 
@@ -39,13 +40,15 @@ def test_analyze_series_chest_mocked(
     mock_contrast_result: ContrastResult,
     synthetic_chest_series: Path,
 ) -> None:
-    mock_nifti.return_value = 24
-    mock_seg.return_value = 1.0
-    mock_collect.return_value = {
+    voxels = {
         "lung_upper_lobe_left": 50_000,
         "lung_upper_lobe_right": 48_000,
         "heart": 10_000,
     }
+    write_stub_overlay_masks(synthetic_chest_series, voxels)
+    mock_nifti.return_value = 24
+    mock_seg.return_value = 1.0
+    mock_collect.return_value = voxels
     mock_contrast.return_value = mock_contrast_result
 
     results = analyze_series([synthetic_chest_series])

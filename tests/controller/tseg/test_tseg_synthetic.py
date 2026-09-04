@@ -19,6 +19,7 @@ from anonymizer.controller.ai.tseg.segment import (
     dicom_series_to_nifti,
 )
 from tests.controller.tseg.fixtures import SYNTHETIC_CT_ASSET_DIRS
+from tests.controller.tseg.support.stub_seg_masks import write_stub_overlay_masks
 from tests.controller.tseg.support.synthetic_ct import list_dcm_files
 
 pytestmark = pytest.mark.usefixtures("synthetic_ct_asset_dirs")
@@ -131,8 +132,10 @@ def test_analyze_series_synthetic_chest_pipeline(
     mock_contrast: MagicMock,
     synthetic_chest_series: Path,
 ) -> None:
+    voxels = _chest_structure_voxels()
+    write_stub_overlay_masks(synthetic_chest_series, voxels)
     mock_seg.return_value = 12.5
-    mock_collect.return_value = _chest_structure_voxels()
+    mock_collect.return_value = voxels
     mock_contrast.return_value = ContrastResult("native", 4.0, 0.97, False)
 
     results = analyze_series([synthetic_chest_series])
@@ -155,8 +158,10 @@ def test_analyze_series_synthetic_head_pipeline(
     mock_contrast: MagicMock,
     synthetic_head_series: Path,
 ) -> None:
+    voxels = _head_structure_voxels()
+    write_stub_overlay_masks(synthetic_head_series, voxels)
     mock_seg.return_value = 10.0
-    mock_collect.return_value = _head_structure_voxels()
+    mock_collect.return_value = voxels
     mock_contrast.return_value = ContrastResult("portal_venous", 72.0, 0.91, True)
 
     results = analyze_series([synthetic_head_series])
@@ -174,8 +179,10 @@ def test_analyze_series_synthetic_abdomen_pipeline(
     mock_contrast: MagicMock,
     synthetic_abdomen_series: Path,
 ) -> None:
+    voxels = _abdomen_structure_voxels()
+    write_stub_overlay_masks(synthetic_abdomen_series, voxels)
     mock_seg.return_value = 11.0
-    mock_collect.return_value = _abdomen_structure_voxels()
+    mock_collect.return_value = voxels
     mock_contrast.return_value = ContrastResult("native", 2.0, 0.99, False)
 
     results = analyze_series([synthetic_abdomen_series])
@@ -193,8 +200,10 @@ def test_analyze_series_contrast_failure_keeps_regions(
     mock_contrast: MagicMock,
     synthetic_chest_series: Path,
 ) -> None:
+    voxels = _chest_structure_voxels()
+    write_stub_overlay_masks(synthetic_chest_series, voxels)
     mock_seg.return_value = 9.0
-    mock_collect.return_value = _chest_structure_voxels()
+    mock_collect.return_value = voxels
     mock_contrast.side_effect = RuntimeError("XGBoost is required")
 
     results = analyze_series([synthetic_chest_series])
@@ -214,8 +223,9 @@ def test_analyze_series_same_name_different_paths_do_not_collide(
     mock_contrast: MagicMock,
     tmp_path: Path,
 ) -> None:
+    voxels = _chest_structure_voxels()
     mock_seg.return_value = 1.0
-    mock_collect.return_value = _chest_structure_voxels()
+    mock_collect.return_value = voxels
     mock_contrast.return_value = ContrastResult("native", 0.0, 0.9, False)
 
     series_a = tmp_path / "batch_a" / "series"
@@ -224,6 +234,7 @@ def test_analyze_series_same_name_different_paths_do_not_collide(
         series.mkdir(parents=True)
         for src in list_dcm_files(SYNTHETIC_CT_ASSET_DIRS["chest"])[:MIN_DICOM_SLICES]:
             (series / src.name).write_bytes(src.read_bytes())
+        write_stub_overlay_masks(series, voxels)
 
     results = analyze_series([series_a, series_b])
     assert len(results) == 2
