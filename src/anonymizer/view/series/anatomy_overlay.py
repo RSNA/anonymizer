@@ -16,6 +16,7 @@ from anonymizer.controller.ai.tseg.config import (
     ROI_SUBSET,
 )
 from anonymizer.controller.ai.tseg.seg_retention import (
+    primary_segment_has_masks,
     read_mask_geometry,
     read_primary_segment_voxels,
     resolve_primary_segment_files,
@@ -113,7 +114,17 @@ def collect_primary_segment_voxels(
     *,
     min_voxels: int = MIN_STRUCTURE_VOXELS,
 ) -> dict[str, int]:
-    """Sum voxels across TS files for each primary UI group (bilateral / multi-part merged)."""
+    """Primary overlay groups for Series View latch buttons.
+
+    Prefer ``primary_segment_voxels.json``. When that sidecar is missing (e.g. cancel
+    mid-Harmonize), infer presence from on-disk ``*.nii.gz`` names only — never decode
+    NIfTI volumes on the UI thread.
+    """
+    from anonymizer.controller.ai.tseg.seg_retention import (
+        primary_segment_mask_stems_on_disk,
+        write_primary_segment_voxels,
+    )
+
     seg_dir = Path(seg_dir)
     cache_dir = seg_dir.parent
     cached = read_primary_segment_voxels(cache_dir)
@@ -121,25 +132,18 @@ def collect_primary_segment_voxels(
         return {
             name: int(count)
             for name, count in cached.items()
-            if int(count) >= min_voxels
+            if int(count) >= min_voxels and primary_segment_has_masks(seg_dir, name)
         }
 
     present: dict[str, int] = {}
-    for group_name in PRIMARY_SEGMENT_GROUPS:
-        files = resolve_primary_segment_files(seg_dir, group_name)
-        total = 0
-        for file_stem in files:
-            mask_path = seg_dir / f"{file_stem}.nii.gz"
-            if not mask_path.is_file():
-                continue
-            image = sitk.ReadImage(str(mask_path))
-            try:
-                array = sitk.GetArrayFromImage(image)
-                total += int((array > 0).sum())
-            finally:
-                del image
-        if total >= min_voxels:
-            present[group_name] = total
+    for group_name in PRIMARY_SEGMENT_ORDER:
+        stems = primary_segment_mask_stems_on_disk(seg_dir, group_name)
+        if not stems:
+            continue
+        # Placeholder counts for ordering; real voxel totals come from finalize.
+        present[group_name] = max(min_voxels, len(stems) * min_voxels)
+    if present:
+        write_primary_segment_voxels(cache_dir, present)
     return present
 
 

@@ -39,9 +39,10 @@ def test_ocr_results_series_requires_any_frame_detections() -> None:
     )
 
 
-def test_clear_cache_button_visible_only_when_harmonized() -> None:
+def test_clear_cache_button_visible_when_harmonized_or_masks() -> None:
     assert clear_cache_button_visible(modality="CT", already_harmonized=True)
-    assert not clear_cache_button_visible(modality="CT", already_harmonized=False)
+    assert clear_cache_button_visible(modality="CT", already_harmonized=False, has_segment_masks=True)
+    assert not clear_cache_button_visible(modality="CT", already_harmonized=False, has_segment_masks=False)
     assert clear_cache_button_visible(modality="MR", already_harmonized=True)
     assert not clear_cache_button_visible(modality=None, already_harmonized=True)
 
@@ -56,6 +57,12 @@ def test_harmonize_button_visible_once_until_cleared() -> None:
         harmonize_models_ready=True,
         modality="CT",
         already_harmonized=True,
+    )
+    assert not harmonize_button_visible(
+        harmonize_models_ready=True,
+        modality="CT",
+        already_harmonized=False,
+        has_segment_masks=True,
     )
     assert not harmonize_button_visible(
         harmonize_models_ready=True,

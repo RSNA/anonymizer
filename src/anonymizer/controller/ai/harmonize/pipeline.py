@@ -1390,6 +1390,11 @@ def harmonize_series(
                 cancelled=cancelled,
             )
             if not used_single_pass or region_result.error:
+                if harmonize_cancel_requested(cancelled) or region_result.error == HARMONIZE_CANCELLED_MESSAGE:
+                    logger.info("Harmonize: cancelled during CT single-pass for %s", series_dir)
+                    timing.anatomy_sec = time.perf_counter() - stage_t0
+                    timing.single_pass = False
+                    break
                 logger.info(
                     "Harmonize: CT single-pass unavailable (%s); falling back to ROI anatomy for %s",
                     region_result.error or "not applicable",

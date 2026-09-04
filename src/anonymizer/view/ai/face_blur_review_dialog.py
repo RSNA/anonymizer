@@ -101,11 +101,13 @@ class FaceBlurReviewDialog(AppCTkToplevel):
 
         self._loading = True
         self._blur_running = False
+        self._cancel_after_step = False
         self._load_work_state = WorkState()
         self._blur_work_state = WorkState()
         self._load_progress_after_id: str | None = None
         self._load_progress_value = 0.0
         self._loading_shell: ctk.CTkFrame | None = None
+        self._loading_status_label: ctk.CTkLabel | None = None
         self._load_progress: ctk.CTkProgressBar | None = None
 
         self._set_dialog_title()
@@ -169,11 +171,12 @@ class FaceBlurReviewDialog(AppCTkToplevel):
         pad = self.LOADING_SHELL_PAD
         self._loading_shell.pack(fill="both", expand=True, padx=pad, pady=pad)
 
-        ctk.CTkLabel(
+        self._loading_status_label = ctk.CTkLabel(
             self._loading_shell,
             text=f"{_('Loading series')}…  {self._series_path.name}",
             anchor="w",
-        ).pack(fill="x", pady=(0, 8))
+        )
+        self._loading_status_label.pack(fill="x", pady=(0, 8))
 
         self._load_progress = ctk.CTkProgressBar(
             self._loading_shell,
@@ -224,8 +227,23 @@ class FaceBlurReviewDialog(AppCTkToplevel):
             logger.exception("Face blur review load failed for %s", self._series_path)
             self._load_work_state.fail(str(exc))
 
+    def _show_cancelling_status(self) -> None:
+        message = _("Cancelling after current step") + "…"
+        if self._loading_status_label is not None:
+            with contextlib.suppress(tk.TclError):
+                self._loading_status_label.configure(text=message)
+        if hasattr(self, "_status_label"):
+            with contextlib.suppress(tk.TclError):
+                self._status_label.configure(text=message)
+        if hasattr(self, "_cancel_button"):
+            with contextlib.suppress(tk.TclError):
+                self._cancel_button.configure(state="disabled")
+
     def _on_load_job_done(self, _algorithm: Algorithm | None, work_state: WorkState) -> None:
         if not self._widget_alive():
+            return
+        if work_state.should_cancel() or self._cancel_after_step:
+            self._close(cancelled=True)
             return
         if work_state.error:
             messagebox.showerror(
@@ -414,6 +432,9 @@ class FaceBlurReviewDialog(AppCTkToplevel):
     def _start_blur_worker(self) -> None:
         if not self._widget_alive() or self._slice_frames is None or self._ds is None:
             return
+        if self._cancel_after_step:
+            self._close(cancelled=True)
+            return
         self._blur_running = True
         self._blur_work_state.prepare_job()
         self._update_status(_("Preparing face blur preview") + "…")
@@ -422,6 +443,10 @@ class FaceBlurReviewDialog(AppCTkToplevel):
 
     def _launch_blur_worker(self, blur_mode: FaceBlurMode) -> None:
         if not self._blur_running or not self._widget_alive():
+            return
+        if self._cancel_after_step:
+            self._blur_running = False
+            self._close(cancelled=True)
             return
         if self._slice_frames is None or self._ds is None:
             self._blur_running = False
@@ -462,13 +487,18 @@ class FaceBlurReviewDialog(AppCTkToplevel):
             )
 
         try:
+            if work_state.should_cancel():
+                work_state.finish(None)
+                return
             preview = preview_face_blur(
                 self._series_path,
                 progress=on_progress,
                 volume_context=volume_context,
                 blur_mode=blur_mode,
             )
-            if not work_state.should_cancel():
+            if work_state.should_cancel():
+                work_state.finish(None)
+            else:
                 work_state.finish(preview)
         except Exception as exc:
             logger.exception("Face blur preview worker failed for %s", self._series_path)
@@ -476,6 +506,9 @@ class FaceBlurReviewDialog(AppCTkToplevel):
 
     def _on_blur_job_tick(self, work_state: WorkState) -> None:
         if not self._widget_alive() or not self._blur_running:
+            return
+        if work_state.should_cancel() or self._cancel_after_step:
+            self._show_cancelling_status()
             return
         status, _done, fraction, _error, _result, _detail = work_state.read_job_ui()
         if status:
@@ -486,6 +519,10 @@ class FaceBlurReviewDialog(AppCTkToplevel):
         if not self._widget_alive():
             return
         if not self._blur_running:
+            return
+        if work_state.should_cancel() or self._cancel_after_step:
+            self._blur_running = False
+            self._close(cancelled=True)
             return
         if work_state.error:
             self._blur_running = False
@@ -602,8 +639,21 @@ class FaceBlurReviewDialog(AppCTkToplevel):
         self._on_cancel()
 
     def _on_cancel(self) -> None:
-        if self._blur_running:
+        """Request cooperative cancel; close after the current load/blur step finishes."""
+        if self._closing:
+            return
+        if self._cancel_after_step:
+            return
+        logger.info(
+            "Face blur review cancel (loading=%s blur_running=%s)",
+            self._loading,
+            self._blur_running,
+        )
+        if self._loading or self._blur_running:
+            self._cancel_after_step = True
+            self._load_work_state.request_cancel()
             self._blur_work_state.request_cancel()
+            self._show_cancelling_status()
             return
         self._close(cancelled=True)
 

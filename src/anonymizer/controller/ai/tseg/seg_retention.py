@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
+import os
 from pathlib import Path
 
 import SimpleITK as sitk
@@ -50,8 +52,18 @@ def _read_json_dict(path: Path) -> dict | None:
 
 
 def _write_json_dict(path: Path, payload: dict) -> None:
+    """Write JSON via temp file + ``os.replace`` (atomic on the same filesystem)."""
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    tmp_path = path.with_name(f"{path.name}.tmp")
+    data = json.dumps(payload, indent=2) + "\n"
+    try:
+        tmp_path.write_text(data, encoding="utf-8")
+        os.replace(tmp_path, path)
+    except Exception:
+        with contextlib.suppress(OSError):
+            tmp_path.unlink(missing_ok=True)
+        raise
 
 
 def resolve_primary_segment_files(seg_dir: Path, group_name: str) -> tuple[str, ...]:
@@ -87,6 +99,64 @@ def resolve_primary_segment_files(seg_dir: Path, group_name: str) -> tuple[str, 
                 return mr_lungs
 
     return fallback
+
+
+def primary_segment_mask_stems_on_disk(seg_dir: Path, group_name: str) -> tuple[str, ...]:
+    """Return resolved group stems that have ``.nii.gz`` masks under ``seg_dir``."""
+    seg_dir = Path(seg_dir)
+    return tuple(
+        stem for stem in resolve_primary_segment_files(seg_dir, group_name) if (seg_dir / f"{stem}.nii.gz").is_file()
+    )
+
+
+def primary_segment_has_masks(seg_dir: Path, group_name: str) -> bool:
+    """True when at least one Series View overlay mask for ``group_name`` exists on disk."""
+    return bool(primary_segment_mask_stems_on_disk(seg_dir, group_name))
+
+
+def overlay_masks_present(seg_dir: Path) -> bool:
+    """True when ``seg/`` contains at least one ``.nii.gz`` anatomy mask for Series View overlays."""
+    seg_dir = Path(seg_dir)
+    return seg_dir.is_dir() and any(seg_dir.glob("*.nii.gz"))
+
+
+def anatomy_overlay_cache_ready(cache_dir: Path) -> bool:
+    """
+    True when Harmonize left a usable Series View overlay cache.
+
+    Requires ``structure_voxels.json``, ``primary_segment_voxels.json``, and on-disk
+    ``seg/*.nii.gz`` masks for every listed primary group. JSON counts alone are not enough.
+    """
+    cache_dir = Path(cache_dir)
+    if read_structure_voxels(cache_dir) is None:
+        return False
+    primary = read_primary_segment_voxels(cache_dir)
+    if primary is None:
+        return False
+    seg_dir = cache_dir / "seg"
+    if not primary:
+        # No anatomy groups above threshold — still ready when voxel sidecar exists.
+        return True
+    if not overlay_masks_present(seg_dir):
+        return False
+    return all(primary_segment_has_masks(seg_dir, name) for name in primary)
+
+
+def reconcile_primary_segment_sidecar(cache_dir: Path) -> dict[str, int]:
+    """
+    Rewrite ``primary_segment_voxels.json`` from structure counts ∩ on-disk masks.
+
+    Repairs stats-only caches that listed overlay groups without writing ``seg/*.nii.gz``.
+    """
+    cache_dir = Path(cache_dir)
+    structure = read_structure_voxels(cache_dir) or {}
+    primary = aggregate_primary_segment_voxels(
+        structure,
+        cache_dir / "seg",
+        require_masks=True,
+    )
+    write_primary_segment_voxels(cache_dir, primary)
+    return primary
 
 
 def read_structure_voxels(cache_dir: Path) -> dict[str, int] | None:
@@ -188,16 +258,103 @@ def aggregate_primary_segment_voxels(
     seg_dir: Path,
     *,
     min_voxels: int = MIN_STRUCTURE_VOXELS,
+    require_masks: bool = True,
 ) -> dict[str, int]:
-    """Sum per-structure counts into primary latch groups."""
+    """Sum per-structure counts into primary Series View overlay groups.
+
+    By default only groups with at least one on-disk ``.nii.gz`` are included so
+    ``primary_segment_voxels.json`` never advertises overlays that cannot be drawn.
+    Pass ``require_masks=False`` only when aggregating from statistics before masks exist.
+    """
     seg_dir = Path(seg_dir)
     present: dict[str, int] = {}
     for group_name in PRIMARY_SEGMENT_ORDER:
         files = resolve_primary_segment_files(seg_dir, group_name)
+        if require_masks:
+            files = primary_segment_mask_stems_on_disk(seg_dir, group_name)
+            if not files:
+                continue
         total = sum(int(structure_voxels.get(stem, 0)) for stem in files)
         if total >= min_voxels:
             present[group_name] = total
     return present
+
+
+def latch_mask_stems_for_export(
+    structure_voxels: dict[str, int],
+    *,
+    min_voxels: int = MIN_STRUCTURE_VOXELS,
+) -> set[str]:
+    """Stems to persist for Series View overlays from structure counts (no disk required)."""
+    keep: set[str] = set()
+    for group_name in PRIMARY_SEGMENT_ORDER:
+        files = PRIMARY_SEGMENT_GROUPS[group_name]
+        preferred = PRIMARY_SEGMENT_PREFERRED_FILES.get(group_name)
+        if preferred:
+            preferred_stems = [stem for stem in preferred if int(structure_voxels.get(stem, 0)) > 0]
+            if preferred_stems:
+                total = sum(int(structure_voxels.get(stem, 0)) for stem in preferred_stems)
+                if total >= min_voxels:
+                    keep.update(preferred_stems)
+                continue
+        stems = [stem for stem in files if int(structure_voxels.get(stem, 0)) > 0]
+        total = sum(int(structure_voxels.get(stem, 0)) for stem in stems)
+        if total >= min_voxels:
+            keep.update(stems)
+    return keep
+
+
+def clear_anatomy_seg_masks(seg_dir: Path) -> None:
+    """Remove anatomy ``*.nii.gz`` under ``seg/`` (keeps face masks)."""
+    seg_dir = Path(seg_dir)
+    if not seg_dir.is_dir():
+        return
+    for mask_path in seg_dir.glob("*.nii.gz"):
+        if mask_path.name in _FACE_MASK_FILENAMES:
+            continue
+        try:
+            mask_path.unlink()
+        except OSError as exc:
+            logger.warning("TS cache: could not remove %s: %s", mask_path, exc)
+
+
+def write_binary_masks_from_multilabel(
+    multilabel_img,
+    seg_dir: Path,
+    stems: set[str],
+    *,
+    task: str = "total",
+) -> list[str]:
+    """
+    Write selected binary ``*.nii.gz`` masks from an in-memory multilabel NIfTI.
+
+    ``multilabel_img`` is a nibabel ``Nifti1Image`` (TotalSegmentator ``ml=True`` return).
+    """
+    import nibabel as nib
+    import numpy as np
+    from totalsegmentator.map_to_binary import class_map
+
+    if task not in class_map:
+        raise KeyError(f"Unknown TotalSegmentator class map task: {task!r}")
+    name_to_label = {name: int(label) for label, name in class_map[task].items()}
+    seg_dir = Path(seg_dir)
+    seg_dir.mkdir(parents=True, exist_ok=True)
+    data = np.asanyarray(multilabel_img.dataobj)
+    affine = multilabel_img.affine
+    written: list[str] = []
+    for stem in sorted(stems):
+        label = name_to_label.get(stem)
+        if label is None:
+            logger.debug("TS cache: skip export for unknown label stem %r", stem)
+            continue
+        binary = (data == label).astype(np.uint8)
+        if not binary.any():
+            continue
+        out_img = nib.Nifti1Image(binary, affine)
+        out_path = seg_dir / f"{stem}.nii.gz"
+        nib.save(out_img, str(out_path))
+        written.append(stem)
+    return written
 
 
 def compute_latch_mask_keep_set(
@@ -207,7 +364,7 @@ def compute_latch_mask_keep_set(
     *,
     min_voxels: int = MIN_STRUCTURE_VOXELS,
 ) -> set[str]:
-    """Mask file stems required for Series View latch overlays and licensed tasks."""
+    """Mask file stems required for Series View overlay buttons and licensed tasks."""
     seg_dir = Path(seg_dir)
     keep: set[str] = set()
 
@@ -246,7 +403,7 @@ def prune_seg_cache(
     structure_voxels: dict[str, int],
     primary_segment_voxels: dict[str, int],
 ) -> list[str]:
-    """Delete seg masks not needed for latch overlays; return removed stems."""
+    """Delete seg masks not needed for Series View overlays; return removed stems."""
     seg_dir = Path(seg_dir)
     if not seg_dir.is_dir():
         return []
@@ -282,14 +439,46 @@ def finalize_seg_cache(
     seg_dir: Path,
     structure_voxels: dict[str, int],
 ) -> dict[str, int]:
-    """Write JSON sidecars and prune masks to the latch-essential set."""
+    """
+    Publish Harmonize segment results as one logical unit.
+
+    Call only after TotalSegmentator has written ``seg/*.nii.gz``. Order:
+
+    1. Prune ``seg/`` to overlay-essential masks (files settle first).
+    2. Write ``mask_geometry.json`` from a remaining mask.
+    3. Write ``structure_voxels.json``.
+    4. Write ``primary_segment_voxels.json`` last — derived only from masks still
+       on disk (``require_masks=True``). Readers treat this file as the overlay
+       catalog; it must never list groups without files.
+
+    JSON files use temp+replace. This is not a multi-file filesystem transaction,
+    but consumers never see a non-empty primary catalog without matching masks,
+    and a crash before step 4 leaves the previous primary (or none) rather than
+    a stats-only ghost catalog.
+    """
     cache_dir = Path(cache_dir)
     seg_dir = Path(seg_dir)
-    write_structure_voxels(cache_dir, structure_voxels)
-    primary_counts = aggregate_primary_segment_voxels(structure_voxels, seg_dir)
-    write_primary_segment_voxels(cache_dir, primary_counts)
-    write_mask_geometry(cache_dir, seg_dir)
+    primary_counts = aggregate_primary_segment_voxels(
+        structure_voxels,
+        seg_dir,
+        require_masks=True,
+    )
     prune_seg_cache(seg_dir, structure_voxels=structure_voxels, primary_segment_voxels=primary_counts)
+    # Re-aggregate after prune in case preferred stems changed keep-set.
+    primary_counts = aggregate_primary_segment_voxels(
+        structure_voxels,
+        seg_dir,
+        require_masks=True,
+    )
+    write_mask_geometry(cache_dir, seg_dir)
+    write_structure_voxels(cache_dir, structure_voxels)
+    write_primary_segment_voxels(cache_dir, primary_counts)
+    if any(int(v) > 0 for v in structure_voxels.values()) and not overlay_masks_present(seg_dir):
+        raise RuntimeError(
+            f"Refusing to publish segment cache under {cache_dir}: "
+            "structure counts are non-zero but seg/ has no overlay masks. "
+            "Write masks before finalize_seg_cache."
+        )
     return primary_counts
 
 

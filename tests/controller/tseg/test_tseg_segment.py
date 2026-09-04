@@ -90,7 +90,24 @@ def test_series_cache_dir_under_series(tmp_path) -> None:
     assert series_cache_dir(series) == series / TSEG_CACHE_DIRNAME
 
 
-def test_segmentation_cache_valid_requires_manifest_and_masks(tmp_path) -> None:
+def test_write_and_read_cached_segmentation_mode(tmp_path: Path) -> None:
+    from anonymizer.controller.ai.tseg.segment import (
+        read_cached_segmentation_mode,
+        write_roi_subset_manifest,
+    )
+
+    write_roi_subset_manifest(
+        tmp_path,
+        ["brain"],
+        anatomy_task="total",
+        modality="CT",
+        segmentation_mode="3mm",
+    )
+    assert read_cached_segmentation_mode(tmp_path) == "3mm"
+
+    write_roi_subset_manifest(tmp_path, ["brain"], anatomy_task="total", modality="CT")
+    assert read_cached_segmentation_mode(tmp_path) == "3mm"
+
     from anonymizer.controller.ai.tseg.segment import write_roi_subset_manifest
 
     seg_dir = tmp_path / "seg"

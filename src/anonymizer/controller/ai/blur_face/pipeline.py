@@ -27,7 +27,6 @@ from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult, b
 from anonymizer.controller.ai.tseg.segment import (
     analyze_tseg_face,
     body_parts_present,
-    collect_structure_voxels,
     count_mask_voxels,
     dominant_region_from_voxels,
     face_mask_cache_path,
@@ -301,7 +300,15 @@ def cached_region_signal(series_directory: Path) -> CachedRegionSignal:
         return CachedRegionSignal.UNAVAILABLE
 
     profile = resolve_profile_for_series(series_directory) or ct_modality_profile()
-    structure_voxels = collect_structure_voxels(seg_dir, list(profile.roi_subset))
+    # Use JSON sidecars only — never decode masks on the UI / eligibility path.
+    from anonymizer.controller.ai.tseg.seg_retention import read_structure_voxels
+
+    structure_voxels = read_structure_voxels(seg_dir.parent)
+    if structure_voxels is None:
+        return CachedRegionSignal.UNAVAILABLE
+    structure_voxels = {
+        name: int(structure_voxels.get(name, 0)) for name in profile.roi_subset
+    }
     if not any(count >= MIN_STRUCTURE_VOXELS for count in structure_voxels.values()):
         return CachedRegionSignal.UNAVAILABLE
 

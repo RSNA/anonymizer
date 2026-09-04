@@ -107,7 +107,12 @@ def brain_structures_option_available_for_series(ds: Dataset | None) -> bool:
 
 
 def series_is_ct_head_candidate(series_path: Path, ds: Dataset | None) -> bool:
-    """True when cached anatomy or DICOM metadata indicates a head-dominant CT study."""
+    """True when cached anatomy or DICOM metadata indicates a head-dominant CT study.
+
+    When metadata was stripped (common after anonymization) and there is no
+    prior anatomy cache, returns True so the optional brain-structures prompt
+    can still appear; the dialog defaults to No.
+    """
     if not brain_structures_option_available_for_series(ds):
         return False
     from anonymizer.controller.ai.blur_face.pipeline import (
@@ -122,7 +127,8 @@ def series_is_ct_head_candidate(series_path: Path, ds: Dataset | None) -> bool:
         return True
     if region_signal in (CachedRegionSignal.NON_HEAD, CachedRegionSignal.MULTI_REGION):
         return False
-    return metadata_signal(ds) == MetadataSignal.HEAD
+    meta = metadata_signal(ds)
+    return meta != MetadataSignal.NON_HEAD
 
 
 def should_prompt_brain_structures_for_series(series_path: Path, ds: Dataset | None) -> bool:
@@ -1034,6 +1040,9 @@ class HarmonizeResultsView(AppToplevel):
     def _on_harmonize_job_tick(self, work_state: WorkState) -> None:
         if self._closing or not self.winfo_exists():
             return
+        if self.cancelled or work_state.should_cancel():
+            self._status_label.configure(text=_("Cancelling after current step") + "…")
+            return
         _status, _done, _fraction, _error, _result, detail = work_state.read_job_ui()
         if isinstance(detail, HarmonizeProgress):
             self._show_harmonize_progress(detail)
@@ -1044,7 +1053,11 @@ class HarmonizeResultsView(AppToplevel):
     def _on_harmonize_job_done(self, _algorithm: Algorithm | None, work_state: WorkState) -> None:
         if self._closing or not self.winfo_exists():
             return
-        if self.cancelled or work_state.should_cancel() or work_state.result is None:
+        if self.cancelled or work_state.should_cancel():
+            self._running = False
+            self._close()
+            return
+        if work_state.result is None:
             return
         if work_state.error:
             self._show_error(work_state.error)
@@ -1175,13 +1188,19 @@ class HarmonizeResultsView(AppToplevel):
     def _on_cancel(self) -> None:
         if self._saving or self._closing:
             return
-        logger.info("_on_cancel")
+        logger.info("_on_cancel running=%s cancelled=%s", self._running, self.cancelled)
         if self._running:
+            if self.cancelled:
+                return
+            # Cooperative cancel: wait for current TotalSegmentator / pipeline step.
             self.cancelled = True
             self.accepted = False
             self._harmonize_work_state.request_cancel()
             self._save_work_state.request_cancel()
-        elif self._batch_total > 1 and len(self._outcomes) < self._batch_total:
+            self._status_label.configure(text=_("Cancelling after current step") + "…")
+            self._show_cancel_button(enabled=False)
+            return
+        if self._batch_total > 1 and len(self._outcomes) < self._batch_total:
             self.cancelled = True
         elif self.accepted is None:
             self.cancelled = True

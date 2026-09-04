@@ -39,7 +39,39 @@ def _write_mask(path: Path, voxel_count: int, *, shape: tuple[int, int, int] = (
     sitk.WriteImage(sitk.GetImageFromArray(array), str(path))
 
 
-def test_finalize_seg_cache_writes_sidecars_and_prunes_empty(tmp_path: Path) -> None:
+def test_latch_mask_stems_for_export_and_multilabel_write(tmp_path: Path) -> None:
+    import nibabel as nib
+    import numpy as np
+
+    from anonymizer.controller.ai.tseg.seg_retention import (
+        latch_mask_stems_for_export,
+        write_binary_masks_from_multilabel,
+    )
+    from totalsegmentator.map_to_binary import class_map
+
+    name_to_label = {name: int(label) for label, name in class_map["total"].items()}
+    shape = (4, 8, 8)
+    data = np.zeros(shape, dtype=np.uint8)
+    data[0, 0:2, 0:2] = name_to_label["brain"]
+    data[1, 0:2, 0:2] = name_to_label["skull"]
+    data[2, 0:2, 0:2] = name_to_label["liver"]  # should not export (below latch set for head-only counts)
+    img = nib.Nifti1Image(data, np.eye(4))
+
+    structure_voxels = {"brain": 5000, "skull": 3000, "liver": 0, "heart": 0}
+    stems = latch_mask_stems_for_export(structure_voxels)
+    assert "brain" in stems
+    assert "skull" in stems
+    assert "liver" not in stems
+
+    seg_dir = tmp_path / "seg"
+    written = write_binary_masks_from_multilabel(img, seg_dir, stems, task="total")
+    assert set(written) == {"brain", "skull"}
+    assert (seg_dir / "brain.nii.gz").is_file()
+    assert (seg_dir / "skull.nii.gz").is_file()
+    assert not (seg_dir / "liver.nii.gz").is_file()
+    brain = nib.load(str(seg_dir / "brain.nii.gz")).get_fdata()
+    assert int((brain > 0).sum()) == 4
+
     cache_dir = tmp_path / "0_TS_SEG"
     seg_dir = cache_dir / "seg"
     _write_mask(seg_dir / "brain.nii.gz", 5000)
@@ -55,6 +87,34 @@ def test_finalize_seg_cache_writes_sidecars_and_prunes_empty(tmp_path: Path) -> 
     assert (seg_dir / "brain.nii.gz").is_file()
     assert not (seg_dir / "liver.nii.gz").is_file()
     assert not (seg_dir / "heart.nii.gz").is_file()
+
+
+def test_finalize_seg_cache_refuses_counts_without_masks(tmp_path: Path) -> None:
+    cache_dir = tmp_path / "0_TS_SEG"
+    seg_dir = cache_dir / "seg"
+    seg_dir.mkdir(parents=True)
+
+    with pytest.raises(RuntimeError, match="no overlay masks"):
+        finalize_seg_cache(cache_dir, seg_dir, {"brain": 5000, "skull": 0})
+
+
+def test_anatomy_overlay_cache_ready_requires_masks(tmp_path: Path) -> None:
+    from anonymizer.controller.ai.tseg.seg_retention import (
+        anatomy_overlay_cache_ready,
+        reconcile_primary_segment_sidecar,
+        write_primary_segment_voxels,
+        write_structure_voxels,
+    )
+
+    cache_dir = tmp_path / "0_TS_SEG"
+    cache_dir.mkdir()
+    write_structure_voxels(cache_dir, {"brain": 5000})
+    write_primary_segment_voxels(cache_dir, {"brain": 5000})
+    assert anatomy_overlay_cache_ready(cache_dir) is False
+
+    reconciled = reconcile_primary_segment_sidecar(cache_dir)
+    assert reconciled == {}
+    assert read_primary_segment_voxels(cache_dir) in (None, {})
 
 
 def test_collect_structure_voxels_reads_json_without_masks(tmp_path: Path) -> None:
@@ -74,11 +134,25 @@ def test_collect_primary_segment_voxels_reads_json(tmp_path: Path) -> None:
 
     cache_dir = tmp_path / "0_TS_SEG"
     seg_dir = cache_dir / "seg"
-    seg_dir.mkdir(parents=True)
-    write_primary_segment_voxels(cache_dir, {"brain": 5000, "skull": 3000})
+    _write_mask(seg_dir / "brain.nii.gz", 5000)
+    _write_mask(seg_dir / "skull.nii.gz", 3000)
+    write_primary_segment_voxels(cache_dir, {"brain": 5000, "skull": 3000, "spine": 9000})
 
     present = collect_primary_segment_voxels(seg_dir)
     assert present == {"brain": 5000, "skull": 3000}
+    assert "spine" not in present
+
+
+def test_aggregate_primary_require_masks_skips_stats_only_groups(tmp_path: Path) -> None:
+    seg_dir = tmp_path / "seg"
+    seg_dir.mkdir()
+    _write_mask(seg_dir / "brainstem.nii.gz", 4000)
+    structure_voxels = {"brain": 5000, "spinal_cord": 2000, "vertebrae_C1": 3000, "brainstem": 4000}
+    present = aggregate_primary_segment_voxels(structure_voxels, seg_dir, require_masks=True)
+    assert present == {"brainstem": 4000}
+    assert "brain" not in present
+    assert "spine" not in present
+    assert "spinal_cord" not in present
 
 
 def test_load_primary_segment_mask_uses_mask_geometry_without_volume(tmp_path: Path) -> None:

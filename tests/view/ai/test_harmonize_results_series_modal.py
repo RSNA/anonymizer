@@ -94,7 +94,7 @@ def test_show_harmonize_does_not_grab_or_wait(
     view.destroy()
 
 
-def test_on_closed_fires_once_on_cancel(
+def test_on_closed_fires_once_on_cancel_while_running(
     tk_root: tk.Tk,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -107,10 +107,38 @@ def test_on_closed_fires_once_on_cancel(
         on_closed=closed.append,
         monkeypatch=monkeypatch,
     )
+    assert view._running is True
     view._on_cancel()
+    assert closed == []
+    assert view.cancelled is True
+    status_text = str(view._status_label.cget("text"))
+    assert "Cancelling after current step" in status_text
+
+    view._harmonize_work_state.finish(None)
+    HarmonizeResultsView._on_harmonize_job_done(view, None, view._harmonize_work_state)
+
     assert len(closed) == 1
     assert closed[0].cancelled is True
     assert get_open_harmonize_view(str(item.ds.SeriesInstanceUID)) is None
+
+
+def test_cancel_during_review_closes_immediately(
+    tk_root: tk.Tk,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    item = _series_item(tmp_path)
+    closed: list[HarmonizeBatchOutcome] = []
+    view, _, _ = _open_harmonize(
+        tk_root,
+        item,
+        on_closed=closed.append,
+        monkeypatch=monkeypatch,
+    )
+    view._running = False
+    view._on_cancel()
+    assert len(closed) == 1
+    assert closed[0].cancelled is True
 
 
 def test_second_open_focuses_existing_without_new_worker(
@@ -186,6 +214,7 @@ def test_series_view_disables_interaction_while_harmonize_open(
     series.winfo_exists = lambda: True
     series._destroyed = False
     series._closing = False
+    series._harmonize_button_visible = lambda: True
     enabled_states: list[bool] = []
     series._set_series_interaction_enabled = lambda enabled: enabled_states.append(enabled)
     series._refresh_analysis_cache_ui = MagicMock()
@@ -237,6 +266,7 @@ def test_series_view_second_click_focuses_existing(
     series.harmonize_button = MagicMock()
     series._set_series_interaction_enabled = MagicMock()
     series._on_series_description_updated = MagicMock()
+    series._harmonize_button_visible = lambda: True
 
     mock_view = MagicMock()
     mock_view.winfo_exists.return_value = True

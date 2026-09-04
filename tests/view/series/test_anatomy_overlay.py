@@ -109,17 +109,33 @@ def test_bgr_to_hex() -> None:
 
 
 def test_collect_primary_segment_voxels_sums_bilateral(tmp_path: Path) -> None:
+    from anonymizer.controller.ai.tseg.seg_retention import write_primary_segment_voxels
     from anonymizer.view.series.anatomy_overlay import collect_primary_segment_voxels
 
-    seg_dir = tmp_path / "seg"
+    cache_dir = tmp_path
+    seg_dir = cache_dir / "seg"
     shape = (8, 32, 32)
     _write_mask(seg_dir / "kidney_left.nii.gz", 600, shape=shape)
     _write_mask(seg_dir / "kidney_right.nii.gz", 500, shape=shape)
     _write_mask(seg_dir / "heart.nii.gz", 1200, shape=shape)
+    write_primary_segment_voxels(cache_dir, {"kidneys": 1100, "heart": 1200})
     present = collect_primary_segment_voxels(seg_dir, min_voxels=1000)
     assert present["kidneys"] == 1100
     assert present["heart"] == 1200
     assert "kidney_left" not in present
+
+
+def test_collect_primary_segment_voxels_file_presence_without_json(tmp_path: Path) -> None:
+    """Orphan masks (no sidecar) must not force NIfTI decode on the UI path."""
+    from anonymizer.view.series.anatomy_overlay import collect_primary_segment_voxels
+
+    seg_dir = tmp_path / "seg"
+    shape = (4, 16, 16)
+    _write_mask(seg_dir / "kidney_left.nii.gz", 600, shape=shape)
+    _write_mask(seg_dir / "kidney_right.nii.gz", 500, shape=shape)
+    present = collect_primary_segment_voxels(seg_dir, min_voxels=1000)
+    assert "kidneys" in present
+    assert present["kidneys"] >= 1000
 
 
 def test_primary_segment_overlays_unions_masks(tmp_path: Path) -> None:
@@ -233,12 +249,15 @@ def test_resolve_lungs_uses_mr_whole_lung_masks(tmp_path: Path) -> None:
 
 
 def test_collect_spine_voxels_uses_super_segment_when_present(tmp_path: Path) -> None:
+    from anonymizer.controller.ai.tseg.seg_retention import write_primary_segment_voxels
     from anonymizer.view.series.anatomy_overlay import collect_primary_segment_voxels
 
-    seg_dir = tmp_path / "seg"
+    cache_dir = tmp_path
+    seg_dir = cache_dir / "seg"
     shape = (8, 32, 32)
     _write_mask(seg_dir / "vertebrae_body.nii.gz", 1500, shape=shape)
     _write_mask(seg_dir / "vertebrae_C1.nii.gz", 800, shape=shape)
+    write_primary_segment_voxels(cache_dir, {"spine": 1500})
     present = collect_primary_segment_voxels(seg_dir, min_voxels=1000)
     assert present["spine"] == 1500
 

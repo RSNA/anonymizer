@@ -177,11 +177,16 @@ def ocr_results_available_for_edit_context(
     return any(texts for texts in overlay_ocr_by_frame.values())
 
 
-def clear_cache_button_visible(*, modality: str | None, already_harmonized: bool) -> bool:
-    """Show Clear only after Harmonize has been applied (Dataset Harmonized=Yes)."""
+def clear_cache_button_visible(
+    *,
+    modality: str | None,
+    already_harmonized: bool,
+    has_segment_masks: bool = False,
+) -> bool:
+    """Show Clear when Harmonize completed or orphan segment masks remain on disk."""
     from anonymizer.utils.modalities import is_tseg_modality
 
-    return is_tseg_modality(modality) and already_harmonized
+    return is_tseg_modality(modality) and (already_harmonized or has_segment_masks)
 
 
 def blur_face_toolbar_visible(
@@ -206,15 +211,16 @@ def harmonize_button_visible(
     harmonize_models_ready: bool,
     modality: str | None,
     already_harmonized: bool,
+    has_segment_masks: bool = False,
 ) -> bool:
-    """Show Harmonize Description only when it can be run (once per series until Clear)."""
+    """Show Harmonize only when it can run; existing seg masks require Clear first."""
     from anonymizer.utils.modalities import is_tseg_modality
 
     if not harmonize_models_ready:
         return False
     if not is_tseg_modality(modality):
         return False
-    return not already_harmonized
+    return not (already_harmonized or has_segment_masks)
 
 
 @dataclass(frozen=True)
@@ -1404,6 +1410,7 @@ class SeriesView(AppCTkToplevel):
             harmonize_models_ready=harmonize_allowed_for_modality(modality),
             modality=modality,
             already_harmonized=already_harmonized,
+            has_segment_masks=self._seg_dir_likely_has_structures(),
         )
 
     def _blur_face_toolbar_visible(self) -> bool:
@@ -1421,12 +1428,13 @@ class SeriesView(AppCTkToplevel):
         )
 
     def _clear_ts_cache_button_visible(self) -> bool:
-        """Show Clear only after Harmonize has been applied (Dataset Harmonized=Yes)."""
+        """Show Clear after Harmonize or when segment masks remain (must Clear before re-run)."""
         anon_uid = self._anon_series_uid()
         already_harmonized = anon_uid is not None and self._controller.series_is_harmonized(anon_uid)
         return clear_cache_button_visible(
             modality=getattr(self._ds, "Modality", None),
             already_harmonized=already_harmonized,
+            has_segment_masks=self._seg_dir_likely_has_structures(),
         )
 
     def _set_toolbar_widget_present(self, widget: tk.Misc | None, present: bool) -> bool:
@@ -1698,6 +1706,11 @@ class SeriesView(AppCTkToplevel):
         if active:
             try:
                 self._latch_structure_overlay(name, self._seg_dir())
+            except FileNotFoundError:
+                logger.warning("No on-disk masks for segmentation overlay %s; deactivating", name)
+                self._clear_structure_latch_state(name)
+                self._deactivate_segmentation_button(name)
+                return
             except Exception:
                 logger.exception("Failed to load segmentation overlay for %s", name)
                 self._clear_structure_latch_state(name)
@@ -1720,11 +1733,16 @@ class SeriesView(AppCTkToplevel):
         if not seg_dir.is_dir():
             if self._structure_overlay_by_name or self.image_viewer.get_active_segmentation_names():
                 self._invalidate_structure_overlays()
+            self.image_viewer.set_segmentation_title(mode=None)
             self.image_viewer.set_segmentation_structures([])
             return
+        from anonymizer.controller.ai.tseg.segment import read_cached_segmentation_mode
+
         present = collect_primary_segment_voxels(seg_dir)
         ordered = order_structures_by_voxels(present)
         items = [(name, color_bgr_for_structure(name)) for name, _count in ordered]
+        mode = read_cached_segmentation_mode(seg_dir.parent) if present else None
+        self.image_viewer.set_segmentation_title(mode=mode)
         previous_active = self.image_viewer.get_active_segmentation_names()
         self.image_viewer.set_segmentation_structures(items)
         still = previous_active & set(present)
@@ -2197,6 +2215,18 @@ class SeriesView(AppCTkToplevel):
         from anonymizer.utils.modalities import is_tseg_modality
 
         if self._ds is None or not is_tseg_modality(getattr(self._ds, "Modality", None)):
+            return
+        if not self._harmonize_button_visible():
+            if self._seg_dir_likely_has_structures():
+                messagebox.showinfo(
+                    title=_("Harmonize"),
+                    message=_(
+                        "Segmentation results already exist for this series. "
+                        "Clear the analysis cache before running Harmonize again."
+                    ),
+                    parent=self,
+                )
+                self._apply_ai_feature_visibility()
             return
         modality = getattr(self._ds, "Modality", None)
         if not harmonize_allowed_for_modality(modality):

@@ -38,6 +38,16 @@ def test_series_is_ct_head_candidate_rejects_mr_and_chest_ct(tmp_path: Path) -> 
     ) is False
 
 
+def test_series_is_ct_head_candidate_ambiguous_anonymized_ct(tmp_path: Path) -> None:
+    """Stripped PHI often leaves no HEAD tokens; still offer the optional prompt."""
+    series = tmp_path / "anon_head"
+    series.mkdir()
+    ds = Dataset()
+    ds.Modality = "CT"
+    ds.SeriesDescription = "Bone  Vol. CECT 0.5"
+    assert series_is_ct_head_candidate(series, ds) is True
+
+
 def test_series_is_ct_head_candidate_uses_cached_head_signal(tmp_path: Path) -> None:
     series = tmp_path / "cached_head"
     series.mkdir()

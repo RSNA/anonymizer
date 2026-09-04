@@ -55,15 +55,18 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
 )
 from anonymizer.controller.ai.tseg.ml_env import sequential_ml_context
 from anonymizer.controller.ai.tseg.seg_retention import (
-    aggregate_primary_segment_voxels,
+    anatomy_overlay_cache_ready,
+    clear_anatomy_seg_masks,
     evict_tseg_volume,
     finalize_seg_cache,
+    latch_mask_stems_for_export,
+    overlay_masks_present,
     read_structure_voxels,
+    reconcile_primary_segment_sidecar,
     resolve_harmonize_roi_subset,
     structure_voxels_sidecar_valid,
     widen_roi_tier,
-    write_primary_segment_voxels,
-    write_structure_voxels,
+    write_binary_masks_from_multilabel,
 )
 from anonymizer.controller.series_io import load_series_frames
 from anonymizer.utils.translate import _
@@ -810,8 +813,11 @@ def write_roi_subset_manifest(
     anatomy_task: str = "total",
     modality: str = "CT",
     roi_tier: str | None = None,
+    segmentation_mode: str | None = None,
 ) -> None:
     """Record which TotalSegmentator ROI classes were requested for this series cache."""
+    from anonymizer.controller.ai.tseg.config import normalize_segmentation_mode
+
     cache_dir.mkdir(parents=True, exist_ok=True)
     payload: dict = {
         "roi_subset": sorted(structures),
@@ -820,8 +826,34 @@ def write_roi_subset_manifest(
     }
     if roi_tier is not None:
         payload["roi_tier"] = roi_tier
+    if segmentation_mode is not None:
+        payload["segmentation_mode"] = normalize_segmentation_mode(segmentation_mode)
     path = cache_dir / ROI_SUBSET_MANIFEST_FILENAME
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def read_cached_segmentation_mode(cache_dir: Path) -> str | None:
+    """Return stored Harmonize segmentation thickness (``1.5mm`` / ``3mm`` / ``6mm``), if any."""
+    from anonymizer.controller.ai.tseg.config import normalize_segmentation_mode
+
+    path = Path(cache_dir) / ROI_SUBSET_MANIFEST_FILENAME
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    mode = data.get("segmentation_mode")
+    if mode is not None:
+        return normalize_segmentation_mode(mode)
+    # Legacy manifests (before mode was recorded): CT/MR total Harmonize defaulted to 3 mm.
+    anatomy_task = str(data.get("anatomy_task") or "total")
+    modality = str(data.get("modality") or "").upper()
+    if anatomy_task in {"total", "total_mr"} and modality in {"CT", "MR", ""}:
+        return "3mm"
+    return None
 
 
 def _read_roi_subset_manifest(cache_dir: Path) -> tuple[set[str], str | None, str | None] | None:
@@ -1121,6 +1153,7 @@ def _analyze_tseg_regions_impl(
                 anatomy_task=profile.anatomy_task,
                 modality=profile.modality,
                 roi_tier=current_tier,
+                segmentation_mode=segmentation_mode_for_modality(profile.modality),
             )
             logger.debug("TS regions: segmentation finished in %.1fs", seg_seconds)
             _report_progress(
@@ -1265,9 +1298,10 @@ def analyze_tseg_ct_single_pass(
     """
     CT Harmonize path: one full ``total``+``statistics=True`` pass.
 
-    Writes ``contrast_stats.json`` and anatomy sidecars from organ volumes, then returns a
-    region ``TS_result`` (contrast phase still applied by ``analyze_tseg_contrast``, which
-    reuses the stats cache). Returns ``(result, nifti_path, used_single_pass)``.
+    Keeps the multilabel segmentation in memory, writes only Series View overlay
+    masks under ``seg/``, plus ``contrast_stats.json`` and anatomy sidecars.
+    Contrast phase is still applied by ``analyze_tseg_contrast`` (reuses the stats
+    cache). Returns ``(result, nifti_path, used_single_pass)``.
     """
     from anonymizer.controller.ai.tseg.config import ROI_SUBSET_FULL, ROI_TIER_FULL
     from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
@@ -1321,10 +1355,25 @@ def analyze_tseg_ct_single_pass(
             if contrast_stats_path.is_file():
                 cached_stats = load_contrast_statistics(contrast_stats_path)
             cached_voxels = read_structure_voxels(work_dir)
-            if cached_stats is not None and cached_voxels:
+            overlay_ready = anatomy_overlay_cache_ready(work_dir)
+            if cached_voxels and not overlay_ready:
+                # Heal legacy stats-only caches (JSON without seg/*.nii.gz).
+                logger.warning(
+                    "TS single-pass: incomplete overlay cache for %s; clearing ghost primary catalog",
+                    series_directory,
+                )
+                reconcile_primary_segment_sidecar(work_dir)
+            need_brain = (
+                include_brain_structures
+                and ENABLE_TSEG_BRAIN_STRUCTURES
+                and bool(cached_voxels)
+                and int(cached_voxels.get("brain", 0)) >= MIN_STRUCTURE_VOXELS
+                and not _brain_structures_cache_valid(seg_dir)
+            )
+            if cached_stats is not None and cached_voxels and overlay_ready and not need_brain:
                 region_result = _ts_result_from_structure_voxels(series_directory, cached_voxels)
                 if region_result.error is None:
-                    logger.info("TS single-pass: reusing cached stats/anatomy sidecars for %s", series_directory)
+                    logger.info("TS single-pass: reusing cached stats/masks for %s", series_directory)
                     _report_progress(
                         progress,
                         stage="regions",
@@ -1347,16 +1396,19 @@ def analyze_tseg_ct_single_pass(
             from anonymizer.controller.ai.tseg.contrast import _require_nibabel
 
             ct_img = _require_nibabel().load(nifti_path)
+            seg_dir.mkdir(parents=True, exist_ok=True)
             logger.info(
                 "TS single-pass: running TotalSegmentator total+statistics (fast=3mm) for %s",
                 series_directory,
             )
-            _, stats = totalsegmentator(
+            # Multilabel in memory + organ stats; write only Series View latch binaries.
+            seg_img, stats = totalsegmentator(
                 ct_img,
                 None,
                 ml=True,
                 fast=True,
                 statistics=True,
+                skip_saving=True,
                 roi_subset=None,
                 statistics_exclude_masks_at_border=False,
                 quiet=True,
@@ -1368,6 +1420,12 @@ def analyze_tseg_ct_single_pass(
             if not isinstance(stats, dict) or not stats:
                 return (
                     _error_result(series_directory, "TotalSegmentator statistics returned empty result"),
+                    nifti_path,
+                    False,
+                )
+            if seg_img is None:
+                return (
+                    _error_result(series_directory, "TotalSegmentator returned no multilabel segmentation"),
                     nifti_path,
                     False,
                 )
@@ -1384,10 +1442,32 @@ def analyze_tseg_ct_single_pass(
                 anatomy_task=profile.anatomy_task,
                 modality=profile.modality,
                 roi_tier=ROI_TIER_FULL,
+                segmentation_mode="3mm",
             )
-            write_structure_voxels(work_dir, structure_voxels)
-            primary_counts = aggregate_primary_segment_voxels(structure_voxels, seg_dir)
-            write_primary_segment_voxels(work_dir, primary_counts)
+
+            export_stems = latch_mask_stems_for_export(structure_voxels)
+            clear_anatomy_seg_masks(seg_dir)
+            # Drop legacy multilabel leftovers from earlier ml=True-to-path attempts.
+            for leftover in (work_dir / "seg.nii", work_dir / "seg.nii.gz", work_dir / "statistics.json"):
+                leftover.unlink(missing_ok=True)
+            written = write_binary_masks_from_multilabel(seg_img, seg_dir, export_stems, task="total")
+            del seg_img
+            release_working_memory(stage="ts_single_pass_after_mask_export")
+            logger.info(
+                "TS single-pass: exported %d latch mask(s) of %d candidate stem(s) under %s",
+                len(written),
+                len(export_stems),
+                seg_dir,
+            )
+            if not overlay_masks_present(seg_dir):
+                return (
+                    _error_result(
+                        series_directory,
+                        "Failed to export anatomy overlay masks from multilabel segmentation",
+                    ),
+                    nifti_path,
+                    False,
+                )
 
             if (
                 include_brain_structures
@@ -1405,10 +1485,16 @@ def analyze_tseg_ct_single_pass(
                             progress=progress,
                             analysis_started=analysis_started,
                         )
+                        brain_counts = collect_structure_voxels_from_masks(
+                            seg_dir, list(BRAIN_STRUCTURE_FILES)
+                        )
+                        structure_voxels.update(brain_counts)
                     except Exception as exc:
                         logger.warning("TS single-pass: brain_structures failed for %s: %s", series_directory, exc)
                 else:
                     logger.debug("TS single-pass: brain_structures skipped (license): %s", license_message)
+
+            finalize_seg_cache(work_dir, seg_dir, structure_voxels)
 
             region_result = _ts_result_from_structure_voxels(series_directory, structure_voxels)
             _report_progress(

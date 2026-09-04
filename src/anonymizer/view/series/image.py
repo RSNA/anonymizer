@@ -119,6 +119,7 @@ class ImageViewer(ctk.CTkFrame):
         self._segmentation_buttons: dict[str, ctk.CTkButton] = {}
         self.segmentation_frame: ctk.CTkFrame | None = None
         self.segmentation_buttons_frame: ctk.CTkScrollableFrame | None = None
+        self._segmentation_title_label: ctk.CTkLabel | None = None
         self.clear_ts_cache_button: ctk.CTkButton | None = None
         self._last_hist_canvas_height: int | None = None
         self._last_viewport_size: tuple[int, int] | None = None
@@ -254,7 +255,8 @@ class ImageViewer(ctk.CTkFrame):
             header = ctk.CTkFrame(self.segmentation_frame, fg_color="transparent")
             header.grid(row=0, column=0, sticky="ew", padx=self.DATA_PANEL_PAD, pady=(self.DATA_PANEL_PAD, 0))
             header.grid_columnconfigure(0, weight=1)
-            ctk.CTkLabel(header, text=_("Segmentation"), anchor="w").grid(row=0, column=0, sticky="w")
+            self._segmentation_title_label = ctk.CTkLabel(header, text=_("Segmentation"), anchor="w")
+            self._segmentation_title_label.grid(row=0, column=0, sticky="w")
             self.clear_ts_cache_button = ctk.CTkButton(
                 header,
                 text=_("Clear"),
@@ -665,6 +667,18 @@ class ImageViewer(ctk.CTkFrame):
     def clear_active_segmentations(self) -> None:
         self._active_segmentation_names.clear()
         self._refresh_segmentation_button_styles()
+
+    def set_segmentation_title(self, *, mode: str | None = None) -> None:
+        """Set panel title to ``Segmentation`` or ``Segmentation [3 mm]`` when mode is known."""
+        if self._segmentation_title_label is None:
+            return
+        if mode:
+            from anonymizer.controller.ai.tseg.config import segmentation_mode_display
+
+            text = f"{_('Segmentation')} [{segmentation_mode_display(mode)}]"
+        else:
+            text = _("Segmentation")
+        self._segmentation_title_label.configure(text=text)
 
     def set_segmentation_structures(self, items: list[tuple[str, tuple[int, int, int]]]) -> None:
         """Rebuild latch buttons. ``items`` are (name, color_bgr) in display order."""
