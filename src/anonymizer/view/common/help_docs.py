@@ -10,41 +10,22 @@ import logging
 import webbrowser
 from pathlib import Path
 
-from anonymizer.utils.translate import _, get_current_language_code
+from anonymizer.utils.translate import get_current_language_code
 
 logger = logging.getLogger(__name__)
 
 DOCS_BASE_URL = "https://rsna.github.io/anonymizer"
-
-# Menu label (gettext msgid) → docs page slug (no trailing slash).
-HELP_TOPICS: tuple[tuple[str, str], ...] = (
-    ("Start here", "01-start-here"),
-    ("Install and first launch", "02-install"),
-    ("Create a project", "04-create-project"),
-    ("Search", "05-search"),
-    ("View", "06-view"),
-    ("Process", "07-process"),
-    ("Send", "08-send"),
-    ("AI Features setup", "07-process/01-ai-features-setup"),
-    ("Remove burned-in text", "07-process/02-remove-burned-in-text"),
-    ("Harmonize names", "07-process/03-harmonize-names"),
-    ("Blur faces", "07-process/04-blur-faces"),
-    ("Run on many studies", "07-process/05-run-on-many-studies"),
-    ("Run without the window", "09-headless"),
-    ("Troubleshooting", "troubleshooting"),
-    ("Tutorials", "tutorials/"),
-    ("License", "license"),
-)
+# Video walkthroughs (Help → Tutorials). Update when a dedicated playlist exists.
+TUTORIALS_YOUTUBE_URL = "https://www.youtube.com/@RSNA"
 
 
 def docs_language_prefix() -> str:
-    """Return URL language segment for mkdocs-static-i18n (empty for default English)."""
+    """Return URL language segment for non-default locales (empty for English at site root)."""
     code = (get_current_language_code() or "en_US").replace("-", "_")
     if code.lower().startswith("en"):
         return ""
     if code in {"de", "es", "fr"}:
         return code
-    # en_US, etc.
     short = code.split("_", 1)[0].lower()
     if short == "en":
         return ""
@@ -53,7 +34,7 @@ def docs_language_prefix() -> str:
     return ""
 
 
-def help_page_url(slug: str, *, base_url: str = DOCS_BASE_URL) -> str:
+def help_page_url(slug: str = "", *, base_url: str = DOCS_BASE_URL) -> str:
     slug = slug.strip("/")
     lang = docs_language_prefix()
     parts = [base_url.rstrip("/")]
@@ -89,7 +70,6 @@ def open_help_page(slug: str = "") -> bool:
     local = local_site_index()
     if local is not None:
         local_url = local.resolve().as_uri()
-        # Best-effort: open language subpath if present beside index.
         lang = docs_language_prefix()
         if slug:
             candidate = local.parent / lang / slug / "index.html" if lang else local.parent / slug / "index.html"
@@ -108,6 +88,46 @@ def open_help_page(slug: str = "") -> bool:
     return False
 
 
+def open_tutorials_channel() -> bool:
+    """Open the tutorials YouTube channel in the default browser."""
+    try:
+        if webbrowser.open(TUTORIALS_YOUTUBE_URL):
+            logger.info("Opened tutorials URL: %s", TUTORIALS_YOUTUBE_URL)
+            return True
+    except Exception:
+        logger.exception("Failed to open tutorials URL %s", TUTORIALS_YOUTUBE_URL)
+    return False
+
+
+def locale_html_dir() -> Path:
+    """Return ``assets/locales/<lang>/html`` for the active UI language."""
+    code = get_current_language_code() or "en_US"
+    cwd_candidate = Path("assets/locales") / code / "html"
+    if cwd_candidate.is_dir():
+        return cwd_candidate
+    packaged = Path(__file__).resolve().parents[2] / "assets" / "locales" / code / "html"
+    return packaged
+
+
+def license_html_path() -> Path | None:
+    """Return the in-app license HTML for the current locale, if present."""
+    candidates = [locale_html_dir()]
+    en_fallback = Path("assets/locales/en_US/html")
+    if not en_fallback.is_dir():
+        en_fallback = Path(__file__).resolve().parents[2] / "assets" / "locales" / "en_US" / "html"
+    if en_fallback not in candidates:
+        candidates.append(en_fallback)
+
+    for html_dir in candidates:
+        if not html_dir.is_dir():
+            continue
+        for pattern in ("*license*.html", "*licence*.html", "*lizenz*.html", "*licencia*.html"):
+            matches = sorted(html_dir.glob(pattern))
+            if matches:
+                return matches[0]
+    return None
+
+
 def help_menu_topics() -> tuple[tuple[str, str], ...]:
-    """Translated labels with page slugs for the Help menu."""
-    return tuple((_(label), slug) for label, slug in HELP_TOPICS)
+    """Deprecated: Help menu no longer lists every manual chapter."""
+    return ()

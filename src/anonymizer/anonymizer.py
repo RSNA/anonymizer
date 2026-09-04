@@ -36,7 +36,12 @@ from anonymizer.utils.translate import (
 )
 from anonymizer.utils.version import get_version
 from anonymizer.view.common.fonts import AppFonts, create_app_fonts
-from anonymizer.view.common.help_docs import help_menu_topics, open_help_page
+from anonymizer.view.common.help_docs import (
+    license_html_path,
+    open_help_page,
+    open_tutorials_channel,
+)
+from anonymizer.view.common.html_view import HTMLView
 from anonymizer.view.project.dataset import DatasetView
 from anonymizer.view.project.export import ExportView
 from anonymizer.view.project.import_files_dialog import ImportFilesDialog
@@ -119,6 +124,7 @@ class Anonymizer(ctk.CTk):
         self.dataset_view: DatasetView | None = None
 
         self.dashboard: Dashboard | None = None
+        self.help_views: dict[str, HTMLView] = {}
         self._app_windows: list[weakref.ref] = []
         self._window_menu: tk.Menu | None = None
         self.grid_columnconfigure(0, weight=1)
@@ -1195,15 +1201,46 @@ class Anonymizer(ctk.CTk):
                 parent=self,
             )
 
+    def open_tutorials(self) -> None:
+        """Open the tutorials YouTube channel in the default browser."""
+        if not open_tutorials_channel():
+            messagebox.showwarning(
+                title=_("Help"),
+                message=_("Could not open the tutorials channel in a browser."),
+                parent=self,
+            )
+
+    def show_help_view(self, html_file_path: Path, *, title: str | None = None) -> None:
+        """Show an in-app HTML help page (e.g. License)."""
+        view_name = title or html_file_path.stem
+        existing = self.help_views.get(view_name)
+        if existing is not None:
+            with contextlib.suppress(tk.TclError):
+                if existing.winfo_exists():
+                    existing.deiconify()
+                    existing.focus()
+                    return
+        self.help_views[view_name] = HTMLView(self, title=view_name, html_file_path=html_file_path.as_posix())
+        self.help_views[view_name].focus()
+
+    def open_license_help(self) -> None:
+        """Open the bundled License HTML in an in-app HTMLView."""
+        path = license_html_path()
+        if path is None or not path.is_file():
+            messagebox.showwarning(
+                title=_("Help"),
+                message=_("License help file was not found."),
+                parent=self,
+            )
+            return
+        self.show_help_view(path, title=_("License"))
+
     def get_help_menu(self, menu_bar: tk.Menu):
         help_menu = tk.Menu(menu_bar, tearoff=0)
         help_menu.add_command(label=_("User Manual"), command=lambda: self.open_user_manual(""))
+        help_menu.add_command(label=_("Tutorials"), command=self.open_tutorials)
         help_menu.add_separator()
-        for label, slug in help_menu_topics():
-            help_menu.add_command(
-                label=label,
-                command=lambda s=slug: self.open_user_manual(s),
-            )
+        help_menu.add_command(label=_("License"), command=self.open_license_help)
         return help_menu
 
     def _live_app_windows(self) -> list[tk.Misc]:

@@ -2542,3 +2542,11 @@ msgstr "Tutorials"
 msgid "Could not open the user manual in a browser. Check your network or build docs locally (mkdocs serve)."
 msgstr "Das Benutzerhandbuch konnte nicht im Browser geöffnet werden. Prüfen Sie das Netzwerk oder bauen Sie die Docs lokal (mkdocs serve)."
 
+msgid "Could not open the tutorials channel in a browser."
+msgstr "Could not open the tutorials channel in a browser."
+
+msgid "License help file was not found."
+msgstr "License help file was not found."
+
+msgid "License"
+msgstr "Lizenz"

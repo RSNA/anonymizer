@@ -3,7 +3,7 @@ site_description: Clinician user manual for the RSNA DICOM Anonymizer (V19)
 site_url: https://rsna.github.io/anonymizer/
 repo_url: https://github.com/RSNA/anonymizer
 repo_name: RSNA/anonymizer
-edit_uri: edit/V19/docs/
+edit_uri: edit/master/docs/
 
 theme:
   name: material
