@@ -11,5 +11,5 @@ Detect and remove burned-in text on one series while keeping L/R markers.
 ## Video
 <!-- YouTube embed placeholder -->
 
-See [Remove burned-in text](../07-process/02-remove-burned-in-text).
+See [Remove burned-in text](../08-process/02-remove-burned-in-text).
 

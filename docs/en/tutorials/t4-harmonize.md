@@ -11,5 +11,5 @@ Run Harmonize on a CT or MR series and apply the suggested description.
 ## Video
 <!-- YouTube embed placeholder -->
 
-See [Harmonize names](../07-process/03-harmonize-names).
+See [Harmonize names](../08-process/03-harmonize-names).
 

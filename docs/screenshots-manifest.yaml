@@ -32,8 +32,8 @@ workflows:
         ux_elements: [Welcome screen, Language selector, New Project / Open / AI Features]
         caption: "Welcome screen after first launch."
 
-  - id: 04-create-project
-    doc: 04-create-project/index.md
+  - id: 05-create-project
+    doc: 05-create-project/index.md
     title: Create a project
     shots_dir: shots
     shots:
@@ -130,38 +130,59 @@ workflows:
         ux_elements: [Search, View, Send buttons, Totals]
         caption: "Dashboard after project create — Search, View, Send."
 
-  - id: 05-search
-    doc: 05-search/index.md
+  - id: 06-search
+    doc: 06-search/index.md
     title: Search
     shots_dir: shots
     shots:
-      - id: ImportDavidson_Progress
-        file: ImportDavidson_Progress.png
-        window: ImportFilesDialog
+      - id: ImportFiles_Menu
+        file: ImportFiles_Menu.png
+        window: FileMenu
         severity: required
-        deps: [project, fixture:davidson_cxr]
-        ux_elements: [Import progress, Cancel, Importing davidson_cxr]
-        caption: "Import Files while processing davidson_cxr (Cancel still available)."
+        deps: [project]
+        ux_elements: [Import Files, Import Directory]
+        caption: "File menu — Import Files (pick files) or Import Directory (folder tree)."
+      - id: ImportDirectory_Chooser
+        file: ImportDirectory_Chooser.png
+        window: NativeFolderDialog
+        severity: optional
+        deps: [project]
+        ux_elements: [Choose folder, Cancel]
+        caption: "Import Directory — choose a folder; every file under it is attempted."
       - id: ImportDavidson_Done
         file: ImportDavidson_Done.png
         window: ImportFilesDialog
         severity: required
         deps: [project, fixture:davidson_cxr]
         ux_elements: [Success PHI → anonymized Patient ID, Close]
-        caption: "Import finished — PHI Patient ID mapped to anonymized ID."
+        caption: "Import Files finished — path mapped to anonymized Patient ID."
+      - id: ImportDirectory_Log
+        file: ImportDirectory_Log.png
+        window: ImportFilesDialog
+        severity: required
+        deps: [project, fixture:test_dcm_files]
+        ux_elements: [Scrollable import log, Success and skip/error lines, Close]
+        caption: "Import Directory finished — each file reports success, skip, or reason."
+      - id: QueryRetrieve_Ready
+        file: QueryRetrieve_Ready.png
+        window: QueryView
+        severity: orthanc
+        deps: [project, orthanc]
+        ux_elements: [Patient Name/ID, Modality, Study Date, Accession, Load Accession Numbers, Query, Show Imported Studies, Move Level, Import & Anonymize]
+        caption: "Query, Retrieve & Import window — criteria, results table, and import controls."
       - id: OrthancCT_Query
         file: OrthancCT_Query.png
         window: QueryView
         severity: orthanc
         deps: [project, orthanc]
-        ux_elements: [Modality CT, Query results, Doe^Archibald selected]
+        ux_elements: [Modality CT, Query results, Doe^Archibald selected, Select All, Clear Selection]
         caption: "CT query results — Doe^Archibald head CT selected."
       - id: OrthancCT_Importing
         file: OrthancCT_Importing.png
         window: ImportStudiesDialog
         severity: orthanc
         deps: [project, orthanc]
-        ux_elements: [Import progress, Import Finished / Close]
+        ux_elements: [Metadata progress, Image progress, Import Finished, Close]
         caption: "Import Studies dialog after C-MOVE of Doe^Archibald."
       - id: OrthancCT_Imported
         file: OrthancCT_Imported.png
@@ -171,8 +192,8 @@ workflows:
         ux_elements: [Green imported row, Imported count]
         caption: "Doe^Archibald highlighted green after successful import."
 
-  - id: 06-view
-    doc: 06-view/index.md
+  - id: 07-view
+    doc: 07-view/index.md
     title: View
     shots_dir: shots
     shots:
@@ -191,9 +212,9 @@ workflows:
         ux_elements: [Image viewport, Frame navigator, Toolbar]
         caption: "Series View reviewing davidson_cxr (before Process tools)."
 
-  - id: 07-process/01-ai-features-setup
-    doc: 07-process/01-ai-features-setup/index.md
-    title: "7.1 AI Features setup"
+  - id: 03-ai-features-setup
+    doc: 03-ai-features-setup/index.md
+    title: "AI Features setup"
     shots_dir: shots
     shots:
       - id: AiFeaturesSetup
@@ -204,9 +225,9 @@ workflows:
         ux_elements: [Download rows, Harmonize resolution, License]
         caption: "AI Features setup — download models before Process tool demos."
 
-  - id: 07-process/02-remove-burned-in-text
-    doc: 07-process/02-remove-burned-in-text/index.md
-    title: "7.2 Remove burned-in text"
+  - id: 08-process/02-remove-burned-in-text
+    doc: 08-process/02-remove-burned-in-text/index.md
+    title: "8.1 Remove Pixel PHI"
     shots_dir: shots
     shots:
       - id: Process_RemovePixel_Whitelist
@@ -243,9 +264,9 @@ workflows:
         ux_elements: [Remove Text]
         caption: "davidson_cxr after Remove Text."
 
-  - id: 07-process/03-harmonize-names
-    doc: 07-process/03-harmonize-names/index.md
-    title: "7.3 Harmonize names"
+  - id: 08-process/03-harmonize-names
+    doc: 08-process/03-harmonize-names/index.md
+    title: "8.2 Harmonize names"
     shots_dir: shots
     shots:
       - id: Process_Harmonize_Description
@@ -267,9 +288,9 @@ workflows:
         ux_elements: [Segment Brain Features]
         caption: "Brain_Ax_EarlyArt Harmonize with Segment Brain Features."
 
-  - id: 07-process/04-blur-faces
-    doc: 07-process/04-blur-faces/index.md
-    title: "7.4 Blur faces"
+  - id: 08-process/04-blur-faces
+    doc: 08-process/04-blur-faces/index.md
+    title: "8.3 Blur faces"
     shots_dir: shots
     shots:
       - id: Process_FaceBlur_Gaussian
@@ -282,9 +303,9 @@ workflows:
         ux_elements: [Face Blur review, Gaussian mode]
         caption: "Brain_Ax_EarlyArt Face Blur review (Gaussian)."
 
-  - id: 07-process/05-run-on-many-studies
-    doc: 07-process/05-run-on-many-studies/index.md
-    title: "7.5 Run on many studies"
+  - id: 08-process/05-run-on-many-studies
+    doc: 08-process/05-run-on-many-studies/index.md
+    title: "8.4 Run on many studies"
     shots_dir: shots
     shots:
       - id: AiBatchOptions
@@ -295,8 +316,8 @@ workflows:
         ux_elements: [Algorithm checkboxes, Modes]
         caption: "AI Batch options with davidson_cxr and Brain_Ax_EarlyArt imported."
 
-  - id: 08-send
-    doc: 08-send/index.md
+  - id: 09-send
+    doc: 09-send/index.md
     title: Send
     shots_dir: shots
     shots:

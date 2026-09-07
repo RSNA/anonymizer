@@ -11,5 +11,5 @@ Preview face blur on a head CT/MR, confirm QA, and save.
 ## Video
 <!-- YouTube embed placeholder -->
 
-See [Blur faces](../07-process/04-blur-faces).
+See [Blur faces](../08-process/04-blur-faces).
 

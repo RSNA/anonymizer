@@ -1,4 +1,4 @@
-# 7.3 Harmonize names
+# 8.2 Harmonize names
 
 Research datasets often use inconsistent **Series Description** text. **Harmonize** suggests a standard name from anatomy and contrast (RSNA Radiology Playbook / RadLex style). It does **not** change pixels.
 
@@ -6,7 +6,7 @@ Research datasets often use inconsistent **Series Description** text. **Harmoniz
 
 **`Brain_Ax_EarlyArt`** — `tests/controller/assets/test_dcm_files/Brain_Ax_EarlyArt` (non-synthetic head CT).
 
-Import this series, open it in **Series View**, then run Harmonize. The same series is used again in [7.4 Blur faces](../04-blur-faces/).
+Import this series, open it in **Series View**, then run Harmonize. The same series is used again in [8.3 Blur faces](../04-blur-faces/).
 
 ## Goal
 
@@ -14,7 +14,7 @@ On `Brain_Ax_EarlyArt`, run **Harmonize Description**, then optionally **Segment
 
 ## Before you start
 
-1. Complete [7.1 AI Features setup](../01-ai-features-setup/) — Harmonize CT pack, resolution, and optionally Brain structures.
+1. Complete [AI Features setup](../../03-ai-features-setup/) — Harmonize CT pack, resolution, and optionally Brain structures.
 2. Import **`Brain_Ax_EarlyArt`** and open it in Series View.
 
 ## Workflow on `Brain_Ax_EarlyArt`
@@ -42,7 +42,7 @@ On `Brain_Ax_EarlyArt`, run **Harmonize Description**, then optionally **Segment
 - **MR:** anatomy from MR packs; IV contrast from DICOM headers.
 - After the last CT series in a study is harmonized, a **LOINC study description** may be suggested.
 - Results cache under the series folder — **Clear Analysis Cache** for a fresh run.
-- Batch: [7.5 Run on many studies](../05-run-on-many-studies/) (resolution comes from AI Features, not per batch).
+- Batch: [8.4 Run on many studies](../05-run-on-many-studies/) (resolution comes from AI Features, not per batch).
 
 ## What good looks like
 
@@ -53,8 +53,8 @@ On `Brain_Ax_EarlyArt`, run **Harmonize Description**, then optionally **Segment
 
 - Not suitable series → expected skip.
 - Already harmonized → Clear Analysis Cache to re-run.
-- Models not ready → [7.1](../01-ai-features-setup/).
+- Models not ready → [AI Features](../../03-ai-features-setup/).
 
 ## Next steps
 
-Continue with [7.4 Blur faces](../04-blur-faces/) on the **same** `Brain_Ax_EarlyArt` series (Gaussian).
+Continue with [8.3 Blur faces](../04-blur-faces/) on the **same** `Brain_Ax_EarlyArt` series (Gaussian).

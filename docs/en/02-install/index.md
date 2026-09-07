@@ -75,7 +75,7 @@ rsna-anonymizer
 ![Welcome screen](shots/Welcome.png)
 
 1. The **Welcome** screen opens.
-2. Optional but recommended: click **AI Features** on Welcome to download models / accept the face license (see [AI Features setup](../07-process/01-ai-features-setup)). Setup is only available from Welcome — close the project to return there later. On macOS, install `libomp` first (step 4 above).
+2. Optional but recommended: click **AI Features** on Welcome to download models / accept the face license (see [AI Features setup](../03-ai-features-setup)). Setup is only available from Welcome — close the project to return there later. On macOS, install `libomp` first (step 4 above).
 3. Create or open a project from the **File** menu.
 
 ## Upgrade
@@ -89,4 +89,5 @@ See the [CHANGELOG](https://github.com/RSNA/anonymizer/blob/V19/CHANGELOG.md) fo
 
 ## Next steps
 
-Continue with [Words we use](../03-words-we-use/), then [Create a project](../04-create-project/).
+1. [AI Features setup](../03-ai-features-setup/) — from Welcome, download models (optional but recommended)
+2. [Words we use](../04-words-we-use/), then [Create a project](../05-create-project/)

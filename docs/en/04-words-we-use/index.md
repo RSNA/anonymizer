@@ -16,8 +16,8 @@ Short glossary for clinicians. When IT uses different terms, these are usually t
 | **Whitelist (OCR)** | Allowed short labels (for example L/R) that should **not** be removed when cleaning burned-in text. |
 
 !!! note "When you talk to IT"
-    Terms like **AE Title**, **SOP Class**, **transfer syntax**, and **C-MOVE** describe how systems talk to each other. You usually only need them when connecting to a hospital archive—see [Create a project → When you talk to IT](../04-create-project/#when-you-talk-to-it).
+    Terms like **AE Title**, **SOP Class**, **transfer syntax**, and **C-MOVE** describe how systems talk to each other. You usually only need them when connecting to a hospital archive—see [Create a project → When you talk to IT](../05-create-project/#when-you-talk-to-it).
 
 ## Next steps
 
-Continue with [Create a project](../04-create-project/).
+Continue with [Create a project](../05-create-project/).

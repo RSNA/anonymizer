@@ -8,10 +8,10 @@ Run AI Batch from Dataset on several studies.
 2. Choose algorithms and options → Start.
 3. Read the summary; spot-check Series View.
 
-For servers without a GUI, use the same tools via [Run without the window](../09-headless/).
+For servers without a GUI, use the same tools via [Run without the window](../10-headless/).
 
 ## Video
 <!-- YouTube embed placeholder -->
 
-See [Run on many studies](../07-process/05-run-on-many-studies).
+See [Run on many studies](../08-process/05-run-on-many-studies).
 

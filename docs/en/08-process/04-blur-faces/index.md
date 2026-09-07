@@ -1,10 +1,10 @@
-# 7.4 Blur faces
+# 8.3 Blur faces
 
 On some **head CT or MR** exams, facial features could allow recognition even after tags are cleaned. **Face de-identify** blurs the face region and lets you review quality before keeping the result.
 
 ## Demo series
 
-**`Brain_Ax_EarlyArt`** — same series as [7.3 Harmonize names](../03-harmonize-names/)  
+**`Brain_Ax_EarlyArt`** — same series as [8.2 Harmonize names](../03-harmonize-names/)  
 (`tests/controller/assets/test_dcm_files/Brain_Ax_EarlyArt`).
 
 Prefer Harmonize first so anatomy hints improve eligibility, then open face blur on this series.
@@ -15,8 +15,8 @@ On `Brain_Ax_EarlyArt`, run face blur in **Gaussian** mode, review QA, and save 
 
 ## Before you start
 
-1. Complete [7.1 AI Features setup](../01-ai-features-setup/) — face models and academic license.
-2. Import **`Brain_Ax_EarlyArt`** (and ideally finish Harmonize in 7.3).
+1. Complete [AI Features setup](../../03-ai-features-setup/) — face models and academic license.
+2. Import **`Brain_Ax_EarlyArt`** (and ideally finish Harmonize in 8.2).
 3. Open the series in Series View.
 
 ## Workflow on `Brain_Ax_EarlyArt` (Gaussian)
@@ -36,7 +36,7 @@ Batch and Series View may also offer median, pixelate, or fill noise. The docume
 
 ## Batch
 
-See [7.5 Run on many studies](../05-run-on-many-studies/). Non-head series are skipped.
+See [8.4 Run on many studies](../05-run-on-many-studies/). Non-head series are skipped.
 
 ## What good looks like
 
@@ -45,11 +45,11 @@ See [7.5 Run on many studies](../05-run-on-many-studies/). Non-head series are s
 
 ## If it fails
 
-- Not a head series / insufficient face mask → skip or run Harmonize first (7.3).
+- Not a head series / insufficient face mask → skip or run Harmonize first (8.2).
 - Already applied → will not re-blur unless you use a deliberate re-run path.
 - QA FAIL → do not save; adjust mode or inspect mask.
-- Tools greyed out → [7.1](../01-ai-features-setup/).
+- Tools greyed out → [AI Features](../../03-ai-features-setup/).
 
 ## Next steps
 
-Continue with [7.5 Run on many studies](../05-run-on-many-studies/) to batch these tools across a cohort.
+Continue with [8.4 Run on many studies](../05-run-on-many-studies/) to batch these tools across a cohort.

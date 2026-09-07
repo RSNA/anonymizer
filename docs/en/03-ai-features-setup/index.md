@@ -1,4 +1,4 @@
-# 7.1 AI Features setup
+# AI Features setup
 
 AI Features are **optional**. They run on your computer after a one-time download. Images are not uploaded for processing.
 
@@ -20,10 +20,10 @@ Close the project (or start the app) to return to Welcome if you need to downloa
 
 | Item | Needed for demo |
 | --- | --- |
-| **Remove burned-in text** (OCR) | Chapter 7.2 — `davidson_cxr` |
-| **Harmonize** CT pack + resolution (1.5 / 3 / 6 mm) | Chapter 7.3 — `Brain_Ax_EarlyArt` |
-| **Face de-identify** + academic license `aca_…` | Chapter 7.4 — `Brain_Ax_EarlyArt` |
-| **Brain structures** (optional licensed pack) | Chapter 7.3 — Segment Brain Features |
+| **Remove burned-in text** (OCR) | Chapter 8.1 — `davidson_cxr` |
+| **Harmonize** CT pack + resolution (1.5 / 3 / 6 mm) | Chapter 8.2 — `Brain_Ax_EarlyArt` |
+| **Face de-identify** + academic license `aca_…` | Chapter 8.3 — `Brain_Ax_EarlyArt` |
+| **Brain structures** (optional licensed pack) | Chapter 8.2 — Segment Brain Features |
 
 There are **no project on/off checkboxes**. If models are installed and ready, tools appear in Series View and batch.
 
@@ -37,7 +37,7 @@ There are **no project on/off checkboxes**. If models are installed and ready, t
 6. Close the dialog. Preferences stay on this workstation.
 
 !!! tip "Internet only for download"
-    After models and license are in place, processing is local. On **macOS**, install the OpenMP C++ library before using Harmonize / related AI Features: `brew install libomp` (see [Install](../../02-install/#4-macos-only--openmp-for-ai-features)).
+    After models and license are in place, processing is local. On **macOS**, install the OpenMP C++ library before using Harmonize / related AI Features: `brew install libomp` (see [Install](../02-install/#4-macos-only--openmp-for-ai-features)).
 
 ## Remove models
 
@@ -46,7 +46,7 @@ Use **Remove** on a tool card to delete downloaded files. This does not undo cha
 ## What good looks like
 
 - Status shows ready for OCR, Harmonize CT, and Face.
-- You can open Series View tools on the demo series in chapters 7.2–7.4.
+- You can open Series View tools on the demo series in [Process](../08-process/) chapters 8.1–8.3.
 
 ## If it fails
 
@@ -56,4 +56,5 @@ Use **Remove** on a tool card to delete downloaded files. This does not undo cha
 
 ## Next steps
 
-Continue with [7.2 Remove burned-in text](../02-remove-burned-in-text/) using **`davidson_cxr`**.
+1. [Words we use](../04-words-we-use/) and [Create a project](../05-create-project/), or
+2. Jump to [Process](../08-process/) tools once you have imported studies — start with [8.1 Remove Pixel PHI](../08-process/02-remove-burned-in-text/)

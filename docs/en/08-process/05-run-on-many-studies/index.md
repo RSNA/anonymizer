@@ -1,6 +1,6 @@
-# 7.5 Run on many studies
+# 8.4 Run on many studies
 
-**AI Batch Process** runs the same tools from chapters 7.2–7.4 across selected studies from the Dataset—without opening each series by hand.
+**AI Batch Process** runs the same tools from chapters 8.1–8.3 across selected studies from the Dataset—without opening each series by hand.
 
 ## Demo studies
 
@@ -8,7 +8,7 @@ Use the same fixtures you practiced one-at-a-time:
 
 | Tool in batch | Fixture to include |
 | --- | --- |
-| Remove burned-in text | **`davidson_cxr`** |
+| Remove Pixel PHI | **`davidson_cxr`** |
 | Harmonize + Face blur | **`Brain_Ax_EarlyArt`** |
 
 Import both (or the full `test_dcm_files` tree), open **Dataset**, select those studies, then start AI Batch Process.
@@ -20,17 +20,17 @@ Process a cohort for burned-in text, Harmonize, and/or face blur with progress a
 ## Before you start
 
 1. Import the demo series above (and any other studies you need).
-2. Finish [7.1 AI Features setup](../01-ai-features-setup/) for every tool you will run.
-3. Optionally walk 7.2–7.4 once so you know expected results.
+2. Finish [AI Features setup](../../03-ai-features-setup/) for every tool you will run.
+3. Optionally walk 8.1–8.3 once so you know expected results.
 
 ## Start a batch
 
 1. Open **Dataset** and select studies (include `davidson_cxr` and `Brain_Ax_EarlyArt` for a full demo).
 2. Start **AI Batch Process**.
 3. In options, choose algorithms:
-   - Remove burned-in text (blackout vs blend; modality whitelist on/off) — exercises `davidson_cxr`
+   - Remove Pixel PHI (blackout vs blend; modality whitelist on/off) — exercises `davidson_cxr`
    - Harmonize (workstation CT/MR resolution from AI Features) — exercises `Brain_Ax_EarlyArt`
-   - Face blur (**Gaussian** to match chapter 7.4) — exercises `Brain_Ax_EarlyArt`
+   - Face blur (**Gaussian** to match chapter 8.3) — exercises `Brain_Ax_EarlyArt`
 4. Preview modality whitelists if offered.
 5. Confirm memory warning if shown, then start.
 
@@ -51,7 +51,7 @@ For each series, selected tools run in a stable order (pixel PHI → Harmonize �
 
 - Read the summary (completed / skipped / failed).
 - Spot-check Series View on `davidson_cxr` and `Brain_Ax_EarlyArt` before export.
-- Same job on a **server without a window** → [Run without the window](../../09-headless/).
+- Same job on a **server without a window** → [Run without the window](../../10-headless/).
 
 ## What good looks like
 
@@ -60,10 +60,10 @@ For each series, selected tools run in a stable order (pixel PHI → Harmonize �
 
 ## If it fails
 
-- Features not ready → [7.1](../01-ai-features-setup/).
+- Features not ready → [AI Features](../../03-ai-features-setup/).
 - No series for selection → check Dataset selection.
 - Insufficient memory → close other apps or process fewer studies.
 
 ## Next steps
 
-Continue with [Send](../../08-send/) to export anonymized studies (or [run without the window](../../09-headless/) for server batch).
+Continue with [Send](../../09-send/) to export anonymized studies (or [run without the window](../../10-headless/) for server batch).

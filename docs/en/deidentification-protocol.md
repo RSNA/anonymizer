@@ -25,8 +25,8 @@ Examples of retained clinical context (depending on script / profile options):
 
 The classic profile options “clean pixel data” and “clean recognizable visual features” are **not** claimed as automatic DICOM profile bits alone. In V19, use optional AI Features instead:
 
-- [Remove burned-in text](07-process/02-remove-burned-in-text)
-- [Blur faces](07-process/04-blur-faces)
+- [Remove burned-in text](08-process/02-remove-burned-in-text)
+- [Blur faces](08-process/04-blur-faces)
 
 ## Structured reports and overlays
 

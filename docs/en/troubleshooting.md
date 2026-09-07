@@ -16,7 +16,7 @@
 | --- | --- |
 | Files ignored | Already imported (same SOP Instance) |
 | Quarantine folders filling | Read folder name (Invalid_DICOM, Missing_Attributes, Lookup_Miss, …) |
-| Lookup_Miss | Fix [lookup table](04-create-project/) or patient ID |
+| Lookup_Miss | Fix [lookup table](05-create-project/) or patient ID |
 
 ## Batch and memory
 
@@ -28,7 +28,7 @@
 
 ## Headless
 
-Full guide: [Run without the window](09-headless/).
+Full guide: [Run without the window](10-headless/).
 
 - `--ai-batch-run` needs **both** `-c` and `--ai-batch`
 - Feature gates fail if models were never downloaded on that machine

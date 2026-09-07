@@ -73,21 +73,19 @@ nav:
   - Home: index.md
   - 1. Start here: 01-start-here/index.md
   - 2. Install and first launch: 02-install/index.md
-  - 3. Words we use: 03-words-we-use/index.md
-  - 4. Create a project: 04-create-project/index.md
-  - 5. Search: 05-search/index.md
-  - 6. View:
-      - Dataset: 06-view/index.md
-      - Series: 06-view/series.md
-  - 7. Process:
-      - 07-process/index.md
-      - 7.1 AI Features setup: 07-process/01-ai-features-setup/index.md
-      - 7.2 Remove burned-in text: 07-process/02-remove-burned-in-text/index.md
-      - 7.3 Harmonize names: 07-process/03-harmonize-names/index.md
-      - 7.4 Blur faces: 07-process/04-blur-faces/index.md
-      - 7.5 Run on many studies: 07-process/05-run-on-many-studies/index.md
-  - 8. Send: 08-send/index.md
-  - 9. Run without the window: 09-headless/index.md
+  - 3. AI Features setup: 03-ai-features-setup/index.md
+  - 4. Words we use: 04-words-we-use/index.md
+  - 5. Create a project: 05-create-project/index.md
+  - 6. Search: 06-search/index.md
+  - 7. View: 07-view/index.md
+  - 8. Process:
+      - 08-process/index.md
+      - 8.1 Remove Pixel PHI: 08-process/02-remove-burned-in-text/index.md
+      - 8.2 Harmonize names: 08-process/03-harmonize-names/index.md
+      - 8.3 Blur faces: 08-process/04-blur-faces/index.md
+      - 8.4 Run on many studies: 08-process/05-run-on-many-studies/index.md
+  - 9. Send: 09-send/index.md
+  - 10. Run without the window: 10-headless/index.md
   - Reference:
       - De-identification protocol: deidentification-protocol.md
       - Troubleshooting: troubleshooting.md

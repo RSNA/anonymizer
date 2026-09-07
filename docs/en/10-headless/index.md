@@ -52,8 +52,8 @@ OCR whitelists remain under the project `whitelists/` directory (same as the GUI
 
 ## Prerequisites
 
-- Project already created in the GUI ([Create a project](../04-create-project/)).
-- Models and face license already set up on **this machine** ([AI Features setup](../07-process/01-ai-features-setup)).
+- Project already created in the GUI ([Create a project](../05-create-project/)).
+- Models and face license already set up on **this machine** ([AI Features setup](../03-ai-features-setup)).
 - Enough free memory for the selected algorithms.
 
 ## What good looks like
@@ -75,7 +75,7 @@ OCR whitelists remain under the project `whitelists/` directory (same as the GUI
 Headless does **not** replace reviewing a sample in the Dataset or Series View. Use the GUI for first-time setup and quality checks; use headless for routine receive or overnight batch.
 
 !!! tip "Same job as GUI batch"
-    Desktop steps: [Run on many studies](../07-process/05-run-on-many-studies/). Headless uses the same AI tools with a JSON recipe.
+    Desktop steps: [Run on many studies](../08-process/05-run-on-many-studies/). Headless uses the same AI tools with a JSON recipe.
 
 ## Next steps
 

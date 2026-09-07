@@ -1,4 +1,4 @@
-# 7.2 Remove burned-in text
+# 8.1 Remove Pixel PHI
 
 Some images have **patient names or labels drawn onto the pixels**. Cleaning DICOM tags alone does not remove them.
 
@@ -14,8 +14,8 @@ On `davidson_cxr`, detect burned-in text with OCR and remove it while keeping us
 
 ## Before you start
 
-1. Complete [7.1 AI Features setup](../01-ai-features-setup/) so OCR models are ready.
-2. Import **`davidson_cxr`** and open it in Series View from [Dataset](../../06-view/).
+1. Complete [AI Features setup](../../03-ai-features-setup/) so OCR models are ready.
+2. Import **`davidson_cxr`** and open it in Series View from [Dataset](../../07-view/).
 
 ## Workflow on `davidson_cxr`
 
@@ -52,7 +52,7 @@ Follow these steps in order. Screenshots match this fixture.
 
 - Dataset **Pixel PHI** status should update for this series.
 - Modality whitelists and match strictness (for example Exact) live in the Series View toolbar / project whitelist files.
-- To run the same tool on many studies, see [7.5 Run on many studies](../05-run-on-many-studies/).
+- To run the same tool on many studies, see [8.4 Run on many studies](../05-run-on-many-studies/).
 
 ## What good looks like
 
@@ -63,8 +63,8 @@ Follow these steps in order. Screenshots match this fixture.
 
 - Many false boxes → tighten match strictness; whitelist keepers.
 - Missed text → manual blackout.
-- Tools greyed out → finish [7.1](../01-ai-features-setup/).
+- Tools greyed out → finish [AI Features](../../03-ai-features-setup/).
 
 ## Next steps
 
-Continue with [7.3 Harmonize names](../03-harmonize-names/) using **`Brain_Ax_EarlyArt`**.
+Continue with [8.2 Harmonize names](../03-harmonize-names/) using **`Brain_Ax_EarlyArt`**.

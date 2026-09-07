@@ -1,6 +1,6 @@
 # Create a project
 
-A **project** keeps settings and anonymized storage together. Create it once in the desktop window, even if a server will later run [headless](../09-headless/).
+A **project** keeps settings and anonymized storage together. Create it once in the desktop window, even if a server will later run [headless](../10-headless/).
 
 ## Goal
 
@@ -47,7 +47,7 @@ Share these ideas (details live in Project Settings dialogs):
 - **Network timeouts** — how long to wait for slow archives.
 - **Patient lookup table** — optional CTP `.properties` mapping for PatientID and Date shift (see [Lookup table](#patient-lookup-table)).
 
-If the project will live on a lab server, continue with [Run without the window](../09-headless/).
+If the project will live on a lab server, continue with [Run without the window](../10-headless/).
 
 ## Project Settings (every control)
 
@@ -117,5 +117,5 @@ The Dashboard exposes the main workflow buttons: **Search**, **View**, and **Sen
 
 ## Next steps
 
-Continue with [Search](../05-search/) to import studies into the project.
+Continue with [Search](../06-search/) to import studies into the project.
 

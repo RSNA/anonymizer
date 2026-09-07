@@ -37,4 +37,4 @@ Use **Create Patient Lookup** to write a CSV under `/private/phi_export/`.
 
 ## Next steps
 
-Optional: [Run without the window](../09-headless/) for lab/server receive or overnight batch.
+Optional: [Run without the window](../10-headless/) for lab/server receive or overnight batch.

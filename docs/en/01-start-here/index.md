@@ -21,15 +21,16 @@ Patient names, IDs, and other identifiers in the file “labels” (DICOM tags) 
 | Mode                     | Best for                                                                                                     |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------ |
 | **Desktop window (GUI)** | Creating projects, reviewing images, AI tools, export                                                        |
-| **No window (headless)** | Lab/server: keep receiving images, or run AI batch overnight — see [Run without the window](../09-headless/) |
+| **No window (headless)** | Lab/server: keep receiving images, or run AI batch overnight — see [Run without the window](../10-headless/) |
 
 
 !!! important "Create the project in the window first"
-    Headless mode uses a project you already created and configured. Start with [Create a project](../04-create-project/), then ask IT to run headless if needed.
+    Headless mode uses a project you already created and configured. Start with [Create a project](../05-create-project/), then ask IT to run headless if needed.
 
 ## Next steps
 
 1. [Install and first launch](../02-install/)
-2. [Words we use](../03-words-we-use/)
-3. [Create a project](../04-create-project/)
+2. [AI Features setup](../03-ai-features-setup/) (from Welcome)
+3. [Words we use](../04-words-we-use/)
+4. [Create a project](../05-create-project/)
 
