@@ -11,8 +11,8 @@ Create a project and import a test folder so studies appear in Dataset.
 ## Video
 <!-- YouTube embed placeholder -->
 
-![New Project](../05-create-project/shots/NewProjectSettings.png)
-![Import](../06-search/shots/ImportDavidson_Done.png)
+![New Project](../05-create-project/shots/macos/NewProjectSettings.png)
+![Import](../06-search/shots/macos/ImportDavidson_Done.png)
 
 See [Create a project](../05-create-project/) and [Search](../06-search/).
 

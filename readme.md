@@ -79,7 +79,7 @@ rsna-anonymizer -c path/to/ProjectModel.json   # headless DICOM receive
 rsna-anonymizer -c path/to/ProjectModel.json --ai-batch path/to/AiBatchConfig.json --ai-batch-run
 ```
 
-Headless AI batch uses a companion [`AiBatchConfig.json`](docs/examples/AiBatchConfig.json) (algorithms, modes, study selection, CT/MR resolution). OCR whitelists remain under the project `whitelists/` directory.
+Headless AI batch uses a companion [`AiBatchConfig.json`](docs/en/10-headless/AiBatchConfig.example.json) (algorithms, modes, study selection, CT/MR resolution). OCR whitelists remain under the project `whitelists/` directory.
 
 ## Upgrade
 
@@ -92,7 +92,7 @@ See [CHANGELOG](CHANGELOG.md) for release notes.
 
 ## Documentation
 
-[Clinician user manual](https://rsna.github.io/anonymizer) (MkDocs Material, English). Build locally: `uv sync --group docs && uv run mkdocs serve`.
+[Clinician user manual](https://rsna.github.io/anonymizer) (MkDocs Material, English). Build locally: `uv sync --group docs && uv run mkdocs serve`. Maintainer notes: [`docs/README.md`](docs/README.md).
 
 ## Development
 

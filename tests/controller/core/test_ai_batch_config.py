@@ -52,7 +52,7 @@ def test_round_trip_json_to_options() -> None:
 
 def test_from_dict_parses_plan_example() -> None:
     data = json.loads(
-        Path("docs/examples/AiBatchConfig.json").read_text(encoding="utf-8")
+        Path("docs/en/10-headless/AiBatchConfig.example.json").read_text(encoding="utf-8")
     )
     config = AiBatchConfig.from_dict(data)
 

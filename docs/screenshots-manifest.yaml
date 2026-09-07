@@ -1,13 +1,14 @@
 # Help screenshot catalog — source of truth for UX coverage and capture.
-# Capture: uv run python src/prototyping/capture_help_screenshots.py --language en_US
+# Capture: uv run python -m docs_help --language en_US
 #
-# Output: docs/<lang>/<workflow.id>/<shots_dir>/<file>
+# Output: docs/<lang>/<workflow.id>/<shots_dir>/<os>/<file>  (os = macos|windows)
 # severity: required | soft | orthanc
 
 fixtures:
   test_dcm_files: tests/controller/assets/test_dcm_files
   davidson_cxr: tests/controller/assets/test_dcm_files/davidson_cxr
   Brain_Ax_EarlyArt: tests/controller/assets/test_dcm_files/Brain_Ax_EarlyArt
+  us_rgb_single_frame: tests/controller/assets/test_dcm_files/us_rgb_single_frame
   ctp_lookup: tests/controller/assets/ctp_lookup/test_dcm_files_lookup.properties
 
 languages:
@@ -202,8 +203,15 @@ workflows:
         window: DatasetView
         severity: required
         deps: [project, imported, fixture:davidson_cxr, fixture:Brain_Ax_EarlyArt]
-        ux_elements: [Study/Series tree, AI status columns, Selection, AI Batch Process]
-        caption: "Dataset tree with davidson_cxr, Brain_Ax_EarlyArt, and other test_dcm_files studies expanded."
+        ux_elements: [Study/Series tree, AI status columns, View Projections, AI Batch Process]
+        caption: "Dataset tree fitted to content — studies expanded with series rows visible."
+      - id: ViewProjections
+        file: ViewProjections.png
+        window: ProjectionView
+        severity: required
+        deps: [project, imported, fixture:Brain_Ax_EarlyArt]
+        ux_elements: [Projection thumbnails, Study title, Open Series View from tile]
+        caption: "View Projections for a selected study (right-click study or toolbar button)."
       - id: SeriesView_Review
         file: SeriesView_Review.png
         window: SeriesView
@@ -250,8 +258,9 @@ workflows:
           whitelist: default
           edit_context: frame
           actions: [detect_text]
-        ux_elements: [Detect Text overlays]
-        caption: "davidson_cxr after Detect Text (Frame, default whitelist)."
+          wait: detect_complete
+        ux_elements: [Green OCR rectangles, Whitelist Standard, Portable/L not boxed]
+        caption: "davidson_cxr after Detect Text — green boxes on PHI; Portable and L skipped (whitelist)."
       - id: Process_RemovePixel_Remove
         file: Process_RemovePixel_Remove.png
         window: SeriesView
@@ -261,8 +270,34 @@ workflows:
           whitelist: default
           edit_context: frame
           actions: [detect_text, remove_text]
-        ux_elements: [Remove Text]
-        caption: "davidson_cxr after Remove Text."
+          removal_mode: blackout
+        ux_elements: [Remove Text result, Black out text, Save Pixel Changes]
+        caption: "davidson_cxr after Remove Text using Black out text."
+      - id: Process_RemovePixel_US_Detect
+        file: Process_RemovePixel_US_Detect.png
+        window: SeriesView
+        severity: soft
+        deps: [project, fixture:us_rgb_single_frame, ocr_models]
+        recipe:
+          whitelist: default
+          edit_context: frame
+          actions: [detect_text]
+          removal_mode: inpaint
+          wait: detect_complete
+        ux_elements: [Green OCR rectangles on color US, Blend into background mode]
+        caption: "us_rgb_single_frame after Detect Text with Blend into background selected."
+      - id: Process_RemovePixel_US_Blend
+        file: Process_RemovePixel_US_Blend.png
+        window: SeriesView
+        severity: soft
+        deps: [project, fixture:us_rgb_single_frame, ocr_models]
+        recipe:
+          whitelist: default
+          edit_context: frame
+          actions: [detect_text, remove_text]
+          removal_mode: inpaint
+        ux_elements: [Blend into background, Remove Text result]
+        caption: "us_rgb_single_frame after Remove Text using Blend into background."
 
   - id: 08-process/03-harmonize-names
     doc: 08-process/03-harmonize-names/index.md
@@ -271,22 +306,34 @@ workflows:
     shots:
       - id: Process_Harmonize_Description
         file: Process_Harmonize_Description.png
-        window: HarmonizeResultsView
+        window: SeriesView+HarmonizeResultsView
         severity: soft
         deps: [project, fixture:Brain_Ax_EarlyArt, tseg_models]
         recipe:
           actions: [harmonize_description]
-        ux_elements: [Harmonize Description results]
-        caption: "Brain_Ax_EarlyArt after Harmonize Description."
-      - id: Process_Harmonize_BrainFeatures
-        file: Process_Harmonize_BrainFeatures.png
-        window: HarmonizeResultsView
+          brain_prompt: auto_no
+        ux_elements: [Series View, Harmonize Description, Playbook results table]
+        caption: "Brain_Ax_EarlyArt Series View above completed Harmonize Description results."
+      - id: Process_Harmonize_BrainPrompt
+        file: Process_Harmonize_BrainPrompt.png
+        window: HarmonizeResultsView+BrainPrompt
         severity: soft
-        deps: [project, fixture:Brain_Ax_EarlyArt, tseg_models]
+        deps: [project, fixture:Brain_Ax_EarlyArt, tseg_models, brain_models]
         recipe:
-          actions: [harmonize_description, segment_brain_features]
-        ux_elements: [Segment Brain Features]
-        caption: "Brain_Ax_EarlyArt Harmonize with Segment Brain Features."
+          actions: [harmonize_description]
+          brain_prompt: capture
+        ux_elements: [Harmonize Description, Brain structures Yes/No]
+        caption: "Harmonize Description with Brain structures Yes/No prompt (dialog only)."
+      - id: Process_Harmonize_SegmentedSeries
+        file: Process_Harmonize_SegmentedSeries.png
+        window: SeriesView
+        severity: soft
+        deps: [project, fixture:Brain_Ax_EarlyArt, tseg_models, brain_models]
+        recipe:
+          actions: [harmonize_description, segment_brain_features, accept, latch_all_segments, middle_slice]
+          brain_prompt: auto_yes
+        ux_elements: [Series View, Brain structure latches, Middle slice]
+        caption: "Brain_Ax_EarlyArt Series View with full brain-structure segments on middle slice."
 
   - id: 08-process/04-blur-faces
     doc: 08-process/04-blur-faces/index.md
@@ -300,8 +347,9 @@ workflows:
         deps: [project, fixture:Brain_Ax_EarlyArt, face_models]
         recipe:
           blur_mode: gaussian
-        ux_elements: [Face Blur review, Gaussian mode]
-        caption: "Brain_Ax_EarlyArt Face Blur review (Gaussian)."
+          wait: review_ready
+        ux_elements: [Face Blur review complete, Current vs Proposed, Green face mask, QA summary, Save]
+        caption: "Brain_Ax_EarlyArt Face Blur review complete (Gaussian) — QA ready to Save."
 
   - id: 08-process/05-run-on-many-studies
     doc: 08-process/05-run-on-many-studies/index.md

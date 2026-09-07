@@ -34,7 +34,7 @@ Process a cohort for burned-in text, Harmonize, and/or face blur with progress a
 4. Preview modality whitelists if offered.
 5. Confirm memory warning if shown, then start.
 
-![AI Batch options](shots/AiBatchOptions.png)
+![AI Batch options](shots/macos/AiBatchOptions.png)
 
 ## Order of work
 

@@ -1,4 +1,4 @@
-"""Load docs/screenshots-manifest.yaml for capture."""
+"""Load docs/screenshots-manifest.yaml for MkDocs help screenshot capture."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MANIFEST = REPO_ROOT / "docs" / "screenshots-manifest.yaml"
 
 
@@ -62,9 +62,18 @@ class Manifest:
                 return shot
         return None
 
-    def output_path(self, language_code: str, shot: ShotSpec) -> Path:
+    def output_path(self, language_code: str, shot: ShotSpec, *, capture_os: str = "macos") -> Path:
+        """PNG path under ``docs/<lang>/<workflow>/shots/<os>/<file>``."""
         lang_dir = self.languages[language_code]
-        return REPO_ROOT / "docs" / lang_dir / shot.workflow_id / shot.shots_dir / shot.file
+        return (
+            REPO_ROOT
+            / "docs"
+            / lang_dir
+            / shot.workflow_id
+            / shot.shots_dir
+            / capture_os
+            / shot.file
+        )
 
 
 def load_manifest(path: Path | None = None) -> Manifest:

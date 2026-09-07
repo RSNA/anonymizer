@@ -15,7 +15,7 @@ Install the Anonymizer and reach the Welcome screen with AI Features available.
 </div>
 -->
 
-![Welcome](../02-install/shots/Welcome.png)
+![Welcome](../02-install/shots/macos/Welcome.png)
 
 Full detail: [Install and first launch](../02-install/)
 

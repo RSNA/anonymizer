@@ -13,7 +13,7 @@ from anonymizer.utils.translate import get_current_language_code
 
 logger = logging.getLogger(__name__)
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 TEST_DCM_ROOT = REPO_ROOT / "tests" / "controller" / "assets" / "test_dcm_files"
 CTP_LOOKUP_PROPERTIES = (
     REPO_ROOT / "tests" / "controller" / "assets" / "ctp_lookup" / "test_dcm_files_lookup.properties"
@@ -51,6 +51,10 @@ def create_capture_project(storage_dir: Path, *, project_name: str = "HelpScreen
     model.language_code = get_current_language_code()
     model.project_name = project_name
     model.storage_dir = storage_dir
+    # Help demos include ultrasound (blend Remove Text) as well as CR/DX/CT/MR.
+    if "US" not in model.modalities:
+        model.modalities = list(model.modalities) + ["US"]
+        model.set_storage_classes_from_modalities()
     model.scp = DICOMNode("127.0.0.1", port, model.scp.aet, True)
     model.scu = DICOMNode("127.0.0.1", 0, model.scu.aet, True)
 
@@ -62,6 +66,7 @@ def create_capture_project(storage_dir: Path, *, project_name: str = "HelpScreen
 
 def fixture_dirs() -> dict[str, Path]:
     """Named test DICOM directories used by help screenshots."""
+    us_rgb = TEST_DCM_ROOT / "us_rgb_single_frame"
     return {
         "test_dcm_files": TEST_DCM_ROOT,
         "davidson_cxr": TEST_DCM_ROOT / "davidson_cxr",
@@ -69,7 +74,8 @@ def fixture_dirs() -> dict[str, Path]:
         "chest": TEST_DCM_ROOT / "synthetic_CT_chest",
         "head": TEST_DCM_ROOT / "synthetic_CT_head",
         "abdomen": TEST_DCM_ROOT / "synthetic_CT_abdomen",
-        "us": TEST_DCM_ROOT / "us_rgb_single_frame",
+        "us": us_rgb,
+        "us_rgb_single_frame": us_rgb,
         "us_mf": TEST_DCM_ROOT / "us_multi_frame_grayscale",
     }
 
@@ -143,6 +149,21 @@ def series_for_fixture(images_dir: Path, fixture_key: str) -> Path | None:
         # Multi-slice CT head
         best = max(series_dirs, key=lambda p: len(list(p.glob("*.dcm"))))
         return best
+    if key in {"us", "us_rgb_single_frame"} or "us_rgb" in key:
+        # Prefer US modality (RGB single-frame abdomen US demo).
+        from pydicom import dcmread
+
+        for ser in reversed(series_dirs):
+            dcms = list(ser.glob("*.dcm"))
+            if not dcms:
+                continue
+            try:
+                ds = dcmread(dcms[0], stop_before_pixels=True, force=True)
+            except Exception:
+                continue
+            if str(getattr(ds, "Modality", "") or "").upper() == "US":
+                return ser
+        return series_dirs[-1]
     return series_dirs[-1]
 
 

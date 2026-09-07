@@ -72,7 +72,7 @@ rsna-anonymizer
 
 ## First launch
 
-![Welcome screen](shots/Welcome.png)
+![Welcome screen](shots/macos/Welcome.png)
 
 1. The **Welcome** screen opens.
 2. Optional but recommended: click **AI Features** on Welcome to download models / accept the face license (see [AI Features setup](../03-ai-features-setup)). Setup is only available from Welcome — close the project to return there later. On macOS, install `libomp` first (step 4 above).

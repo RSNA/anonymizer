@@ -22,19 +22,16 @@ src/prototyping/
 ├── _shared/         # config, storage_dir, parse_log
 ├── dev_anonymizer.py              # hot-reload launcher for UI work
 ├── test_welcome_window.py         # welcome window sizing check
-├── capture_help_screenshots.py    # workflow help PNG capture (--language)
-├── docs_capture/                  # manifest loader + grab/orthanc helpers
 ├── benchmark_harmonize_series.py  # Harmonize stage timing for one series
 ├── ct_eval.py       # shim → ct/ct_eval.py
 └── ex_test_falcon_rsna_study_temp.py  # shim → falcon/rsna_eligibility.py
 ```
 
-Help screenshots (maintainer, local GUI + Orthanc)::
+MkDocs help screenshots (maintainer tooling) live in [`src/docs_help/`](../docs_help/README.md)::
 
 ```bash
-uv run python src/prototyping/capture_help_screenshots.py --language en_US
-# Writes docs/<lang>/<NN-workflow>/shots/*.png per docs/screenshots-manifest.yaml
-# Orthanc: 127.0.0.1:4242 AE ORTHANC for Search/Query shots
+uv run python -m docs_help --language en_US
+# Writes docs/<lang>/<NN-workflow>/shots/<os>/*.png
 ```
 
 Root-level shims exist only for backward-compatible CLI entry points and ``prototyping.config``.

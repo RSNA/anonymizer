@@ -1,4 +1,4 @@
-"""macOS CGWindow helpers for alpha-preserving window captures."""
+"""macOS-only window capture via ``screencapture -l`` and CGWindow listing."""
 
 from __future__ import annotations
 
@@ -9,6 +9,10 @@ import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
+
+from PIL import Image
+
+from docs_help.platform.common import is_blank_capture, trim_transparent
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +84,7 @@ def resolve_cg_window_id(widget: Any, *, pid: int | None = None) -> int | None:
         if overlap <= 0:
             continue
         win_area = ww * wh
-        # Prefer windows that both overlap well and are close in size (dialogs vs root).
         score = (overlap / target_area) + (overlap / max(win_area, 1.0))
-        # Prefer smaller layer (normal windows) slightly when scores are close.
         score -= 0.001 * float(win.get("layer") or 0)
         if score > best_score:
             best_score = score
@@ -109,3 +111,103 @@ def screencapture_window(window_id: int, dest: Path, *, shadow: bool = False) ->
             f"stderr={proc.stderr.strip()!r}"
         )
     return dest
+
+
+def capture_via_screencapture_cli(
+    dest_hint: Path | None = None,
+    *,
+    rect: tuple[int, int, int, int] | None = None,
+) -> Image.Image | None:
+    """Capture via ``screencapture`` CLI (more reliable than PIL ImageGrab under Cursor)."""
+    tmp = dest_hint.with_suffix(".screencap.tmp.png") if dest_hint else None
+    if tmp is None:
+        fd, name = tempfile.mkstemp(suffix=".png")
+        os.close(fd)
+        tmp = Path(name)
+    try:
+        cmd = ["screencapture", "-x", "-t", "png"]
+        if rect is not None:
+            x1, y1, x2, y2 = rect
+            w, h = max(1, x2 - x1), max(1, y2 - y1)
+            cmd.extend(["-R", f"{x1},{y1},{w},{h}"])
+        cmd.append(str(tmp))
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if proc.returncode != 0 or not tmp.is_file() or tmp.stat().st_size < 64:
+            logger.debug(
+                "screencapture CLI failed rc=%s stderr=%r",
+                proc.returncode,
+                (proc.stderr or "")[:200],
+            )
+            return None
+        image = Image.open(tmp)
+        image.load()
+        if is_blank_capture(image):
+            return None
+        return image
+    except Exception as exc:
+        logger.debug("screencapture CLI error: %s", exc)
+        return None
+    finally:
+        try:
+            tmp.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
+def capture_window(widget: Any, dest: Path, label: str) -> Image.Image | None:
+    """Prefer OS window capture so rounded corners keep a real alpha channel."""
+    window_id = resolve_cg_window_id(widget)
+    if window_id is None:
+        return None
+
+    tmp = dest.with_suffix(dest.suffix + ".macwin.tmp.png")
+    try:
+        screencapture_window(window_id, tmp, shadow=False)
+        image = Image.open(tmp)
+        image.load()
+        image = trim_transparent(image)
+        if is_blank_capture(image):
+            logger.warning("macOS window capture blank for %s id=%s", label, window_id)
+            return None
+        logger.info(
+            "Grab %s via screencapture -l %s mode=%s size=%s → %s",
+            label,
+            window_id,
+            image.mode,
+            image.size,
+            dest,
+        )
+        return image
+    except Exception as exc:
+        logger.warning("macOS window capture failed for %s: %s", label, exc)
+        return None
+    finally:
+        try:
+            tmp.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
+def capture_bbox(bbox: tuple[int, int, int, int], dest_hint: Path | None = None) -> Image.Image:
+    """macOS bbox grab: screencapture CLI first, then ImageGrab."""
+    from docs_help.platform.common import capture_bbox_imagegrab
+
+    x1, y1, x2, y2 = bbox
+    cli = capture_via_screencapture_cli(dest_hint, rect=bbox)
+    if cli is not None:
+        return cli
+    try:
+        return capture_bbox_imagegrab(bbox)
+    except Exception:
+        pass
+    cli_full = capture_via_screencapture_cli(dest_hint)
+    if cli_full is not None:
+        fx2, fy2 = cli_full.size
+        crop_box = (
+            max(0, min(x1, fx2 - 1)),
+            max(0, min(y1, fy2 - 1)),
+            max(1, min(x2, fx2)),
+            max(1, min(y2, fy2)),
+        )
+        return cli_full.crop(crop_box)
+    return capture_bbox_imagegrab(bbox)

@@ -8,6 +8,8 @@ edit_uri: edit/master/docs/
 theme:
   name: material
   language: en
+  logo: assets/rsna_icon.png
+  favicon: assets/favicon.ico
   features:
     - navigation.tabs
     - navigation.sections
@@ -20,14 +22,14 @@ theme:
     - toc.follow
   palette:
     - scheme: default
-      primary: indigo
-      accent: indigo
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     - scheme: slate
-      primary: indigo
-      accent: indigo
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
@@ -58,6 +60,9 @@ markdown_extensions:
 
 extra_css:
   - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/os_shots.js
 
 extra:
   social:

@@ -1,3 +1,34 @@
+/* RSNA Anonymizer help — colors from src/anonymizer/assets/themes/rsna_theme.json
+ *
+ * Light: label/brand #014F8F, controls #3a7ebf / hover #325882
+ * Dark:  controls #1f538d / hover #14375e
+ */
+
+:root,
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #014f8f;
+  --md-primary-fg-color--light: #3a7ebf;
+  --md-primary-fg-color--dark: #013a6b;
+  --md-primary-bg-color: #ffffff;
+  --md-primary-bg-color--light: #ffffff;
+  --md-accent-fg-color: #3a7ebf;
+  --md-accent-fg-color--transparent: #3a7ebf1a;
+  --md-accent-bg-color: #ffffff;
+  --md-accent-bg-color--light: #ffffff;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #1f538d;
+  --md-primary-fg-color--light: #3a7ebf;
+  --md-primary-fg-color--dark: #14375e;
+  --md-primary-bg-color: #ffffff;
+  --md-primary-bg-color--light: #ffffff;
+  --md-accent-fg-color: #3a7ebf;
+  --md-accent-fg-color--transparent: #3a7ebf1a;
+  --md-accent-bg-color: #ffffff;
+  --md-accent-bg-color--light: #ffffff;
+}
+
 /* Keep help screenshots at captured logical size (do not stretch small dialogs). */
 .md-typeset p > img,
 .md-typeset li > img {

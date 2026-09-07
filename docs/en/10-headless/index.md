@@ -32,7 +32,7 @@ Both `-c` / `--config` and `--ai-batch` are required with `--ai-batch-run`.
 | **ProjectModel.json** | Site, project name, storage path, DICOM nodes, modalities, timeouts—the project definition. |
 | **AiBatchConfig.json** | Which AI tools to run, blur/OCR modes, study selection (`all` or a list), optional CT/MR resolution overrides. |
 
-Example AI batch config (also in the repo at `docs/examples/AiBatchConfig.json`):
+Example AI batch config (downloadable: [`AiBatchConfig.example.json`](AiBatchConfig.example.json)):
 
 ```json
 {

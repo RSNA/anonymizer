@@ -10,30 +10,43 @@ Import this series, open it in **Series View**, then run Harmonize. The same ser
 
 ## Goal
 
-On `Brain_Ax_EarlyArt`, run **Harmonize Description**, then optionally **Segment Brain Features**, and apply a clear SeriesDescription.
+On `Brain_Ax_EarlyArt` in Series View: run **Harmonize Description**, answer the brain-structures prompt when offered, Apply, then review segmentation overlays on the middle slice.
 
 ## Before you start
 
-1. Complete [AI Features setup](../../03-ai-features-setup/) — Harmonize CT pack, resolution, and optionally Brain structures.
-2. Import **`Brain_Ax_EarlyArt`** and open it in Series View.
+1. Complete [AI Features setup](../../03-ai-features-setup/) — Harmonize CT pack, resolution, and Brain structures.
+2. Import **`Brain_Ax_EarlyArt`** ([Search](../../06-search/)) and open that series in **Series View** ([View](../../07-view/) — right-click the series row).
 
 ## Workflow on `Brain_Ax_EarlyArt`
 
-### 1. Harmonize Description
+### 1. Harmonize Description (from Series View)
 
-1. Open `Brain_Ax_EarlyArt` in Series View.
-2. Click **Harmonize Description**.
-3. Review suggested description, regions, contrast / phase evidence, and geometry notes.
-4. **Apply** to write the series description, or cancel.
+1. With `Brain_Ax_EarlyArt` open in **Series View**, click **Harmonize Description**.
+2. Wait until analysis finishes — the **Playbook harmonization** table fills with anatomy / contrast evidence (not an empty table mid-progress).
+3. Review the suggested Series Description, then **Yes** to apply, or **No** / **Cancel**.
 
-![Harmonize Description on Brain_Ax_EarlyArt](shots/Process_Harmonize_Description.png)
+The Series View remains behind the dialog so you keep context for the open series.
 
-### 2. Segment Brain Features (optional)
+![Series View with completed Harmonize Description results](shots/macos/Process_Harmonize_Description.png)
 
-1. On the same Harmonize results for this head CT, enable **Segment Brain Features** when offered (licensed pack).
-2. Review the extra anatomy detail, then Apply if you want it in the description workflow.
+### 2. Brain structures prompt
 
-![Segment Brain Features on Brain_Ax_EarlyArt](shots/Process_Harmonize_BrainFeatures.png)
+On a CT head series, Harmonize asks whether to run **detailed brain structure segmentation** before the job continues:
+
+1. Read the **Brain structures** Yes/No message (academic license / models required — see [AI Features](../../03-ai-features-setup/)).
+2. Choose **Yes** to include brain structures in this run, or **No** for standard anatomy only.
+
+![Harmonize Description with brain structures prompt](shots/macos/Process_Harmonize_BrainPrompt.png)
+
+### 3. Segmented Series View
+
+After you Accept a Harmonize run that included brain structures (**Yes** on the prompt):
+
+1. Series View shows latch buttons for whole **brain** plus detailed structures (brainstem, lobes, ventricles, …) when the licensed pack ran.
+2. Select **all** structures you want to review (including **brain**).
+3. Go to the **middle slice** to see overlays on a representative frame.
+
+![Series View with all brain segments on the middle slice](shots/macos/Process_Harmonize_SegmentedSeries.png)
 
 ## Notes (same as production use)
 
@@ -48,6 +61,7 @@ On `Brain_Ax_EarlyArt`, run **Harmonize Description**, then optionally **Segment
 
 - SeriesDescription looks consistent for this head CT.
 - Dataset **Harmonized** column updates.
+- After brain Yes: latch buttons appear and overlays draw on the middle slice.
 
 ## If it fails
 

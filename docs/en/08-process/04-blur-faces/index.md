@@ -28,7 +28,7 @@ On `Brain_Ax_EarlyArt`, run face blur in **Gaussian** mode, review QA, and save 
 5. Check **QA PASS** vs **QA FAIL** (pixels changed outside the mask).
 6. **Save** to keep, or discard.
 
-![Face Blur Gaussian on Brain_Ax_EarlyArt](shots/Process_FaceBlur_Gaussian.png)
+![Face Blur Gaussian on Brain_Ax_EarlyArt](shots/macos/Process_FaceBlur_Gaussian.png)
 
 ### Other blur modes
 

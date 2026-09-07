@@ -24,7 +24,7 @@ After importing from `tests/controller/assets/test_dcm_files` (see [Search](../0
 2. Expand a **study** row (triangle) to see nested **series**.
 3. Note PHI / anonymized IDs and the AI status columns.
 
-![Dataset tree with test studies](shots/Dataset.png)
+![Dataset tree with test studies](shots/macos/Dataset.png)
 
 ### Columns (V19)
 
@@ -46,6 +46,8 @@ Right-click a **study** row (not a nested series) to open **Projection View** fo
 - Click a projection tile when you want to jump into full **Series View** for that series.
 - You can also select one or more studies and use the **View Projections** button in the Dataset toolbar.
 
+![View Projections for a selected study](shots/macos/ViewProjections.png)
+
 ### Right-click a **series** → Series View
 
 1. Expand the study that contains the series (for example `davidson_cxr`).
@@ -54,7 +56,7 @@ Right-click a **study** row (not a nested series) to open **Projection View** fo
 
 That is the main way to open a series for review and for Process tools (Remove Pixel PHI, Harmonize, Face blur).
 
-![Series View on davidson_cxr](shots/SeriesView_Review.png)
+![Series View on davidson_cxr](shots/macos/SeriesView_Review.png)
 
 ## Series View — what you can do
 

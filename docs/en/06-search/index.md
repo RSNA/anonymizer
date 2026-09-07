@@ -20,7 +20,7 @@ With a project open, use:
 - **File → Import Files** — pick one or more files (default filter is often `.dcm`; you can change it in the file dialog).
 - **File → Import Directory** — every file under that folder and its subfolders is attempted, not only `.dcm`.
 
-![File menu — Import Files / Import Directory](shots/ImportFiles_Menu.png)
+![File menu — Import Files / Import Directory](shots/macos/ImportFiles_Menu.png)
 
 Already-imported instances (same SOP Instance UID already in this project) are **skipped**, not quarantined.
 
@@ -28,7 +28,7 @@ Already-imported instances (same SOP Instance UID already in this project) are *
 
 After **Import Directory**, the OS folder dialog opens. Navigate to your study tree and click **Choose**.
 
-![Choose folder for Import Directory](shots/ImportDirectory_Chooser.png)
+![Choose folder for Import Directory](shots/macos/ImportDirectory_Chooser.png)
 
 ### 3. What must be true for a file to import
 
@@ -54,7 +54,7 @@ Path: `tests/controller/assets/test_dcm_files/davidson_cxr`
 
 A successful line shows an abridged path and **PHI Patient ID → anonymized Patient ID** (for example `…/davidson_cxr_….dcm => 993627-000001`).
 
-![Import Files finished — success mapping in the log](shots/ImportDavidson_Done.png)
+![Import Files finished — success mapping in the log](shots/macos/ImportDavidson_Done.png)
 
 ### 5. Read the import log (many files)
 
@@ -66,7 +66,7 @@ When you import a larger tree, the same dialog lists **one outcome per file** in
 
 Click **Close** when finished. Dashboard patient / study / image counts update; quarantine counts rise only for rejected files.
 
-![Import Files log — success, mismatch, and already stored](shots/ImportDirectory_Log.png)
+![Import Files log — success, mismatch, and already stored](shots/macos/ImportDirectory_Log.png)
 
 ### Quarantine
 
@@ -98,7 +98,7 @@ This window has three bands:
 2. **Results table** — studies returned by C-FIND.
 3. **Import bar** — Found count, **Select All** / **Clear Selection**, **Move Level**, **Import & Anonymize**.
 
-![Query, Retrieve & Import — criteria, results, and import controls](shots/QueryRetrieve_Ready.png)
+![Query, Retrieve & Import — criteria, results, and import controls](shots/macos/QueryRetrieve_Ready.png)
 
 !!! tip "Ask IT for help"
     The Query Server must allow this computer to C-ECHO, C-FIND, and C-MOVE, and must know your **Local Server** (address, port, AE Title) as the C-MOVE destination. See [Create a project → When you talk to IT](../05-create-project/#when-you-talk-to-it).
@@ -136,7 +136,7 @@ Other controls:
 3. Click the **Doe^Archibald** head CT row (dark selection highlight).
 4. Confirm **Studies Selected: 1** and choose **Move Level** (often **STUDY** or **SERIES**).
 
-![CT query results — Doe^Archibald selected](shots/OrthancCT_Query.png)
+![CT query results — Doe^Archibald selected](shots/macos/OrthancCT_Query.png)
 
 ### 4. Select studies and import
 
@@ -146,13 +146,13 @@ Other controls:
 4. Progress tracks metadata retrieval, then images received versus the hierarchy. A study finishes when all expected files arrive **or** a [Network Timeout](../05-create-project/#network-timeouts) expires for that transfer.
 5. When the dialog shows **Import Finished**, click **Close**.
 
-![Import Studies dialog finished](shots/OrthancCT_Importing.png)
+![Import Studies dialog finished](shots/macos/OrthancCT_Importing.png)
 
 ### 5. Confirm green highlight
 
 Successfully imported studies are **highlighted green** in the Query results list, and the **Imported** column shows how many images landed in the project.
 
-![Imported study highlighted green](shots/OrthancCT_Imported.png)
+![Imported study highlighted green](shots/macos/OrthancCT_Imported.png)
 
 You can select the same studies again after adjusting timeout or move level—already-imported instances are skipped.
 

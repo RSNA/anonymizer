@@ -6,18 +6,18 @@ Send anonymized patients to a remote DICOM system or AWS S3, and optionally save
 
 ## Send view
 
-![Export](shots/SendView.png)
+![Export](shots/macos/SendView.png)
 
 1. From the Dashboard, click **Send** (echo first when using DICOM export).
 2. Select patients (a patient may include several studies).
 3. Send to the configured export server or AWS (if enabled in settings).
 4. Watch status and timestamps; already-sent objects are not re-sent.
 
-![Send status](shots/SendView.png)
+![Send status](shots/macos/SendView.png)
 
 ## Patient lookup CSV
 
-![Save PHI CSV](shots/SendView.png)
+![Save PHI CSV](shots/macos/SendView.png)
 
 Use **Create Patient Lookup** to write a CSV under `/private/phi_export/`.
 

@@ -14,7 +14,7 @@ Open a clean project with a storage folder and site identity ready for import.
 4. Confirm modalities and network settings with IT if you will query a PACS.
 5. Save / create the project. The **Dashboard** opens.
 
-![New Project Settings](shots/NewProjectSettings.png)
+![New Project Settings](shots/macos/NewProjectSettings.png)
 
 ## Everyday project actions
 
@@ -57,55 +57,55 @@ Open **File → Project Settings** (or New Project Settings when creating). Conf
 
 Address, port, and AE Title this computer uses to **receive** images.
 
-![Local Server](shots/LocalServer.png)
+![Local Server](shots/macos/LocalServer.png)
 
 ### Query Server
 
 Hospital archive used by Dashboard **Search**.
 
-![Query Server](shots/QueryServer.png)
+![Query Server](shots/macos/QueryServer.png)
 
 ### Export Server
 
 DICOM destination used when you **Send** (settings label may still say Export Server).
 
-![Export Server](shots/ExportServer.png)
+![Export Server](shots/macos/ExportServer.png)
 
 ### AWS Cognito (optional)
 
 Credentials for S3 Send when enabled.
 
-![AWS Cognito](shots/AWSCognito.png)
+![AWS Cognito](shots/macos/AWSCognito.png)
 
 ### Network Timeouts
 
 How long to wait for slow archives.
 
-![Network Timeouts](shots/NetworkTimeouts.png)
+![Network Timeouts](shots/macos/NetworkTimeouts.png)
 
 ### Modalities / Storage Classes / Transfer Syntaxes
 
 Which image types and encodings are allowed.
 
-![Modalities](shots/Modalities.png)
-![Storage Classes](shots/StorageClasses.png)
-![Transfer Syntaxes](shots/TransferSyntaxes.png)
+![Modalities](shots/macos/Modalities.png)
+![Storage Classes](shots/macos/StorageClasses.png)
+![Transfer Syntaxes](shots/macos/TransferSyntaxes.png)
 
 ### Patient Lookup Table
 
 Optional CTP `.properties` mapping of PHI patient IDs to anonymized IDs and date offsets. Browse → preview → Accept.
 
-![Lookup Table](shots/LookupTable.png)
+![Lookup Table](shots/macos/LookupTable.png)
 
 ### Logging Levels
 
 Raise anonymizer / network logging when troubleshooting with IT.
 
-![Logging Levels](shots/LoggingLevels.png)
+![Logging Levels](shots/macos/LoggingLevels.png)
 
 ## Dashboard after create
 
-![Dashboard](shots/Dashboard.png)
+![Dashboard](shots/macos/Dashboard.png)
 
 The Dashboard exposes the main workflow buttons: **Search**, **View**, and **Send**.
 
