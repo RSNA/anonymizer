@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [19.0.5]
+- Harmonize XR/US/MG (planar): metadata RadLex series descriptions and modality LOINC study offers; isolated from CT/MR TotalSegmentator path; AI Batch supported
+- Dataset: click green harmonized study/series descriptions to choose LOINC (study) or RadLex (series) alternatives for that modality; multi-select preserved
+- Remove Pixel PHI: US exclude-area workflow; refreshed Process / Send / View help screenshots and MkDocs chapters
+- Tests: planar playbook, description-edit candidates, OCR exclude panels; restore US `project_t2` fixture; gate checks match planar Harmonize always-on
+
 ## [19.0.4]
 - Tests: align face-blur gate and mocked TotalSegmentator fixtures with JSON sidecars and mask-required `finalize_seg_cache` (CI green after 19.0.3)
 
