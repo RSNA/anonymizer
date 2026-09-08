@@ -72,8 +72,8 @@ class ImportStudiesDialog(AppToplevel):
         self._instances_to_import = 0
         self._study_metadata_retrieved = 0
 
-        self.rowconfigure(0, weight=1)
-        self.columnconfigure(1, weight=1)
+        self.rowconfigure(0, weight=0)
+        self.columnconfigure(0, weight=1)
         self._last_grid_row = 0
 
         # Create Widgets for Phase 1: (study metadata retrieval)
@@ -81,6 +81,11 @@ class ImportStudiesDialog(AppToplevel):
         self.bind("<Escape>", self._escape_keypress)
         self.wait_visibility()
         self.grab_set()  # make dialog modal
+        # Hug content — avoid empty grey expansion beside the progress frame.
+        self.update_idletasks()
+        req_w = max(self.winfo_reqwidth(), self._frame.winfo_reqwidth() + 24)
+        req_h = max(self.winfo_reqheight(), self._frame.winfo_reqheight() + 24)
+        self.geometry(f"{req_w}x{req_h}")
 
         # Phase 1: Start background task to get StudyUIDHierarchies:
         self._controller.get_study_uid_hierarchies_ex(

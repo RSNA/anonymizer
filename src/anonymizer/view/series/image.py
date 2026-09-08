@@ -54,7 +54,10 @@ class ImageViewer(ctk.CTkFrame):
     MAX_SCREEN_PERCENTAGE = 0.7  # area of current screen available for displaying image
     TEXT_BOX_COLOR_BGR = (0, 255, 0)  # green for OpenCV BGR overlays
     USER_RECT_COLOR_BGR = (255, 0, 0)  # blue for OpenCV BGR overlays
+    EXCLUDE_RECT_COLOR_BGR = (255, 255, 255)  # white dotted outline for OCR exclude zones
     SEGMENTATION_COLOR_BGR = (0, 0, 255)  # red for OpenCV BGR overlays
+    EXCLUDE_RECT_DASH = 8  # segment length (px) for dotted exclude outlines
+    EXCLUDE_RECT_GAP = 6
     DEFAULT_WL_SENSITIVITY = 0.75  # Pixels moved per unit change in WL (affects Beta)
     DEFAULT_WW_SENSITIVITY = 0.75  # Pixels moved per unit change in WW (affects Alpha)
 
@@ -156,6 +159,7 @@ class ImageViewer(ctk.CTkFrame):
         self.active_layers: set[LayerType] = set()
         self.active_layers.add(LayerType.TEXT)
         self.active_layers.add(LayerType.USER_RECT)
+        self.active_layers.add(LayerType.EXCLUDE_RECT)
 
         # --- User Rectangle Tracking ---
         self.temp_rect_id = None
@@ -808,6 +812,21 @@ class ImageViewer(ctk.CTkFrame):
             return None
         return self.overlay_data[frame_index].user_rects
 
+    def set_exclude_rectangle_overlay_data(self, frame_index: int, data: list[UserRectangle]):
+        """Sets OCR-exclude rectangle overlay data for a specific frame."""
+        if frame_index not in self.overlay_data:
+            self.overlay_data[frame_index] = OverlayData()
+        self.overlay_data[frame_index].exclude_rects = data
+        if frame_index == self.current_image_index:
+            self.remove_from_cache(frame_index)
+            self.load_and_display_image(self.current_image_index)
+
+    def get_exclude_rectangle_overlay_data(self, frame_index: int) -> list[UserRectangle] | None:
+        """Retrieves OCR-exclude rectangle overlay data for a specific frame."""
+        if frame_index not in self.overlay_data:
+            return None
+        return self.overlay_data[frame_index].exclude_rects
+
     def _image_to_view_coords(self, x: int, y: int) -> tuple[int, int]:
         """Converts image coordinates to view (display) coordinates."""
         image_width = self.images.shape[2]
@@ -1178,6 +1197,47 @@ class ImageViewer(ctk.CTkFrame):
                     return _("MAX PROJECTION")
         return ""
 
+    @classmethod
+    def _draw_dotted_rectangle(
+        cls,
+        image: np.ndarray,
+        pt1: tuple[int, int],
+        pt2: tuple[int, int],
+        color: tuple[int, int, int],
+        *,
+        thickness: int = 2,
+        dash: int | None = None,
+        gap: int | None = None,
+    ) -> None:
+        """Draw a hollow dotted rectangle (no fill) onto an OpenCV BGR overlay."""
+        x1, y1 = pt1
+        x2, y2 = pt2
+        if x1 > x2:
+            x1, x2 = x2, x1
+        if y1 > y2:
+            y1, y2 = y2, y1
+        dash_len = dash if dash is not None else cls.EXCLUDE_RECT_DASH
+        gap_len = gap if gap is not None else cls.EXCLUDE_RECT_GAP
+        segment = max(1, dash_len)
+        space = max(1, gap_len)
+
+        def _dash_line(ax: int, ay: int, bx: int, by: int) -> None:
+            length = int(np.hypot(bx - ax, by - ay))
+            if length <= 0:
+                return
+            for start in range(0, length + 1, segment + space):
+                end = min(start + segment, length)
+                t0 = start / length
+                t1 = end / length
+                p0 = (int(round(ax + (bx - ax) * t0)), int(round(ay + (by - ay) * t0)))
+                p1 = (int(round(ax + (bx - ax) * t1)), int(round(ay + (by - ay) * t1)))
+                cv2.line(image, p0, p1, color, thickness, lineType=cv2.LINE_AA)
+
+        _dash_line(x1, y1, x2, y1)
+        _dash_line(x2, y1, x2, y2)
+        _dash_line(x2, y2, x1, y2)
+        _dash_line(x1, y2, x1, y1)
+
     def _render_overlays(self, frame_ndx: int) -> np.ndarray:
         """Renders all active overlays for specified frame."""
         if self.images is None or not (0 <= frame_ndx < self.num_images):
@@ -1214,6 +1274,18 @@ class ImageViewer(ctk.CTkFrame):
                                 (x2, y2),
                                 self.USER_RECT_COLOR_BGR,
                                 2,
+                            )
+
+                case LayerType.EXCLUDE_RECT:
+                    if overlay_data.exclude_rects:
+                        for rect in overlay_data.exclude_rects:
+                            x1, y1, x2, y2 = rect.get_bounding_box()
+                            self._draw_dotted_rectangle(
+                                combined_overlay,
+                                (x1, y1),
+                                (x2, y2),
+                                self.EXCLUDE_RECT_COLOR_BGR,
+                                thickness=2,
                             )
 
                 case LayerType.SEGMENTATIONS:
@@ -1272,7 +1344,7 @@ class ImageViewer(ctk.CTkFrame):
         if frame_ndx not in self.overlay_data:
             return False
         overlay = self.overlay_data[frame_ndx]
-        return bool(overlay.ocr_texts or overlay.segmentations or overlay.user_rects)
+        return bool(overlay.ocr_texts or overlay.segmentations or overlay.user_rects or overlay.exclude_rects)
 
     def _install_canvas_image(self, photo_image: ImageTk.PhotoImage) -> None:
         """Show a pixmap on the canvas without delete/recreate flicker when the item already exists."""
@@ -1576,6 +1648,27 @@ class ImageViewer(ctk.CTkFrame):
 
         if hit:
             logging.info(f"Remove OCR Text at {x}, {y}, propagate={self.propagate_overlays}")
+            if self.propagate_overlays:
+                self.clear_cache()
+            self.refresh_current_image()
+            return
+
+        # Check Exclude Rectangle Overlay (white dotted keepers):
+        hit = False
+        for i in range(self.num_images):
+            if not self.propagate_overlays and i != self.current_image_index:
+                continue
+            if i not in self.overlay_data:
+                continue
+            exclude_overlay_data = self.overlay_data[i].exclude_rects
+            rect_ndx = self._find_hit_object(x, y, exclude_overlay_data)
+            if rect_ndx is None:
+                continue
+            hit = True
+            del exclude_overlay_data[rect_ndx]
+
+        if hit:
+            logging.info(f"Remove Exclude Rectangle at {x}, {y}, propagate={self.propagate_overlays}")
             if self.propagate_overlays:
                 self.clear_cache()
             self.refresh_current_image()

@@ -64,9 +64,20 @@ def test_harmonize_button_visible_once_until_cleared() -> None:
         already_harmonized=False,
         has_segment_masks=True,
     )
-    assert not harmonize_button_visible(
+    # Planar XR/US/MG Harmonize is metadata-only (no TS models required for the button).
+    assert harmonize_button_visible(
         harmonize_models_ready=True,
         modality="US",
+        already_harmonized=False,
+    )
+    assert harmonize_button_visible(
+        harmonize_models_ready=True,
+        modality="CR",
+        already_harmonized=False,
+    )
+    assert not harmonize_button_visible(
+        harmonize_models_ready=True,
+        modality="SC",
         already_harmonized=False,
     )
     assert not harmonize_button_visible(

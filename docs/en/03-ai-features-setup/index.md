@@ -2,7 +2,7 @@
 
 AI Features are **optional**. They run on your computer after a one-time download. Images are not uploaded for processing.
 
-Do this chapter **before** the tool walkthroughs on `davidson_cxr` and `Brain_Ax_EarlyArt`.
+Do this chapter **before** the tool walkthroughs on `davidson_cxr` and `CT_Head_With_Contrast`.
 
 ## Goal
 
@@ -21,8 +21,8 @@ Close the project (or start the app) to return to Welcome if you need to downloa
 | Item | Needed for demo |
 | --- | --- |
 | **Remove burned-in text** (OCR) | Chapter 8.1 — `davidson_cxr` |
-| **Harmonize** CT pack + resolution (1.5 / 3 / 6 mm) | Chapter 8.2 — `Brain_Ax_EarlyArt` |
-| **Face de-identify** + academic license `aca_…` | Chapter 8.3 — `Brain_Ax_EarlyArt` |
+| **Harmonize** CT pack + resolution (1.5 / 3 / 6 mm) | Chapter 8.2 — `CT_Head_With_Contrast` |
+| **Face de-identify** + academic license `aca_…` | Chapter 8.3 — `CT_Head_With_Contrast` |
 | **Brain structures** (optional licensed pack) | Chapter 8.2 — Harmonize brain-structures prompt |
 
 There are **no project on/off checkboxes**. If models are installed and ready, tools appear in Series View and batch.

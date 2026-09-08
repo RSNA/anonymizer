@@ -199,6 +199,31 @@ def _study_tseg_series_all_harmonized(study: Study) -> bool:
     )
 
 
+def _study_planar_series_all_harmonized(study: Study) -> bool:
+    """Return True when every XR/US/MG series in the study has a harmonized_description."""
+    from anonymizer.utils.modalities import series_is_planar_harmonize_eligible
+
+    planar_series = [
+        series for series in (study.series or []) if series_is_planar_harmonize_eligible(series.modality)
+    ]
+    if not planar_series:
+        return False
+    return all(
+        series.harmonized_description is not None and bool(str(series.harmonized_description).strip())
+        for series in planar_series
+    )
+
+
+def _study_has_tseg_series(study: Study) -> bool:
+    return any(series_is_tseg_eligible(series.modality) for series in (study.series or []))
+
+
+def _study_has_planar_series(study: Study) -> bool:
+    from anonymizer.utils.modalities import series_is_planar_harmonize_eligible
+
+    return any(series_is_planar_harmonize_eligible(series.modality) for series in (study.series or []))
+
+
 def _study_ct_series_all_harmonized(study: Study) -> bool:
     """Backward-compatible alias for ``_study_tseg_series_all_harmonized``."""
     return _study_tseg_series_all_harmonized(study)
@@ -1091,12 +1116,30 @@ class AnonymizerModel:
 
     @use_session(is_read_only_operation=True)
     def study_is_harmonized(self, anon_study_uid: str) -> bool:
-        """Return True when every CT series in the study has harmonized_description set."""
+        """Return True when every CT|MR series in the study has harmonized_description set."""
         stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
         study = self.session.execute(stmt).scalar_one_or_none()
         if study is None:
             return False
         return _study_ct_series_all_harmonized(study)
+
+    @use_session(is_read_only_operation=True)
+    def study_is_planar_harmonized(self, anon_study_uid: str) -> bool:
+        """Return True when every XR/US/MG series has harmonized_description (ignores CT/MR)."""
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None:
+            return False
+        return _study_planar_series_all_harmonized(study)
+
+    @use_session(is_read_only_operation=True)
+    def study_composition_for_harmonize(self, anon_study_uid: str) -> tuple[bool, bool]:
+        """Return ``(has_tseg_series, has_planar_series)`` for LOINC offer branching."""
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None:
+            return False, False
+        return _study_has_tseg_series(study), _study_has_planar_series(study)
 
     @use_session()
     def set_study_harmonized_description(self, anon_study_uid: str, description: str) -> bool:
@@ -1139,6 +1182,108 @@ class AnonymizerModel:
         return descriptions
 
     @use_session(is_read_only_operation=True)
+    def get_planar_series_harmonized_descriptions(self, anon_study_uid: str) -> list[str]:
+        """Return non-empty XR/US/MG Series.harmonized_description values for a study."""
+        from anonymizer.utils.modalities import series_is_planar_harmonize_eligible
+
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None:
+            return []
+        descriptions: list[str] = []
+        for series in study.series or []:
+            if not series_is_planar_harmonize_eligible(series.modality):
+                continue
+            text = (series.harmonized_description or "").strip()
+            if text:
+                descriptions.append(text)
+        return descriptions
+
+    @use_session(is_read_only_operation=True)
+    def get_planar_series_modalities(self, anon_study_uid: str) -> list[str]:
+        """Return modality codes for planar Harmonize series in a study."""
+        from anonymizer.utils.modalities import series_is_planar_harmonize_eligible
+
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None:
+            return []
+        return [
+            str(series.modality or "").strip().upper()
+            for series in (study.series or [])
+            if series_is_planar_harmonize_eligible(series.modality)
+        ]
+
+    @use_session(is_read_only_operation=True)
+    def get_tseg_series_modalities(self, anon_study_uid: str) -> list[str]:
+        """Return modality codes for CT|MR series in a study."""
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None:
+            return []
+        return [
+            str(series.modality or "").strip().upper()
+            for series in (study.series or [])
+            if series_is_tseg_eligible(series.modality)
+        ]
+
+    @use_session(is_read_only_operation=True)
+    def get_planar_series_instance_count(self, anon_study_uid: str) -> int:
+        """Sum instance counts for planar Harmonize series (CXR view estimate from ORM)."""
+        from anonymizer.utils.modalities import series_is_planar_harmonize_eligible
+
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(
+            selectinload(Study.series).selectinload(Series.instances)
+        )
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None:
+            return 0
+        total = 0
+        for series in study.series or []:
+            if series_is_planar_harmonize_eligible(series.modality):
+                total += len(series.instances or [])
+        return total
+
+    @use_session(is_read_only_operation=True)
+    def get_compatible_series_harmonized_descriptions(
+        self,
+        anon_study_uid: str,
+        *,
+        modality: object | None,
+        exclude_anon_series_uid: str | None = None,
+    ) -> list[str]:
+        """Return other series' harmonized descriptions on the study with compatible modality."""
+        from anonymizer.utils.modalities import (
+            normalize_modality,
+            planar_harmonize_cohort,
+            series_is_planar_harmonize_eligible,
+            series_is_tseg_eligible,
+        )
+
+        stmt = select(Study).where(Study.anon_study_uid == anon_study_uid).options(selectinload(Study.series))
+        study = self.session.execute(stmt).scalar_one_or_none()
+        if study is None:
+            return []
+
+        target = normalize_modality(modality)
+        target_cohort = planar_harmonize_cohort(modality)
+        descriptions: list[str] = []
+        for series in study.series or []:
+            if exclude_anon_series_uid and series.anon_series_uid == exclude_anon_series_uid:
+                continue
+            text = (series.harmonized_description or "").strip()
+            if not text:
+                continue
+            series_mod = series.modality
+            if series_is_tseg_eligible(target) and series_is_tseg_eligible(series_mod):
+                if normalize_modality(series_mod) == target:
+                    descriptions.append(text)
+            elif target_cohort is not None and series_is_planar_harmonize_eligible(series_mod):
+                if planar_harmonize_cohort(series_mod) == target_cohort:
+                    descriptions.append(text)
+        return descriptions
+
+    @use_session(is_read_only_operation=True)
     def get_anon_patient_id_for_study(self, anon_study_uid: str) -> str | None:
         stmt = (
             select(Study)
@@ -1166,6 +1311,26 @@ class AnonymizerModel:
                 (series.harmonized_description or "").strip()
                 for series in (study.series or [])
                 if series_is_tseg_eligible(series.modality)
+                and (series.harmonized_description or "").strip()
+            ]
+            if tuple(sorted(descriptions)) == target:
+                matches.append(study.anon_study_uid)
+        return matches
+
+    @use_session(is_read_only_operation=True)
+    def find_studies_with_planar_series_fingerprint(self, fingerprint: tuple[str, ...]) -> list[str]:
+        """Return anon_study_uid values whose XR/US/MG harmonized descriptions match ``fingerprint``."""
+        from anonymizer.utils.modalities import series_is_planar_harmonize_eligible
+
+        target = tuple(fingerprint)
+        stmt = select(Study).options(selectinload(Study.series))
+        studies = self.session.execute(stmt).scalars().all()
+        matches: list[str] = []
+        for study in studies:
+            descriptions = [
+                (series.harmonized_description or "").strip()
+                for series in (study.series or [])
+                if series_is_planar_harmonize_eligible(series.modality)
                 and (series.harmonized_description or "").strip()
             ]
             if tuple(sorted(descriptions)) == target:

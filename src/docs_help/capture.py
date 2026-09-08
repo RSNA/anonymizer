@@ -91,7 +91,12 @@ def _ensure_project(ctx: CaptureContext) -> None:
 
 def _ensure_modalities_for_fixtures(ctx: CaptureContext, keys: list[str]) -> None:
     """Enable storage classes needed by fixtures (e.g. US for ultrasound demos)."""
-    need_us = any(k in {"us", "us_rgb_single_frame", "us_mf"} or "us_rgb" in k.lower() for k in keys)
+    need_us = any(
+        k in {"us", "us_rgb_single_frame", "us_mf", "us_multi_frame_grayscale"}
+        or "us_rgb" in k.lower()
+        or "us_multi" in k.lower()
+        for k in keys
+    )
     if not need_us:
         return
     model = ctx.app.controller.model

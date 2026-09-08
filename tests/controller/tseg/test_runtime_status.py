@@ -232,7 +232,11 @@ def test_log_runtime_status_does_not_raise() -> None:
 
 
 def test_project_ai_gates_use_ready_checks() -> None:
-    from anonymizer.controller.ai.feature_availability import face_blur_allowed, harmonize_allowed
+    from anonymizer.controller.ai.feature_availability import (
+        face_blur_allowed,
+        harmonize_allowed,
+        harmonize_allowed_for_modality,
+    )
 
     with (
         patch("anonymizer.controller.ai.feature_availability.totalsegmentator_available", return_value=True),
@@ -249,7 +253,10 @@ def test_project_ai_gates_use_ready_checks() -> None:
         patch("anonymizer.controller.ai.feature_availability.face_mr_ready", return_value=False),
         patch("anonymizer.controller.ai.feature_availability.face_license_available", return_value=True),
     ):
+        # Global Harmonize gate stays open for planar XR/US/MG (no TS models required).
         assert harmonize_allowed() is True
+        assert harmonize_allowed_for_modality("CT") is True
+        assert harmonize_allowed_for_modality("CR") is True
         assert face_blur_allowed() is True
     with (
         patch("anonymizer.controller.ai.feature_availability.totalsegmentator_available", return_value=True),
@@ -266,5 +273,7 @@ def test_project_ai_gates_use_ready_checks() -> None:
         patch("anonymizer.controller.ai.feature_availability.face_mr_ready", return_value=False),
         patch("anonymizer.controller.ai.feature_availability.face_license_available", return_value=True),
     ):
-        assert harmonize_allowed() is False
+        assert harmonize_allowed() is True
+        assert harmonize_allowed_for_modality("CT") is False
+        assert harmonize_allowed_for_modality("DX") is True
         assert face_blur_allowed() is False

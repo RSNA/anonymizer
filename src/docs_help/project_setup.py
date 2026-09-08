@@ -70,13 +70,14 @@ def fixture_dirs() -> dict[str, Path]:
     return {
         "test_dcm_files": TEST_DCM_ROOT,
         "davidson_cxr": TEST_DCM_ROOT / "davidson_cxr",
-        "Brain_Ax_EarlyArt": TEST_DCM_ROOT / "Brain_Ax_EarlyArt",
+        "CT_Head_With_Contrast": TEST_DCM_ROOT / "CT_Head_With_Contrast",
         "chest": TEST_DCM_ROOT / "synthetic_CT_chest",
         "head": TEST_DCM_ROOT / "synthetic_CT_head",
         "abdomen": TEST_DCM_ROOT / "synthetic_CT_abdomen",
         "us": us_rgb,
         "us_rgb_single_frame": us_rgb,
         "us_mf": TEST_DCM_ROOT / "us_multi_frame_grayscale",
+        "us_multi_frame_grayscale": TEST_DCM_ROOT / "us_multi_frame_grayscale",
     }
 
 
@@ -139,20 +140,70 @@ def series_for_fixture(images_dir: Path, fixture_key: str) -> Path | None:
         return None
     key = fixture_key.lower()
     if "davidson" in key or key == "cxr":
-        # Single-frame CR/DX often last or only small series
-        for ser in series_dirs:
-            dcms = list(ser.glob("*.dcm"))
-            if len(dcms) == 1:
-                return ser
-        return series_dirs[0]
-    if "brain" in key or "earlyart" in key:
-        # Multi-slice CT head
-        best = max(series_dirs, key=lambda p: len(list(p.glob("*.dcm"))))
-        return best
-    if key in {"us", "us_rgb_single_frame"} or "us_rgb" in key:
-        # Prefer US modality (RGB single-frame abdomen US demo).
         from pydicom import dcmread
 
+        for ser in series_dirs:
+            dcms = list(ser.glob("*.dcm"))
+            if not dcms:
+                continue
+            try:
+                ds = dcmread(dcms[0], stop_before_pixels=True, force=True)
+            except Exception:
+                continue
+            if str(getattr(ds, "Modality", "") or "").upper() in {"CR", "DX"}:
+                return ser
+        return series_dirs[0]
+    if "brain" in key or "earlyart" in key or "ct_head" in key or "with_contrast" in key:
+        from pydicom import dcmread
+
+        ct_dirs: list[Path] = []
+        for ser in series_dirs:
+            dcms = list(ser.glob("*.dcm"))
+            if not dcms:
+                continue
+            try:
+                ds = dcmread(dcms[0], stop_before_pixels=True, force=True)
+            except Exception:
+                continue
+            if str(getattr(ds, "Modality", "") or "").upper() in {"CT", "MR"}:
+                ct_dirs.append(ser)
+        pool = ct_dirs or series_dirs
+        return max(pool, key=lambda p: len(list(p.glob("*.dcm"))))
+    if key in {"us_mf", "us_multi_frame_grayscale"} or "multi_frame" in key:
+        # Prefer multi-frame US (cine / lower-right panel demo).
+        from pydicom import dcmread
+
+        for ser in reversed(series_dirs):
+            dcms = list(ser.glob("*.dcm"))
+            if not dcms:
+                continue
+            try:
+                ds = dcmread(dcms[0], stop_before_pixels=True, force=True)
+            except Exception:
+                continue
+            if str(getattr(ds, "Modality", "") or "").upper() != "US":
+                continue
+            n_frames = int(getattr(ds, "NumberOfFrames", 1) or 1)
+            if n_frames > 1 or len(dcms) > 1:
+                return ser
+        return series_dirs[-1]
+    if key in {"us", "us_rgb_single_frame"} or "us_rgb" in key:
+        # Prefer single-frame US (RGB abdomen / Dist panel demo).
+        from pydicom import dcmread
+
+        for ser in reversed(series_dirs):
+            dcms = list(ser.glob("*.dcm"))
+            if not dcms:
+                continue
+            try:
+                ds = dcmread(dcms[0], stop_before_pixels=True, force=True)
+            except Exception:
+                continue
+            if str(getattr(ds, "Modality", "") or "").upper() != "US":
+                continue
+            n_frames = int(getattr(ds, "NumberOfFrames", 1) or 1)
+            if n_frames <= 1 and len(dcms) == 1:
+                return ser
         for ser in reversed(series_dirs):
             dcms = list(ser.glob("*.dcm"))
             if not dcms:

@@ -4,31 +4,31 @@ On some **head CT or MR** exams, facial features could allow recognition even af
 
 ## Demo series
 
-**`Brain_Ax_EarlyArt`** — same series as [8.2 Harmonize names](../03-harmonize-names/)  
-(`tests/controller/assets/test_dcm_files/Brain_Ax_EarlyArt`).
+**`CT_Head_With_Contrast`** — same series as [8.2 Harmonize names](../03-harmonize-names/)  
+(`tests/controller/assets/test_dcm_files/CT_Head_With_Contrast`).
 
 Prefer Harmonize first so anatomy hints improve eligibility, then open face blur on this series.
 
 ## Goal
 
-On `Brain_Ax_EarlyArt`, run face blur in **Gaussian** mode, review QA, and save if appropriate.
+On `CT_Head_With_Contrast`, run face blur in **Gaussian** mode, review QA, and save if appropriate.
 
 ## Before you start
 
 1. Complete [AI Features setup](../../03-ai-features-setup/) — face models and academic license.
-2. Import **`Brain_Ax_EarlyArt`** (and ideally finish Harmonize in 8.2).
+2. Import **`CT_Head_With_Contrast`** (and ideally finish Harmonize in 8.2).
 3. Open the series in Series View.
 
-## Workflow on `Brain_Ax_EarlyArt` (Gaussian)
+## Workflow on `CT_Head_With_Contrast` (Gaussian)
 
-1. Open `Brain_Ax_EarlyArt` in Series View.
+1. Open `CT_Head_With_Contrast` in Series View.
 2. Start **Face blur** / preview.
 3. Set blur mode to **Gaussian** (common default for this demo).
 4. Review side-by-side: current image vs proposed blur; green outline shows the face region.
 5. Check **QA PASS** vs **QA FAIL** (pixels changed outside the mask).
 6. **Save** to keep, or discard.
 
-![Face Blur Gaussian on Brain_Ax_EarlyArt](shots/macos/Process_FaceBlur_Gaussian.png)
+![Face Blur Gaussian on CT_Head_With_Contrast](shots/macos/Process_FaceBlur_Gaussian.png)
 
 ### Other blur modes
 
@@ -40,7 +40,7 @@ See [8.4 Run on many studies](../05-run-on-many-studies/). Non-head series are s
 
 ## What good looks like
 
-- Face covered on `Brain_Ax_EarlyArt`; anatomy outside the mask unchanged.
+- Face covered on `CT_Head_With_Contrast`; anatomy outside the mask unchanged.
 - Dataset **Face blur** status updates.
 
 ## If it fails

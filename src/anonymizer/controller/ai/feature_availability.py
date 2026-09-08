@@ -28,7 +28,6 @@ from anonymizer.controller.ai.tseg.readiness import (
     totalsegmentator_available,
     xgboost_available,
 )
-from anonymizer.utils.modalities import is_mr_modality
 
 
 def pixel_phi_allowed() -> bool:
@@ -36,16 +35,22 @@ def pixel_phi_allowed() -> bool:
 
 
 def harmonize_allowed() -> bool:
-    """True when TotalSegmentator can run Harmonize for any installed CT or MR pack."""
-    if not totalsegmentator_available():
-        return False
-    if installed_mr_segmentation_modes():
-        return True
-    return bool(installed_ct_segmentation_modes()) and xgboost_available()
+    """True when Harmonize can run for at least one modality.
+
+    Planar XR/US/MG Harmonize needs no TotalSegmentator models, so this is always True.
+    Per-series readiness for CT/MR still uses ``harmonize_allowed_for_modality``.
+    """
+    return True
 
 
 def harmonize_allowed_for_modality(modality: object | None) -> bool:
-    """True when Harmonize models for ``modality`` are installed and runnable."""
+    """True when Harmonize models/path for ``modality`` are ready."""
+    from anonymizer.utils.modalities import is_mr_modality, is_planar_harmonize_modality, is_tseg_modality
+
+    if is_planar_harmonize_modality(modality):
+        return True
+    if not is_tseg_modality(modality):
+        return False
     if not totalsegmentator_available():
         return False
     if is_mr_modality(modality):

@@ -28,10 +28,12 @@ from anonymizer.controller.ai.blur_face import (
 )
 from anonymizer.controller.ai.harmonize import (
     HarmonizeProgress,
+    auto_apply_best_study_descriptions,
     format_harmonize_progress_message,
     harmonize_and_apply_series,
 )
 from anonymizer.controller.ai.harmonize.pipeline import (
+    _load_harmonize_series_dataset,
     _load_series_dataset,
     _load_tseg_series_dataset,
 )
@@ -395,6 +397,13 @@ def face_blur_skip_counts_as_complete(outcome: AiBatchOutcome) -> bool:
     return message in {_("Not a CT series"), _("Not a CT/MR series")}
 
 
+def harmonize_skip_counts_as_complete(outcome: AiBatchOutcome) -> bool:
+    """Ineligible Harmonize skips (SC/OT/DOC, etc.) count as complete in batch totals."""
+    if outcome.algorithm is not AiBatchAlgorithm.HARMONIZE or outcome.status != "skipped":
+        return False
+    return (outcome.message or "") == _("Not a CT/MR/XR/US/MG series or no DICOM files")
+
+
 def _increment_algorithm_totals(
     totals: AiBatchAlgorithmTotals,
     outcome: AiBatchOutcome,
@@ -414,7 +423,7 @@ def _increment_algorithm_totals(
             failed=totals.failed,
         )
     if outcome.status == "skipped":
-        if face_blur_skip_counts_as_complete(outcome):
+        if face_blur_skip_counts_as_complete(outcome) or harmonize_skip_counts_as_complete(outcome):
             return AiBatchAlgorithmTotals(
                 applied=totals.applied,
                 complete=totals.complete + 1,
@@ -644,14 +653,13 @@ def series_needs_pixel_phi(anon_model: AnonymizerModel | None, series_path: Path
 
 
 def series_needs_harmonize(anon_model: AnonymizerModel | None, series_path: Path) -> bool:
+    """True when series is CT|MR|XR|US|MG and not yet marked harmonized in the model."""
     with contextlib.suppress(ValueError, InvalidDicomError, OSError):
-        if _load_tseg_series_dataset(series_path) is None:
+        ds = _load_harmonize_series_dataset(series_path)
+        if ds is None:
             return False
         if anon_model is None:
             return True
-        ds = _load_tseg_series_dataset(series_path)
-        if ds is None:
-            return False
         return not anon_model.series_is_harmonized(str(ds.SeriesInstanceUID))
     return False
 
@@ -705,6 +713,19 @@ def skip_message_for_face_blur_series(
     return skip_message_for_algorithm(AiBatchAlgorithm.FACE_BLUR)
 
 
+def skip_message_for_harmonize_series(
+    anon_model: AnonymizerModel | None,
+    series_path: Path,
+) -> str:
+    with contextlib.suppress(ValueError, InvalidDicomError, OSError):
+        ds = _load_harmonize_series_dataset(series_path)
+        if ds is None:
+            return _("Not a CT/MR/XR/US/MG series or no DICOM files")
+        if anon_model is not None and anon_model.series_is_harmonized(str(ds.SeriesInstanceUID)):
+            return _("Already harmonized (model)")
+    return skip_message_for_algorithm(AiBatchAlgorithm.HARMONIZE)
+
+
 def batch_skip_message_for_series(
     algorithm: AiBatchAlgorithm,
     *,
@@ -713,6 +734,8 @@ def batch_skip_message_for_series(
 ) -> str:
     if algorithm is AiBatchAlgorithm.FACE_BLUR:
         return skip_message_for_face_blur_series(anon_model, series_path)
+    if algorithm is AiBatchAlgorithm.HARMONIZE:
+        return skip_message_for_harmonize_series(anon_model, series_path)
     return skip_message_for_algorithm(algorithm)
 
 
@@ -1236,7 +1259,13 @@ def ai_batch_process(
         summary = AiBatchSummary(
             processed=summary.processed + 1,
             skipped=summary.skipped
-            + (1 if outcome.status == "skipped" and not face_blur_skip_counts_as_complete(outcome) else 0),
+            + (
+                1
+                if outcome.status == "skipped"
+                and not face_blur_skip_counts_as_complete(outcome)
+                and not harmonize_skip_counts_as_complete(outcome)
+                else 0
+            ),
             applied=summary.applied + (1 if outcome.status == "ok" else 0),
             failed=summary.failed + (1 if outcome.status == "failed" else 0),
             cancelled=summary.cancelled,
@@ -1318,7 +1347,10 @@ def ai_batch_process(
                         )
                     )
             elif algorithm is AiBatchAlgorithm.HARMONIZE:
-                log_workflow(format_batch_step_subline(_("Loading anatomy analysis models") + "…"))
+                if any(_load_tseg_series_dataset(path) is not None for path in pending_paths):
+                    log_workflow(format_batch_step_subline(_("Loading anatomy analysis models") + "…"))
+                else:
+                    log_workflow(format_batch_step_subline(_("Harmonizing series descriptions") + "…"))
             else:
                 log_workflow(format_batch_step_subline(_("Loading face segmentation models") + "…"))
 
@@ -1432,15 +1464,10 @@ def ai_batch_process(
                     )
                     for line in harmonize_log_lines:
                         log_workflow(format_batch_workflow_log_line(format_batch_step_subline(line)))
-                    if (
-                        outcome.status == "ok"
-                        and anon_model is not None
-                    ):
-                        anon_study_uid = series_path.parent.name
-                        if anon_model.study_is_harmonized(
-                            anon_study_uid
-                        ) and not anon_model.get_study_harmonized_description(anon_study_uid):
-                            newly_harmonized_study_uids.add(anon_study_uid)
+                    if outcome.status == "ok" and anon_model is not None:
+                        # Collect candidates; maybe_offer_study_description_harmonize
+                        # gates CT/MR vs pure XR/US/MG readiness at dialog time.
+                        newly_harmonized_study_uids.add(series_path.parent.name)
                 else:
                     volume_context = volume_contexts.pop(series_path, None)
                     if volume_context is None:
@@ -1499,6 +1526,29 @@ def ai_batch_process(
 
         if summary.cancelled:
             break
+
+    if (
+        not summary.cancelled
+        and anon_model is not None
+        and newly_harmonized_study_uids
+        and AiBatchAlgorithm.HARMONIZE in algorithms
+    ):
+        applied_study_descs = auto_apply_best_study_descriptions(
+            images_dir=images_dir,
+            anon_model=anon_model,
+            anon_study_uids=tuple(sorted(newly_harmonized_study_uids)),
+        )
+        for offer, updated in applied_study_descs:
+            if not updated or not offer.matches:
+                continue
+            name = offer.matches[0].long_common_name
+            log_workflow(
+                format_batch_step_subline(
+                    _("Auto-applied study description")
+                    + f': "{name}" → {len(updated)} '
+                    + (_("study") if len(updated) == 1 else _("studies"))
+                )
+            )
 
     volume_contexts.clear()
     if work_state is not None and not work_state.done:

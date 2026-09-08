@@ -694,6 +694,45 @@ def filter_ocr_whitelist_only(
     return filtered
 
 
+def rects_intersect(
+    a: tuple[int, int, int, int] | OCRText | UserRectangle,
+    b: tuple[int, int, int, int] | OCRText | UserRectangle,
+) -> bool:
+    """Return True when two axis-aligned boxes overlap (inclusive edges count as overlap)."""
+
+    def _xyxy(box: tuple[int, int, int, int] | OCRText | UserRectangle) -> tuple[int, int, int, int]:
+        if isinstance(box, tuple):
+            return box
+        return box.get_bounding_box()
+
+    ax1, ay1, ax2, ay2 = _xyxy(a)
+    bx1, by1, bx2, by2 = _xyxy(b)
+    if ax1 > ax2:
+        ax1, ax2 = ax2, ax1
+    if ay1 > ay2:
+        ay1, ay2 = ay2, ay1
+    if bx1 > bx2:
+        bx1, bx2 = bx2, bx1
+    if by1 > by2:
+        by1, by2 = by2, by1
+    return ax1 <= bx2 and ax2 >= bx1 and ay1 <= by2 and ay2 >= by1
+
+
+def filter_ocr_outside_exclude_rects(
+    detections: Sequence[OCRText],
+    exclude_rects: Sequence[UserRectangle] | None,
+) -> list[OCRText]:
+    """Drop OCR boxes that intersect any exclude rectangle (spatial keepers)."""
+    if not exclude_rects:
+        return list(detections)
+    kept: list[OCRText] = []
+    for ocr_text in detections:
+        if any(rects_intersect(ocr_text, rect) for rect in exclude_rects):
+            continue
+        kept.append(ocr_text)
+    return kept
+
+
 def load_modality_whitelist(project_dir: Path | None, modality: str | None) -> list[str]:
     """Load the effective modality whitelist for batch OCR filtering.
 

@@ -1327,6 +1327,21 @@ msgstr "Remove Text"
 msgid "Blackout Area"
 msgstr "Blackout Area"
 
+msgid "Exclude Area"
+msgstr "Exclude Area"
+
+msgid "No area(s) drawn in current frame to exclude"
+msgstr "No area(s) drawn in current frame to exclude"
+
+msgid "No area(s) drawn to exclude"
+msgstr "No area(s) drawn to exclude"
+
+msgid "Excluded {count} area(s) from text detection on current image"
+msgstr "Excluded {count} area(s) from text detection on current image"
+
+msgid "Excluded {count} area(s) from text detection across series"
+msgstr "Excluded {count} area(s) from text detection across series"
+
 msgid "Harmonize Description"
 msgstr "Harmonize Description"
 

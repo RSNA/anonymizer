@@ -11,8 +11,11 @@ from PIL import Image, ImageDraw, ImageGrab, ImageStat
 
 logger = logging.getLogger(__name__)
 
-# Docs display: keep UI text readable by capping width after a crisp capture.
-DOCS_SHOT_MAX_WIDTH = 1400
+# Uniform docs frame width (logical / CSS px). Every help PNG is this wide after
+# normalize_for_docs: wide windows downscale, narrow dialogs letterbox. MkDocs
+# max-width:100% then scales all shots by the same factor so UI text matches.
+DOCS_SHOT_MAX_WIDTH = 960
+DOCS_SHOT_PAD_RGB = (255, 255, 255)
 _MIN_MEAN_BRIGHTNESS = 12.0
 
 
@@ -131,6 +134,40 @@ def trim_transparent(image: Image.Image) -> Image.Image:
     return image.crop(bbox)
 
 
+def strip_drop_shadow(
+    image: Image.Image,
+    *,
+    faint_alpha: int = 16,
+    shadow_alpha: int = 250,
+    shadow_luma: float = 48.0,
+) -> Image.Image:
+    """Remove soft window drop-shadow fringe; keep rounded-corner antialiasing.
+
+    macOS ``screencapture -o`` usually omits the shadow; older or fallback grabs
+    still leave a dark semi-transparent halo. Kill dark/faint alpha, then trim.
+    """
+    if image.mode != "RGBA":
+        return image
+    pixels = list(image.getdata())
+    cleaned: list[tuple[int, int, int, int]] = []
+    changed = False
+    for r, g, b, a in pixels:
+        if a == 0:
+            cleaned.append((r, g, b, a))
+            continue
+        luma = (r + g + b) / 3.0
+        if a < faint_alpha or (a < shadow_alpha and luma < shadow_luma):
+            cleaned.append((r, g, b, 0))
+            changed = True
+        else:
+            cleaned.append((r, g, b, a))
+    if not changed:
+        return trim_transparent(image)
+    out = image.copy()
+    out.putdata(cleaned)
+    return trim_transparent(out)
+
+
 def to_logical_size(image: Image.Image, scale: float) -> Image.Image:
     """Convert Retina/physical pixels to Tk logical points (1 PNG px ≈ 1 UI pt)."""
     if scale <= 1.05:
@@ -143,13 +180,34 @@ def to_logical_size(image: Image.Image, scale: float) -> Image.Image:
 
 
 def normalize_for_docs(image: Image.Image) -> Image.Image:
-    """Cap extremely wide shots so help pages stay readable on typical viewports."""
+    """Fit every screenshot into ``DOCS_SHOT_MAX_WIDTH`` for equal on-page text size.
+
+    Strips residual window drop shadows first. Wide captures are downscaled;
+    narrower ones are centered on a padded canvas. UI pixels are never upscaled.
+    """
+    if image.mode == "RGBA":
+        image = strip_drop_shadow(image)
     w, h = image.size
-    if w <= DOCS_SHOT_MAX_WIDTH:
+    if w > DOCS_SHOT_MAX_WIDTH:
+        ratio = DOCS_SHOT_MAX_WIDTH / float(w)
+        image = image.resize(
+            (DOCS_SHOT_MAX_WIDTH, max(1, int(round(h * ratio)))),
+            Image.Resampling.LANCZOS,
+        )
+        w, h = image.size
+    if w >= DOCS_SHOT_MAX_WIDTH:
         return image
-    ratio = DOCS_SHOT_MAX_WIDTH / float(w)
-    new_size = (DOCS_SHOT_MAX_WIDTH, max(1, int(round(h * ratio))))
-    return image.resize(new_size, Image.Resampling.LANCZOS)
+
+    x = (DOCS_SHOT_MAX_WIDTH - w) // 2
+    if image.mode == "RGBA":
+        canvas = Image.new("RGBA", (DOCS_SHOT_MAX_WIDTH, h), (0, 0, 0, 0))
+        canvas.paste(image, (x, 0), image)
+        return canvas
+
+    rgb = image if image.mode == "RGB" else image.convert("RGB")
+    canvas = Image.new("RGB", (DOCS_SHOT_MAX_WIDTH, h), DOCS_SHOT_PAD_RGB)
+    canvas.paste(rgb, (x, 0))
+    return canvas
 
 
 def capture_bbox_imagegrab(bbox: tuple[int, int, int, int]) -> Image.Image:

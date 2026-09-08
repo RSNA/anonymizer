@@ -165,7 +165,9 @@ def capture_window(widget: Any, dest: Path, label: str) -> Image.Image | None:
         screencapture_window(window_id, tmp, shadow=False)
         image = Image.open(tmp)
         image.load()
-        image = trim_transparent(image)
+        from docs_help.platform.common import strip_drop_shadow
+
+        image = strip_drop_shadow(trim_transparent(image))
         if is_blank_capture(image):
             logger.warning("macOS window capture blank for %s id=%s", label, window_id)
             return None

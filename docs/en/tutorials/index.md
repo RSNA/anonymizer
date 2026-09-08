@@ -14,7 +14,7 @@ Short video walkthroughs for common tasks. Pages include step lists so they work
 | T5 | [Blur a face on a head exam](t5-face-blur.md) | `t5-face-blur.md` |
 | T6 | [Process a list of studies](t6-batch.md) | `t6-batch.md` |
 
-Headless server operation is **text-first**: see [Run without the window](../10-headless/) (no required video).
+Headless server operation is **text-first**: see [Run headless](../10-headless/) (no required video).
 
 ## Next steps
 

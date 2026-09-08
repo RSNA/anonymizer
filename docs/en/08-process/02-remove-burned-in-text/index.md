@@ -7,7 +7,7 @@ Some images have **patient names or labels drawn onto the pixels**. Cleaning DIC
 | Series | Path | Used for |
 | --- | --- | --- |
 | **`davidson_cxr`** | `tests/controller/assets/test_dcm_files/davidson_cxr` | Whitelist → Detect → **Black out** |
-| **`us_rgb_single_frame`** | `tests/controller/assets/test_dcm_files/us_rgb_single_frame` (`US_RGB_SingleFrame.dcm`) | Detect → **Blend into background** |
+| **`us_rgb_single_frame`** | `tests/controller/assets/test_dcm_files/us_rgb_single_frame` (`US_RGB_SingleFrame.dcm`) | Detect → **Blend into background**; **Exclude Area** on the machine-parameter block under **mindray** |
 
 Import each folder into your project, then open the series in **Series View**.
 
@@ -15,6 +15,7 @@ Import each folder into your project, then open the series in **Series View**.
 
 1. On `davidson_cxr`, detect burned-in text and **black out** PHI while keeping useful markers via the default whitelist.
 2. On `us_rgb_single_frame`, detect burned-in text and remove it by **blending into the background** (inpaint).
+3. On the same color US series, mark the non-PHI machine-parameter strip with **Exclude Area** so Detect Text and Remove Text skip it.
 
 ## Before you start
 
@@ -92,24 +93,49 @@ Use this color ultrasound frame when you want removed text to look like nearby t
 
 **Black out** vs **Blend into background**: black out replaces text with black; blend fills the area so it matches the image around it. Prefer black out when you need an obvious, irreversible redaction; prefer blend when a less conspicuous result is acceptable (for example some ultrasound overlays).
 
+## Workflow on Color US (Exclude Area)
+
+Use the same **`us_rgb_single_frame`** series when OCR boxes machine settings that are **not PHI**. **Exclude Area** skips a spatial region for Detect Text and Remove Text without changing pixels (unlike **Blackout Area**).
+
+### 6. Exclude the parameter block under mindray
+
+On this frame, a dense block of machine parameters (gain, depth, FR, DR, and similar tokens) sits on the **upper left**, directly **below** the **mindray** logo.
+
+1. Open **`us_rgb_single_frame`** in Series View with edit context **Frame**.
+2. Draw a rectangle covering that parameter block (leave **mindray** and true PHI / site labels outside if you still want them detected). Pending draws appear as **solid blue** rectangles.
+3. Click **Exclude Area**. The rectangle moves to the exclude list and redraws as a **white dotted outline** (no fill).
+
+![Exclude Area on us_rgb_single_frame parameter block](shots/macos/Process_RemovePixel_US_Exclude_Panel.png)
+
+4. Click **Detect Text**. Green boxes should appear on PHI / vendor text **outside** the block; the parameter tokens inside the dotted region should **not** be boxed for removal.
+
+![Detect Text after Exclude Area on us_rgb_single_frame](shots/macos/Process_RemovePixel_US_Exclude_Detect.png)
+
+5. Optionally choose **Blend into background** or **Black out text**, then **Remove Text** and **Save Pixel Changes**.
+6. Click a white dotted rectangle to remove it from the exclude list if you need to adjust.
+
+**Whitelist** vs **Exclude Area** vs **Blackout Area**: whitelist keeps specific OCR *strings*; Exclude Area skips a *region* (no pixel change); Blackout Area paints drawn rectangles black. Prefer setting exclude rectangles **before** Detect Text (or Detect again after adjusting). With **Series** edit context, drawing propagates across frames so the same panel can be excluded on a cine loop.
+
 ## After the demo
 
 - Dataset **Pixel PHI** status should update for each series you saved.
 - Modality whitelists and the match dropdown (Exact → Lenient) live in Series View; stricter matching means fewer OCR hits are treated as whitelist keepers.
+- Exclude regions are for the current Series View session (same as other canvas overlays). Re-open the series and redraw if you need them again.
 - To run the same tool on many studies, see [8.4 Run on many studies](../05-run-on-many-studies/).
 
 ## What good looks like
 
 - On `davidson_cxr`: PHI blacked out; orientation markers kept if whitelisted.
-- On `us_rgb_single_frame`: burned-in labels blended away without solid black bars.
+- On `us_rgb_single_frame`: burned-in labels blended away without solid black bars; with Exclude Area, the mindray parameter block is not removed as PHI.
 - **Pixel PHI** column updates in Dataset.
 
 ## If it fails
 
-- Many false boxes → tighten match strictness; whitelist keepers.
-- Missed text → manual blackout.
+- Many false boxes → tighten match strictness; whitelist keepers; or **Exclude Area** for whole panels.
+- Missed text → manual **Blackout Area**.
+- Parameter text still boxed → enlarge the exclude rectangle and Detect again; click dotted outlines to delete and redraw.
 - Tools greyed out → finish [AI Features](../../03-ai-features-setup/).
 
 ## Next steps
 
-Continue with [8.2 Harmonize names](../03-harmonize-names/) using **`Brain_Ax_EarlyArt`**.
+Continue with [8.2 Harmonize names](../03-harmonize-names/) using **`CT_Head_With_Contrast`**.

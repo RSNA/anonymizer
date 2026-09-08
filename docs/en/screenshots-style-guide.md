@@ -9,7 +9,8 @@ For authors updating this manual.
 - **PHI:** test fixtures only — never real patient data
 - **Storage:** screenshots live under each numbered workflow as `shots/macos/*.png` and `shots/windows/*.png`
 - **Catalog:** [`docs/screenshots-manifest.yaml`](../screenshots-manifest.yaml) lists every UX element and shot
-- **Scale:** capture stores **logical UI points** (Retina 2× grabs are downscaled so 1 PNG pixel ≈ 1 app point). Dialogs then match live app size next to body text; do not upscale in Markdown.
+- **Scale / resolution:** capture stores **logical UI points** (Retina 2× → 1 PNG px ≈ 1 app pt), then `normalize_for_docs` forces every PNG to **`DOCS_SHOT_MAX_WIDTH`** (960): wide windows downscale, narrow dialogs letterbox (no UI upscale). Same file width ⇒ same MkDocs scale ⇒ matching smallest UI text across pages.
+- **No shadows:** macOS grabs use `screencapture -o` (omit window shadow); residual soft fringe is stripped before save. Do not ship shots with drop shadows.
 - **Corners:** macOS uses window-ID capture (`screencapture -l`) so PNGs keep rounded corners and alpha; Windows uses PrintWindow / BitBlt
 
 ## Workflow folders
@@ -48,9 +49,9 @@ uv run python -m docs_help --language en_US --force --only Welcome
 - Writes `docs/<lang>/<chapter>/shots/<os>/` where `<os>` is `macos` or `windows` (host OS; `--platform auto`)
 - **Resume by default** (`--skip-existing`); use `--force` or `--force-shot ID` to redo
 - Process demos use **non-synthetic** fixtures only:
-  - **8.1** Remove Pixel PHI → `davidson_cxr` (black out) + `us_rgb_single_frame` (blend into background)
-  - **8.2** Harmonize → `Brain_Ax_EarlyArt` (Series View → completed results → brain prompt → segmented middle slice)
-  - **8.3** Face blur → `Brain_Ax_EarlyArt` (Gaussian)
+  - **8.1** Remove Pixel PHI → `davidson_cxr` (black out) + `us_rgb_single_frame` (blend + Exclude Area under mindray)
+  - **8.2** Harmonize → `CT_Head_With_Contrast` (Series View → completed results → brain prompt → segmented middle slice)
+  - **8.3** Face blur → `CT_Head_With_Contrast` (Gaussian)
   - **8.4** Batch → both fixtures selected in Dataset
 - Soft-fail AI-heavy Process shots when models are missing
 - Hard-fail Orthanc-dependent Search shots when C-ECHO fails
@@ -58,4 +59,4 @@ uv run python -m docs_help --language en_US --force --only Welcome
 
 ## Priority shots (V19)
 
-Welcome; AI Features; Create project settings (+ subdialogs); Dashboard; Search; View (Dataset + Projections + Series); Process (Remove Pixel PHI, Harmonize, Face, batch); Send.
+Welcome; AI Features; Create project settings (+ subdialogs); Dashboard; Search; View (Dataset + series/study description edit + Projections + Series + Patient Lookup CSV); Process (Remove Pixel PHI, Harmonize, Face, batch); Send (initial → selection → sending → sent).

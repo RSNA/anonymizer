@@ -12,7 +12,6 @@ from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 
-from docs_help.platform import DOCS_SHOT_MAX_WIDTH
 from docs_help.platform.common import normalize_for_docs as _normalize_for_docs
 
 logger = logging.getLogger(__name__)
@@ -165,20 +164,25 @@ def export_series_view_docs_shot(series_view: Any, dest: Path) -> Path:
         draw.text((bx + 8, by + 4), label, fill=_TEXT if is_on else (120, 120, 120), font=font_sm)
         bx += tw + 6
 
-    # Bottom status
+    # Bottom status / OCR toolbar stub
     n = int(getattr(viewer, "num_images", 0) or 0)
     idx = int(getattr(viewer, "current_image_index", 0) or 0)
-    status = f"Pixel PHI: None removed | Harmonized: Brain Ax EarlyArt | Face blur: None"
+    has_exclude = False
+    try:
+        ov = viewer.overlay_data.get(idx)
+        has_exclude = bool(ov and getattr(ov, "exclude_rects", None))
+    except Exception:
+        has_exclude = False
+    if has_exclude or not ordered:
+        status = "Detect Text | Blackout Area | Exclude Area"
+        if has_exclude:
+            status = "Exclude Area active · Detect Text complete"
+    else:
+        status = "Pixel PHI: None removed | Harmonized: Brain Ax EarlyArt | Face blur: None"
     draw.text((pad, canvas_h - 34), status, fill=_TEXT, font=font_sm)
     draw.text((canvas_w - 120, canvas_h - 34), f"{idx + 1}/{n}" if n else "", fill=_TEXT, font=font_sm)
 
     image = _normalize_for_docs(canvas)
-    if image.size[0] > DOCS_SHOT_MAX_WIDTH:
-        ratio = DOCS_SHOT_MAX_WIDTH / float(image.size[0])
-        image = image.resize(
-            (DOCS_SHOT_MAX_WIDTH, max(1, int(round(image.size[1] * ratio)))),
-            Image.Resampling.LANCZOS,
-        )
     image.save(dest, format="PNG")
     logger.info(
         "Exported Series View off-screen shot size=%s segs=%d → %s",

@@ -1,4 +1,4 @@
-# Run without the window (headless)
+# Run headless
 
 Use headless mode on a **lab or server** when you do not need the desktop window. Create and configure the project in the GUI first.
 

@@ -38,6 +38,7 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     collect_series_view_pixel_phi_texts,
     default_whitelist_match_settings,
     describe_match_settings,
+    filter_ocr_outside_exclude_rects,
     filter_ocr_whitelist_only,
     load_modality_whitelist,
     load_modality_whitelist_match_settings,
@@ -78,7 +79,7 @@ from anonymizer.controller.series_io import (
     load_series_frames,
     save_series_frames,
 )
-from anonymizer.controller.series_overlay import LayerType, OCRText, Segmentation, UserRectangle
+from anonymizer.controller.series_overlay import LayerType, OCRText, OverlayData, Segmentation, UserRectangle
 from anonymizer.controller.work_state import WorkState
 from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.memory import collect_garbage_safe, log_process_memory
@@ -214,13 +215,15 @@ def harmonize_button_visible(
     has_segment_masks: bool = False,
 ) -> bool:
     """Show Harmonize only when it can run; existing seg masks require Clear first."""
-    from anonymizer.utils.modalities import is_tseg_modality
+    from anonymizer.utils.modalities import is_harmonize_modality, is_tseg_modality
 
     if not harmonize_models_ready:
         return False
-    if not is_tseg_modality(modality):
+    if not is_harmonize_modality(modality):
         return False
-    return not (already_harmonized or has_segment_masks)
+    if is_tseg_modality(modality):
+        return not (already_harmonized or has_segment_masks)
+    return not already_harmonized
 
 
 @dataclass(frozen=True)
@@ -999,6 +1002,7 @@ class SeriesView(AppCTkToplevel):
         for attr in (
             "detect_button",
             "blackout_button",
+            "exclude_area_button",
             "edit_context_combo_box",
             "whitelist_entry",
             "whitelist_defaults_button",
@@ -1262,7 +1266,11 @@ class SeriesView(AppCTkToplevel):
         self.blackout_button = ctk.CTkButton(
             text_edit_group, width=self.BUTTON_WIDTH, text=_("Blackout Area"), command=self.blackout_button_clicked
         )
-        self.blackout_button.grid(row=0, column=5, padx=(2, self.PAD), pady=0)
+        self.blackout_button.grid(row=0, column=5, padx=2, pady=0)
+        self.exclude_area_button = ctk.CTkButton(
+            text_edit_group, width=self.BUTTON_WIDTH, text=_("Exclude Area"), command=self.exclude_area_button_clicked
+        )
+        self.exclude_area_button.grid(row=0, column=6, padx=(2, self.PAD), pady=0)
 
         toolbar_spacer = ctk.CTkFrame(self.control_frame, fg_color="transparent", width=1, height=1)
         toolbar_spacer.grid(row=0, column=1, sticky="ew")
@@ -2049,20 +2057,22 @@ class SeriesView(AppCTkToplevel):
         )
 
     def filter_text_data(self, frame_index: int) -> list[OCRText]:
-        """Hide whitelist-matched terms from overlay display (detect keeps all EasyOCR hits)."""
+        """Hide whitelist-matched terms and exclude-rect intersections from overlay display."""
         if frame_index not in self.detected_text:
             return []
 
         detections = self.detected_text[frame_index]
         whitelist_set = self.get_whitelist_set()
-        if not whitelist_set:
-            return list(detections)
-
-        return filter_ocr_whitelist_only(
-            detections,
-            whitelist=whitelist_set,
-            whitelist_match_settings=self._whitelist_match_settings,
-        )
+        if whitelist_set:
+            detections = filter_ocr_whitelist_only(
+                detections,
+                whitelist=whitelist_set,
+                whitelist_match_settings=self._whitelist_match_settings,
+            )
+        exclude_rects: list[UserRectangle] = []
+        if hasattr(self, "image_viewer") and frame_index in self.image_viewer.overlay_data:
+            exclude_rects = list(self.image_viewer.overlay_data[frame_index].exclude_rects)
+        return filter_ocr_outside_exclude_rects(detections, exclude_rects)
 
     def draw_text_overlay(self, frame_index: int):
         """Draws text boxes on the overlay for the given frame, based on filtered text_data."""
@@ -2091,6 +2101,13 @@ class SeriesView(AppCTkToplevel):
 
     def remove_text_from_single_frame(self, frame_index: int, ocr_texts: list[OCRText]):
         logger.debug(f"Remove {len(ocr_texts)} words from frame {frame_index}")
+        exclude_rects: list[UserRectangle] = []
+        if frame_index in self.image_viewer.overlay_data:
+            exclude_rects = list(self.image_viewer.overlay_data[frame_index].exclude_rects)
+        ocr_texts[:] = filter_ocr_outside_exclude_rects(ocr_texts, exclude_rects)
+        if not ocr_texts:
+            logger.info("No OCR text remains to remove after exclude-rect filter on frame %s", frame_index)
+            return
         raw_frame = self.image_viewer.images[frame_index]
         windowed_frame = (
             ocr_image_for_frame(self._ds, raw_frame)
@@ -2199,6 +2216,84 @@ class SeriesView(AppCTkToplevel):
             self.blackout_areas_in_series()
             self.update_status(_("Blackout applied to all images"))
 
+    def _commit_user_rects_to_exclude(self, frame_index: int) -> int:
+        """Move pending ``user_rects`` on ``frame_index`` onto ``exclude_rects``. Returns count moved."""
+        if frame_index not in self.image_viewer.overlay_data:
+            return 0
+        overlay = self.image_viewer.overlay_data[frame_index]
+        pending = list(overlay.user_rects)
+        if not pending:
+            return 0
+        overlay.exclude_rects.extend(pending)
+        overlay.user_rects.clear()
+        return len(pending)
+
+    def exclude_areas_in_single_frame(self, frame_index: int) -> int:
+        moved = self._commit_user_rects_to_exclude(frame_index)
+        if moved and frame_index in self.detected_text:
+            self.draw_text_overlay(frame_index)
+        return moved
+
+    def exclude_areas_in_series(self) -> int:
+        total = 0
+        for i in range(self.image_viewer.num_images):
+            total += self._commit_user_rects_to_exclude(i)
+            if i in self.detected_text:
+                self.draw_text_overlay(i)
+        self.image_viewer.clear_cache()
+        self.image_viewer.refresh_current_image()
+        return total
+
+    def exclude_area_button_clicked(self):
+        """Convert drawn user rectangles into Detect/Remove exclude zones (no pixel change)."""
+        edit_context = self._resolve_edit_context()
+        logger.debug("Exclude Area clicked edit_context=%s", edit_context)
+
+        if edit_context is OcrEditContext.FRAME:
+            ndx = self.image_viewer.current_image_index
+            user_rects = (
+                self.image_viewer.overlay_data[ndx].user_rects
+                if ndx in self.image_viewer.overlay_data
+                else []
+            )
+            if not user_rects:
+                logger.warning("No user rect defined in current frame to exclude")
+                self.update_status(_("No area(s) drawn in current frame to exclude"))
+                return
+            moved = self.exclude_areas_in_single_frame(ndx)
+            self.image_viewer.refresh_current_image()
+            self.update_status(
+                _("Excluded {count} area(s) from text detection on current image").format(count=moved)
+            )
+        else:
+            # Ensure SERIES propagation: if only the current frame has pending draws,
+            # copy them to every frame before committing (cine US measurement panels).
+            ndx = self.image_viewer.current_image_index
+            current_pending = (
+                list(self.image_viewer.overlay_data[ndx].user_rects)
+                if ndx in self.image_viewer.overlay_data
+                else []
+            )
+            if current_pending:
+                for i in range(self.image_viewer.num_images):
+                    if i == ndx:
+                        continue
+                    if i not in self.image_viewer.overlay_data:
+                        self.image_viewer.overlay_data[i] = OverlayData()
+                    # Replace so each frame gets the same panel region(s).
+                    if not self.image_viewer.overlay_data[i].user_rects:
+                        self.image_viewer.overlay_data[i].user_rects = [
+                            UserRectangle(top_left=r.top_left, bottom_right=r.bottom_right)
+                            for r in current_pending
+                        ]
+            moved = self.exclude_areas_in_series()
+            if not moved:
+                self.update_status(_("No area(s) drawn to exclude"))
+                return
+            self.update_status(
+                _("Excluded {count} area(s) from text detection across series").format(count=moved)
+            )
+
     def _on_harmonize_closed(self, _outcome: HarmonizeBatchOutcome) -> None:
         """Re-enable Series View after Harmonize closes (Accept, Cancel, or destroy)."""
         self._harmonize_view = None
@@ -2212,12 +2307,12 @@ class SeriesView(AppCTkToplevel):
         self._refresh_series_processing_status()
 
     def harmonize_description_button_clicked(self):
-        from anonymizer.utils.modalities import is_tseg_modality
+        from anonymizer.utils.modalities import is_harmonize_modality, is_tseg_modality
 
-        if self._ds is None or not is_tseg_modality(getattr(self._ds, "Modality", None)):
+        if self._ds is None or not is_harmonize_modality(getattr(self._ds, "Modality", None)):
             return
         if not self._harmonize_button_visible():
-            if self._seg_dir_likely_has_structures():
+            if is_tseg_modality(getattr(self._ds, "Modality", None)) and self._seg_dir_likely_has_structures():
                 messagebox.showinfo(
                     title=_("Harmonize"),
                     message=_(

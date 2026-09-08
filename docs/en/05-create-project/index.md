@@ -47,7 +47,7 @@ Share these ideas (details live in Project Settings dialogs):
 - **Network timeouts** — how long to wait for slow archives.
 - **Patient lookup table** — optional CTP `.properties` mapping for PatientID and Date shift (see [Lookup table](#patient-lookup-table)).
 
-If the project will live on a lab server, continue with [Run without the window](../10-headless/).
+If the project will live on a lab server, continue with [Run headless](../10-headless/).
 
 ## Project Settings (every control)
 

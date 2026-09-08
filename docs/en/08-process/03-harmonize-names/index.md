@@ -4,24 +4,24 @@ Research datasets often use inconsistent **Series Description** text. **Harmoniz
 
 ## Demo series
 
-**`Brain_Ax_EarlyArt`** — `tests/controller/assets/test_dcm_files/Brain_Ax_EarlyArt` (non-synthetic head CT).
+**`CT_Head_With_Contrast`** — `tests/controller/assets/test_dcm_files/CT_Head_With_Contrast` (non-synthetic head CT).
 
 Import this series, open it in **Series View**, then run Harmonize. The same series is used again in [8.3 Blur faces](../04-blur-faces/).
 
 ## Goal
 
-On `Brain_Ax_EarlyArt` in Series View: run **Harmonize Description**, answer the brain-structures prompt when offered, Apply, then review segmentation overlays on the middle slice.
+On `CT_Head_With_Contrast` in Series View: run **Harmonize Description**, answer the brain-structures prompt when offered, Apply, then review segmentation overlays on the middle slice.
 
 ## Before you start
 
 1. Complete [AI Features setup](../../03-ai-features-setup/) — Harmonize CT pack, resolution, and Brain structures.
-2. Import **`Brain_Ax_EarlyArt`** ([Search](../../06-search/)) and open that series in **Series View** ([View](../../07-view/) — right-click the series row).
+2. Import **`CT_Head_With_Contrast`** ([Search](../../06-search/)) and open that series in **Series View** ([View](../../07-view/) — right-click the series row).
 
-## Workflow on `Brain_Ax_EarlyArt`
+## Workflow on `CT_Head_With_Contrast`
 
 ### 1. Harmonize Description (from Series View)
 
-1. With `Brain_Ax_EarlyArt` open in **Series View**, click **Harmonize Description**.
+1. With `CT_Head_With_Contrast` open in **Series View**, click **Harmonize Description**.
 2. Wait until analysis finishes — the **Playbook harmonization** table fills with anatomy / contrast evidence (not an empty table mid-progress).
 3. Review the suggested Series Description, then **Yes** to apply, or **No** / **Cancel**.
 
@@ -51,10 +51,13 @@ After you Accept a Harmonize run that included brain structures (**Yes** on the 
 ## Notes (same as production use)
 
 - Scouts, MIP/VR, dose reports, and similar series are usually skipped.
-- **CT:** anatomy segmentation + contrast phase when models allow.
-- **MR:** anatomy from MR packs; IV contrast from DICOM headers.
-- After the last CT series in a study is harmonized, a **LOINC study description** may be suggested.
-- Results cache under the series folder — **Clear Analysis Cache** for a fresh run.
+- **CT:** anatomy segmentation + contrast phase when models allow (TotalSegmentator).
+- **MR:** anatomy from MR packs; IV contrast from DICOM headers (TotalSegmentator).
+- **XR (CR/DX), US, MG:** metadata-only Harmonize (body part / view / laterality) — **no** TotalSegmentator; isolated from the CT/MR path.
+- **SC / OT / DOC:** Harmonize is not offered.
+- After all CT/MR series in a study are harmonized, a **LOINC study description** may be suggested. Pure XR/US/MG studies use the matching LOINC prefix.
+- In [Dataset](../../07-view/#edit-harmonized-descriptions), click a green harmonized study or series description to pick another LOINC (study) or RadLex (series) option for that modality — without re-running Harmonize.
+- Results cache under the series folder — **Clear Analysis Cache** for a fresh CT/MR run.
 - Batch: [8.4 Run on many studies](../05-run-on-many-studies/) (resolution comes from AI Features, not per batch).
 
 ## What good looks like
@@ -71,4 +74,4 @@ After you Accept a Harmonize run that included brain structures (**Yes** on the 
 
 ## Next steps
 
-Continue with [8.3 Blur faces](../04-blur-faces/) on the **same** `Brain_Ax_EarlyArt` series (Gaussian).
+Continue with [8.3 Blur faces](../04-blur-faces/) on the **same** `CT_Head_With_Contrast` series (Gaussian).

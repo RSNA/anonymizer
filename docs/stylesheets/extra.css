@@ -29,7 +29,7 @@
   --md-accent-bg-color--light: #ffffff;
 }
 
-/* Keep help screenshots at captured logical size (do not stretch small dialogs). */
+/* Shots share a fixed PNG width (DOCS_SHOT_MAX_WIDTH); scale them together. */
 .md-typeset p > img,
 .md-typeset li > img {
   width: auto;

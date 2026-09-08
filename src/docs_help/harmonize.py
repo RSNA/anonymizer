@@ -2,7 +2,7 @@
 
 Keeps the clinician-manual sequence stable across languages and re-runs:
 
-1. Open ``Brain_Ax_EarlyArt`` in **Series View** (never jump from Dashboard alone).
+1. Open ``CT_Head_With_Contrast`` in **Series View** (never jump from Dashboard alone).
 2. Start **Harmonize Description** from that Series View.
 3. Control the brain-structures Yes/No prompt (auto answer, or show a
    captureable stand-in dialog for the prompt shot).

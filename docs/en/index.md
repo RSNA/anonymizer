@@ -15,7 +15,7 @@ This guide follows the desktop workflow in order.
 7. [View](07-view/) — Dataset, projections, and Series View (Dashboard **View**)
 8. [Process](08-process/) — Remove Pixel PHI, Harmonize, Face blur, batch
 9. [Send](09-send/) — send anonymized studies (Dashboard **Send**)
-10. [Run without the window](10-headless/) — lab/server modes
+10. [Run headless](10-headless/) — lab/server modes
 
 ## Popular tasks
 

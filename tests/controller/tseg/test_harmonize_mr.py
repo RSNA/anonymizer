@@ -63,9 +63,15 @@ def test_harmonize_button_visible_for_mr():
         modality="MR",
         already_harmonized=False,
     )
-    assert not harmonize_button_visible(
+    # US uses planar (metadata) Harmonize — button visible; TSEG profile remains None.
+    assert harmonize_button_visible(
         harmonize_models_ready=True,
         modality="US",
+        already_harmonized=False,
+    )
+    assert not harmonize_button_visible(
+        harmonize_models_ready=True,
+        modality="SC",
         already_harmonized=False,
     )
 

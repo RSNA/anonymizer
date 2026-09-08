@@ -264,6 +264,13 @@ def fingerprint_for_harmonized_study(anon_model, anon_study_uid: str) -> tuple[s
     return study_series_description_fingerprint(anon_model.get_ct_series_harmonized_descriptions(anon_study_uid))
 
 
+def fingerprint_for_planar_harmonized_study(anon_model, anon_study_uid: str) -> tuple[str, ...]:
+    """Fingerprint of harmonized XR/US/MG series descriptions stored for a study."""
+    return study_series_description_fingerprint(
+        anon_model.get_planar_series_harmonized_descriptions(anon_study_uid)
+    )
+
+
 def _split_playbook_tokens(description: str) -> list[str]:
     return [tok for tok in description.strip().split() if tok]
 
@@ -876,3 +883,302 @@ def build_study_description_ranking(
     )
     ambiguous = ranking_is_ambiguous(matches, aggregate)
     return aggregate, matches, ambiguous
+
+
+# --- Planar (XR/US/MG) LOINC ranking — isolated from CT/MR Playbook token parse ---
+
+_PLANAR_ANATOMY_PHRASES: tuple[str, ...] = (
+    "chest",
+    "abdomen",
+    "pelvis",
+    "head",
+    "brain",
+    "neck",
+    "breast",
+    "spine",
+    "hand",
+    "wrist",
+    "elbow",
+    "shoulder",
+    "hip",
+    "knee",
+    "ankle",
+    "foot",
+    "liver",
+    "kidney",
+    "thyroid",
+    "carotid",
+)
+
+
+def _planar_anatomy_from_descriptions(series_descriptions: Sequence[str]) -> list[str]:
+    found: list[str] = []
+    seen: set[str] = set()
+    joined = " ".join(series_descriptions).lower()
+    for phrase in _PLANAR_ANATOMY_PHRASES:
+        if phrase in joined and phrase not in seen:
+            # Prefer LOINC-facing labels (capitalize words).
+            label = " ".join(part.capitalize() for part in phrase.split())
+            if phrase == "brain":
+                label = "Head"
+            seen.add(phrase)
+            if label not in seen:
+                found.append(label)
+                seen.add(label)
+    return found
+
+
+_LOINC_N_VIEWS_RE = re.compile(r"\b(\d+)\s+views?\b", re.IGNORECASE)
+_LOINC_SINGLE_VIEW_RE = re.compile(r"\bsingle view\b", re.IGNORECASE)
+_LOINC_BARE_PROJECTION_RE = re.compile(
+    r"\b(ap|pa|lateral|oblique|decubitus|mlo|cc)\b",
+    re.IGNORECASE,
+)
+
+
+def loinc_declared_view_count(long_common_name: str) -> int | None:
+    """Return the view count declared in a LOINC LongCommonName, if any."""
+    name_l = long_common_name.lower()
+    if _LOINC_SINGLE_VIEW_RE.search(name_l):
+        return 1
+    match = _LOINC_N_VIEWS_RE.search(name_l)
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def count_planar_series_images(series_directory: Path) -> int:
+    """Count image instances in a series folder (files × NumberOfFrames when set)."""
+    from pydicom import dcmread
+
+    from anonymizer.controller.ai.tseg.dicom_geometry import list_dicom_paths
+
+    series_directory = Path(series_directory)
+    if not series_directory.is_dir():
+        return 0
+    try:
+        paths = list_dicom_paths(series_directory)
+    except ValueError:
+        return 0
+
+    total = 0
+    for path in paths:
+        try:
+            header = dcmread(path, stop_before_pixels=True, force=True)
+        except Exception:
+            total += 1
+            continue
+        frames = getattr(header, "NumberOfFrames", None)
+        try:
+            frame_count = int(frames) if frames is not None else 1
+        except (TypeError, ValueError):
+            frame_count = 1
+        total += max(1, frame_count)
+    return total
+
+
+def count_planar_study_images(series_directories: Sequence[Path]) -> int:
+    """Sum image instances across planar series directories (CXR view estimate)."""
+    return sum(count_planar_series_images(path) for path in series_directories)
+
+
+def _score_loinc_view_count(name_l: str, *, image_count: int | None) -> float:
+    """Boost / demote LOINC names using series image count as CXR view count."""
+    if image_count is None or image_count <= 0:
+        return 0.0
+
+    declared = loinc_declared_view_count(name_l)
+    if declared is not None:
+        if declared == image_count:
+            return 200.0
+        return -140.0
+
+    # Generic "… Views" without a number — mild preference when count ≥ 2.
+    if re.search(r"\bviews\b", name_l) and image_count >= 2:
+        return 35.0
+
+    # Bare single-projection titles (e.g. "XR Chest AP") fit one image only.
+    if (
+        image_count >= 2
+        and _LOINC_BARE_PROJECTION_RE.search(name_l)
+        and " and " not in name_l
+        and "views" not in name_l
+    ):
+        return -160.0
+
+    if image_count == 1 and _LOINC_BARE_PROJECTION_RE.search(name_l) and " and " not in name_l:
+        return 25.0
+
+    return 0.0
+
+
+_PLANAR_FOREIGN_ANATOMY_TOKENS: tuple[str, ...] = (
+    "ribs",
+    "rib",
+    "abdomen",
+    "pelvis",
+    "spine",
+    "neck",
+    "head",
+    "brain",
+    "breast",
+    "shoulder",
+    "wrist",
+    "hand",
+    "knee",
+    "ankle",
+    "foot",
+    "hip",
+    "elbow",
+)
+
+
+def _planar_foreign_anatomy_penalty(name_l: str, anatomy: Sequence[str]) -> float:
+    """Demote LOINC names that introduce anatomy not evidenced in series descriptions."""
+    allowed = {part.lower() for part in anatomy}
+    # Chest CXR should not rank "Ribs … and Chest …" above plain Chest N Views.
+    if "chest" in allowed and not ({"rib", "ribs"} & allowed):
+        if re.search(r"\bribs?\b", name_l):
+            return -180.0
+    penalty = 0.0
+    for token in _PLANAR_FOREIGN_ANATOMY_TOKENS:
+        if token in allowed or token.rstrip("s") in allowed:
+            continue
+        if token == "chest":
+            continue
+        if re.search(rf"\b{re.escape(token)}\b", name_l):
+            # Ignore when the token is a substring of an allowed multi-word label.
+            if any(token in part for part in allowed):
+                continue
+            penalty -= 90.0
+    if re.search(r"\brf\b", name_l) or "fluoroscopy" in name_l:
+        penalty -= 50.0
+    return penalty
+
+
+def rank_planar_loinc_study_descriptions(
+    series_descriptions: list[str] | tuple[str, ...],
+    *,
+    loinc_prefix: str,
+    top_n: int = DEFAULT_TOP_N,
+    csv_path: str | None = None,
+    image_count: int | None = None,
+) -> list[LoincStudyMatch]:
+    """Rank LOINC rows for planar Harmonize series strings (no CT Playbook parse).
+
+    Best-guess scoring prefers anatomy + view tokens, near-exact Playbook matches,
+    concise names, and — for CXR — LOINC ``N Views`` / ``Single view`` aligned with
+    how many images are in the series (or study).
+    """
+    cleaned = [str(d).strip() for d in series_descriptions if str(d).strip()]
+    anatomy = _planar_anatomy_from_descriptions(cleaned)
+    if not anatomy and not cleaned:
+        return []
+
+    desc_joined = " ".join(cleaned)
+    desc_l = desc_joined.lower()
+    view_tokens = tuple(
+        token
+        for token in (
+            "ap",
+            "pa",
+            "lateral",
+            "oblique",
+            "decubitus",
+            "mlo",
+            "cc",
+            "lm",
+            "ml",
+            "si",
+            "portable",
+        )
+        if re.search(rf"\b{re.escape(token)}\b", desc_l)
+    )
+    single_region = len(anatomy) <= 1
+    prefix_l = loinc_prefix.strip().lower()
+    # When multiple images imply multi-view, do not treat a single projection string
+    # as an exact LOINC core match (e.g. "Chest AP" vs 2 files → prefer "2 Views").
+    suppress_exact_projection_match = bool(
+        image_count is not None
+        and image_count >= 2
+        and loinc_prefix.strip().upper().startswith("XR")
+    )
+
+    scored: list[LoincStudyMatch] = []
+    for code, name in load_loinc_study_descriptions_for_prefix(loinc_prefix, csv_path=csv_path):
+        name_l = name.lower()
+        score = 0.0
+        for part in anatomy:
+            if part.lower() in name_l:
+                score += 120.0
+        if score <= 0:
+            continue
+
+        name_core = name_l
+        if prefix_l and name_core.startswith(prefix_l):
+            name_core = name_core[len(prefix_l) :].lstrip()
+
+        for description in cleaned:
+            desc_norm = description.lower().strip()
+            if name_core == desc_norm:
+                if not (
+                    suppress_exact_projection_match
+                    and _LOINC_BARE_PROJECTION_RE.search(name_core)
+                    and " and " not in name_core
+                    and "views" not in name_core
+                ):
+                    score += 220.0
+            elif desc_norm and desc_norm in name_core:
+                score += 90.0
+
+        for view in view_tokens:
+            if re.search(rf"\b{re.escape(view)}\b", name_l):
+                score += 80.0
+            else:
+                # Only demote missing projection tokens when image count is 1
+                # (or unknown); multi-view LOINC names often omit AP/PA wording.
+                if image_count is None or image_count <= 1:
+                    score -= 25.0
+
+        score += _score_loinc_view_count(name_l, image_count=image_count)
+        score += _planar_foreign_anatomy_penalty(name_l, anatomy)
+
+        # Prefer primary anatomy leading the LOINC name (Chest … vs Ribs … and Chest).
+        if anatomy:
+            primary = anatomy[0].lower()
+            after_prefix = (
+                name_l[len(prefix_l) :].lstrip() if prefix_l and name_l.startswith(prefix_l) else name_l
+            )
+            if after_prefix.startswith(primary):
+                score += 40.0
+            elif primary in after_prefix:
+                score -= 30.0
+
+        if single_region and " and " in name_l:
+            declared = loinc_declared_view_count(name_l)
+            # Keep projection compounds (e.g. AP and Lateral) for multi-view studies.
+            keep_projection_compound = (
+                image_count is not None
+                and image_count >= 2
+                and (declared is None or declared == image_count)
+                and _planar_foreign_anatomy_penalty(name_l, anatomy) >= 0
+            )
+            if not keep_projection_compound:
+                score -= 55.0
+        if "guidance" in name_l or "fluoroscopy" in name_l:
+            score -= 40.0
+        if "limited" in name_l and "limited" not in desc_l:
+            score -= 30.0
+        if "screening" in name_l and "screening" not in desc_l:
+            score -= 20.0
+
+        score -= max(0, len(name) - 28) * 0.75
+        score -= max(0, len(name.split()) - 4) * 3.0
+
+        if score < MIN_MATCH_SCORE:
+            continue
+        scored.append(LoincStudyMatch(loinc_number=code, long_common_name=name, score=score))
+
+    scored.sort(key=lambda item: (-item.score, item.long_common_name, item.loinc_number))
+    return scored[: max(1, top_n)] if scored else []
+

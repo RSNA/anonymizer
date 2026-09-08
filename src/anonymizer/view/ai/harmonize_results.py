@@ -768,6 +768,12 @@ class HarmonizeResultsView(AppToplevel):
             self._proposal_frame.grid()
 
     def _populate_playbook_from_result(self, result: HarmonizedResult) -> None:
+        if result.planar is not None:
+            from anonymizer.controller.ai.harmonize.playbook_planar import planar_harmonize_analysis_rows
+
+            for index, values in enumerate(planar_harmonize_analysis_rows(result.planar)):
+                self._upsert_playbook_row(f"planar_{index}", values)
+            return
         if result.playbook is None:
             return
         for iid, values in zip(
@@ -974,16 +980,26 @@ class HarmonizeResultsView(AppToplevel):
             return
         from anonymizer.view.ai.study_description_dialog import resolve_and_show_study_description_offers
 
-        resolve_and_show_study_description_offers(
+        def _refresh_after_study_apply(_offer=None, _updated=None) -> None:
+            if self._on_series_description_updated is not None:
+                self._on_series_description_updated()
+
+        def _on_auto(offer_, updated: list[str]) -> None:
+            logger.info(
+                "Auto-applied LOINC study description to %d study(ies)",
+                len(updated),
+            )
+            _refresh_after_study_apply(offer_, updated)
+
+        results = resolve_and_show_study_description_offers(
             self,
             offers=[offer],
             images_dir=images_dir,
             anon_model=self._anon_model,
-            on_auto_applied=lambda _offer, updated: logger.info(
-                "Auto-applied LOINC study description to %d study(ies)",
-                len(updated),
-            ),
+            on_auto_applied=_on_auto,
         )
+        if any(r.applied for r in results):
+            _refresh_after_study_apply()
 
     def _on_save_job_done(self, _algorithm: Algorithm | None, work_state: WorkState) -> None:
         if self._closing or not self.winfo_exists():

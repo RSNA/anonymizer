@@ -333,6 +333,7 @@ class PHI_IndexRecord:
 
 
 def _study_ct_series_all_harmonized(study: Study) -> bool:
+    """Backward-compatible CT-only check (prefer ``_study_index_harmonized`` for Dataset)."""
     ct_series = [series for series in (study.series or []) if (series.modality or "").upper() == "CT"]
     if not ct_series:
         return False
@@ -340,6 +341,28 @@ def _study_ct_series_all_harmonized(study: Study) -> bool:
         series.harmonized_description is not None and bool(str(series.harmonized_description).strip())
         for series in ct_series
     )
+
+
+def _study_index_harmonized(study: Study) -> bool:
+    """True when Dataset should show the study Harmonized (green).
+
+    - Studies with CT/MR series: all CT/MR series have ``harmonized_description``
+      (planar siblings do not block).
+    - Pure XR/US/MG studies: all planar Harmonize series are done.
+    """
+    from anonymizer.utils.modalities import (
+        series_is_planar_harmonize_eligible,
+        series_is_tseg_eligible,
+    )
+
+    tseg_series = [s for s in (study.series or []) if series_is_tseg_eligible(s.modality)]
+    if tseg_series:
+        return all(bool((s.harmonized_description or "").strip()) for s in tseg_series)
+
+    planar_series = [s for s in (study.series or []) if series_is_planar_harmonize_eligible(s.modality)]
+    if planar_series:
+        return all(bool((s.harmonized_description or "").strip()) for s in planar_series)
+    return False
 
 
 def _study_face_blur_label(study: Study) -> str:
@@ -421,10 +444,10 @@ def _phi_index_record_from_orm(phi: PHI, study: Study) -> PHI_IndexRecord:
         phi_accession=study.accession_number if study.accession_number else "",
         anon_study_uid=study.anon_study_uid,
         phi_study_uid=study.study_uid,
-        study_description=str(study.description or ""),
+        study_description=str(study.harmonized_description or study.description or ""),
         num_series=num_series,
         num_instances=num_instances,
-        harmonize=_study_ct_series_all_harmonized(study),
+        harmonize=_study_index_harmonized(study),
         face_blurred=_study_face_blur_label(study),
         pixel_phi_removed=_study_pixel_phi_removed(study),
         pixel_phi=_study_pixel_phi_digest(study),

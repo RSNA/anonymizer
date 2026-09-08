@@ -28,7 +28,7 @@
 
 ## Headless
 
-Full guide: [Run without the window](10-headless/).
+Full guide: [Run headless](10-headless/).
 
 - `--ai-batch-run` needs **both** `-c` and `--ai-batch`
 - Feature gates fail if models were never downloaded on that machine

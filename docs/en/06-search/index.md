@@ -30,6 +30,8 @@ After **Import Directory**, the OS folder dialog opens. Navigate to your study t
 
 ![Choose folder for Import Directory](shots/macos/ImportDirectory_Chooser.png)
 
+Navigate to `tests/controller/assets/test_dcm_files` (or a study folder under it such as `davidson_cxr` or `CT_Head_With_Contrast`).
+
 ### 3. What must be true for a file to import
 
 A file is accepted only if all of these hold:
@@ -146,13 +148,13 @@ Other controls:
 4. Progress tracks metadata retrieval, then images received versus the hierarchy. A study finishes when all expected files arrive **or** a [Network Timeout](../05-create-project/#network-timeouts) expires for that transfer.
 5. When the dialog shows **Import Finished**, click **Close**.
 
-![Import Studies dialog finished](shots/macos/OrthancCT_Importing.png)
+![Import Studies dialog — CT series import finished](shots/macos/OrthancCT_Importing.png)
 
-### 5. Confirm green highlight
+### 5. Confirm green highlight (CT series imported)
 
-Successfully imported studies are **highlighted green** in the Query results list, and the **Imported** column shows how many images landed in the project.
+Successfully imported studies are **highlighted green** in the Query results list, and the **Imported** column shows how many images landed in the project. With **Move Level = SERIES**, the CT series for Doe^Archibald completes with Imported matching Images.
 
-![Imported study highlighted green](shots/macos/OrthancCT_Imported.png)
+![Imported CT series highlighted green](shots/macos/OrthancCT_Imported.png)
 
 You can select the same studies again after adjusting timeout or move level—already-imported instances are skipped.
 

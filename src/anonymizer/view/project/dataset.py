@@ -5,7 +5,10 @@ The DatasetView class provides a user interface for viewing the study index, del
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import time
+import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
 
@@ -30,6 +33,9 @@ logger = logging.getLogger(__name__)
 
 STUDY_IID_PREFIX = "study:"
 SERIES_IID_PREFIX = "series:"
+
+# Treeview multi-select modifiers (Shift | Control | Mod1/Command).
+_TREE_MULTISELECT_STATE = 0x0001 | 0x0004 | 0x0008
 
 
 def study_tree_iid(anon_study_uid: str) -> str:
@@ -120,6 +126,14 @@ class DatasetView(AppToplevel):
         self._expanded_study_uids: set[str] = set()
         self._projection_views: dict[tuple[str, ...], ProjectionView] = {}
         self._projection_open_in_progress = False
+        self._description_combo: ttk.Combobox | None = None
+        self._description_combo_meta: dict[str, str | None] = {}
+        self._description_combo_apply = None
+        self._description_combo_initial: str | None = None
+        self._description_combo_iid: str | None = None
+        self._description_combo_dismiss_after_id: str | None = None
+        # Ignore FocusOut dismissals briefly after place/post (popdown steals focus).
+        self._description_combo_suppress_focus_out_until: float = 0.0
 
         self.title(_("View Dataset"))
         self.resizable(True, True)
@@ -152,6 +166,8 @@ class DatasetView(AppToplevel):
             height=30,
         )
         self._tree.grid(row=0, column=0, columnspan=11, sticky="nswe")
+        # Single-click only: Double-1 also fires ButtonRelease and caused awkward re-entry.
+        self._tree.bind("<ButtonRelease-1>", self._on_tree_description_activate)
         self._tree.bind("<ButtonPress-3>", self._on_tree_right_click)
         self._tree.bind("<<TreeviewOpen>>", self._on_tree_open)
         self._tree.bind("<<TreeviewClose>>", self._on_tree_close)
@@ -572,13 +588,338 @@ class DatasetView(AppToplevel):
         iid = self._tree.identify_row(event.y)
         if not iid:
             return None
-        if parse_series_tree_iid(iid) is not None:
-            return _("Right-click to open Series View")
-        if parse_study_tree_iid(iid) is not None:
-            return _("Right-click to view study projections")
+        series_uid = parse_series_tree_iid(iid)
+        if series_uid is not None:
+            pair = self._series_by_uid.get(series_uid)
+            if pair is None or not pair[1].is_harmonized():
+                return None
+            return _("Click description to choose RadLex alternative · Right-click to open Series View")
+        study_uid = parse_study_tree_iid(iid)
+        if study_uid is not None:
+            record = self._studies_by_uid.get(study_uid)
+            if record is None or not record.harmonize:
+                return None
+            return _("Click description to choose LOINC alternative · Right-click to view study projections")
         return None
 
+    def _cancel_description_combo_dismiss(self) -> None:
+        after_id = self._description_combo_dismiss_after_id
+        if after_id is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(after_id)
+            self._description_combo_dismiss_after_id = None
+
+    def _suppress_description_combo_focus_out(self, ms: int = 500) -> None:
+        self._description_combo_suppress_focus_out_until = time.monotonic() + (ms / 1000.0)
+
+    def _description_combo_popdown_mapped(self, combo: ttk.Combobox) -> bool:
+        try:
+            popdown = combo.tk.call("ttk::combobox::PopdownWindow", combo)
+            return bool(combo.tk.getboolean(combo.tk.call("winfo", "ismapped", popdown)))
+        except tk.TclError:
+            return False
+
+    def _dismiss_description_combo(self, *, apply: bool = False) -> None:
+        self._cancel_description_combo_dismiss()
+        combo = self._description_combo
+        if combo is None:
+            return
+        apply_fn = self._description_combo_apply
+        meta = self._description_combo_meta
+        initial = self._description_combo_initial
+        try:
+            if apply and apply_fn is not None:
+                label = combo.get().strip()
+                if label and label != (initial or ""):
+                    loinc_number = meta.get(label)
+                    description = label
+                    if "  (" in label and label.endswith(")"):
+                        description = label.rsplit("  (", 1)[0].strip()
+                    apply_fn(description, loinc_number)
+        finally:
+            try:
+                if self._description_combo_popdown_mapped(combo):
+                    combo.tk.call("ttk::combobox::Unpost", combo)
+            except tk.TclError:
+                pass
+            combo.destroy()
+            self._description_combo = None
+            self._description_combo_meta = {}
+            self._description_combo_apply = None
+            self._description_combo_initial = None
+            self._description_combo_iid = None
+
+    def _maybe_dismiss_description_combo(self) -> None:
+        self._description_combo_dismiss_after_id = None
+        combo = self._description_combo
+        if combo is None:
+            return
+        if time.monotonic() < self._description_combo_suppress_focus_out_until:
+            return
+        if self._description_combo_popdown_mapped(combo):
+            return
+        try:
+            focused = combo.focus_get()
+            if focused is not None:
+                focused_path = str(focused)
+                combo_path = str(combo)
+                if focused_path == combo_path or focused_path.startswith(combo_path + "."):
+                    return
+                if "popdown" in focused_path.lower() or focused.winfo_class() in {"Listbox", "TCombobox"}:
+                    return
+        except tk.TclError:
+            pass
+        self._dismiss_description_combo(apply=False)
+
+    def _place_description_combo(
+        self,
+        iid: str,
+        *,
+        choices: list[str],
+        choice_meta: dict[str, str | None],
+        initial: str,
+        apply_callback,
+    ) -> None:
+        self._dismiss_description_combo(apply=False)
+        if not choices:
+            return
+        # Do not call selection_set here — that would collapse multi-study selection.
+        self._tree.see(iid)
+        self._tree.update_idletasks()
+        bbox = self._tree.bbox(iid, "#0")
+        if not bbox:
+            # Row may still be laying out after expand/see; retry once.
+            self.after(
+                16,
+                lambda: self._place_description_combo(
+                    iid,
+                    choices=choices,
+                    choice_meta=choice_meta,
+                    initial=initial,
+                    apply_callback=apply_callback,
+                ),
+            )
+            return
+        x, y, width, height = bbox
+        # Place on the tree's parent frame — widgets inside Treeview break popdown geometry
+        # on macOS (list appears at top-left).
+        parent = self._tree.master
+        combo = ttk.Combobox(
+            parent,
+            values=choices,
+            state="readonly",
+            font=self._fonts.mono,
+        )
+        if initial in choices:
+            combo.set(initial)
+        else:
+            combo.current(0)
+        place_x = int(self._tree.winfo_x() + x)
+        place_y = int(self._tree.winfo_y() + y)
+        combo.place(x=place_x, y=place_y, width=max(int(width), 180), height=max(int(height), 22))
+        combo.lift()
+        self._description_combo = combo
+        self._description_combo_iid = iid
+        self._description_combo_meta = choice_meta
+        self._description_combo_apply = apply_callback
+        self._description_combo_initial = combo.get()
+        self._suppress_description_combo_focus_out(600)
+
+        def on_selected(_event=None) -> None:
+            self._dismiss_description_combo(apply=True)
+            self._update_tree_from_phi_index()
+
+        def on_escape(_event=None) -> None:
+            self._dismiss_description_combo(apply=False)
+
+        def on_focus_out(_event=None) -> None:
+            if time.monotonic() < self._description_combo_suppress_focus_out_until:
+                return
+            if self._description_combo_popdown_mapped(combo):
+                return
+            # Delay so a click on the dropdown list can still register as <<ComboboxSelected>>.
+            self._cancel_description_combo_dismiss()
+            self._description_combo_dismiss_after_id = self.after(250, self._maybe_dismiss_description_combo)
+
+        combo.bind("<<ComboboxSelected>>", on_selected)
+        combo.bind("<Return>", on_selected)
+        combo.bind("<Escape>", on_escape)
+        combo.bind("<FocusOut>", on_focus_out)
+        combo.focus_set()
+
+        def open_dropdown() -> None:
+            if self._description_combo is not combo:
+                return
+            self._suppress_description_combo_focus_out(600)
+            try:
+                combo.update_idletasks()
+                combo.tk.call("ttk::combobox::Post", combo)
+            except tk.TclError:
+                with contextlib.suppress(tk.TclError):
+                    combo.event_generate("<Down>")
+
+        # Post after geometry is realized; Button-1 synthesize places the list at (0,0).
+        # A short delay beats after_idle on macOS where the widget is not yet mapped.
+        self.after(10, open_dropdown)
+
+    def _on_tree_description_activate(self, event) -> None:
+        # Preserve multi-select: modifier clicks are selection gestures, not description edit.
+        state = int(getattr(event, "state", 0) or 0)
+        if state & _TREE_MULTISELECT_STATE:
+            if self._description_combo is not None:
+                self._dismiss_description_combo(apply=False)
+            return
+
+        # Ignore expander clicks and non-description columns.
+        if self._tree.identify_region(event.x, event.y) not in {"tree", "cell"}:
+            return
+        if self._tree.identify_column(event.x) != "#0":
+            return
+        # Tree indicator (expand/collapse) shares the #0 column — skip it.
+        if self._tree.identify_element(event.x, event.y) in {"Indicator", "Treeitem.indicator"}:
+            return
+        iid = self._tree.identify_row(event.y)
+        if not iid:
+            return
+
+        # Treeview already applied selection for this click; do not collapse a multi-select.
+        selected = self._tree.selection()
+        if len(selected) > 1:
+            if self._description_combo is not None:
+                self._dismiss_description_combo(apply=False)
+            return
+
+        if self._description_combo is not None:
+            if self._description_combo_iid == iid:
+                # Same row: ensure the list is posted (first click may have lost the race).
+                combo = self._description_combo
+                if combo is not None and not self._description_combo_popdown_mapped(combo):
+                    self._suppress_description_combo_focus_out(600)
+                    with contextlib.suppress(tk.TclError):
+                        combo.tk.call("ttk::combobox::Post", combo)
+                return
+            self._dismiss_description_combo(apply=False)
+
+        series_uid = parse_series_tree_iid(iid)
+        if series_uid is not None:
+            self._edit_series_description(iid, series_uid)
+            return
+        study_uid = parse_study_tree_iid(iid)
+        if study_uid is not None:
+            self._edit_study_description(iid, study_uid)
+
+    def _edit_study_description(self, iid: str, anon_study_uid: str) -> None:
+        from anonymizer.controller.ai.harmonize import (
+            apply_harmonized_study_description,
+            study_description_edit_choices,
+        )
+
+        record = self._studies_by_uid.get(anon_study_uid)
+        if record is None or not record.harmonize:
+            return
+
+        anon_model = self._controller.anonymizer.model
+        current = (anon_model.get_study_harmonized_description(anon_study_uid) or "").strip()
+        if not current:
+            return
+
+        pairs = study_description_edit_choices(anon_model, anon_study_uid)
+        if not pairs:
+            return
+
+        choice_meta: dict[str, str | None] = {}
+        labels: list[str] = []
+        for name, code in pairs:
+            label = f"{name}  ({code})" if code else name
+            if label in choice_meta:
+                continue
+            choice_meta[label] = code
+            labels.append(label)
+
+        # Ensure current harmonized value is first.
+        current_label = None
+        for label in labels:
+            name = label.rsplit("  (", 1)[0].strip() if "  (" in label else label
+            if name == current:
+                current_label = label
+                break
+        if current_label is None:
+            labels.insert(0, current)
+            choice_meta[current] = None
+            current_label = current
+        else:
+            labels = [current_label] + [label for label in labels if label != current_label]
+
+        patient_id = anon_model.get_anon_patient_id_for_study(anon_study_uid)
+        images_dir = self._controller.model.images_dir()
+        study_root = Path(images_dir) / patient_id / anon_study_uid if patient_id else None
+
+        def apply_fn(description: str, loinc_number: str | None) -> bool:
+            if study_root is None or not study_root.is_dir():
+                logger.error("Study root missing for %s", anon_study_uid)
+                return False
+            return apply_harmonized_study_description(
+                study_root,
+                description,
+                anon_model,
+                anon_study_uid,
+                loinc_number=loinc_number,
+            )
+
+        self._place_description_combo(
+            iid,
+            choices=labels,
+            choice_meta=choice_meta,
+            initial=current_label,
+            apply_callback=apply_fn,
+        )
+
+    def _edit_series_description(self, iid: str, anon_series_uid: str) -> None:
+        from anonymizer.controller.ai.harmonize import (
+            apply_harmonized_description,
+            series_description_edit_choices,
+        )
+
+        pair = self._series_by_uid.get(anon_series_uid)
+        if pair is None:
+            return
+        study, series = pair
+        if not series.is_harmonized():
+            return
+        current = (series.harmonized_description or "").strip()
+        if not current:
+            return
+
+        choices = series_description_edit_choices(
+            modality=series.modality,
+            current_description=current,
+        )
+        if not choices:
+            return
+        series_path = series_path_for_record(self._controller.model.images_dir(), study, series)
+        if not series_path.is_dir():
+            messagebox.showerror(
+                title=_("Edit Series Description"),
+                message=_("Series folder not found on disk."),
+                parent=self,
+            )
+            return
+
+        anon_model = self._controller.anonymizer.model
+
+        def apply_fn(description: str, _loinc_number: str | None) -> bool:
+            return apply_harmonized_description(series_path, description, anon_model)
+
+        self._place_description_combo(
+            iid,
+            choices=choices,
+            choice_meta={label: None for label in choices},
+            initial=current if current in choices else choices[0],
+            apply_callback=apply_fn,
+        )
+
     def _on_tree_right_click(self, event) -> None:
+        self._dismiss_description_combo(apply=False)
         iid = self._tree.identify_row(event.y)
         if not iid:
             return

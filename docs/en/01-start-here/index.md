@@ -21,7 +21,7 @@ Patient names, IDs, and other identifiers in the file “labels” (DICOM tags) 
 | Mode                     | Best for                                                                                                     |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------ |
 | **Desktop window (GUI)** | Creating projects, reviewing images, AI tools, export                                                        |
-| **No window (headless)** | Lab/server: keep receiving images, or run AI batch overnight — see [Run without the window](../10-headless/) |
+| **No window (headless)** | Lab/server: keep receiving images, or run AI batch overnight — see [Run headless](../10-headless/) |
 
 
 !!! important "Create the project in the window first"

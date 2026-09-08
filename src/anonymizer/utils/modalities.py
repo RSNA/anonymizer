@@ -125,9 +125,46 @@ def is_mr_modality(value: object | None) -> bool:
 
 
 def is_tseg_modality(value: object | None) -> bool:
+    """CT or MR — TotalSegmentator Harmonize / Face Blur path only."""
     return normalize_modality(value) in {"CT", "MR"}
 
 
 def series_is_tseg_eligible(modality: object | None) -> bool:
     """ORM / study-complete helper: CT or MR series participate in TSEG Harmonize."""
     return is_tseg_modality(modality)
+
+
+# Planar (non-3D) Harmonize: metadata Playbook only — never TotalSegmentator.
+_PLANAR_HARMONIZE_MODALITIES = frozenset({"CR", "DX", "US", "MG"})
+
+
+def is_planar_harmonize_modality(value: object | None) -> bool:
+    """CR/DX (XR), US, or MG — metadata Harmonize path (isolated from TSEG)."""
+    return normalize_modality(value) in _PLANAR_HARMONIZE_MODALITIES
+
+
+def series_is_planar_harmonize_eligible(modality: object | None) -> bool:
+    """ORM helper: planar series participate in metadata Harmonize / planar LOINC."""
+    return is_planar_harmonize_modality(modality)
+
+
+def is_harmonize_modality(value: object | None) -> bool:
+    """Any series Harmonize can run: CT/MR (TSEG) or CR/DX/US/MG (planar)."""
+    return is_tseg_modality(value) or is_planar_harmonize_modality(value)
+
+
+def series_is_harmonize_eligible(modality: object | None) -> bool:
+    """ORM helper: series participates in some Harmonize path."""
+    return is_harmonize_modality(modality)
+
+
+def planar_harmonize_cohort(value: object | None) -> str | None:
+    """Return XR / US / MG cohort code, or None if not a planar Harmonize modality."""
+    code = normalize_modality(value)
+    if code in {"CR", "DX"}:
+        return "XR"
+    if code == "US":
+        return "US"
+    if code == "MG":
+        return "MG"
+    return None

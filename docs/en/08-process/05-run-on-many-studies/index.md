@@ -9,7 +9,7 @@ Use the same fixtures you practiced one-at-a-time:
 | Tool in batch | Fixture to include |
 | --- | --- |
 | Remove Pixel PHI | **`davidson_cxr`** |
-| Harmonize + Face blur | **`Brain_Ax_EarlyArt`** |
+| Harmonize + Face blur | **`CT_Head_With_Contrast`** |
 
 Import both (or the full `test_dcm_files` tree), open **Dataset**, select those studies, then start AI Batch Process.
 
@@ -25,12 +25,12 @@ Process a cohort for burned-in text, Harmonize, and/or face blur with progress a
 
 ## Start a batch
 
-1. Open **Dataset** and select studies (include `davidson_cxr` and `Brain_Ax_EarlyArt` for a full demo).
+1. Open **Dataset** and select studies (include `davidson_cxr` and `CT_Head_With_Contrast` for a full demo).
 2. Start **AI Batch Process**.
 3. In options, choose algorithms:
    - Remove Pixel PHI (blackout vs blend; modality whitelist on/off) — exercises `davidson_cxr`
-   - Harmonize (workstation CT/MR resolution from AI Features) — exercises `Brain_Ax_EarlyArt`
-   - Face blur (**Gaussian** to match chapter 8.3) — exercises `Brain_Ax_EarlyArt`
+   - Harmonize (workstation CT/MR resolution from AI Features) — exercises `CT_Head_With_Contrast`
+   - Face blur (**Gaussian** to match chapter 8.3) — exercises `CT_Head_With_Contrast`
 4. Preview modality whitelists if offered.
 5. Confirm memory warning if shown, then start.
 
@@ -50,8 +50,8 @@ For each series, selected tools run in a stable order (pixel PHI → Harmonize �
 ## Afterward
 
 - Read the summary (completed / skipped / failed).
-- Spot-check Series View on `davidson_cxr` and `Brain_Ax_EarlyArt` before export.
-- Same job on a **server without a window** → [Run without the window](../../10-headless/).
+- Spot-check Series View on `davidson_cxr` and `CT_Head_With_Contrast` before export.
+- Same job on a **server without a window** → [Run headless](../../10-headless/).
 
 ## What good looks like
 
@@ -66,4 +66,4 @@ For each series, selected tools run in a stable order (pixel PHI → Harmonize �
 
 ## Next steps
 
-Continue with [Send](../../09-send/) to export anonymized studies (or [run without the window](../../10-headless/) for server batch).
+Continue with [Send](../../09-send/) to export anonymized studies (or [run headless](../../10-headless/) for server batch).

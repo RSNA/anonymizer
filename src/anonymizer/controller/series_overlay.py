@@ -12,7 +12,8 @@ from enum import Enum, auto
 
 class LayerType(Enum):
     TEXT = auto()  # OCR text and rectangle coordinates
-    USER_RECT = auto()  # User defined rectangle coordinates
+    USER_RECT = auto()  # User defined rectangle coordinates (pending blackout)
+    EXCLUDE_RECT = auto()  # Regions excluded from Detect Text / Remove Text
     SEGMENTATIONS = auto()  # polygon vertices
 
 
@@ -58,4 +59,5 @@ class Segmentation:
 class OverlayData:
     ocr_texts: list[OCRText] = field(default_factory=list)
     user_rects: list[UserRectangle] = field(default_factory=list)
+    exclude_rects: list[UserRectangle] = field(default_factory=list)
     segmentations: list[Segmentation] = field(default_factory=list)

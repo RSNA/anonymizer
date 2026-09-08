@@ -1313,6 +1313,16 @@ msgid "Remove Text"
 msgstr ""
 
 msgid "Blackout Area"
+
+msgid "Exclude Area"
+
+msgid "No area(s) drawn in current frame to exclude"
+
+msgid "No area(s) drawn to exclude"
+
+msgid "Excluded {count} area(s) from text detection on current image"
+
+msgid "Excluded {count} area(s) from text detection across series"
 msgstr ""
 
 msgid "Harmonize Description"

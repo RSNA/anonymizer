@@ -33,7 +33,9 @@ class StudyDescriptionDialogResult:
 
 class StudyDescriptionDialog(AppToplevel):
     PAD = 12
-    MIN_WIDTH = 560
+    # Keep compact: option menu and series box should not span a full dashboard width.
+    DIALOG_WIDTH = 440
+    MIN_WIDTH = 400
 
     def __init__(
         self,
@@ -51,14 +53,14 @@ class StudyDescriptionDialog(AppToplevel):
         self._closing = False
 
         self.title(_("Study Description (LOINC)"))
-        self.resizable(True, False)
-        self.minsize(self.MIN_WIDTH, 280)
+        self.resizable(False, False)
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Escape>", lambda _e: self._on_cancel())
 
         self.grid_columnconfigure(0, weight=1)
 
         pad = self.PAD
+        content_width = self.DIALOG_WIDTH - 2 * pad
         body = ctk.CTkFrame(self, fg_color="transparent")
         body.grid(row=0, column=0, sticky="nsew", padx=pad, pady=pad)
         body.grid_columnconfigure(0, weight=1)
@@ -67,14 +69,20 @@ class StudyDescriptionDialog(AppToplevel):
             body,
             text=_("Several LOINC study descriptions are close matches. Choose one."),
             anchor="w",
-            wraplength=self.MIN_WIDTH - 2 * pad,
+            wraplength=content_width,
+            justify="left",
         ).grid(row=0, column=0, sticky="w")
 
         ctk.CTkLabel(body, text=_("Series descriptions") + ":", anchor="w").grid(
             row=1, column=0, sticky="w", pady=(pad, 2)
         )
         series_text = "\n".join(offer.fingerprint) if offer.fingerprint else "—"
-        series_box = ctk.CTkTextbox(body, height=min(120, 24 + 18 * max(1, len(offer.fingerprint))), wrap="word")
+        series_box = ctk.CTkTextbox(
+            body,
+            height=min(96, 24 + 18 * max(1, len(offer.fingerprint))),
+            width=content_width,
+            wrap="word",
+        )
         series_box.grid(row=2, column=0, sticky="ew")
         series_box.insert("1.0", series_text)
         series_box.configure(state="disabled")
@@ -97,22 +105,24 @@ class StudyDescriptionDialog(AppToplevel):
             body,
             variable=self._description_var,
             values=labels,
-            width=self.MIN_WIDTH - 2 * pad,
+            width=content_width,
         )
         self._menu.grid(row=4, column=0, sticky="ew")
 
         peer_count = len(offer.peer_study_uids)
-        # Default on: researchers typically share one study type across the project.
+        # Default on when peers exist; keep enabled so the control is not a dead grey checkbox.
+        # With zero peers, Apply still only updates this study (apply_to_peers is a no-op).
         self._apply_peers_var = tk.IntVar(value=1 if peer_count > 0 else 0)
-        peer_label = _("Also apply to other studies with the same series descriptions") + f" ({peer_count})"
+        peer_label = _("Also apply to other studies with the same series descriptions")
+        if peer_count > 0:
+            peer_label = f"{peer_label} ({peer_count})"
         self._peer_checkbox = ctk.CTkCheckBox(
             body,
             text=peer_label,
             variable=self._apply_peers_var,
+            state="normal",
         )
         self._peer_checkbox.grid(row=5, column=0, sticky="w", pady=(pad, 0))
-        if peer_count == 0:
-            self._peer_checkbox.configure(state="disabled")
 
         footer = ctk.CTkFrame(self, fg_color="transparent")
         footer.grid(row=1, column=0, sticky="ew", padx=pad, pady=(0, pad))
@@ -122,6 +132,11 @@ class StudyDescriptionDialog(AppToplevel):
         btn_row.grid(row=0, column=0, sticky="e")
         ctk.CTkButton(btn_row, text=_("Cancel"), width=100, command=self._on_cancel).pack(side="left", padx=(0, 8))
         ctk.CTkButton(btn_row, text=_("Apply"), width=100, command=self._on_apply).pack(side="left")
+
+        self.update_idletasks()
+        height = max(self.winfo_reqheight(), 280)
+        self.geometry(f"{self.DIALOG_WIDTH}x{height}")
+        self.minsize(self.MIN_WIDTH, 260)
 
         self.lift()
         self.focus()

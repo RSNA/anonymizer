@@ -70,6 +70,7 @@ extra:
       link: https://github.com/RSNA/anonymizer
 
 exclude_docs: |
+  README.md
   _legacy_html/**
   tutorials/scripts/**
   **/shots/.gitkeep
@@ -90,7 +91,7 @@ nav:
       - 8.3 Blur faces: 08-process/04-blur-faces/index.md
       - 8.4 Run on many studies: 08-process/05-run-on-many-studies/index.md
   - 9. Send: 09-send/index.md
-  - 10. Run without the window: 10-headless/index.md
+  - 10. Run headless: 10-headless/index.md
   - Reference:
       - De-identification protocol: deidentification-protocol.md
       - Troubleshooting: troubleshooting.md

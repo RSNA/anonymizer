@@ -44,10 +44,13 @@ from anonymizer.controller.ai_batch_process import (
     format_modality_whitelist_preview,
     format_remove_pixel_phi_instance_detail,
     format_remove_pixel_phi_series_message,
+    harmonize_skip_counts_as_complete,
     modalities_in_selected_studies,
     normalize_selected_algorithms,
     series_needs_face_blur,
+    series_needs_harmonize,
     skip_message_for_face_blur_series,
+    skip_message_for_harmonize_series,
     strip_progress_pct_suffix,
     whitelist_for_batch_ocr,
 )
@@ -431,6 +434,10 @@ def test_ai_batch_process_runs_algorithm_phases_in_order(
             return_value=_batch_test_dataset(modality="MR"),
         ),
         patch(
+            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            return_value=_batch_test_dataset(modality="MR"),
+        ),
+        patch(
             "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
             return_value=_batch_test_dataset(modality="MR"),
         ),
@@ -498,6 +505,10 @@ def test_ai_batch_process_runs_algorithms_in_order_and_honours_cancel(
             return_value=_batch_test_dataset(modality="MR"),
         ),
         patch(
+            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            return_value=_batch_test_dataset(modality="MR"),
+        ),
+        patch(
             "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
             return_value=_batch_test_dataset(modality="MR"),
         ),
@@ -548,6 +559,10 @@ def test_ai_batch_process_harmonize_only_releases_memory_after_series(
         ),
         patch(
             "anonymizer.controller.ai_batch_process._load_series_dataset",
+            return_value=_batch_test_dataset(),
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
             return_value=_batch_test_dataset(),
         ),
         patch(
@@ -690,6 +705,10 @@ def test_ai_batch_process_defers_volume_context_when_harmonize_and_face_blur(
             return_value=_batch_test_dataset(),
         ),
         patch(
+            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            return_value=_batch_test_dataset(),
+        ),
+        patch(
             "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
             return_value=_batch_test_dataset(),
         ),
@@ -807,6 +826,10 @@ def test_ai_batch_process_memory_guard_cancels_between_series(
         ),
         patch(
             "anonymizer.controller.ai_batch_process._load_series_dataset",
+            return_value=_batch_test_dataset(),
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
             return_value=_batch_test_dataset(),
         ),
         patch(
@@ -1140,3 +1163,143 @@ def test_apply_remove_pixel_phi_series_whitelist_disabled_passes_empty_list(
     )
 
     assert mock_remove.call_args.kwargs["whitelist"] == []
+
+
+@patch("anonymizer.controller.ai_batch_process._load_harmonize_series_dataset")
+def test_series_needs_harmonize_true_for_planar_xr(mock_load: MagicMock, tmp_path: Path) -> None:
+    series_dir = tmp_path / "series"
+    series_dir.mkdir()
+    mock_load.return_value = _batch_test_dataset(modality="CR")
+    assert series_needs_harmonize(_pending_anon_model(), series_dir) is True
+
+
+@patch("anonymizer.controller.ai_batch_process._load_harmonize_series_dataset")
+def test_series_needs_harmonize_false_for_non_harmonize_modality(mock_load: MagicMock, tmp_path: Path) -> None:
+    series_dir = tmp_path / "series"
+    series_dir.mkdir()
+    mock_load.return_value = None
+    assert series_needs_harmonize(_pending_anon_model(), series_dir) is False
+
+
+@patch("anonymizer.controller.ai_batch_process._load_harmonize_series_dataset")
+def test_skip_message_for_harmonize_series_ineligible(mock_load: MagicMock, tmp_path: Path) -> None:
+    series_dir = tmp_path / "series"
+    series_dir.mkdir()
+    mock_load.return_value = None
+    assert skip_message_for_harmonize_series(None, series_dir) == (
+        "Not a CT/MR/XR/US/MG series or no DICOM files"
+    )
+
+
+def test_harmonize_skip_counts_as_complete_for_ineligible() -> None:
+    outcome = AiBatchOutcome(
+        Path("/tmp/x"),
+        AiBatchAlgorithm.HARMONIZE,
+        "skipped",
+        "Not a CT/MR/XR/US/MG series or no DICOM files",
+    )
+    assert harmonize_skip_counts_as_complete(outcome) is True
+
+
+@patch("anonymizer.controller.ai_batch_process.auto_apply_best_study_descriptions")
+@patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
+def test_ai_batch_process_auto_applies_study_description_without_dialog(
+    mock_harmonize: MagicMock,
+    mock_auto_apply: MagicMock,
+    images_layout: tuple[Path, list[tuple[str, str]]],
+) -> None:
+    images_dir, studies = images_layout
+    enter_patch, exit_patch, _handle, _runner = _patch_batch_runners()
+    series_path = images_dir / "anon_pt" / "anon_study" / "series_a"
+    from anonymizer.controller.ai.harmonize import HarmonizeApplyOutcome, StudyDescriptionOffer
+    from anonymizer.controller.ai.harmonize.loinc_study import LoincStudyMatch
+
+    mock_harmonize.return_value = HarmonizeApplyOutcome(series_path, "ok", "Chest AP")
+    offer = StudyDescriptionOffer(
+        anon_study_uid="anon_study",
+        fingerprint=("Chest AP",),
+        matches=(LoincStudyMatch("36572-6", "XR Chest AP", 500.0),),
+        peer_study_uids=(),
+        ambiguous=True,
+    )
+    mock_auto_apply.return_value = [(offer, ["anon_study"])]
+    logs: list[str] = []
+
+    with (
+        enter_patch,
+        exit_patch,
+        patch(
+            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            return_value=[(1, 1, series_path)],
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            return_value=_batch_test_dataset(modality="CR"),
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            return_value=_batch_test_dataset(modality="CR"),
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            return_value=None,
+        ),
+    ):
+        summary = ai_batch_process(
+            images_dir,
+            studies,
+            AiBatchProcessOptions(algorithms=(AiBatchAlgorithm.HARMONIZE,)),
+            anon_model=_pending_anon_model(),
+            on_log=logs.append,
+        )
+
+    assert summary.applied == 1
+    mock_auto_apply.assert_called_once()
+    assert any("XR Chest AP" in line for line in logs)
+    assert any("Auto-applied study description" in line for line in logs)
+
+
+@patch("anonymizer.controller.ai_batch_process.auto_apply_best_study_descriptions")
+@patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
+def test_ai_batch_process_runs_harmonize_for_planar_us(
+    mock_harmonize: MagicMock,
+    mock_auto_apply: MagicMock,
+    images_layout: tuple[Path, list[tuple[str, str]]],
+) -> None:
+    images_dir, studies = images_layout
+    enter_patch, exit_patch, _handle, _runner = _patch_batch_runners()
+    series_path = images_dir / "anon_pt" / "anon_study" / "series_a"
+    from anonymizer.controller.ai.harmonize import HarmonizeApplyOutcome
+
+    mock_harmonize.return_value = HarmonizeApplyOutcome(series_path, "ok", "Abdomen")
+    mock_auto_apply.return_value = []
+
+    with (
+        enter_patch,
+        exit_patch,
+        patch(
+            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            return_value=[(1, 1, series_path)],
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            return_value=_batch_test_dataset(modality="US"),
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            return_value=_batch_test_dataset(modality="US"),
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            return_value=None,
+        ),
+    ):
+        summary = ai_batch_process(
+            images_dir,
+            studies,
+            AiBatchProcessOptions(algorithms=(AiBatchAlgorithm.HARMONIZE,)),
+            anon_model=_pending_anon_model(),
+        )
+
+    mock_harmonize.assert_called_once()
+    assert summary.applied == 1

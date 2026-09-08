@@ -339,6 +339,49 @@ def test_auto_apply_study_description_offer_uses_top_match():
     assert seen["loinc"] == "42274-1"
 
 
+def test_auto_apply_best_study_descriptions_applies_ambiguous_top_match():
+    from anonymizer.controller.ai.harmonize.pipeline import auto_apply_best_study_descriptions
+
+    match = LoincStudyMatch("36572-6", "XR Chest AP", 500.0)
+    offer = StudyDescriptionOffer(
+        anon_study_uid="study-a",
+        fingerprint=("Chest AP",),
+        matches=(match, LoincStudyMatch("36643-5", "XR Chest 2 Views", 490.0)),
+        peer_study_uids=(),
+        ambiguous=True,
+    )
+    model = MagicMock()
+    model.get_study_harmonized_description.return_value = None
+    model.get_anon_patient_id_for_study.return_value = "pt-a"
+
+    with pytest.MonkeyPatch.context() as mp:
+        applied: list[str] = []
+
+        def fake_offer(*_args, **_kwargs):
+            return offer
+
+        def fake_apply(study_root, description, anon_model, anon_study_uid, *, loinc_number=None):
+            applied.append(description)
+            return True
+
+        mp.setattr(
+            "anonymizer.controller.ai.harmonize.pipeline.maybe_offer_study_description_harmonize",
+            fake_offer,
+        )
+        mp.setattr(
+            "anonymizer.controller.ai.harmonize.pipeline.apply_harmonized_study_description",
+            fake_apply,
+        )
+        results = auto_apply_best_study_descriptions(
+            images_dir=Path("/tmp/images"),
+            anon_model=model,
+            anon_study_uids=["study-a"],
+        )
+
+    assert len(results) == 1
+    assert applied == ["XR Chest AP"]
+
+
 def test_aggregate_breast_postprocess_mr_series():
     aggregate = aggregate_study_from_series_descriptions(
         [

@@ -7,7 +7,7 @@
 fixtures:
   test_dcm_files: tests/controller/assets/test_dcm_files
   davidson_cxr: tests/controller/assets/test_dcm_files/davidson_cxr
-  Brain_Ax_EarlyArt: tests/controller/assets/test_dcm_files/Brain_Ax_EarlyArt
+  CT_Head_With_Contrast: tests/controller/assets/test_dcm_files/CT_Head_With_Contrast
   us_rgb_single_frame: tests/controller/assets/test_dcm_files/us_rgb_single_frame
   ctp_lookup: tests/controller/assets/ctp_lookup/test_dcm_files_lookup.properties
 
@@ -146,10 +146,10 @@ workflows:
       - id: ImportDirectory_Chooser
         file: ImportDirectory_Chooser.png
         window: NativeFolderDialog
-        severity: optional
+        severity: required
         deps: [project]
-        ux_elements: [Choose folder, Cancel]
-        caption: "Import Directory — choose a folder; every file under it is attempted."
+        ux_elements: [test_dcm_files path, Folder list, davidson_cxr, Choose]
+        caption: "Import Directory — choose test_dcm_files (or a study folder under it)."
       - id: ImportDavidson_Done
         file: ImportDavidson_Done.png
         window: ImportFilesDialog
@@ -183,15 +183,15 @@ workflows:
         window: ImportStudiesDialog
         severity: orthanc
         deps: [project, orthanc]
-        ux_elements: [Metadata progress, Image progress, Import Finished, Close]
-        caption: "Import Studies dialog after C-MOVE of Doe^Archibald."
+        ux_elements: [Move Level SERIES, Metadata progress, Image progress, Import Finished, Close]
+        caption: "Import Studies dialog — CT series C-MOVE of Doe^Archibald finished."
       - id: OrthancCT_Imported
         file: OrthancCT_Imported.png
         window: QueryView
         severity: orthanc
         deps: [project, orthanc]
-        ux_elements: [Green imported row, Imported count]
-        caption: "Doe^Archibald highlighted green after successful import."
+        ux_elements: [Green imported row, Imported count, Move Level SERIES]
+        caption: "Doe^Archibald CT series import complete — green row and Imported count."
 
   - id: 07-view
     doc: 07-view/index.md
@@ -202,16 +202,23 @@ workflows:
         file: Dataset.png
         window: DatasetView
         severity: required
-        deps: [project, imported, fixture:davidson_cxr, fixture:Brain_Ax_EarlyArt]
+        deps: [project, imported, fixture:davidson_cxr, fixture:CT_Head_With_Contrast, fixture:us_rgb_single_frame]
         ux_elements: [Study/Series tree, AI status columns, View Projections, AI Batch Process]
         caption: "Dataset tree fitted to content — studies expanded with series rows visible."
       - id: ViewProjections
         file: ViewProjections.png
         window: ProjectionView
         severity: required
-        deps: [project, imported, fixture:Brain_Ax_EarlyArt]
-        ux_elements: [Projection thumbnails, Study title, Open Series View from tile]
+        deps: [project, imported, fixture:CT_Head_With_Contrast]
+        ux_elements: [Projection thumbnails, Study title, Open Series View from tile, S M L]
         caption: "View Projections for a selected study (right-click study or toolbar button)."
+      - id: ViewProjections_Multi
+        file: ViewProjections_Multi.png
+        window: ProjectionView
+        severity: required
+        deps: [project, imported, fixture:davidson_cxr, fixture:CT_Head_With_Contrast, fixture:us_rgb_single_frame]
+        ux_elements: [Multiple study title, Projection thumbnails for several series, S M L, Page label]
+        caption: "View Projections after multi-selecting studies — stacked tiles, title shows study/series counts, S selected."
       - id: SeriesView_Review
         file: SeriesView_Review.png
         window: SeriesView
@@ -219,6 +226,38 @@ workflows:
         deps: [project, fixture:davidson_cxr]
         ux_elements: [Image viewport, Frame navigator, Toolbar]
         caption: "Series View reviewing davidson_cxr (before Process tools)."
+      - id: Dataset_EditDescription
+        file: Dataset_EditDescription.png
+        window: DatasetView
+        severity: required
+        deps: [project, imported, fixture:davidson_cxr]
+        ux_elements: [Harmonized series row, Inline description Combobox, RadLex alternatives]
+        caption: "Dataset — click a harmonized series description to choose a RadLex alternative (XR views)."
+      - id: Dataset_EditStudyDescription
+        file: Dataset_EditStudyDescription.png
+        window: DatasetView
+        severity: required
+        deps: [project, imported, fixture:davidson_cxr]
+        ux_elements: [Harmonized study row, Inline description Combobox, LOINC Long Common Name options]
+        caption: "Dataset — click a harmonized study description to choose a LOINC Long Common Name for that modality."
+      - id: Dataset_CreatePatientLookup
+        file: Dataset_CreatePatientLookup.png
+        window: DatasetView
+        severity: required
+        deps: [project, imported, fixture:davidson_cxr, fixture:CT_Head_With_Contrast, fixture:us_rgb_single_frame]
+        recipe:
+          mode: button
+        ux_elements: [Create Patient Lookup button, Dataset tree]
+        caption: "Dataset toolbar — Create Patient Lookup exports the PHI mapping CSV."
+      - id: Dataset_PatientLookup_CSV
+        file: Dataset_PatientLookup_CSV.png
+        window: CSVPreview
+        severity: required
+        deps: [project, imported, fixture:davidson_cxr, fixture:CT_Head_With_Contrast, fixture:us_rgb_single_frame]
+        recipe:
+          mode: csv
+        ux_elements: [CSV path under private/phi_export, Column headers, Series rows]
+        caption: "Patient Lookup CSV after Process — davidson, CT head, US single-frame with AI status columns."
 
   - id: 03-ai-features-setup
     doc: 03-ai-features-setup/index.md
@@ -298,6 +337,31 @@ workflows:
           removal_mode: inpaint
         ux_elements: [Blend into background, Remove Text result]
         caption: "us_rgb_single_frame after Remove Text using Blend into background."
+      - id: Process_RemovePixel_US_Exclude_Panel
+        file: Process_RemovePixel_US_Exclude_Panel.png
+        window: SeriesView
+        severity: soft
+        deps: [project, fixture:us_rgb_single_frame, ocr_models]
+        recipe:
+          whitelist: default
+          edit_context: frame
+          actions: [exclude_area]
+          exclude_rect: [8, 55, 210, 150]
+        ux_elements: [Exclude Area white dotted outline, mindray parameter block]
+        caption: "us_rgb_single_frame after Exclude Area over the machine-parameter block under mindray."
+      - id: Process_RemovePixel_US_Exclude_Detect
+        file: Process_RemovePixel_US_Exclude_Detect.png
+        window: SeriesView
+        severity: soft
+        deps: [project, fixture:us_rgb_single_frame, ocr_models]
+        recipe:
+          whitelist: default
+          edit_context: frame
+          actions: [exclude_area, detect_text]
+          exclude_rect: [8, 55, 210, 150]
+          wait: detect_complete
+        ux_elements: [White dotted exclude under mindray, Green OCR outside block, parameters not boxed]
+        caption: "us_rgb_single_frame Detect Text with Exclude Area — mindray parameter block skipped."
 
   - id: 08-process/03-harmonize-names
     doc: 08-process/03-harmonize-names/index.md
@@ -308,17 +372,17 @@ workflows:
         file: Process_Harmonize_Description.png
         window: SeriesView+HarmonizeResultsView
         severity: soft
-        deps: [project, fixture:Brain_Ax_EarlyArt, tseg_models]
+        deps: [project, fixture:CT_Head_With_Contrast, tseg_models]
         recipe:
           actions: [harmonize_description]
           brain_prompt: auto_no
         ux_elements: [Series View, Harmonize Description, Playbook results table]
-        caption: "Brain_Ax_EarlyArt Series View above completed Harmonize Description results."
+        caption: "CT_Head_With_Contrast Series View above completed Harmonize Description results."
       - id: Process_Harmonize_BrainPrompt
         file: Process_Harmonize_BrainPrompt.png
         window: HarmonizeResultsView+BrainPrompt
         severity: soft
-        deps: [project, fixture:Brain_Ax_EarlyArt, tseg_models, brain_models]
+        deps: [project, fixture:CT_Head_With_Contrast, tseg_models, brain_models]
         recipe:
           actions: [harmonize_description]
           brain_prompt: capture
@@ -328,12 +392,12 @@ workflows:
         file: Process_Harmonize_SegmentedSeries.png
         window: SeriesView
         severity: soft
-        deps: [project, fixture:Brain_Ax_EarlyArt, tseg_models, brain_models]
+        deps: [project, fixture:CT_Head_With_Contrast, tseg_models, brain_models]
         recipe:
           actions: [harmonize_description, segment_brain_features, accept, latch_all_segments, middle_slice]
           brain_prompt: auto_yes
         ux_elements: [Series View, Brain structure latches, Middle slice]
-        caption: "Brain_Ax_EarlyArt Series View with full brain-structure segments on middle slice."
+        caption: "CT_Head_With_Contrast Series View with full brain-structure segments on middle slice."
 
   - id: 08-process/04-blur-faces
     doc: 08-process/04-blur-faces/index.md
@@ -344,12 +408,12 @@ workflows:
         file: Process_FaceBlur_Gaussian.png
         window: FaceBlurReviewDialog
         severity: soft
-        deps: [project, fixture:Brain_Ax_EarlyArt, face_models]
+        deps: [project, fixture:CT_Head_With_Contrast, face_models]
         recipe:
           blur_mode: gaussian
           wait: review_ready
         ux_elements: [Face Blur review complete, Current vs Proposed, Green face mask, QA summary, Save]
-        caption: "Brain_Ax_EarlyArt Face Blur review complete (Gaussian) — QA ready to Save."
+        caption: "CT_Head_With_Contrast Face Blur review complete (Gaussian) — QA ready to Save."
 
   - id: 08-process/05-run-on-many-studies
     doc: 08-process/05-run-on-many-studies/index.md
@@ -360,19 +424,48 @@ workflows:
         file: AiBatchOptions.png
         window: AiBatchProcessOptionsDialog
         severity: soft
-        deps: [project, imported, fixture:davidson_cxr, fixture:Brain_Ax_EarlyArt]
+        deps: [project, imported, fixture:davidson_cxr, fixture:CT_Head_With_Contrast]
         ux_elements: [Algorithm checkboxes, Modes]
-        caption: "AI Batch options with davidson_cxr and Brain_Ax_EarlyArt imported."
+        caption: "AI Batch options with davidson_cxr and CT_Head_With_Contrast imported."
 
   - id: 09-send
     doc: 09-send/index.md
     title: Send
     shots_dir: shots
     shots:
-      - id: SendView
-        file: SendView.png
+      - id: SendView_Initial
+        file: SendView_Initial.png
         window: ExportView
         severity: required
-        deps: [project, imported]
-        ux_elements: [Patient list, Send action, Status]
-        caption: "Send anonymized patients to the configured destination."
+        deps: [project, imported, fixture:davidson_cxr, fixture:CT_Head_With_Contrast]
+        recipe:
+          stage: initial
+        ux_elements: [Patient list, Export destination title, No selection]
+        caption: "Send — initial Export view with patients listed, none selected."
+      - id: SendView_Selection
+        file: SendView_Selection.png
+        window: ExportView
+        severity: required
+        deps: [project, imported, fixture:davidson_cxr, fixture:CT_Head_With_Contrast]
+        recipe:
+          stage: selection
+        ux_elements: [Selected patient rows, Select All, Export]
+        caption: "Send — patients selected before Export."
+      - id: SendView_Sending
+        file: SendView_Sending.png
+        window: ExportView
+        severity: required
+        deps: [project, imported, fixture:davidson_cxr, fixture:CT_Head_With_Contrast]
+        recipe:
+          stage: sending
+        ux_elements: [Progress bar, Cancel Export enabled, Images Sent updating]
+        caption: "Send — export in progress with status and Cancel Export."
+      - id: SendView_Sent
+        file: SendView_Sent.png
+        window: ExportView
+        severity: required
+        deps: [project, imported, fixture:davidson_cxr, fixture:CT_Head_With_Contrast]
+        recipe:
+          stage: sent
+        ux_elements: [Green completed rows, Date Time, Images Sent, Processed N of N]
+        caption: "Send — export complete; successful patients shown in green."
