@@ -44,7 +44,10 @@ def enable_filesystem_drops(
             paths = [str(p).strip() for p in raw if str(p).strip()]
             if not paths:
                 return
-            on_paths(paths)
+            # Defer off the DnD callback: opening a modal + wait_window inside
+            # <<Drop>> nests the event loop and leaves Import Files stuck on Close.
+            root = widget.winfo_toplevel()
+            root.after(1, lambda paths=list(paths): on_paths(paths))
 
         widget.dnd_bind("<<Drop>>", _on_drop)
         logger.info("File drop enabled on %s", type(widget).__name__)

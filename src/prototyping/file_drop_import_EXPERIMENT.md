@@ -10,6 +10,9 @@ How to try
    **Dashboard** or **Dataset** window
 4. Confirm the same ``ImportFilesDialog`` path as File → Import
 
+Drops are scheduled with ``after(1, …)`` so the DnD callback returns before the
+modal opens (avoids a nested ``wait_window`` that leaves Close unresponsive).
+
 Soft-fail: if tkdnd cannot load, File → Import still works; check logs for
 ``File drop unavailable``.
 """
