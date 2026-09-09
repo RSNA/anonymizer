@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
 import re
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 from enum import StrEnum, auto
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -65,6 +67,7 @@ if TYPE_CHECKING:
     from anonymizer.controller.anonymizer import AnonymizerController
     from anonymizer.controller.work_state import WorkState
     from anonymizer.model.anonymizer import AnonymizerModel
+    from anonymizer.model.project import ProjectModel
 
 logger = logging.getLogger(__name__)
 
@@ -207,6 +210,101 @@ class AiBatchSummary:
     algorithm_totals: tuple[tuple[AiBatchAlgorithm, AiBatchAlgorithmTotals], ...] = ()
     # Anonymized study UIDs that became fully Harmonized during this run (study desc still empty).
     newly_harmonized_study_uids: tuple[str, ...] = ()
+    outcomes: tuple[AiBatchOutcome, ...] = ()
+    run_log_path: str | None = None
+    run_result_path: str | None = None
+
+
+def _sanitize_batch_run_filename_part(value: str) -> str:
+    cleaned = re.sub(r"[^\w.\-]+", "_", (value or "").strip(), flags=re.UNICODE)
+    return cleaned.strip("._") or "project"
+
+
+def batch_run_artifact_stem(*, site_id: str, project_name: str, when: datetime | None = None) -> str:
+    """Filename stem for AI batch run log/JSON under private/batch_runs/."""
+    stamp = (when or datetime.now()).strftime("%Y%m%d_%H%M%S")
+    site = _sanitize_batch_run_filename_part(site_id)
+    name = _sanitize_batch_run_filename_part(project_name)
+    return f"{site}_{name}_ai_batch_{stamp}"
+
+
+@dataclass
+class BatchRunCapture:
+    """Tees workflow log lines to a project file and writes a JSON result on finish."""
+
+    log_path: Path
+    result_path: Path
+    started_at: str
+    _log_file: object | None = field(default=None, repr=False)
+    finished_at: str | None = None
+
+    @classmethod
+    def open_for_project(cls, project_model: ProjectModel) -> BatchRunCapture:
+        runs_dir = project_model.batch_runs_dir()
+        runs_dir.mkdir(parents=True, exist_ok=True)
+        started = datetime.now()
+        stem = batch_run_artifact_stem(
+            site_id=str(project_model.site_id),
+            project_name=str(project_model.project_name),
+            when=started,
+        )
+        log_path = runs_dir / f"{stem}.log"
+        result_path = runs_dir / f"{stem}.json"
+        capture = cls(
+            log_path=log_path,
+            result_path=result_path,
+            started_at=started.isoformat(timespec="seconds"),
+            _log_file=log_path.open("w", encoding="utf-8"),
+        )
+        return capture
+
+    def write_line(self, line: str) -> None:
+        if self._log_file is None:
+            return
+        text = line if line.endswith("\n") else f"{line}\n"
+        self._log_file.write(text)
+        self._log_file.flush()
+
+    def finish(self, summary: AiBatchSummary) -> None:
+        self.finished_at = datetime.now().isoformat(timespec="seconds")
+        summary_text = format_ai_batch_completion_summary(summary)
+        self.write_line("")
+        self.write_line(summary_text)
+        if self._log_file is not None:
+            self._log_file.close()
+            self._log_file = None
+        payload = {
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "cancelled": summary.cancelled,
+            "series_count": summary.series_count,
+            "processed": summary.processed,
+            "applied": summary.applied,
+            "failed": summary.failed,
+            "skipped": summary.skipped,
+            "algorithm_totals": {
+                algorithm.value: {
+                    "applied": totals.applied,
+                    "complete": totals.complete,
+                    "skipped": totals.skipped,
+                    "failed": totals.failed,
+                    "modified": totals.modified,
+                }
+                for algorithm, totals in summary.algorithm_totals
+            },
+            "outcomes": [
+                {
+                    "series_path": str(outcome.series_path),
+                    "algorithm": outcome.algorithm.value,
+                    "status": outcome.status,
+                    "message": outcome.message,
+                }
+                for outcome in summary.outcomes
+            ],
+            "run_log_path": str(self.log_path),
+            "run_result_path": str(self.result_path),
+        }
+        self.result_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 AiBatchProgressCallback = Callable[
@@ -292,15 +390,32 @@ def _normalize_workflow_log_key(message: str) -> str:
 
 
 def format_ai_batch_completion_summary(summary: AiBatchSummary) -> str:
-    """User-facing batch completion summary with per-algorithm modified series counts."""
+    """User-facing batch completion summary with per-algorithm modified/failed/skipped counts."""
     series_count = summary.series_count
     series_label = _("series") if series_count == 1 else _("series")
-    lines = [_("Complete") + f": {series_count} {series_label}"]
+    headline = _("Complete") + f": {series_count} {series_label}"
+    extras: list[str] = []
+    if summary.applied > 0:
+        extras.append(f"{summary.applied} " + _("applied"))
+    if summary.failed > 0:
+        extras.append(f"{summary.failed} " + _("failed"))
+    if summary.skipped > 0:
+        extras.append(f"{summary.skipped} " + _("skipped"))
+    if extras:
+        headline += f" ({', '.join(extras)})"
+    lines = [headline]
     for algorithm, totals in summary.algorithm_totals:
-        if totals.modified <= 0:
-            continue
         name = algorithm_display_name(algorithm)
-        lines.append(f"  {name}: {totals.modified} " + _("modified"))
+        parts: list[str] = []
+        if totals.modified > 0:
+            parts.append(f"{totals.modified} " + _("modified"))
+        if totals.failed > 0:
+            parts.append(f"{totals.failed} " + _("failed"))
+        if totals.skipped > 0:
+            parts.append(f"{totals.skipped} " + _("skipped"))
+        if not parts:
+            continue
+        lines.append(f"  {name}: {', '.join(parts)}")
     return "\n".join(lines)
 
 
@@ -1142,6 +1257,7 @@ def ai_batch_process(
     *,
     anon_model: AnonymizerModel | None = None,
     anon_controller: AnonymizerController | None = None,
+    project_model: ProjectModel | None = None,
     progress: AiBatchProgressCallback | None = None,
     cancelled: AiBatchCancelledCallback | None = None,
     on_log: AiBatchWorkflowLogCallback | None = None,
@@ -1155,19 +1271,42 @@ def ai_batch_process(
     if not algorithms:
         return AiBatchSummary()
 
+    run_capture: BatchRunCapture | None = None
+    if project_model is not None:
+        with contextlib.suppress(OSError):
+            run_capture = BatchRunCapture.open_for_project(project_model)
+
+    def emit_workflow_line(message: str) -> None:
+        line = format_batch_workflow_log_line(message.rstrip("\n"))
+        if work_state is not None:
+            work_state.append_log(line)
+        if on_log is not None:
+            on_log(line)
+        if run_capture is not None:
+            run_capture.write_line(line)
+
     series_items = enumerate_series_for_studies(images_dir, studies)
     series_total = len(series_items)
     study_total = len(studies)
     if series_total == 0:
         if progress is not None:
             progress(0, 0, algorithms[0], 0, len(algorithms), _("No series found for selected studies"), 1.0)
-        if on_log is not None:
-            on_log(format_batch_workflow_log_line(_("No series found for selected studies")))
-        return AiBatchSummary()
+        emit_workflow_line(_("No series found for selected studies"))
+        empty = AiBatchSummary(
+            run_log_path=str(run_capture.log_path) if run_capture else None,
+            run_result_path=str(run_capture.result_path) if run_capture else None,
+        )
+        if run_capture is not None:
+            emit_workflow_line(_("Run log") + f": {run_capture.log_path}")
+            run_capture.finish(empty)
+        return empty
 
     total_steps = series_total * len(algorithms)
-    completed_steps = 0
-    summary = AiBatchSummary(series_count=series_total)
+    summary = AiBatchSummary(
+        series_count=series_total,
+        run_log_path=str(run_capture.log_path) if run_capture else None,
+        run_result_path=str(run_capture.result_path) if run_capture else None,
+    )
     algorithm_totals: dict[AiBatchAlgorithm, AiBatchAlgorithmTotals] = {
         algorithm: AiBatchAlgorithmTotals() for algorithm in algorithms
     }
@@ -1175,12 +1314,13 @@ def ai_batch_process(
     memory_guard = MemoryGuard()
     defer_volume_to_face_blur = AiBatchAlgorithm.HARMONIZE in algorithms and AiBatchAlgorithm.FACE_BLUR in algorithms
     newly_harmonized_study_uids: set[str] = set()
+    recorded_outcomes: list[AiBatchOutcome] = []
 
     def log_workflow(message: str) -> None:
-        if work_state is not None:
-            work_state.append_log(format_batch_workflow_log_line(message.rstrip("\n")))
-        if on_log is not None:
-            on_log(format_batch_workflow_log_line(message.rstrip("\n")))
+        emit_workflow_line(message)
+
+    if run_capture is not None:
+        log_workflow(_("Run log") + f": {run_capture.log_path}")
 
     def emit_memory_snapshot() -> MemorySnapshot | None:
         snapshot = capture_memory_snapshot()
@@ -1243,6 +1383,29 @@ def ai_batch_process(
         if work_state is not None:
             work_state.set_status(message)
 
+    def _summary_with(
+        *,
+        processed: int | None = None,
+        skipped: int | None = None,
+        applied: int | None = None,
+        failed: int | None = None,
+        cancelled_flag: bool | None = None,
+        outcomes: tuple[AiBatchOutcome, ...] | None = None,
+    ) -> AiBatchSummary:
+        return AiBatchSummary(
+            processed=summary.processed if processed is None else processed,
+            skipped=summary.skipped if skipped is None else skipped,
+            applied=summary.applied if applied is None else applied,
+            failed=summary.failed if failed is None else failed,
+            cancelled=summary.cancelled if cancelled_flag is None else cancelled_flag,
+            series_count=series_total,
+            algorithm_totals=tuple(algorithm_totals.items()),
+            newly_harmonized_study_uids=tuple(sorted(newly_harmonized_study_uids)),
+            outcomes=summary.outcomes if outcomes is None else outcomes,
+            run_log_path=str(run_capture.log_path) if run_capture else None,
+            run_result_path=str(run_capture.result_path) if run_capture else None,
+        )
+
     def record_outcome(
         outcome: AiBatchOutcome,
         *,
@@ -1256,7 +1419,8 @@ def ai_batch_process(
         totals = algorithm_totals[algorithm]
         totals = _increment_algorithm_totals(totals, outcome)
         algorithm_totals[algorithm] = totals
-        summary = AiBatchSummary(
+        recorded_outcomes.append(outcome)
+        summary = _summary_with(
             processed=summary.processed + 1,
             skipped=summary.skipped
             + (
@@ -1268,13 +1432,9 @@ def ai_batch_process(
             ),
             applied=summary.applied + (1 if outcome.status == "ok" else 0),
             failed=summary.failed + (1 if outcome.status == "failed" else 0),
-            cancelled=summary.cancelled,
-            series_count=series_total,
-            algorithm_totals=tuple(algorithm_totals.items()),
-            newly_harmonized_study_uids=tuple(sorted(newly_harmonized_study_uids)),
+            outcomes=tuple(recorded_outcomes),
         )
-        if on_log is not None:
-            on_log(format_batch_workflow_log_line(format_batch_outcome_subline(outcome)))
+        log_workflow(format_batch_outcome_subline(outcome))
 
     def is_cancelled() -> bool:
         if work_state is not None and work_state.should_cancel():
@@ -1283,16 +1443,9 @@ def ai_batch_process(
 
     def mark_cancelled() -> None:
         nonlocal summary
-        summary = AiBatchSummary(
-            processed=summary.processed,
-            skipped=summary.skipped,
-            applied=summary.applied,
-            failed=summary.failed,
-            cancelled=True,
-            series_count=series_total,
-            algorithm_totals=tuple(algorithm_totals.items()),
-            newly_harmonized_study_uids=tuple(sorted(newly_harmonized_study_uids)),
-        )
+        summary = _summary_with(cancelled_flag=True, outcomes=tuple(recorded_outcomes))
+
+    completed_steps = 0
 
     def outcome_detail(outcome: AiBatchOutcome) -> str:
         if outcome.status == "ok":
@@ -1551,6 +1704,9 @@ def ai_batch_process(
             )
 
     volume_contexts.clear()
+    summary = _summary_with(outcomes=tuple(recorded_outcomes))
+    if run_capture is not None:
+        run_capture.finish(summary)
     if work_state is not None and not work_state.done:
         work_state.finish(summary)
     return summary

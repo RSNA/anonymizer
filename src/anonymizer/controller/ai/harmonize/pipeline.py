@@ -1942,11 +1942,13 @@ def _harmonize_one_planar_series(
         timing.merge_sec = time.perf_counter() - stage_t0
         if timing_collector is not None:
             timing_collector.add(timing)
+        error = _("Not an XR/US/MG series or no DICOM files")
+        logger.warning("Harmonize planar merge failed for %s: %s", series_dir, error)
         return HarmonizedResult(
             series_directory=series_dir,
             radlex_series_description="",
             tseg=None,
-            error=_("Not an XR/US/MG series or no DICOM files"),
+            error=error,
         )
 
     try:
@@ -1955,6 +1957,7 @@ def _harmonize_one_planar_series(
         timing.merge_sec = time.perf_counter() - stage_t0
         if timing_collector is not None:
             timing_collector.add(timing)
+        logger.warning("Harmonize planar merge failed for %s: %s", series_dir, exc)
         return HarmonizedResult(
             series_directory=series_dir,
             radlex_series_description="",

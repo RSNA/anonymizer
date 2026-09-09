@@ -2682,6 +2682,7 @@ class ProjectController(AE):
             options,
             anon_model=self.anonymizer.model,
             anon_controller=self.anonymizer,
+            project_model=self.model,
             progress=progress,
             cancelled=cancelled,
             on_log=on_log,

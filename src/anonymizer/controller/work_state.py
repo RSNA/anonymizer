@@ -34,6 +34,7 @@ class WorkState:
     error: str | None = None
     result: object | None = None
     batch_logs: list[str] = field(default_factory=list)
+    log_seq: int = 0
     fraction: float = 0.0
     progress_detail: object | None = None
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
@@ -131,6 +132,16 @@ class WorkState:
     def append_log(self, line: str) -> None:
         with self._lock:
             self.batch_logs.append(line)
+            self.log_seq += 1
+
+    def pending_log_count(self) -> int:
+        with self._lock:
+            return len(self.batch_logs)
+
+    def log_sequence(self) -> int:
+        """Monotonic counter bumped on each append_log (for JobPoller tick keys)."""
+        with self._lock:
+            return self.log_seq
 
     def drain_logs(self) -> list[str]:
         with self._lock:

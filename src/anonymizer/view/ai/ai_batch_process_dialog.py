@@ -291,9 +291,6 @@ class AiBatchProcessDialog(AppToplevel):
                     )
                 )
 
-            def on_log(message: str) -> None:
-                self._worker_queue.put(("log", message))
-
             def on_memory(snapshot: MemorySnapshot) -> None:
                 self._worker_queue.put(("memory", snapshot))
 
@@ -302,7 +299,7 @@ class AiBatchProcessDialog(AppToplevel):
                 self._batch_options,
                 progress=on_progress,
                 cancelled=lambda: self._cancelled,
-                on_log=on_log,
+                on_log=None,
                 memory_callback=on_memory,
                 work_state=self._work_state,
             )

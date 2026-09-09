@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -932,6 +933,7 @@ def test_format_ai_batch_completion_summary_face_blur_complete_not_failed() -> N
 
     summary = AiBatchSummary(
         series_count=6,
+        applied=10,
         algorithm_totals=(
             (AiBatchAlgorithm.REMOVE_PIXEL_PHI, AiBatchAlgorithmTotals(complete=6)),
             (AiBatchAlgorithm.HARMONIZE, AiBatchAlgorithmTotals(applied=6)),
@@ -939,8 +941,92 @@ def test_format_ai_batch_completion_summary_face_blur_complete_not_failed() -> N
         ),
     )
     message = format_ai_batch_completion_summary(summary)
-    assert message == ("Complete: 6 series\n  Harmonize: 6 modified\n  Face De-identify: 4 modified")
+    assert message == (
+        "Complete: 6 series (10 applied)\n  Harmonize: 6 modified\n  Face De-identify: 4 modified"
+    )
     assert "Remove Burnt-in Annotation" not in message
+
+
+def test_format_ai_batch_completion_summary_includes_failed_and_skipped() -> None:
+    from anonymizer.controller.ai_batch_process import AiBatchAlgorithmTotals, AiBatchSummary
+
+    summary = AiBatchSummary(
+        series_count=4,
+        applied=1,
+        failed=2,
+        skipped=1,
+        algorithm_totals=(
+            (AiBatchAlgorithm.HARMONIZE, AiBatchAlgorithmTotals(applied=1, failed=2, skipped=1)),
+        ),
+    )
+    message = format_ai_batch_completion_summary(summary)
+    assert "2 failed" in message
+    assert "1 skipped" in message
+    assert "Harmonize: 1 modified, 2 failed, 1 skipped" in message
+
+
+def test_batch_run_artifact_stem_sanitizes_names() -> None:
+    from datetime import datetime
+
+    from anonymizer.controller.ai_batch_process import batch_run_artifact_stem
+
+    stem = batch_run_artifact_stem(
+        site_id="Site/A",
+        project_name="My Project!",
+        when=datetime(2026, 9, 9, 14, 30, 0),
+    )
+    assert stem == "Site_A_My_Project_ai_batch_20260909_143000"
+
+
+def test_batch_run_capture_writes_log_and_json(tmp_path: Path) -> None:
+    from anonymizer.controller.ai_batch_process import (
+        AiBatchAlgorithmTotals,
+        AiBatchOutcome,
+        AiBatchSummary,
+        BatchRunCapture,
+    )
+    from anonymizer.model.project import ProjectModel
+
+    model = ProjectModel()
+    model.storage_dir = tmp_path / "proj"
+    model.site_id = "SITE1"
+    model.project_name = "Demo"
+    model.__post_init__()
+
+    capture = BatchRunCapture.open_for_project(model)
+    capture.write_line("  Failed: Could not determine body part from DICOM metadata for planar Harmonize")
+    summary = AiBatchSummary(
+        series_count=1,
+        processed=1,
+        failed=1,
+        algorithm_totals=((AiBatchAlgorithm.HARMONIZE, AiBatchAlgorithmTotals(failed=1)),),
+        outcomes=(
+            AiBatchOutcome(
+                Path("/tmp/series"),
+                AiBatchAlgorithm.HARMONIZE,
+                "failed",
+                "Could not determine body part from DICOM metadata for planar Harmonize",
+            ),
+        ),
+    )
+    capture.finish(summary)
+
+    log_text = capture.log_path.read_text(encoding="utf-8")
+    assert "Failed: Could not determine body part" in log_text
+    assert "1 failed" in log_text
+    payload = json.loads(capture.result_path.read_text(encoding="utf-8"))
+    assert payload["failed"] == 1
+    assert payload["outcomes"][0]["status"] == "failed"
+    assert capture.log_path.parent == model.batch_runs_dir()
+
+
+def test_project_model_batch_runs_dir(tmp_path: Path) -> None:
+    from anonymizer.model.project import ProjectModel
+
+    model = ProjectModel()
+    model.storage_dir = tmp_path / "proj"
+    model.__post_init__()
+    assert model.batch_runs_dir() == tmp_path / "proj" / model.PRIVATE_DIR / model.BATCH_RUNS_DIR
 
 
 def test_project_dir_from_series_path_matches_batch_storage_dir(tmp_path: Path) -> None:
@@ -1303,3 +1389,59 @@ def test_ai_batch_process_runs_harmonize_for_planar_us(
 
     mock_harmonize.assert_called_once()
     assert summary.applied == 1
+
+
+@patch("anonymizer.controller.ai_batch_process.auto_apply_best_study_descriptions")
+@patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
+def test_ai_batch_failed_outcome_appears_in_work_state_logs(
+    mock_harmonize: MagicMock,
+    mock_auto_apply: MagicMock,
+    images_layout: tuple[Path, list[tuple[str, str]]],
+) -> None:
+    from anonymizer.controller.ai.harmonize import HarmonizeApplyOutcome
+    from anonymizer.controller.work_state import WorkState
+
+    images_dir, studies = images_layout
+    enter_patch, exit_patch, _handle, _runner = _patch_batch_runners()
+    series_path = images_dir / "anon_pt" / "anon_study" / "series_a"
+    fail_msg = "Could not determine body part from DICOM metadata for planar Harmonize"
+    mock_harmonize.return_value = HarmonizeApplyOutcome(series_path, "failed", fail_msg)
+    mock_auto_apply.return_value = []
+    work_state = WorkState()
+    work_state.prepare_job()
+
+    with (
+        enter_patch,
+        exit_patch,
+        patch(
+            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            return_value=[(1, 1, series_path)],
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            return_value=_batch_test_dataset(modality="CR"),
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            return_value=_batch_test_dataset(modality="CR"),
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            return_value=None,
+        ),
+    ):
+        summary = ai_batch_process(
+            images_dir,
+            studies,
+            AiBatchProcessOptions(algorithms=(AiBatchAlgorithm.HARMONIZE,)),
+            anon_model=_pending_anon_model(),
+            work_state=work_state,
+        )
+
+    logs = work_state.drain_logs()
+    joined = "\n".join(logs)
+    assert summary.failed == 1
+    assert len(summary.outcomes) == 1
+    assert summary.outcomes[0].status == "failed"
+    assert f"Failed: {fail_msg}" in joined
+    assert "1 failed" in format_ai_batch_completion_summary(summary)

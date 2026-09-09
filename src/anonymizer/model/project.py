@@ -196,6 +196,7 @@ class ProjectModel:
         self.PUBLIC_DIR = _("public")
         self.PHI_EXPORT_DIR = _("phi_export")
         self.QUARANTINE_DIR = _("quarantine")
+        self.BATCH_RUNS_DIR = _("batch_runs")
         self.set_storage_classes_from_modalities()
 
     def get_class_name(self) -> str:
@@ -252,6 +253,10 @@ class ProjectModel:
 
     def phi_export_dir(self) -> Path:
         return self.storage_dir.joinpath(self.PRIVATE_DIR, self.PHI_EXPORT_DIR)
+
+    def batch_runs_dir(self) -> Path:
+        """Per-project directory for AI batch workflow logs and JSON run results."""
+        return self.storage_dir.joinpath(self.PRIVATE_DIR, self.BATCH_RUNS_DIR)
 
     def regenerate_site_id(self) -> None:
         self.site_id = self.default_site_id()

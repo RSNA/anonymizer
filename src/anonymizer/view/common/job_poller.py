@@ -76,6 +76,7 @@ class JobPoller:
             done,
             fraction,
             _progress_detail_tick_key(detail),
+            self._work_state.log_sequence(),
         )
 
     def _poll(self) -> None:
@@ -87,7 +88,7 @@ class JobPoller:
             return
 
         tick_key = self._tick_key()
-        frame_index, status, done, _fraction, _detail_key = tick_key
+        frame_index, status, done, _fraction, _detail_key, _log_seq = tick_key
         state_changed = tick_key != self._last_tick_key
         if state_changed:
             logger.debug(
