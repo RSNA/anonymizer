@@ -143,6 +143,19 @@ class DatasetView(AppToplevel):
         self.bind("<Escape>", self._escape_keypress)
         self._create_widgets()
         self._update_tree_from_phi_index()
+        self._enable_filesystem_drops()
+
+    def _enable_filesystem_drops(self) -> None:
+        """Optional OS file/folder drop → same ImportFilesDialog path as File menu."""
+        from anonymizer.view.common.filesystem_drop import enable_filesystem_drops
+
+        app = self._parent.master  # Anonymizer (Dashboard's master)
+        on_paths = getattr(app, "import_paths", None)
+        if not callable(on_paths):
+            return
+        # Register on the window and the index frame so drops land on usable chrome.
+        enable_filesystem_drops(self, on_paths)
+        enable_filesystem_drops(self._index_frame, on_paths)
 
     def _create_widgets(self):
         logger.info("_create_widgets")

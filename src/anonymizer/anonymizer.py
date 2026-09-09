@@ -713,6 +713,10 @@ class Anonymizer(ctk.CTk):
             logger.error("Critical Internal Error creating Dashboard")
             return
 
+        from anonymizer.view.common.filesystem_drop import enable_filesystem_drops
+
+        enable_filesystem_drops(self.dashboard, self.import_paths)
+
         self.dashboard.update_totals(self.controller.anonymizer.model.get_totals())
         self.dashboard.focus_set()
         self._apply_project_window_size()
@@ -921,8 +925,7 @@ class Anonymizer(ctk.CTk):
                 logger.info("Import Files Cancelled")
                 return
 
-            dlg = ImportFilesDialog(self, self.controller.anonymizer, file_paths)
-            dlg.get_input()
+            self._run_import_files_dialog(list(file_paths))
         finally:
             self._end_import()
 
@@ -956,115 +959,171 @@ class Anonymizer(ctk.CTk):
                 logger.info("Import Directory Cancelled")
                 return
 
-            file_paths = []
-            # Handle reading DICOMDIR files in Media Storage Directory (eg. CD/DVD/USB Drive)
-            dicomdir_file = os.path.join(root_dir, "DICOMDIR")
-            if os.path.exists(dicomdir_file):
-                try:
-                    ds = dcmread(fp=dicomdir_file)
-                    root_dir = Path(str(ds.filename)).resolve().parent
-                    msg = _("Reading DICOMDIR Root directory" + f": {Path(root_dir).stem}...")
-                    logger.info(msg)
-                    self.dashboard.set_status(msg)
-
-                    # Iterate through the PATIENT records
-                    for patient in ds.patient_records:
-                        logger.info(f"PATIENT: PatientID={patient.PatientID}, PatientName={patient.PatientName}")
-
-                        # Find all the STUDY records for the patient
-                        studies = [ii for ii in patient.children if ii.DirectoryRecordType == "STUDY"]
-                        for study in studies:
-                            descr = study.StudyDescription or "(no value available)"
-                            logging.info(
-                                f"{'  ' * 1}STUDY: StudyID={study.StudyID}, "
-                                f"StudyDate={study.StudyDate}, StudyDescription={descr}"
-                            )
-
-                            # Find all the SERIES records in the study
-                            all_series = [ii for ii in study.children if ii.DirectoryRecordType == "SERIES"]
-                            for series in all_series:
-                                # Find all the IMAGE records in the series
-                                images = [ii for ii in series.children if ii.DirectoryRecordType == "IMAGE"]
-                                plural = ("", "s")[len(images) > 1]
-
-                                descr = getattr(series, "SeriesDescription", "(no value available)")
-                                logging.info(
-                                    f"{'  ' * 2}SERIES: SeriesNumber={series.SeriesNumber}, "
-                                    f"Modality={series.Modality}, SeriesDescription={descr} - "
-                                    f"{len(images)} SOP Instance{plural}"
-                                )
-
-                                # Get the absolute file path to each instance
-                                # Each IMAGE contains a relative file path to the root directory
-                                elems = [ii["ReferencedFileID"] for ii in images]
-                                # Make sure the relative file path is always a list of str
-                                paths = [[ee.value] if ee.VM == 1 else ee.value for ee in elems]
-                                paths = [f"{root_dir}/{Path(*fp)}" for fp in paths]
-
-                                # List the instance file paths for this series
-                                for fp in paths:
-                                    if is_hidden_path(fp):
-                                        continue
-                                    logger.info(f"{'  ' * 3}IMAGE: Path={os.fspath(fp)}")
-                                    file_paths.append(fp)
-
-                except Exception as e:
-                    msg_prefix = _("Error reading DICOMDIR file")
-                    msg_detail = f"{dicomdir_file}, {str(e)}"
-                    logger.error(msg_prefix + ": " + msg_detail)
-                    self.dashboard.set_status(msg_prefix)
-
-                    messagebox.showerror(
-                        title=_("Import Directory Error"),
-                        message=msg_prefix + "\n\n" + msg_detail,
-                        parent=self,
-                    )
-                    return
-            else:
-                msg = _("Reading filenames from") + f" {Path(root_dir).stem}..."
-                logger.info(msg)
-                self.dashboard.set_status(msg)
-                # TODO OPTIMIZE: use Python Generator to handle massive directory trees
-                file_paths = list_import_directory_files(root_dir)
-
-            if len(file_paths) == 0:
-                msg = _("No files found in") + f" {root_dir}"
-                logger.info(msg)
-                messagebox.showerror(
-                    title=_("Import Directory Error"),
-                    message=msg,
-                    parent=self,
-                )
-                self.dashboard.set_status(msg)
-                return
-
-            msg = (
-                f"{len(file_paths)} "
-                + _("filenames read from")
-                + f"\n\n{root_dir}\n\n"
-                + _("Do you want to initiate import?")
-            )
-            if not messagebox.askyesno(
-                title=_("Import Directory"),
-                message=msg,
-                parent=self,
-            ):
-                msg = _("Import Directory Cancelled")
-                logger.info(msg)
-                self.dashboard.set_status(msg)
-                return
-
-            msg = _("Importing") + f" {len(file_paths)} {_('file') if len(file_paths) == 1 else _('files')}"
-            logger.info(msg)
-            self.dashboard.set_status(msg)
-
-            dlg = ImportFilesDialog(self, self.controller.anonymizer, sorted(file_paths))
-            files_processed = dlg.get_input()
-            msg = _("Files processed") + f": {files_processed}"
-            logger.info(msg)
-            self.dashboard.set_status(msg)
+            self._import_directory_path(root_dir)
         finally:
             self._end_import()
+
+    def import_paths(self, paths: list[str]) -> None:
+        """Import local files/folders from OS drag-and-drop (skips chooser dialogs)."""
+        logging.info("Import Paths (drop): %s", paths)
+
+        if not self.controller:
+            logger.error("Internal Error: no ProjectController")
+            return
+
+        cleaned = [str(Path(p).expanduser()) for p in paths if str(p).strip()]
+        if not cleaned:
+            return
+
+        if not self._begin_import():
+            return
+
+        self.disable_file_menu()
+        try:
+            self.update_idletasks()
+            only_dirs = [p for p in cleaned if Path(p).is_dir()]
+            only_files = [p for p in cleaned if Path(p).is_file()]
+            other = [p for p in cleaned if not Path(p).exists()]
+            if other:
+                logger.warning("Ignoring missing drop paths: %s", other)
+
+            if only_dirs and not only_files and len(only_dirs) == 1:
+                self._import_directory_path(only_dirs[0])
+                return
+
+            file_paths: list[str] = list(only_files)
+            for directory in only_dirs:
+                expanded = self._collect_files_from_directory(directory)
+                if expanded is None:
+                    return
+                file_paths.extend(expanded)
+
+            if not file_paths:
+                messagebox.showerror(
+                    title=_("Import"),
+                    message=_("No files found in the dropped items."),
+                    parent=self,
+                )
+                return
+
+            self._run_import_files_dialog(file_paths)
+        finally:
+            self._end_import()
+
+    def _run_import_files_dialog(self, file_paths: list[str]) -> None:
+        assert self.controller is not None
+        dlg = ImportFilesDialog(self, self.controller.anonymizer, file_paths)
+        dlg.get_input()
+
+    def _collect_files_from_directory(self, root_dir: str) -> list[str] | None:
+        """Expand a directory to file paths (DICOMDIR-aware). None on hard error."""
+        if not self.dashboard:
+            logger.error("Internal Error: no Dashboard")
+            return None
+
+        file_paths: list[str] = []
+        dicomdir_file = os.path.join(root_dir, "DICOMDIR")
+        if os.path.exists(dicomdir_file):
+            try:
+                ds = dcmread(fp=dicomdir_file)
+                root_dir = str(Path(str(ds.filename)).resolve().parent)
+                msg = _("Reading DICOMDIR Root directory" + f": {Path(root_dir).stem}...")
+                logger.info(msg)
+                self.dashboard.set_status(msg)
+
+                for patient in ds.patient_records:
+                    logger.info(f"PATIENT: PatientID={patient.PatientID}, PatientName={patient.PatientName}")
+                    studies = [ii for ii in patient.children if ii.DirectoryRecordType == "STUDY"]
+                    for study in studies:
+                        descr = study.StudyDescription or "(no value available)"
+                        logging.info(
+                            f"{'  ' * 1}STUDY: StudyID={study.StudyID}, "
+                            f"StudyDate={study.StudyDate}, StudyDescription={descr}"
+                        )
+                        all_series = [ii for ii in study.children if ii.DirectoryRecordType == "SERIES"]
+                        for series in all_series:
+                            images = [ii for ii in series.children if ii.DirectoryRecordType == "IMAGE"]
+                            plural = ("", "s")[len(images) > 1]
+                            descr = getattr(series, "SeriesDescription", "(no value available)")
+                            logging.info(
+                                f"{'  ' * 2}SERIES: SeriesNumber={series.SeriesNumber}, "
+                                f"Modality={series.Modality}, SeriesDescription={descr} - "
+                                f"{len(images)} SOP Instance{plural}"
+                            )
+                            elems = [ii["ReferencedFileID"] for ii in images]
+                            paths = [[ee.value] if ee.VM == 1 else ee.value for ee in elems]
+                            paths = [f"{root_dir}/{Path(*fp)}" for fp in paths]
+                            for fp in paths:
+                                if is_hidden_path(fp):
+                                    continue
+                                logger.info(f"{'  ' * 3}IMAGE: Path={os.fspath(fp)}")
+                                file_paths.append(fp)
+            except Exception as e:
+                msg_prefix = _("Error reading DICOMDIR file")
+                msg_detail = f"{dicomdir_file}, {str(e)}"
+                logger.error(msg_prefix + ": " + msg_detail)
+                self.dashboard.set_status(msg_prefix)
+                messagebox.showerror(
+                    title=_("Import Directory Error"),
+                    message=msg_prefix + "\n\n" + msg_detail,
+                    parent=self,
+                )
+                return None
+        else:
+            msg = _("Reading filenames from") + f" {Path(root_dir).stem}..."
+            logger.info(msg)
+            self.dashboard.set_status(msg)
+            file_paths = list_import_directory_files(root_dir)
+
+        return file_paths
+
+    def _import_directory_path(self, root_dir: str) -> None:
+        """Import one directory with the same confirm UX as File → Import Directory."""
+        if not self.dashboard:
+            logger.error("Internal Error: no Dashboard")
+            return
+
+        file_paths = self._collect_files_from_directory(root_dir)
+        if file_paths is None:
+            return
+
+        if len(file_paths) == 0:
+            msg = _("No files found in") + f" {root_dir}"
+            logger.info(msg)
+            messagebox.showerror(
+                title=_("Import Directory Error"),
+                message=msg,
+                parent=self,
+            )
+            self.dashboard.set_status(msg)
+            return
+
+        msg = (
+            f"{len(file_paths)} "
+            + _("filenames read from")
+            + f"\n\n{root_dir}\n\n"
+            + _("Do you want to initiate import?")
+        )
+        if not messagebox.askyesno(
+            title=_("Import Directory"),
+            message=msg,
+            parent=self,
+        ):
+            msg = _("Import Directory Cancelled")
+            logger.info(msg)
+            self.dashboard.set_status(msg)
+            return
+
+        msg = _("Importing") + f" {len(file_paths)} {_('file') if len(file_paths) == 1 else _('files')}"
+        logger.info(msg)
+        self.dashboard.set_status(msg)
+
+        assert self.controller is not None
+        dlg = ImportFilesDialog(self, self.controller.anonymizer, sorted(file_paths))
+        files_processed = dlg.get_input()
+        msg = _("Files processed") + f": {files_processed}"
+        logger.info(msg)
+        self.dashboard.set_status(msg)
 
     def query_retrieve(self):
         logging.info("OPEN QueryView")
@@ -1687,11 +1746,15 @@ def main(config: Path | None = None, ai_batch: Path | None = None, ai_batch_run:
     # path[0]=="" resolves to install_dir and can shadow venv packages (e.g. totalsegmentator).
     if sys.path and sys.path[0] in ("", "."):
         sys.path.pop(0)
+    from anonymizer.controller.ai.harmonize.cxp_view import CXP_VIEW_DIR
+    from anonymizer.controller.ai.harmonize.xp_bodypart import XP_BODYPART_DIR
     from anonymizer.controller.ai.remove_pixel_phi import OCR_MODEL_DIR, OcrModelStatus, probe_ocr_models
 
     tseg_home = Path("assets/ai/tseg")
     tseg_weights = tseg_home / "nnunet" / "results"
     OCR_MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    XP_BODYPART_DIR.mkdir(parents=True, exist_ok=True)
+    CXP_VIEW_DIR.mkdir(parents=True, exist_ok=True)
     tseg_home.mkdir(parents=True, exist_ok=True)
     tseg_weights.mkdir(parents=True, exist_ok=True)
     os.environ["TOTALSEG_HOME_DIR"] = str(tseg_home.resolve())

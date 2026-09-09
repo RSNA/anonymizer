@@ -40,6 +40,7 @@ dependencies = [
     "xgboost>=2.0.0",
     "nibabel",
     "dicom2nifti>=2.3,<2.6",
+    "tkinterdnd2>=0.6.3",
 ]
 
 [project.scripts]

@@ -2166,6 +2166,7 @@ dependencies = [
     { name = "simpleitk" },
     { name = "sqlalchemy" },
     { name = "tkhtmlview" },
+    { name = "tkinterdnd2" },
     { name = "toml" },
     { name = "torch", version = "2.13.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
     { name = "torch", version = "2.13.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
@@ -2224,6 +2225,7 @@ requires-dist = [
     { name = "simpleitk", specifier = ">=2.5.5" },
     { name = "sqlalchemy", specifier = ">=2.0.38" },
     { name = "tkhtmlview" },
+    { name = "tkinterdnd2", specifier = ">=0.6.3" },
     { name = "toml", specifier = ">=0.10.2" },
     { name = "torch", marker = "sys_platform != 'linux'" },
     { name = "torch", marker = "sys_platform == 'linux'", index = "https://download.pytorch.org/whl/cpu" },
@@ -2569,6 +2571,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/75/17/7e8acc5bf815f7be9639a5ffc5eaafbb7f9a3c2e6cfcc8114c7397aba9d8/tkhtmlview-0.3.2.tar.gz", hash = "sha256:e9f34def321585407a19b40a69c63cffa4e4acadff1ccf8b81a4e27afc9bace0", size = 8765, upload-time = "2026-02-12T13:26:36.586Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4d/a2/4b53d0d9a5eca110c774f4f3921c166f8fd4ca952f5f6b2a1d680a1a9b2d/tkhtmlview-0.3.2-py3-none-any.whl", hash = "sha256:21f4492e98e3800a7ef5db223d201430aff3d855cf1dab3e40f17c1acc2e6739", size = 9958, upload-time = "2026-02-12T13:26:35.851Z" },
+]
+
+[[package]]
+name = "tkinterdnd2"
+version = "0.6.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/32/e7/50713531e91cbbd546a72f3044742fa43914bdebab3e012cccb28da5eb8a/tkinterdnd2-0.6.3.tar.gz", hash = "sha256:53ed472ec08705702e087b5664f0534ca53a07a67102255f9cdc82bc5094158b", size = 735139, upload-time = "2026-09-04T16:36:38.159Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f4/86/fb62a6251863085d9e4ccf80cd0e55a19b91fab752a0b245d59aecade8f8/tkinterdnd2-0.6.3-py3-none-any.whl", hash = "sha256:50c7386302104bfb30d8e15b4cc53c0581bc51a28186ff4d7ad3cb2cc820c936", size = 816576, upload-time = "2026-09-04T16:36:36.456Z" },
 ]
 
 [[package]]
