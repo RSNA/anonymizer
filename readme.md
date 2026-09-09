@@ -1,7 +1,7 @@
 # RSNA DICOM Anonymizer (V19)
 [![Tests](https://github.com/RSNA/anonymizer/actions/workflows/tests.yaml/badge.svg)](https://github.com/RSNA/anonymizer/actions/workflows/tests.yaml)
 
-**Version 19.0.5** is the current V19 release on the `master` branch and PyPI. Requires **Python 3.11 or 3.12** with **tkinter** built in. Python 3.13 is not supported.
+**Version 19.0.6** is the current V19 release on the `master` branch and PyPI. Requires **Python 3.11 or 3.12** with **tkinter** built in. Python 3.13 is not supported.
 
 ## Install
 
@@ -27,7 +27,7 @@ uv --version
 
 ### 2. Install Python with tkinter, then the app
 
-The desktop UI needs **tkinter**. Install a Python that ships with it, then create the venv and install **19.0.5**:
+The desktop UI needs **tkinter**. Install a Python that ships with it, then create the venv and install **19.0.6**:
 
 | Platform | Ensure tkinter is available |
 | --- | --- |
@@ -40,7 +40,7 @@ uv python install 3.12                     # or: 3.11
 uv venv rsna-anonymizer --python 3.12      # or: --python 3.11
 source rsna-anonymizer/bin/activate        # Windows: rsna-anonymizer\Scripts\activate
 
-uv pip install rsna-anonymizer             # version 19.0.5
+uv pip install rsna-anonymizer             # version 19.0.6
 ```
 
 ### 3. Verify the install
@@ -48,7 +48,7 @@ uv pip install rsna-anonymizer             # version 19.0.5
 ```bash
 python --version          # 3.11.x or 3.12.x
 python -m tkinter         # a small Tk window must open — required for the UI
-rsna-anonymizer --version # should report 19.0.5
+rsna-anonymizer --version # should report 19.0.6
 ```
 
 If `python -m tkinter` fails, the venv’s Python was built without Tk: fix the platform step above, recreate the venv, and reinstall.

@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [19.0.6]
+- Face blur: fix Sitk NIfTI direction so sagittal head CT detects and blurs face voxels
+- Dataset: show Face blur as No when unset instead of a blank cell
+- AI Batch: surface Failed/Skipped outcomes in the dialog and persist timestamped run logs under private/batch_runs
+- Move FALCON research code from product AI into prototyping; trim redundant controller unit tests; quiet pydicom fixture warnings
+
 ## [19.0.5]
 - Harmonize XR/US/MG (planar): metadata RadLex series descriptions and modality LOINC study offers; isolated from CT/MR TotalSegmentator path; AI Batch supported
 - Dataset: click green harmonized study/series descriptions to choose LOINC (study) or RadLex (series) alternatives for that modality; multi-select preserved
