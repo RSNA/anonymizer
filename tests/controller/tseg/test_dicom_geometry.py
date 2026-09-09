@@ -11,6 +11,7 @@ import pytest
 
 from anonymizer.controller.ai.tseg.config import MIN_DICOM_SLICES
 from anonymizer.controller.ai.tseg.dicom_geometry import (
+    _itk_direction_matrix,
     analyze_series_geometry,
     build_sitk_volume_from_pydicom,
     build_sitk_volume_from_series_frames,
@@ -540,3 +541,58 @@ def test_build_sitk_volume_skips_header_only_instances(tmp_path: Path) -> None:
     assert header_only not in readable
     volume = build_sitk_volume_from_pydicom(paths + [header_only])
     assert volume.GetSize()[2] == len(paths)
+
+
+def test_itk_direction_matrix_uses_axis_vectors_as_columns() -> None:
+    # Identity axes: concat-as-rows and column-major flatten coincide.
+    assert _itk_direction_matrix((1, 0, 0), (0, 1, 0), (0, 0, 1)) == (
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    )
+    # Sagittal-like IOP: row=+P, col=-S, slice=-L — columns must be the vectors
+    # (not the historical row-concat flat tuple).
+    row, col, slice_dir = (0.0, 1.0, 0.0), (0.0, 0.0, -1.0), (-1.0, 0.0, 0.0)
+    assert _itk_direction_matrix(row, col, slice_dir) == (
+        0.0,
+        0.0,
+        -1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        -1.0,
+        0.0,
+    )
+    assert _itk_direction_matrix(row, col, slice_dir) != tuple(row) + tuple(col) + tuple(slice_dir)
+
+
+def test_build_sitk_volume_direction_axial_identity() -> None:
+    from anonymizer.controller.series_io import load_series_frames
+    from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
+
+    series = CONTROLLER_TEST_DCM_FILES_DIR / "CT_Head_With_Contrast"
+    if not series.is_dir():
+        pytest.skip("CT_Head_With_Contrast fixture missing")
+    loaded = load_series_frames(series)
+    volume = build_sitk_volume_from_series_frames(loaded.metadata, loaded.frames, loaded.slice_paths)
+    assert volume.GetDirection() == (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+
+
+def test_build_sitk_volume_direction_sagittal_head() -> None:
+    from anonymizer.controller.series_io import load_series_frames
+    from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
+
+    series = CONTROLLER_TEST_DCM_FILES_DIR / "CT_Head_Without_Contrast_Sagittal"
+    if not series.is_dir():
+        pytest.skip("CT_Head_Without_Contrast_Sagittal fixture missing")
+    loaded = load_series_frames(series)
+    volume = build_sitk_volume_from_series_frames(loaded.metadata, loaded.frames, loaded.slice_paths)
+    # row=+P, col=-S, slice=-L as ITK columns
+    assert volume.GetDirection() == (0.0, 0.0, -1.0, 1.0, 0.0, 0.0, 0.0, -1.0, 0.0)

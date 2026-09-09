@@ -149,6 +149,28 @@ def _cross(
     )
 
 
+def _itk_direction_matrix(
+    x_direction: Sequence[float],
+    y_direction: Sequence[float],
+    z_direction: Sequence[float],
+) -> tuple[float, ...]:
+    """Row-major ITK/SimpleITK direction: matrix columns are axis direction cosines."""
+    x_dir = _vector3(x_direction)
+    y_dir = _vector3(y_direction)
+    z_dir = _vector3(z_direction)
+    return (
+        x_dir[0],
+        y_dir[0],
+        z_dir[0],
+        x_dir[1],
+        y_dir[1],
+        z_dir[1],
+        x_dir[2],
+        y_dir[2],
+        z_dir[2],
+    )
+
+
 def _dot(
     left: tuple[float, float, float],
     right: tuple[float, float, float],
@@ -632,7 +654,11 @@ def build_sitk_volume_from_series_frames(
 
     image.SetSpacing((col_spacing, row_spacing, spacing_z))
     image.SetOrigin([float(value) for value in first.ImagePositionPatient])
-    image.SetDirection(tuple(row_direction + column_direction + slice_direction))
+    # ITK columns = (DICOM row, DICOM column, slice). Concatenating the three vectors
+    # as a flat tuple wrongly places them as matrix *rows*; that matches identity axial
+    # IOP but breaks sagittal/coronal face (and under-segments brain). This form matches
+    # dicom2nifti RAS placement for both axial and sagittal head CT fixtures.
+    image.SetDirection(_itk_direction_matrix(row_direction, column_direction, slice_direction))
     return image
 
 
@@ -675,7 +701,7 @@ def build_sitk_volume_from_pydicom(slice_paths: Sequence[Path]) -> sitk.Image:
 
     image.SetSpacing((col_spacing, row_spacing, slice_spacing))
     image.SetOrigin([float(value) for value in first.ImagePositionPatient])
-    image.SetDirection(tuple(row_direction + column_direction + slice_direction))
+    image.SetDirection(_itk_direction_matrix(row_direction, column_direction, slice_direction))
     return image
 
 
