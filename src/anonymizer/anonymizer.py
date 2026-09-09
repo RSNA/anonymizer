@@ -1746,15 +1746,11 @@ def main(config: Path | None = None, ai_batch: Path | None = None, ai_batch_run:
     # path[0]=="" resolves to install_dir and can shadow venv packages (e.g. totalsegmentator).
     if sys.path and sys.path[0] in ("", "."):
         sys.path.pop(0)
-    from anonymizer.controller.ai.harmonize.cxp_view import CXP_VIEW_DIR
-    from anonymizer.controller.ai.harmonize.xp_bodypart import XP_BODYPART_DIR
     from anonymizer.controller.ai.remove_pixel_phi import OCR_MODEL_DIR, OcrModelStatus, probe_ocr_models
 
     tseg_home = Path("assets/ai/tseg")
     tseg_weights = tseg_home / "nnunet" / "results"
     OCR_MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    XP_BODYPART_DIR.mkdir(parents=True, exist_ok=True)
-    CXP_VIEW_DIR.mkdir(parents=True, exist_ok=True)
     tseg_home.mkdir(parents=True, exist_ok=True)
     tseg_weights.mkdir(parents=True, exist_ok=True)
     os.environ["TOTALSEG_HOME_DIR"] = str(tseg_home.resolve())
