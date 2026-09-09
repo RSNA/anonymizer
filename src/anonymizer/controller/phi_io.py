@@ -92,7 +92,8 @@ class PHI_SeriesIndexRecord:
 
     def face_blur_display(self) -> str:
         raw = (self.face_blur_algorithm or "").strip()
-        return _format_face_blur_status_label(raw) if raw else ""
+        # Match Harmonized / study Face blur: unset is "No", not a blank cell.
+        return _format_face_blur_status_label(raw) if raw else _("No")
 
     def is_harmonized(self) -> bool:
         return bool((self.harmonized_description or "").strip())
@@ -241,7 +242,9 @@ class PHI_IndexRecord:
         values["modality"] = series.modality
         values["num_instances"] = series.instance_count
         values["harmonize"] = series.is_harmonized()
-        values["face_blurred"] = series.face_blur_display()
+        # Applied → algorithm label; unset → False so _display_value yields "No".
+        face_raw = (series.face_blur_algorithm or "").strip()
+        values["face_blurred"] = _format_face_blur_status_label(face_raw) if face_raw else False
         values["pixel_phi_removed"] = series.pixel_phi
         return tuple(self._display_value(values[name]) for name in self.TREE_DISPLAY_FIELDS)
 
@@ -294,7 +297,7 @@ class PHI_IndexRecord:
 
     def _lookup_csv_series_suffix(self, series: PHI_SeriesIndexRecord | None) -> tuple[object, ...]:
         if series is None:
-            return ("", "", "", "No", "", "", "No", "")
+            return ("", "", "", "No", "", "No", "No", "")
         series_harmonized = bool((series.harmonized_description or "").strip())
         return (
             series.anon_series_uid,

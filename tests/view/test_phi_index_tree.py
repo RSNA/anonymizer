@@ -122,3 +122,9 @@ def test_series_tree_values_align_with_study_display_columns() -> None:
     assert series_by_name["pixel_phi_removed"] == "DOE, MRN"
     assert series_by_name["phi_patient_id"] == ""
     assert series_by_name["anon_patient_id"] == ""
+
+    unblurred = study.series_tree_values(study.series[0])
+    unblurred_by_name = dict(zip(fields, unblurred, strict=True))
+    assert unblurred_by_name["harmonize"] == "No"
+    assert unblurred_by_name["face_blurred"] == "No"
+    assert study.series[0].face_blur_display() == "No"
