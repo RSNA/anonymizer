@@ -1,1 +1,1 @@
-"""AI algorithm implementations (OCR, harmonize, face blur, tseg, falcon)."""
+"""AI algorithm implementations (OCR, harmonize, face blur, tseg)."""

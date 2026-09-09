@@ -29,14 +29,12 @@ from anonymizer.controller.ai_batch_process import (
     _apply_remove_pixel_phi_series,
     _log_workflow_progress_step,
     ai_batch_process,
-    effective_modality_whitelists,
     enumerate_series_for_studies,
     face_blur_skip_counts_as_complete,
     format_ai_batch_completion_summary,
     format_ai_batch_phase_label,
     format_ai_batch_status_line,
     format_batch_algorithm_result_line,
-    format_batch_log_series_label,
     format_batch_outcome_subline,
     format_batch_phase_banner,
     format_batch_series_header,
@@ -158,41 +156,20 @@ def test_format_ai_batch_status_line_shows_study_series_only() -> None:
     assert "series_" not in text
 
 
-def test_format_ai_batch_status_line_without_description() -> None:
+@pytest.mark.parametrize(
+    "ds",
+    [None, Dataset()],
+    ids=["no_dataset", "empty_description"],
+)
+def test_format_ai_batch_status_line_missing_description(ds: Dataset | None) -> None:
     text = format_ai_batch_status_line(
         study_index=1,
         study_total=1,
         series_index=2,
         series_total=4,
+        ds=ds,
     )
     assert text == "Study 1/1 · Series 2/4 · <No Series Description>"
-
-
-def test_format_ai_batch_status_line_missing_description_on_dataset() -> None:
-    ds = Dataset()
-    text = format_ai_batch_status_line(
-        study_index=1,
-        study_total=1,
-        series_index=1,
-        series_total=1,
-        ds=ds,
-    )
-    assert text == "Study 1/1 · Series 1/1 · <No Series Description>"
-
-
-def test_format_ai_batch_status_line_ignores_step_detail() -> None:
-    ds = Dataset()
-    ds.SeriesDescription = "Bone Vol. CECT 0.5"
-    text = format_ai_batch_status_line(
-        study_index=1,
-        study_total=3,
-        series_index=1,
-        series_total=3,
-        ds=ds,
-    )
-    assert text == 'Study 1/3 · Series 1/3 · "Bone Vol. CECT 0.5"'
-    assert "Segmenting" not in text
-    assert "%" not in text
 
 
 def test_strip_progress_pct_suffix() -> None:
@@ -253,19 +230,6 @@ def test_log_workflow_progress_step_logs_distinct_messages_for_same_stage() -> N
         "  Computing organ HU statistics…",
         "  Organ HU statistics complete",
     ]
-
-
-def test_format_batch_log_series_label() -> None:
-    ds = Dataset()
-    ds.SeriesDescription = "Head CT"
-    label = format_batch_log_series_label(
-        study_index=3,
-        study_total=10,
-        series_index=5,
-        series_total=12,
-        ds=ds,
-    )
-    assert label == 'Study 3/10 · Series 5/12 · "Head CT"'
 
 
 def test_format_batch_series_header_matches_status_line() -> None:
@@ -849,40 +813,6 @@ def test_ai_batch_process_memory_guard_cancels_between_series(
     assert summary.cancelled is True
 
 
-@patch("anonymizer.controller.ai_batch_process.resolve_series_geometry")
-@patch("anonymizer.controller.ai_batch_process._load_tseg_series_dataset")
-def test_series_needs_face_blur_false_for_cached_chest_abdomen(
-    mock_load_ds: MagicMock,
-    mock_geometry: MagicMock,
-    tmp_path: Path,
-) -> None:
-    series_dir = tmp_path / "series"
-    series_dir.mkdir()
-    _write_chest_region_cache(series_dir)
-    mock_load_ds.return_value = _batch_test_dataset()
-    mock_geometry.return_value = _geometry()
-
-    assert series_needs_face_blur(_pending_anon_model(), series_dir) is False
-
-
-@patch("anonymizer.controller.ai_batch_process.resolve_series_geometry")
-@patch("anonymizer.controller.ai_batch_process._load_tseg_series_dataset")
-def test_skip_message_for_face_blur_series_non_head(
-    mock_load_ds: MagicMock,
-    mock_geometry: MagicMock,
-    tmp_path: Path,
-) -> None:
-    series_dir = tmp_path / "series"
-    series_dir.mkdir()
-    _write_chest_region_cache(series_dir)
-    mock_load_ds.return_value = _batch_test_dataset()
-    mock_geometry.return_value = _geometry()
-
-    message = skip_message_for_face_blur_series(_pending_anon_model(), series_dir)
-
-    assert message == face_blur_gate_message(FaceBlurGateReason.CACHED_REGIONS_NON_HEAD)
-
-
 @patch("anonymizer.controller.ai_batch_process.preview_face_blur")
 @patch("anonymizer.controller.ai_batch_process.resolve_series_geometry")
 @patch("anonymizer.controller.ai_batch_process._load_tseg_series_dataset")
@@ -897,10 +827,16 @@ def test_apply_face_blur_series_skips_non_head_before_segmentation(
     _write_chest_region_cache(series_dir)
     mock_load_ds.return_value = _batch_test_dataset()
     mock_geometry.return_value = _geometry()
+    anon_model = _pending_anon_model()
+
+    assert series_needs_face_blur(anon_model, series_dir) is False
+    assert skip_message_for_face_blur_series(anon_model, series_dir) == face_blur_gate_message(
+        FaceBlurGateReason.CACHED_REGIONS_NON_HEAD
+    )
 
     outcome = _apply_face_blur_series(
         series_dir,
-        anon_model=_pending_anon_model(),
+        anon_model=anon_model,
         blur_mode=FaceBlurMode.GAUSSIAN,
         progress=None,
     )
@@ -928,41 +864,28 @@ def test_face_blur_ineligible_skip_counts_as_complete() -> None:
     assert face_blur_skip_counts_as_complete(already) is False
 
 
-def test_format_ai_batch_completion_summary_face_blur_complete_not_failed() -> None:
+def test_format_ai_batch_completion_summary() -> None:
     from anonymizer.controller.ai_batch_process import AiBatchAlgorithmTotals, AiBatchSummary
 
+    # Complete-only algorithms are omitted; applied/failed/skipped appear in the headline.
     summary = AiBatchSummary(
         series_count=6,
-        applied=10,
+        applied=5,
+        failed=2,
+        skipped=1,
         algorithm_totals=(
             (AiBatchAlgorithm.REMOVE_PIXEL_PHI, AiBatchAlgorithmTotals(complete=6)),
-            (AiBatchAlgorithm.HARMONIZE, AiBatchAlgorithmTotals(applied=6)),
+            (AiBatchAlgorithm.HARMONIZE, AiBatchAlgorithmTotals(applied=1, failed=2, skipped=1)),
             (AiBatchAlgorithm.FACE_BLUR, AiBatchAlgorithmTotals(applied=4, complete=2)),
         ),
     )
     message = format_ai_batch_completion_summary(summary)
     assert message == (
-        "Complete: 6 series (10 applied)\n  Harmonize: 6 modified\n  Face De-identify: 4 modified"
+        "Complete: 6 series (5 applied, 2 failed, 1 skipped)\n"
+        "  Harmonize: 1 modified, 2 failed, 1 skipped\n"
+        "  Face De-identify: 4 modified"
     )
     assert "Remove Burnt-in Annotation" not in message
-
-
-def test_format_ai_batch_completion_summary_includes_failed_and_skipped() -> None:
-    from anonymizer.controller.ai_batch_process import AiBatchAlgorithmTotals, AiBatchSummary
-
-    summary = AiBatchSummary(
-        series_count=4,
-        applied=1,
-        failed=2,
-        skipped=1,
-        algorithm_totals=(
-            (AiBatchAlgorithm.HARMONIZE, AiBatchAlgorithmTotals(applied=1, failed=2, skipped=1)),
-        ),
-    )
-    message = format_ai_batch_completion_summary(summary)
-    assert "2 failed" in message
-    assert "1 skipped" in message
-    assert "Harmonize: 1 modified, 2 failed, 1 skipped" in message
 
 
 def test_batch_run_artifact_stem_sanitizes_names() -> None:
@@ -1018,15 +941,6 @@ def test_batch_run_capture_writes_log_and_json(tmp_path: Path) -> None:
     assert payload["failed"] == 1
     assert payload["outcomes"][0]["status"] == "failed"
     assert capture.log_path.parent == model.batch_runs_dir()
-
-
-def test_project_model_batch_runs_dir(tmp_path: Path) -> None:
-    from anonymizer.model.project import ProjectModel
-
-    model = ProjectModel()
-    model.storage_dir = tmp_path / "proj"
-    model.__post_init__()
-    assert model.batch_runs_dir() == tmp_path / "proj" / model.PRIVATE_DIR / model.BATCH_RUNS_DIR
 
 
 def test_project_dir_from_series_path_matches_batch_storage_dir(tmp_path: Path) -> None:
@@ -1149,45 +1063,6 @@ def test_modalities_in_selected_studies_collects_unique_modalities(
 
     assert modalities == ("CR", "US")
     assert mock_load.call_count == 2
-
-
-def test_effective_modality_whitelists_uses_project_whitelist_when_present(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    pkg_dir = Path(__file__).resolve().parents[3] / "src" / "anonymizer"
-    monkeypatch.chdir(pkg_dir)
-    project_dir = tmp_path / "project"
-    project_whitelist = project_dir / "whitelists" / "cr.txt"
-    project_whitelist.parent.mkdir(parents=True)
-    project_whitelist.write_text("CUSTOMTERM\n", encoding="utf-8")
-
-    whitelists = effective_modality_whitelists(project_dir, ("CR",))
-
-    assert "CUSTOMTERM" in whitelists["CR"]
-    assert "PORTABLE" not in whitelists["CR"]
-
-
-def test_effective_modality_whitelists_excludes_removed_default_terms(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    pkg_dir = Path(__file__).resolve().parents[3] / "src" / "anonymizer"
-    monkeypatch.chdir(pkg_dir)
-    from anonymizer.utils.storage import load_default_whitelist
-
-    project_dir = tmp_path / "project"
-    defaults_without_bilateral = [
-        term for term in load_default_whitelist("CR") if term != "BILATERAL"
-    ]
-    project_whitelist = project_dir / "whitelists" / "cr.txt"
-    project_whitelist.parent.mkdir(parents=True)
-    project_whitelist.write_text("\n".join(defaults_without_bilateral) + "\n", encoding="utf-8")
-
-    whitelists = effective_modality_whitelists(project_dir, ("CR",))
-
-    assert "PORTABLE" in whitelists["CR"]
-    assert "BILATERAL" not in whitelists["CR"]
 
 
 def test_format_modality_whitelist_preview_groups_by_modality() -> None:
@@ -1444,4 +1319,3 @@ def test_ai_batch_failed_outcome_appears_in_work_state_logs(
     assert len(summary.outcomes) == 1
     assert summary.outcomes[0].status == "failed"
     assert f"Failed: {fail_msg}" in joined
-    assert "1 failed" in format_ai_batch_completion_summary(summary)

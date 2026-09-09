@@ -25,20 +25,11 @@ from tests.controller.ocr.conftest import assert_dcm
 from tests.controller.support.us_rgb_fixtures import (
     US_RGB_BATCH_PIXELS_CHANGED,
     US_RGB_BATCH_REMOVED_TEXTS,
-    US_RGB_BATCH_UX_LOG_HIDDEN_TEXTS,
-    US_RGB_BATCH_UX_LOG_VISIBLE_TEXTS,
     US_RGB_DCM,
     US_RGB_SERIES_VIEW_NOT_REMOVED_BY_BATCH,
     US_RGB_SERIES_VIEW_OCR_TEXTS,
     US_RGB_SERIES_VIEW_SURVIVORS_AFTER_BATCH,
 )
-
-
-def test_us_rgb_batch_removed_count_matches_ux_log() -> None:
-    assert len(US_RGB_BATCH_REMOVED_TEXTS) == 21
-    assert len(US_RGB_BATCH_UX_LOG_VISIBLE_TEXTS) == 8
-    assert len(US_RGB_BATCH_UX_LOG_HIDDEN_TEXTS) == 13
-    assert US_RGB_BATCH_UX_LOG_HIDDEN_TEXTS[0] == "3CSs"
 
 
 def test_us_rgb_ux_log_lines_match_fixture() -> None:

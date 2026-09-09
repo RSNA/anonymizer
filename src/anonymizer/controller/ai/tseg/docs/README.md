@@ -1,6 +1,6 @@
 # TotalSegmentator CT/MR segmentation (`tseg`)
 
-The `tseg` package is the **TotalSegmentator runtime** for CT and MR: segmentation masks, region summaries, and optional mask-based contrast phase analysis. It is not an AI Feature catalog and has no RadLex/Playbook/LOINC or FALCON coupling.
+The `tseg` package is the **TotalSegmentator runtime** for CT and MR: segmentation masks, region summaries, and optional mask-based contrast phase analysis. It is not an AI Feature catalog and has no RadLex/Playbook/LOINC coupling.
 
 ## Scope
 

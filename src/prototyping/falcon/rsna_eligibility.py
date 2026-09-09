@@ -14,7 +14,7 @@ from pathlib import Path
 import psutil
 import pydicom
 
-from anonymizer.controller.ai.falcon.preprocessing.preprocess_series import preprocess_series
+from prototyping.falcon.preprocessing.preprocess_series import preprocess_series
 
 RSNA_TEST_DATA_DIR = Path(
     os.environ.get("RSNA_TEST_DATA_DIR", "/Users/michaelevans/DATA/RSNA_TEST_DATA")
@@ -69,7 +69,7 @@ def falcon_runtime_context() -> Iterator[None]:
     """Change cwd to anonymizer package root for relative asset paths in FALCON preprocessing."""
     previous = os.getcwd()
     os.chdir(ANONYMIZER_INSTALL_DIR)
-    logging.getLogger("anonymizer.controller.ai.falcon").setLevel(logging.WARNING)
+    logging.getLogger("prototyping.falcon").setLevel(logging.WARNING)
     try:
         yield
     finally:
@@ -293,7 +293,7 @@ def configure_scan_logging() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
         force=True,
     )
-    logging.getLogger("anonymizer.controller.ai.falcon").setLevel(logging.WARNING)
+    logging.getLogger("prototyping.falcon").setLevel(logging.WARNING)
 
 
 def run_eligibility_scan_first_10() -> EligibilityScanResult:

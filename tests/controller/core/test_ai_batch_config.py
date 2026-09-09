@@ -19,7 +19,7 @@ from anonymizer.controller.ai_batch_config import (
     resolve_ai_batch_studies,
     validate_ai_batch_config_gates,
 )
-from anonymizer.controller.ai_batch_process import AiBatchProcessOptions
+from anonymizer.controller.ai_batch_process import AiBatchProcessOptions, AiBatchSummary
 
 
 def test_round_trip_json_to_options() -> None:
@@ -166,7 +166,11 @@ def test_run_headless_ai_batch_invokes_controller(tmp_path: Path) -> None:
 
     controller = MagicMock()
     controller.model.images_dir.return_value = tmp_path / "images"
-    controller.ai_batch_process.return_value = MagicMock(cancelled=False, failed=0)
+    controller.ai_batch_process.return_value = AiBatchSummary(
+        series_count=1,
+        cancelled=False,
+        failed=0,
+    )
 
     with (
         patch("anonymizer.anonymizer.create_headless_controller", return_value=controller),

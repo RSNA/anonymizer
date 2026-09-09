@@ -14,7 +14,7 @@ import pytest
 
 from anonymizer.view.series.series import SeriesView
 from tests.controller.tseg.support.synthetic_ct import (
-    FALCON_MIN_SLICES,
+    SYNTHETIC_VOLUME_MIN_SLICES,
     build_synthetic_chest_ct_series,
     build_synthetic_wide_ct_series,
 )
@@ -38,7 +38,7 @@ SERIES_BUILDERS = {
 def series_view(request, tk_root: tk.Tk, mock_controller: MagicMock, tmp_path) -> SeriesView:
     """A mapped SeriesView for each frame geometry, closed after the test."""
     builder = SERIES_BUILDERS[request.param]
-    series_dir = builder(tmp_path / request.param, num_slices=FALCON_MIN_SLICES)
+    series_dir = builder(tmp_path / request.param, num_slices=SYNTHETIC_VOLUME_MIN_SLICES)
     view = open_series_view(tk_root, mock_controller, series_dir)
     yield view
     view.destroy()

@@ -182,25 +182,30 @@ def test_prune_prefers_vertebrae_body_over_per_vertebra(tmp_path: Path) -> None:
     assert (seg_dir / "vertebrae_body.nii.gz").is_file()
 
 
-def test_resolve_harmonize_roi_subset_head_from_body_part(tmp_path: Path) -> None:
-    from pydicom import Dataset, FileDataset, Sequence
+def _write_ct_series_dicom(series_dir: Path, *, body_part: str = "HEAD") -> str:
+    from pydicom.dataset import FileDataset, FileMetaDataset
     from pydicom.uid import ExplicitVRLittleEndian, generate_uid
 
-    series_dir = tmp_path / "series"
-    series_dir.mkdir()
+    series_dir.mkdir(parents=True, exist_ok=True)
+    series_uid = generate_uid()
+    path = series_dir / "slice.dcm"
+    file_meta = FileMetaDataset()
+    file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
+    file_meta.MediaStorageSOPClassUID = generate_uid()
+    file_meta.MediaStorageSOPInstanceUID = generate_uid()
     ds = FileDataset(
-        str(series_dir / "slice.dcm"),
+        str(path),
         {},
-        file_meta=Dataset(),
+        file_meta=file_meta,
         preamble=b"\0" * 128,
     )
-    ds.file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
-    ds.file_meta.MediaStorageSOPClassUID = generate_uid()
-    ds.file_meta.MediaStorageSOPInstanceUID = generate_uid()
-    ds.SOPClassUID = ds.file_meta.MediaStorageSOPClassUID
-    ds.SOPInstanceUID = ds.file_meta.MediaStorageSOPInstanceUID
+    ds.is_little_endian = True
+    ds.is_implicit_VR = False
+    ds.SOPClassUID = file_meta.MediaStorageSOPClassUID
+    ds.SOPInstanceUID = file_meta.MediaStorageSOPInstanceUID
     ds.Modality = "CT"
-    ds.BodyPartExamined = "HEAD"
+    ds.SeriesInstanceUID = series_uid
+    ds.BodyPartExamined = body_part
     ds.ImagePositionPatient = [0.0, 0.0, 0.0]
     ds.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
     ds.PixelSpacing = [1.0, 1.0]
@@ -214,7 +219,13 @@ def test_resolve_harmonize_roi_subset_head_from_body_part(tmp_path: Path) -> Non
     ds.SamplesPerPixel = 1
     ds.PhotometricInterpretation = "MONOCHROME2"
     ds.InstanceNumber = 1
-    ds.save_as(str(series_dir / "slice.dcm"))
+    ds.save_as(str(path), write_like_original=False)
+    return series_uid
+
+
+def test_resolve_harmonize_roi_subset_head_from_body_part(tmp_path: Path) -> None:
+    series_dir = tmp_path / "series"
+    _write_ct_series_dicom(series_dir, body_part="HEAD")
 
     subset, tier = resolve_harmonize_roi_subset(series_dir)
     assert tier == ROI_TIER_HEAD
@@ -244,38 +255,8 @@ def test_resolve_harmonize_roi_subset_chest_and_full(
     body_part: str,
     expected_tier: str,
 ) -> None:
-    from pydicom import Dataset, FileDataset
-    from pydicom.uid import ExplicitVRLittleEndian, generate_uid
-
     series_dir = tmp_path / f"series_{body_part.lower()}"
-    series_dir.mkdir()
-    ds = FileDataset(
-        str(series_dir / "slice.dcm"),
-        {},
-        file_meta=Dataset(),
-        preamble=b"\0" * 128,
-    )
-    ds.file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
-    ds.file_meta.MediaStorageSOPClassUID = generate_uid()
-    ds.file_meta.MediaStorageSOPInstanceUID = generate_uid()
-    ds.SOPClassUID = ds.file_meta.MediaStorageSOPClassUID
-    ds.SOPInstanceUID = ds.file_meta.MediaStorageSOPInstanceUID
-    ds.Modality = "CT"
-    ds.BodyPartExamined = body_part
-    ds.ImagePositionPatient = [0.0, 0.0, 0.0]
-    ds.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
-    ds.PixelSpacing = [1.0, 1.0]
-    ds.SliceThickness = 1.0
-    ds.Rows = 16
-    ds.Columns = 16
-    ds.BitsAllocated = 16
-    ds.BitsStored = 16
-    ds.HighBit = 15
-    ds.PixelRepresentation = 0
-    ds.SamplesPerPixel = 1
-    ds.PhotometricInterpretation = "MONOCHROME2"
-    ds.InstanceNumber = 1
-    ds.save_as(str(series_dir / "slice.dcm"))
+    _write_ct_series_dicom(series_dir, body_part=body_part)
 
     _subset, tier = resolve_harmonize_roi_subset(series_dir)
     assert tier == expected_tier
@@ -307,43 +288,6 @@ def test_evict_tseg_volume_keeps_volume_without_sidecars(tmp_path: Path) -> None
 
     assert evict_tseg_volume(series_dir) is False
     assert volume.is_file()
-
-
-def _write_ct_series_dicom(series_dir: Path, *, body_part: str = "HEAD") -> str:
-    from pydicom import Dataset, FileDataset
-    from pydicom.uid import ExplicitVRLittleEndian, generate_uid
-
-    series_dir.mkdir(parents=True, exist_ok=True)
-    series_uid = generate_uid()
-    ds = FileDataset(
-        str(series_dir / "slice.dcm"),
-        {},
-        file_meta=Dataset(),
-        preamble=b"\0" * 128,
-    )
-    ds.file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
-    ds.file_meta.MediaStorageSOPClassUID = generate_uid()
-    ds.file_meta.MediaStorageSOPInstanceUID = generate_uid()
-    ds.SOPClassUID = ds.file_meta.MediaStorageSOPClassUID
-    ds.SOPInstanceUID = ds.file_meta.MediaStorageSOPInstanceUID
-    ds.Modality = "CT"
-    ds.SeriesInstanceUID = series_uid
-    ds.BodyPartExamined = body_part
-    ds.ImagePositionPatient = [0.0, 0.0, 0.0]
-    ds.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
-    ds.PixelSpacing = [1.0, 1.0]
-    ds.SliceThickness = 1.0
-    ds.Rows = 16
-    ds.Columns = 16
-    ds.BitsAllocated = 16
-    ds.BitsStored = 16
-    ds.HighBit = 15
-    ds.PixelRepresentation = 0
-    ds.SamplesPerPixel = 1
-    ds.PhotometricInterpretation = "MONOCHROME2"
-    ds.InstanceNumber = 1
-    ds.save_as(str(series_dir / "slice.dcm"))
-    return series_uid
 
 
 def _write_evictable_cache(series_dir: Path) -> Path:

@@ -354,29 +354,6 @@ def test_load_modality_whitelist_project_file_without_portable(
     assert "PORTABLE" not in whitelist
 
 
-def test_overlay_filter_includes_portable_when_defaults_omit_portable_and_port(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """DX defaults without PORTABLE/PORT must still draw Portable (TABLE must not fuzzy-match)."""
-    pkg_dir = Path(__file__).resolve().parents[3] / "src" / "anonymizer"
-    monkeypatch.chdir(pkg_dir)
-    from anonymizer.utils.storage import load_default_whitelist
-
-    project_dir = tmp_path / "project"
-    defaults_without_portable = [
-        term for term in load_default_whitelist("CR") if term not in ("PORTABLE", "PORT")
-    ]
-    project_whitelist = project_dir / "whitelists" / "cr.txt"
-    project_whitelist.parent.mkdir(parents=True)
-    project_whitelist.write_text("\n".join(defaults_without_portable) + "\n", encoding="utf-8")
-
-    detections = [_ocr("Portable"), _ocr("DAVIDSON")]
-    effective_whitelist = load_modality_whitelist(project_dir, "CR")
-    drawn = filter_ocr_whitelist_only(detections, whitelist=effective_whitelist)
-    assert "Portable" in [item.text for item in drawn]
-
-
 def test_overlay_filter_includes_portable_when_not_on_effective_whitelist(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

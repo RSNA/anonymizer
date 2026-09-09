@@ -14,7 +14,11 @@ src/prototyping/
 ├── ffr/tests/
 │   └── test_face_*.py                    # face blur / export / report POC
 └── falcon/tests/
-    └── test_rsna_eligibility.py          # @rsna_local_data when RSNA_TEST_DATA_DIR set
+    ├── test_rsna_eligibility.py          # @rsna_local_data when RSNA_TEST_DATA_DIR set
+    ├── test_predict.py                   # offline FALCON predict (not CI)
+    ├── test_dicom_loading.py
+    ├── test_eval_accuracy.py
+    └── test_eval_utils.py
 ```
 
 Prototyping tests are **not** run in CI. Run them locally when working on prototyping scripts.

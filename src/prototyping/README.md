@@ -7,7 +7,7 @@ Experimental scripts, CLIs, and UI spikes. **Not** part of the shipped `rsna-ano
 ```
 src/prototyping/
 ├── ct/              # CT eval CLIs (e.g. ct_eval.py)
-├── falcon/          # FALCON one-off studies (e.g. rsna_eligibility.py)
+├── falcon/          # FALCON offline research (moved from product; superseded by tseg Harmonize)
 ├── ocr/             # OCR burned-in text detection / inpainting experiments
 ├── ffr/             # facial feature removal (CT face blur POC, legacy volume scripts)
 │   └── face/        # face blur viz POC (QA gallery + report.html)

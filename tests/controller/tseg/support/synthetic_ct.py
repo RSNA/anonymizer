@@ -1,4 +1,4 @@
-"""Synthetic multi-slice CT DICOM fixtures for FALCON and tseg controller tests."""
+"""Synthetic multi-slice CT DICOM fixtures for tseg and related controller tests."""
 
 import math
 import shutil
@@ -13,7 +13,7 @@ from pydicom.uid import generate_uid
 
 from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 
-FALCON_MIN_SLICES = 11
+SYNTHETIC_VOLUME_MIN_SLICES = 11
 SYNTHETIC_PHANTOM_VERSION = 3
 DEFAULT_SYNTHETIC_SLICE_COUNT = 12
 DEFAULT_PHANTOM_SLICE_COUNT = 24
@@ -185,10 +185,10 @@ def build_synthetic_oriented_ct_series(
     series_uid: str | None = None,
     study_uid: str | None = None,
     sop_instance_uid_prefix: str | None = None,
-    require_falcon_min_slices: bool = True,
+    require_min_volume_slices: bool = True,
 ) -> Path:
     """Build a synthetic chest phantom with custom IOP and stack direction."""
-    if require_falcon_min_slices:
+    if require_min_volume_slices:
         _validate_slice_count(num_slices)
     elif num_slices < 1:
         raise ValueError(f"num_slices must be at least 1, got {num_slices}")
@@ -280,7 +280,7 @@ def build_synthetic_scout_ct_series(output_dir: Path, *, num_slices: int = 5) ->
         stack_delta=[0.0, 0.0, 10.0],
         image_type=["ORIGINAL", "PRIMARY", "LOCALIZER"],
         series_description="SCOUT TOPOGRAM",
-        require_falcon_min_slices=False,
+        require_min_volume_slices=False,
     )
 
 
@@ -294,7 +294,7 @@ def build_synthetic_haste_sag_series(output_dir: Path, *, num_slices: int = 26) 
         image_type=["ORIGINAL", "PRIMARY", "OTHER"],
         series_description="LIVER-PELVIS/HASTE_SAG_POS",
         body_part_examined="ABDOMEN",
-        require_falcon_min_slices=False,
+        require_min_volume_slices=False,
     )
 
 
@@ -308,7 +308,7 @@ def build_synthetic_breast_adc_mr_series(output_dir: Path, *, num_slices: int = 
         image_type=["DERIVED", "SECONDARY", "AXIAL"],
         series_description="ADC = short int value x 0.2E-06 (units: 10E-03 mm^2/s)",
         body_part_examined="BREAST",
-        require_falcon_min_slices=False,
+        require_min_volume_slices=False,
     )
     for path in series_dir.glob("*.dcm"):
         dataset = pydicom.dcmread(path)
@@ -327,7 +327,7 @@ def build_synthetic_breast_mr_anatomical_series(output_dir: Path, *, num_slices:
         image_type=["ORIGINAL", "PRIMARY", "AXIAL"],
         series_description="T2 AXIAL BREAST",
         body_part_examined="BREAST",
-        require_falcon_min_slices=False,
+        require_min_volume_slices=False,
     )
     for path in series_dir.glob("*.dcm"):
         dataset = pydicom.dcmread(path)
@@ -346,7 +346,7 @@ def build_synthetic_ct_perfusion_map_series(output_dir: Path, *, num_slices: int
         image_type=["DERIVED", "SECONDARY", "AXIAL"],
         series_description="CBF PERFUSION MAP",
         body_part_examined="BRAIN",
-        require_falcon_min_slices=False,
+        require_min_volume_slices=False,
     )
 
 
@@ -360,7 +360,7 @@ def build_synthetic_survey_mr_series(output_dir: Path, *, num_slices: int = 40) 
         image_type=["ORIGINAL", "PRIMARY", "AXIAL"],
         series_description="ABDOMEN SURVEY STIR",
         body_part_examined="ABDOMEN",
-        require_falcon_min_slices=False,
+        require_min_volume_slices=False,
     )
     for path in series_dir.glob("*.dcm"):
         dataset = pydicom.dcmread(path)
@@ -379,7 +379,7 @@ def build_synthetic_fused_pet_ct_series(output_dir: Path, *, num_slices: int = 4
         image_type=["DERIVED", "SECONDARY", "AXIAL"],
         series_description="PET/CT FUSION",
         body_part_examined="CHEST",
-        require_falcon_min_slices=False,
+        require_min_volume_slices=False,
     )
 
 
@@ -393,7 +393,7 @@ def build_synthetic_bolus_monitor_series(output_dir: Path, *, num_slices: int = 
         image_type=["ORIGINAL", "PRIMARY", "AXIAL"],
         series_description="BOLUS MONITOR",
         body_part_examined="CHEST",
-        require_falcon_min_slices=False,
+        require_min_volume_slices=False,
     )
 
 
@@ -442,7 +442,7 @@ def build_synthetic_single_slice_ct_series(output_dir: Path) -> Path:
         image_orientation=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
         stack_delta=[0.0, 0.0, DEFAULT_SLICE_THICKNESS_MM],
         series_description="Single slice CT",
-        require_falcon_min_slices=False,
+        require_min_volume_slices=False,
     )
 
 
@@ -474,8 +474,8 @@ def list_dcm_files(series_dir: Path) -> list[Path]:
 
 
 def _validate_slice_count(num_slices: int) -> None:
-    if num_slices < FALCON_MIN_SLICES:
-        raise ValueError(f"num_slices must be at least {FALCON_MIN_SLICES}, got {num_slices}")
+    if num_slices < SYNTHETIC_VOLUME_MIN_SLICES:
+        raise ValueError(f"num_slices must be at least {SYNTHETIC_VOLUME_MIN_SLICES}, got {num_slices}")
 
 
 def _build_phantom_series(
@@ -714,7 +714,7 @@ def build_synthetic_ct_series_with_burned_in_phi(
     *,
     phi_lines: Sequence[str] = DEFAULT_BURNED_IN_PHI_LINES,
     burn_slice_index: int = 0,
-    num_slices: int = FALCON_MIN_SLICES,
+    num_slices: int = SYNTHETIC_VOLUME_MIN_SLICES,
 ) -> Path:
     """Build a synthetic chest CT series with burnt-in PHI on one slice."""
     series_dir = build_synthetic_chest_ct_series(output_dir, num_slices=num_slices)

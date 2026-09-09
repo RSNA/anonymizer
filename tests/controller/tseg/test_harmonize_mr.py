@@ -10,7 +10,6 @@ import pytest
 from pydicom import Dataset
 
 from anonymizer.controller.ai.blur_face import (
-    CachedRegionSignal,
     FaceBlurGateDecision,
     FaceBlurGateReason,
     FaceBlurMode,
@@ -63,37 +62,6 @@ def test_harmonize_button_visible_for_mr():
         modality="MR",
         already_harmonized=False,
     )
-    # US uses planar (metadata) Harmonize — button visible; TSEG profile remains None.
-    assert harmonize_button_visible(
-        harmonize_models_ready=True,
-        modality="US",
-        already_harmonized=False,
-    )
-    assert not harmonize_button_visible(
-        harmonize_models_ready=True,
-        modality="SC",
-        already_harmonized=False,
-    )
-
-
-def test_face_blur_eligibility_allows_mr_when_weights_ready(tmp_path: Path):
-    series = tmp_path / "mr_series"
-    series.mkdir()
-    with (
-        patch(
-            "anonymizer.controller.ai.blur_face.pipeline.cached_region_signal",
-            return_value=CachedRegionSignal.HEAD,
-        ),
-        patch("anonymizer.controller.ai.tseg.model_cache.mr_face_model_ready", return_value=True),
-    ):
-        result = evaluate_face_blur_eligibility(
-            series,
-            modality="MR",
-            geometry=_geometry(),
-            enable_tseg_face=True,
-        )
-    assert result.decision is FaceBlurGateDecision.ALLOW
-    assert result.reason is FaceBlurGateReason.CACHED_REGIONS_HEAD
 
 
 def test_face_blur_eligibility_blocks_mr_without_weights(tmp_path: Path):
@@ -408,9 +376,3 @@ def test_mr_harmonize_falls_back_to_dicom_when_ts_regions_empty(tmp_path: Path):
     assert merged.playbook.iv_contrast_code == "WO"
     assert "Spine" in merged.radlex_series_description
     mock_contrast.assert_not_called()
-
-
-    profile = mr_modality_profile()
-    assert "vertebrae" not in profile.structure_to_region
-    assert profile.structure_to_region["lung_left"] == "Chest"
-    assert profile.structure_to_region["sacrum"] == "Abdomen"

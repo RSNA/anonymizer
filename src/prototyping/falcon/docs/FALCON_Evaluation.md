@@ -2,7 +2,7 @@
 
 ## Utility
 
-`eval_accuracy.py` runs the **production** path (`predict_falcon_series`) on labeled CT series and prints:
+`eval_accuracy.py` runs the prototyping FALCON path (`predict_falcon_series`) on labeled CT series and prints:
 
 - Eligibility rate (successful inference vs `FalconPrediction.error`)
 - **Body part**: accuracy, macro-F1, per-class precision/recall/F1, confusion matrix
@@ -11,7 +11,7 @@
 Ground truth comes from **first-level folder names** under a data root—no manifest CSV.
 
 ```bash
-poetry run python -m anonymizer.controller.ai.falcon.eval_accuracy \
+poetry run python -m prototyping.falcon.eval_accuracy \
   --data-dir /path/to/labeled_dataset
 ```
 

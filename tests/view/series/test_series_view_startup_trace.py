@@ -17,7 +17,7 @@ from tests.controller.ocr.conftest import assert_dcm_dir
 from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 from tests.controller.tseg.fixtures import ensure_synthetic_ct_assets
 from tests.controller.tseg.support.synthetic_ct import (
-    FALCON_MIN_SLICES,
+    SYNTHETIC_VOLUME_MIN_SLICES,
     build_synthetic_chest_ct_series,
     build_synthetic_wide_ct_series,
 )
@@ -40,7 +40,7 @@ STARTUP_PAINT_PROFILES = {
 }
 
 
-def _seed_seg_cache(series_dir: Path, *, num_slices: int = FALCON_MIN_SLICES) -> None:
+def _seed_seg_cache(series_dir: Path, *, num_slices: int = SYNTHETIC_VOLUME_MIN_SLICES) -> None:
     import numpy as np
     import SimpleITK as sitk
     from anonymizer.controller.ai.tseg.seg_retention import write_primary_segment_voxels
@@ -53,7 +53,7 @@ def _seed_seg_cache(series_dir: Path, *, num_slices: int = FALCON_MIN_SLICES) ->
     sitk.WriteImage(sitk.GetImageFromArray(array), str(seg_dir / "brain.nii.gz"))
 
 
-def _seed_seg_nii_only(series_dir: Path, *, num_slices: int = FALCON_MIN_SLICES) -> None:
+def _seed_seg_nii_only(series_dir: Path, *, num_slices: int = SYNTHETIC_VOLUME_MIN_SLICES) -> None:
     import numpy as np
     import SimpleITK as sitk
 
@@ -71,12 +71,12 @@ def _build_paint_profile_series(profile_id: str, tmp_path: Path) -> Path:
     if name == "tiny":
         series_dir = build_synthetic_wide_ct_series(
             tmp_path / name,
-            num_slices=FALCON_MIN_SLICES,
+            num_slices=SYNTHETIC_VOLUME_MIN_SLICES,
             rows=64,
             cols=64,
         )
     else:
-        series_dir = build_synthetic_chest_ct_series(tmp_path / name, num_slices=FALCON_MIN_SLICES)
+        series_dir = build_synthetic_chest_ct_series(tmp_path / name, num_slices=SYNTHETIC_VOLUME_MIN_SLICES)
     if kind == "seg_cache":
         _seed_seg_cache(series_dir)
     return series_dir
@@ -130,7 +130,7 @@ def test_startup_trace_reserves_segmentation_chrome(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest_seg", num_slices=FALCON_MIN_SLICES)
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest_seg", num_slices=SYNTHETIC_VOLUME_MIN_SLICES)
     _seed_seg_cache(series_dir)
     native_size, display_size = _open_and_capture_display(tk_root, mock_controller, series_dir, caplog)
     assert_startup_trace(
@@ -147,7 +147,7 @@ def test_startup_trace_no_segmentation_reserved_without_seg_dir(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest", num_slices=FALCON_MIN_SLICES)
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest", num_slices=SYNTHETIC_VOLUME_MIN_SLICES)
     native_size, display_size = _open_and_capture_display(tk_root, mock_controller, series_dir, caplog)
     assert_startup_trace(
         parse_series_view_load_trace(caplog),
@@ -163,7 +163,7 @@ def test_startup_trace_seg_reserved_from_nii_only(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest_nii", num_slices=FALCON_MIN_SLICES)
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest_nii", num_slices=SYNTHETIC_VOLUME_MIN_SLICES)
     _seed_seg_nii_only(series_dir)
     native_size, display_size = _open_and_capture_display(tk_root, mock_controller, series_dir, caplog)
     assert_startup_trace(
@@ -179,7 +179,7 @@ def test_startup_segmentation_chrome_does_not_refit_image(
     mock_controller: MagicMock,
     tmp_path: Path,
 ) -> None:
-    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest_seg", num_slices=FALCON_MIN_SLICES)
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest_seg", num_slices=SYNTHETIC_VOLUME_MIN_SLICES)
     _seed_seg_cache(series_dir)
     loaded = load_series_frames(series_dir)
     view = SeriesView(
@@ -222,7 +222,7 @@ def test_startup_viewer_ready_after_settle(
     mock_controller: MagicMock,
     tmp_path: Path,
 ) -> None:
-    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest", num_slices=FALCON_MIN_SLICES)
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest", num_slices=SYNTHETIC_VOLUME_MIN_SLICES)
     loaded = load_series_frames(series_dir)
     view = SeriesView(
         tk_root,
@@ -276,7 +276,7 @@ def test_startup_trace_seg_chrome_before_deiconify(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest", num_slices=FALCON_MIN_SLICES)
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest", num_slices=SYNTHETIC_VOLUME_MIN_SLICES)
     _open_and_capture_display(tk_root, mock_controller, series_dir, caplog)
     steps = [record.step for record in parse_series_view_load_trace(caplog)]
     painted_index = steps.index("startup_painted")
@@ -311,7 +311,7 @@ def test_startup_display_native_for_standard_ct(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest", num_slices=FALCON_MIN_SLICES)
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "chest", num_slices=SYNTHETIC_VOLUME_MIN_SLICES)
     native_size, display_size = _open_and_capture_display(tk_root, mock_controller, series_dir, caplog)
     assert display_size == native_size
     assert_startup_trace(
@@ -329,7 +329,7 @@ def test_startup_display_upscales_small_ct(
 ) -> None:
     series_dir = build_synthetic_wide_ct_series(
         tmp_path / "tiny",
-        num_slices=FALCON_MIN_SLICES,
+        num_slices=SYNTHETIC_VOLUME_MIN_SLICES,
         rows=64,
         cols=64,
     )
@@ -403,7 +403,7 @@ def test_startup_async_hidden_load_trace(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    series_dir = build_synthetic_chest_ct_series(tmp_path / "async", num_slices=FALCON_MIN_SLICES)
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "async", num_slices=SYNTHETIC_VOLUME_MIN_SLICES)
     loaded = load_series_frames(series_dir)
     native_size = (int(loaded.frames.shape[2]), int(loaded.frames.shape[1]))
     with caplog.at_level(logging.INFO, logger="anonymizer.view.series.series"):
@@ -430,7 +430,7 @@ def test_startup_async_load_paints_slice_once(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    series_dir = build_synthetic_chest_ct_series(tmp_path / "async_paint", num_slices=FALCON_MIN_SLICES)
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "async_paint", num_slices=SYNTHETIC_VOLUME_MIN_SLICES)
     load_counts: list[int] = []
     original_load = ImageViewer.load_and_display_image
 
@@ -460,7 +460,7 @@ def test_startup_loading_shell_trace(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(SeriesView, "PROGRESS_SLICE_THRESHOLD", 1)
-    series_dir = build_synthetic_chest_ct_series(tmp_path / "shell", num_slices=FALCON_MIN_SLICES)
+    series_dir = build_synthetic_chest_ct_series(tmp_path / "shell", num_slices=SYNTHETIC_VOLUME_MIN_SLICES)
     loaded = load_series_frames(series_dir)
     native_size = (int(loaded.frames.shape[2]), int(loaded.frames.shape[1]))
     with caplog.at_level(logging.INFO, logger="anonymizer.view.series.series"):

@@ -7,9 +7,9 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from anonymizer.controller.ai.falcon.load_models import load_falcon_models
-from anonymizer.controller.ai.falcon.preprocessing.preprocess_series import preprocess_series
-from anonymizer.controller.ai.falcon.resnet9 import ResNet9
+from prototyping.falcon.load_models import load_falcon_models
+from prototyping.falcon.preprocessing.preprocess_series import preprocess_series
+from prototyping.falcon.resnet9 import ResNet9
 from anonymizer.utils.memory import collect_garbage_safe
 
 # Determine device: GPU (CUDA) > Apple Silicon (MPS) > CPU

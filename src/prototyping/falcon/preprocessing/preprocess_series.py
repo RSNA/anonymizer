@@ -5,8 +5,8 @@ from pathlib import Path
 import numpy as np
 import SimpleITK as sitk
 
-from anonymizer.controller.ai.falcon.preprocessing.dicom_loading import get_sitk_from_dicom
-from anonymizer.controller.ai.falcon.preprocessing.image_transformation import crop_image, respacing
+from prototyping.falcon.preprocessing.dicom_loading import get_sitk_from_dicom
+from prototyping.falcon.preprocessing.image_transformation import crop_image, respacing
 
 CROP_SHAPE = (200, 200, 100)
 SCALE_SIZE = (150, 150, 100)

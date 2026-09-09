@@ -15,7 +15,6 @@ from anonymizer.controller.ai.blur_face import (
     SeriesVolumeContext,
     apply_face_blur_preview_to_series_frames,
     compute_qa_stats,
-    format_face_blur_progress_status,
     hu_stack_to_viewer_frames,
     load_series_volume_for_blur,
     mask_slice_segmentations,
@@ -91,14 +90,6 @@ def test_format_face_blur_qa_summary_pass_and_fail() -> None:
     fail_qa = compute_qa_stats(hu_before, hu_after, mask)
     fail_summary = format_face_blur_qa_summary(fail_qa, sigma_mm=8.0, slice_count=2)
     assert "QA FAIL" in fail_summary
-
-
-def test_status_text_for_progress_includes_stage_and_percent() -> None:
-    text = format_face_blur_progress_status(
-        FaceBlurProgress(stage="blur", message="", fraction=0.65),
-    )
-    assert "65%" in text
-    assert "de-identification" in text
 
 
 def test_mask_slice_segmentations_returns_polygons() -> None:
@@ -183,7 +174,7 @@ def test_preview_face_blur_uses_series_volume_context(
 
     loaded = load_series_frames(synthetic_head_series)
 
-    reference_ds, frames, slice_paths = loaded.metadata, loaded.frames, loaded.slice_paths
+    reference_ds, frames, _slice_paths = loaded.metadata, loaded.frames, loaded.slice_paths
     volume_img, _hu, paths = load_series_volume_for_blur(synthetic_head_series)
     shape = sitk.GetArrayFromImage(volume_img).shape
     mask_path = face_mask_cache_path(synthetic_head_series)

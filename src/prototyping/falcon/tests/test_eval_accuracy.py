@@ -10,7 +10,7 @@ import pytest
 from PIL import Image
 from pydicom.data import get_testdata_file
 
-from anonymizer.controller.ai.falcon.eval_accuracy import (
+from prototyping.falcon.eval_accuracy import (
     SUMMARY_CELL_SIZE,
     EvalRow,
     SavedEvalArtifact,
@@ -51,7 +51,7 @@ from anonymizer.controller.ai.falcon.eval_accuracy import (
     summary_grid_dimension,
     write_results_csv,
 )
-from anonymizer.controller.ai.falcon.predict import FalconPrediction
+from prototyping.falcon.predict import FalconPrediction
 
 
 def test_parse_label_dirname_examples():
@@ -574,7 +574,7 @@ def test_save_body_part_error_summary_matrices_only_writes_non_empty_classes(tmp
     assert {path.name for path in paths} == {"headneck_errors.png", "chest_errors.png"}
 
 
-@patch("anonymizer.controller.ai.falcon.eval_accuracy.preprocess_series")
+@patch("prototyping.falcon.eval_accuracy.preprocess_series")
 def test_save_body_part_success_summary_matrices_on_the_fly(mock_preprocess, tmp_path: Path) -> None:
     series_dir = tmp_path / "CT_CHEST_WITHOUT_CONTRAST" / "study" / "series"
     _write_minimal_series(series_dir)
@@ -617,7 +617,7 @@ def test_save_success_summary_matrices_writes_only_non_empty_categories(tmp_path
         radlex_series_description="CT Chest Without Contrast",
     )
     with patch(
-        "anonymizer.controller.ai.falcon.eval_accuracy.save_body_part_success_summary_matrices",
+        "prototyping.falcon.eval_accuracy.save_body_part_success_summary_matrices",
         return_value=[artifact_root / "body_part" / "success" / "chest_success.png"],
     ):
         paths = save_success_summary_matrices(
@@ -705,9 +705,9 @@ def test_contrast_error_artifact_path(tmp_path: Path) -> None:
     assert "errors" in path.parts and "contrast" in path.parts
 
 
-@patch("anonymizer.controller.ai.falcon.eval_accuracy.save_contrast_model_input_png")
-@patch("anonymizer.controller.ai.falcon.eval_accuracy.save_body_part_model_input_png")
-@patch("anonymizer.controller.ai.falcon.eval_accuracy.preprocess_series")
+@patch("prototyping.falcon.eval_accuracy.save_contrast_model_input_png")
+@patch("prototyping.falcon.eval_accuracy.save_body_part_model_input_png")
+@patch("prototyping.falcon.eval_accuracy.preprocess_series")
 def test_save_classification_error_artifacts(
     mock_preprocess,
     mock_save_body_png,
@@ -747,9 +747,9 @@ def test_save_classification_error_artifacts(
     mock_save_contrast_png.assert_not_called()
 
 
-@patch("anonymizer.controller.ai.falcon.eval_accuracy.save_contrast_model_input_png")
-@patch("anonymizer.controller.ai.falcon.eval_accuracy.save_body_part_model_input_png")
-@patch("anonymizer.controller.ai.falcon.eval_accuracy.preprocess_series")
+@patch("prototyping.falcon.eval_accuracy.save_contrast_model_input_png")
+@patch("prototyping.falcon.eval_accuracy.save_body_part_model_input_png")
+@patch("prototyping.falcon.eval_accuracy.preprocess_series")
 def test_save_contrast_artifact_when_body_part_correct(
     mock_preprocess,
     mock_save_body_png,
@@ -802,8 +802,8 @@ def test_save_body_part_pngs_skips_correct_series(tmp_path: Path) -> None:
     assert saved == []
 
 
-@patch("anonymizer.controller.ai.falcon.eval_accuracy.save_contrast_model_input_png")
-@patch("anonymizer.controller.ai.falcon.eval_accuracy.preprocess_series")
+@patch("prototyping.falcon.eval_accuracy.save_contrast_model_input_png")
+@patch("prototyping.falcon.eval_accuracy.preprocess_series")
 def test_save_contrast_success_artifacts(
     mock_preprocess,
     mock_save_contrast_png,
@@ -838,7 +838,7 @@ def test_save_contrast_success_artifacts(
     assert "success" in saved[0].image_path.parts and "contrast" in saved[0].image_path.parts
 
 
-@patch("anonymizer.controller.ai.falcon.eval_accuracy.predict_falcon_series")
+@patch("prototyping.falcon.eval_accuracy.predict_falcon_series")
 def test_evaluate_rows_skips_series_with_existing_results(mock_predict, tmp_path: Path) -> None:
     series_a = tmp_path / "CT_HEAD_WITH_CONTRAST" / "study" / "series_a"
     series_b = tmp_path / "CT_HEAD_WITH_CONTRAST" / "study" / "series_b"
@@ -910,7 +910,7 @@ def test_falcon_prediction_from_results_csv_row_body_part_error():
     assert prediction.iv_contrast is False
 
 
-@patch("anonymizer.controller.ai.falcon.eval_accuracy.preprocess_series")
+@patch("prototyping.falcon.eval_accuracy.preprocess_series")
 def test_save_classification_error_artifacts_skips_existing_png(mock_preprocess, tmp_path: Path) -> None:
     series_dir = tmp_path / "CT_HEAD_WITH_CONTRAST" / "study" / "series"
     _write_minimal_series(series_dir)

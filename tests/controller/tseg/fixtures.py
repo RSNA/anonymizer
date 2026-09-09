@@ -1,4 +1,4 @@
-"""Shared synthetic CT DICOM fixtures for tseg and FALCON controller tests."""
+"""Shared synthetic CT DICOM fixtures for tseg and related controller tests."""
 
 from __future__ import annotations
 

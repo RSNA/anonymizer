@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.ai.falcon.preprocessing.dicom_loading import MIN_DICOM_SLICES, get_sitk_from_dicom
-from anonymizer.controller.ai.falcon.preprocessing.preprocess_series import preprocess_series
+from prototyping.falcon.preprocessing.dicom_loading import MIN_DICOM_SLICES, get_sitk_from_dicom
+from prototyping.falcon.preprocessing.preprocess_series import preprocess_series
 from tests.controller.tseg.support.synthetic_ct import build_synthetic_oriented_ct_series
 
 # Slightly oblique axial IOP (similar to real head CT with ~7° tilt).
@@ -65,7 +65,7 @@ def test_get_sitk_from_dicom_rejects_too_few_slices(tmp_path: Path) -> None:
         num_slices=MIN_DICOM_SLICES - 1,
         image_orientation=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
         stack_delta=[0.0, 0.0, 5.0],
-        require_falcon_min_slices=False,
+        require_min_volume_slices=False,
     )
 
     with pytest.raises(ValueError, match=f"Found only {MIN_DICOM_SLICES - 1} slices"):

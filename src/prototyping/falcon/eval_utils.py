@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from anonymizer.controller.ai.falcon.predict import (
+from prototyping.falcon.predict import (
     BODY_PART_MODEL_INPUT_Z_INDEX,
     _get_contrast_slices,
     extract_body_part_model_input_slice,

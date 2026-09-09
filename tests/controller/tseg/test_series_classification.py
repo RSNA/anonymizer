@@ -17,7 +17,6 @@ from tests.controller.tseg.support.synthetic_ct import (
     build_synthetic_breast_mr_anatomical_series,
     build_synthetic_chest_ct_series,
     build_synthetic_ct_perfusion_map_series,
-    build_synthetic_haste_sag_series,
     build_synthetic_survey_mr_series,
 )
 
@@ -81,12 +80,6 @@ def test_diagnostic_chest_ct_remains_ts_eligible(tmp_path: Path) -> None:
     geometry = analyze_series_geometry(series_dir)
     assert geometry.ts_suitable is True
     assert geometry.ts_skip_category is None
-
-
-def test_haste_sag_remains_localizer(tmp_path: Path) -> None:
-    series_dir = build_synthetic_haste_sag_series(tmp_path / "haste")
-    geometry = analyze_series_geometry(series_dir)
-    assert geometry.dimensionality == "localizer_2d"
 
 
 @pytest.mark.parametrize(

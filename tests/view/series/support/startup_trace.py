@@ -11,7 +11,7 @@ import pytest
 from pydicom import dcmread
 
 from tests.controller.tseg.support.synthetic_ct import (
-    FALCON_MIN_SLICES,
+    SYNTHETIC_VOLUME_MIN_SLICES,
     build_synthetic_abdomen_ct_series,
     build_synthetic_bolus_monitor_series,
     build_synthetic_breast_adc_mr_series,
@@ -53,25 +53,25 @@ FORBIDDEN_STEPS = frozenset({"show_initial_frame", "apply_initial_layout"})
 SeriesBuilder = Callable[..., Path]
 
 STARTUP_TRACE_FIXTURES: dict[str, tuple[SeriesBuilder, dict[str, Any]]] = {
-    "ct_head": (build_synthetic_head_ct_series, {"num_slices": FALCON_MIN_SLICES}),
-    "ct_chest": (build_synthetic_chest_ct_series, {"num_slices": FALCON_MIN_SLICES}),
-    "ct_abdomen": (build_synthetic_abdomen_ct_series, {"num_slices": FALCON_MIN_SLICES}),
-    "ct_small": (build_synthetic_ct_small_series, {"num_slices": FALCON_MIN_SLICES}),
-    "ct_wide": (build_synthetic_wide_ct_series, {"num_slices": FALCON_MIN_SLICES}),
+    "ct_head": (build_synthetic_head_ct_series, {"num_slices": SYNTHETIC_VOLUME_MIN_SLICES}),
+    "ct_chest": (build_synthetic_chest_ct_series, {"num_slices": SYNTHETIC_VOLUME_MIN_SLICES}),
+    "ct_abdomen": (build_synthetic_abdomen_ct_series, {"num_slices": SYNTHETIC_VOLUME_MIN_SLICES}),
+    "ct_small": (build_synthetic_ct_small_series, {"num_slices": SYNTHETIC_VOLUME_MIN_SLICES}),
+    "ct_wide": (build_synthetic_wide_ct_series, {"num_slices": SYNTHETIC_VOLUME_MIN_SLICES}),
     "ct_single": (build_synthetic_single_slice_ct_series, {}),
     "ct_scout": (build_synthetic_scout_ct_series, {}),
-    "ct_sagittal": (build_synthetic_sagittal_ct_series, {"num_slices": FALCON_MIN_SLICES}),
-    "ct_coronal": (build_synthetic_coronal_ct_series, {"num_slices": FALCON_MIN_SLICES}),
-    "ct_oblique": (build_synthetic_oblique_ct_series, {"num_slices": FALCON_MIN_SLICES}),
-    "ct_perfusion": (build_synthetic_ct_perfusion_map_series, {"num_slices": FALCON_MIN_SLICES}),
-    "ct_bolus": (build_synthetic_bolus_monitor_series, {"num_slices": FALCON_MIN_SLICES}),
-    "ct_fused_pet": (build_synthetic_fused_pet_ct_series, {"num_slices": FALCON_MIN_SLICES}),
-    "ct_mpr": (build_synthetic_derived_coronal_mpr_series, {"num_slices": FALCON_MIN_SLICES}),
-    "ct_mip": (build_synthetic_derived_mip_series, {"num_slices": FALCON_MIN_SLICES}),
-    "mr_breast_adc": (build_synthetic_breast_adc_mr_series, {"num_slices": FALCON_MIN_SLICES}),
-    "mr_breast_anatomical": (build_synthetic_breast_mr_anatomical_series, {"num_slices": FALCON_MIN_SLICES}),
-    "mr_survey": (build_synthetic_survey_mr_series, {"num_slices": FALCON_MIN_SLICES}),
-    "mr_haste_sag": (build_synthetic_haste_sag_series, {"num_slices": FALCON_MIN_SLICES}),
+    "ct_sagittal": (build_synthetic_sagittal_ct_series, {"num_slices": SYNTHETIC_VOLUME_MIN_SLICES}),
+    "ct_coronal": (build_synthetic_coronal_ct_series, {"num_slices": SYNTHETIC_VOLUME_MIN_SLICES}),
+    "ct_oblique": (build_synthetic_oblique_ct_series, {"num_slices": SYNTHETIC_VOLUME_MIN_SLICES}),
+    "ct_perfusion": (build_synthetic_ct_perfusion_map_series, {"num_slices": SYNTHETIC_VOLUME_MIN_SLICES}),
+    "ct_bolus": (build_synthetic_bolus_monitor_series, {"num_slices": SYNTHETIC_VOLUME_MIN_SLICES}),
+    "ct_fused_pet": (build_synthetic_fused_pet_ct_series, {"num_slices": SYNTHETIC_VOLUME_MIN_SLICES}),
+    "ct_mpr": (build_synthetic_derived_coronal_mpr_series, {"num_slices": SYNTHETIC_VOLUME_MIN_SLICES}),
+    "ct_mip": (build_synthetic_derived_mip_series, {"num_slices": SYNTHETIC_VOLUME_MIN_SLICES}),
+    "mr_breast_adc": (build_synthetic_breast_adc_mr_series, {"num_slices": SYNTHETIC_VOLUME_MIN_SLICES}),
+    "mr_breast_anatomical": (build_synthetic_breast_mr_anatomical_series, {"num_slices": SYNTHETIC_VOLUME_MIN_SLICES}),
+    "mr_survey": (build_synthetic_survey_mr_series, {"num_slices": SYNTHETIC_VOLUME_MIN_SLICES}),
+    "mr_haste_sag": (build_synthetic_haste_sag_series, {"num_slices": SYNTHETIC_VOLUME_MIN_SLICES}),
 }
 
 EXPECTED_MODALITIES: dict[str, str] = {

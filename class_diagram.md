@@ -36,7 +36,6 @@ flowchart TB
         C_TSEG["controller.ai.tseg<br/>AnalysisProgress<br/>RegionResult<br/>TS_result<br/>FaceSegResult<br/>TsSuitability<br/>ContrastResult<br/>TsegCacheSummary<br/>TsWeightKind<br/>StackMetrics<br/>SeriesGeometryResult<br/>TsegModalityProfile"]
         C_FACE["controller.ai.blur_face<br/>FaceBlurMode<br/>FaceBlurGateDecision<br/>FaceBlurGateReason<br/>MetadataSignal<br/>CachedRegionSignal<br/>FaceBlurEligibility<br/>FaceBlurResult<br/>FaceBlurPreviewResult<br/>FaceBlurProgress<br/>SeriesVolumeContext<br/>QaStats"]
         C_OCR["controller.ai.remove_pixel_phi<br/>PixelPhiRemovalMode<br/>OcrModelStatus<br/>OcrWhitelistMatchMode<br/>OcrWhitelistMatchSettings<br/>WhitelistMatchResult"]
-        C_FALCON["controller.ai.falcon<br/>FalconPrediction<br/>ResNet9<br/>FalconModelDownloadError<br/>GroundTruth<br/>EvalRow<br/>SavedEvalArtifact<br/>ErrorSummaryEntry<br/>ClassifierMetrics<br/>EvalReport"]
         C_PROJECT --- C_ANON
         C_PROJECT --- C_WORK
         C_PROJECT --- C_RUN
@@ -48,7 +47,6 @@ flowchart TB
         C_BATCH --- C_OCR
         C_HARM --- C_TSEG
         C_FACE --- C_TSEG
-        C_HARM --- C_FALCON
     end
 
     subgraph MODEL["MODEL"]

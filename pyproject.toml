@@ -116,8 +116,11 @@ max-complexity = 15
 testpaths = ["tests/controller", "tests/view", "tests/model"]
 addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model -m \"not ocr_integration and not view_dev\""
 pythonpath = ["src", "."]
+filterwarnings = [
+    # pydicom 2.4 still loads packaged testdata via deprecated pkg_resources entry points.
+    "ignore:pkg_resources is deprecated as an API:UserWarning:pydicom.data.data_manager",
+]
 markers = [
-    "falcon_memory(max_rss_delta_mb): measure RSS before/after the test and fail if delta exceeds the limit",
     "tseg_integration: run TotalSegmentator inference (slow, optional)",
     "ocr_integration: EasyOCR on real burnt-in PHI fixtures under tests/controller/ocr (opt-in; excluded from default)",
     "dicom_integration: local Orthanc PACS or heavy DICOM network integration (skipped in CI)",

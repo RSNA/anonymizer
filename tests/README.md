@@ -27,7 +27,6 @@ Defined in `pyproject.toml`:
 | `ocr_integration` | EasyOCR on real fixtures in `tests/controller/ocr/` (opt-in; excluded from default) |
 | `dicom_integration` | Local Orthanc or heavy DICOM network tests |
 | `rsna_local_data` | RSNA test data directory required |
-| `falcon_memory` | RSS leak guard on real FALCON inference |
 
 ```bash
 pytest src/prototyping -m tseg_integration

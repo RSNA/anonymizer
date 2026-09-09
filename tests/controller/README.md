@@ -1,6 +1,6 @@
 # Controller tests
 
-Tests for `src/anonymizer/controller/` and related integration (DICOM network, storage, FALCON, tseg, Harmonize).
+Tests for `src/anonymizer/controller/` and related integration (DICOM network, storage, tseg, Harmonize).
 
 ## Layout
 
@@ -12,7 +12,6 @@ tests/controller/
 ├── tseg/            # TotalSegmentator, dicom_geometry, synthetic CT support
 ├── harmonize/       # harmonize_series merge and pipeline (incl. batch helpers)
 ├── blur_face/       # CT face blur (blur_face.py)
-├── falcon/          # FALCON predict and eval
 ├── dicom/           # SCU/SCP integration tests + support modules
 ├── core/            # anonymizer.py, create_projections.py, ai_batch_process.py
 └── infra/           # storage, network, logging, translate, modalities, aws, load_java_index

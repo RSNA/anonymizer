@@ -78,7 +78,7 @@ src/certs/
 *.zip
 src/anonymizer/assets/ai/ocr/
 src/anonymizer/assets/ai/tseg/
-src/anonymizer/assets/falcon/models/
+src/prototyping/falcon/assets/models/
 dicom/
 phi_imgs/
 **/radon_results.txt

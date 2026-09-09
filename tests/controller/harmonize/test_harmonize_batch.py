@@ -60,39 +60,17 @@ def test_enumerate_ct_series_for_studies_filters_non_ct(
 
 
 @patch("anonymizer.controller.ai.harmonize.pipeline._load_tseg_series_dataset")
-def test_study_harmonize_status_true_when_all_ct_series_harmonized(
+def test_study_harmonize_status_delegates_to_anon_model(
     mock_load: MagicMock,
-    images_layout: tuple[Path, list[tuple[str, str]]],
 ) -> None:
     anon_model = MagicMock()
     anon_model.study_is_harmonized.return_value = True
-
     assert study_harmonize_status(anon_model, "anon_study") is True
     anon_model.study_is_harmonized.assert_called_once_with("anon_study")
     mock_load.assert_not_called()
 
-
-@patch("anonymizer.controller.ai.harmonize.pipeline._load_tseg_series_dataset")
-def test_study_harmonize_status_false_when_any_ct_series_not_harmonized(
-    mock_load: MagicMock,
-    images_layout: tuple[Path, list[tuple[str, str]]],
-) -> None:
-    anon_model = MagicMock()
+    anon_model.reset_mock()
     anon_model.study_is_harmonized.return_value = False
-
-    assert study_harmonize_status(anon_model, "anon_study") is False
-    anon_model.study_is_harmonized.assert_called_once_with("anon_study")
-    mock_load.assert_not_called()
-
-
-@patch("anonymizer.controller.ai.harmonize.pipeline._load_tseg_series_dataset")
-def test_study_harmonize_status_false_when_no_ct_series(
-    mock_load: MagicMock,
-    images_layout: tuple[Path, list[tuple[str, str]]],
-) -> None:
-    anon_model = MagicMock()
-    anon_model.study_is_harmonized.return_value = False
-
     assert study_harmonize_status(anon_model, "anon_study") is False
     anon_model.study_is_harmonized.assert_called_once_with("anon_study")
     mock_load.assert_not_called()
@@ -241,30 +219,6 @@ def test_harmonize_studies_batch_honours_cancel(
     assert summary.processed == 1
     assert summary.applied == 1
     assert summary.cancelled is True
-
-
-def test_format_ai_batch_completion_summary_per_algorithm() -> None:
-    from anonymizer.controller.ai_batch_process import (
-        AiBatchAlgorithm,
-        AiBatchAlgorithmTotals,
-        AiBatchSummary,
-        format_ai_batch_completion_summary,
-    )
-
-    summary = AiBatchSummary(
-        series_count=2,
-        applied=4,
-        skipped=2,
-        failed=0,
-        algorithm_totals=(
-            (AiBatchAlgorithm.REMOVE_PIXEL_PHI, AiBatchAlgorithmTotals(complete=2)),
-            (AiBatchAlgorithm.HARMONIZE, AiBatchAlgorithmTotals(applied=2)),
-            (AiBatchAlgorithm.FACE_BLUR, AiBatchAlgorithmTotals(applied=2)),
-        ),
-    )
-    message = format_ai_batch_completion_summary(summary)
-    assert message == ("Complete: 2 series\n  Harmonize: 2 modified\n  Face De-identify: 2 modified")
-    assert "Remove Burnt-in Annotation" not in message
 
 
 def test_should_log_harmonize_batch_step_skips_redundant_messages() -> None:
