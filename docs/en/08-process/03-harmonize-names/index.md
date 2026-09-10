@@ -1,21 +1,27 @@
 # 8.2 Harmonize names
 
-Research datasets often use inconsistent **Series Description** text. **Harmonize** suggests a standard name from anatomy and contrast (RSNA Radiology Playbook / RadLex style). It does **not** change pixels.
+Research datasets often use inconsistent **Series Description** text. **Harmonize** suggests a standard name from anatomy and (for CT/MR) contrast — RSNA Radiology Playbook / RadLex style. It does **not** change pixels.
 
 ## Demo series
 
-**`CT_Head_With_Contrast`** — `tests/controller/assets/test_dcm_files/CT_Head_With_Contrast` (non-synthetic head CT).
+| Fixture | Path under `tests/controller/assets/test_dcm_files/` | What it shows |
+| --- | --- | --- |
+| **`CT_Head_With_Contrast`** | `CT_Head_With_Contrast` | CT path: TotalSegmentator anatomy / contrast, brain-structures prompt, overlays |
+| **`davidson_cxr`** | `davidson_cxr` | XR planar path: optional **Xp-Bodypart** + **CXp-Projection-Rotation** |
+| **`us_rgb_single_frame`** | `us_rgb_single_frame` | US planar path: DICOM metadata only (no TotalSegmentator) |
 
-Import this series, open it in **Series View**, then run Harmonize. The same series is used again in [8.3 Blur faces](../04-blur-faces/).
+Import a series, open it in **Series View**, then run Harmonize. Reuse **`CT_Head_With_Contrast`** in [8.3 Blur faces](../04-blur-faces/).
 
 ## Goal
 
-On `CT_Head_With_Contrast` in Series View: run **Harmonize Description**, answer the brain-structures prompt when offered, Apply, then review segmentation overlays on the middle slice.
+1. On **`CT_Head_With_Contrast`**: run **Harmonize Description**, answer the brain-structures prompt when offered, Apply, then review segmentation overlays on the middle slice.
+2. On **`davidson_cxr`** and **`us_rgb_single_frame`**: run Harmonize and read the Playbook table — **Source** names the model or DICOM (same idea as CT’s “TotalSegmentator anatomy”).
 
 ## Before you start
 
-1. Complete [AI Features setup](../../03-ai-features-setup/) — Harmonize CT pack, resolution, and Brain structures.
-2. Import **`CT_Head_With_Contrast`** ([Search](../../06-search/)) and open that series in **Series View** ([View](../../07-view/) — right-click the series row).
+1. Complete [AI Features setup](../../03-ai-features-setup/) — Harmonize CT pack, resolution, and Brain structures for the CT demo.
+2. Optionally download **XR body part** and **XR chest view** so the CXR demo shows pixel fusion (without them, XR still Harmonizes from DICOM tags).
+3. Import the demo series ([Search](../../06-search/)) and open each in **Series View** ([View](../../07-view/) — right-click the series row).
 
 ## Workflow on `CT_Head_With_Contrast`
 
@@ -48,23 +54,45 @@ After you Accept a Harmonize run that included brain structures (**Yes** on the 
 
 ![Series View with all brain segments on the middle slice](shots/macos/Process_Harmonize_SegmentedSeries.png)
 
+## Planar Harmonize (XR and US)
+
+CR/DX, ultrasound, and mammography use a **separate** Harmonize path from CT/MR: no TotalSegmentator, no thickness/contrast buckets. The Playbook table still uses **Evidence** (what was measured) and **Source** (where it came from).
+
+### Chest X-ray (`davidson_cxr`)
+
+1. Open **`davidson_cxr`** in Series View → **Harmonize Description**.
+2. When XR models are installed, **Body Part** Source is **Xp-Bodypart** (or fused with DICOM); **View** / **Rotation** use **CXp-Projection-Rotation** when anatomy is Chest.
+3. Evidence looks like CT classifier rows — e.g. `Chest · 99.00% confidence` — not opaque `pixel:…` tokens.
+4. Rotation is analysis-only; SeriesDescription stays e.g. `Chest AP` / `Chest Lat`.
+
+![davidson_cxr Series View above planar Harmonize with XR model sources](shots/macos/Process_Harmonize_CXR.png)
+
+### Ultrasound (`us_rgb_single_frame`)
+
+1. Open **`us_rgb_single_frame`** in Series View → **Harmonize Description**.
+2. Cohort / body part / mode come from DICOM tags and keywords; Source is **DICOM metadata** or **RadLex Playbook**.
+3. No XR pixel packs and no TotalSegmentator run on US.
+
+![us_rgb_single_frame Series View above planar Harmonize (metadata-only)](shots/macos/Process_Harmonize_US.png)
+
 ## Notes (same as production use)
 
 - Scouts, MIP/VR, dose reports, and similar series are usually skipped.
 - **CT:** anatomy segmentation + contrast phase when models allow (TotalSegmentator).
 - **MR:** anatomy from MR packs; IV contrast from DICOM headers (TotalSegmentator).
-- **XR (CR/DX), US, MG:** metadata-only Harmonize (body part / view / laterality) — **no** TotalSegmentator; isolated from the CT/MR path.
+- **XR (CR/DX):** planar Harmonize; optional Xp-Bodypart + chest-only CXp view/rotation (soft downloads).
+- **US / MG:** planar Harmonize from DICOM only — **no** TotalSegmentator and **no** XR pixel packs.
 - **SC / OT / DOC:** Harmonize is not offered.
-- After all CT/MR series in a study are harmonized, a **LOINC study description** may be suggested. Pure XR/US/MG studies use the matching LOINC prefix.
-- In [Dataset](../../07-view/#edit-harmonized-descriptions), click a green harmonized study or series description to pick another LOINC (study) or RadLex (series) option for that modality — without re-running Harmonize.
+- After all series in a study are harmonized, the best **LOINC study description** is applied automatically (same path as AI Batch). Change it later from [Dataset](../../07-view/#edit-harmonized-descriptions). Pure XR/US/MG studies use the matching LOINC prefix.
+- In [Dataset](../../07-view/#edit-study-and-series-descriptions), click a study or series description (or multi-select and right-click for **Set description**) to pick LOINC (study) or RadLex (series) names — including for rows not yet green.
 - Results cache under the series folder — **Clear Analysis Cache** for a fresh CT/MR run.
 - Batch: [8.4 Run on many studies](../05-run-on-many-studies/) (resolution comes from AI Features, not per batch).
 
 ## What good looks like
 
-- SeriesDescription looks consistent for this head CT.
-- Dataset **Harmonized** column updates.
-- After brain Yes: latch buttons appear and overlays draw on the middle slice.
+- CT: SeriesDescription looks consistent for this head CT; Dataset **Harmonized** updates; after brain Yes, latch overlays draw on the middle slice.
+- CXR: Playbook **Source** names **Xp-Bodypart** / **CXp-Projection-Rotation** (or DICOM) with readable confidence evidence.
+- US: Playbook rows cite **DICOM metadata** / **RadLex Playbook**; suggested name matches ultrasound anatomy/mode.
 
 ## If it fails
 

@@ -50,7 +50,7 @@ uv run python -m docs_help --language en_US --force --only Welcome
 - **Resume by default** (`--skip-existing`); use `--force` or `--force-shot ID` to redo
 - Process demos use **non-synthetic** fixtures only:
   - **8.1** Remove Pixel PHI → `davidson_cxr` (black out) + `us_rgb_single_frame` (blend + Exclude Area under mindray)
-  - **8.2** Harmonize → `CT_Head_With_Contrast` (Series View → completed results → brain prompt → segmented middle slice)
+  - **8.2** Harmonize → `CT_Head_With_Contrast` (Series View → completed results → brain prompt → segmented middle slice) + `davidson_cxr` / `us_rgb_single_frame` (planar Playbook sources)
   - **8.3** Face blur → `CT_Head_With_Contrast` (Gaussian)
   - **8.4** Batch → both fixtures selected in Dataset
 - Soft-fail AI-heavy Process shots when models are missing

@@ -9,7 +9,7 @@ Models and licenses are set up once from Welcome — see [AI Features setup](../
 | Chapter | Tool | Demo series | What you practice |
 | --- | --- | --- | --- |
 | 8.1 | [Remove Pixel PHI](02-remove-burned-in-text/) (burned-in text) | **`davidson_cxr`**, **`us_rgb_single_frame`** | Detect → black out; Detect → blend into background |
-| 8.2 | [Harmonize names](03-harmonize-names/) | **`CT_Head_With_Contrast`** | Series View → results → brain prompt → segmented middle slice |
+| 8.2 | [Harmonize names](03-harmonize-names/) | **`CT_Head_With_Contrast`**, **`davidson_cxr`**, **`us_rgb_single_frame`** | CT results + brain prompt; planar XR/US Playbook sources |
 | 8.3 | [Blur faces](04-blur-faces/) | **`CT_Head_With_Contrast`** | Face blur, **Gaussian** mode |
 | 8.4 | [Run on many studies](05-run-on-many-studies/) | Selected studies | Batch the same tools across a cohort |
 
@@ -19,7 +19,7 @@ Demo series live under `tests/controller/assets/test_dcm_files/`. Import them ([
 
 1. Finish [AI Features setup](../03-ai-features-setup/) so models are ready.
 2. Walk **Remove Pixel PHI** on `davidson_cxr` (black out), then try blend on `us_rgb_single_frame`.
-3. Walk **Harmonize**, then **Face blur**, on the same `CT_Head_With_Contrast` series.
+3. Walk **Harmonize** on `CT_Head_With_Contrast`, then the planar demos on `davidson_cxr` and `us_rgb_single_frame`; **Face blur** on the same CT head series.
 4. Use **Run on many studies** when you need the same tools on a cohort.
 
 ## Next steps

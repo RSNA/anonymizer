@@ -152,6 +152,14 @@ class PlanarPlaybookAttributes:
     laterality_evidence: str = ""
     view_evidence: str = ""
     mode_evidence: str = ""
+    body_part_source: str = "DICOM"  # DICOM | pixel | fused
+    pixel_body_part_label: str = ""
+    pixel_body_part_confidence: float | None = None
+    view_source: str = "DICOM"  # DICOM | pixel | fused
+    pixel_view_code: str = ""
+    pixel_view_confidence: float | None = None
+    rotation_label: str = ""
+    rotation_confidence: float | None = None
 
 
 def _metadata_blob(ds: Dataset) -> str:
@@ -267,28 +275,90 @@ def _map_mg_technique(blob: str) -> tuple[str, str]:
     return "", ""
 
 
-def build_planar_playbook_attributes(ds: Dataset) -> PlanarPlaybookAttributes:
+def build_planar_playbook_attributes(
+    ds: Dataset,
+    *,
+    pixel_pred: object | None = None,
+    pixel_view_pred: object | None = None,
+) -> PlanarPlaybookAttributes:
     profile = planar_profile_from_dataset(ds)
     if profile is None:
         raise ValueError("Not a planar Harmonize modality (XR/US/MG)")
 
     blob = _metadata_blob(ds)
-    body_label, body_ev = _map_planar_body_part_label(ds)
+    dicom_label: str | None
+    dicom_ev: str
+    try:
+        dicom_label, dicom_ev = _map_planar_body_part_label(ds)
+    except ValueError:
+        dicom_label, dicom_ev = None, ""
+
+    body_source = "DICOM"
+    pixel_label = ""
+    pixel_conf: float | None = None
+
+    if profile.cohort == "XR" and pixel_pred is not None:
+        from anonymizer.controller.ai.harmonize.xp_bodypart.fuse import fuse_planar_anatomy
+        from anonymizer.controller.ai.harmonize.xp_bodypart.predict import XpBodypartPrediction
+
+        if not isinstance(pixel_pred, XpBodypartPrediction):
+            raise TypeError("pixel_pred must be XpBodypartPrediction or None")
+        fused = fuse_planar_anatomy(
+            dicom_label=dicom_label,
+            dicom_evidence=dicom_ev,
+            pixel_pred=pixel_pred,
+        )
+        body_label = fused.label
+        body_ev = fused.evidence
+        body_source = fused.source
+        pixel_label = fused.pixel_label or ""
+        pixel_conf = fused.pixel_confidence
+    elif dicom_label is None:
+        raise ValueError(
+            "Could not determine body part from DICOM metadata for planar Harmonize"
+        )
+    else:
+        body_label = dicom_label
+        body_ev = dicom_ev
+
     laterality, lat_ev = _map_laterality(ds, blob)
 
     view, view_ev = "", ""
+    view_source = "DICOM"
+    pixel_view = ""
+    pixel_view_conf: float | None = None
+    rotation_label = ""
+    rotation_conf: float | None = None
     mode, mode_ev = "", ""
     technique, tech_ev = "", ""
 
     if profile.cohort == "XR":
         view, view_ev = _map_xr_view(blob, ds)
+        if pixel_view_pred is not None:
+            from anonymizer.controller.ai.harmonize.cxp_view.fuse import fuse_xr_view
+            from anonymizer.controller.ai.harmonize.cxp_view.predict import CxpViewPrediction
+
+            if not isinstance(pixel_view_pred, CxpViewPrediction):
+                raise TypeError("pixel_view_pred must be CxpViewPrediction or None")
+            fused_view = fuse_xr_view(
+                dicom_view=view or None,
+                dicom_evidence=view_ev,
+                pixel_pred=pixel_view_pred,
+            )
+            view = fused_view.view_code
+            view_ev = fused_view.evidence
+            view_source = fused_view.source
+            pixel_view = fused_view.pixel_view_code or ""
+            pixel_view_conf = fused_view.pixel_view_confidence
+            rotation_label = fused_view.rotation_label or ""
+            rotation_conf = fused_view.rotation_confidence
     elif profile.cohort == "US":
         mode, mode_ev = _map_us_mode(blob)
-        # US often omits laterality in description; keep if present.
     elif profile.cohort == "MG":
         if not body_label or body_label == "Head":
             body_label = "Breast"
             body_ev = body_ev or "default:Breast"
+            body_source = "DICOM"
         view, view_ev = _map_mg_view(ds, blob)
         technique, tech_ev = _map_mg_technique(blob)
         if not laterality:
@@ -305,6 +375,14 @@ def build_planar_playbook_attributes(ds: Dataset) -> PlanarPlaybookAttributes:
         laterality_evidence=lat_ev or tech_ev,
         view_evidence=view_ev,
         mode_evidence=mode_ev,
+        body_part_source=body_source,
+        pixel_body_part_label=pixel_label,
+        pixel_body_part_confidence=pixel_conf,
+        view_source=view_source,
+        pixel_view_code=pixel_view,
+        pixel_view_confidence=pixel_view_conf,
+        rotation_label=rotation_label,
+        rotation_confidence=rotation_conf,
     )
 
 
@@ -321,8 +399,15 @@ def format_planar_series_description(attributes: PlanarPlaybookAttributes) -> st
     return " ".join(p for p in parts if p).strip()
 
 
-def build_planar_harmonized_series_description(ds: Dataset) -> tuple[str, PlanarPlaybookAttributes]:
-    attributes = build_planar_playbook_attributes(ds)
+def build_planar_harmonized_series_description(
+    ds: Dataset,
+    *,
+    pixel_pred: object | None = None,
+    pixel_view_pred: object | None = None,
+) -> tuple[str, PlanarPlaybookAttributes]:
+    attributes = build_planar_playbook_attributes(
+        ds, pixel_pred=pixel_pred, pixel_view_pred=pixel_view_pred
+    )
     description = format_planar_series_description(attributes)
     if not description:
         raise ValueError("Empty planar Harmonize series description")
@@ -357,24 +442,55 @@ def planar_loinc_prefix_for_series_descriptions(
     return loinc_prefix_for_planar_cohort(cohort)
 
 
+def _display_dicom_source() -> str:
+    return _("DICOM metadata")
+
+
+def _display_body_part_source(source: str) -> str:
+    """Map internal fusion codes to CT-style model/source labels."""
+    if source == "pixel":
+        return _("Xp-Bodypart")
+    if source == "fused":
+        return _("Xp-Bodypart + DICOM")
+    return _display_dicom_source()
+
+
+def _display_view_source(source: str) -> str:
+    if source == "pixel":
+        return _("CXp-Projection-Rotation")
+    if source == "fused":
+        return _("CXp-Projection-Rotation + DICOM")
+    return _display_dicom_source()
+
+
+def _format_confidence_evidence(label: str, confidence: float | None) -> str:
+    if confidence is None:
+        return label or "—"
+    return f"{label} · {confidence * 100.0:.2f}% " + _("confidence")
+
+
 def planar_harmonize_analysis_rows(
     attributes: PlanarPlaybookAttributes,
 ) -> list[tuple[str, str, str, str, str]]:
-    """Rows for Harmonize Playbook table: (element, code, value, evidence, source)."""
+    """Rows for Harmonize Playbook table: (element, code, value, evidence, source).
+
+    Source names the concrete model (like CT's ``TotalSegmentator anatomy``), not
+    generic ``pixel`` / ``planar`` tokens.
+    """
     rows: list[tuple[str, str, str, str, str]] = [
         (
             _("Cohort"),
             attributes.cohort,
             attributes.cohort,
-            _("Planar metadata Harmonize"),
-            "planar",
+            _("CR/DX/US/MG planar cohort from Modality"),
+            _("RadLex Playbook"),
         ),
         (
             _("Body Part"),
             attributes.body_part_label,
             attributes.body_part_label,
             attributes.body_part_evidence or "—",
-            "DICOM",
+            _display_body_part_source(attributes.body_part_source or "DICOM"),
         ),
     ]
     if attributes.laterality_code:
@@ -384,7 +500,7 @@ def planar_harmonize_analysis_rows(
                 attributes.laterality_code,
                 attributes.laterality_code,
                 attributes.laterality_evidence or "—",
-                "DICOM",
+                _display_dicom_source(),
             )
         )
     if attributes.view_code:
@@ -394,7 +510,19 @@ def planar_harmonize_analysis_rows(
                 attributes.view_code,
                 attributes.view_code,
                 attributes.view_evidence or "—",
-                "DICOM",
+                _display_view_source(attributes.view_source or "DICOM"),
+            )
+        )
+    if attributes.rotation_label:
+        rows.append(
+            (
+                _("Rotation"),
+                attributes.rotation_label,
+                attributes.rotation_label,
+                _format_confidence_evidence(
+                    attributes.rotation_label, attributes.rotation_confidence
+                ),
+                _("CXp-Projection-Rotation"),
             )
         )
     if attributes.mode_code:
@@ -404,7 +532,7 @@ def planar_harmonize_analysis_rows(
                 attributes.mode_code,
                 attributes.mode_code,
                 attributes.mode_evidence or "—",
-                "DICOM",
+                _display_dicom_source(),
             )
         )
     if attributes.technique_code:
@@ -414,7 +542,7 @@ def planar_harmonize_analysis_rows(
                 attributes.technique_code,
                 attributes.technique_code,
                 attributes.laterality_evidence or "—",
-                "DICOM",
+                _display_dicom_source(),
             )
         )
     return rows

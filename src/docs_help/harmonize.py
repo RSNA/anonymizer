@@ -334,22 +334,30 @@ def fit_harmonize_results_for_capture(harmonize_view: Any) -> None:
 
 
 def layout_series_above_harmonize(series_view: Any, harmonize_view: Any, *, peek_px: int = 220) -> None:
-    """Place Series View large on top and Harmonize lower so the series shows above it."""
+    """Place Series View large on top and Harmonize lower so the series shows above it.
+
+    Series View height always covers the Harmonize dialog so the Dashboard console
+    cannot appear in the union screenshot below the dialog.
+    """
     try:
         screen_w = int(series_view.winfo_screenwidth())
         screen_h = int(series_view.winfo_screenheight())
     except Exception:
         screen_w, screen_h = 1440, 900
 
-    sv_w = min(1280, max(980, screen_w - 40))
-    sv_h = min(900, max(700, screen_h - 50))
-    series_view.geometry(f"{sv_w}x{sv_h}+16+28")
+    # Keep Dashboard under Series View so its log pane cannot bleed into grabs.
     try:
-        series_view.deiconify()
-        series_view.lift()
+        root = series_view.winfo_toplevel()
+        for widget in (getattr(root, "dashboard", None), root):
+            if widget is None:
+                continue
+            try:
+                widget.attributes("-topmost", False)
+                widget.lower()
+            except Exception:
+                pass
     except Exception:
         pass
-    settle(series_view, 350)
 
     fit_harmonize_results_for_capture(harmonize_view)
     settle(harmonize_view, 250)
@@ -360,7 +368,7 @@ def layout_series_above_harmonize(series_view: Any, harmonize_view: Any, *, peek
         hv_w, hv_h = 1100, 720
 
     # Cap dialog height so Series View title bar + image strip remain visible above.
-    max_hv_h = max(520, sv_h - peek_px - 40)
+    max_hv_h = max(520, min(screen_h - peek_px - 80, 820))
     if hv_h > max_hv_h:
         harmonize_view.geometry(f"{hv_w}x{max_hv_h}")
         settle(harmonize_view, 200)
@@ -368,6 +376,18 @@ def layout_series_above_harmonize(series_view: Any, harmonize_view: Any, *, peek
             hv_h = int(harmonize_view.winfo_height())
         except Exception:
             hv_h = max_hv_h
+
+    sv_w = min(1280, max(980, screen_w - 40))
+    # Fully contain the dialog: peek strip + dialog + bottom margin.
+    needed_h = peek_px + hv_h + 48
+    sv_h = min(screen_h - 40, max(700, needed_h))
+    series_view.geometry(f"{sv_w}x{sv_h}+16+28")
+    try:
+        series_view.deiconify()
+        series_view.lift()
+    except Exception:
+        pass
+    settle(series_view, 350)
 
     try:
         sx = int(series_view.winfo_rootx())
@@ -379,6 +399,13 @@ def layout_series_above_harmonize(series_view: Any, harmonize_view: Any, *, peek
     dialog_x = sx + max(24, (sv_w_now - hv_w) // 2)
     dialog_y = sy + peek_px
     dialog_y = min(dialog_y, max(40, screen_h - hv_h - 24))
+    # Keep dialog bottom inside Series View.
+    try:
+        sv_bottom = sy + int(series_view.winfo_height())
+        if dialog_y + hv_h > sv_bottom - 8:
+            dialog_y = max(sy + 40, sv_bottom - hv_h - 8)
+    except Exception:
+        pass
     harmonize_view.geometry(f"+{dialog_x}+{dialog_y}")
     try:
         series_view.lift()
@@ -408,6 +435,31 @@ def ensure_brain_structures_models() -> None:
             "Brain structures models are not installed. Download them in AI Features "
             "(Brain structures) before capturing Process_Harmonize_SegmentedSeries."
         )
+
+
+def ensure_xr_planar_models() -> None:
+    """Download optional XR body-part + chest-view packs for CXR Harmonize shots."""
+    from anonymizer.controller.ai.harmonize.cxp_view import (
+        cxp_view_ready,
+        download_cxp_view_models,
+    )
+    from anonymizer.controller.ai.harmonize.xp_bodypart import (
+        download_xp_bodypart_models,
+        xp_bodypart_ready,
+    )
+
+    if not xp_bodypart_ready():
+        logger.info("Downloading XR body-part model for Harmonize help screenshots…")
+        ok, message = download_xp_bodypart_models()
+        if not xp_bodypart_ready():
+            raise RuntimeError(f"XR body-part model required for CXR Harmonize shot: {message}")
+        logger.info("XR body-part download: %s", message if ok else "ready after download")
+    if not cxp_view_ready():
+        logger.info("Downloading XR chest-view model for Harmonize help screenshots…")
+        ok, message = download_cxp_view_models()
+        if not cxp_view_ready():
+            raise RuntimeError(f"XR chest-view model required for CXR Harmonize shot: {message}")
+        logger.info("XR chest-view download: %s", message if ok else "ready after download")
 
 
 def precompute_brain_harmonize_cache(series_path: Path, anon_model=None) -> None:

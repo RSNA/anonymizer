@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -1031,23 +1032,30 @@ def maybe_offer_study_description_harmonize(
     )
 
 
+def _looks_like_loinc_study_description(name: str) -> bool:
+    """True when ``name`` looks like a LOINC LongCommonName (modality-prefixed)."""
+    return bool(re.match(r"(?i)^(CT|MR|XR|US|MG)\b", (name or "").strip()))
+
+
 def study_description_edit_offer(
     anon_model: AnonymizerModel,
     anon_study_uid: str,
     *,
-    top_n: int = 8,
+    top_n: int = 10,
 ) -> StudyDescriptionOffer | None:
     """
     Build a LOINC Study Description menu for Dataset edit from ORM signals only.
 
     Uses stored series harmonized descriptions, composition, and planar instance
-    counts — never opens DICOM or walks ``images_dir``.
+    counts — never opens DICOM or walks ``images_dir``. When CT|MR series are not
+    yet Harmonized, ranks LOINC from the study description text when present.
     """
     from anonymizer.controller.ai.harmonize.loinc_study import (
         LoincStudyMatch,
         build_study_description_ranking,
         fingerprint_for_harmonized_study,
         fingerprint_for_planar_harmonized_study,
+        rank_loinc_study_descriptions_from_hint,
         rank_planar_loinc_study_descriptions,
     )
     from anonymizer.controller.ai.harmonize.playbook_planar import planar_loinc_prefix_for_series_descriptions
@@ -1067,7 +1075,12 @@ def study_description_edit_offer(
 
     def _with_current(matches: list, fingerprint: tuple[str, ...]) -> StudyDescriptionOffer:
         ranked = list(matches)
-        if current and not any(m.long_common_name == current for m in ranked):
+        # Keep only Harmonized / LOINC-style currents — never raw PHI study text.
+        if (
+            current
+            and _looks_like_loinc_study_description(current)
+            and not any(m.long_common_name == current for m in ranked)
+        ):
             ranked.insert(0, LoincStudyMatch(loinc_number="", long_common_name=current, score=0.0))
         return StudyDescriptionOffer(
             anon_study_uid=anon_study_uid,
@@ -1082,17 +1095,22 @@ def study_description_edit_offer(
     if has_tseg:
         descriptions = anon_model.get_ct_series_harmonized_descriptions(anon_study_uid)
         fingerprint = fingerprint_for_harmonized_study(anon_model, anon_study_uid)
-        if not descriptions and not current:
-            return None
-        if not descriptions:
-            return _with_current([], fingerprint or ((current,) if current else ()))
-
         loinc_prefix = "CT "
         get_mods = getattr(anon_model, "get_tseg_series_modalities", None)
         if callable(get_mods):
             modalities = get_mods(anon_study_uid)
             if modalities and all(is_mr_modality(m) for m in modalities):
                 loinc_prefix = "MR "
+
+        if not descriptions and not current:
+            return None
+        if not descriptions:
+            matches = rank_loinc_study_descriptions_from_hint(
+                current,
+                loinc_prefix=loinc_prefix,
+                top_n=top_n,
+            )
+            return _with_current(matches, fingerprint or ((current,) if current else ()))
 
         _aggregate, matches, ambiguous = build_study_description_ranking(
             descriptions,
@@ -1156,6 +1174,7 @@ def study_description_edit_offer(
 
 
 MIN_DESCRIPTION_CHOICES = 4
+NEAREST_DESCRIPTION_CHOICES = 10
 
 # Common RadLex Playbook planes / contrast phases offered as series edit alternatives.
 _EDIT_PLANES: tuple[str, ...] = ("Ax", "Sag", "Cor")
@@ -1164,6 +1183,21 @@ _EDIT_THICKNESS: tuple[str | None, ...] = (None, "Thin", "Thick")
 _EDIT_XR_VIEWS: tuple[str, ...] = ("AP", "PA", "Lat", "Obl", "2V", "3V")
 _EDIT_MG_VIEWS: tuple[str, ...] = ("CC", "MLO", "ML", "LM", "XCCL", "XCCM")
 _EDIT_US_MODES: tuple[str, ...] = ("", "Doppler")
+
+# LOINC anatomy labels → RadLex Playbook body-part codes for CT|MR series edit.
+_LOINC_ANATOMY_TO_PLAYBOOK_BODY: dict[str, str] = {
+    "Head": "Head",
+    "Brain": "Brain",
+    "Neck": "Neck",
+    "Chest": "Ch",
+    "Abdomen": "Abd",
+    "Pelvis": "Pel",
+    "Spine": "Spine",
+    "Cervical spine": "CSp",
+    "Thoracic spine": "TSp",
+    "Lumbar spine": "LSp",
+    "Breast": "Breast",
+}
 
 
 def ensure_min_description_choices(
@@ -1220,14 +1254,40 @@ def _format_tseg_playbook_description(
     return " ".join(p for p in parts if p).strip()
 
 
-def _tseg_radlex_series_edit_choices(current: str, *, minimum: int) -> list[str]:
+def _playbook_body_parts_from_anatomy_hint(anatomy_hint: str) -> list[str]:
+    """Map free-text study/series PHI anatomy into Playbook body-part codes."""
+    from anonymizer.controller.ai.harmonize.loinc_study import infer_loinc_anatomy_from_text
+
+    codes: list[str] = []
+    seen: set[str] = set()
+    for anat in infer_loinc_anatomy_from_text(anatomy_hint):
+        code = _LOINC_ANATOMY_TO_PLAYBOOK_BODY.get(anat)
+        if code and code not in seen:
+            seen.add(code)
+            codes.append(code)
+        # MR neuro studies prefer Brain LOINC; keep Head as a sibling option.
+        if anat == "Head" and "Brain" not in seen:
+            seen.add("Brain")
+            codes.append("Brain")
+    return codes
+
+
+def _tseg_radlex_series_edit_choices(
+    current: str,
+    *,
+    minimum: int,
+    full_catalog: bool = False,
+    anatomy_hint: str = "",
+) -> list[str]:
     from anonymizer.controller.ai.harmonize.loinc_study import parse_playbook_series_description
+    from anonymizer.controller.ai.harmonize.playbook import BODY_PART_PLAYBOOK_CODES
 
     parsed = parse_playbook_series_description(current)
-    body_parts = list(parsed.get("body_parts") or [])
-    if not body_parts and current:
-        # Keep unparsed current; still offer common plane/contrast swaps on first token.
-        body_parts = [current.split()[0]]
+    parsed_body_parts = list(parsed.get("body_parts") or [])
+    body_parts = list(parsed_body_parts)
+    hinted_parts = _playbook_body_parts_from_anatomy_hint(anatomy_hint) if anatomy_hint else []
+    if not body_parts:
+        body_parts = list(hinted_parts[:1])
 
     base_plane = str(parsed.get("plane") or "")
     base_contrast = str(parsed.get("contrast") or "WO")
@@ -1244,71 +1304,109 @@ def _tseg_radlex_series_edit_choices(current: str, *, minimum: int) -> list[str]
             seen.add(stripped)
             choices.append(stripped)
 
-    _add(current)
+    def _emit_for_parts(parts: list[str]) -> None:
+        if not parts:
+            return
+        planes = [base_plane] + [p for p in _EDIT_PLANES if p != base_plane] if base_plane else list(_EDIT_PLANES)
+        contrasts = (
+            [base_contrast] + [c for c in _EDIT_CONTRASTS if c != base_contrast]
+            if base_contrast
+            else list(_EDIT_CONTRASTS)
+        )
+        if full_catalog:
+            # Full modality browse: anatomy × core plane × WO/W (filterable in dialog).
+            catalog_planes = list(_EDIT_PLANES)
+            catalog_contrasts = ("WO", "W")
+            for plane in catalog_planes:
+                for contrast in catalog_contrasts:
+                    _add(
+                        _format_tseg_playbook_description(
+                            body_parts=parts,
+                            plane=plane,
+                            contrast=contrast,
+                            slice_thickness="",
+                            series_type="",
+                            series_type_modifier="",
+                        )
+                    )
+            return
+
+        thicknesses: list[str] = []
+        if base_thickness:
+            thicknesses.append(base_thickness)
+        for tok in _EDIT_THICKNESS:
+            value = tok or ""
+            if value not in thicknesses:
+                thicknesses.append(value)
+
+        for plane in planes:
+            _add(
+                _format_tseg_playbook_description(
+                    body_parts=parts,
+                    plane=plane,
+                    contrast=base_contrast or "WO",
+                    slice_thickness=base_thickness,
+                    series_type=series_type,
+                    series_type_modifier=series_type_modifier,
+                )
+            )
+        for contrast in contrasts:
+            _add(
+                _format_tseg_playbook_description(
+                    body_parts=parts,
+                    plane=base_plane or planes[0],
+                    contrast=contrast,
+                    slice_thickness=base_thickness,
+                    series_type=series_type,
+                    series_type_modifier=series_type_modifier,
+                )
+            )
+        for thickness in thicknesses:
+            _add(
+                _format_tseg_playbook_description(
+                    body_parts=parts,
+                    plane=base_plane or planes[0],
+                    contrast=base_contrast or "WO",
+                    slice_thickness=thickness,
+                    series_type=series_type,
+                    series_type_modifier=series_type_modifier,
+                )
+            )
+        if len(choices) < minimum:
+            for plane in planes:
+                for contrast in contrasts:
+                    for thickness in thicknesses:
+                        _add(
+                            _format_tseg_playbook_description(
+                                body_parts=parts,
+                                plane=plane,
+                                contrast=contrast,
+                                slice_thickness=thickness,
+                                series_type=series_type,
+                                series_type_modifier=series_type_modifier,
+                            )
+                        )
+                        if len(choices) >= max(minimum, NEAREST_DESCRIPTION_CHOICES):
+                            return
+
+    if current.strip() and parsed_body_parts:
+        # Only keep already-Playbook (harmonized) current values in the menu.
+        _add(current)
     if series_type == "Localizer":
         return choices
 
-    planes = [base_plane] + [p for p in _EDIT_PLANES if p != base_plane]
-    contrasts = [base_contrast] + [c for c in _EDIT_CONTRASTS if c != base_contrast]
-    thicknesses: list[str] = []
-    if base_thickness:
-        thicknesses.append(base_thickness)
-    for tok in _EDIT_THICKNESS:
-        value = tok or ""
-        if value not in thicknesses:
-            thicknesses.append(value)
+    if full_catalog:
+        preferred = list(dict.fromkeys([*(body_parts or []), *hinted_parts]))
+        rest = sorted(code for code in BODY_PART_PLAYBOOK_CODES if code not in preferred)
+        for code in [*preferred, *rest]:
+            _emit_for_parts([code])
+        return choices
 
-    # Prefer plane then contrast swaps (most useful RadLex edits) before thickness.
-    for plane in planes:
-        _add(
-            _format_tseg_playbook_description(
-                body_parts=body_parts,
-                plane=plane,
-                contrast=base_contrast,
-                slice_thickness=base_thickness,
-                series_type=series_type,
-                series_type_modifier=series_type_modifier,
-            )
-        )
-    for contrast in contrasts:
-        _add(
-            _format_tseg_playbook_description(
-                body_parts=body_parts,
-                plane=base_plane or planes[0],
-                contrast=contrast,
-                slice_thickness=base_thickness,
-                series_type=series_type,
-                series_type_modifier=series_type_modifier,
-            )
-        )
-    for thickness in thicknesses:
-        _add(
-            _format_tseg_playbook_description(
-                body_parts=body_parts,
-                plane=base_plane or planes[0],
-                contrast=base_contrast,
-                slice_thickness=thickness,
-                series_type=series_type,
-                series_type_modifier=series_type_modifier,
-            )
-        )
-    # Cross products if still short of the minimum.
-    if len(choices) < minimum:
-        for plane in planes:
-            for contrast in contrasts:
-                for thickness in thicknesses:
-                    _add(
-                        _format_tseg_playbook_description(
-                            body_parts=body_parts,
-                            plane=plane,
-                            contrast=contrast,
-                            slice_thickness=thickness,
-                            series_type=series_type,
-                            series_type_modifier=series_type_modifier,
-                        )
-                    )
-                    if len(choices) >= max(minimum, 8):
-                        return choices
+    if not body_parts:
+        # Unrecognized PHI without a study anatomy hint — do not invent Chest.
+        return choices
+
+    _emit_for_parts(body_parts)
     return choices
 
 
@@ -1341,12 +1439,34 @@ _EDIT_PLANAR_ANATOMY_LABELS: frozenset[str] = frozenset(
 )
 
 
-def _planar_radlex_series_edit_choices(current: str, modality: object | None, *, minimum: int) -> list[str]:
+def _planar_recognized_anatomy(tokens: Sequence[str]) -> str | None:
+    """Return a known Playbook anatomy label from tokens, or None for raw PHI text."""
+    import re
+
+    if not tokens:
+        return None
+    joined = " ".join(tokens)
+    for label in sorted(_EDIT_PLANAR_ANATOMY_LABELS, key=len, reverse=True):
+        if re.search(rf"(?i)\b{re.escape(label)}\b", joined):
+            return label
+    for tok in tokens:
+        if tok in _EDIT_PLANAR_ANATOMY_LABELS:
+            return tok
+    return None
+
+
+def _planar_radlex_series_edit_choices(
+    current: str,
+    modality: object | None,
+    *,
+    minimum: int,
+    full_catalog: bool = False,
+) -> list[str]:
     from anonymizer.utils.modalities import planar_harmonize_cohort
 
     cohort = planar_harmonize_cohort(modality) or "XR"
     tokens = [tok for tok in current.split() if tok]
-    anatomy = next((tok for tok in tokens if tok in _EDIT_PLANAR_ANATOMY_LABELS), tokens[0] if tokens else "Chest")
+    anatomy = _planar_recognized_anatomy(tokens) or "Chest"
 
     laterality = ""
     for tok in tokens:
@@ -1356,7 +1476,6 @@ def _planar_radlex_series_edit_choices(current: str, modality: object | None, *,
 
     view_set = _EDIT_MG_VIEWS if cohort == "MG" else _EDIT_XR_VIEWS
     current_view = next((tok for tok in tokens if tok in view_set), "")
-    has_doppler = "Doppler" in tokens
 
     choices: list[str] = []
     seen: set[str] = set()
@@ -1367,39 +1486,57 @@ def _planar_radlex_series_edit_choices(current: str, modality: object | None, *,
             seen.add(stripped)
             choices.append(stripped)
 
-    def _emit(*, mode: str = "", view: str = "") -> None:
+    def _emit(*, anat: str, mode: str = "", view: str = "", lat: str = "") -> None:
         parts: list[str] = []
         if mode:
             parts.append(mode)
-        parts.append(anatomy)
-        if laterality and cohort in {"XR", "MG"}:
-            parts.append(laterality)
+        parts.append(anat)
+        if lat and cohort in {"XR", "MG"}:
+            parts.append(lat)
         if view:
             parts.append(view)
         _add(" ".join(parts))
 
-    _add(current)
+    if current.strip() and _planar_recognized_anatomy(tokens) is not None:
+        # Only keep already-Playbook (harmonized) current values in the menu.
+        _add(current)
+
+    if full_catalog:
+        anatomies = [anatomy] + sorted(a for a in _EDIT_PLANAR_ANATOMY_LABELS if a != anatomy)
+    else:
+        anatomies = [anatomy]
+
     if cohort == "US":
-        for mode in _EDIT_US_MODES:
-            if bool(mode) == has_doppler and current:
-                continue
-            _emit(mode=mode)
-            if len(choices) >= minimum:
-                return choices
-        # Common US anatomy alternatives for the same mode.
-        for alt_anatomy in ("Abdomen", "Pelvis", "Chest", "Neck", "Thyroid"):
-            if alt_anatomy == anatomy:
-                continue
-            parts = (["Doppler"] if has_doppler else []) + [alt_anatomy]
-            _add(" ".join(parts))
-            if len(choices) >= minimum:
+        us_core = ("Abdomen", "Pelvis", "Chest", "Neck", "Thyroid", "Head", "Liver", "Kidney")
+        us_anatomies = [anatomy] + [a for a in us_core if a != anatomy]
+        if not full_catalog:
+            us_anatomies = [anatomy]
+        for anat in us_anatomies:
+            for mode in _EDIT_US_MODES:
+                _emit(anat=anat, mode=mode)
+            if not full_catalog and len(choices) >= minimum:
                 return choices
         return choices
 
+    if cohort == "MG":
+        if full_catalog:
+            lats = [laterality] if laterality else []
+            lats = list(dict.fromkeys([*lats, "L", "R", "Bilat"]))
+        else:
+            lats = [laterality or "L"]
+        views = ([current_view] if current_view else []) + [v for v in view_set if v != current_view]
+        for lat in lats:
+            for view in views:
+                _emit(anat="Breast", view=view, lat=lat)
+            _emit(anat="Breast", lat=lat)
+        return choices
+
     views = ([current_view] if current_view else []) + [v for v in view_set if v != current_view]
-    for view in views:
-        _emit(view=view)
-        if len(choices) >= max(minimum, 6):
+    for anat in anatomies:
+        for view in views:
+            _emit(anat=anat, view=view, lat=laterality)
+        _emit(anat=anat, lat=laterality)
+        if not full_catalog and len(choices) >= max(minimum, NEAREST_DESCRIPTION_CHOICES):
             return choices
     return choices
 
@@ -1409,47 +1546,110 @@ def series_description_edit_choices(
     modality: object | None,
     current_description: str,
     minimum: int = MIN_DESCRIPTION_CHOICES,
+    full_catalog: bool = False,
+    anatomy_hint: str | None = None,
 ) -> list[str]:
     """
     RadLex Playbook series description menu for Dataset edit.
 
     Current value first, then modality-appropriate Playbook alternatives.
-    Does not use sibling series or the PHI index.
+    Unrecognized PHI does not invent anatomy. ``full_catalog`` expands the
+    modality-relevant Playbook catalog (filterable scroll dialog). ``anatomy_hint``
+    (usually the parent study description) prioritizes matching body parts.
     """
     from anonymizer.utils.modalities import series_is_planar_harmonize_eligible, series_is_tseg_eligible
 
     current = (current_description or "").strip()
-    if not current:
-        return []
-
+    hint = (anatomy_hint or "").strip()
     if series_is_tseg_eligible(modality):
-        return _tseg_radlex_series_edit_choices(current, minimum=minimum)
+        if current:
+            seed = current
+        else:
+            parts = _playbook_body_parts_from_anatomy_hint(hint) if hint else []
+            seed = f"{parts[0]} Ax WO" if parts else "Ch Ax WO"
+        return _tseg_radlex_series_edit_choices(
+            seed,
+            minimum=minimum,
+            full_catalog=full_catalog,
+            anatomy_hint=hint or current,
+        )
     if series_is_planar_harmonize_eligible(modality):
-        return _planar_radlex_series_edit_choices(current, modality, minimum=minimum)
-    return [current]
+        from anonymizer.utils.modalities import planar_harmonize_cohort
+
+        cohort = planar_harmonize_cohort(modality) or "XR"
+        if current:
+            seed = current
+        elif cohort == "US":
+            seed = "Abdomen"
+        elif cohort == "MG":
+            seed = "Breast L CC"
+        else:
+            seed = "Chest AP"
+        return _planar_radlex_series_edit_choices(
+            seed,
+            modality,
+            minimum=minimum,
+            full_catalog=full_catalog,
+        )
+    return [current] if current else []
+
+
+
+def study_loinc_prefix_for_edit(anon_model: AnonymizerModel, anon_study_uid: str) -> str | None:
+    """Return LOINC LongCommonName prefix for a study, or None when unknown/mixed."""
+    from anonymizer.controller.ai.harmonize.playbook_planar import planar_loinc_prefix_for_series_descriptions
+    from anonymizer.utils.modalities import is_mr_modality, planar_harmonize_cohort
+
+    composition = getattr(anon_model, "study_composition_for_harmonize", None)
+    has_tseg, has_planar = False, False
+    if callable(composition):
+        raw = composition(anon_study_uid)
+        try:
+            has_tseg, has_planar = bool(raw[0]), bool(raw[1])
+        except (TypeError, IndexError, ValueError):
+            has_tseg, has_planar = False, False
+
+    if has_tseg:
+        get_mods = getattr(anon_model, "get_tseg_series_modalities", None)
+        if callable(get_mods):
+            modalities = get_mods(anon_study_uid)
+            if modalities and all(is_mr_modality(m) for m in modalities):
+                return "MR "
+        return "CT "
+    if has_planar:
+        descriptions = anon_model.get_planar_series_harmonized_descriptions(anon_study_uid)
+        modalities = anon_model.get_planar_series_modalities(anon_study_uid)
+        cohorts = {planar_harmonize_cohort(m) for m in modalities}
+        cohorts.discard(None)
+        if len(cohorts) != 1:
+            return None
+        cohort = next(iter(cohorts))
+        assert cohort is not None
+        return planar_loinc_prefix_for_series_descriptions(cohort, descriptions)
+    return None
 
 
 def study_description_edit_choices(
     anon_model: AnonymizerModel,
     anon_study_uid: str,
     *,
-    top_n: int = 8,
+    top_n: int = NEAREST_DESCRIPTION_CHOICES,
     minimum: int = MIN_DESCRIPTION_CHOICES,
+    hint_description: str | None = None,
+    full_catalog: bool = False,
 ) -> list[tuple[str, str | None]]:
     """
     LOINC Study Description menu for Dataset edit (modality-filtered CSV only).
 
     Returns ``(long_common_name, loinc_number)`` with the current harmonized
-    description first when present. Pads from the same LOINC modality prefix —
-    never from other studies in the PHI index.
+    description first when present. Harmonized studies: nearest ranked matches.
+    Unharmonized / ``full_catalog``: entire modality-prefix LOINC list with
+    hint-ranked rows first (filterable scroll dialog).
     """
-    from anonymizer.controller.ai.harmonize.loinc_study import load_loinc_study_descriptions_for_prefix
-    from anonymizer.controller.ai.harmonize.playbook_planar import planar_loinc_prefix_for_series_descriptions
-    from anonymizer.utils.modalities import is_mr_modality, planar_harmonize_cohort
-
-    offer = study_description_edit_offer(anon_model, anon_study_uid, top_n=top_n)
-    if offer is None:
-        return []
+    from anonymizer.controller.ai.harmonize.loinc_study import (
+        load_loinc_study_descriptions_for_prefix,
+        rank_loinc_study_descriptions_from_hint,
+    )
 
     results: list[tuple[str, str | None]] = []
     seen: set[str] = set()
@@ -1461,44 +1661,374 @@ def study_description_edit_choices(
         seen.add(text)
         results.append((text, (code or None)))
 
-    for match in offer.matches:
-        _add(match.long_common_name, match.loinc_number or None)
+    current = (anon_model.get_study_harmonized_description(anon_study_uid) or "").strip()
+    hint = (hint_description or "").strip() or current
+    current_code: str | None = None
+    offer = study_description_edit_offer(anon_model, anon_study_uid, top_n=top_n)
+    ranked_from_series = False
+    if offer is not None:
+        for match in offer.matches:
+            if match.long_common_name == current:
+                current_code = match.loinc_number or None
+            if match.score > 0:
+                ranked_from_series = True
+            # Skip raw PHI rows that offer may have carried with score 0.
+            if match.score <= 0 and not _looks_like_loinc_study_description(match.long_common_name):
+                continue
+            _add(match.long_common_name, match.loinc_number or None)
 
-    if len(results) >= minimum:
+    if current and _looks_like_loinc_study_description(current):
+        rest = [(n, c) for n, c in results if n != current]
+        results = [(current, current_code)] + rest
+        seen = {n for n, _ in results}
+
+    loinc_prefix = study_loinc_prefix_for_edit(anon_model, anon_study_uid)
+    use_full = full_catalog or (not ranked_from_series and not current)
+
+    if not use_full and ranked_from_series and len(results) >= max(minimum, top_n):
+        return results[: max(minimum, top_n)]
+
+    if not loinc_prefix:
+        return results[: max(minimum, top_n)] if results and not use_full else results
+
+    # Prefer hint-ranked rows, then (for full catalog) the rest of the modality list.
+    for match in rank_loinc_study_descriptions_from_hint(
+        hint or current,
+        loinc_prefix=loinc_prefix,
+        top_n=max(minimum, top_n) if not use_full else 80,
+    ):
+        _add(match.long_common_name, match.loinc_number or None)
+        if not use_full and len(results) >= max(minimum, top_n):
+            return results
+
+    if use_full:
+        for code, name in load_loinc_study_descriptions_for_prefix(loinc_prefix):
+            _add(name, code)
         return results
 
-    # Resolve modality LOINC prefix the same way as the ranker.
+    return results
+
+
+DescriptionEditSelectionKind = str  # "series" | "study" | "invalid"
+
+
+@dataclass(frozen=True)
+class DescriptionEditSelection:
+    """Validated Dataset selection for group description edit."""
+
+    kind: DescriptionEditSelectionKind
+    reason: str
+    count: int
+    cohort_key: str = ""
+
+
+def series_description_cohort_key(modality: object | None) -> str | None:
+    """Return cohort key for series group edit (``tseg`` / ``XR`` / ``US`` / ``MG``)."""
+    from anonymizer.utils.modalities import (
+        planar_harmonize_cohort,
+        series_is_planar_harmonize_eligible,
+        series_is_tseg_eligible,
+    )
+
+    if series_is_tseg_eligible(modality):
+        return "tseg"
+    if series_is_planar_harmonize_eligible(modality):
+        return planar_harmonize_cohort(modality)
+    return None
+
+
+def classify_description_edit_selection(
+    *,
+    series_cohort_keys: Sequence[str | None] | None = None,
+    study_loinc_prefixes: Sequence[str | None] | None = None,
+) -> DescriptionEditSelection:
+    """
+    Validate a Dataset multi-select for Set description….
+
+    Pass either series cohort keys or study LOINC prefixes — not both.
+    """
+    has_series = series_cohort_keys is not None and len(series_cohort_keys) > 0
+    has_studies = study_loinc_prefixes is not None and len(study_loinc_prefixes) > 0
+    if has_series and has_studies:
+        return DescriptionEditSelection(
+            kind="invalid",
+            reason="mixed",
+            count=len(series_cohort_keys or ()) + len(study_loinc_prefixes or ()),
+        )
+    if not has_series and not has_studies:
+        return DescriptionEditSelection(kind="invalid", reason="empty", count=0)
+
+    if has_series:
+        keys = list(series_cohort_keys or ())
+        if any(k is None for k in keys):
+            return DescriptionEditSelection(kind="invalid", reason="ineligible", count=len(keys))
+        unique = {str(k) for k in keys}
+        if len(unique) != 1:
+            return DescriptionEditSelection(kind="invalid", reason="mixed_modality", count=len(keys))
+        return DescriptionEditSelection(
+            kind="series",
+            reason="",
+            count=len(keys),
+            cohort_key=next(iter(unique)),
+        )
+
+    prefixes = list(study_loinc_prefixes or ())
+    if any(p is None or not str(p).strip() for p in prefixes):
+        return DescriptionEditSelection(kind="invalid", reason="ineligible", count=len(prefixes))
+    unique_p = {str(p) for p in prefixes}
+    if len(unique_p) != 1:
+        return DescriptionEditSelection(kind="invalid", reason="mixed_modality", count=len(prefixes))
+    return DescriptionEditSelection(
+        kind="study",
+        reason="",
+        count=len(prefixes),
+        cohort_key=next(iter(unique_p)),
+    )
+
+
+def series_description_group_choices(
+    *,
+    modalities: Sequence[object | None],
+    current_descriptions: Sequence[str],
+    minimum: int = MIN_DESCRIPTION_CHOICES,
+    anatomy_hint: str | None = None,
+) -> list[str]:
+    """
+    Shared RadLex menu for a homogeneous series multi-select.
+
+    Harmonized Playbook strings: nearest variants (~10).
+    Unharmonized PHI: full modality-relevant Playbook catalog.
+    """
+    if not modalities:
+        return []
+    keys = [series_description_cohort_key(m) for m in modalities]
+    info = classify_description_edit_selection(series_cohort_keys=keys)
+    if info.kind != "series":
+        return []
+
+    pairs = list(zip(modalities, current_descriptions, strict=False))
+    nonempty = [(m, str(d).strip()) for m, d in pairs if str(d).strip()]
+    all_playbook = bool(nonempty) and all(
+        _series_description_looks_playbook(modality=m, description=d) for m, d in nonempty
+    )
+
+    seed_desc = nonempty[0][1] if nonempty else ""
+    return series_description_edit_choices(
+        modality=modalities[0],
+        current_description=seed_desc,
+        minimum=NEAREST_DESCRIPTION_CHOICES if all_playbook else minimum,
+        full_catalog=not all_playbook,
+        anatomy_hint=anatomy_hint,
+    )
+
+
+def study_description_group_choices(
+    anon_model: AnonymizerModel,
+    anon_study_uids: Sequence[str],
+    *,
+    top_n: int = NEAREST_DESCRIPTION_CHOICES,
+    minimum: int = MIN_DESCRIPTION_CHOICES,
+    hint_descriptions: Sequence[str] | None = None,
+) -> list[tuple[str, str | None]]:
+    """Shared LOINC menu for a homogeneous study multi-select."""
+    if not anon_study_uids:
+        return []
+    prefixes = [study_loinc_prefix_for_edit(anon_model, uid) for uid in anon_study_uids]
+    info = classify_description_edit_selection(study_loinc_prefixes=prefixes)
+    if info.kind != "study":
+        return []
+
+    hints = list(hint_descriptions or [])
+    any_unharmonized = False
+    for uid in anon_study_uids:
+        harm = (anon_model.get_study_harmonized_description(uid) or "").strip()
+        if not harm:
+            any_unharmonized = True
+            break
+
+    results: list[tuple[str, str | None]] = []
+    seen: set[str] = set()
+    for index, uid in enumerate(anon_study_uids):
+        hint = hints[index] if index < len(hints) else None
+        for name, code in study_description_edit_choices(
+            anon_model,
+            uid,
+            top_n=top_n,
+            minimum=minimum,
+            hint_description=hint,
+            full_catalog=any_unharmonized,
+        ):
+            if name in seen:
+                continue
+            seen.add(name)
+            results.append((name, code))
+    if any_unharmonized:
+        return results
+    return results[: max(minimum, top_n) * 2]
+
+
+def _series_description_looks_playbook(*, modality: object | None, description: str) -> bool:
+    """True when ``description`` already looks like a RadLex Playbook series string."""
+    from anonymizer.controller.ai.harmonize.loinc_study import parse_playbook_series_description
+    from anonymizer.utils.modalities import series_is_planar_harmonize_eligible, series_is_tseg_eligible
+
+    text = (description or "").strip()
+    if not text:
+        return False
+    if series_is_tseg_eligible(modality):
+        return bool(parse_playbook_series_description(text).get("body_parts"))
+    if series_is_planar_harmonize_eligible(modality):
+        return _planar_recognized_anatomy(text.split()) is not None
+    return False
+
+
+def apply_series_descriptions(
+    *,
+    series_dirs: Sequence[Path],
+    description: str,
+    anon_model: AnonymizerModel,
+) -> list[Path]:
+    """Apply one RadLex series description to each series directory; return successes."""
+    text = (description or "").strip()
+    if not text:
+        return []
+    updated: list[Path] = []
+    for series_dir in series_dirs:
+        path = Path(series_dir)
+        if apply_harmonized_description(path, text, anon_model):
+            updated.append(path)
+        else:
+            logger.error("Failed to apply series description for %s", path)
+    return updated
+
+
+def apply_study_descriptions(
+    *,
+    images_dir: Path,
+    anon_model: AnonymizerModel,
+    anon_study_uids: Sequence[str],
+    description: str,
+    loinc_number: str | None = None,
+) -> list[str]:
+    """Apply one LOINC study description to each study; return updated UIDs."""
+    text = (description or "").strip()
+    if not text:
+        return []
+    updated: list[str] = []
+    for anon_study_uid in anon_study_uids:
+        patient_id = anon_model.get_anon_patient_id_for_study(anon_study_uid)
+        if not patient_id:
+            logger.error("No patient id for study %s; skipping study description apply", anon_study_uid)
+            continue
+        study_root = Path(images_dir) / patient_id / anon_study_uid
+        if apply_harmonized_study_description(
+            study_root,
+            text,
+            anon_model,
+            anon_study_uid,
+            loinc_number=loinc_number,
+        ):
+            updated.append(anon_study_uid)
+        else:
+            logger.error("Failed to apply study description for %s", anon_study_uid)
+    return updated
+
+
+def find_similar_study_uids(
+    anon_model: AnonymizerModel,
+    anon_study_uid: str,
+    *,
+    candidates: Sequence[tuple[str, str, str | None]] | None = None,
+) -> list[str]:
+    """
+    Other studies similar to ``anon_study_uid`` (excludes self).
+
+    Prefer the same harmonized series-description fingerprint when available.
+    Also match ``candidates`` of ``(uid, study_description, loinc_prefix)`` with the
+    same non-empty study description and LOINC prefix — so Dataset Select similar
+    works before every series is harmonized (mirrors series description matching).
+    """
+    from anonymizer.controller.ai.harmonize.loinc_study import (
+        fingerprint_for_harmonized_study,
+        fingerprint_for_planar_harmonized_study,
+    )
+
+    peers: set[str] = set()
+
     composition = getattr(anon_model, "study_composition_for_harmonize", None)
-    has_tseg, has_planar = True, False
+    has_tseg, has_planar = False, False
     if callable(composition):
         raw = composition(anon_study_uid)
         try:
             has_tseg, has_planar = bool(raw[0]), bool(raw[1])
         except (TypeError, IndexError, ValueError):
-            has_tseg, has_planar = True, False
+            has_tseg, has_planar = False, False
 
-    loinc_prefix = "CT "
     if has_tseg:
-        get_mods = getattr(anon_model, "get_tseg_series_modalities", None)
-        if callable(get_mods):
-            modalities = get_mods(anon_study_uid)
-            if modalities and all(is_mr_modality(m) for m in modalities):
-                loinc_prefix = "MR "
+        fingerprint = fingerprint_for_harmonized_study(anon_model, anon_study_uid)
+        if fingerprint:
+            peers.update(uid for uid in find_studies_with_fingerprint(anon_model, fingerprint) if uid != anon_study_uid)
     elif has_planar:
-        descriptions = anon_model.get_planar_series_harmonized_descriptions(anon_study_uid)
-        modalities = anon_model.get_planar_series_modalities(anon_study_uid)
-        cohorts = {planar_harmonize_cohort(m) for m in modalities}
-        cohorts.discard(None)
-        if len(cohorts) == 1:
-            cohort = next(iter(cohorts))
-            assert cohort is not None
-            loinc_prefix = planar_loinc_prefix_for_series_descriptions(cohort, descriptions)
+        fingerprint = fingerprint_for_planar_harmonized_study(anon_model, anon_study_uid)
+        if fingerprint:
+            peers.update(
+                uid
+                for uid in anon_model.find_studies_with_planar_series_fingerprint(fingerprint)
+                if uid != anon_study_uid
+            )
 
-    for code, name in load_loinc_study_descriptions_for_prefix(loinc_prefix):
-        _add(name, code)
-        if len(results) >= max(minimum, top_n):
-            break
-    return results
+    if candidates is not None:
+        seed_desc = (anon_model.get_study_harmonized_description(anon_study_uid) or "").strip()
+        seed_prefix = study_loinc_prefix_for_edit(anon_model, anon_study_uid)
+        # Prefer explicit candidate row for the seed when ORM study desc is empty.
+        for uid, description, prefix in candidates:
+            if uid == anon_study_uid:
+                text = (description or "").strip()
+                if text and not seed_desc:
+                    seed_desc = text
+                if prefix and seed_prefix is None:
+                    seed_prefix = prefix
+                break
+        if seed_desc:
+            for uid, description, prefix in candidates:
+                if uid == anon_study_uid:
+                    continue
+                if (description or "").strip() != seed_desc:
+                    continue
+                if seed_prefix is not None and prefix is not None and prefix != seed_prefix:
+                    continue
+                peers.add(uid)
+
+    return sorted(peers)
+
+
+def find_similar_series_uids(
+    candidates: Sequence[tuple[str, object | None, str]],
+    *,
+    seed_uid: str,
+    seed_modality: object | None,
+    seed_description: str,
+) -> list[str]:
+    """
+    Other series UIDs with the same cohort and description text.
+
+    ``candidates`` is ``(anon_series_uid, modality, description)`` from the Dataset index.
+    """
+    seed_key = series_description_cohort_key(seed_modality)
+    seed_text = (seed_description or "").strip()
+    if not seed_key or not seed_text:
+        return []
+    peers: list[str] = []
+    for uid, modality, description in candidates:
+        if uid == seed_uid:
+            continue
+        if series_description_cohort_key(modality) != seed_key:
+            continue
+        if (description or "").strip() != seed_text:
+            continue
+        peers.append(uid)
+    return peers
+
 
 
 def apply_study_description_offer(
@@ -1585,35 +2115,6 @@ def group_study_description_offers_by_fingerprint(
     return list(by_fp.values())
 
 
-def resolve_study_description_offers(
-    *,
-    images_dir: Path,
-    anon_model: AnonymizerModel,
-    offers: Sequence[StudyDescriptionOffer],
-) -> tuple[list[StudyDescriptionOffer], list[tuple[StudyDescriptionOffer, list[str]]]]:
-    """
-    Group by fingerprint; auto-apply clear winners; return (ambiguous_offers, auto_results).
-
-    ``auto_results`` is a list of (offer, updated_uids) for silently applied groups.
-    Used by interactive Series View Harmonize (ambiguous groups still show a dialog).
-    """
-    ambiguous: list[StudyDescriptionOffer] = []
-    auto_results: list[tuple[StudyDescriptionOffer, list[str]]] = []
-    for offer in group_study_description_offers_by_fingerprint(list(offers)):
-        if anon_model.get_study_harmonized_description(offer.anon_study_uid):
-            continue
-        if offer.ambiguous:
-            ambiguous.append(offer)
-            continue
-        updated = auto_apply_study_description_offer(
-            images_dir=images_dir,
-            anon_model=anon_model,
-            offer=offer,
-        )
-        auto_results.append((offer, updated))
-    return ambiguous, auto_results
-
-
 def auto_apply_best_study_descriptions(
     *,
     images_dir: Path,
@@ -1621,10 +2122,14 @@ def auto_apply_best_study_descriptions(
     anon_study_uids: Sequence[str],
 ) -> list[tuple[StudyDescriptionOffer, list[str]]]:
     """
-    Best-guess LOINC Study Description for batch / headless Harmonize.
+    Best-guess LOINC Study Description for Harmonize (Series View and AI Batch).
 
-    Always applies the top-ranked match (including formerly "ambiguous" rankings).
-    Never returns leftover offers for a UI dialog.
+    When a study becomes fully series-harmonized, rank LOINC LongCommonName rows and
+    apply the top match to that study and to fingerprint peers that still lack a
+    study-level description. Always takes the top-ranked match (no confirmation UI);
+    users can change the choice later from Dataset.
+
+    Returns a list of ``(offer, updated_uids)`` for groups that were written.
     """
     offers: list[StudyDescriptionOffer] = []
     for anon_study_uid in anon_study_uids:
@@ -1911,8 +2416,10 @@ def _harmonize_one_planar_series(
     cancelled: HarmonizeCancelledCallback | None,
     timing_collector: HarmonizeTimingCollector | None,
 ) -> HarmonizedResult | None:
-    """Metadata-only Harmonize for XR/US/MG. Never calls TotalSegmentator."""
+    """Planar Harmonize for XR/US/MG. XR may use optional pixel body-part model."""
+    from anonymizer.controller.ai.harmonize.planar_profile import planar_profile_from_dataset
     from anonymizer.controller.ai.harmonize.playbook_planar import build_planar_harmonized_series_description
+    from anonymizer.controller.ai.tseg.dicom_geometry import sorted_dicom_paths
 
     series_dir = Path(series_dir)
     timing = HarmonizeStageTimings(series_directory=str(series_dir))
@@ -1951,8 +2458,51 @@ def _harmonize_one_planar_series(
             error=error,
         )
 
+    pixel_pred = None
+    pixel_view_pred = None
+    profile = planar_profile_from_dataset(ds)
+    if profile is not None and profile.cohort == "XR":
+        from anonymizer.controller.ai.harmonize.cxp_view import cxp_view_ready, predict_cxp_view
+        from anonymizer.controller.ai.harmonize.xp_bodypart import predict_body_part, xp_bodypart_ready
+
+        need_body = xp_bodypart_ready()
+        need_view = cxp_view_ready()
+        pixels = None
+        if need_body or need_view:
+            if not _report("merge", "Loading XR pixels for classification", 0.35):
+                return None
+            try:
+                paths = sorted_dicom_paths(series_dir)
+                if paths:
+                    pixel_ds = dcmread(paths[0], stop_before_pixels=False)
+                    pixels = pixel_ds.pixel_array
+            except Exception:
+                logger.warning("XR pixel load failed for %s", series_dir, exc_info=True)
+                pixels = None
+
+        if need_body and pixels is not None:
+            if not _report("merge", "Classifying XR body part from pixels", 0.45):
+                return None
+            pixel_pred = predict_body_part(pixels)
+
+        # Resolve anatomy first so CXR view runs only for Chest.
+        try:
+            from anonymizer.controller.ai.harmonize.playbook_planar import build_planar_playbook_attributes
+
+            prelim = build_planar_playbook_attributes(ds, pixel_pred=pixel_pred)
+            anatomy_is_chest = prelim.body_part_label == "Chest"
+        except ValueError:
+            anatomy_is_chest = False
+
+        if need_view and anatomy_is_chest and pixels is not None:
+            if not _report("merge", "Classifying CXR projection and rotation", 0.55):
+                return None
+            pixel_view_pred = predict_cxp_view(pixels)
+
     try:
-        description, planar_attrs = build_planar_harmonized_series_description(ds)
+        description, planar_attrs = build_planar_harmonized_series_description(
+            ds, pixel_pred=pixel_pred, pixel_view_pred=pixel_view_pred
+        )
     except ValueError as exc:
         timing.merge_sec = time.perf_counter() - stage_t0
         if timing_collector is not None:

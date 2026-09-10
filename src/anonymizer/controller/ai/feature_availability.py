@@ -5,6 +5,16 @@ View imports these directly. Status strings, download manager, and catalog regis
 
 from __future__ import annotations
 
+from anonymizer.controller.ai.harmonize.cxp_view import (
+    CxpViewModelStatus,
+    cxp_view_ready,
+    probe_cxp_view_models,
+)
+from anonymizer.controller.ai.harmonize.xp_bodypart import (
+    XpBodypartModelStatus,
+    probe_xp_bodypart_models,
+    xp_bodypart_ready,
+)
 from anonymizer.controller.ai.remove_pixel_phi import (
     OcrModelStatus,
     ocr_models_ready,
@@ -140,3 +150,21 @@ def face_ct_needs_download() -> bool:
 
 def face_mr_needs_download() -> bool:
     return totalsegmentator_available() and face_license_available() and not face_mr_has_models()
+
+
+def harmonize_xr_bodypart_has_models() -> bool:
+    return xp_bodypart_ready()
+
+
+def harmonize_xr_bodypart_needs_download() -> bool:
+    status, _ = probe_xp_bodypart_models()
+    return status in {XpBodypartModelStatus.MISSING, XpBodypartModelStatus.FAILED}
+
+
+def harmonize_cxr_view_has_models() -> bool:
+    return cxp_view_ready()
+
+
+def harmonize_cxr_view_needs_download() -> bool:
+    status, _ = probe_cxp_view_models()
+    return status in {CxpViewModelStatus.MISSING, CxpViewModelStatus.FAILED}

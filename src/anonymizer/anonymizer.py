@@ -758,28 +758,39 @@ class Anonymizer(ctk.CTk):
             messagebox.showerror(title=title, message=message, parent=self)
             return
         self._shutting_down = True
-        if self.controller:
-            self.shutdown_controller()
-        self.save_config()
+        try:
+            if self.controller:
+                self.shutdown_controller()
+            self.save_config()
+        except Exception:
+            logger.exception("quit_app: shutdown failed; forcing process exit")
+            os._exit(1)
         self.quit()
 
     def shutdown_controller(self):
         logger.info("shutdown_controller")
 
         if self.dashboard:
-            self.dashboard.destroy()
+            with contextlib.suppress(Exception):
+                self.dashboard.destroy()
             self.dashboard = None
         if not self.controller:
             return
-        self.controller.stop_scp()
-        self.controller.shutdown()
-        self.controller.save_model()
-        self.controller.anonymizer.stop()
+        with contextlib.suppress(Exception):
+            self.controller.stop_scp()
+        with contextlib.suppress(Exception):
+            self.controller.shutdown()
+        with contextlib.suppress(Exception):
+            self.controller.save_model()
+        with contextlib.suppress(Exception):
+            self.controller.anonymizer.stop()
         if self.query_view:
-            self.query_view.destroy()
+            with contextlib.suppress(Exception):
+                self.query_view.destroy()
             self.query_view = None
         if self.export_view:
-            self.export_view.destroy()
+            with contextlib.suppress(Exception):
+                self.export_view.destroy()
             self.export_view = None
         self.controller = None
 
@@ -1487,10 +1498,20 @@ def run_GUI(logs_dir):
         logger.exception(f"Error initialising ANONYMIZER GUI, exiting: {str(e)}")
         sys.exit(1)
 
+    _signal_quit_count = 0
+
     def _signal_quit(signum, _frame) -> None:
+        nonlocal _signal_quit_count
+        _signal_quit_count += 1
+        if _signal_quit_count >= 2:
+            # Second Ctrl-C / SIGTERM: do not wait for Tk teardown (can hang).
+            logger.error("Signal %s received again — forcing immediate process exit", signum)
+            os._exit(128 + int(signum))
         logger.info("Signal %s received, scheduling graceful quit", signum)
         if app.winfo_exists():
             app.after(0, app.quit_app)
+        else:
+            os._exit(128 + int(signum))
 
     for sig in (signal.SIGINT, signal.SIGTERM):
         with contextlib.suppress(ValueError, OSError):
@@ -1502,7 +1523,8 @@ def run_GUI(logs_dir):
     except Exception as e:
         logger.exception(f"Error in ANONYMIZER GUI MAINLOOP: {str(e)}")
     finally:
-        app.shutdown_controller()
+        with contextlib.suppress(Exception):
+            app.shutdown_controller()
 
     logger.info("ANONYMIZER GUI Stop.")
 

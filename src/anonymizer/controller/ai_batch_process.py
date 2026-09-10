@@ -1618,8 +1618,8 @@ def ai_batch_process(
                     for line in harmonize_log_lines:
                         log_workflow(format_batch_workflow_log_line(format_batch_step_subline(line)))
                     if outcome.status == "ok" and anon_model is not None:
-                        # Collect candidates; maybe_offer_study_description_harmonize
-                        # gates CT/MR vs pure XR/US/MG readiness at dialog time.
+                        # Collect candidates; auto_apply_best_study_descriptions
+                        # after the batch gates readiness and applies top LOINC matches.
                         newly_harmonized_study_uids.add(series_path.parent.name)
                 else:
                     volume_context = volume_contexts.pop(series_path, None)

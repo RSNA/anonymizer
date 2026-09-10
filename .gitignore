@@ -74,10 +74,15 @@ src/certs/
 *.dcm
 !tests/controller/assets/test_dcm_files/**/*.dcm
 *.pth
+*.pt
 *.dmg
 *.zip
 src/anonymizer/assets/ai/ocr/
 src/anonymizer/assets/ai/tseg/
+src/anonymizer/assets/ai/xp_bodypart/
+src/anonymizer/assets/ai/cxp_view/
+assets/ai/xp_bodypart/
+assets/ai/cxp_view/
 src/prototyping/falcon/assets/models/
 dicom/
 phi_imgs/

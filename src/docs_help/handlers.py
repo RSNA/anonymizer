@@ -2078,10 +2078,11 @@ def shot_process_remove_pixel(ctx: CaptureContext, shot: ShotSpec) -> ShotResult
 
 
 def shot_process_harmonize_description(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
-    """Series View (CT head) above completed Harmonize Description results."""
+    """Series View above completed Harmonize Description results (CT or planar)."""
     from docs_help.harmonize import (
         BrainPromptPolicy,
         close_harmonize_session,
+        ensure_xr_planar_models,
         grab_series_with_overlays,
         layout_series_above_harmonize,
         prepare_series_for_harmonize,
@@ -2089,6 +2090,14 @@ def shot_process_harmonize_description(ctx: CaptureContext, shot: ShotSpec) -> S
     )
 
     fixture = _fixture_from_deps(shot.deps) or "CT_Head_With_Contrast"
+    if fixture in {"davidson_cxr", "cxr"} or "davidson" in fixture.lower():
+        try:
+            ensure_xr_planar_models()
+        except Exception as exc:
+            logger.warning("XR planar models for CXR Harmonize shot: %s", exc)
+            if shot.soft:
+                return ShotResult(shot.id, "soft_fail", f"xr_models:{exc}")
+            raise
     session = prepare_series_for_harmonize(
         ctx,
         fixture,
@@ -2341,6 +2350,8 @@ SHOT_HANDLERS: dict[str, Callable[[CaptureContext, ShotSpec], ShotResult]] = {
     "Process_RemovePixel_US_Exclude_Panel": shot_process_remove_pixel,
     "Process_RemovePixel_US_Exclude_Detect": shot_process_remove_pixel,
     "Process_Harmonize_Description": shot_process_harmonize_description,
+    "Process_Harmonize_CXR": shot_process_harmonize_description,
+    "Process_Harmonize_US": shot_process_harmonize_description,
     "Process_Harmonize_BrainPrompt": shot_process_harmonize_brain_prompt,
     "Process_Harmonize_SegmentedSeries": shot_process_harmonize_segmented_series,
     "Process_FaceBlur_Gaussian": shot_process_face_blur,

@@ -18,9 +18,9 @@ from anonymizer.controller.ai.harmonize import (
     HarmonizedResult,
     HarmonizeProgress,
     apply_harmonized_description,
+    auto_apply_best_study_descriptions,
     format_harmonize_progress_message,
     harmonize_series,
-    maybe_offer_study_description_harmonize,
 )
 from anonymizer.controller.ai.harmonize.playbook import (
     PLAYBOOK_TREE_IIDS,
@@ -686,8 +686,13 @@ class HarmonizeResultsView(AppToplevel):
     def _populate_dicom_tree(self) -> None:
         for item in self._dicom_tree.get_children():
             self._dicom_tree.delete(item)
-        for field_name, tag, value in harmonize_dicom_rows(self._ds):
+        rows = harmonize_dicom_rows(self._ds)
+        for field_name, tag, value in rows:
             self._dicom_tree.insert("", "end", values=(field_name, tag, value))
+        # Resize to modality-specific row count (CT/MR vs XR/US/MG differ).
+        visible = max(len(rows), 1) + self._TREE_TRAILING_BLANK_ROWS
+        with contextlib.suppress(Exception):
+            self._dicom_tree.configure(height=visible)
 
     def _clear_playbook_tree(self) -> None:
         for iid in self._playbook_tree.get_children():
@@ -933,7 +938,7 @@ class HarmonizeResultsView(AppToplevel):
             return
         # DICOM already matches; persist ORM flag on the UI thread.
         if self._persist_harmonized_metadata(proposed):
-            self._maybe_offer_study_description()
+            self._maybe_auto_apply_study_description()
 
     def _notify_series_description_updated(self) -> None:
         if self._on_series_description_updated is not None:
@@ -965,41 +970,26 @@ class HarmonizeResultsView(AppToplevel):
             )
         return ok
 
-    def _maybe_offer_study_description(self) -> None:
-        """Auto-apply or offer LOINC StudyDescription when this apply completes the study."""
+    def _maybe_auto_apply_study_description(self) -> None:
+        """Best-guess LOINC StudyDescription when this apply completes the study (same as AI Batch)."""
         if self._anon_model is None or self._closing or not self.winfo_exists():
             return
         anon_study_uid = str(self._ds.StudyInstanceUID)
         images_dir = Path(self._series_path).resolve().parent.parent.parent
-        offer = maybe_offer_study_description_harmonize(
-            self._anon_model,
-            anon_study_uid,
-            images_dir=images_dir,
-        )
-        if offer is None:
-            return
-        from anonymizer.view.ai.study_description_dialog import resolve_and_show_study_description_offers
-
-        def _refresh_after_study_apply(_offer=None, _updated=None) -> None:
-            if self._on_series_description_updated is not None:
-                self._on_series_description_updated()
-
-        def _on_auto(offer_, updated: list[str]) -> None:
-            logger.info(
-                "Auto-applied LOINC study description to %d study(ies)",
-                len(updated),
-            )
-            _refresh_after_study_apply(offer_, updated)
-
-        results = resolve_and_show_study_description_offers(
-            self,
-            offers=[offer],
+        applied = auto_apply_best_study_descriptions(
             images_dir=images_dir,
             anon_model=self._anon_model,
-            on_auto_applied=_on_auto,
+            anon_study_uids=(anon_study_uid,),
         )
-        if any(r.applied for r in results):
-            _refresh_after_study_apply()
+        if not applied:
+            return
+        total_studies = sum(len(updated) for _offer, updated in applied)
+        logger.info(
+            "Auto-applied LOINC study description to %d study(ies)",
+            total_studies,
+        )
+        if self._on_series_description_updated is not None:
+            self._on_series_description_updated()
 
     def _on_save_job_done(self, _algorithm: Algorithm | None, work_state: WorkState) -> None:
         if self._closing or not self.winfo_exists():
@@ -1021,7 +1011,7 @@ class HarmonizeResultsView(AppToplevel):
         self._commit_saved_description()
         self.accepted = True
         self._status_label.configure(text=_("Series description saved"))
-        self._maybe_offer_study_description()
+        self._maybe_auto_apply_study_description()
         self._record_outcome(accepted=True)
 
     def _show_save_error(self, message: str) -> None:

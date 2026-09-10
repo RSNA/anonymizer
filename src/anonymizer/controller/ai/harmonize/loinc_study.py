@@ -888,6 +888,12 @@ def build_study_description_ranking(
 # --- Planar (XR/US/MG) LOINC ranking — isolated from CT/MR Playbook token parse ---
 
 _PLANAR_ANATOMY_PHRASES: tuple[str, ...] = (
+    # Multi-word first so "lower extremity" wins before bare joint tokens.
+    "lower extremity",
+    "upper extremity",
+    "cervical spine",
+    "thoracic spine",
+    "lumbar spine",
     "chest",
     "abdomen",
     "pelvis",
@@ -911,20 +917,31 @@ _PLANAR_ANATOMY_PHRASES: tuple[str, ...] = (
 )
 
 
+_PLANAR_ANATOMY_LABELS: dict[str, str] = {
+    "lower extremity": "Lower extremity",
+    "upper extremity": "Upper extremity",
+    "brain": "Head",
+}
+
+
 def _planar_anatomy_from_descriptions(series_descriptions: Sequence[str]) -> list[str]:
     found: list[str] = []
-    seen: set[str] = set()
+    seen_phrases: set[str] = set()
+    seen_labels: set[str] = set()
     joined = " ".join(series_descriptions).lower()
     for phrase in _PLANAR_ANATOMY_PHRASES:
-        if phrase in joined and phrase not in seen:
-            # Prefer LOINC-facing labels (capitalize words).
-            label = " ".join(part.capitalize() for part in phrase.split())
-            if phrase == "brain":
-                label = "Head"
-            seen.add(phrase)
-            if label not in seen:
-                found.append(label)
-                seen.add(label)
+        if phrase not in joined or phrase in seen_phrases:
+            continue
+        label = _PLANAR_ANATOMY_LABELS.get(
+            phrase,
+            " ".join(part.capitalize() for part in phrase.split()),
+        )
+        seen_phrases.add(phrase)
+        key = label.lower()
+        if key in seen_labels:
+            continue
+        found.append(label)
+        seen_labels.add(key)
     return found
 
 
@@ -1056,6 +1073,85 @@ def _planar_foreign_anatomy_penalty(name_l: str, anatomy: Sequence[str]) -> floa
     return penalty
 
 
+# Playbook emits R / L / Bilat; LOINC LongCommonName uses left / right / bilateral.
+_PLANAR_LATERALITY_CODES = frozenset({"R", "L", "Bilat"})
+_LOINC_LEFT_RE = re.compile(r"\bleft\b", re.IGNORECASE)
+_LOINC_RIGHT_RE = re.compile(r"\bright\b", re.IGNORECASE)
+_LOINC_BILATERAL_RE = re.compile(r"\bbilateral\b", re.IGNORECASE)
+
+
+def _planar_laterality_from_descriptions(series_descriptions: Sequence[str]) -> str:
+    """Return ``R``, ``L``, ``Bilat``, or ``""`` from Playbook series strings."""
+    codes: set[str] = set()
+    for description in series_descriptions:
+        text = str(description).strip()
+        if not text:
+            continue
+        for token in text.split():
+            upper = token.upper()
+            if upper in {"R", "RIGHT"}:
+                codes.add("R")
+            elif upper in {"L", "LEFT"}:
+                codes.add("L")
+            elif upper in {"BILAT", "BILATERAL", "BOTH"}:
+                codes.add("Bilat")
+        lower = text.lower()
+        if _LOINC_RIGHT_RE.search(lower):
+            codes.add("R")
+        if _LOINC_LEFT_RE.search(lower):
+            codes.add("L")
+        if _LOINC_BILATERAL_RE.search(lower) or re.search(r"\bbilat\b", lower):
+            codes.add("Bilat")
+
+    if "Bilat" in codes or {"R", "L"} <= codes:
+        return "Bilat"
+    if codes == {"R"}:
+        return "R"
+    if codes == {"L"}:
+        return "L"
+    return ""
+
+
+def _score_loinc_laterality(name_l: str, laterality: str) -> float:
+    """Boost matching LOINC laterality; demote conflicting left/right/bilateral."""
+    has_left = bool(_LOINC_LEFT_RE.search(name_l))
+    has_right = bool(_LOINC_RIGHT_RE.search(name_l))
+    has_bilat = bool(_LOINC_BILATERAL_RE.search(name_l))
+    asserts_laterality = has_left or has_right or has_bilat
+
+    if not laterality:
+        # Prefer non-lateralized LOINC rows when series give no side evidence.
+        return -45.0 if asserts_laterality else 0.0
+
+    if laterality not in _PLANAR_LATERALITY_CODES:
+        return 0.0
+
+    if laterality == "R":
+        if has_right and not has_left:
+            return 110.0
+        if has_left and not has_right:
+            return -130.0
+        if has_bilat:
+            return -55.0
+        return 0.0
+
+    if laterality == "L":
+        if has_left and not has_right:
+            return 110.0
+        if has_right and not has_left:
+            return -130.0
+        if has_bilat:
+            return -55.0
+        return 0.0
+
+    # Bilat
+    if has_bilat:
+        return 110.0
+    if has_left or has_right:
+        return -90.0
+    return 0.0
+
+
 def rank_planar_loinc_study_descriptions(
     series_descriptions: list[str] | tuple[str, ...],
     *,
@@ -1066,15 +1162,19 @@ def rank_planar_loinc_study_descriptions(
 ) -> list[LoincStudyMatch]:
     """Rank LOINC rows for planar Harmonize series strings (no CT Playbook parse).
 
-    Best-guess scoring prefers anatomy + view tokens, near-exact Playbook matches,
-    concise names, and — for CXR — LOINC ``N Views`` / ``Single view`` aligned with
-    how many images are in the series (or study).
+    Best-guess scoring prefers anatomy, laterality (R/L/Bilat), view tokens,
+    near-exact Playbook matches, concise names, and — for CXR — LOINC ``N Views`` /
+    ``Single view`` aligned with how many images are in the series (or study).
+
+    Only LongCommonName values from the LOINC StudyDescription list (filtered by
+    ``loinc_prefix``) are returned — nothing is synthesized.
     """
     cleaned = [str(d).strip() for d in series_descriptions if str(d).strip()]
     anatomy = _planar_anatomy_from_descriptions(cleaned)
     if not anatomy and not cleaned:
         return []
 
+    laterality = _planar_laterality_from_descriptions(cleaned)
     desc_joined = " ".join(cleaned)
     desc_l = desc_joined.lower()
     view_tokens = tuple(
@@ -1094,6 +1194,9 @@ def rank_planar_loinc_study_descriptions(
         )
         if re.search(rf"\b{re.escape(token)}\b", desc_l)
     )
+    # Playbook emits ``Lat`` for lateral XR; treat as the LOINC ``lateral`` token.
+    if "lateral" not in view_tokens and re.search(r"\blat\b", desc_l):
+        view_tokens = (*view_tokens, "lateral")
     single_region = len(anatomy) <= 1
     prefix_l = loinc_prefix.strip().lower()
     # When multiple images imply multi-view, do not treat a single projection string
@@ -1104,8 +1207,13 @@ def rank_planar_loinc_study_descriptions(
         and loinc_prefix.strip().upper().startswith("XR")
     )
 
+    catalog = load_loinc_study_descriptions_for_prefix(loinc_prefix, csv_path=csv_path)
+    allowed_names = {name for _code, name in catalog}
+
     scored: list[LoincStudyMatch] = []
-    for code, name in load_loinc_study_descriptions_for_prefix(loinc_prefix, csv_path=csv_path):
+    for code, name in catalog:
+        if name not in allowed_names:
+            continue
         name_l = name.lower()
         score = 0.0
         for part in anatomy:
@@ -1142,6 +1250,7 @@ def rank_planar_loinc_study_descriptions(
 
         score += _score_loinc_view_count(name_l, image_count=image_count)
         score += _planar_foreign_anatomy_penalty(name_l, anatomy)
+        score += _score_loinc_laterality(name_l, laterality)
 
         # Prefer primary anatomy leading the LOINC name (Chest … vs Ribs … and Chest).
         if anatomy:
@@ -1181,4 +1290,141 @@ def rank_planar_loinc_study_descriptions(
 
     scored.sort(key=lambda item: (-item.score, item.long_common_name, item.loinc_number))
     return scored[: max(1, top_n)] if scored else []
+
+
+# --- Free-text study edit hints (PHI / unharmonized Study Description) ---
+
+# Longer phrases first so "cervical spine" wins before "spine".
+_FREE_TEXT_ANATOMY_PHRASES: tuple[tuple[str, str], ...] = (
+    ("lower extremity", "Lower extremity"),
+    ("upper extremity", "Upper extremity"),
+    ("cervical spine", "Cervical spine"),
+    ("thoracic spine", "Thoracic spine"),
+    ("lumbar spine", "Lumbar spine"),
+    ("abdomen pelvis", "Abdomen"),
+    ("chest abdomen pelvis", "Chest"),
+    ("abdominal", "Abdomen"),
+    ("abdomen", "Abdomen"),
+    ("pelvis", "Pelvis"),
+    ("chest", "Chest"),
+    ("brain", "Head"),
+    ("head", "Head"),
+    ("skull", "Head"),
+    ("neuro", "Head"),
+    ("neck", "Neck"),
+    ("spine", "Spine"),
+    ("breast", "Breast"),
+)
+
+
+def infer_loinc_anatomy_from_text(text: str) -> tuple[str, ...]:
+    """Extract preferred LOINC anatomy parts from free-text study/series PHI."""
+    lowered = _normalize_name(text)
+    if not lowered:
+        return ()
+    found: list[str] = []
+    seen: set[str] = set()
+    for phrase, label in _FREE_TEXT_ANATOMY_PHRASES:
+        if re.search(rf"\b{re.escape(phrase)}\b", lowered) and label not in seen:
+            if label not in _LOINC_ANATOMY_MATCH_PHRASES and label not in {
+                "Cervical spine",
+                "Thoracic spine",
+                "Lumbar spine",
+            }:
+                # Skip phrases that ranking cannot score (extremity leftovers).
+                if label not in _ANATOMY_RANK:
+                    continue
+            seen.add(label)
+            found.append(label)
+    return _sort_anatomy(found)
+
+
+def infer_contrast_family_from_text(text: str) -> str:
+    """Best-effort WO / W / WO_AND_W from free-text study description."""
+    lowered = _normalize_name(text)
+    if not lowered:
+        return "WO"
+    if re.search(r"\b(with\s+and\s+without|wo\s+and\s+w|w\s+and\s+wo)\b", lowered):
+        return "WO_AND_W"
+    has_wo = bool(
+        re.search(r"\b(wo|without|w/?o)\b", lowered)
+        or "without con" in lowered
+        or "non contrast" in lowered
+        or "noncontrast" in lowered
+        or "unenhanced" in lowered
+    )
+    has_w = bool(re.search(r"\b(with|w)\b.*\bcon", lowered) or "w contrast" in lowered)
+    if has_wo and has_w:
+        return "WO_AND_W"
+    if has_w and not has_wo:
+        return "W"
+    return "WO"
+
+
+def rank_loinc_study_descriptions_from_hint(
+    hint: str,
+    *,
+    loinc_prefix: str,
+    top_n: int = DEFAULT_TOP_N,
+    csv_path: str | None = None,
+) -> list[LoincStudyMatch]:
+    """
+    Rank modality-prefix LOINC rows using free-text study description hints.
+
+    Used when series are not yet Playbook-harmonized so Dataset edit does not fall
+    back to alphabetical noise (e.g. MR Abdomen for ``MRI HEAD WITHOUT CON``).
+    """
+    text = (hint or "").strip()
+    if not text:
+        return []
+
+    anatomy = infer_loinc_anatomy_from_text(text)
+    contrast_family = infer_contrast_family_from_text(text)
+    if anatomy:
+        aggregate = StudyDescriptionAggregate(
+            anatomy_parts=anatomy,
+            preferred_anatomy_parts=anatomy,
+            anatomy_fractions=(),
+            contrast_family=contrast_family,
+            diagnostic_series_count=1,
+            series_descriptions=(text,),
+        )
+        canonicals = build_canonical_loinc_phrases(aggregate, loinc_prefix=loinc_prefix)
+        scored: list[LoincStudyMatch] = []
+        seen_names: set[str] = set()
+        for code, name in load_loinc_study_descriptions_for_prefix(loinc_prefix, csv_path=csv_path):
+            if name in seen_names:
+                continue
+            required = aggregate.preferred_anatomy_parts or aggregate.anatomy_parts
+            if not _name_covers_required_anatomy(name, required):
+                continue
+            if _name_has_unrelated_specialty_anatomy(name, required):
+                continue
+            if _name_has_foreign_anatomy(name, _allowed_anatomy_parts(aggregate)):
+                continue
+            score = _score_loinc_name(name, aggregate, canonicals)
+            # Edit menus keep anatomy-filtered rows even when below Harmonize MIN_MATCH_SCORE.
+            if score < 40.0:
+                continue
+            seen_names.add(name)
+            scored.append(LoincStudyMatch(loinc_number=code, long_common_name=name, score=score))
+        scored.sort(key=lambda item: (-item.score, item.long_common_name, item.loinc_number))
+        if scored:
+            return scored[: max(1, top_n)]
+
+    # No recognizable anatomy — lexical overlap against the modality catalog.
+    hint_tokens = {t for t in re.findall(r"[a-z0-9]+", _normalize_name(text)) if len(t) > 2}
+    hint_tokens -= {"mri", "mr", "ct", "xr", "us", "mg", "without", "with", "contrast", "con", "study"}
+    if not hint_tokens:
+        return []
+    scored_lex: list[LoincStudyMatch] = []
+    for code, name in load_loinc_study_descriptions_for_prefix(loinc_prefix, csv_path=csv_path):
+        name_tokens = _tokenize_loinc_name(name)
+        overlap = hint_tokens & name_tokens
+        if not overlap:
+            continue
+        score = 80.0 + 40.0 * len(overlap)
+        scored_lex.append(LoincStudyMatch(loinc_number=code, long_common_name=name, score=score))
+    scored_lex.sort(key=lambda item: (-item.score, item.long_common_name, item.loinc_number))
+    return scored_lex[: max(1, top_n)] if scored_lex else []
 

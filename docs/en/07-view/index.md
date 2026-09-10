@@ -38,7 +38,7 @@ After importing from `tests/controller/assets/test_dcm_files` (see [Search](../0
 
 Hover tips on the tree say what a right-click will do. Selection follows the row under the pointer.
 
-**Left-click** the study or series **description** (first column) only when that row is already **harmonized** (green) — see [Edit harmonized descriptions](#edit-harmonized-descriptions) below. Use **Shift** or **Cmd/Ctrl+Click** to multi-select studies without opening the description menu.
+**Left-click** the study or series **description** (first column) when a single row is selected — see [Edit study and series descriptions](#edit-study-and-series-descriptions) below. Use **Shift** or **Cmd/Ctrl+Click** to multi-select; then **right-click** the selection to set one description on all selected rows.
 
 ### Right-click a **study** → View Projections
 
@@ -98,16 +98,18 @@ That is the main way to open a series for review and for Process tools (Remove P
 
 ![Series View on davidson_cxr](shots/macos/SeriesView_Review.png)
 
-## Edit harmonized descriptions
+## Edit study and series descriptions
 
-After [Harmonize](../08-process/03-harmonize-names/) (Series View or [AI Batch](../08-process/05-run-on-many-studies/)), green **Harmonized** rows show the standardized name in the first column. You can change that name from Dataset without re-running analysis.
+After [Harmonize](../08-process/03-harmonize-names/) (Series View or [AI Batch](../08-process/05-run-on-many-studies/)), green **Harmonized** rows show the standardized name. You can also set RadLex / LOINC names on **unharmonized** rows from Dataset — choosing a standard name writes DICOM and marks the row harmonized (green after refresh).
 
-Click only **harmonized** (green) descriptions. Non-harmonized rows are not editable this way. **Esc** or click away cancels. Multi-select is unchanged: **Shift+Click** and **Cmd/Ctrl+Click** only change selection — they do not open the menu.
+Hover tooltips explain what a click or toolbar action will do (including why a button is disabled).
+
+**Esc** or click away cancels an open inline menu. **Shift+Click** and **Cmd/Ctrl+Click** only change selection — they do not open the inline menu. With several series or studies selected (same modality), **right-click** the selection to open **Set description**.
 
 ### Series description (RadLex)
 
-1. Expand the study and click the **series** description in the first column.
-2. Choose a RadLex / Playbook-style alternative for **that modality** (for example XR views: Chest AP → PA / Lat / Obl / 2V; CT/MR: plane or contrast swaps).
+1. Expand the study and click the **series** description in the first column (one row selected).
+2. Choose a RadLex / Playbook-style name for **that modality** (for example XR views: Chest AP → PA / Lat / Obl / 2V; CT/MR: plane or contrast swaps).
 3. The tree refreshes when you pick a value.
 
 ![Dataset series description dropdown (RadLex)](shots/macos/Dataset_EditDescription.png)
@@ -116,10 +118,20 @@ Click only **harmonized** (green) descriptions. Non-harmonized rows are not edit
 
 1. Click the **study** description in the first column (the parent row).
 2. Choose a **LOINC** Long Common Name for **that modality prefix** (XR / US / MG / CT / MR). Each option is shown as `Long Common Name  (LoincNumber)`.
-3. The list is ranked from the study’s harmonized series names (and view count for CXR when known), then padded from the same modality’s LOINC catalog — not from other studies in the project.
+3. The list is ranked from the study’s harmonized series names when available (and view count for CXR when known), then padded from the same modality’s LOINC catalog.
 4. Applying a choice updates Study Description (and Procedure Code Sequence when a LOINC number is present).
 
 ![Dataset study description dropdown (LOINC)](shots/macos/Dataset_EditStudyDescription.png)
+
+### Set description (group edit)
+
+1. Select **only series** or **only studies**, all with the same modality cohort.
+2. **Right-click** any selected row and pick one RadLex (series) or LOINC (study) value.
+3. That exact string is applied to every selected row. Hover tips change in multi-select mode to say so.
+
+### Select Similar
+
+With a **single** study or series selected, **Select Similar** adds other rows that already share the same series descriptions (studies) or the same series description text (series). Then right-click the selection to set one description on all selected rows.
 
 ## Series View — what you can do
 
@@ -182,8 +194,8 @@ Use Dataset to export a spreadsheet that maps PHI identifiers to anonymized IDs 
 ## What good looks like
 
 - Nested study → series tree matches what you imported (`davidson_cxr`, `CT_Head_With_Contrast`, `us_rgb_single_frame`).
-- Right-click study opens projections; multi-select + **View Projections** opens all selected studies; right-click series opens Series View.
-- Clicking a **harmonized** (green) **series** description opens RadLex alternatives; clicking a **study** description opens LOINC options for that modality; modifier clicks keep multi-select.
+- Right-click study opens projections; multi-select + **View Projections** opens all selected studies; right-click series opens Series View; multi-select + right-click opens **Set description**.
+- Clicking a **series** or **study** description (single selection) opens RadLex / LOINC options; modifier clicks keep multi-select.
 - **S / M / L** changes tile size; first open may build `Projection.pkl` under each series.
 - `davidson_cxr` loads and scrolls in Series View.
 - AI columns update after Process tools.

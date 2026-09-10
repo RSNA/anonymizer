@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [19.0.7]
+- Import: OS file/folder drop onto Dashboard or Dataset opens Import Files (tkinterdnd2; soft-fail if unavailable)
+- Dataset: multi-select right-click opens Set description; tooltips reflect multi-select; exclude non-harmonized current text from RadLex/LOINC options; scrollable picker for full catalogs
+- Harmonize XR (CR/DX): optional pixel body-part model and chest CXp projection/rotation model (AI Features download); fuse with DICOM anatomy/view
+- Harmonize: when all series in a study are applied, auto-apply best LOINC study description (same API as AI Batch); remove confirmation dialog — edit from Dataset instead
+- Docs: Harmonize CXR/US demos; Dataset Set description / Select Similar UX
+
 ## [19.0.6]
 - Face blur: fix Sitk NIfTI direction so sagittal head CT detects and blurs face voxels
 - Dataset: show Face blur as No when unset instead of a blank cell

@@ -279,3 +279,66 @@ def test_planar_loinc_ranks_abdomen_for_us_description() -> None:
     matches = rank_planar_loinc_study_descriptions(["Abdomen"], loinc_prefix="US ", top_n=5)
     assert matches
     assert matches[0].long_common_name == "US Abdomen"
+
+
+def test_planar_loinc_ranks_lower_extremity_from_playbook_string() -> None:
+    from anonymizer.controller.ai.harmonize.loinc_study import (
+        _planar_anatomy_from_descriptions,
+        load_loinc_study_descriptions_for_prefix,
+        rank_planar_loinc_study_descriptions,
+    )
+
+    series = ["Lower extremity AP"]
+    assert _planar_anatomy_from_descriptions(series) == ["Lower extremity"]
+    matches = rank_planar_loinc_study_descriptions(
+        series,
+        loinc_prefix="XR ",
+        top_n=5,
+        image_count=1,
+    )
+    assert matches
+    assert any("lower extremity" in m.long_common_name.lower() for m in matches)
+    catalog = {name for _code, name in load_loinc_study_descriptions_for_prefix("XR ")}
+    assert all(m.long_common_name in catalog for m in matches)
+
+
+def test_planar_loinc_ranks_right_lower_extremity_laterality() -> None:
+    from anonymizer.controller.ai.harmonize.loinc_study import (
+        _planar_laterality_from_descriptions,
+        load_loinc_study_descriptions_for_prefix,
+        rank_planar_loinc_study_descriptions,
+    )
+
+    series = ["Lower extremity R"]
+    assert _planar_laterality_from_descriptions(series) == "R"
+    matches = rank_planar_loinc_study_descriptions(
+        series,
+        loinc_prefix="XR ",
+        top_n=5,
+        image_count=1,
+    )
+    assert matches
+    assert matches[0].long_common_name == "XR Lower extremity - right Single view"
+    assert "left" not in matches[0].long_common_name.lower()
+    catalog = {name for _code, name in load_loinc_study_descriptions_for_prefix("XR ")}
+    assert all(m.long_common_name in catalog for m in matches)
+    # Conflicting laterality must rank below matching side.
+    right_scores = [m.score for m in matches if "right" in m.long_common_name.lower()]
+    left_scores = [m.score for m in matches if "left" in m.long_common_name.lower()]
+    assert right_scores
+    if left_scores:
+        assert min(right_scores) > max(left_scores)
+
+
+def test_planar_loinc_ranks_bilat_wrist_laterality() -> None:
+    from anonymizer.controller.ai.harmonize.loinc_study import rank_planar_loinc_study_descriptions
+
+    matches = rank_planar_loinc_study_descriptions(
+        ["Wrist Bilat"],
+        loinc_prefix="XR ",
+        top_n=5,
+        image_count=2,
+    )
+    assert matches
+    assert "bilateral" in matches[0].long_common_name.lower()
+    assert "wrist" in matches[0].long_common_name.lower()

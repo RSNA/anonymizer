@@ -22,10 +22,19 @@ Close the project (or start the app) to return to Welcome if you need to downloa
 | --- | --- |
 | **Remove burned-in text** (OCR) | Chapter 8.1 — `davidson_cxr` |
 | **Harmonize** CT pack + resolution (1.5 / 3 / 6 mm) | Chapter 8.2 — `CT_Head_With_Contrast` |
+| **Harmonize** XR body part (optional) | Pixel anatomy for CR/DX when DICOM body-part tags are missing or wrong |
+| **Harmonize** XR chest view (optional) | Pixel AP/PA/Lat (+ rotation QC) for chest CR/DX |
 | **Face de-identify** + academic license `aca_…` | Chapter 8.3 — `CT_Head_With_Contrast` |
 | **Brain structures** (optional licensed pack) | Chapter 8.2 — Harmonize brain-structures prompt |
 
 There are **no project on/off checkboxes**. If models are installed and ready, tools appear in Series View and batch.
+
+XR Harmonize works without the XR body-part or chest-view packs (DICOM tags / keywords only). When installed, CR/DX series can use:
+
+- EfficientNet-B4 body-part classifier ([Xp-Bodypart-Mislabel-Checker](https://huggingface.co/spaces/MedicalAILabo/Xp-Bodypart-Mislabel-Checker); Mitsuyama et al., *European Radiology* 2025), fused with DICOM anatomy.
+- Chest-only projection/rotation classifier ([CXp-Projection-Rotation-Mislabel-Checker](https://huggingface.co/spaces/MedicalAILabo/CXp-Projection-Rotation-Mislabel-Checker)) to refine AP/PA/Lat; rotation is shown in the Harmonize analysis table and is not written into SeriesDescription.
+
+Mammography and ultrasound do not use these models.
 
 ## First-time steps
 
@@ -33,7 +42,7 @@ There are **no project on/off checkboxes**. If models are installed and ready, t
 2. Download **Remove burned-in text**, **Harmonize** (CT), and **Face de-identify**.
 3. Enter or validate the academic license when prompted (face / brain structures).
 4. Choose Harmonize CT resolution; download if the pack is missing.
-5. Optionally download **Brain structures** for the Harmonize demo.
+5. Optionally download **Brain structures** for the CT Harmonize demo, and **XR body part** / **XR chest view** for the CXR Harmonize demo in chapter 8.2.
 6. Close the dialog. Preferences stay on this workstation.
 
 !!! tip "Internet only for download"

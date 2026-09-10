@@ -566,7 +566,7 @@ def test_harmonize_analysis_section_renders_playbook_attributes() -> None:
 
 
 def test_harmonize_dicom_table_includes_all_relevant_fields() -> None:
-    from pydicom import dcmread
+    from pydicom import Dataset, dcmread
     from pydicom.data import get_testdata_file
 
     from anonymizer.controller.ai.harmonize.playbook import harmonize_dicom_rows
@@ -578,9 +578,52 @@ def test_harmonize_dicom_table_includes_all_relevant_fields() -> None:
     assert "Acquisition plane" not in labels
     assert "Slice Thickness" in labels
     assert "Spacing Between Slices" in labels
-    assert len(rows) == 18
+    assert "Image Orientation Patient" in labels
+    assert "Contrast Bolus Agent" in labels
+    assert "View Position" not in labels
+    assert "Image Laterality" not in labels
+    assert "Series Number" not in labels
+    assert "Scanning Sequence" not in labels
+    assert "Patient Orientation" not in labels
     assert any(row[2] == "—" for row in rows)
     assert any(row[2] != "—" for row in rows)
+
+
+def test_harmonize_dicom_table_xr_omits_ct_fields() -> None:
+    from pydicom.dataset import Dataset
+
+    from anonymizer.controller.ai.harmonize.playbook import harmonize_dicom_rows
+
+    ds = Dataset()
+    ds.Modality = "CR"
+    ds.BodyPartExamined = "CHEST"
+    ds.ViewPosition = "AP"
+    rows = harmonize_dicom_rows(ds)
+    labels = [row[0] for row in rows]
+    assert "Modality" in labels
+    assert "Body Part Examined" in labels
+    assert "View Position" in labels
+    assert "Image Laterality" in labels
+    assert "Slice Thickness" not in labels
+    assert "Image Orientation Patient" not in labels
+    assert "Contrast Bolus Agent" not in labels
+    assert "SOP Class UID" not in labels
+
+
+def test_harmonize_dicom_table_us_planar_fields() -> None:
+    from pydicom.dataset import Dataset
+
+    from anonymizer.controller.ai.harmonize.playbook import harmonize_dicom_rows
+
+    ds = Dataset()
+    ds.Modality = "US"
+    ds.StudyDescription = "USS ABDOMEN"
+    rows = harmonize_dicom_rows(ds)
+    labels = [row[0] for row in rows]
+    assert "Study Description" in labels
+    assert "View Position" in labels
+    assert "Slice Thickness" not in labels
+    assert "View Code Sequence" not in labels
 
 
 def test_series_description_is_harmonized_when_cache_matches() -> None:

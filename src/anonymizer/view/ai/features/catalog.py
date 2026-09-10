@@ -6,6 +6,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 
+from anonymizer.controller.ai.harmonize.cxp_view import (
+    download_cxp_view_models,
+    remove_cxp_view_models,
+)
+from anonymizer.controller.ai.harmonize.xp_bodypart import (
+    download_xp_bodypart_models,
+    remove_xp_bodypart_models,
+)
 from anonymizer.controller.ai.remove_pixel_phi import download_ocr_models, remove_ocr_models
 from anonymizer.controller.ai.tseg.readiness import (
     TsWeightKind,
@@ -30,6 +38,8 @@ class AiModelGroupId(StrEnum):
     OCR = "remove_pixel_phi"
     HARMONIZE_CT = "harmonize_ct_models"
     HARMONIZE_MR = "harmonize_mr_models"
+    HARMONIZE_XR_BODYPART = "harmonize_xr_bodypart"
+    HARMONIZE_CXR_VIEW = "harmonize_cxr_view"
     FACE_CT = "face_ct_models"
     FACE_MR = "face_mr_models"
     BRAIN_STRUCTURES = "enable_brain_structures"
@@ -38,6 +48,8 @@ class AiModelGroupId(StrEnum):
 DOWNLOAD_ID_OCR = AiModelGroupId.OCR.value
 DOWNLOAD_ID_HARMONIZE_CT = AiModelGroupId.HARMONIZE_CT.value
 DOWNLOAD_ID_HARMONIZE_MR = AiModelGroupId.HARMONIZE_MR.value
+DOWNLOAD_ID_HARMONIZE_XR_BODYPART = AiModelGroupId.HARMONIZE_XR_BODYPART.value
+DOWNLOAD_ID_HARMONIZE_CXR_VIEW = AiModelGroupId.HARMONIZE_CXR_VIEW.value
 DOWNLOAD_ID_FACE_CT = AiModelGroupId.FACE_CT.value
 DOWNLOAD_ID_FACE_MR = AiModelGroupId.FACE_MR.value
 DOWNLOAD_ID_BRAIN = AiModelGroupId.BRAIN_STRUCTURES.value
@@ -66,6 +78,8 @@ def all_download_ids() -> tuple[str, ...]:
         DOWNLOAD_ID_OCR,
         DOWNLOAD_ID_HARMONIZE_CT,
         DOWNLOAD_ID_HARMONIZE_MR,
+        DOWNLOAD_ID_HARMONIZE_XR_BODYPART,
+        DOWNLOAD_ID_HARMONIZE_CXR_VIEW,
         DOWNLOAD_ID_BRAIN,
         DOWNLOAD_ID_FACE_CT,
         DOWNLOAD_ID_FACE_MR,
@@ -108,6 +122,8 @@ def feature_title(key: str) -> str:
         AiFeatureId.FACE_BLUR.value: _("Face De-identify"),
         AiModelGroupId.HARMONIZE_CT.value: _("CT models"),
         AiModelGroupId.HARMONIZE_MR.value: _("MR models"),
+        AiModelGroupId.HARMONIZE_XR_BODYPART.value: _("XR body part"),
+        AiModelGroupId.HARMONIZE_CXR_VIEW.value: _("XR chest view"),
         AiModelGroupId.FACE_CT.value: _("CT models"),
         AiModelGroupId.FACE_MR.value: _("MR models"),
     }[key]
@@ -116,7 +132,9 @@ def feature_title(key: str) -> str:
 def feature_description(key: str) -> str:
     return {
         AiFeatureId.REMOVE_PIXEL_PHI.value: _("OCR burnt-in text removal."),
-        AiFeatureId.HARMONIZE.value: _("Standardize SeriesDescription (CT/MR)."),
+        AiFeatureId.HARMONIZE.value: _(
+            "Standardize SeriesDescription (CT/MR/XR/US/MG)."
+        ),
         AiFeatureId.BRAIN_STRUCTURES.value: _(
             "Optional CT Head detail after total anatomy (academic license)."
         ),
@@ -127,9 +145,15 @@ def feature_description(key: str) -> str:
 def feature_summary(key: str) -> str:
     return {
         AiFeatureId.REMOVE_PIXEL_PHI.value: _("OCR burnt-in text removal."),
-        AiFeatureId.HARMONIZE.value: _("RadLex series naming from anatomy."),
+        AiFeatureId.HARMONIZE.value: _("RadLex / planar series naming from anatomy."),
         AiModelGroupId.HARMONIZE_CT.value: "",
         AiModelGroupId.HARMONIZE_MR.value: "",
+        AiModelGroupId.HARMONIZE_XR_BODYPART.value: _(
+            "Optional pixel body-part for CR/DX (Xp-Bodypart-Checker)."
+        ),
+        AiModelGroupId.HARMONIZE_CXR_VIEW.value: _(
+            "Optional CXR projection/rotation for chest CR/DX (CXp-Checker)."
+        ),
         AiFeatureId.BRAIN_STRUCTURES.value: _("CT Head detail in Harmonize Description."),
         AiFeatureId.FACE_BLUR.value: _("Head CT/MR face de-identify."),
         AiModelGroupId.FACE_CT.value: "",
@@ -143,6 +167,22 @@ def download_ocr() -> object:
 
 def remove_ocr() -> None:
     remove_ocr_models()
+
+
+def download_xp_bodypart() -> object:
+    return download_xp_bodypart_models()
+
+
+def remove_xp_bodypart() -> None:
+    remove_xp_bodypart_models()
+
+
+def download_cxp_view() -> object:
+    return download_cxp_view_models()
+
+
+def remove_cxp_view() -> None:
+    remove_cxp_view_models()
 
 
 def download_kind(kind: TsWeightKind) -> object:

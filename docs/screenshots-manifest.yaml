@@ -378,6 +378,25 @@ workflows:
           brain_prompt: auto_no
         ux_elements: [Series View, Harmonize Description, Playbook results table]
         caption: "CT_Head_With_Contrast Series View above completed Harmonize Description results."
+      - id: Process_Harmonize_CXR
+        file: Process_Harmonize_CXR.png
+        window: SeriesView+HarmonizeResultsView
+        severity: soft
+        deps: [project, fixture:davidson_cxr, xr_planar_models]
+        recipe:
+          actions: [harmonize_description]
+        ux_elements:
+          [Series View, Harmonize Description, Playbook table, Xp-Bodypart, CXp-Projection-Rotation]
+        caption: "davidson_cxr Series View above planar Harmonize — Body Part / View sources name XR models."
+      - id: Process_Harmonize_US
+        file: Process_Harmonize_US.png
+        window: SeriesView+HarmonizeResultsView
+        severity: soft
+        deps: [project, fixture:us_rgb_single_frame]
+        recipe:
+          actions: [harmonize_description]
+        ux_elements: [Series View, Harmonize Description, Playbook table, DICOM metadata sources]
+        caption: "us_rgb_single_frame Series View above planar Harmonize (metadata-only; no TotalSegmentator)."
       - id: Process_Harmonize_BrainPrompt
         file: Process_Harmonize_BrainPrompt.png
         window: HarmonizeResultsView+BrainPrompt

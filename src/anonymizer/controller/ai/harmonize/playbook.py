@@ -1249,29 +1249,68 @@ def _dicom_field_display(ds: Dataset, keyword: str) -> str:
     return str(value).strip()
 
 
+def _view_code_sequence_display(ds: Dataset) -> str:
+    """First ViewCodeSequence CodeMeaning (or CodeValue) for MG Playbook view."""
+    try:
+        seq = ds.get("ViewCodeSequence")
+        if not seq:
+            return "—"
+        item = seq[0]
+        meaning = str(getattr(item, "CodeMeaning", "") or "").strip()
+        value = str(getattr(item, "CodeValue", "") or "").strip()
+        return meaning or value or "—"
+    except Exception:
+        return "—"
+
+
+def _dicom_row(ds: Dataset, label: str, tag: str, keyword: str) -> tuple[str, str, str]:
+    return (label, tag, _dicom_field_display(ds, keyword))
+
+
 def harmonize_dicom_rows(ds: Dataset) -> list[tuple[str, str, str]]:
-    """DICOM tags relevant to Playbook series-description harmonization (blank values included)."""
-    rows = [
-        (_("Study Description"), "(0008,1030)", _dicom_field_display(ds, "StudyDescription")),
-        (_("Modality"), "(0008,0060)", _dicom_field_display(ds, "Modality")),
-        (_("Series Description"), "(0008,103E)", _dicom_field_display(ds, "SeriesDescription")),
-        (_("Series Number"), "(0020,0011)", _dicom_field_display(ds, "SeriesNumber")),
-        (_("Image Type"), "(0008,0008)", _dicom_field_display(ds, "ImageType")),
-        (_("SOP Class UID"), "(0008,0016)", _dicom_field_display(ds, "SOPClassUID")),
-        (_("Derivation Description"), "(0008,2111)", _dicom_field_display(ds, "DerivationDescription")),
-        (_("Body Part Examined"), "(0018,0015)", _dicom_field_display(ds, "BodyPartExamined")),
-        (_("Slice Thickness"), "(0018,0050)", _dicom_field_display(ds, "SliceThickness")),
-        (_("Spacing Between Slices"), "(0018,0088)", _dicom_field_display(ds, "SpacingBetweenSlices")),
-        (_("Protocol Name"), "(0018,1030)", _dicom_field_display(ds, "ProtocolName")),
-        (_("Scanning Sequence"), "(0018,0020)", _dicom_field_display(ds, "ScanningSequence")),
-        (_("Image Orientation Patient"), "(0020,0037)", _dicom_field_display(ds, "ImageOrientationPatient")),
-        (_("Patient Orientation"), "(0020,0020)", _dicom_field_display(ds, "PatientOrientation")),
-        (_("View Position"), "(0018,5101)", _dicom_field_display(ds, "ViewPosition")),
-        (_("Contrast Bolus Agent"), "(0018,0010)", _dicom_field_display(ds, "ContrastBolusAgent")),
-        (_("Contrast Bolus Route"), "(0018,1040)", _dicom_field_display(ds, "ContrastBolusRoute")),
-        (_("Contrast Bolus Volume"), "(0018,1041)", _dicom_field_display(ds, "ContrastBolusVolume")),
+    """DICOM tags used by RadLex/Playbook Harmonize for this series' modality.
+
+    Volumetric CT/MR and planar XR/US/MG use different inputs; unused modality
+    fields (e.g. View Position on CT, Slice Thickness on CXR) are omitted.
+    """
+    from anonymizer.controller.ai.harmonize.planar_profile import planar_profile_from_dataset
+
+    planar = planar_profile_from_dataset(ds)
+
+    # Shared identity / text fields consulted by keyword mappers.
+    common_head = [
+        _dicom_row(ds, _("Study Description"), "(0008,1030)", "StudyDescription"),
+        _dicom_row(ds, _("Modality"), "(0008,0060)", "Modality"),
+        _dicom_row(ds, _("Series Description"), "(0008,103E)", "SeriesDescription"),
+        _dicom_row(ds, _("Protocol Name"), "(0018,1030)", "ProtocolName"),
+        _dicom_row(ds, _("Body Part Examined"), "(0018,0015)", "BodyPartExamined"),
     ]
-    return rows
+
+    if planar is not None:
+        rows = list(common_head)
+        rows.append(_dicom_row(ds, _("Image Laterality"), "(0020,0062)", "ImageLaterality"))
+        rows.append(_dicom_row(ds, _("Laterality"), "(0020,0060)", "Laterality"))
+        # All planar cohorts search ViewPosition via the metadata keyword blob.
+        rows.append(_dicom_row(ds, _("View Position"), "(0018,5101)", "ViewPosition"))
+        if planar.cohort == "MG":
+            rows.append(
+                (_("View Code Sequence"), "(0054,0220)", _view_code_sequence_display(ds))
+            )
+        return rows
+
+    # CT / MR (and unknown): volumetric Playbook + TotalSegmentator path.
+    return [
+        *common_head,
+        _dicom_row(ds, _("Image Type"), "(0008,0008)", "ImageType"),
+        _dicom_row(ds, _("SOP Class UID"), "(0008,0016)", "SOPClassUID"),
+        _dicom_row(ds, _("Derivation Description"), "(0008,2111)", "DerivationDescription"),
+        _dicom_row(ds, _("Slice Thickness"), "(0018,0050)", "SliceThickness"),
+        _dicom_row(ds, _("Spacing Between Slices"), "(0018,0088)", "SpacingBetweenSlices"),
+        _dicom_row(ds, _("Image Orientation Patient"), "(0020,0037)", "ImageOrientationPatient"),
+        _dicom_row(ds, _("Contrast Bolus Agent"), "(0018,0010)", "ContrastBolusAgent"),
+        _dicom_row(ds, _("Contrast Bolus Route"), "(0018,1040)", "ContrastBolusRoute"),
+        _dicom_row(ds, _("Contrast Bolus Volume"), "(0018,1041)", "ContrastBolusVolume"),
+    ]
 
 
 def _totalsegmentator_anatomy_source(*, ds: Dataset | None = None) -> str:

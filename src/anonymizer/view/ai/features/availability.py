@@ -52,20 +52,26 @@ from anonymizer.view.ai.features.catalog import (
     DOWNLOAD_ID_FACE_CT,
     DOWNLOAD_ID_FACE_MR,
     DOWNLOAD_ID_HARMONIZE_CT,
+    DOWNLOAD_ID_HARMONIZE_CXR_VIEW,
     DOWNLOAD_ID_HARMONIZE_MR,
+    DOWNLOAD_ID_HARMONIZE_XR_BODYPART,
     DOWNLOAD_ID_OCR,
     AiFeatureId,
     AiFeatureSpec,
     AiModelGroupId,
     AiModelGroupSpec,
+    download_cxp_view,
     download_kind,
     download_ocr,
+    download_xp_bodypart,
     feature_description,
     feature_summary,
     feature_title,
     install_registry,
+    remove_cxp_view,
     remove_kind,
     remove_ocr,
+    remove_xp_bodypart,
 )
 
 logger = logging.getLogger(__name__)
@@ -128,7 +134,12 @@ def ai_feature_status_harmonize() -> str:
         return _("TotalSegmentator unavailable.")
     if not xgboost_available():
         return _("OpenMP required (e.g. brew install libomp).")
-    if _download_in_progress(DOWNLOAD_ID_HARMONIZE_CT) or _download_in_progress(DOWNLOAD_ID_HARMONIZE_MR):
+    if (
+        _download_in_progress(DOWNLOAD_ID_HARMONIZE_CT)
+        or _download_in_progress(DOWNLOAD_ID_HARMONIZE_MR)
+        or _download_in_progress(DOWNLOAD_ID_HARMONIZE_XR_BODYPART)
+        or _download_in_progress(DOWNLOAD_ID_HARMONIZE_CXR_VIEW)
+    ):
         return _("Downloading…")
     return ""
 
@@ -155,6 +166,22 @@ def ai_feature_status_harmonize_mr() -> str:
         active=get_mr_segmentation_mode(),
         installed=installed_mr_segmentation_modes(),
     )
+
+
+def ai_feature_status_harmonize_xr_bodypart() -> str:
+    if _download_in_progress(DOWNLOAD_ID_HARMONIZE_XR_BODYPART):
+        return _("Downloading…")
+    if feature_gates.harmonize_xr_bodypart_has_models():
+        return _("Installed.")
+    return _("Not installed.")
+
+
+def ai_feature_status_harmonize_cxr_view() -> str:
+    if _download_in_progress(DOWNLOAD_ID_HARMONIZE_CXR_VIEW):
+        return _("Downloading…")
+    if feature_gates.harmonize_cxr_view_has_models():
+        return _("Installed.")
+    return _("Not installed.")
 
 
 def ai_feature_status_brain_structures() -> str:
@@ -269,6 +296,10 @@ def installed_model_inventory(group: AiModelGroupId) -> tuple[str, ...]:
     """Friendly inventory lines for models currently installed for ``group``."""
     if group == AiModelGroupId.OCR:
         return (_("OCR models"),) if ocr_models_ready() else ()
+    if group == AiModelGroupId.HARMONIZE_XR_BODYPART:
+        return (_("XR body-part model"),) if feature_gates.harmonize_xr_bodypart_has_models() else ()
+    if group == AiModelGroupId.HARMONIZE_CXR_VIEW:
+        return (_("XR chest view model"),) if feature_gates.harmonize_cxr_view_has_models() else ()
     task_ids = installed_task_ids(group)
     if not task_ids:
         return ()
@@ -291,6 +322,10 @@ def format_installed_inventory_status(
         lines.append(resolution_line)
     if group == AiModelGroupId.OCR:
         return _("Installed. Test in Series View before batch use.")
+    if group == AiModelGroupId.HARMONIZE_XR_BODYPART:
+        return _("Installed.")
+    if group == AiModelGroupId.HARMONIZE_CXR_VIEW:
+        return _("Installed.")
     if group in {AiModelGroupId.FACE_CT, AiModelGroupId.FACE_MR}:
         return _("Installed: 1.5 mm.")
     if group == AiModelGroupId.BRAIN_STRUCTURES:
@@ -443,6 +478,28 @@ def _install_feature_registry() -> None:
             remove=lambda: remove_kind(TsWeightKind.ANATOMY_MR),
             has_resolution_picker=True,
         ),
+        AiModelGroupId.HARMONIZE_XR_BODYPART: AiModelGroupSpec(
+            id=AiModelGroupId.HARMONIZE_XR_BODYPART,
+            download_id=DOWNLOAD_ID_HARMONIZE_XR_BODYPART,
+            title=partial(feature_title, AiModelGroupId.HARMONIZE_XR_BODYPART.value),
+            summary=partial(feature_summary, AiModelGroupId.HARMONIZE_XR_BODYPART.value),
+            status=ai_feature_status_harmonize_xr_bodypart,
+            needs_download=feature_gates.harmonize_xr_bodypart_needs_download,
+            has_models=feature_gates.harmonize_xr_bodypart_has_models,
+            download=download_xp_bodypart,
+            remove=remove_xp_bodypart,
+        ),
+        AiModelGroupId.HARMONIZE_CXR_VIEW: AiModelGroupSpec(
+            id=AiModelGroupId.HARMONIZE_CXR_VIEW,
+            download_id=DOWNLOAD_ID_HARMONIZE_CXR_VIEW,
+            title=partial(feature_title, AiModelGroupId.HARMONIZE_CXR_VIEW.value),
+            summary=partial(feature_summary, AiModelGroupId.HARMONIZE_CXR_VIEW.value),
+            status=ai_feature_status_harmonize_cxr_view,
+            needs_download=feature_gates.harmonize_cxr_view_needs_download,
+            has_models=feature_gates.harmonize_cxr_view_has_models,
+            download=download_cxp_view,
+            remove=remove_cxp_view,
+        ),
         AiModelGroupId.BRAIN_STRUCTURES: AiModelGroupSpec(
             id=AiModelGroupId.BRAIN_STRUCTURES,
             download_id=DOWNLOAD_ID_BRAIN,
@@ -492,7 +549,12 @@ def _install_feature_registry() -> None:
             description=partial(feature_description, AiFeatureId.HARMONIZE.value),
             summary=partial(feature_summary, AiFeatureId.HARMONIZE.value),
             status=ai_feature_status_harmonize,
-            model_group_ids=(AiModelGroupId.HARMONIZE_CT, AiModelGroupId.HARMONIZE_MR),
+            model_group_ids=(
+                AiModelGroupId.HARMONIZE_CT,
+                AiModelGroupId.HARMONIZE_MR,
+                AiModelGroupId.HARMONIZE_XR_BODYPART,
+                AiModelGroupId.HARMONIZE_CXR_VIEW,
+            ),
         ),
         AiFeatureId.BRAIN_STRUCTURES: AiFeatureSpec(
             id=AiFeatureId.BRAIN_STRUCTURES,

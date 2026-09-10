@@ -2,5 +2,5 @@
 
 1. Confirm Harmonize models ready.
 2. Open CT series; Harmonize Description; explain regions/contrast.
-3. Apply; optionally show study description prompt.
+3. Apply; note auto LOINC study description when the study is complete.
 4. Mention MR uses header contrast.

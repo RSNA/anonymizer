@@ -238,7 +238,7 @@ class AiFeaturesPanel(ctk.CTkFrame):
             status.grid(row=2, column=0, sticky="w", padx=_DETAIL_PADX, pady=(1, 0))
             self._status_labels[key] = status
             progress = ctk.CTkFrame(block, fg_color="transparent")
-            progress.grid(row=6, column=0, sticky="ew", padx=_DETAIL_PADX, pady=(2, 0))
+            progress.grid(row=8, column=0, sticky="ew", padx=_DETAIL_PADX, pady=(2, 0))
             progress.columnconfigure(0, weight=1)
             progress.grid_remove()
             self._progress_frames[key] = progress
@@ -249,6 +249,8 @@ class AiFeaturesPanel(ctk.CTkFrame):
                 self._build_modality_section(block, group_id=AiModelGroupId.HARMONIZE_CT, row=3)
                 self._build_modality_section(block, group_id=AiModelGroupId.BRAIN_STRUCTURES, row=4)
                 self._build_modality_section(block, group_id=AiModelGroupId.HARMONIZE_MR, row=5)
+                self._build_modality_section(block, group_id=AiModelGroupId.HARMONIZE_XR_BODYPART, row=6)
+                self._build_modality_section(block, group_id=AiModelGroupId.HARMONIZE_CXR_VIEW, row=7)
             elif feature.id == AiFeatureId.FACE_BLUR:
                 self._build_modality_section(block, group_id=AiModelGroupId.FACE_CT, row=3)
                 self._build_modality_section(block, group_id=AiModelGroupId.FACE_MR, row=4)
@@ -571,6 +573,34 @@ class AiFeaturesPanel(ctk.CTkFrame):
                 )
             else:
                 logger.info("AI Features: %s model download finished successfully", event.download_id)
+        elif event.download_id == AiModelGroupId.HARMONIZE_XR_BODYPART.value:
+            from anonymizer.controller.ai.harmonize.xp_bodypart import xp_bodypart_ready
+
+            title = group.title() if group else event.download_id
+            if event.error is not None or not xp_bodypart_ready():
+                logger.warning("AI Features: XR body-part download did not complete")
+                self._show_download_error_message(
+                    title,
+                    str(event.error)
+                    if event.error is not None
+                    else _("XR body-part model download did not complete."),
+                )
+            else:
+                logger.info("AI Features: XR body-part model download finished successfully")
+        elif event.download_id == AiModelGroupId.HARMONIZE_CXR_VIEW.value:
+            from anonymizer.controller.ai.harmonize.cxp_view import cxp_view_ready
+
+            title = group.title() if group else event.download_id
+            if event.error is not None or not cxp_view_ready():
+                logger.warning("AI Features: XR chest view download did not complete")
+                self._show_download_error_message(
+                    title,
+                    str(event.error)
+                    if event.error is not None
+                    else _("XR chest view model download did not complete."),
+                )
+            else:
+                logger.info("AI Features: XR chest view model download finished successfully")
         else:
             if event.error is not None or not ocr_models_ready():
                 logger.warning("AI Features: OCR model download did not complete")

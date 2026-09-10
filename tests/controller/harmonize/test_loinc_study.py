@@ -10,9 +10,9 @@ from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, generate_uid
 
 from anonymizer.controller.ai.harmonize import (
+    auto_apply_best_study_descriptions,
     auto_apply_study_description_offer,
     group_study_description_offers_by_fingerprint,
-    resolve_study_description_offers,
 )
 from anonymizer.controller.ai.harmonize.loinc_study import (
     LoincStudyMatch,
@@ -269,7 +269,7 @@ def test_group_offers_by_fingerprint():
     assert chest.ambiguous is True
 
 
-def test_resolve_auto_applies_clear_fingerprint_peers():
+def test_auto_apply_best_applies_fingerprint_peers():
     match = LoincStudyMatch("42274-1", "CT Chest W contrast IV", 1000.0)
     offer = StudyDescriptionOffer(
         anon_study_uid="study-a",
@@ -293,14 +293,17 @@ def test_resolve_auto_applies_clear_fingerprint_peers():
             "anonymizer.controller.ai.harmonize.pipeline.apply_harmonized_study_description",
             fake_apply,
         )
-        ambiguous, auto_results = resolve_study_description_offers(
+        mp.setattr(
+            "anonymizer.controller.ai.harmonize.pipeline.maybe_offer_study_description_harmonize",
+            lambda *_args, **_kwargs: offer,
+        )
+        results = auto_apply_best_study_descriptions(
             images_dir=Path("/tmp/images"),
             anon_model=model,
-            offers=[offer],
+            anon_study_uids=("study-a",),
         )
-    assert ambiguous == []
-    assert len(auto_results) == 1
-    assert set(auto_results[0][1]) == {"study-a", "study-b"}
+    assert len(results) == 1
+    assert set(results[0][1]) == {"study-a", "study-b"}
     assert set(applied) == {"study-a", "study-b"}
 
 
