@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import sys
 import tkinter as tk
 import weakref
 
@@ -11,6 +12,7 @@ import pytest
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import (
     AppToplevel,
+    attach_menubar_to_toplevels,
     find_app_menu_host,
     focus_app_window,
     refresh_app_window_menu,
@@ -50,11 +52,13 @@ class _MenuHost(tk.Tk):
     def register_app_window(self, window: tk.Misc) -> None:
         for existing in self._live_app_windows():
             if existing is window:
-                window.configure(menu=self.menu_bar)
+                if attach_menubar_to_toplevels():
+                    window.configure(menu=self.menu_bar)
                 self.refresh_window_menu()
                 return
         self._app_windows.append(weakref.ref(window))
-        window.configure(menu=self.menu_bar)
+        if attach_menubar_to_toplevels():
+            window.configure(menu=self.menu_bar)
         self.refresh_window_menu()
 
     def unregister_app_window(self, window: tk.Misc) -> None:
@@ -79,6 +83,10 @@ def menu_host():
     yield host
     with contextlib.suppress(tk.TclError):
         host.destroy()
+
+
+def test_attach_menubar_to_toplevels_matches_platform() -> None:
+    assert attach_menubar_to_toplevels() is (sys.platform == "darwin")
 
 
 def test_find_app_menu_host_walks_master_chain(menu_host: _MenuHost) -> None:
@@ -113,7 +121,10 @@ def test_app_toplevel_registers_and_lists_in_window_menu(menu_host: _MenuHost) -
     assert _("Dashboard") in labels
     assert "Alpha" in labels
     assert "Beta" in labels
-    assert win_a.cget("menu") == str(menu_host.menu_bar)
+    if attach_menubar_to_toplevels():
+        assert win_a.cget("menu") == str(menu_host.menu_bar)
+    else:
+        assert not str(win_a.cget("menu") or "").strip()
 
     win_a.destroy()
     menu_host.update()

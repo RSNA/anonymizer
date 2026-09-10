@@ -1,9 +1,30 @@
+import os
 import socket
+import ssl
+from pathlib import Path
 from unittest.mock import Mock, patch
 
+import certifi
 import pytest
 
-from src.anonymizer.utils.network import dns_lookup, get_local_ip_addresses, is_valid_ip
+from anonymizer.utils.network import dns_lookup, ensure_ssl_certifi, get_local_ip_addresses, is_valid_ip
+
+
+def test_ensure_ssl_certifi_points_urllib_at_certifi_bundle(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SSL_CERT_FILE", raising=False)
+    monkeypatch.delenv("REQUESTS_CA_BUNDLE", raising=False)
+    previous = ssl._create_default_https_context
+
+    try:
+        cafile = ensure_ssl_certifi()
+        assert Path(cafile).is_file()
+        assert cafile == certifi.where()
+        assert os.environ["SSL_CERT_FILE"] == cafile
+        assert os.environ["REQUESTS_CA_BUNDLE"] == cafile
+        ctx = ssl._create_default_https_context()
+        assert isinstance(ctx, ssl.SSLContext)
+    finally:
+        ssl._create_default_https_context = previous
 
 
 def test_get_local_ip_addresses_localhost() -> None:

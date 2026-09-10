@@ -586,10 +586,13 @@ def _ensure_pretrained_weights(task_id: int, *, trainer: str, model: str) -> Non
     """Download one TotalSegmentator task when its checkpoint is not on disk."""
     from totalsegmentator.libs import download_pretrained_weights
 
+    from anonymizer.utils.network import ensure_ssl_certifi
+
+    ensure_ssl_certifi()
     if _task_checkpoint_ready(task_id, trainer=trainer, model=model):
         logger.info("TS weights: task %s already installed, skipping download", task_id)
         return
-    logger.info("TS weights: downloading task %s …", task_id)
+    logger.info("TS weights: downloading task %s ...", task_id)
     model_folder = _try_resolve_task_model_folder(task_id, trainer=trainer, model=model)
     if model_folder is not None:
         _remove_incomplete_dataset_dir(model_folder)

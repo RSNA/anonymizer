@@ -1,15 +1,35 @@
+import io
 import logging
 
 from pydicom import config as pydicom_config
 
 from anonymizer.model.project import LoggingLevels
-from src.anonymizer.utils.logging import (
+from anonymizer.utils.logging import (
+    _EncodingSafeStreamHandler,
     disable_pydicom_debug,
     enable_pydicom_debug,
     set_anonymizer_log_level,
     set_logging_levels,
     set_pynetdicom_log_level,
 )
+
+
+def test_encoding_safe_stream_handler_replaces_unencodable_chars() -> None:
+    """Windows cp1252 consoles must not raise on Unicode arrows in log lines."""
+    buf = io.TextIOWrapper(io.BytesIO(), encoding="cp1252", errors="strict")
+    handler = _EncodingSafeStreamHandler(buf)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    log = logging.getLogger("test_encoding_safe_stream_handler")
+    log.handlers.clear()
+    log.addHandler(handler)
+    log.setLevel(logging.INFO)
+    log.propagate = False
+
+    log.info("geometry \u2192 TS seg")  # arrow that cp1252 cannot encode
+    buf.seek(0)
+    text = buf.read()
+    assert "geometry" in text
+    assert "TS seg" in text
 
 
 def test_set_logging_levels_all_levels():

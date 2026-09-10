@@ -310,7 +310,7 @@ def download_segmentation_model(
             on_complete(False)
         return False
 
-    logger.info("Segmentation models: downloading %s weights …", kind.value)
+    logger.info("Segmentation models: downloading %s weights ...", kind.value)
     try:
         download_segmentation_model_weights(kind)
     except Exception as exc:
@@ -390,9 +390,9 @@ def log_runtime_status() -> None:
         return
 
     if xgboost_available():
-        logger.info("Harmonize: available — TotalSegmentator and XGBoost (contrast) are installed")
+        logger.info("Harmonize: available - TotalSegmentator and XGBoost (contrast) are installed")
     else:
-        logger.warning("Harmonize: unavailable — XGBoost or its platform OpenMP runtime is not available")
+        logger.warning("Harmonize: unavailable - XGBoost or its platform OpenMP runtime is not available")
 
     from anonymizer.controller.ai.tseg.model_cache import (
         installed_ct_segmentation_modes,
@@ -412,9 +412,9 @@ def log_runtime_status() -> None:
 
     licensed, license_message = verify_face_license()
     if licensed:
-        logger.info("Face Blur: available — TotalSegmentator academic license is valid")
+        logger.info("Face Blur: available - TotalSegmentator academic license is valid")
     else:
-        logger.warning("Face Blur: unavailable — %s", license_message)
+        logger.warning("Face Blur: unavailable - %s", license_message)
     logger.info("  CT face model: %s", "downloaded" if face_ct_ready() else "not downloaded")
     logger.info("  MR face model: %s", "downloaded" if face_mr_ready() else "not downloaded")
     logger.info(

@@ -1103,14 +1103,14 @@ def _analyze_tseg_regions_impl(
             logger.debug("TS regions: reusing cached NIfTI %s (%d slices)", nifti_path, n_slices)
         else:
             if harmonize_cancel_requested(cancelled):
-                logger.info("TS regions: cancelled before DICOM→NIfTI for %s", series_directory)
+                logger.info("TS regions: cancelled before DICOM->NIfTI for %s", series_directory)
                 return (_error_result(series_directory, HARMONIZE_CANCELLED_MESSAGE), None)
             logger.debug("TS regions: converting DICOM to NIfTI: %s", series_directory)
             n_slices = dicom_series_to_nifti(series_directory, nifti_path)
             release_working_memory(stage="ts_regions_after_dicom_to_nifti")
             logger.debug("TS regions: wrote %s (%d slices)", nifti_path, n_slices)
             if harmonize_cancel_requested(cancelled):
-                logger.info("TS regions: cancelled after DICOM→NIfTI for %s", series_directory)
+                logger.info("TS regions: cancelled after DICOM->NIfTI for %s", series_directory)
                 return (_error_result(series_directory, HARMONIZE_CANCELLED_MESSAGE), nifti_path)
 
         seg_cached = _segmentation_cache_valid(

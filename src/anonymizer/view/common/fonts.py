@@ -44,7 +44,7 @@ def _mono_font_family() -> str:
     os_map = {"Darwin": "macOS", "Windows": "Windows", "Linux": "Linux"}
     os_key = os_map.get(platform.system())
     if os_key is None:
-        logger.error("Unsupported OS: %s — using fallback mono font", platform.system())
+        logger.error("Unsupported OS: %s - using fallback mono font", platform.system())
         return family
     tv_theme = ThemeManager.theme.get("Treeview", {})
     font_section = tv_theme.get("font", {}).get(os_key, {})

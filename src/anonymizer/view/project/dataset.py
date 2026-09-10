@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import sys
 import time
 import tkinter as tk
 from pathlib import Path
@@ -34,17 +35,21 @@ logger = logging.getLogger(__name__)
 STUDY_IID_PREFIX = "study:"
 SERIES_IID_PREFIX = "series:"
 
-# Treeview multi-select modifiers (Shift | Control | Mod1–Mod2 | macOS Command/Option).
-# ButtonRelease can drop modifiers; also capture on ButtonPress (see DatasetView).
-_TREE_MULTISELECT_STATE = (
-    0x0001  # Shift
-    | 0x0004  # Control
-    | 0x0008  # Mod1
-    | 0x0010  # Mod2
-    | 0x00020000  # Meta (some builds)
-    | 0x00080000  # Option / Alt (Aqua)
-    | 0x00100000  # Command (Aqua)
-)
+# Multi-select modifiers for description-edit vs selection gestures.
+# Windows maps Num Lock to Mod1 (0x0008) — do NOT treat Mod1/Mod2 as multi-select there
+# or every click with Num Lock on is ignored (no Set description).
+if sys.platform == "darwin":
+    _TREE_MULTISELECT_STATE = (
+        0x0001  # Shift
+        | 0x0004  # Control
+        | 0x00080000  # Option
+        | 0x00100000  # Command
+    )
+else:
+    _TREE_MULTISELECT_STATE = (
+        0x0001  # Shift
+        | 0x0004  # Control
+    )
 
 
 def study_tree_iid(anon_study_uid: str) -> str:
@@ -107,8 +112,7 @@ class DatasetView(AppToplevel):
     Args:
         parent (Dashboard): The parent dashboard.
         project_controller (ProjectController): The project controller.
-        mono_font (ctk.CTkFont): The mono font used for layout sizing.
-        title (str | None): The title of the view.
+        fonts (AppFonts): Application fonts (mono used for column sizing).
 
     Attributes:
         _data_font (ctk.CTkFont): The mono font. (used only for calculating character width)
@@ -116,6 +120,11 @@ class DatasetView(AppToplevel):
         _controller (ProjectController): The project controller.
         _project_model (ProjectModel): The project model.
     """
+
+    # Tree #0 (study/series description): keep enough width for LOINC/RadLex text.
+    _MIN_DESCRIPTION_CHARS = 30
+    # Child series rows are indented under the expander; reserve space so ~30 chars stay visible.
+    _SERIES_TREE_INDENT_CHARS = 6
 
     def __init__(
         self,
@@ -201,7 +210,12 @@ class DatasetView(AppToplevel):
         MotionTooltipController(self._tree, self._tree_row_tooltip_text, parent=self).bind()
 
         self._tree.heading("#0", text=_("Study / Series"))
-        self._tree.column("#0", width=20 * self._char_width_px, stretch=False, anchor="w")
+        self._tree.column(
+            "#0",
+            width=self._MIN_DESCRIPTION_CHARS * self._char_width_px,
+            stretch=False,
+            anchor="w",
+        )
 
         col_names = PHI_IndexRecord.get_tree_display_titles()
         col_fields = PHI_IndexRecord.get_tree_display_fields()
@@ -409,10 +423,22 @@ class DatasetView(AppToplevel):
         if study_uid is None:
             return None
         anon_model = self._controller.anonymizer.model
+
+        def _prefix_from_record(record: PHI_IndexRecord) -> str | None:
+            mod = str(record.modality or "").strip().upper()
+            if mod in {"CT", "MR", "US", "MG"}:
+                return f"{mod} "
+            if mod in {"CR", "DX"}:
+                return "XR "
+            return None
+
+        # In-memory Dataset labels only — one DB call for the seed prefix accuracy.
+        seed_prefix = study_loinc_prefix_for_edit(anon_model, study_uid)
         study_candidates: list[tuple[str, str, str | None]] = []
         for uid, record in self._studies_by_uid.items():
-            desc = (anon_model.get_study_harmonized_description(uid) or record.study_description or "").strip()
-            study_candidates.append((uid, desc, study_loinc_prefix_for_edit(anon_model, uid)))
+            desc = (record.study_description or "").strip()
+            prefix = seed_prefix if uid == study_uid else _prefix_from_record(record)
+            study_candidates.append((uid, desc, prefix))
         return find_similar_study_uids(anon_model, study_uid, candidates=study_candidates)
 
     def _on_tree_button_press(self, event) -> None:
@@ -770,7 +796,24 @@ class DatasetView(AppToplevel):
                 )
 
         self._autosize_id_columns()
+        self._autosize_description_column()
         self._refresh_description_action_buttons()
+
+    def _autosize_description_column(self) -> None:
+        """Widen Study/Series (#0) so at least ~30 description characters stay visible."""
+        heading = _("Study / Series")
+        max_chars = max(self._MIN_DESCRIPTION_CHARS, len(heading) + 2)
+        for study_iid in self._tree.get_children(""):
+            max_chars = max(max_chars, len(str(self._tree.item(study_iid, "text") or "")))
+            for series_iid in self._tree.get_children(study_iid):
+                text_len = len(str(self._tree.item(series_iid, "text") or ""))
+                max_chars = max(max_chars, text_len + self._SERIES_TREE_INDENT_CHARS)
+        self._tree.column(
+            "#0",
+            width=max_chars * self._char_width_px,
+            stretch=False,
+            anchor="w",
+        )
 
     def _autosize_id_columns(self) -> None:
         """Widen PHI ID / Anon ID to fit the widest study value (plus heading)."""

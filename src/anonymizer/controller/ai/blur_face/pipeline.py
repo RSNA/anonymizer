@@ -757,7 +757,7 @@ def blur_face_hu_volume(
     sigma_y = max(sigma_mm / row_spacing, min_sigma_px)
     sigma_x = max(sigma_mm / col_spacing, min_sigma_px)
     logger.info(
-        "Face blur: mode=%s sigma_mm=%.2f → sigma_px=(%.2f, %.2f) spacing_mm=(%.3f, %.3f) mask_smooth_sigma_px=%.2f",
+        "Face blur: mode=%s sigma_mm=%.2f -> sigma_px=(%.2f, %.2f) spacing_mm=(%.3f, %.3f) mask_smooth_sigma_px=%.2f",
         mode.value,
         sigma_mm,
         sigma_x,
@@ -825,7 +825,7 @@ def blur_face_intensity_volume(
     if high < low:
         low, high = high, low
     logger.info(
-        "Face blur: intensity fill from non-face percentiles [%.1f, %.1f] → [%.3f, %.3f]",
+        "Face blur: intensity fill from non-face percentiles [%.1f, %.1f] -> [%.3f, %.3f]",
         low_percentile,
         high_percentile,
         low,
@@ -1184,7 +1184,7 @@ def preview_face_blur(
         )
         stats = compute_qa_stats(hu_before, hu_after, mask)
         if not stats.outside_clean:
-            logger.warning("Face blur preview: QA FAIL — blur changed voxels outside face mask")
+            logger.warning("Face blur preview: QA FAIL - blur changed voxels outside face mask")
 
         blurred_slice_frames: np.ndarray | None = None
         hu_after_for_result: np.ndarray | None = hu_after
@@ -1285,7 +1285,7 @@ def write_blurred_dicom_series(
 
     series_uid = generate_uid()
     logger.info(
-        "Face blur: writing %d blurred slice(s) → %s (SeriesInstanceUID=%s)",
+        "Face blur: writing %d blurred slice(s) -> %s (SeriesInstanceUID=%s)",
         len(slice_paths),
         output_directory,
         series_uid,
@@ -1386,7 +1386,7 @@ def blur_face_series(
         return _error_result(series_directory, out_dir, f"{type(exc).__name__}: {exc}")
 
     logger.info(
-        "Face blur: complete for %s — %d slices, mask=%s, output=%s",
+        "Face blur: complete for %s - %d slices, mask=%s, output=%s",
         series_directory,
         preview.slice_count,
         preview.face_mask_path,

@@ -1,8 +1,9 @@
-"""Shared Toplevel bases: attach Anonymizer menubar and register for the Window menu."""
+"""Shared Toplevel bases: register for the Window menu; share menubar on macOS only."""
 
 from __future__ import annotations
 
 import logging
+import sys
 import tkinter as tk
 from typing import Any, Protocol
 
@@ -11,6 +12,17 @@ import customtkinter as ctk
 from anonymizer.view.common.ctk_safe import mark_ctk_window_alive
 
 logger = logging.getLogger(__name__)
+
+
+def attach_menubar_to_toplevels() -> bool:
+    """
+    True when child windows should receive ``configure(menu=…)``.
+
+    On macOS the menubar is system-wide and must stay attached while a child
+    window has focus. On Windows/Linux each Toplevel shows its own menubar strip,
+    so the menu stays only on Welcome / Dashboard (the root window).
+    """
+    return sys.platform == "darwin"
 
 
 class AppMenuHost(Protocol):
@@ -101,12 +113,13 @@ def _finish_app_window_setup(window: tk.Misc) -> None:
         return
     window._app_menu_host = host  # type: ignore[attr-defined]
 
-    menu_bar = getattr(host, "menu_bar", None)
-    if menu_bar is not None:
-        try:
-            window.configure(menu=menu_bar)
-        except tk.TclError:
-            logger.debug("Could not attach menu_bar to %s", window, exc_info=True)
+    if attach_menubar_to_toplevels():
+        menu_bar = getattr(host, "menu_bar", None)
+        if menu_bar is not None:
+            try:
+                window.configure(menu=menu_bar)
+            except tk.TclError:
+                logger.debug("Could not attach menu_bar to %s", window, exc_info=True)
 
     try:
         host.register_app_window(window)
@@ -131,7 +144,7 @@ def _on_app_window_destroy(event: tk.Event, window: tk.Misc) -> None:
 
 
 class AppToplevel(tk.Toplevel):
-    """Toplevel that shares the Anonymizer menubar and appears under Window."""
+    """Toplevel registered under Window; shares the menubar on macOS only."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -142,7 +155,7 @@ class AppToplevel(tk.Toplevel):
 
 
 class AppCTkToplevel(ctk.CTkToplevel):
-    """CTkToplevel that shares the Anonymizer menubar and appears under Window."""
+    """CTkToplevel registered under Window; shares the menubar on macOS only."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)

@@ -29,6 +29,7 @@ dependencies = [
     "cryptography",
     "requests",
     "requests-oauthlib",
+    "certifi",
     "toml>=0.10.2",
     "click>=8.1.8",
     "dataclasses-json>=0.6.7",

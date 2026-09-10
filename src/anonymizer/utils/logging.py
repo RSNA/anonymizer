@@ -11,9 +11,13 @@ Functions:
 - disable_pydicom_debug() -> None: Disables debug mode for pydicom.
 """
 
+from __future__ import annotations
+
+import contextlib
 import logging
 import logging.handlers
 import os
+import sys
 from pathlib import Path
 
 from pydicom import config as pydicom_config
@@ -26,6 +30,31 @@ LOG_SIZE = 1024 * 1024 * 100  # 100 MB
 LOG_BACKUP_COUNT = 10
 LOG_DEFAULT_LEVEL = logging.INFO
 LOG_FORMAT = "{asctime} {levelname} {threadName} {name}.{funcName}.{lineno} {message}"
+
+
+class _EncodingSafeStreamHandler(logging.StreamHandler):
+    """StreamHandler that does not raise when the console encoding cannot represent a character.
+
+    Windows consoles often use cp1252; log lines with arrows or ellipses must not crash emit().
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = self.format(record)
+            stream = self.stream
+            try:
+                stream.write(msg + self.terminator)
+            except UnicodeEncodeError:
+                encoding = getattr(stream, "encoding", None) or "utf-8"
+                safe = (msg + self.terminator).encode(encoding, errors="replace").decode(
+                    encoding, errors="replace"
+                )
+                stream.write(safe)
+            self.flush()
+        except RecursionError:
+            raise
+        except Exception:
+            self.handleError(record)
 
 
 def _get_logs_dir() -> str:
@@ -70,15 +99,23 @@ def init_logging(file_handler: bool = True) -> str | None:
         logs_dir = _get_logs_dir()
         os.makedirs(logs_dir, exist_ok=True)
         logger.info("Logs will be stored in: %s", logs_dir)
-        # Setup rotating log file:
+        # Setup rotating log file (UTF-8 so Windows locale encodings never fail on arrows):
         fileHandler = logging.handlers.RotatingFileHandler(
-            os.path.join(logs_dir, LOG_FILENAME), maxBytes=LOG_SIZE, backupCount=LOG_BACKUP_COUNT
+            os.path.join(logs_dir, LOG_FILENAME),
+            maxBytes=LOG_SIZE,
+            backupCount=LOG_BACKUP_COUNT,
+            encoding="utf-8",
         )
         fileHandler.setFormatter(logFormatter)
         logger.addHandler(fileHandler)
 
-    # Setup stderr console output:
-    consoleHandler = logging.StreamHandler()
+    # Prefer replace errors on legacy console encodings (cp1252 on Windows).
+    stream = sys.stderr
+    if hasattr(stream, "reconfigure"):
+        with contextlib.suppress(Exception):
+            stream.reconfigure(errors="replace")
+
+    consoleHandler = _EncodingSafeStreamHandler(stream)
     consoleHandler.setFormatter(logFormatter)
     logger.addHandler(consoleHandler)
 

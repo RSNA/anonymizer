@@ -290,8 +290,8 @@ class Anonymizer(ctk.CTk):
             self.show_ai_features_setup_dialog,
             fonts=self.fonts,
         )
-        # Center the welcome panel so outer margins stay visually even.
-        self.welcome_view.grid(row=0, column=0)
+        # Fill the shell so Windows does not show a lighter CTk margin under the panel.
+        self.welcome_view.grid(row=0, column=0, sticky="nsew")
         for delay_ms in (0, 50, 200, 400):
             self.after(delay_ms, self._apply_welcome_window_size)
         self.after(500, self._finalize_welcome_window)
@@ -1345,7 +1345,11 @@ class Anonymizer(ctk.CTk):
         self.refresh_window_menu()
 
     def _attach_menu_to_window(self, window: tk.Misc) -> None:
-        if self.menu_bar is None:
+        # Windows/Linux: menubar only on Welcome/Dashboard (this root). macOS: share
+        # the system menubar while child windows are focused.
+        from anonymizer.view.common.app_window import attach_menubar_to_toplevels
+
+        if not attach_menubar_to_toplevels() or self.menu_bar is None:
             return
         try:
             window.configure(menu=self.menu_bar)
@@ -1505,7 +1509,7 @@ def run_GUI(logs_dir):
         _signal_quit_count += 1
         if _signal_quit_count >= 2:
             # Second Ctrl-C / SIGTERM: do not wait for Tk teardown (can hang).
-            logger.error("Signal %s received again — forcing immediate process exit", signum)
+            logger.error("Signal %s received again - forcing immediate process exit", signum)
             os._exit(128 + int(signum))
         logger.info("Signal %s received, scheduling graceful quit", signum)
         if app.winfo_exists():

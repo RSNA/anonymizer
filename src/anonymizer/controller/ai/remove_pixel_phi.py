@@ -269,6 +269,10 @@ def download_ocr_models(*, verbose: bool = False) -> tuple[bool, str]:
     """Download EasyOCR weights into assets/ai/ocr/model."""
 
     global _ocr_downloading
+    from anonymizer.utils.network import ensure_ssl_certifi
+
+    # EasyOCR uses urllib; Windows Python often lacks a usable system CA store.
+    ensure_ssl_certifi()
     OCR_MODEL_DIR.mkdir(parents=True, exist_ok=True)
     status, _ignored = probe_ocr_models()
     if status == OcrModelStatus.READY:

@@ -2522,7 +2522,7 @@ def _harmonize_one_planar_series(
     if not _report("done", "Harmonized description ready", 1.0):
         return None
 
-    logger.info("Harmonize planar %s → %s", series_dir.name, description)
+    logger.info("Harmonize planar %s -> %s", series_dir.name, description)
     return HarmonizedResult(
         series_directory=series_dir,
         radlex_series_description=description,
@@ -2630,7 +2630,7 @@ def _harmonize_series_tseg(
         logger.warning("Harmonize: ENABLE_TS_CONTRAST=False; contrast phase is required for Playbook merge")
 
     logger.info(
-        "Harmonize starting for %d series (geometry → TS seg → TS contrast → Playbook merge)",
+        "Harmonize starting for %d series (geometry -> TS seg -> TS contrast -> Playbook merge)",
         len(series_directories),
     )
     started = time.perf_counter()

@@ -2,10 +2,40 @@
 This module provides utility functions related to network operations.
 """
 
+from __future__ import annotations
+
 import ipaddress
+import logging
+import os
 import socket
+import ssl
 
 import ifaddr
+
+logger = logging.getLogger(__name__)
+
+
+def ensure_ssl_certifi() -> str:
+    """
+    Point Python's default HTTPS context at certifi's CA bundle.
+
+    EasyOCR downloads models with ``urllib.request.urlretrieve``, which uses the
+    default SSL context. On some Windows Python installs that trust store is
+    incomplete and raises ``SSLCertVerificationError``. Certifi ships a Mozilla
+    CA bundle that works reliably across platforms.
+    """
+    import certifi
+
+    cafile = certifi.where()
+    os.environ["SSL_CERT_FILE"] = cafile
+    os.environ["REQUESTS_CA_BUNDLE"] = cafile
+
+    def _https_context() -> ssl.SSLContext:
+        return ssl.create_default_context(cafile=cafile)
+
+    ssl._create_default_https_context = _https_context  # type: ignore[assignment]
+    logger.debug("SSL default HTTPS context uses certifi CA bundle: %s", cafile)
+    return cafile
 
 
 def get_local_ip_addresses() -> list[str]:
