@@ -1025,6 +1025,13 @@ class Anonymizer(ctk.CTk):
         assert self.controller is not None
         dlg = ImportFilesDialog(self, self.controller.anonymizer, file_paths)
         dlg.get_input()
+        self._refresh_dataset_view_if_open()
+
+    def _refresh_dataset_view_if_open(self) -> None:
+        """Rebuild Dataset View tree after import if that window is open."""
+        view = self.dataset_view
+        if view is not None and view.winfo_exists():
+            view._update_tree_from_phi_index()
 
     def _collect_files_from_directory(self, root_dir: str) -> list[str] | None:
         """Expand a directory to file paths (DICOMDIR-aware). None on hard error."""
@@ -1135,6 +1142,7 @@ class Anonymizer(ctk.CTk):
         msg = _("Files processed") + f": {files_processed}"
         logger.info(msg)
         self.dashboard.set_status(msg)
+        self._refresh_dataset_view_if_open()
 
     def query_retrieve(self):
         logging.info("OPEN QueryView")

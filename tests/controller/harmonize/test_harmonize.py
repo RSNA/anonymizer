@@ -329,6 +329,117 @@ def test_harmonize_single_slice_topogram_as_localizer(
 
 
 @pytest.mark.usefixtures("synthetic_ct_asset_dirs")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions")
+def test_harmonize_single_slice_ct_guesses_from_dicom(
+    mock_regions: MagicMock,
+    mock_contrast: MagicMock,
+    tmp_path: Path,
+) -> None:
+    from tests.controller.tseg.support.synthetic_ct import build_synthetic_single_slice_ct_series
+
+    series_dir = build_synthetic_single_slice_ct_series(tmp_path / "single")
+    results = harmonize_series([series_dir])
+
+    mock_regions.assert_not_called()
+    mock_contrast.assert_not_called()
+    merged = results[0]
+    assert merged.error is None
+    assert merged.geometry is not None
+    assert merged.geometry.dimensionality == "single_slice_2d"
+    assert merged.geometry.ts_suitable is False
+    assert merged.playbook is not None
+    assert merged.playbook.body_part_code == "Ch"
+    assert merged.playbook.anatomic_plane_code == "Ax"
+    assert merged.radlex_series_description == "Ch Ax WO"
+
+
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions")
+def test_harmonize_single_slice_mr_guesses_from_dicom(
+    mock_regions: MagicMock,
+    mock_contrast: MagicMock,
+    tmp_path: Path,
+) -> None:
+    from tests.controller.tseg.support.synthetic_ct import build_synthetic_single_slice_mr_series
+
+    series_dir = build_synthetic_single_slice_mr_series(tmp_path / "mr_single")
+    results = harmonize_series([series_dir])
+
+    mock_regions.assert_not_called()
+    mock_contrast.assert_not_called()
+    merged = results[0]
+    assert merged.error is None
+    assert merged.geometry is not None
+    assert merged.geometry.dimensionality == "single_slice_2d"
+    assert merged.geometry.ts_suitable is False
+    assert merged.geometry.ts_skip_category == "single_slice"
+    assert merged.playbook is not None
+    assert merged.playbook.body_part_code == "Brain"
+    assert merged.playbook.anatomic_plane_code == "Ax"
+    # MR uses DICOM IV-contrast text (WITHOUT CONTRAST → WO), not TS phase ML.
+    assert merged.playbook.iv_contrast_code == "WO"
+    assert merged.radlex_series_description == "Brain Ax WO"
+
+
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions")
+def test_harmonize_single_slice_mr_with_contrast_from_dicom(
+    mock_regions: MagicMock,
+    mock_contrast: MagicMock,
+    tmp_path: Path,
+) -> None:
+    from tests.controller.tseg.support.synthetic_ct import build_synthetic_single_slice_mr_series
+
+    series_dir = build_synthetic_single_slice_mr_series(
+        tmp_path / "mr_single_w",
+        series_description="T1 AXIAL POST GAD",
+        study_description="MRI BRAIN WITH CONTRAST",
+    )
+    results = harmonize_series([series_dir])
+
+    mock_regions.assert_not_called()
+    merged = results[0]
+    assert merged.error is None
+    assert merged.playbook is not None
+    assert merged.playbook.iv_contrast_code == "W"
+    assert merged.radlex_series_description == "Brain Ax W"
+
+
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast")
+@patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions")
+def test_harmonize_smart_prep_single_slice_as_monitoring(
+    mock_regions: MagicMock,
+    mock_contrast: MagicMock,
+    tmp_path: Path,
+) -> None:
+    from pydicom import dcmread
+
+    from tests.controller.tseg.support.synthetic_ct import build_synthetic_single_slice_ct_series
+
+    series_dir = build_synthetic_single_slice_ct_series(tmp_path / "smart_prep")
+    for path in series_dir.glob("*.dcm"):
+        ds = dcmread(path)
+        ds.StudyDescription = "CT CHEST PULMONARY EMBOLISM (CTPE)"
+        ds.SeriesDescription = "PE Smart Prep Left Atrium"
+        if hasattr(ds, "BodyPartExamined"):
+            del ds.BodyPartExamined
+        ds.save_as(path)
+
+    results = harmonize_series([series_dir])
+    mock_regions.assert_not_called()
+    merged = results[0]
+    assert merged.error is None
+    assert merged.playbook is not None
+    assert merged.playbook.body_part_code == "Ch"
+    assert merged.playbook.series_type_code == "Monitoring"
+    assert merged.radlex_series_description == "Ch WO Monitoring"
+
+
+@pytest.mark.usefixtures("synthetic_ct_asset_dirs")
 @patch("anonymizer.controller.ai.harmonize.pipeline.ENABLE_TS_CONTRAST", False)
 @patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_contrast")
 @patch("anonymizer.controller.ai.harmonize.pipeline.analyze_tseg_regions")

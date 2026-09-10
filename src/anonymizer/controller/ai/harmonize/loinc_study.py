@@ -914,6 +914,7 @@ _PLANAR_ANATOMY_PHRASES: tuple[str, ...] = (
     "kidney",
     "thyroid",
     "carotid",
+    "axilla",
 )
 
 

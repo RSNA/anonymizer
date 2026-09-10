@@ -142,6 +142,8 @@ MONITORING_SEQUENCE_KEYWORDS = (
     "TEST BOLUS",
     "TIMING BOLUS",
     "BOLUS MONITOR",
+    "SMART PREP",
+    "SMARTPREP",
     "HEART RATE",
     "CARDIAC MONITOR",
     "ECG",
@@ -174,11 +176,13 @@ FUSED_SEQUENCE_KEYWORDS = (
     "DUAL ENERGY",
 )
 
+# Skip TS anatomy but still allow a Playbook guess from DICOM headers.
 METADATA_DIAGNOSTIC_SKIP_CATEGORIES: frozenset[TsSkipCategory] = frozenset(
     {
         "body_part_no_roi",
         "angio_sequence",
         "spectroscopy",
+        "single_slice",
     }
 )
 
@@ -326,6 +330,7 @@ def description_suggests_fused(description_text: str) -> bool:
 
 
 def metadata_diagnostic_fallback_allowed(skip_category: TsSkipCategory | None) -> bool:
+    """True when Harmonize should guess a Playbook name from DICOM instead of requiring TS."""
     return skip_category in METADATA_DIAGNOSTIC_SKIP_CATEGORIES
 
 

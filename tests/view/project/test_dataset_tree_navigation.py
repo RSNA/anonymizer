@@ -51,6 +51,12 @@ def _navigation_view() -> DatasetView:
     view._series_by_uid = {"series-1": (study, _series("series-1"))}
     view._tree = MagicMock()
     view._tree.selection.return_value = ()
+    view._tree.identify_region.return_value = "tree"
+    view._tree.identify_column.return_value = "#0"
+    view._tree.identify_element.return_value = "text"
+    view._description_combo = None
+    view._description_combo_iid = None
+    view._tree_press_was_multiselect = False
     view._dismiss_description_combo = MagicMock()
     view._open_projection_view = MagicMock()
     view._open_series_by_uid = MagicMock()
@@ -59,6 +65,10 @@ def _navigation_view() -> DatasetView:
     view._controller = MagicMock()
     view._controller.anonymizer.model.get_study_harmonized_description.return_value = ""
     return view
+
+
+def _desc_event(*, x: int = 40, y: int = 12, state: int = 0) -> SimpleNamespace:
+    return SimpleNamespace(x=x, y=y, state=state)
 
 
 def test_right_click_series_opens_series_view() -> None:
@@ -144,12 +154,12 @@ def test_tree_row_tooltip_text_by_row_type() -> None:
 
     view._tree.identify_row.return_value = study_tree_iid("study-1")
     assert view._tree_row_tooltip_text(SimpleNamespace(y=1)) == (
-        "Click description to choose a LOINC name · Right-click opens projections"
+        "Double-click description to choose a LOINC name · Right-click opens projections"
     )
 
     view._tree.identify_row.return_value = series_tree_iid("series-1")
     assert view._tree_row_tooltip_text(SimpleNamespace(y=1)) == (
-        "Click description to choose a RadLex name · Right-click opens Series View"
+        "Double-click description to choose a RadLex name · Right-click opens Series View"
     )
 
     view._tree.identify_row.return_value = ""
@@ -167,3 +177,83 @@ def test_tree_row_tooltip_text_multi_select_series() -> None:
 
     tip = view._tree_row_tooltip_text(SimpleNamespace(y=1))
     assert tip == "Right-click to set the same RadLex description on 2 selected series"
+
+
+def test_double_click_series_description_opens_edit() -> None:
+    view = _navigation_view()
+    iid = series_tree_iid("series-1")
+    view._tree.identify_row.return_value = iid
+    view._tree.selection.return_value = (iid,)
+
+    result = view._on_tree_description_activate(_desc_event())
+
+    view._edit_series_description.assert_called_once_with(iid, "series-1")
+    view._edit_study_description.assert_not_called()
+    assert result == "break"
+
+
+def test_double_click_study_description_opens_edit() -> None:
+    view = _navigation_view()
+    iid = study_tree_iid("study-1")
+    view._tree.identify_row.return_value = iid
+    view._tree.selection.return_value = (iid,)
+
+    result = view._on_tree_description_activate(_desc_event())
+
+    view._edit_study_description.assert_called_once_with(iid, "study-1")
+    view._edit_series_description.assert_not_called()
+    assert result == "break"
+
+
+def test_double_click_expander_does_not_open_edit() -> None:
+    view = _navigation_view()
+    view._tree.identify_element.return_value = "Treeitem.indicator"
+    view._tree.identify_row.return_value = study_tree_iid("study-1")
+    view._tree.selection.return_value = (study_tree_iid("study-1"),)
+
+    result = view._on_tree_description_activate(_desc_event())
+
+    view._edit_study_description.assert_not_called()
+    view._edit_series_description.assert_not_called()
+    assert result is None
+
+
+def test_double_click_non_description_column_does_not_open_edit() -> None:
+    view = _navigation_view()
+    view._tree.identify_column.return_value = "#1"
+    view._tree.identify_row.return_value = series_tree_iid("series-1")
+    view._tree.selection.return_value = (series_tree_iid("series-1"),)
+
+    result = view._on_tree_description_activate(_desc_event())
+
+    view._edit_series_description.assert_not_called()
+    assert result is None
+
+
+def test_double_click_multi_select_does_not_open_edit() -> None:
+    view = _navigation_view()
+    study = view._studies_by_uid["study-1"]
+    view._series_by_uid["series-2"] = (study, _series("series-2"))
+    iid1 = series_tree_iid("series-1")
+    iid2 = series_tree_iid("series-2")
+    view._tree.identify_row.return_value = iid1
+    view._tree.selection.return_value = (iid1, iid2)
+
+    result = view._on_tree_description_activate(_desc_event())
+
+    view._edit_series_description.assert_not_called()
+    view._edit_study_description.assert_not_called()
+    assert result == "break"
+
+
+def test_double_click_with_multiselect_modifier_does_not_open_edit() -> None:
+    view = _navigation_view()
+    iid = series_tree_iid("series-1")
+    view._tree.identify_row.return_value = iid
+    view._tree.selection.return_value = (iid,)
+    view._tree_press_was_multiselect = True
+
+    result = view._on_tree_description_activate(_desc_event())
+
+    view._edit_series_description.assert_not_called()
+    assert result == "break"

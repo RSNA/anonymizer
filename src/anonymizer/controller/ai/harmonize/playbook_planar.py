@@ -2,6 +2,8 @@
 
 Isolated from CT/MR :mod:`playbook` SeriesNameV4 emission. Uses DICOM tags and
 keywords only — never TotalSegmentator or geometry thickness/contrast.
+Study/Series descriptions supply anatomy when BodyPartExamined is empty
+(token match to Playbook series labels, ignoring procedure words such as biopsy).
 """
 
 from __future__ import annotations
@@ -37,6 +39,7 @@ _PLAYBOOK_CODE_TO_ANATOMY_LABEL: dict[str, str] = {
     "TSp": "Thoracic spine",
     "LSp": "Lumbar spine",
     "Breast": "Breast",
+    "Axilla": "Axilla",
     "UExt": "Upper extremity",
     "LExt": "Lower extremity",
     "Hand": "Hand",
@@ -50,6 +53,7 @@ _PLAYBOOK_CODE_TO_ANATOMY_LABEL: dict[str, str] = {
 }
 
 _EXTRA_BODY_PART_EXACT: dict[str, str] = {
+    "AXILLA": "Axilla",
     "HAND": "Hand",
     "WRIST": "Wrist",
     "ELBOW": "Elbow",
@@ -137,6 +141,45 @@ _DOPPLER_KEYWORDS: tuple[str, ...] = (
 _DBT_KEYWORDS: tuple[str, ...] = ("DBT", "TOMO", "TOMOSYNTHESIS", "3D MAMMO")
 _FFD_KEYWORDS: tuple[str, ...] = ("FFD", "FFDM", "FULL FIELD")
 
+# Procedure / modality tokens that are not Playbook anatomy (e.g. "US biopsy unspecified").
+_METADATA_STOPWORDS: frozenset[str] = frozenset(
+    {
+        "US",
+        "USS",
+        "XR",
+        "MG",
+        "CR",
+        "DX",
+        "CT",
+        "MR",
+        "MRI",
+        "BIOPSY",
+        "GUIDANCE",
+        "UNSPECIFIED",
+        "LIMITED",
+        "SCREENING",
+        "STUDY",
+        "SERIES",
+        "EXAM",
+        "PROCEDURE",
+        "AND",
+        "WITH",
+        "WITHOUT",
+        "THE",
+        "FOR",
+    }
+)
+
+_PLANAR_ANATOMY_CATALOG: tuple[str, ...] = tuple(
+    dict.fromkeys(
+        [
+            *_PLAYBOOK_CODE_TO_ANATOMY_LABEL.values(),
+            *_EXTRA_BODY_PART_EXACT.values(),
+            "Axilla",
+        ]
+    )
+)
+
 
 @dataclass(frozen=True)
 class PlanarPlaybookAttributes:
@@ -178,6 +221,37 @@ def _metadata_blob(ds: Dataset) -> str:
     return " ".join(p for p in parts if p).upper()
 
 
+def _significant_metadata_tokens(text: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[A-Z0-9]+", text.upper())
+        if len(token) > 2 and token not in _METADATA_STOPWORDS
+    }
+
+
+def _closest_catalog_anatomy_label(blob: str) -> tuple[str, str] | None:
+    """Match leftover DICOM tokens to the closest Playbook series anatomy label.
+
+    Ignores procedure/modality words so ``US Biopsy Axilla`` / ``US biopsy unspecified``
+    maps to ``Axilla`` rather than failing. Requires a whole-token match so XR
+    ``Axillary`` views do not become Axilla.
+    """
+    tokens = _significant_metadata_tokens(blob)
+    if not tokens:
+        return None
+    ranked: list[tuple[int, int, str]] = []
+    for label in _PLANAR_ANATOMY_CATALOG:
+        label_tokens = _significant_metadata_tokens(label)
+        if not label_tokens or not label_tokens <= tokens:
+            continue
+        ranked.append((len(label_tokens), len(label), label))
+    if not ranked:
+        return None
+    ranked.sort(reverse=True)
+    label = ranked[0][2]
+    return label, f"catalog:{label}"
+
+
 def _map_planar_body_part_label(ds: Dataset) -> tuple[str, str]:
     """Return (anatomy label, evidence)."""
     body_part_examined = str(ds.get("BodyPartExamined", "") or "").strip().upper()
@@ -197,6 +271,10 @@ def _map_planar_body_part_label(ds: Dataset) -> tuple[str, str]:
     for keywords, label in _EXTRA_BODY_PART_KEYWORDS:
         if any(keyword in blob for keyword in keywords):
             return label, f"keyword:{keywords[0]}"
+
+    catalog = _closest_catalog_anatomy_label(blob)
+    if catalog is not None:
+        return catalog
 
     # Fall back to CT/MR localizer mapper (may raise).
     try:

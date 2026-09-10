@@ -34,6 +34,7 @@ from tests.paths import REPO_ROOT
 TEST_DCM = REPO_ROOT / "tests" / "controller" / "assets" / "test_dcm_files"
 DAVIDSON_CXR = TEST_DCM / "davidson_cxr" / "davidson_cxr_monochrome1_uncompressed.dcm"
 US_RGB = TEST_DCM / "us_rgb_single_frame" / "US_RGB_SingleFrame.dcm"
+US_MULTI_FRAME = TEST_DCM / "us_multi_frame_grayscale" / "us_multi_frame_grayscale_JPG2000.dcm"
 
 
 @pytest.fixture
@@ -132,6 +133,38 @@ def test_us_rgb_playbook_from_dicom(us_rgb_path: Path) -> None:
     assert attrs.body_part_label == "Abdomen"
     assert description == "Abdomen"
     assert attrs.mode_code == ""
+
+
+def test_us_multi_frame_axilla_from_study_description() -> None:
+    assert US_MULTI_FRAME.is_file(), f"Missing fixture: {US_MULTI_FRAME}"
+    ds = dcmread(US_MULTI_FRAME, stop_before_pixels=True)
+    assert ds.Modality == "US"
+    assert str(ds.get("StudyDescription") or "") == "US Biopsy Axilla"
+    description, attrs = build_planar_harmonized_series_description(ds)
+    assert attrs.cohort == "US"
+    assert attrs.body_part_label == "Axilla"
+    assert description == "Axilla"
+    assert "catalog:Axilla" in attrs.body_part_evidence or "AXILLA" in attrs.body_part_evidence.upper()
+
+
+def test_us_axilla_study_description_beats_unspecified_series() -> None:
+    ds = Dataset()
+    ds.Modality = "US"
+    ds.StudyDescription = "US Biopsy Axilla"
+    ds.SeriesDescription = "US biopsy unspecified"
+    description, attrs = build_planar_harmonized_series_description(ds)
+    assert description == "Axilla"
+    assert attrs.body_part_label == "Axilla"
+
+
+def test_xr_axillary_view_is_not_axilla_body_part() -> None:
+    ds = Dataset()
+    ds.Modality = "CR"
+    ds.StudyDescription = "XR Shoulder"
+    ds.SeriesDescription = "AP and Axillary"
+    description, attrs = build_planar_harmonized_series_description(ds)
+    assert attrs.body_part_label == "Shoulder"
+    assert description != "Axilla"
 
 
 def test_load_planar_dataset_accepts_cxr_and_us(
@@ -279,6 +312,14 @@ def test_planar_loinc_ranks_abdomen_for_us_description() -> None:
     matches = rank_planar_loinc_study_descriptions(["Abdomen"], loinc_prefix="US ", top_n=5)
     assert matches
     assert matches[0].long_common_name == "US Abdomen"
+
+
+def test_planar_loinc_ranks_axilla_for_us_description() -> None:
+    from anonymizer.controller.ai.harmonize.loinc_study import rank_planar_loinc_study_descriptions
+
+    matches = rank_planar_loinc_study_descriptions(["Axilla"], loinc_prefix="US ", top_n=5)
+    assert matches
+    assert matches[0].long_common_name == "US Axilla"
 
 
 def test_planar_loinc_ranks_lower_extremity_from_playbook_string() -> None:

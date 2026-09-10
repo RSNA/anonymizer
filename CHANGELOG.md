@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- Dataset: double-click a study or series description to open Set description (harmonized or not); single-click only selects the row
+- Harmonize US: map study/series text (e.g. ``US Biopsy Axilla``) to the closest Playbook anatomy when BodyPartExamined is empty
+- Harmonize CT/MR: single-slice series get a DICOM Playbook guess instead of failing as “not a diagnostic 3D volume”; Smart Prep maps to Monitoring; MR IV contrast from DICOM headers
 
 ## [19.0.7]
 - Import: OS file/folder drop onto Dashboard or Dataset opens Import Files (tkinterdnd2; soft-fail if unavailable)

@@ -84,7 +84,7 @@ CR/DX, ultrasound, and mammography use a **separate** Harmonize path from CT/MR:
 - **US / MG:** planar Harmonize from DICOM only — **no** TotalSegmentator and **no** XR pixel packs.
 - **SC / OT / DOC:** Harmonize is not offered.
 - After all series in a study are harmonized, the best **LOINC study description** is applied automatically (same path as AI Batch). Change it later from [Dataset](../../07-view/#edit-harmonized-descriptions). Pure XR/US/MG studies use the matching LOINC prefix.
-- In [Dataset](../../07-view/#edit-study-and-series-descriptions), click a study or series description (or multi-select and right-click for **Set description**) to pick LOINC (study) or RadLex (series) names — including for rows not yet green.
+- In [Dataset](../../07-view/#edit-study-and-series-descriptions), double-click a study or series description (or multi-select and right-click for **Set description**) to pick LOINC (study) or RadLex (series) names — including for rows not yet green. Single-click only selects the row.
 - Results cache under the series folder — **Clear Analysis Cache** for a fresh CT/MR run.
 - Batch: [8.4 Run on many studies](../05-run-on-many-studies/) (resolution comes from AI Features, not per batch).
 

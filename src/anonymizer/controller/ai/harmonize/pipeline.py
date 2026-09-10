@@ -1435,6 +1435,7 @@ _EDIT_PLANAR_ANATOMY_LABELS: frozenset[str] = frozenset(
         "Ankle",
         "Foot",
         "Thyroid",
+        "Axilla",
     }
 )
 
@@ -1507,7 +1508,7 @@ def _planar_radlex_series_edit_choices(
         anatomies = [anatomy]
 
     if cohort == "US":
-        us_core = ("Abdomen", "Pelvis", "Chest", "Neck", "Thyroid", "Head", "Liver", "Kidney")
+        us_core = ("Abdomen", "Pelvis", "Chest", "Neck", "Thyroid", "Head", "Liver", "Kidney", "Axilla")
         us_anatomies = [anatomy] + [a for a in us_core if a != anatomy]
         if not full_catalog:
             us_anatomies = [anatomy]

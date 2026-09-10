@@ -94,6 +94,30 @@ def test_show_harmonize_does_not_grab_or_wait(
     view.destroy()
 
 
+def test_harmonize_opens_near_parent_series_view(
+    tk_root: tk.Tk,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Windows needs explicit +x+y; keep Harmonize offset from the launching Series View."""
+    parent = tk.Toplevel(tk_root)
+    parent.geometry("900x700+160+120")
+    parent.update_idletasks()
+    item = _series_item(tmp_path)
+    monkeypatch.setattr(HarmonizeResultsView, "_start_current_item_worker", lambda self: None)
+    monkeypatch.setattr(HarmonizeResultsView, "grab_set", MagicMock())
+    monkeypatch.setattr(tk.Misc, "wait_window", MagicMock())
+    view = show_harmonize_results_view(parent, items=[item])
+    parent.update_idletasks()
+    view.update_idletasks()
+    try:
+        assert view.winfo_x() == parent.winfo_rootx() + 30
+        assert view.winfo_y() == parent.winfo_rooty() + 30
+    finally:
+        view.destroy()
+        parent.destroy()
+
+
 def test_on_closed_fires_once_on_cancel_while_running(
     tk_root: tk.Tk,
     tmp_path: Path,

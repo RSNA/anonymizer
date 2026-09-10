@@ -9,8 +9,10 @@ import pytest
 from anonymizer.controller.ai.tseg.dicom_geometry import analyze_series_geometry
 from anonymizer.controller.ai.tseg.series_classification import (
     description_suggests_angio_sequence,
+    description_suggests_monitoring,
     description_suggests_parametric_map,
     evaluate_ts_suitability,
+    metadata_diagnostic_fallback_allowed,
 )
 from tests.controller.tseg.support.synthetic_ct import (
     build_synthetic_breast_adc_mr_series,
@@ -112,3 +114,16 @@ def test_spectroscopy_skip_category(description: str, category: str) -> None:
     )
     assert suitability.suitable is False
     assert suitability.skip_category == category
+
+
+def test_metadata_fallback_allows_single_slice() -> None:
+    assert metadata_diagnostic_fallback_allowed("single_slice")
+    assert metadata_diagnostic_fallback_allowed("body_part_no_roi")
+    assert not metadata_diagnostic_fallback_allowed("localizer")
+    assert not metadata_diagnostic_fallback_allowed("parametric_map")
+
+
+def test_smart_prep_is_monitoring() -> None:
+    assert description_suggests_monitoring("PE SMART PREP LEFT ATRIUM")
+    assert description_suggests_monitoring("SMARTPREP")
+    assert not description_suggests_monitoring("CT CHEST PULMONARY EMBOLISM (CTPE)")

@@ -104,11 +104,11 @@ After [Harmonize](../08-process/03-harmonize-names/) (Series View or [AI Batch](
 
 Hover tooltips explain what a click or toolbar action will do (including why a button is disabled).
 
-**Esc** or click away cancels an open inline menu. **Shift+Click** and **Cmd/Ctrl+Click** only change selection — they do not open the inline menu. With several series or studies selected (same modality), **right-click** the selection to open **Set description**.
+**Single-click** selects a row. **Double-click** a study or series description (harmonized or not) to open **Set description**. **Esc** or click away cancels an open inline menu. **Shift+Click** and **Cmd/Ctrl+Click** only change selection — they do not open the editor. With several series or studies selected (same modality), **right-click** the selection to open **Set description**.
 
 ### Series description (RadLex)
 
-1. Expand the study and click the **series** description in the first column (one row selected).
+1. Expand the study and **double-click** the **series** description in the first column (one row selected).
 2. Choose a RadLex / Playbook-style name for **that modality** (for example XR views: Chest AP → PA / Lat / Obl / 2V; CT/MR: plane or contrast swaps).
 3. The tree refreshes when you pick a value.
 
@@ -116,7 +116,7 @@ Hover tooltips explain what a click or toolbar action will do (including why a b
 
 ### Study description (LOINC)
 
-1. Click the **study** description in the first column (the parent row).
+1. **Double-click** the **study** description in the first column (the parent row).
 2. Choose a **LOINC** Long Common Name for **that modality prefix** (XR / US / MG / CT / MR). Each option is shown as `Long Common Name  (LoincNumber)`.
 3. The list is ranked from the study’s harmonized series names when available (and view count for CXR when known), then padded from the same modality’s LOINC catalog.
 4. Applying a choice updates Study Description (and Procedure Code Sequence when a LOINC number is present).
@@ -195,7 +195,7 @@ Use Dataset to export a spreadsheet that maps PHI identifiers to anonymized IDs 
 
 - Nested study → series tree matches what you imported (`davidson_cxr`, `CT_Head_With_Contrast`, `us_rgb_single_frame`).
 - Right-click study opens projections; multi-select + **View Projections** opens all selected studies; right-click series opens Series View; multi-select + right-click opens **Set description**.
-- Clicking a **series** or **study** description (single selection) opens RadLex / LOINC options; modifier clicks keep multi-select.
+- Double-clicking a **series** or **study** description (single selection) opens RadLex / LOINC **Set description**; single-click only selects the row; modifier clicks keep multi-select.
 - **S / M / L** changes tile size; first open may build `Projection.pkl` under each series.
 - `davidson_cxr` loads and scrolls in Series View.
 - AI columns update after Process tools.

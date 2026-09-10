@@ -428,7 +428,8 @@ class ProjectionView(AppToplevel):
 
         if projection and series_path:
             label.configure(cursor="hand2")
-            bind_hover_tooltip(label, _("Open Series View"), parent=self)
+            tip = (projection.series_description or "").strip() or _("(no series description)")
+            bind_hover_tooltip(label, tip, parent=self)
             label.bind(
                 "<Button-1>",
                 lambda event, k=projection, sp=series_path: self._on_image_click(event, k, sp),

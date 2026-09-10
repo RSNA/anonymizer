@@ -320,6 +320,8 @@ _MONITORING_KEYWORDS: tuple[str, ...] = (
     "TEST BOLUS",
     "TIMING BOLUS",
     "BOLUS MONITOR",
+    "SMART PREP",
+    "SMARTPREP",
     "HEART RATE",
     "CARDIAC MONITOR",
     "ECG",
@@ -885,6 +887,8 @@ def resolve_metadata_harmonize_route(
     Return a metadata-only harmonize route, or ``None`` when TS anatomy merge is required.
 
     Localizers are handled separately (optional TS fallback) in the harmonize pipeline.
+    Single-slice CT/MR (and other ``METADATA_DIAGNOSTIC_SKIP_CATEGORIES``) skip
+    TotalSegmentator but still get a Playbook guess from DICOM study/series text.
     When ``tseg`` is passed, anatomy analysis may have run but produced no Playbook body
     regions; DICOM metadata is used as a fallback when a body part can be inferred.
     """

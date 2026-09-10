@@ -53,6 +53,7 @@ from anonymizer.controller.series_io import (
 )
 from anonymizer.controller.series_overlay import OCRText, UserRectangle
 from anonymizer.utils.dicom import SUPPORTED_PHOTOMETRIC_INTERPRETATIONS, get_wl_ww
+from anonymizer.utils.network import ensure_ssl_certifi
 from anonymizer.utils.storage import (
     load_default_whitelist,
     load_project_whitelist,
@@ -269,7 +270,6 @@ def download_ocr_models(*, verbose: bool = False) -> tuple[bool, str]:
     """Download EasyOCR weights into assets/ai/ocr/model."""
 
     global _ocr_downloading
-    from anonymizer.utils.network import ensure_ssl_certifi
 
     # EasyOCR uses urllib; Windows Python often lacks a usable system CA store.
     ensure_ssl_certifi()

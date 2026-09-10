@@ -446,6 +446,31 @@ def build_synthetic_single_slice_ct_series(output_dir: Path) -> Path:
     )
 
 
+def build_synthetic_single_slice_mr_series(
+    output_dir: Path,
+    *,
+    body_part_examined: str = "BRAIN",
+    series_description: str = "T2 AXIAL SINGLE SLICE",
+    study_description: str = "MRI HEAD WITHOUT CONTRAST",
+) -> Path:
+    """Single-slice diagnostic-style MR series (metadata Harmonize, no TS volume)."""
+    series_dir = build_synthetic_oriented_ct_series(
+        output_dir,
+        num_slices=1,
+        image_orientation=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+        stack_delta=[0.0, 0.0, DEFAULT_SLICE_THICKNESS_MM],
+        series_description=series_description,
+        body_part_examined=body_part_examined,
+        require_min_volume_slices=False,
+    )
+    for path in series_dir.glob("*.dcm"):
+        dataset = pydicom.dcmread(path)
+        dataset.Modality = "MR"
+        dataset.StudyDescription = study_description
+        dataset.save_as(path)
+    return series_dir
+
+
 def write_synthetic_phantom_assets() -> dict[str, Path]:
     return {
         SYNTHETIC_CT_HEAD_ASSET_DIR.name: build_synthetic_head_ct_series(

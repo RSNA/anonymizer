@@ -41,7 +41,7 @@ from anonymizer.model.anonymizer import StudyPhiHeader
 from anonymizer.utils.modalities import is_mr_modality
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.features.catalog import AiFeatureId, feature_description
-from anonymizer.view.common.app_window import AppToplevel
+from anonymizer.view.common.app_window import AppToplevel, position_toplevel_near_parent
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.common.job_poller import STAGE_POLL_MS, start_background_job
@@ -284,13 +284,8 @@ class HarmonizeResultsView(AppToplevel):
         self._min_height = self._compute_min_window_height()
         self.resizable(True, True)
         self.minsize(self.MIN_WIDTH, self._min_height)
-        self.geometry(f"{self.MIN_WIDTH}x{self._min_height}")
         with contextlib.suppress(tk.TclError):
             self.transient(parent)
-        self.lift()
-        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
-        self.bind("<Escape>", self._escape_keypress)
-        self.bind("<Destroy>", self._on_destroy, add="+")
 
         self.grid_rowconfigure(0, weight=0)
         self.grid_rowconfigure(1, weight=1)
@@ -299,6 +294,13 @@ class HarmonizeResultsView(AppToplevel):
         self.grid_columnconfigure(0, weight=1)
 
         self._create_widgets()
+        # Explicit +x+y keeps Windows aligned to Series View (macOS already does via transient).
+        position_toplevel_near_parent(self, parent, width=self.MIN_WIDTH, height=self._min_height)
+        self.lift()
+        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+        self.bind("<Escape>", self._escape_keypress)
+        self.bind("<Destroy>", self._on_destroy, add="+")
+
         self._update_batch_header()
         self._populate_dicom_tree()
         self._clear_playbook_tree()

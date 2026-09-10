@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import sys
 import tkinter as tk
@@ -76,6 +77,68 @@ def focus_app_window(window: tk.Misc) -> None:
         window.focus_force()
     except tk.TclError:
         logger.debug("focus_app_window failed for %s", window, exc_info=True)
+
+
+def position_toplevel_near_parent(
+    window: tk.Misc,
+    parent: tk.Misc | None = None,
+    *,
+    width: int | None = None,
+    height: int | None = None,
+    offset: int = 30,
+) -> None:
+    """Place a Toplevel near ``parent`` (default: ``window.master``), clamped to the screen.
+
+    Avoids Windows leaving newly created dialogs at ``+0+0`` when only WxH is set.
+    """
+    try:
+        window.update_idletasks()
+    except tk.TclError:
+        return
+
+    try:
+        cur_w = int(window.winfo_width())
+        cur_h = int(window.winfo_height())
+    except tk.TclError:
+        return
+
+    width = width or (cur_w if cur_w > 1 else None)
+    height = height or (cur_h if cur_h > 1 else None)
+    if width is None or height is None:
+        try:
+            width = width or int(window.winfo_reqwidth())
+            height = height or int(window.winfo_reqheight())
+        except tk.TclError:
+            return
+
+    host = parent if parent is not None else getattr(window, "master", None)
+    try:
+        if host is not None:
+            host.update_idletasks()
+            pos_x = int(host.winfo_rootx()) + offset
+            pos_y = int(host.winfo_rooty()) + offset
+        else:
+            raise tk.TclError("no parent")
+    except tk.TclError:
+        try:
+            screen_w = int(window.winfo_screenwidth())
+            screen_h = int(window.winfo_screenheight())
+        except tk.TclError:
+            return
+        pos_x = max(0, (screen_w - width) // 2)
+        pos_y = max(0, (screen_h - height) // 2)
+    else:
+        try:
+            screen_w = int(window.winfo_screenwidth())
+            screen_h = int(window.winfo_screenheight())
+        except tk.TclError:
+            screen_w = pos_x + width
+            screen_h = pos_y + height
+        pos_x = max(0, min(pos_x, screen_w - width))
+        pos_y = max(0, min(pos_y, screen_h - height))
+
+    with contextlib.suppress(tk.TclError):
+        window.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
 
 
 def refresh_app_window_menu(window: tk.Misc) -> None:

@@ -15,6 +15,7 @@ from anonymizer.view.common.app_window import (
     attach_menubar_to_toplevels,
     find_app_menu_host,
     focus_app_window,
+    position_toplevel_near_parent,
     refresh_app_window_menu,
     window_menu_label_for,
 )
@@ -153,3 +154,18 @@ def test_refresh_app_window_menu_updates_label_after_title_change(menu_host: _Me
 
     win.destroy()
     menu_host.update()
+
+
+def test_position_toplevel_near_parent_offsets_from_parent(menu_host: _MenuHost) -> None:
+    parent = tk.Toplevel(menu_host)
+    child = tk.Toplevel(parent)
+    try:
+        parent.geometry("640x480+120+80")
+        parent.update_idletasks()
+        position_toplevel_near_parent(child, parent, width=400, height=300, offset=30)
+        child.update_idletasks()
+        assert child.winfo_x() == parent.winfo_rootx() + 30
+        assert child.winfo_y() == parent.winfo_rooty() + 30
+    finally:
+        child.destroy()
+        parent.destroy()

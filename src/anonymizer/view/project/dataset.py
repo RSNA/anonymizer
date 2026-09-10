@@ -200,9 +200,10 @@ class DatasetView(AppToplevel):
             height=30,
         )
         self._tree.grid(row=0, column=0, columnspan=11, sticky="nswe")
-        # Single-click only: Double-1 also fires ButtonRelease and caused awkward re-entry.
+        # Double-click description (#0) opens Set description. Single-click only selects.
+        # Do not bind ButtonRelease-1: Double-1 also fires release and would re-enter the editor.
         self._tree.bind("<ButtonPress-1>", self._on_tree_button_press, add="+")
-        self._tree.bind("<ButtonRelease-1>", self._on_tree_description_activate)
+        self._tree.bind("<Double-1>", self._on_tree_description_activate)
         self._tree.bind("<ButtonPress-3>", self._on_tree_right_click)
         self._tree.bind("<<TreeviewOpen>>", self._on_tree_open)
         self._tree.bind("<<TreeviewClose>>", self._on_tree_close)
@@ -447,50 +448,53 @@ class DatasetView(AppToplevel):
         if self._tree_press_was_multiselect and self._description_combo is not None:
             self._dismiss_description_combo(apply=False)
 
-    def _on_tree_description_activate(self, event) -> None:
+    def _on_tree_description_activate(self, event) -> str | None:
         # Preserve multi-select: modifier clicks are selection gestures, not description edit.
-        # Prefer press-time flag — ButtonRelease often drops Shift/Cmd before release.
+        # Prefer press-time flag — Double-1 may drop Shift/Cmd before the event.
         state = int(getattr(event, "state", 0) or 0)
         multiselect_click = self._tree_press_was_multiselect or bool(state & _TREE_MULTISELECT_STATE)
         self._tree_press_was_multiselect = False
+
+        # Ignore expander clicks and non-description columns (let Treeview expand/collapse).
+        if self._tree.identify_region(event.x, event.y) not in {"tree", "cell"}:
+            return None
+        if self._tree.identify_column(event.x) != "#0":
+            return None
+        # Tree indicator (expand/collapse) shares the #0 column — skip it.
+        if self._tree.identify_element(event.x, event.y) in {"Indicator", "Treeitem.indicator"}:
+            return None
+        iid = self._tree.identify_row(event.y)
+        if not iid:
+            return None
+
         if multiselect_click:
             if self._description_combo is not None:
                 self._dismiss_description_combo(apply=False)
-            return
-
-        # Ignore expander clicks and non-description columns.
-        if self._tree.identify_region(event.x, event.y) not in {"tree", "cell"}:
-            return
-        if self._tree.identify_column(event.x) != "#0":
-            return
-        # Tree indicator (expand/collapse) shares the #0 column — skip it.
-        if self._tree.identify_element(event.x, event.y) in {"Indicator", "Treeitem.indicator"}:
-            return
-        iid = self._tree.identify_row(event.y)
-        if not iid:
-            return
+            return "break"
 
         # Treeview already applied selection for this click; do not collapse a multi-select.
         selected = self._tree.selection()
         if len(selected) > 1:
             if self._description_combo is not None:
                 self._dismiss_description_combo(apply=False)
-            return
+            return "break"
 
         if self._description_combo is not None:
             if self._description_combo_iid == iid:
-                # Second click on the active row: close the menu and show the label again.
+                # Second double-click on the active row: close the menu and show the label again.
                 self._dismiss_description_combo(apply=False)
-                return
+                return "break"
             self._dismiss_description_combo(apply=False)
 
         series_uid = parse_series_tree_iid(iid)
         if series_uid is not None:
             self._edit_series_description(iid, series_uid)
-            return
+            return "break"
         study_uid = parse_study_tree_iid(iid)
         if study_uid is not None:
             self._edit_study_description(iid, study_uid)
+            return "break"
+        return None
 
     def _set_description_tooltip_text(self) -> str:
         kind, uids, info = self._selected_description_targets()
@@ -1011,7 +1015,7 @@ class DatasetView(AppToplevel):
 
             if series_description_cohort_key(pair[1].modality) is None:
                 return None
-            return _("Click description to choose a RadLex name · Right-click opens Series View")
+            return _("Double-click description to choose a RadLex name · Right-click opens Series View")
 
         study_uid = parse_study_tree_iid(iid)
         if study_uid is not None:
@@ -1027,7 +1031,7 @@ class DatasetView(AppToplevel):
                 # Still allow tooltip when study has a display description / eligible modality.
                 if not (record.modality or "").strip():
                     return None
-            return _("Click description to choose a LOINC name · Right-click opens projections")
+            return _("Double-click description to choose a LOINC name · Right-click opens projections")
         return None
 
     def _cancel_description_combo_dismiss(self) -> None:
