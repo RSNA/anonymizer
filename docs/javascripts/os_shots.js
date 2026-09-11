@@ -4,10 +4,16 @@
  * Markdown authors embed shots/macos/*.png. On Windows browsers, rewrite to
  * shots/windows/* and fall back to macOS if the Windows PNG is missing.
  *
+ * MkDocs emits relative srcs such as ``shots/macos/Welcome.png`` (no leading
+ * slash). Match ``shots/macos/`` anywhere in the path — not only ``/shots/macos/``.
+ *
  * There is no HTML5 OS API; Client Hints + UA parsing is coarse but enough
  * for Mac vs Windows chrome selection.
  */
 (function () {
+  var MAC_SEG = "shots/macos/";
+  var WIN_SEG = "shots/windows/";
+
   function docsShotOs() {
     var p = navigator.userAgentData && navigator.userAgentData.platform;
     if (p) {
@@ -22,11 +28,12 @@
 
   function rewriteShots() {
     if (docsShotOs() !== "windows") return;
-    var images = document.querySelectorAll('img[src*="/shots/macos/"]');
+    var images = document.querySelectorAll('img[src*="shots/macos/"]');
     images.forEach(function (img) {
       var macSrc = img.getAttribute("src");
-      if (!macSrc || macSrc.indexOf("/shots/macos/") === -1) return;
-      var winSrc = macSrc.replace("/shots/macos/", "/shots/windows/");
+      if (!macSrc || macSrc.indexOf(MAC_SEG) === -1) return;
+      if (macSrc.indexOf(WIN_SEG) !== -1) return;
+      var winSrc = macSrc.split(MAC_SEG).join(WIN_SEG);
       img.setAttribute("data-docs-shot-macos", macSrc);
       img.addEventListener(
         "error",
@@ -42,9 +49,17 @@
     });
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", rewriteShots);
-  } else {
+  function scheduleRewrite() {
     rewriteShots();
+    // Material instant navigation replaces page content without a full reload.
+    if (typeof document$ !== "undefined" && document$.subscribe) {
+      document$.subscribe(rewriteShots);
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", scheduleRewrite);
+  } else {
+    scheduleRewrite();
   }
 })();
