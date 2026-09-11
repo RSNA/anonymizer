@@ -7,7 +7,7 @@
 [![PyPI](https://img.shields.io/pypi/v/rsna-anonymizer.svg)](https://pypi.org/project/rsna-anonymizer/)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)](https://www.python.org/downloads/)
 
-**La version 19.0.7** est la version V19 actuelle sur la branche `master` et sur PyPI. Nécessite **Python 3.11 ou 3.12** avec **tkinter** intégré. Python 3.13 n’est pas pris en charge.
+**La version 19.0.8** est la version V19 actuelle sur la branche `master` et sur PyPI. Nécessite **Python 3.11 ou 3.12** avec **tkinter** intégré. Python 3.13 n’est pas pris en charge.
 
 ## Installation
 
@@ -33,7 +33,7 @@ uv --version
 
 ### 2. Installer Python avec tkinter, puis l’application
 
-L’interface de bureau a besoin de **tkinter**. Installez un Python qui l’inclut, créez le venv et installez **19.0.7** :
+L’interface de bureau a besoin de **tkinter**. Installez un Python qui l’inclut, créez le venv et installez **19.0.8** :
 
 | Plateforme | Assurer la disponibilité de tkinter |
 | --- | --- |
@@ -46,7 +46,7 @@ uv python install 3.12                     # or: 3.11
 uv venv rsna-anonymizer --python 3.12      # or: --python 3.11
 source rsna-anonymizer/bin/activate        # Windows: rsna-anonymizer\Scripts\activate
 
-uv pip install rsna-anonymizer             # version 19.0.7
+uv pip install rsna-anonymizer             # version 19.0.8
 ```
 
 ### 3. Vérifier l’installation
@@ -54,7 +54,7 @@ uv pip install rsna-anonymizer             # version 19.0.7
 ```bash
 python --version          # 3.11.x or 3.12.x
 python -m tkinter         # a small Tk window must open — required for the UI
-rsna-anonymizer --version # should report 19.0.7
+rsna-anonymizer --version # should report 19.0.8
 ```
 
 Si `python -m tkinter` échoue, le Python du venv a été compilé sans Tk : corrigez l’étape plateforme ci-dessus, recréez le venv et réinstallez.

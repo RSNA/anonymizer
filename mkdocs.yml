@@ -45,6 +45,102 @@ plugins:
           default: true
           name: English
           build: true
+        - locale: de
+          name: Deutsch
+          build: true
+          nav_translations:
+            Home: Start
+            1. Start here: 1. Hier beginnen
+            2. Install and first launch: 2. Installation und erster Start
+            3. AI Features setup: 3. KI-Funktionen einrichten
+            4. Words we use: 4. Begriffe
+            5. Create a project: 5. Projekt anlegen
+            6. Search: 6. Suchen
+            7. View: 7. Ansicht
+            8. Process: 8. Verarbeiten
+            8.1 Remove Pixel PHI: 8.1 Eingebrannten Text entfernen
+            8.2 Harmonize names: 8.2 Namen harmonisieren
+            8.3 Blur faces: 8.3 Gesichter unscharf machen
+            8.4 Run on many studies: 8.4 Auf vielen Studien ausführen
+            9. Send: 9. Senden
+            10. Run headless: 10. Ohne Oberfläche ausführen
+            Reference: Referenz
+            De-identification protocol: De-Identifikationsprotokoll
+            Troubleshooting: Fehlerbehebung
+            Tutorials: Tutorials
+            Overview: Überblick
+            T1 Install: T1 Installation
+            T2 Project import: T2 Projektimport
+            T3 Burned-in text: T3 Eingebrannten Text entfernen
+            T4 Harmonize: T4 Harmonisieren
+            T5 Face blur: T5 Gesichter unscharf machen
+            T6 Batch: T6 KI-Stapelverarbeitung
+            Screenshots style guide: Screenshot-Stilguide
+            License: Lizenz
+        - locale: es
+          name: Español
+          build: true
+          nav_translations:
+            Home: Inicio
+            1. Start here: 1. Empezar aquí
+            2. Install and first launch: 2. Instalación y primer inicio
+            3. AI Features setup: 3. Configuración de Funciones de IA
+            4. Words we use: 4. Palabras que usamos
+            5. Create a project: 5. Crear un proyecto
+            6. Search: 6. Buscar
+            7. View: 7. Vista
+            8. Process: 8. Procesar
+            8.1 Remove Pixel PHI: 8.1 Quitar texto quemado
+            8.2 Harmonize names: 8.2 Armonizar nombres
+            8.3 Blur faces: 8.3 Desenfocar caras
+            8.4 Run on many studies: 8.4 Ejecutar en muchos estudios
+            9. Send: 9. Enviar
+            10. Run headless: 10. Ejecutar sin interfaz
+            Reference: Referencia
+            De-identification protocol: Protocolo de desidentificación
+            Troubleshooting: Solución de problemas
+            Tutorials: Tutoriales
+            Overview: Resumen
+            T1 Install: T1 Instalación
+            T2 Project import: T2 Importar proyecto
+            T3 Burned-in text: T3 Quitar texto quemado
+            T4 Harmonize: T4 Armonizar
+            T5 Face blur: T5 Desenfocar caras
+            T6 Batch: T6 Procesamiento por lotes de IA
+            Screenshots style guide: Guía de estilo de capturas
+            License: Licencia
+        - locale: fr
+          name: Français
+          build: true
+          nav_translations:
+            Home: Accueil
+            1. Start here: 1. Commencer ici
+            2. Install and first launch: 2. Installation et premier lancement
+            3. AI Features setup: 3. Configuration des Fonctions IA
+            4. Words we use: 4. Mots que nous utilisons
+            5. Create a project: 5. Créer un projet
+            6. Search: 6. Rechercher
+            7. View: 7. Vue
+            8. Process: 8. Traiter
+            8.1 Remove Pixel PHI: 8.1 Supprimer le texte incrusté
+            8.2 Harmonize names: 8.2 Harmoniser les noms
+            8.3 Blur faces: 8.3 Flouter les visages
+            8.4 Run on many studies: 8.4 Exécuter sur plusieurs études
+            9. Send: 9. Envoyer
+            10. Run headless: 10. Exécution sans interface
+            Reference: Référence
+            De-identification protocol: Protocole de désidentification
+            Troubleshooting: Dépannage
+            Tutorials: Tutoriels
+            Overview: Aperçu
+            T1 Install: T1 Installation
+            T2 Project import: T2 Import de projet
+            T3 Burned-in text: T3 Supprimer le texte incrusté
+            T4 Harmonize: T4 Harmoniser
+            T5 Face blur: T5 Flouter les visages
+            T6 Batch: T6 Traitement par lots IA
+            Screenshots style guide: Guide de style des captures
+            License: Licence
 
 markdown_extensions:
   - admonition

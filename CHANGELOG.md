@@ -5,9 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-- Dataset: double-click a study or series description to open Set description (harmonized or not); single-click only selects the row
-- Harmonize US: map study/series text (e.g. ``US Biopsy Axilla``) to the closest Playbook anatomy when BodyPartExamined is empty
-- Harmonize CT/MR: single-slice series get a DICOM Playbook guess instead of failing as “not a diagnostic 3D volume”; Smart Prep maps to Monitoring; MR IV contrast from DICOM headers
+
+## [19.0.8]
+- Windows: Dataset left-click Set description works with Num Lock on; OCR/model downloads use certifi CA bundle; menubar only on macOS child windows; encoding-safe console logging
+- Dataset: double-click study/series description opens Set description (single-click selects only); import refresh and tree UX polish
+- Harmonize: US text→Playbook anatomy when BodyPartExamined empty; CT/MR single-slice DICOM Playbook guess; Smart Prep→Monitoring; MR IV contrast from DICOM headers
+- Docs: MkDocs `de`/`es`/`fr` locales with full markdown translations and nav; Windows help screenshots; multilingual READMEs; Contributor Covenant, SECURITY.md, OpenSSF Scorecard workflow; `pyproject` license Apache-2.0
+- Remove obsolete `patch_release.sh`
 
 ## [19.0.7]
 - Import: OS file/folder drop onto Dashboard or Dataset opens Import Files (tkinterdnd2; soft-fail if unavailable)

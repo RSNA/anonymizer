@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rsna-anonymizer"
-version = "19.0.7"
+version = "19.0.8"
 description = "RSNA DICOM Anonymizer"
 readme = "readme.md"
 license = { text = "Apache-2.0" }
