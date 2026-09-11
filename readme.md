@@ -1,5 +1,13 @@
 # RSNA DICOM Anonymizer (V19)
+
+[en](readme.md) · [de](readme.de.md) · [es](readme.es.md) · [fr](readme.fr.md)
+
+Other languages: [Deutsch](readme.de.md), [Español](readme.es.md), [Français](readme.fr.md).
+
 [![Tests](https://github.com/RSNA/anonymizer/actions/workflows/tests.yaml/badge.svg)](https://github.com/RSNA/anonymizer/actions/workflows/tests.yaml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/rsna-anonymizer.svg)](https://pypi.org/project/rsna-anonymizer/)
+[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)](https://www.python.org/downloads/)
 
 **Version 19.0.7** is the current V19 release on the `master` branch and PyPI. Requires **Python 3.11 or 3.12** with **tkinter** built in. Python 3.13 is not supported.
 
@@ -155,3 +163,9 @@ uv sync --group docs
 uv run mkdocs serve          # http://127.0.0.1:8000
 uv run mkdocs build --strict
 ```
+
+## Community
+
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security policy](SECURITY.md)
+- [License](LICENSE) (Apache-2.0)
