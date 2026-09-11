@@ -105,7 +105,7 @@ Notes de version : [CHANGELOG](CHANGELOG.md).
 ```bash
 git clone https://github.com/RSNA/anonymizer.git
 cd anonymizer
-git checkout V19          # for V19 work
+git checkout master
 uv sync --group dev
 uv run pre-commit install
 uv run rsna-anonymizer

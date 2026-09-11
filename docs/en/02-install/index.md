@@ -85,7 +85,7 @@ source rsna-anonymizer/bin/activate
 uv pip install --upgrade rsna-anonymizer
 ```
 
-See the [CHANGELOG](https://github.com/RSNA/anonymizer/blob/V19/CHANGELOG.md) for release notes.
+See the [CHANGELOG](https://github.com/RSNA/anonymizer/blob/master/CHANGELOG.md) for release notes.
 
 ## Next steps
 
