@@ -65,7 +65,18 @@ class CaptureContext:
 
 
 def _prepare_environment(work_dir: Path) -> Path:
+    """Match ``anonymizer.main``: run from package dir and point TS at local weights."""
     os.chdir(PACKAGE_DIR)
+    # Keep public/private/… ASCII even when UI language translates those labels
+    # (German öffentlich breaks SimpleITK NIfTI writes on Windows).
+    os.environ["ANONYMIZER_ASCII_STORAGE_DIRS"] = "1"
+    tseg_home = (PACKAGE_DIR / "assets" / "ai" / "tseg").resolve()
+    tseg_weights = tseg_home / "nnunet" / "results"
+    tseg_home.mkdir(parents=True, exist_ok=True)
+    tseg_weights.mkdir(parents=True, exist_ok=True)
+    os.environ["TOTALSEG_HOME_DIR"] = str(tseg_home)
+    os.environ["TOTALSEG_WEIGHTS_PATH"] = str(tseg_weights)
+    logger.info("TOTALSEG_HOME_DIR=%s", tseg_home)
     logs_dir = work_dir / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
     return logs_dir

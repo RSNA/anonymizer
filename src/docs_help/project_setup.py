@@ -55,8 +55,14 @@ def create_capture_project(storage_dir: Path, *, project_name: str = "HelpScreen
     if "US" not in model.modalities:
         model.modalities = list(model.modalities) + ["US"]
         model.set_storage_classes_from_modalities()
-    model.scp = DICOMNode("127.0.0.1", port, model.scp.aet, True)
-    model.scu = DICOMNode("127.0.0.1", 0, model.scu.aet, True)
+    # Orthanc modality maps AE ANONYMIZER → localhost:1045; keep English AET
+    # even when the UI language would translate it (e.g. ANONYMISIERER).
+    model.scp = DICOMNode("127.0.0.1", port, "ANONYMIZER", True)
+    model.scu = DICOMNode("127.0.0.1", 0, "ANONYMIZER", True)
+    # CT_Head_With_Contrast fixtures are JPEG 2000; Orthanc seed/C-MOVE need it.
+    for uid in ("1.2.840.10008.1.2.4.90", "1.2.840.10008.1.2.4.91"):
+        if uid not in model.transfer_syntaxes:
+            model.transfer_syntaxes.append(uid)
 
     controller = ProjectController(model)
     controller.save_model()

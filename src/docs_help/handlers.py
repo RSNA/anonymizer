@@ -1808,6 +1808,21 @@ def _render_patient_lookup_csv_preview(csv_path: Path, dest: Path, *, max_rows: 
     return save_docs_png(dest, image)
 
 
+def _csv_truthy(value: object) -> bool:
+    """True for English/translated Yes cells in Patient Lookup CSV (e.g. Yes/Ja)."""
+    text = str(value or "").strip().casefold()
+    if not text:
+        return False
+    if text in {"yes", "y", "true", "1"}:
+        return True
+    try:
+        from anonymizer.utils.translate import _ as tr
+
+        return text == str(tr("Yes")).strip().casefold()
+    except Exception:
+        return False
+
+
 def shot_dataset_patient_lookup(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     """Dataset with Create Patient Lookup in view, or rendered CSV preview."""
     recipe = shot.recipe or {}
@@ -1843,8 +1858,8 @@ def shot_dataset_patient_lookup(ctx: CaptureContext, shot: ShotSpec) -> ShotResu
             phi_i = header.index("PixelPHI")
         except ValueError as exc:
             raise RuntimeError(f"Patient Lookup CSV missing AI columns: {exc}") from exc
-        harm_yes = any(row[harm_i] == "Yes" for row in rows[1:] if len(row) > harm_i)
-        rem_yes = any(row[rem_i] == "Yes" for row in rows[1:] if len(row) > rem_i)
+        harm_yes = any(_csv_truthy(row[harm_i]) for row in rows[1:] if len(row) > harm_i)
+        rem_yes = any(_csv_truthy(row[rem_i]) for row in rows[1:] if len(row) > rem_i)
         phi_text = any((row[phi_i] or "").strip() for row in rows[1:] if len(row) > phi_i)
         if not (harm_yes and rem_yes and phi_text):
             raise RuntimeError(
@@ -1999,6 +2014,14 @@ def shot_process_remove_pixel(ctx: CaptureContext, shot: ShotSpec) -> ShotResult
                     status_msg = ""
                 if "detection complete" in status_msg.casefold():
                     break
+                try:
+                    from anonymizer.utils.translate import _
+
+                    done_tr = str(_("Text detection complete")).strip().casefold()
+                    if done_tr and done_tr in status_msg.casefold():
+                        break
+                except Exception:
+                    pass
             else:
                 raise RuntimeError("Timed out waiting for Detect Text")
             settle(view, max(ctx.settle_ms, 700))
@@ -2079,6 +2102,8 @@ def shot_process_remove_pixel(ctx: CaptureContext, shot: ShotSpec) -> ShotResult
 
 def shot_process_harmonize_description(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     """Series View above completed Harmonize Description results (CT or planar)."""
+    import concurrent.futures
+
     from docs_help.harmonize import (
         BrainPromptPolicy,
         close_harmonize_session,
@@ -2098,17 +2123,43 @@ def shot_process_harmonize_description(ctx: CaptureContext, shot: ShotSpec) -> S
             if shot.soft:
                 return ShotResult(shot.id, "soft_fail", f"xr_models:{exc}")
             raise
+
     session = prepare_series_for_harmonize(
         ctx,
         fixture,
         import_fixtures=_import_fixtures,
-        clear_cache=True,
+        clear_cache=False,
     )
     try:
-        hv = run_harmonize_to_results(session, policy=BrainPromptPolicy.AUTO_NO)
+        # Bound the wait so a stuck TotalSegmentator pass cannot hang capture forever.
+        # Soft shots (CT Harmonize Description) fall back to macOS in the docs site.
+        timeout_s = 240.0 if "CT_Head" in fixture or "ct_head" in fixture.lower() else 900.0
+
+        def _run() -> Any:
+            return run_harmonize_to_results(
+                session,
+                policy=BrainPromptPolicy.AUTO_NO,
+                timeout_s=timeout_s,
+            )
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(_run)
+            try:
+                hv = future.result(timeout=timeout_s + 30.0)
+            except concurrent.futures.TimeoutError as exc:
+                msg = f"Harmonize timed out after {timeout_s:.0f}s (likely stuck TotalSegmentator)"
+                logger.error("%s", msg)
+                if shot.soft:
+                    return ShotResult(shot.id, "soft_fail", msg)
+                raise TimeoutError(msg) from exc
         layout_series_above_harmonize(session.series_view, hv, peek_px=240)
         dest = grab_series_with_overlays(ctx, session.series_view, hv, shot=shot)
         return ShotResult(shot.id, "ok", f"{fixture}:results+series", dest)
+    except Exception as exc:
+        if shot.soft:
+            logger.warning("Process_Harmonize_Description soft-fail: %s", exc)
+            return ShotResult(shot.id, "soft_fail", str(exc))
+        raise
     finally:
         close_harmonize_session(session)
 

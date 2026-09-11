@@ -134,6 +134,55 @@ def trim_transparent(image: Image.Image) -> Image.Image:
     return image.crop(bbox)
 
 
+def trim_solid_edge(
+    image: Image.Image,
+    *,
+    max_luma: float = 12.0,
+    max_fraction: float = 0.08,
+) -> Image.Image:
+    """Crop uniform near-black margins (Windows PrintWindow / DWM shadow fill).
+
+    Only removes full-edge strips where sampled pixels stay at/under ``max_luma``.
+    Caps each side at ``max_fraction`` of width/height so real black UI chrome
+    (title bars, viewports) is not eaten.
+    """
+    rgb = image.convert("RGB")
+    w, h = rgb.size
+    if w < 16 or h < 16:
+        return image
+    px = rgb.load()
+    step_x = max(1, w // 80)
+    step_y = max(1, h // 80)
+    max_x = max(1, int(w * max_fraction))
+    max_y = max(1, int(h * max_fraction))
+
+    def row_dark(y: int) -> bool:
+        return all((px[x, y][0] + px[x, y][1] + px[x, y][2]) / 3.0 <= max_luma for x in range(0, w, step_x))
+
+    def col_dark(x: int) -> bool:
+        return all((px[x, y][0] + px[x, y][1] + px[x, y][2]) / 3.0 <= max_luma for y in range(0, h, step_y))
+
+    top = 0
+    while top < max_y and row_dark(top):
+        top += 1
+    bottom = 0
+    while bottom < max_y and row_dark(h - 1 - bottom):
+        bottom += 1
+    left = 0
+    while left < max_x and col_dark(left):
+        left += 1
+    right = 0
+    while right < max_x and col_dark(w - 1 - right):
+        right += 1
+
+    if left == top == right == bottom == 0:
+        return image
+    box = (left, top, w - right, h - bottom)
+    if box[2] - box[0] < 8 or box[3] - box[1] < 8:
+        return image
+    return image.crop(box)
+
+
 def strip_drop_shadow(
     image: Image.Image,
     *,

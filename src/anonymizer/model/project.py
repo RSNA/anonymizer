@@ -2,6 +2,7 @@
 This module contains the ProjectModel class and related data classes for storing project settings and configurations.
 """
 
+import os
 import time
 from copy import copy, deepcopy
 from dataclasses import asdict, dataclass, field
@@ -16,6 +17,19 @@ from pynetdicom._globals import DEFAULT_TRANSFER_SYNTAXES  # type: ignore
 from anonymizer.utils.modalities import get_modalities
 from anonymizer.utils.translate import _
 from anonymizer.utils.version import get_version
+
+
+def _use_ascii_storage_dirs() -> bool:
+    """When set (e.g. docs_help capture), keep filesystem folder names ASCII.
+
+    SimpleITK/NIfTI fails on Windows paths with translated names such as German
+    ``öffentlich``.
+    """
+    return os.environ.get("ANONYMIZER_ASCII_STORAGE_DIRS", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
 
 
 # Controller Custom Error classes:
@@ -192,11 +206,18 @@ class ProjectModel:
 
     def __post_init__(self):
         # Sub-directories in the storage directory:
-        self.PRIVATE_DIR = _("private")
-        self.PUBLIC_DIR = _("public")
-        self.PHI_EXPORT_DIR = _("phi_export")
-        self.QUARANTINE_DIR = _("quarantine")
-        self.BATCH_RUNS_DIR = _("batch_runs")
+        if _use_ascii_storage_dirs():
+            self.PRIVATE_DIR = "private"
+            self.PUBLIC_DIR = "public"
+            self.PHI_EXPORT_DIR = "phi_export"
+            self.QUARANTINE_DIR = "quarantine"
+            self.BATCH_RUNS_DIR = "batch_runs"
+        else:
+            self.PRIVATE_DIR = _("private")
+            self.PUBLIC_DIR = _("public")
+            self.PHI_EXPORT_DIR = _("phi_export")
+            self.QUARANTINE_DIR = _("quarantine")
+            self.BATCH_RUNS_DIR = _("batch_runs")
         self.set_storage_classes_from_modalities()
 
     def get_class_name(self) -> str:

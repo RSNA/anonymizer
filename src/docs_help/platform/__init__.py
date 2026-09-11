@@ -22,6 +22,7 @@ from docs_help.platform.common import (
     screen_capture_available,
     settle,
     to_logical_size,
+    trim_solid_edge,
     trim_transparent,
     union_logical_bbox,
     wait_mapped,
@@ -49,6 +50,7 @@ __all__ = [
     "screen_capture_available",
     "settle",
     "to_logical_size",
+    "trim_solid_edge",
     "trim_transparent",
     "union_logical_bbox",
     "wait_mapped",
@@ -98,8 +100,13 @@ def grab_widget(
     allow_placeholder: bool = False,
     shot_id: str | None = None,
     geometry: str | None = None,
+    normalize: bool = True,
 ) -> Path:
-    """Capture a Tk/CTk toplevel (or root) and write PNG (RGBA on macOS when possible)."""
+    """Capture a Tk/CTk toplevel (or root) and write PNG (RGBA on macOS when possible).
+
+    Set ``normalize=False`` when the caller will composite several grabs first
+    (letterboxing a small dialog to 960px before paste creates white slabs).
+    """
     dest.parent.mkdir(parents=True, exist_ok=True)
     backend = _backend()
     try:
@@ -217,7 +224,8 @@ def grab_widget(
 
     scale = display_scale(widget)
     image = to_logical_size(image, scale)
-    image = normalize_for_docs(image)
+    if normalize:
+        image = normalize_for_docs(image)
     logger.info(
         "Saved %s mode=%s size=%s (display_scale=%.2f) → %s",
         label,
@@ -253,8 +261,52 @@ def grab_stacked_windows(
     settle(base, settle_ms)
     settle(overlay, settle_ms // 2)
 
-    base_img = backend.capture_window(base, dest, f"{label}:base")
-    overlay_img = backend.capture_window(overlay, dest, f"{label}:overlay")
+    def _capture_one(widget: Any, tag: str) -> Image.Image | None:
+        img = backend.capture_window(widget, dest, f"{label}:{tag}")
+        if img is not None and not is_blank_capture(img):
+            return img
+        # Per-window bbox grab (cover behind should hide Series View).
+        try:
+            logical = widget_logical_bbox(widget)
+            x1, y1, x2, y2 = logical
+            if x2 <= x1 or y2 <= y1:
+                return None
+            scale = display_scale(widget)
+            bboxes = [logical]
+            if scale > 1.05:
+                bboxes.append(scaled_bbox(logical, scale))
+            for bbox in bboxes:
+                candidate = backend.capture_bbox(bbox, dest)
+                if candidate is not None and not is_blank_capture(candidate):
+                    logger.info("Stacked %s %s via bbox=%s", label, tag, bbox)
+                    return candidate
+        except Exception as exc:
+            logger.warning("Stacked %s %s bbox failed: %s", label, tag, exc)
+        return None
+
+    # Hide overlay while capturing base so PrintWindow/bbox of the parent does
+    # not already include the dialog (avoids double-composited prompts).
+    overlay_withdrawn = False
+    try:
+        overlay.withdraw()
+        overlay_withdrawn = True
+    except Exception:
+        try:
+            overlay.lower()
+            overlay.geometry("+-8000+-8000")
+        except Exception:
+            pass
+    settle(base, max(settle_ms // 2, 200))
+    base_img = _capture_one(base, "base")
+    try:
+        if overlay_withdrawn:
+            overlay.deiconify()
+        overlay.lift()
+        overlay.attributes("-topmost", True)
+    except Exception:
+        pass
+    settle(overlay, max(settle_ms // 2, 200))
+    overlay_img = _capture_one(overlay, "overlay")
     if base_img is None or is_blank_capture(base_img):
         return grab_widget(
             base,
@@ -264,6 +316,7 @@ def grab_stacked_windows(
             shot_id=shot_id,
         )
     if overlay_img is None or is_blank_capture(overlay_img):
+        logger.warning("Stacked %s missing overlay — saving base only", label)
         image = to_logical_size(base_img, display_scale(base))
         image = normalize_for_docs(image)
         return save_docs_png(dest, image)

@@ -12,6 +12,7 @@ Keeps the clinician-manual sequence stable across languages and re-runs:
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import time
@@ -22,6 +23,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 import customtkinter as ctk
+from PIL import Image
 
 from docs_help.platform import (
     close_toplevel,
@@ -31,13 +33,13 @@ from docs_help.platform import (
     settle,
     wait_mapped,
 )
+from docs_help.platform.common import normalize_for_docs, save_docs_png
 from docs_help.project_setup import series_for_fixture
 
 logger = logging.getLogger(__name__)
 
 # Head CT Harmonize (with TotalSegmentator) can take several minutes on first run.
 DEFAULT_HARMONIZE_TIMEOUT_S = 900.0
-BRAIN_PROMPT_TITLE_MARKERS = ("brain structures", "brain structure")
 
 
 class BrainPromptPolicy(str, Enum):
@@ -59,8 +61,23 @@ class HarmonizeCaptureSession:
 
 
 def _is_brain_structures_prompt(title: object, message: object) -> bool:
+    """True for the CT-head brain-structures Yes/No prompt in the active UI language.
+
+    Matches against gettext translations of the canonical English msgids so capture
+    stays language-agnostic (no hardcoded en/de/fr strings).
+    """
+    from anonymizer.utils.translate import _
+
     blob = f"{title}\n{message}".casefold()
-    return any(marker in blob for marker in BRAIN_PROMPT_TITLE_MARKERS)
+    needles = (
+        str(_("Brain structures")).strip(),
+        str(_("This appears to be a CT head study. Run detailed brain structure segmentation?")).strip(),
+    )
+    for needle in needles:
+        text = needle.casefold()
+        if text and text in blob:
+            return True
+    return False
 
 
 def brain_structures_prompt_copy() -> tuple[str, str]:
@@ -90,14 +107,13 @@ def show_brain_prompt_standin(
     Native ``messagebox.askyesno`` cannot be composited into docs screenshots from
     the same Tk thread; this stand-in uses the same copy and button labels.
     """
+    from anonymizer.utils.translate import _
+
     dlg = ctk.CTkToplevel(master=parent)
     dlg.title(title)
     dlg.resizable(False, False)
-    if parent is not None:
-        try:
-            dlg.transient(parent)
-        except Exception:
-            pass
+    # Do not call transient(): on Windows, owned dialogs collapse HWND walks /
+    # PrintWindow targets onto the parent Series View during stacked grabs.
     frame = ctk.CTkFrame(dlg)
     frame.pack(fill="both", expand=True, padx=16, pady=16)
     ctk.CTkLabel(frame, text=message, wraplength=420, justify="left", anchor="w").pack(fill="x", pady=(0, 16))
@@ -114,8 +130,8 @@ def show_brain_prompt_standin(
             on_no()
         close_toplevel(dlg)
 
-    ctk.CTkButton(buttons, text="No", width=90, command=_no).pack(side="right", padx=(8, 0))
-    ctk.CTkButton(buttons, text="Yes", width=90, command=_yes).pack(side="right")
+    ctk.CTkButton(buttons, text=_("No"), width=90, command=_no).pack(side="right", padx=(8, 0))
+    ctk.CTkButton(buttons, text=_("Yes"), width=90, command=_yes).pack(side="right")
     dlg.update_idletasks()
     try:
         if parent is not None:
@@ -460,6 +476,41 @@ def ensure_xr_planar_models() -> None:
         if not cxp_view_ready():
             raise RuntimeError(f"XR chest-view model required for CXR Harmonize shot: {message}")
         logger.info("XR chest-view download: %s", message if ok else "ready after download")
+
+
+def precompute_harmonize_cache(
+    series_path: Path,
+    anon_model=None,
+    *,
+    include_brain_structures: bool = False,
+) -> None:
+    """Run Harmonize without Tk so TotalSegmentator is not nested under the UI.
+
+    On Windows, TS under a live Series View / Harmonize dialog often hangs after
+    anatomy export; help capture precomputes the ``0_TS_SEG`` cache first, then
+    opens the UI which reuses it.
+    """
+    from anonymizer.controller.ai.harmonize.pipeline import harmonize_series
+
+    logger.info(
+        "Precomputing Harmonize cache for %s (brain_structures=%s)",
+        series_path,
+        include_brain_structures,
+    )
+    results = harmonize_series(
+        [series_path],
+        include_brain_structures=include_brain_structures,
+        anon_model=anon_model,
+    )
+    if not results:
+        raise RuntimeError("harmonize_series returned no results")
+    err = getattr(results[0], "error", None)
+    if err:
+        raise RuntimeError(f"harmonize_series failed: {err}")
+    seg_dir = series_path / "0_TS_SEG" / "seg"
+    if not seg_dir.is_dir() or not any(seg_dir.glob("*.nii.gz")):
+        raise RuntimeError(f"Harmonize precompute left no seg masks under {seg_dir}")
+    logger.info("Precompute complete for %s", series_path)
 
 
 def precompute_brain_harmonize_cache(series_path: Path, anon_model=None) -> None:
@@ -881,32 +932,73 @@ def capture_brain_prompt_over_harmonize(
     except Exception:
         pass
 
-    dlg = show_brain_prompt_standin(session.harmonize_view, title=title, message=message)
-    session.brain_prompt = dlg
     try:
         session.harmonize_view.geometry("+80+60")
         session.harmonize_view.lift()
         session.harmonize_view.attributes("-topmost", True)
+    except Exception:
+        pass
+    settle(session.harmonize_view, settle_before_grab_ms)
+
+    # Capture Harmonize alone first, then show the stand-in prompt and capture it.
+    # Grabbing both while the prompt is visible double-composites on Windows
+    # (PrintWindow/bbox of the parent often already includes the dialog).
+    dest = ctx.dest(shot)
+    settle_ms = max(getattr(ctx, "settle_ms", 400), 700)
+    allow = getattr(ctx, "allow_placeholder", False)
+
+    base_path = dest.with_name(dest.stem + ".__base.png")
+    try:
+        grab_widget(
+            session.harmonize_view,
+            base_path,
+            settle_ms=settle_ms,
+            allow_placeholder=allow,
+            shot_id=f"{shot.id}:base",
+            normalize=False,
+        )
+        base_img = Image.open(base_path).convert("RGBA")
+    finally:
+        with contextlib.suppress(Exception):
+            base_path.unlink(missing_ok=True)
+
+    dlg = show_brain_prompt_standin(session.harmonize_view, title=title, message=message)
+    session.brain_prompt = dlg
+    try:
         dlg.geometry("+200+160")
         dlg.lift()
         dlg.attributes("-topmost", True)
     except Exception:
         pass
-    settle(session.harmonize_view, settle_before_grab_ms)
-    settle(dlg, 300)
+    settle(dlg, 400)
 
+    overlay_path = dest.with_name(dest.stem + ".__overlay.png")
     try:
-        path = grab_dialogs(ctx, session.harmonize_view, dlg, shot=shot)
-    except Exception as exc:
-        logger.warning("Stacked dialog grab failed (%s); union over cover", exc)
-        path = grab_widgets_union(
-            [session.harmonize_view, dlg],
-            ctx.dest(shot),
-            settle_ms=max(getattr(ctx, "settle_ms", 400), 700),
-            allow_placeholder=getattr(ctx, "allow_placeholder", False),
-            shot_id=shot.id,
+        grab_widget(
+            dlg,
+            overlay_path,
+            settle_ms=max(settle_ms // 2, 300),
+            allow_placeholder=allow,
+            shot_id=f"{shot.id}:overlay",
+            normalize=False,
         )
+        overlay_img = Image.open(overlay_path).convert("RGBA")
+    finally:
+        with contextlib.suppress(Exception):
+            overlay_path.unlink(missing_ok=True)
+
+    ox, oy = 90, 110
+    canvas_w = max(base_img.size[0], ox + overlay_img.size[0] + 12)
+    canvas_h = max(base_img.size[1], oy + overlay_img.size[1] + 12)
+    canvas = Image.new("RGBA", (canvas_w, canvas_h), (245, 245, 245, 255))
+    canvas.alpha_composite(base_img, (0, 0))
+    canvas.alpha_composite(overlay_img, (ox, oy))
+    canvas = normalize_for_docs(canvas)
+    path = save_docs_png(dest, canvas)
+    logger.info("Saved brain-prompt composite %s size=%s", shot.id, canvas.size)
+
     close_toplevel(dlg)
+    session.brain_prompt = None
     if cover is not None:
         close_toplevel(cover)
     cancel_harmonize_quietly(session.harmonize_view)

@@ -13,6 +13,7 @@ fixtures:
 
 languages:
   en_US: en
+  de: de
 
 orthanc:
   host: 127.0.0.1
