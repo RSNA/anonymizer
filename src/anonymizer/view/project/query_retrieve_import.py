@@ -352,7 +352,6 @@ class QueryView(AppToplevel):
     def _disable_action_buttons(self):
         logger.info("_disable_action_buttons")
         self._load_accession_file_button.configure(state="disabled")
-        self._show_imported_studies_switch.configure(state="disabled")
         self._query_button.configure(state="disabled")
         self._select_all_button.configure(state="disabled")
         self._clear_selection_button.configure(state="disabled")
@@ -365,7 +364,6 @@ class QueryView(AppToplevel):
     def _enable_action_buttons(self):
         logger.info("_enable_action_buttons")
         self._load_accession_file_button.configure(state="enabled")
-        self._show_imported_studies_switch.configure(state="enabled")
         self._query_button.configure(state="enabled")
         self._select_all_button.configure(state="enabled")
         self._clear_selection_button.configure(state="enabled")

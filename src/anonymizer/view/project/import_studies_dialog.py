@@ -1,3 +1,4 @@
+import contextlib
 import logging
 from tkinter import messagebox
 from typing import List
@@ -72,20 +73,22 @@ class ImportStudiesDialog(AppToplevel):
         self._instances_to_import = 0
         self._study_metadata_retrieved = 0
 
-        self.rowconfigure(0, weight=0)
-        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
+        self.columnconfigure(1, weight=1)
         self._last_grid_row = 0
 
         # Create Widgets for Phase 1: (study metadata retrieval)
         self._create_widgets_1()
         self.bind("<Escape>", self._escape_keypress)
+        with contextlib.suppress(Exception):
+            self.transient(parent)
+        # V18: let Tk size to the labels; only set +x+y so the dialog sits on Query & Retrieve.
+        self.update_idletasks()
+        with contextlib.suppress(Exception):
+            parent.update_idletasks()
+            self.geometry(f"+{int(parent.winfo_rootx()) + 30}+{int(parent.winfo_rooty()) + 30}")
         self.wait_visibility()
         self.grab_set()  # make dialog modal
-        # Hug content — avoid empty grey expansion beside the progress frame.
-        self.update_idletasks()
-        req_w = max(self.winfo_reqwidth(), self._frame.winfo_reqwidth() + 24)
-        req_h = max(self.winfo_reqheight(), self._frame.winfo_reqheight() + 24)
-        self.geometry(f"{req_w}x{req_h}")
 
         # Phase 1: Start background task to get StudyUIDHierarchies:
         self._controller.get_study_uid_hierarchies_ex(
@@ -99,6 +102,7 @@ class ImportStudiesDialog(AppToplevel):
 
         self._frame = ctk.CTkFrame(self)
         self._frame.grid(row=0, column=0, padx=PAD, pady=PAD, sticky="nswe")
+        self._frame.columnconfigure(0, weight=1)
 
         row = 0
 
