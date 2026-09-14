@@ -140,11 +140,14 @@ def trim_solid_edge(
     max_luma: float = 12.0,
     max_fraction: float = 0.08,
 ) -> Image.Image:
-    """Crop uniform near-black margins (Windows PrintWindow / DWM shadow fill).
+    """Crop uniform near-black margins when an edge is a solid fill.
 
     Only removes full-edge strips where sampled pixels stay at/under ``max_luma``.
     Caps each side at ``max_fraction`` of width/height so real black UI chrome
     (title bars, viewports) is not eaten.
+
+    Windows docs grabs must not rely on this: ``platform.windows`` copies the
+    DWM visible frame so the invisible resize margin is never in the bitmap.
     """
     rgb = image.convert("RGB")
     w, h = rgb.size

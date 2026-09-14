@@ -16,7 +16,7 @@ src/docs_help/
   platform/
     common.py                         # settle, normalize (shared)
     macos.py                          # screencapture -l + CGWindow
-    windows.py                        # PrintWindow / BitBlt + ImageGrab
+    windows.py                        # visible DWM frame (screen BitBlt) / PrintWindow fallback
 ```
 
 ## Developer workflow (macOS + Windows)
@@ -25,10 +25,16 @@ Capture must run on the real OS (window chrome cannot be faked).
 
 1. Check out the latest branch on a **macOS** machine
 2. Orthanc on `127.0.0.1:4242` (AE `ORTHANC`) for Search/Query shots; grant Screen Recording
-3. Run capture (writes `shots/macos/`):
+3. Run full capture (all languages in order **en_US → de → es → fr**; writes `shots/macos/`). Existing PNGs stay on disk (`exists` in the end-of-run table) so you can re-run to resume:
 
 ```bash
-uv run python -m docs_help --language en_US
+uv run python -m docs_help -v
+```
+
+One language only:
+
+```bash
+uv run python -m docs_help --language de -v
 uv run python -m docs_help --language en_US --force --only Welcome
 ```
 
