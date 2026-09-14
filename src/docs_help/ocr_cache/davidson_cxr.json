@@ -1,0 +1,14 @@
+{
+  "fixture": "davidson_cxr",
+  "note": "Source-pixel EasyOCR boxes for davidson_cxr (2140x1760). Portable is present so the default whitelist can hide it.",
+  "frames": {
+    "0": [
+      {"text": "DAVIDSON", "box": [48, 16, 280, 54], "prob": 0.99},
+      {"text": "DOUGLAS [M]", "box": [292, 16, 560, 54], "prob": 0.98},
+      {"text": "01.09.2012", "box": [572, 16, 820, 54], "prob": 0.97},
+      {"text": "DOB: 06.16.1976", "box": [48, 58, 420, 96], "prob": 0.96},
+      {"text": "Semi-Upright", "box": [1680, 16, 2088, 54], "prob": 0.95},
+      {"text": "Portable", "box": [1760, 58, 2040, 96], "prob": 0.94}
+    ]
+  }
+}

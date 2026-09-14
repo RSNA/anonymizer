@@ -119,6 +119,20 @@ def _ensure_modalities_for_fixtures(ctx: CaptureContext, keys: list[str]) -> Non
     logger.info("Enabled US modality for capture project (%d storage classes)", len(model.storage_classes))
 
 
+def _seed_imported_fixture_caches(ctx: CaptureContext, keys: list[str]) -> None:
+    """Copy saved ``0_TS_SEG`` onto imported series so Harmonize skips TotalSegmentator."""
+    from docs_help.fixture_cache import seed_tseg_cache
+    from docs_help.project_setup import series_for_fixture
+
+    images = ctx.app.controller.model.images_dir()
+    for key in keys:
+        series = series_for_fixture(images, key)
+        if series is None:
+            continue
+        if seed_tseg_cache(series, key):
+            logger.info("TS cache ready for fixture %s at %s", key, series)
+
+
 def _import_fixtures(ctx: CaptureContext, *keys: str) -> None:
     _ensure_project(ctx)
     needed = [k for k in keys if k not in ctx.imported_keys]
@@ -137,6 +151,7 @@ def _import_fixtures(ctx: CaptureContext, *keys: str) -> None:
     ctx.imported_keys.update(needed)
     if errors and errors == len(paths):
         raise RuntimeError(f"All {len(paths)} import(s) failed for {needed}")
+    _seed_imported_fixture_caches(ctx, needed)
 
 
 def _fixture_from_deps(deps: tuple[str, ...]) -> str | None:
@@ -166,34 +181,46 @@ def _open_settings(ctx: CaptureContext, *, new_model: bool = False):
 
 
 
-def _teardown_capture_app(app: object) -> None:
+def _teardown_capture_app(app: object, *, timeout_s: float = 2.0) -> None:
     import contextlib
+    import threading
 
-    for attr in ("query_view", "export_view", "dataset_view"):
-        view = getattr(app, attr, None)
-        if view is not None:
+    from docs_help.interrupt import hard_exit
+
+    try:
+        for attr in ("query_view", "export_view", "dataset_view"):
+            view = getattr(app, attr, None)
+            if view is not None:
+                with contextlib.suppress(Exception):
+                    close_toplevel(view)
+                with contextlib.suppress(Exception):
+                    setattr(app, attr, None)
+        dashboard = getattr(app, "dashboard", None)
+        if dashboard is not None:
             with contextlib.suppress(Exception):
-                close_toplevel(view)
+                dashboard.destroy()
             with contextlib.suppress(Exception):
-                setattr(app, attr, None)
-    dashboard = getattr(app, "dashboard", None)
-    if dashboard is not None:
+                app.dashboard = None
+        ctrl = getattr(app, "controller", None)
+        if ctrl is not None:
+            # pynetdicom socketserver.shutdown() can wait forever; don't block Ctrl+C.
+            def _stop_network() -> None:
+                with contextlib.suppress(Exception):
+                    ctrl.stop_scp()
+                with contextlib.suppress(Exception):
+                    ctrl.anonymizer.stop()
+
+            stopper = threading.Thread(target=_stop_network, daemon=True, name="docs_help-teardown")
+            stopper.start()
+            stopper.join(timeout_s)
+            with contextlib.suppress(Exception):
+                app.controller = None
         with contextlib.suppress(Exception):
-            dashboard.destroy()
+            app.quit()
         with contextlib.suppress(Exception):
-            app.dashboard = None
-    ctrl = getattr(app, "controller", None)
-    if ctrl is not None:
-        with contextlib.suppress(Exception):
-            ctrl.stop_scp()
-        with contextlib.suppress(Exception):
-            ctrl.anonymizer.stop()
-        with contextlib.suppress(Exception):
-            app.controller = None
-    with contextlib.suppress(Exception):
-        app.quit()
-    with contextlib.suppress(Exception):
-        app.destroy()
+            app.destroy()
+    except KeyboardInterrupt:
+        hard_exit()
 
 
 def _existing(path: Path) -> Path | None:
@@ -246,6 +273,9 @@ def run_language(
 
     work_dir = CAPTURE_WORK / language
     if work_dir.exists():
+        from docs_help.fixture_cache import harvest_tseg_cache_from_tree
+
+        harvest_tseg_cache_from_tree(work_dir)
         shutil.rmtree(work_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
     logs_dir = _prepare_environment(work_dir)
@@ -298,14 +328,26 @@ def run_language(
                     raise RuntimeError("Welcome must run before project open")
                 result = handler(ctx, shot)
                 _record(ctx, result)
+            except KeyboardInterrupt:
+                from docs_help.interrupt import hard_exit
+
+                hard_exit()
             except Exception as exc:
                 detail = f"{type(exc).__name__}: {exc}"
                 logger.error("%s failed: %s\n%s", shot.id, detail, traceback.format_exc())
                 status = "soft_fail" if shot.soft else "hard_fail"
                 _record(ctx, ShotResult(shot.id, status, detail))
+    except KeyboardInterrupt:
+        from docs_help.interrupt import hard_exit
+
+        hard_exit()
     finally:
         try:
             _teardown_capture_app(app)
+        except KeyboardInterrupt:
+            from docs_help.interrupt import hard_exit
+
+            hard_exit()
         except Exception:
             logger.exception("teardown failed")
         if not keep_work and work_dir.exists():

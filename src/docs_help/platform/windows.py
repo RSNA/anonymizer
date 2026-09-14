@@ -1,12 +1,13 @@
-"""Windows-only window capture via the visible DWM frame, with ImageGrab fallback.
+"""Windows-only window capture via PrintWindow, with ImageGrab fallback.
 
 Importing this module on non-Windows hosts is safe; Win32 APIs load lazily.
 
 PrintWindow copies ``GetWindowRect``, which on Vista+ includes an *invisible*
-resize/shadow margin. That region is not on screen; PrintWindow fills it with
-opaque black (the U-shaped frame on left/right/bottom). macOS ``screencapture
--l -o`` never includes that margin. Docs grabs therefore copy the DWM visible
-frame (``DWMWA_EXTENDED_FRAME_BOUNDS``) so the PNG is the window chrome only.
+resize/shadow margin filled with opaque black. macOS ``screencapture -l -o``
+never includes that margin. Docs grabs crop that bitmap to
+``DWMWA_EXTENDED_FRAME_BOUNDS`` so the PNG is the window chrome only — not a
+screen BitBlt of the DWM rect, which would include desktop pixels around
+rounded corners (white in Cursor, black on a dark desktop).
 """
 
 from __future__ import annotations
@@ -29,6 +30,24 @@ _SRCCOPY = 0x00CC0020
 _DPI_PER_MONITOR_V2 = -4
 
 
+def _hwnd_from_winfo_id(wid: Any) -> int:
+    """Tk ``winfo_id()`` may be an int, decimal/hex str, or raw HWND bytes."""
+    if isinstance(wid, int):
+        return wid
+    if isinstance(wid, (bytes, bytearray, memoryview)):
+        raw = bytes(wid)
+        if not raw:
+            raise ValueError("empty HWND bytes")
+        return int.from_bytes(raw, "little")
+    text = str(wid).strip()
+    if text.lower().startswith("0x"):
+        return int(text, 16)
+    try:
+        return int(text, 10)
+    except ValueError:
+        return int(text, 16)
+
+
 def _find_hwnd(widget: Any) -> int | None:
     """Resolve the Win32 HWND for a Tk/CTk toplevel when possible.
 
@@ -44,11 +63,10 @@ def _find_hwnd(widget: Any) -> int | None:
         from ctypes.wintypes import HWND
 
         widget.update_idletasks()
-        wid = int(widget.winfo_id())
+        current = _hwnd_from_winfo_id(widget.winfo_id())
         user32 = windll.user32
         GWL_STYLE = -16
         WS_CHILD = 0x40000000
-        current = int(HWND(wid))
         get_style = getattr(user32, "GetWindowLongPtrW", None) or user32.GetWindowLongW
         while current:
             style = int(get_style(HWND(current), GWL_STYLE))
@@ -176,7 +194,10 @@ def _hbitmap_to_image(gdi32: Any, mem_dc: int, bmp: int, width: int, height: int
     buf_len = width * height * 4
     buf = (ctypes.c_ubyte * buf_len)()
     gdi32.GetDIBits(mem_dc, bmp, 0, height, byref(buf), byref(bmi), 0)
-    return Image.frombuffer("RGB", (width, height), bytes(buf), "raw", "BGRX", 0, 1)
+    # RGBA so shared normalize_for_docs letterboxes like macOS screencapture.
+    return Image.frombuffer("RGB", (width, height), bytes(buf), "raw", "BGRX", 0, 1).convert(
+        "RGBA"
+    )
 
 
 def _bitblt_screen(bounds: tuple[int, int, int, int]) -> Image.Image | None:
@@ -247,37 +268,40 @@ def _printwindow_bitmap(hwnd: int, window: tuple[int, int, int, int]) -> Image.I
 
 
 def _capture_hwnd(hwnd: int) -> Image.Image | None:
-    """Capture the on-screen window frame (no invisible DWM resize margin)."""
+    """Capture the window's own pixels (no desktop around rounded corners).
+
+    PrintWindow renders the HWND; ``GetWindowRect`` is larger than the visible
+    DWM frame, so the bitmap is cropped with that geometry (not an edge trim).
+    Screen BitBlt is last-resort only — it copies whatever is behind the window
+    (white Cursor canvas, wallpaper) into the PNG.
+    """
     if sys.platform != "win32":
         return None
 
     with _per_monitor_dpi():
         window = _window_rect(hwnd)
         visible = _dwm_visible_rect(hwnd)
-        target = visible or window
-        if target is None:
-            return None
-
-        image = _bitblt_screen(target)
-        if image is not None:
-            return image
-
         if window is None:
             return None
+
         image = _printwindow_bitmap(hwnd, window)
-        if image is None:
-            return None
-        if visible is not None:
+        if image is not None and visible is not None:
             crop = crop_box_for_visible_frame(window, visible)
             if crop is not None and crop != (0, 0, image.size[0], image.size[1]):
                 image = image.crop(crop)
-        if is_blank_capture(image):
-            return None
-        return image
+        if image is not None and not is_blank_capture(image):
+            return image
+
+        target = visible or window
+        image = _bitblt_screen(target)
+        if image is not None:
+            logger.warning("Win32 hwnd=%s fell back to screen BitBlt size=%s", hwnd, image.size)
+            return image
+        return None
 
 
 def capture_window(widget: Any, dest: Any, label: str) -> Image.Image | None:
-    """Capture a Tk/CTk window on Windows via the visible DWM frame when possible."""
+    """Capture a Tk/CTk window on Windows via PrintWindow cropped to the DWM frame."""
     hwnd = _find_hwnd(widget)
     if hwnd is None:
         return None
@@ -296,3 +320,11 @@ def capture_bbox(bbox: tuple[int, int, int, int], dest_hint: Any = None) -> Imag
     """Windows bbox grab via ImageGrab."""
     del dest_hint
     return capture_bbox_imagegrab(bbox)
+
+
+def capture_screen(dest_hint: Any = None) -> Image.Image | None:
+    """Full-screen grab via ImageGrab."""
+    from PIL import ImageGrab
+
+    del dest_hint
+    return ImageGrab.grab()

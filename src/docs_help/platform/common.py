@@ -31,13 +31,18 @@ def screen_capture_available() -> bool:
 
 def settle(widget: Any, ms: int = 400) -> None:
     """Pump Tk events so layout and paints complete before capture."""
-    widget.update_idletasks()
-    widget.update()
-    deadline = time.monotonic() + (ms / 1000.0)
-    while time.monotonic() < deadline:
+    from docs_help.interrupt import hard_exit
+
+    try:
         widget.update_idletasks()
         widget.update()
-        time.sleep(0.02)
+        deadline = time.monotonic() + (ms / 1000.0)
+        while time.monotonic() < deadline:
+            widget.update_idletasks()
+            widget.update()
+            time.sleep(0.02)
+    except KeyboardInterrupt:
+        hard_exit()
 
 
 def wait_mapped(widget: Any, timeout_ms: int = 1500) -> None:

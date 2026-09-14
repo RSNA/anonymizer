@@ -18,6 +18,7 @@ src/prototyping/
 ├── aws/             # S3 import/export helpers
 ├── build/           # packaging and CI helpers
 ├── ui/              # tkinter / CustomTkinter spikes
+│   └── windows_shot.py  # Windows HWND / PrintWindow / DWM grab comparison
 ├── scratch/         # unmaintained demos (no tests required)
 ├── _shared/         # config, storage_dir, parse_log
 ├── dev_anonymizer.py              # hot-reload launcher for UI work

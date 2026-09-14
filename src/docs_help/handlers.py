@@ -653,6 +653,7 @@ def shot_query_retrieve_ready(ctx: CaptureContext, shot: ShotSpec) -> ShotResult
         except Exception:
             pass
         settle(view, max(ctx.settle_ms, 500))
+        _set_query_move_level(view, "STUDY")
         dest = ctx.grab(view, shot, geometry=geometry, settle_ms=max(ctx.settle_ms, 600))
         return ShotResult(shot.id, "ok", f"QueryRetrieve ready {geometry}", dest)
     finally:
@@ -687,6 +688,35 @@ def _select_query_patient(view: Any, name_substr: str) -> str:
                 view._tree_select(None)
             return str(iid)
     raise RuntimeError(f"No query row matching PatientName containing {name_substr!r}")
+
+
+def _set_query_move_level(view: Any, level: str) -> None:
+    """Set QueryView Move Level (``STUDY`` / ``SERIES`` / ``INSTANCE``)."""
+    from anonymizer.utils.translate import _ as tr
+
+    if hasattr(view, "_move_level_var"):
+        view._move_level_var.set(tr(level))
+
+
+def _close_query_windows(ctx: CaptureContext, view: Any) -> None:
+    """Destroy QueryView and any Import Studies dialog so later shots are not blocked."""
+    from anonymizer.view.project.import_studies_dialog import ImportStudiesDialog
+
+    parents = []
+    with contextlib.suppress(Exception):
+        parents.append(view)
+    with contextlib.suppress(Exception):
+        parents.append(ctx.app)
+    for parent in parents:
+        with contextlib.suppress(Exception):
+            for widget in list(parent.winfo_children()):
+                if isinstance(widget, ImportStudiesDialog):
+                    with contextlib.suppress(Exception):
+                        widget.grab_release()
+                    close_toplevel(widget)
+    close_toplevel(view)
+    with contextlib.suppress(Exception):
+        ctx.app.query_view = None
 
 
 def _shot_by_id(ctx: CaptureContext, shot_id: str) -> ShotSpec | None:
@@ -740,8 +770,7 @@ def _orthanc_ct_workflow(ctx: CaptureContext, primary: ShotSpec) -> ShotResult:
 
     if hasattr(view, "_modality_var"):
         view._modality_var.set("CT")
-    if hasattr(view, "_move_level_var"):
-        view._move_level_var.set("SERIES")
+    _set_query_move_level(view, "STUDY")
     with contextlib.suppress(Exception):
         if hasattr(view, "_show_imported_studies_switch"):
             view._show_imported_studies_switch.select()
@@ -753,6 +782,7 @@ def _orthanc_ct_workflow(ctx: CaptureContext, primary: ShotSpec) -> ShotResult:
             break
 
     if not list(view._query_results.get_children()):
+        _close_query_windows(ctx, view)
         raise RuntimeError("CT Query returned no studies from Orthanc")
 
     doe_iid = _select_query_patient(view, "Doe^Archibald")
@@ -858,12 +888,14 @@ def _orthanc_ct_workflow(ctx: CaptureContext, primary: ShotSpec) -> ShotResult:
         ctx._orthanc_imported_captured = True  # type: ignore[attr-defined]
 
     n = len(list(view._query_results.get_children()))
-    return ShotResult(
+    result = ShotResult(
         primary.id,
         "ok",
-        f"Doe^Archibald CT SERIES workflow studies={n} scp_port={ctx.app.controller.model.scp.port}",
+        f"Doe^Archibald CT STUDY workflow studies={n} scp_port={ctx.app.controller.model.scp.port}",
         query_dest,
     )
+    _close_query_windows(ctx, view)
+    return result
 
 
 def shot_orthanc_ct_query(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
@@ -1618,33 +1650,22 @@ def _open_patient_lookup_project(ctx: CaptureContext) -> None:
 
 
 def _process_before_patient_lookup(ctx: CaptureContext) -> dict[str, object]:
-    """Run Harmonize (CT head) and Remove Pixel PHI (davidson + US) before CSV export."""
+    """Apply Harmonize + pixel-PHI metadata from capture caches (no TS / EasyOCR)."""
     if getattr(ctx, "_lookup_processed", False):
         return dict(getattr(ctx, "_lookup_process_stats", {}) or {})
 
-    from pathlib import Path as _Path
-
-    from easyocr import Reader
     from pydicom import dcmread
 
     from anonymizer.controller.ai.harmonize.pipeline import (
         apply_harmonized_description,
         harmonize_and_apply_series,
     )
-    from anonymizer.controller.ai.remove_pixel_phi import (
-        OCR_LANGS,
-        OCR_MODEL_DIR,
-        apply_instance_pixel_phi_for_dcm,
-        download_ocr_models,
-        ocr_models_ready,
-        remove_pixel_phi,
-        _ocr_use_gpu,
-    )
+    from anonymizer.controller.ai.remove_pixel_phi import apply_instance_pixel_phi_for_dcm
+    from docs_help.fixture_cache import cached_pixel_phi_labels, tseg_anatomy_cache_ready
 
     controller = ctx.app.controller
     anon = controller.anonymizer.model
     images = controller.model.images_dir()
-    project_dir = _Path(controller.model.storage_dir)
     stats: dict[str, object] = {
         "harmonize": "",
         "pixel_phi_series": 0,
@@ -1654,24 +1675,16 @@ def _process_before_patient_lookup(ctx: CaptureContext) -> dict[str, object]:
     brain = series_for_fixture(images, "CT_Head_With_Contrast")
     if brain is None:
         raise RuntimeError("CT head series missing for Patient Lookup processing")
-    outcome = harmonize_and_apply_series(brain, anon_model=anon)
-    stats["harmonize"] = f"{outcome.status}:{outcome.message}"
-    if outcome.status == "failed":
-        # Still mark processed so the CSV demo shows SeriesHarmonized=Yes if models unavailable.
-        ds = dcmread(next(brain.glob("*.dcm")), stop_before_pixels=True, force=True)
-        label = str(getattr(ds, "SeriesDescription", "") or "").strip() or "Brain Ax EarlyArt"
-        if "BRAIN" in label.upper() or "EARLYART" in label.upper() or not label:
-            label = "Brain Ax EarlyArt"
-        apply_harmonized_description(brain, label, anon)
-        stats["harmonize"] = f"fallback:{label} ({outcome.message})"
+    if tseg_anatomy_cache_ready(brain):
+        outcome = harmonize_and_apply_series(brain, anon_model=anon)
+        stats["harmonize"] = f"{outcome.status}:{outcome.message}"
+        if outcome.status == "failed":
+            apply_harmonized_description(brain, "Brain Ax EarlyArt", anon)
+            stats["harmonize"] = f"fallback:Brain Ax EarlyArt ({outcome.message})"
+    else:
+        apply_harmonized_description(brain, "Brain Ax EarlyArt", anon)
+        stats["harmonize"] = "cache_miss:Brain Ax EarlyArt"
 
-    if not ocr_models_ready():
-        download_ocr_models()
-    reader = Reader(
-        lang_list=list(OCR_LANGS),
-        model_storage_directory=str(OCR_MODEL_DIR),
-        gpu=_ocr_use_gpu(),
-    )
     pixel_series = 0
     pixel_instances = 0
     for fixture in ("davidson_cxr", "us_rgb_single_frame"):
@@ -1684,14 +1697,10 @@ def _process_before_patient_lookup(ctx: CaptureContext) -> dict[str, object]:
         series_uid = str(
             getattr(dcmread(dcms[0], stop_before_pixels=True, force=True), "SeriesInstanceUID", "") or ""
         )
+        labels = cached_pixel_phi_labels(fixture)
         any_text = False
         for dcm_path in dcms:
-            _modified, texts, _changed = remove_pixel_phi(
-                dcm_path,
-                reader,
-                project_dir=project_dir,
-            )
-            if texts and apply_instance_pixel_phi_for_dcm(anon, dcm_path, texts):
+            if labels and apply_instance_pixel_phi_for_dcm(anon, dcm_path, labels):
                 pixel_instances += 1
                 any_text = True
         if series_uid:
@@ -1926,8 +1935,6 @@ def _series_view_for_fixture(ctx: CaptureContext, fixture: str):
 
 def shot_process_remove_pixel(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     """Series View OCR workflow: detect and/or remove burned-in text."""
-    import time
-
     from anonymizer.controller.ai.remove_pixel_phi import (
         PixelPhiRemovalMode,
         normalize_pixel_phi_removal_mode,
@@ -1982,60 +1989,19 @@ def shot_process_remove_pixel(ctx: CaptureContext, shot: ShotSpec) -> ShotResult
             settle(view, max(ctx.settle_ms, 400))
 
         if "detect_text" in actions:
-            work = getattr(view, "_ocr_work_state", None)
-            if work is not None:
-                with contextlib.suppress(Exception):
-                    work.prepare_job()
-            view.detect_text_button_clicked()
-            deadline = time.monotonic() + 180.0
-            saw_running = False
-            while time.monotonic() < deadline:
-                settle(ctx.app, 150)
-                work = getattr(view, "_ocr_work_state", None)
-                if work is not None:
-                    if work.error:
-                        raise RuntimeError(f"Detect Text failed: {work.error}")
-                    # Job may set done briefly, then on_done resets WorkState.
-                    if bool(work.done):
-                        break
-                    if (work.status or "").strip() or work.fraction > 0:
-                        saw_running = True
-                ndx = view.image_viewer.current_image_index
-                ocr = view.image_viewer.overlay_data.get(ndx)
-                texts = list(getattr(ocr, "ocr_texts", []) or []) if ocr is not None else []
-                # Overlays applied after finish (WorkState often already reset).
-                if texts and saw_running:
-                    break
-                status_msg = ""
-                try:
-                    if hasattr(view, "_status_label"):
-                        status_msg = str(view._status_label.cget("text") or "")
-                except Exception:
-                    status_msg = ""
-                if "detection complete" in status_msg.casefold():
-                    break
-                try:
-                    from anonymizer.utils.translate import _
+            from docs_help.fixture_cache import apply_cached_ocr_detections
 
-                    done_tr = str(_("Text detection complete")).strip().casefold()
-                    if done_tr and done_tr in status_msg.casefold():
-                        break
-                except Exception:
-                    pass
-            else:
-                raise RuntimeError("Timed out waiting for Detect Text")
+            detection_count = apply_cached_ocr_detections(view, fixture)
             settle(view, max(ctx.settle_ms, 700))
-            try:
-                view._refresh_ocr_toolbar_buttons()
-            except Exception:
-                pass
-            # Detect-only shots must show green rectangles (result), not the busy status.
             if "remove_text" not in actions:
                 ndx = view.image_viewer.current_image_index
                 ocr = view.image_viewer.overlay_data.get(ndx)
                 texts = list(getattr(ocr, "ocr_texts", []) or []) if ocr is not None else []
                 if not texts:
-                    raise RuntimeError("Detect Text shot expected green OCR overlays, found none")
+                    raise RuntimeError(
+                        f"Detect Text shot expected green OCR overlays from cache, found none "
+                        f"(cached={detection_count})"
+                    )
                 settle(view, 500)
 
         if "remove_text" in actions:
@@ -2102,14 +2068,15 @@ def shot_process_remove_pixel(ctx: CaptureContext, shot: ShotSpec) -> ShotResult
 
 def shot_process_harmonize_description(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     """Series View above completed Harmonize Description results (CT or planar)."""
-    import concurrent.futures
-
+    from docs_help.fixture_cache import tseg_anatomy_cache_ready
     from docs_help.harmonize import (
         BrainPromptPolicy,
         close_harmonize_session,
         ensure_xr_planar_models,
         grab_series_with_overlays,
         layout_series_above_harmonize,
+        open_series_view,
+        precompute_harmonize_cache,
         prepare_series_for_harmonize,
         run_harmonize_to_results,
     )
@@ -2131,30 +2098,29 @@ def shot_process_harmonize_description(ctx: CaptureContext, shot: ShotSpec) -> S
         clear_cache=False,
     )
     try:
-        # Bound the wait so a stuck TotalSegmentator pass cannot hang capture forever.
-        # Soft shots (CT Harmonize Description) fall back to macOS in the docs site.
-        timeout_s = 240.0 if "CT_Head" in fixture or "ct_head" in fixture.lower() else 900.0
-
-        def _run() -> Any:
-            return run_harmonize_to_results(
-                session,
-                policy=BrainPromptPolicy.AUTO_NO,
-                timeout_s=timeout_s,
+        is_ct = "CT_Head" in fixture or "ct_head" in fixture.lower()
+        if is_ct and not tseg_anatomy_cache_ready(session.series_path):
+            close_toplevel(session.series_view)
+            session.series_view = None
+            precompute_harmonize_cache(
+                session.series_path,
+                anon_model=ctx.app.controller.anonymizer.model,
+                fixture=fixture,
             )
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(_run)
-            try:
-                hv = future.result(timeout=timeout_s + 30.0)
-            except concurrent.futures.TimeoutError as exc:
-                msg = f"Harmonize timed out after {timeout_s:.0f}s (likely stuck TotalSegmentator)"
-                logger.error("%s", msg)
-                if shot.soft:
-                    return ShotResult(shot.id, "soft_fail", msg)
-                raise TimeoutError(msg) from exc
+            session.series_view = open_series_view(ctx, session.series_path)
+        timeout_s = 120.0 if is_ct else 900.0
+        hv = run_harmonize_to_results(
+            session,
+            policy=BrainPromptPolicy.AUTO_NO,
+            timeout_s=timeout_s,
+        )
         layout_series_above_harmonize(session.series_view, hv, peek_px=240)
         dest = grab_series_with_overlays(ctx, session.series_view, hv, shot=shot)
         return ShotResult(shot.id, "ok", f"{fixture}:results+series", dest)
+    except KeyboardInterrupt:
+        from docs_help.interrupt import hard_exit
+
+        hard_exit()
     except Exception as exc:
         if shot.soft:
             logger.warning("Process_Harmonize_Description soft-fail: %s", exc)
@@ -2169,21 +2135,15 @@ def shot_process_harmonize_brain_prompt(ctx: CaptureContext, shot: ShotSpec) -> 
     from docs_help.harmonize import (
         capture_brain_prompt_over_harmonize,
         close_harmonize_session,
-        ensure_brain_structures_models,
         prepare_series_for_harmonize,
     )
 
     fixture = _fixture_from_deps(shot.deps) or "CT_Head_With_Contrast"
-    # Prefer live prompt when models exist; otherwise stand-in copy is used.
-    try:
-        ensure_brain_structures_models()
-    except Exception as exc:
-        logger.warning("Brain models for prompt shot: %s", exc)
     session = prepare_series_for_harmonize(
         ctx,
         fixture,
         import_fixtures=_import_fixtures,
-        clear_cache=True,
+        clear_cache=False,
     )
     try:
         dest = capture_brain_prompt_over_harmonize(ctx, session, shot, answer=False)
@@ -2202,7 +2162,6 @@ def shot_process_harmonize_segmented_series(ctx: CaptureContext, shot: ShotSpec)
     import gc
 
     from docs_help.harmonize import (
-        clear_series_analysis_cache,
         goto_middle_slice,
         grab_series_with_overlays,
         latch_brain_and_detail_overlays,
@@ -2225,13 +2184,11 @@ def shot_process_harmonize_segmented_series(ctx: CaptureContext, shot: ShotSpec)
         if series_has_brain_structure_cache(series_path):
             logger.info("Reusing existing brain-structure cache under %s", series_path)
         else:
-            series_view = open_series_view(ctx, series_path)
-            clear_series_analysis_cache(series_view)
-            close_toplevel(series_view)
-            series_view = None
+            logger.info("Brain-structure masks missing; precompute without clearing anatomy cache")
             precompute_brain_harmonize_cache(
                 series_path,
                 anon_model=ctx.app.controller.anonymizer.model,
+                fixture=fixture,
             )
             try:
                 from anonymizer.controller.ai.tseg.model_cache import clear_predictor_cache

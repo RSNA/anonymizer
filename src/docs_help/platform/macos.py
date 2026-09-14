@@ -202,7 +202,7 @@ def capture_bbox(bbox: tuple[int, int, int, int], dest_hint: Path | None = None)
         return capture_bbox_imagegrab(bbox)
     except Exception:
         pass
-    cli_full = capture_via_screencapture_cli(dest_hint)
+    cli_full = capture_screen(dest_hint)
     if cli_full is not None:
         fx2, fy2 = cli_full.size
         crop_box = (
@@ -213,3 +213,13 @@ def capture_bbox(bbox: tuple[int, int, int, int], dest_hint: Path | None = None)
         )
         return cli_full.crop(crop_box)
     return capture_bbox_imagegrab(bbox)
+
+
+def capture_screen(dest_hint: Path | None = None) -> Image.Image | None:
+    """Full-screen grab via screencapture CLI, then ImageGrab."""
+    from PIL import ImageGrab
+
+    image = capture_via_screencapture_cli(dest_hint)
+    if image is not None:
+        return image
+    return ImageGrab.grab()

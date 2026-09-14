@@ -43,6 +43,10 @@ uv run python -m docs_help --language en_US --force --only Welcome
 
 `--platform auto` (default) uses the host OS. Cross-OS capture is refused.
 
+Harmonize shots reuse a saved TotalSegmentator `0_TS_SEG` tree under
+`docs/.capture_work/fixture_cache/` (gitignored). Detect Text shots apply
+committed boxes in `src/docs_help/ocr_cache/` instead of running EasyOCR.
+
 Markdown embeds the macOS path (`shots/macos/….png`). The published site’s
 `docs/javascripts/os_shots.js` swaps to `shots/windows/` for Windows visitors,
 falling back to macOS if a Windows PNG is missing.

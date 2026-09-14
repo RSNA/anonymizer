@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from docs_help.capture import CAPTURE_WORK, ShotResult, _existing, run_language
+from docs_help.interrupt import hard_exit, install_hard_interrupt
 from docs_help.manifest import load_manifest
 from docs_help.platform import require_host_platform, screen_capture_available
 
@@ -16,6 +17,15 @@ logger = logging.getLogger("docs_help")
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Capture help screenshots into ``docs/<lang>/<workflow>/shots/<os>/``."""
+    install_hard_interrupt()
+    try:
+        return _main(argv)
+    except KeyboardInterrupt:
+        hard_exit()
+
+
+def _main(argv: list[str] | None = None) -> int:
     """Capture help screenshots into ``docs/<lang>/<workflow>/shots/<os>/``."""
     manifest = load_manifest()
     parser = argparse.ArgumentParser(

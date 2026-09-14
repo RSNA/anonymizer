@@ -483,6 +483,7 @@ def precompute_harmonize_cache(
     anon_model=None,
     *,
     include_brain_structures: bool = False,
+    fixture: str = "CT_Head_With_Contrast",
 ) -> None:
     """Run Harmonize without Tk so TotalSegmentator is not nested under the UI.
 
@@ -510,47 +511,78 @@ def precompute_harmonize_cache(
     seg_dir = series_path / "0_TS_SEG" / "seg"
     if not seg_dir.is_dir() or not any(seg_dir.glob("*.nii.gz")):
         raise RuntimeError(f"Harmonize precompute left no seg masks under {seg_dir}")
+    from docs_help.fixture_cache import save_tseg_cache
+
+    save_tseg_cache(series_path, fixture)
     logger.info("Precompute complete for %s", series_path)
 
 
-def precompute_brain_harmonize_cache(series_path: Path, anon_model=None) -> None:
-    """Run Harmonize+brain structures without Tk (avoids TS/Tk segfaults during capture)."""
+def precompute_brain_harmonize_cache(
+    series_path: Path,
+    anon_model=None,
+    *,
+    fixture: str = "CT_Head_With_Contrast",
+) -> None:
+    """Ensure brain-structure masks exist without re-running anatomy TotalSegmentator.
+
+    Help capture seeds ``0_TS_SEG`` from ``docs/.capture_work/fixture_cache/``. The
+    Harmonize pipeline would otherwise re-run ``total`` when brain masks are
+    missing; this path reuses anatomy+NIfTI and only runs ``brain_structures``.
+    """
     from anonymizer.controller.ai.harmonize.pipeline import harmonize_series
     from anonymizer.controller.ai.tseg.config import BRAIN_STRUCTURE_FILES
-    from anonymizer.controller.ai.tseg.segment import run_brain_structures_segmentation
+    from anonymizer.controller.ai.tseg.segment import dicom_series_to_nifti, run_brain_structures_segmentation
+    from docs_help.fixture_cache import save_tseg_cache, tseg_anatomy_cache_ready
+
+    series_path = Path(series_path)
+    if series_has_brain_structure_cache(series_path):
+        logger.info("Brain-structure cache already present under %s", series_path)
+        save_tseg_cache(series_path, fixture)
+        return
 
     ensure_brain_structures_models()
-    logger.info("Precomputing Harmonize+brain cache for %s", series_path)
-    results = harmonize_series(
-        [series_path],
-        include_brain_structures=True,
-        anon_model=anon_model,
-    )
-    if not results:
-        raise RuntimeError("harmonize_series returned no results")
-    err = getattr(results[0], "error", None)
-    if err:
-        raise RuntimeError(f"harmonize_series failed: {err}")
+    ts_dir = series_path / "0_TS_SEG"
+    nifti = ts_dir / "volume.nii.gz"
+    seg_dir = ts_dir / "seg"
 
-    seg_dir = series_path / "0_TS_SEG" / "seg"
-    nifti = series_path / "0_TS_SEG" / "volume.nii.gz"
-    present = [n for n in BRAIN_STRUCTURE_FILES if (seg_dir / f"{n}.nii.gz").is_file()]
-    if len(present) < 8:
+    if tseg_anatomy_cache_ready(series_path):
         if not nifti.is_file():
-            raise RuntimeError(
-                f"Harmonize finished without brain structures ({len(present)} masks) "
-                f"and volume.nii.gz is missing under {series_path / '0_TS_SEG'}"
-            )
-        logger.warning(
-            "Harmonize left only %d brain-structure masks; forcing brain_structures task",
-            len(present),
-        )
+            logger.info("Anatomy cache has no NIfTI; converting DICOM only for %s", series_path)
+            ts_dir.mkdir(parents=True, exist_ok=True)
+            dicom_series_to_nifti(series_path, nifti)
+        logger.info("Reusing TS anatomy cache; running brain_structures only for %s", series_path)
         run_brain_structures_segmentation(nifti, seg_dir)
+    else:
+        logger.info("Precomputing Harmonize+brain cache for %s", series_path)
+        results = harmonize_series(
+            [series_path],
+            include_brain_structures=True,
+            anon_model=anon_model,
+        )
+        if not results:
+            raise RuntimeError("harmonize_series returned no results")
+        err = getattr(results[0], "error", None)
+        if err:
+            raise RuntimeError(f"harmonize_series failed: {err}")
         present = [n for n in BRAIN_STRUCTURE_FILES if (seg_dir / f"{n}.nii.gz").is_file()]
+        if len(present) < 8:
+            if not nifti.is_file():
+                raise RuntimeError(
+                    f"Harmonize finished without brain structures ({len(present)} masks) "
+                    f"and volume.nii.gz is missing under {ts_dir}"
+                )
+            logger.warning(
+                "Harmonize left only %d brain-structure masks; forcing brain_structures task",
+                len(present),
+            )
+            run_brain_structures_segmentation(nifti, seg_dir)
+
+    present = [n for n in BRAIN_STRUCTURE_FILES if (seg_dir / f"{n}.nii.gz").is_file()]
     if len(present) < 8:
         raise RuntimeError(
             f"Expected ≥8 brain-structure masks after precompute; got {len(present)}: {present}"
         )
+    save_tseg_cache(series_path, fixture)
     logger.info("Precompute complete for %s (%d brain-structure masks)", series_path, len(present))
 
 
@@ -854,7 +886,7 @@ def prepare_series_for_harmonize(
     fixture: str,
     *,
     import_fixtures: Callable[..., None],
-    clear_cache: bool = True,
+    clear_cache: bool = False,
 ) -> HarmonizeCaptureSession:
     """Import fixture, open Series View, optionally clear prior Harmonize cache."""
     import_fixtures(ctx, fixture)
@@ -1007,11 +1039,18 @@ def capture_brain_prompt_over_harmonize(
 
 def close_harmonize_session(session: HarmonizeCaptureSession) -> None:
     """Best-effort teardown of Harmonize + Series View."""
-    if session.brain_prompt is not None:
-        close_toplevel(session.brain_prompt)
-        session.brain_prompt = None
-    if session.harmonize_view is not None:
-        cancel_harmonize_quietly(session.harmonize_view, wait_s=3.0)
-        close_toplevel(session.harmonize_view)
-        session.harmonize_view = None
-    close_toplevel(session.series_view)
+    from docs_help.interrupt import hard_exit
+
+    try:
+        if session.brain_prompt is not None:
+            close_toplevel(session.brain_prompt)
+            session.brain_prompt = None
+        if session.harmonize_view is not None:
+            cancel_harmonize_quietly(session.harmonize_view, wait_s=0.2)
+            close_toplevel(session.harmonize_view)
+            session.harmonize_view = None
+        if session.series_view is not None:
+            close_toplevel(session.series_view)
+            session.series_view = None
+    except KeyboardInterrupt:
+        hard_exit()

@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any, Literal
 
-from PIL import Image, ImageGrab
+from PIL import Image
 
 from docs_help.platform import common
 from docs_help.platform.common import (
@@ -102,10 +102,10 @@ def grab_widget(
     geometry: str | None = None,
     normalize: bool = True,
 ) -> Path:
-    """Capture a Tk/CTk toplevel (or root) and write PNG (RGBA on macOS when possible).
+    """Capture a Tk/CTk toplevel (or root) and write a PNG.
 
     Set ``normalize=False`` when the caller will composite several grabs first
-    (letterboxing a small dialog to 960px before paste creates white slabs).
+    (letterboxing a small dialog to 960px before paste creates empty slabs).
     """
     dest.parent.mkdir(parents=True, exist_ok=True)
     backend = _backend()
@@ -179,13 +179,7 @@ def grab_widget(
                     image = candidate
                     break
                 try:
-                    full = None
-                    if detect_os() == "macos":
-                        from docs_help.platform.macos import capture_via_screencapture_cli
-
-                        full = capture_via_screencapture_cli(dest)
-                    if full is None:
-                        full = ImageGrab.grab()
+                    full = backend.capture_screen(dest)
                     if full is not None and not is_blank_capture(full):
                         fx2, fy2 = full.size
                         crop = (

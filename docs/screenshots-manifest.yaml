@@ -184,15 +184,15 @@ workflows:
         window: ImportStudiesDialog
         severity: orthanc
         deps: [project, orthanc]
-        ux_elements: [Move Level SERIES, Metadata progress, Image progress, Import Finished, Close]
-        caption: "Import Studies dialog — CT series C-MOVE of Doe^Archibald finished."
+        ux_elements: [Move Level STUDY, Metadata progress, Image progress, Import Finished, Close]
+        caption: "Import Studies dialog — CT study C-MOVE of Doe^Archibald finished."
       - id: OrthancCT_Imported
         file: OrthancCT_Imported.png
         window: QueryView
         severity: orthanc
         deps: [project, orthanc]
-        ux_elements: [Green imported row, Imported count, Move Level SERIES]
-        caption: "Doe^Archibald CT series import complete — green row and Imported count."
+        ux_elements: [Green imported row, Imported count, Move Level STUDY]
+        caption: "Doe^Archibald CT study import complete — green row and Imported count."
 
   - id: 07-view
     doc: 07-view/index.md

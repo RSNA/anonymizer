@@ -11,7 +11,7 @@ For authors updating this manual.
 - **Catalog:** [`docs/screenshots-manifest.yaml`](../screenshots-manifest.yaml) lists every UX element and shot
 - **Scale / resolution:** capture stores **logical UI points** (Retina 2× → 1 PNG px ≈ 1 app pt), then `normalize_for_docs` forces every PNG to **`DOCS_SHOT_MAX_WIDTH`** (960): wide windows downscale, narrow dialogs letterbox (no UI upscale). Same file width ⇒ same MkDocs scale ⇒ matching smallest UI text across pages.
 - **No shadows:** macOS grabs use `screencapture -o` (omit window shadow); residual soft fringe is stripped before save. Do not ship shots with drop shadows.
-- **Corners:** macOS uses window-ID capture (`screencapture -l`) so PNGs keep rounded corners and alpha; Windows uses PrintWindow / BitBlt
+- **Corners:** macOS uses window-ID capture (`screencapture -l`) so PNGs keep rounded corners and alpha; Windows uses PrintWindow of the HWND cropped to the DWM visible frame (not a screen BitBlt, which would include the desktop)
 
 ## Workflow folders
 
