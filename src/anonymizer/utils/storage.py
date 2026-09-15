@@ -22,7 +22,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.workbook.child import _WorkbookChild
 from openpyxl.worksheet.worksheet import Worksheet
 
-from anonymizer.utils.translate import _, get_current_language_code
+from anonymizer.utils.translate import _, get_current_language_code, locales_dir
 
 logger = logging.getLogger(__name__)
 
@@ -221,8 +221,6 @@ def read_java_anonymizer_index_xlsx(filename: str) -> list[JavaAnonymizerExporte
 
 
 def default_whitelist_path(modality_code: str) -> Path:
-    from anonymizer.utils.translate import locales_dir
-
     return locales_dir() / str(get_current_language_code() or "en_US") / "whitelists" / (modality_code.lower() + ".txt")
 
 
