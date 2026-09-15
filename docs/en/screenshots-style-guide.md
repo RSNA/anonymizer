@@ -28,7 +28,9 @@ docs/en/08-process/05-run-on-many-studies/shots/{macos,windows}/
 docs/en/09-send/shots/{macos,windows}/
 ```
 
-Markdown embeds the **macOS** path (site JS swaps to Windows for Windows visitors):
+Markdown embeds the **macOS** path under the current language. Site JS swaps only
+`shots/macos/` → `shots/windows/` for Windows visitors; if the Windows PNG is
+missing, it falls back to the **same-language** macOS shot (never English):
 
 `![…](shots/macos/Welcome.png)`
 

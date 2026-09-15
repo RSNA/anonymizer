@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import tkinter as tk
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
@@ -19,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 CatalogKind = Literal["radlex", "loinc"]
 
+ExpandCatalogLoader = Callable[[], tuple[list[str], dict[str, str | None]]]
+
 
 @dataclass(frozen=True)
 class SetDescriptionDialogResult:
@@ -27,15 +30,29 @@ class SetDescriptionDialogResult:
     loinc_number: str | None = None
 
 
-def _catalog_label(kind: CatalogKind, modality: str = "") -> str:
+def _catalog_label(kind: CatalogKind, modality: str = "", *, full: bool = False) -> str:
     mod = (modality or "").strip()
     if kind == "loinc":
+        if full:
+            if mod:
+                return _("Full {modality} LOINC study catalog").format(modality=mod)
+            return _("Full LOINC study catalog")
         if mod:
-            return _("{modality} LOINC study descriptions").format(modality=mod)
-        return _("LOINC study descriptions")
+            return _("{modality} LOINC study descriptions (closest matches)").format(modality=mod)
+        return _("LOINC study descriptions (closest matches)")
+    if full:
+        if mod:
+            return _("Full {modality} RadLex Playbook catalog").format(modality=mod)
+        return _("Full RadLex Playbook catalog")
     if mod:
-        return _("{modality} RadLex Playbook series descriptions").format(modality=mod)
-    return _("RadLex Playbook series descriptions")
+        return _("{modality} RadLex Playbook series descriptions (closest matches)").format(modality=mod)
+    return _("RadLex Playbook series descriptions (closest matches)")
+
+
+def _expand_button_label(kind: CatalogKind) -> str:
+    if kind == "loinc":
+        return _("Show full LOINC catalog…")
+    return _("Show full RadLex catalog…")
 
 
 def _find_theme_host(widget: tk.Misc) -> tk.Misc | None:
@@ -94,6 +111,8 @@ class SetDescriptionDialog(AppToplevel):
         initial: str,
         catalog_kind: CatalogKind,
         modality: str = "",
+        expand_loader: ExpandCatalogLoader | None = None,
+        showing_full_catalog: bool = False,
     ):
         super().__init__(master=parent)
         self.title(title)
@@ -102,6 +121,10 @@ class SetDescriptionDialog(AppToplevel):
         self._choices = list(choices)
         self._filtered = list(choices)
         self._closing = False
+        self._catalog_kind = catalog_kind
+        self._modality = modality
+        self._expand_loader = expand_loader
+        self._showing_full_catalog = showing_full_catalog
 
         self.resizable(True, True)
         self.columnconfigure(0, weight=1)
@@ -109,14 +132,12 @@ class SetDescriptionDialog(AppToplevel):
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
 
-        self._create_widgets(hint=hint, catalog_kind=catalog_kind, initial=initial, modality=modality)
+        self._create_widgets(hint=hint, initial=initial)
         self.wait_visibility()
         self.lift()
         self.grab_set()
 
-    def _create_widgets(
-        self, *, hint: str, catalog_kind: CatalogKind, initial: str, modality: str
-    ) -> None:
+    def _create_widgets(self, *, hint: str, initial: str) -> None:
         pad = self.PAD
 
         body = ctk.CTkFrame(self, fg_color="transparent")
@@ -127,12 +148,17 @@ class SetDescriptionDialog(AppToplevel):
         ctk.CTkLabel(body, text=hint, anchor="w", justify="left", wraplength=self.DIALOG_WIDTH - 2 * pad).grid(
             row=0, column=0, sticky="ew", pady=(0, 4)
         )
-        ctk.CTkLabel(
+        self._catalog_label = ctk.CTkLabel(
             body,
-            text=_catalog_label(catalog_kind, modality),
+            text=_catalog_label(
+                self._catalog_kind,
+                self._modality,
+                full=self._showing_full_catalog,
+            ),
             anchor="w",
             font=ctk.CTkFont(weight="bold"),
-        ).grid(row=1, column=0, sticky="ew", pady=(0, pad))
+        )
+        self._catalog_label.grid(row=1, column=0, sticky="ew", pady=(0, pad))
 
         self._filter_var = tk.StringVar(value="")
         filter_entry = ctk.CTkEntry(body, textvariable=self._filter_var, placeholder_text=_("Filter…"))
@@ -177,8 +203,21 @@ class SetDescriptionDialog(AppToplevel):
         footer = ctk.CTkFrame(self, fg_color="transparent")
         footer.grid(row=1, column=0, sticky="ew", padx=pad, pady=(0, pad))
         footer.grid_columnconfigure(0, weight=1)
+
+        left = ctk.CTkFrame(footer, fg_color="transparent")
+        left.grid(row=0, column=0, sticky="w")
+        self._expand_button: ctk.CTkButton | None = None
+        if self._expand_loader is not None and not self._showing_full_catalog:
+            self._expand_button = ctk.CTkButton(
+                left,
+                width=200,
+                text=_expand_button_label(self._catalog_kind),
+                command=self._expand_to_full_catalog,
+            )
+            self._expand_button.pack(side="left")
+
         btn_row = ctk.CTkFrame(footer, fg_color="transparent")
-        btn_row.grid(row=0, column=0, sticky="e")
+        btn_row.grid(row=0, column=1, sticky="e")
         ctk.CTkButton(btn_row, width=100, text=_("Cancel"), command=self._on_cancel).pack(side="left", padx=(0, 8))
         self._ok_button = ctk.CTkButton(btn_row, width=100, text=_("Apply"), command=self._ok_event)
         self._ok_button.pack(side="left")
@@ -190,6 +229,39 @@ class SetDescriptionDialog(AppToplevel):
         self.geometry(f"{self.DIALOG_WIDTH}x{self.DIALOG_HEIGHT}")
         self.minsize(self.MIN_WIDTH, self.MIN_HEIGHT)
         filter_entry.focus()
+
+    def _expand_to_full_catalog(self) -> None:
+        if self._expand_loader is None or self._showing_full_catalog:
+            return
+        button = self._expand_button
+        if button is not None:
+            button.configure(state="disabled")
+        try:
+            choices, meta = self._expand_loader()
+        except Exception:
+            logger.exception("Failed to load full description catalog")
+            if button is not None:
+                with contextlib.suppress(tk.TclError):
+                    button.configure(state="normal")
+            return
+        if not choices:
+            if button is not None:
+                with contextlib.suppress(tk.TclError):
+                    button.configure(state="normal")
+            return
+        selected = self._selected_label()
+        self._choices = list(choices)
+        self._choice_meta = dict(meta)
+        self._showing_full_catalog = True
+        self._catalog_label.configure(text=_catalog_label(self._catalog_kind, self._modality, full=True))
+        if button is not None:
+            button.pack_forget()
+            button.destroy()
+            self._expand_button = None
+        # Keep filter text; refresh list around current selection when possible.
+        self._apply_filter()
+        if selected and selected in self._filtered:
+            self._populate_list(selected)
 
     def _apply_filter(self) -> None:
         needle = self._filter_var.get().strip().lower()
@@ -280,6 +352,8 @@ def show_set_description_dialog(
     initial: str = "",
     catalog_kind: CatalogKind = "radlex",
     modality: str = "",
+    expand_loader: ExpandCatalogLoader | None = None,
+    showing_full_catalog: bool = False,
 ) -> SetDescriptionDialogResult:
     meta = choice_meta or {label: None for label in choices}
     dialog = SetDescriptionDialog(
@@ -291,5 +365,7 @@ def show_set_description_dialog(
         initial=initial,
         catalog_kind=catalog_kind,
         modality=modality,
+        expand_loader=expand_loader,
+        showing_full_catalog=showing_full_catalog,
     )
     return dialog.get_input()

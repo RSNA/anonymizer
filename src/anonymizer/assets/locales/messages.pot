@@ -1117,6 +1117,42 @@ msgstr ""
 msgid "Geometry"
 msgstr ""
 
+msgid "Original acquisition"
+msgstr ""
+
+msgid "Reformatted series"
+msgstr ""
+
+msgid "3D rendering (MIP/VR)"
+msgstr ""
+
+msgid "Derived secondary capture"
+msgstr ""
+
+msgid "Unknown source"
+msgstr ""
+
+msgid "Unknown orientation"
+msgstr ""
+
+msgid "Diagnostic 3D volume"
+msgstr ""
+
+msgid "Multi-frame volume"
+msgstr ""
+
+msgid "Localizer or scout"
+msgstr ""
+
+msgid "Single slice"
+msgstr ""
+
+msgid "2D projection"
+msgstr ""
+
+msgid "Unknown series type"
+msgstr ""
+
 msgid "dominant"
 msgstr ""
 

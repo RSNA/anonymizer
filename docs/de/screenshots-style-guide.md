@@ -49,7 +49,7 @@ uv run python -m docs_help --language en_US --force --only Welcome
 - Schreibt `docs/<lang>/<chapter>/shots/<os>/`, wobei `<os>` `macos` oder `windows` ist (Host-OS; `--platform auto`)
 - **Standardmäßig fortsetzen** (`--skip-existing`); mit `--force` oder `--force-shot ID` erneut
 - Process-Demos nutzen nur **nicht-synthetische** Fixtures:
-  - **8.1** Pixel-PHI entfernen → `davidson_cxr` (schwärzen) + `us_rgb_single_frame` (einblenden + Exclude Area unter mindray)
+  - **8.1** Pixel-PHI entfernen → `davidson_cxr` (schwärzen) + `us_rgb_single_frame` (einblenden + Bereich ausschließen unter mindray)
   - **8.2** Harmonisieren → `CT_Head_With_Contrast` (Serienansicht → abgeschlossene Ergebnisse → Hirn-Prompt → segmentierter mittlerer Schnitt) + `davidson_cxr` / `us_rgb_single_frame` (planare Playbook-Quellen)
   - **8.3** Gesichtsunschärfe → `CT_Head_With_Contrast` (Gaussian)
   - **8.4** Stapel → beide Fixtures im Datensatz ausgewählt

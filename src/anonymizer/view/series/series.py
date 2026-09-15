@@ -166,6 +166,12 @@ def _option_menu_width_for_labels(values: list[str], *, height: int = 28) -> int
     return text_width + height + max(corner_radius, 3) + 6
 
 
+def _button_width_for_label(label: str, *, minimum: int = 100) -> int:
+    """Pixel width for a CTkButton so translated toolbar labels are not clipped."""
+    font = ctk.CTkFont()
+    return max(minimum, int(font.measure(label)) + 24)
+
+
 def ocr_results_available_for_edit_context(
     edit_context: OcrEditContext,
     *,
@@ -1263,12 +1269,20 @@ class SeriesView(AppCTkToplevel):
         # Present only after Detect Text; start hidden so window size matches available actions.
         self.remove_button.grid_remove()
         self.remove_text_mode_menu.grid_remove()
+        blackout_label = _("Blackout Area")
         self.blackout_button = ctk.CTkButton(
-            text_edit_group, width=self.BUTTON_WIDTH, text=_("Blackout Area"), command=self.blackout_button_clicked
+            text_edit_group,
+            width=_button_width_for_label(blackout_label, minimum=self.BUTTON_WIDTH),
+            text=blackout_label,
+            command=self.blackout_button_clicked,
         )
         self.blackout_button.grid(row=0, column=5, padx=2, pady=0)
+        exclude_label = _("Exclude Area")
         self.exclude_area_button = ctk.CTkButton(
-            text_edit_group, width=self.BUTTON_WIDTH, text=_("Exclude Area"), command=self.exclude_area_button_clicked
+            text_edit_group,
+            width=_button_width_for_label(exclude_label, minimum=self.BUTTON_WIDTH),
+            text=exclude_label,
+            command=self.exclude_area_button_clicked,
         )
         self.exclude_area_button.grid(row=0, column=6, padx=(2, self.PAD), pady=0)
 

@@ -7,7 +7,7 @@ Manche Bilder haben **Patientennamen oder Beschriftungen auf die Pixel gezeichne
 | Serie | Pfad | Verwendung |
 | --- | --- | --- |
 | **`davidson_cxr`** | `tests/controller/assets/test_dcm_files/davidson_cxr` | Whitelist → Erkennen → **Schwärzen** |
-| **`us_rgb_single_frame`** | `tests/controller/assets/test_dcm_files/us_rgb_single_frame` (`US_RGB_SingleFrame.dcm`) | Erkennen → **In den Hintergrund einblenden**; **Exclude Area** auf dem Maschinenparameter-Block unter **mindray** |
+| **`us_rgb_single_frame`** | `tests/controller/assets/test_dcm_files/us_rgb_single_frame` (`US_RGB_SingleFrame.dcm`) | Erkennen → **In den Hintergrund einblenden**; **Bereich ausschließen** auf dem Maschinenparameter-Block unter **mindray** |
 
 Jeden Ordner in Ihr Projekt importieren, dann die Serie in der **Serienansicht** öffnen.
 
@@ -15,7 +15,7 @@ Jeden Ordner in Ihr Projekt importieren, dann die Serie in der **Serienansicht**
 
 1. Auf `davidson_cxr` eingebrannten Text erkennen und PHI **schwärzen**, während nützliche Marker über die Standard-Whitelist erhalten bleiben.
 2. Auf `us_rgb_single_frame` eingebrannten Text erkennen und durch **Einblenden in den Hintergrund** (Inpaint) entfernen.
-3. Auf derselben Farb-US-Serie den nicht-PHI-Maschinenparameterstreifen mit **Exclude Area** markieren, damit Text erkennen und Text entfernen ihn überspringen.
+3. Auf derselben Farb-US-Serie den nicht-PHI-Maschinenparameterstreifen mit **Bereich ausschließen** markieren, damit Text erkennen und Text entfernen ihn überspringen.
 
 ## Bevor Sie starten
 
@@ -93,9 +93,9 @@ Diesen Farb-Ultraschall-Frame nutzen, wenn entfernter Text wie benachbartes Gewe
 
 **Text schwärzen** vs **In den Hintergrund einblenden**: Schwärzen ersetzt Text durch Schwarz; Einblenden füllt den Bereich so, dass er zum Bild darum passt. Schwärzen bevorzugen, wenn Sie eine offensichtliche, irreversible Schwärzung brauchen; Einblenden, wenn ein unauffälligeres Ergebnis akzeptabel ist (z. B. manche Ultraschall-Overlays).
 
-## Ablauf auf Farb-US (Exclude Area)
+## Ablauf auf Farb-US (Bereich ausschließen)
 
-Dieselbe Serie **`us_rgb_single_frame`** nutzen, wenn OCR Maschineneinstellungen einrahmt, die **keine PHI** sind. **Exclude Area** überspringt eine räumliche Region für Text erkennen und Text entfernen, ohne Pixel zu ändern (anders als **Bereich schwärzen**).
+Dieselbe Serie **`us_rgb_single_frame`** nutzen, wenn OCR Maschineneinstellungen einrahmt, die **keine PHI** sind. **Bereich ausschließen** überspringt eine räumliche Region für Text erkennen und Text entfernen, ohne Pixel zu ändern (anders als **Bereich schwärzen**).
 
 ### 6. Parameterblock unter mindray ausschließen
 
@@ -103,18 +103,18 @@ Auf diesem Frame sitzt ein dichter Block von Maschinenparametern (Gain, Depth, F
 
 1. **`us_rgb_single_frame`** in der Serienansicht mit Bearbeitungskontext **Frame** öffnen.
 2. Ein Rechteck über diesen Parameterblock ziehen (**mindray** und echte PHI-/Standortbeschriftungen außen lassen, wenn sie noch erkannt werden sollen). Ausstehende Zeichnungen erscheinen als **solid blaue** Rechtecke.
-3. Auf **Exclude Area** klicken. Das Rechteck wandert in die Ausschlussliste und wird als **weiße gepunktete Kontur** (ohne Füllung) neu gezeichnet.
+3. Auf **Bereich ausschließen** klicken. Das Rechteck wandert in die Ausschlussliste und wird als **weiße gepunktete Kontur** (ohne Füllung) neu gezeichnet.
 
-![Exclude Area auf us_rgb_single_frame-Parameterblock](shots/macos/Process_RemovePixel_US_Exclude_Panel.png)
+![Bereich ausschließen auf us_rgb_single_frame-Parameterblock](shots/macos/Process_RemovePixel_US_Exclude_Panel.png)
 
 4. Auf **Text erkennen** klicken. Grüne Boxen sollten auf PHI-/Herstellertext **außerhalb** des Blocks erscheinen; die Parameter-Tokens innerhalb der gepunkteten Region sollten **nicht** zur Entfernung eingerahmt werden.
 
-![Text erkennen nach Exclude Area auf us_rgb_single_frame](shots/macos/Process_RemovePixel_US_Exclude_Detect.png)
+![Text erkennen nach Bereich ausschließen auf us_rgb_single_frame](shots/macos/Process_RemovePixel_US_Exclude_Detect.png)
 
 5. Optional **In den Hintergrund einblenden** oder **Text schwärzen** wählen, dann **Text entfernen** und **Pixeländerungen speichern**.
 6. Auf ein weiß gepunktetes Rechteck klicken, um es aus der Ausschlussliste zu entfernen, wenn Sie anpassen müssen.
 
-**Whitelist** vs **Exclude Area** vs **Bereich schwärzen**: Die Whitelist behält bestimmte OCR-*Zeichenketten*; Exclude Area überspringt eine *Region* (keine Pixeländerung); Bereich schwärzen malt gezeichnete Rechtecke schwarz. Ausschlussrechtecke möglichst **vor** Text erkennen setzen (oder danach erneut erkennen). Mit Bearbeitungskontext **Series** propagiert das Zeichnen über Frames, sodass dasselbe Panel auf einer Cine-Schleife ausgeschlossen werden kann.
+**Whitelist** vs **Bereich ausschließen** vs **Bereich schwärzen**: Die Whitelist behält bestimmte OCR-*Zeichenketten*; Bereich ausschließen überspringt eine *Region* (keine Pixeländerung); Bereich schwärzen malt gezeichnete Rechtecke schwarz. Ausschlussrechtecke möglichst **vor** Text erkennen setzen (oder danach erneut erkennen). Mit Bearbeitungskontext **Series** propagiert das Zeichnen über Frames, sodass dasselbe Panel auf einer Cine-Schleife ausgeschlossen werden kann.
 
 ## Nach der Demo
 
@@ -126,12 +126,12 @@ Auf diesem Frame sitzt ein dichter Block von Maschinenparametern (Gain, Depth, F
 ## So sieht es aus, wenn es passt
 
 - Auf `davidson_cxr`: PHI geschwärzt; Orientierungsmarker behalten, wenn auf Whitelist.
-- Auf `us_rgb_single_frame`: eingebrannte Beschriftungen ohne solide schwarze Balken eingeblendet entfernt; mit Exclude Area wird der mindray-Parameterblock nicht als PHI entfernt.
+- Auf `us_rgb_single_frame`: eingebrannte Beschriftungen ohne solide schwarze Balken eingeblendet entfernt; mit Bereich ausschließen wird der mindray-Parameterblock nicht als PHI entfernt.
 - Spalte **Pixel-PHI** aktualisiert sich im Datensatz.
 
 ## Wenn es fehlschlägt
 
-- Viele Fehlboxen → Match-Strenge erhöhen; Behalter whitelisten; oder **Exclude Area** für ganze Panels.
+- Viele Fehlboxen → Match-Strenge erhöhen; Behalter whitelisten; oder **Bereich ausschließen** für ganze Panels.
 - Verpasster Text → manuell **Bereich schwärzen**.
 - Parametertext noch eingerahmt → Ausschlussrechteck vergrößern und erneut erkennen; gepunktete Konturen anklicken zum Löschen und Neuzeichnen.
 - Werkzeuge ausgegraut → [KI-Funktionen](../../03-ai-features-setup/) abschließen.

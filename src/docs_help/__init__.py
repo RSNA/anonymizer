@@ -4,7 +4,7 @@ Maintainer-only package (not shipped in the ``rsna-anonymizer`` wheel).
 
 ::
 
-    uv run python -m docs_help --language en_US
+    uv run python -m docs_help -v
 """
 
 from __future__ import annotations

@@ -1,4 +1,9 @@
-"""Capture context, project helpers, and language runner for MkDocs help shots."""
+"""Capture context, project helpers, and language runner for MkDocs help shots.
+
+The shot sequence is OS-agnostic: languages, chapter order, handlers, Harmonize,
+TSEG cache, and resume (``exists``) are identical on macOS and Windows. The host
+OS only selects the grab backend and the dest folder ``shots/<macos|windows>/``.
+"""
 
 from __future__ import annotations
 
@@ -7,13 +12,19 @@ import logging
 import os
 import shutil
 import traceback
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from docs_help.manifest import ShotSpec, load_manifest
 from docs_help.platform import close_toplevel, grab_widget, settle, wait_mapped
-from docs_help.project_setup import collect_import_paths, create_capture_project
+from docs_help.project_setup import (
+    capture_project_exists,
+    collect_import_paths,
+    create_capture_project,
+    discover_imported_fixtures,
+)
 
 logger = logging.getLogger("docs_help")
 
@@ -22,12 +33,17 @@ PACKAGE_DIR = REPO_ROOT / "src" / "anonymizer"
 CAPTURE_WORK = REPO_ROOT / "docs" / ".capture_work"
 
 
+_CAPTURE_OSES = ("macos", "windows")
+
+
 @dataclass
 class ShotResult:
     shot_id: str
     status: str
     detail: str = ""
     path: Path | None = None
+    language: str = ""
+    capture_os: str = ""
 
 
 @dataclass
@@ -38,6 +54,7 @@ class CaptureContext:
     settle_ms: int
     capture_os: str = "macos"
     allow_placeholder: bool = False
+    reset_work: bool = False
     work_dir: Path = field(default_factory=Path)
     imported_keys: set[str] = field(default_factory=set)
     project_open: bool = False
@@ -82,22 +99,135 @@ def _prepare_environment(work_dir: Path) -> Path:
     return logs_dir
 
 
+def _announce(message: str) -> None:
+    """Always-visible stepwise progress for terminal monitoring."""
+    print(message, flush=True)
+    logger.info("%s", message)
+
+
 def _record(ctx: CaptureContext, result: ShotResult) -> None:
+    if not result.language:
+        result.language = ctx.language
+    if not result.capture_os:
+        result.capture_os = ctx.capture_os
     ctx.results.append(result)
-    mark = {"ok": "OK", "soft_fail": "SOFT", "hard_fail": "FAIL", "skipped": "SKIP"}.get(result.status, result.status)
+    mark = {"ok": "OK", "exists": "EXISTS", "skipped": "EXISTS", "soft_fail": "SOFT", "hard_fail": "FAIL"}.get(
+        result.status, result.status
+    )
     where = f" → {result.path}" if result.path else ""
-    print(f"[{mark}] {result.shot_id}: {result.detail}{where}")
+    _announce(f"[{mark}] {ctx.language} {result.shot_id}: {result.detail}{where}")
+
+
+def _shots_in_results(results: list[ShotResult], shot_order: Sequence[str] | None) -> list[str]:
+    seen = {result.shot_id for result in results}
+    if shot_order:
+        ordered = [shot_id for shot_id in shot_order if shot_id in seen]
+        ordered.extend(shot_id for shot_id in seen if shot_id not in shot_order)
+        return ordered
+    ordered: list[str] = []
+    for result in results:
+        if result.shot_id not in ordered:
+            ordered.append(result.shot_id)
+    return ordered
+
+
+def _png_on_disk(path: Path) -> bool:
+    return path.is_file() and path.stat().st_size > 0
+
+
+def _shot_languages_by_os(
+    shot: ShotSpec,
+    *,
+    languages: Sequence[str],
+    manifest: Any,
+    capture_oses: Sequence[str] = _CAPTURE_OSES,
+) -> dict[str, list[str]]:
+    """Languages with a PNG for ``shot``, keyed by OS (empty list if none)."""
+    return {
+        os_name: [
+            lang
+            for lang in languages
+            if _png_on_disk(manifest.output_path(lang, shot, capture_os=os_name))
+        ]
+        for os_name in capture_oses
+    }
+
+
+def format_capture_report(
+    results: list[ShotResult],
+    *,
+    shot_order: Sequence[str] | None = None,
+    languages: Sequence[str] | None = None,
+    capture_os: str | None = None,
+) -> str:
+    """One row per shot: a language list per OS column."""
+    del capture_os
+    manifest = load_manifest()
+    expected = [str(code) for code in languages] if languages else list(manifest.language_codes())
+    expected_set = set(expected)
+    os_names = list(_CAPTURE_OSES)
+    lang_width = max(len(" ".join(expected)), 18)
+    if shot_order:
+        shot_ids = list(shot_order)
+    else:
+        shot_ids = _shots_in_results(results, None)
+
+    incomplete = 0
+    rows: list[str] = []
+    for shot_id in shot_ids:
+        shot = manifest.shot_by_id(shot_id)
+        if shot is None:
+            continue
+        by_os = _shot_languages_by_os(
+            shot, languages=expected, manifest=manifest, capture_oses=os_names
+        )
+        cells: list[str] = []
+        row_incomplete = False
+        for os_name in os_names:
+            langs = by_os.get(os_name) or []
+            if set(langs) != expected_set:
+                row_incomplete = True
+            cells.append(" ".join(langs) if langs else "-")
+        if row_incomplete:
+            incomplete += 1
+            mark = "* "
+        else:
+            mark = "  "
+        os_cols = "".join(f"{cell:<{lang_width}} " for cell in cells).rstrip()
+        rows.append(f"{mark}{shot_id:<32} {os_cols}")
+
+    header_os = "".join(f"{name:<{lang_width}} " for name in os_names).rstrip()
+    lines = [
+        f"{'Shot':<34} {header_os}",
+        "-" * (36 + lang_width * len(os_names)),
+        *rows,
+        "",
+        f"Summary: {len(rows)} shot(s), {len(rows) - incomplete} complete, {incomplete} incomplete",
+    ]
+    return "\n".join(lines)
 
 
 def _ensure_project(ctx: CaptureContext) -> None:
     if ctx.project_open:
         return
-    project_dir = create_capture_project(ctx.work_dir / "project")
+    project_dir = ctx.work_dir / "project"
+    if capture_project_exists(project_dir) and not ctx.reset_work:
+        _announce(f"STEP resume capture project {project_dir}")
+    else:
+        if project_dir.exists() and ctx.reset_work:
+            shutil.rmtree(project_dir)
+        create_capture_project(project_dir)
+        _announce(f"STEP create capture project {project_dir}")
     ctx.app.open_project(project_dir)
     settle(ctx.app, ctx.settle_ms)
     if not ctx.app.controller:
         raise RuntimeError("ProjectController not created after open_project")
     ctx.project_open = True
+    images = ctx.app.controller.model.images_dir()
+    found = discover_imported_fixtures(Path(images))
+    if found:
+        ctx.imported_keys.update(found)
+        _announce(f"STEP already imported fixtures: {', '.join(sorted(found))}")
 
 
 def _ensure_modalities_for_fixtures(ctx: CaptureContext, keys: list[str]) -> None:
@@ -140,6 +270,7 @@ def _import_fixtures(ctx: CaptureContext, *keys: str) -> None:
         return
     _ensure_modalities_for_fixtures(ctx, needed)
     paths = collect_import_paths(*needed)
+    _announce(f"STEP import fixtures {needed} ({len(paths)} file(s))")
     anon = ctx.app.controller.anonymizer
     errors = 0
     for path in paths:
@@ -238,7 +369,8 @@ def run_language(
     allow_placeholder: bool,
     skip_existing: bool,
     force_shots: set[str],
-    capture_os: str = "macos",
+    capture_os: str | None = None,
+    reset_work: bool = False,
 ) -> list[ShotResult]:
     import customtkinter as ctk
     from anonymizer.anonymizer import Anonymizer
@@ -251,6 +383,10 @@ def run_language(
 
     shots = [s for s in manifest.all_shots() if only is None or s.id in only]
     results: list[ShotResult] = []
+    total = len(shots)
+
+    _announce(f"=== language={language} platform={capture_os} ===")
+    _announce(f"    chapters: {manifest.chapter_sequence_label()}")
 
     def should_skip(shot: ShotSpec) -> Path | None:
         if not skip_existing or shot.id in force_shots:
@@ -258,26 +394,40 @@ def run_language(
         return _existing(manifest.output_path(language, shot, capture_os=capture_os))
 
     pending = [s for s in shots if should_skip(s) is None]
-    for shot in shots:
+    for catalog_i, shot in enumerate(shots, start=1):
         existing = should_skip(shot)
         if existing is not None:
-            result = ShotResult(shot.id, "skipped", f"exists ({existing.stat().st_size} bytes)", existing)
+            result = ShotResult(
+                shot.id,
+                "exists",
+                f"already captured ({existing.stat().st_size} bytes)",
+                existing,
+                language,
+                capture_os or "",
+            )
             results.append(result)
-            print(f"[SKIP] {result.shot_id}: {result.detail} → {result.path}")
-
-    if not pending:
-        print(f"Nothing to capture for {language}.")
-        return results
-
-    print(f"Will capture {len(pending)} shot(s): {', '.join(s.id for s in pending)}")
+            _announce(
+                f"[EXISTS] [{catalog_i}/{total}] {language}  {shot.chapter_label}  {result.shot_id}: "
+                f"{result.detail} → {result.path}"
+            )
 
     work_dir = CAPTURE_WORK / language
-    if work_dir.exists():
-        from docs_help.fixture_cache import harvest_tseg_cache_from_tree
+    from docs_help.fixture_cache import TSEG_CACHE_ROOT, harvest_tseg_cache_from_tree
 
+    if work_dir.exists():
         harvest_tseg_cache_from_tree(work_dir)
+    if reset_work and work_dir.exists():
+        _announce(f"STEP reset-work: wiping {work_dir} (fixture_cache kept at {TSEG_CACHE_ROOT})")
         shutil.rmtree(work_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
+
+    if not pending:
+        _announce(f"Nothing to capture for {language} (all {total} shot(s) already on disk).")
+        return results
+
+    _announce(f"    pending={len(pending)}/{total}: {', '.join(s.id for s in pending)}")
+    _announce(f"    work={work_dir}")
+    _announce(f"    fixture_cache={TSEG_CACHE_ROOT}")
     logs_dir = _prepare_environment(work_dir)
 
     set_language_code(language)
@@ -312,14 +462,25 @@ def run_language(
         settle_ms=settle_ms,
         capture_os=capture_os,
         allow_placeholder=allow_placeholder,
+        reset_work=reset_work,
         work_dir=work_dir,
         results=results,
     )
 
     try:
-        for shot in pending:
-            from docs_help.handlers import SHOT_HANDLERS
+        from docs_help.handlers import SHOT_HANDLERS
+
+        for catalog_i, shot in enumerate(shots, start=1):
+            existing = should_skip(shot)
+            if existing is not None:
+                continue
             handler = SHOT_HANDLERS.get(shot.id)
+            _announce(
+                f"--- [{catalog_i}/{total}] {language}  "
+                f"{shot.chapter_label}  {shot.id} ---"
+            )
+            if shot.caption:
+                _announce(f"    {shot.caption}")
             if handler is None:
                 _record(ctx, ShotResult(shot.id, "hard_fail", f"No handler for {shot.id}"))
                 continue
@@ -337,6 +498,10 @@ def run_language(
                 logger.error("%s failed: %s\n%s", shot.id, detail, traceback.format_exc())
                 status = "soft_fail" if shot.soft else "hard_fail"
                 _record(ctx, ShotResult(shot.id, status, detail))
+                _announce(
+                    f"STEP continue after {status} on {shot.id} "
+                    "(re-run the same command to resume remaining shots)"
+                )
     except KeyboardInterrupt:
         from docs_help.interrupt import hard_exit
 
@@ -351,7 +516,10 @@ def run_language(
         except Exception:
             logger.exception("teardown failed")
         if not keep_work and work_dir.exists():
+            _announce(f"STEP remove work dir {work_dir} (--no-keep-work)")
             shutil.rmtree(work_dir, ignore_errors=True)
+        else:
+            _announce(f"STEP keep work dir {work_dir} for resume")
 
     return ctx.results
 

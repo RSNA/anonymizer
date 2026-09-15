@@ -19,6 +19,18 @@ def test_set_language_code_valid_code():
     assert get_current_language_code() == "en_US"
 
 
+def test_locales_dir_is_package_absolute_and_independent_of_cwd(tmp_path, monkeypatch):
+    """UI catalogs must resolve from the package tree, not process CWD."""
+    from anonymizer.utils.translate import locales_dir, set_language_code, _
+
+    monkeypatch.chdir(tmp_path)
+    assert locales_dir().is_absolute()
+    assert locales_dir().is_dir()
+    set_language_code("de")
+    assert _("Welcome") == "Willkommen"
+    assert _("Select File → New Project to start.").startswith("Wählen")
+
+
 def test_set_language_code_invalid_code():
     """Test setting language code with an invalid code."""
     with pytest.raises(ValueError) as excinfo:

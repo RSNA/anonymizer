@@ -24,8 +24,10 @@ from docs_help.orthanc import (
 from docs_help.platform import close_toplevel, settle, wait_mapped
 from docs_help.project_setup import (
     CTP_LOOKUP_PROPERTIES,
+    capture_project_exists,
     collect_import_paths,
     create_capture_project,
+    discover_imported_fixtures,
     series_for_fixture,
     study_tuples,
 )
@@ -1615,14 +1617,38 @@ LOOKUP_FIXTURES = VIEW_DEMO_FIXTURES
 
 
 def _open_clean_demo_project(ctx: CaptureContext, *, dirname: str) -> None:
-    """Fresh project with only the three View demo fixtures (no synthetic leftovers)."""
+    """View-demo project with davidson + CT head + US. Reuses the on-disk project on resume."""
     import shutil
 
+    from docs_help.capture import _announce
+
     project_dir = ctx.work_dir / dirname
+    reuse = capture_project_exists(project_dir) and not getattr(ctx, "reset_work", False)
+
     if ctx.project_open:
+        same = (
+            ctx.app.controller is not None
+            and Path(str(ctx.app.controller.model.storage_dir)).resolve() == project_dir.resolve()
+        )
+        if reuse and same:
+            ctx.imported_keys.update(discover_imported_fixtures(Path(ctx.app.controller.model.images_dir())))
+            _import_fixtures(ctx, *VIEW_DEMO_FIXTURES)
+            return
         with contextlib.suppress(Exception):
             ctx.app.close_project()
         ctx.project_open = False
+
+    if reuse:
+        _announce(f"STEP resume demo project {project_dir}")
+        ctx.app.open_project(project_dir)
+        settle(ctx.app, ctx.settle_ms)
+        if not ctx.app.controller:
+            raise RuntimeError(f"Failed to resume demo project {dirname!r}")
+        ctx.project_open = True
+        ctx.imported_keys.update(discover_imported_fixtures(Path(ctx.app.controller.model.images_dir())))
+        _import_fixtures(ctx, *VIEW_DEMO_FIXTURES)
+        return
+
     if project_dir.exists():
         shutil.rmtree(project_dir)
     create_capture_project(project_dir)
@@ -2129,7 +2155,6 @@ def shot_process_harmonize_description(ctx: CaptureContext, shot: ShotSpec) -> S
     finally:
         close_harmonize_session(session)
 
-
 def shot_process_harmonize_brain_prompt(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     """Harmonize Description dialog + brain-structures Yes/No (no Series View)."""
     from docs_help.harmonize import (
@@ -2150,7 +2175,6 @@ def shot_process_harmonize_brain_prompt(ctx: CaptureContext, shot: ShotSpec) -> 
         return ShotResult(shot.id, "ok", f"{fixture}:brain_prompt", dest)
     finally:
         close_harmonize_session(session)
-
 
 def shot_process_harmonize_segmented_series(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     """Series View after brain Harmonize: detailed brain-structure latches on middle slice.
@@ -2225,7 +2249,6 @@ def shot_process_harmonize_segmented_series(ctx: CaptureContext, shot: ShotSpec)
     finally:
         if series_view is not None:
             close_toplevel(series_view)
-
 
 def shot_process_face_blur(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     """Face Blur review dialog after Gaussian preview completes (QA + Save enabled)."""

@@ -6,9 +6,8 @@ import argparse
 import logging
 import os
 import sys
-from pathlib import Path
 
-from docs_help.capture import CAPTURE_WORK, ShotResult, _existing, run_language
+from docs_help.capture import ShotResult, _existing, format_capture_report, run_language
 from docs_help.interrupt import hard_exit, install_hard_interrupt
 from docs_help.manifest import load_manifest
 from docs_help.platform import require_host_platform, screen_capture_available
@@ -31,12 +30,28 @@ def _main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
             "Capture RSNA Anonymizer MkDocs help screenshots.\n\n"
-            "Run on macOS and Windows separately; PNGs land under shots/<os>/."
+            "Full capture (all languages, chapter order, resume-safe):\n"
+            "  uv run python -m docs_help -v\n\n"
+            "Languages run in manifest order: en_US → de → es → fr.\n"
+            "Existing PNGs stay on disk (report status: exists); re-run to resume.\n"
+            "One language:  uv run python -m docs_help --language de -v\n"
+            "Shots follow docs/screenshots-manifest.yaml (help-chapter order).\n"
+            "Shared TSEG cache: docs/.capture_work/fixture_cache/"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--language", choices=sorted(manifest.languages), default="en_US")
-    parser.add_argument("--all-languages", action="store_true")
+    lang_codes = manifest.language_codes()
+    parser.add_argument(
+        "--language",
+        choices=lang_codes,
+        default=None,
+        help="Capture one UI language. Default: all languages in order.",
+    )
+    parser.add_argument(
+        "--all-languages",
+        action="store_true",
+        help="Capture every language in manifest order (default when --language is omitted).",
+    )
     parser.add_argument(
         "--platform",
         choices=["auto", "macos", "windows"],
@@ -45,13 +60,23 @@ def _main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--only", nargs="+", metavar="SHOT")
     parser.add_argument("--settle-ms", type=int, default=500)
-    parser.add_argument("--keep-work", action="store_true")
+    parser.add_argument(
+        "--keep-work",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Keep docs/.capture_work/<lang> after the run so a later invocation can resume (default: true)",
+    )
+    parser.add_argument(
+        "--reset-work",
+        action="store_true",
+        help="Wipe docs/.capture_work/<lang> before capturing. Does not delete docs/.capture_work/fixture_cache/.",
+    )
     parser.add_argument("--allow-placeholder", action="store_true")
     parser.add_argument(
         "--skip-existing",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Skip shots whose PNG already exists (default: true)",
+        help="Leave shots whose PNG already exists (report status: exists). Default: true",
     )
     parser.add_argument("--force", action="store_true", help="Same as --no-skip-existing")
     parser.add_argument("--force-shot", nargs="+", metavar="SHOT")
@@ -70,7 +95,9 @@ def _main(argv: list[str] | None = None) -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
-    languages = list(manifest.languages) if args.all_languages else [args.language]
+    if args.language and args.all_languages:
+        parser.error("use --language for one locale, or omit it / pass --all-languages for a full run")
+    languages = list(lang_codes) if args.language is None or args.all_languages else [args.language]
     only = set(args.only) if args.only else None
     force_shots = set(args.force_shot or ())
     skip_existing = False if args.force else bool(args.skip_existing)
@@ -106,35 +133,41 @@ def _main(argv: list[str] | None = None) -> int:
         )
         return 2
 
+    print(
+        f"Full capture languages ({len(languages)}): " + " → ".join(languages),
+        flush=True,
+    )
     all_results: list[ShotResult] = []
-    for language in languages:
+    for lang_i, language in enumerate(languages, start=1):
         print(
-            f"\n=== Capturing language={language} platform={capture_os} "
-            f"→ {manifest.languages[language]}/…/shots/{capture_os}/ ==="
+            f"\n=== [{lang_i}/{len(languages)}] language={language} platform={capture_os} "
+            f"→ {manifest.languages[language]}/…/shots/{capture_os}/ ===",
+            flush=True,
         )
         all_results.extend(
             run_language(
                 language,
                 only=only,
                 settle_ms=args.settle_ms,
-                keep_work=args.keep_work,
+                keep_work=bool(args.keep_work),
                 allow_placeholder=args.allow_placeholder,
                 skip_existing=skip_existing,
                 force_shots=force_shots,
                 capture_os=capture_os,
+                reset_work=bool(args.reset_work),
             )
         )
 
     print()
-    print(f"{'Shot':<32} {'Status':<10} Detail")
-    print("-" * 80)
-    for r in all_results:
-        print(f"{r.shot_id:<32} {r.status:<10} {r.detail}")
+    print(
+        format_capture_report(
+            all_results,
+            shot_order=tuple(s.id for s in manifest.all_shots()),
+            languages=tuple(languages),
+            capture_os=capture_os,
+        )
+    )
     hard = [r for r in all_results if r.status == "hard_fail"]
-    soft = [r for r in all_results if r.status == "soft_fail"]
-    ok = [r for r in all_results if r.status == "ok"]
-    skipped = [r for r in all_results if r.status == "skipped"]
-    print(f"\nSummary: {len(ok)} ok, {len(skipped)} skipped, {len(soft)} soft-fail, {len(hard)} hard-fail")
     code = 1 if hard else 0
     sys.stdout.flush()
     sys.stderr.flush()

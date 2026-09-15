@@ -1129,6 +1129,42 @@ msgstr "Provenance"
 msgid "Geometry"
 msgstr "Geometry"
 
+msgid "Original acquisition"
+msgstr "Original acquisition"
+
+msgid "Reformatted series"
+msgstr "Reformatted series"
+
+msgid "3D rendering (MIP/VR)"
+msgstr "3D rendering (MIP/VR)"
+
+msgid "Derived secondary capture"
+msgstr "Derived secondary capture"
+
+msgid "Unknown source"
+msgstr "Unknown source"
+
+msgid "Unknown orientation"
+msgstr "Unknown orientation"
+
+msgid "Diagnostic 3D volume"
+msgstr "Diagnostic 3D volume"
+
+msgid "Multi-frame volume"
+msgstr "Multi-frame volume"
+
+msgid "Localizer or scout"
+msgstr "Localizer or scout"
+
+msgid "Single slice"
+msgstr "Single slice"
+
+msgid "2D projection"
+msgstr "2D projection"
+
+msgid "Unknown series type"
+msgstr "Unknown series type"
+
 msgid "dominant"
 msgstr "dominant"
 

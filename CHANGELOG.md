@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [19.0.9]
+- Dataset: expand nearest LOINC/RadLex description pickers to the full modality catalog so wrong-category Harmonize names can be corrected
+- Harmonize planar LOINC ranking: Extremities↔Extremity word boundaries; Head↔Skull; ignore elbow “radial head” false matches
+- Docs: DE/ES/FR macOS help screenshots; Windows→macOS shot fallback stays same-language; docs_help capture/manifest hardening
+- i18n: extractable geometry provenance/plane/dimensionality strings; locale catalog refresh for Set description expand UX
+
 ## [19.0.8]
 - Windows: Dataset left-click Set description works with Num Lock on; OCR/model downloads use certifi CA bundle; menubar only on macOS child windows; encoding-safe console logging
 - Dataset: double-click study/series description opens Set description (single-click selects only); import refresh and tree UX polish

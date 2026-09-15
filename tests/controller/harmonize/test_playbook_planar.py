@@ -383,3 +383,41 @@ def test_planar_loinc_ranks_bilat_wrist_laterality() -> None:
     assert matches
     assert "bilateral" in matches[0].long_common_name.lower()
     assert "wrist" in matches[0].long_common_name.lower()
+
+
+def test_planar_loinc_ranks_extremities_coarse_xp_label() -> None:
+    """Xp-Bodypart 'Extremities' must map to LOINC XR Extremity (not leave study as XRAY)."""
+    from anonymizer.controller.ai.harmonize.loinc_study import (
+        _planar_anatomy_from_descriptions,
+        rank_planar_loinc_study_descriptions,
+    )
+
+    series = ["Extremities", "Extremities", "Extremities"]
+    assert _planar_anatomy_from_descriptions(series) == ["Extremity"]
+    matches = rank_planar_loinc_study_descriptions(series, loinc_prefix="XR ", top_n=5)
+    assert matches
+    assert matches[0].long_common_name.startswith("XR Extremity")
+    assert "elbow" not in matches[0].long_common_name.lower()
+
+
+def test_planar_loinc_head_series_do_not_match_radial_head_elbow() -> None:
+    """Bare 'Head' series must not auto-pick XR Elbow Radial head capitellar."""
+    from anonymizer.controller.ai.harmonize.loinc_study import rank_planar_loinc_study_descriptions
+
+    matches = rank_planar_loinc_study_descriptions(
+        ["Head", "Head"],
+        loinc_prefix="XR ",
+        top_n=5,
+    )
+    assert not any("radial head" in m.long_common_name.lower() for m in matches)
+    assert not any("elbow" in m.long_common_name.lower() for m in matches)
+    # LOINC has Skull (not Head) for neuro XR — acceptable synonym ranking.
+    if matches:
+        assert "skull" in matches[0].long_common_name.lower()
+
+
+def test_planar_loinc_single_head_series_does_not_false_match_elbow() -> None:
+    from anonymizer.controller.ai.harmonize.loinc_study import rank_planar_loinc_study_descriptions
+
+    matches = rank_planar_loinc_study_descriptions(["Head"], loinc_prefix="XR ", top_n=5)
+    assert not any("elbow" in m.long_common_name.lower() for m in matches)

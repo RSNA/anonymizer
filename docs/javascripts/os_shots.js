@@ -1,8 +1,11 @@
 /**
  * Swap MkDocs help screenshots to the visitor OS when available.
  *
- * Markdown authors embed shots/macos/*.png. On Windows browsers, rewrite to
- * shots/windows/* and fall back to macOS if the Windows PNG is missing.
+ * Markdown authors embed shots/macos/*.png (relative to the current language
+ * page, e.g. docs/de/06-search/…). On Windows browsers, rewrite only the OS
+ * segment to shots/windows/* — language (/de/, /en/, …) is never changed.
+ * If the Windows PNG is missing, fall back to that same-language macOS shot
+ * (German Windows missing → German macOS, never English).
  *
  * MkDocs emits relative srcs such as ``shots/macos/Welcome.png`` (no leading
  * slash). Match ``shots/macos/`` anywhere in the path — not only ``/shots/macos/``.
@@ -26,14 +29,21 @@
     return "macos";
   }
 
+  /** Replace shots/<os>/ only; leave language and chapter path untouched. */
+  function swapShotOs(src, fromSeg, toSeg) {
+    if (!src || src.indexOf(fromSeg) === -1) return null;
+    if (src.indexOf(toSeg) !== -1) return null;
+    return src.split(fromSeg).join(toSeg);
+  }
+
   function rewriteShots() {
     if (docsShotOs() !== "windows") return;
     var images = document.querySelectorAll('img[src*="shots/macos/"]');
     images.forEach(function (img) {
       var macSrc = img.getAttribute("src");
-      if (!macSrc || macSrc.indexOf(MAC_SEG) === -1) return;
-      if (macSrc.indexOf(WIN_SEG) !== -1) return;
-      var winSrc = macSrc.split(MAC_SEG).join(WIN_SEG);
+      var winSrc = swapShotOs(macSrc, MAC_SEG, WIN_SEG);
+      if (!winSrc) return;
+      // Same-language macOS path for 404 fallback (never default-locale).
       img.setAttribute("data-docs-shot-macos", macSrc);
       img.addEventListener(
         "error",

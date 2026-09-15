@@ -221,13 +221,9 @@ def read_java_anonymizer_index_xlsx(filename: str) -> list[JavaAnonymizerExporte
 
 
 def default_whitelist_path(modality_code: str) -> Path:
-    return Path(
-        "assets/locales/"
-        + str(get_current_language_code() or "en_US")
-        + "/whitelists/"
-        + modality_code.lower()
-        + ".txt"
-    )
+    from anonymizer.utils.translate import locales_dir
+
+    return locales_dir() / str(get_current_language_code() or "en_US") / "whitelists" / (modality_code.lower() + ".txt")
 
 
 def project_whitelist_path(project_dir: Path, modality_code: str) -> Path:

@@ -129,9 +129,10 @@ class WelcomeView(ctk.CTkFrame):
             text=self.welcome_text_top,
             font=self._fonts.body,
             justify="left",
+            anchor="w",
             wraplength=self.WELCOME_TEXT_WRAP_LENGTH,
         )
-        label_top.grid(row=3, column=0, padx=self.PAD * 2, pady=(self.PAD, 0), sticky="n")
+        label_top.grid(row=3, column=0, padx=self.PAD * 2, pady=(self.PAD, 0), sticky="ew")
 
         links = ctk.CTkFrame(master=self, fg_color="transparent")
         links.grid(row=4, column=0, padx=self.PAD * 2, pady=(2, self.PAD // 2), sticky="w")
@@ -143,15 +144,18 @@ class WelcomeView(ctk.CTkFrame):
             text=self.welcome_text_bottom,
             font=self._fonts.body,
             justify="left",
+            anchor="w",
             wraplength=self.WELCOME_TEXT_WRAP_LENGTH,
         )
-        label_bottom.grid(row=5, column=0, padx=self.PAD * 2, pady=(0, self.PAD), sticky="n")
+        label_bottom.grid(row=5, column=0, padx=self.PAD * 2, pady=(0, self.PAD), sticky="ew")
 
         label_sponsor_text = ctk.CTkLabel(
             master=self,
             text=self.sponsor_text,
             font=self._fonts.small,
             justify="left",
+            anchor="w",
             wraplength=self.WELCOME_TEXT_WRAP_LENGTH,
         )
-        label_sponsor_text.grid(row=6, column=0, padx=self.PAD * 2, pady=(self.PAD, self.PAD * 2))
+        label_sponsor_text.grid(row=6, column=0, padx=self.PAD * 2, pady=(self.PAD, self.PAD * 2), sticky="ew")
+        self.grid_columnconfigure(0, weight=1)

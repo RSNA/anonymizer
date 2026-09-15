@@ -564,6 +564,13 @@ def run_brain_structures_segmentation(
         remaining_sec=45.0,
     )
 
+    ts_device = resolve_device(device)
+    logger.info(
+        "TS brain_structures: starting (device=%s) nifti=%s output=%s",
+        ts_device,
+        nifti_path,
+        output_dir,
+    )
     seg_started = time.perf_counter()
     with sequential_ml_context("ts_brain_structures"):
         totalsegmentator(
@@ -573,7 +580,7 @@ def run_brain_structures_segmentation(
             fast=False,
             fastest=False,
             quiet=True,
-            device=resolve_device(device),
+            device=ts_device,
             nr_thr_resamp=1,
             nr_thr_saving=1,
         )
@@ -583,6 +590,53 @@ def run_brain_structures_segmentation(
 
 def _brain_structures_cache_valid(seg_dir: Path) -> bool:
     return any((seg_dir / f"{name}.nii.gz").is_file() for name in BRAIN_STRUCTURE_FILES)
+
+
+def _maybe_run_brain_structures(
+    series_directory: Path,
+    nifti_path: Path,
+    seg_dir: Path,
+    structure_voxels: dict[str, int],
+    *,
+    include_brain_structures: bool,
+    progress: ProgressCallback | None,
+    analysis_started: float,
+) -> dict[str, int]:
+    """Run licensed ``brain_structures`` when requested and those masks are missing."""
+    if not (
+        include_brain_structures
+        and ENABLE_TSEG_BRAIN_STRUCTURES
+        and int(structure_voxels.get("brain", 0)) >= MIN_STRUCTURE_VOXELS
+        and not _brain_structures_cache_valid(seg_dir)
+    ):
+        return structure_voxels
+    from anonymizer.controller.ai.tseg.readiness import verify_face_license
+
+    licensed, license_message = verify_face_license()
+    if not licensed:
+        logger.debug("TS single-pass: brain_structures skipped (license): %s", license_message)
+        return structure_voxels
+    ts_device = resolve_device(None)
+    try:
+        logger.info(
+            "TS single-pass: running brain_structures (device=%s) for %s",
+            ts_device,
+            series_directory,
+        )
+        run_brain_structures_segmentation(
+            nifti_path,
+            seg_dir,
+            device=ts_device,
+            progress=progress,
+            analysis_started=analysis_started,
+        )
+        brain_counts = collect_structure_voxels_from_masks(seg_dir, list(BRAIN_STRUCTURE_FILES))
+        updated = dict(structure_voxels)
+        updated.update(brain_counts)
+        return updated
+    except Exception as exc:
+        logger.warning("TS single-pass: brain_structures failed for %s: %s", series_directory, exc)
+        return structure_voxels
 
 
 def analyze_tseg_face(
@@ -1370,10 +1424,34 @@ def analyze_tseg_ct_single_pass(
                 and int(cached_voxels.get("brain", 0)) >= MIN_STRUCTURE_VOXELS
                 and not _brain_structures_cache_valid(seg_dir)
             )
-            if cached_stats is not None and cached_voxels and overlay_ready and not need_brain:
+            if cached_stats is not None and cached_voxels and overlay_ready:
                 region_result = _ts_result_from_structure_voxels(series_directory, cached_voxels)
                 if region_result.error is None:
-                    logger.info("TS single-pass: reusing cached stats/masks for %s", series_directory)
+                    if not need_brain:
+                        logger.info("TS single-pass: reusing cached stats/masks for %s", series_directory)
+                        _report_progress(
+                            progress,
+                            stage="regions",
+                            message=format_anatomy_regions_progress_message(region_result, seg_cached=True),
+                            fraction=0.95,
+                            started=analysis_started,
+                        )
+                        return (region_result, nifti_path, True)
+                    logger.info(
+                        "TS single-pass: reusing cached anatomy; running brain_structures only for %s",
+                        series_directory,
+                    )
+                    structure_voxels = _maybe_run_brain_structures(
+                        series_directory,
+                        nifti_path,
+                        seg_dir,
+                        dict(cached_voxels),
+                        include_brain_structures=True,
+                        progress=progress,
+                        analysis_started=analysis_started,
+                    )
+                    finalize_seg_cache(work_dir, seg_dir, structure_voxels)
+                    region_result = _ts_result_from_structure_voxels(series_directory, structure_voxels)
                     _report_progress(
                         progress,
                         stage="regions",
@@ -1469,30 +1547,15 @@ def analyze_tseg_ct_single_pass(
                     False,
                 )
 
-            if (
-                include_brain_structures
-                and ENABLE_TSEG_BRAIN_STRUCTURES
-                and structure_voxels.get("brain", 0) >= MIN_STRUCTURE_VOXELS
-            ):
-                from anonymizer.controller.ai.tseg.readiness import verify_face_license
-
-                licensed, license_message = verify_face_license()
-                if licensed:
-                    try:
-                        run_brain_structures_segmentation(
-                            nifti_path,
-                            seg_dir,
-                            progress=progress,
-                            analysis_started=analysis_started,
-                        )
-                        brain_counts = collect_structure_voxels_from_masks(
-                            seg_dir, list(BRAIN_STRUCTURE_FILES)
-                        )
-                        structure_voxels.update(brain_counts)
-                    except Exception as exc:
-                        logger.warning("TS single-pass: brain_structures failed for %s: %s", series_directory, exc)
-                else:
-                    logger.debug("TS single-pass: brain_structures skipped (license): %s", license_message)
+            structure_voxels = _maybe_run_brain_structures(
+                series_directory,
+                nifti_path,
+                seg_dir,
+                structure_voxels,
+                include_brain_structures=include_brain_structures,
+                progress=progress,
+                analysis_started=analysis_started,
+            )
 
             finalize_seg_cache(work_dir, seg_dir, structure_voxels)
 

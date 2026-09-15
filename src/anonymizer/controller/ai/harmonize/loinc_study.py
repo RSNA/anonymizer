@@ -894,11 +894,14 @@ _PLANAR_ANATOMY_PHRASES: tuple[str, ...] = (
     "cervical spine",
     "thoracic spine",
     "lumbar spine",
+    # Xp-Bodypart coarse class only (not the word inside "lower/upper extremity").
+    "extremities",
     "chest",
     "abdomen",
     "pelvis",
     "head",
     "brain",
+    "skull",
     "neck",
     "breast",
     "spine",
@@ -921,8 +924,21 @@ _PLANAR_ANATOMY_PHRASES: tuple[str, ...] = (
 _PLANAR_ANATOMY_LABELS: dict[str, str] = {
     "lower extremity": "Lower extremity",
     "upper extremity": "Upper extremity",
+    "extremities": "Extremity",
     "brain": "Head",
+    "skull": "Head",
 }
+
+# LOINC LongCommonName tokens that evidence each Playbook/Xp anatomy label.
+# XR has no "Head" rows — Skull is the catalog stand-in for neuro/skull XR.
+_PLANAR_ANATOMY_LOINC_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "Head": ("head", "skull"),
+    "Extremity": ("extremity", "extremities"),
+    "Lower extremity": ("lower extremity",),
+    "Upper extremity": ("upper extremity",),
+}
+
+_RADIAL_HEAD_RE = re.compile(r"\bradial\s+head\b", re.IGNORECASE)
 
 
 def _planar_anatomy_from_descriptions(series_descriptions: Sequence[str]) -> list[str]:
@@ -933,6 +949,12 @@ def _planar_anatomy_from_descriptions(series_descriptions: Sequence[str]) -> lis
     for phrase in _PLANAR_ANATOMY_PHRASES:
         if phrase not in joined or phrase in seen_phrases:
             continue
+        # Word-boundary for short tokens so "head" in "radial head" still matches the
+        # phrase list when scanning joined text — LOINC scoring applies the radial-head
+        # guard separately. Prefer phrase boundaries for multi-word anatomy.
+        if " " in phrase:
+            if not re.search(rf"\b{re.escape(phrase)}\b", joined):
+                continue
         label = _PLANAR_ANATOMY_LABELS.get(
             phrase,
             " ".join(part.capitalize() for part in phrase.split()),
@@ -944,6 +966,50 @@ def _planar_anatomy_from_descriptions(series_descriptions: Sequence[str]) -> lis
         found.append(label)
         seen_labels.add(key)
     return found
+
+
+def _strip_radial_head(text: str) -> str:
+    """Remove elbow 'radial head' so neuro Head does not false-match that phrase."""
+    return _RADIAL_HEAD_RE.sub(" ", text)
+
+
+def _planar_token_in_loinc_text(token: str, name_l: str) -> bool:
+    """True when ``token`` appears as a LOINC anatomy word (not nested in radial head)."""
+    tok = token.lower().strip()
+    if not tok:
+        return False
+    haystack = name_l
+    if tok == "head":
+        haystack = _strip_radial_head(name_l)
+    return bool(re.search(rf"\b{re.escape(tok)}\b", haystack))
+
+
+def _planar_anatomy_matches_loinc(part: str, name_l: str) -> bool:
+    """Match Playbook/Xp anatomy labels to LOINC LongCommonName anatomy terms."""
+    synonyms = _PLANAR_ANATOMY_LOINC_SYNONYMS.get(part, (part.lower(),))
+    return any(_planar_token_in_loinc_text(syn, name_l) for syn in synonyms)
+
+
+def _series_desc_matches_loinc_core(desc_norm: str, name_core: str) -> bool:
+    """Series string appears in LOINC core with word boundaries (Extremities↔Extremity)."""
+    if not desc_norm or not name_core:
+        return False
+    tokens = {desc_norm}
+    if desc_norm == "head":
+        tokens.add("skull")
+    if desc_norm in {"extremity", "extremities"}:
+        tokens.update({"extremity", "extremities"})
+    return any(_planar_token_in_loinc_text(tok, name_core) for tok in tokens)
+
+
+def _loinc_primary_matches_anatomy(after_prefix: str, primary: str) -> bool:
+    """True when the LOINC name leads with the preferred anatomy (Head↔Skull)."""
+    primary_l = primary.lower()
+    if after_prefix.startswith(primary_l):
+        return True
+    if primary_l == "head" and after_prefix.startswith("skull"):
+        return True
+    return primary_l == "extremity" and after_prefix.startswith("extremit")
 
 
 _LOINC_N_VIEWS_RE = re.compile(r"\b(\d+)\s+views?\b", re.IGNORECASE)
@@ -1218,7 +1284,7 @@ def rank_planar_loinc_study_descriptions(
         name_l = name.lower()
         score = 0.0
         for part in anatomy:
-            if part.lower() in name_l:
+            if _planar_anatomy_matches_loinc(part, name_l):
                 score += 120.0
         if score <= 0:
             continue
@@ -1237,7 +1303,7 @@ def rank_planar_loinc_study_descriptions(
                     and "views" not in name_core
                 ):
                     score += 220.0
-            elif desc_norm and desc_norm in name_core:
+            elif _series_desc_matches_loinc_core(desc_norm, name_core):
                 score += 90.0
 
         for view in view_tokens:
@@ -1259,9 +1325,9 @@ def rank_planar_loinc_study_descriptions(
             after_prefix = (
                 name_l[len(prefix_l) :].lstrip() if prefix_l and name_l.startswith(prefix_l) else name_l
             )
-            if after_prefix.startswith(primary):
+            if _loinc_primary_matches_anatomy(after_prefix, primary):
                 score += 40.0
-            elif primary in after_prefix:
+            elif _planar_anatomy_matches_loinc(anatomy[0], after_prefix):
                 score -= 30.0
 
         if single_region and " and " in name_l:
@@ -1299,6 +1365,8 @@ def rank_planar_loinc_study_descriptions(
 _FREE_TEXT_ANATOMY_PHRASES: tuple[tuple[str, str], ...] = (
     ("lower extremity", "Lower extremity"),
     ("upper extremity", "Upper extremity"),
+    ("extremities", "Extremity"),
+    ("extremity", "Extremity"),
     ("cervical spine", "Cervical spine"),
     ("thoracic spine", "Thoracic spine"),
     ("lumbar spine", "Lumbar spine"),

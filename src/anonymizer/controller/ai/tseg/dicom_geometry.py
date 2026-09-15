@@ -929,42 +929,51 @@ def ensure_series_geometry(
 
 
 # User-facing labels (msgids for gettext). Internal codes remain on SeriesGeometryResult.
-_PROVENANCE_MSGIDS: dict[ProvenanceLabel, str] = {
-    "original": "Original acquisition",
-    "derived_reformat": "Reformatted series",
-    "derived_3d_render": "3D rendering (MIP/VR)",
-    "derived_secondary": "Derived secondary capture",
-    "unknown": "Unknown source",
-}
-
-_PLANE_MSGIDS: dict[PlaneLabel, str] = {
-    "axial": "Axial",
-    "sagittal": "Sagittal",
-    "coronal": "Coronal",
-    "oblique": "Oblique",
-    "unknown": "Unknown orientation",
-}
-
-_DIMENSIONALITY_MSGIDS: dict[DimensionalityLabel, str] = {
-    "volume_3d": "Diagnostic 3D volume",
-    "multiframe_volume": "Multi-frame volume",
-    "localizer_2d": "Localizer or scout",
-    "single_slice_2d": "Single slice",
-    "projection_2d": "2D projection",
-    "unknown": "Unknown series type",
-}
+# Use direct _("…") literals in the label helpers below so xgettext can extract them.
 
 
 def provenance_label(provenance: ProvenanceLabel) -> str:
-    return _(_PROVENANCE_MSGIDS.get(provenance, "Unknown source"))
+    match provenance:
+        case "original":
+            return _("Original acquisition")
+        case "derived_reformat":
+            return _("Reformatted series")
+        case "derived_3d_render":
+            return _("3D rendering (MIP/VR)")
+        case "derived_secondary":
+            return _("Derived secondary capture")
+        case _:
+            return _("Unknown source")
 
 
 def plane_label(plane: PlaneLabel) -> str:
-    return _(_PLANE_MSGIDS.get(plane, "Unknown orientation"))
+    match plane:
+        case "axial":
+            return _("Axial")
+        case "sagittal":
+            return _("Sagittal")
+        case "coronal":
+            return _("Coronal")
+        case "oblique":
+            return _("Oblique")
+        case _:
+            return _("Unknown orientation")
 
 
 def dimensionality_label(dimensionality: DimensionalityLabel) -> str:
-    return _(_DIMENSIONALITY_MSGIDS.get(dimensionality, "Unknown series type"))
+    match dimensionality:
+        case "volume_3d":
+            return _("Diagnostic 3D volume")
+        case "multiframe_volume":
+            return _("Multi-frame volume")
+        case "localizer_2d":
+            return _("Localizer or scout")
+        case "single_slice_2d":
+            return _("Single slice")
+        case "projection_2d":
+            return _("2D projection")
+        case _:
+            return _("Unknown series type")
 
 
 def ts_suitability_label(ts_suitable: bool) -> str:

@@ -47,8 +47,10 @@ Harmonize shots reuse a saved TotalSegmentator `0_TS_SEG` tree under
 `docs/.capture_work/fixture_cache/` (gitignored). Detect Text shots apply
 committed boxes in `src/docs_help/ocr_cache/` instead of running EasyOCR.
 
-Markdown embeds the macOS path (`shots/macos/….png`). The published site’s
-`docs/javascripts/os_shots.js` swaps to `shots/windows/` for Windows visitors,
-falling back to macOS if a Windows PNG is missing.
+Markdown embeds the macOS path (`shots/macos/….png`) under the **current
+language** page. The published site’s `docs/javascripts/os_shots.js` swaps only
+the OS folder to `shots/windows/` for Windows visitors. If that PNG is missing,
+it falls back to the **same-language** macOS shot (e.g. German Windows missing →
+German macOS — never English).
 
 See also [`docs/en/screenshots-style-guide.md`](../../docs/en/screenshots-style-guide.md).

@@ -9,6 +9,7 @@ import pytest
 
 from anonymizer.controller.ai.harmonize import harmonize_series
 from anonymizer.controller.ai.harmonize.timings import HarmonizeStageTimings
+from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
 from anonymizer.controller.ai.tseg.contrast import structure_voxels_from_organ_stats
 from anonymizer.controller.ai.tseg.segment import (
     NO_ANATOMY_REGIONS_ERROR,
@@ -115,3 +116,129 @@ def test_harmonize_prefers_ct_single_pass_when_enabled(
     mock_single_pass.assert_called_once()
     mock_regions.assert_not_called()
     mock_contrast.assert_called_once()
+
+
+def _ct_head_geometry() -> SeriesGeometryResult:
+    from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
+
+    return SeriesGeometryResult(
+        plane="axial",
+        plane_confidence=0.95,
+        slice_normal_lps=(0.0, 0.0, 1.0),
+        plane_angles_deg={"axial": 5.0, "coronal": 85.0, "sagittal": 85.0},
+        dimensionality="volume_3d",
+        n_slices=34,
+        through_plane_extent_mm=170.0,
+        slice_spacing_mm=5.0,
+        spacing_regularity=1.0,
+        provenance="original",
+        provenance_confidence=0.9,
+        image_type=("ORIGINAL", "PRIMARY", "AXIAL"),
+        source_series_uids=(),
+        ts_suitable=True,
+        metadata_suspect=False,
+        method="test",
+        notes="",
+    )
+
+
+def _anatomy_only_series(tmp_path: Path) -> Path:
+    series = tmp_path / "series"
+    cache = series / TSEG_CACHE_DIRNAME
+    seg = cache / "seg"
+    cache.mkdir(parents=True)
+    seg.mkdir()
+    (cache / "volume.nii.gz").write_bytes(b"vol")
+    (cache / "contrast_stats.json").write_text("{}")
+    (seg / "brain.nii.gz").write_bytes(b"m")
+    return series
+
+
+@patch("anonymizer.controller.ai.tseg.segment.finalize_seg_cache", side_effect=lambda cache, seg, voxels: voxels)
+@patch("anonymizer.controller.ai.tseg.segment.collect_structure_voxels_from_masks", return_value={"cerebellum": 4000})
+@patch("anonymizer.controller.ai.tseg.readiness.verify_face_license", return_value=(True, ""))
+@patch("anonymizer.controller.ai.tseg.segment.run_brain_structures_segmentation", return_value=1.0)
+@patch("anonymizer.controller.ai.tseg.segment._require_totalsegmentator")
+@patch("anonymizer.controller.ai.tseg.segment._nifti_slice_count", return_value=34)
+@patch("anonymizer.controller.ai.tseg.segment.invalidate_stale_tseg_volume_cache")
+@patch("anonymizer.controller.ai.tseg.segment.anatomy_overlay_cache_ready", return_value=True)
+@patch(
+    "anonymizer.controller.ai.tseg.segment.read_structure_voxels",
+    return_value={"brain": 200_000, "skull": 50_000},
+)
+@patch("anonymizer.controller.ai.tseg.segment.load_contrast_statistics", return_value={"brain": {"volume": 200000}})
+@patch("anonymizer.controller.ai.tseg.segment.ts_regions_eligible", return_value=True)
+@patch("anonymizer.controller.ai.tseg.segment.resolve_series_geometry")
+@patch("anonymizer.controller.ai.tseg.modality_profile.resolve_profile_for_series")
+def test_single_pass_reuses_anatomy_when_only_brain_missing(
+    mock_profile: MagicMock,
+    mock_geometry: MagicMock,
+    _eligible: MagicMock,
+    _stats: MagicMock,
+    _voxels: MagicMock,
+    _overlay: MagicMock,
+    _invalidate: MagicMock,
+    _slices: MagicMock,
+    mock_totalseg: MagicMock,
+    mock_brain: MagicMock,
+    _license: MagicMock,
+    _brain_counts: MagicMock,
+    _finalize: MagicMock,
+    tmp_path: Path,
+) -> None:
+    from anonymizer.controller.ai.tseg.modality_profile import ct_modality_profile
+
+    mock_profile.return_value = ct_modality_profile()
+    mock_geometry.return_value = _ct_head_geometry()
+    series = _anatomy_only_series(tmp_path)
+
+    result, nifti, used = analyze_tseg_ct_single_pass(series, include_brain_structures=True)
+
+    assert used is True
+    assert result.error is None
+    assert nifti is not None
+    mock_totalseg.assert_not_called()
+    mock_brain.assert_called_once()
+
+
+@patch("anonymizer.controller.ai.tseg.segment.run_brain_structures_segmentation")
+@patch("anonymizer.controller.ai.tseg.segment._require_totalsegmentator")
+@patch("anonymizer.controller.ai.tseg.segment._nifti_slice_count", return_value=34)
+@patch("anonymizer.controller.ai.tseg.segment.invalidate_stale_tseg_volume_cache")
+@patch("anonymizer.controller.ai.tseg.segment._brain_structures_cache_valid", return_value=True)
+@patch("anonymizer.controller.ai.tseg.segment.anatomy_overlay_cache_ready", return_value=True)
+@patch(
+    "anonymizer.controller.ai.tseg.segment.read_structure_voxels",
+    return_value={"brain": 200_000, "skull": 50_000, "cerebellum": 4000},
+)
+@patch("anonymizer.controller.ai.tseg.segment.load_contrast_statistics", return_value={"brain": {"volume": 200000}})
+@patch("anonymizer.controller.ai.tseg.segment.ts_regions_eligible", return_value=True)
+@patch("anonymizer.controller.ai.tseg.segment.resolve_series_geometry")
+@patch("anonymizer.controller.ai.tseg.modality_profile.resolve_profile_for_series")
+def test_single_pass_reuses_full_cache_including_brain(
+    mock_profile: MagicMock,
+    mock_geometry: MagicMock,
+    _eligible: MagicMock,
+    _stats: MagicMock,
+    _voxels: MagicMock,
+    _overlay: MagicMock,
+    _brain_valid: MagicMock,
+    _invalidate: MagicMock,
+    _slices: MagicMock,
+    mock_totalseg: MagicMock,
+    mock_brain: MagicMock,
+    tmp_path: Path,
+) -> None:
+    from anonymizer.controller.ai.tseg.modality_profile import ct_modality_profile
+
+    mock_profile.return_value = ct_modality_profile()
+    mock_geometry.return_value = _ct_head_geometry()
+    series = _anatomy_only_series(tmp_path)
+
+    result, _nifti, used = analyze_tseg_ct_single_pass(series, include_brain_structures=True)
+
+    assert used is True
+    assert result.error is None
+    mock_totalseg.assert_not_called()
+    mock_brain.assert_not_called()
+

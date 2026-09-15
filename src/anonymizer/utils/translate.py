@@ -1,36 +1,40 @@
 """
-translate.py: Set the path for .mo translation files and language code for the html help system
+translate.py: Application gettext catalog and language selection.
 
-Doe not use python locale module, manage language settings within the application
-Numerics and Dates are based on en_US / DICOM std for all languages
+Does not use the Python locale module for UI language. Numerics and dates stay
+en_US / DICOM-style for all languages.
 
-This module provides functions for managing language settings within the application.
-It includes functions for setting the language code, getting the current language code,
-getting the current language, and modifying strings by inserting spaces between lowercase
-and uppercase letters or after specified codes.
-
-Language name to locale sub-directory name mapping is defined in the `language_to_code` dictionary.
-The `code_to_language` dictionary provides the reverse mapping.
-
-Example usage:
-    set_language_code("en_US")
-    print(get_current_language())  # Output: English
-    print(insert_spaces_between_cases("HelloWorld"))  # Output: Hello World
+Catalog files live under the installed package tree
+``anonymizer/assets/locales/<lang>/LC_MESSAGES/messages.mo``. Loading is always
+resolved from this package path — never from process CWD — so UI translation
+does not depend on platform launch directory or ``os.chdir``.
 """
+
+from __future__ import annotations
 
 import gettext
 import logging
 import re
+from pathlib import Path
 from pprint import pformat
 
 # Language name to locale sub-directory name mapping (assets/locales/*)
 language_to_code: dict[str, str] = {"English": "en_US", "Deutsch": "de", "Español": "es", "Français": "fr"}
 code_to_language: dict[str, str] = {v: k for k, v in language_to_code.items()}
 
+# ``utils/translate.py`` → package root ``anonymizer/``
+_PACKAGE_ROOT = Path(__file__).resolve().parent.parent
+_LOCALES_DIR = _PACKAGE_ROOT / "assets" / "locales"
+
 _current_language_code: str | None = None
-_current_translations = None
+_current_translations: gettext.NullTranslations | None = None
 
 logger = logging.getLogger(__name__)
+
+
+def locales_dir() -> Path:
+    """Absolute path to packaged gettext locales (platform- and CWD-independent)."""
+    return _LOCALES_DIR
 
 
 def _(msg: str) -> str:
@@ -52,20 +56,33 @@ def set_language_code(lang_code: str):
     if lang_code not in language_to_code.values():
         raise ValueError(f"Invalid language code: {lang_code}")
 
-    logger.info(f"Setting language code to '{lang_code}'")
+    localedir = locales_dir()
+    logger.info("Setting language code to '%s' (localedir=%s)", lang_code, localedir)
+
+    if not localedir.is_dir():
+        raise ValueError(f"Locales directory not found: {localedir}")
 
     # Latch the language code
     _current_language_code = lang_code
 
-    # Load the compiled MO file
+    # Load the compiled MO from the package tree only (no CWD fallback).
     domain = "messages"
-    localedir = "assets/locales"
-    # Load the compiled MO file
-    _current_translations = gettext.translation(domain, localedir, languages=[lang_code], fallback=True)
-    if not _current_translations or not hasattr(_current_translations, "_info"):
-        raise ValueError(f"Language not found: {lang_code}")
+    try:
+        _current_translations = gettext.translation(
+            domain,
+            localedir=str(localedir),
+            languages=[lang_code],
+            fallback=False,
+        )
+    except FileNotFoundError as exc:
+        raise ValueError(f"Language catalog not found: {lang_code} under {localedir}") from exc
 
-    logger.info(f"_current_translations:\n{pformat(_current_translations._info)}")  # type: ignore
+    catalog_path = localedir / lang_code / "LC_MESSAGES" / f"{domain}.mo"
+    logger.info(
+        "Loaded translations from %s:\n%s",
+        catalog_path,
+        pformat(getattr(_current_translations, "_info", {})),
+    )
 
 
 # Default to US English: en_US

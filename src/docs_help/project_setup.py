@@ -40,6 +40,31 @@ def preferred_scp_port() -> int:
             return free_tcp_port()
 
 
+PROJECT_MODEL_FILENAME = "ProjectModel.json"
+
+
+def project_model_path(storage_dir: Path) -> Path:
+    return Path(storage_dir) / PROJECT_MODEL_FILENAME
+
+
+def capture_project_exists(storage_dir: Path) -> bool:
+    return project_model_path(storage_dir).is_file()
+
+
+def discover_imported_fixtures(images_dir: Path) -> set[str]:
+    """Fixture keys that already have an imported series under ``images_dir``."""
+    found: set[str] = set()
+    for key in fixture_dirs():
+        if key == "test_dcm_files":
+            continue
+        try:
+            if series_for_fixture(images_dir, key) is not None:
+                found.add(key)
+        except Exception:
+            continue
+    return found
+
+
 def create_capture_project(storage_dir: Path, *, project_name: str = "HelpScreenshots") -> Path:
     """Create a ProjectModel.json under ``storage_dir`` and return the project directory."""
     storage_dir.mkdir(parents=True, exist_ok=True)

@@ -6,6 +6,7 @@ import contextlib
 import logging
 import sys
 import tkinter as tk
+import tkinter.font as tkfont
 from typing import Any, Protocol
 
 import customtkinter as ctk
@@ -139,6 +140,73 @@ def position_toplevel_near_parent(
 
     with contextlib.suppress(tk.TclError):
         window.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
+
+
+def _max_descendant_reqwidth(widget: tk.Misc) -> int:
+    widest = 0
+    stack: list[tk.Misc] = [widget]
+    while stack:
+        current = stack.pop()
+        try:
+            widest = max(widest, int(current.winfo_reqwidth()))
+            stack.extend(current.winfo_children())
+        except tk.TclError:
+            continue
+    return widest
+
+
+def _title_bar_min_width(window: tk.Misc) -> int:
+    """Caption text is not a widget; include it so titles are not clipped."""
+    try:
+        title = str(window.title() or "")
+    except tk.TclError:
+        return 0
+    if not title:
+        return 0
+    try:
+        font = tkfont.nametofont("TkCaptionFont")
+        extra = 96 if sys.platform == "darwin" else 48
+        return int(font.measure(title)) + extra
+    except (tk.TclError, AttributeError):
+        return 0
+
+
+def fit_toplevel_to_content(
+    window: tk.Misc,
+    *,
+    parent: tk.Misc | None = None,
+    pad: int = 40,
+    min_width: int = 0,
+    min_height: int = 0,
+    place: bool = False,
+    offset: int = 30,
+) -> tuple[int, int]:
+    """Size a dialog to its widgets (and title), optionally placing it near ``parent``.
+
+    Tk/CTk ``winfo_reqwidth`` on the toplevel often follows a progress bar default
+    (~200px) rather than the longest label. Walk descendants and the caption.
+    """
+    try:
+        window.update_idletasks()
+    except tk.TclError:
+        return (0, 0)
+    try:
+        req_w = int(window.winfo_reqwidth())
+        req_h = int(window.winfo_reqheight())
+    except tk.TclError:
+        return (0, 0)
+    width = max(req_w, _max_descendant_reqwidth(window) + pad, _title_bar_min_width(window), min_width)
+    height = max(req_h, min_height)
+    if place:
+        position_toplevel_near_parent(window, parent, width=width, height=height, offset=offset)
+    else:
+        try:
+            pos_x, pos_y = int(window.winfo_x()), int(window.winfo_y())
+            window.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
+        except tk.TclError:
+            with contextlib.suppress(tk.TclError):
+                window.geometry(f"{width}x{height}")
+    return width, height
 
 
 def refresh_app_window_menu(window: tk.Misc) -> None:

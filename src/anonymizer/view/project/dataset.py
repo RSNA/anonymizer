@@ -548,12 +548,18 @@ class DatasetView(AppToplevel):
         title: str,
         hint: str,
         modality: str,
+        expand_loader=None,
+        showing_full_catalog: bool = False,
     ) -> None:
         from anonymizer.controller.ai.harmonize import apply_series_descriptions
-        from anonymizer.view.ai.set_description_dialog import show_set_description_dialog
+        from anonymizer.view.ai.set_description_dialog import (
+            ExpandCatalogLoader,
+            show_set_description_dialog,
+        )
 
         if not choices or not series_dirs:
             return
+        loader: ExpandCatalogLoader | None = expand_loader
         result = show_set_description_dialog(
             self,
             title=title,
@@ -563,6 +569,8 @@ class DatasetView(AppToplevel):
             initial=initial if initial in choices else choices[0],
             catalog_kind="radlex",
             modality=modality,
+            expand_loader=loader,
+            showing_full_catalog=showing_full_catalog,
         )
         if not result.applied or not result.description:
             return
@@ -591,12 +599,18 @@ class DatasetView(AppToplevel):
         title: str,
         hint: str,
         modality: str,
+        expand_loader=None,
+        showing_full_catalog: bool = False,
     ) -> None:
         from anonymizer.controller.ai.harmonize import apply_study_descriptions
-        from anonymizer.view.ai.set_description_dialog import show_set_description_dialog
+        from anonymizer.view.ai.set_description_dialog import (
+            ExpandCatalogLoader,
+            show_set_description_dialog,
+        )
 
         if not labels or not anon_study_uids:
             return
+        loader: ExpandCatalogLoader | None = expand_loader
         result = show_set_description_dialog(
             self,
             title=title,
@@ -606,6 +620,8 @@ class DatasetView(AppToplevel):
             initial=initial,
             catalog_kind="loinc",
             modality=modality,
+            expand_loader=loader,
+            showing_full_catalog=showing_full_catalog,
         )
         if not result.applied or not result.description:
             return
@@ -1015,7 +1031,10 @@ class DatasetView(AppToplevel):
 
             if series_description_cohort_key(pair[1].modality) is None:
                 return None
-            return _("Double-click description to choose a RadLex name · Right-click opens Series View")
+            return _(
+                "Double-click description to choose a RadLex name "
+                "(expand to full catalog if needed) · Right-click opens Series View"
+            )
 
         study_uid = parse_study_tree_iid(iid)
         if study_uid is not None:
@@ -1031,7 +1050,10 @@ class DatasetView(AppToplevel):
                 # Still allow tooltip when study has a display description / eligible modality.
                 if not (record.modality or "").strip():
                     return None
-            return _("Double-click description to choose a LOINC name · Right-click opens projections")
+            return _(
+                "Double-click description to choose a LOINC name "
+                "(expand to full catalog if needed) · Right-click opens projections"
+            )
         return None
 
     def _cancel_description_combo_dismiss(self) -> None:
@@ -1218,7 +1240,6 @@ class DatasetView(AppToplevel):
 
     def _edit_study_description(self, iid: str, anon_study_uid: str) -> None:
         from anonymizer.controller.ai.harmonize import (
-            apply_harmonized_study_description,
             study_description_edit_choices,
             study_description_group_choices,
             study_loinc_prefix_for_edit,
@@ -1295,55 +1316,69 @@ class DatasetView(AppToplevel):
             # Unharmonized PHI is not a selectable option — default to first LOINC choice.
             current_label = labels[0]
 
-        # Full LOINC catalog (or multi-select) uses the scrollable picker.
-        if full_catalog or len(group_uids) > 1 or len(labels) > 12:
-            n = len(group_uids)
-            prefix = study_loinc_prefix_for_edit(anon_model, anon_study_uid) or ""
-            modality = prefix.strip() or str(record.modality or "").strip()
-            if n > 1:
-                title = _("Set {modality} study description ({n})").format(modality=modality, n=n)
+        n = len(group_uids)
+        prefix = study_loinc_prefix_for_edit(anon_model, anon_study_uid) or ""
+        modality = prefix.strip() or str(record.modality or "").strip()
+        if n > 1:
+            title = _("Set {modality} study description ({n})").format(modality=modality, n=n)
+            if full_catalog:
                 hint = _("Applies to all {n} selected {modality} studies").format(n=n, modality=modality)
             else:
-                title = _("Set {modality} study description").format(modality=modality)
+                hint = _(
+                    "Applies to all {n} selected {modality} studies · Expand to the full catalog "
+                    "if the category is wrong"
+                ).format(n=n, modality=modality)
+        else:
+            title = _("Set {modality} study description").format(modality=modality)
+            if full_catalog:
                 hint = _("Choose a {modality} LOINC study description").format(modality=modality)
-            self._apply_study_description_dialog(
-                anon_study_uids=group_uids,
-                labels=labels,
-                choice_meta=choice_meta,
-                initial=current_label,
-                title=title,
-                hint=hint,
-                modality=modality,
-            )
-            return
+            else:
+                hint = _(
+                    "Closest matches for this study · Expand to the full {modality} LOINC catalog "
+                    "if the category is wrong"
+                ).format(modality=modality)
 
-        patient_id = anon_model.get_anon_patient_id_for_study(anon_study_uid)
-        images_dir = self._controller.model.images_dir()
-        study_root = Path(images_dir) / patient_id / anon_study_uid if patient_id else None
+        expand_loader = None
+        if not full_catalog:
 
-        def apply_fn(description: str, loinc_number: str | None) -> bool:
-            if study_root is None or not study_root.is_dir():
-                logger.error("Study root missing for %s", anon_study_uid)
-                return False
-            return apply_harmonized_study_description(
-                study_root,
-                description,
-                anon_model,
-                anon_study_uid,
-                loinc_number=loinc_number,
-            )
+            def expand_loader() -> tuple[list[str], dict[str, str | None]]:
+                seed_uid = group_uids[0]
+                seed_hint = current
+                if len(group_uids) > 1:
+                    rec0 = self._studies_by_uid.get(seed_uid)
+                    seed_hint = (anon_model.get_study_harmonized_description(seed_uid) or "").strip()
+                    if not seed_hint and rec0 is not None:
+                        seed_hint = (rec0.study_description or "").strip()
+                full_pairs = study_description_edit_choices(
+                    anon_model,
+                    seed_uid,
+                    hint_description=seed_hint,
+                    full_catalog=True,
+                )
+                full_meta: dict[str, str | None] = {}
+                full_labels: list[str] = []
+                for name, code in full_pairs:
+                    label = f"{name}  ({code})" if code else name
+                    if label in full_meta:
+                        continue
+                    full_meta[label] = code
+                    full_labels.append(label)
+                return full_labels, full_meta
 
-        self._place_description_combo(
-            iid,
-            choices=labels,
+        self._apply_study_description_dialog(
+            anon_study_uids=group_uids,
+            labels=labels,
             choice_meta=choice_meta,
             initial=current_label,
-            apply_callback=apply_fn,
+            title=title,
+            hint=hint,
+            modality=modality,
+            expand_loader=expand_loader,
+            showing_full_catalog=full_catalog,
         )
 
     def _edit_series_description(self, iid: str, anon_series_uid: str) -> None:
         from anonymizer.controller.ai.harmonize import (
-            apply_harmonized_description,
             series_description_cohort_key,
             series_description_edit_choices,
             series_description_group_choices,
@@ -1412,37 +1447,48 @@ class DatasetView(AppToplevel):
             return
 
         initial = current if current in choices else choices[0]
-        if full_catalog or len(group_uids) > 1 or len(choices) > 12:
-            n = len(series_dirs)
-            modality = str(series.modality or "").strip()
-            if n > 1:
-                title = _("Set {modality} series description ({n})").format(modality=modality, n=n)
+        n = len(series_dirs)
+        modality = str(series.modality or "").strip()
+        if n > 1:
+            title = _("Set {modality} series description ({n})").format(modality=modality, n=n)
+            if full_catalog:
                 hint = _("Applies to all {n} selected {modality} series").format(n=n, modality=modality)
             else:
-                title = _("Set {modality} series description").format(modality=modality)
+                hint = _(
+                    "Applies to all {n} selected {modality} series · Expand to the full catalog "
+                    "if the category is wrong"
+                ).format(n=n, modality=modality)
+        else:
+            title = _("Set {modality} series description").format(modality=modality)
+            if full_catalog:
                 hint = _("Choose a {modality} RadLex Playbook series description").format(modality=modality)
-            self._apply_series_description_dialog(
-                series_dirs=series_dirs,
-                choices=choices,
-                initial=initial,
-                title=title,
-                hint=hint,
-                modality=modality,
-            )
-            return
+            else:
+                hint = _(
+                    "Closest matches for this series · Expand to the full {modality} RadLex catalog "
+                    "if the category is wrong"
+                ).format(modality=modality)
 
-        anon_model = self._controller.anonymizer.model
-        series_path = series_dirs[0]
+        expand_loader = None
+        if not full_catalog:
 
-        def apply_fn(description: str, _loinc_number: str | None) -> bool:
-            return apply_harmonized_description(series_path, description, anon_model)
+            def expand_loader() -> tuple[list[str], dict[str, str | None]]:
+                full_choices = series_description_edit_choices(
+                    modality=series.modality,
+                    current_description=current,
+                    full_catalog=True,
+                    anatomy_hint=study_hint,
+                )
+                return full_choices, {label: None for label in full_choices}
 
-        self._place_description_combo(
-            iid,
+        self._apply_series_description_dialog(
+            series_dirs=series_dirs,
             choices=choices,
-            choice_meta={label: None for label in choices},
             initial=initial,
-            apply_callback=apply_fn,
+            title=title,
+            hint=hint,
+            modality=modality,
+            expand_loader=expand_loader,
+            showing_full_catalog=full_catalog,
         )
 
     def _on_tree_right_click(self, event) -> None:

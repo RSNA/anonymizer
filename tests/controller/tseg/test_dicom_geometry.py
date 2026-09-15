@@ -401,6 +401,23 @@ def test_format_series_view_geometry_line(tmp_path: Path) -> None:
     assert format_series_view_geometry_line(geom) == expected
 
 
+def test_format_series_view_geometry_line_translated(tmp_path: Path) -> None:
+    from anonymizer.utils.translate import set_language_code
+
+    geom = analyze_series_geometry(build_synthetic_chest_ct_series(tmp_path / "chest"))
+    set_language_code("de")
+    try:
+        line = format_series_view_geometry_line(geom)
+    finally:
+        set_language_code("en_US")
+    assert "Herkunft:" in line
+    assert "Geometrie:" in line
+    assert "Originalaufnahme" in line
+    assert "Diagnostisches 3D-Volumen" in line
+    assert "Original acquisition" not in line
+    assert "Diagnostic 3D volume" not in line
+
+
 def test_format_geometry_progress_message_includes_skip_reason() -> None:
     from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
 

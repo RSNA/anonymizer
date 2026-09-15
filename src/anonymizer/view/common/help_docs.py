@@ -101,20 +101,26 @@ def open_tutorials_channel() -> bool:
 
 def locale_html_dir() -> Path:
     """Return ``assets/locales/<lang>/html`` for the active UI language."""
+    from anonymizer.utils.translate import locales_dir
+
     code = get_current_language_code() or "en_US"
+    packaged = locales_dir() / code / "html"
+    if packaged.is_dir():
+        return packaged
     cwd_candidate = Path("assets/locales") / code / "html"
     if cwd_candidate.is_dir():
         return cwd_candidate
-    packaged = Path(__file__).resolve().parents[2] / "assets" / "locales" / code / "html"
     return packaged
 
 
 def license_html_path() -> Path | None:
     """Return the in-app license HTML for the current locale, if present."""
+    from anonymizer.utils.translate import locales_dir
+
     candidates = [locale_html_dir()]
-    en_fallback = Path("assets/locales/en_US/html")
+    en_fallback = locales_dir() / "en_US" / "html"
     if not en_fallback.is_dir():
-        en_fallback = Path(__file__).resolve().parents[2] / "assets" / "locales" / "en_US" / "html"
+        en_fallback = Path("assets/locales/en_US/html")
     if en_fallback not in candidates:
         candidates.append(en_fallback)
 

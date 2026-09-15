@@ -1,8 +1,16 @@
-# Help screenshot catalog — source of truth for UX coverage and capture.
-# Capture: uv run python -m docs_help --language en_US
+# Full capture (all languages, resume-safe):
+#   uv run python -m docs_help -v
+# Languages (in order): en_US → de → es → fr
+# One language:         uv run python -m docs_help --language de -v
+# Existing PNGs are skipped; work under docs/.capture_work/<lang> is kept.
+# Shared TSEG/OCR cache: docs/.capture_work/fixture_cache/ (+ docs_help/ocr_cache/)
+# Reset language work:   --reset-work   Recapture PNGs: --force
 #
-# Output: docs/<lang>/<workflow.id>/<shots_dir>/<os>/<file>  (os = macos|windows)
-# severity: required | soft | orthanc
+# Shot order = MkDocs nav chapter numbers (not folder names):
+#   2 Install → 3 AI Features → 5 Create a project → 6 Search → 7 View
+#   → 8.1 Remove Pixel PHI → 8.2 Harmonize names → 8.3 Blur faces
+#   → 8.4 Run on many studies → 9 Send
+#
 
 fixtures:
   test_dcm_files: tests/controller/assets/test_dcm_files
@@ -14,6 +22,8 @@ fixtures:
 languages:
   en_US: en
   de: de
+  es: es
+  fr: fr
 
 orthanc:
   host: 127.0.0.1
@@ -23,6 +33,7 @@ orthanc:
 workflows:
   - id: 02-install
     doc: 02-install/index.md
+    chapter: "2"
     title: Install and first launch
     shots_dir: shots
     shots:
@@ -34,8 +45,23 @@ workflows:
         ux_elements: [Welcome screen, Language selector, New Project / Open / AI Features]
         caption: "Welcome screen after first launch."
 
+  - id: 03-ai-features-setup
+    doc: 03-ai-features-setup/index.md
+    chapter: "3"
+    title: "AI Features setup"
+    shots_dir: shots
+    shots:
+      - id: AiFeaturesSetup
+        file: AiFeaturesSetup.png
+        window: AiFeaturesSetupDialog
+        severity: required
+        deps: [language]
+        ux_elements: [Download rows, Harmonize resolution, License]
+        caption: "AI Features setup — download models before Process tool demos."
+
   - id: 05-create-project
     doc: 05-create-project/index.md
+    chapter: "5"
     title: Create a project
     shots_dir: shots
     shots:
@@ -134,6 +160,7 @@ workflows:
 
   - id: 06-search
     doc: 06-search/index.md
+    chapter: "6"
     title: Search
     shots_dir: shots
     shots:
@@ -196,6 +223,7 @@ workflows:
 
   - id: 07-view
     doc: 07-view/index.md
+    chapter: "7"
     title: View
     shots_dir: shots
     shots:
@@ -260,22 +288,10 @@ workflows:
         ux_elements: [CSV path under private/phi_export, Column headers, Series rows]
         caption: "Patient Lookup CSV after Process — davidson, CT head, US single-frame with AI status columns."
 
-  - id: 03-ai-features-setup
-    doc: 03-ai-features-setup/index.md
-    title: "AI Features setup"
-    shots_dir: shots
-    shots:
-      - id: AiFeaturesSetup
-        file: AiFeaturesSetup.png
-        window: AiFeaturesSetupDialog
-        severity: required
-        deps: [language]
-        ux_elements: [Download rows, Harmonize resolution, License]
-        caption: "AI Features setup — download models before Process tool demos."
-
   - id: 08-process/02-remove-burned-in-text
     doc: 08-process/02-remove-burned-in-text/index.md
-    title: "8.1 Remove Pixel PHI"
+    chapter: "8.1"
+    title: Remove Pixel PHI
     shots_dir: shots
     shots:
       - id: Process_RemovePixel_Whitelist
@@ -366,7 +382,8 @@ workflows:
 
   - id: 08-process/03-harmonize-names
     doc: 08-process/03-harmonize-names/index.md
-    title: "8.2 Harmonize names"
+    chapter: "8.2"
+    title: Harmonize names
     shots_dir: shots
     shots:
       - id: Process_Harmonize_Description
@@ -379,25 +396,6 @@ workflows:
           brain_prompt: auto_no
         ux_elements: [Series View, Harmonize Description, Playbook results table]
         caption: "CT_Head_With_Contrast Series View above completed Harmonize Description results."
-      - id: Process_Harmonize_CXR
-        file: Process_Harmonize_CXR.png
-        window: SeriesView+HarmonizeResultsView
-        severity: soft
-        deps: [project, fixture:davidson_cxr, xr_planar_models]
-        recipe:
-          actions: [harmonize_description]
-        ux_elements:
-          [Series View, Harmonize Description, Playbook table, Xp-Bodypart, CXp-Projection-Rotation]
-        caption: "davidson_cxr Series View above planar Harmonize — Body Part / View sources name XR models."
-      - id: Process_Harmonize_US
-        file: Process_Harmonize_US.png
-        window: SeriesView+HarmonizeResultsView
-        severity: soft
-        deps: [project, fixture:us_rgb_single_frame]
-        recipe:
-          actions: [harmonize_description]
-        ux_elements: [Series View, Harmonize Description, Playbook table, DICOM metadata sources]
-        caption: "us_rgb_single_frame Series View above planar Harmonize (metadata-only; no TotalSegmentator)."
       - id: Process_Harmonize_BrainPrompt
         file: Process_Harmonize_BrainPrompt.png
         window: HarmonizeResultsView+BrainPrompt
@@ -418,10 +416,30 @@ workflows:
           brain_prompt: auto_yes
         ux_elements: [Series View, Brain structure latches, Middle slice]
         caption: "CT_Head_With_Contrast Series View with full brain-structure segments on middle slice."
+      - id: Process_Harmonize_CXR
+        file: Process_Harmonize_CXR.png
+        window: SeriesView+HarmonizeResultsView
+        severity: soft
+        deps: [project, fixture:davidson_cxr, xr_planar_models]
+        recipe:
+          actions: [harmonize_description]
+        ux_elements:
+          [Series View, Harmonize Description, Playbook table, Xp-Bodypart, CXp-Projection-Rotation]
+        caption: "davidson_cxr Series View above planar Harmonize — Body Part / View sources name XR models."
+      - id: Process_Harmonize_US
+        file: Process_Harmonize_US.png
+        window: SeriesView+HarmonizeResultsView
+        severity: soft
+        deps: [project, fixture:us_rgb_single_frame]
+        recipe:
+          actions: [harmonize_description]
+        ux_elements: [Series View, Harmonize Description, Playbook table, DICOM metadata sources]
+        caption: "us_rgb_single_frame Series View above planar Harmonize (metadata-only; no TotalSegmentator)."
 
   - id: 08-process/04-blur-faces
     doc: 08-process/04-blur-faces/index.md
-    title: "8.3 Blur faces"
+    chapter: "8.3"
+    title: Blur faces
     shots_dir: shots
     shots:
       - id: Process_FaceBlur_Gaussian
@@ -437,7 +455,8 @@ workflows:
 
   - id: 08-process/05-run-on-many-studies
     doc: 08-process/05-run-on-many-studies/index.md
-    title: "8.4 Run on many studies"
+    chapter: "8.4"
+    title: Run on many studies
     shots_dir: shots
     shots:
       - id: AiBatchOptions
@@ -450,6 +469,7 @@ workflows:
 
   - id: 09-send
     doc: 09-send/index.md
+    chapter: "9"
     title: Send
     shots_dir: shots
     shots:

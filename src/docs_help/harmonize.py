@@ -56,6 +56,7 @@ class HarmonizeCaptureSession:
 
     series_view: Any
     series_path: Path
+    fixture: str = ""
     harmonize_view: Any | None = None
     brain_prompt: Any | None = None
 
@@ -266,6 +267,37 @@ def clear_series_analysis_cache(series_view: Any) -> None:
     settle(series_view, 400)
 
 
+def _open_harmonize_results_view(series_view: Any) -> Any:
+    """Open HarmonizeResultsView with the same arguments as the Series View button.
+
+    Used when analysis cache already exists: the app hides Harmonize Description
+    (user would Clear Analysis Cache to re-run). Capture keeps the cache and still
+    opens the same results view so the worker reuses ``0_TS_SEG``.
+    """
+    from anonymizer.view.ai.harmonize_results import show_harmonize_results_view
+
+    ds = getattr(series_view, "_ds", None)
+    series_path = getattr(series_view, "_series_path", None)
+    controller = getattr(series_view, "_controller", None)
+    if ds is None or series_path is None or controller is None:
+        raise RuntimeError("Series View is not ready for Harmonize")
+    logger.info("Harmonize starting for %s", series_path)
+    with contextlib.suppress(Exception):
+        series_view.harmonize_button.grid_remove()
+    series_view._set_series_interaction_enabled(False)
+    series_view._harmonize_view = show_harmonize_results_view(
+        series_view,
+        series_path=series_path,
+        ds=ds,
+        current_description=str(ds.get("SeriesDescription", "") or "").strip(),
+        fonts=getattr(series_view, "_fonts", None),
+        anon_model=controller.anonymizer.model,
+        on_series_description_updated=getattr(series_view, "_on_series_description_updated", None),
+        on_closed=getattr(series_view, "_on_harmonize_closed", None),
+    )
+    return series_view._harmonize_view
+
+
 def start_harmonize_from_series_view(series_view: Any) -> Any:
     """Click Harmonize Description and return the HarmonizeResultsView."""
     from anonymizer.view.ai.harmonize_results import (
@@ -291,9 +323,18 @@ def start_harmonize_from_series_view(series_view: Any) -> Any:
     except Exception as exc:
         logger.warning("Series View Harmonize chrome refresh: %s", exc)
 
-    series_view.harmonize_description_button_clicked()
-    settle(series_view, 300)
-    view = getattr(series_view, "_harmonize_view", None) or get_any_open_harmonize_view()
+    visible = getattr(series_view, "_harmonize_button_visible", None)
+    has_masks = getattr(series_view, "_seg_dir_likely_has_structures", None)
+    if callable(visible) and not visible() and callable(has_masks) and has_masks():
+        logger.info(
+            "STEP Harmonize Description (analysis cache present; opening HarmonizeResultsView; "
+            "reuse anatomy, brain_structures only if missing)"
+        )
+        view = _open_harmonize_results_view(series_view)
+    else:
+        series_view.harmonize_description_button_clicked()
+        settle(series_view, 300)
+        view = getattr(series_view, "_harmonize_view", None) or get_any_open_harmonize_view()
     if view is None:
         for _ in range(50):
             settle(series_view, 50)
@@ -888,15 +929,23 @@ def prepare_series_for_harmonize(
     import_fixtures: Callable[..., None],
     clear_cache: bool = False,
 ) -> HarmonizeCaptureSession:
-    """Import fixture, open Series View, optionally clear prior Harmonize cache."""
+    """Import fixture, reuse shared TSEG cache, open Series View.
+
+    Does not clear analysis cache: capture must reuse ``0_TS_SEG`` from a previous
+    language or a resumed run. Pass ``clear_cache=True`` only for an explicit reset.
+    """
+    from docs_help.fixture_cache import seed_tseg_cache
+
     import_fixtures(ctx, fixture)
     series_path = series_for_fixture(ctx.app.controller.model.images_dir(), fixture)
     if series_path is None:
         raise RuntimeError(f"No series for fixture {fixture!r}")
+    seed_tseg_cache(series_path, fixture)
     series_view = open_series_view(ctx, series_path)
     if clear_cache:
+        logger.warning("Clearing analysis cache for %s (explicit capture reset)", series_path)
         clear_series_analysis_cache(series_view)
-    return HarmonizeCaptureSession(series_view=series_view, series_path=series_path)
+    return HarmonizeCaptureSession(series_view=series_view, series_path=series_path, fixture=fixture)
 
 
 def run_harmonize_to_results(
@@ -905,7 +954,12 @@ def run_harmonize_to_results(
     policy: BrainPromptPolicy,
     timeout_s: float = DEFAULT_HARMONIZE_TIMEOUT_S,
 ) -> Any:
-    """Start Harmonize under ``policy`` and wait for a complete results table."""
+    """Start Harmonize from Series View and wait for a complete results table.
+
+    This is the same path as the app: ``HarmonizeResultsView`` worker +
+    ``tseg_batch_session`` + ``harmonize_series``. Capture must not call
+    TotalSegmentator or ``harmonize_series`` on the Tk main thread.
+    """
     if policy is BrainPromptPolicy.CAPTURE:
         raise ValueError("Use capture_brain_prompt_over_harmonize for CAPTURE policy")
     with brain_prompt_policy(policy):
@@ -913,6 +967,10 @@ def run_harmonize_to_results(
         wait_harmonize_results_ready(session.harmonize_view, timeout_s=timeout_s)
         fit_harmonize_results_for_capture(session.harmonize_view)
         settle(session.harmonize_view, 600)
+    if session.fixture:
+        from docs_help.fixture_cache import save_tseg_cache
+
+        save_tseg_cache(session.series_path, session.fixture)
     return session.harmonize_view
 
 
