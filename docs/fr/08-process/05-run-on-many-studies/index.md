@@ -47,6 +47,8 @@ Pour chaque série, les outils sélectionnés s’exécutent dans un ordre stabl
 - Une mémoire insuffisante peut interrompre avec un avertissement clair.
 - Les séries déjà traitées sont ignorées par défaut.
 
+![Traitement par lots IA en cours](shots/macos/AiBatchRunning.png)
+
 ## Ensuite
 
 - Lisez le résumé (terminé / ignoré / échoué).

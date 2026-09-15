@@ -47,6 +47,8 @@ Para cada serie, las herramientas seleccionadas se ejecutan en un orden estable 
 - Poca memoria puede abortar con un aviso claro.
 - Las series ya procesadas se omiten por defecto.
 
+![Procesamiento por lotes de IA en ejecución](shots/macos/AiBatchRunning.png)
+
 ## Después
 
 - Lea el resumen (completados / omitidos / fallidos).

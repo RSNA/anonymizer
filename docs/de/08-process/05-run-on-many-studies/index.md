@@ -47,6 +47,8 @@ Für jede Serie laufen ausgewählte Werkzeuge in einer stabilen Reihenfolge (Pix
 - Wenig Speicher kann mit klarer Warnung abbrechen.
 - Bereits verarbeitete Serien werden standardmäßig übersprungen.
 
+![KI-Stapelverarbeitung läuft](shots/macos/AiBatchRunning.png)
+
 ## Danach
 
 - Zusammenfassung lesen (abgeschlossen / übersprungen / fehlgeschlagen).

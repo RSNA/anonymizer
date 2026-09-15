@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [19.0.10]
+- Docs: AI Batch Process running dialog screenshot for chapter 8.4 (en/de/es/fr macOS)
+- docs_help: staged AiBatchRunning capture without starting the batch worker
+
 ## [19.0.9]
 - Dataset: expand nearest LOINC/RadLex description pickers to the full modality catalog so wrong-category Harmonize names can be corrected
 - Harmonize planar LOINC ranking: Extremities↔Extremity word boundaries; Head↔Skull; ignore elbow “radial head” false matches

@@ -52,7 +52,7 @@ uv run python -m docs_help --language en_US --force --only Welcome
   - **8.1** Supprimer le PHI pixel → `davidson_cxr` (noircir) + `us_rgb_single_frame` (fusion + Zone d'exclusion sous mindray)
   - **8.2** Harmoniser → `CT_Head_With_Contrast` (Vue des séries → résultats terminés → invite cerveau → coupe du milieu segmentée) + `davidson_cxr` / `us_rgb_single_frame` (sources Playbook planaires)
   - **8.3** Flou facial → `CT_Head_With_Contrast` (Gaussien)
-  - **8.4** Lots → les deux fixtures sélectionnées dans Jeu de données
+  - **8.4** Lots → options + dialogue d’exécution avec les deux fixtures sélectionnées dans Jeu de données
 - Soft-fail des captures Traiter lourdes en IA lorsque les modèles manquent
 - Hard-fail des captures Rechercher dépendantes d’Orthanc lorsque C-ECHO échoue
 - Si un PNG Windows manque, le site publié retombe sur l’image macOS

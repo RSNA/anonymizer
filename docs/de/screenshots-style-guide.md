@@ -52,7 +52,7 @@ uv run python -m docs_help --language en_US --force --only Welcome
   - **8.1** Pixel-PHI entfernen → `davidson_cxr` (schwärzen) + `us_rgb_single_frame` (einblenden + Bereich ausschließen unter mindray)
   - **8.2** Harmonisieren → `CT_Head_With_Contrast` (Serienansicht → abgeschlossene Ergebnisse → Hirn-Prompt → segmentierter mittlerer Schnitt) + `davidson_cxr` / `us_rgb_single_frame` (planare Playbook-Quellen)
   - **8.3** Gesichtsunschärfe → `CT_Head_With_Contrast` (Gaussian)
-  - **8.4** Stapel → beide Fixtures im Datensatz ausgewählt
+  - **8.4** Stapel → Optionen + Lauf-Dialog mit beiden Fixtures im Datensatz ausgewählt
 - Soft-Fail bei KI-lastigen Process-Shots, wenn Modelle fehlen
 - Hard-Fail bei Orthanc-abhängigen Search-Shots, wenn C-ECHO fehlschlägt
 - Fehlt ein Windows-PNG, fällt die veröffentlichte Site auf das macOS-Bild zurück

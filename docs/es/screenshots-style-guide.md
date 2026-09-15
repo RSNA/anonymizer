@@ -52,7 +52,7 @@ uv run python -m docs_help --language en_US --force --only Welcome
   - **8.1** Quitar PHI de píxeles → `davidson_cxr` (ocultar) + `us_rgb_single_frame` (fundir + Excluir área bajo mindray)
   - **8.2** Harmonize → `CT_Head_With_Contrast` (Vista de Series → resultados completos → mensaje cerebral → corte medio segmentado) + `davidson_cxr` / `us_rgb_single_frame` (fuentes Playbook planar)
   - **8.3** Desenfoque facial → `CT_Head_With_Contrast` (Gaussian)
-  - **8.4** Lote → ambas fixtures seleccionadas en el Conjunto de datos
+  - **8.4** Lote → opciones + diálogo en ejecución con ambas fixtures seleccionadas en el Conjunto de datos
 - Fallo suave en capturas de Procesar intensivas en IA cuando faltan modelos
 - Fallo duro en capturas de Buscar que dependen de Orthanc cuando falla C-ECHO
 - Si falta un PNG de Windows, el sitio publicado usa la imagen macOS

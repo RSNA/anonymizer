@@ -47,6 +47,8 @@ For each series, selected tools run in a stable order (pixel PHI â†’ Harmonize â
 - Low memory can abort with a clear warning.
 - Already-processed series are skipped by default.
 
+![AI Batch Process running](shots/macos/AiBatchRunning.png)
+
 ## Afterward
 
 - Read the summary (completed / skipped / failed).

@@ -1483,6 +1483,141 @@ def shot_ai_batch_options(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
         close_toplevel(dlg)
 
 
+def _stage_ai_batch_running(dlg: Any) -> None:
+    """Fake mid-run AI Batch Process UI without starting the worker thread."""
+    from types import SimpleNamespace
+
+    from anonymizer.controller.ai_batch_process import (
+        AiBatchAlgorithm,
+        format_ai_batch_phase_label,
+        format_batch_phase_banner,
+        format_batch_series_context,
+        format_batch_step_subline,
+        format_batch_workflow_log_line,
+    )
+    from anonymizer.utils.memory import capture_memory_snapshot
+    from anonymizer.utils.translate import _
+
+    # Cancel any scheduled auto-start if the after callback still fires.
+    dlg._cancelled = True
+
+    cxr_ds = SimpleNamespace(get=lambda key, default="": "CHEST 2 VIEWS" if key == "SeriesDescription" else default)
+    head_ds = SimpleNamespace(get=lambda key, default="": "CT HEAD AX" if key == "SeriesDescription" else default)
+
+    dlg._progressbar.set(0.42)
+    dlg._phase_label.configure(
+        text=format_ai_batch_phase_label(
+            AiBatchAlgorithm.HARMONIZE,
+            algorithm_index=2,
+            algorithms_total=3,
+        )
+    )
+    dlg._progress_label.configure(
+        text=format_batch_series_context(
+            study_index=2,
+            study_total=2,
+            series_index=1,
+            series_total=3,
+            ds=head_ds,
+        )
+    )
+    dlg._update_memory_label(capture_memory_snapshot())
+
+    dlg._text_box.configure(state="normal")
+    dlg._text_box.delete("1.0", "end")
+    log_lines = [
+        format_batch_workflow_log_line(format_batch_phase_banner(AiBatchAlgorithm.REMOVE_PIXEL_PHI)),
+        format_batch_workflow_log_line(
+            format_batch_series_context(
+                study_index=1,
+                study_total=2,
+                series_index=1,
+                series_total=1,
+                ds=cxr_ds,
+            )
+        ),
+        format_batch_workflow_log_line(format_batch_step_subline(_("Applied") + ": " + _("Complete"))),
+        format_batch_workflow_log_line(format_batch_phase_banner(AiBatchAlgorithm.HARMONIZE)),
+        format_batch_workflow_log_line(
+            format_batch_series_context(
+                study_index=2,
+                study_total=2,
+                series_index=1,
+                series_total=3,
+                ds=head_ds,
+            )
+        ),
+        format_batch_workflow_log_line(format_batch_step_subline(_("Segmenting anatomy (TotalSegmentator)") + "…")),
+    ]
+    for line in log_lines:
+        dlg._append_log(line)
+    dlg._cancel_button.configure(text=_("Cancel"), state="normal")
+
+
+def shot_ai_batch_running(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
+    """Capture AiBatchProcessDialog mid-run (staged; worker never starts)."""
+    from anonymizer.controller.ai.blur_face import FaceBlurMode
+    from anonymizer.controller.ai.remove_pixel_phi import PixelPhiRemovalMode
+    from anonymizer.controller.ai_batch_process import AiBatchAlgorithm, AiBatchProcessOptions
+    from anonymizer.view.ai.ai_batch_process_dialog import AiBatchProcessDialog
+
+    # Always ensure both demo fixtures for a multi-study mid-run shot.
+    _import_fixtures(ctx, "davidson_cxr", "CT_Head_With_Contrast")
+    images_dir = ctx.app.controller.model.images_dir()
+    studies: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for key in ("davidson_cxr", "CT_Head_With_Contrast"):
+        series = series_for_fixture(images_dir, key)
+        if series is None:
+            continue
+        study = series.parent
+        patient = study.parent
+        pair = (patient.name, study.name)
+        if pair not in seen:
+            seen.add(pair)
+            studies.append(pair)
+    if len(studies) < 2:
+        raise RuntimeError(f"Need ≥2 fixture studies for batch running dialog, got {len(studies)}")
+
+    options = AiBatchProcessOptions(
+        algorithms=(
+            AiBatchAlgorithm.REMOVE_PIXEL_PHI,
+            AiBatchAlgorithm.HARMONIZE,
+            AiBatchAlgorithm.FACE_BLUR,
+        ),
+        blur_mode=FaceBlurMode.GAUSSIAN,
+        pixel_phi_removal_mode=PixelPhiRemovalMode.BLACKOUT,
+        use_modality_whitelist=True,
+    )
+    parent = ctx.app.dashboard or ctx.app
+
+    # Prevent the dialog from launching the real batch worker during capture.
+    original_start = AiBatchProcessDialog._start_worker
+    AiBatchProcessDialog._start_worker = lambda self: None  # type: ignore[method-assign]
+    try:
+        dlg = AiBatchProcessDialog(parent, ctx.app.controller, studies, options)
+        try:
+            settle(dlg, max(ctx.settle_ms, 500))
+            _stage_ai_batch_running(dlg)
+            settle(dlg, max(ctx.settle_ms, 600))
+            try:
+                wait_mapped(dlg)
+                dlg.update_idletasks()
+                dlg.lift()
+            except Exception:
+                pass
+            return ShotResult(
+                shot.id,
+                "ok",
+                f"running:{len(studies)} studies",
+                ctx.grab(dlg, shot, settle_ms=max(ctx.settle_ms, 700)),
+            )
+        finally:
+            close_toplevel(dlg)
+    finally:
+        AiBatchProcessDialog._start_worker = original_start  # type: ignore[method-assign]
+
+
 def _prepare_send_view(ctx: CaptureContext):
     """Open Send/Export with several imported patients for staged screenshots."""
     _import_fixtures(ctx, "davidson_cxr", "CT_Head_With_Contrast", "us_rgb_single_frame")
@@ -2368,6 +2503,7 @@ SHOT_HANDLERS: dict[str, Callable[[CaptureContext, ShotSpec], ShotResult]] = {
     "ViewProjections_Multi": shot_view_projections_multi,
     "SeriesView_Review": shot_series_review,
     "AiBatchOptions": shot_ai_batch_options,
+    "AiBatchRunning": shot_ai_batch_running,
     "SendView_Initial": shot_send_view,
     "SendView_Selection": shot_send_view,
     "SendView_Sending": shot_send_view,

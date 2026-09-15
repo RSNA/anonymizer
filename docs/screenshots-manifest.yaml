@@ -466,6 +466,15 @@ workflows:
         deps: [project, imported, fixture:davidson_cxr, fixture:CT_Head_With_Contrast]
         ux_elements: [Algorithm checkboxes, Modes]
         caption: "AI Batch options with davidson_cxr and CT_Head_With_Contrast imported."
+      - id: AiBatchRunning
+        file: AiBatchRunning.png
+        window: AiBatchProcessDialog
+        severity: soft
+        deps: [project, imported, fixture:davidson_cxr, fixture:CT_Head_With_Contrast]
+        recipe:
+          stage: running
+        ux_elements: [Progress bar, Phase label, Study/series status, Log, Cancel]
+        caption: "AI Batch Process running — Harmonize phase mid-cohort with Cancel available."
 
   - id: 09-send
     doc: 09-send/index.md
