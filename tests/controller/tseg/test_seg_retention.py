@@ -98,6 +98,29 @@ def test_finalize_seg_cache_refuses_counts_without_masks(tmp_path: Path) -> None
         finalize_seg_cache(cache_dir, seg_dir, {"brain": 5000, "skull": 0})
 
 
+def test_finalize_seg_cache_allows_subthreshold_counts_without_masks(tmp_path: Path) -> None:
+    """Thin/unusual volumes can leave sub-threshold counts after prune removes all masks."""
+    from anonymizer.controller.ai.tseg.config import MIN_STRUCTURE_VOXELS
+
+    cache_dir = tmp_path / "0_TS_SEG"
+    seg_dir = cache_dir / "seg"
+    seg_dir.mkdir(parents=True)
+    sub = MIN_STRUCTURE_VOXELS - 1
+
+    primary = finalize_seg_cache(
+        cache_dir,
+        seg_dir,
+        {"spinal_cord": sub, "vertebrae": sub, "brain": 0},
+    )
+    assert primary == {}
+    assert read_structure_voxels(cache_dir) == {
+        "brain": 0,
+        "spinal_cord": sub,
+        "vertebrae": sub,
+    }
+    assert read_primary_segment_voxels(cache_dir) in (None, {})
+
+
 def test_anatomy_overlay_cache_ready_requires_masks(tmp_path: Path) -> None:
     from anonymizer.controller.ai.tseg.seg_retention import (
         anatomy_overlay_cache_ready,
@@ -118,15 +141,29 @@ def test_anatomy_overlay_cache_ready_requires_masks(tmp_path: Path) -> None:
 
 
 def test_collect_structure_voxels_reads_json_without_masks(tmp_path: Path) -> None:
+    from anonymizer.controller.ai.tseg.config import MIN_STRUCTURE_VOXELS
+
+    cache_dir = tmp_path / "0_TS_SEG"
+    seg_dir = cache_dir / "seg"
+    seg_dir.mkdir(parents=True)
+    # Sub-threshold leftovers after prune: JSON-only cache is still valid.
+    sub = MIN_STRUCTURE_VOXELS - 1
+    write_structure_voxels(cache_dir, {"brain": sub, "liver": 0})
+    write_roi_subset_manifest(cache_dir, ["brain", "liver"])
+
+    counts = collect_structure_voxels(seg_dir, ["brain", "liver"])
+    assert counts == {"brain": sub, "liver": 0}
+    assert _segmentation_cache_valid(seg_dir, ["brain", "liver"])
+
+
+def test_segmentation_cache_invalid_when_latch_worthy_without_masks(tmp_path: Path) -> None:
     cache_dir = tmp_path / "0_TS_SEG"
     seg_dir = cache_dir / "seg"
     seg_dir.mkdir(parents=True)
     write_structure_voxels(cache_dir, {"brain": 4000, "liver": 0})
     write_roi_subset_manifest(cache_dir, ["brain", "liver"])
 
-    counts = collect_structure_voxels(seg_dir, ["brain", "liver"])
-    assert counts == {"brain": 4000, "liver": 0}
-    assert _segmentation_cache_valid(seg_dir, ["brain", "liver"])
+    assert not _segmentation_cache_valid(seg_dir, ["brain", "liver"])
 
 
 def test_collect_primary_segment_voxels_reads_json(tmp_path: Path) -> None:

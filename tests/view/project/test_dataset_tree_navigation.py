@@ -153,17 +153,34 @@ def test_tree_row_tooltip_text_by_row_type() -> None:
     view = _navigation_view()
 
     view._tree.identify_row.return_value = study_tree_iid("study-1")
-    assert view._tree_row_tooltip_text(SimpleNamespace(y=1)) == (
-        "Double-click description to choose a LOINC name · Right-click opens projections"
+    assert view._tree_row_tooltip_text(SimpleNamespace(y=1, x=40)) == (
+        "Double-click description to choose a LOINC name "
+        "(expand to full catalog if needed) · Right-click opens projections"
     )
 
     view._tree.identify_row.return_value = series_tree_iid("series-1")
-    assert view._tree_row_tooltip_text(SimpleNamespace(y=1)) == (
-        "Double-click description to choose a RadLex name · Right-click opens Series View"
+    assert view._tree_row_tooltip_text(SimpleNamespace(y=1, x=40)) == (
+        "Double-click description to choose a RadLex name "
+        "(expand to full catalog if needed) · Right-click opens Series View"
     )
 
     view._tree.identify_row.return_value = ""
-    assert view._tree_row_tooltip_text(SimpleNamespace(y=1)) is None
+    assert view._tree_row_tooltip_text(SimpleNamespace(y=1, x=40)) is None
+
+
+def test_tree_row_tooltip_only_over_description_column() -> None:
+    view = _navigation_view()
+    view._tree.identify_row.return_value = study_tree_iid("study-1")
+
+    view._tree.identify_column.return_value = "#1"
+    assert view._tree_row_tooltip_text(SimpleNamespace(y=1, x=200)) is None
+
+    view._tree.identify_column.return_value = "#0"
+    view._tree.identify_element.return_value = "Treeitem.indicator"
+    assert view._tree_row_tooltip_text(SimpleNamespace(y=1, x=10)) is None
+
+    view._tree.identify_element.return_value = "text"
+    assert view._tree_row_tooltip_text(SimpleNamespace(y=1, x=40)) is not None
 
 
 def test_tree_row_tooltip_text_multi_select_series() -> None:
@@ -175,11 +192,34 @@ def test_tree_row_tooltip_text_multi_select_series() -> None:
     view._tree.selection.return_value = (iid1, iid2)
     view._tree.identify_row.return_value = iid1
 
-    tip = view._tree_row_tooltip_text(SimpleNamespace(y=1))
+    tip = view._tree_row_tooltip_text(SimpleNamespace(y=1, x=40))
     assert tip == "Right-click to set the same RadLex description on 2 selected series"
 
 
-def test_double_click_series_description_opens_edit() -> None:
+def test_select_studies_for_patients_selects_matching_study_iids() -> None:
+    view = _navigation_view()
+    study2 = _study("study-2", patient="anon-2")
+    view._studies_by_uid["study-2"] = study2
+    view._tree.selection_set = MagicMock()
+    view._tree.see = MagicMock()
+    view._tree.focus = MagicMock()
+    view._refresh_description_action_buttons = MagicMock()
+    view.deiconify = MagicMock()
+    view.focus_force = MagicMock()
+
+    view.select_studies_for_patients(["anon-1", "anon-2", "missing"])
+
+    view._tree.selection_set.assert_called_once()
+    selected = view._tree.selection_set.call_args[0]
+    assert set(selected) == {study_tree_iid("study-1"), study_tree_iid("study-2")}
+    view._refresh_description_action_buttons.assert_called_once()
+
+
+def test_description_column_is_forty_chars_not_button_row() -> None:
+    assert DatasetView._MIN_DESCRIPTION_CHARS == 40
+    # Button strip is window minsize only, not the #0 column floor.
+    assert DatasetView._BUTTON_ROW_WIDTH_PX == 7 * 120 + 140 + 9 * 10
+
     view = _navigation_view()
     iid = series_tree_iid("series-1")
     view._tree.identify_row.return_value = iid

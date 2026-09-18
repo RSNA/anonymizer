@@ -387,8 +387,15 @@ class ProjectController(AE):
         self._aws_last_error: str | None = None
         self.anonymizer = AnonymizerController(project_model=model)
 
-    def __str__(self):
-        return super().__str__() + f"\n{self.model}" + f"\n{self.anonymizer.model}"
+    def build_dataset_analytics(self, *, should_abort=None):
+        """Read-only Dataset analytics snapshot for the Dashboard."""
+        from anonymizer.controller.analytics import build_dataset_analytics
+
+        return build_dataset_analytics(
+            self.anonymizer.model,
+            Path(self.model.images_dir()),
+            should_abort=should_abort,
+        )
 
     def _reset_scp_vars(self):
         self._abort_query = False

@@ -10,6 +10,7 @@ import logging
 import sys
 import time
 import tkinter as tk
+from collections.abc import Sequence
 from pathlib import Path
 from tkinter import messagebox, ttk
 
@@ -121,10 +122,17 @@ class DatasetView(AppToplevel):
         _project_model (ProjectModel): The project model.
     """
 
-    # Tree #0 (study/series description): keep enough width for LOINC/RadLex text.
-    _MIN_DESCRIPTION_CHARS = 30
-    # Child series rows are indented under the expander; reserve space so ~30 chars stay visible.
-    _SERIES_TREE_INDENT_CHARS = 6
+    # Tree #0 (study/series description): ~40 chars; overflow via tooltip.
+    _MIN_DESCRIPTION_CHARS = 40
+    # Button row layout (must match `_create_widgets`): 7×120 + 1×140 + pads.
+    # Used for window minsize only — not the description column.
+    _BUTTON_WIDTH = 120
+    _SELECT_SIMILAR_WIDTH = 140
+    _BUTTON_PAD = 10
+    _BUTTON_COUNT = 8
+    _BUTTON_ROW_WIDTH_PX = (
+        7 * _BUTTON_WIDTH + _SELECT_SIMILAR_WIDTH + (_BUTTON_COUNT + 1) * _BUTTON_PAD
+    )
 
     def __init__(
         self,
@@ -180,8 +188,8 @@ class DatasetView(AppToplevel):
 
     def _create_widgets(self):
         logger.info("_create_widgets")
-        PAD = 10
-        ButtonWidth = 120
+        PAD = self._BUTTON_PAD
+        ButtonWidth = self._BUTTON_WIDTH
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
@@ -220,17 +228,21 @@ class DatasetView(AppToplevel):
 
         col_names = PHI_IndexRecord.get_tree_display_titles()
         col_fields = PHI_IndexRecord.get_tree_display_fields()
-        stretch_fields = {"pixel_phi_removed"}
+        # Pixel PHI: fixed to heading width (do not absorb leftover tree width).
+        title_sized_fields = {"pixel_phi_removed"}
         for col_idx, title in enumerate(col_names):
             field_name = col_fields[col_idx]
             self._tree.heading(field_name, text=title)
-            width_chars = max(len(title), 8) + 2
-            if field_name == "modality":
-                width_chars = max(width_chars, 12)
+            if field_name in title_sized_fields:
+                width_chars = len(title) + 2
+            else:
+                width_chars = max(len(title), 8) + 2
+                if field_name == "modality":
+                    width_chars = max(width_chars, 12)
             self._tree.column(
                 field_name,
                 width=width_chars * self._char_width_px,
-                stretch=field_name in stretch_fields,
+                stretch=False,
                 anchor="center",
             )
 
@@ -290,7 +302,7 @@ class DatasetView(AppToplevel):
 
         self._select_similar_button = ctk.CTkButton(
             self._button_frame,
-            width=max(ButtonWidth, 140),
+            width=max(ButtonWidth, self._SELECT_SIMILAR_WIDTH),
             text=_("Select Similar"),
             command=self._select_similar_button_pressed,
         )
@@ -448,6 +460,18 @@ class DatasetView(AppToplevel):
         if self._tree_press_was_multiselect and self._description_combo is not None:
             self._dismiss_description_combo(apply=False)
 
+    def _pointer_over_description(self, event) -> bool:
+        """True when the pointer is over the Study/Series description text (#0), not the expander or other columns."""
+        if self._tree.identify_region(event.x, event.y) not in {"tree", "cell"}:
+            return False
+        if self._tree.identify_column(event.x) != "#0":
+            return False
+        # Tree indicator (expand/collapse) shares the #0 column — skip it.
+        return self._tree.identify_element(event.x, event.y) not in {
+            "Indicator",
+            "Treeitem.indicator",
+        }
+
     def _on_tree_description_activate(self, event) -> str | None:
         # Preserve multi-select: modifier clicks are selection gestures, not description edit.
         # Prefer press-time flag — Double-1 may drop Shift/Cmd before the event.
@@ -455,13 +479,7 @@ class DatasetView(AppToplevel):
         multiselect_click = self._tree_press_was_multiselect or bool(state & _TREE_MULTISELECT_STATE)
         self._tree_press_was_multiselect = False
 
-        # Ignore expander clicks and non-description columns (let Treeview expand/collapse).
-        if self._tree.identify_region(event.x, event.y) not in {"tree", "cell"}:
-            return None
-        if self._tree.identify_column(event.x) != "#0":
-            return None
-        # Tree indicator (expand/collapse) shares the #0 column — skip it.
-        if self._tree.identify_element(event.x, event.y) in {"Indicator", "Treeitem.indicator"}:
+        if not self._pointer_over_description(event):
             return None
         iid = self._tree.identify_row(event.y)
         if not iid:
@@ -820,20 +838,45 @@ class DatasetView(AppToplevel):
         self._refresh_description_action_buttons()
 
     def _autosize_description_column(self) -> None:
-        """Widen Study/Series (#0) so at least ~30 description characters stay visible."""
-        heading = _("Study / Series")
-        max_chars = max(self._MIN_DESCRIPTION_CHARS, len(heading) + 2)
-        for study_iid in self._tree.get_children(""):
-            max_chars = max(max_chars, len(str(self._tree.item(study_iid, "text") or "")))
-            for series_iid in self._tree.get_children(study_iid):
-                text_len = len(str(self._tree.item(series_iid, "text") or ""))
-                max_chars = max(max_chars, text_len + self._SERIES_TREE_INDENT_CHARS)
-        self._tree.column(
-            "#0",
-            width=max_chars * self._char_width_px,
-            stretch=False,
-            anchor="w",
-        )
+        """Set Study/Series (#0) to a fixed ~40-character width."""
+        desc_px = self._MIN_DESCRIPTION_CHARS * self._char_width_px
+        self._tree.column("#0", width=desc_px, stretch=False, anchor="w")
+        # Window minsize: fit button strip or tree columns, whichever is wider.
+        try:
+            other = 0
+            for col in self._tree["columns"]:
+                other += int(self._tree.column(col, "width") or 0)
+            tree_w = desc_px + other + 2 * self._BUTTON_PAD + 24
+            min_w = max(self._BUTTON_ROW_WIDTH_PX + 2 * self._BUTTON_PAD, tree_w)
+            min_h = max(int(self.minsize()[1] or 0), 320)
+            self.minsize(min_w, min_h)
+        except Exception:
+            pass
+
+    def select_studies_for_patients(self, anon_patient_ids: Sequence[str]) -> None:
+        """Select all study rows belonging to the given anonymized patient IDs."""
+        wanted = {str(pid) for pid in anon_patient_ids if str(pid)}
+        if not wanted:
+            return
+        if not self._studies_by_uid:
+            self._update_tree_from_phi_index()
+        iids = [
+            study_tree_iid(record.anon_study_uid)
+            for record in self._studies_by_uid.values()
+            if record.anon_patient_id in wanted
+        ]
+        if not iids:
+            logger.info("select_studies_for_patients: no matching studies for %s", sorted(wanted))
+            self._tree.selection_set([])
+            self._refresh_description_action_buttons()
+            return
+        self._tree.selection_set(*iids)
+        with contextlib.suppress(Exception):
+            self._tree.see(iids[0])
+            self._tree.focus(iids[0])
+        self._refresh_description_action_buttons()
+        self.deiconify()
+        self.focus_force()
 
     def _autosize_id_columns(self) -> None:
         """Widen PHI ID / Anon ID to fit the widest study value (plus heading)."""
@@ -1004,6 +1047,9 @@ class DatasetView(AppToplevel):
             self._expanded_study_uids.discard(study_uid)
 
     def _tree_row_tooltip_text(self, event) -> str | None:
+        # Description tips only over the #0 Study/Series text — not the full row.
+        if not self._pointer_over_description(event):
+            return None
         iid = self._tree.identify_row(event.y)
         if not iid:
             return None

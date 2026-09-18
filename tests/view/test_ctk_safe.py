@@ -8,6 +8,7 @@ from anonymizer.view.common.ctk_safe import (
     dispose_photo_image,
     install_safe_scaling_tracker,
     install_safe_tk_font_destructor,
+    install_safe_tk_variable_destructor,
     mark_ctk_window_destroyed,
     pause_scaling_tracker_check,
     resume_scaling_tracker_check,
@@ -113,9 +114,11 @@ def test_install_safe_tk_font_destructor_skips_delete_off_main_thread() -> None:
     font._tk = MagicMock()
 
     worker = MagicMock()
-    with patch("anonymizer.view.common.ctk_safe.threading.current_thread", return_value=worker):
-        with patch("anonymizer.view.common.ctk_safe._tk_scheduling_anchor", return_value=None):
-            tkfont.Font.__del__(font)
+    with (
+        patch("anonymizer.view.common.ctk_safe.threading.current_thread", return_value=worker),
+        patch("anonymizer.view.common.ctk_safe._tk_scheduling_anchor", return_value=None),
+    ):
+        tkfont.Font.__del__(font)
 
     font._call.assert_not_called()
 
@@ -134,12 +137,77 @@ def test_install_safe_tk_font_destructor_deletes_on_main_thread() -> None:
     font._call.assert_called_once_with("font", "delete", "TkFontMock1")
 
 
+def test_install_safe_tk_variable_destructor_skips_tcl_off_main_thread() -> None:
+    import tkinter as tk
+
+    install_safe_tk_variable_destructor()
+    tk_mock = MagicMock()
+    var = MagicMock()
+    var._tk = tk_mock
+    var._name = "PY_VAR_mock"
+    var._tclCommands = ["cmd1"]
+    worker = MagicMock()
+
+    with patch("anonymizer.view.common.ctk_safe.threading.current_thread", return_value=worker):
+        tk.Variable.__del__(var)
+
+    tk_mock.globalunsetvar.assert_not_called()
+    assert var._tk is None
+    assert var._tclCommands is None
+
+
+def test_release_mpl_frame_images_disposes_photo_images_like_image_viewer() -> None:
+    """Charts must use dispose_photo_image on the main thread (ImageViewer pattern)."""
+    from types import SimpleNamespace
+
+    from anonymizer.view.common.ctk_safe import release_mpl_frame_images
+
+    frame = MagicMock()
+    frame.winfo_children.return_value = []
+    label = MagicMock()
+    # Plain object: no CTkImage scale-cache attrs (MagicMock would fake hasattr).
+    photo = SimpleNamespace(name="pyimage_chart")
+    pil_image = MagicMock()
+    frame._mpl_images = [(label, photo, pil_image)]
+
+    with (
+        patch("anonymizer.view.common.ctk_safe.dispose_photo_image") as dispose,
+        patch("anonymizer.view.common.ctk_safe.release_ctk_label_image") as release_label,
+    ):
+        release_mpl_frame_images(frame)
+
+    release_label.assert_any_call(label)
+    dispose.assert_called_once_with(frame, photo)
+    pil_image.close.assert_called_once()
+    assert frame._mpl_images == []
+
+
+def test_dispose_photo_image_neutralizes_wrapper() -> None:
+    from types import SimpleNamespace
+
+    from anonymizer.view.common.ctk_safe import dispose_photo_image
+
+    widget = MagicMock()
+    widget.winfo_exists.return_value = True
+    inner = SimpleNamespace(name="pyimage42")
+    photo = SimpleNamespace(name="pyimage42", _PhotoImage__photo=inner)
+
+    dispose_photo_image(widget, photo)
+
+    widget.tk.call.assert_called_once_with("image", "delete", "pyimage42")
+    assert photo._PhotoImage__photo is None
+    assert photo.name is None
+    assert inner.name is None
+
+
 def test_teardown_ctk_toplevel_destroys_and_schedules_gc() -> None:
     window = MagicMock()
     parent = MagicMock()
-    with patch("anonymizer.view.common.ctk_safe.mark_ctk_window_destroyed") as mark_destroyed:
-        with patch("anonymizer.utils.memory.schedule_collect_garbage_on_tk") as schedule_gc:
-            teardown_ctk_toplevel(window, parent=parent)
+    with (
+        patch("anonymizer.view.common.ctk_safe.mark_ctk_window_destroyed") as mark_destroyed,
+        patch("anonymizer.utils.memory.schedule_collect_garbage_on_tk") as schedule_gc,
+    ):
+        teardown_ctk_toplevel(window, parent=parent)
     mark_destroyed.assert_called_once_with(window)
     window.destroy.assert_called_once()
     schedule_gc.assert_called_once_with(parent)
@@ -157,9 +225,11 @@ def test_font_gc_off_main_thread_does_not_call_tcl_directly() -> None:
     worker = MagicMock()
 
     def collect_off_thread() -> None:
-        with patch("anonymizer.view.common.ctk_safe.threading.current_thread", return_value=worker):
-            with patch("anonymizer.view.common.ctk_safe._tk_scheduling_anchor", return_value=None):
-                tkfont.Font.__del__(font)
+        with (
+            patch("anonymizer.view.common.ctk_safe.threading.current_thread", return_value=worker),
+            patch("anonymizer.view.common.ctk_safe._tk_scheduling_anchor", return_value=None),
+        ):
+            tkfont.Font.__del__(font)
 
     thread = threading.Thread(target=collect_off_thread)
     thread.start()

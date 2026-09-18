@@ -955,7 +955,10 @@ def _segmentation_cache_valid(
     if not requested <= recorded:
         return False
     if structure_voxels_sidecar_valid(cache_dir, structures):
-        return True
+        counts = read_structure_voxels(cache_dir) or {}
+        latch_worthy = any(int(counts.get(name, 0)) >= MIN_STRUCTURE_VOXELS for name in structures)
+        # Ghost stats-only caches (latch-worthy JSON, empty seg/) must re-run.
+        return (not latch_worthy) or overlay_masks_present(seg_dir)
     return any((seg_dir / f"{structure}.nii.gz").is_file() for structure in structures)
 
 

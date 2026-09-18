@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 _PATCH_INSTALLED = False
 _FONT_DEL_PATCHED = False
+_VARIABLE_DEL_PATCHED = False
 _scaling_check_paused = False
 
 
@@ -24,13 +25,18 @@ def mark_ctk_window_destroyed(window: tk.Misc) -> None:
 
 
 def dispose_photo_image(widget: tk.Misc, photo_image) -> None:
-    """Release a Tk PhotoImage on the main thread (avoids bus errors when GC runs elsewhere)."""
+    """Release a Tk PhotoImage on the main thread (avoids bus errors when GC runs elsewhere).
+
+    After Tcl ``image delete``, neutralize the Python wrapper so ``PIL.ImageTk.PhotoImage.__del__``
+    (and ``tkinter.Image.__del__``) become no-ops if a worker thread triggers GC later.
+    """
     if photo_image is None:
         return
     if threading.current_thread() is not threading.main_thread():
         return
     name = getattr(photo_image, "name", None)
     if not name:
+        _neutralize_photo_image(photo_image)
         return
     master = widget
     with contextlib.suppress(tk.TclError):
@@ -38,6 +44,26 @@ def dispose_photo_image(widget: tk.Misc, photo_image) -> None:
             master = master.winfo_toplevel()
     with contextlib.suppress(tk.TclError):
         master.tk.call("image", "delete", name)
+    _neutralize_photo_image(photo_image)
+
+
+def _neutralize_photo_image(photo_image) -> None:
+    """Make PhotoImage finalizers skip Tcl (safe if GC runs off the main thread).
+
+    ``PIL.ImageTk.PhotoImage.__del__`` returns early on ``AttributeError`` when
+    accessing ``self.__photo.name``. Clearing ``_PhotoImage__photo`` takes that path.
+    For bare ``tkinter.PhotoImage``, clearing ``name`` skips ``Image.__del__``'s delete.
+    """
+    with contextlib.suppress(Exception):
+        inner = getattr(photo_image, "_PhotoImage__photo", None)
+        if inner is not None:
+            with contextlib.suppress(Exception):
+                inner.name = None
+            with contextlib.suppress(Exception):
+                object.__setattr__(photo_image, "_PhotoImage__photo", None)
+    with contextlib.suppress(Exception):
+        if getattr(photo_image, "name", None) is not None:
+            photo_image.name = None
 
 
 def release_ctk_label_image(label: tk.Misc) -> None:
@@ -139,6 +165,65 @@ def _tk_scheduling_anchor() -> tk.Misc | None:
     return None
 
 
+def release_ctk_image(widget: tk.Misc, ctk_image) -> None:
+    """Dispose scaled PhotoImages held by a CTkImage (same pattern as series image cache)."""
+    if ctk_image is None:
+        return
+    for cache_name in ("_scaled_light_photo_images", "_scaled_dark_photo_images"):
+        cache = getattr(ctk_image, cache_name, None)
+        if not isinstance(cache, dict):
+            continue
+        for photo in list(cache.values()):
+            dispose_photo_image(widget, photo)
+        cache.clear()
+
+
+def release_mpl_frame_images(frame: tk.Misc) -> None:
+    """Release chart images on the main thread before widget destroy.
+
+    Same lifecycle as ``ImageViewer.release_resources`` / ``clear_cache``:
+    1. clear widget image bindings
+    2. ``dispose_photo_image`` each Tk PhotoImage
+    3. close PIL buffers
+    4. drop Python refs
+    """
+    refs = list(getattr(frame, "_mpl_images", None) or [])
+    frame._mpl_images = []  # type: ignore[attr-defined]
+
+    for item in refs:
+        label = None
+        image_ref = None
+        pil_image = None
+        if isinstance(item, tuple):
+            if len(item) == 3:
+                label, image_ref, pil_image = item
+            elif len(item) == 2:
+                image_ref, pil_image = item
+            elif item:
+                image_ref = item[0]
+        else:
+            image_ref = item
+        if label is not None:
+            release_ctk_label_image(label)
+            with contextlib.suppress(Exception):
+                label.image = None  # type: ignore[attr-defined]
+        # ImageViewer path: direct PhotoImage. Legacy charts may still hold CTkImage.
+        if image_ref is not None and hasattr(image_ref, "_scaled_light_photo_images"):
+            release_ctk_image(frame, image_ref)
+        else:
+            dispose_photo_image(frame, image_ref)
+        if pil_image is not None and hasattr(pil_image, "close"):
+            with contextlib.suppress(Exception):
+                pil_image.close()
+
+    with contextlib.suppress(Exception):
+        for child in list(frame.winfo_children()):
+            release_ctk_label_image(child)
+            with contextlib.suppress(Exception):
+                for grandchild in list(child.winfo_children()):
+                    release_ctk_label_image(grandchild)
+
+
 def teardown_ctk_toplevel(
     window: tk.Misc,
     *,
@@ -181,6 +266,40 @@ def install_safe_tk_font_destructor() -> None:
     tkfont.Font.__del__ = _safe_font_del
     _FONT_DEL_PATCHED = True
     logger.debug("Installed safe tkinter Font destructor")
+
+
+def install_safe_tk_variable_destructor() -> None:
+    """Avoid bus errors when StringVar/BooleanVar are GC'd off the main thread.
+
+    Volumes dropdown checkboxes hold many ``BooleanVar``s; clearing them can
+    finalize on a worker (e.g. pynetdicom) and crash Tcl with a bus error.
+    """
+    global _VARIABLE_DEL_PATCHED
+    if _VARIABLE_DEL_PATCHED:
+        return
+
+    def _safe_var_del(self) -> None:
+        try:
+            if getattr(self, "_tk", None) is None:
+                return
+            if threading.current_thread() is not threading.main_thread():
+                # Drop the Tk handle so a later main-thread pass is a no-op;
+                # leaking the Tcl name is safer than touching Tk from a worker.
+                self._tk = None
+                self._tclCommands = None
+                return
+            if self._tk.getboolean(self._tk.call("info", "exists", self._name)):
+                self._tk.globalunsetvar(self._name)
+            if self._tclCommands is not None:
+                for name in self._tclCommands:
+                    self._tk.deletecommand(name)
+                self._tclCommands = None
+        except Exception:
+            pass
+
+    tk.Variable.__del__ = _safe_var_del
+    _VARIABLE_DEL_PATCHED = True
+    logger.debug("Installed safe tkinter Variable destructor")
 
 
 def install_safe_scaling_tracker() -> None:

@@ -247,15 +247,25 @@ class Anonymizer(ctk.CTk):
         height = max(content_height + pad, self.project_window_min_height)
         return width, height
 
-    def _apply_project_window_size(self, *, log: bool = False) -> None:
+    def _apply_project_window_size(self, *, log: bool = False, grow_only: bool = False) -> None:
         """Resize the main window to fit the project dashboard after leaving welcome."""
         if self._welcome_window_locked or self.dashboard is None or not self.dashboard.winfo_exists():
+            return
+        width, height = self._project_window_target_size()
+        cur_w = getattr(self, "_current_width", None)
+        cur_h = getattr(self, "_current_height", None)
+        if grow_only and cur_w is not None and cur_h is not None:
+            # Volumes add/remove: grow with content, never shrink (shrink flickered).
+            width = max(width, cur_w)
+            height = max(height, cur_h)
+        # Skip geometry writes when nothing changed — avoids dashboard flicker from
+        # repeated syncs (totals updates, analytics chrome, expand/collapse).
+        if width == cur_w and height == cur_h and not log:
             return
         from anonymizer.view.common.ctk_safe import pause_scaling_tracker_check, resume_scaling_tracker_check
 
         pause_scaling_tracker_check()
         try:
-            width, height = self._project_window_target_size()
             self._current_width = width
             self._current_height = height
             self._block_update_dimensions_event = True
@@ -1496,10 +1506,15 @@ class Anonymizer(ctk.CTk):
 
 
 def run_GUI(logs_dir):
-    from anonymizer.view.common.ctk_safe import install_safe_scaling_tracker, install_safe_tk_font_destructor
+    from anonymizer.view.common.ctk_safe import (
+        install_safe_scaling_tracker,
+        install_safe_tk_font_destructor,
+        install_safe_tk_variable_destructor,
+    )
 
     install_safe_scaling_tracker()
     install_safe_tk_font_destructor()
+    install_safe_tk_variable_destructor()
     try:
         app = Anonymizer(Path(logs_dir))
         app._log_ctk_scaling()

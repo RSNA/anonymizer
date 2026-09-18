@@ -1,3 +1,11 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: RSNA DICOM Anonymizer\n"
+"POT-Creation-Date: 2026-09-17\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
 #, python-brace-format
 msgid ""
 "RSNA DICOM Anonymizer {version}\n"
@@ -1349,14 +1357,19 @@ msgid "Remove Text"
 msgstr ""
 
 msgid "Blackout Area"
+msgstr ""
 
 msgid "Exclude Area"
+msgstr ""
 
 msgid "No area(s) drawn in current frame to exclude"
+msgstr ""
 
 msgid "No area(s) drawn to exclude"
+msgstr ""
 
 msgid "Excluded {count} area(s) from text detection on current image"
+msgstr ""
 
 msgid "Excluded {count} area(s) from text detection across series"
 msgstr ""
@@ -1848,23 +1861,29 @@ msgstr ""
 
 msgid ""
 "Remove protected identity and health information (PHI/PII) from DICOM metadata. "
-"Optional AI can remove burned-in text on all modalities, and blur faces on head CT/MR."
+"Optional AI algorithms can remove burned-in text on all modalities, blur faces in "
+"head CT and MR, and harmonize study and series descriptions."
 msgstr ""
 "Remove protected identity and health information (PHI/PII) from DICOM metadata. "
-"Optional AI can remove burned-in text on all modalities, and blur faces on head CT/MR."
+"Optional AI algorithms can remove burned-in text on all modalities, blur faces in "
+"head CT and MR, and harmonize study and series descriptions."
 
 msgid ""
-"For CT and MR, optionally harmonize study descriptions using LOINC study names "
-"and series descriptions using the RSNA RadLex Playbook."
+"Harmonize maps study descriptions to LOINC study names and series descriptions "
+"to the RSNA RadLex Playbook (CT, MR, XR, US, and MG)."
 msgstr ""
-"For CT and MR, optionally harmonize study descriptions using LOINC study names "
-"and series descriptions using the RSNA RadLex Playbook."
+"Harmonize maps study descriptions to LOINC study names and series descriptions "
+"to the RSNA RadLex Playbook (CT, MR, XR, US, and MG)."
 
 msgid "Open Help → User Manual → Start here for how to configure and use the program."
 msgstr "Open Help → User Manual → Start here for how to configure and use the program."
 
-msgid "Use the AI Features button on this screen to download models and set Harmonize resolution."
-msgstr "Use the AI Features button on this screen to download models and set Harmonize resolution."
+msgid ""
+"Use the AI Features button on this screen to download models and set the "
+"resolution for anatomy segmentation used in Harmonize."
+msgstr ""
+"Use the AI Features button on this screen to download models and set the "
+"resolution for anatomy segmentation used in Harmonize."
 
 msgid "Select File → New Project to start."
 msgstr "Select File → New Project to start."
@@ -2395,10 +2414,10 @@ msgstr ""
 msgid "MR anatomy 1.5 mm (part {n}/2)"
 msgstr ""
 
-msgid "CT anatomy 1.5 mm (parts 15)"
+msgid "CT anatomy 1.5 mm (parts 1–5)"
 msgstr ""
 
-msgid "MR anatomy 1.5 mm (parts 12)"
+msgid "MR anatomy 1.5 mm (parts 1–2)"
 msgstr ""
 
 msgid "OCR models"

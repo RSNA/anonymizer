@@ -1,0 +1,59 @@
+{
+  "_meta": {
+    "purpose": "Healthy-adult normative ml histogram windows for TotalSegmentator PRIMARY_SEGMENT_GROUPS latch names (controller/ai/tseg/config.py). Keys must match those group names exactly; there is no catch-all default.",
+    "sections": {
+      "soft_organs": "Major soft-tissue latch groups from the TS total task",
+      "brain_structures": "Licensed TS brain_structures task (Dataset409)",
+      "skeletal": "Primary skeletal latch groups (skull, spine, clavicles, ribs)",
+      "airways_and_cord": "Remaining primary latch groups (trachea, spinal_cord)"
+    },
+    "notes": "Spans are literature means with padding for sex/age/partial FOV; out-of-range samples still plot via axis extension. Not CT-task calibration data.",
+    "sources": [
+      "Cressoni et al., Crit Care 2014;18:R104 (doi:10.1186/cc13875): supine CT total lung volume mean ~4995 ml (men ~5757, women ~4136).",
+      "Kawel-Boehm et al., J Cardiovasc Magn Reson 2020;22:87 (doi:10.1186/s12968-020-00683-3): adult CMR chamber volumes; whole-heart TS mask ≈ chambers + myocardium (~250–650 ml healthy).",
+      "DeSouza et al., Expert Rev Gastroenterol Hepatol 2018 (doi:10.1080/17474124.2018.1496015): adult pancreas volume typically ~71–83 ml (CT/MRI meta-analysis); CT ranges ~30–140 ml.",
+      "TS stomach is anatomical organ (wall ± lumen): empty-to-moderate fill typically tens–hundreds of ml; satiety MRI volumes can exceed 600 ml — axis padded accordingly.",
+      "Akeret et al., Brain Struct Funct 2021;226:1699-1711 (doi:10.1007/s00429-021-02280-1): encephalon / lobar / ventricle morphometry.",
+      "Potvin et al., NeuroImage 2016;137:9-20 (doi:10.1016/j.neuroimage.2016.05.016): FreeSurfer adult subcortical norms.",
+      "Bigler & Woodard skeletal mass fractions + ICRP reference bone density (~1.9 g/cm³): approximate healthy mineralized volumes for cranium, spine, ribs, clavicles (padded for TS mask FOV)."
+    ]
+  },
+  "soft_organs": {
+    "brain": { "min_ml": 900, "max_ml": 1600, "bin_width_ml": 50 },
+    "heart": { "min_ml": 250, "max_ml": 650, "bin_width_ml": 50 },
+    "lungs": { "min_ml": 2500, "max_ml": 7000, "bin_width_ml": 250 },
+    "liver": { "min_ml": 500, "max_ml": 4000, "bin_width_ml": 100 },
+    "spleen": { "min_ml": 50, "max_ml": 400, "bin_width_ml": 25 },
+    "kidneys": { "min_ml": 100, "max_ml": 900, "bin_width_ml": 50 },
+    "stomach": { "min_ml": 50, "max_ml": 600, "bin_width_ml": 50 },
+    "pancreas": { "min_ml": 40, "max_ml": 120, "bin_width_ml": 10 }
+  },
+  "brain_structures": {
+    "brainstem": { "min_ml": 15, "max_ml": 35, "bin_width_ml": 2 },
+    "subarachnoid_space": { "min_ml": 40, "max_ml": 250, "bin_width_ml": 10 },
+    "venous_sinuses": { "min_ml": 5, "max_ml": 50, "bin_width_ml": 5 },
+    "septum_pellucidum": { "min_ml": 0.5, "max_ml": 4, "bin_width_ml": 0.5 },
+    "cerebellum": { "min_ml": 70, "max_ml": 180, "bin_width_ml": 10 },
+    "caudate_nucleus": { "min_ml": 4, "max_ml": 14, "bin_width_ml": 1 },
+    "lentiform_nucleus": { "min_ml": 8, "max_ml": 22, "bin_width_ml": 1 },
+    "insular_cortex": { "min_ml": 10, "max_ml": 45, "bin_width_ml": 5 },
+    "internal_capsule": { "min_ml": 5, "max_ml": 30, "bin_width_ml": 2 },
+    "ventricle": { "min_ml": 5, "max_ml": 80, "bin_width_ml": 5 },
+    "central_sulcus": { "min_ml": 2, "max_ml": 15, "bin_width_ml": 1 },
+    "frontal_lobe": { "min_ml": 120, "max_ml": 320, "bin_width_ml": 20 },
+    "parietal_lobe": { "min_ml": 90, "max_ml": 280, "bin_width_ml": 20 },
+    "occipital_lobe": { "min_ml": 50, "max_ml": 180, "bin_width_ml": 10 },
+    "temporal_lobe": { "min_ml": 90, "max_ml": 280, "bin_width_ml": 20 },
+    "thalamus": { "min_ml": 8, "max_ml": 25, "bin_width_ml": 1 }
+  },
+  "skeletal": {
+    "skull": { "min_ml": 400, "max_ml": 1100, "bin_width_ml": 50 },
+    "spine": { "min_ml": 250, "max_ml": 700, "bin_width_ml": 50 },
+    "clavicles": { "min_ml": 15, "max_ml": 50, "bin_width_ml": 5 },
+    "ribs": { "min_ml": 100, "max_ml": 400, "bin_width_ml": 25 }
+  },
+  "airways_and_cord": {
+    "trachea": { "min_ml": 10, "max_ml": 50, "bin_width_ml": 5 },
+    "spinal_cord": { "min_ml": 15, "max_ml": 45, "bin_width_ml": 5 }
+  }
+}

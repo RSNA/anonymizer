@@ -615,6 +615,37 @@ class AnonymizerModel:
         return list(self.session.execute(stmt).scalars().all())
 
     @use_session(is_read_only_operation=True)
+    def load_phi_with_studies_series_no_instances(self) -> list[PHI]:
+        """Eager-load PHI → studies → series (no instances) for Dataset analytics."""
+        stmt = select(PHI).options(selectinload(PHI.studies).selectinload(Study.series))
+        return list(self.session.execute(stmt).scalars().all())
+
+    @use_session(is_read_only_operation=True)
+    def study_uids_with_pixel_phi(self) -> set[str]:
+        """Study UIDs that have at least one instance with non-empty pixel_phi."""
+        stmt = (
+            select(Study.study_uid)
+            .join(Series, Series.study_uid == Study.study_uid)
+            .join(Instance, Instance.series_uid == Series.series_uid)
+            .where(Instance.pixel_phi.is_not(None))
+            .where(Instance.pixel_phi != "")
+            .distinct()
+        )
+        return set(self.session.execute(stmt).scalars().all())
+
+    @use_session(is_read_only_operation=True)
+    def anon_series_uids_with_pixel_phi(self) -> set[str]:
+        """Anonymized series UIDs that have at least one instance with non-empty pixel_phi."""
+        stmt = (
+            select(Series.anon_series_uid)
+            .join(Instance, Instance.series_uid == Series.series_uid)
+            .where(Instance.pixel_phi.is_not(None))
+            .where(Instance.pixel_phi != "")
+            .distinct()
+        )
+        return set(self.session.execute(stmt).scalars().all())
+
+    @use_session(is_read_only_operation=True)
     def get_anon_patient_id(self, phi_patient_id: str) -> str | None:
         """
         Retrieves the anonymized patient ID for a given PHI patient ID.

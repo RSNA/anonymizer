@@ -12,6 +12,7 @@ authors = [{ name = "Algorhythm Software", email = "michael@dx.life" }]
 requires-python = ">=3.11.0,<3.13.0"
 dependencies = [
     "numpy<2.0.0",
+    "matplotlib>=3.8.0",
     "customtkinter",
     "pillow",
     "tkhtmlview",

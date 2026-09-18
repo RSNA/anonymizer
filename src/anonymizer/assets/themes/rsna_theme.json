@@ -135,12 +135,41 @@
     "hover_color": ["gray75", "gray28"],
     "text_color": ["gray14", "gray84"]
   },
+  "Tooltip": {
+    "fg_color": ["gray90", "gray20"],
+    "text_color": ["#014F8F", "white"],
+    "border_color": ["gray70", "gray40"],
+    "padx": 8,
+    "pady": 5,
+    "wraplength": 260
+  },
   "Histogram" : {
     "fg_color": ["gray85", "gray13"],
     "bar_color": ["gray70", "gray30"],
     "axis_label_color": ["gray10", "gray90"],
     "wl_line_color": ["#3a7ebf", "#1f538d"],
     "ww_boundary_line_color": ["#3a7ebf", "#1f538d"]
+  },
+  "Analytics": {
+    "panel_fg_color": ["gray85", "gray16"],
+    "fig_color": ["gray90", "gray13"],
+    "text_color": ["#014F8F", "white"],
+    "muted_text_color": ["gray52", "gray62"],
+    "accent_color": ["#3a7ebf", "#1f538d"],
+    "spine_color": ["gray70", "gray40"],
+    "wedge_edge_color": ["gray90", "gray13"],
+    "normative_band_color": ["#DCE4EE", "#1E3A5F"],
+    "normative_bound_color": ["#6E7174", "#AAB0B5"],
+    "outlier_bar_color": ["#D97706", "#F0B429"],
+    "palette": [
+      ["#3a7ebf", "#5a9fd4"],
+      ["#014F8F", "#1E7BC7"],
+      ["#325882", "#4a7a9e"],
+      ["#939BA2", "#AAB0B5"],
+      ["#1f538d", "#3a7ebf"],
+      ["#14375e", "#325882"],
+      ["#6E7174", "#979DA2"]
+    ]
   },
   "CTkFont": {
     "macOS": {

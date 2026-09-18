@@ -1,16 +1,60 @@
-"""Shared hover tooltip helpers for tkinter / customtkinter widgets."""
+"""Shared hover tooltip helpers for tkinter / customtkinter widgets.
+
+Colors and spacing come from ``ThemeManager.theme["Tooltip"]`` (rsna_theme.json)
+so Dataset, Analytics, Series View, and settings dialogs share one look.
+"""
 
 from __future__ import annotations
 
+import contextlib
 import tkinter as tk
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from typing import Any
+
+import customtkinter as ctk
 
 TooltipText = str | Callable[[], str]
 
-TOOLTIP_BG = "#333333"
-TOOLTIP_FG = "white"
-TOOLTIP_WRAPLENGTH = 220
+# Fallbacks only if theme JSON is incomplete (keep in sync with rsna_theme Tooltip).
+_FALLBACK_FG = ("gray90", "gray20")
+_FALLBACK_TEXT = ("#014F8F", "white")
+_FALLBACK_BORDER = ("gray70", "gray40")
+_FALLBACK_PADX = 8
+_FALLBACK_PADY = 5
+_FALLBACK_WRAP = 260
 TOOLTIP_OFFSET = 12
+
+
+def _appearance_index() -> int:
+    return 1 if ctk.get_appearance_mode() == "Dark" else 0
+
+
+def _theme_pair(value: Any, fallback: tuple[str, str] | str) -> str:
+    """Resolve a theme light/dark pair (or plain string) for the active appearance."""
+    raw = value if value is not None else fallback
+    if isinstance(raw, (list, tuple)) and len(raw) >= 2:
+        return str(raw[_appearance_index()])
+    if isinstance(raw, (list, tuple)) and raw:
+        return str(raw[0])
+    return str(raw)
+
+
+def _tooltip_theme() -> Mapping[str, Any]:
+    section = ctk.ThemeManager.theme.get("Tooltip")
+    return section if isinstance(section, Mapping) else {}
+
+
+def tooltip_style() -> dict[str, Any]:
+    """Resolved Tooltip theme tokens for the current appearance mode."""
+    theme = _tooltip_theme()
+    return {
+        "bg": _theme_pair(theme.get("fg_color"), _FALLBACK_FG),
+        "fg": _theme_pair(theme.get("text_color"), _FALLBACK_TEXT),
+        "border": _theme_pair(theme.get("border_color"), _FALLBACK_BORDER),
+        "padx": int(theme.get("padx", _FALLBACK_PADX)),
+        "pady": int(theme.get("pady", _FALLBACK_PADY)),
+        "wraplength": int(theme.get("wraplength", _FALLBACK_WRAP)),
+    }
 
 
 def _resolve_tooltip_text(text: TooltipText) -> str:
@@ -18,19 +62,32 @@ def _resolve_tooltip_text(text: TooltipText) -> str:
 
 
 def show_tooltip(parent: tk.Misc, x_root: int, y_root: int, text: str) -> tk.Toplevel:
-    """Show a borderless tooltip window at screen coordinates."""
+    """Show a borderless tooltip window at screen coordinates (theme-styled)."""
+    style = tooltip_style()
     tip = tk.Toplevel(parent)
     tip.wm_overrideredirect(True)
+    # macOS: use the native help-window style (no heavy shadow / chrome).
+    with contextlib.suppress(tk.TclError):
+        tip.tk.call(
+            "::tk::unsupported::MacWindowStyle",
+            "style",
+            tip._w,
+            "help",
+            "noActivates",
+        )
     tip.wm_geometry(f"+{x_root + TOOLTIP_OFFSET}+{y_root + TOOLTIP_OFFSET}")
+    tip.configure(bg=style["bg"])
     label = tk.Label(
         tip,
         text=text,
-        bg=TOOLTIP_BG,
-        fg=TOOLTIP_FG,
-        padx=6,
-        pady=4,
-        wraplength=TOOLTIP_WRAPLENGTH,
+        bg=style["bg"],
+        fg=style["fg"],
+        padx=style["padx"],
+        pady=style["pady"],
+        wraplength=style["wraplength"],
         justify="left",
+        borderwidth=0,
+        highlightthickness=0,
     )
     label.pack()
     return tip

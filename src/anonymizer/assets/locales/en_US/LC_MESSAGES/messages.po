@@ -16,6 +16,9 @@ msgid ""
 "\n"
 "This application reads a configuration file if provided and runs headless or launches a GUI."
 msgstr ""
+"RSNA DICOM Anonymizer {version}\n"
+"\n"
+"This application reads a configuration file if provided and runs headless or launches a GUI."
 
 msgid "RSNA DICOM Anonymizer Version"
 msgstr "RSNA DICOM Anonymizer Version"
@@ -321,7 +324,7 @@ msgid "Downloading: {byte_part}"
 msgstr "Downloading: {byte_part}"
 
 msgid "FRAME"
-msgstr ""
+msgstr "FRAME"
 
 msgid "SERIES"
 msgstr "SERIES"
@@ -388,7 +391,7 @@ msgid "Partial ({applied}/{total})"
 msgstr "Partial ({applied}/{total})"
 
 msgid "None"
-msgstr ""
+msgstr "None"
 
 #, python-brace-format
 msgid "Pixel PHI: {pixel_phi} | Harmonized: {harmonized}"
@@ -934,7 +937,7 @@ msgid "Multiplanar reformat"
 msgstr "Multiplanar reformat"
 
 msgid "Native"
-msgstr ""
+msgstr "Native"
 
 msgid "Series geometry is required for Playbook harmonization"
 msgstr "Series geometry is required for Playbook harmonization"
@@ -1438,12 +1441,11 @@ msgstr "Blackout applied to all images"
 msgid "Harmonize is not ready yet. Click AI Features to download models."
 msgstr "Harmonize is not ready yet. Click AI Features to download models."
 
-#, fuzzy
 msgid "Harmonize is already open for this series."
-msgstr "Harmonize could not analyze this series."
+msgstr "Harmonize is already open for this series."
 
 msgid "Harmonize is already running for another series. Finish or cancel it first."
-msgstr ""
+msgstr "Harmonize is already running for another series. Finish or cancel it first."
 
 msgid "< 0.1 MB"
 msgstr "< 0.1 MB"
@@ -1866,23 +1868,29 @@ msgstr "Easy to use, advanced DICOM expertise not required!"
 
 msgid ""
 "Remove protected identity and health information (PHI/PII) from DICOM metadata. "
-"Optional AI can remove burned-in text on all modalities, and blur faces on head CT/MR."
+"Optional AI algorithms can remove burned-in text on all modalities, blur faces in "
+"head CT and MR, and harmonize study and series descriptions."
 msgstr ""
 "Remove protected identity and health information (PHI/PII) from DICOM metadata. "
-"Optional AI can remove burned-in text on all modalities, and blur faces on head CT/MR."
+"Optional AI algorithms can remove burned-in text on all modalities, blur faces in "
+"head CT and MR, and harmonize study and series descriptions."
 
 msgid ""
-"For CT and MR, optionally harmonize study descriptions using LOINC study names "
-"and series descriptions using the RSNA RadLex Playbook."
+"Harmonize maps study descriptions to LOINC study names and series descriptions "
+"to the RSNA RadLex Playbook (CT, MR, XR, US, and MG)."
 msgstr ""
-"For CT and MR, optionally harmonize study descriptions using LOINC study names "
-"and series descriptions using the RSNA RadLex Playbook."
+"Harmonize maps study descriptions to LOINC study names and series descriptions "
+"to the RSNA RadLex Playbook (CT, MR, XR, US, and MG)."
 
 msgid "Open Help → User Manual → Start here for how to configure and use the program."
 msgstr "Open Help → User Manual → Start here for how to configure and use the program."
 
-msgid "Use the AI Features button on this screen to download models and set Harmonize resolution."
-msgstr "Use the AI Features button on this screen to download models and set Harmonize resolution."
+msgid ""
+"Use the AI Features button on this screen to download models and set the "
+"resolution for anatomy segmentation used in Harmonize."
+msgstr ""
+"Use the AI Features button on this screen to download models and set the "
+"resolution for anatomy segmentation used in Harmonize."
 
 msgid "Select File → New Project to start."
 msgstr "Select File → New Project to start."
@@ -2396,7 +2404,6 @@ msgstr "TotalSegmentator unavailable."
 msgid "OpenMP required (e.g. brew install libomp)."
 msgstr "OpenMP required (e.g. brew install libomp)."
 
-#, fuzzy
 msgid "Installed (0.5 x 0.5 x 1 mm)."
 msgstr "Installed (0.5 x 0.5 x 1 mm)."
 
@@ -2414,11 +2421,11 @@ msgstr "CT anatomy 1.5 mm (part {n}/5)"
 msgid "MR anatomy 1.5 mm (part {n}/2)"
 msgstr "MR anatomy 1.5 mm (part {n}/2)"
 
-msgid "CT anatomy 1.5 mm (parts 15)"
-msgstr "CT anatomy 1.5 mm (parts 15)"
+msgid "CT anatomy 1.5 mm (parts 1–5)"
+msgstr "CT anatomy 1.5 mm (parts 1–5)"
 
-msgid "MR anatomy 1.5 mm (parts 12)"
-msgstr "MR anatomy 1.5 mm (parts 12)"
+msgid "MR anatomy 1.5 mm (parts 1–2)"
+msgstr "MR anatomy 1.5 mm (parts 1–2)"
 
 msgid "OCR models"
 msgstr "OCR models"
@@ -2429,7 +2436,6 @@ msgstr "Installed. Test in Series View before batch use."
 msgid "Installed: 1.5 mm."
 msgstr "Installed: 1.5 mm."
 
-#, fuzzy
 msgid "Installed: 0.5 x 0.5 x 1 mm."
 msgstr "Installed: 0.5 x 0.5 x 1 mm."
 
@@ -2502,6 +2508,9 @@ msgid ""
 "\n"
 "Verify your study selection includes series with readable DICOM files."
 msgstr ""
+"No modalities found in the selected studies.\n"
+"\n"
+"Verify your study selection includes series with readable DICOM files."
 
 msgid "(no whitelist terms)"
 msgstr "(no whitelist terms)"

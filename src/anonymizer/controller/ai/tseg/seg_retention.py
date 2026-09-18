@@ -473,10 +473,14 @@ def finalize_seg_cache(
     write_mask_geometry(cache_dir, seg_dir)
     write_structure_voxels(cache_dir, structure_voxels)
     write_primary_segment_voxels(cache_dir, primary_counts)
-    if any(int(v) > 0 for v in structure_voxels.values()) and not overlay_masks_present(seg_dir):
+    # Sub-threshold detections (e.g. thin/unusual volumes) are pruned from seg/ and
+    # leave non-zero structure counts without overlay masks — that is a valid publish.
+    # Refuse only when latch-worthy anatomy would need Series View masks.
+    latch_worthy = any(int(v) >= MIN_STRUCTURE_VOXELS for v in structure_voxels.values())
+    if latch_worthy and not overlay_masks_present(seg_dir):
         raise RuntimeError(
             f"Refusing to publish segment cache under {cache_dir}: "
-            "structure counts are non-zero but seg/ has no overlay masks. "
+            "structure counts are latch-worthy but seg/ has no overlay masks. "
             "Write masks before finalize_seg_cache."
         )
     return primary_counts
