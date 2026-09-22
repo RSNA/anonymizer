@@ -2869,12 +2869,24 @@ class SeriesView(AppCTkToplevel):
                 parent=self,
             )
             return
-        from tkinter import simpledialog
+        from anonymizer.view.series.new_segment_dialog import show_new_segment_dialog
 
-        name = simpledialog.askstring(_("New Segment"), "", parent=self)
-        if not name:
+        result = show_new_segment_dialog(self, session)
+        if not result.applied or not result.name:
             return
-        entry = add_user_label(session, name)
+        try:
+            entry = add_user_label(
+                session,
+                result.name,
+                normative_organ=result.normative_organ,
+            )
+        except ValueError:
+            messagebox.showwarning(
+                title=_("New Segment"),
+                message=_("A segment with this name already exists"),
+                parent=self,
+            )
+            return
         key = f"user:{entry.label_id}"
         # Keep the new chip in the shared View latch set so it remains listed next to TS.
         self.image_viewer._active_segmentation_names.add(key)
@@ -2898,6 +2910,9 @@ class SeriesView(AppCTkToplevel):
             return
         try:
             save_annotate_session(session)
+            from anonymizer.controller.analytics import upsert_series_ledger_from_cache
+
+            upsert_series_ledger_from_cache(session.cache_dir)
         except Exception:
             logger.exception("Failed to save annotations")
 

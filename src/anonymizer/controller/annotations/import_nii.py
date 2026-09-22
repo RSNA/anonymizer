@@ -370,7 +370,16 @@ def _add_label_entry(
     name: str,
     *,
     color_bgr: tuple[int, int, int] | None = None,
-) -> LabelEntry:
+) -> LabelEntry | None:
+    """Add a user label, or return None when the name already exists (skip duplicate)."""
+    from anonymizer.controller.annotations.store import (
+        label_name_taken,
+        resolve_normative_organ,
+    )
+
+    if label_name_taken(session, name):
+        return None
+    normative = resolve_normative_organ(name)
     if color_bgr is not None:
         lid = next_label_id(session.label_map)
         entry = LabelEntry(
@@ -378,11 +387,12 @@ def _add_label_entry(
             name=name.strip() or f"label_{lid}",
             color_bgr=color_bgr,
             created=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            normative_organ=normative,
         )
         session.label_map[lid] = entry
         session.dirty = True
         return entry
-    return add_user_label(session, name)
+    return add_user_label(session, name, normative_organ=normative)
 
 
 def import_binary_masks(
@@ -417,6 +427,9 @@ def import_binary_masks(
         # Avoid palette collision when many masks share default colors
         color = next_label_color(session.label_map)
         entry = _add_label_entry(session, name, color_bgr=color)
+        if entry is None:
+            warnings.append(f"Duplicate segment name skipped: {name}")
+            continue
         session.labels[arr > 0] = entry.label_id
         entries.append(entry)
     if entries:
@@ -468,6 +481,9 @@ def import_label_nifti(
         meta = resolved.get(ext_id) or _ResolvedLabel(name=f"label_{ext_id}")
         color = meta.color_bgr if meta.color_bgr is not None else next_label_color(session.label_map)
         entry = _add_label_entry(session, meta.name, color_bgr=color)
+        if entry is None:
+            warnings.append(f"Duplicate segment name skipped: {meta.name}")
+            continue
         session.labels[arr == ext_id] = entry.label_id
         entries.append(entry)
 

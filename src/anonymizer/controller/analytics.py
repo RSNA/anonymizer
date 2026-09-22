@@ -289,9 +289,17 @@ def organ_volume_range_ml(organ_name: str) -> tuple[float, float, float]:
         ) from exc
 
 
+def has_organ_volume_range(organ_name: str) -> bool:
+    """True when ``organ_name`` has a normative JSON entry (matched TS / user organs)."""
+    return organ_name in load_organ_volume_ranges()
+
+
 # Mild outliers may extend the main axis by at most this many bin widths past the
 # normative pad. Farther samples are extreme → underflow/overflow sentinel bins.
 ORGAN_VOLUME_NEAR_EXTENT_BINS = 2
+# Pad fraction when building a data-driven axis for custom (no-normative) organs.
+_CUSTOM_ORGAN_AXIS_PAD = 0.08
+_CUSTOM_ORGAN_DEFAULT_BIN_WIDTH_ML = 10.0
 
 
 def organ_volume_base_span(organ_name: str) -> tuple[float, float, float, float, float]:
@@ -310,12 +318,40 @@ def organ_volume_base_span(organ_name: str) -> tuple[float, float, float, float,
     return base_lo, base_hi, float(norm_lo), float(norm_hi), w
 
 
+def _custom_organ_base_span(
+    samples: Sequence[float] | None,
+) -> tuple[float, float, float, float, float]:
+    """Data-driven span when no normative JSON entry exists (custom user organs)."""
+    if samples:
+        s_lo = float(min(samples))
+        s_hi = float(max(samples))
+    else:
+        s_lo, s_hi = 0.0, _CUSTOM_ORGAN_DEFAULT_BIN_WIDTH_ML
+    if s_hi <= s_lo:
+        s_hi = s_lo + _CUSTOM_ORGAN_DEFAULT_BIN_WIDTH_ML
+    pad = max((s_hi - s_lo) * _CUSTOM_ORGAN_AXIS_PAD, _CUSTOM_ORGAN_DEFAULT_BIN_WIDTH_ML * 0.5)
+    base_lo = max(0.0, s_lo - pad)
+    base_hi = s_hi + pad
+    # No clinical band: treat full base as “norm” so charts can omit band drawing.
+    width = max(
+        ORGAN_VOLUME_MIN_BIN_WIDTH_ML,
+        (base_hi - base_lo) / 12.0,
+        _CUSTOM_ORGAN_DEFAULT_BIN_WIDTH_ML,
+    )
+    return base_lo, base_hi, base_lo, base_hi, width
+
+
 def effective_bin_width_ml(
     organ_name: str,
     bin_width_pct: float | None = None,
+    *,
+    samples: Sequence[float] | None = None,
 ) -> float:
     """JSON ``bin_width_ml`` when ``bin_width_pct`` is unset; else % of base span."""
-    _base_lo, _base_hi, _nlo, _nhi, json_w = organ_volume_base_span(organ_name)
+    if has_organ_volume_range(organ_name):
+        _base_lo, _base_hi, _nlo, _nhi, json_w = organ_volume_base_span(organ_name)
+    else:
+        _base_lo, _base_hi, _nlo, _nhi, json_w = _custom_organ_base_span(samples)
     if bin_width_pct is None:
         return json_w
     pct = max(
@@ -339,11 +375,17 @@ def organ_volume_axis_span(
     ``ORGAN_VOLUME_NEAR_EXTENT_BINS`` whole bins of the *effective* width.
     Extreme samples beyond that do **not** stretch the axis — they use one-bin
     under/overflow sentinels (see ``organ_volume_bin_edges``).
+
+    Custom organs without a JSON range use a data-driven base span and set
+    ``norm_lo == plot_lo`` / ``norm_hi == plot_hi`` so charts skip the band.
     """
-    base_lo, base_hi, norm_lo, norm_hi, _json_w = organ_volume_base_span(organ_name)
-    w = effective_bin_width_ml(organ_name, bin_width_pct)
+    if has_organ_volume_range(organ_name):
+        base_lo, base_hi, norm_lo, norm_hi, _json_w = organ_volume_base_span(organ_name)
+    else:
+        base_lo, base_hi, norm_lo, norm_hi, _json_w = _custom_organ_base_span(samples)
+    w = effective_bin_width_ml(organ_name, bin_width_pct, samples=samples)
     plot_lo, plot_hi = base_lo, base_hi
-    if samples:
+    if samples and has_organ_volume_range(organ_name):
         near_lo_limit = max(0.0, base_lo - ORGAN_VOLUME_NEAR_EXTENT_BINS * w)
         near_hi_limit = base_hi + ORGAN_VOLUME_NEAR_EXTENT_BINS * w
         s_lo = float(min(samples))
@@ -850,7 +892,10 @@ def _warn_organ_volume_outside_normative(
     Out-of-range volumes are still kept in the histogram sample list (``n=`` unchanged);
     they simply fall outside the fixed axis bins. Causes may be segmentation error,
     a true clinical outlier, or an incorrect entry in ``organ_volume_ranges_ml.json``.
+    Custom ``user:*`` organs have no normative JSON entry — skip logging.
     """
+    if not has_organ_volume_range(organ):
+        return
     lo, hi, _width = organ_volume_range_ml(organ)
     series_oor = [(ml, mod) for ml, mod in series_entries if ml < lo or ml > hi]
     mean_oor = mean_ml < lo or mean_ml > hi
@@ -896,22 +941,20 @@ def _patient_mean_samples_by_organ(
     contributes CT series when the filter is CT. Patient means (and any
     contributing series) outside the normative JSON range are logged at WARNING
     but still included in the returned samples.
+
+    Accepts ``PRIMARY_SEGMENT_GROUPS`` keys and custom ``user:*`` annotation keys.
     """
-    by_organ_patient: dict[str, dict[str, list[tuple[float, str]]]] = {
-        name: {} for name in VOLUME_SEGMENT_GROUPS
-    }
+    by_organ_patient: dict[str, dict[str, list[tuple[float, str]]]] = {}
     for sample in organ_samples:
         if modality is not None and sample.modality != modality:
             continue
-        patients = by_organ_patient.get(sample.organ)
-        if patients is None:
+        if sample.organ not in VOLUME_SEGMENT_GROUPS and not str(sample.organ).startswith("user:"):
             continue
-        patients.setdefault(sample.anon_patient_id, []).append(
-            (sample.ml, sample.modality)
-        )
+        patients = by_organ_patient.setdefault(sample.organ, {})
+        patients.setdefault(sample.anon_patient_id, []).append((sample.ml, sample.modality))
 
     samples_by_organ: dict[str, list[OrganVolumeSample]] = {
-        name: [] for name in VOLUME_SEGMENT_GROUPS
+        name: [] for name in by_organ_patient
     }
     for organ, patients in by_organ_patient.items():
         for patient_id, entries in patients.items():
@@ -947,7 +990,10 @@ def default_selected_organ_names(
 
 def organ_display_name(organ_name: str) -> str:
     """UI label for a volume segment key (``frontal_lobe`` → ``Frontal lobe``)."""
-    return organ_name.replace("_", " ").capitalize()
+    name = str(organ_name or "")
+    if name.startswith("user:"):
+        name = name[5:]
+    return name.replace("_", " ").capitalize()
 
 
 def _select_main_organ(
@@ -979,6 +1025,8 @@ def series_is_head_limited(structure_voxels: Mapping[str, int] | None) -> bool:
 
 
 def _organ_allowed_for_series(organ: str, *, head_limited: bool) -> bool:
+    if str(organ).startswith("user:"):
+        return True
     if organ in NORM_MISMATCH_EXCLUDED_ORGANS:
         return False
     if not head_limited:
@@ -987,16 +1035,21 @@ def _organ_allowed_for_series(organ: str, *, head_limited: bool) -> bool:
 
 
 def _organ_volumes_ml_for_cache(cache_dir: Path) -> dict[str, float]:
-    """Primary-segment volumes in ml for every group with on-disk masks.
+    """Primary-segment volumes in ml, overlaid with user annotation volumes.
 
     Prefers ``organ_volumes_ml.json`` when fresher than masks (fast Refresh).
     Otherwise recounts masks once and writes that cache. Falls back to voxel
-    sidecars only when no anatomy masks exist.
+    sidecars only when no anatomy masks exist. User annotation ml always
+    overlays TS (user wins on the same organ key).
     """
+    from anonymizer.controller.annotations.volumes import user_annotation_volumes_ml
+
     volumes = ensure_organ_volumes_ml(cache_dir)
-    if volumes:
-        return volumes
-    return _organ_volumes_ml_from_sidecars(cache_dir)
+    if not volumes:
+        volumes = _organ_volumes_ml_from_sidecars(cache_dir)
+    merged = dict(volumes)
+    merged.update(user_annotation_volumes_ml(cache_dir))
+    return {k: float(v) for k, v in merged.items() if float(v) > 0}
 
 
 def _organ_volumes_ml_from_sidecars(cache_dir: Path) -> dict[str, float]:
@@ -1106,13 +1159,15 @@ def _series_anatomy_contribution(
     series_path: Path,
     modality: str,
 ) -> tuple[list[_RegionHit], list[_OrganSample], SeriesLedgerRow] | None:
-    """Anatomy facts for one series, or None when no TS cache / sidecars."""
+    """Anatomy facts for one series, or None when no TS cache / sidecars / annotations."""
     series_path = Path(series_path)
     cache_dir = resolve_series_cache_dir(series_path)
     if not cache_dir.is_dir():
         return None
     structures = read_structure_voxels(cache_dir)
-    if not structures and not read_primary_segment_voxels(cache_dir):
+    has_primary = bool(read_primary_segment_voxels(cache_dir))
+    organs_from_cache = _organ_volumes_ml_for_cache(cache_dir)
+    if not structures and not has_primary and not organs_from_cache:
         return None
     mod = (modality or "").strip().upper() or _("Unknown")
     head_limited = series_is_head_limited(structures)
@@ -1128,7 +1183,7 @@ def _series_anatomy_contribution(
     organ_samples: list[_OrganSample] = []
     organs_ml: dict[str, float] = {}
     anon_patient_id = series_path.parent.parent.name
-    for organ, ml in _organ_volumes_ml_for_cache(cache_dir).items():
+    for organ, ml in organs_from_cache.items():
         if not _organ_allowed_for_series(organ, head_limited=head_limited):
             continue
         organs_ml[organ] = float(ml)

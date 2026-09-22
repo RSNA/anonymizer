@@ -72,23 +72,73 @@ class LabelEntry:
     name: str
     color_bgr: tuple[int, int, int]
     created: str = ""
+    # Exact PRIMARY_SEGMENT_GROUPS / organ_volume_ranges key, or None for custom.
+    normative_organ: str | None = None
 
     def to_json(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "name": self.name,
             "color_bgr": list(self.color_bgr),
             "created": self.created,
         }
+        if self.normative_organ:
+            payload["normative_organ"] = self.normative_organ
+        return payload
 
     @classmethod
     def from_json(cls, label_id: int, raw: dict[str, Any]) -> LabelEntry:
         color = raw.get("color_bgr") or [0, 165, 255]
+        normative = raw.get("normative_organ")
+        normative_organ = (str(normative).strip() or None) if normative is not None else None
         return cls(
             label_id=label_id,
             name=str(raw.get("name") or f"label_{label_id}"),
             color_bgr=(int(color[0]), int(color[1]), int(color[2])),
             created=str(raw.get("created") or ""),
+            normative_organ=normative_organ,
         )
+
+
+def normalize_label_name(name: str) -> str:
+    """Canonical form for case-insensitive uniqueness checks."""
+    return " ".join(str(name or "").strip().lower().split())
+
+
+def _normalize_organ_token(text: str) -> str:
+    token = "".join(ch if ch.isalnum() else "_" for ch in str(text or "").strip().lower())
+    while "__" in token:
+        token = token.replace("__", "_")
+    return token.strip("_")
+
+
+def resolve_normative_organ(name: str) -> str | None:
+    """Map a free-text segment name to a normative organ key, or None if custom.
+
+    Matches exact ``PRIMARY_SEGMENT_ORDER`` keys and display labels
+    (case-insensitive; spaces/underscores interchangeable).
+    """
+    from anonymizer.controller.ai.tseg.config import PRIMARY_SEGMENT_ORDER
+
+    token = _normalize_organ_token(name)
+    if not token:
+        return None
+    for key in PRIMARY_SEGMENT_ORDER:
+        display = key.replace("_", " ").capitalize()
+        if token == key or token == _normalize_organ_token(display):
+            return key
+    return None
+
+
+def user_organ_slug(name: str) -> str:
+    """Stable slug for custom analytics keys (``user:<slug>``)."""
+    return (_normalize_organ_token(name) or "segment")[:64]
+
+
+def analytics_organ_key(entry: LabelEntry) -> str:
+    """Ledger / histogram key for one user label."""
+    if entry.normative_organ:
+        return entry.normative_organ
+    return f"user:{user_organ_slug(entry.name)}"
 
 
 @dataclass
@@ -153,6 +203,11 @@ def _write_label_map(path: Path, label_map: dict[int, LabelEntry]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {str(lid): entry.to_json() for lid, entry in sorted(label_map.items())}
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def read_label_map(cache_dir: Path) -> dict[int, LabelEntry]:
+    """Load ``label_map.json`` for a series cache (empty if missing)."""
+    return _read_label_map(label_map_path(Path(cache_dir)))
 
 
 def _load_existing_edits(session: AnnotateSession) -> None:
@@ -235,14 +290,45 @@ def next_label_color(label_map: dict[int, LabelEntry]) -> tuple[int, int, int]:
     return _USER_LABEL_PALETTE_BGR[len(label_map) % len(_USER_LABEL_PALETTE_BGR)]
 
 
-def add_user_label(session: AnnotateSession, name: str) -> LabelEntry:
+def label_name_taken(
+    label_map: dict[int, LabelEntry] | AnnotateSession,
+    name: str,
+    *,
+    exclude_label_id: int | None = None,
+) -> bool:
+    """True when ``name`` matches an existing label (case-insensitive, trimmed)."""
+    needle = normalize_label_name(name)
+    if not needle:
+        return False
+    mapping = label_map.label_map if isinstance(label_map, AnnotateSession) else label_map
+    for lid, entry in mapping.items():
+        if exclude_label_id is not None and lid == exclude_label_id:
+            continue
+        if normalize_label_name(entry.name) == needle:
+            return True
+    return False
+
+
+def add_user_label(
+    session: AnnotateSession,
+    name: str,
+    *,
+    normative_organ: str | None | object = ...,
+) -> LabelEntry:
     name = name.strip() or f"label_{next_label_id(session.label_map)}"
+    if label_name_taken(session, name):
+        raise ValueError(f"Segment name already exists: {name}")
+    if normative_organ is ...:
+        resolved = resolve_normative_organ(name)
+    else:
+        resolved = (str(normative_organ).strip() or None) if normative_organ else None
     lid = next_label_id(session.label_map)
     entry = LabelEntry(
         label_id=lid,
         name=name,
         color_bgr=next_label_color(session.label_map),
         created=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        normative_organ=resolved,
     )
     session.label_map[lid] = entry
     session.dirty = True

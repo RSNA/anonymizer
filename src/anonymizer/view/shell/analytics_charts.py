@@ -53,6 +53,7 @@ from anonymizer.controller.analytics import (
     OrganVolumeSample,
     age_histogram_bin_edges,
     default_selected_organ_names,
+    has_organ_volume_range,
     organ_display_name,
     organ_volume_axis_span,
     organ_volume_bin_edges,
@@ -741,10 +742,12 @@ def _organ_histogram(
     )
     has_under = bool(edges) and float(edges[0]) < plot_lo - 1e-9
     has_over = bool(edges) and float(edges[-1]) > plot_hi + 1e-9
+    show_normative = has_organ_volume_range(organ.organ_name)
 
-    ax.axvspan(norm_lo, norm_hi, color=theme.normative_band, alpha=0.35, zorder=0, lw=0)
-    ax.axvline(norm_lo, color=theme.normative_bound, linestyle="--", linewidth=1.0, zorder=3)
-    ax.axvline(norm_hi, color=theme.normative_bound, linestyle="--", linewidth=1.0, zorder=3)
+    if show_normative:
+        ax.axvspan(norm_lo, norm_hi, color=theme.normative_band, alpha=0.35, zorder=0, lw=0)
+        ax.axvline(norm_lo, color=theme.normative_bound, linestyle="--", linewidth=1.0, zorder=3)
+        ax.axvline(norm_hi, color=theme.normative_bound, linestyle="--", linewidth=1.0, zorder=3)
 
     max_count = 1.0
     under_n = over_n = 0
@@ -773,7 +776,7 @@ def _organ_histogram(
                     patch.set_facecolor(theme.overflow_bar)
                 continue
             mid = 0.5 * (float(left) + float(right))
-            if mid < norm_lo or mid > norm_hi:
+            if show_normative and (mid < norm_lo or mid > norm_hi):
                 patch.set_facecolor(theme.outlier_bar)
         max_count = float(max(counts) if len(counts) else 1)
 
@@ -807,6 +810,14 @@ def _organ_histogram(
         has_underflow=has_under,
         has_overflow=has_over,
     )
+    tip = (
+        _("Norm: [{lo}..{hi}]").format(
+            lo=_format_ml_bound(norm_lo),
+            hi=_format_ml_bound(norm_hi),
+        )
+        if show_normative
+        else _("No normative range")
+    )
     ax.figure._analytics_organ_hit = {  # type: ignore[attr-defined]
         "organ_name": organ.organ_name,
         "norm_lo": float(norm_lo),
@@ -816,10 +827,7 @@ def _organ_histogram(
         "axis_lo": float(edges[0]),
         "axis_hi": float(edges[-1]),
         "axes_bbox": (float(pos.x0), float(pos.y0), float(pos.x1), float(pos.y1)),
-        "norm_tip": _("Norm: [{lo}..{hi}]").format(
-            lo=_format_ml_bound(norm_lo),
-            hi=_format_ml_bound(norm_hi),
-        ),
+        "norm_tip": tip,
         "bins": bins_meta,
     }
 
