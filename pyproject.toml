@@ -9,20 +9,23 @@ description = "RSNA DICOM Anonymizer"
 readme = "readme.md"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Algorhythm Software", email = "michael@dx.life" }]
-requires-python = ">=3.11.0,<3.13.0"
+requires-python = ">=3.11.0,<3.15.0"
 dependencies = [
-    "numpy<2.0.0",
+    "numpy>=1.26.0",
     "matplotlib>=3.8.0",
     "customtkinter",
     "pillow",
     "tkhtmlview",
-    "pydicom>=2.4,<2.5",
-    "pynetdicom",
+    "pydicom>=3.0,<4",
+    "pynetdicom>=3.0",
     "ifaddr",
     "boto3",
     "openpyxl",
     "psutil",
     "pylibjpeg[all]",
+    "pylibjpeg-openjpeg>=2.5.0",
+    "pylibjpeg-libjpeg>=2.4.0",
+    "pylibjpeg-rle>=2.2.0",
     "opencv-python-headless",
     "easyocr",
     "torch",
@@ -41,7 +44,7 @@ dependencies = [
     "totalsegmentator>=2.3.0",
     "xgboost>=2.0.0",
     "nibabel",
-    "dicom2nifti>=2.3,<2.6",
+    "dicom2nifti>=2.6",
     "tkinterdnd2>=0.6.3",
 ]
 
@@ -117,16 +120,13 @@ max-complexity = 15
 
 [tool.pytest.ini_options]
 testpaths = ["tests/controller", "tests/view", "tests/model"]
-addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model -m \"not ocr_integration and not view_dev\""
+addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model -m \"not ocr_integration and not view_dev and not dicom_integration\""
 pythonpath = ["src", "."]
-filterwarnings = [
-    # pydicom 2.4 still loads packaged testdata via deprecated pkg_resources entry points.
-    "ignore:pkg_resources is deprecated as an API:UserWarning:pydicom.data.data_manager",
-]
+filterwarnings = []
 markers = [
     "tseg_integration: run TotalSegmentator inference (slow, optional)",
     "ocr_integration: EasyOCR on real burnt-in PHI fixtures under tests/controller/ocr (opt-in; excluded from default)",
-    "dicom_integration: local Orthanc PACS or heavy DICOM network integration (skipped in CI)",
+    "dicom_integration: local Orthanc PACS or heavy DICOM network integration (skipped in CI; excluded from default)",
     "rsna_local_data: requires local RSNA_TEST_DATA directory (skipped when absent)",
     "view_dev: local Series View layout tests against developer MRI_TEST fixtures (excluded from CI)",
     "prototyping: tests for src/prototyping scripts",

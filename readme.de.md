@@ -5,13 +5,13 @@
 [![Tests](https://github.com/RSNA/anonymizer/actions/workflows/tests.yaml/badge.svg)](https://github.com/RSNA/anonymizer/actions/workflows/tests.yaml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/rsna-anonymizer.svg)](https://pypi.org/project/rsna-anonymizer/)
-[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue.svg)](https://www.python.org/downloads/)
 
-**Version 19.0.10** ist die aktuelle V19-Version auf dem Branch `master` und auf PyPI. Benötigt **Python 3.11 oder 3.12** mit eingebautem **tkinter**. Python 3.13 wird nicht unterstützt.
+**Version 19.0.10** ist die aktuelle V19-Version auf dem Branch `master` und auf PyPI. Benötigt **Python 3.11–3.14** mit eingebautem **tkinter**. Empfohlen ist **3.12**; **3.14.1** vermeiden (torchvision schließt diesen Patch aus).
 
 ## Installation
 
-Sie brauchen drei Dinge: **uv**, eine Python-Umgebung **3.11/3.12** mit **tkinter** und (unter macOS, für AI Features) **libomp**.
+Sie brauchen drei Dinge: **uv**, eine Python-Umgebung **3.11–3.14** mit **tkinter** und (unter macOS, für AI Features) **libomp**.
 
 ### 1. uv installieren
 
@@ -37,13 +37,13 @@ Die Desktop-Oberfläche braucht **tkinter**. Installieren Sie ein Python mit tki
 
 | Plattform | tkinter verfügbar machen |
 | --- | --- |
-| **Windows** | Python 3.11 oder 3.12 von [python.org](https://www.python.org/downloads/) mit **Add to PATH** und **tcl/tk and IDLE** |
+| **Windows** | Python 3.11–3.14 von [python.org](https://www.python.org/downloads/) mit **Add to PATH** und **tcl/tk and IDLE** |
 | **macOS** | Bevorzugt `uv python install 3.12` (Tk 9.x). Oder Homebrew: `brew install python@3.12 python-tk@3.12` |
 | **Linux** | `sudo apt install python3.12 python3.12-tk python3.12-venv` (oder passende `python3.11` / `python3.11-tk` / `python3.11-venv` Pakete) |
 
 ```bash
-uv python install 3.12                     # or: 3.11
-uv venv rsna-anonymizer --python 3.12      # or: --python 3.11
+uv python install 3.12                     # or: 3.11 / 3.13 / 3.14
+uv venv rsna-anonymizer --python 3.12      # or: --python 3.11 / 3.13 / 3.14
 source rsna-anonymizer/bin/activate        # Windows: rsna-anonymizer\Scripts\activate
 
 uv pip install rsna-anonymizer             # version 19.0.10
@@ -52,7 +52,7 @@ uv pip install rsna-anonymizer             # version 19.0.10
 ### 3. Installation prüfen
 
 ```bash
-python --version          # 3.11.x or 3.12.x
+python --version          # 3.11.x–3.14.x
 python -m tkinter         # a small Tk window must open — required for the UI
 rsna-anonymizer --version # should report 19.0.10
 ```

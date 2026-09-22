@@ -497,13 +497,15 @@ def resolve_face_mask_path(
         if face_mask_is_substantial(face_voxels):
             logger.info("Face blur: using cached mask %s", cache_path)
             return cache_path
-        message = face_blur_gate_message(FaceBlurGateReason.INSUFFICIENT_FACE_MASK)
+        # Empty/ghost masks must not permanently block Face Blur — drop and resegment.
         logger.warning(
-            "Face blur: cached mask has insufficient face voxels (%d) for %s",
+            "Face blur: cached mask has insufficient face voxels (%d) for %s; discarding",
             face_voxels,
             series_directory,
         )
-        raise RuntimeError(message)
+        cache_path.unlink(missing_ok=True)
+        if not run_if_missing:
+            raise RuntimeError(face_blur_gate_message(FaceBlurGateReason.INSUFFICIENT_FACE_MASK))
 
     if not run_if_missing:
         raise FileNotFoundError(

@@ -255,7 +255,8 @@ class Anonymizer(ctk.CTk):
         cur_w = getattr(self, "_current_width", None)
         cur_h = getattr(self, "_current_height", None)
         if grow_only and cur_w is not None and cur_h is not None:
-            # Volumes add/remove: grow with content, never shrink (shrink flickered).
+            # Grow with added charts; callers pass grow_only=False when content shrinks
+            # (Volumes Clear / deselect) so the dashboard does not keep empty pad.
             width = max(width, cur_w)
             height = max(height, cur_h)
         # Skip geometry writes when nothing changed — avoids dashboard flicker from
@@ -393,7 +394,8 @@ class Anonymizer(ctk.CTk):
 
     def load_config(self):
         from anonymizer.controller.ai.tseg.config import apply_ai_features_preferences
-        from anonymizer.utils.app_state import ai_features_from_state
+        from anonymizer.controller.analytics_prefs import apply_analytics_preferences
+        from anonymizer.utils.app_state import ai_features_from_state, analytics_from_state
 
         logger.info(f"Load Config (App State): {self.get_app_state_path()}")
         try:
@@ -415,6 +417,7 @@ class Anonymizer(ctk.CTk):
                 if not os.path.exists(str(self.current_open_project_dir)):
                     self.current_open_project_dir = None
                 apply_ai_features_preferences(ai_features_from_state(config_data))
+                apply_analytics_preferences(analytics_from_state(config_data))
         except FileNotFoundError:
             warn_msg = (
                 "Config file not found: "
@@ -425,15 +428,18 @@ class Anonymizer(ctk.CTk):
 
     def save_config(self):
         from anonymizer.controller.ai.tseg.config import merge_ai_features_into_state
+        from anonymizer.controller.analytics_prefs import merge_analytics_into_state
 
         logger.info(f"Save Config (App State): {self.get_app_state_path()}")
         try:
-            config_data = merge_ai_features_into_state(
-                {
-                    "language": get_current_language(),
-                    "recent_project_dirs": [str(path) for path in self.recent_project_dirs],
-                    "current_open_project_dir": str(self.current_open_project_dir) or "",
-                }
+            config_data = merge_analytics_into_state(
+                merge_ai_features_into_state(
+                    {
+                        "language": get_current_language(),
+                        "recent_project_dirs": [str(path) for path in self.recent_project_dirs],
+                        "current_open_project_dir": str(self.current_open_project_dir) or "",
+                    }
+                )
             )
             app_state_path = self.get_app_state_path()
             app_state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1834,8 +1840,10 @@ def main(config: Path | None = None, ai_batch: Path | None = None, ai_batch_run:
     log_runtime_status()
 
     from anonymizer.controller.ai.tseg.config import apply_ai_features_preferences
+    from anonymizer.controller.analytics_prefs import apply_analytics_preferences
 
     apply_ai_features_preferences()
+    apply_analytics_preferences()
 
     if ai_batch_run:
         if config is None or ai_batch is None:

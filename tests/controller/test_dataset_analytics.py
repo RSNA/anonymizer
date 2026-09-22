@@ -12,6 +12,7 @@ import pytest
 
 from anonymizer.controller.analytics import (
     AGE_BANDS,
+    HEAD_LIMITED_EXCLUDED_ORGANS,
     AnalyticsFilterIndex,
     AnatomyAnalytics,
     CountBucket,
@@ -35,6 +36,7 @@ from anonymizer.controller.analytics import (
     age_years_for_dob,
     normalize_sex_label,
     organ_volume_bin_edges,
+    series_is_head_limited,
     voxels_to_ml,
 )
 from anonymizer.utils.translate import _
@@ -137,6 +139,66 @@ def test_voxels_to_ml() -> None:
     assert voxels_to_ml(100, None) is None
 
 
+def test_organ_counts_prefer_mask_voxels_over_stats_mm3_sidecar(tmp_path: Path) -> None:
+    """CT single-pass wrote mm³ into sidecars; analytics must re-count masks."""
+    import numpy as np
+    import SimpleITK as sitk
+
+    from anonymizer.controller.analytics import _organ_counts_for_cache, _organ_volumes_ml_for_cache
+    from anonymizer.controller.ai.tseg.seg_retention import (
+        write_mask_geometry,
+        write_primary_segment_voxels,
+        write_structure_voxels,
+    )
+
+    cache = tmp_path / "0_TS_SEG"
+    seg = cache / "seg"
+    seg.mkdir(parents=True)
+
+    def _mask(name: str, n_on: int, spacing=(1.0, 1.0, 1.0)) -> None:
+        arr = np.zeros((4, 8, 8), dtype=np.uint8)
+        flat = arr.reshape(-1)
+        flat[:n_on] = 1
+        img = sitk.GetImageFromArray(arr)
+        img.SetSpacing(spacing)
+        sitk.WriteImage(img, str(seg / f"{name}.nii.gz"))
+
+    # True brain voxels (array fits); sidecar wrongly stores stats mm³ (~1.1e6).
+    _mask("brain", 200)
+    _mask("frontal_lobe", 80, spacing=(2.0, 1.0, 1.0))
+    write_structure_voxels(cache, {"brain": 1_100_000, "frontal_lobe": 400})
+    write_primary_segment_voxels(cache, {"brain": 1_100_000, "frontal_lobe": 400})
+    write_mask_geometry(cache, seg)
+
+    counts = _organ_counts_for_cache(cache)
+    assert counts["brain"] == 200
+    assert counts["frontal_lobe"] == 80
+
+    volumes = _organ_volumes_ml_for_cache(cache)
+    # Each mask uses its own spacing: brain 200×1³/1000; frontal 80×2×1×1/1000.
+    assert volumes["brain"] == pytest.approx(0.2)
+    assert volumes["frontal_lobe"] == pytest.approx(0.16)
+    # Second pass hits organ_volumes_ml.json (no re-read of NIfTI).
+    assert (cache / "organ_volumes_ml.json").is_file()
+    assert _organ_volumes_ml_for_cache(cache) == volumes
+
+
+def test_mask_file_volume_ml_uses_file_spacing(tmp_path: Path) -> None:
+    import numpy as np
+    import SimpleITK as sitk
+
+    from anonymizer.controller.analytics import mask_file_volume_ml
+
+    path = tmp_path / "organ.nii.gz"
+    arr = np.zeros((2, 4, 4), dtype=np.uint8)
+    arr.reshape(-1)[:8] = 1
+    img = sitk.GetImageFromArray(arr)
+    img.SetSpacing((0.5, 0.5, 2.0))
+    sitk.WriteImage(img, str(path))
+    # 8 voxels × 0.5×0.5×2.0 mm³ / 1000 = 0.004 ml
+    assert mask_file_volume_ml(path) == pytest.approx(0.004)
+
+
 def test_select_top_organs_two_major() -> None:
     top = _select_top_organs(
         {
@@ -170,6 +232,71 @@ def test_select_main_organ_by_patient_count_then_median() -> None:
     assert main.organ_name == "brain"
     assert main.patient_count == 3
     assert main.samples_ml == (500.0, 510.0, 520.0)
+
+
+def test_series_is_head_limited_by_region_mass() -> None:
+    assert series_is_head_limited({"brain": 80_000, "skull": 15_000, "vertebrae_C1": 2_000})
+    assert series_is_head_limited({"brain": 80_000, "spinal_cord": 5_000})
+    assert not series_is_head_limited({"liver": 60_000, "spleen": 12_000})
+    assert not series_is_head_limited(
+        {"brain": 80_000, "heart": 10_000, "lung_upper_lobe_left": 50_000}
+    )
+    assert not series_is_head_limited(None)
+    assert not series_is_head_limited({})
+
+
+def test_collect_tseg_metrics_excludes_truncal_organs_on_head_fov(tmp_path: Path) -> None:
+    series = tmp_path / "pt" / "study" / "series"
+    cache = series / "0_TS_SEG"
+    cache.mkdir(parents=True)
+    (cache / "primary_segment_voxels.json").write_text(
+        json.dumps(
+            {
+                "brain": 1_200_000,
+                "skull": 500_000,
+                "brainstem": 55_000,
+                "frontal_lobe": 400_000,
+                "spine": 15_000,
+                "spinal_cord": 5_000,
+                "ribs": 1_000,
+                "heart": 500,
+                "liver": 200,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (cache / "structure_voxels.json").write_text(
+        json.dumps(
+            {
+                "brain": 1_200_000,
+                "skull": 500_000,
+                "vertebrae_C1": 8_000,
+                "vertebrae_C2": 7_000,
+                "spinal_cord": 5_000,
+                "brainstem": 55_000,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (cache / "mask_geometry.json").write_text(
+        json.dumps(
+            {
+                "size": [10, 10, 10],
+                "spacing": [1.0, 1.0, 1.0],
+                "origin": [0, 0, 0],
+                "direction": [1, 0, 0, 0, 1, 0, 0, 0, 1],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    anatomy = _collect_tseg_metrics(tmp_path)
+    names = {o.organ_name for o in anatomy.organ_volumes}
+    assert "brain" in names
+    assert "brainstem" not in names  # FreeSurfer≠TS-CT; omit volume charts
+    assert "frontal_lobe" in names
+    assert "skull" in names
+    assert names.isdisjoint(HEAD_LIMITED_EXCLUDED_ORGANS)
 
 
 def test_collect_tseg_metrics_top_organ_histograms(tmp_path: Path) -> None:
@@ -225,8 +352,8 @@ def test_collect_tseg_metrics_top_organ_histograms(tmp_path: Path) -> None:
         "spine",
         "cerebellum",
         "ventricle",
-        "brainstem",
     }
+    assert "brainstem" not in names
     # Ranked by patient count then median ml — single patient → descending volume.
     assert names[0] == "spine"
     assert names[1] == "liver"
@@ -374,43 +501,112 @@ def test_organ_volume_bin_edges_cover_normative_when_samples_inside() -> None:
     from anonymizer.controller.analytics import organ_volume_range_ml
 
     lo, hi, width = organ_volume_range_ml("brain")
-    # In-range samples keep a one-bin pad so normative bounds stay inset.
+    # In-range samples: main span only — no empty underflow/overflow bins.
     edges = organ_volume_bin_edges([lo + 10.0, hi - 10.0], organ_name="brain")
-    assert edges[0] == pytest.approx(max(0.0, lo - width))
-    assert edges[-1] == pytest.approx(hi + width)
+    main_lo = max(0.0, lo - width)
+    main_hi = hi + width
+    assert edges[0] == pytest.approx(main_lo)
+    assert edges[-1] == pytest.approx(main_hi)
+
+
+def test_organ_volume_near_outlier_extends_axis_without_sentinel() -> None:
+    """Mild outliers within 2 bins of the pad stay on the main axis (amber), not red."""
+    from anonymizer.controller.analytics import (
+        ORGAN_VOLUME_NEAR_EXTENT_BINS,
+        organ_volume_axis_span,
+        organ_volume_range_ml,
+    )
+
+    lo, hi, width = organ_volume_range_ml("brain")
+    base_hi = hi + width
+    near = base_hi + ORGAN_VOLUME_NEAR_EXTENT_BINS * width
+    plot_lo, plot_hi, _nlo, _nhi, _w = organ_volume_axis_span([near], organ_name="brain")
+    assert plot_lo == pytest.approx(max(0.0, lo - width))
+    assert plot_hi == pytest.approx(near)
+    edges = organ_volume_bin_edges([lo + 10.0, near], organ_name="brain")
+    assert edges[0] == pytest.approx(plot_lo)
+    assert edges[-1] == pytest.approx(plot_hi)
 
 
 def test_organ_volume_axis_pads_so_norm_lo_is_inset() -> None:
-    """High-only outliers must not glue the left dotted bound to the spine."""
-    from anonymizer.controller.analytics import organ_volume_axis_span, organ_volume_range_ml
+    """Extreme high outliers must not stretch the plot axis or glue left norm to spine."""
+    from anonymizer.controller.analytics import (
+        ORGAN_VOLUME_NEAR_EXTENT_BINS,
+        organ_volume_axis_span,
+        organ_volume_range_ml,
+    )
 
     lo, hi, width = organ_volume_range_ml("frontal_lobe")
+    extreme = hi + width + (ORGAN_VOLUME_NEAR_EXTENT_BINS + 2) * width
     axis_lo, axis_hi, norm_lo, norm_hi, _w = organ_volume_axis_span(
-        [hi + 90.0], organ_name="frontal_lobe"
+        [extreme], organ_name="frontal_lobe"
     )
     assert norm_lo == pytest.approx(lo)
     assert norm_hi == pytest.approx(hi)
     assert axis_lo == pytest.approx(max(0.0, lo - width))
-    assert axis_lo < norm_lo  # left dotted line is interior, not at x=spine
-    assert axis_hi >= hi + 90.0
+    assert axis_lo < norm_lo
+    assert axis_hi == pytest.approx(hi + width)
+    assert axis_hi < extreme
 
 
-def test_organ_volume_bin_edges_extend_for_outliers() -> None:
-    from anonymizer.controller.analytics import organ_volume_axis_span, organ_volume_range_ml
+def test_organ_volume_bin_edges_sentinel_bins_for_extreme_outliers() -> None:
+    """Extremes get one-bin sentinels; main span stays plot_lo..plot_hi."""
+    from anonymizer.controller.analytics import (
+        ORGAN_VOLUME_NEAR_EXTENT_BINS,
+        organ_volume_axis_span,
+        organ_volume_bin_patient_ids,
+        organ_volume_range_ml,
+        OrganVolumeSample,
+    )
 
-    lo, hi, _width = organ_volume_range_ml("brain")
+    lo, hi, width = organ_volume_range_ml("brain")
     below = lo - 200.0
-    above = hi + 150.0
-    axis_lo, axis_hi, norm_lo, norm_hi, _w = organ_volume_axis_span(
+    above = hi + width + (ORGAN_VOLUME_NEAR_EXTENT_BINS + 3) * width
+    plot_lo, plot_hi, norm_lo, norm_hi, w = organ_volume_axis_span(
         [below, above], organ_name="brain"
     )
     assert norm_lo == pytest.approx(lo)
     assert norm_hi == pytest.approx(hi)
-    assert axis_lo <= below
-    assert axis_hi >= above
+    assert plot_lo == pytest.approx(max(0.0, lo - width))
+    assert plot_hi == pytest.approx(hi + width)
     edges = organ_volume_bin_edges([below, above], organ_name="brain")
-    assert edges[0] == pytest.approx(axis_lo)
-    assert edges[-1] == pytest.approx(axis_hi)
+    assert edges[0] == pytest.approx(plot_lo - w)
+    assert edges[-1] == pytest.approx(plot_hi + w)
+    assert edges[2] - edges[1] == pytest.approx(w)
+    ids = organ_volume_bin_patient_ids(
+        (OrganVolumeSample("lo", below), OrganVolumeSample("hi", above)),
+        edges,
+        plot_lo=plot_lo,
+        plot_hi=plot_hi,
+    )
+    assert "lo" in ids[0]
+    assert "hi" in ids[-1]
+
+
+def test_ventricle_overflow_keeps_main_bin_width() -> None:
+    """HEAD pathology (~320 ml) must not shrink inlier bins."""
+    from anonymizer.controller.analytics import (
+        OrganVolumeSample,
+        organ_volume_axis_span,
+        organ_volume_bin_patient_ids,
+        organ_volume_range_ml,
+    )
+
+    _lo, _hi, width = organ_volume_range_ml("ventricle")
+    samples_ml = [10.0, 20.0, 35.0, 320.0]
+    plot_lo, plot_hi, *_rest = organ_volume_axis_span(samples_ml, organ_name="ventricle")
+    edges = organ_volume_bin_edges(samples_ml, organ_name="ventricle")
+    assert edges[-2] == pytest.approx(plot_hi)
+    assert edges[-1] == pytest.approx(plot_hi + width)
+    assert edges[-1] < 200.0
+    ids = organ_volume_bin_patient_ids(
+        tuple(OrganVolumeSample(f"p{i}", ml) for i, ml in enumerate(samples_ml)),
+        edges,
+        plot_lo=plot_lo,
+        plot_hi=plot_hi,
+    )
+    assert "p3" in ids[-1]
+    assert sum(len(b) for b in ids) == 4
 
 
 def test_organ_volume_ml_tick_values_are_sparse_and_skip_forced_bounds() -> None:
@@ -450,7 +646,11 @@ def test_organ_volume_range_unknown_raises() -> None:
 
 def test_organ_volume_ranges_cover_primary_segment_groups() -> None:
     from anonymizer.controller.ai.tseg.config import PRIMARY_SEGMENT_GROUPS
-    from anonymizer.controller.analytics import VOLUME_SEGMENT_GROUPS, load_organ_volume_ranges
+    from anonymizer.controller.analytics import (
+        NORM_MISMATCH_EXCLUDED_ORGANS,
+        VOLUME_SEGMENT_GROUPS,
+        load_organ_volume_ranges,
+    )
 
     ranges = load_organ_volume_ranges()
     assert frozenset(PRIMARY_SEGMENT_GROUPS) == VOLUME_SEGMENT_GROUPS
@@ -461,6 +661,20 @@ def test_organ_volume_ranges_cover_primary_segment_groups() -> None:
         assert lo > 0.0
     for name in ("skull", "spine", "clavicles", "ribs"):
         assert name in ranges
+    assert "brainstem" in ranges  # key retained; charts omit via exclusion set
+    assert "brainstem" in NORM_MISMATCH_EXCLUDED_ORGANS
+
+
+def test_brainstem_excluded_from_volume_charts_even_on_body_fov() -> None:
+    from anonymizer.controller.analytics import (
+        NORM_MISMATCH_EXCLUDED_ORGANS,
+        _organ_allowed_for_series,
+    )
+
+    assert "brainstem" in NORM_MISMATCH_EXCLUDED_ORGANS
+    assert _organ_allowed_for_series("brainstem", head_limited=False) is False
+    assert _organ_allowed_for_series("brainstem", head_limited=True) is False
+    assert _organ_allowed_for_series("ventricle", head_limited=False) is True
 
 
 def test_patient_mean_logs_warning_when_outside_normative(caplog: pytest.LogCaptureFixture) -> None:

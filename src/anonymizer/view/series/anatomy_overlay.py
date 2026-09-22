@@ -232,8 +232,14 @@ def load_primary_segment_mask(
     group_name: str,
     *,
     reference_volume_path: Path | None = None,
+    edited_mask: np.ndarray | None = None,
 ) -> np.ndarray:
-    """Union preferred or fallback TS masks for a primary group into one binary volume."""
+    """Union preferred or fallback TS masks for a primary group into one binary volume.
+
+    When ``edited_mask`` is provided (``annotations/edits/``), it is used instead of ``seg/``.
+    """
+    if edited_mask is not None:
+        return (edited_mask > 0).astype(np.uint8)
     files = resolve_primary_segment_files(seg_dir, group_name)
     reference, owned_reference = _reference_image_for_masks(
         seg_dir,
@@ -296,6 +302,11 @@ def mask_slice_to_segmentations(
     contour_epsilon_ratio: float = _ANATOMY_CONTOUR_EPSILON_RATIO,
     smooth_sigma: float = _ANATOMY_MASK_SMOOTH_SIGMA_PX,
     contour_smooth_window: int = _ANATOMY_CONTOUR_SMOOTH_WINDOW,
+    label_id: int | None = None,
+    label_name: str | None = None,
+    source: str | None = None,
+    editable: bool = False,
+    filled: bool = False,
 ) -> list[Segmentation]:
     """Contour a single axial binary mask slice."""
     if not np.any(slice_mask):
@@ -319,7 +330,18 @@ def mask_slice_to_segmentations(
         if contour.shape[0] < 3:
             continue
         points = [PolygonPoint(x=int(point[0][0]), y=int(point[0][1])) for point in contour]
-        segmentations.append(Segmentation(points=points, color_bgr=color_bgr, structure_name=structure_name))
+        segmentations.append(
+            Segmentation(
+                points=points,
+                color_bgr=color_bgr,
+                structure_name=structure_name,
+                label_id=label_id,
+                label_name=label_name,
+                source=source,
+                editable=editable,
+                filled=filled,
+            )
+        )
     return segmentations
 
 
@@ -329,6 +351,11 @@ def contour_mask_slice(
     *,
     structure_name: str,
     color_bgr: tuple[int, int, int],
+    label_id: int | None = None,
+    label_name: str | None = None,
+    source: str | None = None,
+    editable: bool = False,
+    filled: bool = False,
 ) -> list[Segmentation]:
     """Contour one Z slice of a 3D mask (empty list if out of range or empty)."""
     if mask.ndim != 3:
@@ -339,6 +366,11 @@ def contour_mask_slice(
         mask[slice_index],
         structure_name=structure_name,
         color_bgr=color_bgr,
+        label_id=label_id,
+        label_name=label_name,
+        source=source,
+        editable=editable,
+        filled=filled,
     )
 
 

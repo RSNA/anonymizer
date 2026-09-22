@@ -37,7 +37,7 @@ from numpy.typing import NDArray
 from openjpeg.utils import encode_array  # JPEG2000Lossless
 from pydicom import Dataset, dcmread
 from pydicom.encaps import encapsulate
-from pydicom.pixel_data_handlers.util import (
+from pydicom.pixels.processing import (
     apply_color_lut,
     convert_color_space,
 )

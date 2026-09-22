@@ -1,6 +1,6 @@
 # Installation et premier lancement
 
-**La version 19.0.1** est la première version officielle V19. Il vous faut **Python 3.11 ou 3.12** avec **tkinter**, installé via **uv**. Python 3.13 n’est pas pris en charge.
+**La version 19.0.10** est la version V19 actuelle. Il vous faut **Python 3.11–3.14** avec **tkinter**, installé via **uv**. Préférez **3.12** ; évitez **3.14.1** (torchvision exclut ce correctif).
 
 ## Installation avec uv et tkinter
 
@@ -26,12 +26,12 @@ uv --version
 
 ### 2. Installer Python avec tkinter, puis l’application
 
-La fenêtre de bureau a besoin de **tkinter**. Installez un Python qui l’inclut, créez le venv et installez **19.0.1** :
+La fenêtre de bureau a besoin de **tkinter**. Installez un Python qui l’inclut, créez le venv et installez **19.0.10** :
 
 
 | Plateforme | Assurer la disponibilité de tkinter |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **Windows** | Installez Python 3.11 ou 3.12 depuis [python.org](https://www.python.org/downloads/) avec **Add to PATH** et **tcl/tk and IDLE** |
+| **Windows** | Installez Python 3.11–3.14 depuis [python.org](https://www.python.org/downloads/) avec **Add to PATH** et **tcl/tk and IDLE** |
 | **macOS** | Préférez `uv python install 3.12` (Tk 9.x). Ou Homebrew : `brew install python@3.12 python-tk@3.12` |
 | **Linux** | `sudo apt install python3.12 python3.12-tk python3.12-venv` (ou paquets 3.11 équivalents) |
 
@@ -41,15 +41,15 @@ uv python install 3.12
 uv venv rsna-anonymizer --python 3.12
 source rsna-anonymizer/bin/activate   # Windows: rsna-anonymizer\Scripts\activate
 
-uv pip install rsna-anonymizer       # version 19.0.1
+uv pip install rsna-anonymizer       # version 19.0.10
 ```
 
 ### 3. Vérifier l’installation
 
 ```bash
-python --version          # 3.11.x or 3.12.x
+python --version          # 3.11.x–3.14.x
 python -m tkinter         # a small Tk window must open — required for the UI
-rsna-anonymizer --version # should report 19.0.1
+rsna-anonymizer --version # should report 19.0.10
 ```
 
 Si `python -m tkinter` échoue, recréez le venv avec un Python qui inclut Tk (tableau ci-dessus), puis réinstallez.

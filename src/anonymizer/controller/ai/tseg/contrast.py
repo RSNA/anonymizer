@@ -484,10 +484,13 @@ def _organ_stat(stats: dict, organ: str, field: str) -> float:
 
 def structure_voxels_from_organ_stats(stats: dict) -> dict[str, int]:
     """
-    Map TotalSegmentator organ statistics volumes (mm³) to structure mass for body-part logic.
+    Map TotalSegmentator organ statistics volumes (mm³) to a temporary mass proxy.
 
-    Volume is used as a relative mass proxy (same units across structures) so
-    ``dominant_region_from_voxels`` / ``body_parts_present`` ratios remain meaningful.
+    Values are **mm³**, not voxel counts. Callers must run
+    ``reconcile_structure_voxels_from_masks`` after exporting binary masks (and
+    before ``finalize_seg_cache`` / Dataset analytics) so sidecars store true
+    voxel counts. Until then, ratios remain meaningful for
+    ``dominant_region_from_voxels`` / ``body_parts_present``.
     """
     from anonymizer.controller.ai.tseg.segment import STRUCTURE_TO_REGION
 

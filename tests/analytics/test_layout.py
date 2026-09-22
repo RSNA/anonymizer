@@ -148,14 +148,46 @@ def test_graphical_widgets_before_textual() -> None:
     )
     keys = [w.key for w in select_widgets(snap)]
     assert "ai" in keys
-    assert "organ:brain" in keys
-    assert keys.index("organ:brain") < keys.index("ai")
-    # AI follows modality/volumes before leftover charts (e.g. ethnicity).
-    assert keys.index("modality") < keys.index("ai")
+    assert "sex" in keys
+    # AI pairs beside Sex (immediately after) when sex data exists.
+    assert keys.index("ai") == keys.index("sex") + 1
+    assert keys.index("organ:brain") > keys.index("ai")
 
 
-def test_no_volumes_places_ai_beside_modality() -> None:
-    """With volumes unchecked, AI fills the second column next to modality."""
+def test_ai_pairs_beside_sex_when_present() -> None:
+    snap = _snap_multi_modality()
+    layout = plan_board_layout(select_widgets(snap))
+    by_key = {p.spec.key: p for p in layout.placements}
+    assert "sex" in by_key and "ai" in by_key
+    assert by_key["sex"].row == by_key["ai"].row
+    assert by_key["sex"].col == 0
+    assert by_key["ai"].col == 1
+
+
+def test_ai_pairs_beside_age_when_no_sex() -> None:
+    snap = _snap_multi_modality()
+    from dataclasses import replace
+
+    # Drop sex buckets so sex chart is irrelevant; keep age.
+    patients = tuple(
+        replace(p, sex=_("Unknown")) for p in snap.filter_index.patients
+    )
+    index = replace(snap.filter_index, patients=patients)
+    snap = _assemble_from_index(index, datetime.now().astimezone())
+    keys = [w.key for w in select_widgets(snap)]
+    assert "sex" not in keys
+    assert "age" in keys
+    assert "ai" in keys
+    assert keys.index("ai") == keys.index("age") + 1
+    layout = plan_board_layout(select_widgets(snap))
+    by_key = {p.spec.key: p for p in layout.placements}
+    assert by_key["age"].row == by_key["ai"].row
+    assert by_key["age"].col == 0
+    assert by_key["ai"].col == 1
+
+
+def test_no_volumes_still_orders_modality_after_ai_pair() -> None:
+    """With volumes unchecked, modality still follows the Sex|AI pair."""
     snap = _snap_multi_modality()
     from dataclasses import replace
 
@@ -172,16 +204,11 @@ def test_no_volumes_places_ai_beside_modality() -> None:
     )
     sections = select_board_sections(snap, selected_organs=())
     assert not sections.organs
-    assert "modality" in {w.key for w in sections.charts}
-    assert "ai" in {w.key for w in sections.texts}
-    layout = plan_board_layout(sections.all)
-    by_key = {p.spec.key: p for p in layout.placements}
-    assert by_key["modality"].row == by_key["ai"].row
-    assert by_key["modality"].col == 0
-    assert by_key["ai"].col == 1
-    assert by_key["modality"].colspan == 1
-    assert by_key["ai"].colspan == 1
+    keys = [w.key for w in sections.all]
+    assert keys.index("sex") < keys.index("ai") < keys.index("modality")
 
+
+def test_organ_selection_changes_placement_count() -> None:
     """Fewer selected organs → fewer placements; empty selection → no organ cells."""
     snap = _snap_multi_modality()
     from dataclasses import replace
@@ -210,6 +237,8 @@ def test_no_volumes_places_ai_beside_modality() -> None:
     assert plan_board_layout(one.organs).rows == 1
     assert plan_board_layout(none.organs).rows == 0
 
+
+def test_default_and_explicit_organ_selection() -> None:
     snap = _snap_multi_modality()
     from dataclasses import replace
 
@@ -242,6 +271,31 @@ def test_no_volumes_places_ai_beside_modality() -> None:
     # Explicit empty selection must remove all organ widgets (not fall back to defaults).
     cleared = {w.key for w in select_widgets(snap, selected_organs=())}
     assert not any(k.startswith("organ:") for k in cleared)
+
+
+def test_select_widgets_filters_board_by_selected_board_widgets() -> None:
+    snap = _snap_multi_modality()
+    assert "sex" in {w.key for w in select_widgets(snap)}
+    assert "age" in {w.key for w in select_widgets(snap)}
+
+    only_sex = {w.key for w in select_widgets(snap, selected_board_widgets=("sex",))}
+    assert "sex" in only_sex
+    assert "age" not in only_sex
+    assert "modality" not in only_sex
+
+    none = {w.key for w in select_widgets(snap, selected_board_widgets=())}
+    assert "sex" not in none
+    assert "age" not in none
+    assert "modality" not in none
+
+
+def test_intersect_board_widget_selection_defaults_to_all_relevant() -> None:
+    from anonymizer.controller.analytics_prefs import intersect_board_widget_selection
+
+    relevant = ("sex", "age", "modality")
+    assert intersect_board_widget_selection(None, relevant) == set(relevant)
+    assert intersect_board_widget_selection(("sex", "ai"), relevant) == {"sex"}
+    assert intersect_board_widget_selection((), relevant) == set()
 
 
 def test_unknown_demo_omits_empty_ethnicity() -> None:

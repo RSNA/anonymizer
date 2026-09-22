@@ -67,7 +67,7 @@ def test_resolve_face_mask_path_missing_without_run(tmp_path: Path) -> None:
         resolve_face_mask_path(series, run_if_missing=False)
 
 
-def test_resolve_face_mask_path_rejects_cached_empty_mask(tmp_path: Path) -> None:
+def test_resolve_face_mask_path_rejects_cached_empty_mask_without_rerun(tmp_path: Path) -> None:
     series = tmp_path / "series"
     series.mkdir()
     cache = face_mask_cache_path(series)
@@ -76,3 +76,31 @@ def test_resolve_face_mask_path_rejects_cached_empty_mask(tmp_path: Path) -> Non
     message = face_blur_gate_message(FaceBlurGateReason.INSUFFICIENT_FACE_MASK)
     with pytest.raises(RuntimeError, match=message.split(".")[0]):
         resolve_face_mask_path(series, run_if_missing=False)
+    assert not cache.is_file()
+
+
+@patch("anonymizer.controller.ai.blur_face.pipeline.analyze_tseg_face")
+def test_resolve_face_mask_path_reruns_when_cached_mask_empty(
+    mock_analyze: MagicMock,
+    tmp_path: Path,
+) -> None:
+    series = tmp_path / "series"
+    series.mkdir()
+    cache = face_mask_cache_path(series)
+    _write_face_mask(cache, voxel_count=0)
+
+    def _create_mask(directory: Path, **kwargs) -> FaceSegResult:
+        _write_face_mask(cache, voxel_count=2000)
+        return FaceSegResult(
+            series_directory=directory,
+            face_mask_path=cache,
+            slice_count=24,
+            face_voxel_count=2000,
+            inference_seconds=1.0,
+        )
+
+    mock_analyze.side_effect = _create_mask
+
+    assert resolve_face_mask_path(series) == cache
+    mock_analyze.assert_called_once()
+    assert cache.is_file()

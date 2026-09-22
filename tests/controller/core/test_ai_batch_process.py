@@ -1216,8 +1216,271 @@ def test_ai_batch_process_auto_applies_study_description_without_dialog(
 
     assert summary.applied == 1
     mock_auto_apply.assert_called_once()
+    assert mock_auto_apply.call_args.kwargs["anon_study_uids"] == ("anon_study",)
     assert any("XR Chest AP" in line for line in logs)
     assert any("Auto-applied study description" in line for line in logs)
+
+
+@patch("anonymizer.controller.ai_batch_process.auto_apply_best_study_descriptions")
+@patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
+def test_ai_batch_applies_study_description_before_later_phase_cancel(
+    mock_harmonize: MagicMock,
+    mock_auto_apply: MagicMock,
+    images_layout: tuple[Path, list[tuple[str, str]]],
+) -> None:
+    """Study LOINC runs when that study's series finish; Face Blur cancel must not skip it."""
+    images_dir, studies = images_layout
+    enter_patch, exit_patch, _handle, _runner = _patch_batch_runners()
+    series_path = images_dir / "anon_pt" / "anon_study" / "series_a"
+    from anonymizer.controller.ai.harmonize import HarmonizeApplyOutcome, StudyDescriptionOffer
+    from anonymizer.controller.ai.harmonize.loinc_study import LoincStudyMatch
+
+    mock_harmonize.return_value = HarmonizeApplyOutcome(series_path, "ok", "Chest AP")
+    offer = StudyDescriptionOffer(
+        anon_study_uid="anon_study",
+        fingerprint=("Chest AP",),
+        matches=(LoincStudyMatch("36572-6", "XR Chest AP", 500.0),),
+        peer_study_uids=(),
+        ambiguous=False,
+    )
+    study_apply_done = {"value": False}
+
+    def auto_apply_side_effect(**kwargs):
+        study_apply_done["value"] = True
+        return [(offer, ["anon_study"])]
+
+    mock_auto_apply.side_effect = auto_apply_side_effect
+
+    def cancelled() -> bool:
+        # Cancel only after this study's LOINC apply (next algorithm phase gate).
+        return study_apply_done["value"]
+
+    logs: list[str] = []
+
+    with (
+        enter_patch,
+        exit_patch,
+        patch(
+            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            return_value=[(1, 1, series_path)],
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            return_value=_batch_test_dataset(modality="CR"),
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            return_value=_batch_test_dataset(modality="CR"),
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            return_value=None,
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process.series_needs_face_blur",
+            return_value=True,
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._apply_face_blur_series",
+            side_effect=AssertionError("Face blur must not run after cancel"),
+        ),
+    ):
+        summary = ai_batch_process(
+            images_dir,
+            studies,
+            AiBatchProcessOptions(
+                algorithms=(AiBatchAlgorithm.HARMONIZE, AiBatchAlgorithm.FACE_BLUR),
+            ),
+            anon_model=_pending_anon_model(),
+            cancelled=cancelled,
+            on_log=logs.append,
+        )
+
+    mock_auto_apply.assert_called_once()
+    assert mock_auto_apply.call_args.kwargs["anon_study_uids"] == ("anon_study",)
+    assert any("Auto-applied study description" in line for line in logs)
+    assert summary.cancelled is True
+
+
+@patch("anonymizer.controller.ai_batch_process.auto_apply_best_study_descriptions")
+def test_ai_batch_applies_study_description_when_harmonize_phase_skipped(
+    mock_auto_apply: MagicMock,
+    images_layout: tuple[Path, list[tuple[str, str]]],
+) -> None:
+    """Re-run with series already Harmonized still heals missing study descriptions."""
+    images_dir, studies = images_layout
+    enter_patch, exit_patch, _handle, _runner = _patch_batch_runners()
+    series_path = images_dir / "anon_pt" / "anon_study" / "series_a"
+    from anonymizer.controller.ai.harmonize import StudyDescriptionOffer
+    from anonymizer.controller.ai.harmonize.loinc_study import LoincStudyMatch
+
+    offer = StudyDescriptionOffer(
+        anon_study_uid="anon_study",
+        fingerprint=("Chest AP",),
+        matches=(LoincStudyMatch("36572-6", "XR Chest AP", 500.0),),
+        peer_study_uids=(),
+        ambiguous=False,
+    )
+    mock_auto_apply.return_value = [(offer, ["anon_study"])]
+    already = _pending_anon_model()
+    already.series_is_harmonized.return_value = True
+    logs: list[str] = []
+
+    with (
+        enter_patch,
+        exit_patch,
+        patch(
+            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            return_value=[(1, 1, series_path)],
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            return_value=_batch_test_dataset(modality="CR"),
+        ),
+    ):
+        summary = ai_batch_process(
+            images_dir,
+            studies,
+            AiBatchProcessOptions(algorithms=(AiBatchAlgorithm.HARMONIZE,)),
+            anon_model=already,
+            on_log=logs.append,
+        )
+
+    mock_auto_apply.assert_called_once()
+    assert mock_auto_apply.call_args.kwargs["anon_study_uids"] == ("anon_study",)
+    assert any("Auto-applied study description" in line for line in logs)
+    assert summary.applied == 0
+
+
+@patch("anonymizer.controller.ai_batch_process.auto_apply_best_study_descriptions")
+@patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
+def test_ai_batch_study_loinc_after_each_study_not_end_of_selection(
+    mock_harmonize: MagicMock,
+    mock_auto_apply: MagicMock,
+    images_layout: tuple[Path, list[tuple[str, str]]],
+) -> None:
+    """LOINC study apply runs per study as soon as that study's series are done."""
+    images_dir, studies = images_layout
+    # Two studies in selection
+    studies = [("anon_pt", "study_a"), ("anon_pt", "study_b")]
+    series_a = images_dir / "anon_pt" / "study_a" / "series_a"
+    series_b = images_dir / "anon_pt" / "study_b" / "series_b"
+    series_a.mkdir(parents=True, exist_ok=True)
+    series_b.mkdir(parents=True, exist_ok=True)
+    (series_a / "1.dcm").write_bytes(b"")
+    (series_b / "1.dcm").write_bytes(b"")
+    enter_patch, exit_patch, _handle, _runner = _patch_batch_runners()
+    from anonymizer.controller.ai.harmonize import HarmonizeApplyOutcome, StudyDescriptionOffer
+    from anonymizer.controller.ai.harmonize.loinc_study import LoincStudyMatch
+
+    mock_harmonize.side_effect = lambda series_path, **kwargs: HarmonizeApplyOutcome(
+        series_path, "ok", "Chest AP"
+    )
+    apply_order: list[str] = []
+
+    def auto_apply_side_effect(**kwargs):
+        uids = kwargs["anon_study_uids"]
+        apply_order.extend(uids)
+        uid = uids[0]
+        offer = StudyDescriptionOffer(
+            anon_study_uid=uid,
+            fingerprint=("Chest AP",),
+            matches=(LoincStudyMatch("36572-6", "XR Chest AP", 500.0),),
+            peer_study_uids=(),
+            ambiguous=False,
+        )
+        return [(offer, [uid])]
+
+    mock_auto_apply.side_effect = auto_apply_side_effect
+
+    with (
+        enter_patch,
+        exit_patch,
+        patch(
+            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            return_value=[(1, 2, series_a), (2, 2, series_b)],
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            return_value=_batch_test_dataset(modality="CR"),
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            return_value=_batch_test_dataset(modality="CR"),
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            return_value=None,
+        ),
+    ):
+        ai_batch_process(
+            images_dir,
+            studies,
+            AiBatchProcessOptions(algorithms=(AiBatchAlgorithm.HARMONIZE,)),
+            anon_model=_pending_anon_model(),
+        )
+
+    assert apply_order == ["study_a", "study_b"]
+    assert mock_auto_apply.call_count == 2
+
+
+@patch("anonymizer.controller.ai_batch_process.auto_apply_best_study_descriptions")
+@patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
+def test_ai_batch_skips_study_loinc_apply_when_study_not_ready(
+    mock_harmonize: MagicMock,
+    mock_auto_apply: MagicMock,
+    images_layout: tuple[Path, list[tuple[str, str]]],
+) -> None:
+    """After the first of two series, offer gate yields nothing (study not complete)."""
+    images_dir, studies = images_layout
+    enter_patch, exit_patch, _handle, _runner = _patch_batch_runners()
+    series_a = images_dir / "anon_pt" / "anon_study" / "series_a"
+    series_b = images_dir / "anon_pt" / "anon_study" / "series_b"
+    from anonymizer.controller.ai.harmonize import HarmonizeApplyOutcome
+
+    call_count = {"n": 0}
+
+    def cancelled() -> bool:
+        return call_count["n"] >= 1
+
+    def harmonize_side_effect(series_path, **kwargs):
+        call_count["n"] += 1
+        return HarmonizeApplyOutcome(series_path, "ok", "Chest AP")
+
+    mock_harmonize.side_effect = harmonize_side_effect
+    mock_auto_apply.return_value = []  # study not fully series-harmonized yet
+
+    with (
+        enter_patch,
+        exit_patch,
+        patch(
+            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            return_value=[(1, 1, series_a), (1, 1, series_b)],
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            return_value=_batch_test_dataset(modality="CR"),
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            return_value=_batch_test_dataset(modality="CR"),
+        ),
+        patch(
+            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            return_value=None,
+        ),
+    ):
+        summary = ai_batch_process(
+            images_dir,
+            studies,
+            AiBatchProcessOptions(algorithms=(AiBatchAlgorithm.HARMONIZE,)),
+            anon_model=_pending_anon_model(),
+            cancelled=cancelled,
+        )
+
+    mock_auto_apply.assert_called_once()
+    assert mock_auto_apply.call_args.kwargs["anon_study_uids"] == ("anon_study",)
+    assert summary.cancelled is True
 
 
 @patch("anonymizer.controller.ai_batch_process.auto_apply_best_study_descriptions")

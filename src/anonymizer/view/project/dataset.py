@@ -1314,7 +1314,9 @@ class DatasetView(AppToplevel):
 
         kind, uids, _info = self._selected_description_targets()
         group_uids = uids if kind == "study" and anon_study_uid in uids and len(uids) > 1 else [anon_study_uid]
-        full_catalog = not is_harmonized
+        # Single unharmonized may open the full catalog; multi always opens closest +
+        # Expand — same dialog state as working single-select after the list settles.
+        open_full_catalog = len(group_uids) == 1 and not is_harmonized
 
         if len(group_uids) > 1:
             hints = []
@@ -1324,19 +1326,18 @@ class DatasetView(AppToplevel):
                 if not text and rec is not None:
                     text = (rec.study_description or "").strip()
                 hints.append(text)
-                if not (anon_model.get_study_harmonized_description(uid) or "").strip():
-                    full_catalog = True
             pairs = study_description_group_choices(
                 anon_model,
                 group_uids,
                 hint_descriptions=hints,
+                full_catalog=False,
             )
         else:
             pairs = study_description_edit_choices(
                 anon_model,
                 anon_study_uid,
                 hint_description=current,
-                full_catalog=full_catalog,
+                full_catalog=open_full_catalog,
             )
         if not pairs:
             return
@@ -1367,25 +1368,22 @@ class DatasetView(AppToplevel):
         modality = prefix.strip() or str(record.modality or "").strip()
         if n > 1:
             title = _("Set {modality} study description ({n})").format(modality=modality, n=n)
-            if full_catalog:
-                hint = _("Applies to all {n} selected {modality} studies").format(n=n, modality=modality)
-            else:
-                hint = _(
-                    "Applies to all {n} selected {modality} studies · Expand to the full catalog "
-                    "if the category is wrong"
-                ).format(n=n, modality=modality)
+            hint = _(
+                "Applies to all {n} selected {modality} studies · Expand to the full catalog "
+                "if the category is wrong"
+            ).format(n=n, modality=modality)
+        elif open_full_catalog:
+            title = _("Set {modality} study description").format(modality=modality)
+            hint = _("Choose a {modality} LOINC study description").format(modality=modality)
         else:
             title = _("Set {modality} study description").format(modality=modality)
-            if full_catalog:
-                hint = _("Choose a {modality} LOINC study description").format(modality=modality)
-            else:
-                hint = _(
-                    "Closest matches for this study · Expand to the full {modality} LOINC catalog "
-                    "if the category is wrong"
-                ).format(modality=modality)
+            hint = _(
+                "Closest matches for this study · Expand to the full {modality} LOINC catalog "
+                "if the category is wrong"
+            ).format(modality=modality)
 
         expand_loader = None
-        if not full_catalog:
+        if not open_full_catalog:
 
             def expand_loader() -> tuple[list[str], dict[str, str | None]]:
                 seed_uid = group_uids[0]
@@ -1420,7 +1418,7 @@ class DatasetView(AppToplevel):
             hint=hint,
             modality=modality,
             expand_loader=expand_loader,
-            showing_full_catalog=full_catalog,
+            showing_full_catalog=open_full_catalog,
         )
 
     def _edit_series_description(self, iid: str, anon_series_uid: str) -> None:
@@ -1448,7 +1446,9 @@ class DatasetView(AppToplevel):
         group_uids = (
             uids if kind == "series" and anon_series_uid in uids and len(uids) > 1 else [anon_series_uid]
         )
-        full_catalog = not is_harmonized
+        # Multi always opens closest + Expand (same as working single). Single
+        # unharmonized may still open the full Playbook catalog.
+        open_full_catalog = len(group_uids) == 1 and not is_harmonized
         images_dir = Path(self._controller.model.images_dir())
 
         if len(group_uids) > 1:
@@ -1463,21 +1463,18 @@ class DatasetView(AppToplevel):
                 modalities.append(ser.modality)
                 desc = (ser.harmonized_description or ser.description or "").strip()
                 descriptions.append(desc)
-                if not (ser.harmonized_description or "").strip() and not _series_description_looks_playbook(
-                    modality=ser.modality, description=desc
-                ):
-                    full_catalog = True
                 series_dirs.append(series_path_for_record(images_dir, st, ser))
             choices = series_description_group_choices(
                 modalities=modalities,
                 current_descriptions=descriptions,
                 anatomy_hint=study_hint,
+                full_catalog=False,
             )
         else:
             choices = series_description_edit_choices(
                 modality=series.modality,
                 current_description=current,
-                full_catalog=full_catalog,
+                full_catalog=open_full_catalog,
                 anatomy_hint=study_hint,
             )
             series_dirs = [series_path_for_record(images_dir, study, series)]
@@ -1497,25 +1494,22 @@ class DatasetView(AppToplevel):
         modality = str(series.modality or "").strip()
         if n > 1:
             title = _("Set {modality} series description ({n})").format(modality=modality, n=n)
-            if full_catalog:
-                hint = _("Applies to all {n} selected {modality} series").format(n=n, modality=modality)
-            else:
-                hint = _(
-                    "Applies to all {n} selected {modality} series · Expand to the full catalog "
-                    "if the category is wrong"
-                ).format(n=n, modality=modality)
+            hint = _(
+                "Applies to all {n} selected {modality} series · Expand to the full catalog "
+                "if the category is wrong"
+            ).format(n=n, modality=modality)
+        elif open_full_catalog:
+            title = _("Set {modality} series description").format(modality=modality)
+            hint = _("Choose a {modality} RadLex Playbook series description").format(modality=modality)
         else:
             title = _("Set {modality} series description").format(modality=modality)
-            if full_catalog:
-                hint = _("Choose a {modality} RadLex Playbook series description").format(modality=modality)
-            else:
-                hint = _(
-                    "Closest matches for this series · Expand to the full {modality} RadLex catalog "
-                    "if the category is wrong"
-                ).format(modality=modality)
+            hint = _(
+                "Closest matches for this series · Expand to the full {modality} RadLex catalog "
+                "if the category is wrong"
+            ).format(modality=modality)
 
         expand_loader = None
-        if not full_catalog:
+        if not open_full_catalog:
 
             def expand_loader() -> tuple[list[str], dict[str, str | None]]:
                 full_choices = series_description_edit_choices(
@@ -1534,7 +1528,7 @@ class DatasetView(AppToplevel):
             hint=hint,
             modality=modality,
             expand_loader=expand_loader,
-            showing_full_catalog=full_catalog,
+            showing_full_catalog=open_full_catalog,
         )
 
     def _on_tree_right_click(self, event) -> None:

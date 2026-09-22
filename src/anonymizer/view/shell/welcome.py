@@ -43,19 +43,21 @@ class WelcomeView(ctk.CTkFrame):
             + "\n\n"
             + _(
                 "Remove protected identity and health information (PHI/PII) from DICOM metadata. "
-                "Optional AI can remove burned-in text on all modalities, and blur faces on head CT/MR."
+                "Optional AI algorithms can remove burned-in text on all modalities, blur faces in "
+                "head CT and MR, and harmonize study and series descriptions."
             )
             + "\n\n"
             + _(
-                "For CT and MR, optionally harmonize study descriptions using LOINC study names "
-                "and series descriptions using the RSNA RadLex Playbook."
+                "Harmonize maps study descriptions to LOINC study names and series descriptions "
+                "to the RSNA RadLex Playbook (CT, MR, XR, US, and MG)."
             )
         )
         self.welcome_text_bottom = (
             _("Open Help → User Manual → Start here for how to configure and use the program.")
             + "\n\n"
             + _(
-                "Use the AI Features button on this screen to download models and set Harmonize resolution."
+                "Use the AI Features button on this screen to download models and set the "
+                "resolution for anatomy segmentation used in Harmonize."
             )
             + "\n\n"
             + _("Select File → New Project to start.")

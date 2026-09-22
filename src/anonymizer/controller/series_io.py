@@ -13,7 +13,7 @@ from pydicom import Dataset, dcmread
 from pydicom.dataelem import DataElement
 from pydicom.dataset import FileMetaDataset
 from pydicom.errors import InvalidDicomError
-from pydicom.pixel_data_handlers.util import (
+from pydicom.pixels.processing import (
     apply_color_lut,
     apply_modality_lut,
     convert_color_space,
@@ -354,10 +354,6 @@ def _validate_dicom_pixel_array(ds: Dataset) -> tuple[ndarray, int, int, str]:
     Raises ValueError if any validation fails
     """
     # Mandatory fields:
-    if not hasattr(ds, "is_implicit_VR"):
-        raise ValueError("Invalid DICOM dataset: Missing is_implicit_VR attribute.")
-    if not hasattr(ds, "is_little_endian"):
-        raise ValueError("Invalid DICOM dataset: Missing is_little_endian attribute.")
     if not hasattr(ds, "file_meta"):
         raise ValueError("Invalid DICOM dataset: Missing file_meta attribute.")
     if not hasattr(ds.file_meta, "TransferSyntaxUID"):
@@ -811,7 +807,7 @@ def apply_series_description(series_path: Path, description: str) -> bool:
                 )
                 continue
             ds.SeriesDescription = description
-            ds.save_as(dcm_path, write_like_original=True)
+            ds.save_as(dcm_path)
 
         except Exception as ex:
             logger.exception(f"Failed to update SeriesDescription on {dcm_path}: {ex}")
@@ -880,7 +876,7 @@ def apply_study_description(
                     item.CodingSchemeDesignator = "LN"
                     item.CodeMeaning = description
                     ds.ProcedureCodeSequence = Sequence([item])
-                ds.save_as(dcm_path, write_like_original=True)
+                ds.save_as(dcm_path)
                 updated_any = True
             except Exception as ex:
                 logger.exception("Failed to update StudyDescription on %s: %s", dcm_path, ex)
@@ -1071,8 +1067,9 @@ def save_series_frames(
                 else final_pixel_data
             )
             if final_pixel_data_to_save.dtype.byteorder not in ("=", "<"):
-                final_pixel_data_to_save = (
-                    final_pixel_data_to_save.byteswap().newbyteorder("<")
+                # NumPy 2 removed ndarray.newbyteorder; byteswap then reinterpret dtype.
+                final_pixel_data_to_save = final_pixel_data_to_save.byteswap().view(
+                    final_pixel_data_to_save.dtype.newbyteorder("<")
                 )
 
             # EXPLICITLY SET VR for PixelData because of using ExplicitVRLittleEndian TS
@@ -1110,11 +1107,14 @@ def save_series_frames(
 
             # Set preferred uncompressed transfer syntax: Explicit VR Little Endian
             ds_save.file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
-            ds_save.is_little_endian = True
-            ds_save.is_implicit_VR = False  # Explicit VR
 
             # Save the File (Overwrite Original)
-            ds_save.save_as(original_path, write_like_original=False)
+            ds_save.save_as(
+                original_path,
+                enforce_file_format=True,
+                little_endian=True,
+                implicit_vr=False,
+            )
             logger.debug(f"Successfully overwrote {original_path.name}")
 
             frame_ndx += num_frames_in_file

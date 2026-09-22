@@ -1,6 +1,6 @@
 # Instalación y primer inicio
 
-**La versión 19.0.1** es la primera versión oficial de V19. Necesita **Python 3.11 o 3.12** con **tkinter**, instalado mediante **uv**. Python 3.13 no es compatible.
+**La versión 19.0.10** es la versión V19 actual. Necesita **Python 3.11–3.14** con **tkinter**, instalado mediante **uv**. Se recomienda **3.12**; evite **3.14.1** (torchvision excluye ese parche).
 
 ## Instalar con uv y tkinter
 
@@ -26,12 +26,12 @@ uv --version
 
 ### 2. Instalar Python con tkinter y la aplicación
 
-La ventana de escritorio necesita **tkinter**. Instale un Python que lo incluya, cree el venv e instale **19.0.1**:
+La ventana de escritorio necesita **tkinter**. Instale un Python que lo incluya, cree el venv e instale **19.0.10**:
 
 
 | Plataforma | Asegurar tkinter |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **Windows** | Instale Python 3.11 o 3.12 desde [python.org](https://www.python.org/downloads/) con **Add to PATH** y **tcl/tk and IDLE** |
+| **Windows** | Instale Python 3.11–3.14 desde [python.org](https://www.python.org/downloads/) con **Add to PATH** y **tcl/tk and IDLE** |
 | **macOS** | Prefiera `uv python install 3.12` (Tk 9.x). O Homebrew: `brew install python@3.12 python-tk@3.12` |
 | **Linux** | `sudo apt install python3.12 python3.12-tk python3.12-venv` (o paquetes 3.11 equivalentes) |
 
@@ -41,15 +41,15 @@ uv python install 3.12
 uv venv rsna-anonymizer --python 3.12
 source rsna-anonymizer/bin/activate   # Windows: rsna-anonymizer\Scripts\activate
 
-uv pip install rsna-anonymizer       # version 19.0.1
+uv pip install rsna-anonymizer       # version 19.0.10
 ```
 
 ### 3. Verificar la instalación
 
 ```bash
-python --version          # 3.11.x or 3.12.x
+python --version          # 3.11.x–3.14.x
 python -m tkinter         # a small Tk window must open — required for the UI
-rsna-anonymizer --version # should report 19.0.1
+rsna-anonymizer --version # should report 19.0.10
 ```
 
 Si `python -m tkinter` falla, recree el venv con un Python que incluya Tk (tabla anterior) y reinstale.

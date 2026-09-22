@@ -70,12 +70,19 @@ def test_series_description_edit_choices_empty_seeds_modality_defaults() -> None
 def test_series_description_group_choices_raw_expands_catalog() -> None:
     from anonymizer.controller.ai.harmonize.pipeline import series_description_group_choices
 
-    raw = series_description_group_choices(
+    # Default multi-select menu is nearest-only (same as single before Expand).
+    raw_near = series_description_group_choices(
         modalities=["CR", "CR"],
         current_descriptions=["XRAY", "XRAY"],
     )
-    assert "Chest AP" in raw
-    assert "Wrist AP" in raw
+    assert "Chest AP" in raw_near
+    assert len(raw_near) <= 12
+    raw_full = series_description_group_choices(
+        modalities=["CR", "CR"],
+        current_descriptions=["XRAY", "XRAY"],
+        full_catalog=True,
+    )
+    assert "Wrist AP" in raw_full
     harmonized = series_description_group_choices(
         modalities=["CR", "DX"],
         current_descriptions=["Chest AP", "Chest AP"],

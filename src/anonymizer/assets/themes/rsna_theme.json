@@ -161,6 +161,7 @@
     "normative_band_color": ["#DCE4EE", "#1E3A5F"],
     "normative_bound_color": ["#6E7174", "#AAB0B5"],
     "outlier_bar_color": ["#D97706", "#F0B429"],
+    "overflow_bar_color": ["#DC2626", "#F87171"],
     "palette": [
       ["#3a7ebf", "#5a9fd4"],
       ["#014F8F", "#1E7BC7"],

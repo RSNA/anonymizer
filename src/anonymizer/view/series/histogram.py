@@ -6,6 +6,7 @@ from typing import Callable
 import customtkinter as ctk
 import numpy as np
 
+from anonymizer.utils.tk_mouse import pointer_buttons
 from anonymizer.view.common.fonts import canvas_label_font
 
 logger = logging.getLogger(__name__)
@@ -88,9 +89,13 @@ class Histogram(ctk.CTkFrame):
         self.canvas.bind("<ButtonPress-1>", self._on_left_press)
         self.canvas.bind("<B1-Motion>", self._on_left_drag)
         self.canvas.bind("<ButtonRelease-1>", self._on_left_release)
-        self.canvas.bind("<ButtonPress-3>", self._on_right_press)
-        self.canvas.bind("<B3-Motion>", self._on_right_drag)
-        self.canvas.bind("<ButtonRelease-3>", self._on_right_release)
+        ptr = pointer_buttons(self)
+        self._right_press_seq = ptr.right_press
+        self._right_motion_seq = ptr.right_motion
+        self._right_release_seq = ptr.right_release
+        self.canvas.bind(self._right_press_seq, self._on_right_press)
+        self.canvas.bind(self._right_motion_seq, self._on_right_drag)
+        self.canvas.bind(self._right_release_seq, self._on_right_release)
         self.canvas.bind("<Configure>", self._on_canvas_configure)
 
     def refresh_display(self) -> None:
@@ -114,9 +119,9 @@ class Histogram(ctk.CTkFrame):
                 canvas.unbind("<ButtonPress-1>")
                 canvas.unbind("<B1-Motion>")
                 canvas.unbind("<ButtonRelease-1>")
-                canvas.unbind("<ButtonPress-3>")
-                canvas.unbind("<B3-Motion>")
-                canvas.unbind("<ButtonRelease-3>")
+                canvas.unbind(self._right_press_seq)
+                canvas.unbind(self._right_motion_seq)
+                canvas.unbind(self._right_release_seq)
                 if self.winfo_exists():
                     canvas.delete("all")
 

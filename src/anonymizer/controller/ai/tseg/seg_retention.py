@@ -6,6 +6,7 @@ import contextlib
 import json
 import logging
 import os
+from collections.abc import Mapping
 from pathlib import Path
 
 import SimpleITK as sitk
@@ -36,6 +37,7 @@ logger = logging.getLogger(__name__)
 STRUCTURE_VOXELS_FILENAME = "structure_voxels.json"
 PRIMARY_SEGMENT_VOXELS_FILENAME = "primary_segment_voxels.json"
 MASK_GEOMETRY_FILENAME = "mask_geometry.json"
+ORGAN_VOLUMES_ML_FILENAME = "organ_volumes_ml.json"
 
 _LICENSED_MASK_STEMS = frozenset({"face", "face_mr", "vertebrae_body"})
 _FACE_MASK_FILENAMES = frozenset({FACE_MASK_FILENAME, "face_mr.nii.gz"})
@@ -178,6 +180,125 @@ def write_structure_voxels(cache_dir: Path, counts: dict[str, int]) -> Path:
     return path
 
 
+def read_organ_volumes_ml(cache_dir: Path) -> dict[str, float] | None:
+    """Cached millilitre volumes from ``organ_volumes_ml.json``, if present."""
+    payload = _read_json_dict(Path(cache_dir) / ORGAN_VOLUMES_ML_FILENAME)
+    if payload is None:
+        return None
+    out: dict[str, float] = {}
+    for key, value in payload.items():
+        if key.startswith("_"):
+            continue
+        try:
+            ml = float(value)
+        except (TypeError, ValueError):
+            continue
+        if ml > 0:
+            out[str(key)] = ml
+    return out or None
+
+
+def write_organ_volumes_ml(cache_dir: Path, volumes: Mapping[str, float]) -> Path:
+    path = Path(cache_dir) / ORGAN_VOLUMES_ML_FILENAME
+    payload = {str(k): float(v) for k, v in sorted(volumes.items()) if float(v) > 0}
+    _write_json_dict(path, payload)
+    return path
+
+
+def organ_volumes_ml_cache_is_fresh(cache_dir: Path) -> bool:
+    """True when ``organ_volumes_ml.json`` is newer than masks / primary sidecar."""
+    cache_dir = Path(cache_dir)
+    vol_path = cache_dir / ORGAN_VOLUMES_ML_FILENAME
+    if not vol_path.is_file():
+        return False
+    try:
+        vol_mtime = vol_path.stat().st_mtime
+    except OSError:
+        return False
+    markers: list[Path] = [cache_dir / PRIMARY_SEGMENT_VOXELS_FILENAME]
+    seg_dir = cache_dir / "seg"
+    if seg_dir.is_dir():
+        markers.extend(seg_dir.glob("*.nii.gz"))
+    for marker in markers:
+        if not marker.is_file():
+            continue
+        try:
+            if marker.stat().st_mtime > vol_mtime:
+                return False
+        except OSError:
+            return False
+    return True
+
+
+def voxels_to_ml(voxels: int, spacing: list[float] | tuple[float, ...] | None) -> float | None:
+    """Convert a raw mask voxel count to millilitres.
+
+    ``spacing`` must be the three voxel sizes in **millimetres** (SimpleITK
+    ``GetSpacing()`` order). Volume = count × ∏spacing_mm / 1000.
+    """
+    if voxels <= 0 or not spacing or len(spacing) < 3:
+        return None
+    try:
+        mm3 = float(spacing[0]) * float(spacing[1]) * float(spacing[2])
+    except (TypeError, ValueError):
+        return None
+    if mm3 <= 0:
+        return None
+    return voxels * mm3 / 1000.0
+
+
+def mask_file_volume_ml(mask_path: Path) -> float | None:
+    """Millilitres for one binary ``*.nii.gz`` using that file's own spacing."""
+    path = Path(mask_path)
+    if not path.is_file():
+        return None
+    image = sitk.ReadImage(str(path))
+    try:
+        array = sitk.GetArrayFromImage(image)
+        voxels = int((array > 0).sum())
+        spacing = tuple(float(v) for v in image.GetSpacing())
+    finally:
+        del image
+    return voxels_to_ml(voxels, spacing)
+
+
+def organ_volumes_ml_from_masks(cache_dir: Path) -> dict[str, float]:
+    """Sum each primary group from on-disk masks using each file's own spacing."""
+    seg_dir = Path(cache_dir) / "seg"
+    result: dict[str, float] = {}
+    if not seg_dir.is_dir():
+        return result
+    for group_name in PRIMARY_SEGMENT_ORDER:
+        files = primary_segment_mask_stems_on_disk(seg_dir, group_name)
+        if not files:
+            continue
+        total_ml = 0.0
+        any_mask = False
+        for stem in files:
+            ml = mask_file_volume_ml(seg_dir / f"{stem}.nii.gz")
+            if ml is None:
+                continue
+            any_mask = True
+            total_ml += ml
+        if any_mask and total_ml > 0:
+            result[group_name] = total_ml
+    return result
+
+
+def ensure_organ_volumes_ml(cache_dir: Path) -> dict[str, float]:
+    """Return cached ml volumes, or recount masks once and write ``organ_volumes_ml.json``."""
+    cache_dir = Path(cache_dir)
+    if organ_volumes_ml_cache_is_fresh(cache_dir):
+        cached = read_organ_volumes_ml(cache_dir)
+        if cached:
+            return cached
+    volumes = organ_volumes_ml_from_masks(cache_dir)
+    if volumes:
+        with contextlib.suppress(OSError):
+            write_organ_volumes_ml(cache_dir, volumes)
+    return volumes
+
+
 def read_primary_segment_voxels(cache_dir: Path) -> dict[str, int] | None:
     payload = _read_json_dict(Path(cache_dir) / PRIMARY_SEGMENT_VOXELS_FILENAME)
     if payload is None:
@@ -262,19 +383,25 @@ def aggregate_primary_segment_voxels(
 ) -> dict[str, int]:
     """Sum per-structure counts into primary Series View overlay groups.
 
-    By default only groups with at least one on-disk ``.nii.gz`` are included so
-    ``primary_segment_voxels.json`` never advertises overlays that cannot be drawn.
+    When ``require_masks=True``, counts come from on-disk ``.nii.gz`` masks (not
+    possibly-stale ``structure_voxels`` stats mm³). Groups without masks are omitted
+    so ``primary_segment_voxels.json`` never advertises undrawable overlays.
     Pass ``require_masks=False`` only when aggregating from statistics before masks exist.
     """
+    from anonymizer.controller.ai.tseg.segment import collect_structure_voxels_from_masks
+
     seg_dir = Path(seg_dir)
     present: dict[str, int] = {}
     for group_name in PRIMARY_SEGMENT_ORDER:
-        files = resolve_primary_segment_files(seg_dir, group_name)
         if require_masks:
             files = primary_segment_mask_stems_on_disk(seg_dir, group_name)
             if not files:
                 continue
-        total = sum(int(structure_voxels.get(stem, 0)) for stem in files)
+            counted = collect_structure_voxels_from_masks(seg_dir, list(files))
+            total = sum(int(v) for v in counted.values())
+        else:
+            files = resolve_primary_segment_files(seg_dir, group_name)
+            total = sum(int(structure_voxels.get(stem, 0)) for stem in files)
         if total >= min_voxels:
             present[group_name] = total
     return present
@@ -473,6 +600,13 @@ def finalize_seg_cache(
     write_mask_geometry(cache_dir, seg_dir)
     write_structure_voxels(cache_dir, structure_voxels)
     write_primary_segment_voxels(cache_dir, primary_counts)
+    # Cache millilitre volumes so Dashboard Refresh does not re-scan NIfTI.
+    ensure_organ_volumes_ml(cache_dir)
+    # Append/replace project analytics ledger row (best-effort; never fail finalize).
+    with contextlib.suppress(Exception):
+        from anonymizer.controller.analytics import upsert_series_ledger_from_cache
+
+        upsert_series_ledger_from_cache(cache_dir)
     # Sub-threshold detections (e.g. thin/unusual volumes) are pruned from seg/ and
     # leave non-zero structure counts without overlay masks — that is a valid publish.
     # Refuse only when latch-worthy anatomy would need Series View masks.

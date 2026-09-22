@@ -9,6 +9,18 @@ from typing import Any
 import customtkinter as ctk
 
 from anonymizer.controller.analytics import default_selected_organ_names, organ_display_name
+from anonymizer.controller.analytics_prefs import (
+    ORGAN_BIN_WIDTH_PCT_CHOICES,
+    board_widget_display_name,
+    get_organ_bin_width_pct,
+    get_selected_board_widgets,
+    get_selected_organs,
+    intersect_board_widget_selection,
+    organ_bin_width_pct_label,
+    set_organ_bin_width_pct,
+    set_selected_board_widgets,
+    set_selected_organs,
+)
 from anonymizer.controller.project import EchoRequest, EchoResponse, ProjectController
 from anonymizer.model.anonymizer import Totals
 from anonymizer.utils.memory import schedule_collect_garbage_on_tk
@@ -179,7 +191,7 @@ class Dashboard(ctk.CTkFrame):
         self._analytics_expanded = False
         self._analytics_header = ctk.CTkFrame(self, fg_color="transparent")
         self._analytics_header.grid(row=row, column=0, columnspan=4, sticky="ew", padx=self.PAD, pady=(self.PAD, 0))
-        self._analytics_header.grid_columnconfigure(3, weight=1)
+        self._analytics_header.grid_columnconfigure(7, weight=1)
         # Hidden until the project has at least one study.
         self._analytics_header.grid_remove()
 
@@ -191,9 +203,23 @@ class Dashboard(ctk.CTkFrame):
         )
         self._analytics_expand_btn.grid(row=0, column=0, sticky="w")
 
-        # Volumes control lives in the header chrome (not the board layout).
+        # Show (board widgets) + Volumes (organs) live in the header chrome.
+        self._show_label = ctk.CTkLabel(self._analytics_header, text=_("Show"), anchor="w")
+        self._show_label.grid(row=0, column=1, sticky="w", padx=(16, 0))
+        self._show_label.bind("<Button-1>", lambda _e: self._toggle_show_picker())
+        self._show_label.grid_remove()
+
+        self._show_expand_btn = ctk.CTkButton(
+            self._analytics_header,
+            width=28,
+            text="▸",
+            command=self._toggle_show_picker,
+        )
+        self._show_expand_btn.grid(row=0, column=2, sticky="w", padx=(6, 0))
+        self._show_expand_btn.grid_remove()
+
         self._volumes_label = ctk.CTkLabel(self._analytics_header, text=_("Volumes"), anchor="w")
-        self._volumes_label.grid(row=0, column=1, sticky="w", padx=(16, 0))
+        self._volumes_label.grid(row=0, column=3, sticky="w", padx=(16, 0))
         self._volumes_label.bind("<Button-1>", lambda _e: self._toggle_volumes_picker())
         self._volumes_label.grid_remove()
 
@@ -203,11 +229,30 @@ class Dashboard(ctk.CTkFrame):
             text="▸",
             command=self._toggle_volumes_picker,
         )
-        self._volumes_expand_btn.grid(row=0, column=2, sticky="w", padx=(6, 0))
+        self._volumes_expand_btn.grid(row=0, column=4, sticky="w", padx=(6, 0))
         self._volumes_expand_btn.grid_remove()
 
+        self._bin_width_label = ctk.CTkLabel(
+            self._analytics_header, text=_("Bin width"), anchor="w"
+        )
+        self._bin_width_label.grid(row=0, column=5, sticky="w", padx=(16, 0))
+        self._bin_width_label.grid_remove()
+
+        self._bin_width_values = [
+            organ_bin_width_pct_label(pct) for pct in ORGAN_BIN_WIDTH_PCT_CHOICES
+        ]
+        self._bin_width_menu = ctk.CTkOptionMenu(
+            self._analytics_header,
+            values=self._bin_width_values,
+            width=90,
+            command=self._on_bin_width_choice,
+        )
+        self._bin_width_menu.set(organ_bin_width_pct_label(get_organ_bin_width_pct()))
+        self._bin_width_menu.grid(row=0, column=6, sticky="w", padx=(6, 0))
+        self._bin_width_menu.grid_remove()
+
         self._analytics_updated = ctk.CTkLabel(self._analytics_header, text="", text_color="gray")
-        self._analytics_updated.grid(row=0, column=3, sticky="e", padx=(8, 8))
+        self._analytics_updated.grid(row=0, column=7, sticky="e", padx=(8, 8))
 
         self._analytics_refresh_btn = ctk.CTkButton(
             self._analytics_header,
@@ -216,7 +261,7 @@ class Dashboard(ctk.CTkFrame):
             command=self._request_analytics_refresh,
         )
         # Create + grid once, then hide (same pattern as QueryView._error_frame).
-        self._analytics_refresh_btn.grid(row=0, column=4, sticky="e")
+        self._analytics_refresh_btn.grid(row=0, column=8, sticky="e")
         self._analytics_refresh_btn.grid_remove()
 
         row += 1
@@ -250,12 +295,19 @@ class Dashboard(ctk.CTkFrame):
         self._analytics_poll_ms = 200
         # None until first snapshot; then the user's Volumes-picker checks.
         self._analytics_selected_organs: set[str] | None = None
+        self._analytics_selected_board_widgets: set[str] = set()
+        self._analytics_relevant_board_widgets: tuple[str, ...] = ()
         self._volumes_picker_expanded = False
+        self._show_picker_expanded = False
         self._organ_picker_vars: dict[str, ctk.BooleanVar] = {}
+        self._board_picker_vars: dict[str, ctk.BooleanVar] = {}
         self._analytics_flow_host: ctk.CTkFrame | None = None
         self._volumes_dropdown: ctk.CTkFrame | None = None
+        self._show_dropdown: ctk.CTkFrame | None = None
         self._volumes_dropdown_dismiss_after_id: str | None = None
+        self._show_dropdown_dismiss_after_id: str | None = None
         self._volumes_outside_bind_id: str | None = None
+        self._show_outside_bind_id: str | None = None
         self._project_size_sync_after_id: str | None = None
         self._project_size_sync_grow_only = False
 
@@ -312,7 +364,9 @@ class Dashboard(ctk.CTkFrame):
         self._analytics_expand_btn.configure(text=self._analytics_expand_btn_label(False))
         self._analytics_refresh_btn.grid_remove()
         self._set_volumes_header_visible(False)
+        self._set_show_header_visible(False)
         self._close_volumes_dropdown()
+        self._close_show_dropdown()
         self._analytics_scroll.grid_remove()
         if sync_window:
             self._sync_project_window_size()
@@ -332,6 +386,7 @@ class Dashboard(ctk.CTkFrame):
                 return
             logger.info("Analytics expand: restoring cached board without re-render")
             self._set_volumes_header_visible(bool(self._analytics_cache.anatomy.organ_volumes))
+            self._sync_board_widget_selection_with_snapshot(self._analytics_cache)
             self.update_idletasks()
             self._fit_analytics_scroll_viewport()
             self._sync_project_window_size()
@@ -345,19 +400,47 @@ class Dashboard(ctk.CTkFrame):
         if visible and self._analytics_expanded:
             self._volumes_label.grid()
             self._volumes_expand_btn.grid()
+            self._bin_width_label.grid()
+            self._bin_width_menu.grid()
+            self._bin_width_menu.set(organ_bin_width_pct_label(get_organ_bin_width_pct()))
         else:
             self._volumes_label.grid_remove()
             self._volumes_expand_btn.grid_remove()
+            self._bin_width_label.grid_remove()
+            self._bin_width_menu.grid_remove()
+
+    def _set_show_header_visible(self, visible: bool) -> None:
+        if visible and self._analytics_expanded:
+            self._show_label.grid()
+            self._show_expand_btn.grid()
+        else:
+            self._show_label.grid_remove()
+            self._show_expand_btn.grid_remove()
+            self._close_show_dropdown()
+
+    def _sync_board_widget_selection_with_snapshot(self, snapshot) -> None:
+        from anonymizer.view.shell.analytics_charts import relevant_board_widget_keys
+
+        relevant = relevant_board_widget_keys(snapshot)
+        self._analytics_relevant_board_widgets = relevant
+        self._analytics_selected_board_widgets = intersect_board_widget_selection(
+            get_selected_board_widgets(),
+            relevant,
+        )
+        self._set_show_header_visible(bool(relevant))
 
     def _sync_organ_selection_with_snapshot(self, snapshot) -> None:
-        """Keep selection ⊆ available organs; seed defaults on first load only."""
+        """Keep selection ⊆ available organs; seed defaults or prefs on first load."""
         available_set = {o.organ_name for o in snapshot.anatomy.organ_volumes}
         if not available_set:
             self._analytics_selected_organs = set()
             self._set_volumes_header_visible(False)
             self._close_volumes_dropdown()
             return
-        if self._analytics_selected_organs is None:
+        prefs = get_selected_organs()
+        if prefs is not None:
+            self._analytics_selected_organs = {name for name in prefs if name in available_set}
+        elif self._analytics_selected_organs is None:
             self._analytics_selected_organs = set(
                 default_selected_organ_names(snapshot.anatomy.organ_volumes)
             )
@@ -371,11 +454,37 @@ class Dashboard(ctk.CTkFrame):
             return ()
         return tuple(self._analytics_selected_organs)
 
+    def _selected_board_widgets_for_render(self) -> tuple[str, ...]:
+        return tuple(self._analytics_selected_board_widgets)
+
+    def _persist_organ_selection(self) -> None:
+        names = self._selected_organs_for_render()
+        set_selected_organs(names)
+
+    def _persist_board_widget_selection(self) -> None:
+        set_selected_board_widgets(self._selected_board_widgets_for_render())
+
+    def _toggle_show_picker(self) -> None:
+        if self._show_picker_expanded:
+            self._close_show_dropdown()
+            return
+        self._close_volumes_dropdown()
+        self._open_show_dropdown()
+
     def _toggle_volumes_picker(self) -> None:
         if self._volumes_picker_expanded:
             self._close_volumes_dropdown()
             return
+        self._close_show_dropdown()
         self._open_volumes_dropdown()
+
+    def _cancel_show_dropdown_dismiss(self) -> None:
+        after_id = self._show_dropdown_dismiss_after_id
+        if after_id is None:
+            return
+        with contextlib.suppress(Exception):
+            self.after_cancel(after_id)
+        self._show_dropdown_dismiss_after_id = None
 
     def _cancel_volumes_dropdown_dismiss(self) -> None:
         after_id = self._volumes_dropdown_dismiss_after_id
@@ -384,6 +493,24 @@ class Dashboard(ctk.CTkFrame):
         with contextlib.suppress(Exception):
             self.after_cancel(after_id)
         self._volumes_dropdown_dismiss_after_id = None
+
+    def _close_show_dropdown(self) -> None:
+        self._cancel_show_dropdown_dismiss()
+        self._unbind_show_dropdown_outside()
+        self._show_picker_expanded = False
+        if self._show_expand_btn.winfo_exists():
+            with contextlib.suppress(Exception):
+                self._show_expand_btn.configure(text="▸")
+        dropdown = self._show_dropdown
+        self._show_dropdown = None
+        pending_vars = self._board_picker_vars
+        self._board_picker_vars = {}
+        if dropdown is None:
+            return
+        with contextlib.suppress(Exception):
+            if dropdown.winfo_exists():
+                dropdown.place_forget()
+        self.after(1, lambda: self._destroy_volumes_dropdown_later(dropdown, pending_vars))
 
     def _close_volumes_dropdown(self) -> None:
         self._cancel_volumes_dropdown_dismiss()
@@ -411,6 +538,57 @@ class Dashboard(ctk.CTkFrame):
             if dropdown.winfo_exists():
                 dropdown.destroy()
         pending_vars.clear()
+
+    def _open_show_dropdown(self) -> None:
+        """Floating checkbox menu under header Show ▸ for board widgets."""
+        snapshot = self._analytics_cache
+        if snapshot is None or not self._analytics_relevant_board_widgets:
+            return
+        if not self._show_expand_btn.winfo_ismapped():
+            return
+
+        self._close_show_dropdown()
+        self._show_picker_expanded = True
+        self._show_expand_btn.configure(text="▾")
+
+        self.update_idletasks()
+        anchor = self._show_label
+        width = max(
+            self._show_label.winfo_width() + self._show_expand_btn.winfo_width() + 24,
+            160,
+        )
+        x = anchor.winfo_rootx() - self.winfo_rootx()
+        y = (
+            self._show_expand_btn.winfo_rooty()
+            - self.winfo_rooty()
+            + self._show_expand_btn.winfo_height()
+            + 2
+        )
+
+        dropdown = ctk.CTkFrame(self, width=width, corner_radius=6, border_width=1)
+        self._show_dropdown = dropdown
+        self._board_picker_vars = {}
+        selected = self._analytics_selected_board_widgets
+
+        for key in self._analytics_relevant_board_widgets:
+            var = ctk.BooleanVar(value=key in selected)
+            self._board_picker_vars[key] = var
+            ctk.CTkCheckBox(
+                dropdown,
+                text=board_widget_display_name(key),
+                variable=var,
+                command=self._on_board_widget_checks_changed,
+            ).pack(anchor="w", padx=10, pady=4)
+
+        self.update_idletasks()
+        width = max(width, dropdown.winfo_reqwidth() + 8)
+        dropdown.configure(width=width)
+        dropdown.place(x=x, y=y)
+        dropdown.lift()
+        dropdown.bind("<Escape>", lambda _e: self._close_show_dropdown())
+        self._show_dropdown_dismiss_after_id = self.after(
+            50, self._arm_show_dropdown_outside_dismiss
+        )
 
     def _open_volumes_dropdown(self) -> None:
         """Floating checkbox menu under header Volumes ▸ — place() overlay, not layout."""
@@ -443,6 +621,23 @@ class Dashboard(ctk.CTkFrame):
         self._volumes_dropdown = dropdown
         self._organ_picker_vars = {}
         selected = self._analytics_selected_organs or set()
+
+        actions = ctk.CTkFrame(dropdown, fg_color="transparent")
+        actions.pack(fill="x", padx=6, pady=(6, 2))
+        ctk.CTkButton(
+            actions,
+            text=_("Select all"),
+            width=90,
+            height=26,
+            command=self._select_all_volume_organs,
+        ).pack(side="left", padx=(0, 6))
+        ctk.CTkButton(
+            actions,
+            text=_("Clear"),
+            width=70,
+            height=26,
+            command=self._clear_volume_organs,
+        ).pack(side="left")
 
         # Inner scroll host: height clamped after packing so short lists stay compact.
         list_frame = ctk.CTkScrollableFrame(
@@ -481,7 +676,17 @@ class Dashboard(ctk.CTkFrame):
             50, self._arm_volumes_dropdown_outside_dismiss
         )
 
-    def _arm_volumes_dropdown_outside_dismiss(self) -> None:
+    def _arm_show_dropdown_outside_dismiss(self) -> None:
+        self._show_dropdown_dismiss_after_id = None
+        dropdown = self._show_dropdown
+        if dropdown is None or not dropdown.winfo_exists():
+            return
+        root = self.winfo_toplevel()
+        self._show_outside_bind_id = root.bind(
+            "<ButtonPress-1>", self._on_show_dropdown_outside_click, add="+"
+        )
+
+    def _arm_volumes_dropdown_dismiss(self) -> None:
         self._volumes_dropdown_dismiss_after_id = None
         dropdown = self._volumes_dropdown
         if dropdown is None or not dropdown.winfo_exists():
@@ -490,6 +695,25 @@ class Dashboard(ctk.CTkFrame):
         self._volumes_outside_bind_id = root.bind(
             "<ButtonPress-1>", self._on_volumes_dropdown_outside_click, add="+"
         )
+
+    def _arm_volumes_dropdown_outside_dismiss(self) -> None:
+        self._arm_volumes_dropdown_dismiss()
+
+    def _on_show_dropdown_outside_click(self, event) -> None:
+        dropdown = self._show_dropdown
+        if dropdown is None or not dropdown.winfo_exists():
+            self._unbind_show_dropdown_outside()
+            return
+        widget = event.widget
+        with contextlib.suppress(Exception):
+            wpath = str(widget)
+            if wpath.startswith(str(dropdown)):
+                return
+            if wpath.startswith(str(self._show_expand_btn)):
+                return
+            if wpath.startswith(str(self._show_label)):
+                return
+        self._close_show_dropdown()
 
     def _on_volumes_dropdown_outside_click(self, event) -> None:
         dropdown = self._volumes_dropdown
@@ -507,6 +731,15 @@ class Dashboard(ctk.CTkFrame):
                 return
         self._close_volumes_dropdown()
 
+    def _unbind_show_dropdown_outside(self) -> None:
+        bind_id = self._show_outside_bind_id
+        self._show_outside_bind_id = None
+        if bind_id is None:
+            return
+        root = self.winfo_toplevel()
+        with contextlib.suppress(Exception):
+            root.unbind("<ButtonPress-1>", bind_id)
+
     def _unbind_volumes_dropdown_outside(self) -> None:
         bind_id = self._volumes_outside_bind_id
         self._volumes_outside_bind_id = None
@@ -516,17 +749,53 @@ class Dashboard(ctk.CTkFrame):
         with contextlib.suppress(Exception):
             root.unbind("<ButtonPress-1>", bind_id)
 
+    def _select_all_volume_organs(self) -> None:
+        for var in self._organ_picker_vars.values():
+            var.set(True)
+        self._on_organ_volume_checks_changed()
+
+    def _clear_volume_organs(self) -> None:
+        for var in self._organ_picker_vars.values():
+            var.set(False)
+        self._on_organ_volume_checks_changed()
+
+    def _on_board_widget_checks_changed(self) -> None:
+        if self._board_picker_vars:
+            self._analytics_selected_board_widgets = {
+                name for name, var in self._board_picker_vars.items() if bool(var.get())
+            }
+            self._persist_board_widget_selection()
+        self._rerender_analytics_flow()
+        dropdown = self._show_dropdown
+        if dropdown is not None and dropdown.winfo_exists():
+            dropdown.lift()
+
+    def _on_bin_width_choice(self, choice: str) -> None:
+        pct: float | None = None
+        for candidate in ORGAN_BIN_WIDTH_PCT_CHOICES:
+            if organ_bin_width_pct_label(candidate) == choice:
+                pct = candidate
+                break
+        set_organ_bin_width_pct(pct)
+        # In-place organ image swap — full rebuild flickered / could shrink the window.
+        self._rerender_analytics_flow(force_repaint_organs=True)
+
     def _on_organ_volume_checks_changed(self) -> None:
         if self._organ_picker_vars:
             self._analytics_selected_organs = {
                 name for name, var in self._organ_picker_vars.items() if bool(var.get())
             }
+            self._persist_organ_selection()
         self._rerender_analytics_flow()
         dropdown = self._volumes_dropdown
         if dropdown is not None and dropdown.winfo_exists():
             dropdown.lift()
 
-    def _rerender_analytics_flow(self) -> None:
+    def _rerender_analytics_flow(
+        self,
+        *,
+        force_repaint_organs: bool = False,
+    ) -> None:
         """Sync the analytics board in place — only add/remove/move cells (no window flash)."""
         from anonymizer.view.shell.analytics_charts import (
             resolve_board_theme,
@@ -543,23 +812,49 @@ class Dashboard(ctk.CTkFrame):
             self._render_analytics_view(snapshot)
             return
 
+        self.update_idletasks()
+        prev_content_h = max(int(self._analytics_board.winfo_reqheight()), 1)
+
         sections = select_board_sections(
             snapshot,
             selected_organs=self._selected_organs_for_render(),
+            selected_board_widgets=self._selected_board_widgets_for_render(),
             on_organ_bar_activate=self._on_organ_bar_activate,
         )
         theme = resolve_board_theme(self._analytics_board)
-        sync_widget_section(host, sections.ordered, snapshot, theme)
+        force = (
+            frozenset(w.key for w in sections.organs) if force_repaint_organs else None
+        )
+        sync_widget_section(
+            host,
+            sections.ordered,
+            snapshot,
+            theme,
+            force_repaint_keys=force,
+        )
         if sections.ordered and not host.winfo_ismapped():
             host.pack(fill="x")
         elif not sections.ordered:
             host.pack_forget()
 
-        # Grow the project window with new organ charts; never shrink here
-        # (shrink-on-deselect flickered the whole dashboard).
+        # Fit scroll to content, then resize the project window. Grow when charts
+        # are added; allow shrink on Clear/deselect so leftover empty pad is gone.
+        # Bin-width organ re-paint keeps the same cells — never shrink the window.
         self.update_idletasks()
         self._fit_analytics_scroll_viewport()
-        self._sync_project_window_size(grow_only=True)
+        new_content_h = max(int(self._analytics_board.winfo_reqheight()), 1)
+        grow_only = force_repaint_organs or new_content_h >= prev_content_h
+        self._sync_project_window_size(grow_only=grow_only)
+        if not grow_only and new_content_h < prev_content_h:
+            # Geometry settles after destroy; second pass clears residual pad.
+            self.after_idle(self._refit_analytics_after_shrink)
+
+    def _refit_analytics_after_shrink(self) -> None:
+        if not self.winfo_exists() or not self._analytics_expanded:
+            return
+        self.update_idletasks()
+        self._fit_analytics_scroll_viewport()
+        self._sync_project_window_size(grow_only=False)
 
     def _on_organ_bar_activate(self, organ_name: str, patient_ids: tuple[str, ...]) -> None:
         """Open Dataset View (if needed) and select studies for patients in a hist bar."""
@@ -638,7 +933,9 @@ class Dashboard(ctk.CTkFrame):
         )
 
         self._sync_organ_selection_with_snapshot(snapshot)
+        self._sync_board_widget_selection_with_snapshot(snapshot)
         self._close_volumes_dropdown()
+        self._close_show_dropdown()
         # Clear board hosts; volumes menu is a place() overlay on the dashboard.
         # ImageViewer pattern: dispose PhotoImages on the main thread, then destroy.
         for child in list(self._analytics_board.winfo_children()):
@@ -646,11 +943,13 @@ class Dashboard(ctk.CTkFrame):
                 release_mpl_frame_images(child)
                 child.destroy()
         self._organ_picker_vars = {}
+        self._board_picker_vars = {}
         self._analytics_flow_host = None
         theme = resolve_board_theme(self._analytics_board)
         sections = select_board_sections(
             snapshot,
             selected_organs=self._selected_organs_for_render(),
+            selected_board_widgets=self._selected_board_widgets_for_render(),
             on_organ_bar_activate=self._on_organ_bar_activate,
         )
         logger.info(

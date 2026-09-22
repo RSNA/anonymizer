@@ -1638,6 +1638,7 @@ def study_description_edit_choices(
     minimum: int = MIN_DESCRIPTION_CHOICES,
     hint_description: str | None = None,
     full_catalog: bool = False,
+    nearest_only: bool = False,
 ) -> list[tuple[str, str | None]]:
     """
     LOINC Study Description menu for Dataset edit (modality-filtered CSV only).
@@ -1645,7 +1646,8 @@ def study_description_edit_choices(
     Returns ``(long_common_name, loinc_number)`` with the current harmonized
     description first when present. Harmonized studies: nearest ranked matches.
     Unharmonized / ``full_catalog``: entire modality-prefix LOINC list with
-    hint-ranked rows first (filterable scroll dialog).
+    hint-ranked rows first (filterable scroll dialog). ``nearest_only`` skips
+    the unharmonized auto-expand (multi-select opens closest, then Expand).
     """
     from anonymizer.controller.ai.harmonize.loinc_study import (
         load_loinc_study_descriptions_for_prefix,
@@ -1684,7 +1686,7 @@ def study_description_edit_choices(
         seen = {n for n, _ in results}
 
     loinc_prefix = study_loinc_prefix_for_edit(anon_model, anon_study_uid)
-    use_full = full_catalog or (not ranked_from_series and not current)
+    use_full = False if nearest_only else full_catalog or (not ranked_from_series and not current)
 
     if not use_full and ranked_from_series and len(results) >= max(minimum, top_n):
         return results[: max(minimum, top_n)]
@@ -1793,12 +1795,13 @@ def series_description_group_choices(
     current_descriptions: Sequence[str],
     minimum: int = MIN_DESCRIPTION_CHOICES,
     anatomy_hint: str | None = None,
+    full_catalog: bool = False,
 ) -> list[str]:
     """
     Shared RadLex menu for a homogeneous series multi-select.
 
-    Harmonized Playbook strings: nearest variants (~10).
-    Unharmonized PHI: full modality-relevant Playbook catalog.
+    Default: nearest variants (same as single-select before Expand).
+    ``full_catalog``: modality-relevant Playbook catalog.
     """
     if not modalities:
         return []
@@ -1809,16 +1812,12 @@ def series_description_group_choices(
 
     pairs = list(zip(modalities, current_descriptions, strict=False))
     nonempty = [(m, str(d).strip()) for m, d in pairs if str(d).strip()]
-    all_playbook = bool(nonempty) and all(
-        _series_description_looks_playbook(modality=m, description=d) for m, d in nonempty
-    )
-
     seed_desc = nonempty[0][1] if nonempty else ""
     return series_description_edit_choices(
         modality=modalities[0],
         current_description=seed_desc,
-        minimum=NEAREST_DESCRIPTION_CHOICES if all_playbook else minimum,
-        full_catalog=not all_playbook,
+        minimum=NEAREST_DESCRIPTION_CHOICES if not full_catalog else minimum,
+        full_catalog=full_catalog,
         anatomy_hint=anatomy_hint,
     )
 
@@ -1830,8 +1829,12 @@ def study_description_group_choices(
     top_n: int = NEAREST_DESCRIPTION_CHOICES,
     minimum: int = MIN_DESCRIPTION_CHOICES,
     hint_descriptions: Sequence[str] | None = None,
+    full_catalog: bool = False,
 ) -> list[tuple[str, str | None]]:
-    """Shared LOINC menu for a homogeneous study multi-select."""
+    """Shared LOINC menu for a homogeneous study multi-select.
+
+    Default: nearest matches (same dialog state as single-select before Expand).
+    """
     if not anon_study_uids:
         return []
     prefixes = [study_loinc_prefix_for_edit(anon_model, uid) for uid in anon_study_uids]
@@ -1840,13 +1843,6 @@ def study_description_group_choices(
         return []
 
     hints = list(hint_descriptions or [])
-    any_unharmonized = False
-    for uid in anon_study_uids:
-        harm = (anon_model.get_study_harmonized_description(uid) or "").strip()
-        if not harm:
-            any_unharmonized = True
-            break
-
     results: list[tuple[str, str | None]] = []
     seen: set[str] = set()
     for index, uid in enumerate(anon_study_uids):
@@ -1857,13 +1853,14 @@ def study_description_group_choices(
             top_n=top_n,
             minimum=minimum,
             hint_description=hint,
-            full_catalog=any_unharmonized,
+            full_catalog=full_catalog,
+            nearest_only=not full_catalog,
         ):
             if name in seen:
                 continue
             seen.add(name)
             results.append((name, code))
-    if any_unharmonized:
+    if full_catalog:
         return results
     return results[: max(minimum, top_n) * 2]
 

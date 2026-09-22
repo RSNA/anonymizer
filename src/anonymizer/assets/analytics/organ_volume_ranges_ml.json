@@ -7,15 +7,24 @@
       "skeletal": "Primary skeletal latch groups (skull, spine, clavicles, ribs)",
       "airways_and_cord": "Remaining primary latch groups (trachea, spinal_cord)"
     },
-    "notes": "Spans are literature means with padding for sex/age/partial FOV; out-of-range samples still plot via axis extension. Not CT-task calibration data.",
+    "notes": "Windows are literature-backed adult ranges for the closest matching tissue definition, then padded for sex, age, and partial FOV. Lobe windows use landmark whole-lobe GM+WM MRI volumes (not FreeSurfer cortical-GM-only). Subcortical windows use large FreeSurfer cohorts. Analytics omits truncal/column organs on head-limited series (no Chest/Abdomen latch mass) so whole-body spine/cord/organ norms are not applied to partial FOV. Extreme samples plot in underflow/overflow sentinel bins without stretching the main axis. Brainstem is retained in this JSON for PRIMARY_SEGMENT_GROUPS key coverage but is excluded from volume histograms (NORM_MISMATCH_EXCLUDED_ORGANS): Dataset409 CT labels systematically ~2× FreeSurfer MRI whole-brainstem; FreeSurfer 18–45 ml must not be re-enabled as a clinical norm until a method-matched TS-CT healthy band exists.",
     "sources": [
-      "Cressoni et al., Crit Care 2014;18:R104 (doi:10.1186/cc13875): supine CT total lung volume mean ~4995 ml (men ~5757, women ~4136).",
-      "Kawel-Boehm et al., J Cardiovasc Magn Reson 2020;22:87 (doi:10.1186/s12968-020-00683-3): adult CMR chamber volumes; whole-heart TS mask ≈ chambers + myocardium (~250–650 ml healthy).",
-      "DeSouza et al., Expert Rev Gastroenterol Hepatol 2018 (doi:10.1080/17474124.2018.1496015): adult pancreas volume typically ~71–83 ml (CT/MRI meta-analysis); CT ranges ~30–140 ml.",
-      "TS stomach is anatomical organ (wall ± lumen): empty-to-moderate fill typically tens–hundreds of ml; satiety MRI volumes can exceed 600 ml — axis padded accordingly.",
-      "Akeret et al., Brain Struct Funct 2021;226:1699-1711 (doi:10.1007/s00429-021-02280-1): encephalon / lobar / ventricle morphometry.",
-      "Potvin et al., NeuroImage 2016;137:9-20 (doi:10.1016/j.neuroimage.2016.05.016): FreeSurfer adult subcortical norms.",
-      "Bigler & Woodard skeletal mass fractions + ICRP reference bone density (~1.9 g/cm³): approximate healthy mineralized volumes for cranium, spine, ribs, clavicles (padded for TS mask FOV)."
+      "Allen JS, Damasio H, Grabowski TJ. Am J Phys Anthropol 2002;118:341-358 (doi:10.1002/ajpa.10092): landmark MRI whole-lobe GM+WM volumes in 46 healthy adults (22–49 y). Bilateral observed ranges (min–max across sex): frontal ~319–551 ml, parietal ~182–333 ml, temporal ~180–311 ml, occipital ~64–123 ml; cerebellum ~113–185 ml; whole insula GM+WM ~14–26 ml (means ≈18.8 men / 16.4 women). Histogram windows pad those spans for age/FOV/CT vs MRI method differences. Note: Allen whole-insula GM+WM is not used for the TS ``insular_cortex`` latch (cortex/GM-class; see Faillenot).",
+      "Allen JS, Bruss J, Brown CK, Damasio H. Neurobiol Aging 2005;26:1245-1260 (doi:10.1016/j.neurobiolaging.2005.05.023): n=87 adults (22–88 y), same whole-lobe GM+WM definition; documents age-related decline used when padding lobe maxima/minima.",
+      "Faillenot I, et al. NeuroImage 2017;150:88-98 (doi:10.1016/j.neuroimage.2017.01.073): manual bilateral insular grey-matter volume 7.7±0.9 ml in 30 healthy adults (native space). Matches the TS Dataset409 ``insular_cortex`` tissue class better than Allen whole-insula GM+WM. Histogram window 5–15 ml ≈ mean±~3 SD with CT/method pad.",
+      "Cohen JD, et al. Cereb Cortex 2010 (PMC2813413): manual bilateral insular cortex ≈10.8 ml in typically developing controls — corroborates GM-cortex scale (~8–12 ml), not Allen ~16–19 ml means.",
+      "Potvin O, et al. NeuroImage 2016;137:9-20 (doi:10.1016/j.neuroimage.2016.05.016): FreeSurfer 5.3 subcortical norms, n=2,790 healthy adults (18–94 y). Brainstem regression intercept ≈21.4 ml (age/sex/eTIV/scanner covariates); healthy adult FreeSurfer brainstem is typically ~18–30 ml. Deep-nuclei windows follow the same cohort scales.",
+      "Sander L, et al. Front Neurosci 2020;14:609422 (doi:10.3389/fnins.2020.609422): FreeSurfer brainstem volumetry in healthy adults — unadjusted total brainstem means ≈28.3 ml (men) / 24.8 ml (women). Independent confirmation that MRI FreeSurfer whole-brainstem norms sit near ~25–30 ml, not ~50+ ml.",
+      "Igase K, et al. Sci Rep 2022;12:2055 (doi:10.1038/s41598-022-27202-x): FreeSurfer 6.0 brainstem subfield pipeline (whole brainstem + medulla/pons/midbrain) in n=182 healthy adults; used as an additional FreeSurfer-family reference. Manual midbrain+pons+medulla protocols (without peduncles/adjacent WM) can report ~6–8 ml — a different tissue definition, not a FreeSurfer whole-brainstem range.",
+      "Potvin O, et al. NOMIS (doi:10.1101/2021.01.25.428063): n=6,909 healthy adults (18–100 y) FreeSurfer 6 morphometry including brainstem subregions — cited for population scale; cortical-GM lobe sums are intentionally not used as TS lobe windows (different tissue class from landmark whole-lobe GM+WM).",
+      "TS Dataset409 brainstem (brain_structures task) on head CT often measures ~50–60 ml — roughly 2× FreeSurfer MRI whole-brainstem. Inflation is a label-definition / modality mismatch (CT soft-tissue boundaries; Dataset409 may include peduncles/adjacent tissue FreeSurfer excludes), not missing truncal FOV. Volume charts omit brainstem for this reason (see notes); do not silently widen 18–45 ml while still citing FreeSurfer.",
+      "TotalSegmentator total task exports vertebrae_C1–C7 (mapped to Head) plus spinal_cord; the analytics spine group still unions C+T+L+S. Head-limited scans typically only see C1–C2 — excluded from volume charts until cervical-only windows exist.",
+      "Cressoni M, et al. Crit Care 2014;18:R104 (doi:10.1186/cc13875): supine CT total lung volume mean ~4995 ml (men ~5757, women ~4136); large ICU CT series underpinning lungs window.",
+      "Kawel-Boehm N, et al. J Cardiovasc Magn Reson 2020;22:87 (doi:10.1186/s12968-020-00683-3): SCMR adult CMR chamber reference ranges; whole-heart TS mask ≈ chambers + myocardium (~250–650 ml healthy).",
+      "DeSouza SV, et al. Expert Rev Gastroenterol Hepatol 2018 (doi:10.1080/17474124.2018.1496015): pancreas volume meta-analysis (~71–83 ml typical; CT often ~40–120 ml).",
+      "Peters M, et al. / Courchesne E, et al. (as reviewed in Allen 2002): adult intracranial/whole-brain MRI means ~1100–1300 ml by sex; brain window 900–1600 ml pads healthy adult encephalic volume including measurement method spread.",
+      "Bigler & Woodard skeletal mass fractions + ICRP reference bone density (~1.9 g/cm³): approximate mineralized volumes for cranium, spine, ribs, clavicles (padded for TS mask FOV).",
+      "TS stomach is anatomical organ (wall ± lumen): empty-to-moderate fill typically tens–hundreds of ml; satiety MRI volumes can exceed 600 ml — axis padded accordingly."
     ]
   },
   "soft_organs": {
@@ -29,21 +38,21 @@
     "pancreas": { "min_ml": 40, "max_ml": 120, "bin_width_ml": 10 }
   },
   "brain_structures": {
-    "brainstem": { "min_ml": 15, "max_ml": 35, "bin_width_ml": 2 },
-    "subarachnoid_space": { "min_ml": 40, "max_ml": 250, "bin_width_ml": 10 },
+    "brainstem": { "min_ml": 18, "max_ml": 45, "bin_width_ml": 2 },
+    "subarachnoid_space": { "min_ml": 10, "max_ml": 250, "bin_width_ml": 10 },
     "venous_sinuses": { "min_ml": 5, "max_ml": 50, "bin_width_ml": 5 },
     "septum_pellucidum": { "min_ml": 0.5, "max_ml": 4, "bin_width_ml": 0.5 },
-    "cerebellum": { "min_ml": 70, "max_ml": 180, "bin_width_ml": 10 },
+    "cerebellum": { "min_ml": 100, "max_ml": 200, "bin_width_ml": 10 },
     "caudate_nucleus": { "min_ml": 4, "max_ml": 14, "bin_width_ml": 1 },
     "lentiform_nucleus": { "min_ml": 8, "max_ml": 22, "bin_width_ml": 1 },
-    "insular_cortex": { "min_ml": 10, "max_ml": 45, "bin_width_ml": 5 },
+    "insular_cortex": { "min_ml": 5, "max_ml": 15, "bin_width_ml": 1 },
     "internal_capsule": { "min_ml": 5, "max_ml": 30, "bin_width_ml": 2 },
     "ventricle": { "min_ml": 5, "max_ml": 80, "bin_width_ml": 5 },
     "central_sulcus": { "min_ml": 2, "max_ml": 15, "bin_width_ml": 1 },
-    "frontal_lobe": { "min_ml": 120, "max_ml": 320, "bin_width_ml": 20 },
-    "parietal_lobe": { "min_ml": 90, "max_ml": 280, "bin_width_ml": 20 },
-    "occipital_lobe": { "min_ml": 50, "max_ml": 180, "bin_width_ml": 10 },
-    "temporal_lobe": { "min_ml": 90, "max_ml": 280, "bin_width_ml": 20 },
+    "frontal_lobe": { "min_ml": 280, "max_ml": 560, "bin_width_ml": 20 },
+    "parietal_lobe": { "min_ml": 170, "max_ml": 420, "bin_width_ml": 20 },
+    "occipital_lobe": { "min_ml": 50, "max_ml": 150, "bin_width_ml": 10 },
+    "temporal_lobe": { "min_ml": 160, "max_ml": 340, "bin_width_ml": 20 },
     "thalamus": { "min_ml": 8, "max_ml": 25, "bin_width_ml": 1 }
   },
   "skeletal": {

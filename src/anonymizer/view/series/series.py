@@ -19,10 +19,12 @@ from anonymizer.controller.ai.blur_face import (
     FaceBlurGateDecision,
     FaceBlurGateReason,
     FaceBlurMode,
+    MetadataSignal,
     cached_region_signal,
     evaluate_face_blur_eligibility,
     face_blur_gate_message,
     face_blur_status_applicable,
+    metadata_signal,
 )
 from anonymizer.controller.ai.feature_availability import (
     face_blur_allowed,
@@ -62,6 +64,21 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
     stackable_dicom_paths,
 )
 from anonymizer.controller.ai.tseg.seg_retention import read_primary_segment_voxels
+from anonymizer.controller.annotations import (
+    AnnotateSession,
+    ImportProfile,
+    add_user_label,
+    annotations_exist,
+    begin_stroke_capture,
+    commit_stroke_undo,
+    detect_and_import,
+    ensure_series_annotation_geometry,
+    ensure_ts_edit,
+    load_annotate_session,
+    save_annotate_session,
+    stamp_brush,
+    undo_last_stroke,
+)
 from anonymizer.controller.create_projections import invalidate_projection_cache
 from anonymizer.controller.runner import (
     Algorithm,
@@ -114,9 +131,11 @@ from anonymizer.view.series.anatomy_overlay import (
     color_bgr_for_structure,
     contour_mask_slice,
     load_primary_segment_mask,
+    mask_slice_to_segmentations,
     merge_structure_overlays,
     order_structures_by_voxels,
     shift_overlays_to_viewer_frames,
+    structure_button_label,
 )
 from anonymizer.view.series.image import ImageViewer
 
@@ -200,17 +219,14 @@ def blur_face_toolbar_visible(
     *,
     face_blur_models_ready: bool,
     face_blur_already_applied: bool,
-    cached_signal: CachedRegionSignal,
-    eligibility_blocked: bool,
+    is_head_series: bool,
 ) -> bool:
-    """Series View Face Blur presence: Harmonize-first HEAD cache, not metadata-only."""
+    """Show Face Blur when models are ready, series is head, and ORM flag is unset."""
     if not face_blur_models_ready:
         return False
     if face_blur_already_applied:
         return False
-    if cached_signal != CachedRegionSignal.HEAD:
-        return False
-    return not eligibility_blocked
+    return is_head_series
 
 
 def harmonize_button_visible(
@@ -218,17 +234,14 @@ def harmonize_button_visible(
     harmonize_models_ready: bool,
     modality: str | None,
     already_harmonized: bool,
-    has_segment_masks: bool = False,
 ) -> bool:
-    """Show Harmonize only when it can run; existing seg masks require Clear first."""
-    from anonymizer.utils.modalities import is_harmonize_modality, is_tseg_modality
+    """Show Harmonize when models are ready and the series ORM flag is not set."""
+    from anonymizer.utils.modalities import is_harmonize_modality
 
     if not harmonize_models_ready:
         return False
     if not is_harmonize_modality(modality):
         return False
-    if is_tseg_modality(modality):
-        return not (already_harmonized or has_segment_masks)
     return not already_harmonized
 
 
@@ -317,6 +330,13 @@ class SeriesView(AppCTkToplevel):
         ] = queue.Queue()
         self._structure_contour_poll_after_id: str | None = None
         self._harmonize_view = None
+        self._annotate_session: AnnotateSession | None = None
+        self._annotate_save_after_id: str | None = None
+        self._stroke_before: np.ndarray | None = None
+        self._stroke_kind: str | None = None
+        self._stroke_structure: str | None = None
+        self._stroke_slice: int | None = None
+        self._user_label_overlays: dict[str, dict[int, list[Segmentation]]] = {}
 
         self._ui_rebuilding = False
         self._startup_layout = False
@@ -1212,6 +1232,13 @@ class SeriesView(AppCTkToplevel):
             on_segmentation_toggle=self._on_segmentation_toggle,
             on_slice_index_changed=self._ensure_segmentation_overlays_for_frame,
             clear_callback=self.clear_ts_cache_button_clicked,
+            on_annotate_mode_changed=self._on_annotate_mode_changed,
+            on_annotate_stroke=self._on_annotate_stroke,
+            on_annotate_stroke_end=self._on_annotate_stroke_end,
+            on_annotate_undo=self._on_annotate_undo,
+            on_annotate_new_label=self._on_annotate_new_label,
+            on_annotate_import_segments=self._on_annotate_import_segments,
+            on_annotate_target_changed=self._on_annotate_target_changed,
             series_projections=self._projections,
         )
         self.image_viewer.grid(row=0, column=1, sticky="nsew")
@@ -1432,21 +1459,19 @@ class SeriesView(AppCTkToplevel):
             harmonize_models_ready=harmonize_allowed_for_modality(modality),
             modality=modality,
             already_harmonized=already_harmonized,
-            has_segment_masks=self._seg_dir_likely_has_structures(),
         )
 
     def _blur_face_toolbar_visible(self) -> bool:
         anon_uid = self._anon_series_uid()
         already_applied = anon_uid is not None and self._controller.series_has_face_blur(anon_uid)
-        cached = cached_region_signal(self._series_path)
-        eligibility = None
-        if cached == CachedRegionSignal.HEAD:
-            eligibility = self._face_blur_eligibility()
+        is_head = (
+            cached_region_signal(self._series_path) == CachedRegionSignal.HEAD
+            or metadata_signal(self._ds) == MetadataSignal.HEAD
+        )
         return blur_face_toolbar_visible(
             face_blur_models_ready=face_blur_allowed(),
             face_blur_already_applied=already_applied,
-            cached_signal=cached,
-            eligibility_blocked=(eligibility is not None and eligibility.decision == FaceBlurGateDecision.BLOCK),
+            is_head_series=is_head,
         )
 
     def _clear_ts_cache_button_visible(self) -> bool:
@@ -1560,7 +1585,18 @@ class SeriesView(AppCTkToplevel):
     def _push_merged_segmentation_overlays(self, *, defer_render: bool = False) -> None:
         if not hasattr(self, "image_viewer"):
             return
-        merged = merge_structure_overlays(self._structure_overlay_by_name)
+        visible = self._visible_segmentation_keys()
+        filtered_structures = {
+            name: by_slice
+            for name, by_slice in self._structure_overlay_by_name.items()
+            if name in visible
+        }
+        merged = merge_structure_overlays(filtered_structures)
+        for key, by_slice in self._user_label_overlays.items():
+            if key not in visible:
+                continue
+            for slice_index, segs in by_slice.items():
+                merged.setdefault(slice_index, []).extend(segs)
         viewer_overlays = shift_overlays_to_viewer_frames(merged, frame_offset=0)
         if viewer_overlays:
             self.image_viewer.active_layers.add(LayerType.SEGMENTATIONS)
@@ -1574,6 +1610,20 @@ class SeriesView(AppCTkToplevel):
             self.image_viewer.clear_cache()
             if self.image_viewer._startup_complete:
                 self.image_viewer.load_and_display_image(self.image_viewer.current_image_index)
+
+    def _visible_segmentation_keys(self) -> set[str]:
+        """Keys whose overlays should be drawn.
+
+        View: multi-select latch set. Annotate: only the exclusive paint target.
+        """
+        if self.image_viewer.get_annotate_mode() == "annotate":
+            paint = self.image_viewer.get_paint_target_key()
+            if paint is None:
+                return set()
+            if paint.startswith("ts:"):
+                return {paint.split(":", 1)[1]}
+            return {paint}
+        return self.image_viewer.get_active_segmentation_names()
 
     def _anatomical_slice_for_viewer_frame(self, frame_index: int) -> int | None:
         slice_index = frame_index - self._segmentation_frame_offset()
@@ -1602,11 +1652,21 @@ class SeriesView(AppCTkToplevel):
 
     def _ensure_segmentation_overlays_for_frame(self, frame_index: int) -> None:
         slice_index = self._anatomical_slice_for_viewer_frame(frame_index)
-        if slice_index is None or not self._structure_mask_by_name:
+        if slice_index is None:
             return
+        visible = self._visible_segmentation_keys()
         changed = False
         for name in list(self._structure_mask_by_name):
+            if name not in visible:
+                continue
             changed = self._ensure_structure_slice_contoured(name, slice_index) or changed
+        for key in visible:
+            if not key.startswith("user:"):
+                continue
+            cache = self._user_label_overlays.get(key, {})
+            if slice_index not in cache:
+                self._recontour_after_paint(key, slice_index)
+                changed = True
         if changed:
             self._push_merged_segmentation_overlays()
 
@@ -1703,14 +1763,26 @@ class SeriesView(AppCTkToplevel):
         """Load mask, paint current slice, contour the rest in the background."""
         self._cancel_structure_contour_job(name)
         color = color_bgr_for_structure(name)
-        mask = load_primary_segment_mask(seg_dir, name)
+        edited = None
+        if self._annotate_session is not None:
+            edited = self._annotate_session.ts_edits.get(name)
+        mask = load_primary_segment_mask(seg_dir, name, edited_mask=edited)
         self._structure_mask_by_name[name] = mask
         frame_index = self.image_viewer.current_image_index if hasattr(self, "image_viewer") else 0
         slice_index = self._anatomical_slice_for_viewer_frame(frame_index)
         if slice_index is None:
             slice_index = 0
+        source = "edited" if edited is not None else "ts"
         initial: dict[int, list[Segmentation]] = {}
-        segs = contour_mask_slice(mask, slice_index, structure_name=name, color_bgr=color)
+        segs = contour_mask_slice(
+            mask,
+            slice_index,
+            structure_name=name,
+            color_bgr=color,
+            source=source,
+            editable=True,
+            filled=False,
+        )
         if segs:
             initial[slice_index] = segs
         else:
@@ -1725,6 +1797,13 @@ class SeriesView(AppCTkToplevel):
         )
 
     def _on_segmentation_toggle(self, name: str, active: bool) -> None:
+        if name.startswith("user:"):
+            if active:
+                self._latch_user_label_overlay(name)
+            else:
+                self._user_label_overlays.pop(name, None)
+            self._push_merged_segmentation_overlays()
+            return
         if active:
             try:
                 self._latch_structure_overlay(name, self._seg_dir())
@@ -1742,45 +1821,149 @@ class SeriesView(AppCTkToplevel):
             self._clear_structure_latch_state(name)
         self._push_merged_segmentation_overlays()
 
+    def _latch_user_label_overlay(self, key: str) -> None:
+        """Ensure contours for a custom user segment are available for the current slice."""
+        session = self._ensure_annotate_session()
+        if session is None or not key.startswith("user:"):
+            return
+        try:
+            lid = int(key.split(":", 1)[1])
+        except ValueError:
+            return
+        if lid not in session.label_map:
+            return
+        frame_index = self.image_viewer.current_image_index if hasattr(self, "image_viewer") else 0
+        slice_index = self._anatomical_slice_for_viewer_frame(frame_index)
+        if slice_index is None:
+            slice_index = 0
+        self._recontour_after_paint(key, slice_index)
+
     def _deactivate_segmentation_button(self, name: str) -> None:
         self.image_viewer._active_segmentation_names.discard(name)
         self.image_viewer._refresh_segmentation_button_styles()
         self._clear_structure_latch_state(name)
         self._push_merged_segmentation_overlays()
 
+    def _segmentation_button_items(self) -> tuple[list[tuple[str, tuple[int, int, int]]], dict[str, str]]:
+        """Custom user-label buttons then TS structure buttons (shared View/Annotate list)."""
+        items: list[tuple[str, tuple[int, int, int]]] = []
+        labels: dict[str, str] = {}
+        session = self._ensure_annotate_session()
+        if session is not None:
+            for lid, entry in sorted(session.label_map.items()):
+                key = f"user:{lid}"
+                items.append((key, entry.color_bgr))
+                labels[key] = entry.name
+        seg_dir = self._seg_dir()
+        if seg_dir.is_dir():
+            present = collect_primary_segment_voxels(seg_dir)
+            for name, _count in order_structures_by_voxels(present):
+                items.append((name, color_bgr_for_structure(name)))
+                labels[name] = structure_button_label(name)
+        return items, labels
+
     def _refresh_segmentation_controls(self, *, defer_render: bool = False) -> None:
         if not hasattr(self, "image_viewer"):
             return
+        self._ensure_annotate_session()
         seg_dir = self._seg_dir()
-        if not seg_dir.is_dir():
+        items, labels = self._segmentation_button_items()
+        if not items:
             if self._structure_overlay_by_name or self.image_viewer.get_active_segmentation_names():
                 self._invalidate_structure_overlays()
             self.image_viewer.set_segmentation_title(mode=None)
             self.image_viewer.set_segmentation_structures([])
+            self._sync_annotate_availability()
             return
         from anonymizer.controller.ai.tseg.segment import read_cached_segmentation_mode
 
-        present = collect_primary_segment_voxels(seg_dir)
-        ordered = order_structures_by_voxels(present)
-        items = [(name, color_bgr_for_structure(name)) for name, _count in ordered]
+        present = collect_primary_segment_voxels(seg_dir) if seg_dir.is_dir() else {}
         mode = read_cached_segmentation_mode(seg_dir.parent) if present else None
         self.image_viewer.set_segmentation_title(mode=mode)
         previous_active = self.image_viewer.get_active_segmentation_names()
-        self.image_viewer.set_segmentation_structures(items)
-        still = previous_active & set(present)
+        self.image_viewer.set_segmentation_structures(items, labels=labels)
+        item_keys = {n for n, _ in items}
+        still_ts = previous_active & set(present)
+        still_user = {n for n in previous_active if n.startswith("user:") and n in item_keys}
+        view_user = {n for n in self.image_viewer._view_latch_names if n.startswith("user:") and n in item_keys}
+        still_user |= view_user
+        still = still_ts | still_user
         self.image_viewer._active_segmentation_names = still
+        self.image_viewer._view_latch_names = (
+            {n for n in self.image_viewer._view_latch_names if n in item_keys} | still_user
+        )
         self.image_viewer._refresh_segmentation_button_styles()
         # Reload latched masks from disk on refresh (Harmonize/Clear) — never on slice change.
         self._structure_contour_generation += 1
         self._clear_structure_latch_state()
-        for name in still:
+        self._user_label_overlays.clear()
+        for name in still_ts:
             try:
                 self._latch_structure_overlay(name, seg_dir)
             except Exception:
                 logger.exception("Failed to refresh segmentation overlay for %s", name)
                 self.image_viewer._active_segmentation_names.discard(name)
+        for key in still_user:
+            self._latch_user_label_overlay(key)
         self.image_viewer._refresh_segmentation_button_styles()
         self._push_merged_segmentation_overlays(defer_render=defer_render)
+        self._sync_annotate_availability()
+        options = [(self.image_viewer._paint_key_for_button(n), labels.get(n, n)) for n, _ in items]
+        self.image_viewer.set_paint_targets(options, active_key=self.image_viewer.get_paint_target_key())
+        if self.image_viewer.get_annotate_mode() == "annotate":
+            target = self.image_viewer.get_paint_target_key()
+            if target and target.startswith("ts:"):
+                self.image_viewer._select_annotate_segment(target.split(":", 1)[1])
+            elif target and target.startswith("user:"):
+                self.image_viewer._select_annotate_segment(target)
+
+    def _refresh_paint_target_options(self) -> None:
+        """Rebuild segment buttons after annotation label changes."""
+        if not hasattr(self, "image_viewer"):
+            return
+        previous_active = self.image_viewer.get_active_segmentation_names()
+        previous_target = self.image_viewer.get_paint_target_key()
+        items, labels = self._segmentation_button_items()
+        self.image_viewer.set_segmentation_structures(items, labels=labels)
+        item_keys = {n for n, _ in items}
+        still_ts = {n for n in previous_active if not n.startswith("user:") and n in item_keys}
+        still_user = {n for n in previous_active if n.startswith("user:") and n in item_keys}
+        still_user |= {n for n in self.image_viewer._view_latch_names if n.startswith("user:") and n in item_keys}
+        still = still_ts | still_user
+        self.image_viewer._active_segmentation_names = still
+        self.image_viewer._view_latch_names = (
+            {n for n in self.image_viewer._view_latch_names if n in item_keys} | still_user
+        )
+        options = [(self.image_viewer._paint_key_for_button(n), labels.get(n, n)) for n, _ in items]
+        if self.image_viewer.get_annotate_mode() == "annotate":
+            target = previous_target
+            if target is None and still:
+                # Prefer an already-active chip, else first button.
+                first_active = sorted(still)[0]
+                target = self.image_viewer._paint_key_for_button(first_active)
+            elif target is None and items:
+                target = self.image_viewer._paint_key_for_button(items[0][0])
+            self.image_viewer.set_paint_targets(options, active_key=target)
+            if target and target.startswith("ts:"):
+                self.image_viewer._select_annotate_segment(target.split(":", 1)[1])
+            elif target and target.startswith("user:"):
+                self.image_viewer._select_annotate_segment(target)
+        else:
+            self.image_viewer.set_paint_targets(options, active_key=previous_target)
+            self.image_viewer._refresh_segmentation_button_styles()
+            seg_dir = self._seg_dir()
+            for name in still_ts:
+                if name in self._structure_overlay_by_name:
+                    continue
+                try:
+                    self._latch_structure_overlay(name, seg_dir)
+                except Exception:
+                    logger.exception("Failed to re-latch %s after button rebuild", name)
+                    self.image_viewer._active_segmentation_names.discard(name)
+            for key in still_user:
+                if key not in self._user_label_overlays:
+                    self._latch_user_label_overlay(key)
+            self._push_merged_segmentation_overlays()
 
     def _on_series_description_updated(self) -> None:
         self._update_title()
@@ -2321,21 +2504,11 @@ class SeriesView(AppCTkToplevel):
         self._refresh_series_processing_status()
 
     def harmonize_description_button_clicked(self):
-        from anonymizer.utils.modalities import is_harmonize_modality, is_tseg_modality
+        from anonymizer.utils.modalities import is_harmonize_modality
 
         if self._ds is None or not is_harmonize_modality(getattr(self._ds, "Modality", None)):
             return
         if not self._harmonize_button_visible():
-            if is_tseg_modality(getattr(self._ds, "Modality", None)) and self._seg_dir_likely_has_structures():
-                messagebox.showinfo(
-                    title=_("Harmonize"),
-                    message=_(
-                        "Segmentation results already exist for this series. "
-                        "Clear the analysis cache before running Harmonize again."
-                    ),
-                    parent=self,
-                )
-                self._apply_ai_feature_visibility()
             return
         modality = getattr(self._ds, "Modality", None)
         if not harmonize_allowed_for_modality(modality):
@@ -2388,6 +2561,346 @@ class SeriesView(AppCTkToplevel):
             on_closed=self._on_harmonize_closed,
         )
 
+    def _cache_dir(self) -> Path:
+        return resolve_series_cache_dir(self._series_path)
+
+    def _ensure_annotate_session(self) -> AnnotateSession | None:
+        if self._annotate_session is not None:
+            return self._annotate_session
+        try:
+            session = ensure_series_annotation_geometry(self._series_path, self._cache_dir())
+        except Exception:
+            logger.exception("Could not ensure annotation geometry for %s", self._series_path)
+            session = load_annotate_session(self._cache_dir())
+        self._annotate_session = session
+        return session
+
+    def _sync_annotate_availability(self) -> None:
+        if not hasattr(self, "image_viewer"):
+            return
+        session = self._ensure_annotate_session()
+        self.image_viewer.set_annotate_enabled(session is not None)
+
+    def _on_annotate_import_segments(self) -> None:
+        """Import researcher NIfTI/NRRD masks into user annotation labels."""
+        from tkinter import filedialog
+
+        session = self._ensure_annotate_session()
+        if session is None:
+            messagebox.showinfo(
+                title=_("Import Segments"),
+                message=_("Could not create annotation geometry for this series."),
+                parent=self,
+            )
+            return
+
+        profile_labels = {
+            _("Auto-detect"): ImportProfile.AUTO,
+            _("Multi-label volume"): ImportProfile.MULTILABEL,
+            _("ITK-SNAP (+ .label)"): ImportProfile.ITK_SNAP,
+            _("nnU-Net (+ dataset.json)"): ImportProfile.NNUNET,
+            _("Binary masks"): ImportProfile.BINARY_MASKS,
+            _("TotalSegmentator folder"): ImportProfile.FOLDER_TS,
+        }
+
+        dlg = ctk.CTkToplevel(self)
+        dlg.title(_("Import Segments"))
+        dlg.transient(self)
+        dlg.grab_set()
+        dlg.resizable(False, False)
+        choice: dict[str, ImportProfile | None] = {"profile": ImportProfile.AUTO}
+
+        ctk.CTkLabel(dlg, text=_("Format preset") + ":").grid(row=0, column=0, padx=12, pady=(12, 4), sticky="w")
+        preset_var = ctk.StringVar(value=_("Auto-detect"))
+        preset_menu = ctk.CTkOptionMenu(dlg, variable=preset_var, values=list(profile_labels.keys()), width=220)
+        preset_menu.grid(row=1, column=0, padx=12, pady=(0, 8), sticky="ew")
+
+        def _cancel() -> None:
+            choice["profile"] = None
+            dlg.destroy()
+
+        def _pick_files() -> None:
+            choice["profile"] = profile_labels.get(preset_var.get(), ImportProfile.AUTO)
+            dlg.destroy()
+
+        def _pick_folder() -> None:
+            choice["profile"] = ImportProfile.FOLDER_TS
+            dlg.destroy()
+
+        btn_row = ctk.CTkFrame(dlg, fg_color="transparent")
+        btn_row.grid(row=2, column=0, padx=12, pady=(4, 12), sticky="ew")
+        ctk.CTkButton(btn_row, text=_("Choose files…"), width=120, command=_pick_files).grid(
+            row=0, column=0, padx=(0, 6)
+        )
+        ctk.CTkButton(btn_row, text=_("Choose folder…"), width=120, command=_pick_folder).grid(
+            row=0, column=1, padx=(0, 6)
+        )
+        ctk.CTkButton(btn_row, text=_("Cancel"), width=80, command=_cancel).grid(row=0, column=2)
+
+        # Center over Series View after widgets have a size.
+        dlg.update_idletasks()
+        parent_x = int(self.winfo_rootx())
+        parent_y = int(self.winfo_rooty())
+        parent_w = max(1, int(self.winfo_width()))
+        parent_h = max(1, int(self.winfo_height()))
+        dlg_w = max(dlg.winfo_reqwidth(), dlg.winfo_width())
+        dlg_h = max(dlg.winfo_reqheight(), dlg.winfo_height())
+        x = parent_x + max(0, (parent_w - dlg_w) // 2)
+        y = parent_y + max(0, (parent_h - dlg_h) // 2)
+        dlg.geometry(f"+{x}+{y}")
+
+        dlg.wait_window()
+
+        profile = choice["profile"]
+        if profile is None:
+            return
+
+        paths: list[Path] | None = None
+        folder: Path | None = None
+        filetypes = [
+            (_("Segment volumes"), "*.nii *.nii.gz *.nrrd *.seg.nrrd"),
+            (_("NIfTI"), "*.nii *.nii.gz"),
+            (_("NRRD"), "*.nrrd *.seg.nrrd"),
+            (_("All files"), "*.*"),
+        ]
+        if profile == ImportProfile.FOLDER_TS:
+            folder_str = filedialog.askdirectory(parent=self, title=_("TotalSegmentator / mask folder"))
+            if not folder_str:
+                return
+            folder = Path(folder_str)
+        else:
+            selected = filedialog.askopenfilenames(parent=self, title=_("Import Segments"), filetypes=filetypes)
+            if not selected:
+                return
+            paths = [Path(p) for p in selected]
+
+        try:
+            result = detect_and_import(session, paths=paths, folder=folder, profile=profile)
+        except Exception as exc:
+            logger.exception("Segment import failed")
+            messagebox.showerror(title=_("Import Segments"), message=str(exc), parent=self)
+            return
+
+        for entry in result.entries:
+            key = f"user:{entry.label_id}"
+            self.image_viewer._active_segmentation_names.add(key)
+            self.image_viewer.remember_view_latch(key)
+            self._latch_user_label_overlay(key)
+
+        self._refresh_paint_target_options()
+        self._push_merged_segmentation_overlays()
+        self._schedule_annotate_save()
+
+        names = ", ".join(e.name for e in result.entries[:5])
+        if len(result.entries) > 5:
+            names += "…"
+        status = _("Imported") + f" {len(result.entries)} " + _("segment(s)")
+        if names:
+            status += f": {names}"
+        if result.resampled:
+            status += " (" + _("resampled") + ")"
+        if result.warnings:
+            status += " — " + result.warnings[0]
+        self.update_status(status)
+
+    def _on_annotate_mode_changed(self, mode: str) -> None:
+        if mode == "annotate":
+            self._ensure_annotate_session()
+            self._refresh_paint_target_options()
+            self._recontour_visible_user_labels_current_slice()
+            self._push_merged_segmentation_overlays()
+        else:
+            self._flush_annotate_save()
+
+    def _on_annotate_target_changed(self, key: str | None) -> None:
+        # Annotate draws only the paint target — refresh so previous segments disappear.
+        if hasattr(self, "image_viewer") and self.image_viewer.get_annotate_mode() == "annotate":
+            self._recontour_visible_user_labels_current_slice()
+            self._push_merged_segmentation_overlays()
+
+    def _on_annotate_stroke(self, target_key: str, cy: int, cx: int, radius: int, tool: str) -> None:
+        session = self._ensure_annotate_session()
+        if session is None:
+            return
+        frame_index = self.image_viewer.current_image_index
+        slice_index = self._anatomical_slice_for_viewer_frame(frame_index)
+        if slice_index is None:
+            return
+        if target_key.startswith("user:"):
+            try:
+                lid = int(target_key.split(":", 1)[1])
+            except ValueError:
+                return
+            volume = session.labels
+            value = 0 if tool == "erase" else lid
+            kind = "user"
+            structure = None
+        elif target_key.startswith("ts:"):
+            name = target_key.split(":", 1)[1]
+            source = self._structure_mask_by_name.get(name)
+            if source is None:
+                try:
+                    source = load_primary_segment_mask(self._seg_dir(), name)
+                    self._structure_mask_by_name[name] = source
+                except Exception:
+                    logger.exception("Cannot load TS mask for edit target %s", name)
+                    return
+            volume = ensure_ts_edit(session, name, source_mask=source)
+            self._structure_mask_by_name[name] = volume
+            value = 0 if tool == "erase" else 1
+            kind = "ts_edit"
+            structure = name
+        else:
+            return
+
+        if self._stroke_before is None:
+            self._stroke_before = begin_stroke_capture(volume, slice_index=slice_index)
+            self._stroke_kind = kind
+            self._stroke_structure = structure
+            self._stroke_slice = slice_index
+
+        stamp_brush(volume, slice_index=slice_index, cy=cy, cx=cx, radius=radius, value=value)
+        session.dirty = True
+        self._recontour_after_paint(target_key, slice_index)
+
+    def _on_annotate_stroke_end(self) -> None:
+        session = self._annotate_session
+        if session is None or self._stroke_before is None:
+            return
+        commit_stroke_undo(
+            session,
+            kind=self._stroke_kind or "user",  # type: ignore[arg-type]
+            structure_name=self._stroke_structure,
+            slice_index=int(self._stroke_slice or 0),
+            before_slice=self._stroke_before,
+        )
+        self._stroke_before = None
+        self._stroke_kind = None
+        self._stroke_structure = None
+        self._stroke_slice = None
+        self._schedule_annotate_save()
+
+    def _recontour_after_paint(self, target_key: str, slice_index: int) -> None:
+        session = self._annotate_session
+        if session is None:
+            return
+        if target_key.startswith("user:"):
+            try:
+                lid = int(target_key.split(":", 1)[1])
+            except ValueError:
+                return
+            entry = session.label_map.get(lid)
+            if entry is None:
+                return
+            plane = (session.labels[slice_index] == lid).astype(np.uint8)
+            segs = mask_slice_to_segmentations(
+                plane,
+                structure_name=entry.name,
+                color_bgr=entry.color_bgr,
+                label_id=lid,
+                label_name=entry.name,
+                source="user",
+                editable=True,
+                filled=False,
+            )
+            cache = self._user_label_overlays.setdefault(target_key, {})
+            cache[slice_index] = segs
+        elif target_key.startswith("ts:"):
+            name = target_key.split(":", 1)[1]
+            mask = self._structure_mask_by_name.get(name)
+            if mask is None:
+                return
+            color = color_bgr_for_structure(name)
+            segs = contour_mask_slice(
+                mask,
+                slice_index,
+                structure_name=name,
+                color_bgr=color,
+                source="edited",
+                editable=True,
+                filled=False,
+            )
+            cache = self._structure_overlay_by_name.setdefault(name, {})
+            cache[slice_index] = segs
+        self._push_merged_segmentation_overlays()
+
+    def _recontour_visible_user_labels_current_slice(self) -> None:
+        """Recontour user-label overlays that are currently visible (Annotate: paint target only)."""
+        session = self._annotate_session
+        if session is None or not hasattr(self, "image_viewer"):
+            return
+        frame_index = self.image_viewer.current_image_index
+        slice_index = self._anatomical_slice_for_viewer_frame(frame_index)
+        if slice_index is None:
+            return
+        for key in self._visible_segmentation_keys():
+            if key.startswith("user:"):
+                self._recontour_after_paint(key, slice_index)
+
+    def _on_annotate_undo(self) -> None:
+        session = self._annotate_session
+        if session is None:
+            return
+        if not undo_last_stroke(session):
+            return
+        visible = self._visible_segmentation_keys()
+        # Refresh structure masks from edits for visible TS targets only.
+        for name, edited in session.ts_edits.items():
+            self._structure_mask_by_name[name] = edited
+            if name in visible and name in self._structure_overlay_by_name:
+                frame_index = self.image_viewer.current_image_index
+                slice_index = self._anatomical_slice_for_viewer_frame(frame_index)
+                if slice_index is not None:
+                    self._recontour_after_paint(f"ts:{name}", slice_index)
+        frame_index = self.image_viewer.current_image_index
+        slice_index = self._anatomical_slice_for_viewer_frame(frame_index)
+        if slice_index is not None:
+            for key in visible:
+                if key.startswith("user:"):
+                    self._recontour_after_paint(key, slice_index)
+        self._schedule_annotate_save()
+
+    def _on_annotate_new_label(self) -> None:
+        session = self._ensure_annotate_session()
+        if session is None:
+            messagebox.showinfo(
+                title=_("Annotate"),
+                message=_("Run Harmonize to enable ROI annotation"),
+                parent=self,
+            )
+            return
+        from tkinter import simpledialog
+
+        name = simpledialog.askstring(_("New Segment"), "", parent=self)
+        if not name:
+            return
+        entry = add_user_label(session, name)
+        key = f"user:{entry.label_id}"
+        # Keep the new chip in the shared View latch set so it remains listed next to TS.
+        self.image_viewer._active_segmentation_names.add(key)
+        self.image_viewer.remember_view_latch(key)
+        self._refresh_paint_target_options()
+        self.image_viewer._select_annotate_segment(key)
+        self.image_viewer.reveal_segmentation_button(key)
+        self._schedule_annotate_save()
+        self.update_status(_("Created segment") + f": {entry.name}")
+
+    def _schedule_annotate_save(self) -> None:
+        if self._annotate_save_after_id is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self._annotate_save_after_id)
+        self._annotate_save_after_id = self.after(300, self._flush_annotate_save)
+
+    def _flush_annotate_save(self) -> None:
+        self._annotate_save_after_id = None
+        session = self._annotate_session
+        if session is None or not session.dirty:
+            return
+        try:
+            save_annotate_session(session)
+        except Exception:
+            logger.exception("Failed to save annotations")
+
     def clear_ts_cache_button_clicked(self) -> None:
         from anonymizer.utils.modalities import is_tseg_modality
 
@@ -2400,6 +2913,7 @@ class SeriesView(AppCTkToplevel):
         size_mb = summary.size_bytes / (1024 * 1024) if summary.exists else 0.0
         size_text = f"{size_mb:.1f} MB" if size_mb >= 0.1 else _("< 0.1 MB")
         file_count = summary.file_count if summary.exists else 0
+        has_annotations = annotations_exist(self._cache_dir())
 
         cache_message = (
             _("Delete analysis cache for this series?")
@@ -2412,25 +2926,56 @@ class SeriesView(AppCTkToplevel):
             + "\n\n"
             + _("Harmonize analysis can be re-run after clearing the cache.")
         )
+        if has_annotations:
+            cache_message += (
+                "\n\n"
+                + _("ROI annotations were found.")
+                + "\n"
+                + _("Yes = clear cache and annotations")
+                + "\n"
+                + _("No = clear Harmonize cache only (keep annotations)")
+                + "\n"
+                + _("Cancel = abort")
+            )
         anon_uid = self._anon_series_uid()
         if anon_uid is not None and self._controller.series_has_face_blur(anon_uid):
             cache_message += "\n\n" + _(
                 "Face blur has already been applied; blurred pixels and Blur Face status are unchanged."
             )
 
-        confirmed = messagebox.askyesno(
-            title=_("Clear Analysis Cache"),
-            message=cache_message,
-            parent=self,
-            default="no",
-        )
-        if not confirmed:
-            return
+        if has_annotations:
+            confirmed = messagebox.askyesnocancel(
+                title=_("Clear Analysis Cache"),
+                message=cache_message,
+                parent=self,
+                default="no",
+            )
+            if confirmed is None:
+                return
+            also_clear_annotations = bool(confirmed)
+        else:
+            confirmed = messagebox.askyesno(
+                title=_("Clear Analysis Cache"),
+                message=cache_message,
+                parent=self,
+                default="no",
+            )
+            if not confirmed:
+                return
+            also_clear_annotations = True
 
-        logger.info("Clearing TS cache for %s", self._series_path)
+        logger.info(
+            "Clearing TS cache for %s also_annotations=%s",
+            self._series_path,
+            also_clear_annotations,
+        )
+        self._flush_annotate_save()
+        self._annotate_session = None
+        self._user_label_overlays.clear()
         self._controller.clear_series_tseg_cache(
             self._series_path,
             anon_series_uid=anon_uid,
+            also_clear_annotations=also_clear_annotations,
         )
         self._series_geometry = None
         self._face_blur_eligibility_cache = None
@@ -2441,7 +2986,10 @@ class SeriesView(AppCTkToplevel):
         if not self._widget_alive():
             return
         self._invalidate_structure_overlays()
+        self._user_label_overlays.clear()
+        self._annotate_session = None
         self._refresh_analysis_cache_ui()
+        self._sync_annotate_availability()
         self.update_status(_("Analysis cache cleared"))
         self._refresh_series_processing_status()
 
@@ -2743,12 +3291,17 @@ class SeriesView(AppCTkToplevel):
         if getattr(self, "_closing", False):
             return
         self._closing = True
+        self._flush_annotate_save()
         self._structure_contour_generation += 1
         self._clear_structure_latch_state()
         if self._structure_contour_poll_after_id is not None:
             with contextlib.suppress(tk.TclError):
                 self.after_cancel(self._structure_contour_poll_after_id)
             self._structure_contour_poll_after_id = None
+        if self._annotate_save_after_id is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self._annotate_save_after_id)
+            self._annotate_save_after_id = None
         if not self._ocr_work_state.done:
             self._ocr_work_state.request_cancel()
         mark_ctk_window_destroyed(self)

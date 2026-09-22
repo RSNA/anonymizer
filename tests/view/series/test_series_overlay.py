@@ -12,8 +12,6 @@ from anonymizer.controller.series_overlay import (
 )
 from anonymizer.view.series.series_overlay import (
     COLORED_SEGMENTATION_OUTLINE_THICKNESS,
-    COLORED_SEGMENTATION_OUTLINE_UNDERLAY_BGR,
-    COLORED_SEGMENTATION_OUTLINE_UNDERLAY_THICKNESS,
     render_segmentations_overlay,
 )
 
@@ -22,6 +20,11 @@ def test_segmentation_optional_fields_default_none() -> None:
     seg = Segmentation(points=[PolygonPoint(x=1, y=2)])
     assert seg.color_bgr is None
     assert seg.structure_name is None
+    assert seg.label_id is None
+    assert seg.label_name is None
+    assert seg.source is None
+    assert seg.editable is False
+    assert seg.filled is False
 
 
 def test_overlay_data_defaults_empty() -> None:
@@ -43,7 +46,12 @@ def test_user_rectangle_bounding_box() -> None:
 
 
 def test_layer_type_members() -> None:
-    assert {LayerType.TEXT, LayerType.USER_RECT, LayerType.SEGMENTATIONS} == set(LayerType)
+    assert {
+        LayerType.TEXT,
+        LayerType.USER_RECT,
+        LayerType.EXCLUDE_RECT,
+        LayerType.SEGMENTATIONS,
+    } == set(LayerType)
 
 
 def _square(x0: int, y0: int, x1: int, y1: int) -> list[PolygonPoint]:
@@ -80,8 +88,7 @@ def test_colored_segmentation_outline_only_no_fill() -> None:
     # Edge carries solid outline color (opaque stroke, not CT-blended).
     edge = overlay[10, 25]
     assert tuple(edge) == color
-    assert COLORED_SEGMENTATION_OUTLINE_THICKNESS == 2
-    assert COLORED_SEGMENTATION_OUTLINE_UNDERLAY_THICKNESS > COLORED_SEGMENTATION_OUTLINE_THICKNESS
+    assert COLORED_SEGMENTATION_OUTLINE_THICKNESS == 1
     assert tuple(overlay[2, 2]) == (0, 0, 0)
 
 
@@ -98,7 +105,7 @@ def test_colored_outline_is_opaque_solid_not_additive() -> None:
     assert tuple(edge) == color
 
 
-def test_colored_outline_draws_black_understroke() -> None:
+def test_colored_outline_has_no_dark_understroke() -> None:
     color = (0, 0, 255)
     overlay = render_segmentations_overlay(
         50,
@@ -108,9 +115,9 @@ def test_colored_outline_draws_black_understroke() -> None:
     )
     assert tuple(overlay[0, 0]) == (0, 0, 0)
     assert tuple(overlay[15, 25]) == color
-    # Outer fringe of the thicker understroke (outside the color stroke).
-    under = overlay[15 - COLORED_SEGMENTATION_OUTLINE_UNDERLAY_THICKNESS // 2, 25]
-    assert tuple(under) == COLORED_SEGMENTATION_OUTLINE_UNDERLAY_BGR
+    # Neighbors outside the 1px stroke stay empty (no dark underlay fringe).
+    assert tuple(overlay[14, 25]) == (0, 0, 0)
+    assert tuple(overlay[16, 25]) == (0, 0, 0)
 
 
 def test_primary_head_colors_are_distinct() -> None:

@@ -1018,6 +1018,38 @@ _LOINC_BARE_PROJECTION_RE = re.compile(
     r"\b(ap|pa|lateral|oblique|decubitus|mlo|cc)\b",
     re.IGNORECASE,
 )
+# Hyphenated LOINC compounds (e.g. lateral-decubitus) — ``\blateral\b`` alone must not match.
+_LOINC_LATERAL_DECUBITUS_RE = re.compile(r"\blateral-decubitus\b", re.IGNORECASE)
+# Patient-position / technique tokens that must be evidenced in series text.
+_LOINC_FOREIGN_VIEW_TOKENS: tuple[str, ...] = (
+    "decubitus",
+    "lordotic",
+    "oblique",
+    "portable",
+    "upright",
+)
+
+
+def _loinc_name_has_series_view(name_l: str, view: str) -> bool:
+    """True when LOINC text contains the series view token (not a hyphenated cousin)."""
+    if view == "lateral":
+        # "lateral-decubitus" is a distinct view; plain Lat/lateral must not credit it.
+        stripped = _LOINC_LATERAL_DECUBITUS_RE.sub(" ", name_l)
+        return bool(re.search(r"\blateral\b", stripped))
+    return bool(re.search(rf"\b{re.escape(view)}\b", name_l))
+
+
+def _planar_foreign_view_penalty(name_l: str, view_tokens: Sequence[str]) -> float:
+    """Demote LOINC names that assert views/positions not present in series descriptions."""
+    evidenced = {tok.lower() for tok in view_tokens}
+    penalty = 0.0
+    for token in _LOINC_FOREIGN_VIEW_TOKENS:
+        if token in evidenced:
+            continue
+        if re.search(rf"\b{re.escape(token)}\b", name_l):
+            # Decubitus is a strong patient-position claim (lying down).
+            penalty -= 140.0 if token == "decubitus" else 70.0
+    return penalty
 
 
 def loinc_declared_view_count(long_common_name: str) -> int | None:
@@ -1307,7 +1339,7 @@ def rank_planar_loinc_study_descriptions(
                 score += 90.0
 
         for view in view_tokens:
-            if re.search(rf"\b{re.escape(view)}\b", name_l):
+            if _loinc_name_has_series_view(name_l, view):
                 score += 80.0
             else:
                 # Only demote missing projection tokens when image count is 1
@@ -1317,6 +1349,7 @@ def rank_planar_loinc_study_descriptions(
 
         score += _score_loinc_view_count(name_l, image_count=image_count)
         score += _planar_foreign_anatomy_penalty(name_l, anatomy)
+        score += _planar_foreign_view_penalty(name_l, view_tokens)
         score += _score_loinc_laterality(name_l, laterality)
 
         # Prefer primary anatomy leading the LOINC name (Chest … vs Ribs … and Chest).

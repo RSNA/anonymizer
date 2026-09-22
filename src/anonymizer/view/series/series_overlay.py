@@ -7,11 +7,10 @@ import numpy as np
 
 from anonymizer.controller.series_overlay import Segmentation
 
-# Opaque solid outlines: dark understroke wider than the color stroke so edges stay readable on bone.
-# Near-black (not 0,0,0): zero RGB is treated as empty by ImageViewer compositing.
-COLORED_SEGMENTATION_OUTLINE_THICKNESS = 2
-COLORED_SEGMENTATION_OUTLINE_UNDERLAY_THICKNESS = 4
-COLORED_SEGMENTATION_OUTLINE_UNDERLAY_BGR = (16, 16, 16)
+# Single-pixel opaque color stroke (no dark understroke — that exaggerates contour jaggedness).
+COLORED_SEGMENTATION_OUTLINE_THICKNESS = 1
+# Optional fill blend when ``Segmentation.filled`` is True (Series View uses outline-only).
+ACTIVE_LABEL_FILL_BLEND = 0.35
 
 
 def render_segmentations_overlay(
@@ -23,15 +22,14 @@ def render_segmentations_overlay(
 ) -> np.ndarray:
     """Draw segmentations into a BGR overlay buffer.
 
-    When ``Segmentation.color_bgr`` is set: opaque outline only (solid color stroke over a
-    dark understroke; no fill, no transparency).
-    When unset: solid ``fillPoly`` with ``default_color_bgr`` (Face Blur path).
+    When ``Segmentation.color_bgr`` is set: opaque 1px outline (optional light fill when
+    ``filled``). When unset: solid ``fillPoly`` with ``default_color_bgr`` (Face Blur path).
     """
     combined = np.zeros((height, width, 3), dtype=np.uint8)
     if not segmentations:
         return combined
 
-    outline_queue: list[tuple[np.ndarray, tuple[int, int, int]]] = []
+    outline_queue: list[tuple[np.ndarray, tuple[int, int, int], bool]] = []
 
     for segmentation in segmentations:
         if len(segmentation.points) < 3:
@@ -41,18 +39,18 @@ def render_segmentations_overlay(
         if color is None:
             cv2.fillPoly(combined, [points], default_color_bgr)
             continue
-        outline_queue.append((points, color))
+        outline_queue.append((points, color, bool(segmentation.filled)))
 
-    for points, color in outline_queue:
+    for points, color, filled in outline_queue:
+        if filled:
+            fill_layer = np.zeros_like(combined)
+            cv2.fillPoly(fill_layer, [points], color)
+            fill_mask = fill_layer.max(axis=2) > 0
+            combined[fill_mask] = (
+                combined[fill_mask].astype(np.float32) * (1.0 - ACTIVE_LABEL_FILL_BLEND)
+                + fill_layer[fill_mask].astype(np.float32) * ACTIVE_LABEL_FILL_BLEND
+            ).astype(np.uint8)
         # LINE_8 (not AA): AA softens into CT via composite and shifts hue (e.g. orange↔yellow).
-        cv2.polylines(
-            combined,
-            [points],
-            isClosed=True,
-            color=COLORED_SEGMENTATION_OUTLINE_UNDERLAY_BGR,
-            thickness=COLORED_SEGMENTATION_OUTLINE_UNDERLAY_THICKNESS,
-            lineType=cv2.LINE_8,
-        )
         cv2.polylines(
             combined,
             [points],

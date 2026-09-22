@@ -23,6 +23,7 @@ from anonymizer.controller.ai.tseg.seg_retention import (
 from anonymizer.controller.ai.tseg.segment import (
     _segmentation_cache_valid,
     collect_structure_voxels,
+    reconcile_structure_voxels_from_masks,
     write_roi_subset_manifest,
 )
 from anonymizer.view.series.anatomy_overlay import (
@@ -31,12 +32,25 @@ from anonymizer.view.series.anatomy_overlay import (
 )
 
 
-def _write_mask(path: Path, voxel_count: int, *, shape: tuple[int, int, int] = (4, 16, 16)) -> None:
+def _write_mask(path: Path, voxel_count: int, *, shape: tuple[int, int, int] = (8, 32, 32)) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     array = np.zeros(shape, dtype=np.uint8)
     flat = array.reshape(-1)
     flat[: min(voxel_count, flat.size)] = 1
     sitk.WriteImage(sitk.GetImageFromArray(array), str(path))
+
+
+def test_reconcile_structure_voxels_from_masks_replaces_stats_mm3(tmp_path: Path) -> None:
+    seg_dir = tmp_path / "seg"
+    _write_mask(seg_dir / "brain.nii.gz", 500)
+    _write_mask(seg_dir / "frontal_lobe.nii.gz", 120)
+    # Stats mm³ placeholders (as structure_voxels_from_organ_stats would write).
+    polluted = {"brain": 1_250_000, "frontal_lobe": 0, "liver": 900_000}
+    fixed = reconcile_structure_voxels_from_masks(seg_dir, polluted)
+    assert fixed["brain"] == 500
+    assert fixed["frontal_lobe"] == 120
+    # No mask → leave prior value (liver not exported).
+    assert fixed["liver"] == 900_000
 
 
 def test_latch_mask_stems_for_export_and_multilabel_write(tmp_path: Path) -> None:
@@ -195,11 +209,11 @@ def test_aggregate_primary_require_masks_skips_stats_only_groups(tmp_path: Path)
 def test_load_primary_segment_mask_uses_mask_geometry_without_volume(tmp_path: Path) -> None:
     cache_dir = tmp_path / "0_TS_SEG"
     seg_dir = cache_dir / "seg"
-    _write_mask(seg_dir / "brain.nii.gz", 5000, shape=(3, 12, 12))
+    _write_mask(seg_dir / "brain.nii.gz", 5000, shape=(8, 25, 25))
     finalize_seg_cache(cache_dir, seg_dir, {"brain": 5000})
 
     mask = load_primary_segment_mask(seg_dir, "brain")
-    assert mask.shape == (3, 12, 12)
+    assert mask.shape == (8, 25, 25)
     assert mask.sum() > 0
 
 
@@ -236,8 +250,6 @@ def _write_ct_series_dicom(series_dir: Path, *, body_part: str = "HEAD") -> str:
         file_meta=file_meta,
         preamble=b"\0" * 128,
     )
-    ds.is_little_endian = True
-    ds.is_implicit_VR = False
     ds.SOPClassUID = file_meta.MediaStorageSOPClassUID
     ds.SOPInstanceUID = file_meta.MediaStorageSOPInstanceUID
     ds.Modality = "CT"
@@ -256,7 +268,7 @@ def _write_ct_series_dicom(series_dir: Path, *, body_part: str = "HEAD") -> str:
     ds.SamplesPerPixel = 1
     ds.PhotometricInterpretation = "MONOCHROME2"
     ds.InstanceNumber = 1
-    ds.save_as(str(path), write_like_original=False)
+    ds.save_as(str(path), enforce_file_format=True, little_endian=True, implicit_vr=False)
     return series_uid
 
 

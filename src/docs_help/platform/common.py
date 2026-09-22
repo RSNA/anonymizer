@@ -205,7 +205,7 @@ def strip_drop_shadow(
     """
     if image.mode != "RGBA":
         return image
-    pixels = list(image.getdata())
+    pixels = list(image.get_flattened_data())
     cleaned: list[tuple[int, int, int, int]] = []
     changed = False
     for r, g, b, a in pixels:

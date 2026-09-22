@@ -17,6 +17,7 @@ from anonymizer.controller.series_overlay import (
     Segmentation,
     UserRectangle,
 )
+from anonymizer.utils.tk_mouse import pointer_buttons
 from anonymizer.utils.translate import _
 from anonymizer.utils.windowing import apply_windowing
 from anonymizer.view.common.ctk_safe import dispose_photo_image
@@ -31,6 +32,8 @@ from anonymizer.view.series.series_overlay import render_segmentations_overlay
 logger = logging.getLogger(__name__)
 
 ProjectionMode = Literal["slice", "min", "mean", "max"]
+AnnotateMode = Literal["view", "annotate"]
+AnnotateTool = Literal["brush", "erase"]
 
 
 class ImageViewer(ctk.CTkFrame):
@@ -43,6 +46,9 @@ class ImageViewer(ctk.CTkFrame):
     BUTTON_WIDTH = 100
     PAD = 6
     DATA_PANEL_PAD = 4
+    BRUSH_RADIUS_MIN = 1
+    BRUSH_RADIUS_MAX = 64
+    BRUSH_RADIUS_DEFAULT = 12
     HISTOGRAM_CANVAS_WIDTH = 220
     HISTOGRAM_CANVAS_HEIGHT = 110
     SEGMENTATION_BUTTON_HEIGHT = 22
@@ -60,6 +66,10 @@ class ImageViewer(ctk.CTkFrame):
     EXCLUDE_RECT_GAP = 6
     DEFAULT_WL_SENSITIVITY = 0.75  # Pixels moved per unit change in WL (affects Beta)
     DEFAULT_WW_SENSITIVITY = 0.75  # Pixels moved per unit change in WW (affects Alpha)
+    ZOOM_MIN = 0.25
+    ZOOM_MAX = 8.0
+    ZOOM_WHEEL_FACTOR = 1.15
+    PAN_MIN_VISIBLE_FRACTION = 0.1
 
     def __init__(
         self,
@@ -76,6 +86,13 @@ class ImageViewer(ctk.CTkFrame):
         on_wlww_changed: Callable[[float, float], None] | None = None,
         on_segmentation_toggle: Callable[[str, bool], None] | None = None,
         clear_callback: Callable[[], None] | None = None,
+        on_annotate_mode_changed: Callable[[AnnotateMode], None] | None = None,
+        on_annotate_stroke: Callable[[str, int, int, int, AnnotateTool], None] | None = None,
+        on_annotate_stroke_end: Callable[[], None] | None = None,
+        on_annotate_undo: Callable[[], None] | None = None,
+        on_annotate_new_label: Callable[[], None] | None = None,
+        on_annotate_import_segments: Callable[[], None] | None = None,
+        on_annotate_target_changed: Callable[[str | None], None] | None = None,
         enable_interactive_editing: bool = True,
         show_playback_controls: bool = True,
         show_data_panel: bool = True,
@@ -99,13 +116,20 @@ class ImageViewer(ctk.CTkFrame):
         self.on_wlww_changed = on_wlww_changed
         self.on_segmentation_toggle = on_segmentation_toggle
         self.clear_callback = clear_callback
+        self.on_annotate_mode_changed = on_annotate_mode_changed
+        self.on_annotate_stroke = on_annotate_stroke
+        self.on_annotate_stroke_end = on_annotate_stroke_end
+        self.on_annotate_undo = on_annotate_undo
+        self.on_annotate_new_label = on_annotate_new_label
+        self.on_annotate_import_segments = on_annotate_import_segments
+        self.on_annotate_target_changed = on_annotate_target_changed
         self.enable_interactive_editing = enable_interactive_editing
         self.show_playback_controls = show_playback_controls
         self.show_data_panel = show_data_panel
         self._companion_images: np.ndarray | None = None
         self.companion_canvas: tk.Canvas | None = None
         self.companion_canvas_image_item = None
-        self._companion_cache: dict[int, tuple[ImageTk.PhotoImage, tuple[int, int]]] = {}
+        self._companion_cache: dict[int, tuple[ImageTk.PhotoImage, Image.Image, tuple[int, int]]] = {}
         self._primary_label: tk.Label | None = None
         self._companion_label: tk.Label | None = None
         self._interaction_enabled = True
@@ -118,17 +142,56 @@ class ImageViewer(ctk.CTkFrame):
         self._projection_buttons: dict[str, ctk.CTkButton] = {}
         self._suppress_callbacks = False
         self._active_segmentation_names: set[str] = set()
+        # View-mode multi-select latch set. Annotate mode uses exclusive paint-target
+        # selection without permanently dropping these (so user chips stay with TS).
+        self._view_latch_names: set[str] = set()
         self._segmentation_button_meta: dict[str, tuple[int, int, int]] = {}
         self._segmentation_buttons: dict[str, ctk.CTkButton] = {}
         self.segmentation_frame: ctk.CTkFrame | None = None
         self.segmentation_buttons_frame: ctk.CTkScrollableFrame | None = None
         self._segmentation_title_label: ctk.CTkLabel | None = None
         self.clear_ts_cache_button: ctk.CTkButton | None = None
+        self._annotate_chrome: ctk.CTkFrame | None = None
+        self._annotate_mode: AnnotateMode = "view"
+        self._annotate_tool: AnnotateTool = "brush"
+        self._brush_radius: int = self.BRUSH_RADIUS_DEFAULT
+        self._annotate_enabled: bool = False
+        self._paint_target_key: str | None = None
+        self._paint_target_options: list[tuple[str, str]] = []
+        self._painting: bool = False
+        self._last_paint_xy: tuple[int, int] | None = None
+        self._brush_cursor_id: int | None = None
+        self._brush_size_label: ctk.CTkLabel | None = None
+        self._view_mode_btn: ctk.CTkButton | None = None
+        self._annotate_mode_btn: ctk.CTkButton | None = None
+        self._brush_tool_btn: ctk.CTkButton | None = None
+        self._erase_tool_btn: ctk.CTkButton | None = None
+        self._annotate_tools_frame: ctk.CTkFrame | None = None
+        self._new_label_btn: ctk.CTkButton | None = None
+        self._import_segments_btn: ctk.CTkButton | None = None
+        self._fit_btn: ctk.CTkButton | None = None
+        self._segmentation_button_labels: dict[str, str] = {}
         self._last_hist_canvas_height: int | None = None
         self._last_viewport_size: tuple[int, int] | None = None
         self._segmentation_scroll_height: int = self.SEGMENTATION_SCROLL_MIN_HEIGHT
         self._viewport_fit_pending = False
         self._pending_viewport_size: tuple[int, int] | None = None
+        # Zoom/pan relative to fit-to-viewport baseline (1.0 / 0,0 = fitted).
+        self._zoom: float = 1.0
+        self._pan_x: float = 0.0
+        self._pan_y: float = 0.0
+        self._panning: bool = False
+        self._pan_start_xy: tuple[int, int] | None = None
+        self._pan_origin: tuple[float, float] | None = None
+        self._fit_pil: Image.Image | None = None
+        self._fit_companion_pil: Image.Image | None = None
+        # Native-resolution RGB composites (windowed + overlays) for crisp NEAREST upscale.
+        self._native_pil: Image.Image | None = None
+        self._native_companion_pil: Image.Image | None = None
+        self._transformed_photo: ImageTk.PhotoImage | None = None
+        self._transformed_companion_photo: ImageTk.PhotoImage | None = None
+        self._last_install_zoom: float | None = None
+        self._last_companion_install_zoom: float | None = None
 
         # Determine image properties from the last frame
         last_frame = images[-1]
@@ -255,6 +318,7 @@ class ImageViewer(ctk.CTkFrame):
             )
             self.segmentation_frame.grid_rowconfigure(0, weight=0)
             self.segmentation_frame.grid_rowconfigure(1, weight=0)
+            self.segmentation_frame.grid_rowconfigure(2, weight=0)
             self.segmentation_frame.grid_columnconfigure(0, weight=1)
             header = ctk.CTkFrame(self.segmentation_frame, fg_color="transparent")
             header.grid(row=0, column=0, sticky="ew", padx=self.DATA_PANEL_PAD, pady=(self.DATA_PANEL_PAD, 0))
@@ -271,6 +335,79 @@ class ImageViewer(ctk.CTkFrame):
             self.clear_ts_cache_button.grid(row=0, column=1, sticky="e", padx=(4, 0))
             self.clear_ts_cache_button.grid_remove()
 
+            self._annotate_chrome = ctk.CTkFrame(self.segmentation_frame, fg_color="transparent")
+            self._annotate_chrome.grid(row=1, column=0, sticky="ew", padx=self.DATA_PANEL_PAD, pady=(4, 0))
+            self._annotate_chrome.grid_columnconfigure(0, weight=1)
+            mode_row = ctk.CTkFrame(self._annotate_chrome, fg_color="transparent")
+            mode_row.grid(row=0, column=0, sticky="ew")
+            mode_row.grid_columnconfigure(4, weight=1)
+            self._view_mode_btn = ctk.CTkButton(
+                mode_row, text=_("View"), width=56, height=22, command=lambda: self.set_annotate_mode("view")
+            )
+            self._view_mode_btn.grid(row=0, column=0, padx=(0, 4))
+            self._annotate_mode_btn = ctk.CTkButton(
+                mode_row, text=_("Annotate"), width=72, height=22, command=lambda: self.set_annotate_mode("annotate")
+            )
+            self._annotate_mode_btn.grid(row=0, column=1, padx=(0, 4))
+            self._new_label_btn = ctk.CTkButton(
+                mode_row,
+                text=_("New Segment"),
+                width=96,
+                height=22,
+                command=self._on_new_label_clicked,
+            )
+            self._new_label_btn.grid(row=0, column=2, padx=(0, 4))
+            self._new_label_btn.grid_remove()
+            self._fit_btn = ctk.CTkButton(
+                mode_row,
+                text=_("Fit"),
+                width=44,
+                height=22,
+                command=self.reset_zoom_pan,
+            )
+            self._fit_btn.grid(row=0, column=3, padx=(0, 4))
+            self._import_segments_btn = ctk.CTkButton(
+                mode_row,
+                text=_("Import…"),
+                width=72,
+                height=22,
+                command=self._on_import_segments_clicked,
+            )
+            self._import_segments_btn.grid(row=0, column=5, sticky="e", padx=(4, 0))
+            self._annotate_tools_frame = ctk.CTkFrame(self._annotate_chrome, fg_color="transparent")
+            self._annotate_tools_frame.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+            self._brush_tool_btn = ctk.CTkButton(
+                self._annotate_tools_frame,
+                text=_("Brush"),
+                width=56,
+                height=22,
+                command=lambda: self.set_annotate_tool("brush"),
+            )
+            self._brush_tool_btn.grid(row=0, column=0, padx=(0, 4))
+            self._erase_tool_btn = ctk.CTkButton(
+                self._annotate_tools_frame,
+                text=_("Erase"),
+                width=56,
+                height=22,
+                command=lambda: self.set_annotate_tool("erase"),
+            )
+            self._erase_tool_btn.grid(row=0, column=1, padx=(0, 4))
+            minus_btn = ctk.CTkButton(
+                self._annotate_tools_frame, text="−", width=28, height=22, command=lambda: self._nudge_brush(-1)
+            )
+            minus_btn.grid(row=0, column=2, padx=(8, 2))
+            plus_btn = ctk.CTkButton(
+                self._annotate_tools_frame, text="+", width=28, height=22, command=lambda: self._nudge_brush(1)
+            )
+            plus_btn.grid(row=0, column=3, padx=(0, 4))
+            self._brush_size_label = ctk.CTkLabel(self._annotate_tools_frame, text=f"{self._brush_radius} px")
+            self._brush_size_label.grid(row=0, column=4, padx=(0, 4))
+            ctk.CTkButton(
+                self._annotate_tools_frame, text=_("Undo"), width=52, height=22, command=self._on_undo_clicked
+            ).grid(row=0, column=5, padx=(8, 0))
+            self._annotate_tools_frame.grid_remove()
+            self._refresh_annotate_chrome_styles()
+
             self.segmentation_buttons_frame = ctk.CTkScrollableFrame(
                 self.segmentation_frame,
                 width=self.HISTOGRAM_CANVAS_WIDTH,
@@ -278,7 +415,7 @@ class ImageViewer(ctk.CTkFrame):
                 label_text="",
             )
             self.segmentation_buttons_frame.grid(
-                row=1, column=0, sticky="new", padx=self.DATA_PANEL_PAD, pady=self.DATA_PANEL_PAD
+                row=2, column=0, sticky="new", padx=self.DATA_PANEL_PAD, pady=self.DATA_PANEL_PAD
             )
             self.segmentation_buttons_frame.grid_remove()
 
@@ -347,15 +484,28 @@ class ImageViewer(ctk.CTkFrame):
         # Live resize is driven by image_frame <Configure> → fit_to_viewport().
         self.bind("<MouseWheel>", self.on_mousewheel)
         self.canvas.bind("<MouseWheel>", self.on_mousewheel)
+        self.canvas.bind("<Control-MouseWheel>", self._on_zoom_wheel)
+        self.canvas.bind("<Command-MouseWheel>", self._on_zoom_wheel)
+        self.bind("<Control-MouseWheel>", self._on_zoom_wheel)
+        self.bind("<Command-MouseWheel>", self._on_zoom_wheel)
         if self.enable_interactive_editing:
             self.canvas.bind("<Button-1>", self._on_left_click)  # Left-click press
-            self.canvas.bind("<B1-Motion>", self.draw_box)  # Left-click drag
-            self.canvas.bind("<ButtonRelease-1>", self.end_drawing_user_rect)  # Left-click release
-        self.canvas.bind("<ButtonPress-3>", self._start_adjust_display)  # Right-click press
-        self.canvas.bind("<B3-Motion>", self._adjust_display)  # Right-click drag
-        self.canvas.bind("<ButtonRelease-3>", self._end_adjust_display)  # Right-click release
+            self.canvas.bind("<B1-Motion>", self._on_left_drag)  # Left-click drag
+            self.canvas.bind("<ButtonRelease-1>", self._on_left_release)  # Left-click release
+            self.canvas.bind("<Motion>", self._on_canvas_motion)
+        # Middle = pan; right = WW/WL (logical; Tk 8 Aqua swaps physical 2/3).
+        ptr = pointer_buttons(self)
+        self.canvas.bind(ptr.pan_press, self._start_pan)
+        self.canvas.bind(ptr.pan_motion, self._pan_motion)
+        self.canvas.bind(ptr.pan_release, self._end_pan)
+        self.canvas.bind(ptr.pan_double, self._on_fit_double_click)
+        self.canvas.bind(ptr.right_press, self._start_adjust_display)
+        self.canvas.bind(ptr.right_motion, self._adjust_display)
+        self.canvas.bind(ptr.right_release, self._end_adjust_display)
         if self.num_images > 1 and self.control_frame is not None:
             self.control_frame.bind("<MouseWheel>", self.on_mousewheel)
+            self.control_frame.bind("<Control-MouseWheel>", self._on_zoom_wheel)
+            self.control_frame.bind("<Command-MouseWheel>", self._on_zoom_wheel)
 
         # Keys: bind on widgets that can hold keyboard focus.
         # mouse_enter focuses the image canvas; CTkFrame.bind alone
@@ -366,6 +516,8 @@ class ImageViewer(ctk.CTkFrame):
             if self.show_playback_controls:
                 self.bind("<space>", self.toggle_play)
                 self.canvas.bind("<space>", self.toggle_play)
+        self._bind_annotate_keys(self)
+        self._bind_annotate_keys(self.canvas)
 
         # Focus management for ImageViewer
         self.bind("<Enter>", self.mouse_enter)
@@ -515,6 +667,9 @@ class ImageViewer(ctk.CTkFrame):
         with contextlib.suppress(tk.TclError):
             self.update_idletasks()
         self._companion_images = images
+        self._zoom = 1.0
+        self._pan_x = 0.0
+        self._pan_y = 0.0
         self.image_frame.grid_columnconfigure(0, weight=1)
         self.image_frame.grid_columnconfigure(1, weight=1)
 
@@ -538,6 +693,13 @@ class ImageViewer(ctk.CTkFrame):
         self.companion_canvas = tk.Canvas(self.image_frame, bg="black", borderwidth=0, highlightthickness=0)
         self.companion_canvas.grid(row=canvas_row, column=1, sticky="", padx=(4, 0))
         self._bind_slice_navigation_pointer(self.companion_canvas)
+        self.companion_canvas.bind("<Control-MouseWheel>", self._on_zoom_wheel)
+        self.companion_canvas.bind("<Command-MouseWheel>", self._on_zoom_wheel)
+        ptr = pointer_buttons(self)
+        self.companion_canvas.bind(ptr.pan_press, self._start_pan)
+        self.companion_canvas.bind(ptr.pan_motion, self._pan_motion)
+        self.companion_canvas.bind(ptr.pan_release, self._end_pan)
+        self.companion_canvas.bind(ptr.pan_double, self._on_fit_double_click)
 
         scroll_row = canvas_row + 1
         if self.num_images > 1:
@@ -584,6 +746,10 @@ class ImageViewer(ctk.CTkFrame):
                     label.destroy()
 
         self._companion_images = None
+        self._fit_companion_pil = None
+        self._native_companion_pil = None
+        dispose_photo_image(self, self._transformed_companion_photo)
+        self._transformed_companion_photo = None
         self._companion_cache.clear()
         self.image_frame.grid_columnconfigure(0, weight=1)
         self.image_frame.grid_columnconfigure(1, weight=0)
@@ -600,29 +766,31 @@ class ImageViewer(ctk.CTkFrame):
         if not (0 <= frame_ndx < self._companion_images.shape[0]):
             return
 
-        if frame_ndx in self._companion_cache:
-            cached_image, cached_size = self._companion_cache[frame_ndx]
+        if (
+            self._zoom <= 1.0
+            and frame_ndx in self._companion_cache
+        ):
+            cached_image, cached_pil, cached_size = self._companion_cache[frame_ndx]
             if cached_size == self.current_size:
-                self.companion_canvas.image = cached_image  # type: ignore[attr-defined]
-                if self.companion_canvas_image_item:
-                    self.companion_canvas.delete(self.companion_canvas_image_item)
-                self.companion_canvas_image_item = self.companion_canvas.create_image(
-                    0, 0, anchor="nw", image=cached_image
-                )
+                self._fit_companion_pil = cached_pil
+                self._last_companion_install_zoom = None
+                self._install_transformed_from_pil(companion=True)
                 return
 
         image_array = self._companion_images[frame_ndx].copy()
         image_array = apply_windowing(self.current_wl, self.current_ww, image_array)
-        image_pil = Image.fromarray(image_array)
-        image_pil_resized = image_pil.resize(self.current_size, Image.Resampling.LANCZOS)
-        photo_image = ImageTk.PhotoImage(image_pil_resized)
-        image_pil.close()
-
-        self.companion_canvas.image = photo_image  # type: ignore[attr-defined]
-        if self.companion_canvas_image_item:
-            self.companion_canvas.delete(self.companion_canvas_image_item)
-        self.companion_canvas_image_item = self.companion_canvas.create_image(0, 0, anchor="nw", image=photo_image)
-        self._companion_cache[frame_ndx] = (photo_image, self.current_size)
+        native_pil = Image.fromarray(image_array)
+        if self._native_companion_pil is not None and hasattr(self._native_companion_pil, "close"):
+            with contextlib.suppress(Exception):
+                self._native_companion_pil.close()
+        self._native_companion_pil = native_pil.copy()
+        image_pil_resized = native_pil.resize(self.current_size, Image.Resampling.LANCZOS)
+        native_pil.close()
+        fit_photo = ImageTk.PhotoImage(image_pil_resized)
+        self._fit_companion_pil = image_pil_resized.copy()
+        self._last_companion_install_zoom = None
+        self._install_transformed_from_pil(companion=True)
+        self._companion_cache[frame_ndx] = (fit_photo, image_pil_resized, self.current_size)
         self._manage_companion_cache()
 
     def update_companion_stack(self, images: np.ndarray) -> None:
@@ -638,8 +806,11 @@ class ImageViewer(ctk.CTkFrame):
     def _remove_from_companion_cache(self, index: int) -> None:
         if index not in self._companion_cache:
             return
-        photo_image, _ = self._companion_cache.pop(index)
+        entry = self._companion_cache.pop(index)
+        photo_image = entry[0]
         dispose_photo_image(self, photo_image)
+        if len(entry) > 1 and hasattr(entry[1], "close"):
+            entry[1].close()
 
     def _manage_companion_cache(self) -> None:
         while len(self._companion_cache) > self.CACHE_SIZE:
@@ -670,7 +841,13 @@ class ImageViewer(ctk.CTkFrame):
 
     def clear_active_segmentations(self) -> None:
         self._active_segmentation_names.clear()
+        self._view_latch_names.clear()
         self._refresh_segmentation_button_styles()
+
+    def remember_view_latch(self, name: str) -> None:
+        """Keep ``name`` in the View-mode latch set (e.g. newly created user segment)."""
+        if name in self._segmentation_button_meta or name.startswith("user:"):
+            self._view_latch_names.add(name)
 
     def set_segmentation_title(self, *, mode: str | None = None) -> None:
         """Set panel title to ``Segmentation`` or ``Segmentation [3 mm]`` when mode is known."""
@@ -684,22 +861,35 @@ class ImageViewer(ctk.CTkFrame):
             text = _("Segmentation")
         self._segmentation_title_label.configure(text=text)
 
-    def set_segmentation_structures(self, items: list[tuple[str, tuple[int, int, int]]]) -> None:
-        """Rebuild latch buttons. ``items`` are (name, color_bgr) in display order."""
+    def set_segmentation_structures(
+        self,
+        items: list[tuple[str, tuple[int, int, int]]],
+        *,
+        labels: dict[str, str] | None = None,
+    ) -> None:
+        """Rebuild latch buttons. ``items`` are (key, color_bgr) in display order.
+
+        Keys are TS structure names or ``user:<id>`` for custom ROI labels.
+        """
         if self.segmentation_buttons_frame is None:
             return
         for child in self.segmentation_buttons_frame.winfo_children():
             child.destroy()
         self._segmentation_buttons.clear()
         self._segmentation_button_meta = {name: color for name, color in items}
+        self._segmentation_button_labels = dict(labels or {})
         still_active = {name for name in self._active_segmentation_names if name in self._segmentation_button_meta}
         self._active_segmentation_names = still_active
+        self._view_latch_names = {name for name in self._view_latch_names if name in self._segmentation_button_meta}
+        if self._annotate_mode == "view":
+            # View latch tracks the multi-select set shown on chips.
+            self._view_latch_names = set(still_active)
         per_row = self.SEGMENTATION_BUTTONS_PER_ROW
         for col in range(per_row):
             with contextlib.suppress(tk.TclError):
                 self.segmentation_buttons_frame.grid_columnconfigure(col, weight=0)
         for index, (name, _color_bgr) in enumerate(items):
-            label = structure_button_label(name)
+            label = self._segmentation_button_labels.get(name) or structure_button_label(name)
             row, col = divmod(index, per_row)
             button = ctk.CTkButton(
                 self.segmentation_buttons_frame,
@@ -714,17 +904,64 @@ class ImageViewer(ctk.CTkFrame):
         self._refresh_segmentation_button_styles()
         self.apply_fixed_chrome()
 
+    def reveal_segmentation_button(self, name: str) -> None:
+        """Scroll the segment latch list so ``name`` is visible."""
+        button = self._segmentation_buttons.get(name)
+        frame = self.segmentation_buttons_frame
+        if button is None or frame is None:
+            return
+        with contextlib.suppress(tk.TclError):
+            frame.update_idletasks()
+            canvas = getattr(frame, "_parent_canvas", None)
+            if canvas is not None:
+                # User labels are listed first — scroll to top when revealing a new one.
+                if name.startswith("user:"):
+                    canvas.yview_moveto(0.0)
+                else:
+                    canvas.yview_moveto(1.0)
+            else:
+                button.focus_set()
+
+    def _paint_key_for_button(self, name: str) -> str:
+        if name.startswith("user:"):
+            return name
+        return f"ts:{name}"
+
     def _toggle_segmentation_structure(self, name: str) -> None:
         if name not in self._segmentation_button_meta:
+            return
+        if self._annotate_mode == "annotate":
+            self._select_annotate_segment(name)
             return
         active = name not in self._active_segmentation_names
         if active:
             self._active_segmentation_names.add(name)
+            self._view_latch_names.add(name)
         else:
             self._active_segmentation_names.discard(name)
+            self._view_latch_names.discard(name)
         self._refresh_segmentation_button_styles()
         if self.on_segmentation_toggle is not None:
             self.on_segmentation_toggle(name, active)
+
+    def _select_annotate_segment(self, name: str) -> None:
+        """Exclusive paint-target selection in Annotate mode (radio behavior)."""
+        paint_key = self._paint_key_for_button(name)
+        previous_active = set(self._active_segmentation_names)
+        # Snapshot View latches before collapsing to the paint target.
+        if not self._view_latch_names:
+            self._view_latch_names = set(previous_active)
+        self._view_latch_names.add(name)
+        # One selected chip for painting; View latch set is restored on leaving Annotate.
+        self._active_segmentation_names = {name}
+        self.set_paint_target(paint_key)
+        self._refresh_segmentation_button_styles()
+        if self.on_segmentation_toggle is None:
+            return
+        for old in previous_active - self._active_segmentation_names:
+            self.on_segmentation_toggle(old, False)
+        for new in self._active_segmentation_names - previous_active:
+            self.on_segmentation_toggle(new, True)
 
     def _refresh_segmentation_button_styles(self) -> None:
         theme = ctk.ThemeManager.theme["CTkButton"]
@@ -733,8 +970,11 @@ class ImageViewer(ctk.CTkFrame):
         for name, button in self._segmentation_buttons.items():
             color_bgr = self._segmentation_button_meta[name]
             outline_hex = bgr_to_hex(color_bgr)
-            active = name in self._active_segmentation_names
-            if active:
+            if self._annotate_mode == "annotate":
+                selected = self._paint_target_key == self._paint_key_for_button(name)
+            else:
+                selected = name in self._active_segmentation_names
+            if selected:
                 button.configure(
                     fg_color="#ffffff",
                     hover_color="#f0f0f0",
@@ -750,6 +990,261 @@ class ImageViewer(ctk.CTkFrame):
                     border_width=0,
                     text_color="#ffffff",
                 )
+
+    def set_annotate_enabled(self, enabled: bool) -> None:
+        """Enable Annotate mode when mask geometry / volume grid exists."""
+        self._annotate_enabled = bool(enabled)
+        if not enabled and self._annotate_mode == "annotate":
+            self.set_annotate_mode("view")
+        if self._annotate_mode_btn is not None:
+            state = "normal" if enabled else "disabled"
+            with contextlib.suppress(tk.TclError):
+                self._annotate_mode_btn.configure(state=state)
+        if self._import_segments_btn is not None:
+            state = "normal" if enabled else "disabled"
+            with contextlib.suppress(tk.TclError):
+                self._import_segments_btn.configure(state=state)
+        self.apply_fixed_chrome()
+
+    def get_annotate_mode(self) -> AnnotateMode:
+        return self._annotate_mode
+
+    def set_annotate_mode(self, mode: AnnotateMode) -> None:
+        if mode == "annotate" and not self._annotate_enabled:
+            return
+        if mode == self._annotate_mode:
+            self._refresh_annotate_chrome_styles()
+            return
+        previous_mode = self._annotate_mode
+        self._annotate_mode = mode
+        self._painting = False
+        self._last_paint_xy = None
+        self._clear_brush_cursor()
+        if mode == "annotate":
+            # Preserve View multi-select; exclusive paint selection is temporary.
+            self._view_latch_names = set(self._active_segmentation_names) | self._view_latch_names
+            if self._annotate_tools_frame is not None:
+                self._annotate_tools_frame.grid()
+            if self._new_label_btn is not None:
+                self._new_label_btn.grid()
+            self.canvas.config(cursor="none")
+            if self._paint_target_key is None:
+                if self._active_segmentation_names:
+                    first = sorted(self._active_segmentation_names)[0]
+                    self._select_annotate_segment(first)
+                elif self._segmentation_button_meta:
+                    first = next(iter(self._segmentation_button_meta))
+                    self._select_annotate_segment(first)
+            else:
+                key = self._paint_target_key
+                if key.startswith("ts:"):
+                    self._select_annotate_segment(key.split(":", 1)[1])
+                elif key.startswith("user:"):
+                    self._select_annotate_segment(key)
+        else:
+            if self._annotate_tools_frame is not None:
+                self._annotate_tools_frame.grid_remove()
+            if self._new_label_btn is not None:
+                self._new_label_btn.grid_remove()
+            self.canvas.config(cursor="")
+            if previous_mode == "annotate":
+                self._restore_view_latches()
+        self._refresh_annotate_chrome_styles()
+        self._refresh_segmentation_button_styles()
+        if self.on_annotate_mode_changed is not None:
+            self.on_annotate_mode_changed(mode)
+
+    def _restore_view_latches(self) -> None:
+        """Re-apply View multi-select after leaving Annotate (keeps user chips with TS)."""
+        desired = {n for n in self._view_latch_names if n in self._segmentation_button_meta}
+        if self._paint_target_key:
+            if self._paint_target_key.startswith("user:"):
+                desired.add(self._paint_target_key)
+            elif self._paint_target_key.startswith("ts:"):
+                desired.add(self._paint_target_key.split(":", 1)[1])
+        previous = set(self._active_segmentation_names)
+        self._active_segmentation_names = desired
+        self._view_latch_names = set(desired)
+        self._refresh_segmentation_button_styles()
+        if self.on_segmentation_toggle is None:
+            return
+        for old in previous - desired:
+            self.on_segmentation_toggle(old, False)
+        for new in desired - previous:
+            self.on_segmentation_toggle(new, True)
+
+    def set_annotate_tool(self, tool: AnnotateTool) -> None:
+        self._annotate_tool = tool
+        self._refresh_annotate_chrome_styles()
+
+    def set_brush_radius(self, radius: int) -> None:
+        self._brush_radius = max(self.BRUSH_RADIUS_MIN, min(self.BRUSH_RADIUS_MAX, int(radius)))
+        if self._brush_size_label is not None:
+            self._brush_size_label.configure(text=f"{self._brush_radius} px")
+
+    def _nudge_brush(self, delta: int) -> None:
+        self.set_brush_radius(self._brush_radius + delta)
+
+    def set_paint_targets(self, options: list[tuple[str, str]], *, active_key: str | None = None) -> None:
+        """``options`` are (key, display_label). Keys: ``user:<id>`` or ``ts:<name>``."""
+        self._paint_target_options = list(options)
+        if active_key is not None:
+            self.set_paint_target(active_key)
+        elif self._paint_target_key and any(k == self._paint_target_key for k, _ in options):
+            self.set_paint_target(self._paint_target_key)
+        elif options:
+            self.set_paint_target(options[0][0])
+        else:
+            self._paint_target_key = None
+
+    def set_paint_target(self, key: str | None) -> None:
+        self._paint_target_key = key
+        self._refresh_segmentation_button_styles()
+        if self.on_annotate_target_changed is not None:
+            self.on_annotate_target_changed(key)
+
+    def get_paint_target_key(self) -> str | None:
+        return self._paint_target_key
+
+    def _refresh_annotate_chrome_styles(self) -> None:
+        theme = ctk.ThemeManager.theme["CTkButton"]
+        active_fg = theme.get("fg_color", ("#3a7ebf", "#1f538d"))
+        idle_fg = ("gray70", "gray30")
+        if self._view_mode_btn is not None:
+            self._view_mode_btn.configure(
+                fg_color=active_fg if self._annotate_mode == "view" else idle_fg
+            )
+        if self._annotate_mode_btn is not None:
+            self._annotate_mode_btn.configure(
+                fg_color=active_fg if self._annotate_mode == "annotate" else idle_fg
+            )
+        if self._brush_tool_btn is not None:
+            self._brush_tool_btn.configure(
+                fg_color=active_fg if self._annotate_tool == "brush" else idle_fg
+            )
+        if self._erase_tool_btn is not None:
+            self._erase_tool_btn.configure(
+                fg_color=active_fg if self._annotate_tool == "erase" else idle_fg
+            )
+
+    def _bind_annotate_keys(self, widget) -> None:
+        widget.bind("<Escape>", self._on_annotate_escape)
+        widget.bind("<Control-z>", self._on_undo_clicked)
+        widget.bind("<Command-z>", self._on_undo_clicked)
+        widget.bind("<KeyPress-b>", lambda e: self.set_annotate_tool("brush"))
+        widget.bind("<KeyPress-B>", lambda e: self.set_annotate_tool("brush"))
+        widget.bind("<KeyPress-e>", lambda e: self.set_annotate_tool("erase"))
+        widget.bind("<KeyPress-E>", lambda e: self.set_annotate_tool("erase"))
+        widget.bind("<bracketleft>", lambda e: self._nudge_brush(-1))
+        widget.bind("<bracketright>", lambda e: self._nudge_brush(1))
+        widget.bind("<KeyPress-f>", self._on_fit_key)
+        widget.bind("<KeyPress-F>", self._on_fit_key)
+        for digit in range(1, 10):
+            widget.bind(f"<KeyPress-{digit}>", lambda e, d=digit: self._select_paint_target_by_index(d - 1))
+
+    def _select_paint_target_by_index(self, index: int) -> None:
+        if self._annotate_mode != "annotate":
+            return
+        keys = list(self._segmentation_button_meta.keys())
+        if 0 <= index < len(keys):
+            self._select_annotate_segment(keys[index])
+
+    def _on_annotate_escape(self, event=None):
+        if self._annotate_mode != "annotate":
+            return
+        if self._painting:
+            self._painting = False
+            self._last_paint_xy = None
+            if self.on_annotate_stroke_end is not None:
+                self.on_annotate_stroke_end()
+            return
+        self.set_annotate_mode("view")
+
+    def _on_undo_clicked(self, event=None):
+        if self.on_annotate_undo is not None:
+            self.on_annotate_undo()
+
+    def _on_new_label_clicked(self) -> None:
+        if self.on_annotate_new_label is not None:
+            self.on_annotate_new_label()
+
+    def _on_import_segments_clicked(self) -> None:
+        if self.on_annotate_import_segments is not None:
+            self.on_annotate_import_segments()
+
+    def _clear_brush_cursor(self) -> None:
+        if self._brush_cursor_id is not None:
+            with contextlib.suppress(tk.TclError):
+                self.canvas.delete(self._brush_cursor_id)
+            self._brush_cursor_id = None
+
+    def _draw_brush_cursor(self, x_view: int, y_view: int) -> None:
+        self._clear_brush_cursor()
+        if self._annotate_mode != "annotate":
+            return
+        scale_x = (self.current_size[0] / max(1, self.images.shape[2])) * self._zoom
+        r_view = max(2, int(self._brush_radius * scale_x))
+        self._brush_cursor_id = self.canvas.create_oval(
+            x_view - r_view,
+            y_view - r_view,
+            x_view + r_view,
+            y_view + r_view,
+            outline="cyan",
+            width=1,
+        )
+
+    def _on_canvas_motion(self, event) -> None:
+        if self._annotate_mode != "annotate" or self._painting:
+            return
+        self._draw_brush_cursor(int(event.x), int(event.y))
+
+    def _on_left_drag(self, event) -> None:
+        if self._panning:
+            self._pan_motion(event)
+            return
+        if self._annotate_mode == "annotate":
+            self._paint_at_event(event)
+            return
+        self.draw_box(event)
+
+    def _on_left_release(self, event) -> None:
+        if self._panning:
+            self._end_pan(event)
+            return
+        if self._annotate_mode == "annotate":
+            if self._painting:
+                self._painting = False
+                self._last_paint_xy = None
+                if self.on_annotate_stroke_end is not None:
+                    self.on_annotate_stroke_end()
+            self._draw_brush_cursor(int(event.x), int(event.y))
+            return
+        self.end_drawing_user_rect(event)
+
+    def _paint_at_event(self, event) -> None:
+        if self._paint_target_key is None or self.on_annotate_stroke is None:
+            return
+        x_img, y_img = self._view_to_image_coords(int(event.x), int(event.y))
+        if self._last_paint_xy is not None:
+            # Stamp along path with spacing ≤ radius/2
+            x0, y0 = self._last_paint_xy
+            dx, dy = x_img - x0, y_img - y0
+            dist = max(1.0, (dx * dx + dy * dy) ** 0.5)
+            step = max(1.0, self._brush_radius / 2.0)
+            n = int(dist / step) + 1
+            for i in range(1, n + 1):
+                t = i / n
+                xi = int(x0 + dx * t)
+                yi = int(y0 + dy * t)
+                self.on_annotate_stroke(
+                    self._paint_target_key, yi, xi, self._brush_radius, self._annotate_tool
+                )
+        else:
+            self.on_annotate_stroke(
+                self._paint_target_key, y_img, x_img, self._brush_radius, self._annotate_tool
+            )
+        self._last_paint_xy = (x_img, y_img)
+        self._draw_brush_cursor(int(event.x), int(event.y))
 
     def set_text_overlay_data(self, frame_index: int, data: list[OCRText]):
         # Creates new text overlay if one doesn't exist yet:
@@ -783,12 +1278,19 @@ class ImageViewer(ctk.CTkFrame):
             self.load_and_display_image(self.current_image_index)
 
     def set_segmentation_overlays(self, overlays: dict[int, list[Segmentation]]) -> None:
-        """Apply segmentation overlays for many frames with a single refresh."""
+        """Apply segmentation overlays for many frames with a single refresh.
+
+        Only invalidates touched frames (not the whole series cache) so brush
+        strokes stay responsive at high zoom.
+        """
+        touched: set[int] = set()
         for frame_index, segmentations in overlays.items():
             if frame_index not in self.overlay_data:
                 self.overlay_data[frame_index] = OverlayData()
             self.overlay_data[frame_index].segmentations = segmentations
-        self.clear_cache()
+            touched.add(frame_index)
+        for frame_index in touched:
+            self.remove_from_cache(frame_index)
         self.load_and_display_image(self.current_image_index)
 
     def get_segmentation_overlay_data(self, frame_index: int) -> list[Segmentation] | None:
@@ -828,23 +1330,206 @@ class ImageViewer(ctk.CTkFrame):
         return self.overlay_data[frame_index].exclude_rects
 
     def _image_to_view_coords(self, x: int, y: int) -> tuple[int, int]:
-        """Converts image coordinates to view (display) coordinates."""
+        """Converts image coordinates to view (canvas) coordinates."""
         image_width = self.images.shape[2]
         image_height = self.images.shape[1]
         scale_x = self.current_size[0] / image_width
         scale_y = self.current_size[1] / image_height
-        return int(x * scale_x), int(y * scale_y)
+        fit_x = x * scale_x
+        fit_y = y * scale_y
+        return int(fit_x * self._zoom + self._pan_x), int(fit_y * self._zoom + self._pan_y)
 
     def _view_to_image_coords(self, x: int, y: int) -> tuple[int, int]:
-        """Converts view (display) coordinates to image coordinates."""
+        """Converts view (canvas) coordinates to image coordinates."""
         image_width = self.images.shape[2]
         image_height = self.images.shape[1]
         scale_x = self.current_size[0] / image_width
         scale_y = self.current_size[1] / image_height
-        # Avoid division by zero. If scale is zero, return original coords (or handle appropriately).
-        if scale_x == 0 or scale_y == 0:
+        if scale_x == 0 or scale_y == 0 or self._zoom == 0:
             return x, y
-        return int(x / scale_x), int(y / scale_y)
+        fit_x = (x - self._pan_x) / self._zoom
+        fit_y = (y - self._pan_y) / self._zoom
+        return int(fit_x / scale_x), int(fit_y / scale_y)
+
+    def _zoomed_display_size(self) -> tuple[int, int]:
+        return (
+            max(1, int(round(self.current_size[0] * self._zoom))),
+            max(1, int(round(self.current_size[1] * self._zoom))),
+        )
+
+    def _clamp_pan(self) -> None:
+        zw, zh = self._zoomed_display_size()
+        cw, ch = self.current_size
+        frac = self.PAN_MIN_VISIBLE_FRACTION
+        self._pan_x = min(self._pan_x, cw * (1.0 - frac))
+        self._pan_x = max(self._pan_x, cw * frac - zw)
+        self._pan_y = min(self._pan_y, ch * (1.0 - frac))
+        self._pan_y = max(self._pan_y, ch * frac - zh)
+
+    def reset_zoom_pan(self, event=None) -> None:
+        """Reset zoom/pan to fit-to-viewport identity."""
+        self._zoom = 1.0
+        self._pan_x = 0.0
+        self._pan_y = 0.0
+        self._last_install_zoom = None
+        self._last_companion_install_zoom = None
+        self._refresh_viewport_transform()
+
+    def _on_fit_key(self, event=None):
+        self.reset_zoom_pan()
+        return "break"
+
+    def _on_fit_double_click(self, event=None):
+        self.reset_zoom_pan()
+        return "break"
+
+    def _event_has_ctrl_or_cmd(self, event) -> bool:
+        state = int(getattr(event, "state", 0) or 0)
+        # Control=0x4; Command on Aqua often 0x8 (Mod1) or 0x100000.
+        return bool(state & 0x4) or bool(state & 0x8) or bool(state & 0x100000)
+
+    def _event_has_shift(self, event) -> bool:
+        return bool(int(getattr(event, "state", 0) or 0) & 0x1)
+
+    def _zoom_at_canvas(self, canvas_x: float, canvas_y: float, factor: float) -> None:
+        fit_x = (canvas_x - self._pan_x) / self._zoom if self._zoom else canvas_x
+        fit_y = (canvas_y - self._pan_y) / self._zoom if self._zoom else canvas_y
+        new_zoom = max(self.ZOOM_MIN, min(self.ZOOM_MAX, self._zoom * factor))
+        self._zoom = new_zoom
+        self._pan_x = canvas_x - fit_x * new_zoom
+        self._pan_y = canvas_y - fit_y * new_zoom
+        self._clamp_pan()
+        # Magnification needs the native composite; rebuild if we only have a fit cache hit.
+        if self._zoom > 1.0 and self._native_pil is None:
+            self._last_install_zoom = None
+            self.load_and_display_image(self.current_image_index)
+            return
+        self._last_install_zoom = None
+        self._last_companion_install_zoom = None
+        self._refresh_viewport_transform()
+
+    def _on_zoom_wheel(self, event):
+        if not self._interaction_allowed():
+            return "break"
+        factor = self.ZOOM_WHEEL_FACTOR if event.delta > 0 else 1.0 / self.ZOOM_WHEEL_FACTOR
+        self._zoom_at_canvas(float(event.x), float(event.y), factor)
+        if self._annotate_mode == "annotate":
+            self._draw_brush_cursor(int(event.x), int(event.y))
+        return "break"
+
+    def _start_pan(self, event) -> None:
+        if not self._interaction_allowed():
+            return
+        if self.drawing_rect or self.adjusting_wlww:
+            return
+        self._panning = True
+        self._pan_start_xy = (int(event.x), int(event.y))
+        self._pan_origin = (self._pan_x, self._pan_y)
+        self.canvas.config(cursor="hand2")
+
+    def _pan_motion(self, event) -> None:
+        if not self._panning or self._pan_start_xy is None or self._pan_origin is None:
+            return
+        dx = int(event.x) - self._pan_start_xy[0]
+        dy = int(event.y) - self._pan_start_xy[1]
+        self._pan_x = self._pan_origin[0] + dx
+        self._pan_y = self._pan_origin[1] + dy
+        self._clamp_pan()
+        self._refresh_viewport_transform()
+
+    def _end_pan(self, event=None) -> None:
+        if not self._panning:
+            return
+        self._panning = False
+        self._pan_start_xy = None
+        self._pan_origin = None
+        if self._annotate_mode == "annotate":
+            self.canvas.config(cursor="none")
+        else:
+            self.canvas.config(cursor="")
+
+    def _viewport_source_pil(self, *, companion: bool = False) -> Image.Image | None:
+        """PIL used for the current zoom: native when magnifying, fit otherwise."""
+        if companion:
+            if self._zoom > 1.0 and self._native_companion_pil is not None:
+                return self._native_companion_pil
+            return self._fit_companion_pil
+        if self._zoom > 1.0 and self._native_pil is not None:
+            return self._native_pil
+        return self._fit_pil
+
+    def _photo_from_source_pil(self, source_pil: Image.Image) -> ImageTk.PhotoImage:
+        """Build the on-canvas PhotoImage.
+
+        Magnification uses NEAREST from the source (preferably native) so 1px
+        segment outlines stay crisp. Fit / shrink keeps LANCZOS.
+        """
+        zw, zh = self._zoomed_display_size()
+        src_w, src_h = source_pil.size
+        if abs(self._zoom - 1.0) < 1e-6 and (src_w, src_h) == self.current_size:
+            return ImageTk.PhotoImage(source_pil)
+        upscaling = zw > src_w or zh > src_h or self._zoom > 1.0
+        resampling = Image.Resampling.NEAREST if upscaling else Image.Resampling.LANCZOS
+        resized = source_pil.resize((zw, zh), resampling)
+        photo = ImageTk.PhotoImage(resized)
+        resized.close()
+        return photo
+
+    def _install_transformed_from_pil(self, fit_pil: Image.Image | None = None, *, companion: bool = False) -> None:
+        """Place zoom/pan transform on canvas. ``fit_pil`` kept for API; source chosen by zoom."""
+        canvas = self.companion_canvas if companion else self.canvas
+        if canvas is None:
+            return
+        source = self._viewport_source_pil(companion=companion)
+        if source is None:
+            source = fit_pil
+        if source is None:
+            return
+        item = self.companion_canvas_image_item if companion else self.canvas_image_item
+        existing = self._transformed_companion_photo if companion else self._transformed_photo
+        last_zoom_attr = "_last_companion_install_zoom" if companion else "_last_install_zoom"
+        last_zoom = getattr(self, last_zoom_attr, None)
+        if existing is not None and item is not None and last_zoom is not None and abs(last_zoom - self._zoom) < 1e-6:
+            with contextlib.suppress(tk.TclError):
+                canvas.coords(item, self._pan_x, self._pan_y)
+                return
+
+        photo = self._photo_from_source_pil(source)
+        if companion:
+            dispose_photo_image(self, self._transformed_companion_photo)
+            self._transformed_companion_photo = photo
+            self._last_companion_install_zoom = self._zoom
+            self.companion_canvas.image = photo  # type: ignore[attr-defined]
+            if self.companion_canvas_image_item is not None:
+                with contextlib.suppress(tk.TclError):
+                    self.companion_canvas.itemconfig(self.companion_canvas_image_item, image=photo)
+                    self.companion_canvas.coords(self.companion_canvas_image_item, self._pan_x, self._pan_y)
+                    return
+            self.companion_canvas_image_item = self.companion_canvas.create_image(
+                self._pan_x, self._pan_y, anchor="nw", image=photo
+            )
+            return
+        dispose_photo_image(self, self._transformed_photo)
+        self._transformed_photo = photo
+        self._last_install_zoom = self._zoom
+        self.photo_image = photo
+        self.canvas.image = photo  # type: ignore[attr-defined]
+        if self.canvas_image_item is not None:
+            with contextlib.suppress(tk.TclError):
+                self.canvas.itemconfig(self.canvas_image_item, image=photo)
+                self.canvas.coords(self.canvas_image_item, self._pan_x, self._pan_y)
+                return
+        self.canvas_image_item = self.canvas.create_image(
+            self._pan_x, self._pan_y, anchor="nw", image=photo
+        )
+
+    def _refresh_viewport_transform(self) -> None:
+        """Re-place cached pixmaps with current zoom/pan (no re-windowing)."""
+        if self._viewport_source_pil(companion=False) is not None:
+            self._install_transformed_from_pil(companion=False)
+        if self._viewport_source_pil(companion=True) is not None:
+            self._install_transformed_from_pil(companion=True)
+        self.update_status()
 
     def _screen_canvas_budget(self) -> tuple[int, int]:
         """Return max drawable (width, height) from screen budget and visible chrome."""
@@ -994,7 +1679,11 @@ class ImageViewer(ctk.CTkFrame):
         """
         if self.data_frame is None or self.histogram is None:
             return
-        show_segmentation = bool(self._segmentation_button_meta) or reserve_segmentation_chrome
+        show_segmentation = (
+            bool(self._segmentation_button_meta)
+            or reserve_segmentation_chrome
+            or bool(self._annotate_enabled)
+        )
         with contextlib.suppress(tk.TclError):
             self.histogram.canvas.configure(
                 width=self.HISTOGRAM_CANVAS_WIDTH,
@@ -1048,14 +1737,18 @@ class ImageViewer(ctk.CTkFrame):
         if size[0] <= 0 or size[1] <= 0:
             return False
         if size == self.current_size and self.canvas_image_item is not None:
+            # Ensure widget geometry matches the fit size; no pixel reload needed.
+            self.canvas.config(width=size[0], height=size[1])
+            if self.companion_canvas is not None:
+                self.companion_canvas.config(width=size[0], height=size[1])
             self.update_idletasks()
-            canvas_matches = self.canvas.winfo_width() == size[0] and self.canvas.winfo_height() == size[1]
-            companion_matches = self.companion_canvas is None or (
-                self.companion_canvas.winfo_width() == size[0] and self.companion_canvas.winfo_height() == size[1]
-            )
-            if canvas_matches and companion_matches:
-                return False
+            return False
+        old_w, old_h = self.current_size
         self.current_size = size
+        if old_w > 0 and old_h > 0 and (size[0] != old_w or size[1] != old_h):
+            self._pan_x *= size[0] / old_w
+            self._pan_y *= size[1] / old_h
+            self._clamp_pan()
         self.canvas.config(width=size[0], height=size[1])
         if self.companion_canvas is not None:
             self.companion_canvas.config(width=size[0], height=size[1])
@@ -1169,12 +1862,16 @@ class ImageViewer(ctk.CTkFrame):
 
     def get_dimensions_text(self) -> str:
         # View = on-screen pixel dimensions (current_size); Actual = native DICOM frame size.
-        return _("View[{vw}x{vh}] Actual[{aw}x{ah}]").format(
+        zoom_pct = int(round(self._zoom * 100))
+        base = _("View[{vw}x{vh}] Actual[{aw}x{ah}]").format(
             vw=self.current_size[0],
             vh=self.current_size[1],
             aw=self.images.shape[2],
             ah=self.images.shape[1],
         )
+        if abs(self._zoom - 1.0) < 1e-3:
+            return base
+        return f"{base}  Zoom {zoom_pct}%"
 
     def update_status(self):
         if self.projection_label is not None:
@@ -1353,8 +2050,11 @@ class ImageViewer(ctk.CTkFrame):
         if self.canvas_image_item is not None:
             with contextlib.suppress(tk.TclError):
                 self.canvas.itemconfig(self.canvas_image_item, image=photo_image)
+                self.canvas.coords(self.canvas_image_item, self._pan_x, self._pan_y)
                 return
-        self.canvas_image_item = self.canvas.create_image(0, 0, anchor="nw", image=photo_image)
+        self.canvas_image_item = self.canvas.create_image(
+            self._pan_x, self._pan_y, anchor="nw", image=photo_image
+        )
 
     def load_and_display_image(self, frame_ndx: int):
         logger.debug(f"Loading and displaying image at index: {frame_ndx}")
@@ -1364,12 +2064,20 @@ class ImageViewer(ctk.CTkFrame):
 
         display_pixels = self._display_pixels(frame_ndx)
         use_cache = not self._is_projection_mode()
+        # Fit-sized cache is LANCZOS-softened — never use it when magnifying.
+        can_use_fit_cache = use_cache and self._zoom <= 1.0
 
         # Use Cache (skip when overlays must be composited — cache stores pre-overlay pixels).
-        if use_cache and frame_ndx in self.image_cache and not self._frame_has_composited_overlay(frame_ndx):
-            cached_image, __, cached_size = self.image_cache[frame_ndx]
+        if (
+            can_use_fit_cache
+            and frame_ndx in self.image_cache
+            and not self._frame_has_composited_overlay(frame_ndx)
+        ):
+            cached_image, cached_pil, cached_size = self.image_cache[frame_ndx]
             if cached_size == self.current_size:
-                self._install_canvas_image(cached_image)
+                self._fit_pil = cached_pil
+                self._last_install_zoom = None
+                self._install_transformed_from_pil(companion=False)
                 if self.current_image_index != frame_ndx and self.histogram is not None and not self.companion_attached:
                     self.histogram.update_image(display_pixels)
                 self.current_image_index = frame_ndx
@@ -1388,19 +2096,33 @@ class ImageViewer(ctk.CTkFrame):
             rendered_overlay = self._render_overlays(frame_ndx)
             image_array = self._composite_overlay(image_array, rendered_overlay)
 
-        # Display:
-        image_pil = Image.fromarray(self._pil_frame(image_array))
-        image_pil_resized = image_pil.resize(self.current_size, Image.Resampling.LANCZOS)
-        self.current_size = image_pil_resized.size
-        self.photo_image = ImageTk.PhotoImage(image_pil_resized)
-        image_pil.close()
+        # Native RGB composite — source of truth for crisp NEAREST magnification.
+        native_pil = Image.fromarray(self._pil_frame(image_array))
+        if self._native_pil is not None and hasattr(self._native_pil, "close"):
+            with contextlib.suppress(Exception):
+                self._native_pil.close()
+        self._native_pil = native_pil.copy()
         del image_array
 
-        self._install_canvas_image(self.photo_image)
+        # Fit pixmap for zoom==1 and for returning to fit without full recompute.
+        image_pil_resized = native_pil.resize(self.current_size, Image.Resampling.LANCZOS)
+        native_pil.close()
+        self.current_size = image_pil_resized.size
+        if self._fit_pil is not None and hasattr(self._fit_pil, "close"):
+            with contextlib.suppress(Exception):
+                # Don't close if it's the same object still referenced by cache.
+                if self._fit_pil is not image_pil_resized and not any(
+                    entry[1] is self._fit_pil for entry in self.image_cache.values()
+                ):
+                    self._fit_pil.close()
+        self._fit_pil = image_pil_resized.copy()
+        self._last_install_zoom = None
+        self._install_transformed_from_pil(companion=False)
 
         # Caching: Store BOTH PhotoImage & resized PIL.Image (slice frames only)
         if not self._is_projection_mode():
-            self.add_to_cache(frame_ndx, self.photo_image, image_pil_resized)
+            fit_photo = ImageTk.PhotoImage(image_pil_resized)
+            self.add_to_cache(frame_ndx, fit_photo, image_pil_resized)
         self.current_image_index = frame_ndx
         self._load_companion_display(frame_ndx)
         if self.num_images > 1:
@@ -1452,6 +2174,17 @@ class ImageViewer(ctk.CTkFrame):
         self.detach_companion_stack()
         self.clear_cache()
         dispose_photo_image(self, self.photo_image)
+        dispose_photo_image(self, self._transformed_photo)
+        dispose_photo_image(self, self._transformed_companion_photo)
+        self._transformed_photo = None
+        self._transformed_companion_photo = None
+        self._fit_pil = None
+        self._fit_companion_pil = None
+        self._native_pil = None
+        self._native_companion_pil = None
+        self._zoom = 1.0
+        self._pan_x = 0.0
+        self._pan_y = 0.0
         with contextlib.suppress(tk.TclError, AttributeError):
             if self.canvas_image_item is not None:
                 self.canvas.delete(self.canvas_image_item)
@@ -1473,6 +2206,15 @@ class ImageViewer(ctk.CTkFrame):
     def on_mousewheel(self, event):
         if not self._interaction_allowed():
             return
+        if self._event_has_ctrl_or_cmd(event):
+            return self._on_zoom_wheel(event)
+        if self._annotate_mode == "annotate":
+            # Plain wheel still nudges brush; Shift+wheel scrolls slices (Ctrl+wheel zooms).
+            if not self._event_has_shift(event):
+                delta = 1 if event.delta > 0 else -1
+                self._nudge_brush(delta)
+                self._draw_brush_cursor(int(getattr(event, "x", 0)), int(getattr(event, "y", 0)))
+                return
         if event.delta > 0:
             self.change_image(self.current_image_index - 1)
         else:
@@ -1628,6 +2370,16 @@ class ImageViewer(ctk.CTkFrame):
         if self.playing:
             return
 
+        if self._event_has_shift(event):
+            self._start_pan(event)
+            return
+
+        if self._annotate_mode == "annotate":
+            self._painting = True
+            self._last_paint_xy = None
+            self._paint_at_event(event)
+            return
+
         x, y = int(event.x), int(event.y)  # View coordinates
 
         # Check Text Overlay:
@@ -1717,7 +2469,6 @@ class ImageViewer(ctk.CTkFrame):
     def draw_box(self, event):
         """
         Updates the visual representation of the box being drawn temporarily.
-        (Bound to <B3-Motion> for right-click drag)
         """
         # Only run if we are currently in the drawing state
         if not self.drawing_rect or self.start_x is None or self.start_y is None:
@@ -1747,7 +2498,6 @@ class ImageViewer(ctk.CTkFrame):
         """
         Finalizes drawing: removes temp rect, adds permanent rect to overlay_data,
         and triggers a full redraw of the background image item.
-        (Bound to <ButtonRelease-3>)
         """
         # --- Check if drawing was valid ---
         if not self.drawing_rect:
@@ -1862,7 +2612,7 @@ class ImageViewer(ctk.CTkFrame):
 
     # --- WW/WL Adjustment Event Handlers ---
     def _start_adjust_display(self, event):
-        """Starts WL/WW adjustment. (Bound to <ButtonPress-3>)"""
+        """Starts WL/WW adjustment. (Bound to logical right-button press)"""
         if not self._interaction_allowed():
             return
         if self.drawing_rect:
@@ -1876,7 +2626,7 @@ class ImageViewer(ctk.CTkFrame):
         self.canvas.config(cursor="fleur")
 
     def _adjust_display(self, event):
-        """Adjusts WL(U/D)/WW(L/R) during drag. (Bound to <B3-Motion>)"""
+        """Adjusts WL(U/D)/WW(L/R) during drag. (Bound to logical right-button motion)"""
         if not self.adjusting_wlww or self.adjust_start_x is None or self.adjust_start_y is None:
             return
 
@@ -1911,7 +2661,7 @@ class ImageViewer(ctk.CTkFrame):
         self.refresh_current_image()
 
     def _end_adjust_display(self, event):
-        """Ends WL/WW adjustment. (Bound to <ButtonRelease-3>)"""
+        """Ends WL/WW adjustment. (Bound to logical right-button release)"""
         if not self.adjusting_wlww:
             return
         logger.debug("Ending WL/WW adjust")

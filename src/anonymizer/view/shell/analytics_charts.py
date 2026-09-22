@@ -30,12 +30,14 @@ import sys
 import tkinter as tk
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any
 
 import customtkinter as ctk
 import matplotlib
 
 matplotlib.use("Agg")
+from matplotlib import cbook, font_manager
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
@@ -55,13 +57,54 @@ from anonymizer.controller.analytics import (
     organ_volume_axis_span,
     organ_volume_bin_edges,
     organ_volume_bin_patient_ids,
+    organ_volume_clip_samples_for_hist,
     organ_volume_ml_tick_values,
 )
+from anonymizer.controller.analytics_prefs import get_organ_bin_width_pct
+from anonymizer.utils.tk_mouse import mouse_wheel_notches
 from anonymizer.utils.translate import _
 from anonymizer.view.common.ctk_safe import release_mpl_frame_images
 from anonymizer.view.common.tooltip import MotionTooltipController
 
 logger = logging.getLogger(__name__)
+
+
+def _matplotlib_bundled_font(name: str) -> Path:
+    return Path(cbook._get_data_path("fonts", "ttf", name))
+
+
+def _matplotlib_fonts_healthy() -> bool:
+    """True when bundled fonts resolve and DejaVu is findable (cache not stale)."""
+    if not _matplotlib_bundled_font("DejaVuSans.ttf").is_file():
+        return False
+    if not _matplotlib_bundled_font("LastResortHE-Regular.ttf").is_file():
+        return False
+    try:
+        found = Path(font_manager.findfont(font_manager.FontProperties(family="DejaVu Sans")))
+    except (ValueError, OSError, RuntimeError):
+        return False
+    return found.is_file() and found.name.startswith("DejaVuSans")
+
+
+def _configure_matplotlib_fonts(*, force_rebuild: bool = False) -> None:
+    """Pin Agg charts to bundled DejaVu; rebuild cache when ``uv`` swapped .venv Pythons.
+
+    Shared ``~/.matplotlib/fontlist-*.json`` stores absolute paths into
+    ``.venv/lib/pythonX.Y/...``. After a Python switch those files vanish and
+    matplotlib falls through to LastResortHE at a dead path (FileNotFoundError
+    during Dashboard analytics rasterize).
+    """
+    if force_rebuild or not _matplotlib_fonts_healthy():
+        logger.info("Analytics charts: rebuilding matplotlib font cache")
+        font_manager._load_fontmanager(try_read_cache=False)
+    matplotlib.rcParams["font.family"] = "sans-serif"
+    matplotlib.rcParams["font.sans-serif"] = ["DejaVu Sans"]
+    matplotlib.rcParams["axes.unicode_minus"] = False
+    # Skip LastResortHE fallback (fragile across venv recreations).
+    matplotlib.rcParams["font.enable_last_resort"] = False
+
+
+_configure_matplotlib_fonts()
 
 WidgetPainter = Callable[[ctk.CTkFrame, DatasetAnalytics, "ChartTheme"], None]
 WidgetPredicate = Callable[[DatasetAnalytics], bool]
@@ -75,6 +118,10 @@ _CELL_FIGSIZE = (3.2, 2.55)
 _CELL_FIGSIZE_WIDE = (6.6, 2.55)  # orphan last-row span (full board width)
 _DONUT_RIGHT = 0.58  # leave room for external legend labels
 _AI_PADX = 10
+# Logical chart DPI (Tk display size). Rasterize at SUPERSAMPLE× then LANCZOS
+# down so axis/title glyphs stay sharp on HiDPI without enlarging the cell.
+_CHART_BASE_DPI = 100
+_CHART_SUPERSAMPLE = 2
 # Prefer growing the project window with content; scroll only past this cap.
 ANALYTICS_SCROLL_SCREEN_FRACTION = 0.70
 ANALYTICS_SCROLL_MIN_HEIGHT = 220
@@ -100,6 +147,7 @@ class ChartTheme:
     normative_band: str
     normative_bound: str
     outlier_bar: str
+    overflow_bar: str
     palette: tuple[str, ...]
 
 
@@ -205,6 +253,7 @@ def load_chart_theme() -> ChartTheme:
     normative_band = _theme_mpl(analytics.get("normative_band_color", ["#DCE4EE", "#1E3A5F"]))
     normative_bound = _theme_mpl(analytics.get("normative_bound_color", spine))
     outlier_bar = _theme_mpl(analytics.get("outlier_bar_color", muted))
+    overflow_bar = _theme_mpl(analytics.get("overflow_bar_color", ["#DC2626", "#F87171"]))
 
     raw_palette = analytics.get("palette")
     if isinstance(raw_palette, list) and raw_palette:
@@ -223,6 +272,7 @@ def load_chart_theme() -> ChartTheme:
         normative_band=normative_band,
         normative_bound=normative_bound,
         outlier_bar=outlier_bar,
+        overflow_bar=overflow_bar,
         palette=palette,
     )
 
@@ -241,19 +291,38 @@ def analytics_scrollbar_needed(content_height: int, viewport_height: int) -> boo
     return content_height > viewport_height
 
 
-def _wheel_notches(delta: int) -> int:
+def _wheel_notches(delta: int, widget: tk.Misc | None = None) -> int:
     """Map a platform MouseWheel delta to a small signed notch count (±1…3)."""
-    if not delta:
-        return 0
-    if sys.platform.startswith("win"):
-        notches = -int(delta / 120)
-        if notches == 0:
-            notches = -1 if delta > 0 else 1
-    else:
-        # darwin/X11: dampen large trackpad bursts so one gesture ≠ full page.
-        magnitude = min(3, max(1, abs(int(delta))))
-        notches = -magnitude if delta > 0 else magnitude
-    return notches
+    return mouse_wheel_notches(delta, widget)
+
+
+# Widget class names that should not drive the analytics board scroll (match CTk).
+_SCROLL_EXCLUDE_TYPES = frozenset({"CTkScrollbar", "CTkSlider", "CTkTextbox"})
+
+
+def _event_targets_analytics_scroll(scroll: ctk.CTkScrollableFrame, widget: object) -> bool:
+    """True when ``widget`` is under this scroll's canvas/inner frame.
+
+    Walks ``master`` ourselves. CTk's ``_check_if_valid_scroll`` recurses via
+    ``self._check_if_valid_scroll``, so it cannot be reused after we neuter that
+    attribute to disable CTk's captured ``bind_all`` handler.
+    """
+    canvas = getattr(scroll, "_parent_canvas", None)
+    if canvas is None or widget is None:
+        return False
+    current: object | None = widget
+    for _depth in range(64):
+        if current is None:
+            return False
+        if current is canvas or current is scroll:
+            return True
+        if type(current).__name__ in _SCROLL_EXCLUDE_TYPES:
+            return False
+        parent_canvas = getattr(current, "_parent_canvas", None)
+        if parent_canvas is canvas and parent_canvas is not None:
+            return True
+        current = getattr(current, "master", None)
+    return False
 
 
 def configure_granular_scroll(
@@ -263,21 +332,34 @@ def configure_granular_scroll(
 ) -> None:
     """Pixel-level mouse-wheel steps; scrollbar ``moveto`` stays native (no flicker).
 
-    CTk's default darwin ``yscrollincrement`` and raw ``event.delta`` can jump
-    nearly a full viewport per wheel notch — dampen the wheel only. Rewriting
-    scrollbar ``moveto`` fights thumb drag and causes flicker.
+    CTk ``bind_all`` captures ``_mouse_wheel_all`` at init — assigning a new
+    method on the instance does nothing. We neuter CTk's captured handler via
+    ``_check_if_valid_scroll``, then ``bind_all`` our own (Tk-aware notches).
+
+    Setting ``yscrollincrement=1`` without replacing the handler made Aqua
+    scroll *slower* (CTk defaults to 8px/notch on darwin).
     """
     canvas = getattr(scroll, "_parent_canvas", None)
     if canvas is None:
         return
+    if getattr(scroll, "_analytics_granular_scroll", False):
+        return
+    scroll._analytics_granular_scroll = True  # type: ignore[attr-defined]
 
     step = max(1, int(step_px))
     canvas.configure(yscrollincrement=1, xscrollincrement=1)
 
     def _mouse_wheel_all(event: tk.Event) -> str | None:
-        if not scroll.check_if_master_is_canvas(event.widget):
+        if not _event_targets_analytics_scroll(scroll, event.widget):
             return None
-        notches = _wheel_notches(int(getattr(event, "delta", 0) or 0))
+        delta = int(getattr(event, "delta", 0) or 0)
+        if delta == 0:
+            num = getattr(event, "num", None)
+            if num == 4:
+                delta = 1
+            elif num == 5:
+                delta = -1
+        notches = _wheel_notches(delta, scroll)
         if notches == 0:
             return None
         if canvas.yview() == (0.0, 1.0):
@@ -285,7 +367,13 @@ def configure_granular_scroll(
         canvas.yview_scroll(notches * step, "units")
         return "break"
 
+    # Neuter CTk's bind_all-captured handler (it still calls this attribute).
+    scroll._check_if_valid_scroll = lambda _w: False  # type: ignore[method-assign]
     scroll._mouse_wheel_all = _mouse_wheel_all  # type: ignore[method-assign]
+    scroll.bind_all("<MouseWheel>", _mouse_wheel_all, add="+")
+    if sys.platform.startswith("linux"):
+        scroll.bind_all("<Button-4>", _mouse_wheel_all, add="+")
+        scroll.bind_all("<Button-5>", _mouse_wheel_all, add="+")
 
 
 def plan_board_layout(widgets: Sequence[WidgetSpec], *, cols: int | None = None) -> BoardLayout:
@@ -319,8 +407,8 @@ def _flow_placements(
 
 
 def _style_axes(ax: Axes, theme: ChartTheme) -> None:
-    ax.tick_params(colors=theme.text, labelsize=7)
-    ax.title.set_fontsize(8)
+    ax.tick_params(colors=theme.text, labelsize=8)
+    ax.title.set_fontsize(9)
     ax.title.set_color(theme.text)
     for spine in ax.spines.values():
         spine.set_color(theme.spine)
@@ -421,7 +509,7 @@ def build_chart_figure(
     legend_gutter: bool = False,
 ) -> Figure:
     """Fixed plot + optional caption band — stable under embed (no tight crop)."""
-    fig = Figure(figsize=figsize, dpi=100, layout=None, facecolor=theme.fig)
+    fig = Figure(figsize=figsize, dpi=_CHART_BASE_DPI, layout=None, facecolor=theme.fig)
     fig.patch.set_facecolor(theme.fig)
     left = 0.06 if legend_gutter else 0.14
     right = _DONUT_RIGHT if legend_gutter else 0.96
@@ -448,7 +536,7 @@ def build_chart_figure(
             ha="center",
             va="center",
             color=theme.muted,
-            fontsize=7,
+            fontsize=8,
             transform=cap_ax.transAxes,
         )
     else:
@@ -457,6 +545,49 @@ def build_chart_figure(
     ax.set_facecolor(theme.fig)
     paint(ax)
     return fig
+
+
+def _rasterize_figure_png(fig: Figure, theme: ChartTheme) -> Image.Image:
+    """Render at supersampled DPI, then LANCZOS-down to logical chart pixels."""
+    render_dpi = _CHART_BASE_DPI * _CHART_SUPERSAMPLE
+    buf = io.BytesIO()
+
+    def _savefig() -> None:
+        fig.savefig(
+            buf,
+            format="png",
+            dpi=render_dpi,
+            facecolor=theme.fig,
+            edgecolor="none",
+            transparent=False,
+        )
+
+    try:
+        _savefig()
+    except (FileNotFoundError, OSError) as exc:
+        # Stale font cache / deleted .venv fonts mid-session — rebuild once and retry.
+        logger.warning("Analytics chart rasterize font failure (%s); refreshing fonts", exc)
+        buf.seek(0)
+        buf.truncate(0)
+        _configure_matplotlib_fonts(force_rebuild=True)
+        _savefig()
+    except ValueError as exc:
+        if "font" not in str(exc).lower():
+            raise
+        logger.warning("Analytics chart rasterize font failure (%s); refreshing fonts", exc)
+        buf.seek(0)
+        buf.truncate(0)
+        _configure_matplotlib_fonts(force_rebuild=True)
+        _savefig()
+    buf.seek(0)
+    hi = Image.open(buf).convert("RGBA")
+    if _CHART_SUPERSAMPLE <= 1:
+        return hi
+    logical = (
+        max(1, hi.width // _CHART_SUPERSAMPLE),
+        max(1, hi.height // _CHART_SUPERSAMPLE),
+    )
+    return hi.resize(logical, Image.Resampling.LANCZOS)
 
 
 def _embed_figure(
@@ -471,29 +602,37 @@ def _embed_figure(
     Uses ``ImageTk.PhotoImage`` directly (ImageViewer pattern), not ``CTkImage``.
     CTkImage's scale-cache can drop PhotoImages without dispose on DPI/window resize,
     and those finalizers then crash when GC runs on a DICOM worker thread.
+
+    When the cell already has a chart label (bin-width re-paint), swap the image
+    in place so the dashboard does not flash empty.
     """
+    from anonymizer.view.common.ctk_safe import dispose_photo_image
+
     organ_hit = getattr(fig, "_analytics_organ_hit", None)
-    buf = io.BytesIO()
     try:
-        fig.savefig(
-            buf,
-            format="png",
-            dpi=100,
-            facecolor=theme.fig,
-            edgecolor="none",
-            transparent=False,
-        )
-        buf.seek(0)
-        pil_image = Image.open(buf).convert("RGBA")
+        pil_image = _rasterize_figure_png(fig, theme)
         photo_image = ImageTk.PhotoImage(pil_image)
+        existing = list(getattr(frame, "_mpl_images", None) or [])
+        prior = existing[0] if existing else None
+        if isinstance(prior, tuple) and len(prior) >= 2:
+            label, old_photo = prior[0], prior[1]
+            with contextlib.suppress(Exception):
+                label.configure(image=photo_image)
+            label.image = photo_image  # type: ignore[attr-defined]
+            frame._mpl_images = [(label, photo_image, pil_image)]  # type: ignore[attr-defined]
+            dispose_photo_image(frame, old_photo)
+            if isinstance(organ_hit, dict):
+                _bind_organ_histogram_interactions(
+                    label, organ_hit, on_bar_activate=on_organ_bar_activate
+                )
+            return
+
         label = ctk.CTkLabel(frame, text="", image=photo_image, fg_color="transparent")
         # Expand so the image sits in the cell rather than hugging the left edge.
         label.pack(padx=2, pady=2, expand=True)
         # Strong refs like ImageViewer: widget.image + PhotoImage + PIL.
         label.image = photo_image  # type: ignore[attr-defined]
-        refs: list[Any] = getattr(frame, "_mpl_images", [])
-        refs.append((label, photo_image, pil_image))
-        frame._mpl_images = refs  # type: ignore[attr-defined]
+        frame._mpl_images = [(label, photo_image, pil_image)]  # type: ignore[attr-defined]
         if isinstance(organ_hit, dict):
             _bind_organ_histogram_interactions(
                 label, organ_hit, on_bar_activate=on_organ_bar_activate
@@ -531,14 +670,14 @@ def _donut(ax: Axes, theme: ChartTheme, dist: Distribution, title: str) -> None:
         [f"{label} ({count})" for label, count in zip(labels, sizes, strict=False)],
         loc="center left",
         bbox_to_anchor=(1.02, 0.5),
-        fontsize=7,
+        fontsize=8,
         frameon=False,
         handlelength=1.0,
         borderaxespad=0.0,
     )
     for text in legend.get_texts():
         text.set_color(theme.text)
-    ax.set_title(title, fontsize=8, color=theme.text, pad=4)
+    ax.set_title(title, fontsize=9, color=theme.text, pad=4)
     ax.set_aspect("equal")
 
 
@@ -558,9 +697,14 @@ def _count_hbar(ax: Axes, theme: ChartTheme, dist: Distribution, title: str) -> 
     y = range(len(labels))
     ax.barh(list(y), values, color=theme.accent, height=0.6)
     ax.set_yticks(list(y), labels=labels)
+    # Same orientation as histogram ylabel "patients" (rotation 90, bottom→top).
+    for tick in ax.get_yticklabels():
+        tick.set_rotation(90)
+        tick.set_ha("center")
+        tick.set_va("bottom")
     ax.invert_yaxis()
     ax.set_title(title)
-    ax.set_xlabel(_("count"), fontsize=7, color=theme.muted)
+    ax.set_xlabel(_("count"), fontsize=8, color=theme.muted)
     _style_axes(ax, theme)
     _set_count_axis_ticks(ax, max(values), axis="x")
 
@@ -570,57 +714,105 @@ def _age_histogram(ax: Axes, theme: ChartTheme, age: AgeHistogram) -> None:
     edges = age_histogram_bin_edges(samples)
     counts, _bins, _patches = ax.hist(samples, bins=edges, color=theme.accent, edgecolor=theme.wedge_edge)
     ax.set_xlim(edges[0], edges[-1])
-    ax.set_xlabel(_("Age (years)"), fontsize=7, color=theme.muted)
-    ax.set_ylabel(_("patients"), fontsize=7, color=theme.muted)
+    ax.set_xlabel(_("Age (years)"), fontsize=8, color=theme.muted)
+    ax.set_ylabel(_("patients"), fontsize=8, color=theme.muted)
     ax.set_title(_chart_title(_("Age at study"), age.known_total))
     _style_axes(ax, theme)
     _set_count_axis_ticks(ax, max(counts) if len(counts) else 1)
 
 
-def _organ_histogram(ax: Axes, theme: ChartTheme, organ: OrganVolumeDistribution) -> None:
+def _organ_histogram(
+    ax: Axes,
+    theme: ChartTheme,
+    organ: OrganVolumeDistribution,
+    *,
+    bin_width_pct: float | None = None,
+) -> None:
+    """One axis: main bins + same-width red sentinel; // break at plot edge."""
     samples = list(organ.samples)
     samples_ml = [s.ml for s in samples]
-    title = _chart_title(
-        _("{organ} volume (ml)").format(organ=organ_display_name(organ.organ_name)),
-        organ.patient_count,
+    if bin_width_pct is None:
+        bin_width_pct = get_organ_bin_width_pct()
+    plot_lo, plot_hi, norm_lo, norm_hi, bin_width = organ_volume_axis_span(
+        samples_ml, organ_name=organ.organ_name, bin_width_pct=bin_width_pct
     )
-    axis_lo, axis_hi, norm_lo, norm_hi, bin_width = organ_volume_axis_span(
-        samples_ml, organ_name=organ.organ_name
+    edges = organ_volume_bin_edges(
+        samples_ml, organ_name=organ.organ_name, bin_width_pct=bin_width_pct
     )
-    edges = organ_volume_bin_edges(samples_ml, organ_name=organ.organ_name)
-    # Normative band + two dotted bounds on every organ volume histogram.
+    has_under = bool(edges) and float(edges[0]) < plot_lo - 1e-9
+    has_over = bool(edges) and float(edges[-1]) > plot_hi + 1e-9
+
     ax.axvspan(norm_lo, norm_hi, color=theme.normative_band, alpha=0.35, zorder=0, lw=0)
     ax.axvline(norm_lo, color=theme.normative_bound, linestyle="--", linewidth=1.0, zorder=3)
     ax.axvline(norm_hi, color=theme.normative_bound, linestyle="--", linewidth=1.0, zorder=3)
+
     max_count = 1.0
+    under_n = over_n = 0
     if samples_ml:
+        hist_vals = organ_volume_clip_samples_for_hist(
+            samples_ml, edges, plot_lo=plot_lo, plot_hi=plot_hi
+        )
         counts, bin_edges, patches = ax.hist(
-            samples_ml,
+            hist_vals,
             bins=edges,
             color=theme.accent,
             edgecolor=theme.wedge_edge,
             zorder=2,
         )
-        for patch, left, right in zip(patches, bin_edges[:-1], bin_edges[1:], strict=False):
+        last = len(patches) - 1
+        for i, (patch, left, right) in enumerate(
+            zip(patches, bin_edges[:-1], bin_edges[1:], strict=False)
+        ):
+            count_i = float(counts[i])
+            if (has_under and i == 0) or (has_over and i == last):
+                if count_i > 0:
+                    if has_under and i == 0:
+                        under_n = int(count_i)
+                    else:
+                        over_n = int(count_i)
+                    patch.set_facecolor(theme.overflow_bar)
+                continue
             mid = 0.5 * (float(left) + float(right))
             if mid < norm_lo or mid > norm_hi:
                 patch.set_facecolor(theme.outlier_bar)
         max_count = float(max(counts) if len(counts) else 1)
-    ax.set_xlim(edges[0], edges[-1])
-    # Clean ml ticks only — do not force-label normative min/max (clutter/overwrite).
-    ax.set_xticks(organ_volume_ml_tick_values(axis_lo, axis_hi, bin_width))
-    ax.set_xlabel(_("ml"), fontsize=7, color=theme.muted)
-    ax.set_ylabel(_("patients"), fontsize=7, color=theme.muted)
-    ax.set_title(title)
+
+    if under_n > 0:
+        _draw_axis_break_at(ax, plot_lo, bin_width, theme)
+    if over_n > 0:
+        _draw_axis_break_at(ax, plot_hi, bin_width, theme)
+
+    ax.set_xlim(float(edges[0]), float(edges[-1]))
+    # Main-span ticks only — no labels in the sentinel column.
+    ax.set_xticks(organ_volume_ml_tick_values(plot_lo, plot_hi, bin_width))
+    ax.set_xlabel(_("ml"), fontsize=8, color=theme.muted)
+    ax.set_ylabel(_("patients"), fontsize=8, color=theme.muted)
+    ax.set_title(
+        _chart_title(
+            _("{organ} volume (ml)").format(organ=organ_display_name(organ.organ_name)),
+            organ.patient_count,
+        )
+    )
     _style_axes(ax, theme)
     _set_count_axis_ticks(ax, max_count)
-    # Hit-test metadata for bar tooltips / double-click and Norm band tip.
+
     pos = ax.get_position()
-    bins_meta = _organ_bar_bin_hits(samples, edges)
+    bins_meta = _organ_bar_bin_hits(
+        samples,
+        edges,
+        plot_lo=plot_lo,
+        plot_hi=plot_hi,
+        norm_lo=norm_lo,
+        norm_hi=norm_hi,
+        has_underflow=has_under,
+        has_overflow=has_over,
+    )
     ax.figure._analytics_organ_hit = {  # type: ignore[attr-defined]
         "organ_name": organ.organ_name,
         "norm_lo": float(norm_lo),
         "norm_hi": float(norm_hi),
+        "main_lo": float(plot_lo),
+        "main_hi": float(plot_hi),
         "axis_lo": float(edges[0]),
         "axis_hi": float(edges[-1]),
         "axes_bbox": (float(pos.x0), float(pos.y0), float(pos.x1), float(pos.y1)),
@@ -632,24 +824,86 @@ def _organ_histogram(ax: Axes, theme: ChartTheme, organ: OrganVolumeDistribution
     }
 
 
+def _draw_axis_break_at(ax: Axes, x: float, bin_width: float, theme: ChartTheme) -> None:
+    """Simple // mark on the x-spine where the main axis ends and the sentinel begins."""
+    dx = 0.25 * float(bin_width)
+    # x in data coords, y in axes fraction (0 = bottom spine).
+    trans = ax.get_xaxis_transform()
+    kwargs = dict(color=theme.muted, clip_on=False, linewidth=1.6, zorder=5)
+    for shift in (-0.35 * dx, 0.35 * dx):
+        ax.plot(
+            [x + shift - dx, x + shift + dx],
+            [-0.03, 0.05],
+            transform=trans,
+            **kwargs,
+        )
+
+
+def _extreme_hover_tip(mls: Sequence[float]) -> str:
+    """n=1 → single value; else min–max · n (same pattern as main bins)."""
+    values = [float(v) for v in mls]
+    n = len(values)
+    if n <= 0:
+        return _("n=0")
+    if n == 1:
+        return _("{val} ml · n=1").format(val=_format_ml_bound(values[0]))
+    return _("{lo}–{hi} ml · n={n}").format(
+        lo=_format_ml_bound(min(values)),
+        hi=_format_ml_bound(max(values)),
+        n=n,
+    )
+
+
 def _organ_bar_bin_hits(
     samples: Sequence[OrganVolumeSample],
     edges: Sequence[float],
+    *,
+    plot_lo: float | None = None,
+    plot_hi: float | None = None,
+    norm_lo: float | None = None,
+    norm_hi: float | None = None,
+    has_underflow: bool = False,
+    has_overflow: bool = False,
 ) -> list[dict[str, Any]]:
-    """Per-bin tip metadata; patient ids from ``organ_volume_bin_patient_ids``."""
+    """Per-bin tip metadata; extreme tips use true ml values."""
     if len(edges) < 2:
         return []
-    id_bins = organ_volume_bin_patient_ids(samples, edges)
+    lo_bound = float(plot_lo if plot_lo is not None else edges[0])
+    hi_bound = float(plot_hi if plot_hi is not None else edges[-1])
+    n_lo = float(norm_lo if norm_lo is not None else lo_bound)
+    n_hi = float(norm_hi if norm_hi is not None else hi_bound)
+    id_bins = organ_volume_bin_patient_ids(
+        samples, edges, plot_lo=lo_bound, plot_hi=hi_bound
+    )
+    under_mls = [float(s.ml) for s in samples if float(s.ml) < lo_bound]
+    over_mls = [float(s.ml) for s in samples if float(s.ml) > hi_bound]
+    last = len(id_bins) - 1
     bins: list[dict[str, Any]] = []
     for i, patients in enumerate(id_bins):
         lo = float(edges[i])
         hi = float(edges[i + 1])
         count = len(patients)
-        tip = _("{lo}–{hi} ml · n={n}").format(
-            lo=_format_ml_bound(lo),
-            hi=_format_ml_bound(hi),
-            n=count,
-        )
+        if has_underflow and i == 0:
+            tip = _extreme_hover_tip(under_mls)
+            kind = "underflow"
+        elif has_overflow and i == last:
+            tip = _extreme_hover_tip(over_mls)
+            kind = "overflow"
+        else:
+            mid = 0.5 * (lo + hi)
+            if mid < n_lo or mid > n_hi:
+                tip = _("Outside norm: {lo}–{hi} ml · n={n}").format(
+                    lo=_format_ml_bound(lo),
+                    hi=_format_ml_bound(hi),
+                    n=count,
+                )
+            else:
+                tip = _("{lo}–{hi} ml · n={n}").format(
+                    lo=_format_ml_bound(lo),
+                    hi=_format_ml_bound(hi),
+                    n=count,
+                )
+            kind = "main"
         bins.append(
             {
                 "lo": lo,
@@ -657,6 +911,7 @@ def _organ_bar_bin_hits(
                 "count": count,
                 "patient_ids": patients,
                 "tip": tip,
+                "kind": kind,
             }
         )
     return bins
@@ -723,8 +978,15 @@ def _bind_organ_histogram_interactions(
     *,
     on_bar_activate: OrganBarActivate | None = None,
 ) -> None:
-    """Bar tip (value + n) preferred; Norm tip on empty band; double-click selects patients."""
+    """Bar tip (value + n) preferred; Norm tip on empty band; double-click selects patients.
+
+    Hit data is stored on the label so bin-width in-place image swaps can refresh
+    tip/click targets without stacking another MotionTooltipController.
+    """
     label._analytics_organ_hit = hit  # type: ignore[attr-defined]
+    if getattr(label, "_analytics_organ_bound", False):
+        return
+    label._analytics_organ_bound = True  # type: ignore[attr-defined]
 
     def _text_for_position(event: tk.Event) -> str | None:
         return _organ_histogram_tooltip_at(label, event)
@@ -735,16 +997,19 @@ def _bind_organ_histogram_interactions(
         return
 
     def _on_double_click(event: tk.Event) -> str | None:
-        data_x = _figure_data_x_at(label, hit, event)
+        current = getattr(label, "_analytics_organ_hit", None)
+        if not isinstance(current, dict):
+            return None
+        data_x = _figure_data_x_at(label, current, event)
         if data_x is None:
             return None
-        bar = _bin_at_data_x(hit, data_x)
+        bar = _bin_at_data_x(current, data_x)
         if bar is None or int(bar.get("count") or 0) <= 0:
             return None
         patient_ids = tuple(str(p) for p in (bar.get("patient_ids") or ()))
         if not patient_ids:
             return None
-        on_bar_activate(str(hit.get("organ_name") or ""), patient_ids)
+        on_bar_activate(str(current.get("organ_name") or ""), patient_ids)
         return "break"
 
     label.bind("<Double-Button-1>", _on_double_click, add="+")
@@ -832,10 +1097,11 @@ def build_organ_figure(
     organ: OrganVolumeDistribution,
     *,
     figsize: tuple[float, float] = _CELL_FIGSIZE,
+    bin_width_pct: float | None = None,
 ) -> Figure:
     return build_chart_figure(
         theme,
-        lambda ax: _organ_histogram(ax, theme, organ),
+        lambda ax: _organ_histogram(ax, theme, organ, bin_width_pct=bin_width_pct),
         figsize=figsize,
     )
 
@@ -903,17 +1169,17 @@ def _paint_ai_labels(cell: ctk.CTkFrame, analytics: DatasetAnalytics, theme: Cha
         holder,
         text=_("AI COVERAGE"),
         text_color=theme.text,
-        anchor="w",
+        anchor="center",
         font=ctk.CTkFont(size=12),
-    ).pack(anchor="w", pady=(0, 4))
+    ).pack(anchor="center", fill="x", pady=(0, 4))
     for line in lines:
         ctk.CTkLabel(
             holder,
             text=line,
             text_color=theme.accent,
-            anchor="w",
+            anchor="center",
             font=ctk.CTkFont(size=13),
-        ).pack(anchor="w", pady=1)
+        ).pack(anchor="center", fill="x", pady=1)
 
 
 def _make_organ_painter(
@@ -947,15 +1213,38 @@ class BoardSections:
 
     @property
     def ordered(self) -> tuple[WidgetSpec, ...]:
-        """2-col flow: sex, age, modality, volumes…, AI, then other charts.
+        """2-col flow: pair AI beside Sex, else Age, else Ethnicity when present.
 
-        Volumes (or AI when none selected) always follow modality so both
-        columns fill before wrapping.
+        Remaining order: modality, selected volumes, then other charts.
         """
-        pre = [c for c in self.charts if c.key in {"sex", "age"}]
+        ai = [t for t in self.texts if t.key == "ai"]
+        other_texts = [t for t in self.texts if t.key != "ai"]
+
+        head = [c for c in self.charts if c.key in {"sex", "age"}]
         modality = [c for c in self.charts if c.key == "modality"]
         post = [c for c in self.charts if c.key not in {"sex", "age", "modality"}]
-        return tuple(pre + modality + list(self.organs) + list(self.texts) + post)
+
+        sequence: list[WidgetSpec] = head + modality + list(self.organs) + post + other_texts
+        if not ai:
+            return tuple(sequence)
+
+        insert_after: int | None = None
+        for key in ("sex", "age", "ethnicity"):
+            for i, widget in enumerate(sequence):
+                if widget.key == key:
+                    insert_after = i
+                    break
+            if insert_after is not None:
+                break
+
+        if insert_after is not None:
+            i = insert_after
+            return tuple(sequence[: i + 1] + ai + sequence[i + 1 :])
+
+        for i, widget in enumerate(sequence):
+            if widget.key == "modality":
+                return tuple(sequence[: i + 1] + ai + sequence[i + 1 :])
+        return tuple(ai + sequence)
 
     @property
     def all(self) -> tuple[WidgetSpec, ...]:
@@ -971,17 +1260,41 @@ BOARD_WIDGETS: tuple[WidgetSpec, ...] = (
 )
 
 
+def relevant_board_widget_keys(
+    analytics: DatasetAnalytics,
+    *,
+    widgets: Sequence[WidgetSpec] | None = None,
+) -> tuple[str, ...]:
+    """BOARD_WIDGET keys that have data for this snapshot (Show picker rows)."""
+    registry = tuple(widgets) if widgets is not None else BOARD_WIDGETS
+    return tuple(spec.key for spec in registry if spec.relevant(analytics))
+
+
 def select_board_sections(
     analytics: DatasetAnalytics,
     *,
     widgets: Sequence[WidgetSpec] | None = None,
     selected_organs: Sequence[str] | None = None,
+    selected_board_widgets: Sequence[str] | None = None,
     on_organ_bar_activate: OrganBarActivate | None = None,
 ) -> BoardSections:
-    """Relevance filter + organ selection; use ``.ordered`` / ``.all`` for layout."""
+    """Relevance filter + organ/board selection; use ``.ordered`` / ``.all`` for layout."""
     registry = tuple(widgets) if widgets is not None else BOARD_WIDGETS
-    charts = tuple(spec for spec in registry if spec.graphical and spec.relevant(analytics))
-    texts = tuple(spec for spec in registry if not spec.graphical and spec.relevant(analytics))
+    allowed_keys = None if selected_board_widgets is None else {name for name in selected_board_widgets if name}
+    charts = tuple(
+        spec
+        for spec in registry
+        if spec.graphical
+        and spec.relevant(analytics)
+        and (allowed_keys is None or spec.key in allowed_keys)
+    )
+    texts = tuple(
+        spec
+        for spec in registry
+        if not spec.graphical
+        and spec.relevant(analytics)
+        and (allowed_keys is None or spec.key in allowed_keys)
+    )
     available = analytics.anatomy.organ_volumes
     if selected_organs is None:
         names = set(default_selected_organ_names(available))
@@ -1004,6 +1317,7 @@ def select_widgets(
     *,
     widgets: Sequence[WidgetSpec] | None = None,
     selected_organs: Sequence[str] | None = None,
+    selected_board_widgets: Sequence[str] | None = None,
     on_organ_bar_activate: OrganBarActivate | None = None,
 ) -> tuple[WidgetSpec, ...]:
     """Ordered board widgets: fill both columns before wrapping to the next row."""
@@ -1011,6 +1325,7 @@ def select_widgets(
         analytics,
         widgets=widgets,
         selected_organs=selected_organs,
+        selected_board_widgets=selected_board_widgets,
         on_organ_bar_activate=on_organ_bar_activate,
     ).ordered
 
@@ -1045,7 +1360,7 @@ def _render_placement(
         row=placement.row,
         column=placement.col,
         columnspan=placement.colspan,
-        sticky="nsew",
+        sticky="new",
         padx=6,
         pady=6,
     )
@@ -1073,12 +1388,16 @@ def _repaint_cell(
     theme: ChartTheme,
     figsize: tuple[float, float],
 ) -> None:
-    _clear_children(cell)
     cell._analytics_figsize = figsize  # type: ignore[attr-defined]
+    # Figure cells swap the PhotoImage in place (_embed_figure); clearing first
+    # flashes an empty cell (bin-width change flicker).
+    if not getattr(cell, "_mpl_images", None):
+        _clear_children(cell)
     try:
         placement.spec.paint(cell, analytics, theme)
     except Exception:
         logger.exception("Failed to re-paint analytics widget %s", placement.spec.key)
+        _clear_children(cell)
         ctk.CTkLabel(cell, text=_("Chart unavailable"), text_color=theme.muted).pack(expand=True, padx=8, pady=8)
 
 
@@ -1109,15 +1428,19 @@ def sync_widget_section(
     widgets: Sequence[WidgetSpec],
     analytics: DatasetAnalytics,
     theme: ChartTheme | None = None,
+    *,
+    force_repaint_keys: frozenset[str] | None = None,
 ) -> BoardLayout:
     """Update the 2-col flow in place — reuse unchanged cells (no full-board flicker).
 
     Added widgets are painted; removed widgets are destroyed; surviving widgets are
-    only re-gridded (and re-painted when their figsize/span changes).
+    only re-gridded (and re-painted when their figsize/span changes, or when
+    ``force_repaint_keys`` names them — e.g. organ histograms after bin-width change).
     """
     resolved = theme or load_chart_theme()
     layout = plan_board_layout(widgets)
     cells: dict[str, ctk.CTkFrame] = dict(getattr(host, "_analytics_cells", {}) or {})
+    force = force_repaint_keys or frozenset()
 
     wanted_keys = {p.spec.key for p in layout.placements}
     for key, cell in list(cells.items()):
@@ -1143,12 +1466,12 @@ def sync_widget_section(
             row=placement.row,
             column=placement.col,
             columnspan=placement.colspan,
-            sticky="nsew",
+            sticky="new",
             padx=6,
             pady=6,
         )
         prev = getattr(cell, "_analytics_figsize", None)
-        if prev != figsize:
+        if prev != figsize or key in force:
             _repaint_cell(cell, placement, analytics, resolved, figsize)
         else:
             cell._analytics_figsize = figsize  # type: ignore[attr-defined]
@@ -1176,6 +1499,7 @@ def render_analytics_board(
     *,
     widgets: Sequence[WidgetSpec] | None = None,
     selected_organs: Sequence[str] | None = None,
+    selected_board_widgets: Sequence[str] | None = None,
     on_organ_bar_activate: OrganBarActivate | None = None,
 ) -> BoardLayout:
     """Fill ``board`` via ``plan_board_layout``; returns the layout used."""
@@ -1184,6 +1508,7 @@ def render_analytics_board(
         analytics,
         widgets=widgets,
         selected_organs=selected_organs,
+        selected_board_widgets=selected_board_widgets,
         on_organ_bar_activate=on_organ_bar_activate,
     )
     layout = plan_board_layout(active)

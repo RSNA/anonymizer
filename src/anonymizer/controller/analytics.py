@@ -37,13 +37,29 @@ from typing import Any
 
 from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir
 from anonymizer.controller.ai.tseg.config import PRIMARY_SEGMENT_GROUPS
+from anonymizer.controller.ai.tseg.contrast import truncal_anatomy_present
 from anonymizer.controller.ai.tseg.seg_retention import (
     aggregate_primary_segment_voxels,
+    ensure_organ_volumes_ml,
     read_mask_geometry,
     read_primary_segment_voxels,
     read_structure_voxels,
+    resolve_primary_segment_files,
+    voxels_to_ml,
 )
-from anonymizer.controller.ai.tseg.segment import dominant_region_from_voxels
+from anonymizer.controller.ai.tseg.segment import (
+    body_parts_present,
+    collect_structure_voxels_from_masks,
+    dominant_region_from_voxels,
+)
+from anonymizer.controller.analytics_ledger import (
+    SeriesLedgerRow,
+    ledger_exists,
+    read_ledger_rows,
+    replace_ledger_rows,
+    upsert_series_row,
+    utc_now_iso,
+)
 from anonymizer.model.anonymizer import AnonymizerModel, Study
 from anonymizer.utils.modalities import is_tseg_modality
 from anonymizer.utils.translate import _
@@ -60,6 +76,36 @@ TOP_ORGANS_N = 2  # default checked count in the Volumes picker
 MODALITY_FILTER_TOP_N = 6
 # Volumes picker / histograms: every Series View primary latch group (TS grouping).
 VOLUME_SEGMENT_GROUPS: frozenset[str] = frozenset(PRIMARY_SEGMENT_GROUPS)
+# Organs whose normative windows assume truncal / whole-column FOV. On head-limited
+# series (no Chest/Abdomen latch mass) these are incomplete by construction — omit
+# from volume histograms rather than amber-flag against whole-body norms.
+# Note: TS does export cervical vertebrae_C1–C7 (and spinal_cord) on head FOV, but
+# the ``spine`` group still unions C+T+L+S; head CT typically only sees C1–C2.
+HEAD_LIMITED_EXCLUDED_ORGANS: frozenset[str] = frozenset(
+    {
+        "spine",
+        "spinal_cord",
+        "ribs",
+        "clavicles",
+        "heart",
+        "lungs",
+        "trachea",
+        "liver",
+        "spleen",
+        "kidneys",
+        "stomach",
+        "pancreas",
+    }
+)
+# Absolute ml vs FreeSurfer/MRI norms is misleading for these TS CT labels
+# (systematic ~2× inflation). Keep segmentation overlays; omit volume charts
+# until a method-matched healthy band exists (see organ_volume_ranges_ml.json).
+NORM_MISMATCH_EXCLUDED_ORGANS: frozenset[str] = frozenset({"brainstem"})
+# Floor when resolving user % of base span into an effective bin width.
+ORGAN_VOLUME_MIN_BIN_WIDTH_ML = 0.1
+# Clamp for persisted ``organ_bin_width_pct`` (percent of padded normative span).
+ORGAN_VOLUME_BIN_WIDTH_PCT_MIN = 1.0
+ORGAN_VOLUME_BIN_WIDTH_PCT_MAX = 20.0
 BODY_REGIONS: tuple[str, ...] = ("Head", "Chest", "Abdomen")
 _DICOM_DATE_RE = re.compile(r"^(\d{4})(\d{2})(\d{2})$")
 MODALITY_FILTER_ALL = "All"
@@ -243,74 +289,175 @@ def organ_volume_range_ml(organ_name: str) -> tuple[float, float, float]:
         ) from exc
 
 
+# Mild outliers may extend the main axis by at most this many bin widths past the
+# normative pad. Farther samples are extreme → underflow/overflow sentinel bins.
+ORGAN_VOLUME_NEAR_EXTENT_BINS = 2
+
+
+def organ_volume_base_span(organ_name: str) -> tuple[float, float, float, float, float]:
+    """Return ``(base_lo, base_hi, norm_lo, norm_hi, json_bin_width_ml)``.
+
+    Base span is the normative window plus one JSON bin of pad on each side.
+    User coarseness (% of range) is always relative to this stable span — never
+    the sample min–max — so extremes do not thin every bar.
+    """
+    norm_lo, norm_hi, width = organ_volume_range_ml(organ_name)
+    w = float(width)
+    base_lo = max(0.0, float(norm_lo) - w)
+    base_hi = float(norm_hi) + w
+    if base_hi <= base_lo:
+        base_hi = base_lo + w
+    return base_lo, base_hi, float(norm_lo), float(norm_hi), w
+
+
+def effective_bin_width_ml(
+    organ_name: str,
+    bin_width_pct: float | None = None,
+) -> float:
+    """JSON ``bin_width_ml`` when ``bin_width_pct`` is unset; else % of base span."""
+    _base_lo, _base_hi, _nlo, _nhi, json_w = organ_volume_base_span(organ_name)
+    if bin_width_pct is None:
+        return json_w
+    pct = max(
+        ORGAN_VOLUME_BIN_WIDTH_PCT_MIN,
+        min(ORGAN_VOLUME_BIN_WIDTH_PCT_MAX, float(bin_width_pct)),
+    )
+    span = _base_hi - _base_lo
+    return max(ORGAN_VOLUME_MIN_BIN_WIDTH_ML, (pct / 100.0) * span)
+
+
 def organ_volume_axis_span(
     samples: Sequence[float] | None = None,
     *,
     organ_name: str,
+    bin_width_pct: float | None = None,
 ) -> tuple[float, float, float, float, float]:
-    """Return ``(axis_lo, axis_hi, norm_lo, norm_hi, bin_width_ml)``.
+    """Return ``(plot_lo, plot_hi, norm_lo, norm_hi, bin_width_ml)``.
 
-    The axis always covers the normative window from ``organ_volume_ranges_ml.json``,
-    plus one bin of headroom on each side so both dotted normative bounds stay
-    inset (not glued to the plot spine). If any sample falls outside that padded
-    window, extend by whole bin widths so outliers remain visible.
+    Base span is the normative window plus one-bin pad (JSON width). Mild
+    (“near”) outliers may extend that span by at most
+    ``ORGAN_VOLUME_NEAR_EXTENT_BINS`` whole bins of the *effective* width.
+    Extreme samples beyond that do **not** stretch the axis — they use one-bin
+    under/overflow sentinels (see ``organ_volume_bin_edges``).
     """
-    norm_lo, norm_hi, width = organ_volume_range_ml(organ_name)
-    w = float(width)
-    # One-bin pad keeps axvline(norm_lo/hi) visually interior when samples sit
-    # inside the healthy window (otherwise left bound coincides with the spine).
-    axis_lo = max(0.0, float(norm_lo) - w)
-    axis_hi = float(norm_hi) + w
-    if axis_hi <= axis_lo:
-        axis_hi = axis_lo + w
+    base_lo, base_hi, norm_lo, norm_hi, _json_w = organ_volume_base_span(organ_name)
+    w = effective_bin_width_ml(organ_name, bin_width_pct)
+    plot_lo, plot_hi = base_lo, base_hi
     if samples:
+        near_lo_limit = max(0.0, base_lo - ORGAN_VOLUME_NEAR_EXTENT_BINS * w)
+        near_hi_limit = base_hi + ORGAN_VOLUME_NEAR_EXTENT_BINS * w
         s_lo = float(min(samples))
         s_hi = float(max(samples))
-        if s_lo < axis_lo:
-            axis_lo = max(0.0, axis_lo - math.ceil((axis_lo - s_lo) / w) * w)
-        if s_hi > axis_hi:
-            axis_hi += math.ceil((s_hi - axis_hi) / w) * w
-    return axis_lo, axis_hi, float(norm_lo), float(norm_hi), w
+        if near_lo_limit <= s_lo < base_lo:
+            plot_lo = max(0.0, base_lo - math.ceil((base_lo - s_lo) / w) * w)
+        if base_hi < s_hi <= near_hi_limit:
+            plot_hi = base_hi + math.ceil((s_hi - base_hi) / w) * w
+    return plot_lo, plot_hi, float(norm_lo), float(norm_hi), w
 
 
 def organ_volume_bin_edges(
     samples: Sequence[float] | None = None,
     *,
     organ_name: str,
+    bin_width_pct: float | None = None,
 ) -> list[float]:
-    """Fixed-width histogram edges covering normative range plus any sample outliers."""
-    axis_lo, axis_hi, _norm_lo, _norm_hi, w = organ_volume_axis_span(
-        samples, organ_name=organ_name
+    """Fixed-width main edges; one-bin under/overflow sentinels when extremes exist.
+
+    Sentinel width equals one main bin so the red bar matches neighbors in pixels.
+    """
+    plot_lo, plot_hi, _norm_lo, _norm_hi, w = organ_volume_axis_span(
+        samples, organ_name=organ_name, bin_width_pct=bin_width_pct
     )
-    n_bins = max(1, int(math.ceil((axis_hi - axis_lo) / w)))
-    edges = [axis_lo + i * w for i in range(n_bins)]
-    edges.append(axis_lo + n_bins * w)
+    n_main = max(1, int(math.ceil((plot_hi - plot_lo) / w)))
+    edges = [plot_lo + i * w for i in range(n_main)]
+    edges.append(plot_lo + n_main * w)
+    edges[-1] = plot_hi
+    if samples:
+        s_lo = float(min(samples))
+        s_hi = float(max(samples))
+        if s_lo < plot_lo:
+            edges.insert(0, plot_lo - w)
+        if s_hi > plot_hi:
+            edges.append(plot_hi + w)
     return edges
+
+
+def _organ_volume_sentinel_flags(
+    edges: Sequence[float],
+    *,
+    plot_lo: float,
+    plot_hi: float,
+) -> tuple[bool, bool]:
+    """Return ``(has_underflow, has_overflow)`` from edge list vs plot span."""
+    if len(edges) < 2:
+        return False, False
+    has_under = float(edges[0]) < float(plot_lo) - 1e-9
+    has_over = float(edges[-1]) > float(plot_hi) + 1e-9
+    return has_under, has_over
+
+
+def organ_volume_clip_samples_for_hist(
+    samples: Sequence[float],
+    edges: Sequence[float],
+    *,
+    plot_lo: float,
+    plot_hi: float,
+) -> list[float]:
+    """Map extreme under/overflow ml into sentinel bin centers for ``ax.hist``."""
+    if len(edges) < 2:
+        return [float(s) for s in samples]
+    has_under, has_over = _organ_volume_sentinel_flags(edges, plot_lo=plot_lo, plot_hi=plot_hi)
+    under_mid = 0.5 * (float(edges[0]) + float(plot_lo)) if has_under else None
+    over_mid = 0.5 * (float(plot_hi) + float(edges[-1])) if has_over else None
+    out: list[float] = []
+    for raw in samples:
+        ml = float(raw)
+        if ml < plot_lo and under_mid is not None:
+            out.append(under_mid)
+        elif ml > plot_hi and over_mid is not None:
+            out.append(over_mid)
+        else:
+            out.append(ml)
+    return out
 
 
 def organ_volume_bin_patient_ids(
     samples: Sequence[OrganVolumeSample],
     edges: Sequence[float],
+    *,
+    plot_lo: float | None = None,
+    plot_hi: float | None = None,
 ) -> list[tuple[str, ...]]:
-    """Group patient ids into bins matching matplotlib ``hist`` edge semantics.
-
-    Intervals are left-closed / right-open except the last bin, which is closed
-    on the right (same as ``numpy.histogram`` / ``Axes.hist``).
-    """
+    """Group patient ids into bins; extremes go in under/overflow sentinels when present."""
     if len(edges) < 2:
         return []
+    if plot_lo is None or plot_hi is None:
+        plot_lo = float(edges[0]) if plot_lo is None else float(plot_lo)
+        plot_hi = float(edges[-1]) if plot_hi is None else float(plot_hi)
+
+    plot_lo_f = float(plot_lo)
+    plot_hi_f = float(plot_hi)
+    has_under, has_over = _organ_volume_sentinel_flags(edges, plot_lo=plot_lo_f, plot_hi=plot_hi_f)
     buckets: list[list[str]] = [[] for _ in range(len(edges) - 1)]
     last = len(buckets) - 1
+    main_first = 1 if has_under else 0
+    main_last = last - 1 if has_over else last
     for sample in samples:
         ml = float(sample.ml)
+        if has_under and ml < plot_lo_f:
+            buckets[0].append(sample.anon_patient_id)
+            continue
+        if has_over and ml > plot_hi_f:
+            buckets[last].append(sample.anon_patient_id)
+            continue
         placed = False
-        for i in range(last):
+        for i in range(main_first, main_last):
             if edges[i] <= ml < edges[i + 1]:
                 buckets[i].append(sample.anon_patient_id)
                 placed = True
                 break
-        if not placed and edges[last] <= ml <= edges[last + 1]:
-            buckets[last].append(sample.anon_patient_id)
+        if not placed:
+            buckets[main_last].append(sample.anon_patient_id)
     return [tuple(ids) for ids in buckets]
 
 
@@ -816,19 +963,104 @@ def _earliest_study_date(studies: list[Study] | None) -> date | None:
     return min(valid) if valid else None
 
 
-def voxels_to_ml(voxels: int, spacing: list[float] | tuple[float, ...] | None) -> float | None:
-    if voxels <= 0 or not spacing or len(spacing) < 3:
-        return None
-    try:
-        mm3 = float(spacing[0]) * float(spacing[1]) * float(spacing[2])
-    except (TypeError, ValueError):
-        return None
-    if mm3 <= 0:
-        return None
-    return voxels * mm3 / 1000.0
+def series_is_head_limited(structure_voxels: Mapping[str, int] | None) -> bool:
+    """True when Head latch mass is present and Chest/Abdomen are not.
+
+    Uses the same region aggregation as Harmonize body-part labels so volume
+    charts stay consistent with Series View anatomy.
+    """
+    if not structure_voxels:
+        return False
+    region = dominant_region_from_voxels(dict(structure_voxels))
+    if int(region.region_voxels.get("Head", 0)) <= 0:
+        return False
+    label = body_parts_present(region.region_voxels)
+    return not truncal_anatomy_present(label)
+
+
+def _organ_allowed_for_series(organ: str, *, head_limited: bool) -> bool:
+    if organ in NORM_MISMATCH_EXCLUDED_ORGANS:
+        return False
+    if not head_limited:
+        return True
+    return organ not in HEAD_LIMITED_EXCLUDED_ORGANS
+
+
+def _organ_volumes_ml_for_cache(cache_dir: Path) -> dict[str, float]:
+    """Primary-segment volumes in ml for every group with on-disk masks.
+
+    Prefers ``organ_volumes_ml.json`` when fresher than masks (fast Refresh).
+    Otherwise recounts masks once and writes that cache. Falls back to voxel
+    sidecars only when no anatomy masks exist.
+    """
+    volumes = ensure_organ_volumes_ml(cache_dir)
+    if volumes:
+        return volumes
+    return _organ_volumes_ml_from_sidecars(cache_dir)
+
+
+def _organ_volumes_ml_from_sidecars(cache_dir: Path) -> dict[str, float]:
+    """Legacy fallback: sidecar voxel counts × shared ``mask_geometry`` spacing.
+
+    Only used when no anatomy masks are on disk. Sidecar values must be raw
+    voxel counts (post-``reconcile_structure_voxels_from_masks``), not mm³.
+    """
+    geometry = read_mask_geometry(cache_dir)
+    spacing = geometry.get("spacing") if geometry else None
+    if not spacing:
+        return {}
+
+    primary = read_primary_segment_voxels(cache_dir)
+    if primary:
+        counts = {
+            name: count
+            for name, count in primary.items()
+            if name in VOLUME_SEGMENT_GROUPS and count > 0
+        }
+    else:
+        structures = read_structure_voxels(cache_dir)
+        if not structures:
+            return {}
+        aggregated = aggregate_primary_segment_voxels(
+            structures,
+            Path(cache_dir) / "seg",
+            require_masks=False,
+            min_voxels=1,
+        )
+        counts = {
+            name: count
+            for name, count in aggregated.items()
+            if name in VOLUME_SEGMENT_GROUPS and count > 0
+        }
+
+    out: dict[str, float] = {}
+    for name, voxels in counts.items():
+        ml = voxels_to_ml(int(voxels), spacing)
+        if ml is not None:
+            out[name] = ml
+    return out
 
 
 def _organ_counts_for_cache(cache_dir: Path) -> dict[str, int]:
+    """Deprecated path kept for tests: mask voxel totals (not ml)."""
+    seg_dir = Path(cache_dir) / "seg"
+    result: dict[str, int] = {}
+    for group_name in sorted(VOLUME_SEGMENT_GROUPS):
+        files = (
+            resolve_primary_segment_files(seg_dir, group_name)
+            if seg_dir.is_dir()
+            else PRIMARY_SEGMENT_GROUPS.get(group_name, ())
+        )
+        mask_stems = [
+            stem for stem in files if seg_dir.is_dir() and (seg_dir / f"{stem}.nii.gz").is_file()
+        ]
+        if mask_stems:
+            counted = collect_structure_voxels_from_masks(seg_dir, list(mask_stems))
+            total = sum(int(v) for v in counted.values())
+            if total > 0:
+                result[group_name] = total
+    if result:
+        return result
     primary = read_primary_segment_voxels(cache_dir)
     if primary:
         return {
@@ -839,7 +1071,6 @@ def _organ_counts_for_cache(cache_dir: Path) -> dict[str, int]:
     structures = read_structure_voxels(cache_dir)
     if not structures:
         return {}
-    seg_dir = cache_dir / "seg"
     aggregated = aggregate_primary_segment_voxels(
         structures,
         seg_dir,
@@ -871,15 +1102,102 @@ def _iter_series_dirs(images_dir: Path) -> list[Path]:
     return series
 
 
+def _series_anatomy_contribution(
+    series_path: Path,
+    modality: str,
+) -> tuple[list[_RegionHit], list[_OrganSample], SeriesLedgerRow] | None:
+    """Anatomy facts for one series, or None when no TS cache / sidecars."""
+    series_path = Path(series_path)
+    cache_dir = resolve_series_cache_dir(series_path)
+    if not cache_dir.is_dir():
+        return None
+    structures = read_structure_voxels(cache_dir)
+    if not structures and not read_primary_segment_voxels(cache_dir):
+        return None
+    mod = (modality or "").strip().upper() or _("Unknown")
+    head_limited = series_is_head_limited(structures)
+    region_hits: list[_RegionHit] = []
+    regions: list[str] = []
+    if structures:
+        region = dominant_region_from_voxels(structures)
+        for body_part, voxels in region.region_voxels.items():
+            if voxels > 0:
+                region_hits.append(_RegionHit(region=body_part, modality=mod))
+                regions.append(body_part)
+
+    organ_samples: list[_OrganSample] = []
+    organs_ml: dict[str, float] = {}
+    anon_patient_id = series_path.parent.parent.name
+    for organ, ml in _organ_volumes_ml_for_cache(cache_dir).items():
+        if not _organ_allowed_for_series(organ, head_limited=head_limited):
+            continue
+        organs_ml[organ] = float(ml)
+        organ_samples.append(
+            _OrganSample(
+                organ=organ,
+                modality=mod,
+                ml=ml,
+                anon_patient_id=anon_patient_id,
+            )
+        )
+
+    row = SeriesLedgerRow(
+        anon_series_uid=series_path.name,
+        anon_patient_id=anon_patient_id,
+        modality=mod,
+        head_limited=head_limited,
+        regions=tuple(regions),
+        organs_ml=organs_ml,
+        updated_at=utc_now_iso(),
+    )
+    return region_hits, organ_samples, row
+
+
+def _anatomy_from_ledger_rows(
+    rows: Mapping[str, SeriesLedgerRow],
+    modality_by_anon_uid: dict[str, str],
+) -> tuple[tuple[_RegionHit, ...], tuple[_OrganSample, ...], tuple[str, ...]]:
+    """Convert ledger rows to analytics anatomy tuples; prefer PHI modality when known."""
+    region_hits: list[_RegionHit] = []
+    organ_samples: list[_OrganSample] = []
+    segmented_modalities: list[str] = []
+    for uid, row in sorted(rows.items()):
+        if modality_by_anon_uid and uid not in modality_by_anon_uid:
+            # Drop stale ledger entries for series no longer in PHI.
+            continue
+        modality = modality_by_anon_uid.get(uid, "").strip().upper() or row.modality or _("Unknown")
+        segmented_modalities.append(modality)
+        for body_part in row.regions:
+            region_hits.append(_RegionHit(region=body_part, modality=modality))
+        for organ, ml in row.organs_ml.items():
+            if not _organ_allowed_for_series(organ, head_limited=row.head_limited):
+                continue
+            organ_samples.append(
+                _OrganSample(
+                    organ=organ,
+                    modality=modality,
+                    ml=float(ml),
+                    anon_patient_id=row.anon_patient_id,
+                )
+            )
+    return tuple(region_hits), tuple(organ_samples), tuple(segmented_modalities)
+
+
 def _collect_tseg_raw(
     images_dir: Path,
     modality_by_anon_uid: dict[str, str],
     *,
     should_abort: Callable[[], bool] | None = None,
-) -> tuple[tuple[_RegionHit, ...], tuple[_OrganSample, ...], tuple[str, ...]]:
+) -> tuple[
+    tuple[_RegionHit, ...],
+    tuple[_OrganSample, ...],
+    tuple[str, ...],
+    dict[str, SeriesLedgerRow],
+]:
     region_hits: list[_RegionHit] = []
     organ_samples: list[_OrganSample] = []
     segmented_modalities: list[str] = []
+    ledger_rows: dict[str, SeriesLedgerRow] = {}
     series_dirs = _iter_series_dirs(images_dir)
     logger.info("Analytics tseg scan: %d series dirs under %s", len(series_dirs), images_dir)
 
@@ -887,39 +1205,125 @@ def _collect_tseg_raw(
         if should_abort is not None and should_abort():
             logger.info("Analytics tseg scan aborted after %d/%d series", idx - 1, len(series_dirs))
             break
-        cache_dir = resolve_series_cache_dir(series_path)
-        if not cache_dir.is_dir():
-            continue
-        structures = read_structure_voxels(cache_dir)
-        if not structures and not read_primary_segment_voxels(cache_dir):
-            continue
         modality = modality_by_anon_uid.get(series_path.name, "").strip().upper() or _("Unknown")
-        segmented_modalities.append(modality)
-        if structures:
-            region = dominant_region_from_voxels(structures)
-            for body_part, voxels in region.region_voxels.items():
-                if voxels > 0:
-                    region_hits.append(_RegionHit(region=body_part, modality=modality))
-
-        geometry = read_mask_geometry(cache_dir)
-        spacing = geometry.get("spacing") if geometry else None
-        if spacing:
-            for organ, voxels in _organ_counts_for_cache(cache_dir).items():
-                ml = voxels_to_ml(voxels, spacing)
-                if ml is None:
-                    continue
-                organ_samples.append(
-                    _OrganSample(
-                        organ=organ,
-                        modality=modality,
-                        ml=ml,
-                        anon_patient_id=series_path.parent.parent.name,
-                    )
-                )
+        contrib = _series_anatomy_contribution(series_path, modality)
+        if contrib is None:
+            continue
+        hits, samples, row = contrib
+        region_hits.extend(hits)
+        organ_samples.extend(samples)
+        segmented_modalities.append(row.modality)
+        ledger_rows[row.anon_series_uid] = row
         if idx % 50 == 0:
             logger.info("Analytics tseg scan progress %d/%d", idx, len(series_dirs))
 
-    return tuple(region_hits), tuple(organ_samples), tuple(segmented_modalities)
+    return (
+        tuple(region_hits),
+        tuple(organ_samples),
+        tuple(segmented_modalities),
+        ledger_rows,
+    )
+
+
+def rebuild_anatomy_ledger(
+    images_dir: Path,
+    modality_by_anon_uid: dict[str, str],
+    *,
+    should_abort: Callable[[], bool] | None = None,
+) -> tuple[tuple[_RegionHit, ...], tuple[_OrganSample, ...], tuple[str, ...]]:
+    """Walk images once, write the project ledger, return anatomy tuples."""
+    region_hits, organ_samples, segmented_modalities, ledger_rows = _collect_tseg_raw(
+        images_dir,
+        modality_by_anon_uid,
+        should_abort=should_abort,
+    )
+    try:
+        replace_ledger_rows(images_dir, ledger_rows)
+        logger.info(
+            "Analytics ledger: rebuilt %d series rows under %s",
+            len(ledger_rows),
+            images_dir,
+        )
+    except OSError as exc:
+        logger.warning("Analytics ledger: rebuild write failed: %s", exc)
+    return region_hits, organ_samples, segmented_modalities
+
+
+def load_anatomy_from_ledger(
+    images_dir: Path,
+    modality_by_anon_uid: dict[str, str],
+) -> tuple[tuple[_RegionHit, ...], tuple[_OrganSample, ...], tuple[str, ...]] | None:
+    """Return anatomy from the project ledger, or None when the ledger file is absent."""
+    if not ledger_exists(images_dir):
+        return None
+    rows = read_ledger_rows(images_dir)
+    return _anatomy_from_ledger_rows(rows, modality_by_anon_uid)
+
+
+def upsert_series_ledger_from_cache(
+    cache_dir: Path,
+    *,
+    modality: str | None = None,
+) -> SeriesLedgerRow | None:
+    """Append/replace one ledger row after Harmonize finalize (best-effort)."""
+    from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
+
+    cache_dir = Path(cache_dir).resolve()
+    if cache_dir.name != TSEG_CACHE_DIRNAME:
+        return None
+    series_path = cache_dir.parent
+    study_path = series_path.parent
+    patient_path = study_path.parent
+    images_dir = patient_path.parent
+    if not (series_path.is_dir() and study_path.is_dir() and patient_path.is_dir() and images_dir.is_dir()):
+        return None
+    try:
+        rel = series_path.relative_to(images_dir)
+    except ValueError:
+        return None
+    if len(rel.parts) != 3:
+        return None
+    # Real projects: ProjectModel beside images; tests: ASCII ``public/`` tree.
+    if not (images_dir.parent / "ProjectModel.json").is_file() and images_dir.name != "public":
+        return None
+    mod = (modality or "").strip().upper()
+    if not mod:
+        try:
+            from anonymizer.controller.ai.tseg.modality_profile import resolve_profile_for_series
+
+            mod = str(resolve_profile_for_series(series_path).modality or "").strip().upper()
+        except Exception:
+            mod = ""
+    if not mod:
+        mod = _("Unknown")
+    contrib = _series_anatomy_contribution(series_path, mod)
+    if contrib is None:
+        return None
+    row = contrib[2]
+    upsert_series_row(images_dir, row)
+    return row
+
+
+def _collect_tseg_anatomy(
+    images_dir: Path,
+    modality_by_anon_uid: dict[str, str],
+    *,
+    should_abort: Callable[[], bool] | None = None,
+) -> tuple[tuple[_RegionHit, ...], tuple[_OrganSample, ...], tuple[str, ...]]:
+    """Prefer project ledger; rebuild from images when the ledger file is missing."""
+    cached = load_anatomy_from_ledger(images_dir, modality_by_anon_uid)
+    if cached is not None:
+        logger.info(
+            "Analytics anatomy: loaded ledger (%d segmented series)",
+            len(cached[2]),
+        )
+        return cached
+    logger.info("Analytics anatomy: ledger missing — rebuilding from images")
+    return rebuild_anatomy_ledger(
+        images_dir,
+        modality_by_anon_uid,
+        should_abort=should_abort,
+    )
 
 
 def _modality_options(modality_counter: Counter[str], *, top_n: int = MODALITY_FILTER_TOP_N) -> tuple[str, ...]:
@@ -1113,7 +1517,7 @@ def build_dataset_analytics(
         len(series_rows),
     )
     t_tseg = time.monotonic()
-    region_hits, organ_samples, segmented_modalities = _collect_tseg_raw(
+    region_hits, organ_samples, segmented_modalities = _collect_tseg_anatomy(
         images_dir,
         modality_by_anon_uid,
         should_abort=should_abort,
@@ -1144,7 +1548,7 @@ def _collect_tseg_metrics(
     should_abort: Callable[[], bool] | None = None,
     modality_by_anon_uid: dict[str, str] | None = None,
 ) -> AnatomyAnalytics:
-    region_hits, organ_samples, segmented_modalities = _collect_tseg_raw(
+    region_hits, organ_samples, segmented_modalities = _collect_tseg_anatomy(
         images_dir,
         modality_by_anon_uid or {},
         should_abort=should_abort,

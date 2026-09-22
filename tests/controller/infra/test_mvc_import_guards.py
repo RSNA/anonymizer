@@ -17,10 +17,14 @@ _TOUCHED_CONTROLLER_MODULES = frozenset(
     }
 )
 
-# seg_retention ↔ blur_face.pipeline ↔ segment cycle; only allowed mid-function import.
+# seg_retention ↔ blur_face.pipeline ↔ segment cycle; analytics ledger is best-effort.
 _ALLOWED_LAZY_MODULES_BY_FILE: dict[Path, frozenset[str]] = {
     _CONTROLLER_ROOT / "ai" / "tseg" / "seg_retention.py": frozenset(
-        {"anonymizer.controller.ai.blur_face.pipeline"}
+        {
+            "anonymizer.controller.ai.blur_face.pipeline",
+            "anonymizer.controller.ai.tseg.segment",
+            "anonymizer.controller.analytics",
+        }
     ),
 }
 

@@ -548,11 +548,11 @@ def test_build_sitk_volume_skips_header_only_instances(tmp_path: Path) -> None:
     header_only = series_dir / "header_only.dcm"
     shutil.copy(paths[0], header_only)
     ds = pydicom.dcmread(header_only)
-    ds.save_as(header_only, write_like_original=False)
+    ds.save_as(header_only, enforce_file_format=True)
     ds_no_pixels = pydicom.dcmread(header_only, stop_before_pixels=True, force=True)
     if hasattr(ds_no_pixels, "PixelData"):
         del ds_no_pixels.PixelData
-    ds_no_pixels.save_as(header_only, write_like_original=False)
+    ds_no_pixels.save_as(header_only, enforce_file_format=True)
 
     readable = filter_dicom_paths_with_pixel_data(paths + [header_only])
     assert header_only not in readable

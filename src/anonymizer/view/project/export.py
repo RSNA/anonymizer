@@ -231,13 +231,21 @@ class ExportView(AppToplevel):
         )
         self._clear_selection_button.grid(row=0, column=9, padx=PAD, pady=PAD, sticky="w")
 
+        self._export_dicom_seg_var = ctk.BooleanVar(value=False)
+        self._export_dicom_seg_checkbox = ctk.CTkCheckBox(
+            self._status_frame,
+            text=_("Export segments as DICOM-SEG"),
+            variable=self._export_dicom_seg_var,
+        )
+        self._export_dicom_seg_checkbox.grid(row=0, column=10, padx=PAD, pady=PAD, sticky="e")
+
         self._export_button = ctk.CTkButton(
             self._status_frame,
             width=ButtonWidth,
             text=_("Export"),
             command=self._export_button_pressed,
         )
-        self._export_button.grid(row=0, column=10, padx=PAD, pady=PAD, sticky="e")
+        self._export_button.grid(row=0, column=11, padx=PAD, pady=PAD, sticky="e")
         self._export_button.focus_set()
 
     def busy(self):
@@ -249,6 +257,7 @@ class ExportView(AppToplevel):
         self._export_button.configure(state="disabled")
         self._select_all_button.configure(state="disabled")
         self._clear_selection_button.configure(state="disabled")
+        self._export_dicom_seg_checkbox.configure(state="disabled")
         self._cancel_export_button.configure(state="enabled")
         self._tree.configure(selectmode="none")
 
@@ -258,6 +267,7 @@ class ExportView(AppToplevel):
         self._export_button.configure(state="enabled")
         self._select_all_button.configure(state="enabled")
         self._clear_selection_button.configure(state="enabled")
+        self._export_dicom_seg_checkbox.configure(state="normal")
         self._cancel_export_button.configure(state="disabled")
         self._tree.configure(selectmode="extended")
 
@@ -481,6 +491,7 @@ class ExportView(AppToplevel):
                 "AWS" if self._export_to_AWS else _("EXPORT"),
                 self._patient_ids_to_export.copy(),
                 ux_Q,
+                export_dicom_seg=bool(self._export_dicom_seg_var.get()),
             )
         )
 

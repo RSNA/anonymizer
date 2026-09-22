@@ -13,8 +13,12 @@ logger = logging.getLogger(__name__)
 
 APP_STATE_FILENAME = ".anonymizer_state.json"
 AI_FEATURES_SECTION = "ai_features"
+ANALYTICS_SECTION = "analytics"
 CT_SEGMENTATION_MODE_KEY = "ct_segmentation_mode"
 MR_SEGMENTATION_MODE_KEY = "mr_segmentation_mode"
+SELECTED_ORGANS_KEY = "selected_organs"
+SELECTED_BOARD_WIDGETS_KEY = "selected_board_widgets"
+ORGAN_BIN_WIDTH_PCT_KEY = "organ_bin_width_pct"
 
 
 def get_app_state_path() -> Path:
@@ -41,4 +45,9 @@ def write_app_state(data: dict[str, Any]) -> None:
 
 def ai_features_from_state(state: dict[str, Any]) -> dict[str, Any]:
     section = state.get(AI_FEATURES_SECTION)
+    return section if isinstance(section, dict) else {}
+
+
+def analytics_from_state(state: dict[str, Any]) -> dict[str, Any]:
+    section = state.get(ANALYTICS_SECTION)
     return section if isinstance(section, dict) else {}

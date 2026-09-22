@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from anonymizer.controller.ai.blur_face import CachedRegionSignal
 from anonymizer.controller.runner import OcrEditContext
 from anonymizer.view.series.series import (
     blur_face_toolbar_visible,
@@ -48,6 +47,7 @@ def test_clear_cache_button_visible_when_harmonized_or_masks() -> None:
 
 
 def test_harmonize_button_visible_once_until_cleared() -> None:
+    # Presence follows the series ORM flag only (plus models/modality readiness).
     assert harmonize_button_visible(
         harmonize_models_ready=True,
         modality="CT",
@@ -57,12 +57,6 @@ def test_harmonize_button_visible_once_until_cleared() -> None:
         harmonize_models_ready=True,
         modality="CT",
         already_harmonized=True,
-    )
-    assert not harmonize_button_visible(
-        harmonize_models_ready=True,
-        modality="CT",
-        already_harmonized=False,
-        has_segment_masks=True,
     )
     # Planar XR/US/MG Harmonize is metadata-only (no TS models required for the button).
     assert harmonize_button_visible(
@@ -87,40 +81,25 @@ def test_harmonize_button_visible_once_until_cleared() -> None:
     )
 
 
-def test_blur_face_toolbar_requires_head_cache_after_harmonize() -> None:
+def test_blur_face_toolbar_visible_for_head_until_orm_applied() -> None:
+    # Presence follows head series + ORM face-blur flag (plus models readiness).
     assert blur_face_toolbar_visible(
         face_blur_models_ready=True,
         face_blur_already_applied=False,
-        cached_signal=CachedRegionSignal.HEAD,
-        eligibility_blocked=False,
+        is_head_series=True,
     )
     assert not blur_face_toolbar_visible(
         face_blur_models_ready=True,
         face_blur_already_applied=False,
-        cached_signal=CachedRegionSignal.UNAVAILABLE,
-        eligibility_blocked=False,
-    )
-    assert not blur_face_toolbar_visible(
-        face_blur_models_ready=True,
-        face_blur_already_applied=False,
-        cached_signal=CachedRegionSignal.NON_HEAD,
-        eligibility_blocked=False,
-    )
-    assert not blur_face_toolbar_visible(
-        face_blur_models_ready=True,
-        face_blur_already_applied=False,
-        cached_signal=CachedRegionSignal.MULTI_REGION,
-        eligibility_blocked=False,
+        is_head_series=False,
     )
     assert not blur_face_toolbar_visible(
         face_blur_models_ready=True,
         face_blur_already_applied=True,
-        cached_signal=CachedRegionSignal.HEAD,
-        eligibility_blocked=False,
+        is_head_series=True,
     )
     assert not blur_face_toolbar_visible(
-        face_blur_models_ready=True,
+        face_blur_models_ready=False,
         face_blur_already_applied=False,
-        cached_signal=CachedRegionSignal.HEAD,
-        eligibility_blocked=True,
+        is_head_series=True,
     )

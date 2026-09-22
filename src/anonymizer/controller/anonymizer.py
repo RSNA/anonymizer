@@ -244,7 +244,7 @@ class AnonymizerController:
             estr = repr(e)
             error_msg: str = f"Storage Error = {estr}, QUARANTINE {ds.SOPInstanceUID} to {filename}"
             logger.error(error_msg)
-            ds.save_as(filename, write_like_original=True)
+            ds.save_as(filename)
         except Exception as e2:
             e2str = repr(e2)
             logger.critical(f"Critical Error writing incoming dataset to QUARANTINE: {e2str}")
@@ -509,8 +509,7 @@ class AnonymizerController:
             logger.debug(f"ANON STORE: {source} => {filename}")
 
             # TODO: Optimize / Transcoding / DICOM Compliance File Verification - as per extra project options
-            # see options for write_like_original=True
-            ds.save_as(filename, write_like_original=False)
+            ds.save_as(filename, enforce_file_format=True)
 
             return None
 

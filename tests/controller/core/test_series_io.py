@@ -23,8 +23,6 @@ def create_basic_dataset() -> Dataset:
     ds.SeriesDescription = "Test Series"
     ds.file_meta = FileMetaDataset()
     ds.file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
-    ds.is_implicit_VR = False
-    ds.is_little_endian = True
     return ds
 
 

@@ -1064,6 +1064,41 @@ def _apply_harmonize_series(
     )
 
 
+def _auto_apply_study_descriptions_for_uids(
+    *,
+    images_dir: Path,
+    anon_model: AnonymizerModel,
+    anon_study_uids: Sequence[str],
+    log_workflow: Callable[[str], None],
+) -> None:
+    """
+    Best-guess LOINC StudyDescription (same API as Series View).
+
+    ``maybe_offer_study_description_harmonize`` only returns an offer when that
+    study's series are fully RadLex-harmonized, so it is safe to call after each
+    series in a study.
+    """
+    study_uids = tuple(sorted({uid for uid in anon_study_uids if uid}))
+    if not study_uids:
+        return
+    applied_study_descs = auto_apply_best_study_descriptions(
+        images_dir=images_dir,
+        anon_model=anon_model,
+        anon_study_uids=study_uids,
+    )
+    for offer, updated in applied_study_descs:
+        if not updated or not offer.matches:
+            continue
+        name = offer.matches[0].long_common_name
+        log_workflow(
+            format_batch_step_subline(
+                _("Auto-applied study description")
+                + f': "{name}" → {len(updated)} '
+                + (_("study") if len(updated) == 1 else _("studies"))
+            )
+        )
+
+
 def _apply_face_blur_series(
     series_path: Path,
     *,
@@ -1484,6 +1519,14 @@ def ai_batch_process(
                     _("Phase skipped"),
                     completed_steps / total_steps,
                 )
+            # Series already Harmonized: heal missing study LOINC for the selection.
+            if algorithm is AiBatchAlgorithm.HARMONIZE and anon_model is not None:
+                _auto_apply_study_descriptions_for_uids(
+                    images_dir=images_dir,
+                    anon_model=anon_model,
+                    anon_study_uids=tuple(uid for _, uid in studies),
+                    log_workflow=log_workflow,
+                )
             continue
 
         emit_memory_snapshot()
@@ -1532,6 +1575,14 @@ def ai_batch_process(
                     anon_model=anon_model,
                 )
                 if ds is None:
+                    # Already-harmonized series: study may now be complete (last sibling).
+                    if algorithm is AiBatchAlgorithm.HARMONIZE and anon_model is not None:
+                        _auto_apply_study_descriptions_for_uids(
+                            images_dir=images_dir,
+                            anon_model=anon_model,
+                            anon_study_uids=(series_path.parent.name,),
+                            log_workflow=log_workflow,
+                        )
                     continue
 
                 if algorithm is AiBatchAlgorithm.HARMONIZE and not defer_volume_to_face_blur:
@@ -1618,9 +1669,15 @@ def ai_batch_process(
                     for line in harmonize_log_lines:
                         log_workflow(format_batch_workflow_log_line(format_batch_step_subline(line)))
                     if outcome.status == "ok" and anon_model is not None:
-                        # Collect candidates; auto_apply_best_study_descriptions
-                        # after the batch gates readiness and applies top LOINC matches.
                         newly_harmonized_study_uids.add(series_path.parent.name)
+                        # Same timing as Series View: when this study's series are all
+                        # RadLex-harmonized, apply LOINC study description immediately.
+                        _auto_apply_study_descriptions_for_uids(
+                            images_dir=images_dir,
+                            anon_model=anon_model,
+                            anon_study_uids=(series_path.parent.name,),
+                            log_workflow=log_workflow,
+                        )
                 else:
                     volume_context = volume_contexts.pop(series_path, None)
                     if volume_context is None:
@@ -1679,29 +1736,6 @@ def ai_batch_process(
 
         if summary.cancelled:
             break
-
-    if (
-        not summary.cancelled
-        and anon_model is not None
-        and newly_harmonized_study_uids
-        and AiBatchAlgorithm.HARMONIZE in algorithms
-    ):
-        applied_study_descs = auto_apply_best_study_descriptions(
-            images_dir=images_dir,
-            anon_model=anon_model,
-            anon_study_uids=tuple(sorted(newly_harmonized_study_uids)),
-        )
-        for offer, updated in applied_study_descs:
-            if not updated or not offer.matches:
-                continue
-            name = offer.matches[0].long_common_name
-            log_workflow(
-                format_batch_step_subline(
-                    _("Auto-applied study description")
-                    + f': "{name}" → {len(updated)} '
-                    + (_("study") if len(updated) == 1 else _("studies"))
-                )
-            )
 
     volume_contexts.clear()
     summary = _summary_with(outcomes=tuple(recorded_outcomes))

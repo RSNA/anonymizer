@@ -251,6 +251,7 @@ class ExportPatientsRequest:
     dest_name: str
     patient_ids: list[str]  # list of patient IDs to export
     ux_Q: Queue  # queue for UX updates for the full export
+    export_dicom_seg: bool = False
 
 
 @dataclass
@@ -560,10 +561,6 @@ class ProjectController(AE):
 
         # Add the File Meta Information (Group 0x0002 elements)
         ds.file_meta = FileMetaDataset(event.file_meta)
-        # Only one Transfer Syntax is Big Endian (mostly retired)
-        ds.is_little_endian = ds.file_meta.TransferSyntaxUID != "1.2.840.10008.1.2.2"  # Explicit VR Big Endian
-        # Only one Transfer Syntax uses Implicit VR
-        ds.is_implicit_VR = ds.file_meta.TransferSyntaxUID == "1.2.840.10008.1.2"  # Implicit VR Little Endian
 
         # File Metadata:Implementation Class UID and Version Name:
         ds.file_meta.ImplementationClassUID = UID(self.model.IMPLEMENTATION_CLASS_UID)  # UI: (0002,0012)
@@ -2254,7 +2251,14 @@ class ProjectController(AE):
         logger.info("Move abort complete")
         self._abort_move = False
 
-    def _export_patient(self, dest_name: str, patient_id: str, ux_Q: Queue) -> None:
+    def _export_patient(
+        self,
+        dest_name: str,
+        patient_id: str,
+        ux_Q: Queue,
+        *,
+        export_dicom_seg: bool = False,
+    ) -> None:
         """
         Blocking: Export the anonymized patient's DICOM files to the specified destination (DICOM server or AWS S3 bucket).
 
@@ -2262,6 +2266,8 @@ class ProjectController(AE):
             dest_name (str): The name of the destination.
             patient_id (str): The anonymized Patient ID.
             ux_Q (Queue): The UX queue to send ExportPatientsResponse to.
+            export_dicom_seg: When True, convert series ROI NIfTI annotations to DICOM-SEG
+                files in each series directory before collecting files to send.
 
                 Any exceptions & errors are reflected via the error field of ExportPatientsResponse
 
@@ -2275,7 +2281,9 @@ class ProjectController(AE):
         Returns:
             None
         """
-        logger.info(f"_export_patient {patient_id} start, export to :{dest_name}")
+        logger.info(
+            f"_export_patient {patient_id} start, export to :{dest_name} dicom_seg={export_dicom_seg}"
+        )
 
         export_association: Association | None = None
         files_sent = 0
@@ -2285,6 +2293,9 @@ class ProjectController(AE):
 
             if not patient_dir.exists():
                 raise ValueError(f"Selected directory {patient_dir} does not exist")
+
+            if export_dicom_seg:
+                self._prepare_patient_dicom_segs(patient_dir)
 
             # Get all the DICOM files for this patient:
             file_paths = []
@@ -2416,6 +2427,33 @@ class ProjectController(AE):
 
         return
 
+    ROI_SEG_FILENAME = "roi_annotations.seg.dcm"
+
+    def _prepare_patient_dicom_segs(self, patient_dir: Path) -> None:
+        """Convert NIfTI ROI annotations to DICOM-SEG files under each series directory.
+
+        Failures for individual series are logged and skipped so the patient export continues.
+        """
+        from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir
+        from anonymizer.controller.annotations import annotations_exist, export_dicom_seg
+
+        patient_dir = Path(patient_dir)
+        for study_path in sorted(patient_dir.iterdir()):
+            if not study_path.is_dir() or study_path.name.startswith("."):
+                continue
+            for series_path in sorted(study_path.iterdir()):
+                if not series_path.is_dir() or series_path.name.startswith("."):
+                    continue
+                cache_dir = resolve_series_cache_dir(series_path)
+                if not annotations_exist(cache_dir):
+                    continue
+                dest = series_path / self.ROI_SEG_FILENAME
+                try:
+                    export_dicom_seg(cache_dir, dest, series_dir=series_path)
+                    logger.info("Prepared DICOM-SEG for export: %s", dest)
+                except Exception:
+                    logger.exception("DICOM-SEG conversion failed for series %s; continuing export", series_path)
+
     def bulk_export_active(self) -> bool:
         """
         Checks if bulk export is active.
@@ -2450,7 +2488,13 @@ class ProjectController(AE):
 
         with self._export_executor as executor:
             for i in range(len(req.patient_ids)):
-                future = executor.submit(self._export_patient, req.dest_name, req.patient_ids[i], req.ux_Q)
+                future = executor.submit(
+                    self._export_patient,
+                    req.dest_name,
+                    req.patient_ids[i],
+                    req.ux_Q,
+                    export_dicom_seg=req.export_dicom_seg,
+                )
                 self._export_futures.append(future)
 
             logger.info(f"Export Futures: {len(self._export_futures)}")
@@ -2644,13 +2688,20 @@ class ProjectController(AE):
     def get_totals(self):
         return self.anonymizer.model.get_totals()
 
-    def clear_series_tseg_cache(self, series_path: Path, anon_series_uid: str | None = None) -> None:
+    def clear_series_tseg_cache(
+        self,
+        series_path: Path,
+        anon_series_uid: str | None = None,
+        *,
+        also_clear_annotations: bool = False,
+    ) -> None:
         from anonymizer.controller.ai.tseg.cache import clear_series_tseg_cache
 
         clear_series_tseg_cache(
             series_path,
             anon_model=self.anonymizer.model,
             anon_series_uid=anon_series_uid,
+            also_clear_annotations=also_clear_annotations,
         )
 
     def harmonize_studies(

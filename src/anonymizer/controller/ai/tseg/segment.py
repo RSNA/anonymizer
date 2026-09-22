@@ -273,6 +273,41 @@ def collect_structure_voxels_from_masks(segmentation_dir: Path, structures: list
     return counts
 
 
+def _anatomy_mask_stem(path: Path) -> str:
+    """Return structure name for ``*.nii.gz`` (``Path.stem`` would leave ``.nii``)."""
+    name = path.name
+    if name.endswith(".nii.gz"):
+        return name[: -len(".nii.gz")]
+    return path.stem
+
+
+def reconcile_structure_voxels_from_masks(
+    seg_dir: Path,
+    structure_voxels: dict[str, int],
+) -> dict[str, int]:
+    """Replace stats-mm³ placeholders with true voxel counts for on-disk masks.
+
+    CT single-pass initially maps TotalSegmentator statistics ``volume`` (mm³) into
+    ``structure_voxels``. Those values are only a temporary mass proxy for body-part
+    logic. Before ``finalize_seg_cache`` (and for Dataset analytics), every exported
+    anatomy mask must be re-counted so sidecars store raw voxels that
+    ``voxels_to_ml`` can convert with spacing.
+    """
+    seg_dir = Path(seg_dir)
+    updated = dict(structure_voxels)
+    if not seg_dir.is_dir():
+        return updated
+    stems = sorted(
+        _anatomy_mask_stem(p)
+        for p in seg_dir.glob("*.nii.gz")
+        if p.is_file() and not _anatomy_mask_stem(p).startswith("face")
+    )
+    if not stems:
+        return updated
+    updated.update(collect_structure_voxels_from_masks(seg_dir, stems))
+    return updated
+
+
 def collect_structure_voxels(segmentation_dir: Path, structures: list[str]) -> dict[str, int]:
     seg_dir = Path(segmentation_dir)
     cache_dir = seg_dir.parent
@@ -834,7 +869,12 @@ def face_mask_cache_path(series_directory: Path, *, profile=None) -> Path:
 
 
 def _face_cache_valid(mask_path: Path) -> bool:
-    return mask_path.is_file()
+    """True when a cached face mask exists and has enough voxels to blur."""
+    if not mask_path.is_file():
+        return False
+    from anonymizer.controller.ai.blur_face import face_mask_is_substantial
+
+    return face_mask_is_substantial(count_mask_voxels(mask_path))
 
 
 def _insufficient_face_mask_error(face_voxel_count: int) -> str | None:
@@ -1453,6 +1493,7 @@ def analyze_tseg_ct_single_pass(
                         progress=progress,
                         analysis_started=analysis_started,
                     )
+                    structure_voxels = reconcile_structure_voxels_from_masks(seg_dir, structure_voxels)
                     finalize_seg_cache(work_dir, seg_dir, structure_voxels)
                     region_result = _ts_result_from_structure_voxels(series_directory, structure_voxels)
                     _report_progress(
@@ -1559,7 +1600,8 @@ def analyze_tseg_ct_single_pass(
                 progress=progress,
                 analysis_started=analysis_started,
             )
-
+            # Stats volumes are mm³; replace with true mask voxel counts before sidecars.
+            structure_voxels = reconcile_structure_voxels_from_masks(seg_dir, structure_voxels)
             finalize_seg_cache(work_dir, seg_dir, structure_voxels)
 
             region_result = _ts_result_from_structure_voxels(series_directory, structure_voxels)

@@ -437,8 +437,6 @@ def _write_minimal_dcm(path: Path, *, study_description: str = "OLD") -> None:
     ds = Dataset()
     ds.file_meta = FileMetaDataset()
     ds.file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
-    ds.is_little_endian = True
-    ds.is_implicit_VR = False
     ds.SOPClassUID = "1.2.840.10008.5.1.4.1.1.2"
     ds.SOPInstanceUID = generate_uid()
     ds.StudyInstanceUID = generate_uid()
@@ -455,7 +453,7 @@ def _write_minimal_dcm(path: Path, *, study_description: str = "OLD") -> None:
     ds.PixelRepresentation = 0
     ds.PixelData = bytes(2 * 2 * 2)
     path.parent.mkdir(parents=True, exist_ok=True)
-    ds.save_as(path, write_like_original=False)
+    ds.save_as(path, enforce_file_format=True, little_endian=True, implicit_vr=False)
 
 
 def test_apply_study_description(tmp_path: Path):

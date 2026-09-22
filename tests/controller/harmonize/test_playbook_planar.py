@@ -242,9 +242,7 @@ def test_harmonize_series_sc_ignored(tmp_path: Path) -> None:
     ds.SeriesInstanceUID = generate_uid()
     ds.StudyInstanceUID = generate_uid()
     ds.PatientID = "SC1"
-    ds.is_little_endian = True
-    ds.is_implicit_VR = False
-    ds.save_as(series / "sc.dcm", write_like_original=False)
+    ds.save_as(series / "sc.dcm", enforce_file_format=True, little_endian=True, implicit_vr=False)
 
     results = harmonize_series([series])
     assert len(results) == 1
@@ -291,6 +289,22 @@ def test_planar_loinc_ranks_two_views_from_image_count() -> None:
     )
     assert matches
     assert matches[0].long_common_name == "XR Chest 2 Views"
+
+
+def test_planar_loinc_pa_and_lat_not_lateral_decubitus() -> None:
+    """Chest PA + Lat is upright lateral, not lateral-decubitus (lying down)."""
+    from anonymizer.controller.ai.harmonize.loinc_study import rank_planar_loinc_study_descriptions
+
+    matches = rank_planar_loinc_study_descriptions(
+        ["Chest Lat", "Chest PA"],
+        loinc_prefix="XR ",
+        top_n=8,
+        image_count=2,
+    )
+    assert matches
+    assert matches[0].long_common_name == "XR Chest PA and Lateral"
+    top_names = [m.long_common_name for m in matches]
+    assert not any("decubitus" in name.lower() for name in top_names[:3])
 
 
 def test_planar_loinc_ranks_three_views_from_image_count() -> None:

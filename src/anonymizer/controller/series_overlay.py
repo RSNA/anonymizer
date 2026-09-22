@@ -53,6 +53,13 @@ class Segmentation:
     points: list[PolygonPoint]
     color_bgr: tuple[int, int, int] | None = None
     structure_name: str | None = None
+    # ROI annotation (display metadata; voxels live in annotations/labels.nii.gz).
+    label_id: int | None = None
+    label_name: str | None = None
+    source: str | None = None  # "ts" | "user" | "edited"
+    editable: bool = False
+    # When True with color_bgr set: light fill under outline (unused in Series View; outline-only).
+    filled: bool = False
 
 
 @dataclass

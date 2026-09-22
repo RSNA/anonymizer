@@ -160,7 +160,7 @@ def test_analyze_tseg_face_fails_on_empty_mask_after_inference(
 
 
 @patch("anonymizer.controller.ai.tseg.segment.run_face_segmentation")
-def test_analyze_tseg_face_fails_on_cached_empty_mask(
+def test_analyze_tseg_face_reruns_when_cached_mask_empty(
     mock_run: MagicMock,
     synthetic_head_series: Path,
 ) -> None:
@@ -168,11 +168,18 @@ def test_analyze_tseg_face_fails_on_cached_empty_mask(
     dicom_series_to_nifti(synthetic_head_series, cache / "volume.nii.gz")
     _write_empty_face_mask(cache / "seg" / FACE_MASK_FILENAME)
 
+    def _fake_run(nifti_path: Path, output_dir: Path, **kwargs) -> float:
+        _write_face_mask(output_dir / FACE_MASK_FILENAME)
+        return 1.5
+
+    mock_run.side_effect = _fake_run
+
     result = analyze_tseg_face(synthetic_head_series)
 
-    assert result.error == face_blur_gate_message(FaceBlurGateReason.INSUFFICIENT_FACE_MASK)
-    assert result.face_mask_path is None
-    mock_run.assert_not_called()
+    assert result.error is None
+    assert result.face_voxel_count >= 1500
+    mock_run.assert_called_once()
+    assert result.inference_seconds == 1.5
 
 
 @patch("anonymizer.controller.ai.tseg.segment.run_face_segmentation")
