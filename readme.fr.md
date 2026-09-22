@@ -1,4 +1,4 @@
-# RSNA DICOM Anonymizer (V19)
+# RSNA DICOM Anonymizer (V19.1)
 
 [en](readme.md) · [de](readme.de.md) · [es](readme.es.md) · [fr](readme.fr.md)
 
@@ -7,7 +7,7 @@
 [![PyPI](https://img.shields.io/pypi/v/rsna-anonymizer.svg)](https://pypi.org/project/rsna-anonymizer/)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue.svg)](https://www.python.org/downloads/)
 
-**La version 19.0.10** est la version V19 actuelle sur la branche `master` et sur PyPI. Nécessite **Python 3.11–3.14** avec **tkinter** intégré. Préférez **3.12** ; évitez **3.14.1** (torchvision exclut ce correctif).
+**La version 19.1.0.dev1** est la préversion de développement V19.1 actuelle sur la branche `V19.1` (`uv pip install --pre rsna-anonymizer`). La stable **19.0.10** reste sur `master`. Nécessite **Python 3.11–3.14** avec **tkinter** intégré. Préférez **3.12** ; évitez **3.14.1** (torchvision exclut ce correctif).
 
 ## Installation
 
@@ -33,7 +33,7 @@ uv --version
 
 ### 2. Installer Python avec tkinter, puis l’application
 
-L’interface de bureau a besoin de **tkinter**. Installez un Python qui l’inclut, créez le venv et installez **19.0.10** :
+L’interface de bureau a besoin de **tkinter**. Installez un Python qui l’inclut, créez le venv et installez **19.1.0.dev1** (`--pre`) :
 
 | Plateforme | Assurer la disponibilité de tkinter |
 | --- | --- |
@@ -46,7 +46,7 @@ uv python install 3.12                     # or: 3.11 / 3.13 / 3.14
 uv venv rsna-anonymizer --python 3.12      # or: --python 3.11 / 3.13 / 3.14
 source rsna-anonymizer/bin/activate        # Windows: rsna-anonymizer\Scripts\activate
 
-uv pip install rsna-anonymizer             # version 19.0.10
+uv pip install --pre rsna-anonymizer       # version 19.1.0.dev1
 ```
 
 ### 3. Vérifier l’installation
@@ -54,7 +54,7 @@ uv pip install rsna-anonymizer             # version 19.0.10
 ```bash
 python --version          # 3.11.x–3.14.x
 python -m tkinter         # a small Tk window must open — required for the UI
-rsna-anonymizer --version # should report 19.0.10
+rsna-anonymizer --version # should report 19.1.0.dev1
 ```
 
 Si `python -m tkinter` échoue, le Python du venv a été compilé sans Tk : corrigez l’étape plateforme ci-dessus, recréez le venv et réinstallez.
@@ -91,7 +91,7 @@ Le lot d’IA sans interface utilise un fichier compagnon [`AiBatchConfig.json`]
 
 ```bash
 source rsna-anonymizer/bin/activate
-uv pip install --upgrade rsna-anonymizer
+uv pip install --upgrade --pre rsna-anonymizer
 ```
 
 Notes de version : [CHANGELOG](CHANGELOG.md).
@@ -105,7 +105,7 @@ Notes de version : [CHANGELOG](CHANGELOG.md).
 ```bash
 git clone https://github.com/RSNA/anonymizer.git
 cd anonymizer
-git checkout master
+git checkout V19.1
 uv sync --group dev
 uv run pre-commit install
 uv run rsna-anonymizer

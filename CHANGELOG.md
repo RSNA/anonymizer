@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [19.1.0.dev1]
+- PyPI development pre-release of V19.1 on branch `V19.1` (install with `uv pip install --pre rsna-anonymizer`)
+- Dashboard Dataset analytics with organ volume histograms (TotalSegmentator + user annotations)
+- Series annotate segments: New Segment normative organ matching, unique names, ledger-backed analytics refresh
 - Series View / Dataset: map middle vs right mouse via Tk version so pan and WW/WL stay consistent on macOS Tk 8.6 (Python 3.13/3.14) and Tk 9 (Python 3.12)
 - Support Python 3.13 and 3.14 (`requires-python >=3.11,<3.15`); lift `numpy<2` and `pydicom<2.5` pins (NumPy 2.x, pydicom 3.x, pynetdicom 3.x, dicom2nifti ≥2.6); bump pylibjpeg codecs for cp313/cp314 wheels; CI matrix 3.11–3.14
 
