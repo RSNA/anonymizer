@@ -160,10 +160,13 @@ class AnonymizerController:
 
     def __del__(self):
         if self._active:
-            self._stop_worker_threads()
+            self.stop()
 
     def stop(self):
         self._stop_worker_threads()
+        # Always dispose after workers join so pooled sqlite connections are not
+        # left open for GC (ResourceWarning on Python 3.13+).
+        self.model.close()
 
     def missing_attributes(self, ds: Dataset) -> list[str]:
         return [
@@ -598,13 +601,16 @@ class AnonymizerController:
         """
         logger.info(f"thread={threading.current_thread().name} start")
 
-        while True:
-            time.sleep(self.WORKER_THREAD_SLEEP_SECS)
-            source, ds = ds_Q.get()  # Blocks by default
-            if ds is None:  # sentinel value
+        try:
+            while True:
+                time.sleep(self.WORKER_THREAD_SLEEP_SECS)
+                source, ds = ds_Q.get()  # Blocks by default
+                if ds is None:  # sentinel value
+                    ds_Q.task_done()
+                    break
+                self.anonymize(source, ds)
                 ds_Q.task_done()
-                break
-            self.anonymize(source, ds)
-            ds_Q.task_done()
-
-        logger.info(f"thread={threading.current_thread().name} end")
+        finally:
+            # Ensure this worker's scoped session is dropped before the thread exits.
+            self.model.session_factory.remove()
+            logger.info(f"thread={threading.current_thread().name} end")

@@ -377,6 +377,11 @@ class AnonymizerModel:
         """
         return self.session_factory()
 
+    def close(self) -> None:
+        """Drop the thread-local session and dispose the engine pool (idempotent)."""
+        self.session_factory.remove()
+        self.engine.dispose()
+
     # Database Session Manager
     @contextmanager
     def _get_session(self, read_only: bool = False):
