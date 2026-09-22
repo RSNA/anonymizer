@@ -132,7 +132,7 @@ def apply_analytics_preferences(prefs: dict[str, Any] | None = None) -> None:
         prefs = analytics_from_state(read_app_state())
     if SELECTED_ORGANS_KEY in prefs:
         raw = prefs.get(SELECTED_ORGANS_KEY)
-        _selected_organs = _normalize_string_list(raw) or [] if isinstance(raw, list) else None
+        _selected_organs = (_normalize_string_list(raw) or []) if isinstance(raw, list) else None
     if SELECTED_BOARD_WIDGETS_KEY in prefs:
         raw = prefs.get(SELECTED_BOARD_WIDGETS_KEY)
         if isinstance(raw, list):
