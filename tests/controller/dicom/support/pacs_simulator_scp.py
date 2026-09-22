@@ -123,7 +123,7 @@ def _handle_store(event: Event, storage_dir: str) -> int:
 
     logger.debug(f"C-STORE [TxSyn:{ds.file_meta.TransferSyntaxUID}]: {remote['ae_title']} => {filename}")
     try:
-        ds.save_as(filename, write_like_original=False)
+        ds.save_as(filename, enforce_file_format=True)
     except Exception as exception:
         logger.error("Failed writing instance to storage directory")
         logger.exception(exception)

@@ -23,7 +23,6 @@ from anonymizer.controller.series_io import load_series_frames
 from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.utils.storage import load_default_whitelist
-from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT
 from tests.controller.ocr.conftest import assert_dcm
 from tests.controller.support.pixel_phi_test_support import register_series_with_anonymizer
 from tests.controller.support.us_rgb_fixtures import (
@@ -37,6 +36,7 @@ from tests.controller.support.us_rgb_fixtures import (
     US_RGB_PROJECT_T2_SERIES_VIEW_OCR_TEXTS,
     US_RGB_SERIES_VIEW_OCR_TEXTS,
 )
+from tests.opened_anonymizer_model import opened_anonymizer_model
 from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
 
 ANONYMIZER_SCRIPT = DEFAULT_ANONYMIZER_SCRIPT
@@ -84,14 +84,10 @@ def us_rgb_batch_series(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def anonymizer_model(tmp_path: Path) -> AnonymizerModel:
+def anonymizer_model(tmp_path: Path):
     db_path = tmp_path / "us_rgb_batch.db"
-    return AnonymizerModel(
-        site_id=TEST_SITEID,
-        uid_root=TEST_UIDROOT,
-        script_path=ANONYMIZER_SCRIPT,
-        db_url=f"sqlite:///{db_path}",
-    )
+    with opened_anonymizer_model(f"sqlite:///{db_path}", script_path=ANONYMIZER_SCRIPT) as model:
+        yield model
 
 
 def test_us_rgb_loads_color_single_frame(us_rgb_loaded) -> None:

@@ -15,8 +15,7 @@ from anonymizer.controller.process_ctp_lookup import (
     private_lookup_properties_path,
 )
 from anonymizer.model.anonymizer import AnonymizerModel, LookupPatient
-from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT
-from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
+from tests.opened_anonymizer_model import opened_anonymizer_model
 
 
 def _write_properties(path: Path, lines: list[str]) -> None:
@@ -260,19 +259,14 @@ def test_commit_writes_files_and_sql(controller, tmp_path: Path) -> None:
 
 def test_replace_lookup_patients_replaces_all(tmp_path: Path) -> None:
     db_path = tmp_path / "lookup.db"
-    model = AnonymizerModel(
-        site_id=TEST_SITEID,
-        uid_root=TEST_UIDROOT,
-        script_path=DEFAULT_ANONYMIZER_SCRIPT,
-        db_url=f"sqlite:///{db_path}",
-    )
-    model.replace_lookup_patients(
-        [
-            LookupPatient(patient_id="A", anon_patient_id="X-001", date_offset=1),
-            LookupPatient(patient_id="B", anon_patient_id="X-002", date_offset=2),
-        ]
-    )
-    assert model.get_lookup_patient("A") is not None
-    model.replace_lookup_patients([LookupPatient(patient_id="C", anon_patient_id="X-003", date_offset=None)])
-    assert model.get_lookup_patient("A") is None
-    assert model.get_lookup_patient("C") is not None
+    with opened_anonymizer_model(f"sqlite:///{db_path}") as model:
+        model.replace_lookup_patients(
+            [
+                LookupPatient(patient_id="A", anon_patient_id="X-001", date_offset=1),
+                LookupPatient(patient_id="B", anon_patient_id="X-002", date_offset=2),
+            ]
+        )
+        assert model.get_lookup_patient("A") is not None
+        model.replace_lookup_patients([LookupPatient(patient_id="C", anon_patient_id="X-003", date_offset=None)])
+        assert model.get_lookup_patient("A") is None
+        assert model.get_lookup_patient("C") is not None

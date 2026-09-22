@@ -13,10 +13,10 @@ import pytest
 from pydicom import dcmread
 
 from anonymizer.controller.analytics import build_dataset_analytics
-from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.view.shell.analytics_charts import modality_distinct_count, select_widgets
 from docs_help.project_setup import TEST_DCM_ROOT
 from tests.analytics.conftest import require_fixture
+from tests.opened_anonymizer_model import opened_anonymizer_model
 
 
 def _first_dcm(root: Path) -> Path:
@@ -57,20 +57,12 @@ def _seed_organ_cache(series_dir: Path, *, organ: str = "brain", voxels: int = 4
 
 
 @pytest.fixture
-def analytics_model(tmp_path: Path) -> tuple[AnonymizerModel, Path]:
-    from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT
-    from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
-
+def analytics_model(tmp_path: Path):
     db = tmp_path / "anonymizer.db"
-    model = AnonymizerModel(
-        site_id=TEST_SITEID,
-        uid_root=TEST_UIDROOT,
-        script_path=DEFAULT_ANONYMIZER_SCRIPT,
-        db_url=f"sqlite:///{db}",
-    )
-    images = tmp_path / "images"
-    images.mkdir()
-    return model, images
+    with opened_anonymizer_model(f"sqlite:///{db}") as model:
+        images = tmp_path / "images"
+        images.mkdir()
+        yield model, images
 
 
 def test_analytics_from_ct_and_cr_fixtures(analytics_model) -> None:

@@ -7,11 +7,8 @@ from pydicom.data import get_testdata_file
 
 from anonymizer.model.anonymizer import PHI, AnonymizerModel, Series, Study
 from tests.controller.dicom.support.test_files import ct_small_filename, mr_brain_filename
-from tests.controller.dicom.support.test_nodes import (
-    TEST_SITEID,
-    TEST_UIDROOT,
-)
-from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
+from tests.controller.dicom.support.test_nodes import TEST_SITEID
+from tests.opened_anonymizer_model import opened_anonymizer_model
 
 TEST_DB_DIALECT = "sqlite"  # Database dialect
 TEST_DB_NAME = "anonymizer_model_test.db"  # Name of the test database file
@@ -21,7 +18,7 @@ TEST_DB_URL = f"{TEST_DB_DIALECT}:///{TEST_DB_FILE}"
 
 
 @pytest.fixture(scope="function")
-def anonymizer_model() -> AnonymizerModel:
+def anonymizer_model():
     """
     Provides a fresh, initialized AnonymizerModel instance using an
     in-memory SQLite database for each test.
@@ -32,14 +29,8 @@ def anonymizer_model() -> AnonymizerModel:
     # Ensure directory exists
     TEST_DB_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    model = AnonymizerModel(
-        site_id=TEST_SITEID,
-        uid_root=TEST_UIDROOT,
-        script_path=DEFAULT_ANONYMIZER_SCRIPT,
-        db_url=TEST_DB_URL,  # db_url = "sqlite:///:memory:"
-    )
-
-    return model
+    with opened_anonymizer_model(TEST_DB_URL) as model:
+        yield model
 
 
 @pytest.fixture

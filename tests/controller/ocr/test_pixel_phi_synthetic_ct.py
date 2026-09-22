@@ -17,7 +17,6 @@ from anonymizer.controller.ai.remove_pixel_phi import (
 from anonymizer.controller.ai_batch_process import AiBatchAlgorithm, _apply_remove_pixel_phi_series
 from anonymizer.controller.phi_io import build_phi_index
 from anonymizer.model.anonymizer import AnonymizerModel, Instance
-from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT
 from tests.controller.support.pixel_phi_test_support import (
     build_synthetic_chest_ct_series_with_two_phi_slices,
     easyocr_results_for_default_phi,
@@ -31,18 +30,14 @@ from tests.controller.tseg.support.synthetic_ct import (
     build_synthetic_single_slice_ct_series,
     list_dcm_files,
 )
-from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
+from tests.opened_anonymizer_model import opened_anonymizer_model
 
 
 @pytest.fixture
-def anonymizer_model(tmp_path: Path) -> AnonymizerModel:
+def anonymizer_model(tmp_path: Path):
     db_path = tmp_path / "pixel_phi_synthetic.db"
-    return AnonymizerModel(
-        site_id=TEST_SITEID,
-        uid_root=TEST_UIDROOT,
-        script_path=DEFAULT_ANONYMIZER_SCRIPT,
-        db_url=f"sqlite:///{db_path}",
-    )
+    with opened_anonymizer_model(f"sqlite:///{db_path}") as model:
+        yield model
 
 
 def _phi_slice_path(series_dir: Path, *, burn_slice_index: int = 0) -> Path:

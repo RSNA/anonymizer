@@ -18,8 +18,7 @@ from anonymizer.controller.ai.remove_pixel_phi import (
 )
 from anonymizer.controller.series_overlay import OCRText, OverlayData, UserRectangle
 from anonymizer.model.anonymizer import Instance
-from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT
-from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
+from tests.opened_anonymizer_model import opened_anonymizer_model
 
 
 @pytest.fixture
@@ -72,25 +71,19 @@ def test_remove_pixel_phi_returns_empty_tuple_when_no_text(mock_dcmread: MagicMo
 
 def test_apply_instance_pixel_phi_delegates_to_model(mock_dataset: Dataset, tmp_path: Path) -> None:
     db_path = tmp_path / "pixel_phi.db"
-    from anonymizer.model.anonymizer import AnonymizerModel
 
-    model = AnonymizerModel(
-        site_id=TEST_SITEID,
-        uid_root=TEST_UIDROOT,
-        script_path=DEFAULT_ANONYMIZER_SCRIPT,
-        db_url=f"sqlite:///{db_path}",
-    )
-    model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=0)
-    phi = model.get_phi_by_phi_patient_id(mock_dataset.PatientID)
-    assert phi is not None
-    instance = phi.studies[0].series[0].instances[0]
+    with opened_anonymizer_model(f"sqlite:///{db_path}") as model:
+        model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=0)
+        phi = model.get_phi_by_phi_patient_id(mock_dataset.PatientID)
+        assert phi is not None
+        instance = phi.studies[0].series[0].instances[0]
 
-    assert apply_instance_pixel_phi(model, instance.anon_sop_instance_uid, ["Burned", "Burned", " Name"]) is True
+        assert apply_instance_pixel_phi(model, instance.anon_sop_instance_uid, ["Burned", "Burned", " Name"]) is True
 
-    with model._get_session(read_only=True) as session:
-        row = session.get(Instance, instance.sop_instance_uid)
-        assert row is not None
-        assert row.pixel_phi == "Burned, Name"
+        with model._get_session(read_only=True) as session:
+            row = session.get(Instance, instance.sop_instance_uid)
+            assert row is not None
+            assert row.pixel_phi == "Burned, Name"
 
 
 @patch("anonymizer.controller.ai.remove_pixel_phi.dcmread")
@@ -100,31 +93,25 @@ def test_apply_instance_pixel_phi_for_dcm_reads_sop_uid(
     tmp_path: Path,
 ) -> None:
     db_path = tmp_path / "pixel_phi_for_dcm.db"
-    from anonymizer.model.anonymizer import AnonymizerModel
 
-    model = AnonymizerModel(
-        site_id=TEST_SITEID,
-        uid_root=TEST_UIDROOT,
-        script_path=DEFAULT_ANONYMIZER_SCRIPT,
-        db_url=f"sqlite:///{db_path}",
-    )
-    model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=0)
-    phi = model.get_phi_by_phi_patient_id(mock_dataset.PatientID)
-    assert phi is not None
-    instance = phi.studies[0].series[0].instances[0]
+    with opened_anonymizer_model(f"sqlite:///{db_path}") as model:
+        model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=0)
+        phi = model.get_phi_by_phi_patient_id(mock_dataset.PatientID)
+        assert phi is not None
+        instance = phi.studies[0].series[0].instances[0]
 
-    dcm_path = tmp_path / "slice.dcm"
-    dcm_path.write_bytes(b"")
-    mock_ds = Dataset()
-    mock_ds.SOPInstanceUID = instance.anon_sop_instance_uid
-    mock_dcmread.return_value = mock_ds
+        dcm_path = tmp_path / "slice.dcm"
+        dcm_path.write_bytes(b"")
+        mock_ds = Dataset()
+        mock_ds.SOPInstanceUID = instance.anon_sop_instance_uid
+        mock_dcmread.return_value = mock_ds
 
-    assert apply_instance_pixel_phi_for_dcm(model, dcm_path, ["Left", "Right"]) is True
+        assert apply_instance_pixel_phi_for_dcm(model, dcm_path, ["Left", "Right"]) is True
 
-    with model._get_session(read_only=True) as session:
-        row = session.get(Instance, instance.sop_instance_uid)
-        assert row is not None
-        assert row.pixel_phi == "Left, Right"
+        with model._get_session(read_only=True) as session:
+            row = session.get(Instance, instance.sop_instance_uid)
+            assert row is not None
+            assert row.pixel_phi == "Left, Right"
 
 
 def test_collect_series_view_pixel_phi_texts() -> None:

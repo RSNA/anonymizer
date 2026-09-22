@@ -9,9 +9,7 @@ from pydicom import Dataset
 from sqlalchemy import create_engine, text
 
 from anonymizer.controller.phi_io import build_phi_index
-from anonymizer.model.anonymizer import AnonymizerModel
-from tests.controller.dicom.support.test_nodes import TEST_SITEID, TEST_UIDROOT
-from tests.paths import DEFAULT_ANONYMIZER_SCRIPT
+from tests.opened_anonymizer_model import opened_anonymizer_model
 
 V3_METADATA_COLUMNS = (
     ("instances", "pixel_phi"),
@@ -114,12 +112,8 @@ def mock_dataset() -> Dataset:
 
 def test_lookup_patient_table_created_on_open(tmp_path: Path) -> None:
     db_path = tmp_path / "fresh.db"
-    AnonymizerModel(
-        site_id=TEST_SITEID,
-        uid_root=TEST_UIDROOT,
-        script_path=DEFAULT_ANONYMIZER_SCRIPT,
-        db_url=f"sqlite:///{db_path}",
-    )
+    with opened_anonymizer_model(f"sqlite:///{db_path}"):
+        pass
     engine = create_engine(f"sqlite:///{db_path}")
     with engine.connect() as conn:
         tables = {
@@ -139,12 +133,8 @@ def test_ensure_schema_columns_adds_v3_metadata_columns(tmp_path: Path) -> None:
     for table_name, column_name in V3_METADATA_COLUMNS:
         assert column_name not in _column_names(db_path, table_name)
 
-    AnonymizerModel(
-        site_id=TEST_SITEID,
-        uid_root=TEST_UIDROOT,
-        script_path=DEFAULT_ANONYMIZER_SCRIPT,
-        db_url=f"sqlite:///{db_path}",
-    )
+    with opened_anonymizer_model(f"sqlite:///{db_path}"):
+        pass
 
     for table_name, column_name in V3_METADATA_COLUMNS:
         assert column_name in _column_names(db_path, table_name)
@@ -155,20 +145,12 @@ def test_ensure_schema_columns_is_idempotent(tmp_path: Path) -> None:
     _create_v2_shaped_db(db_path)
     db_url = f"sqlite:///{db_path}"
 
-    AnonymizerModel(
-        site_id=TEST_SITEID,
-        uid_root=TEST_UIDROOT,
-        script_path=DEFAULT_ANONYMIZER_SCRIPT,
-        db_url=db_url,
-    )
+    with opened_anonymizer_model(db_url):
+        pass
     columns_after_first_open = {table: _column_names(db_path, table) for table, _ in V3_METADATA_COLUMNS}
 
-    AnonymizerModel(
-        site_id=TEST_SITEID,
-        uid_root=TEST_UIDROOT,
-        script_path=DEFAULT_ANONYMIZER_SCRIPT,
-        db_url=db_url,
-    )
+    with opened_anonymizer_model(db_url):
+        pass
     columns_after_second_open = {table: _column_names(db_path, table) for table, _ in V3_METADATA_COLUMNS}
 
     assert columns_after_first_open == columns_after_second_open
@@ -178,15 +160,10 @@ def test_get_phi_index_after_schema_sync(tmp_path: Path, mock_dataset: Dataset) 
     db_path = tmp_path / "legacy_v2.db"
     _create_v2_shaped_db(db_path)
 
-    model = AnonymizerModel(
-        site_id=TEST_SITEID,
-        uid_root=TEST_UIDROOT,
-        script_path=DEFAULT_ANONYMIZER_SCRIPT,
-        db_url=f"sqlite:///{db_path}",
-    )
-    model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=0)
+    with opened_anonymizer_model(f"sqlite:///{db_path}") as model:
+        model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=0)
 
-    records = build_phi_index(model)
-    assert records is not None
-    assert len(records) >= 1
-    assert records[-1].phi_patient_id == mock_dataset.PatientID
+        records = build_phi_index(model)
+        assert records is not None
+        assert len(records) >= 1
+        assert records[-1].phi_patient_id == mock_dataset.PatientID
