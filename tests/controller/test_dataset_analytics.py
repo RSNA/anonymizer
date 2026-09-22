@@ -187,7 +187,7 @@ def test_mask_file_volume_ml_uses_file_spacing(tmp_path: Path) -> None:
     import numpy as np
     import SimpleITK as sitk
 
-    from anonymizer.controller.analytics import mask_file_volume_ml
+    from anonymizer.controller.ai.tseg.seg_retention import mask_file_volume_ml
 
     path = tmp_path / "organ.nii.gz"
     arr = np.zeros((2, 4, 4), dtype=np.uint8)
