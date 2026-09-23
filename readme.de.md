@@ -7,7 +7,7 @@
 [![PyPI](https://img.shields.io/pypi/v/rsna-anonymizer.svg)](https://pypi.org/project/rsna-anonymizer/)
 [![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue.svg)](https://www.python.org/downloads/)
 
-**Version 19.0.10** ist die aktuelle V19-Version auf dem Branch `master` und auf PyPI. Benötigt **Python 3.12–3.14** mit eingebautem **tkinter**. Bevorzugt **3.12** für die breiteste Tk/AI-Wheel-Abdeckung; **3.14.1** vermeiden (torchvision schließt diesen Patch aus).
+**Version 19.0.10** ist die aktuelle stabile V19-Version auf dem Branch `master` und auf PyPI. Die Entwicklungs-Vorabversion **19.1.0.dev1** liegt auf dem Branch `dev` (`uv pip install --pre rsna-anonymizer`). Benötigt **Python 3.12–3.14** mit eingebautem **tkinter**. Bevorzugt **3.12** für die breiteste Tk/AI-Wheel-Abdeckung; **3.14.1** vermeiden (torchvision schließt diesen Patch aus).
 
 ## Installation
 
@@ -110,6 +110,8 @@ uv sync --group dev
 uv run pre-commit install
 uv run rsna-anonymizer
 ```
+
+Für die 19.1-Entwicklung (Vorabversion) verwenden Sie `git checkout dev` statt `master`.
 
 macOS AI Features: `brew install libomp` (OpenMP-Laufzeit für Harmonize-Kontrast / TotalSegmentator).
 

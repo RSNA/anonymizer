@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Security fixes are applied to the current **V19** release line on `master` and the matching packages on [PyPI](https://pypi.org/project/rsna-anonymizer/) (latest `19.x`).
+Security fixes are applied to the current **V19** release line on `master` (stable `19.0.x`), the **`dev`** branch development line (`19.1.0.dev*`), and the matching packages on [PyPI](https://pypi.org/project/rsna-anonymizer/).
 
 Older major versions are **not** supported.
 
