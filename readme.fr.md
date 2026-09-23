@@ -1,4 +1,4 @@
-# RSNA DICOM Anonymizer (V19.1)
+# RSNA DICOM Anonymizer
 
 [en](readme.md) · [de](readme.de.md) · [es](readme.es.md) · [fr](readme.fr.md)
 
@@ -7,7 +7,7 @@
 [![PyPI](https://img.shields.io/pypi/v/rsna-anonymizer.svg)](https://pypi.org/project/rsna-anonymizer/)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue.svg)](https://www.python.org/downloads/)
 
-**La version 19.1.0.dev1** est la préversion de développement V19.1 actuelle sur la branche `V19.1` (`uv pip install --pre rsna-anonymizer`). La stable **19.0.10** reste sur `master`. Nécessite **Python 3.11–3.14** avec **tkinter** intégré. Préférez **3.12** ; évitez **3.14.1** (torchvision exclut ce correctif).
+**La version 19.1.0.dev1** est la préversion de développement 19.1 actuelle sur la branche `dev` (`uv pip install --pre rsna-anonymizer`). La stable **19.0.10** reste sur `master`. Nécessite **Python 3.11–3.14** avec **tkinter** intégré. Préférez **3.12** ; évitez **3.14.1** (torchvision exclut ce correctif).
 
 ## Installation
 
@@ -105,7 +105,7 @@ Notes de version : [CHANGELOG](CHANGELOG.md).
 ```bash
 git clone https://github.com/RSNA/anonymizer.git
 cd anonymizer
-git checkout V19.1
+git checkout dev
 uv sync --group dev
 uv run pre-commit install
 uv run rsna-anonymizer

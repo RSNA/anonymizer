@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ## [19.1.0.dev1]
-- PyPI development pre-release of V19.1 on branch `V19.1` (install with `uv pip install --pre rsna-anonymizer`)
+- PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
 - Dashboard Dataset analytics with organ volume histograms (TotalSegmentator + user annotations)
 - Series annotate segments: New Segment normative organ matching, unique names, ledger-backed analytics refresh
 - Series View / Dataset: map middle vs right mouse via Tk version so pan and WW/WL stay consistent on macOS Tk 8.6 (Python 3.13/3.14) and Tk 9 (Python 3.12)

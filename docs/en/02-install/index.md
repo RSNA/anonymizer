@@ -1,6 +1,6 @@
 # Install and first launch
 
-**Version 19.1.0.dev1** is the current V19.1 development pre-release (`uv pip install --pre rsna-anonymizer`). Stable **19.0.10** remains on `master`. You need **Python 3.11–3.14** with **tkinter**, installed via **uv**. Prefer **3.12**; avoid **3.14.1** (torchvision excludes that patch).
+**Version 19.1.0.dev1** is the current 19.1 development pre-release on the `dev` branch (`uv pip install --pre rsna-anonymizer`). Stable **19.0.10** remains on `master`. You need **Python 3.11–3.14** with **tkinter**, installed via **uv**. Prefer **3.12**; avoid **3.14.1** (torchvision excludes that patch).
 
 ## Install with uv and tkinter
 
