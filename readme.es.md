@@ -5,13 +5,13 @@
 [![Tests](https://github.com/RSNA/anonymizer/actions/workflows/tests.yaml/badge.svg)](https://github.com/RSNA/anonymizer/actions/workflows/tests.yaml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/rsna-anonymizer.svg)](https://pypi.org/project/rsna-anonymizer/)
-[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue.svg)](https://www.python.org/downloads/)
 
-**La versión 19.0.10** es la versión V19 actual en la rama `master` y en PyPI. Requiere **Python 3.11 o 3.12** con **tkinter** incluido. Python 3.13 no es compatible.
+**La versión 19.0.10** es la versión V19 actual en la rama `master` y en PyPI. Requiere **Python 3.12–3.14** con **tkinter** incluido. Prefiera **3.12** para la cobertura más amplia de ruedas Tk/IA; evite **3.14.1** (torchvision excluye ese parche).
 
 ## Instalación
 
-Necesita tres cosas: **uv**, un entorno Python **3.11/3.12** con **tkinter** y (en macOS, para AI Features) **libomp**.
+Necesita tres cosas: **uv**, un entorno Python **3.12–3.14** con **tkinter** y (en macOS, para AI Features) **libomp**.
 
 ### 1. Instalar uv
 
@@ -37,22 +37,22 @@ La interfaz de escritorio necesita **tkinter**. Instale un Python que lo incluya
 
 | Plataforma | Asegurar tkinter |
 | --- | --- |
-| **Windows** | Instale Python 3.11 o 3.12 desde [python.org](https://www.python.org/downloads/) con **Add to PATH** y **tcl/tk and IDLE** |
+| **Windows** | Instale Python 3.12–3.14 desde [python.org](https://www.python.org/downloads/) con **Add to PATH** y **tcl/tk and IDLE** |
 | **macOS** | Prefiera `uv python install 3.12` (Tk 9.x). O Homebrew: `brew install python@3.12 python-tk@3.12` |
-| **Linux** | `sudo apt install python3.12 python3.12-tk python3.12-venv` (o los paquetes equivalentes `python3.11` / `python3.11-tk` / `python3.11-venv`) |
+| **Linux** | `sudo apt install python3.12 python3.12-tk python3.12-venv` (o los paquetes equivalentes para 3.13 / 3.14) |
 
 ```bash
-uv python install 3.12                     # or: 3.11
-uv venv rsna-anonymizer --python 3.12      # or: --python 3.11
+uv python install 3.12                     # o: 3.13 / 3.14
+uv venv rsna-anonymizer --python 3.12      # o: --python 3.13 / 3.14
 source rsna-anonymizer/bin/activate        # Windows: rsna-anonymizer\Scripts\activate
 
-uv pip install rsna-anonymizer             # version 19.0.10
+uv pip install rsna-anonymizer             # versión 19.0.10
 ```
 
 ### 3. Verificar la instalación
 
 ```bash
-python --version          # 3.11.x or 3.12.x
+python --version          # 3.12.x–3.14.x
 python -m tkinter         # a small Tk window must open — required for the UI
 rsna-anonymizer --version # should report 19.0.10
 ```
