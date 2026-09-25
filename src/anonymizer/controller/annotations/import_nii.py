@@ -296,21 +296,37 @@ def resolve_label_names(
     return resolved, used, tuple(warnings)
 
 
+class AnnotationGeometryUnsupported(ValueError):
+    """Series cannot host annotation volumes (e.g. planar CR/DX without IOP/IPP)."""
+
+
 def ensure_series_annotation_geometry(
     series_dir: Path,
     cache_dir: Path,
 ) -> AnnotateSession:
-    """Load or create an annotate session with volume + mask geometry for ``series_dir``."""
+    """Load or create an annotate session with volume + mask geometry for ``series_dir``.
+
+    Requires the same stackable patient geometry as TSeg (``ImageOrientationPatient`` +
+    ``ImagePositionPatient``). Planar CXR/CR without those tags must not invent a SITK
+    volume — Annotate stays unavailable instead.
+    """
     cache_dir = Path(cache_dir)
     session = load_annotate_session(cache_dir)
     if session is not None:
         return session
 
-    from anonymizer.controller.ai.tseg.dicom_geometry import build_sitk_volume_from_series_frames
+    from anonymizer.controller.ai.tseg.dicom_geometry import (
+        build_sitk_volume_from_series_frames,
+        is_stackable_image_header,
+    )
     from anonymizer.controller.series_io import load_series_frames
 
     series_dir = Path(series_dir)
     loaded = load_series_frames(series_dir)
+    if not is_stackable_image_header(loaded.metadata):
+        raise AnnotationGeometryUnsupported(
+            f"Series lacks stackable patient geometry for annotation volumes: {series_dir}"
+        )
     volume = build_sitk_volume_from_series_frames(loaded.metadata, loaded.frames, loaded.slice_paths)
     cache_dir.mkdir(parents=True, exist_ok=True)
     sitk.WriteImage(volume, str(cache_dir / "volume.nii.gz"), True)

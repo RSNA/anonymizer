@@ -2126,6 +2126,10 @@ class ProjectController(AE):
         """
         return self._move_futures is not None
 
+    def manage_move(self, req: MoveStudiesRequest) -> None:
+        """Public C-MOVE entry point (wraps ``_manage_move``)."""
+        self._manage_move(req)
+
     def _manage_move(self, req: MoveStudiesRequest) -> None:
         """
         Blocking: Manages a bulk move operation for a list of studies using a thread pool (self._study_move_thread_pool_size).
@@ -2687,6 +2691,9 @@ class ProjectController(AE):
 
     def get_totals(self):
         return self.anonymizer.model.get_totals()
+
+    def get_imported_modalities(self) -> list[str]:
+        return self.anonymizer.model.get_imported_modalities()
 
     def clear_series_tseg_cache(
         self,

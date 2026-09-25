@@ -1774,7 +1774,7 @@ def run_HEADLESS(project_model_path: Path):
     controller.anonymizer.stop()
 
 
-@click.command(help=_cli_help())
+@click.command(help=_cli_help(), context_settings={"ignore_unknown_options": False})
 @click.version_option(version=get_version(), prog_name="RSNA DICOM Anonymizer")
 @click.option(
     "--config",
@@ -1794,7 +1794,32 @@ def run_HEADLESS(project_model_path: Path):
     default=False,
     help=_("Run AI batch once using --ai-batch, then exit (requires -c)."),
 )
-def main(config: Path | None = None, ai_batch: Path | None = None, ai_batch_run: bool = False):
+@click.option(
+    "--mcp",
+    is_flag=True,
+    default=False,
+    help=_("Run the MCP server (stdio / SSE / streamable-http) after shared bootstrap."),
+)
+@click.option(
+    "--transport",
+    type=click.Choice(["stdio", "sse", "streamable-http"], case_sensitive=False),
+    default="stdio",
+    show_default=True,
+    help=_("MCP transport (only with --mcp)."),
+)
+@click.option("--host", default="127.0.0.1", show_default=True, help=_("MCP bind host (HTTP transports)."))
+@click.option("--port", default=8000, show_default=True, type=int, help=_("MCP bind port (HTTP transports)."))
+@click.option("--path", "mcp_path", default="/mcp", show_default=True, help=_("MCP URL path (streamable-http)."))
+def main(
+    config: Path | None = None,
+    ai_batch: Path | None = None,
+    ai_batch_run: bool = False,
+    mcp: bool = False,
+    transport: str = "stdio",
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    mcp_path: str = "/mcp",
+):
     install_dir = os.path.dirname(os.path.realpath(__file__))
     logs_dir = init_logging()
     os.chdir(install_dir)
@@ -1850,6 +1875,19 @@ def main(config: Path | None = None, ai_batch: Path | None = None, ai_batch_run:
             logger.error("--ai-batch-run requires both -c/--config and --ai-batch")
             sys.exit(2)
         sys.exit(run_HEADLESS_AI_BATCH(config, ai_batch))
+
+    if mcp:
+        from anonymizer.mcp.server import run_MCP
+
+        run_MCP(
+            transport=transport.lower(),
+            host=host,
+            port=port,
+            path=mcp_path,
+            project_config=config,
+            init_logs=False,
+        )
+        return
 
     if config:
         run_HEADLESS(config)

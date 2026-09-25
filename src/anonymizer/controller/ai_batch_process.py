@@ -1035,6 +1035,28 @@ def _apply_remove_pixel_phi_series(
     )
 
 
+def apply_remove_pixel_phi_series(
+    series_path: Path,
+    *,
+    anon_model: AnonymizerModel,
+    ocr_reader: Reader,
+    on_log_detail: Callable[[str], None] | None = None,
+    removal_mode: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT,
+    project_dir: Path | None = None,
+    use_modality_whitelist: bool = True,
+) -> AiBatchOutcome:
+    """Public series-level pixel PHI removal (wraps ``_apply_remove_pixel_phi_series``)."""
+    return _apply_remove_pixel_phi_series(
+        series_path,
+        anon_model=anon_model,
+        ocr_reader=ocr_reader,
+        on_log_detail=on_log_detail,
+        removal_mode=removal_mode,
+        project_dir=project_dir,
+        use_modality_whitelist=use_modality_whitelist,
+    )
+
+
 def _apply_harmonize_series(
     series_path: Path,
     *,

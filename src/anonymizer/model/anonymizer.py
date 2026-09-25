@@ -563,6 +563,14 @@ class AnonymizerModel:
         )
 
     @use_session(is_read_only_operation=True)
+    def get_imported_modalities(self) -> list[str]:
+        """Distinct modality codes present on imported series (inventory), sorted."""
+        rows = self.session.execute(
+            select(Series.modality).where(Series.modality.is_not(None)).distinct()
+        ).scalars().all()
+        return sorted({str(m).strip().upper() for m in rows if m and str(m).strip()})
+
+    @use_session(is_read_only_operation=True)
     def get_phi_by_anon_patient_id(self, anon_patient_id: str) -> PHI | None:
         """
         Fetch PHI record from the database using the anonymized patient ID.
