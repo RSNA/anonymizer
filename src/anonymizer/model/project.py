@@ -14,7 +14,7 @@ from typing import Dict, List
 from dataclasses_json import config, dataclass_json
 from pynetdicom._globals import DEFAULT_TRANSFER_SYNTAXES  # type: ignore
 
-from anonymizer.utils.modalities import get_modalities
+from anonymizer.utils.modalities import DEFAULT_PROJECT_MODALITIES, get_modalities
 from anonymizer.utils.translate import _
 from anonymizer.utils.version import get_version
 
@@ -169,7 +169,7 @@ class ProjectModel:
 
     @staticmethod
     def default_modalities() -> List[str]:
-        return ["CR", "DX", "CT", "MR"]
+        return list(DEFAULT_PROJECT_MODALITIES)
 
     @staticmethod
     def default_transfer_syntaxes() -> List[str]:

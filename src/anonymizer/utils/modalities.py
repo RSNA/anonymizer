@@ -151,6 +151,9 @@ _MODALITY_ALIASES: dict[str, str] = {
 
 _DEFAULT_MODALITY_TOKENS = frozenset({"default", "defaults", "default_modalities"})
 
+# Single source for ProjectModel + resolve_project_modalities ("defaults" token).
+DEFAULT_PROJECT_MODALITIES: tuple[str, ...] = ("CR", "DX", "CT", "MR")
+
 _DEFAULTS_IN_TEXT_RE = re.compile(
     r"\bdefaults?\b|\bdefault\s+modalit(?:y|ies)\b",
     re.IGNORECASE,
@@ -282,10 +285,8 @@ def resolve_project_modalities(
     if not tokens:
         return None
 
-    from anonymizer.model.project import ProjectModel
-
     defaults = list(default_modalities) if default_modalities is not None else list(
-        ProjectModel.default_modalities()
+        DEFAULT_PROJECT_MODALITIES
     )
     catalog = get_modalities()
     resolved: list[str] = []
