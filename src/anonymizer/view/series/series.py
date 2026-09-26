@@ -79,6 +79,7 @@ from anonymizer.controller.annotations import (
     stamp_brush,
     undo_last_stroke,
 )
+from anonymizer.controller.annotations.import_nii import AnnotationGeometryUnsupported
 from anonymizer.controller.create_projections import invalidate_projection_cache
 from anonymizer.controller.runner import (
     Algorithm,
@@ -2569,6 +2570,10 @@ class SeriesView(AppCTkToplevel):
             return self._annotate_session
         try:
             session = ensure_series_annotation_geometry(self._series_path, self._cache_dir())
+        except AnnotationGeometryUnsupported as exc:
+            # Expected for planar CR/DX (no IOP/IPP) — Annotate disabled, not an error.
+            logger.info("%s", exc)
+            session = None
         except Exception:
             logger.exception("Could not ensure annotation geometry for %s", self._series_path)
             session = load_annotate_session(self._cache_dir())

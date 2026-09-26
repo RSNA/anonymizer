@@ -6,6 +6,7 @@ Experimental scripts, CLIs, and UI spikes. **Not** part of the shipped `rsna-ano
 
 ```
 src/prototyping/
+├── medgemma_chat/   # MedGemma + Anonymizer MCP chat (CLI / Gradio prototype)
 ├── ct/              # CT eval CLIs (e.g. ct_eval.py)
 ├── falcon/          # FALCON offline research (moved from product; superseded by tseg Harmonize)
 ├── ocr/             # OCR burned-in text detection / inpainting experiments
@@ -52,6 +53,10 @@ uv sync --extra tseg --group dev --group prototyping-viz
 uv run python -m prototyping.ffr.face /path/to/ct_head_series
 # → opens <series>/ts_seg/viz_poc/report.html in a browser
 # (runs face segmentation first if 0_TS_SEG/seg/face.nii.gz is missing)
+
+# MedGemma × Anonymizer MCP chat (see medgemma_chat/README.md)
+uv sync --extra mcp --group medgemma-chat
+uv run python -m prototyping.medgemma_chat --model /path/to/medgemma_4b_it
 ```
 
 ## Promotion to production

@@ -54,6 +54,11 @@ rsna-anonymizer = "anonymizer.anonymizer:main"
 [project.urls]
 Homepage = "https://github.com/RSNA/anonymizer"
 
+[project.optional-dependencies]
+mcp = [
+    "fastmcp>=4.0",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/anonymizer"]
 
@@ -78,6 +83,7 @@ dev = [
     "pytest-mock>=3.14.1",
     "watchfiles>=1.0.0",
     "setuptools>=70,<82",
+    "gradio>=6",
 ]
 docs = [
     "mkdocs-material>=9.5.0",
@@ -86,6 +92,12 @@ docs = [
 prototyping-viz = [
     "matplotlib>=3.8.0",
     "scikit-image>=0.22.0",
+]
+medgemma-chat = [
+    "transformers>=5",
+    "pillow",
+    "accelerate",
+    "bitsandbytes>=0.50",
 ]
 
 [tool.ruff]
@@ -119,8 +131,8 @@ ignore = [
 max-complexity = 15
 
 [tool.pytest.ini_options]
-testpaths = ["tests/controller", "tests/view", "tests/model"]
-addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model -m \"not ocr_integration and not view_dev and not dicom_integration\""
+testpaths = ["tests/controller", "tests/view", "tests/model", "tests/mcp"]
+addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model --cov=src/anonymizer/mcp -m \"not ocr_integration and not view_dev and not dicom_integration\""
 pythonpath = ["src", "."]
 filterwarnings = []
 markers = [

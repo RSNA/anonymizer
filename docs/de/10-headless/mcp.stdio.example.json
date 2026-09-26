@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "rsna-anonymizer": {
+      "command": "uv",
+      "args": ["run", "rsna-anonymizer", "--mcp"]
+    }
+  }
+}
