@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from anonymizer.controller.project import ProjectController
+from anonymizer.mcp import api as mcp_tools
 from anonymizer.mcp.session import SESSION, ProjectSession, ProjectSessionError
-from anonymizer.mcp import tools as mcp_tools
 from anonymizer.model.project import ProjectModel
 
 
@@ -22,22 +22,31 @@ def _isolated_session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def test_create_project_writes_model_and_opens_session(tmp_path: Path):
-    result = mcp_tools.create_project(
-        project_name="Research CT Head",
-        site_id="SITE99",
-        uid_root="1.2.3.4.5",
-    )
+    result = mcp_tools.create_project(project_name="Research CT Head")
     assert result["ok"] is True
     project = result["project"]
     assert project["project_name"] == "Research CT Head"
-    assert project["site_id"] == "SITE99"
-    assert project["uid_root"] == "1.2.3.4.5"
     assert project["totals"]["patients"] == 0
     assert "storage_dir" not in project
     assert "images_dir" not in project
     storage = tmp_path / "RSNA Anonymizer" / "Research CT Head"
     assert (storage / ProjectController.PROJECT_MODEL_FILENAME_JSON).is_file()
     assert SESSION.is_open
+
+
+def test_create_project_via_ops_still_accepts_site_uid(tmp_path: Path):
+    """site_id/uid_root remain on ops/session; not on the MCP tool schema."""
+    from anonymizer.mcp import ops as mcp_ops
+
+    payload = mcp_ops.create_project(
+        SESSION,
+        "Research CT Head",
+        site_id="SITE99",
+        uid_root="1.2.3.4.5",
+    )
+    project = payload["project"]
+    assert project["site_id"] == "SITE99"
+    assert project["uid_root"] == "1.2.3.4.5"
 
 
 def test_create_project_requires_overwrite_to_replace():
@@ -128,11 +137,11 @@ def test_list_projects_finds_created():
 def test_mcp_call_logging_middleware_logs(caplog: pytest.LogCaptureFixture):
     import asyncio
 
-    from anonymizer.mcp.call_logging import McpCallLoggingMiddleware
+    from anonymizer.mcp.middleware import McpCallLoggingMiddleware
 
     class _Ctx:
         method = "tools/call"
-        params = {"name": "project_info", "arguments": {}}
+        message = {"name": "project_info", "arguments": {}}
 
     async def _next(_ctx):
         class _Result:
@@ -142,7 +151,8 @@ def test_mcp_call_logging_middleware_logs(caplog: pytest.LogCaptureFixture):
         return _Result()
 
     with caplog.at_level("INFO", logger="anonymizer.mcp"):
-        asyncio.run(McpCallLoggingMiddleware()(_Ctx(), _next))
+        # Exercise on_message directly (FastMCP dispatches hooks via Middleware.__call__).
+        asyncio.run(McpCallLoggingMiddleware().on_message(_Ctx(), _next))
     text = "\n".join(r.message for r in caplog.records)
     assert "MCP ← tools/call" in text
     assert "project_info" in text
@@ -152,65 +162,77 @@ def test_mcp_call_logging_middleware_logs(caplog: pytest.LogCaptureFixture):
 def test_mcp_call_logging_logs_initialize_instructions(caplog: pytest.LogCaptureFixture):
     import asyncio
 
-    from anonymizer.mcp.call_logging import McpCallLoggingMiddleware
+    from anonymizer.mcp.middleware import McpCallLoggingMiddleware
     from anonymizer.mcp.instructions import load_server_instructions
 
     instructions = load_server_instructions()
 
     class _Ctx:
         method = "initialize"
-        params = {}
+        message = {}
 
     async def _next(_ctx):
-        return type("InitResult", (), {"instructions": instructions})()
+        return {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "serverInfo": {"name": "rsna-anonymizer", "version": "0"},
+            "instructions": instructions,
+        }
 
     with caplog.at_level("INFO", logger="anonymizer.mcp"):
-        asyncio.run(McpCallLoggingMiddleware()(_Ctx(), _next))
+        asyncio.run(McpCallLoggingMiddleware().on_message(_Ctx(), _next))
     text = "\n".join(r.message for r in caplog.records)
     assert "MCP ← initialize" in text
-    assert "MCP → initialize instructions returned to client" in text
+    assert "initialize instructions" in text
     assert "create_project" in text
     assert "list_inventory" in text
+    assert "no instructions" not in text
+    assert "serverInfo" in text or "capabilities" in text
 
 
 def test_mcp_call_logging_logs_tools_list(caplog: pytest.LogCaptureFixture):
     import asyncio
 
-    from anonymizer.mcp.call_logging import McpCallLoggingMiddleware
-
-    class _Tool:
-        def model_dump(self, by_alias: bool = False, exclude_none: bool = False):
-            return {
-                "name": "create_project",
-                "description": "Create a new empty project.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "project_name": {
-                            "type": "string",
-                            "description": "Project display name (required).",
-                        }
-                    },
-                    "required": ["project_name"],
-                },
-            }
+    from anonymizer.mcp.middleware import McpCallLoggingMiddleware
 
     class _Ctx:
         method = "tools/list"
-        params = {}
+        message = {}
 
     async def _next(_ctx):
-        return type("ListResult", (), {"tools": [_Tool()]})()
+        return {
+            "tools": [
+                {
+                    "name": "create_project",
+                    "description": "Create a new empty project.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "project_name": {
+                                "type": "string",
+                                "description": "Project display name (required).",
+                            }
+                        },
+                        "required": ["project_name"],
+                    },
+                }
+            ]
+        }
 
-    with caplog.at_level("INFO", logger="anonymizer.mcp"):
-        asyncio.run(McpCallLoggingMiddleware()(_Ctx(), _next))
+    with caplog.at_level("DEBUG", logger="anonymizer.mcp"):
+        asyncio.run(McpCallLoggingMiddleware().on_message(_Ctx(), _next))
     text = "\n".join(r.message for r in caplog.records)
     assert "MCP ← tools/list" in text
-    assert "MCP → tools/list returned to client" in text
+    assert "MCP → tools/list returned to client" in text or "tools/list API definitions" in text
+    assert "1 tools" in text or "tools=1" in text
     assert "create_project" in text
     assert "Project display name" in text
     assert "inputSchema" in text
-
+    assert "no tools" not in text
+    assert any(
+        r.levelname == "DEBUG" and "tools/list API definitions" in r.message
+        for r in caplog.records
+    )
 
 def test_resolve_missing_path_raises(tmp_path: Path):
     session = ProjectSession()
@@ -234,7 +256,7 @@ def test_run_mcp_keyboard_interrupt_exits_cleanly(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(mcp_server.SESSION, "close", lambda: closed.append(True))
 
     with pytest.raises(SystemExit) as exc_info:
-        mcp_server.run_MCP(transport="streamable-http", port=0, init_logs=True)
+        mcp_server.run_MCP(transport="http", port=0, init_logs=True)
     assert exc_info.value.code == 130
     assert closed == [True]
 

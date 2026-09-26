@@ -1780,7 +1780,7 @@ def run_HEADLESS(project_model_path: Path):
     "--config",
     "-c",
     type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=Path),
-    help=_("Path to the configuration file. If not provided, the GUI will be launched."),
+    help=_("Headless DICOM receive using this ProjectModel.json (mutually exclusive with --mcp)."),
 )
 @click.option(
     "--ai-batch",
@@ -1792,33 +1792,25 @@ def run_HEADLESS(project_model_path: Path):
     "--ai-batch-run",
     is_flag=True,
     default=False,
-    help=_("Run AI batch once using --ai-batch, then exit (requires -c)."),
+    help=_("Run AI batch once using --ai-batch, then exit (requires -c; not with --mcp)."),
 )
 @click.option(
     "--mcp",
-    is_flag=True,
-    default=False,
-    help=_("Run the MCP server (stdio / SSE / streamable-http) after shared bootstrap."),
+    type=str,
+    is_flag=False,
+    flag_value="",
+    default=None,
+    help=_(
+        "Headless MCP server (mutually exclusive with -c). "
+        "Bare --mcp uses stdio; --mcp HOST:PORT serves http://HOST:PORT/mcp. "
+        "Open or create projects with MCP tools."
+    ),
 )
-@click.option(
-    "--transport",
-    type=click.Choice(["stdio", "sse", "streamable-http"], case_sensitive=False),
-    default="stdio",
-    show_default=True,
-    help=_("MCP transport (only with --mcp)."),
-)
-@click.option("--host", default="127.0.0.1", show_default=True, help=_("MCP bind host (HTTP transports)."))
-@click.option("--port", default=8000, show_default=True, type=int, help=_("MCP bind port (HTTP transports)."))
-@click.option("--path", "mcp_path", default="/mcp", show_default=True, help=_("MCP URL path (streamable-http)."))
 def main(
     config: Path | None = None,
     ai_batch: Path | None = None,
     ai_batch_run: bool = False,
-    mcp: bool = False,
-    transport: str = "stdio",
-    host: str = "127.0.0.1",
-    port: int = 8000,
-    mcp_path: str = "/mcp",
+    mcp: str | None = None,
 ):
     install_dir = os.path.dirname(os.path.realpath(__file__))
     logs_dir = init_logging()
@@ -1870,21 +1862,74 @@ def main(
     apply_ai_features_preferences()
     apply_analytics_preferences()
 
+    dispatch_runtime(
+        config=config,
+        ai_batch=ai_batch,
+        ai_batch_run=ai_batch_run,
+        mcp=mcp,
+        logs_dir=logs_dir,
+    )
+
+
+def parse_mcp_bind(addr: str) -> tuple[str, int]:
+    """Parse ``HOST:PORT`` for ``--mcp``. Raises ``ValueError`` if invalid."""
+    host, sep, port_s = addr.rpartition(":")
+    if not sep or not host or not port_s:
+        raise ValueError(f"expected HOST:PORT, got {addr!r}")
+    try:
+        port = int(port_s)
+    except ValueError as exc:
+        raise ValueError(f"invalid port in {addr!r}") from exc
+    if not (1 <= port <= 65535):
+        raise ValueError(f"port out of range in {addr!r}")
+    return host, port
+
+
+def dispatch_runtime(
+    *,
+    config: Path | None,
+    ai_batch: Path | None,
+    ai_batch_run: bool,
+    mcp: str | None,
+    logs_dir: Path | None,
+) -> None:
+    """Choose GUI / headless receive / MCP after shared bootstrap.
+
+    ``-c`` and ``--mcp`` are mutually exclusive.
+    ``mcp`` is ``None`` (off), ``""`` (stdio), or ``HOST:PORT`` (HTTP).
+    """
+    if config is not None and mcp is not None:
+        logger.error("-c/--config and --mcp are mutually exclusive")
+        sys.exit(2)
+
+    if ai_batch_run and mcp is not None:
+        logger.error("--ai-batch-run cannot be combined with --mcp")
+        sys.exit(2)
+
     if ai_batch_run:
         if config is None or ai_batch is None:
             logger.error("--ai-batch-run requires both -c/--config and --ai-batch")
             sys.exit(2)
         sys.exit(run_HEADLESS_AI_BATCH(config, ai_batch))
 
-    if mcp:
-        from anonymizer.mcp.server import run_MCP
+    if mcp is not None:
+        from anonymizer.mcp.server import MCP_HTTP_PATH, run_MCP
+
+        if mcp == "":
+            run_MCP(transport="stdio", init_logs=False)
+            return
+
+        try:
+            host, port = parse_mcp_bind(mcp)
+        except ValueError as exc:
+            logger.error("--mcp address invalid: %s", exc)
+            sys.exit(2)
 
         run_MCP(
-            transport=transport.lower(),
+            transport="http",
             host=host,
             port=port,
-            path=mcp_path,
-            project_config=config,
+            path=MCP_HTTP_PATH,
             init_logs=False,
         )
         return

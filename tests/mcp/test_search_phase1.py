@@ -9,7 +9,7 @@ import pytest
 from pydicom.dataset import Dataset
 
 from anonymizer.mcp.session import SESSION
-from anonymizer.mcp import tools as mcp_tools
+from anonymizer.mcp import api as mcp_tools
 from anonymizer.utils.translate import set_language_code
 
 DAVIDSON = (

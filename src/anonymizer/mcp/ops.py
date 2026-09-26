@@ -537,6 +537,19 @@ def resolve_series(
     _reject_relative_selector("study", study_sel)
     _reject_relative_selector("series", series_sel)
 
+    # "all" means no filter for study/series. For patient it must not be treated as an id —
+    # export/preview needs one patient; use patient_index from list_inventory instead.
+    if patient_sel.lower() in {"all", "*"}:
+        raise HeadlessOpsError(
+            'patient="all" is not valid for series preview/export. '
+            'Call list_inventory, then pass one patient_index (e.g. patient="2") '
+            "or anon_patient_id from that table."
+        )
+    if study_sel.lower() in {"all", "*"}:
+        study_sel = ""
+    if series_sel.lower() in {"all", "*"}:
+        series_sel = ""
+
     filtered = list(rows)
 
     if patient_sel:
@@ -563,26 +576,38 @@ def resolve_series(
         if not filtered:
             raise HeadlessOpsError(f"No series for patient={target_patient!r}")
 
-    if study_sel and study_sel.lower() not in {"all", "*"}:
-        studies = _study_order(filtered)
-        picked = _pick_index(studies, study_sel, label="study")
-        filtered = [r for r in filtered if str(r.get("anon_study_uid") or "") == picked]
+    if study_sel:
+        # Prefer inventory study_index when present; else 1-based order of distinct studies.
+        by_study_index = [
+            r for r in filtered if str(r.get("study_index") or "") == study_sel
+        ]
+        if study_sel.isdigit() and by_study_index:
+            filtered = by_study_index
+        else:
+            studies = _study_order(filtered)
+            picked = _pick_index(studies, study_sel, label="study")
+            filtered = [r for r in filtered if str(r.get("anon_study_uid") or "") == picked]
         if not filtered:
             raise HeadlessOpsError(f"No series for study selector={study_sel!r}")
 
-    if series_sel and series_sel.lower() not in {"all", "*"}:
+    if series_sel:
         if series_sel.isdigit():
             want = int(series_sel)
+            # Global row_index when patient omitted (e.g. "second series in inventory").
+            by_row = [r for r in filtered if int(r.get("row_index") or 0) == want]
             by_index = [r for r in filtered if int(r.get("series_index") or 0) == want]
-            if not by_index and patient_sel:
-                if 1 <= want <= len(filtered):
-                    by_index = [filtered[want - 1]]
-            if not by_index:
+            if not patient_sel and by_row:
+                filtered = by_row
+            elif by_index:
+                filtered = by_index
+            elif patient_sel and 1 <= want <= len(filtered):
+                filtered = [filtered[want - 1]]
+            else:
                 raise HeadlessOpsError(
-                    f"No series matched series={series_sel!r} (series_index). "
-                    "Call list_inventory and use series_index within the patient."
+                    f"No series matched series={series_sel!r}. "
+                    "Call list_inventory; use series_index within a patient, "
+                    "or row_index when patient is omitted."
                 )
-            filtered = by_index
             pick_row = filtered[0]
         else:
             filtered = _filter_series_rows(filtered, series_selector=series_sel)
@@ -598,7 +623,7 @@ def resolve_series(
         else:
             raise HeadlessOpsError(
                 f"{len(filtered)} series match; pass series_index from list_inventory "
-                '(e.g. patient="1", series="1").'
+                '(e.g. patient="1", series="1"), or row_index as series="2" with no patient.'
             )
 
     path = _series_disk_path(controller, pick_row)
@@ -1159,6 +1184,7 @@ def configure_remote(
     aet: str,
     role: RemoteScpRole | str = RemoteScpRole.QUERY,
 ) -> dict[str, Any]:
+    """Thin adapter: set ``remote_scps`` + ``save_model`` (no controller changes)."""
     try:
         role_enum = role if isinstance(role, RemoteScpRole) else RemoteScpRole(str(role).strip().upper())
     except ValueError as exc:
@@ -1193,6 +1219,7 @@ def pacs_find(
     study_date: str = "",
     modality: str = "",
 ) -> dict[str, Any]:
+    """Thin adapter: ``ProjectController.find_studies`` → allowlisted study dicts."""
     scp_key = _query_scp_key()
     if scp_key not in controller.model.remote_scps:
         raise HeadlessOpsError(f"No {scp_key} remote configured. Call configure_remote first.")
@@ -1232,6 +1259,7 @@ def pacs_move(
     studies: list[dict[str, str]],
     level: PacsMoveLevel | str = PacsMoveLevel.SERIES,
 ) -> dict[str, Any]:
+    """Thin adapter: ensure SCP → ``get_study_uid_hierarchies`` / ``manage_move``."""
     try:
         session.ensure_scp()
     except HeadlessSessionError as exc:

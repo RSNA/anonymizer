@@ -9,11 +9,11 @@ Usage (anonymizer repo)::
   # Real EasyOCR (slow first time):
   uv run python tests/mcp/run_mvp_live.py --real-ocr
 
-  # Also load MedGemma and write a CXR report (needs ght-qcxr weights):
+  # Also load MedGemma and write a CXR report (needs local weights):
   uv run python tests/mcp/run_mvp_live.py --real-ocr --medgemma \\
-      --medgemma-dir /Users/michaelevans/CODE/ght-qcxr/medgemma/medgemma_4b_it
+      --medgemma-dir /path/to/medgemma_4b_it
 
-Spawns ``rsna-anonymizer --mcp`` on --port, drives create→import→strip→export,
+Spawns ``rsna-anonymizer --mcp HOST:PORT``, drives create→import→strip→export,
 writes a JSON summary under the project private dir, then tears the server down.
 """
 
@@ -41,9 +41,11 @@ DAVIDSON_DCM = next(
 )
 
 
-def _tool_json(result) -> dict:
+def _tool_payload(result) -> dict:
+    from anonymizer.mcp.api import parse_wire_text
+
     text = "".join(getattr(b, "text", "") or "" for b in (getattr(result, "content", None) or []))
-    return json.loads(text)
+    return parse_wire_text(text)
 
 
 async def _mvp(url: str, storage_dir: Path, *, skip_ocr: bool) -> dict:
@@ -58,7 +60,7 @@ async def _mvp(url: str, storage_dir: Path, *, skip_ocr: bool) -> dict:
             assert "remove_pixel_phi" in tools and "export_series_preview" in tools
 
             storage_dir.mkdir(parents=True, exist_ok=True)
-            created = _tool_json(
+            created = _tool_payload(
                 await session.call_tool(
                     "create_project",
                     {
@@ -71,7 +73,7 @@ async def _mvp(url: str, storage_dir: Path, *, skip_ocr: bool) -> dict:
             assert created.get("ok"), created
             summary["steps"].append({"create_project": created.get("ok")})
 
-            imported = _tool_json(
+            imported = _tool_payload(
                 await session.call_tool("import_file", {"file_path": str(DAVIDSON_DCM)})
             )
             assert imported.get("ok") and imported.get("succeeded", 0) >= 1, imported
@@ -86,7 +88,7 @@ async def _mvp(url: str, storage_dir: Path, *, skip_ocr: bool) -> dict:
                 }
             )
 
-            inv = _tool_json(await session.call_tool("list_inventory", {}))
+            inv = _tool_payload(await session.call_tool("list_inventory", {}))
             assert inv.get("ok") and inv.get("count", 0) >= 1, inv
             row = inv["series"][0]
             assert "series_path" not in row
@@ -95,22 +97,21 @@ async def _mvp(url: str, storage_dir: Path, *, skip_ocr: bool) -> dict:
 
             if skip_ocr:
                 # Mark scanned by exporting with gate off, then user still gets a preview.
-                preview = _tool_json(
+                preview = _tool_payload(
                     await session.call_tool(
                         "export_series_preview",
                         {
                             "patient": "1",
                             "series": "1",
-                            "require_pixel_phi_scanned": False,
                         },
                     )
                 )
                 summary["steps"].append({"remove_pixel_phi": "skipped (--skip-ocr)"})
             else:
-                stripped = _tool_json(
+                stripped = _tool_payload(
                     await session.call_tool(
                         "remove_pixel_phi",
-                        {"series": "all", "removal_mode": "blackout"},
+                        {"series": "all"},
                     )
                 )
                 assert stripped.get("ok"), stripped
@@ -123,7 +124,7 @@ async def _mvp(url: str, storage_dir: Path, *, skip_ocr: bool) -> dict:
                         }
                     }
                 )
-                preview = _tool_json(
+                preview = _tool_payload(
                     await session.call_tool(
                         "export_series_preview",
                         {"patient": "1", "series": "1"},
@@ -131,7 +132,16 @@ async def _mvp(url: str, storage_dir: Path, *, skip_ocr: bool) -> dict:
                 )
 
             assert preview.get("ok"), preview
-            summary["preview_path"] = preview.get("preview_path")
+            preview_path = preview.get("preview_path")
+            if not preview_path and preview.get("preview_base64"):
+                import base64
+
+                ext = ".jpg" if "jpeg" in str(preview.get("mime_type") or "") else ".png"
+                out_img = storage_dir / "private" / f"mvp_preview{ext}"
+                out_img.parent.mkdir(parents=True, exist_ok=True)
+                out_img.write_bytes(base64.b64decode(preview["preview_base64"]))
+                preview_path = str(out_img)
+            summary["preview_path"] = preview_path
             summary["preview"] = {
                 "width": preview.get("width"),
                 "height": preview.get("height"),
@@ -143,19 +153,16 @@ async def _mvp(url: str, storage_dir: Path, *, skip_ocr: bool) -> dict:
 
 
 def _medgemma_report(preview_path: Path, model_dir: Path, device: str) -> str:
-    sys.path.insert(0, str(Path("/Users/michaelevans/CODE/ght-qcxr")))
-    from medgemma.mcp_medgemma_chat import (  # type: ignore
-        _require_ml,
+    from prototyping.medgemma_chat.infer import (
         generate_cxr_report,
         load_medgemma,
+        require_ml,
         resolve_device,
-        StepTimer,
     )
 
-    torch_mod, AutoModel, AutoProcessor = _require_ml()
+    torch_mod, AutoModel, AutoProcessor = require_ml()
     dev = resolve_device(device, torch_mod)
-    timer = StepTimer(verbose=True)
-    model, processor = load_medgemma(model_dir, dev, timer, torch_mod, AutoModel, AutoProcessor)
+    model, processor = load_medgemma(model_dir, dev, torch_mod, AutoModel, AutoProcessor)
     return generate_cxr_report(
         model=model,
         processor=processor,
@@ -188,7 +195,8 @@ def main() -> int:
     parser.add_argument(
         "--medgemma-dir",
         type=Path,
-        default=Path("/Users/michaelevans/CODE/ght-qcxr/medgemma/medgemma_4b_it"),
+        default=None,
+        help="Local MedGemma weights directory (required with --medgemma)",
     )
     parser.add_argument("--device", default="auto", choices=("auto", "mps", "cpu", "cuda"))
     args = parser.parse_args()
@@ -197,6 +205,10 @@ def main() -> int:
     if args.real_ocr:
         skip_ocr = False
 
+    if args.medgemma and args.medgemma_dir is None:
+        print("--medgemma requires --medgemma-dir /path/to/medgemma_4b_it", file=sys.stderr)
+        return 2
+
     url = f"http://{args.host}:{args.port}/mcp"
     proc = subprocess.Popen(
         [
@@ -204,12 +216,7 @@ def main() -> int:
             "-m",
             "anonymizer.anonymizer",
             "--mcp",
-            "--transport",
-            "streamable-http",
-            "--host",
-            args.host,
-            "--port",
-            str(args.port),
+            f"{args.host}:{args.port}",
         ],
         cwd=str(REPO),
     )

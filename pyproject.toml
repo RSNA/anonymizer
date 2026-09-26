@@ -56,7 +56,7 @@ Homepage = "https://github.com/RSNA/anonymizer"
 
 [project.optional-dependencies]
 mcp = [
-    "mcp>=1.0",
+    "fastmcp>=4.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -83,6 +83,7 @@ dev = [
     "pytest-mock>=3.14.1",
     "watchfiles>=1.0.0",
     "setuptools>=70,<82",
+    "gradio>=6",
 ]
 docs = [
     "mkdocs-material>=9.5.0",
@@ -91,6 +92,12 @@ docs = [
 prototyping-viz = [
     "matplotlib>=3.8.0",
     "scikit-image>=0.22.0",
+]
+medgemma-chat = [
+    "transformers>=5",
+    "pillow",
+    "accelerate",
+    "bitsandbytes>=0.50",
 ]
 
 [tool.ruff]

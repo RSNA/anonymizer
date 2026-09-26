@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from anonymizer.mcp.session import SESSION
-from anonymizer.mcp import tools as mcp_tools
+from anonymizer.mcp import api as mcp_tools
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.modalities import (
     extract_modality_tokens_from_text,

@@ -14,8 +14,8 @@ from pydicom.dataset import Dataset
 
 from anonymizer.mcp.server import create_server
 from anonymizer.mcp.session import SESSION
-from anonymizer.mcp.tools import MCP_TOOL_NAMES
-from anonymizer.mcp import tools as mcp_tools
+from anonymizer.mcp.api import MCP_TOOL_NAMES
+from anonymizer.mcp import api as mcp_tools
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.translate import set_language_code
 
@@ -57,10 +57,10 @@ def _import_davidson() -> dict:
 
 
 def test_create_server_registers_every_advertised_tool():
+    import asyncio
+
     server = create_server()
-    listed = getattr(server, "_tool_manager", None)
-    assert listed is not None
-    names = {info.name for info in listed.list_tools()}
+    names = {t.name for t in asyncio.run(server.list_tools())}
     assert names == EXPECTED_MCP_TOOLS
 
 
@@ -88,10 +88,9 @@ def test_api_list_projects_after_create():
 
 
 def test_api_create_project_ok():
-    result = mcp_tools.create_project(project_name="Created", site_id="SITE1")
+    result = mcp_tools.create_project(project_name="Created")
     assert result["ok"] is True
     assert result["project"]["project_name"] == "Created"
-    assert result["project"]["site_id"] == "SITE1"
     assert result["project"]["totals"]["patients"] == 0
     assert SESSION.is_open
 
@@ -164,6 +163,13 @@ def test_api_import_directory_ok():
     assert result["ok"] is True
     assert result["succeeded"] >= 1
     assert result["failed"] == 0
+
+
+def test_api_import_directory_rejects_placeholder_path():
+    _create_open()
+    result = mcp_tools.import_directory("/absolute/path/to/dicom")
+    assert result["ok"] is False
+    assert "placeholder" in result["error"].lower() or "absolute" in result["error"].lower()
 
 
 def test_api_import_directory_without_session():
@@ -239,7 +245,7 @@ def test_api_remove_pixel_phi_ok_mocked():
             return_value=True,
         ),
     ):
-        result = mcp_tools.remove_pixel_phi(modality_hint="cxr")
+        result = mcp_tools.remove_pixel_phi(series="cxr")
 
     assert result["ok"] is True
     assert result["status"] == "complete"
@@ -364,7 +370,6 @@ def test_api_export_series_preview_patient_index():
     result = mcp_tools.export_series_preview(
         patient="1",
         series="1",
-        require_pixel_phi_scanned=False,
     )
     assert result["ok"] is True
     assert result.get("caption")
@@ -384,8 +389,7 @@ def test_api_export_series_preview_ok_gate_off():
     _create_open()
     _import_davidson()
     result = mcp_tools.export_series_preview(
-        modality_hint="cxr",
-        require_pixel_phi_scanned=False,
+        series="cxr",
     )
     assert result["ok"] is True
     import base64
@@ -405,8 +409,16 @@ def test_api_export_series_preview_ok_gate_off():
     assert result.get("size") == 448
 
 
+def test_api_export_series_preview_rejects_patient_all():
+    _create_open()
+    _import_davidson()
+    result = mcp_tools.export_series_preview(patient="all", series="1")
+    assert result["ok"] is False
+    assert "all" in result["error"].lower()
+
+
 def test_api_export_series_preview_without_session():
-    result = mcp_tools.export_series_preview(require_pixel_phi_scanned=False)
+    result = mcp_tools.export_series_preview()
     assert result["ok"] is False
 
 
@@ -540,7 +552,7 @@ def test_api_pacs_move_without_session():
         lambda: mcp_tools.resolve_series(patient="1"),
         lambda: mcp_tools.remove_pixel_phi(),
         lambda: mcp_tools.harmonize_studies(),
-        lambda: mcp_tools.export_series_preview(require_pixel_phi_scanned=False),
+        lambda: mcp_tools.export_series_preview(),
         lambda: mcp_tools.import_file(str(DAVIDSON_DCM)),
         lambda: mcp_tools.import_directory(str(DAVIDSON)),
         lambda: mcp_tools.configure_remote("1.1.1.1", 104, "AE"),

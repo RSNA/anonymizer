@@ -5,9 +5,10 @@ Use el modo headless en un **laboratorio o servidor** cuando no necesite la vent
 ## Objetivo
 
 - Seguir recibiendo DICOM en un proyecto existente, y/o
-- Ejecutar un lote de IA una vez en ese proyecto y salir.
+- Ejecutar un lote de IA una vez en ese proyecto y salir, y/o
+- Exponer la interfaz de herramientas **MCP** para que un cliente LLM gestione proyectos, importación, inventario e imagen.
 
-## Dos comandos
+## Recepción y lote de IA
 
 ### 1. Solo recibir (escucha DICOM)
 
@@ -23,7 +24,7 @@ La aplicación carga el proyecto y escucha imágenes entrantes usando los ajuste
 rsna-anonymizer -c path/to/ProjectModel.json --ai-batch path/to/AiBatchConfig.json --ai-batch-run
 ```
 
-Tanto `-c` / `--config` como `--ai-batch` son obligatorios con `--ai-batch-run`.
+Tanto `-c` / `--config` como `--ai-batch` son obligatorios con `--ai-batch-run`. No combine `-c` con `--mcp` (mutuamente excluyentes).
 
 ## Para qué sirve cada archivo
 
@@ -50,6 +51,61 @@ Ejemplo de configuración de lote de IA (descargable: [`AiBatchConfig.example.js
 
 Las listas blancas OCR permanecen bajo el directorio `whitelists/` del proyecto (igual que en la GUI).
 
+## Servidor MCP
+
+`-c` y `--mcp` son **mutuamente excluyentes**. Abra o cree proyectos con las herramientas MCP tras conectar.
+
+Instale el extra MCP opcional una vez (servidor FastMCP):
+
+```bash
+uv sync --extra mcp
+# o: pip install 'rsna-anonymizer[mcp]'
+```
+
+### MCP HTTP
+
+```bash
+rsna-anonymizer --mcp 127.0.0.1:8000
+```
+
+Endpoint: `http://127.0.0.1:8000/mcp`.
+
+### MCP stdio
+
+```bash
+rsna-anonymizer --mcp
+```
+
+### `mcp.json` del cliente
+
+Ejemplo: [`mcp.example.json`](mcp.example.json) / [`mcp.stdio.example.json`](mcp.stdio.example.json).
+
+```json
+{
+  "mcpServers": {
+    "rsna-anonymizer": {
+      "url": "http://127.0.0.1:8000/mcp"
+    }
+  }
+}
+```
+
+### Chat prototipo MedGemma
+
+```bash
+# Terminal 1
+uv sync --extra mcp
+uv run rsna-anonymizer --mcp 127.0.0.1:8000
+
+# Terminal 2
+uv sync --extra mcp --group medgemma-chat
+uv run python -m prototyping.medgemma_chat \
+  --model /path/to/medgemma_hf_weights \
+  --mcp-url http://127.0.0.1:8000/mcp
+```
+
+Detalle: `src/prototyping/medgemma_chat/README.md`.
+
 ## Requisitos previos
 
 - Proyecto ya creado en la GUI ([Crear un proyecto](../05-create-project/)).
@@ -66,9 +122,12 @@ Las listas blancas OCR permanecen bajo el directorio `whitelists/` del proyecto 
 | Problema | Qué comprobar |
 | --- | --- |
 | `--ai-batch-run` sin archivos | Proporcione tanto `-c` como `--ai-batch` |
+| `-c` con `--mcp` | Mutuamente excluyentes |
 | Errores de puerta de funciones | Descargue modelos / licencia en esa estación |
 | Lista de estudios vacía | Importe datos primero, o corrija `studies` en AiBatchConfig |
 | Poca memoria | Reduzca la carga concurrente; véase [Solución de problemas](../troubleshooting.md) |
+| El cliente no conecta | `--mcp HOST:PORT` vs `mcp.json` (`http://HOST:PORT/mcp`); extra MCP instalado |
+| Herramientas obsoletas | Reinicie MCP; abra un chat nuevo en el cliente |
 
 ## Para clínicos
 

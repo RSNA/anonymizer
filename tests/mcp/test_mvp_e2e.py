@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from anonymizer.mcp.session import SESSION
-from anonymizer.mcp import tools as mcp_tools
+from anonymizer.mcp import api as mcp_tools
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.translate import set_language_code
 
@@ -116,7 +116,7 @@ def _http_e2e_enabled() -> bool:
 
 @pytest.mark.skipif(not _http_e2e_enabled(), reason="Set ANONYMIZER_MCP_E2E=1 to run live HTTP MCP e2e")
 def test_mvp_http_server_davidson(tmp_path: Path):
-    """Spawn ``rsna-anonymizer --mcp`` and drive tools over streamable HTTP."""
+    """Spawn ``rsna-anonymizer --mcp HOST:PORT`` and drive tools over HTTP."""
     import asyncio
     import signal
 
@@ -134,12 +134,7 @@ def test_mvp_http_server_davidson(tmp_path: Path):
             "-m",
             "anonymizer.anonymizer",
             "--mcp",
-            "--transport",
-            "streamable-http",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(port),
+            f"127.0.0.1:{port}",
         ],
         cwd=str(Path(__file__).resolve().parents[2]),
         env=os.environ.copy(),

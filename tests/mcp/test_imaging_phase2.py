@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from anonymizer.mcp.session import SESSION
-from anonymizer.mcp import tools as mcp_tools
+from anonymizer.mcp import api as mcp_tools
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.translate import set_language_code
 
@@ -83,14 +83,16 @@ def test_export_preview_allowed_without_pixel_phi_scan_by_default():
 
 
 def test_export_preview_optional_gate_when_require_pixel_phi_scanned():
+    from anonymizer.mcp import ops as ops
+
     _open_project_with_davidson()
-    blocked = mcp_tools.export_series_preview(
-        patient="1",
-        series="1",
-        require_pixel_phi_scanned=True,
-    )
-    assert blocked["ok"] is False
-    assert "remove_pixel_phi" in blocked["error"].lower() or "scanned" in blocked["error"].lower()
+    with pytest.raises(ops.HeadlessOpsError, match="remove_pixel_phi|scanned"):
+        ops.export_series_preview(
+            SESSION.controller,
+            patient="1",
+            series="1",
+            require_pixel_phi_scanned=True,
+        )
 
 
 def test_implicit_series_resolve_sole_inventory_for_remove_pixel_phi():
@@ -115,7 +117,7 @@ def test_implicit_series_resolve_sole_inventory_for_remove_pixel_phi():
             return_value=True,
         ),
     ):
-        result = mcp_tools.remove_pixel_phi(modality_hint="cxr")
+        result = mcp_tools.remove_pixel_phi(series="cxr")
 
     assert result["ok"] is True
     assert result["anon_series_uid"]
@@ -149,7 +151,7 @@ def test_remove_pixel_phi_then_export_davidson(mock_ocr: MagicMock):
     fake_handle.reader = MagicMock()
     with patch.object(SESSION, "ensure_ocr_reader", return_value=fake_handle):
         result = mcp_tools.remove_pixel_phi(
-            patient="1", series="1", removal_mode="blackout"
+            patient="1", series="1"
         )
 
     assert result["ok"] is True
