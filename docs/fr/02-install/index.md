@@ -1,6 +1,6 @@
 # Installation et premier lancement
 
-**La version 19.1.0.dev1** est la préversion de développement 19.1 actuelle sur la branche `dev` (`uv pip install --pre rsna-anonymizer`). La stable **19.0.10** reste sur `master`. Il vous faut **Python 3.11–3.14** avec **tkinter**, installé via **uv**. Préférez **3.12** ; évitez **3.14.1** (torchvision exclut ce correctif).
+**La version 19.1.0.dev2** est la préversion de développement 19.1 actuelle sur la branche `dev` (`uv pip install --pre rsna-anonymizer`). La stable **19.0.10** reste sur `master`. Il vous faut **Python 3.11–3.14** avec **tkinter**, installé via **uv**. Préférez **3.12** ; évitez **3.14.1** (torchvision exclut ce correctif).
 
 ## Installation avec uv et tkinter
 
@@ -26,7 +26,7 @@ uv --version
 
 ### 2. Installer Python avec tkinter, puis l’application
 
-La fenêtre de bureau a besoin de **tkinter**. Installez un Python qui l’inclut, créez le venv et installez **19.1.0.dev1** (`--pre`) :
+La fenêtre de bureau a besoin de **tkinter**. Installez un Python qui l’inclut, créez le venv et installez **19.1.0.dev2** (`--pre`) :
 
 
 | Plateforme | Assurer la disponibilité de tkinter |
@@ -41,7 +41,7 @@ uv python install 3.12
 uv venv rsna-anonymizer --python 3.12
 source rsna-anonymizer/bin/activate   # Windows: rsna-anonymizer\Scripts\activate
 
-uv pip install --pre rsna-anonymizer  # version 19.1.0.dev1
+uv pip install --pre rsna-anonymizer  # version 19.1.0.dev2
 ```
 
 ### 3. Vérifier l’installation
@@ -49,7 +49,7 @@ uv pip install --pre rsna-anonymizer  # version 19.1.0.dev1
 ```bash
 python --version          # 3.11.x–3.14.x
 python -m tkinter         # a small Tk window must open — required for the UI
-rsna-anonymizer --version # should report 19.1.0.dev1
+rsna-anonymizer --version # should report 19.1.0.dev2
 ```
 
 Si `python -m tkinter` échoue, recréez le venv avec un Python qui inclut Tk (tableau ci-dessus), puis réinstallez.

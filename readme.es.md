@@ -7,7 +7,7 @@
 [![PyPI](https://img.shields.io/pypi/v/rsna-anonymizer.svg)](https://pypi.org/project/rsna-anonymizer/)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue.svg)](https://www.python.org/downloads/)
 
-**La versión 19.1.0.dev1** es la prelanzamiento de desarrollo 19.1 actual en la rama `dev` (`uv pip install --pre rsna-anonymizer`). La estable **19.0.10** permanece en `master`. Requiere **Python 3.11–3.14** con **tkinter** incluido. Se recomienda **3.12**; evite **3.14.1** (torchvision excluye ese parche).
+**La versión 19.1.0.dev2** es la prelanzamiento de desarrollo 19.1 actual en la rama `dev` (`uv pip install --pre rsna-anonymizer`). La estable **19.0.10** permanece en `master`. Requiere **Python 3.11–3.14** con **tkinter** incluido. Se recomienda **3.12**; evite **3.14.1** (torchvision excluye ese parche).
 
 ## Instalación
 
@@ -33,7 +33,7 @@ uv --version
 
 ### 2. Instalar Python con tkinter y la aplicación
 
-La interfaz de escritorio necesita **tkinter**. Instale un Python que lo incluya, cree el venv e instale **19.1.0.dev1** (`--pre`):
+La interfaz de escritorio necesita **tkinter**. Instale un Python que lo incluya, cree el venv e instale **19.1.0.dev2** (`--pre`):
 
 | Plataforma | Asegurar tkinter |
 | --- | --- |
@@ -46,7 +46,7 @@ uv python install 3.12                     # or: 3.11 / 3.13 / 3.14
 uv venv rsna-anonymizer --python 3.12      # or: --python 3.11 / 3.13 / 3.14
 source rsna-anonymizer/bin/activate        # Windows: rsna-anonymizer\Scripts\activate
 
-uv pip install --pre rsna-anonymizer       # version 19.1.0.dev1
+uv pip install --pre rsna-anonymizer       # version 19.1.0.dev2
 ```
 
 ### 3. Verificar la instalación
@@ -54,7 +54,7 @@ uv pip install --pre rsna-anonymizer       # version 19.1.0.dev1
 ```bash
 python --version          # 3.11.x–3.14.x
 python -m tkinter         # a small Tk window must open — required for the UI
-rsna-anonymizer --version # should report 19.1.0.dev1
+rsna-anonymizer --version # should report 19.1.0.dev2
 ```
 
 Si `python -m tkinter` falla, el Python del venv se compiló sin Tk: corrija el paso de la plataforma, recree el venv y reinstale.

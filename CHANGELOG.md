@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [19.1.0.dev2]
+- PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
+- Headless MCP server (FastMCP): project/session, local import, PACS find/move, inventory, pixel PHI, harmonize, series preview with MCP `ImageContent`
+- Prototyping MedGemma chat client over Anonymizer MCP (NF4 load, tool-call parsing, multimodal preview turns)
+- Dispose PHI SQLAlchemy engines on anonymizer stop; close engines in tests
+
 ## [19.1.0.dev1]
 - PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)
 - Dashboard Dataset analytics with organ volume histograms (TotalSegmentator + user annotations)

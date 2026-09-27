@@ -1,6 +1,6 @@
 # Install and first launch
 
-**Version 19.1.0.dev1** is the current 19.1 development pre-release on the `dev` branch (`uv pip install --pre rsna-anonymizer`). Stable **19.0.10** remains on `master`. You need **Python 3.11–3.14** with **tkinter**, installed via **uv**. Prefer **3.12**; avoid **3.14.1** (torchvision excludes that patch).
+**Version 19.1.0.dev2** is the current 19.1 development pre-release on the `dev` branch (`uv pip install --pre rsna-anonymizer`). Stable **19.0.10** remains on `master`. You need **Python 3.11–3.14** with **tkinter**, installed via **uv**. Prefer **3.12**; avoid **3.14.1** (torchvision excludes that patch).
 
 ## Install with uv and tkinter
 
@@ -26,7 +26,7 @@ uv --version
 
 ### 2. Install Python with tkinter, then the app
 
-The desktop window needs **tkinter**. Install a Python that includes it, then create the venv and install **19.1.0.dev1** (`--pre`):
+The desktop window needs **tkinter**. Install a Python that includes it, then create the venv and install **19.1.0.dev2** (`--pre`):
 
 
 | Platform    | Ensure tkinter is available                                                                                                           |
@@ -41,7 +41,7 @@ uv python install 3.12
 uv venv rsna-anonymizer --python 3.12
 source rsna-anonymizer/bin/activate   # Windows: rsna-anonymizer\Scripts\activate
 
-uv pip install --pre rsna-anonymizer  # version 19.1.0.dev1
+uv pip install --pre rsna-anonymizer  # version 19.1.0.dev2
 ```
 
 ### 3. Verify the install
@@ -49,7 +49,7 @@ uv pip install --pre rsna-anonymizer  # version 19.1.0.dev1
 ```bash
 python --version          # 3.11.x–3.14.x
 python -m tkinter         # a small Tk window must open — required for the UI
-rsna-anonymizer --version # should report 19.1.0.dev1
+rsna-anonymizer --version # should report 19.1.0.dev2
 ```
 
 If `python -m tkinter` fails, recreate the venv with a Python that includes Tk (table above), then reinstall.
