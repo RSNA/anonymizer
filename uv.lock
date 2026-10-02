@@ -4365,6 +4365,7 @@ mcp = [
 [package.dev-dependencies]
 dev = [
     { name = "black" },
+    { name = "fastmcp" },
     { name = "ffmpeg-python" },
     { name = "gradio" },
     { name = "pre-commit" },
@@ -4437,6 +4438,7 @@ provides-extras = ["mcp"]
 [package.metadata.requires-dev]
 dev = [
     { name = "black" },
+    { name = "fastmcp", specifier = ">=4.0" },
     { name = "ffmpeg-python", specifier = ">=0.2.0" },
     { name = "gradio", specifier = ">=6" },
     { name = "pre-commit" },

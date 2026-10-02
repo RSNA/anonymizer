@@ -84,6 +84,8 @@ dev = [
     "watchfiles>=1.0.0",
     "setuptools>=70,<82",
     "gradio>=6",
+    # Default suite includes tests/mcp (optional product extra [mcp]).
+    "fastmcp>=4.0",
 ]
 docs = [
     "mkdocs-material>=9.5.0",
