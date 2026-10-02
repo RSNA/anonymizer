@@ -84,7 +84,8 @@ src/anonymizer/assets/ai/cxp_view/
 assets/ai/xp_bodypart/
 assets/ai/cxp_view/
 src/prototyping/falcon/assets/models/
-dicom/
+# Local DICOM dumps at repo root only (do not ignore src/**/dicom/ or tests/**/dicom/)
+/dicom/
 phi_imgs/
 **/radon_results.txt
 tests/controller/dicom/support/orthanc_runtime/
