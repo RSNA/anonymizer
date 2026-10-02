@@ -12,8 +12,8 @@ from typing import List, Tuple
 import customtkinter as ctk
 
 from anonymizer.controller.process_ctp_lookup import CtpLookupPreview
-from anonymizer.controller.project import DICOMNode, ProjectController
-from anonymizer.model.project import AWSCognito, ProjectModel
+from anonymizer.controller.project import ProjectController
+from anonymizer.model.project import AWSCognito, DICOMNode, ProjectModel
 from anonymizer.utils.logging import set_logging_levels
 from anonymizer.utils.storage import (
     JavaAnonymizerExportedStudy,
