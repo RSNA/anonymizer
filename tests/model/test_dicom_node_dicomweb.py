@@ -63,6 +63,6 @@ def test_dicom_node_json_roundtrip_defaults():
     assert q.password == ""
 
 
-def test_model_version_is_10():
-    assert ProjectModel.MODEL_VERSION == 10
-    assert ProjectModel().version == 10
+def test_model_version_is_current():
+    assert ProjectModel.MODEL_VERSION == 11
+    assert ProjectModel().version == ProjectModel.MODEL_VERSION
