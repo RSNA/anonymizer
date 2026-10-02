@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from pydicom.data import get_testdata_file
 from pydicom import dcmread
+from pydicom.data import get_testdata_file
 
 from anonymizer.controller.runner import Algorithm
 from anonymizer.controller.work_state import WorkState

@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 from anonymizer.view.common.ctk_safe import (
     dispose_photo_image,
     install_safe_scaling_tracker,
+    install_safe_scrollable_frame_widget_resolve,
     install_safe_tk_font_destructor,
     install_safe_tk_variable_destructor,
     mark_ctk_window_destroyed,
@@ -14,6 +15,24 @@ from anonymizer.view.common.ctk_safe import (
     resume_scaling_tracker_check,
     teardown_ctk_toplevel,
 )
+
+
+def test_install_safe_scrollable_frame_resolves_string_widget() -> None:
+    import tkinter as tk
+
+    from customtkinter.windows.widgets.ctk_scrollable_frame import CTkScrollableFrame
+
+    install_safe_scrollable_frame_widget_resolve()
+    canvas = MagicMock(name="parent_canvas")
+    scroll = MagicMock()
+    scroll._parent_canvas = canvas
+    scroll.nametowidget.return_value = canvas
+
+    assert CTkScrollableFrame._check_if_valid_scroll(scroll, ".!ctkframe.!canvas") is True
+    scroll.nametowidget.assert_called_once_with(".!ctkframe.!canvas")
+
+    scroll.nametowidget.side_effect = tk.TclError("unknown")
+    assert CTkScrollableFrame._check_if_valid_scroll(scroll, ".!gone") is False
 
 
 def test_install_safe_scaling_tracker_replaces_check_once() -> None:

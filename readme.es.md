@@ -133,9 +133,9 @@ La estructura refleja el código: `tests/controller/` → `src/anonymizer/contro
 
 ```bash
 uv run pytest tests/controller/tseg -q
-uv run pytest tests/controller tests/model -q   # CI suite (no view)
+uv run pytest -q                                # same suite as CI (controller + model + mcp + Orthanc)
 uv run pytest src/prototyping -q
-uv run pytest -q                                # full local suite
+uv run pytest tests/view -m 'not view_dev' -q   # local GUI suite
 ```
 
 Opcional: `tests/controller/.env` con `AWS_USERNAME` / `AWS_PASSWORD` para pruebas de subida a S3. Los marcadores están documentados en `pyproject.toml` y `tests/README.md`.

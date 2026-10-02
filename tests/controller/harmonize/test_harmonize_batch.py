@@ -222,7 +222,7 @@ def test_harmonize_studies_batch_honours_cancel(
 
 
 def test_should_log_harmonize_batch_step_skips_redundant_messages() -> None:
-    from anonymizer.controller.ai_batch_process import should_log_harmonize_batch_step
+    from anonymizer.controller.ai.batch_process import should_log_harmonize_batch_step
     from anonymizer.controller.ai.tseg.segment import AnalysisProgress
 
     assert should_log_harmonize_batch_step(
@@ -252,7 +252,7 @@ def test_should_log_harmonize_batch_step_skips_redundant_messages() -> None:
 
 
 def test_log_workflow_progress_step_dedupes_ellipsis_variants() -> None:
-    from anonymizer.controller.ai_batch_process import _log_workflow_progress_step
+    from anonymizer.controller.ai.batch_process import _log_workflow_progress_step
 
     logged: list[str] = []
     last_stage: list[str | None] = [None]
@@ -373,12 +373,12 @@ def test_format_anatomy_regions_summary_includes_dominant_region() -> None:
 
 
 def test_format_playbook_analysis_log_lines_match_table() -> None:
-    from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
     from anonymizer.controller.ai.harmonize.playbook import (
         PlaybookHarmonizeAttributes,
         format_playbook_analysis_log_lines,
         harmonize_analysis_rows,
     )
+    from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
 
     tseg = TS_result(
         series_directory=Path("/tmp/series"),
@@ -433,8 +433,8 @@ def test_format_playbook_analysis_log_lines_match_table() -> None:
 
 def test_format_harmonize_batch_contrast_log_lines(tmp_path: Path) -> None:
     from anonymizer.controller.ai.harmonize import HarmonizedResult, format_harmonize_batch_contrast_log_lines
-    from anonymizer.controller.ai.tseg.contrast import save_contrast_statistics
     from anonymizer.controller.ai.harmonize.playbook import PlaybookHarmonizeAttributes
+    from anonymizer.controller.ai.tseg.contrast import save_contrast_statistics
     from anonymizer.controller.ai.tseg.segment import series_cache_dir
 
     series_dir = tmp_path / "series"

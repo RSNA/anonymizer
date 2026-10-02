@@ -26,6 +26,8 @@ from tests.controller.dicom.support.helpers import (
     send_files_to_scp,
     verify_files_sent_to_pacs_simulator,
 )
+from tests.controller.dicom.support.orthanc import enable_orthanc_dimse_remote, wipe_orthanc
+from tests.controller.dicom.support.orthanc_bundle import ManagedOrthanc
 from tests.controller.dicom.support.test_files import (
     CR_STUDY_3_SERIES_3_IMAGES,
     CT_STUDY_1_SERIES_4_IMAGES,
@@ -763,14 +765,15 @@ def test_move_at_series_level_via_accession_number_list_from_pacs_to_local_stora
     pass
 
 
-# ORTHANC PACS TESTS:
-# TODO: setup Orthanc PACS for testing in all Github action enviromnents
-# include orthanc binaries in repository
+# ORTHANC PACS TESTS (managed Orthanc session fixture):
 
 
 @pytest.mark.dicom_integration
-@pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
-def test_move_at_study_level_1_CT_file_from_orthanc_to_local_storage(temp_dir: str, controller: ProjectController):
+def test_move_at_study_level_1_CT_file_from_orthanc_to_local_storage(
+    temp_dir: str, controller: ProjectController, managed_orthanc: ManagedOrthanc
+):
+    wipe_orthanc(managed_orthanc)
+    enable_orthanc_dimse_remote(controller, managed_orthanc)
     ds: Dataset = send_file_to_scp(ct_small_filename, OrthancSCP, controller)
     assert ds
     # Get study_uid_hierarchy for CT small study:
@@ -807,10 +810,11 @@ def test_move_at_study_level_1_CT_file_from_orthanc_to_local_storage(temp_dir: s
 
 
 @pytest.mark.dicom_integration
-@pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_move_at_study_level_with_network_timeout_then_series_level_MR_Study_from_orthanc_to_local_storage(
-    temp_dir: str, controller: ProjectController
+    temp_dir: str, controller: ProjectController, managed_orthanc: ManagedOrthanc
 ):
+    wipe_orthanc(managed_orthanc)
+    enable_orthanc_dimse_remote(controller, managed_orthanc)
     send_files_to_scp(MR_STUDY_3_SERIES_11_IMAGES, OrthancSCP, controller)
 
     # Get study_uid_hierarchy for MR study:
@@ -853,8 +857,11 @@ def test_move_at_study_level_with_network_timeout_then_series_level_MR_Study_fro
 
 
 @pytest.mark.dicom_integration
-@pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
-def test_move_at_instance_level_3_studies_2_patients_from_orthanc_to_local_storage(controller: ProjectController):
+def test_move_at_instance_level_3_studies_2_patients_from_orthanc_to_local_storage(
+    controller: ProjectController, managed_orthanc: ManagedOrthanc
+):
+    wipe_orthanc(managed_orthanc)
+    enable_orthanc_dimse_remote(controller, managed_orthanc)
     # Send 3 studies to ORTHANC PACS:
     ds1: list[Dataset] = send_files_to_scp(CR_STUDY_3_SERIES_3_IMAGES, OrthancSCP, controller)  # Doe^Archibald
     ds2: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, OrthancSCP, controller)  # Doe^Archibald
@@ -930,10 +937,11 @@ def test_move_at_instance_level_3_studies_2_patients_from_orthanc_to_local_stora
 
 
 @pytest.mark.dicom_integration
-@pytest.mark.skipif(os.getenv("CI") == "true", reason="Skip test for CI")
 def test_move_at_study_level_3_studies_with_network_timeout_then_series_level_from_orthance_to_local_storage(
-    temp_dir: str, controller: ProjectController
+    temp_dir: str, controller: ProjectController, managed_orthanc: ManagedOrthanc
 ):
+    wipe_orthanc(managed_orthanc)
+    enable_orthanc_dimse_remote(controller, managed_orthanc)
     # Send 3 studies to ORTHANC PACS:
     ds1: list[Dataset] = send_files_to_scp(CR_STUDY_3_SERIES_3_IMAGES, OrthancSCP, controller)  # Doe^Archibald
     ds2: list[Dataset] = send_files_to_scp(CT_STUDY_1_SERIES_4_IMAGES, OrthancSCP, controller)  # Doe^Archibald

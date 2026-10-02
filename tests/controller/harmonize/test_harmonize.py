@@ -618,8 +618,8 @@ def test_harmonize_fails_when_tseg_contrast_unavailable(
 
 
 def test_harmonize_analysis_section_renders_playbook_attributes() -> None:
-    from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
     from anonymizer.controller.ai.harmonize.playbook import PlaybookHarmonizeAttributes, harmonize_analysis_rows
+    from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
 
     tseg = _head_tseg_result(Path("/tmp/series"))
     attributes = PlaybookHarmonizeAttributes(
@@ -677,7 +677,7 @@ def test_harmonize_analysis_section_renders_playbook_attributes() -> None:
 
 
 def test_harmonize_dicom_table_includes_all_relevant_fields() -> None:
-    from pydicom import Dataset, dcmread
+    from pydicom import dcmread
     from pydicom.data import get_testdata_file
 
     from anonymizer.controller.ai.harmonize.playbook import harmonize_dicom_rows

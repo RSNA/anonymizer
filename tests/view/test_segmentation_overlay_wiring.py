@@ -7,11 +7,11 @@ from unittest.mock import MagicMock
 
 import numpy as np
 
+from anonymizer.controller.series_overlay import PolygonPoint, Segmentation
 from anonymizer.view.series.anatomy_overlay import (
     contour_mask_slice,
     merge_structure_overlays,
 )
-from anonymizer.controller.series_overlay import PolygonPoint, Segmentation
 
 
 def test_latch_loader_called_once_across_slice_reads(tmp_path: Path) -> None:

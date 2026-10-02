@@ -10,7 +10,7 @@ MCP_ROOT = Path(__file__).resolve().parents[2] / "src" / "anonymizer" / "mcp"
 TOOLS_ROOT = MCP_ROOT / "tools"
 
 _BANNED_EVERYWHERE = (
-    "controller.ai_batch_process import _",
+    "controller.ai.batch_process import _",
     "._manage_move",
     "._apply_remove_pixel_phi",
 )

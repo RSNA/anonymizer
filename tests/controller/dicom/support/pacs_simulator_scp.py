@@ -5,7 +5,7 @@ from typing import List
 from pydicom import Dataset, dcmread
 from pynetdicom._globals import DEFAULT_TRANSFER_SYNTAXES  # type: ignore
 from pynetdicom.ae import ApplicationEntity as AE
-from pynetdicom.events import EVT_C_ECHO, EVT_C_FIND, EVT_C_MOVE, EVT_C_STORE, Event
+from pynetdicom.events import EVT_C_ECHO, EVT_C_FIND, EVT_C_GET, EVT_C_MOVE, EVT_C_STORE, Event
 from pynetdicom.presentation import PresentationContext, build_context
 
 from anonymizer.model.project import DICOMNode
@@ -63,14 +63,19 @@ def set_verification_context(ae: AE):
     return
 
 
-def set_radiology_storage_contexts(ae: AE) -> None:
+def set_radiology_storage_contexts(ae: AE, *, allow_role_selection: bool = False) -> None:
     for uid in sorted(_RADIOLOGY_STORAGE_CLASSES.values()):
-        ae.add_supported_context(uid, _TRANSFER_SYNTAXES)
+        if allow_role_selection:
+            # Allow C-GET requestor to negotiate SCP role (instances return on same association)
+            ae.add_supported_context(uid, _TRANSFER_SYNTAXES, scu_role=True, scp_role=True)
+        else:
+            ae.add_supported_context(uid, _TRANSFER_SYNTAXES)
     return
 
 
-def set_study_root_qr_contexts(ae: AE) -> None:
-    for uid in sorted(_STUDY_ROOT_QR_CLASSES):
+def set_study_root_qr_contexts(ae: AE, *, include_get: bool = True) -> None:
+    classes = _STUDY_ROOT_QR_CLASSES if include_get else _STUDY_ROOT_QR_CLASSES[:2]
+    for uid in sorted(classes):
         ae.add_supported_context(uid, _TRANSFER_SYNTAXES)
     return
 
@@ -245,6 +250,34 @@ def _handle_find(event, storage_dir: str):
     logger.info("Find complete")
 
 
+def _matching_instances(storage_dir: str, ds: Dataset) -> list:
+    instances = []
+    for fpath in os.listdir(storage_dir):
+        instances.append(dcmread(os.path.join(storage_dir, fpath)))
+    if not instances:
+        return []
+
+    level = ds.QueryRetrieveLevel
+    if level == "STUDY" and "StudyInstanceUID" in ds:
+        return [inst for inst in instances if inst.StudyInstanceUID == ds.StudyInstanceUID]
+    if level == "SERIES" and "StudyInstanceUID" in ds and "SeriesInstanceUID" in ds:
+        return [
+            inst
+            for inst in instances
+            if inst.StudyInstanceUID == ds.StudyInstanceUID and inst.SeriesInstanceUID == ds.SeriesInstanceUID
+        ]
+    if level == "IMAGE" and "StudyInstanceUID" in ds and "SeriesInstanceUID" in ds and "SOPInstanceUID" in ds:
+        return [
+            inst
+            for inst in instances
+            if inst.StudyInstanceUID == ds.StudyInstanceUID
+            and inst.SeriesInstanceUID == ds.SeriesInstanceUID
+            and inst.SOPInstanceUID == ds.SOPInstanceUID
+        ]
+    logger.error(f"Unsupported QueryRetrieveLevel: {level}")
+    return []
+
+
 # "The C-MOVE request handler must yield the (address, port) of "
 # "the destination AE, then yield the number of sub-operations, "
 # "then yield (status, dataset) pairs."
@@ -254,84 +287,35 @@ def _handle_move(event, storage_dir: str, known_aet_dict: dict):
     logger.info(ds)
 
     if "QueryRetrieveLevel" not in ds:
-        # Failure
         logger.error("Missing QueryRetrieveLevel")
         yield C_SOP_CLASS_INVALID, None
         return
 
-    # Lookup destination AE in known AEs
     if event.move_destination not in known_aet_dict:
-        # Unknown destination AE
         logger.error("Unknown move destination AE")
         yield (C_MOVE_UNKNOWN_AE, None)
         return
 
     (addr, port) = known_aet_dict[event.move_destination]
-
-    # Yield the IP address and listen port of the destination AE
-    # and the presentation context for associating with the destination AE
     assoc_param_dict = {"contexts": get_radiology_storage_contexts()}
     logger.info(f"Yield dest ip,port:{addr, port} for AET:{event.move_destination}")
     yield (addr, port, assoc_param_dict)
 
-    # Import stored SOP Instances
-    instances = []
-    matching = []
-    for fpath in os.listdir(storage_dir):
-        instances.append(dcmread(os.path.join(storage_dir, fpath)))
-
-    if len(instances) == 0:
-        logger.error("No instances in pacs file system for C-MOVE response")
-        yield 0
-        return
-
-    logger.info(f"{len(instances)} instances found in pacs file system")
-
-    if ds.QueryRetrieveLevel == "STUDY":
-        if "StudyInstanceUID" in ds:
-            matching = [inst for inst in instances if inst.StudyInstanceUID == ds.StudyInstanceUID]
-
-    elif ds.QueryRetrieveLevel == "SERIES":
-        if "StudyInstanceUID" in ds and "SeriesInstanceUID" in ds:
-            matching = [
-                inst
-                for inst in instances
-                if inst.StudyInstanceUID == ds.StudyInstanceUID and inst.SeriesInstanceUID == ds.SeriesInstanceUID
-            ]
-
-    elif ds.QueryRetrieveLevel == "IMAGE":
-        if "StudyInstanceUID" in ds and "SeriesInstanceUID" in ds and "SOPInstanceUID" in ds:
-            matching = [
-                inst
-                for inst in instances
-                if inst.StudyInstanceUID == ds.StudyInstanceUID
-                and inst.SeriesInstanceUID == ds.SeriesInstanceUID
-                and inst.SOPInstanceUID == ds.SOPInstanceUID
-            ]
-
-    else:
-        logger.error(f"Unsupported QueryRetrieveLevel: {ds.QueryRetrieveLevel}")
-        yield 0
-        return
-
-    # Yield the total number of C-STORE sub-operations required
+    matching = _matching_instances(storage_dir, ds)
     matches = len(matching)
     logger.info(f"Matching instances: {matches}")
     if not matches:
-        logger.error(f"No matching instances for C-MOVE response StudyInstanceUID={ds.StudyInstanceUID}")
+        logger.error(f"No matching instances for C-MOVE response StudyInstanceUID={ds.get('StudyInstanceUID')}")
         yield 0
         return
 
     yield matches
 
-    # Yield the matching instances
     for instance in matching:
-        # Check if C-CANCEL has been received
         if event.is_cancelled:
             logger.error("C-CANCEL move operation")
             yield (C_CANCEL, None)
-
-        # Pending
+            return
         logger.info(
             f"Move StudyInstanceUID:{instance.StudyInstanceUID}, SeriesInstanceUID:{instance.SeriesInstanceUID}, InstanceUID:{instance.SOPInstanceUID} InstanceNumber: {instance.InstanceNumber}"
         )
@@ -340,10 +324,45 @@ def _handle_move(event, storage_dir: str, known_aet_dict: dict):
     logger.info("Move complete")
 
 
+def _handle_get(event, storage_dir: str):
+    """C-GET: yield sub-op count then (status, dataset) pairs on the same association."""
+    logger.info("_handle_get")
+    ds = event.identifier
+    if "QueryRetrieveLevel" not in ds:
+        logger.error("Missing QueryRetrieveLevel")
+        yield C_SOP_CLASS_INVALID
+        return
+
+    matching = _matching_instances(storage_dir, ds)
+    matches = len(matching)
+    logger.info(f"C-GET matching instances: {matches}")
+    yield matches
+    if not matches:
+        return
+
+    for instance in matching:
+        if event.is_cancelled:
+            logger.error("C-CANCEL get operation")
+            yield (C_CANCEL, None)
+            return
+        logger.info(
+            f"Get StudyInstanceUID:{instance.StudyInstanceUID}, SeriesInstanceUID:{instance.SeriesInstanceUID}, InstanceUID:{instance.SOPInstanceUID}"
+        )
+        yield (C_PENDING_A, instance)
+
+    logger.info("Get complete")
+
+
 # Start SCP:
-def start(addr: DICOMNode, storage_dir: str, known_nodes: list[DICOMNode]) -> bool:
+def start(
+    addr: DICOMNode,
+    storage_dir: str,
+    known_nodes: list[DICOMNode],
+    *,
+    enable_get: bool = True,
+) -> bool:
     global scp
-    logger.info(f"start {addr.ip}, {addr.port}, {addr.aet}, {storage_dir} ...")
+    logger.info(f"start {addr.ip}, {addr.port}, {addr.aet}, {storage_dir} enable_get={enable_get} ...")
 
     known_aet_dict = {node.aet: (node.ip, node.port) for node in known_nodes}
 
@@ -351,15 +370,14 @@ def start(addr: DICOMNode, storage_dir: str, known_nodes: list[DICOMNode]) -> bo
         logger.error("PACS SIMULATOR scp is already running")
         return False
 
-    # Make sure storage directory exists:
     os.makedirs(storage_dir, exist_ok=True)
 
     ae = AE(addr.aet)
     ae.maximum_pdu_size = 0  # no limit
     set_network_timeout(ae)
     set_verification_context(ae)
-    set_study_root_qr_contexts(ae)
-    set_radiology_storage_contexts(ae)
+    set_study_root_qr_contexts(ae, include_get=enable_get)
+    set_radiology_storage_contexts(ae, allow_role_selection=enable_get)
 
     handlers = [
         (EVT_C_ECHO, _handle_echo),
@@ -367,6 +385,8 @@ def start(addr: DICOMNode, storage_dir: str, known_nodes: list[DICOMNode]) -> bo
         (EVT_C_FIND, _handle_find, [storage_dir]),
         (EVT_C_MOVE, _handle_move, [storage_dir, known_aet_dict]),
     ]
+    if enable_get:
+        handlers.append((EVT_C_GET, _handle_get, [storage_dir]))
 
     try:
         scp = ae.start_server(

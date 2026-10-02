@@ -43,6 +43,7 @@ STARTUP_PAINT_PROFILES = {
 def _seed_seg_cache(series_dir: Path, *, num_slices: int = SYNTHETIC_VOLUME_MIN_SLICES) -> None:
     import numpy as np
     import SimpleITK as sitk
+
     from anonymizer.controller.ai.tseg.seg_retention import write_primary_segment_voxels
 
     cache_dir = series_dir / "0_TS_SEG"

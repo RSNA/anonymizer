@@ -8,8 +8,8 @@ from typing import Any
 
 import customtkinter as ctk
 
-from anonymizer.controller.analytics import default_selected_organ_names, organ_display_name
-from anonymizer.controller.analytics_prefs import (
+from anonymizer.controller.analytics.dataset import default_selected_organ_names, organ_display_name
+from anonymizer.controller.analytics.prefs import (
     ORGAN_BIN_WIDTH_PCT_CHOICES,
     board_widget_display_name,
     get_organ_bin_width_pct,

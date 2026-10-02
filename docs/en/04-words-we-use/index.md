@@ -9,6 +9,7 @@ Short glossary for clinicians. When IT uses different terms, these are usually t
 | **Instance / image** | A single frame or slice file. |
 | **PHI** | Protected health information — identifiers that could reveal who the patient is. |
 | **De-identify / anonymize** | Remove or replace identifiers so the study is safer to share for research. |
+| **Anonymizer script** | XML rules that list DICOM tags to keep, remove, or transform. Edit from **Project Settings → Edit Anonymizer Script**. |
 | **Burned-in text** | Words drawn onto the picture itself (not only in the file labels). Common on ultrasound. |
 | **Quarantine** | A holding folder for files that could not be imported (wrong type, missing IDs, lookup miss, etc.). |
 | **Dataset** | The in-app list of patients, studies, and series in your project (formerly called PHI Index). |

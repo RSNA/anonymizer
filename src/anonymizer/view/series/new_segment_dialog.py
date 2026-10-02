@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import customtkinter as ctk
 
 from anonymizer.controller.ai.tseg.config import PRIMARY_SEGMENT_ORDER
-from anonymizer.controller.analytics import organ_display_name
+from anonymizer.controller.analytics.dataset import organ_display_name
 from anonymizer.controller.annotations.store import (
     AnnotateSession,
     label_name_taken,

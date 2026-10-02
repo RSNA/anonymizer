@@ -139,3 +139,76 @@ def export_patients_from_local_storage_to_test_pacs(patient_ids: list[str], cont
             return False
 
     return True
+
+
+def cxr_paths() -> list[str]:
+    """Davidson CXR fixture path(s) under assets/test_dcm_files."""
+    from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
+
+    path = (
+        CONTROLLER_TEST_DCM_FILES_DIR
+        / "davidson_cxr"
+        / "davidson_cxr_monochrome1_uncompressed.dcm"
+    )
+    assert path.is_file(), f"Missing CXR fixture: {path}"
+    return [str(path)]
+
+
+def ct_head_paths() -> list[str]:
+    """CT Head With Contrast series DICOM paths under assets/test_dcm_files."""
+    from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
+
+    series_dir = CONTROLLER_TEST_DCM_FILES_DIR / "CT_Head_With_Contrast"
+    paths = sorted(p for p in series_dir.glob("*.dcm") if p.is_file())
+    assert paths, f"Missing CT fixtures in {series_dir}"
+    return [str(p) for p in paths]
+
+
+def send_paths_to_scp(paths: list[str], scp: DICOMNode, controller: ProjectController) -> int:
+    """C-STORE or STOW (depending on remote.dicomweb) a list of absolute DICOM paths."""
+    from pydicom import dcmread
+    from pynetdicom.presentation import build_context
+
+    assert paths
+    for path in paths:
+        assert os.path.exists(path), path
+
+    node = controller.model.remote_scps.get(scp.aet, scp)
+    if getattr(node, "dicomweb", False):
+        sent = controller.send(paths, scp.aet)
+        assert sent == len(paths)
+        return sent
+
+    # DIMSE: negotiate SOPClass+TransferSyntax for each file (covers JPEG 2000 CT fixtures).
+    contexts = []
+    seen: set[tuple[str, str]] = set()
+    for path in paths:
+        ds = dcmread(path, stop_before_pixels=True)
+        sop = str(ds.SOPClassUID)
+        ts = str(ds.file_meta.TransferSyntaxUID)
+        key = (sop, ts)
+        if key not in seen:
+            seen.add(key)
+            contexts.append(build_context(sop, ts))
+            if ts not in controller.model.transfer_syntaxes:
+                controller.model.transfer_syntaxes = list(controller.model.transfer_syntaxes) + [ts]
+    # Refresh local SCP contexts so C-GET/MOVE can receive compressed instances.
+    controller.set_radiology_storage_contexts()
+
+    sent = controller.send(paths, scp.aet, send_contexts=contexts)
+    assert sent == len(paths)
+    return sent
+
+
+def ensure_compressed_transfer_syntaxes(controller: ProjectController) -> None:
+    """Allow JPEG 2000 (and similar) on the local SCP for Orthanc retrieve tests."""
+    extra = [
+        "1.2.840.10008.1.2.4.90",  # JPEG 2000 Lossless
+        "1.2.840.10008.1.2.4.91",  # JPEG 2000
+    ]
+    current = list(controller.model.transfer_syntaxes)
+    for uid in extra:
+        if uid not in current:
+            current.append(uid)
+    controller.model.transfer_syntaxes = current
+    controller.set_radiology_storage_contexts()

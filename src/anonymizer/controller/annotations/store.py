@@ -234,16 +234,23 @@ def load_annotate_session(cache_dir: Path) -> AnnotateSession | None:
     if geometry is not None:
         labels_file = labels_path(cache_dir)
         label_map = _read_label_map(label_map_path(cache_dir))
+        labels, ref = _empty_labels_from_geometry(geometry)
         if labels_file.is_file():
             try:
                 img = sitk.ReadImage(str(labels_file))
-                labels = sitk.GetArrayFromImage(img).astype(np.uint16, copy=False)
-                ref = img
+                arr = sitk.GetArrayFromImage(img).astype(np.uint16, copy=True)
+                if arr.shape == labels.shape:
+                    labels = arr
+                    ref = img
+                else:
+                    logger.warning(
+                        "Discarding labels %s that do not match mask geometry %s under %s",
+                        arr.shape,
+                        labels.shape,
+                        cache_dir,
+                    )
             except RuntimeError as exc:
                 logger.warning("Could not read labels volume: %s", exc)
-                labels, ref = _empty_labels_from_geometry(geometry)
-        else:
-            labels, ref = _empty_labels_from_geometry(geometry)
         session = AnnotateSession(
             cache_dir=cache_dir, labels=labels, label_map=label_map, reference_image=ref
         )
@@ -263,10 +270,17 @@ def load_annotate_session(cache_dir: Path) -> AnnotateSession | None:
     if labels_file.is_file():
         try:
             img = sitk.ReadImage(str(labels_file))
-            arr = sitk.GetArrayFromImage(img).astype(np.uint16, copy=False)
+            arr = sitk.GetArrayFromImage(img).astype(np.uint16, copy=True)
             if arr.shape == labels.shape:
                 labels = arr
                 ref = img
+            else:
+                logger.warning(
+                    "Discarding labels %s that do not match volume grid %s under %s",
+                    arr.shape,
+                    labels.shape,
+                    cache_dir,
+                )
         except RuntimeError as exc:
             logger.warning("Could not read labels volume: %s", exc)
     session = AnnotateSession(

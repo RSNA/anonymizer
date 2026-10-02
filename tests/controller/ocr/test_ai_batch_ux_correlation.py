@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pytest
 
+from anonymizer.controller.ai.batch_process import (
+    format_remove_pixel_phi_instance_detail,
+    format_remove_pixel_phi_series_message,
+)
 from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
     remove_pixel_phi,
-)
-from anonymizer.controller.ai_batch_process import (
-    format_remove_pixel_phi_instance_detail,
-    format_remove_pixel_phi_series_message,
 )
 from anonymizer.controller.runner import RemovePixelPhiRunner
 from tests.controller.ocr.conftest import assert_dcm

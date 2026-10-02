@@ -8,7 +8,7 @@ from customtkinter import ThemeManager
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.modalities import get_modalities
 from anonymizer.utils.translate import _
-from anonymizer.view.common.app_window import AppToplevel
+from anonymizer.view.common.app_window import AppToplevel, install_modal_dismiss
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import default_char_width_px
 
@@ -65,6 +65,7 @@ class ModalitiesDialog(AppToplevel):
         self._create_widgets()
         self.wait_visibility()
         self.lift()
+        install_modal_dismiss(self, self._on_cancel)
         self.grab_set()  # make dialog modal
 
     def _create_widgets(self):

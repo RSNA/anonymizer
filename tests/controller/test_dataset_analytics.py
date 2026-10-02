@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.analytics import (
+from anonymizer.controller.analytics.dataset import (
     AGE_BANDS,
     HEAD_LIMITED_EXCLUDED_ORGANS,
     AnalyticsFilterIndex,
@@ -144,12 +144,12 @@ def test_organ_counts_prefer_mask_voxels_over_stats_mm3_sidecar(tmp_path: Path) 
     import numpy as np
     import SimpleITK as sitk
 
-    from anonymizer.controller.analytics import _organ_counts_for_cache, _organ_volumes_ml_for_cache
     from anonymizer.controller.ai.tseg.seg_retention import (
         write_mask_geometry,
         write_primary_segment_voxels,
         write_structure_voxels,
     )
+    from anonymizer.controller.analytics.dataset import _organ_counts_for_cache, _organ_volumes_ml_for_cache
 
     cache = tmp_path / "0_TS_SEG"
     seg = cache / "seg"
@@ -422,7 +422,7 @@ def test_assemble_anatomy_histograms_patient_means(tmp_path: Path) -> None:
 
 
 def test_organ_display_name_humanizes_underscores() -> None:
-    from anonymizer.controller.analytics import organ_display_name
+    from anonymizer.controller.analytics.dataset import organ_display_name
 
     assert organ_display_name("brain") == "Brain"
     assert organ_display_name("frontal_lobe") == "Frontal lobe"
@@ -498,7 +498,7 @@ def test_modality_filter_subsets_and_planar_anatomy() -> None:
 
 
 def test_organ_volume_bin_edges_cover_normative_when_samples_inside() -> None:
-    from anonymizer.controller.analytics import organ_volume_range_ml
+    from anonymizer.controller.analytics.dataset import organ_volume_range_ml
 
     lo, hi, width = organ_volume_range_ml("brain")
     # In-range samples: main span only — no empty underflow/overflow bins.
@@ -511,7 +511,7 @@ def test_organ_volume_bin_edges_cover_normative_when_samples_inside() -> None:
 
 def test_organ_volume_near_outlier_extends_axis_without_sentinel() -> None:
     """Mild outliers within 2 bins of the pad stay on the main axis (amber), not red."""
-    from anonymizer.controller.analytics import (
+    from anonymizer.controller.analytics.dataset import (
         ORGAN_VOLUME_NEAR_EXTENT_BINS,
         organ_volume_axis_span,
         organ_volume_range_ml,
@@ -530,7 +530,7 @@ def test_organ_volume_near_outlier_extends_axis_without_sentinel() -> None:
 
 def test_organ_volume_axis_pads_so_norm_lo_is_inset() -> None:
     """Extreme high outliers must not stretch the plot axis or glue left norm to spine."""
-    from anonymizer.controller.analytics import (
+    from anonymizer.controller.analytics.dataset import (
         ORGAN_VOLUME_NEAR_EXTENT_BINS,
         organ_volume_axis_span,
         organ_volume_range_ml,
@@ -551,12 +551,12 @@ def test_organ_volume_axis_pads_so_norm_lo_is_inset() -> None:
 
 def test_organ_volume_bin_edges_sentinel_bins_for_extreme_outliers() -> None:
     """Extremes get one-bin sentinels; main span stays plot_lo..plot_hi."""
-    from anonymizer.controller.analytics import (
+    from anonymizer.controller.analytics.dataset import (
         ORGAN_VOLUME_NEAR_EXTENT_BINS,
+        OrganVolumeSample,
         organ_volume_axis_span,
         organ_volume_bin_patient_ids,
         organ_volume_range_ml,
-        OrganVolumeSample,
     )
 
     lo, hi, width = organ_volume_range_ml("brain")
@@ -585,7 +585,7 @@ def test_organ_volume_bin_edges_sentinel_bins_for_extreme_outliers() -> None:
 
 def test_ventricle_overflow_keeps_main_bin_width() -> None:
     """HEAD pathology (~320 ml) must not shrink inlier bins."""
-    from anonymizer.controller.analytics import (
+    from anonymizer.controller.analytics.dataset import (
         OrganVolumeSample,
         organ_volume_axis_span,
         organ_volume_bin_patient_ids,
@@ -610,7 +610,7 @@ def test_ventricle_overflow_keeps_main_bin_width() -> None:
 
 
 def test_organ_volume_ml_tick_values_are_sparse_and_skip_forced_bounds() -> None:
-    from anonymizer.controller.analytics import organ_volume_ml_tick_values, organ_volume_range_ml
+    from anonymizer.controller.analytics.dataset import organ_volume_ml_tick_values, organ_volume_range_ml
 
     lo, hi, width = organ_volume_range_ml("brain")
     ticks = organ_volume_ml_tick_values(lo - 100, hi + 100, width, max_ticks=6)
@@ -621,7 +621,7 @@ def test_organ_volume_ml_tick_values_are_sparse_and_skip_forced_bounds() -> None
 
 
 def test_organ_volume_ml_tick_values_origin_omits_next_label() -> None:
-    from anonymizer.controller.analytics import organ_volume_ml_tick_values
+    from anonymizer.controller.analytics.dataset import organ_volume_ml_tick_values
 
     # Frontal-lobe-like span: origin kept, next sparse label dropped (no overwrite).
     ticks = organ_volume_ml_tick_values(100.0, 420.0, 20.0, max_ticks=6)
@@ -638,7 +638,7 @@ def test_organ_volume_bin_edges_differ_by_organ() -> None:
 
 
 def test_organ_volume_range_unknown_raises() -> None:
-    from anonymizer.controller.analytics import organ_volume_range_ml
+    from anonymizer.controller.analytics.dataset import organ_volume_range_ml
 
     with pytest.raises(KeyError, match="No normative volume range"):
         organ_volume_range_ml("not_a_real_organ")
@@ -646,7 +646,7 @@ def test_organ_volume_range_unknown_raises() -> None:
 
 def test_organ_volume_ranges_cover_primary_segment_groups() -> None:
     from anonymizer.controller.ai.tseg.config import PRIMARY_SEGMENT_GROUPS
-    from anonymizer.controller.analytics import (
+    from anonymizer.controller.analytics.dataset import (
         NORM_MISMATCH_EXCLUDED_ORGANS,
         VOLUME_SEGMENT_GROUPS,
         load_organ_volume_ranges,
@@ -666,7 +666,7 @@ def test_organ_volume_ranges_cover_primary_segment_groups() -> None:
 
 
 def test_brainstem_excluded_from_volume_charts_even_on_body_fov() -> None:
-    from anonymizer.controller.analytics import (
+    from anonymizer.controller.analytics.dataset import (
         NORM_MISMATCH_EXCLUDED_ORGANS,
         _organ_allowed_for_series,
     )
@@ -680,7 +680,7 @@ def test_brainstem_excluded_from_volume_charts_even_on_body_fov() -> None:
 def test_patient_mean_logs_warning_when_outside_normative(caplog: pytest.LogCaptureFixture) -> None:
     import logging
 
-    from anonymizer.controller.analytics import organ_volume_range_ml
+    from anonymizer.controller.analytics.dataset import organ_volume_range_ml
 
     lo, hi, _ = organ_volume_range_ml("lungs")
     above = hi + 500.0
@@ -688,7 +688,7 @@ def test_patient_mean_logs_warning_when_outside_normative(caplog: pytest.LogCapt
         _OrganSample("lungs", "CT", above, "ptOut"),
         _OrganSample("lungs", "CT", (lo + hi) / 2.0, "ptOk"),
     )
-    with caplog.at_level(logging.WARNING, logger="anonymizer.controller.analytics"):
+    with caplog.at_level(logging.WARNING, logger="anonymizer.controller.analytics.dataset"):
         by_organ = _patient_mean_samples_by_organ(samples, modality=None)
 
     assert sorted(s.ml for s in by_organ["lungs"]) == pytest.approx(sorted([above, (lo + hi) / 2.0]))
@@ -706,7 +706,7 @@ def test_patient_mean_logs_warning_when_outside_normative(caplog: pytest.LogCapt
 def test_patient_mean_logs_when_series_oor_but_mean_inside(caplog: pytest.LogCaptureFixture) -> None:
     import logging
 
-    from anonymizer.controller.analytics import organ_volume_range_ml
+    from anonymizer.controller.analytics.dataset import organ_volume_range_ml
 
     lo, hi, _ = organ_volume_range_ml("heart")
     # One series far above, one far below → mean can land inside range.
@@ -719,7 +719,7 @@ def test_patient_mean_logs_when_series_oor_but_mean_inside(caplog: pytest.LogCap
     mean = (low + high) / 2.0
     assert lo <= mean <= hi
 
-    with caplog.at_level(logging.WARNING, logger="anonymizer.controller.analytics"):
+    with caplog.at_level(logging.WARNING, logger="anonymizer.controller.analytics.dataset"):
         by_organ = _patient_mean_samples_by_organ(samples, modality=None)
 
     assert [s.ml for s in by_organ["heart"]] == pytest.approx([mean])

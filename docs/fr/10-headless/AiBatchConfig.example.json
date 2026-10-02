@@ -1,9 +1,14 @@
 {
-  "algorithms": ["harmonize", "face_blur", "remove_pixel_phi"],
+  "algorithms": [
+    "harmonize",
+    "face_blur",
+    "remove_pixel_phi"
+  ],
   "blur_mode": "gaussian",
   "pixel_phi_removal_mode": "blackout",
   "use_modality_whitelist": true,
   "include_brain_structures": false,
+  "prefer_description_mappings": true,
   "ct_segmentation_mode": "3mm",
   "mr_segmentation_mode": "3mm",
   "studies": "all",

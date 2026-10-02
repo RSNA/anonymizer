@@ -6,7 +6,6 @@ from dataclasses import replace
 
 import pytest
 
-from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
 from anonymizer.controller.ai.harmonize.playbook import (
     IV_CONTRAST_PLAYBOOK_CODES,
     PLAYBOOK_TREE_IIDS,
@@ -22,14 +21,15 @@ from anonymizer.controller.ai.harmonize.playbook import (
     map_anatomic_plane_code,
     map_body_part_code,
     map_iv_contrast_code,
+    map_series_type_code,
     map_series_type_modifier_code,
     map_slice_thickness_bucket,
-    map_series_type_code,
     playbook_iv_contrast_row_values,
     resolve_slice_thickness_for_playbook,
     series_type_label,
     should_emit_series_type_modifier,
 )
+from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
 from anonymizer.controller.ai.tseg.segment import TS_result
 
 
@@ -300,13 +300,13 @@ def test_series_type_label_uses_playbook_definition() -> None:
 @pytest.mark.parametrize(
     ("mm", "expected"),
     [
-        (0.75, "Recon"),
+        (0.75, "Sub1"),
         (1.0, "Thin"),
         (2.0, "Thin"),
-        (2.5, "Std"),
-        (3.0, "Std"),
-        (4.9, "Std"),
-        (5.0, "Std"),
+        (2.5, "Med"),
+        (3.0, "Med"),
+        (4.9, "Med"),
+        (5.0, "Med"),
         (5.1, "Thick"),
         (8.0, "Thick"),
     ],
@@ -314,6 +314,16 @@ def test_series_type_label_uses_playbook_definition() -> None:
 def test_map_slice_thickness_bucket(mm: float, expected: str) -> None:
     assert map_slice_thickness_bucket(mm) == expected
     assert expected in SLICE_THICKNESS_PLAYBOOK_CODES
+
+
+def test_sub1_thickness_emitted_in_series_description() -> None:
+    geometry = replace(_geometry(plane="axial"), slice_spacing_mm=0.625)
+    attributes = build_playbook_attributes(
+        _tseg(body_parts_present="Head", contrast_phase="native", structures_present={"brain": 50000}),
+        geometry,
+    )
+    assert attributes.slice_thickness_code == "Sub1"
+    assert format_playbook_series_description(attributes, geometry) == "Brain Ax WO Sub1"
 
 
 def test_standard_thickness_omitted_from_series_description() -> None:
@@ -417,3 +427,31 @@ def test_series_type_modifier_omitted_from_series_description() -> None:
     assert attributes.series_type_modifier_code == "MPR"
     assert should_emit_series_type_modifier("MPR") is False
     assert "MPR" not in format_playbook_series_description(attributes, geometry)
+
+
+def test_playbook_component_code_tooltip_uses_lookup_tables() -> None:
+    from anonymizer.controller.ai.harmonize.playbook import (
+        BODY_PART_PLAYBOOK_CODES,
+        playbook_component_code_label,
+        playbook_component_code_tooltip,
+    )
+
+    assert playbook_component_code_tooltip("plane", "Ax") == "Ax — Axial"
+    assert playbook_component_code_tooltip("contrast", "WO") == "WO — Without contrast"
+    assert playbook_component_code_tooltip("body_part", "Ch") == "Ch — Chest"
+    assert playbook_component_code_tooltip("body_part", "CSp") == "CSp — Cervical spine"
+    assert playbook_component_code_tooltip("luminal", "PO") == "PO — Oral contrast"
+    assert playbook_component_code_tooltip("series_type", "Radiation_Dose") == (
+        "Radiation_Dose — Radiation dose sheet"
+    )
+    assert playbook_component_code_tooltip("series_type_modifier", "MPR") == (
+        "MPR — Multiplanar reformat"
+    )
+    # Full-word codes / empty omit: no tooltip.
+    assert playbook_component_code_tooltip("body_part", "Brain") is None
+    assert playbook_component_code_tooltip("laterality", "") is None
+    # Compound body parts expand each token via the same table.
+    assert playbook_component_code_label("body_part", "Ch+Abd") == "Chest + Abdomen"
+    assert set(BODY_PART_PLAYBOOK_CODES).issubset(
+        {code for code in BODY_PART_PLAYBOOK_CODES if playbook_component_code_label("body_part", code)}
+    )

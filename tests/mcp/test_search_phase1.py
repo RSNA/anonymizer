@@ -8,8 +8,8 @@ from unittest.mock import MagicMock
 import pytest
 from pydicom.dataset import Dataset
 
-from anonymizer.mcp.session import SESSION
 from anonymizer.mcp import api as mcp_tools
+from anonymizer.mcp.session import SESSION
 from anonymizer.utils.translate import set_language_code
 
 DAVIDSON = (
@@ -93,6 +93,31 @@ def test_configure_remote_query(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     assert result["remote"]["aet"] == "PACS_AE"
     assert "QUERY" in result["project"]["remote_scps"]
     assert result["project"]["remote_scps"]["QUERY"]["aet"] == "PACS_AE"
+    assert result["remote"]["dicomweb"] is False
+
+
+def test_configure_remote_dicomweb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    _open_temp_project(tmp_path, monkeypatch)
+    result = mcp_tools.configure_remote(
+        "10.0.0.9",
+        4242,
+        "ORTHANC",
+        role="QUERY",
+        dicomweb=True,
+        http_port=8042,
+        http_path="/dicom-web",
+        username="u",
+        password="secret",
+    )
+    assert result["ok"] is True
+    remote = result["remote"]
+    assert remote["dicomweb"] is True
+    assert remote["http_port"] == 8042
+    assert remote["http_path"] == "/dicom-web"
+    assert remote["username"] == "u"
+    assert remote["password"] == "***"
+    assert "secret" not in str(result)
+    assert remote["dicomweb_root"] == "http://10.0.0.9:8042/dicom-web"
 
 
 def test_pacs_find_serializes_allowlisted_fields(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

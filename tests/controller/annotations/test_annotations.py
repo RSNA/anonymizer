@@ -277,18 +277,34 @@ def test_ct_head_annotate_five_slices_exports_both_formats(tmp_path: Path) -> No
     assert str(ds.SegmentSequence[0].SegmentLabel) == "ct_head_roi"
     assert str(ds.SegmentSequence[0].SegmentAlgorithmType) == "MANUAL"
     assert len(ds.PerFrameFunctionalGroupsSequence) == 5
+    assert list(ds.ImageType)[:2] == ["DERIVED", "PRIMARY"]
+    assert hasattr(ds, "ReferencedSeriesSequence")
+    assert hasattr(ds, "DimensionOrganizationSequence")
+    assert hasattr(ds, "DimensionIndexSequence")
+    assert len(ds.DimensionIndexSequence) == 2
+    assert not hasattr(ds, "MaximumFractionalValue")
 
     # Source SOP refs match the annotated slice stack order.
     from anonymizer.controller.ai.tseg.dicom_geometry import stackable_dicom_paths
 
     source_paths = stackable_dicom_paths(series)
     assert len(source_paths) == z
+    ref_series = ds.ReferencedSeriesSequence[0]
+    assert str(ref_series.SeriesInstanceUID) == str(
+        dcmread(str(source_paths[0]), stop_before_pixels=True, force=True).SeriesInstanceUID
+    )
+    ref_instances = {
+        str(item.ReferencedSOPInstanceUID) for item in ref_series.ReferencedInstanceSequence
+    }
+    assert len(ref_instances) == z
     for frame_i, zi in enumerate(slice_indices):
         fg = ds.PerFrameFunctionalGroupsSequence[frame_i]
-        assert int(fg.SegmentIdentificationSequence[0].SegmentNumber) == 1
+        assert int(fg.SegmentIdentificationSequence[0].ReferencedSegmentNumber) == 1
+        assert list(fg.FrameContentSequence[0].DimensionIndexValues) == [1, zi + 1]
         src = fg.DerivationImageSequence[0].SourceImageSequence[0]
         ref_ds = dcmread(str(source_paths[zi]), stop_before_pixels=True, force=True)
         assert str(src.ReferencedSOPInstanceUID) == str(ref_ds.SOPInstanceUID)
+        assert str(ref_ds.SOPInstanceUID) in ref_instances
 
     frames = _unpack_binary_seg_frames(
         bytes(ds.PixelData),

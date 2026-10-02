@@ -9,7 +9,12 @@ from anonymizer.controller.annotations.brush import (
     stamp_brush,
     undo_last_stroke,
 )
-from anonymizer.controller.annotations.export_dicom_seg import export_dicom_seg
+from anonymizer.controller.annotations.export_dicom_seg import (
+    build_dicom_seg_export_session,
+    count_exportable_segment_labels,
+    count_patient_exportable_segment_labels,
+    export_dicom_seg,
+)
 from anonymizer.controller.annotations.export_nii import export_ml_bundle
 from anonymizer.controller.annotations.import_nii import (
     ImportProfile,
@@ -73,6 +78,9 @@ __all__ = [
     "ensure_series_annotation_geometry",
     "ensure_ts_edit",
     "export_dicom_seg",
+    "build_dicom_seg_export_session",
+    "count_exportable_segment_labels",
+    "count_patient_exportable_segment_labels",
     "export_ml_bundle",
     "detect_and_import",
     "import_binary_masks",

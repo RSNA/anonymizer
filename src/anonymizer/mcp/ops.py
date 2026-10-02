@@ -16,12 +16,12 @@ from typing import Any
 
 import numpy as np
 
+from anonymizer.controller.ai.batch_process import apply_remove_pixel_phi_series
 from anonymizer.controller.ai.harmonize import auto_apply_best_study_descriptions
 from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
     normalize_pixel_phi_removal_mode,
 )
-from anonymizer.controller.ai_batch_process import apply_remove_pixel_phi_series
 from anonymizer.controller.project import MoveStudiesRequest, ProjectController, StudyUIDHierarchy
 from anonymizer.controller.runner import RemovePixelPhiRunner
 from anonymizer.controller.series_io import load_series_frames
@@ -36,6 +36,18 @@ from anonymizer.mcp.snapshots import (
 )
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.model.project import DICOMNode, ProjectModel
+from anonymizer.model.settings_validate import (
+    SettingsValidationError,
+    settings_defaults_payload,
+    validate_language_code,
+    validate_local_scp,
+    validate_network_timeouts,
+    validate_project_name,
+    validate_remote_node,
+    validate_site_id,
+    validate_transfer_syntaxes,
+    validate_uid_root,
+)
 from anonymizer.utils.modalities import resolve_project_modalities
 from anonymizer.utils.storage import get_dcm_files, list_import_directory_files
 from anonymizer.utils.translate import _
@@ -134,23 +146,190 @@ def create_project(
     uid_root: str | None = None,
     overwrite: bool = False,
     modalities: list[str] | str | None = None,
+    language_code: str | None = None,
+    transfer_syntaxes: list[str] | None = None,
+    scp: dict[str, Any] | None = None,
+    network_timeouts: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     try:
-        name = project_name.strip()
-        if not name:
+        raw_name = (project_name or "").strip()
+        if not raw_name:
             raise HeadlessOpsError("project_name is required")
+        if raw_name in {".", ".."} or "/" in raw_name or "\\" in raw_name:
+            raise HeadlessOpsError("project_name must be a single path segment (no slashes)")
+        name = validate_project_name(raw_name)
+        resolved_site = validate_site_id(site_id) if site_id is not None and str(site_id).strip() else None
+        resolved_uid = validate_uid_root(uid_root) if uid_root is not None and str(uid_root).strip() else None
         storage = resolve_project_storage(project_name=name, storage_dir=storage_dir)
         controller = session.create(
             storage_dir=storage,
             project_name=name,
-            site_id=site_id,
-            uid_root=uid_root,
+            site_id=resolved_site,
+            uid_root=resolved_uid,
             overwrite=overwrite,
         )
-        apply_project_modalities(controller, modalities)
+        apply_create_settings(
+            controller,
+            language_code=language_code,
+            modalities=modalities,
+            transfer_syntaxes=transfer_syntaxes,
+            scp=scp,
+            network_timeouts=network_timeouts,
+        )
+    except SettingsValidationError as exc:
+        raise HeadlessOpsError(str(exc)) from exc
     except HeadlessSessionError as exc:
         raise HeadlessOpsError(str(exc)) from exc
     return {"project": serialize_project_info(controller)}
+
+
+def project_settings_defaults() -> dict[str, Any]:
+    """Read-only factory defaults + DIMSE/DICOMweb help for setup wizard."""
+    return settings_defaults_payload()
+
+
+def apply_create_settings(
+    controller: ProjectController,
+    *,
+    language_code: str | None = None,
+    modalities: list[str] | str | None = None,
+    transfer_syntaxes: list[str] | None = None,
+    scp: dict[str, Any] | None = None,
+    network_timeouts: dict[str, Any] | None = None,
+) -> None:
+    """Validate and apply optional settings after create; mirror scp→scu."""
+    try:
+        _apply_mutable_settings(
+            controller,
+            language_code=language_code,
+            modalities=modalities,
+            transfer_syntaxes=transfer_syntaxes,
+            scp=scp,
+            network_timeouts=network_timeouts,
+            mirror_scp_to_scu=True,
+        )
+    except SettingsValidationError as exc:
+        raise HeadlessOpsError(str(exc)) from exc
+
+
+def update_project_settings(
+    controller: ProjectController,
+    *,
+    language_code: str | None = None,
+    modalities: list[str] | str | None = None,
+    transfer_syntaxes: list[str] | None = None,
+    scp: dict[str, Any] | None = None,
+    network_timeouts: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Update mutable settings on an open project (identity fields are not accepted)."""
+    if not any(
+        x is not None
+        for x in (language_code, modalities, transfer_syntaxes, scp, network_timeouts)
+    ):
+        raise HeadlessOpsError(
+            "Provide at least one mutable setting: language_code, modalities, "
+            "transfer_syntaxes, scp, or network_timeouts"
+        )
+    try:
+        _apply_mutable_settings(
+            controller,
+            language_code=language_code,
+            modalities=modalities,
+            transfer_syntaxes=transfer_syntaxes,
+            scp=scp,
+            network_timeouts=network_timeouts,
+            mirror_scp_to_scu=True,
+        )
+    except SettingsValidationError as exc:
+        raise HeadlessOpsError(str(exc)) from exc
+    return {"project": serialize_project_info(controller)}
+
+
+def _scp_kwargs(scp: dict[str, Any] | None) -> dict[str, Any]:
+    if not scp:
+        return {}
+    return {
+        "ip": scp.get("ip"),
+        "port": scp.get("port"),
+        "aet": scp.get("aet"),
+    }
+
+
+def _timeout_kwargs(timeouts: dict[str, Any] | None) -> dict[str, Any]:
+    if not timeouts:
+        return {}
+    return {
+        "tcp_connection": timeouts.get("tcp_connection"),
+        "acse": timeouts.get("acse"),
+        "dimse": timeouts.get("dimse"),
+        "network": timeouts.get("network"),
+    }
+
+
+def _apply_mutable_settings(
+    controller: ProjectController,
+    *,
+    language_code: str | None,
+    modalities: list[str] | str | None,
+    transfer_syntaxes: list[str] | None,
+    scp: dict[str, Any] | None,
+    network_timeouts: dict[str, Any] | None,
+    mirror_scp_to_scu: bool,
+) -> None:
+    model = controller.model
+    restart_scp = False
+
+    if language_code is not None and str(language_code).strip():
+        model.language_code = validate_language_code(language_code)
+
+    if transfer_syntaxes is not None:
+        model.transfer_syntaxes = validate_transfer_syntaxes(
+            list(transfer_syntaxes),
+            allowed=list(ProjectModel.default_transfer_syntaxes()),
+        )
+        restart_scp = True
+
+    if scp is not None:
+        kwargs = _scp_kwargs(scp)
+        # Treat empty dict as "no change"; require at least one field when provided.
+        if any(v is not None and str(v).strip() != "" for v in kwargs.values()):
+            node = validate_local_scp(base=model.scp, **{
+                k: v for k, v in kwargs.items() if v is not None and str(v).strip() != ""
+            })
+            model.scp = node
+            if mirror_scp_to_scu:
+                model.scu = DICOMNode(node.ip, node.port, node.aet, True)
+            restart_scp = True
+
+    if network_timeouts is not None:
+        tkwargs = _timeout_kwargs(network_timeouts)
+        if any(v is not None for v in tkwargs.values()):
+            model.network_timeouts = validate_network_timeouts(
+                base=model.network_timeouts,
+                **{k: v for k, v in tkwargs.items() if v is not None},
+            )
+            restart_scp = True
+
+    # Modalities persist via apply_project_modalities (save_model); do after other fields
+    # so a restart path still includes modality changes when update_model saves.
+    if modalities is not None and (
+        (isinstance(modalities, str) and modalities.strip())
+        or (isinstance(modalities, list) and len(modalities) > 0)
+    ):
+        apply_project_modalities(controller, modalities)
+        # apply_project_modalities already saved; still need update_model if SCP changed
+        if restart_scp:
+            controller.update_model()
+        return
+
+    if restart_scp:
+        controller.update_model()
+    elif any(
+        x is not None
+        for x in (language_code, transfer_syntaxes, scp, network_timeouts)
+    ):
+        if not controller.save_model():
+            raise HeadlessOpsError("Failed to save ProjectModel.json")
 
 
 def project_open(
@@ -1183,6 +1362,12 @@ def configure_remote(
     port: int,
     aet: str,
     role: RemoteScpRole | str = RemoteScpRole.QUERY,
+    dicomweb: bool = False,
+    http_port: int | None = None,
+    http_path: str | None = None,
+    use_https: bool = False,
+    username: str | None = None,
+    password: str | None = None,
 ) -> dict[str, Any]:
     """Thin adapter: set ``remote_scps`` + ``save_model`` (no controller changes)."""
     try:
@@ -1193,12 +1378,21 @@ def configure_remote(
         ) from exc
     scp_key = _query_scp_key() if role_enum is RemoteScpRole.QUERY else _export_scp_key()
 
-    if not ip.strip() or not aet.strip():
-        raise HeadlessOpsError("ip and aet are required")
-    if not (1 <= int(port) <= 65535):
-        raise HeadlessOpsError("port must be 1–65535")
+    try:
+        node = validate_remote_node(
+            ip=ip,
+            port=port,
+            aet=aet,
+            dicomweb=dicomweb,
+            http_port=http_port,
+            http_path=http_path,
+            use_https=use_https,
+            username=username,
+            password=password,
+        )
+    except SettingsValidationError as exc:
+        raise HeadlessOpsError(str(exc)) from exc
 
-    node = DICOMNode(ip.strip(), int(port), aet.strip(), False)
     controller.model.remote_scps[scp_key] = node
     if not controller.save_model():
         raise HeadlessOpsError("Failed to save ProjectModel.json")
@@ -1259,18 +1453,21 @@ def pacs_move(
     studies: list[dict[str, str]],
     level: PacsMoveLevel | str = PacsMoveLevel.SERIES,
 ) -> dict[str, Any]:
-    """Thin adapter: ensure SCP → ``get_study_uid_hierarchies`` / ``manage_move``."""
-    try:
-        session.ensure_scp()
-    except HeadlessSessionError as exc:
-        raise HeadlessOpsError(str(exc)) from exc
-
+    """Thin adapter: ensure SCP (DIMSE only) → ``get_study_uid_hierarchies`` / ``manage_move``."""
     if not studies:
         raise HeadlessOpsError("studies list is empty")
 
     scp_key = _query_scp_key()
     if scp_key not in controller.model.remote_scps:
         raise HeadlessOpsError(f"No {scp_key} remote configured. Call configure_remote first.")
+
+    query_remote = controller.model.remote_scps[scp_key]
+    # WADO-RS pulls instances over HTTP; local C-STORE SCP is only needed for DIMSE MOVE/GET.
+    if not query_remote.dicomweb:
+        try:
+            session.ensure_scp()
+        except HeadlessSessionError as exc:
+            raise HeadlessOpsError(str(exc)) from exc
 
     hierarchies: list[StudyUIDHierarchy] = []
     for item in studies:

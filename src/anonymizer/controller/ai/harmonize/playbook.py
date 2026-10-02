@@ -88,8 +88,12 @@ BODY_PART_PLAYBOOK_CODES: frozenset[str] = frozenset(
         "TSp_LSp",
         "CSp_TSp_LSp",
         "SBTT",
+        "Panc",
     }
 )
+
+# CT SeriesNameV4 laterality (sheet uses B for bilateral; planar XR/MG keep Bilat separately).
+LATERALITY_PLAYBOOK_CODES: frozenset[str] = frozenset({"L", "R", "B"})
 
 ANATOMIC_PLANE_PLAYBOOK_CODES: frozenset[str] = frozenset(
     {"Ax", "Sag", "Cor", "Ax_Obl", "Sag_Obl", "Cor_Obl", "Rad_Obl"}
@@ -115,6 +119,18 @@ IV_CONTRAST_PLAYBOOK_CODES: frozenset[str] = frozenset(
 )
 # RSNA RadLex Series Playbook IV Contrast Phase vocabulary.
 
+LUMINAL_CONTRAST_PLAYBOOK_CODES: frozenset[str] = frozenset(
+    {
+        "PO",
+        "PR",
+        "Cysto",
+        "PostVoid",
+        "Tube",
+        "Intra-articular",
+        "Intra-thecal",
+    }
+)
+
 SERIES_TYPE_PLAYBOOK_CODES: frozenset[str] = frozenset(
     {
         "Localizer",
@@ -127,13 +143,22 @@ SERIES_TYPE_PLAYBOOK_CODES: frozenset[str] = frozenset(
     }
 )
 
-# RSNA RadLex Series Playbook slice-thickness buckets (CT Sandbox / RSNA FAQ).
-SLICE_THICKNESS_PLAYBOOK_CODES: frozenset[str] = frozenset({"Recon", "Thin", "Std", "Thick"})
-# SeriesNameV4 emits only non-default thickness tokens (Med/Std omitted; Recon omitted in v1).
-SLICE_THICKNESS_EMITTED_CODES: frozenset[str] = frozenset({"Thin", "Thick"})
+# RSNA RadLex Series Playbook slice-thickness buckets (CT SeriesNameV4 sheet).
+# Sub1/Med are sheet tokens; Recon/Std remain as legacy aliases accepted by parse.
+SLICE_THICKNESS_PLAYBOOK_CODES: frozenset[str] = frozenset(
+    {"Sub1", "Thin", "Med", "Thick", "Recon", "Std"}
+)
+# SeriesNameV4 emits non-default thickness only (Med/Std/Soft omitted; Soft is Kernel).
+SLICE_THICKNESS_EMITTED_CODES: frozenset[str] = frozenset({"Sub1", "Thin", "Thick"})
 _SLICE_THICKNESS_REGULARITY_MIN = 0.85
 
 SERIES_TYPE_MODIFIER_PLAYBOOK_CODES: frozenset[str] = frozenset({"MPR"})
+
+# Kernel Soft is the default and omitted from SeriesNameV4.
+KERNEL_PLAYBOOK_CODES: frozenset[str] = frozenset({"Bone", "Lung"})
+
+# View Supine is the default and omitted from SeriesNameV4.
+VIEW_PLAYBOOK_CODES: frozenset[str] = frozenset({"Prone", "LLD", "RLD"})
 
 METADATA_HARMONIZE_SERIES_TYPES: frozenset[str] = SERIES_TYPE_PLAYBOOK_CODES
 
@@ -246,11 +271,66 @@ _MR_WITH_CONTRAST_KEYWORDS: tuple[str, ...] = (
 )
 
 _BODY_PART_MSGIDS: dict[str, str] = {
-    "Ch": "Chest",
-    "Abd": "Abdomen",
-    "Head": "Head",
+    "WB": "Whole body",
     "Brain": "Brain",
+    "Head": "Head",
+    "Pit": "Pituitary",
+    "TBone": "Temporal bone",
+    "TMJ": "Temporomandibular joint",
+    "Face": "Face",
+    "Orbit": "Orbit",
+    "Sinuses": "Paranasal sinuses",
+    "NP": "Nasopharynx",
+    "OP": "Oropharynx",
+    "Larynx": "Larynx",
+    "Neck": "Neck",
+    "Thyroid": "Thyroid",
+    "Parathyroid": "Parathyroid",
+    "Ch": "Chest",
     "CAP": "Chest abdomen pelvis",
+    "Mandible": "Mandible",
+    "Heart": "Heart",
+    "Coronary": "Coronary arteries",
+    "Breast": "Breast",
+    "Abd": "Abdomen",
+    "Pel": "Pelvis",
+    "AbdPel": "Abdomen pelvis",
+    "Aorta": "Aorta",
+    "Liver": "Liver",
+    "Kidney": "Kidney",
+    "Adrenal": "Adrenal",
+    "Rectum": "Rectum",
+    "Uterus": "Uterus",
+    "Fetus": "Fetus",
+    "Pros": "Prostate",
+    "UExt": "Upper extremity",
+    "Shoulder": "Shoulder",
+    "Elbow": "Elbow",
+    "Wrist": "Wrist",
+    "Hand": "Hand",
+    "Finger": "Finger",
+    "LExt": "Lower extremity",
+    "Fem": "Femur",
+    "Hip": "Hip",
+    "Knee": "Knee",
+    "Ankle": "Ankle",
+    "Foot": "Foot",
+    "Joints": "Joints",
+    "Spine": "Spine",
+    "CSp": "Cervical spine",
+    "TSp": "Thoracic spine",
+    "LSp": "Lumbar spine",
+    "Sacrum": "Sacrum",
+    "SIJ": "Sacroiliac joints",
+    "Brain_Face": "Brain and face",
+    "Brain_Neck": "Brain and neck",
+    "Brain_Face_Csp": "Brain, face, and cervical spine",
+    "Brain_CSp": "Brain and cervical spine",
+    "CSp_TSp": "Cervical and thoracic spine",
+    "TSp_LSp": "Thoracic and lumbar spine",
+    "CSp_TSp_LSp": "Entire spine",
+    "SBTT": "Small bowel through terminal ileum",
+    "Panc": "Pancreas",
 }
 
 _PLANE_MSGIDS: dict[str, str] = {
@@ -281,10 +361,39 @@ _IV_CONTRAST_MSGIDS: dict[str, str] = {
 }
 
 _SLICE_THICKNESS_MSGIDS: dict[str, str] = {
-    "Recon": "Reconstruction (< 1 mm)",
-    "Thin": "Thin ( 1 mm and < 2.5 mm)",
-    "Std": "Standard ( 2.5 mm and  5 mm)",
-    "Thick": "Thick ( 5 mm)",
+    "Sub1": "Sub-millimeter (< 1 mm)",
+    "Recon": "Sub-millimeter (< 1 mm)",  # legacy alias of Sub1
+    "Thin": "Thin (≥ 1 mm and < 2.5 mm)",
+    "Med": "Medium (≥ 2.5 mm and < 5 mm)",
+    "Std": "Medium (≥ 2.5 mm and < 5 mm)",  # legacy alias of Med
+    "Thick": "Thick (≥ 5 mm)",
+}
+
+_LATERALITY_MSGIDS: dict[str, str] = {
+    "L": "Left",
+    "R": "Right",
+    "B": "Bilateral",
+}
+
+_LUMINAL_CONTRAST_MSGIDS: dict[str, str] = {
+    "PO": "Oral contrast",
+    "PR": "Rectal contrast",
+    "Cysto": "Cystogram contrast",
+    "PostVoid": "Post-void",
+    "Tube": "Tube contrast",
+    "Intra-articular": "Intra-articular contrast",
+    "Intra-thecal": "Intrathecal contrast",
+}
+
+_KERNEL_MSGIDS: dict[str, str] = {
+    "Bone": "Bone kernel",
+    "Lung": "Lung kernel",
+}
+
+_VIEW_MSGIDS: dict[str, str] = {
+    "Prone": "Prone",
+    "LLD": "Left lateral decubitus",
+    "RLD": "Right lateral decubitus",
 }
 
 _SERIES_TYPE_MSGIDS: dict[str, str] = {
@@ -480,7 +589,18 @@ def _playbook_iv_contrast_evidence(
 
 
 def body_part_label(code: str) -> str:
-    return _playbook_localized(_BODY_PART_MSGIDS, code)
+    raw = (code or "").strip()
+    if not raw:
+        return "—"
+    if "+" in raw:
+        return " + ".join(body_part_label(part) for part in raw.split("+") if part.strip())
+    return _playbook_localized(_BODY_PART_MSGIDS, raw)
+
+
+def laterality_label(code: str) -> str:
+    if not code:
+        return "—"
+    return _playbook_localized(_LATERALITY_MSGIDS, code)
 
 
 def anatomic_plane_label(code: str) -> str:
@@ -489,6 +609,24 @@ def anatomic_plane_label(code: str) -> str:
 
 def iv_contrast_label(code: str) -> str:
     return _playbook_localized(_IV_CONTRAST_MSGIDS, code)
+
+
+def luminal_contrast_label(code: str) -> str:
+    if not code:
+        return "—"
+    return _playbook_localized(_LUMINAL_CONTRAST_MSGIDS, code)
+
+
+def kernel_label(code: str) -> str:
+    if not code:
+        return "—"
+    return _playbook_localized(_KERNEL_MSGIDS, code)
+
+
+def view_label(code: str) -> str:
+    if not code:
+        return "—"
+    return _playbook_localized(_VIEW_MSGIDS, code)
 
 
 def _iv_contrast_playbook_code(code: str) -> str:
@@ -507,6 +645,54 @@ def series_type_modifier_label(code: str) -> str:
     if not code:
         return "—"
     return _playbook_localized(_SERIES_TYPE_MODIFIER_MSGIDS, code)
+
+
+def slice_thickness_label(code: str) -> str:
+    if not code:
+        return "—"
+    return _playbook_localized(_SLICE_THICKNESS_MSGIDS, code)
+
+
+def playbook_component_code_label(field_key: str, code: str) -> str:
+    """Full Playbook gloss for a Compose field code (existing msgid lookup tables)."""
+    key = (field_key or "").strip()
+    raw = "" if code is None else str(code).strip()
+    if key == "laterality":
+        return laterality_label(raw)
+    if key == "body_part":
+        return body_part_label(raw)
+    if key == "plane":
+        return anatomic_plane_label(raw) if raw else "—"
+    if key == "contrast":
+        return iv_contrast_label(raw) if raw else "—"
+    if key == "luminal":
+        return luminal_contrast_label(raw)
+    if key == "slice_thickness":
+        return slice_thickness_label(raw)
+    if key == "series_type":
+        return series_type_label(raw)
+    if key == "series_type_modifier":
+        return series_type_modifier_label(raw)
+    if key == "kernel":
+        return kernel_label(raw)
+    if key == "view":
+        return view_label(raw)
+    if key == "mode":
+        return _("Doppler") if raw == "Doppler" else (raw or "—")
+    if key == "anatomy":
+        return raw or "—"
+    return raw or "—"
+
+
+def playbook_component_code_tooltip(field_key: str, code: str) -> str | None:
+    """Structured hover text ``CODE — full name`` when the code is abbreviated."""
+    raw = "" if code is None else str(code).strip()
+    if not raw:
+        return None
+    label = playbook_component_code_label(field_key, raw)
+    if not label or label == "—" or label == raw:
+        return None
+    return f"{raw} — {label}"
 
 
 def _normalized_dicom_text(*values: object) -> str:
@@ -749,18 +935,13 @@ def is_localizer_geometry(geometry: SeriesGeometryResult) -> bool:
 def map_slice_thickness_bucket(mm: float) -> str:
     """Map effective through-plane thickness (mm) to a Playbook slice-thickness bucket."""
     if mm < 1.0:
-        return "Recon"
+        return "Sub1"
     if mm < 2.5:
         return "Thin"
+    # Sheet text says Thick ≥5; SeriesNameV4 examples treat 5 mm as Med (omitted).
     if mm <= 5.0:
-        return "Std"
+        return "Med"
     return "Thick"
-
-
-def slice_thickness_label(code: str) -> str:
-    if not code:
-        return "—"
-    return _playbook_localized(_SLICE_THICKNESS_MSGIDS, code)
 
 
 def _dicom_slice_thickness_mm(ds: Dataset) -> float | None:
@@ -824,12 +1005,17 @@ def resolve_slice_thickness_for_playbook(
     """
     Return ``(emitted_code, mm, bucket)`` for harmonize.
 
-    ``emitted_code`` is empty when the bucket is omitted from SeriesNameV4 (Std/Recon v1).
+    ``emitted_code`` is empty when the bucket is omitted from SeriesNameV4 (Med/Std).
     """
     mm = effective_slice_thickness_mm(geometry, ds)
     if mm is None:
         return "", None, ""
     bucket = map_slice_thickness_bucket(mm)
+    # Normalize legacy aliases to sheet tokens before emit check.
+    if bucket == "Recon":
+        bucket = "Sub1"
+    elif bucket == "Std":
+        bucket = "Med"
     emitted = bucket if should_emit_slice_thickness(bucket, geometry, series_type_code) else ""
     return emitted, mm, bucket
 
@@ -1169,9 +1355,12 @@ def playbook_series_description_elements(
     Ordered Playbook CT series-name elements implemented by harmonize.
 
     Full CT convention order (RSNA spreadsheet): Laterality, Body Part, Body Part
-    Modifier, Maneuvers, Anatomic Plane, IV Contrast, Slice Thickness, … Harmonize
-    currently emits Body Part → Anatomic Plane → IV Contrast → Slice Thickness (Thin/Thick
-    only when non-default) → Series Type (when applicable).
+    Modifier, Maneuvers, Anatomic Plane, IV Contrast, Luminal Contrast, Series Type,
+    Series Type Modifier, Spectral, Slice Thickness, Kernel, View.
+
+    Harmonize currently emits Body Part → Anatomic Plane → IV Contrast → Slice Thickness
+    (Sub1/Thin/Thick when non-default) → Series Type (when applicable). Compose supports
+    Laterality, Luminal, Kernel, and View as well.
 
     For single-modality CT exams the ``CT`` modality prefix is omitted per Playbook rules.
     """
@@ -1204,9 +1393,9 @@ def format_playbook_series_description(
     """
     Build the Playbook-compliant CT series description string.
 
-    Element order: ``{BodyPart[+…]} {AnatomicPlane} {IVContrastPhase} [{Thin|Thick}] {SeriesType}``.
-    Standard-range thickness (≥2.5 mm and <5 mm) and sub-1 mm reconstructions are omitted
-    per RSNA CT Sandbox SeriesNameV4. ``WO`` is emitted for native series.
+    Element order: ``{BodyPart[+…]} {AnatomicPlane} {IVContrastPhase} [{Sub1|Thin|Thick}]
+    {SeriesType}``. Medium-range thickness (Med/Std) and Soft kernel are omitted per
+    SeriesNameV4. ``WO`` is emitted for native series.
     """
     elements = playbook_series_description_elements(
         attributes,

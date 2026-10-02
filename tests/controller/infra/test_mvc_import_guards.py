@@ -23,7 +23,7 @@ _ALLOWED_LAZY_MODULES_BY_FILE: dict[Path, frozenset[str]] = {
         {
             "anonymizer.controller.ai.blur_face.pipeline",
             "anonymizer.controller.ai.tseg.segment",
-            "anonymizer.controller.analytics",
+            "anonymizer.controller.analytics.dataset",
         }
     ),
 }

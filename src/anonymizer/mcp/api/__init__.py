@@ -36,8 +36,10 @@ from anonymizer.mcp.api.handlers import (  # noqa: F401 — public API
     pacs_move,
     project_info,
     project_open,
+    project_settings_defaults,
     remove_pixel_phi,
     resolve_series,
+    update_project_settings,
 )
 from anonymizer.mcp.api.schema_json import mcp_input_schema
 from anonymizer.mcp.api.wire import as_plain_tool, parse_wire_text, wire_text
@@ -70,9 +72,11 @@ __all__ = [
     "parse_wire_text",
     "register_tools",
     "list_projects",
+    "project_settings_defaults",
     "create_project",
     "project_open",
     "project_info",
+    "update_project_settings",
     "list_inventory",
     "import_directory",
     "import_file",

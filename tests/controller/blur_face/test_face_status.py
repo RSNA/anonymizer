@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from anonymizer.controller.ai.blur_face import (
+    FACE_BLUR_MODE_LABELS,
     FaceBlurMode,
     FaceBlurProgress,
-    FACE_BLUR_MODE_LABELS,
     face_blur_mode_display_label,
     format_face_blur_progress_status,
 )

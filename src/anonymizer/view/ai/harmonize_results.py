@@ -8,7 +8,7 @@ import tkinter as tk
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from tkinter import messagebox, ttk
+from tkinter import ttk
 
 import customtkinter as ctk
 from pydicom import Dataset
@@ -40,7 +40,6 @@ from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import StudyPhiHeader
 from anonymizer.utils.modalities import is_mr_modality
 from anonymizer.utils.translate import _
-from anonymizer.view.ai.features.catalog import AiFeatureId, feature_description
 from anonymizer.view.common.app_window import AppToplevel, position_toplevel_near_parent
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import AppFonts
@@ -795,18 +794,53 @@ class HarmonizeResultsView(AppToplevel):
         ):
             self._upsert_playbook_row(iid, values)
 
-    def _prompt_brain_structures_for_current_series(self) -> bool:
-        if not should_prompt_brain_structures_for_series(self._series_path, self._ds):
-            return False
-        description = feature_description(AiFeatureId.BRAIN_STRUCTURES.value)
-        return messagebox.askyesno(
-            title=_("Brain structures"),
-            message=_("This appears to be a CT head study. Run detailed brain structure segmentation?")
-            + "\n\n"
-            + description,
-            default="no",
-            parent=self,
-        )
+    def _prompt_harmonize_run_options(self):
+        """Combined mapping/brain pre-run prompt; never stacks two dialogs."""
+        from anonymizer.view.ai.harmonize_run_options_dialog import show_harmonize_run_options_dialog
+
+        mapping = None
+        if self._anon_model is not None:
+            series_uid = str(getattr(self._ds, "SeriesInstanceUID", "") or "").strip()
+            modality = str(getattr(self._ds, "Modality", "") or "").strip().upper()
+            original = ""
+            if series_uid:
+                original = (self._anon_model.get_series_description(series_uid) or "").strip()
+            if not original:
+                original = str(getattr(self._ds, "SeriesDescription", "") or "").strip()
+            if original:
+                mapping = self._anon_model.lookup_description_mapping(
+                    kind="series",
+                    original=original,
+                    modality=modality,
+                )
+        offer_brain = should_prompt_brain_structures_for_series(self._series_path, self._ds)
+        return show_harmonize_run_options_dialog(
+            self,
+            mapping=mapping,
+            offer_brain=offer_brain,
+        ), mapping
+
+    def _apply_mapping_without_model(self, mapping) -> None:
+        """Apply a saved mapping and finish the current Harmonize item without TS/ML."""
+        from anonymizer.controller.ai.harmonize import apply_harmonized_description
+
+        description = (mapping.harmonized_description or "").strip()
+        if not description:
+            self._show_error(_("Empty mapped description"))
+            return
+        self._show_saving_state()
+        ok = apply_harmonized_description(self._series_path, description, self._anon_model)
+        self._finish_saving_state()
+        if not ok:
+            self._show_error(_("Failed to apply mapped description"))
+            return
+        self._pending_save_description = description
+        self._commit_saved_description()
+        self.accepted = True
+        self._status_label.configure(text=_("Applied from description mapping"))
+        self._maybe_auto_apply_study_description()
+        self._record_outcome(accepted=True)
+        self._configure_ok_button()
 
     def _user_harmonize_status(self, progress: HarmonizeProgress) -> str:
         from anonymizer.controller.ai.tseg.config import segmentation_mode_for_modality
@@ -962,15 +996,31 @@ class HarmonizeResultsView(AppToplevel):
         """Record series harmonized_description in the project DB (must run on UI thread)."""
         if self._anon_model is None:
             return True
+        from anonymizer.controller.ai.harmonize.mapping_origin import series_mapping_origin
+
         series_uid = str(self._ds.SeriesInstanceUID)
-        ok = self._anon_model.set_series_harmonized_description(series_uid, description.strip())
+        text = description.strip()
+        ok = self._anon_model.set_series_harmonized_description(series_uid, text)
         if not ok:
             logger.error(
                 "Failed to set harmonized_description for series_uid=%s description=%r",
                 series_uid,
                 description,
             )
-        return ok
+            return False
+        # Blank sticky original → no series mapping (nothing to remember).
+        modality = str(getattr(self._ds, "Modality", "") or "").strip().upper()
+        self._anon_model.remember_series_description_mapping(
+            series_uid=series_uid,
+            modality=modality,
+            harmonized=text,
+            origin=series_mapping_origin(
+                self.result,
+                modality=modality,
+                include_brain_structures=self._include_brain_structures_for_current_run,
+            ),
+        )
+        return True
 
     def _maybe_auto_apply_study_description(self) -> None:
         """Best-guess LOINC StudyDescription when this apply completes the study (same as AI Batch)."""
@@ -1029,7 +1079,18 @@ class HarmonizeResultsView(AppToplevel):
         self._update_playbook_from_progress(progress)
 
     def _start_current_item_worker(self) -> None:
-        self._include_brain_structures_for_current_run = self._prompt_brain_structures_for_current_series()
+        options, mapping = self._prompt_harmonize_run_options()
+        if options.cancelled:
+            self._running = False
+            self._status_label.configure(text=_("Harmonize cancelled"))
+            self._configure_ok_button()
+            return
+        if options.apply_mapping and mapping is not None:
+            self._include_brain_structures_for_current_run = False
+            self._apply_mapping_without_model(mapping)
+            return
+
+        self._include_brain_structures_for_current_run = options.include_brain_structures
         self._harmonize_work_state.prepare_job()
 
         def _worker() -> None:

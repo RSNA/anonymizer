@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 _PATCH_INSTALLED = False
 _FONT_DEL_PATCHED = False
 _VARIABLE_DEL_PATCHED = False
+_SCROLL_WIDGET_RESOLVE_PATCHED = False
 _scaling_check_paused = False
 
 
@@ -300,6 +301,35 @@ def install_safe_tk_variable_destructor() -> None:
     tk.Variable.__del__ = _safe_var_del
     _VARIABLE_DEL_PATCHED = True
     logger.debug("Installed safe tkinter Variable destructor")
+
+
+def install_safe_scrollable_frame_widget_resolve() -> None:
+    """Resolve Tk path-name ``event.widget`` strings before CTk's master walk.
+
+    ``CTkScrollableFrame`` ``bind_all`` MouseWheel handlers sometimes receive
+    ``event.widget`` as a path string (``.!ctkframe...``) instead of a widget.
+    Stock ``_check_if_valid_scroll`` then does ``widget.master`` and raises
+    ``AttributeError: 'str' object has no attribute 'master'``.
+    """
+    global _SCROLL_WIDGET_RESOLVE_PATCHED
+    if _SCROLL_WIDGET_RESOLVE_PATCHED:
+        return
+
+    from customtkinter.windows.widgets.ctk_scrollable_frame import CTkScrollableFrame
+
+    original = CTkScrollableFrame._check_if_valid_scroll
+
+    def _safe_check_if_valid_scroll(self, widget):  # noqa: ANN001
+        if isinstance(widget, str):
+            try:
+                widget = self.nametowidget(widget)
+            except (KeyError, tk.TclError):
+                return False
+        return original(self, widget)
+
+    CTkScrollableFrame._check_if_valid_scroll = _safe_check_if_valid_scroll  # type: ignore[method-assign]
+    _SCROLL_WIDGET_RESOLVE_PATCHED = True
+    logger.debug("Installed safe CTkScrollableFrame widget path resolve")
 
 
 def install_safe_scaling_tracker() -> None:

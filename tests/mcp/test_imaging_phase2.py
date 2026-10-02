@@ -5,11 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import numpy as np
 import pytest
 
-from anonymizer.mcp.session import SESSION
 from anonymizer.mcp import api as mcp_tools
+from anonymizer.mcp.session import SESSION
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.translate import set_language_code
 

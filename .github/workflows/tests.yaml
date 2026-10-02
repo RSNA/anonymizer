@@ -43,9 +43,16 @@ jobs:
     - name: Ruff Linting Check
       run: uv run --python ${{ matrix.python-version }} ruff check ./src/anonymizer/
 
+    - name: Cache managed Orthanc binaries
+      uses: actions/cache@v4
+      with:
+        path: tests/controller/dicom/support/orthanc_runtime
+        key: orthanc-${{ runner.os }}-1.12.7-dicomweb-1.18-gdcm-1.8
+
     - name: Run Unit Tests
       env:
         PYTHONPATH: ${{ github.workspace }}/src
         AWS_USERNAME: ${{ secrets.AWS_USERNAME }}
         AWS_PASSWORD: ${{ secrets.AWS_PASSWORD }}
-      run: uv run --python ${{ matrix.python-version }} pytest tests/controller tests/model
+        CI: "true"
+      run: uv run --python ${{ matrix.python-version }} pytest

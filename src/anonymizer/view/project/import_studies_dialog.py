@@ -90,11 +90,51 @@ class ImportStudiesDialog(AppToplevel):
         self.wait_visibility()
         self.grab_set()  # make dialog modal
 
+        instance_level = move_level in [_("IMAGE"), _("INSTANCE")]
+        remote = controller.model.remote_scps.get(self._scp_name)
+        self._retrieve_modality = self._resolve_import_modality()
+        self._apply_source_label(self._retrieve_modality)
+        logger.info(
+            "Import dialog started: studies=%s move_level=%s instance_level=%s modality=%s remote=%s",
+            len(self.studies),
+            move_level,
+            instance_level,
+            self._retrieve_modality,
+            remote if remote is not None else self._scp_name,
+        )
+
         # Phase 1: Start background task to get StudyUIDHierarchies:
         self._controller.get_study_uid_hierarchies_ex(
-            self._scp_name, self.studies, instance_level=move_level in [_("IMAGE"), _("INSTANCE")]
+            self._scp_name, self.studies, instance_level=instance_level
         )
         self._update_progress_get_hierarchies()
+
+    def _resolve_import_modality(self) -> str:
+        """Match RetrieveMixin._manage_move: WADO / C-GET / C-MOVE."""
+        remote = self._controller.model.remote_scps[self._scp_name]
+        if remote.dicomweb:
+            return "WADO"
+        return "GET" if self._controller._probe_qr_get_support(self._scp_name) else "MOVE"
+
+    def _apply_source_label(self, modality: str) -> None:
+        remote = self._controller.model.remote_scps[self._scp_name]
+        base = _("Import from") + f" {remote}"
+        if modality == "GET":
+            text = f"{base}  ·  C-GET"
+        elif modality == "MOVE":
+            text = f"{base}  ·  C-MOVE"
+        elif modality == "WADO":
+            text = f"{base}  ·  WADO-RS"
+        else:
+            text = base
+        self._source_label.configure(text=text)
+        # Keep window title in sync for SCP retrieve mode.
+        title = _("Importing Study") if len(self.studies) == 1 else _("Importing Studies")
+        mode = {"GET": "C-GET", "MOVE": "C-MOVE", "WADO": "WADO-RS"}.get(modality)
+        if mode:
+            self.title(f"{title} from {remote.aet} ({mode})")
+        else:
+            self.title(f"{title} from {remote.aet}")
 
     def _create_widgets_1(self):
         logger.info("_create_widgets_1")
@@ -226,6 +266,18 @@ class ImportStudiesDialog(AppToplevel):
                 mr: MoveStudiesRequest = MoveStudiesRequest(
                     self._scp_name, self._controller.model.scu.aet, self._move_level, self.studies
                 )
+                logger.info(
+                    "Import retrieve initiated: studies=%s instances=%s move_level=%s modality=%s scp=%s dest_ae=%s",
+                    self._study_metadata_retrieved,
+                    self._instances_to_import,
+                    self._move_level,
+                    getattr(self, "_retrieve_modality", "?"),
+                    self._scp_name,
+                    self._controller.model.scu.aet,
+                )
+                # Refresh modality (uses probe cache; aligns with retrieve choice).
+                self._retrieve_modality = self._resolve_import_modality()
+                self._apply_source_label(self._retrieve_modality)
                 self._controller.move_studies_ex(mr)
                 study_or_studies = _("Study") if len(self.studies) == 1 else _("Studies")
                 self._import_status_label.configure(

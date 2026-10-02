@@ -39,7 +39,7 @@ dependencies = [
     "dataclasses-json>=0.6.7",
     "bidict>=0.23.1",
     "sqlalchemy>=2.0.38",
-    "simpleitk>=2.5.5",
+    "simpleitk>=2.5.6",
     "scipy",
     "totalsegmentator>=2.3.0",
     "xgboost>=2.0.0",
@@ -131,15 +131,15 @@ ignore = [
 max-complexity = 15
 
 [tool.pytest.ini_options]
-testpaths = ["tests/controller", "tests/view", "tests/model", "tests/mcp"]
-addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model --cov=src/anonymizer/mcp -m \"not ocr_integration and not view_dev and not dicom_integration\""
+testpaths = ["tests/controller", "tests/model", "tests/mcp"]
+addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model --cov=src/anonymizer/mcp -m \"not ocr_integration and not view_dev\""
 pythonpath = ["src", "."]
 filterwarnings = []
 markers = [
     "tseg_integration: run TotalSegmentator inference (slow, optional)",
     "ocr_integration: EasyOCR on real burnt-in PHI fixtures under tests/controller/ocr (opt-in; excluded from default)",
-    "dicom_integration: local Orthanc PACS or heavy DICOM network integration (skipped in CI; excluded from default)",
+    "dicom_integration: managed Orthanc PACS (DIMSE + DICOMweb); included in default suite; skip with -m 'not dicom_integration'",
     "rsna_local_data: requires local RSNA_TEST_DATA directory (skipped when absent)",
-    "view_dev: local Series View layout tests against developer MRI_TEST fixtures (excluded from CI)",
+    "view_dev: local Series View layout tests against developer MRI_TEST fixtures (excluded from default; not in testpaths)",
     "prototyping: tests for src/prototyping scripts",
 ]

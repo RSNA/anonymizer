@@ -47,9 +47,28 @@ class DICOMNode:
     port: int
     aet: str
     local: bool
+    dicomweb: bool = False
+    http_port: int = 8042
+    http_path: str = "/dicom-web"
+    use_https: bool = False
+    username: str = ""
+    password: str = ""
+
+    def dicomweb_root(self) -> str:
+        """Compose DICOMweb QIDO/WADO/STOW root from IP, HTTP port, path, and scheme."""
+        path = (self.http_path or "/").strip()
+        if not path.startswith("/"):
+            path = "/" + path
+        path = path.rstrip("/") or ""
+        scheme = "https" if self.use_https else "http"
+        return f"{scheme}://{self.ip}:{int(self.http_port)}{path}"
 
     def __repr__(self) -> str:
-        return f"AET '{self.aet}' on host {self.ip}:{self.port}"
+        base = f"AET '{self.aet}' on host {self.ip}:{self.port}"
+        if not self.dicomweb:
+            return base
+        user = f" user={self.username!r}" if self.username else ""
+        return f"{base}; DICOMweb {self.dicomweb_root()}{user}"
 
 
 @dataclass
@@ -99,7 +118,7 @@ class ProjectModel:
     """
 
     # Project Model Version Control
-    MODEL_VERSION = 9
+    MODEL_VERSION = 11
 
     # SQLite DB configuration for SQLAlchemy
     # TODO: expand for other supported databases (PostgreSQL, MySQL, etc.)
@@ -204,8 +223,7 @@ class ProjectModel:
     network_timeouts: NetworkTimeouts = field(default_factory=default_timeouts)
     anonymizer_script_path: Path = field(default=Path("assets/scripts/default-anonymizer.script"), metadata=path_field)
 
-    def __post_init__(self):
-        # Sub-directories in the storage directory:
+    def __post_init__(self):        # Sub-directories in the storage directory:
         if _use_ascii_storage_dirs():
             self.PRIVATE_DIR = "private"
             self.PUBLIC_DIR = "public"
@@ -226,6 +244,9 @@ class ProjectModel:
     def __repr__(self) -> str:
         cpy = deepcopy(self)
         cpy.aws_cognito.password = len(cpy.aws_cognito.password) * "*"
+        for node in cpy.remote_scps.values():
+            if node.password:
+                node.password = len(node.password) * "*"
         return f"{self.get_class_name()}\n({pformat(asdict(cpy), sort_dicts=False)})"
 
     def abridged_path(self, path_obj: Path, depth: int = 4, include_filename: bool = False) -> str:

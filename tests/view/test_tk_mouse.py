@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from anonymizer.utils.tk_mouse import (
+from anonymizer.view.common.tk_mouse import (
     PointerButtons,
     aqua_middle_right_swapped,
     mouse_wheel_notches,

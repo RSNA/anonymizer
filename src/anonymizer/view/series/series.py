@@ -333,6 +333,8 @@ class SeriesView(AppCTkToplevel):
         self._harmonize_view = None
         self._annotate_session: AnnotateSession | None = None
         self._annotate_save_after_id: str | None = None
+        self._annotate_recontour_after_id: str | None = None
+        self._pending_annotate_recontour: tuple[str, int] | None = None
         self._stroke_before: np.ndarray | None = None
         self._stroke_kind: str | None = None
         self._stroke_structure: str | None = None
@@ -1240,6 +1242,7 @@ class SeriesView(AppCTkToplevel):
             on_annotate_new_label=self._on_annotate_new_label,
             on_annotate_import_segments=self._on_annotate_import_segments,
             on_annotate_target_changed=self._on_annotate_target_changed,
+            on_annotate_requires_target=self._on_annotate_requires_target,
             series_projections=self._projections,
         )
         self.image_viewer.grid(row=0, column=1, sticky="nsew")
@@ -2567,11 +2570,27 @@ class SeriesView(AppCTkToplevel):
 
     def _ensure_annotate_session(self) -> AnnotateSession | None:
         if self._annotate_session is not None:
-            return self._annotate_session
+            # Re-validate against the displayed stack (stale planar grids paint off-image).
+            frames = self._frames
+            if frames is not None:
+                z, y, x = int(frames.shape[0]), int(frames.shape[1]), int(frames.shape[2])
+                if self._annotate_session.labels.shape != (z, y, x):
+                    logger.warning(
+                        "Dropping in-memory annotation session %s; Series View frames are %s",
+                        self._annotate_session.labels.shape,
+                        frames.shape,
+                    )
+                    self._annotate_session = None
+            if self._annotate_session is not None:
+                return self._annotate_session
         try:
-            session = ensure_series_annotation_geometry(self._series_path, self._cache_dir())
+            session = ensure_series_annotation_geometry(
+                self._series_path,
+                self._cache_dir(),
+                reference_frames=self._frames,
+            )
         except AnnotationGeometryUnsupported as exc:
-            # Expected for planar CR/DX (no IOP/IPP) — Annotate disabled, not an error.
+            # Expected when modality cannot host a label grid — Annotate disabled.
             logger.info("%s", exc)
             session = None
         except Exception:
@@ -2715,13 +2734,20 @@ class SeriesView(AppCTkToplevel):
             self._recontour_visible_user_labels_current_slice()
             self._push_merged_segmentation_overlays()
         else:
-            self._flush_annotate_save()
+            self._flush_annotate_save(update_ledger=True)
 
     def _on_annotate_target_changed(self, key: str | None) -> None:
         # Annotate draws only the paint target — refresh so previous segments disappear.
         if hasattr(self, "image_viewer") and self.image_viewer.get_annotate_mode() == "annotate":
             self._recontour_visible_user_labels_current_slice()
             self._push_merged_segmentation_overlays()
+
+    def _on_annotate_requires_target(self) -> None:
+        messagebox.showinfo(
+            title=_("Annotate"),
+            message=_("Create or select a segment before painting."),
+            parent=self,
+        )
 
     def _on_annotate_stroke(self, target_key: str, cy: int, cx: int, radius: int, tool: str) -> None:
         session = self._ensure_annotate_session()
@@ -2766,7 +2792,8 @@ class SeriesView(AppCTkToplevel):
 
         stamp_brush(volume, slice_index=slice_index, cy=cy, cx=cx, radius=radius, value=value)
         session.dirty = True
-        self._recontour_after_paint(target_key, slice_index)
+        # Throttle full-slice recontour + frame redraw while the mouse is moving.
+        self._schedule_annotate_recontour(target_key, slice_index)
 
     def _on_annotate_stroke_end(self) -> None:
         session = self._annotate_session
@@ -2779,11 +2806,38 @@ class SeriesView(AppCTkToplevel):
             slice_index=int(self._stroke_slice or 0),
             before_slice=self._stroke_before,
         )
+        pending = self._pending_annotate_recontour
         self._stroke_before = None
         self._stroke_kind = None
         self._stroke_structure = None
         self._stroke_slice = None
+        self._flush_annotate_recontour()
+        if pending is None and hasattr(self, "image_viewer"):
+            # Ensure final contour even if the last motion already flushed.
+            paint = self.image_viewer.get_paint_target_key()
+            frame_index = self.image_viewer.current_image_index
+            slice_index = self._anatomical_slice_for_viewer_frame(frame_index)
+            if paint is not None and slice_index is not None:
+                self._recontour_after_paint(paint, slice_index)
         self._schedule_annotate_save()
+
+    def _schedule_annotate_recontour(self, target_key: str, slice_index: int) -> None:
+        self._pending_annotate_recontour = (target_key, slice_index)
+        if self._annotate_recontour_after_id is not None:
+            return
+        self._annotate_recontour_after_id = self.after(50, self._flush_annotate_recontour)
+
+    def _flush_annotate_recontour(self) -> None:
+        if self._annotate_recontour_after_id is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self._annotate_recontour_after_id)
+            self._annotate_recontour_after_id = None
+        pending = self._pending_annotate_recontour
+        self._pending_annotate_recontour = None
+        if pending is None:
+            return
+        target_key, slice_index = pending
+        self._recontour_after_paint(target_key, slice_index)
 
     def _recontour_after_paint(self, target_key: str, slice_index: int) -> None:
         session = self._annotate_session
@@ -2807,6 +2861,9 @@ class SeriesView(AppCTkToplevel):
                 source="user",
                 editable=True,
                 filled=False,
+                # Live brush: skip Gaussian smooth (expensive on CT slices).
+                smooth_sigma=0.0,
+                contour_smooth_window=0,
             )
             cache = self._user_label_overlays.setdefault(target_key, {})
             cache[slice_index] = segs
@@ -2816,14 +2873,15 @@ class SeriesView(AppCTkToplevel):
             if mask is None:
                 return
             color = color_bgr_for_structure(name)
-            segs = contour_mask_slice(
-                mask,
-                slice_index,
+            segs = mask_slice_to_segmentations(
+                mask[slice_index],
                 structure_name=name,
                 color_bgr=color,
                 source="edited",
                 editable=True,
                 filled=False,
+                smooth_sigma=0.0,
+                contour_smooth_window=0,
             )
             cache = self._structure_overlay_by_name.setdefault(name, {})
             cache[slice_index] = segs
@@ -2870,7 +2928,7 @@ class SeriesView(AppCTkToplevel):
         if session is None:
             messagebox.showinfo(
                 title=_("Annotate"),
-                message=_("Run Harmonize to enable ROI annotation"),
+                message=_("Could not create annotation geometry for this series."),
                 parent=self,
             )
             return
@@ -2903,21 +2961,29 @@ class SeriesView(AppCTkToplevel):
         self.update_status(_("Created segment") + f": {entry.name}")
 
     def _schedule_annotate_save(self) -> None:
+        """Debounce NIfTI write; ledger updates wait until leave-annotate / close."""
         if self._annotate_save_after_id is not None:
             with contextlib.suppress(tk.TclError):
                 self.after_cancel(self._annotate_save_after_id)
-        self._annotate_save_after_id = self.after(300, self._flush_annotate_save)
+        # 2s debounce: CT label volumes are large; mouse-up should not block painting.
+        self._annotate_save_after_id = self.after(
+            2000, lambda: self._flush_annotate_save(update_ledger=False)
+        )
 
-    def _flush_annotate_save(self) -> None:
-        self._annotate_save_after_id = None
+    def _flush_annotate_save(self, *, update_ledger: bool = True) -> None:
+        if self._annotate_save_after_id is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self._annotate_save_after_id)
+            self._annotate_save_after_id = None
         session = self._annotate_session
         if session is None or not session.dirty:
             return
         try:
             save_annotate_session(session)
-            from anonymizer.controller.analytics import upsert_series_ledger_from_cache
+            if update_ledger:
+                from anonymizer.controller.analytics.dataset import upsert_series_ledger_from_cache
 
-            upsert_series_ledger_from_cache(session.cache_dir)
+                upsert_series_ledger_from_cache(session.cache_dir)
         except Exception:
             logger.exception("Failed to save annotations")
 
@@ -3311,17 +3377,18 @@ class SeriesView(AppCTkToplevel):
         if getattr(self, "_closing", False):
             return
         self._closing = True
-        self._flush_annotate_save()
+        if self._annotate_recontour_after_id is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self._annotate_recontour_after_id)
+            self._annotate_recontour_after_id = None
+        self._pending_annotate_recontour = None
+        self._flush_annotate_save(update_ledger=True)
         self._structure_contour_generation += 1
         self._clear_structure_latch_state()
         if self._structure_contour_poll_after_id is not None:
             with contextlib.suppress(tk.TclError):
                 self.after_cancel(self._structure_contour_poll_after_id)
             self._structure_contour_poll_after_id = None
-        if self._annotate_save_after_id is not None:
-            with contextlib.suppress(tk.TclError):
-                self.after_cancel(self._annotate_save_after_id)
-            self._annotate_save_after_id = None
         if not self._ocr_work_state.done:
             self._ocr_work_state.request_cancel()
         mark_ctk_window_destroyed(self)

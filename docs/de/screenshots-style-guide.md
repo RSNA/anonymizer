@@ -59,4 +59,4 @@ uv run python -m docs_help --language en_US --force --only Welcome
 
 ## Prioritäre Shots (V19)
 
-Willkommen; KI-Funktionen; Projekteinstellungen anlegen (+ Unterdialoge); Dashboard; Suchen; Ansicht (Datensatz + Serien-/Studienbeschreibungsbearbeitung + Projektionen + Serie + Patientensuche-CSV); Verarbeiten (Pixel-PHI entfernen, Harmonisieren, Gesicht, Stapel); Senden (Anfang → Auswahl → Senden → gesendet).
+Willkommen; KI-Funktionen; Projekteinstellungen anlegen (+ Unterdialoge inkl. Anonymizer-Skript-Editor); Dashboard; Suchen; Ansicht (Datensatz + Serien-/Studienbeschreibungsbearbeitung + Projektionen + Serie + Patientensuche-CSV); Verarbeiten (Pixel-PHI entfernen, Harmonisieren, Gesicht, Stapel); Senden (Anfang → Auswahl → Senden → gesendet).

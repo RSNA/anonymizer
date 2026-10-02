@@ -12,10 +12,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydicom.dataset import Dataset
 
+from anonymizer.mcp import api as mcp_tools
+from anonymizer.mcp.api import MCP_TOOL_NAMES
 from anonymizer.mcp.server import create_server
 from anonymizer.mcp.session import SESSION
-from anonymizer.mcp.api import MCP_TOOL_NAMES
-from anonymizer.mcp import api as mcp_tools
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.translate import set_language_code
 
@@ -445,13 +445,13 @@ def test_api_configure_remote_export_ok():
 
 def test_api_configure_remote_bad_role():
     _create_open()
-    result = mcp_tools.configure_remote("1.1.1.1", 104, "AE", role="NOPE")
+    result = mcp_tools.configure_remote("1.1.1.1", 104, "PACS", role="NOPE")
     assert result["ok"] is False
     assert "role" in result["error"].lower()
 
 
 def test_api_configure_remote_without_session():
-    result = mcp_tools.configure_remote("1.1.1.1", 104, "AE")
+    result = mcp_tools.configure_remote("1.1.1.1", 104, "PACS")
     assert result["ok"] is False
 
 
@@ -555,7 +555,7 @@ def test_api_pacs_move_without_session():
         lambda: mcp_tools.export_series_preview(),
         lambda: mcp_tools.import_file(str(DAVIDSON_DCM)),
         lambda: mcp_tools.import_directory(str(DAVIDSON)),
-        lambda: mcp_tools.configure_remote("1.1.1.1", 104, "AE"),
+        lambda: mcp_tools.configure_remote("1.1.1.1", 104, "PACS"),
         lambda: mcp_tools.pacs_find(),
         lambda: mcp_tools.pacs_move([{"study_instance_uid": "1", "patient_id": "p"}]),
     ],

@@ -45,7 +45,7 @@ from matplotlib.gridspec import GridSpec
 from matplotlib.ticker import AutoMinorLocator
 from PIL import Image, ImageTk
 
-from anonymizer.controller.analytics import (
+from anonymizer.controller.analytics.dataset import (
     AgeHistogram,
     DatasetAnalytics,
     Distribution,
@@ -61,10 +61,10 @@ from anonymizer.controller.analytics import (
     organ_volume_clip_samples_for_hist,
     organ_volume_ml_tick_values,
 )
-from anonymizer.controller.analytics_prefs import get_organ_bin_width_pct
-from anonymizer.utils.tk_mouse import mouse_wheel_notches
+from anonymizer.controller.analytics.prefs import get_organ_bin_width_pct
 from anonymizer.utils.translate import _
 from anonymizer.view.common.ctk_safe import release_mpl_frame_images
+from anonymizer.view.common.tk_mouse import mouse_wheel_notches
 from anonymizer.view.common.tooltip import MotionTooltipController
 
 logger = logging.getLogger(__name__)

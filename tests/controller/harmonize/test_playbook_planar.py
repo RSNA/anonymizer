@@ -18,11 +18,11 @@ from anonymizer.controller.ai.harmonize.pipeline import (
     _load_tseg_series_dataset,
     harmonize_series,
 )
+from anonymizer.controller.ai.harmonize.planar_profile import planar_profile_for_modality
 from anonymizer.controller.ai.harmonize.playbook_planar import (
     build_planar_harmonized_series_description,
     format_planar_series_description,
 )
-from anonymizer.controller.ai.harmonize.planar_profile import planar_profile_for_modality
 from anonymizer.utils.modalities import (
     is_harmonize_modality,
     is_planar_harmonize_modality,

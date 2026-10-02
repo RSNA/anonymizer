@@ -119,9 +119,19 @@ Per the [MCP tools specification](https://modelcontextprotocol.io/specification/
 2. **`tools/list`** — each tool’s `name`, `description`, and `inputSchema`
 3. **`tools/call`** — plain text results (`list_inventory` is a TSV table; other tools return compact JSON or `error: …`)
 
-Tool groups: session (`list_projects`, `create_project`, `project_open`, `project_info`), local ingest (`import_directory`, `import_file`), PACS (`configure_remote`, `pacs_find`, `pacs_move`), inventory (`list_inventory`), process (`remove_pixel_phi`, `harmonize_studies`, `export_series_preview`). Full argument tables live in the server instructions asset shipped with the package (`anonymizer/mcp/assets/instructions.md`).
+Tool groups: session (`list_projects`, `project_settings_defaults`, `create_project`, `project_open`, `project_info`, `update_project_settings`), local ingest (`import_directory`, `import_file`), PACS (`configure_remote`, `pacs_find`, `pacs_move`), inventory (`list_inventory`), process (`remove_pixel_phi`, `harmonize_studies`, `export_series_preview`). Full argument tables live in the server instructions asset shipped with the package (`anonymizer/mcp/assets/instructions.md`).
 
 Always pass `arguments` (use `{}` for zero-argument tools). Do not invent client result markers such as `TOOL_RESULT` / `END_TOOL_RESULT`.
+
+### Interactive project setup (MCP)
+
+You can create and tune a project through chat (no prior GUI create required for MCP-only workflows):
+
+1. Ask for `project_name`, optionally call `project_settings_defaults`, confirm non-default choices, then `create_project` once.
+2. For PACS remotes, ask **DIMSE vs DICOMweb** per QUERY/EXPORT role before `configure_remote`.
+3. Later edits use `project_info` → `update_project_settings` (language, modalities, transfer syntaxes, local SCP, timeouts). Identity fields (`project_name`, `site_id`, `uid_root`, storage path) stay fixed after create — same as the desktop Settings dialog.
+
+Field ranges match the desktop GUI (ports 104–65535, name/site/UID lengths, timeout maxes). Invalid values are rejected.
 
 ### GUI and MCP
 
@@ -171,7 +181,8 @@ Full flags: [`src/prototyping/medgemma_chat/README.md`](../../../src/prototyping
 
 ## Prerequisites
 
-- Project already created in the GUI ([Create a project](../05-create-project/)).
+- For receive / AI batch (`-c`): project already created ([Create a project](../05-create-project/) or via MCP `create_project`).
+- For MCP-only: create/open projects with tools after connect (interactive setup wizard in server instructions).
 - Models and face license already set up on **this machine** ([AI Features setup](../03-ai-features-setup)).
 - Enough free memory for the selected algorithms.
 - For MCP: the `[mcp]` optional dependency installed.

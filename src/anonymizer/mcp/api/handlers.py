@@ -23,6 +23,7 @@ from anonymizer.mcp.api.schemas import (
     PacsMoveArgs,
     ProjectOpenArgs,
     SeriesSelectorsArgs,
+    UpdateProjectSettingsArgs,
 )
 from anonymizer.mcp.ops import (
     HeadlessOpsError,
@@ -78,11 +79,22 @@ def list_projects() -> dict[str, Any]:
     return _ok(ops.list_projects())
 
 
+def project_settings_defaults() -> dict[str, Any]:
+    _parse(EmptyArgs, {})
+    return _ok(ops.project_settings_defaults())
+
+
 def create_project(
     project_name: str,
     storage_dir: str | None = None,
     overwrite: bool = False,
     modalities: list[str] | str | None = None,
+    site_id: str | None = None,
+    uid_root: str | None = None,
+    language_code: str | None = None,
+    transfer_syntaxes: list[str] | None = None,
+    scp: dict[str, Any] | None = None,
+    network_timeouts: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     args, err = _parse(
         CreateProjectArgs,
@@ -91,6 +103,12 @@ def create_project(
             "storage_dir": storage_dir,
             "overwrite": overwrite,
             "modalities": modalities,
+            "site_id": site_id,
+            "uid_root": uid_root,
+            "language_code": language_code,
+            "transfer_syntaxes": transfer_syntaxes,
+            "scp": scp,
+            "network_timeouts": network_timeouts,
         },
     )
     if err is not None:
@@ -104,6 +122,12 @@ def create_project(
         except Exception:
             pass
     try:
+        scp_dict = args.scp.model_dump(exclude_none=True) if args.scp is not None else None
+        timeouts_dict = (
+            args.network_timeouts.model_dump(exclude_none=True)
+            if args.network_timeouts is not None
+            else None
+        )
         return _ok(
             _with_public_project(
                 ops.create_project(
@@ -112,6 +136,12 @@ def create_project(
                     storage_dir=args.storage_dir,
                     overwrite=args.overwrite,
                     modalities=args.modalities,
+                    site_id=args.site_id,
+                    uid_root=args.uid_root,
+                    language_code=args.language_code,
+                    transfer_syntaxes=args.transfer_syntaxes,
+                    scp=scp_dict,
+                    network_timeouts=timeouts_dict,
                 )
             )
         )
@@ -157,6 +187,48 @@ def project_info() -> dict[str, Any]:
         return _err(exc)
 
 
+def update_project_settings(
+    language_code: str | None = None,
+    modalities: list[str] | str | None = None,
+    transfer_syntaxes: list[str] | None = None,
+    scp: dict[str, Any] | None = None,
+    network_timeouts: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    args, err = _parse(
+        UpdateProjectSettingsArgs,
+        {
+            "language_code": language_code,
+            "modalities": modalities,
+            "transfer_syntaxes": transfer_syntaxes,
+            "scp": scp,
+            "network_timeouts": network_timeouts,
+        },
+    )
+    if err is not None:
+        return err
+    try:
+        scp_dict = args.scp.model_dump(exclude_none=True) if args.scp is not None else None
+        timeouts_payload = (
+            args.network_timeouts.model_dump(exclude_none=True)
+            if args.network_timeouts is not None
+            else None
+        )
+        return _ok(
+            _with_public_project(
+                ops.update_project_settings(
+                    _controller(),
+                    language_code=args.language_code,
+                    modalities=args.modalities,
+                    transfer_syntaxes=args.transfer_syntaxes,
+                    scp=scp_dict,
+                    network_timeouts=timeouts_payload,
+                )
+            )
+        )
+    except (HeadlessOpsError, ProjectSessionError) as exc:
+        return _err(exc)
+
+
 def list_inventory() -> dict[str, Any]:
     _parse(EmptyArgs, {})
     try:
@@ -197,9 +269,27 @@ def configure_remote(
     port: int,
     aet: str,
     role: RemoteScpRole = RemoteScpRole.QUERY,
+    dicomweb: bool = False,
+    http_port: int | None = None,
+    http_path: str | None = None,
+    use_https: bool = False,
+    username: str | None = None,
+    password: str | None = None,
 ) -> dict[str, Any]:
     args, err = _parse(
-        ConfigureRemoteArgs, {"ip": ip, "port": port, "aet": aet, "role": role}
+        ConfigureRemoteArgs,
+        {
+            "ip": ip,
+            "port": port,
+            "aet": aet,
+            "role": role,
+            "dicomweb": dicomweb,
+            "http_port": http_port,
+            "http_path": http_path,
+            "use_https": use_https,
+            "username": username,
+            "password": password,
+        },
     )
     if err is not None:
         return err
@@ -211,6 +301,12 @@ def configure_remote(
                 port=args.port,
                 aet=args.aet,
                 role=args.role,
+                dicomweb=args.dicomweb,
+                http_port=args.http_port,
+                http_path=args.http_path,
+                use_https=args.use_https,
+                username=args.username,
+                password=args.password,
             )
         )
     except (HeadlessOpsError, ProjectSessionError) as exc:

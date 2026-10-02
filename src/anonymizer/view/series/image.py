@@ -17,10 +17,10 @@ from anonymizer.controller.series_overlay import (
     Segmentation,
     UserRectangle,
 )
-from anonymizer.utils.tk_mouse import pointer_buttons
 from anonymizer.utils.translate import _
 from anonymizer.utils.windowing import apply_windowing
 from anonymizer.view.common.ctk_safe import dispose_photo_image
+from anonymizer.view.common.tk_mouse import pointer_buttons
 from anonymizer.view.series.anatomy_overlay import (
     bgr_to_hex,
     latch_button_width_px,
@@ -93,6 +93,7 @@ class ImageViewer(ctk.CTkFrame):
         on_annotate_new_label: Callable[[], None] | None = None,
         on_annotate_import_segments: Callable[[], None] | None = None,
         on_annotate_target_changed: Callable[[str | None], None] | None = None,
+        on_annotate_requires_target: Callable[[], None] | None = None,
         enable_interactive_editing: bool = True,
         show_playback_controls: bool = True,
         show_data_panel: bool = True,
@@ -123,6 +124,7 @@ class ImageViewer(ctk.CTkFrame):
         self.on_annotate_new_label = on_annotate_new_label
         self.on_annotate_import_segments = on_annotate_import_segments
         self.on_annotate_target_changed = on_annotate_target_changed
+        self.on_annotate_requires_target = on_annotate_requires_target
         self.enable_interactive_editing = enable_interactive_editing
         self.show_playback_controls = show_playback_controls
         self.show_data_panel = show_data_panel
@@ -2375,6 +2377,10 @@ class ImageViewer(ctk.CTkFrame):
             return
 
         if self._annotate_mode == "annotate":
+            if self._paint_target_key is None:
+                if self.on_annotate_requires_target is not None:
+                    self.on_annotate_requires_target()
+                return
             self._painting = True
             self._last_paint_xy = None
             self._paint_at_event(event)

@@ -52,7 +52,7 @@ from anonymizer.controller.ai.tseg.segment import (
     collect_structure_voxels_from_masks,
     dominant_region_from_voxels,
 )
-from anonymizer.controller.analytics_ledger import (
+from anonymizer.controller.analytics.ledger import (
     SeriesLedgerRow,
     ledger_exists,
     read_ledger_rows,
@@ -110,7 +110,7 @@ BODY_REGIONS: tuple[str, ...] = ("Head", "Chest", "Abdomen")
 _DICOM_DATE_RE = re.compile(r"^(\d{4})(\d{2})(\d{2})$")
 MODALITY_FILTER_ALL = "All"
 _ORGAN_VOLUME_RANGES_PATH = (
-    Path(__file__).resolve().parents[1] / "assets" / "analytics" / "organ_volume_ranges_ml.json"
+    Path(__file__).resolve().parents[2] / "assets" / "analytics" / "organ_volume_ranges_ml.json"
 )
 # Nested JSON sections under assets/analytics/organ_volume_ranges_ml.json.
 _ORGAN_VOLUME_RANGE_SECTIONS: tuple[str, ...] = (

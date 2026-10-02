@@ -87,6 +87,7 @@ src/prototyping/falcon/assets/models/
 dicom/
 phi_imgs/
 **/radon_results.txt
+tests/controller/dicom/support/orthanc_runtime/
 
 # --- Legacy ---
 Pipfile.lock

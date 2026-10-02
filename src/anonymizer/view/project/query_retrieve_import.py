@@ -677,8 +677,6 @@ class QueryView(AppToplevel):
             self._tree_select(None)  # update Error Frame if one study was imported
 
     def _import_button_pressed(self):
-        logger.info("Import button pressed")
-
         if self._query_active:
             logger.error("Import disabled, query is active")
             return
@@ -687,7 +685,7 @@ class QueryView(AppToplevel):
         study_uids = list(self._query_results.selection())
 
         if len(study_uids) == 0:
-            logger.info("No studies selected to import")
+            logger.info("Import not started — no studies selected")
             return
 
         # Double check if any selected studies are already stored/imported:
@@ -696,7 +694,7 @@ class QueryView(AppToplevel):
         ]
 
         if len(unstored_study_uids) == 0:
-            logger.info("All studies selected are already stored/imported")
+            logger.info("Import not started — all selected studies already imported")
             return
 
         studies: list[StudyUIDHierarchy] = []
@@ -714,12 +712,21 @@ class QueryView(AppToplevel):
         self._study_uids_to_import = unstored_study_uids.copy()
 
         if self._studies_to_process == 0:
-            logger.info("All studies selected are already stored/imported")
+            logger.info("Import not started — all selected studies already imported")
             return
+
+        move_level = self._move_level_var.get()
+        query_scp = self._controller.model.remote_scps.get(_("QUERY"))
+        logger.info(
+            "Import initiated: studies=%s move_level=%s query_server=%s",
+            self._studies_to_process,
+            move_level,
+            query_scp if query_scp is not None else _("QUERY"),
+        )
 
         self._disable_action_buttons()
 
-        dlg = ImportStudiesDialog(self, self._controller, studies, self._move_level_var.get())
+        dlg = ImportStudiesDialog(self, self._controller, studies, move_level)
         imported_study_hierarchies = dlg.get_input()
 
         self._enable_action_buttons()

@@ -6,8 +6,8 @@ from typing import Callable
 import customtkinter as ctk
 import numpy as np
 
-from anonymizer.utils.tk_mouse import pointer_buttons
 from anonymizer.view.common.fonts import canvas_label_font
+from anonymizer.view.common.tk_mouse import pointer_buttons
 
 logger = logging.getLogger(__name__)
 

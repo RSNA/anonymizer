@@ -37,7 +37,7 @@ The Series View remains behind the dialog so you keep context for the open serie
 
 ### 2. Brain structures prompt
 
-On a CT head series, Harmonize asks whether to run **detailed brain structure segmentation** before the job continues:
+On a CT head series, Harmonize asks whether to run **detailed brain structure segmentation** before the job continues. If a saved **description mapping** also matches this series’ original description, the same dialog asks whether to **Apply mapping** or **Run Harmonize model** (brain option appears only when running the model). You are never shown two stacked prompts.
 
 1. Read the **Brain structures** Yes/No message (academic license / models required — see [AI Features](../../03-ai-features-setup/)).
 2. Choose **Yes** to include brain structures in this run, or **No** for standard anatomy only.

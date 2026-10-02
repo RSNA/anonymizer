@@ -7,7 +7,6 @@ OS only selects the grab backend and the dest folder ``shots/<macos|windows>/``.
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import os
 import shutil
@@ -373,9 +372,16 @@ def run_language(
     reset_work: bool = False,
 ) -> list[ShotResult]:
     import customtkinter as ctk
+
     from anonymizer.anonymizer import Anonymizer
     from anonymizer.utils.translate import set_language_code
-    from anonymizer.view.common.ctk_safe import install_safe_scaling_tracker
+    from anonymizer.view.common.ctk_safe import (
+        install_safe_scaling_tracker,
+        install_safe_scrollable_frame_widget_resolve,
+    )
+
+    install_safe_scaling_tracker()
+    install_safe_scrollable_frame_widget_resolve()
 
     manifest = load_manifest()
     if language not in manifest.languages:
@@ -432,6 +438,7 @@ def run_language(
 
     set_language_code(language)
     install_safe_scaling_tracker()
+    install_safe_scrollable_frame_widget_resolve()
 
     # Dialog __init__ paths call wait_visibility(); that can hang forever on macOS.
     import tkinter as tk

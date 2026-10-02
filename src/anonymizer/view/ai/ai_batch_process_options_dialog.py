@@ -9,6 +9,11 @@ from pathlib import Path
 
 import customtkinter as ctk
 
+from anonymizer.controller.ai.batch_process import (
+    AiBatchAlgorithm,
+    AiBatchProcessOptions,
+    normalize_selected_algorithms,
+)
 from anonymizer.controller.ai.feature_availability import (
     brain_structures_allowed,
     face_blur_allowed,
@@ -20,11 +25,6 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     normalize_pixel_phi_removal_mode,
     pixel_phi_removal_mode_menu_labels,
     pixel_phi_removal_mode_option_label,
-)
-from anonymizer.controller.ai_batch_process import (
-    AiBatchAlgorithm,
-    AiBatchProcessOptions,
-    normalize_selected_algorithms,
 )
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.blur_face_results import (
@@ -226,6 +226,23 @@ class AiBatchProcessOptionsDialog(AppToplevel):
             text_color="gray60",
         ).pack(anchor="w", pady=(4, 0))
 
+        self._prefer_description_mappings_var = tk.IntVar(value=1)
+        ctk.CTkCheckBox(
+            frame,
+            text=_("Prefer description mappings (skip AI when matched)"),
+            variable=self._prefer_description_mappings_var,
+        ).pack(anchor="w", pady=(8, 0))
+        ctk.CTkLabel(
+            frame,
+            text=_(
+                "When a saved original→harmonized mapping matches a series, apply it and skip the anatomy model."
+            ),
+            anchor="w",
+            justify="left",
+            wraplength=self.INTRO_WRAP - pad * 4,
+            text_color="gray60",
+        ).pack(anchor="w", pady=(4, 0))
+
     def _create_widgets(self) -> None:
         pad = self.PAD
         section_pad = self.SECTION_PAD
@@ -383,6 +400,9 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         include_brain = bool(
             hasattr(self, "_include_brain_structures_var") and self._include_brain_structures_var.get() == 1
         )
+        prefer_mappings = bool(
+            hasattr(self, "_prefer_description_mappings_var") and self._prefer_description_mappings_var.get() == 1
+        )
         self._result = AiBatchProcessOptionsResult(
             confirmed=True,
             options=AiBatchProcessOptions(
@@ -391,6 +411,7 @@ class AiBatchProcessOptionsDialog(AppToplevel):
                 pixel_phi_removal_mode=pixel_phi_removal_mode,
                 use_modality_whitelist=self._use_modality_whitelist_var.get() == 1,
                 include_brain_structures=include_brain,
+                prefer_description_mappings=prefer_mappings,
             ),
         )
         self._close()

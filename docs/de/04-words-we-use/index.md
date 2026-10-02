@@ -9,6 +9,7 @@ Kurzes Glossar für Kliniker. Wenn die IT andere Wörter verwendet, meinen sie m
 | **Instanz / Bild** | Eine einzelne Frame- oder Schnitt-Datei. |
 | **PHI** | Protected Health Information — Kennungen, die verraten können, wer der Patient ist. |
 | **De-identifizieren / anonymisieren** | Kennungen entfernen oder ersetzen, damit die Studie sicherer für die Forschung weitergegeben werden kann. |
+| **Anonymizer-Skript** | XML-Regeln, die DICOM-Tags zum Behalten, Entfernen oder Umwandeln auflisten. Bearbeiten über **Projekteinstellungen → Anonymizer-Skript bearbeiten**. |
 | **Eingebrannter Text** | Wörter, die auf das Bild selbst gezeichnet sind (nicht nur in den Datei-Etiketten). Häufig bei Ultraschall. |
 | **Quarantäne** | Ein Zwischenordner für Dateien, die nicht importiert werden konnten (falscher Typ, fehlende IDs, Lookup-Fehler usw.). |
 | **Datensatz** | Die In-App-Liste von Patienten, Studien und Serien in Ihrem Projekt (früher PHI Index). |

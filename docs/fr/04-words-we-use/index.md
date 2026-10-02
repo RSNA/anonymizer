@@ -9,6 +9,7 @@ Glossaire court pour les cliniciens. Quand l’informatique utilise d’autres t
 | **Instance / image** | Un seul fichier de frame ou de coupe. |
 | **PHI** | Protected health information — identifiants qui pourraient révéler qui est le patient. |
 | **Désidentifier / anonymiser** | Supprimer ou remplacer les identifiants pour que l’étude soit plus sûre à partager pour la recherche. |
+| **Script d’anonymisation** | Règles XML listant les balises DICOM à conserver, supprimer ou transformer. Modifier via **Paramètres du projet → Modifier le script d’anonymisation**. |
 | **Texte incrusté** | Mots dessinés sur l’image elle-même (pas seulement dans les étiquettes du fichier). Fréquent en échographie. |
 | **Quarantaine** | Dossier d’attente pour les fichiers qui n’ont pas pu être importés (mauvais type, identifiants manquants, échec de lookup, etc.). |
 | **Jeu de données** | La liste dans l’application des patients, études et séries de votre projet (autrefois appelée PHI Index). |

@@ -13,7 +13,7 @@ from anonymizer.controller.ai.tseg.seg_retention import (
     ORGAN_VOLUMES_ML_FILENAME,
     write_organ_volumes_ml,
 )
-from anonymizer.controller.analytics import (
+from anonymizer.controller.analytics.dataset import (
     _organ_volumes_ml_for_cache,
     _OrganSample,
     _patient_mean_samples_by_organ,

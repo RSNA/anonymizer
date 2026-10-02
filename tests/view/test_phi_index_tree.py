@@ -78,12 +78,15 @@ def test_series_path_for_record() -> None:
     assert path == Path("/images/anon-1/stu/ser")
 
 
-def test_tree_label_is_description_only() -> None:
+def test_tree_label_is_harmonized_description() -> None:
     study = _study("stu", description="Chest CT")
+    # #0 shows harmonized; sticky original lives in study_description / Original column.
+    assert study.tree_label() == "(no description)"
+    study.harmonized_description = "Chest CT"
     assert study.tree_label() == "Chest CT"
     assert _study("stu2", description="").tree_label() == "(no description)"
     series = _series("ser")
-    assert series.tree_label() == "Ax"
+    assert series.tree_label() == "(no description)"
     series.harmonized_description = "CT Chest Ax"
     assert series.tree_label() == "CT Chest Ax"
 

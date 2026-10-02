@@ -83,8 +83,11 @@ class PHI_SeriesIndexRecord:
     pixel_phi: str
 
     def tree_label(self) -> str:
-        description = (self.harmonized_description or self.description or "").strip()
+        description = (self.harmonized_description or "").strip()
         return description or "(no description)"
+
+    def original_display(self) -> str:
+        return (self.description or "").strip()
 
     def harmonized_display(self) -> str:
         text = (self.harmonized_description or "").strip()
@@ -112,7 +115,8 @@ class PHI_IndexRecord:
     anon_study_uid: str
     phi_study_uid: str
     modality: str = ""
-    study_description: str = ""
+    study_description: str = ""  # sticky intake original
+    harmonized_description: str = ""
     num_series: int = 0
     num_instances: int = 0
     harmonize: bool = False
@@ -124,7 +128,9 @@ class PHI_IndexRecord:
     _NESTED_FIELD_NAMES: ClassVar[frozenset[str]] = frozenset({"series"})
 
     # Succinct Dataset View Treeview columns (CSV keeps LOOKUP_CSV_FIELD_TITLES).
+    # Tree #0 text is Harmonized Description; original is a data column.
     TREE_DISPLAY_FIELDS: ClassVar[tuple[str, ...]] = (
+        "original_description",
         "phi_patient_id",
         "anon_patient_id",
         "phi_accession",
@@ -151,6 +157,7 @@ class PHI_IndexRecord:
         "phi_study_uid": "PHI-StudyUID",
         "modality": "Modality",
         "study_description": "StudyDescription",
+        "harmonized_description": "StudyHarmonizedDescription",
         "num_series": "Series",
         "num_instances": "Instances",
         "harmonize": "Harmonized",
@@ -180,6 +187,7 @@ class PHI_IndexRecord:
     @classmethod
     def get_tree_display_titles(cls) -> list[str]:
         titles = {
+            "original_description": _("Original Description"),
             "phi_patient_id": _("PHI ID"),
             "anon_patient_id": _("Anon ID"),
             "phi_accession": _("Acc No"),
@@ -218,11 +226,14 @@ class PHI_IndexRecord:
         values["face_blurred"] = series.face_blur_display()
         values["pixel_phi_removed"] = series.pixel_phi_removed
         values["pixel_phi"] = series.pixel_phi
+        values["study_description"] = series.description
+        values["harmonized_description"] = series.harmonized_description
         return tuple(self._display_value(values[f.name]) for f in self._column_fields())
 
     def tree_values(self) -> tuple:
         """Study-level values for Dataset View Treeview display columns."""
         values: dict[str, object] = {
+            "original_description": (self.study_description or "").strip(),
             "phi_patient_id": self.phi_patient_id,
             "anon_patient_id": self.anon_patient_id,
             "phi_accession": self.phi_accession,
@@ -239,6 +250,7 @@ class PHI_IndexRecord:
     def series_tree_values(self, series: PHI_SeriesIndexRecord) -> tuple:
         """Series child values aligned with Dataset View Treeview display columns."""
         values: dict[str, object] = {name: "" for name in self.TREE_DISPLAY_FIELDS}
+        values["original_description"] = series.original_display()
         values["modality"] = series.modality
         values["num_instances"] = series.instance_count
         values["harmonize"] = series.is_harmonized()
@@ -249,7 +261,7 @@ class PHI_IndexRecord:
         return tuple(self._display_value(values[name]) for name in self.TREE_DISPLAY_FIELDS)
 
     def tree_label(self) -> str:
-        description = (self.study_description or "").strip()
+        description = (self.harmonized_description or "").strip()
         return description or "(no description)"
 
     @classmethod
@@ -269,9 +281,12 @@ class PHI_IndexRecord:
         "PHI-StudyUID",
         "Series",
         "StudyInstances",
+        "StudyDescription",
+        "StudyHarmonizedDescription",
         "ANON-SeriesUID",
         "Modality",
         "SeriesDescription",
+        "SeriesHarmonizedDescription",
         "SeriesHarmonized",
         "Instances",
         "FaceBlurred",
@@ -293,16 +308,19 @@ class PHI_IndexRecord:
             self.phi_study_uid,
             self.num_series,
             self.num_instances,
+            (self.study_description or "").strip(),
+            (self.harmonized_description or "").strip(),
         )
 
     def _lookup_csv_series_suffix(self, series: PHI_SeriesIndexRecord | None) -> tuple[object, ...]:
         if series is None:
-            return ("", "", "", "No", "", "No", "No", "")
+            return ("", "", "", "", "No", "", "No", "No", "")
         series_harmonized = bool((series.harmonized_description or "").strip())
         return (
             series.anon_series_uid,
             series.modality,
-            series.description,
+            (series.description or "").strip(),
+            (series.harmonized_description or "").strip(),
             self._display_value(series_harmonized),
             series.instance_count,
             series.face_blur_display(),
@@ -447,7 +465,8 @@ def _phi_index_record_from_orm(phi: PHI, study: Study) -> PHI_IndexRecord:
         phi_accession=study.accession_number if study.accession_number else "",
         anon_study_uid=study.anon_study_uid,
         phi_study_uid=study.study_uid,
-        study_description=str(study.harmonized_description or study.description or ""),
+        study_description=str(study.description or ""),
+        harmonized_description=str(study.harmonized_description or ""),
         num_series=num_series,
         num_instances=num_instances,
         harmonize=_study_index_harmonized(study),

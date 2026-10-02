@@ -29,6 +29,7 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
 from anonymizer.utils.dicom import SUPPORTED_PHOTOMETRIC_INTERPRETATIONS, get_wl_ww
 from anonymizer.utils.memory import log_process_memory
 from anonymizer.utils.storage import get_dcm_files
+from anonymizer.utils.version import get_version
 
 logger = logging.getLogger(__name__)
 
@@ -769,9 +770,75 @@ def _load_series_frames(
     return ds1, all_series_frames_stacked, tuple(processed_paths)
 
 
+def _modifying_system_name() -> str:
+    return f"RSNA Anonymizer {get_version()}"
+
+
+def _dicom_lo_text(value: object | None) -> str:
+    """Strip a DICOM text value and clamp to LO VR length (64)."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return text[:64]
+
+
+def _source_of_previous_values(ds: Dataset) -> str:
+    """
+    Best-effort ``SourceOfPreviousValues`` ``(0400,0564)`` for OAS.
+
+    Preference when still present after anonymization (Type 2 → empty if none):
+    1. InstitutionName ``(0008,0080)``
+    2. InstitutionalDepartmentName ``(0008,1040)``
+    3. file meta SourceApplicationEntityTitle ``(0002,0016)``
+    """
+    for attr in ("InstitutionName", "InstitutionalDepartmentName"):
+        text = _dicom_lo_text(getattr(ds, attr, None))
+        if text:
+            return text
+    file_meta = getattr(ds, "file_meta", None)
+    if file_meta is not None:
+        text = _dicom_lo_text(getattr(file_meta, "SourceApplicationEntityTitle", None))
+        if text:
+            return text
+    return ""
+
+
+def _append_original_attributes(ds: Dataset, modified_attrs: Dataset) -> None:
+    """
+    Append one Original Attributes Sequence item capturing ``modified_attrs``.
+
+    DICOM SOP Common C.12.1.1.9 / Table C.12.1.1.9-1:
+    - Modified Attributes Sequence ``(0400,0550)`` Type 1 (prior values)
+    - Attribute Modification DateTime ``(0400,0562)`` Type 1
+    - Modifying System ``(0400,0563)`` Type 1
+    - Source of Previous Values ``(0400,0564)`` Type 2 (empty if unknown)
+    - Reason for the Attribute Modification ``(0400,0565)`` Type 1
+      (``COERCE`` — Harmonize replaces study/series descriptions with playbook values)
+
+    Does not add private creator tags.
+    """
+    from datetime import datetime
+
+    now = datetime.now()
+    item = Dataset()
+    item.ModifiedAttributesSequence = Sequence([modified_attrs])
+    item.AttributeModificationDateTime = now.strftime("%Y%m%d%H%M%S.%f")
+    item.ModifyingSystem = _modifying_system_name()
+    item.SourceOfPreviousValues = _source_of_previous_values(ds)
+    item.ReasonForTheAttributeModification = "COERCE"
+    existing = getattr(ds, "OriginalAttributesSequence", None)
+    if existing is None:
+        ds.OriginalAttributesSequence = Sequence([item])
+    else:
+        existing.append(item)
+
+
 def apply_series_description(series_path: Path, description: str) -> bool:
     """
     Set SeriesDescription on every DICOM file in a series directory.
+
+    When the prior SeriesDescription differs, append Original Attributes Sequence
+    with the previous value before overwriting the public tag.
 
     Args:
         series_path: Directory containing series instance .dcm files.
@@ -806,6 +873,11 @@ def apply_series_description(series_path: Path, description: str) -> bool:
                     dcm_path.name,
                 )
                 continue
+            prior = str(ds.get("SeriesDescription", "") or "").strip()
+            if prior and prior != description:
+                modified = Dataset()
+                modified.SeriesDescription = prior
+                _append_original_attributes(ds, modified)
             ds.SeriesDescription = description
             ds.save_as(dcm_path)
 
@@ -827,6 +899,9 @@ def apply_study_description(
 
     When ``loinc_number`` is provided, also set Procedure Code Sequence (0008,1032)
     with Coding Scheme Designator ``LN`` (DICOM CID 102 / LOINC-RSNA Playbook).
+
+    When the prior StudyDescription differs, append Original Attributes Sequence
+    with the previous value before overwriting the public tag.
 
     ``study_root`` is the anonymized study folder (``images/<patient>/<study>/``) whose
     immediate children are series directories.
@@ -869,6 +944,11 @@ def apply_study_description(
                         dcm_path.name,
                     )
                     continue
+                prior = str(ds.get("StudyDescription", "") or "").strip()
+                if prior and prior != description:
+                    modified = Dataset()
+                    modified.StudyDescription = prior
+                    _append_original_attributes(ds, modified)
                 ds.StudyDescription = description
                 if loinc_code is not None:
                     item = Dataset()

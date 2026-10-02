@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 
 import numpy as np
+import SimpleITK as sitk
 from pydicom.dataset import Dataset, FileDataset, FileMetaDataset
 from pydicom.sequence import Sequence
 from pydicom.uid import (
@@ -18,12 +19,188 @@ from pydicom.uid import (
 from anonymizer.controller.annotations.store import (
     AnnotateSession,
     LabelEntry,
+    edits_dir,
     labels_path,
     load_annotate_session,
+    next_label_color,
+    next_label_id,
+    normalize_label_name,
+    read_label_map,
+    resolve_normative_organ,
     save_annotate_session,
 )
 
 logger = logging.getLogger(__name__)
+
+# Face Blur masks are not clinical anatomy segments for DICOM-SEG export.
+_FACE_MASK_STEMS = frozenset({"face", "face_mr"})
+
+
+def count_exportable_segment_labels(cache_dir: Path) -> int:
+    """Count unique exportable segment labels under a series ``0_TS_SEG`` cache.
+
+    Matches DICOM-SEG inventory rules without loading NIfTI volumes: user
+    ``label_map.json`` names, plus ``seg/*.nii.gz`` and ``annotations/edits/*.nii.gz``
+    stems not already present (Face Blur stems excluded). Dedupes by normalized name.
+    """
+    cache_dir = Path(cache_dir)
+    names: set[str] = set()
+    for entry in read_label_map(cache_dir).values():
+        key = normalize_label_name(entry.name)
+        if key:
+            names.add(key)
+
+    seg_dir = cache_dir / "seg"
+    if seg_dir.is_dir():
+        for path in seg_dir.glob("*.nii.gz"):
+            stem = path.name[: -len(".nii.gz")]
+            if stem in _FACE_MASK_STEMS:
+                continue
+            key = normalize_label_name(stem)
+            if key:
+                names.add(key)
+
+    edits = edits_dir(cache_dir)
+    if edits.is_dir():
+        for path in edits.glob("*.nii.gz"):
+            stem = path.name[: -len(".nii.gz")]
+            if stem in _FACE_MASK_STEMS:
+                continue
+            key = normalize_label_name(stem)
+            if key:
+                names.add(key)
+
+    return len(names)
+
+
+def count_patient_exportable_segment_labels(patient_dir: Path) -> int:
+    """Sum exportable segment labels across all series under a patient directory."""
+    from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir
+
+    patient_dir = Path(patient_dir)
+    if not patient_dir.is_dir():
+        return 0
+    total = 0
+    for study_path in patient_dir.iterdir():
+        if not study_path.is_dir() or study_path.name.startswith("."):
+            continue
+        for series_path in study_path.iterdir():
+            if not series_path.is_dir() or series_path.name.startswith("."):
+                continue
+            total += count_exportable_segment_labels(resolve_series_cache_dir(series_path))
+    return total
+
+
+def _paint_binary_label(
+    session: AnnotateSession,
+    name: str,
+    mask: np.ndarray,
+    *,
+    occupied_names: set[str],
+    binary_masks: dict[int, np.ndarray],
+) -> str | None:
+    """Add ``mask`` as a new segment label; skip empty / duplicate names.
+
+    TotalSegmentator masks are stored independently in ``binary_masks`` so
+    overlapping structures (e.g. brain ⊃ frontal_lobe) keep full coverage in
+    DICOM-SEG frames. Returns the label name when painted, else None.
+    """
+    key = normalize_label_name(name)
+    if not key or key in occupied_names:
+        return None
+    if mask.shape != session.labels.shape:
+        logger.warning(
+            "Skip DICOM-SEG mask %s: shape %s != labels %s",
+            name,
+            mask.shape,
+            session.labels.shape,
+        )
+        return None
+    binary = (mask > 0).astype(np.uint8)
+    if not np.any(binary):
+        return None
+    lid = next_label_id(session.label_map)
+    entry = LabelEntry(
+        label_id=lid,
+        name=name,
+        color_bgr=next_label_color(session.label_map),
+        normative_organ=resolve_normative_organ(name),
+    )
+    session.label_map[lid] = entry
+    binary_masks[lid] = binary
+    # Preview multi-class volume only fills empty voxels so user ROIs stay intact.
+    session.labels[(binary > 0) & (session.labels == 0)] = lid
+    occupied_names.add(key)
+    return name
+
+
+def build_dicom_seg_export_session(cache_dir: Path) -> AnnotateSession | None:
+    """Build an in-memory annotate session for DICOM-SEG export.
+
+    Combines user ROI labels (``annotations/``) with TotalSegmentator overlay
+    masks under ``seg/`` (brain structures, organs, …). Does **not** write
+    ``annotations/``. Face Blur masks are excluded. Returns None when there is
+    no volume grid or no segment content to export.
+    """
+    cache_dir = Path(cache_dir)
+    base = load_annotate_session(cache_dir)
+    if base is None:
+        return None
+
+    session = AnnotateSession(
+        cache_dir=base.cache_dir,
+        labels=np.array(base.labels, copy=True, dtype=np.uint16),
+        label_map=dict(base.label_map),
+        reference_image=base.reference_image,
+        ts_edits={name: np.array(mask, copy=True) for name, mask in base.ts_edits.items()},
+    )
+    occupied = {normalize_label_name(entry.name) for entry in session.label_map.values()}
+    automatic_names: set[str] = set()
+    binary_masks: dict[int, np.ndarray] = {}
+
+    seg_dir = cache_dir / "seg"
+    if seg_dir.is_dir():
+        for path in sorted(seg_dir.glob("*.nii.gz")):
+            stem = path.name[: -len(".nii.gz")]
+            if stem in _FACE_MASK_STEMS:
+                continue
+            try:
+                img = sitk.ReadImage(str(path))
+                mask = (sitk.GetArrayFromImage(img) > 0).astype(np.uint8)
+            except RuntimeError as exc:
+                logger.warning("Could not read TS mask %s: %s", path, exc)
+                continue
+            painted = _paint_binary_label(
+                session, stem, mask, occupied_names=occupied, binary_masks=binary_masks
+            )
+            if painted:
+                automatic_names.add(normalize_label_name(painted))
+
+    # Prefer edited TS masks over raw ``seg/`` for the same structure name.
+    for name, edit_mask in sorted(session.ts_edits.items()):
+        key = normalize_label_name(name)
+        if key in automatic_names:
+            for lid, entry in list(session.label_map.items()):
+                if normalize_label_name(entry.name) == key:
+                    binary = (edit_mask > 0).astype(np.uint8)
+                    if np.any(binary):
+                        binary_masks[lid] = binary
+                        session.labels[session.labels == lid] = 0
+                        session.labels[binary > 0] = lid
+                    break
+            continue
+        painted = _paint_binary_label(
+            session, name, edit_mask, occupied_names=occupied, binary_masks=binary_masks
+        )
+        if painted:
+            automatic_names.add(normalize_label_name(painted))
+
+    if not np.any(session.labels > 0) and not binary_masks:
+        return None
+
+    session._dicom_seg_automatic_names = automatic_names  # type: ignore[attr-defined]
+    session._dicom_seg_binary_masks = binary_masks  # type: ignore[attr-defined]
+    return session
 
 
 def _pack_binary_frames(frames: list[np.ndarray]) -> bytes:
@@ -43,13 +220,17 @@ def _pack_binary_frames(frames: list[np.ndarray]) -> bytes:
 
 
 def _source_refs_from_series(series_dir: Path) -> tuple[Dataset | None, list[Dataset]]:
-    """Return a template dataset and per-slice referenced SOP items when possible."""
+    """Return a template dataset and per-frame referenced SOP items when possible.
+
+    Uses Series View frame order (stackable slices, or expanded multi-frame / planar
+    listing) so ``zi`` aligns with label volume depth.
+    """
     from pydicom import dcmread
 
-    from anonymizer.controller.ai.tseg.dicom_geometry import stackable_dicom_paths
+    from anonymizer.controller.annotations.planar_geometry import annotation_source_dicom_paths
 
     try:
-        paths = stackable_dicom_paths(series_dir)
+        paths = annotation_source_dicom_paths(series_dir)
     except Exception as exc:  # noqa: BLE001 — export best-effort
         logger.warning("Could not list series DICOMs for DICOM-SEG: %s", exc)
         return None, []
@@ -70,6 +251,52 @@ def _source_refs_from_series(series_dir: Path) -> tuple[Dataset | None, list[Dat
     return template, refs
 
 
+def _build_referenced_series_sequence(template: Dataset | None, slice_refs: list[Dataset]) -> Sequence | None:
+    """Common Instance Reference: one ReferencedSeriesSequence item for the source series."""
+    if template is None or not slice_refs:
+        return None
+    series_uid = str(getattr(template, "SeriesInstanceUID", "") or "")
+    if not series_uid:
+        return None
+    instances: list[Dataset] = []
+    seen: set[str] = set()
+    for ref in slice_refs:
+        sop_uid = str(getattr(ref, "ReferencedSOPInstanceUID", "") or "")
+        if not sop_uid or sop_uid in seen:
+            continue
+        seen.add(sop_uid)
+        inst = Dataset()
+        inst.ReferencedSOPClassUID = str(getattr(ref, "ReferencedSOPClassUID", "") or "")
+        inst.ReferencedSOPInstanceUID = sop_uid
+        instances.append(inst)
+    if not instances:
+        return None
+    series_item = Dataset()
+    series_item.SeriesInstanceUID = series_uid
+    series_item.ReferencedInstanceSequence = Sequence(instances)
+    return Sequence([series_item])
+
+
+def _build_dimension_organization(dimension_organization_uid: str) -> tuple[Sequence, Sequence]:
+    """Multi-frame dimension organization: Segment Number + Image Position Patient."""
+    org = Dataset()
+    org.DimensionOrganizationUID = dimension_organization_uid
+
+    # Dimension 1: referenced segment number within Segment Identification Sequence
+    dim_seg = Dataset()
+    dim_seg.DimensionOrganizationUID = dimension_organization_uid
+    dim_seg.DimensionIndexPointer = (0x0062, 0x000B)  # ReferencedSegmentNumber
+    dim_seg.FunctionalGroupPointer = (0x0062, 0x000A)  # SegmentIdentificationSequence
+
+    # Dimension 2: Image Position Patient within Plane Position Sequence
+    dim_pos = Dataset()
+    dim_pos.DimensionOrganizationUID = dimension_organization_uid
+    dim_pos.DimensionIndexPointer = (0x0020, 0x0032)  # ImagePositionPatient
+    dim_pos.FunctionalGroupPointer = (0x0020, 0x9113)  # PlanePositionSequence
+
+    return Sequence([org]), Sequence([dim_seg, dim_pos])
+
+
 def export_dicom_seg(
     cache_dir: Path,
     dest_path: Path,
@@ -77,7 +304,10 @@ def export_dicom_seg(
     series_dir: Path | None = None,
     session: AnnotateSession | None = None,
 ) -> Path:
-    """Write a DICOM Segmentation file from ``labels.nii.gz`` + ``label_map.json``.
+    """Write a DICOM Segmentation file from label volumes + label map.
+
+    When ``session`` is omitted, builds one via :func:`build_dicom_seg_export_session`
+    (user ROI annotations plus TotalSegmentator ``seg/`` masks).
 
     One segment per label_map entry. Frames are binary bit-packed axial slices that
     contain the label. Source series UIDs are referenced when ``series_dir`` is given.
@@ -87,14 +317,21 @@ def export_dicom_seg(
     if session is not None and session.dirty:
         save_annotate_session(session)
     if session is None:
-        session = load_annotate_session(cache_dir)
+        session = build_dicom_seg_export_session(cache_dir)
     if session is None:
-        raise FileNotFoundError(f"No annotation session available under {cache_dir}")
+        raise FileNotFoundError(f"No segment content available under {cache_dir}")
     if not session.label_map:
         # Still allow empty map if labels volume has ids — synthesize entries.
         present_ids = sorted({int(v) for v in np.unique(session.labels) if int(v) > 0})
         for lid in present_ids:
             session.label_map[lid] = LabelEntry(label_id=lid, name=f"label_{lid}", color_bgr=(0, 165, 255))
+
+    automatic_names: set[str] = getattr(session, "_dicom_seg_automatic_names", set()) or set()
+    binary_masks: dict[int, np.ndarray] = getattr(session, "_dicom_seg_binary_masks", {}) or {}
+    has_automatic = bool(automatic_names)
+    has_manual = any(
+        normalize_label_name(entry.name) not in automatic_names for entry in session.label_map.values()
+    )
 
     template, slice_refs = _source_refs_from_series(series_dir) if series_dir else (None, [])
     labels = session.labels
@@ -112,6 +349,7 @@ def export_dicom_seg(
     ds.SOPClassUID = SegmentationStorage
     ds.SOPInstanceUID = file_meta.MediaStorageSOPInstanceUID
     ds.Modality = "SEG"
+    ds.ImageType = ["DERIVED", "PRIMARY"]
     ds.SeriesInstanceUID = generate_uid()
     ds.StudyInstanceUID = (
         str(getattr(template, "StudyInstanceUID", "") or "") if template is not None else generate_uid()
@@ -121,10 +359,19 @@ def export_dicom_seg(
     )
     ds.SeriesNumber = 9001
     ds.InstanceNumber = 1
-    ds.ContentLabel = "ROI_ANNOTATION"
-    ds.ContentDescription = "User ROI annotations"
+    if has_automatic and has_manual:
+        ds.ContentLabel = "SEGMENTS"
+        ds.ContentDescription = "Anatomy segments and user ROI annotations"
+        ds.SeriesDescription = "Segments + ROI Annotations"
+    elif has_automatic:
+        ds.ContentLabel = "ANATOMY_SEG"
+        ds.ContentDescription = "TotalSegmentator anatomy segments"
+        ds.SeriesDescription = "Anatomy Segments"
+    else:
+        ds.ContentLabel = "ROI_ANNOTATION"
+        ds.ContentDescription = "User ROI annotations"
+        ds.SeriesDescription = "ROI Annotations"
     ds.ContentCreatorName = "RSNA Anonymizer"
-    ds.SeriesDescription = "ROI Annotations"
     ds.PatientName = str(getattr(template, "PatientName", "Anonymous") or "Anonymous") if template else "Anonymous"
     ds.PatientID = str(getattr(template, "PatientID", "ANON") or "ANON") if template else "ANON"
     ds.StudyDate = str(getattr(template, "StudyDate", now.strftime("%Y%m%d")) or now.strftime("%Y%m%d"))
@@ -142,7 +389,15 @@ def export_dicom_seg(
     ds.PixelRepresentation = 0
     ds.LossyImageCompression = "00"
     ds.SegmentationType = "BINARY"
-    ds.MaximumFractionalValue = 1
+
+    ref_series_seq = _build_referenced_series_sequence(template, slice_refs)
+    if ref_series_seq is not None:
+        ds.ReferencedSeriesSequence = ref_series_seq
+
+    dimension_organization_uid = generate_uid()
+    ds.DimensionOrganizationSequence, ds.DimensionIndexSequence = _build_dimension_organization(
+        dimension_organization_uid
+    )
 
     ref = session.reference_image
     shared = Dataset()
@@ -163,7 +418,9 @@ def export_dicom_seg(
         seg_item.SegmentNumber = number
         seg_item.SegmentLabel = entry.name[:64]
         seg_item.SegmentDescription = f"label_id={lid}"
-        seg_item.SegmentAlgorithmType = "MANUAL"
+        seg_item.SegmentAlgorithmType = (
+            "AUTOMATIC" if normalize_label_name(entry.name) in automatic_names else "MANUAL"
+        )
         cat = Dataset()
         cat.CodeValue = "T-D0050"
         cat.CodingSchemeDesignator = "SRT"
@@ -184,25 +441,24 @@ def export_dicom_seg(
 
     for lid, _entry in sorted(session.label_map.items()):
         number = label_id_to_number[lid]
+        lid_volume = binary_masks.get(lid)
         for zi in range(z):
-            plane = labels[zi] == lid
+            plane = lid_volume[zi] > 0 if lid_volume is not None else labels[zi] == lid
             if not np.any(plane):
                 continue
             frames.append(plane.astype(np.uint8))
             fg = Dataset()
+            frame_content = Dataset()
+            # Matches DimensionIndexSequence order: segment number, 1-based stack position.
+            frame_content.DimensionIndexValues = [int(number), int(zi) + 1]
+            fg.FrameContentSequence = Sequence([frame_content])
             der = Dataset()
-            der.SegmentNumber = number
+            der.ReferencedSegmentNumber = number
             fg.SegmentIdentificationSequence = Sequence([der])
             if zi < len(slice_refs):
-                ref_img = Dataset()
-                ref_series = Dataset()
-                if template is not None:
-                    ref_series.SeriesInstanceUID = str(getattr(template, "SeriesInstanceUID", "") or "")
                 sop = Dataset()
                 sop.ReferencedSOPClassUID = slice_refs[zi].ReferencedSOPClassUID
                 sop.ReferencedSOPInstanceUID = slice_refs[zi].ReferencedSOPInstanceUID
-                ref_series.ReferencedSOPSequence = Sequence([sop])
-                ref_img.ReferencedImageSequence = Sequence([sop])
                 # DerivationImageSequence
                 der_img = Dataset()
                 src = Dataset()
@@ -217,7 +473,6 @@ def export_dicom_seg(
                 fg.DerivationImageSequence = Sequence([der_img])
             # Plane position
             if ref is not None:
-                # Index as x,y,z physical from SimpleITK
                 # sitk index: (x, y, z) = (col, row, slice)
                 phys = ref.TransformIndexToPhysicalPoint((0, 0, int(zi)))
                 pos = Dataset()
@@ -242,8 +497,11 @@ def export_dicom_seg(
         empty = np.zeros((rows, cols), dtype=np.uint8)
         frames = [empty]
         fg = Dataset()
+        frame_content = Dataset()
+        frame_content.DimensionIndexValues = [1, 1]
+        fg.FrameContentSequence = Sequence([frame_content])
         der = Dataset()
-        der.SegmentNumber = 1
+        der.ReferencedSegmentNumber = 1
         fg.SegmentIdentificationSequence = Sequence([der])
         per_frame = [fg]
 

@@ -1,10 +1,10 @@
-from anonymizer.controller.phi_io import build_phi_index, format_series_processing_status
 from pathlib import Path
 
 import pytest
 from pydicom import Dataset
 from pydicom.data import get_testdata_file
 
+from anonymizer.controller.phi_io import build_phi_index, format_series_processing_status
 from anonymizer.model.anonymizer import PHI, AnonymizerModel, Series, Study
 from tests.controller.dicom.support.test_files import ct_small_filename, mr_brain_filename
 from tests.controller.dicom.support.test_nodes import TEST_SITEID
@@ -365,7 +365,8 @@ def test_set_series_harmonized_description(anonymizer_model: AnonymizerModel, mo
     phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
     assert phi is not None
     updated = phi.studies[0].series[0]
-    assert updated.description == harmonized
+    # Sticky original intake description must be preserved.
+    assert updated.description == mock_dataset1.SeriesDescription
     assert updated.harmonized_description == harmonized
 
     records = build_phi_index(anonymizer_model)
@@ -374,6 +375,7 @@ def test_set_series_harmonized_description(anonymizer_model: AnonymizerModel, mo
     assert records[0].series[0].harmonized_description == harmonized
     assert records[0].series[0].harmonized_display() == harmonized
     assert harmonized in records[0].series[0].tree_label()
+    assert records[0].series[0].original_display() == mock_dataset1.SeriesDescription
 
 
 def test_set_series_harmonized_description_from_worker_thread(
@@ -513,7 +515,7 @@ def test_set_instance_pixel_phi(anonymizer_model: AnonymizerModel, mock_dataset1
 
 
 def test_clear_series_tseg_metadata(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
-    
+
     anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_offset_from_hash=0)
     phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
     assert phi is not None
@@ -538,7 +540,7 @@ def test_clear_series_tseg_metadata(anonymizer_model: AnonymizerModel, mock_data
 
 
 def test_get_series_processing_status(anonymizer_model: AnonymizerModel, mock_dataset1: Dataset):
-    
+
     anonymizer_model.capture_phi(source="pytest", ds=mock_dataset1, date_offset_from_hash=0)
     phi = anonymizer_model.get_phi_by_phi_patient_id(mock_dataset1.PatientID)
     assert phi is not None

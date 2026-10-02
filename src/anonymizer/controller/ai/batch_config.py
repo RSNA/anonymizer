@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from anonymizer.controller.ai.batch_process import AiBatchAlgorithm, AiBatchProcessOptions
 from anonymizer.controller.ai.blur_face import FaceBlurMode
 from anonymizer.controller.ai.feature_availability import (
     brain_structures_allowed,
@@ -21,7 +22,6 @@ from anonymizer.controller.ai.tseg.config import (
     set_ct_segmentation_mode,
     set_mr_segmentation_mode,
 )
-from anonymizer.controller.ai_batch_process import AiBatchAlgorithm, AiBatchProcessOptions
 from anonymizer.controller.phi_io import build_phi_index
 from anonymizer.model.anonymizer import AnonymizerModel
 
@@ -52,6 +52,7 @@ class AiBatchConfig:
     pixel_phi_removal_mode: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT
     use_modality_whitelist: bool = True
     include_brain_structures: bool = False
+    prefer_description_mappings: bool = True
     ct_segmentation_mode: str | None = None
     mr_segmentation_mode: str | None = None
     studies: Literal["all"] | tuple[AiBatchStudyRef, ...] = "all"
@@ -64,6 +65,7 @@ class AiBatchConfig:
             pixel_phi_removal_mode=self.pixel_phi_removal_mode,
             use_modality_whitelist=self.use_modality_whitelist,
             include_brain_structures=self.include_brain_structures,
+            prefer_description_mappings=self.prefer_description_mappings,
         )
 
     def apply_segmentation_modes(self) -> None:
@@ -87,6 +89,7 @@ class AiBatchConfig:
             "pixel_phi_removal_mode": self.pixel_phi_removal_mode.value,
             "use_modality_whitelist": self.use_modality_whitelist,
             "include_brain_structures": self.include_brain_structures,
+            "prefer_description_mappings": self.prefer_description_mappings,
             "studies": studies,
             "skip_already_processed": self.skip_already_processed,
         }
@@ -114,6 +117,10 @@ class AiBatchConfig:
             data.get("include_brain_structures", False),
             field="include_brain_structures",
         )
+        prefer_description_mappings = _parse_bool(
+            data.get("prefer_description_mappings", True),
+            field="prefer_description_mappings",
+        )
         ct_segmentation_mode = _optional_str(data.get(CT_SEGMENTATION_MODE_KEY))
         mr_segmentation_mode = _optional_str(data.get(MR_SEGMENTATION_MODE_KEY))
         studies = _parse_studies(data.get("studies", "all"))
@@ -127,6 +134,7 @@ class AiBatchConfig:
             pixel_phi_removal_mode=pixel_phi_removal_mode,
             use_modality_whitelist=use_modality_whitelist,
             include_brain_structures=include_brain_structures,
+            prefer_description_mappings=prefer_description_mappings,
             ct_segmentation_mode=ct_segmentation_mode,
             mr_segmentation_mode=mr_segmentation_mode,
             studies=studies,

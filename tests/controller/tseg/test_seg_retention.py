@@ -56,12 +56,12 @@ def test_reconcile_structure_voxels_from_masks_replaces_stats_mm3(tmp_path: Path
 def test_latch_mask_stems_for_export_and_multilabel_write(tmp_path: Path) -> None:
     import nibabel as nib
     import numpy as np
+    from totalsegmentator.map_to_binary import class_map
 
     from anonymizer.controller.ai.tseg.seg_retention import (
         latch_mask_stems_for_export,
         write_binary_masks_from_multilabel,
     )
-    from totalsegmentator.map_to_binary import class_map
 
     name_to_label = {name: int(label) for label, name in class_map["total"].items()}
     shape = (4, 8, 8)

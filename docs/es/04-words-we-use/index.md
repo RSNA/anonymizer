@@ -9,6 +9,7 @@ Glosario breve para clínicos. Cuando TI usa otros términos, suelen ser las mis
 | **Instancia / imagen** | Un único fotograma o archivo de corte. |
 | **PHI** | Información sanitaria protegida — identificadores que podrían revelar quién es el paciente. |
 | **Desidentificar / anonimizar** | Eliminar o sustituir identificadores para que el estudio sea más seguro de compartir para investigación. |
+| **Script del anonimizador** | Reglas XML que enumeran etiquetas DICOM a conservar, eliminar o transformar. Edite desde **Ajustes del Proyecto → Editar script del anonimizador**. |
 | **Texto quemado** | Palabras dibujadas en la propia imagen (no solo en las etiquetas del archivo). Frecuente en ecografía. |
 | **Cuarentena** | Carpeta de retención para archivos que no se pudieron importar (tipo incorrecto, IDs faltantes, fallo de búsqueda, etc.). |
 | **Conjunto de datos** | La lista en la aplicación de pacientes, estudios y series de su proyecto (antes llamado Índice PHI). |

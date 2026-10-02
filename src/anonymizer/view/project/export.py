@@ -11,13 +11,14 @@ from tkinter import messagebox, ttk
 
 import customtkinter as ctk
 
+from anonymizer.controller.annotations import count_patient_exportable_segment_labels
 from anonymizer.controller.project import (
     ExportPatientsRequest,
     ExportPatientsResponse,
     ProjectController,
 )
 from anonymizer.model.project import ProjectModel
-from anonymizer.utils.storage import count_studies_series_images
+from anonymizer.utils.storage import DICOM_FILE_SUFFIX, count_studies_series_images
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
@@ -25,6 +26,21 @@ from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.shell.dashboard import Dashboard
 
 logger = logging.getLogger(__name__)
+
+
+def _count_patient_images_excluding_seg(patient_path: str | os.PathLike[str]) -> tuple[int, int, int]:
+    """Studies / series / image counts, excluding prepared DICOM-SEG files."""
+    study_count, series_count, _ = count_studies_series_images(os.fspath(patient_path))
+    image_count = 0
+    skip_name = ProjectController.ROI_SEG_FILENAME
+    for _root, _dirs, files in os.walk(os.fspath(patient_path)):
+        for file in files:
+            if not file.endswith(DICOM_FILE_SUFFIX):
+                continue
+            if file == skip_name:
+                continue
+            image_count += 1
+    return study_count, series_count, image_count
 
 
 class ExportView(AppToplevel):
@@ -82,6 +98,7 @@ class ExportView(AppToplevel):
             "Studies": (_("Studies"), 10, True, False),
             "Series": (_("Series"), 10, True, False),
             "Files": (_("Images"), 10, True, False),
+            "Segments": (_("Segments"), 10, True, False),
             "DateTime": (_("Date Time"), 20, True, False),
             "FilesSent": (_("Images Sent"), 5, True, False),
             "Error": (_("Last Export Error"), 30, False, True),
@@ -284,9 +301,9 @@ class ExportView(AppToplevel):
 
         # Insert NEW data
         for anon_pt_id in not_in_treeview:
-            study_count, series_count, file_count = count_studies_series_images(
-                os.path.join(self._controller.model.images_dir(), anon_pt_id)
-            )
+            patient_path = os.path.join(self._controller.model.images_dir(), anon_pt_id)
+            study_count, series_count, file_count = _count_patient_images_excluding_seg(patient_path)
+            segment_count = count_patient_exportable_segment_labels(patient_path)
             phi_name = self._controller.anonymizer.model.get_phi_name_by_anon_patient_id(anon_pt_id)
             self._tree.insert(
                 "",
@@ -298,6 +315,7 @@ class ExportView(AppToplevel):
                     study_count,
                     series_count,
                     file_count,
+                    segment_count,
                 ],
             )
 
@@ -306,13 +324,16 @@ class ExportView(AppToplevel):
 
         # Update all values (i/o intensive, TODO: could be optimised)
         for anon_pt_id in anon_pt_ids:
-            study_count, series_count, file_count = count_studies_series_images(
-                os.path.join(self._controller.model.images_dir(), anon_pt_id)
-            )
+            patient_path = os.path.join(self._controller.model.images_dir(), anon_pt_id)
+            study_count, series_count, file_count = _count_patient_images_excluding_seg(patient_path)
+            segment_count = count_patient_exportable_segment_labels(patient_path)
             current_values = list(self._tree.item(anon_pt_id, "values"))
+            while len(current_values) < len(self._attr_map):
+                current_values.append("")
             current_values[2] = str(study_count)
             current_values[3] = str(series_count)
             current_values[4] = str(file_count)
+            current_values[5] = str(segment_count)
             self._tree.item(anon_pt_id, values=current_values)
 
     def _tree_select(self, event):
@@ -321,8 +342,8 @@ class ExportView(AppToplevel):
         if len(selected) == 1:
             item = selected[0]
             values = self._tree.item(item, "values")
-            if len(values) > 7:
-                error_msg = values[7]
+            if len(values) > 8:
+                error_msg = values[8]
                 window_width = self.winfo_width()
                 if error_msg:
                     self._error_label.configure(text=error_msg, wraplength=window_width)
@@ -384,9 +405,10 @@ class ExportView(AppToplevel):
                 while len(current_values) < len(self._attr_map):
                     current_values.append("")
                 # Format the date and time as "YYYY-MM-DD HH:MM:SS"
-                current_values[5] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                current_values[6] = str(resp.files_sent)
-                current_values[7] = resp.error if resp.error else ""
+                # Indices: 4=Images, 5=Segments, 6=DateTime, 7=Images Sent, 8=Error
+                current_values[6] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                current_values[7] = str(resp.files_sent)
+                current_values[8] = resp.error if resp.error else ""
                 self._tree.item(resp.patient_id, values=current_values)
                 self._tree.see(resp.patient_id)
 

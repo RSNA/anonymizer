@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- DICOMweb PACS I/O (QIDO-RS / WADO-RS / STOW-RS) when enabled on a remote; credentials and HTTP port/path in DICOM server dialog
+- Sticky Study/Series ``description`` (intake original); Harmonize/Set description write ``harmonized_description`` only
+- DICOM Original Attributes Sequence when rewriting Study/Series Description
+- Per-project description mapping memory; Dataset Description Mappings viewer; Prefer description mappings in AI batch
+- Group controller analytics into ``controller/analytics/``; move AI batch modules under ``controller/ai/``
+- Split ProjectController DICOM networking into ``controller/dicom/``; prefer Study-Root C-GET over C-MOVE when negotiated
 
 ## [19.1.0.dev2]
 - PyPI development pre-release of 19.1 on branch `dev` (install with `uv pip install --pre rsna-anonymizer`)

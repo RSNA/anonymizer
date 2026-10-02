@@ -92,18 +92,18 @@ Review quarantine counts on the Dashboard. Fix settings or source files, then im
 
 ### 1. Open Search
 
-On the Dashboard, click **Search**. The app first **C-ECHO**s the configured Query Server. If the echo succeeds, the **Query, Retrieve & Import** window opens.
+On the Dashboard, click **Search**. The app first **C-ECHO**s the configured Query Server (DIMSE; requires the archive’s DICOM port even when DICOMweb is enabled for find/import). If the echo succeeds, the **Query, Retrieve & Import** window opens. With **DICOMweb** enabled on the Query Server, Query uses QIDO-RS and Import uses WADO-RS (no local C-MOVE destination is required for that path). For classic DIMSE, Import prefers **C-GET** when the archive accepts Study-Root Get; otherwise it uses **C-MOVE**.
 
 This window has three bands:
 
 1. **Criteria** — Patient Name, Patient ID, Modality, Study Date, Accession No.(s), **Load Accession Numbers**, **Query** / **Cancel Query**, **Show Imported Studies**.
-2. **Results table** — studies returned by C-FIND.
+2. **Results table** — studies returned by C-FIND (or QIDO-RS when DICOMweb is enabled).
 3. **Import bar** — Found count, **Select All** / **Clear Selection**, **Move Level**, **Import & Anonymize**.
 
 ![Query, Retrieve & Import — criteria, results, and import controls](shots/macos/QueryRetrieve_Ready.png)
 
 !!! tip "Ask IT for help"
-    The Query Server must allow this computer to C-ECHO, C-FIND, and C-MOVE, and must know your **Local Server** (address, port, AE Title) as the C-MOVE destination. See [Create a project → When you talk to IT](../05-create-project/#when-you-talk-to-it).
+    The Query Server must allow this computer to C-ECHO and C-FIND. For classic DICOM import it must also allow **C-GET** and/or **C-MOVE**. When C-MOVE is used, the archive must know your **Local Server** (address, port, AE Title) as the C-MOVE destination. With **DICOMweb** enabled, import uses WADO-RS over HTTP instead (no C-MOVE destination). See [Create a project → When you talk to IT](../05-create-project/#when-you-talk-to-it).
 
 ### 2. Search for studies
 
@@ -143,7 +143,13 @@ Other controls:
 ### 4. Select studies and import
 
 1. Select studies: single click, multi-select (**⌘** / **Ctrl**+click), **Select All**, or **Clear Selection**.
-2. Choose **Move Level**: **STUDY**, **SERIES**, or **INSTANCE** (DICOM C-MOVE level). Prefer STUDY when the archive supports it; try SERIES or INSTANCE if transfers stall.
+2. Choose **Move Level**: **STUDY**, **SERIES**, or **INSTANCE**. This controls how the app requests images for **every** retrieve path—not only classic C-MOVE:
+
+    - **DIMSE C-MOVE** — QueryRetrieveLevel on each C-MOVE (the archive pushes files to your Local Server).
+    - **DIMSE C-GET** — the same levels when the archive accepts Study-Root Get (instances return on the same association; no C-MOVE destination AE).
+    - **DICOMweb WADO-RS** — the same levels control whether download is whole-study, per-series, or per-instance over HTTP.
+
+    Prefer **STUDY** when the archive supports it; try **SERIES** or **INSTANCE** if transfers stall. The control stays visible for DICOMweb and C-GET because level still applies.
 3. Click **Import & Anonymize**. The app builds a study hierarchy for the selected move level, then opens the **Import Studies** progress dialog.
 4. Progress tracks metadata retrieval, then images received versus the hierarchy. A study finishes when all expected files arrive **or** a [Network Timeout](../05-create-project/#network-timeouts) expires for that transfer.
 5. When the dialog shows **Import Finished**, click **Close**.
@@ -163,8 +169,8 @@ You can select the same studies again after adjusting timeout or move level—al
 Many VNAs move images asynchronously and do not behave like a textbook PACS. If imports are incomplete:
 
 - Lengthen **Network Timeout** in Project Settings.
-- Change **Move Level** (Study → Series → Instance) and retry **Import & Anonymize**.
-- Confirm with IT that C-MOVE destination matches your Local Server AE Title and that modalities / storage classes allow the studies you expect.
+- Change **Move Level** (Study → Series → Instance) and retry **Import & Anonymize** (this helps for C-MOVE, C-GET, and WADO alike).
+- For classic C-MOVE, confirm with IT that the C-MOVE destination matches your Local Server AE Title and that modalities / storage classes allow the studies you expect.
 
 ---
 

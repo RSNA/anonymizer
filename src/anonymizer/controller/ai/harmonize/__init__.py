@@ -1,5 +1,17 @@
 """Harmonize AI Feature: Playbook series descriptions and LOINC study offers."""
 
+from anonymizer.controller.ai.harmonize.description_components import (
+    PLANAR_COMPONENT_FIELDS,
+    TSEG_COMPONENT_FIELDS,
+    PlanarComponentSelection,
+    PlaybookComponentSelection,
+    format_planar_component_description,
+    format_playbook_series_description,
+    format_series_playbook_fields,
+    series_playbook_component_field_order,
+    series_playbook_component_initial,
+    series_playbook_component_options,
+)
 from anonymizer.controller.ai.harmonize.loinc_study import StudyDescriptionOffer
 from anonymizer.controller.ai.harmonize.pipeline import (
     MIN_DESCRIPTION_CHOICES,
@@ -53,6 +65,7 @@ from anonymizer.controller.ai.harmonize.pipeline import (
     study_description_group_choices,
     study_harmonize_status,
     study_loinc_prefix_for_edit,
+    study_ready_for_description_edit,
     study_root_for_series,
     study_series_description_fingerprint,
     tseg_series_paths_for_study,
@@ -87,8 +100,18 @@ __all__ = [
     "HarmonizedResult",
     "PLAYBOOK_TREE_IIDS",
     "PlaybookHarmonizeAttributes",
+    "PlaybookComponentSelection",
+    "PlanarComponentSelection",
+    "PLANAR_COMPONENT_FIELDS",
+    "TSEG_COMPONENT_FIELDS",
     "StudyDescriptionOffer",
     "DescriptionEditSelection",
+    "format_planar_component_description",
+    "format_playbook_series_description",
+    "format_series_playbook_fields",
+    "series_playbook_component_field_order",
+    "series_playbook_component_initial",
+    "series_playbook_component_options",
     "apply_harmonized_description",
     "apply_harmonized_study_description",
     "apply_series_descriptions",
@@ -133,6 +156,7 @@ __all__ = [
     "series_description_edit_choices",
     "series_description_group_choices",
     "series_description_is_harmonized",
+    "study_ready_for_description_edit",
     "study_description_edit_choices",
     "study_description_edit_offer",
     "study_description_group_choices",

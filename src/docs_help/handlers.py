@@ -148,6 +148,30 @@ def shot_logging_levels(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     return shot_settings_subdialog(ctx, shot, opener)
 
 
+def shot_anonymizer_script_editor(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
+    from anonymizer.view.settings.anonymizer_script_dialog import AnonymizerScriptDialog
+
+    _ensure_project(ctx)
+    model = ctx.app.controller.model
+    script_path = Path(model.anonymizer_script_path)
+    if not script_path.is_file():
+        from anonymizer.controller.process_ctp_lookup import _DEFAULT_SCRIPT_PATH
+
+        script_path = _DEFAULT_SCRIPT_PATH
+    parent = ctx.app.dashboard or ctx.app
+    dlg = AnonymizerScriptDialog(
+        parent,
+        script_path=script_path,
+        project_model=model,
+        project_controller=ctx.app.controller,
+    )
+    try:
+        settle(dlg, max(ctx.settle_ms, 600))
+        return ShotResult(shot.id, "ok", script_path.name, ctx.grab(dlg, shot))
+    finally:
+        close_toplevel(dlg)
+
+
 def shot_lookup_table(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     from anonymizer.view.settings.lookup_table_dialog import LookupTableDialog
 
@@ -214,7 +238,10 @@ def _project_file_menu(app: Any) -> Any:
 def _save_rgba(dest: Path, image: Any, widget: Any) -> Path:
     from PIL import Image
 
-    from docs_help.platform.common import display_scale as _display_scale, normalize_for_docs as _normalize_for_docs, to_logical_size as _to_logical_size, trim_transparent as _trim_transparent
+    from docs_help.platform.common import display_scale as _display_scale
+    from docs_help.platform.common import normalize_for_docs as _normalize_for_docs
+    from docs_help.platform.common import to_logical_size as _to_logical_size
+    from docs_help.platform.common import trim_transparent as _trim_transparent
 
     if not isinstance(image, Image.Image):
         raise TypeError("expected PIL Image")
@@ -229,6 +256,7 @@ def _save_rgba(dest: Path, image: Any, widget: Any) -> Path:
 def shot_import_davidson_menu(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     """Main window File menu open — Import Files / Import Directory."""
     import customtkinter as ctk
+
     from anonymizer.utils.translate import _
 
     _ensure_project(ctx)
@@ -312,8 +340,8 @@ def shot_import_directory_chooser(ctx: CaptureContext, shot: ShotSpec) -> ShotRe
     """Folder chooser navigated to tests/.../test_dcm_files (docs stand-in)."""
     import customtkinter as ctk
 
-    from docs_help.project_setup import TEST_DCM_ROOT
     from anonymizer.utils.translate import _
+    from docs_help.project_setup import TEST_DCM_ROOT
 
     _ensure_project(ctx)
     settle(ctx.app, ctx.settle_ms)
@@ -383,8 +411,8 @@ def shot_import_directory_chooser(ctx: CaptureContext, shot: ShotSpec) -> ShotRe
 def _trim_docs_png_whitespace(path: Path, *, bottom: bool = True, right: bool = False) -> None:
     """Crop near-uniform light grey margins from a saved help PNG."""
     try:
-        from PIL import Image
         import numpy as np
+        from PIL import Image
 
         image = Image.open(path).convert("RGB")
         arr = np.asarray(image)
@@ -1487,7 +1515,7 @@ def _stage_ai_batch_running(dlg: Any) -> None:
     """Fake mid-run AI Batch Process UI without starting the worker thread."""
     from types import SimpleNamespace
 
-    from anonymizer.controller.ai_batch_process import (
+    from anonymizer.controller.ai.batch_process import (
         AiBatchAlgorithm,
         format_ai_batch_phase_label,
         format_batch_phase_banner,
@@ -1556,9 +1584,9 @@ def _stage_ai_batch_running(dlg: Any) -> None:
 
 def shot_ai_batch_running(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     """Capture AiBatchProcessDialog mid-run (staged; worker never starts)."""
+    from anonymizer.controller.ai.batch_process import AiBatchAlgorithm, AiBatchProcessOptions
     from anonymizer.controller.ai.blur_face import FaceBlurMode
     from anonymizer.controller.ai.remove_pixel_phi import PixelPhiRemovalMode
-    from anonymizer.controller.ai_batch_process import AiBatchAlgorithm, AiBatchProcessOptions
     from anonymizer.view.ai.ai_batch_process_dialog import AiBatchProcessDialog
 
     # Always ensure both demo fixtures for a multi-study mid-run shot.
@@ -1682,12 +1710,12 @@ def _stage_send_view(view: Any, stage: str) -> None:
         # First patient mid-flight: timestamp + partial Images Sent, still processing.
         first = selected[0]
         values = list(view._tree.item(first, "values") or [])
-        while len(values) < 8:
+        while len(values) < 9:
             values.append("")
         total_files = int(values[4] or 0)
-        values[5] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        values[6] = str(max(1, total_files // 2) if total_files else 1)
-        values[7] = ""
+        values[6] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        values[7] = str(max(1, total_files // 2) if total_files else 1)
+        values[8] = ""
         view._tree.item(first, values=values)
         view._patients_processed = 0
         view._update_export_progress()
@@ -1706,11 +1734,11 @@ def _stage_send_view(view: Any, stage: str) -> None:
         stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         for iid in selected:
             values = list(view._tree.item(iid, "values") or [])
-            while len(values) < 8:
+            while len(values) < 9:
                 values.append("")
-            values[5] = stamp
-            values[6] = str(values[4] or "0")
-            values[7] = ""
+            values[6] = stamp
+            values[7] = str(values[4] or "0")
+            values[8] = ""
             view._tree.item(iid, values=values, tags=("green",))
         view._tree.selection_set([])
         view._patients_to_process = len(selected)
@@ -2480,6 +2508,7 @@ SHOT_HANDLERS: dict[str, Callable[[CaptureContext, ShotSpec], ShotResult]] = {
     "Modalities": shot_modalities,
     "StorageClasses": shot_storage_classes,
     "TransferSyntaxes": shot_transfer_syntaxes,
+    "AnonymizerScriptEditor": shot_anonymizer_script_editor,
     "LookupTable": shot_lookup_table,
     "LoggingLevels": shot_logging_levels,
     "Dashboard": shot_dashboard,

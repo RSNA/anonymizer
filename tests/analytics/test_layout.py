@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from anonymizer.controller.analytics import (
+from anonymizer.controller.analytics.dataset import (
     AnalyticsFilterIndex,
     AnatomyAnalytics,
     Distribution,
     OrganVolumeDistribution,
     OrganVolumeSample,
-    _PatientRow,
-    _SeriesRow,
     _ai_coverage_distribution,
     _assemble_from_index,
+    _PatientRow,
+    _SeriesRow,
     default_selected_organ_names,
 )
 from anonymizer.utils.translate import _
@@ -290,7 +290,7 @@ def test_select_widgets_filters_board_by_selected_board_widgets() -> None:
 
 
 def test_intersect_board_widget_selection_defaults_to_all_relevant() -> None:
-    from anonymizer.controller.analytics_prefs import intersect_board_widget_selection
+    from anonymizer.controller.analytics.prefs import intersect_board_widget_selection
 
     relevant = ("sex", "age", "modality")
     assert intersect_board_widget_selection(None, relevant) == set(relevant)

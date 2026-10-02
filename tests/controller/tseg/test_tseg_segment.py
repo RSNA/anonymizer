@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
 from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
+from anonymizer.controller.ai.tseg.dicom_geometry import SeriesGeometryResult
 from anonymizer.controller.ai.tseg.segment import (
     _segmentation_cache_valid,
     analyze_tseg_regions,

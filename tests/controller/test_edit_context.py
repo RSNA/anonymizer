@@ -8,7 +8,6 @@ import pytest
 
 from anonymizer.controller.runner import (
     OcrEditContext,
-    edit_context_display_label,
     edit_context_menu_labels,
     edit_context_menu_values,
     normalize_edit_context,

@@ -39,8 +39,15 @@ def user_annotation_volumes_ml(cache_dir: Path) -> dict[str, float]:
 
     Matched labels use ``normative_organ``; custom use ``user:<slug>``.
     When several labels map to the same key, volumes are summed.
+
+    Planar pixel-space grids (CR/DX/US/MG without patient geometry) return empty —
+    synthetic spacing must not invent millilitres.
     """
     cache_dir = Path(cache_dir)
+    from anonymizer.controller.annotations.planar_geometry import is_planar_pixel_space_geometry
+
+    if is_planar_pixel_space_geometry(cache_dir):
+        return {}
     labels_file = labels_path(cache_dir)
     if not labels_file.is_file():
         return {}

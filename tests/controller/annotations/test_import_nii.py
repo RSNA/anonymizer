@@ -9,6 +9,7 @@ import numpy as np
 import SimpleITK as sitk
 
 from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir
+from anonymizer.controller.ai.tseg.seg_retention import MASK_GEOMETRY_FILENAME, mask_geometry_from_image
 from anonymizer.controller.annotations import (
     ImportProfile,
     add_user_label,
@@ -26,7 +27,6 @@ from anonymizer.controller.annotations.import_nii import (
     align_label_image_to_reference,
     detect_and_import,
 )
-from anonymizer.controller.ai.tseg.seg_retention import MASK_GEOMETRY_FILENAME, mask_geometry_from_image
 
 
 def _write_geometry_volume(cache_dir: Path, shape_zyx: tuple[int, int, int] = (4, 32, 32)) -> sitk.Image:

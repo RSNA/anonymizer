@@ -103,7 +103,7 @@ Cette fenêtre a trois bandes :
 ![Interroger, récupérer et importer — critères, résultats et contrôles d’import](shots/macos/QueryRetrieve_Ready.png)
 
 !!! tip "Demandez de l’aide à l’informatique"
-    Le Serveur de requête doit autoriser cet ordinateur à faire C-ECHO, C-FIND et C-MOVE, et doit connaître votre **Serveur local** (adresse, port, AE Title) comme destination C-MOVE. Voir [Créer un projet → Quand vous parlez à l’informatique](../05-create-project/#quand-vous-parlez-a-linformatique).
+    Le Serveur de requête doit autoriser cet ordinateur à faire C-ECHO et C-FIND. Pour l’import DICOM classique, il doit aussi autoriser **C-GET** et/ou **C-MOVE**. Lorsque le C-MOVE est utilisé, l’archive doit connaître votre **Serveur local** (adresse, port, AE Title) comme destination C-MOVE. Avec **DICOMweb** activé, l’import utilise WADO-RS en HTTP (pas de destination C-MOVE). Voir [Créer un projet → Quand vous parlez à l’informatique](../05-create-project/#quand-vous-parlez-a-linformatique).
 
 ### 2. Rechercher des études
 
@@ -143,7 +143,13 @@ Autres contrôles :
 ### 4. Sélectionner des études et importer
 
 1. Sélectionnez des études : clic simple, multi-sélection (**⌘** / **Ctrl**+clic), **Tout Sélectionner**, ou **Effacer la Sélection**.
-2. Choisissez **Niveau de déplacement** : **STUDY**, **SERIES** ou **INSTANCE** (niveau DICOM C-MOVE). Préférez STUDY lorsque l’archive le prend en charge ; essayez SERIES ou INSTANCE si les transferts bloquent.
+2. Choisissez **Niveau de déplacement** : **STUDY**, **SERIES** ou **INSTANCE**. Cela contrôle comment l’application demande les images pour **chaque** chemin de récupération — pas seulement le C-MOVE classique :
+
+    - **DIMSE C-MOVE** — QueryRetrieveLevel sur chaque C-MOVE (l’archive envoie les fichiers vers votre Serveur local).
+    - **DIMSE C-GET** — les mêmes niveaux lorsque l’archive accepte le Get Study-Root (les instances reviennent sur la même association ; pas de destination C-MOVE).
+    - **DICOMweb WADO-RS** — les mêmes niveaux contrôlent si le téléchargement est étude entière, par série ou par instance en HTTP.
+
+    Préférez **STUDY** lorsque l’archive le prend en charge ; essayez **SERIES** ou **INSTANCE** si les transferts bloquent. Le contrôle reste visible pour DICOMweb et C-GET car le niveau s’applique toujours.
 3. Cliquez sur **Importer et anonymiser**. L’application construit une hiérarchie d’études pour le niveau de déplacement sélectionné, puis ouvre la boîte de dialogue de progression **Import Studies**.
 4. La progression suit la récupération des métadonnées, puis les images reçues par rapport à la hiérarchie. Une étude se termine lorsque tous les fichiers attendus arrivent **ou** qu’un [Délai réseau](../05-create-project/#delais-reseau) expire pour ce transfert.
 5. Lorsque la boîte de dialogue affiche **Importation terminée**, cliquez sur **Fermer**.
@@ -163,8 +169,8 @@ Vous pouvez resélectionner les mêmes études après avoir ajusté le délai ou
 Beaucoup de VNA déplacent les images de façon asynchrone et ne se comportent pas comme un PACS « manuel ». Si les imports sont incomplets :
 
 - Allongez le **Délai réseau** dans Paramètres du projet.
-- Changez le **Niveau de déplacement** (Study → Series → Instance) et réessayez **Importer et anonymiser**.
-- Confirmez avec l’informatique que la destination C-MOVE correspond à l’AE Title de votre Serveur local et que les modalités / classes de stockage autorisent les études attendues.
+- Changez le **Niveau de déplacement** (Study → Series → Instance) et réessayez **Importer et anonymiser** (utile pour C-MOVE, C-GET et WADO).
+- Pour le C-MOVE classique, confirmez avec l’informatique que la destination C-MOVE correspond à l’AE Title de votre Serveur local et que les modalités / classes de stockage autorisent les études attendues.
 
 ---
 

@@ -9,6 +9,7 @@ import numpy as np
 import pydicom
 import pytest
 
+from anonymizer.controller.ai.batch_process import AiBatchAlgorithm, _apply_remove_pixel_phi_series
 from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
     _ocr_rotation_angles,
@@ -17,7 +18,6 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     filter_ocr_whitelist_only,
     ocr_image_for_frame,
 )
-from anonymizer.controller.ai_batch_process import AiBatchAlgorithm, _apply_remove_pixel_phi_series
 from anonymizer.controller.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
 from anonymizer.controller.series_io import load_series_frames
 from anonymizer.controller.work_state import WorkState

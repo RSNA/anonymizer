@@ -14,9 +14,13 @@ from anonymizer.controller.ai.harmonize.playbook import (
     ANATOMIC_PLANE_PLAYBOOK_CODES,
     BODY_PART_PLAYBOOK_CODES,
     IV_CONTRAST_PLAYBOOK_CODES,
+    KERNEL_PLAYBOOK_CODES,
+    LATERALITY_PLAYBOOK_CODES,
+    LUMINAL_CONTRAST_PLAYBOOK_CODES,
     SERIES_TYPE_MODIFIER_PLAYBOOK_CODES,
     SERIES_TYPE_PLAYBOOK_CODES,
     SLICE_THICKNESS_PLAYBOOK_CODES,
+    VIEW_PLAYBOOK_CODES,
 )
 from anonymizer.utils.translate import get_current_language_code
 
@@ -276,51 +280,85 @@ def _split_playbook_tokens(description: str) -> list[str]:
 
 
 def parse_playbook_series_description(description: str) -> dict[str, object]:
-    """Parse a Playbook series string into body parts, contrast, and series type."""
+    """Parse a Playbook series string into SeriesNameV4 component codes."""
     tokens = _split_playbook_tokens(description)
+    laterality = ""
     body_parts: list[str] = []
     contrast = ""
+    luminal = ""
     series_type = ""
     plane = ""
     slice_thickness = ""
     series_type_modifier = ""
+    kernel = ""
+    view = ""
 
-    if not tokens:
-        return {
-            "body_parts": body_parts,
-            "contrast": contrast,
-            "series_type": series_type,
-            "plane": plane,
-            "slice_thickness": slice_thickness,
-            "series_type_modifier": series_type_modifier,
-            "is_localizer": False,
-        }
-
-    first = tokens[0]
-    for part in first.split("+"):
-        part = part.strip()
-        if part in BODY_PART_PLAYBOOK_CODES or part in _BODY_PART_TO_LOINC_ANATOMY:
-            body_parts.append(part)
-
-    for tok in tokens[1:]:
-        if tok in SERIES_TYPE_PLAYBOOK_CODES:
-            series_type = tok
-        elif tok in IV_CONTRAST_PLAYBOOK_CODES:
-            contrast = tok
-        elif tok in ANATOMIC_PLANE_PLAYBOOK_CODES:
-            plane = tok
-        elif tok in SLICE_THICKNESS_PLAYBOOK_CODES:
-            slice_thickness = tok
-        elif tok in SERIES_TYPE_MODIFIER_PLAYBOOK_CODES:
-            series_type_modifier = tok
-
-    return {
+    empty = {
+        "laterality": laterality,
         "body_parts": body_parts,
         "contrast": contrast,
+        "luminal": luminal,
         "series_type": series_type,
         "plane": plane,
         "slice_thickness": slice_thickness,
         "series_type_modifier": series_type_modifier,
+        "kernel": kernel,
+        "view": view,
+        "is_localizer": False,
+    }
+    if not tokens:
+        return empty
+
+    idx = 0
+    if tokens[0] in LATERALITY_PLAYBOOK_CODES:
+        laterality = tokens[0]
+        idx = 1
+    if idx >= len(tokens):
+        empty["laterality"] = laterality
+        return empty
+
+    body_tok = tokens[idx]
+    for part in body_tok.split("+"):
+        part = part.strip()
+        if part in BODY_PART_PLAYBOOK_CODES or part in _BODY_PART_TO_LOINC_ANATOMY:
+            body_parts.append(part)
+    idx += 1
+
+    for tok in tokens[idx:]:
+        if tok in SERIES_TYPE_PLAYBOOK_CODES:
+            series_type = tok
+        elif tok in IV_CONTRAST_PLAYBOOK_CODES:
+            contrast = tok
+        elif tok in LUMINAL_CONTRAST_PLAYBOOK_CODES:
+            luminal = tok
+        elif tok in ANATOMIC_PLANE_PLAYBOOK_CODES:
+            plane = tok
+        elif tok in SLICE_THICKNESS_PLAYBOOK_CODES:
+            # Normalize legacy aliases to SeriesNameV4 sheet tokens.
+            if tok == "Recon":
+                slice_thickness = "Sub1"
+            elif tok == "Std":
+                slice_thickness = "Med"
+            else:
+                slice_thickness = tok
+        elif tok in SERIES_TYPE_MODIFIER_PLAYBOOK_CODES:
+            series_type_modifier = tok
+        elif tok in KERNEL_PLAYBOOK_CODES:
+            kernel = tok
+        elif tok in VIEW_PLAYBOOK_CODES:
+            view = tok
+
+    return {
+        "laterality": laterality,
+        "body_parts": body_parts,
+        "contrast": contrast,
+        "luminal": luminal,
+        "series_type": series_type,
+        "plane": plane,
+        "slice_thickness": slice_thickness,
+        "series_type_modifier": series_type_modifier,
+        "kernel": kernel,
+        "view": view,
         "is_localizer": series_type == "Localizer",
     }
 

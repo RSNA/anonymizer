@@ -8,25 +8,25 @@ import numpy as np
 import pytest
 import SimpleITK as sitk
 
-from anonymizer.controller.analytics import (
+from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
+from anonymizer.controller.ai.tseg.seg_retention import (
+    finalize_seg_cache,
+    write_primary_segment_voxels,
+    write_structure_voxels,
+)
+from anonymizer.controller.analytics.dataset import (
     _collect_tseg_anatomy,
     _series_anatomy_contribution,
     rebuild_anatomy_ledger,
     upsert_series_ledger_from_cache,
 )
-from anonymizer.controller.analytics_ledger import (
+from anonymizer.controller.analytics.ledger import (
     SeriesLedgerRow,
     ledger_exists,
     ledger_path_for_images_dir,
     read_ledger_rows,
     upsert_series_row,
     utc_now_iso,
-)
-from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
-from anonymizer.controller.ai.tseg.seg_retention import (
-    finalize_seg_cache,
-    write_primary_segment_voxels,
-    write_structure_voxels,
 )
 
 
@@ -100,7 +100,7 @@ def test_collect_prefers_ledger_without_series_walk(tmp_path: Path, monkeypatch:
         raise AssertionError("must not walk images when ledger exists")
 
     monkeypatch.setattr(
-        "anonymizer.controller.analytics._iter_series_dirs",
+        "anonymizer.controller.analytics.dataset._iter_series_dirs",
         _boom,
     )
     region_hits, organ_samples, segmented = _collect_tseg_anatomy(
@@ -150,7 +150,7 @@ def test_second_collect_uses_ledger_after_rebuild(tmp_path: Path, monkeypatch: p
     assert first[2] == ("CT",)
 
     calls = {"n": 0}
-    from anonymizer.controller import analytics as analytics_mod
+    from anonymizer.controller.analytics import dataset as analytics_mod
 
     real_iter = analytics_mod._iter_series_dirs
 

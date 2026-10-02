@@ -10,18 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydicom.dataset import Dataset
 
-from anonymizer.controller.ai.blur_face import (
-    FaceBlurGateDecision,
-    FaceBlurGateReason,
-    FaceBlurMode,
-    face_blur_gate_message,
-)
-from anonymizer.controller.ai.remove_pixel_phi import (
-    OcrWhitelistMatchMode,
-    OcrWhitelistMatchSettings,
-    PixelPhiRemovalMode,
-)
-from anonymizer.controller.ai_batch_process import (
+from anonymizer.controller.ai.batch_process import (
     AiBatchAlgorithm,
     AiBatchOutcome,
     AiBatchProcessOptions,
@@ -53,6 +42,17 @@ from anonymizer.controller.ai_batch_process import (
     strip_progress_pct_suffix,
     whitelist_for_batch_ocr,
 )
+from anonymizer.controller.ai.blur_face import (
+    FaceBlurGateDecision,
+    FaceBlurGateReason,
+    FaceBlurMode,
+    face_blur_gate_message,
+)
+from anonymizer.controller.ai.remove_pixel_phi import (
+    OcrWhitelistMatchMode,
+    OcrWhitelistMatchSettings,
+    PixelPhiRemovalMode,
+)
 from tests.controller.blur_face.test_face_blur_gate import _geometry, _write_chest_region_cache
 
 
@@ -77,10 +77,10 @@ def _patch_batch_runners():
     runner = MagicMock()
     return (
         patch(
-            "anonymizer.controller.ai_batch_process.enter_batch_phase",
+            "anonymizer.controller.ai.batch_process.enter_batch_phase",
             return_value=(runner, handle),
         ),
-        patch("anonymizer.controller.ai_batch_process.exit_batch_phase"),
+        patch("anonymizer.controller.ai.batch_process.exit_batch_phase"),
         handle,
         runner,
     )
@@ -358,9 +358,9 @@ def test_format_remove_pixel_phi_instance_detail_no_text() -> None:
     assert "no burnt-in text" in detail.lower()
 
 
-@patch("anonymizer.controller.ai_batch_process._apply_face_blur_series")
-@patch("anonymizer.controller.ai_batch_process._apply_harmonize_series")
-@patch("anonymizer.controller.ai_batch_process._apply_remove_pixel_phi_series")
+@patch("anonymizer.controller.ai.batch_process._apply_face_blur_series")
+@patch("anonymizer.controller.ai.batch_process._apply_harmonize_series")
+@patch("anonymizer.controller.ai.batch_process._apply_remove_pixel_phi_series")
 def test_ai_batch_process_runs_algorithm_phases_in_order(
     mock_remove: MagicMock,
     mock_harmonize: MagicMock,
@@ -391,19 +391,19 @@ def test_ai_batch_process_runs_algorithm_phases_in_order(
         enter_patch,
         exit_patch,
         patch(
-            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            "anonymizer.controller.ai.batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_paths[0]), (1, 1, series_paths[1])],
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_series_dataset",
             return_value=_batch_test_dataset(modality="MR"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_harmonize_series_dataset",
             return_value=_batch_test_dataset(modality="MR"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_tseg_series_dataset",
             return_value=_batch_test_dataset(modality="MR"),
         ),
     ):
@@ -429,9 +429,9 @@ def test_ai_batch_process_runs_algorithm_phases_in_order(
     mock_face_blur.assert_not_called()
 
 
-@patch("anonymizer.controller.ai_batch_process._apply_face_blur_series")
-@patch("anonymizer.controller.ai_batch_process._apply_harmonize_series")
-@patch("anonymizer.controller.ai_batch_process._apply_remove_pixel_phi_series")
+@patch("anonymizer.controller.ai.batch_process._apply_face_blur_series")
+@patch("anonymizer.controller.ai.batch_process._apply_harmonize_series")
+@patch("anonymizer.controller.ai.batch_process._apply_remove_pixel_phi_series")
 def test_ai_batch_process_runs_algorithms_in_order_and_honours_cancel(
     mock_remove: MagicMock,
     mock_harmonize: MagicMock,
@@ -462,19 +462,19 @@ def test_ai_batch_process_runs_algorithms_in_order_and_honours_cancel(
         enter_patch,
         exit_patch,
         patch(
-            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            "anonymizer.controller.ai.batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_paths[0])],
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_series_dataset",
             return_value=_batch_test_dataset(modality="MR"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_harmonize_series_dataset",
             return_value=_batch_test_dataset(modality="MR"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_tseg_series_dataset",
             return_value=_batch_test_dataset(modality="MR"),
         ),
     ):
@@ -501,8 +501,8 @@ def test_ai_batch_process_runs_algorithms_in_order_and_honours_cancel(
     assert summary.cancelled is True
 
 
-@patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
-@patch("anonymizer.controller.ai_batch_process.release_working_memory")
+@patch("anonymizer.controller.ai.batch_process.harmonize_and_apply_series")
+@patch("anonymizer.controller.ai.batch_process.release_working_memory")
 def test_ai_batch_process_harmonize_only_releases_memory_after_series(
     mock_release: MagicMock,
     mock_harmonize: MagicMock,
@@ -519,19 +519,19 @@ def test_ai_batch_process_harmonize_only_releases_memory_after_series(
         enter_patch,
         exit_patch,
         patch(
-            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            "anonymizer.controller.ai.batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_path)],
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_series_dataset",
             return_value=_batch_test_dataset(),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_harmonize_series_dataset",
             return_value=_batch_test_dataset(),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_tseg_series_dataset",
             return_value=_batch_test_dataset(),
         ),
     ):
@@ -548,7 +548,7 @@ def test_ai_batch_process_harmonize_only_releases_memory_after_series(
     mock_release.assert_any_call(stage="ai_batch_after_harmonize_series", preserve_accelerator=True)
 
 
-@patch("anonymizer.controller.ai_batch_process._apply_remove_pixel_phi_series")
+@patch("anonymizer.controller.ai.batch_process._apply_remove_pixel_phi_series")
 def test_ai_batch_process_uses_runner_reader_for_pixel_phi(
     mock_remove: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
@@ -567,15 +567,15 @@ def test_ai_batch_process_uses_runner_reader_for_pixel_phi(
         enter_patch,
         exit_patch,
         patch(
-            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            "anonymizer.controller.ai.batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_path)],
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_series_dataset",
             return_value=_batch_test_dataset(modality="MR"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_tseg_series_dataset",
             return_value=_batch_test_dataset(modality="MR"),
         ),
     ):
@@ -590,7 +590,7 @@ def test_ai_batch_process_uses_runner_reader_for_pixel_phi(
     assert mock_remove.call_args.kwargs["ocr_reader"] is handle.reader
 
 
-@patch("anonymizer.controller.ai_batch_process._apply_remove_pixel_phi_series")
+@patch("anonymizer.controller.ai.batch_process._apply_remove_pixel_phi_series")
 def test_ai_batch_process_forwards_pixel_phi_removal_mode(
     mock_remove: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
@@ -609,15 +609,15 @@ def test_ai_batch_process_forwards_pixel_phi_removal_mode(
         enter_patch,
         exit_patch,
         patch(
-            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            "anonymizer.controller.ai.batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_path)],
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_series_dataset",
             return_value=_batch_test_dataset(modality="US"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_tseg_series_dataset",
             return_value=_batch_test_dataset(modality="US"),
         ),
     ):
@@ -634,9 +634,9 @@ def test_ai_batch_process_forwards_pixel_phi_removal_mode(
     assert mock_remove.call_args.kwargs["removal_mode"] is PixelPhiRemovalMode.INPAINT
 
 
-@patch("anonymizer.controller.ai_batch_process._apply_face_blur_series")
-@patch("anonymizer.controller.ai_batch_process._prepare_ct_volume_context")
-@patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
+@patch("anonymizer.controller.ai.batch_process._apply_face_blur_series")
+@patch("anonymizer.controller.ai.batch_process._prepare_ct_volume_context")
+@patch("anonymizer.controller.ai.batch_process.harmonize_and_apply_series")
 def test_ai_batch_process_defers_volume_context_when_harmonize_and_face_blur(
     mock_harmonize: MagicMock,
     mock_prepare_volume: MagicMock,
@@ -662,23 +662,23 @@ def test_ai_batch_process_defers_volume_context_when_harmonize_and_face_blur(
         enter_patch,
         exit_patch,
         patch(
-            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            "anonymizer.controller.ai.batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_path)],
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_series_dataset",
             return_value=_batch_test_dataset(),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_harmonize_series_dataset",
             return_value=_batch_test_dataset(),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_tseg_series_dataset",
             return_value=_batch_test_dataset(),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._face_blur_batch_eligibility",
+            "anonymizer.controller.ai.batch_process._face_blur_batch_eligibility",
             return_value=allow,
         ),
     ):
@@ -694,8 +694,8 @@ def test_ai_batch_process_defers_volume_context_when_harmonize_and_face_blur(
     mock_prepare_volume.assert_called_once_with(series_path)
 
 
-@patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
-@patch("anonymizer.controller.ai_batch_process.enter_batch_phase")
+@patch("anonymizer.controller.ai.batch_process.harmonize_and_apply_series")
+@patch("anonymizer.controller.ai.batch_process.enter_batch_phase")
 def test_ai_batch_process_skips_harmonize_phase_when_all_harmonized(
     mock_enter: MagicMock,
     mock_harmonize: MagicMock,
@@ -708,7 +708,7 @@ def test_ai_batch_process_skips_harmonize_phase_when_all_harmonized(
 
     with (
         patch(
-            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            "anonymizer.controller.ai.batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_path)],
         ),
     ):
@@ -725,8 +725,8 @@ def test_ai_batch_process_skips_harmonize_phase_when_all_harmonized(
     assert summary.processed == 0
 
 
-@patch("anonymizer.controller.ai_batch_process._apply_remove_pixel_phi_series")
-@patch("anonymizer.controller.ai_batch_process.enter_batch_phase")
+@patch("anonymizer.controller.ai.batch_process._apply_remove_pixel_phi_series")
+@patch("anonymizer.controller.ai.batch_process.enter_batch_phase")
 def test_ai_batch_process_skips_pixel_phi_phase_when_all_scanned(
     mock_enter: MagicMock,
     mock_remove: MagicMock,
@@ -739,15 +739,15 @@ def test_ai_batch_process_skips_pixel_phi_phase_when_all_scanned(
 
     with (
         patch(
-            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            "anonymizer.controller.ai.batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_path)],
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_series_dataset",
             return_value=_batch_test_dataset(modality="MR"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_tseg_series_dataset",
             return_value=_batch_test_dataset(modality="MR"),
         ),
     ):
@@ -763,8 +763,8 @@ def test_ai_batch_process_skips_pixel_phi_phase_when_all_scanned(
     assert summary.processed == 0
 
 
-@patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
-@patch("anonymizer.controller.ai_batch_process.MemoryGuard")
+@patch("anonymizer.controller.ai.batch_process.harmonize_and_apply_series")
+@patch("anonymizer.controller.ai.batch_process.MemoryGuard")
 def test_ai_batch_process_memory_guard_cancels_between_series(
     mock_guard_cls: MagicMock,
     mock_harmonize: MagicMock,
@@ -786,19 +786,19 @@ def test_ai_batch_process_memory_guard_cancels_between_series(
         enter_patch,
         exit_patch,
         patch(
-            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            "anonymizer.controller.ai.batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_paths[0]), (1, 1, series_paths[1])],
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_series_dataset",
             return_value=_batch_test_dataset(),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_harmonize_series_dataset",
             return_value=_batch_test_dataset(),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_tseg_series_dataset",
             return_value=_batch_test_dataset(),
         ),
     ):
@@ -813,9 +813,9 @@ def test_ai_batch_process_memory_guard_cancels_between_series(
     assert summary.cancelled is True
 
 
-@patch("anonymizer.controller.ai_batch_process.preview_face_blur")
-@patch("anonymizer.controller.ai_batch_process.resolve_series_geometry")
-@patch("anonymizer.controller.ai_batch_process._load_tseg_series_dataset")
+@patch("anonymizer.controller.ai.batch_process.preview_face_blur")
+@patch("anonymizer.controller.ai.batch_process.resolve_series_geometry")
+@patch("anonymizer.controller.ai.batch_process._load_tseg_series_dataset")
 def test_apply_face_blur_series_skips_non_head_before_segmentation(
     mock_load_ds: MagicMock,
     mock_geometry: MagicMock,
@@ -865,7 +865,7 @@ def test_face_blur_ineligible_skip_counts_as_complete() -> None:
 
 
 def test_format_ai_batch_completion_summary() -> None:
-    from anonymizer.controller.ai_batch_process import AiBatchAlgorithmTotals, AiBatchSummary
+    from anonymizer.controller.ai.batch_process import AiBatchAlgorithmTotals, AiBatchSummary
 
     # Complete-only algorithms are omitted; applied/failed/skipped appear in the headline.
     summary = AiBatchSummary(
@@ -891,7 +891,7 @@ def test_format_ai_batch_completion_summary() -> None:
 def test_batch_run_artifact_stem_sanitizes_names() -> None:
     from datetime import datetime
 
-    from anonymizer.controller.ai_batch_process import batch_run_artifact_stem
+    from anonymizer.controller.ai.batch_process import batch_run_artifact_stem
 
     stem = batch_run_artifact_stem(
         site_id="Site/A",
@@ -902,7 +902,7 @@ def test_batch_run_artifact_stem_sanitizes_names() -> None:
 
 
 def test_batch_run_capture_writes_log_and_json(tmp_path: Path) -> None:
-    from anonymizer.controller.ai_batch_process import (
+    from anonymizer.controller.ai.batch_process import (
         AiBatchAlgorithmTotals,
         AiBatchOutcome,
         AiBatchSummary,
@@ -953,7 +953,7 @@ def test_project_dir_from_series_path_matches_batch_storage_dir(tmp_path: Path) 
     assert project_dir_from_series_path(series_path) == storage_dir
 
 
-@patch("anonymizer.controller.ai_batch_process._apply_remove_pixel_phi_series")
+@patch("anonymizer.controller.ai.batch_process._apply_remove_pixel_phi_series")
 def test_ai_batch_process_forwards_project_storage_dir_for_pixel_phi(
     mock_remove: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
@@ -975,15 +975,15 @@ def test_ai_batch_process_forwards_project_storage_dir_for_pixel_phi(
         enter_patch,
         exit_patch,
         patch(
-            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            "anonymizer.controller.ai.batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_path)],
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_series_dataset",
             return_value=_batch_test_dataset(modality="CR"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_tseg_series_dataset",
             return_value=_batch_test_dataset(modality="CR"),
         ),
     ):
@@ -1006,7 +1006,7 @@ def test_apply_remove_pixel_phi_series_uses_saved_modality_whitelist(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from anonymizer.controller.ai_batch_process import AiBatchAlgorithm, _apply_remove_pixel_phi_series
+    from anonymizer.controller.ai.batch_process import AiBatchAlgorithm, _apply_remove_pixel_phi_series
 
     pkg_dir = Path(__file__).resolve().parents[3] / "src" / "anonymizer"
     monkeypatch.chdir(pkg_dir)
@@ -1044,7 +1044,7 @@ def test_whitelist_for_batch_ocr() -> None:
     assert whitelist_for_batch_ocr(use_modality_whitelist=False) == []
 
 
-@patch("anonymizer.controller.ai_batch_process._load_series_dataset")
+@patch("anonymizer.controller.ai.batch_process._load_series_dataset")
 def test_modalities_in_selected_studies_collects_unique_modalities(
     mock_load: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
@@ -1082,9 +1082,9 @@ def test_format_modality_whitelist_preview_groups_by_modality() -> None:
     assert "(empty)" in text
 
 
-@patch("anonymizer.controller.ai_batch_process.remove_pixel_phi", return_value=(False, [], 0))
-@patch("anonymizer.controller.ai_batch_process.stackable_dicom_paths")
-@patch("anonymizer.controller.ai_batch_process._load_series_dataset")
+@patch("anonymizer.controller.ai.batch_process.remove_pixel_phi", return_value=(False, [], 0))
+@patch("anonymizer.controller.ai.batch_process.stackable_dicom_paths")
+@patch("anonymizer.controller.ai.batch_process._load_series_dataset")
 def test_apply_remove_pixel_phi_series_whitelist_enabled_passes_none(
     mock_load: MagicMock,
     mock_stackable: MagicMock,
@@ -1104,9 +1104,9 @@ def test_apply_remove_pixel_phi_series_whitelist_enabled_passes_none(
     assert mock_remove.call_args.kwargs["whitelist"] is None
 
 
-@patch("anonymizer.controller.ai_batch_process.remove_pixel_phi", return_value=(False, [], 0))
-@patch("anonymizer.controller.ai_batch_process.stackable_dicom_paths")
-@patch("anonymizer.controller.ai_batch_process._load_series_dataset")
+@patch("anonymizer.controller.ai.batch_process.remove_pixel_phi", return_value=(False, [], 0))
+@patch("anonymizer.controller.ai.batch_process.stackable_dicom_paths")
+@patch("anonymizer.controller.ai.batch_process._load_series_dataset")
 def test_apply_remove_pixel_phi_series_whitelist_disabled_passes_empty_list(
     mock_load: MagicMock,
     mock_stackable: MagicMock,
@@ -1126,7 +1126,7 @@ def test_apply_remove_pixel_phi_series_whitelist_disabled_passes_empty_list(
     assert mock_remove.call_args.kwargs["whitelist"] == []
 
 
-@patch("anonymizer.controller.ai_batch_process._load_harmonize_series_dataset")
+@patch("anonymizer.controller.ai.batch_process._load_harmonize_series_dataset")
 def test_series_needs_harmonize_true_for_planar_xr(mock_load: MagicMock, tmp_path: Path) -> None:
     series_dir = tmp_path / "series"
     series_dir.mkdir()
@@ -1134,7 +1134,7 @@ def test_series_needs_harmonize_true_for_planar_xr(mock_load: MagicMock, tmp_pat
     assert series_needs_harmonize(_pending_anon_model(), series_dir) is True
 
 
-@patch("anonymizer.controller.ai_batch_process._load_harmonize_series_dataset")
+@patch("anonymizer.controller.ai.batch_process._load_harmonize_series_dataset")
 def test_series_needs_harmonize_false_for_non_harmonize_modality(mock_load: MagicMock, tmp_path: Path) -> None:
     series_dir = tmp_path / "series"
     series_dir.mkdir()
@@ -1142,7 +1142,7 @@ def test_series_needs_harmonize_false_for_non_harmonize_modality(mock_load: Magi
     assert series_needs_harmonize(_pending_anon_model(), series_dir) is False
 
 
-@patch("anonymizer.controller.ai_batch_process._load_harmonize_series_dataset")
+@patch("anonymizer.controller.ai.batch_process._load_harmonize_series_dataset")
 def test_skip_message_for_harmonize_series_ineligible(mock_load: MagicMock, tmp_path: Path) -> None:
     series_dir = tmp_path / "series"
     series_dir.mkdir()
@@ -1162,8 +1162,8 @@ def test_harmonize_skip_counts_as_complete_for_ineligible() -> None:
     assert harmonize_skip_counts_as_complete(outcome) is True
 
 
-@patch("anonymizer.controller.ai_batch_process.auto_apply_best_study_descriptions")
-@patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
+@patch("anonymizer.controller.ai.batch_process.auto_apply_best_study_descriptions")
+@patch("anonymizer.controller.ai.batch_process.harmonize_and_apply_series")
 def test_ai_batch_process_auto_applies_study_description_without_dialog(
     mock_harmonize: MagicMock,
     mock_auto_apply: MagicMock,
@@ -1190,19 +1190,19 @@ def test_ai_batch_process_auto_applies_study_description_without_dialog(
         enter_patch,
         exit_patch,
         patch(
-            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            "anonymizer.controller.ai.batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_path)],
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_series_dataset",
             return_value=_batch_test_dataset(modality="CR"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_harmonize_series_dataset",
             return_value=_batch_test_dataset(modality="CR"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_tseg_series_dataset",
             return_value=None,
         ),
     ):
@@ -1221,8 +1221,8 @@ def test_ai_batch_process_auto_applies_study_description_without_dialog(
     assert any("Auto-applied study description" in line for line in logs)
 
 
-@patch("anonymizer.controller.ai_batch_process.auto_apply_best_study_descriptions")
-@patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
+@patch("anonymizer.controller.ai.batch_process.auto_apply_best_study_descriptions")
+@patch("anonymizer.controller.ai.batch_process.harmonize_and_apply_series")
 def test_ai_batch_applies_study_description_before_later_phase_cancel(
     mock_harmonize: MagicMock,
     mock_auto_apply: MagicMock,
@@ -1261,27 +1261,27 @@ def test_ai_batch_applies_study_description_before_later_phase_cancel(
         enter_patch,
         exit_patch,
         patch(
-            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            "anonymizer.controller.ai.batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_path)],
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_series_dataset",
             return_value=_batch_test_dataset(modality="CR"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_harmonize_series_dataset",
             return_value=_batch_test_dataset(modality="CR"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_tseg_series_dataset",
             return_value=None,
         ),
         patch(
-            "anonymizer.controller.ai_batch_process.series_needs_face_blur",
+            "anonymizer.controller.ai.batch_process.series_needs_face_blur",
             return_value=True,
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._apply_face_blur_series",
+            "anonymizer.controller.ai.batch_process._apply_face_blur_series",
             side_effect=AssertionError("Face blur must not run after cancel"),
         ),
     ):
@@ -1302,7 +1302,7 @@ def test_ai_batch_applies_study_description_before_later_phase_cancel(
     assert summary.cancelled is True
 
 
-@patch("anonymizer.controller.ai_batch_process.auto_apply_best_study_descriptions")
+@patch("anonymizer.controller.ai.batch_process.auto_apply_best_study_descriptions")
 def test_ai_batch_applies_study_description_when_harmonize_phase_skipped(
     mock_auto_apply: MagicMock,
     images_layout: tuple[Path, list[tuple[str, str]]],
@@ -1330,11 +1330,11 @@ def test_ai_batch_applies_study_description_when_harmonize_phase_skipped(
         enter_patch,
         exit_patch,
         patch(
-            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            "anonymizer.controller.ai.batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_path)],
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_harmonize_series_dataset",
             return_value=_batch_test_dataset(modality="CR"),
         ),
     ):
@@ -1352,8 +1352,8 @@ def test_ai_batch_applies_study_description_when_harmonize_phase_skipped(
     assert summary.applied == 0
 
 
-@patch("anonymizer.controller.ai_batch_process.auto_apply_best_study_descriptions")
-@patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
+@patch("anonymizer.controller.ai.batch_process.auto_apply_best_study_descriptions")
+@patch("anonymizer.controller.ai.batch_process.harmonize_and_apply_series")
 def test_ai_batch_study_loinc_after_each_study_not_end_of_selection(
     mock_harmonize: MagicMock,
     mock_auto_apply: MagicMock,
@@ -1397,19 +1397,19 @@ def test_ai_batch_study_loinc_after_each_study_not_end_of_selection(
         enter_patch,
         exit_patch,
         patch(
-            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            "anonymizer.controller.ai.batch_process.enumerate_series_for_studies",
             return_value=[(1, 2, series_a), (2, 2, series_b)],
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_series_dataset",
             return_value=_batch_test_dataset(modality="CR"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_harmonize_series_dataset",
             return_value=_batch_test_dataset(modality="CR"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_tseg_series_dataset",
             return_value=None,
         ),
     ):
@@ -1424,8 +1424,8 @@ def test_ai_batch_study_loinc_after_each_study_not_end_of_selection(
     assert mock_auto_apply.call_count == 2
 
 
-@patch("anonymizer.controller.ai_batch_process.auto_apply_best_study_descriptions")
-@patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
+@patch("anonymizer.controller.ai.batch_process.auto_apply_best_study_descriptions")
+@patch("anonymizer.controller.ai.batch_process.harmonize_and_apply_series")
 def test_ai_batch_skips_study_loinc_apply_when_study_not_ready(
     mock_harmonize: MagicMock,
     mock_auto_apply: MagicMock,
@@ -1454,19 +1454,19 @@ def test_ai_batch_skips_study_loinc_apply_when_study_not_ready(
         enter_patch,
         exit_patch,
         patch(
-            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            "anonymizer.controller.ai.batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_a), (1, 1, series_b)],
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_series_dataset",
             return_value=_batch_test_dataset(modality="CR"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_harmonize_series_dataset",
             return_value=_batch_test_dataset(modality="CR"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_tseg_series_dataset",
             return_value=None,
         ),
     ):
@@ -1483,8 +1483,8 @@ def test_ai_batch_skips_study_loinc_apply_when_study_not_ready(
     assert summary.cancelled is True
 
 
-@patch("anonymizer.controller.ai_batch_process.auto_apply_best_study_descriptions")
-@patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
+@patch("anonymizer.controller.ai.batch_process.auto_apply_best_study_descriptions")
+@patch("anonymizer.controller.ai.batch_process.harmonize_and_apply_series")
 def test_ai_batch_process_runs_harmonize_for_planar_us(
     mock_harmonize: MagicMock,
     mock_auto_apply: MagicMock,
@@ -1502,19 +1502,19 @@ def test_ai_batch_process_runs_harmonize_for_planar_us(
         enter_patch,
         exit_patch,
         patch(
-            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            "anonymizer.controller.ai.batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_path)],
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_series_dataset",
             return_value=_batch_test_dataset(modality="US"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_harmonize_series_dataset",
             return_value=_batch_test_dataset(modality="US"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_tseg_series_dataset",
             return_value=None,
         ),
     ):
@@ -1529,8 +1529,8 @@ def test_ai_batch_process_runs_harmonize_for_planar_us(
     assert summary.applied == 1
 
 
-@patch("anonymizer.controller.ai_batch_process.auto_apply_best_study_descriptions")
-@patch("anonymizer.controller.ai_batch_process.harmonize_and_apply_series")
+@patch("anonymizer.controller.ai.batch_process.auto_apply_best_study_descriptions")
+@patch("anonymizer.controller.ai.batch_process.harmonize_and_apply_series")
 def test_ai_batch_failed_outcome_appears_in_work_state_logs(
     mock_harmonize: MagicMock,
     mock_auto_apply: MagicMock,
@@ -1552,19 +1552,19 @@ def test_ai_batch_failed_outcome_appears_in_work_state_logs(
         enter_patch,
         exit_patch,
         patch(
-            "anonymizer.controller.ai_batch_process.enumerate_series_for_studies",
+            "anonymizer.controller.ai.batch_process.enumerate_series_for_studies",
             return_value=[(1, 1, series_path)],
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_series_dataset",
             return_value=_batch_test_dataset(modality="CR"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_harmonize_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_harmonize_series_dataset",
             return_value=_batch_test_dataset(modality="CR"),
         ),
         patch(
-            "anonymizer.controller.ai_batch_process._load_tseg_series_dataset",
+            "anonymizer.controller.ai.batch_process._load_tseg_series_dataset",
             return_value=None,
         ),
     ):

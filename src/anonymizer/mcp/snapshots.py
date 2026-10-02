@@ -9,6 +9,7 @@ from pydicom.dataset import Dataset
 
 from anonymizer.controller.project import ProjectController, StudyUIDHierarchy
 from anonymizer.model.project import DICOMNode
+from anonymizer.model.settings_validate import timeouts_dict
 
 # Paths teach MCP clients to leave the tool API — omit from public project snapshots.
 _MCP_PROJECT_PATH_KEYS = frozenset({"storage_dir", "images_dir", "private_dir"})
@@ -47,12 +48,15 @@ def serialize_project_info(controller: ProjectController) -> dict[str, Any]:
         "project_name": model.project_name,
         "site_id": model.site_id,
         "uid_root": model.uid_root,
+        "language_code": model.language_code,
         "storage_dir": str(model.storage_dir),
         "images_dir": str(model.images_dir()),
         "private_dir": str(model.private_dir()),
         "model_version": model.version,
         "modalities": list(model.modalities),
+        "transfer_syntaxes": list(model.transfer_syntaxes),
         "imported_modalities": controller.get_imported_modalities(),
+        "network_timeouts": timeouts_dict(model.network_timeouts),
         "totals": {
             "patients": totals.patients,
             "studies": totals.studies,
@@ -61,6 +65,7 @@ def serialize_project_info(controller: ProjectController) -> dict[str, Any]:
         },
         "remote_scps": {name: serialize_dicom_node(node) for name, node in model.remote_scps.items()},
         "local_scp": serialize_dicom_node(model.scp),
+        "local_scu": serialize_dicom_node(model.scu),
     }
 
 
@@ -71,7 +76,26 @@ def public_project_info(controller: ProjectController) -> dict[str, Any]:
 
 
 def serialize_dicom_node(node: DICOMNode) -> dict[str, Any]:
-    return {"ip": node.ip, "port": node.port, "aet": node.aet, "local": node.local}
+    data: dict[str, Any] = {
+        "ip": node.ip,
+        "port": node.port,
+        "aet": node.aet,
+        "local": node.local,
+        "dicomweb": bool(node.dicomweb),
+    }
+    if node.dicomweb:
+        data.update(
+            {
+                "http_port": int(node.http_port),
+                "http_path": node.http_path,
+                "use_https": bool(node.use_https),
+                "username": node.username or "",
+                # Never expose password over MCP
+                "password": "***" if node.password else "",
+                "dicomweb_root": node.dicomweb_root(),
+            }
+        )
+    return data
 
 
 def abridged_path(path: str | Path, depth: int = 3) -> str:

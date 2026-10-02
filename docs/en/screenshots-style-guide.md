@@ -61,4 +61,4 @@ uv run python -m docs_help --language en_US --force --only Welcome
 
 ## Priority shots (V19)
 
-Welcome; AI Features; Create project settings (+ subdialogs); Dashboard; Search; View (Dataset + series/study description edit + Projections + Series + Patient Lookup CSV); Process (Remove Pixel PHI, Harmonize, Face, batch); Send (initial → selection → sending → sent).
+Welcome; AI Features; Create project settings (+ subdialogs including Anonymizer Script Editor); Dashboard; Search; View (Dataset + series/study description edit + Projections + Series + Patient Lookup CSV); Process (Remove Pixel PHI, Harmonize, Face, batch); Send (initial → selection → sending → sent).

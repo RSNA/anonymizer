@@ -7,16 +7,16 @@ from pathlib import Path
 
 import pytest
 
+from anonymizer.controller.ai.batch_process import (
+    format_remove_pixel_phi_instance_detail,
+    format_remove_pixel_phi_series_message,
+)
 from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
     detect_text,
     filter_ocr_detections,
     ocr_image_for_frame,
     remove_pixel_phi,
-)
-from anonymizer.controller.ai_batch_process import (
-    format_remove_pixel_phi_instance_detail,
-    format_remove_pixel_phi_series_message,
 )
 from anonymizer.controller.runner import RemovePixelPhiRunner
 from anonymizer.controller.series_io import load_series_frames

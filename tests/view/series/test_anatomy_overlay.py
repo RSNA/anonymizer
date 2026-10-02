@@ -10,6 +10,7 @@ import pytest
 import SimpleITK as sitk
 
 from anonymizer.controller.ai.tseg.config import PRIMARY_SEGMENT_GROUPS, PRIMARY_SEGMENT_ORDER, ROI_SUBSET
+from anonymizer.controller.series_overlay import PolygonPoint, Segmentation
 from anonymizer.view.series.anatomy_overlay import (
     PRIMARY_SEGMENT_COLORS_BGR,
     color_bgr_for_structure,
@@ -18,7 +19,6 @@ from anonymizer.view.series.anatomy_overlay import (
     merge_structure_overlays,
     structure_mask_overlays_for_series,
 )
-from anonymizer.controller.series_overlay import PolygonPoint, Segmentation
 
 
 def _write_mask(path: Path, voxels: int, shape: tuple[int, int, int] = (4, 16, 16)) -> None:

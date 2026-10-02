@@ -35,18 +35,29 @@ def test_create_project_writes_model_and_opens_session(tmp_path: Path):
 
 
 def test_create_project_via_ops_still_accepts_site_uid(tmp_path: Path):
-    """site_id/uid_root remain on ops/session; not on the MCP tool schema."""
+    """site_id/uid_root are validated and applied on create (MCP schema + ops)."""
     from anonymizer.mcp import ops as mcp_ops
 
     payload = mcp_ops.create_project(
         SESSION,
         "Research CT Head",
-        site_id="SITE99",
+        site_id="994681",
         uid_root="1.2.3.4.5",
     )
     project = payload["project"]
-    assert project["site_id"] == "SITE99"
+    assert project["site_id"] == "994681"
     assert project["uid_root"] == "1.2.3.4.5"
+
+
+def test_create_project_mcp_exposes_site_uid(tmp_path: Path):
+    result = mcp_tools.create_project(
+        project_name="With Site",
+        site_id="12345",
+        uid_root="1.2.826.0.1.3680043.10.474.2",
+    )
+    assert result["ok"] is True
+    assert result["project"]["site_id"] == "12345"
+    assert result["project"]["uid_root"] == "1.2.826.0.1.3680043.10.474.2"
 
 
 def test_create_project_requires_overwrite_to_replace():
@@ -75,7 +86,7 @@ def test_create_project_with_existing_storage_dir(tmp_path: Path):
 
 def test_create_project_rejects_missing_storage_dir(tmp_path: Path):
     missing = tmp_path / "does_not_exist"
-    result = mcp_tools.create_project(project_name="X", storage_dir=str(missing))
+    result = mcp_tools.create_project(project_name="Missing", storage_dir=str(missing))
     assert result["ok"] is False
     assert "does not exist" in result["error"].lower()
 
@@ -162,8 +173,8 @@ def test_mcp_call_logging_middleware_logs(caplog: pytest.LogCaptureFixture):
 def test_mcp_call_logging_logs_initialize_instructions(caplog: pytest.LogCaptureFixture):
     import asyncio
 
-    from anonymizer.mcp.middleware import McpCallLoggingMiddleware
     from anonymizer.mcp.instructions import load_server_instructions
+    from anonymizer.mcp.middleware import McpCallLoggingMiddleware
 
     instructions = load_server_instructions()
 

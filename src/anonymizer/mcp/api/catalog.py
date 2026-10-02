@@ -25,6 +25,7 @@ from anonymizer.mcp.api.schemas import (
     PacsMoveArgs,
     ProjectOpenArgs,
     SeriesSelectorsArgs,
+    UpdateProjectSettingsArgs,
 )
 
 
@@ -66,12 +67,25 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
         idempotent_hint=True,
     ),
     ToolSpec(
+        name="project_settings_defaults",
+        title="Project settings defaults",
+        description=(
+            "Return factory project-setting defaults, allowed language codes, field ranges, "
+            "and DIMSE vs DICOMweb guidance. Call with arguments {}. Read-only. "
+            "Use once when guiding interactive project setup before create_project."
+        ),
+        args_model=EmptyArgs,
+        read_only_hint=True,
+        idempotent_hint=True,
+    ),
+    ToolSpec(
         name="create_project",
         title="Create project",
         description=(
             "Create a new empty anonymizer project and leave it open. "
-            "Call only when the user asks to create a project. "
-            "Requires project_name from the user. "
+            "Call only when the user asks to create a project and has confirmed settings. "
+            "Requires project_name from the user; optional site_id, uid_root, language_code, "
+            "modalities, transfer_syntaxes, scp, network_timeouts (same ranges as the desktop GUI). "
             "After success: the project is already open — reply in plain language and STOP. "
             "Do not call project_open, import_directory, import_file, or any other tool next "
             "unless the same user message explicitly asked for that next step too."
@@ -96,11 +110,26 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
         name="project_info",
         title="Project info",
         description=(
-            "Return metadata for the currently open project. "
-            "Call with arguments {}. Requires an open project. Read-only."
+            "Return metadata for the currently open project including language, modalities, "
+            "transfer_syntaxes, network_timeouts, local_scp/local_scu, and remotes. "
+            "Call with arguments {}. Requires an open project. Read-only. "
+            "Use before update_project_settings when editing an existing project."
         ),
         args_model=EmptyArgs,
         read_only_hint=True,
+        idempotent_hint=True,
+    ),
+    ToolSpec(
+        name="update_project_settings",
+        title="Update project settings",
+        description=(
+            "Change mutable settings on the open project: language_code, modalities, "
+            "transfer_syntaxes, local scp, network_timeouts. "
+            "project_name, storage_dir, site_id, and uid_root are fixed after create — refuse those. "
+            "Validate ranges match the desktop GUI; reject invalid values. "
+            "Call only with values the user supplied."
+        ),
+        args_model=UpdateProjectSettingsArgs,
         idempotent_hint=True,
     ),
     ToolSpec(
@@ -131,17 +160,22 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
         name="configure_remote",
         title="Configure PACS remote",
         description=(
-            "Save a PACS QUERY or EXPORT remote (ip, port, aet) on the open project. "
-            "Call only with host/port/AE values the user supplied. Never invent them."
+            "Save a PACS QUERY or EXPORT remote on the open project. "
+            "Before calling: ask whether that role uses DIMSE SCP (ip, DICOM port, AET) "
+            "or DICOMweb (dicomweb=true, ip, http_port, http_path, optional HTTPS/creds) — "
+            "one port per mode. "
+            "Do not assume DICOMweb unless the user chose it or gave HTTP details. "
+            "Configure QUERY and EXPORT separately when both are needed. "
+            "Call only with values the user supplied. Never invent them."
         ),
         args_model=ConfigureRemoteArgs,
         open_world_hint=True,
     ),
     ToolSpec(
         name="pacs_find",
-        title="PACS C-FIND",
+        title="PACS find (C-FIND or QIDO-RS)",
         description=(
-            "Query the configured QUERY remote for studies. "
+            "Query the configured QUERY remote for studies (DIMSE C-FIND or DICOMweb QIDO-RS). "
             "Omit unused query keys. Requires configure_remote first when not already set."
         ),
         args_model=PacsFindArgs,
@@ -150,9 +184,9 @@ TOOL_CATALOG: Final[tuple[ToolSpec, ...]] = (
     ),
     ToolSpec(
         name="pacs_move",
-        title="PACS C-MOVE import",
+        title="PACS import (C-MOVE/C-GET or WADO-RS)",
         description=(
-            "C-MOVE studies from PACS into the open project. "
+            "Import studies from PACS into the open project (DIMSE retrieve or DICOMweb WADO-RS). "
             "studies must come from pacs_find results (study_instance_uid + patient_id). "
             "Do not invent UIDs."
         ),

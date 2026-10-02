@@ -1,5 +1,7 @@
 """Pointer and wheel helpers that stay stable across Tk versions.
 
+View-layer helpers for Series View / Dataset chart bindings.
+
 On macOS Aqua with Tk 8.x, physical middle and right clicks are reported as
 Tk buttons 3 and 2 (swapped vs X11). Tk 9 Aqua and all X11/Win32 builds use
 the X11 numbering (middle=2, right=3). Series View binds pan to middle and

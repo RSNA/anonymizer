@@ -9,12 +9,12 @@ import numpy as np
 import pydicom
 import pytest
 
+from anonymizer.controller.ai.batch_process import AiBatchAlgorithm, _apply_remove_pixel_phi_series
 from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,
     detect_text,
     remove_pixel_phi,
 )
-from anonymizer.controller.ai_batch_process import AiBatchAlgorithm, _apply_remove_pixel_phi_series
 from anonymizer.controller.phi_io import build_phi_index
 from anonymizer.model.anonymizer import AnonymizerModel, Instance
 from tests.controller.support.pixel_phi_test_support import (

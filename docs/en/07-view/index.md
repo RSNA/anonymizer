@@ -28,8 +28,10 @@ After importing from `tests/controller/assets/test_dcm_files` (see [Search](../0
 
 ### Columns (V19)
 
-| Status | Meaning |
+| Column / status | Meaning |
 | --- | --- |
+| **Harmonized Description** (first column) | Standardized RadLex / LOINC name when set; otherwise “(no description)” |
+| **Original Description** | Sticky intake Study/Series Description from import |
 | **Harmonized** | Series description standardized (or study-level description applied) |
 | **Face blur** | Face de-identification applied |
 | **Pixel PHI** | Burned-in text scan / removal recorded |
@@ -116,10 +118,11 @@ Hover tooltips explain what a click or toolbar action will do (including why a b
 
 ### Study description (LOINC)
 
-1. **Double-click** the **study** description in the first column (the parent row).
-2. Choose a **LOINC** Long Common Name for **that modality prefix** (XR / US / MG / CT / MR). Each option is shown as `Long Common Name  (LoincNumber)`.
-3. The list is ranked from the study’s harmonized series names when available (and view count for CXR when known), then padded from the same modality’s LOINC catalog.
-4. Applying a choice updates Study Description (and Procedure Code Sequence when a LOINC number is present).
+1. Harmonize **all** Harmonize-eligible series in the study first (CT/MR and planar cohorts as applicable). Dataset blocks study **Set description** until that is done.
+2. **Double-click** the **study** Harmonized Description in the first column (the parent row).
+3. Choose a **LOINC** Long Common Name for **that modality prefix** (XR / US / MG / CT / MR). Each option is shown as `Long Common Name  (LoincNumber)`.
+4. The list is ranked from the study’s sticky original / series context when available, then padded from the same modality’s LOINC catalog.
+5. Applying a choice updates Study Description (and Procedure Code Sequence), marks the study harmonized, and saves an original→harmonized mapping (with LOINC) for this project.
 
 ![Dataset study description dropdown (LOINC)](shots/macos/Dataset_EditStudyDescription.png)
 
@@ -131,7 +134,11 @@ Hover tooltips explain what a click or toolbar action will do (including why a b
 
 ### Select Similar
 
-With a **single** study or series selected, **Select Similar** adds other rows that already share the same series descriptions (studies) or the same series description text (series). Then right-click the selection to set one description on all selected rows.
+With a **single** study or series selected, **Select Similar** adds other rows that share the same **original** (intake) description text and cohort. Then right-click the selection to set one description on all selected rows.
+
+### Description Mappings
+
+Open **Description Mappings** from the Dataset toolbar to list, inspect, or delete saved corrections for this project. Tabs are **Series (RadLex)** and **Study (LOINC)**. Row management matches Dataset: **Select All**, **Clear Selection**, and **Delete** (multi-select with Shift / Cmd-Ctrl). Mappings are created when you apply **Set description** (**Origin** = Manual) or when AI accepts / auto-applies a description (**Origin** = succinct process label, e.g. `TS 1.5mm+brain`, `LOINC rank`, `XR body+view`). Blank originals and identity mappings (same original and harmonized text) are not stored.
 
 ## Series View — what you can do
 
@@ -173,7 +180,21 @@ Zoom uses nearest-neighbor magnification so voxel edges and 1 px segment outli
 
 ### Annotation
 
-ROI annotation works once the series has a voxel grid for labels (from Harmonize cache, or created automatically when you annotate / import). The **Segmentation** panel shows TotalSegmentator structure chips (after Harmonize) and **user segments** you create or import.
+ROI annotation works once the series has a voxel grid for labels. For **CT/MR**, the grid comes from the Harmonize / TotalSegmentator cache, or is created automatically when you annotate or import. For **CR/DX (XR), US, and MG**, Annotate builds a **pixel-space** grid aligned to Series View frames when patient orientation tags (`ImageOrientationPatient` / `ImagePositionPatient`) are missing — no TotalSegmentator run is required. Millilitre volumes are not reported for those pixel-space grids.
+
+The **Segmentation** panel shows TotalSegmentator structure chips (after Harmonize on CT/MR) and **user segments** you create or import.
+
+#### Labelling lesions and disease areas
+
+For dense disease ROIs (lesions, opacities, masses, and similar region labels—on CT/MR or planar XR/US/MG), use **pixel masks** in Annotate (**New Segment** + Brush / Erase, or **Import…** of NIfTI/NRRD labelmaps). That store (`0_TS_SEG/annotations/`) is the source of truth for training, area metrics, and reload in research tools.
+
+| Hand-off | Role |
+| --- | --- |
+| **NIfTI ML bundle** (`labels.nii.gz` + `label_map.json`) | Preferred research interchange (Slicer, nnU-Net, local pipelines) |
+| **DICOM-SEG** on [Send](../09-send/#export-segments-as-dicom-seg) | DICOM-native packaging for archives and SEG-aware viewers |
+| **GSPS / graphic presentation states** | Not used here—fine for arrows and text in clinical PACS, but not a dense lesion mask for AI/research |
+
+Do not expect Orthanc Explorer, Horos, or similar casual PACS UIs to overlay SEG on the source image (CT/MR or XR). Open images + SEG together in a SEG-capable tool (for example 3D Slicer, MITK, or OHIF), or keep working from the NIfTI / in-app overlays.
 
 #### Import Segments (research NIfTI / NRRD)
 
@@ -200,7 +221,7 @@ Use **View** / **Annotate** in the Segmentation header to switch. **Esc** cancel
 
 #### Paint workflow
 
-1. Open a CT/MR series that has been Harmonized (structure chips visible).
+1. Open a series with Annotate available (CT/MR after Harmonize, or CR/DX/US/MG with a displayable frame stack).
 2. Click **Annotate**.
 3. Select the paint target: click a chip, or press **1–9** for the first nine chips in the list.
 4. Optional: **New Segment** to create a named user label, or **Import…** for external NIfTI/NRRD (see table above).
@@ -224,7 +245,7 @@ Use **View** / **Annotate** in the Segmentation header to switch. **Esc** cancel
 
 **View** multi-select vs **Annotate** exclusive target: in View you can latch brain + ventricles + a user ROI together for review; in Annotate only the chip you are editing is outlined so paint stays unambiguous.
 
-User segments and TotalSegmentator edits persist with the series cache. Clearing analysis cache can offer to keep or delete ROI annotations. Export can include segments as DICOM-SEG when that option is enabled on project export.
+User segments and TotalSegmentator edits persist with the series cache. Clearing analysis cache can offer to keep or delete ROI annotations. On [Send](../09-send/#export-segments-as-dicom-seg), check **Export segments as DICOM-SEG** to send one Segmentation Storage file per series (BINARY, bit-packed; see [SEG format used](../09-send/#seg-format-used)) as a **sibling SEG series** under the same study—not inside the source image series.
 
 ## Other Dataset actions
 
@@ -267,7 +288,7 @@ Use Dataset to export a spreadsheet that maps PHI identifiers to anonymized IDs 
 | --- | --- |
 | Anonymized IDs | `ANON-PatientID`, `ANON-PatientName`, `ANON-StudyUID`, `ANON-SeriesUID`, `ANON-AccNo` |
 | PHI counterparts | `PHI-PatientName`, `PHI-PatientID`, `PHI-StudyDate`, `PHI-StudyUID`, `PHI-AccNo` |
-| Study / series | `DateOffset`, `Series`, `StudyInstances`, `Modality`, `SeriesDescription`, `Instances` |
+| Study / series | `DateOffset`, `Series`, `StudyInstances`, `StudyDescription`, `StudyHarmonizedDescription`, `Modality`, `SeriesDescription`, `SeriesHarmonizedDescription`, `Instances` |
 | AI status | `SeriesHarmonized`, `FaceBlurred`, `PixelPHIRemoved`, `PixelPHI` |
 
 ## What good looks like
@@ -277,7 +298,7 @@ Use Dataset to export a spreadsheet that maps PHI identifiers to anonymized IDs 
 - Double-clicking a **series** or **study** description (single selection) opens RadLex / LOINC **Set description**; single-click only selects the row; modifier clicks keep multi-select.
 - **S / M / L** changes tile size; first open may build `Projection.pkl` under each series.
 - `davidson_cxr` loads and scrolls in Series View; Ctrl/Cmd+wheel zooms, middle-mouse or Shift+left-drag pans, **F** / **Fit** resets.
-- After Harmonize on CT/MR, **View** multi-latches overlays and **Annotate** paints one selected segment (Brush / Erase, wheel for size).
+- After Harmonize on CT/MR, **View** multi-latches overlays and **Annotate** paints one selected segment (Brush / Erase, wheel for size). On CR/DX/US/MG, **Annotate** is available without Harmonize (pixel-space ROIs).
 - AI columns update after Process tools.
 - **Create Patient Lookup** writes a CSV under `private/phi_export/` that opens with the expected columns.
 

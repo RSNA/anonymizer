@@ -59,4 +59,4 @@ uv run python -m docs_help --language en_US --force --only Welcome
 
 ## Capturas prioritarias (V19)
 
-Bienvenido; Funciones de IA; Ajustes de crear proyecto (+ subdiálogos); Panel de control; Buscar; Vista (Conjunto de datos + edición de descripción de serie/estudio + Proyecciones + Serie + CSV de Búsqueda de Pacientes); Procesar (Quitar PHI de píxeles, Harmonize, Face, lote); Enviar (inicial → selección → enviando → enviado).
+Bienvenido; Funciones de IA; Ajustes de crear proyecto (+ subdiálogos, incluido Editor del script del anonimizador); Panel de control; Buscar; Vista (Conjunto de datos + edición de descripción de serie/estudio + Proyecciones + Serie + CSV de Búsqueda de Pacientes); Procesar (Quitar PHI de píxeles, Harmonize, Face, lote); Enviar (inicial → selección → enviando → enviado).

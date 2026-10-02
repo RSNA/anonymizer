@@ -4420,7 +4420,7 @@ requires-dist = [
     { name = "requests" },
     { name = "requests-oauthlib" },
     { name = "scipy" },
-    { name = "simpleitk", specifier = ">=2.5.5" },
+    { name = "simpleitk", specifier = ">=2.5.6" },
     { name = "sqlalchemy", specifier = ">=2.0.38" },
     { name = "tkhtmlview" },
     { name = "tkinterdnd2", specifier = ">=0.6.3" },
@@ -4839,20 +4839,19 @@ wheels = [
 
 [[package]]
 name = "simpleitk"
-version = "2.5.5"
+version = "2.5.6"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/28/8f/c21ee6dc4dbede4fc385b5d70703d45f749db2738c7b0c175546f43c9f86/simpleitk-2.5.5.tar.gz", hash = "sha256:254f70febed55868801c89f310e650eb1b87148d82b1d4e3628d8f0181a7f529", size = 2112106, upload-time = "2026-05-13T20:28:15.503Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/79/39/b494f7c90a2739369ef04f7f09c67d29a8dd3150fff51b0c2f89111b7f81/simpleitk-2.5.5-cp311-abi3-macosx_10_9_x86_64.whl", hash = "sha256:e831d15f5ea5b0e02ed3a6ac5f2dd34ba0a0eeaa4ebacfb1d970999836b19ee0", size = 42679794, upload-time = "2026-05-13T20:24:49.959Z" },
-    { url = "https://files.pythonhosted.org/packages/6e/34/4b3208b35dea488263a5c9f4a464ef20316f663e9e90d5de61349c31b327/simpleitk-2.5.5-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:ee87416622cec6ed6b96747a0648c82c6e88f10b6553668ce90736f09ab5a994", size = 38646487, upload-time = "2026-05-13T20:25:09.636Z" },
-    { url = "https://files.pythonhosted.org/packages/14/e5/6a77865140278c86a392a85bd2317a1097bd891f54955ebe5db623e4b37c/simpleitk-2.5.5-cp311-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:847f42057d7bf01b5721b107dd3e00d4ee8d514f6f1ff85794ffedacaf4afc53", size = 48082097, upload-time = "2026-05-13T20:25:26.946Z" },
-    { url = "https://files.pythonhosted.org/packages/9f/68/ed67a355a62848ee04bb4f01e89d3be871052c2c3ae6d5fc0fb2f6010979/simpleitk-2.5.5-cp311-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:8ace5e392be00d5bec28c87ef1d73016f8ebe671dafffe9e9d045f20b0968033", size = 52778654, upload-time = "2026-05-13T20:25:41.737Z" },
-    { url = "https://files.pythonhosted.org/packages/42/ab/3a03de43173749171340ad974636105cb02c780f76055551c874c3df7fff/simpleitk-2.5.5-cp311-abi3-win_amd64.whl", hash = "sha256:a5fcfcfe9242d3d509b254b3213ca0f5db2c15903f2fc375d9ac5d38e57d415d", size = 18920455, upload-time = "2026-05-13T20:25:48.765Z" },
-    { url = "https://files.pythonhosted.org/packages/58/e9/e2ea5fc95dbc66dbed925634ed308ea5246d1ec923dfdf74cc82e081acd4/simpleitk-2.5.5-cp314-cp314t-macosx_10_9_x86_64.whl", hash = "sha256:2e486cac9d0a147c70ebf983e7e5fb49da1d039f1a3393a9b04dcdfdc78899b4", size = 42709520, upload-time = "2026-05-13T20:26:09.907Z" },
-    { url = "https://files.pythonhosted.org/packages/82/ac/8208b28cf1b3a998ab4d730f8f80acfcffd2fc023a5f7e4090c4b4ff4c38/simpleitk-2.5.5-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:a45327a014c730c4bf903de288162a608857df7b9f91ace39e8600c6f8d00465", size = 38662876, upload-time = "2026-05-13T20:26:25.906Z" },
-    { url = "https://files.pythonhosted.org/packages/74/15/83d370f2b37ab224af0a9a5e83511f55046a1f1f51395c552916443cefe7/simpleitk-2.5.5-cp314-cp314t-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:bd0d4552648dfce62f7462116a131ed9240fe072fb9abaa1efa31464b637937c", size = 47935456, upload-time = "2026-05-13T20:26:57.97Z" },
-    { url = "https://files.pythonhosted.org/packages/9d/bd/4f4998f4c5f581282d9cedd0e965e0e8b6fb0f1e3ca9113c9cffcbe22b72/simpleitk-2.5.5-cp314-cp314t-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:29c4e26fe02c4c0d67bbdd89225ad655eed0b8d6346b875aa9b09018773009c2", size = 52629787, upload-time = "2026-05-13T20:27:14.4Z" },
-    { url = "https://files.pythonhosted.org/packages/dd/eb/0df2167bf35f502c90576ef39db58e0728159429bbb0fdccf35acaae63b7/simpleitk-2.5.5-cp314-cp314t-win_amd64.whl", hash = "sha256:dd204e3490014cd475a654817ca9d593e69c9b5f637290478fd0020c0f84406b", size = 19514461, upload-time = "2026-05-13T20:27:21.388Z" },
+    { url = "https://files.pythonhosted.org/packages/c8/30/cb0eec647afea94c1d95bed3c0014a96565404e4225dba2c0c63bbdd6b9a/simpleitk-2.5.6-cp311-abi3-macosx_10_9_x86_64.whl", hash = "sha256:36658792fe2a62814cbfedb3b236ac722ca7e00953241726bc4a3a26cc7ef5a7", size = 42685058, upload-time = "2026-07-30T16:52:12.477Z" },
+    { url = "https://files.pythonhosted.org/packages/68/e8/18d2351ef7b6a17c921f1fbac3a19dc3a27f6ea7749c2f5a5877e38202b9/simpleitk-2.5.6-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:afcda49474748548fa1b7dbb9f557c3b9feafeb0dd3c2e05d771cc935c86646e", size = 38252322, upload-time = "2026-07-30T16:52:16.719Z" },
+    { url = "https://files.pythonhosted.org/packages/ff/c3/9025397ec8638c261ba1fe56ffed06983df707a3bc961da5ef90157e5a25/simpleitk-2.5.6-cp311-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:af7ca101b23233745b813481ea91694ecea95c3e3b6eed8dca37be39a60f6894", size = 48070098, upload-time = "2026-07-30T16:52:21.316Z" },
+    { url = "https://files.pythonhosted.org/packages/f4/ec/301532fb2003e6557e6a12106eb1df572ed6f74c08c05c2e7a8913353383/simpleitk-2.5.6-cp311-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:99242c333ed17138134e9749f3a484518f41baebab0fc0f0fe7c657ab8090c07", size = 52798369, upload-time = "2026-07-30T16:52:25.774Z" },
+    { url = "https://files.pythonhosted.org/packages/16/d0/a746280d0987413e443c26f19fe5c559fb3034160ee0a7307ae2d85e8d59/simpleitk-2.5.6-cp311-abi3-win_amd64.whl", hash = "sha256:0002b298efb31332f99587cf26ed9f42c2c3ec006a0570f492dfc9ea27303d73", size = 18925827, upload-time = "2026-07-30T16:52:29.496Z" },
+    { url = "https://files.pythonhosted.org/packages/d5/1d/3726ab6a73d3d46c416f369f3a37686b44ead5f3013da1a05bd976ba8b2c/simpleitk-2.5.6-cp314-cp314t-macosx_10_9_x86_64.whl", hash = "sha256:a455eb6ae0ab4ed8d50d3a2762b5e3c7e17a8ee331dc40f468ce416ba4c0840d", size = 42716633, upload-time = "2026-07-30T16:52:33.5Z" },
+    { url = "https://files.pythonhosted.org/packages/a4/48/dd215989255c3835a85dbcf4a57a9782de5069e24add46f1883024955acb/simpleitk-2.5.6-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:454d0fd8c9323e8246c8c7b8fd9c142b211080968359684acd0f0c48b7f55d49", size = 38247497, upload-time = "2026-07-30T16:52:37.227Z" },
+    { url = "https://files.pythonhosted.org/packages/23/37/80222d4c16355664abc1d5c0105a2ee061a4f05a35dc619f983943c0766b/simpleitk-2.5.6-cp314-cp314t-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:22b825c609fe5ca114c8acc149a26a94a01bd62e8c9e685f362d5f880e237269", size = 47951032, upload-time = "2026-07-30T16:52:42.151Z" },
+    { url = "https://files.pythonhosted.org/packages/9f/22/8944f38bf222a63b74605aa9f0e2fb1c807155e5d71aee749383428b2e52/simpleitk-2.5.6-cp314-cp314t-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:baf0d5731b8918efce8084e5e28e403aab116e1081b77822123bb55e0841e5e7", size = 52645744, upload-time = "2026-07-30T16:52:50.027Z" },
+    { url = "https://files.pythonhosted.org/packages/21/01/d663e669d8df9d970f3349c29796c7667337daf19c4e69ca99d5ab5518a3/simpleitk-2.5.6-cp314-cp314t-win_amd64.whl", hash = "sha256:5e731a91cd1376e5a4533395cf2b1ae9fb2a8fa1fbf7f396ab49d3223fc464fd", size = 19518293, upload-time = "2026-07-30T16:52:53.405Z" },
 ]
 
 [[package]]

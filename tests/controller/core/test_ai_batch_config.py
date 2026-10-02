@@ -8,9 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from anonymizer.controller.ai.blur_face import FaceBlurMode
-from anonymizer.controller.ai.remove_pixel_phi import PixelPhiRemovalMode
-from anonymizer.controller.ai_batch_config import (
+from anonymizer.controller.ai.batch_config import (
     AiBatchAlgorithm,
     AiBatchConfig,
     AiBatchConfigError,
@@ -19,7 +17,9 @@ from anonymizer.controller.ai_batch_config import (
     resolve_ai_batch_studies,
     validate_ai_batch_config_gates,
 )
-from anonymizer.controller.ai_batch_process import AiBatchProcessOptions, AiBatchSummary
+from anonymizer.controller.ai.batch_process import AiBatchProcessOptions, AiBatchSummary
+from anonymizer.controller.ai.blur_face import FaceBlurMode
+from anonymizer.controller.ai.remove_pixel_phi import PixelPhiRemovalMode
 
 
 def test_round_trip_json_to_options() -> None:
@@ -47,6 +47,7 @@ def test_round_trip_json_to_options() -> None:
         pixel_phi_removal_mode=PixelPhiRemovalMode.INPAINT,
         use_modality_whitelist=False,
         include_brain_structures=True,
+        prefer_description_mappings=True,
     )
 
 
@@ -93,8 +94,8 @@ def test_apply_segmentation_modes() -> None:
     )
 
     with (
-        patch("anonymizer.controller.ai_batch_config.set_ct_segmentation_mode") as set_ct,
-        patch("anonymizer.controller.ai_batch_config.set_mr_segmentation_mode") as set_mr,
+        patch("anonymizer.controller.ai.batch_config.set_ct_segmentation_mode") as set_ct,
+        patch("anonymizer.controller.ai.batch_config.set_mr_segmentation_mode") as set_mr,
     ):
         config.apply_segmentation_modes()
 
@@ -106,7 +107,7 @@ def test_validate_gates_fail_fast() -> None:
     config = AiBatchConfig(algorithms=(AiBatchAlgorithm.HARMONIZE,))
 
     with (
-        patch("anonymizer.controller.ai_batch_config.harmonize_allowed", return_value=False),
+        patch("anonymizer.controller.ai.batch_config.harmonize_allowed", return_value=False),
         pytest.raises(AiBatchConfigError, match="harmonize"),
     ):
         validate_ai_batch_config_gates(config)
@@ -117,7 +118,7 @@ def test_resolve_studies_all_from_phi_index() -> None:
     anon_model = MagicMock()
     record = MagicMock(anon_patient_id="pt1", anon_study_uid="study1")
 
-    with patch("anonymizer.controller.ai_batch_config.build_phi_index", return_value=[record]):
+    with patch("anonymizer.controller.ai.batch_config.build_phi_index", return_value=[record]):
         studies = resolve_ai_batch_studies(
             config,
             images_dir=Path("/images"),
@@ -174,9 +175,9 @@ def test_run_headless_ai_batch_invokes_controller(tmp_path: Path) -> None:
 
     with (
         patch("anonymizer.anonymizer.create_headless_controller", return_value=controller),
-        patch("anonymizer.controller.ai_batch_config.validate_ai_batch_config_gates"),
+        patch("anonymizer.controller.ai.batch_config.validate_ai_batch_config_gates"),
         patch(
-            "anonymizer.controller.ai_batch_config.resolve_ai_batch_studies",
+            "anonymizer.controller.ai.batch_config.resolve_ai_batch_studies",
             return_value=[("pt1", "study1")],
         ),
     ):

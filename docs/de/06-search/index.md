@@ -103,7 +103,7 @@ Dieses Fenster hat drei Bereiche:
 ![Studien abfragen, abrufen und importieren — Kriterien, Ergebnisse und Importsteuerungen](shots/macos/QueryRetrieve_Ready.png)
 
 !!! tip "IT um Hilfe bitten"
-    Der Query Server muss diesem Computer C-ECHO, C-FIND und C-MOVE erlauben und Ihren **Lokalen Server** (Adresse, Port, AE Title) als C-MOVE-Ziel kennen. Siehe [Projekt anlegen → Wenn Sie mit der IT sprechen](../05-create-project/#when-you-talk-to-it).
+    Der Query Server muss diesem Computer C-ECHO und C-FIND erlauben. Für klassischen DICOM-Import muss er auch **C-GET** und/oder **C-MOVE** erlauben. Wenn C-MOVE verwendet wird, muss das Archiv Ihren **Lokalen Server** (Adresse, Port, AE Title) als C-MOVE-Ziel kennen. Mit aktiviertem **DICOMweb** nutzt der Import WADO-RS über HTTP (kein C-MOVE-Ziel). Siehe [Projekt anlegen → Wenn Sie mit der IT sprechen](../05-create-project/#when-you-talk-to-it).
 
 ### 2. Nach Studien suchen
 
@@ -143,7 +143,13 @@ Weitere Steuerelemente:
 ### 4. Studien auswählen und importieren
 
 1. Studien auswählen: Einfachklick, Mehrfachauswahl (**⌘** / **Ctrl**+Klick), **Alles auswählen** oder **Auswahl aufheben**.
-2. **Verschiebe-Ebene** wählen: **STUDIE**, **SERIE** oder **INSTANZ** (DICOM-C-MOVE-Ebene). STUDIE bevorzugen, wenn das Archiv es unterstützt; SERIE oder INSTANZ versuchen, wenn Übertragungen stocken.
+2. **Verschiebe-Ebene** wählen: **STUDIE**, **SERIE** oder **INSTANZ**. Das steuert, wie die App Bilder für **jeden** Abrufweg anfordert — nicht nur klassisches C-MOVE:
+
+    - **DIMSE C-MOVE** — QueryRetrieveLevel bei jedem C-MOVE (das Archiv sendet Dateien an Ihren Lokalen Server).
+    - **DIMSE C-GET** — dieselben Ebenen, wenn das Archiv Study-Root-Get akzeptiert (Instanzen kommen auf derselben Assoziation zurück; kein C-MOVE-Ziel).
+    - **DICOMweb WADO-RS** — dieselben Ebenen steuern, ob der Download studieweit, pro Serie oder pro Instanz über HTTP erfolgt.
+
+    **STUDIE** bevorzugen, wenn das Archiv es unterstützt; **SERIE** oder **INSTANZ** versuchen, wenn Übertragungen stocken. Die Steuerung bleibt bei DICOMweb und C-GET sichtbar, weil die Ebene weiterhin gilt.
 3. **Importieren und anonymisieren** klicken. Die App baut eine Studienhierarchie für die gewählte Verschiebe-Ebene und öffnet dann den Fortschrittsdialog **Studien importieren**.
 4. Der Fortschritt verfolgt zuerst den Metadatenabruf, dann empfangene Bilder gegenüber der Hierarchie. Eine Studie ist fertig, wenn alle erwarteten Dateien ankommen **oder** eine [Netzwerk-Zeitüberschreitung](../05-create-project/#network-timeouts) für diese Übertragung abläuft.
 5. Wenn der Dialog **Import abgeschlossen** zeigt, **Schließen** klicken.
@@ -163,8 +169,8 @@ Sie können dieselben Studien nach Anpassen von Timeout oder Verschiebe-Ebene er
 Viele VNAs verschieben Bilder asynchron und verhalten sich nicht wie ein Lehrbuch-PACS. Wenn Importe unvollständig sind:
 
 - **Netzwerk-Zeitüberschreitung** in den Projekteinstellungen verlängern.
-- **Verschiebe-Ebene** ändern (Studie → Serie → Instanz) und **Importieren und anonymisieren** erneut versuchen.
-- Mit der IT bestätigen, dass das C-MOVE-Ziel dem AE Title Ihres Lokalen Servers entspricht und dass Modalitäten / Speicherklassen die erwarteten Studien erlauben.
+- **Verschiebe-Ebene** ändern (Studie → Serie → Instanz) und **Importieren und anonymisieren** erneut versuchen (hilft ebenso bei C-MOVE, C-GET und WADO).
+- Für klassisches C-MOVE mit der IT bestätigen, dass das C-MOVE-Ziel dem AE Title Ihres Lokalen Servers entspricht und dass Modalitäten / Speicherklassen die erwarteten Studien erlauben.
 
 ---
 

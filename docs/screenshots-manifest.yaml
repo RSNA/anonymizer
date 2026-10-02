@@ -78,7 +78,8 @@ workflows:
           - AWS Cognito
           - Network Timeouts
           - Modalities / Storage Classes / Transfer Syntaxes
-          - Patient Lookup Table / Logging Levels
+          - Script File / Edit Anonymizer Script
+          - Logging Levels
         caption: "New Project Settings — identity, storage, and network before create."
       - id: LocalServer
         file: LocalServer.png
@@ -136,13 +137,25 @@ workflows:
         deps: [project]
         ux_elements: [Transfer syntax list]
         caption: "Transfer Syntaxes accepted for receive/import."
+      - id: AnonymizerScriptEditor
+        file: AnonymizerScriptEditor.png
+        window: AnonymizerScriptDialog
+        severity: soft
+        deps: [project]
+        ux_elements:
+          - Active / Removed / All view
+          - Search and Operand filter
+          - Tag / Name / Operand list
+          - Operand help panel / Load Patient Lookup Table
+          - Accept / Revert / Cancel
+        caption: "Anonymizer Script Editor — Active rules, operand help, lookup from side panel."
       - id: LookupTable
         file: LookupTable.png
         window: LookupTableDialog
         severity: required
         deps: [project, fixture:ctp_lookup]
         ux_elements: [Properties path, Preview summary, Script changes, Accept]
-        caption: "Patient Lookup Table preview from CTP properties."
+        caption: "Patient Lookup Table from Edit Anonymizer Script — CTP properties preview."
       - id: LoggingLevels
         file: LoggingLevels.png
         window: LoggingLevelsDialog

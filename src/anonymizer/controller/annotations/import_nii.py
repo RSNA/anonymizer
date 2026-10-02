@@ -297,21 +297,35 @@ def resolve_label_names(
 
 
 class AnnotationGeometryUnsupported(ValueError):
-    """Series cannot host annotation volumes (e.g. planar CR/DX without IOP/IPP)."""
+    """Series cannot host annotation volumes (unsupported modality or unloadable frames)."""
 
 
 def ensure_series_annotation_geometry(
     series_dir: Path,
     cache_dir: Path,
+    *,
+    reference_frames: np.ndarray | None = None,
 ) -> AnnotateSession:
     """Load or create an annotate session with volume + mask geometry for ``series_dir``.
 
-    Requires the same stackable patient geometry as TSeg (``ImageOrientationPatient`` +
-    ``ImagePositionPatient``). Planar CXR/CR without those tags must not invent a SITK
-    volume — Annotate stays unavailable instead.
+    Prefers the same stackable patient geometry as TSeg (``ImageOrientationPatient`` +
+    ``ImagePositionPatient``). For planar CR/DX/US/MG without those tags, builds a
+    pixel-space grid aligned to Series View frames (does not loosen TSeg stackable rules).
+
+    When ``reference_frames`` is provided (Series View stack), an existing cache whose
+    label grid does not match the displayed ``(Z,Y,X)`` size is rebuilt so brush
+    coordinates stay aligned with on-screen pixels.
     """
     cache_dir = Path(cache_dir)
     session = load_annotate_session(cache_dir)
+    if session is not None and not _session_matches_reference_frames(session, reference_frames):
+        logger.warning(
+            "Annotation grid %s does not match Series View frames %s; rebuilding under %s",
+            session.labels.shape,
+            None if reference_frames is None else np.asarray(reference_frames).shape,
+            cache_dir,
+        )
+        session = None
     if session is not None:
         return session
 
@@ -319,24 +333,77 @@ def ensure_series_annotation_geometry(
         build_sitk_volume_from_series_frames,
         is_stackable_image_header,
     )
+    from anonymizer.controller.annotations.planar_geometry import (
+        build_planar_sitk_volume,
+        write_planar_annotation_geometry,
+    )
+    from anonymizer.controller.annotations.store import labels_path
     from anonymizer.controller.series_io import load_series_frames
+    from anonymizer.utils.modalities import is_planar_harmonize_modality
 
     series_dir = Path(series_dir)
     loaded = load_series_frames(series_dir)
-    if not is_stackable_image_header(loaded.metadata):
-        raise AnnotationGeometryUnsupported(
-            f"Series lacks stackable patient geometry for annotation volumes: {series_dir}"
-        )
-    volume = build_sitk_volume_from_series_frames(loaded.metadata, loaded.frames, loaded.slice_paths)
+    frames = np.asarray(reference_frames) if reference_frames is not None else loaded.frames
+    metadata = loaded.metadata
+    slice_paths = loaded.slice_paths
     cache_dir.mkdir(parents=True, exist_ok=True)
-    sitk.WriteImage(volume, str(cache_dir / "volume.nii.gz"), True)
-    (cache_dir / MASK_GEOMETRY_FILENAME).write_text(
-        json.dumps(mask_geometry_from_image(volume)) + "\n", encoding="utf-8"
-    )
+
+    use_planar = is_planar_harmonize_modality(getattr(metadata, "Modality", None))
+    wrote = False
+    if is_stackable_image_header(metadata) and frames.ndim == 3 and (
+        reference_frames is None or frames.shape == loaded.frames.shape
+    ):
+        try:
+            volume = build_sitk_volume_from_series_frames(metadata, frames, slice_paths)
+            sitk.WriteImage(volume, str(cache_dir / "volume.nii.gz"), True)
+            (cache_dir / MASK_GEOMETRY_FILENAME).write_text(
+                json.dumps(mask_geometry_from_image(volume)) + "\n", encoding="utf-8"
+            )
+            wrote = True
+        except ValueError:
+            if not use_planar:
+                raise
+    if not wrote:
+        if not use_planar:
+            raise AnnotationGeometryUnsupported(
+                f"Series lacks stackable patient geometry for annotation volumes: {series_dir}"
+            )
+        write_planar_annotation_geometry(cache_dir, build_planar_sitk_volume(metadata, frames))
+
+    # Drop stale label volumes that belonged to a previous grid size.
+    stale = labels_path(cache_dir)
+    if stale.is_file():
+        try:
+            stale_shape = sitk.GetArrayFromImage(sitk.ReadImage(str(stale))).shape
+            expected = (int(frames.shape[0]), int(frames.shape[1]), int(frames.shape[2]))
+            if stale_shape != expected:
+                stale.unlink(missing_ok=True)
+        except Exception:  # noqa: BLE001
+            stale.unlink(missing_ok=True)
+
     session = load_annotate_session(cache_dir)
     if session is None:
         raise RuntimeError(f"Failed to create annotation geometry under {cache_dir}")
+    check_frames = reference_frames if reference_frames is not None else frames
+    if not _session_matches_reference_frames(session, check_frames):
+        raise RuntimeError(
+            f"Annotation geometry shape {session.labels.shape} still mismatches "
+            f"Series View frames after rebuild: {np.asarray(check_frames).shape}"
+        )
     return session
+
+
+def _session_matches_reference_frames(
+    session: AnnotateSession,
+    reference_frames: np.ndarray | None,
+) -> bool:
+    if reference_frames is None:
+        return True
+    frames = np.asarray(reference_frames)
+    if frames.ndim < 3:
+        return False
+    z, y, x = int(frames.shape[0]), int(frames.shape[1]), int(frames.shape[2])
+    return session.labels.shape == (z, y, x)
 
 
 def _geometry_matches(a: sitk.Image, b: sitk.Image, *, atol: float = 1e-4) -> bool:

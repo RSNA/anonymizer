@@ -19,8 +19,8 @@ from anonymizer.controller.ai.harmonize.loinc_study import (
     StudyDescriptionOffer,
     aggregate_study_from_series_descriptions,
     build_study_description_ranking,
-    loinc_study_description_csv_path,
     load_ct_loinc_study_descriptions,
+    loinc_study_description_csv_path,
     parse_playbook_series_description,
     preferred_anatomy_from_fractions,
     rank_loinc_study_descriptions,
@@ -57,6 +57,30 @@ def test_parse_playbook_series_description():
 
     mpr = parse_playbook_series_description("Brain Sag WO MPR")
     assert mpr["series_type_modifier"] == "MPR"
+
+    bone = parse_playbook_series_description("Brain Ax WO Thin Bone")
+    assert bone["kernel"] == "Bone"
+    assert bone["slice_thickness"] == "Thin"
+
+    laterality = parse_playbook_series_description("L Hip Ax WO Thin Bone")
+    assert laterality["laterality"] == "L"
+    assert laterality["body_parts"] == ["Hip"]
+    assert laterality["kernel"] == "Bone"
+
+    luminal = parse_playbook_series_description("AbdPel Ax WO PO")
+    assert luminal["luminal"] == "PO"
+    assert luminal["body_parts"] == ["AbdPel"]
+
+    prone = parse_playbook_series_description("Ch Ax WO Thin Lung Prone")
+    assert prone["kernel"] == "Lung"
+    assert prone["view"] == "Prone"
+
+    sub1 = parse_playbook_series_description("Brain Ax WO Sub1 Bone")
+    assert sub1["slice_thickness"] == "Sub1"
+    assert sub1["kernel"] == "Bone"
+
+    legacy_recon = parse_playbook_series_description("Brain Ax WO Recon")
+    assert legacy_recon["slice_thickness"] == "Sub1"
 
 
 def test_aggregate_chest_abdomen_with_contrast():

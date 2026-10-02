@@ -1,6 +1,6 @@
-import pytest
-
 from pathlib import Path
+
+import pytest
 
 from anonymizer.utils.translate import (
     _current_translations,
@@ -21,7 +21,7 @@ def test_set_language_code_valid_code():
 
 def test_locales_dir_is_package_absolute_and_independent_of_cwd(tmp_path, monkeypatch):
     """UI catalogs must resolve from the package tree, not process CWD."""
-    from anonymizer.utils.translate import locales_dir, set_language_code, _
+    from anonymizer.utils.translate import _, locales_dir, set_language_code
 
     monkeypatch.chdir(tmp_path)
     assert locales_dir().is_absolute()

@@ -17,6 +17,8 @@ def _study_with_series() -> PHI_IndexRecord:
         phi_accession="ACC1",
         anon_study_uid="anon-study-1",
         phi_study_uid="phi-study-1",
+        study_description="CT CHEST",
+        harmonized_description="CT Chest",
         num_series=2,
         num_instances=15,
         harmonize=False,
@@ -63,15 +65,19 @@ def test_iter_lookup_csv_rows_one_per_series() -> None:
     assert by_name_0["PHI-PatientName"] == "Doe^Jane"
     assert by_name_0["Series"] == 2
     assert by_name_0["StudyInstances"] == 15
+    assert by_name_0["StudyDescription"] == "CT CHEST"
+    assert by_name_0["StudyHarmonizedDescription"] == "CT Chest"
     assert "StudyHarmonized" not in by_name_0
-    assert "HarmonizedDescription" not in by_name_0
 
     assert by_name_0["ANON-SeriesUID"] == "ser-1"
     assert by_name_0["SeriesDescription"] == "SCOUT"
+    assert by_name_0["SeriesHarmonizedDescription"] == ""
     assert by_name_0["SeriesHarmonized"] == "No"
     assert by_name_0["Instances"] == 2
 
     assert by_name_1["ANON-SeriesUID"] == "ser-2"
+    assert by_name_1["SeriesDescription"] == "Ax"
+    assert by_name_1["SeriesHarmonizedDescription"] == "CT Chest Ax PortVen"
     assert by_name_1["SeriesHarmonized"] == "Yes"
     assert by_name_1["Instances"] == 13
     assert by_name_1["FaceBlurred"] == "Gaussian"

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from typing import Any
 
-from anonymizer.controller.analytics import (
+from anonymizer.controller.analytics.dataset import (
     ORGAN_VOLUME_BIN_WIDTH_PCT_MAX,
     ORGAN_VOLUME_BIN_WIDTH_PCT_MIN,
 )

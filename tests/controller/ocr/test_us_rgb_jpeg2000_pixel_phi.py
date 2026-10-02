@@ -7,9 +7,9 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 from cv2 import dilate
+from openjpeg.utils import decode
 from pydicom import dcmread
 from pydicom.uid import JPEG2000Lossless
-from openjpeg.utils import decode
 
 from anonymizer.controller.ai.remove_pixel_phi import (
     PixelPhiRemovalMode,

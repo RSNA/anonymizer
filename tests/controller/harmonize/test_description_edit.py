@@ -285,17 +285,220 @@ def test_study_description_edit_offer_skips_non_loinc_current() -> None:
 
 
 def test_series_description_edit_choices_raw_mr_not_in_options() -> None:
+    from anonymizer.controller.ai.harmonize.description_components import (
+        format_series_playbook_fields,
+        series_playbook_component_options,
+    )
+
+    # Raw PHI must not appear as a composed choice; anatomy hint seeds Brain/Head.
     choices = series_description_edit_choices(
         modality="MR",
         current_description="T1Pre",
         anatomy_hint="MRI HEAD WITHOUT CON",
-        full_catalog=True,
+        full_catalog=False,
     )
     assert "T1Pre" not in choices
     assert any(c.startswith("Brain") or c.startswith("Head") for c in choices)
 
+    opts = series_playbook_component_options(
+        modality="MR",
+        current_description="T1Pre",
+        anatomy_hint="MRI HEAD WITHOUT CON",
+        full_vocab=False,
+    )
+    assert "T1Pre" not in opts.get("body_part", [])
+    assert any(c in {"Brain", "Head"} for c in opts.get("body_part", []))
+    composed = format_series_playbook_fields(
+        {
+            "body_part": opts["body_part"][0],
+            "plane": "Ax",
+            "contrast": "WO",
+            "slice_thickness": "",
+            "series_type": "",
+            "series_type_modifier": "",
+        },
+        modality="MR",
+    )
+    assert composed.startswith("Brain") or composed.startswith("Head")
 
-def test_phi_index_study_description_prefers_harmonized() -> None:
+
+def test_series_playbook_component_options_closest_vs_full_vocab() -> None:
+    from anonymizer.controller.ai.harmonize.description_components import (
+        format_playbook_series_description,
+        playbook_selection_from_field_map,
+        series_playbook_component_options,
+    )
+    from anonymizer.controller.ai.harmonize.playbook import (
+        ANATOMIC_PLANE_PLAYBOOK_CODES,
+        BODY_PART_PLAYBOOK_CODES,
+        IV_CONTRAST_PLAYBOOK_CODES,
+    )
+
+    closest = series_playbook_component_options(
+        modality="CT",
+        current_description="Ch Ax WO",
+        full_vocab=False,
+    )
+    assert closest["body_part"][0] == "Ch"
+    assert "Ax" in closest["plane"]
+    assert "Sag" in closest["plane"]
+    assert "WO" in closest["contrast"]
+    # Closest is a small per-field list — not a cartesian product.
+    assert len(closest["body_part"]) < 20
+    assert len(closest["plane"]) <= 5
+
+    full = series_playbook_component_options(
+        modality="CT",
+        current_description="Ch Ax WO",
+        full_vocab=True,
+    )
+    assert full["body_part"][0] == "Ch"
+    assert set(full["body_part"]) >= BODY_PART_PLAYBOOK_CODES
+    assert set(c for c in full["plane"] if c) == set(ANATOMIC_PLANE_PLAYBOOK_CODES)
+    # Typical planes first (not alphabetical).
+    assert full["plane"][:3] == ["Ax", "Cor", "Sag"]
+    assert full["plane"][3:6] == ["Ax_Obl", "Cor_Obl", "Sag_Obl"]
+    assert set(c for c in full["contrast"] if c) == set(IV_CONTRAST_PLAYBOOK_CODES)
+    # Full vocab is per-field, never body × plane × contrast composed rows.
+    assert len(full["body_part"]) == len(BODY_PART_PLAYBOOK_CODES)
+    assert len(full["plane"]) == len(ANATOMIC_PLANE_PLAYBOOK_CODES)
+    assert len(full["contrast"]) == len(IV_CONTRAST_PLAYBOOK_CODES)
+
+    from anonymizer.controller.ai.harmonize.description_components import (
+        TSEG_COMPONENT_FIELDS,
+        series_playbook_component_field_order,
+    )
+
+    assert series_playbook_component_field_order("CT") == TSEG_COMPONENT_FIELDS
+    assert series_playbook_component_field_order("MR") == TSEG_COMPONENT_FIELDS
+    assert TSEG_COMPONENT_FIELDS == (
+        "laterality",
+        "body_part",
+        "plane",
+        "contrast",
+        "luminal",
+        "series_type",
+        "series_type_modifier",
+        "slice_thickness",
+        "kernel",
+        "view",
+    )
+
+    selection = playbook_selection_from_field_map(
+        {
+            "body_part": "Brain",
+            "plane": "Ax",
+            "contrast": "WO",
+            "slice_thickness": "Thin",
+            "series_type": "",
+            "series_type_modifier": "",
+        }
+    )
+    assert format_playbook_series_description(selection) == "Brain Ax WO Thin"
+
+    named = playbook_selection_from_field_map(
+        {
+            "laterality": "L",
+            "body_part": "Hip",
+            "plane": "Ax",
+            "contrast": "WO",
+            "luminal": "",
+            "slice_thickness": "Thin",
+            "series_type": "",
+            "series_type_modifier": "",
+            "kernel": "Bone",
+            "view": "",
+        }
+    )
+    assert format_playbook_series_description(named) == "L Hip Ax WO Thin Bone"
+
+    chest = playbook_selection_from_field_map(
+        {
+            "body_part": "Ch",
+            "plane": "Ax",
+            "contrast": "WO",
+            "luminal": "",
+            "slice_thickness": "Thin",
+            "kernel": "Lung",
+            "view": "Prone",
+        }
+    )
+    assert format_playbook_series_description(chest) == "Ch Ax WO Thin Lung Prone"
+
+    abd = playbook_selection_from_field_map(
+        {
+            "body_part": "AbdPel",
+            "plane": "Ax",
+            "contrast": "WO",
+            "luminal": "PO",
+        }
+    )
+    assert format_playbook_series_description(abd) == "AbdPel Ax WO PO"
+
+    assert "Sub1" in full["slice_thickness"]
+    assert "Bone" in full["kernel"]
+    assert "PO" in full["luminal"]
+    assert "L" in full["laterality"]
+    assert "Prone" in full["view"]
+
+
+def test_series_playbook_component_initial_blank_is_empty() -> None:
+    """Blank series must not invent Ch Ax WO (or any) defaults for Compose."""
+    from anonymizer.controller.ai.harmonize.description_components import (
+        series_playbook_component_initial,
+    )
+
+    blank = series_playbook_component_initial(
+        modality="CT",
+        current_description="",
+        anatomy_hint="ORBITA",
+    )
+    assert blank
+    assert all(v == "" for v in blank.values())
+
+    seeded = series_playbook_component_initial(
+        modality="MR",
+        current_description="Brain Ax WO",
+    )
+    assert seeded["body_part"] in {"Brain", "Head"}
+    assert seeded["plane"] == "Ax"
+    assert seeded["contrast"] == "WO"
+
+
+def test_series_playbook_component_options_planar_xr() -> None:
+    from anonymizer.controller.ai.harmonize.description_components import (
+        format_series_playbook_fields,
+        series_playbook_component_options,
+    )
+
+    closest = series_playbook_component_options(
+        modality="CR",
+        current_description="Chest AP",
+        full_vocab=False,
+    )
+    assert closest["anatomy"] == ["Chest"]
+    assert "AP" in closest["view"]
+    assert "PA" in closest["view"]
+
+    full = series_playbook_component_options(
+        modality="CR",
+        current_description="Chest AP",
+        full_vocab=True,
+    )
+    assert "Wrist" in full["anatomy"]
+    assert "Chest" in full["anatomy"]
+    # Per-field, not anatomy × view dump.
+    assert len(full["anatomy"]) < 40
+    assert len(full["view"]) < 15
+
+    text = format_series_playbook_fields(
+        {"anatomy": "Wrist", "view": "AP", "laterality": "", "mode": ""},
+        modality="CR",
+    )
+    assert text == "Wrist AP"
+
+
+def test_phi_index_keeps_original_and_harmonized_study_descriptions() -> None:
     study = SimpleNamespace(
         series=[],
         anon_date_delta=0,
@@ -323,5 +526,6 @@ def test_phi_index_study_description_prefers_harmonized() -> None:
         record = _phi_index_record_from_orm(phi, study)
 
     assert isinstance(record, PHI_IndexRecord)
-    assert record.study_description == "XR Chest 2 Views"
+    assert record.study_description == "Original"
+    assert record.harmonized_description == "XR Chest 2 Views"
     assert record.tree_label() == "XR Chest 2 Views"

@@ -19,8 +19,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from anonymizer.mcp.session import SESSION
 from anonymizer.mcp import api as mcp_tools
+from anonymizer.mcp.session import SESSION
 from anonymizer.model.project import ProjectModel
 from anonymizer.utils.translate import set_language_code
 
@@ -53,7 +53,7 @@ def _fake_easyocr(_reader, pixels, *, modality=None):
 
 def test_mvp_create_import_strip_export_davidson(mvp_store: Path):
     """Full researcher MVP path with mocked OCR (fast, default CI)."""
-    created = mcp_tools.create_project(project_name="MVP_E2E", overwrite=True)
+    created = mcp_tools.create_project(project_name="MVP-E2E", overwrite=True)
     assert created["ok"] is True
 
     imported = mcp_tools.import_file(str(DAVIDSON_DCM))
@@ -97,7 +97,7 @@ def test_mvp_create_import_strip_export_davidson(mvp_store: Path):
 @pytest.mark.ocr_integration
 def test_mvp_remove_pixel_phi_real_ocr_davidson(mvp_store: Path):
     """Opt-in: real EasyOCR on Davidson CXR (may download OCR weights)."""
-    assert mcp_tools.create_project(project_name="MVP_OCR", overwrite=True)["ok"]
+    assert mcp_tools.create_project(project_name="MVP-OCR", overwrite=True)["ok"]
     assert mcp_tools.import_file(str(DAVIDSON_DCM))["succeeded"] == 1
     result = mcp_tools.remove_pixel_phi(series="all")
     assert result["ok"] is True

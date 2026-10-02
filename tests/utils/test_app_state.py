@@ -22,7 +22,7 @@ from anonymizer.utils import app_state
 
 @pytest.fixture
 def isolated_app_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    from anonymizer.controller.analytics_prefs import clear_analytics_preferences_cache
+    from anonymizer.controller.analytics.prefs import clear_analytics_preferences_cache
 
     state_path = tmp_path / ".anonymizer_state.json"
     monkeypatch.setattr(app_state, "get_app_state_path", lambda: state_path)
@@ -54,7 +54,7 @@ def test_persist_and_apply_ai_features_preferences(isolated_app_state: Path) -> 
 
 
 def test_persist_and_apply_analytics_preferences(isolated_app_state: Path) -> None:
-    from anonymizer.controller.analytics_prefs import (
+    from anonymizer.controller.analytics.prefs import (
         apply_analytics_preferences,
         clear_analytics_preferences_cache,
         get_organ_bin_width_pct,

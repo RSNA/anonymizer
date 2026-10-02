@@ -9,13 +9,27 @@ import xml.etree.ElementTree as ET
 from collections.abc import Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from difflib import SequenceMatcher
 from functools import wraps
 from pathlib import Path
 from pprint import pformat
 from typing import ClassVar, NamedTuple
 
 from pydicom import Dataset
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, create_engine, delete, func, select, text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    create_engine,
+    delete,
+    func,
+    select,
+    text,
+)
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -119,6 +133,60 @@ class LookupPatient(Base):
     patient_id: Mapped[str] = mapped_column(String, primary_key=True)
     anon_patient_id: Mapped[str] = mapped_column(String)
     date_offset: Mapped[int | None] = mapped_column(Integer, default=None)
+    basedate: Mapped[str | None] = mapped_column(String, default=None)
+
+
+class DescriptionMapping(Base):
+    """Per-project original→harmonized description memory (manual Set description corrections)."""
+
+    __tablename__ = "description_mappings"
+    __table_args__ = (
+        UniqueConstraint(
+            "kind",
+            "modality",
+            "cohort",  # SQLite column name; ORM attr is ``origin``
+            "original_normalized",
+            name="uq_description_mapping_key",
+        ),
+    )
+
+    mapping_pk: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, init=False)
+    kind: Mapped[str] = mapped_column(String)  # "series" | "study"
+    original_normalized: Mapped[str] = mapped_column(String)
+    original_display: Mapped[str] = mapped_column(String)
+    harmonized_description: Mapped[str] = mapped_column(String)
+    modality: Mapped[str] = mapped_column(String, default="")
+    # Who produced the mapping: ``Manual`` or an AI feature / algorithm name.
+    # DB column remains ``cohort`` for existing project databases.
+    origin: Mapped[str] = mapped_column("cohort", String, default="")
+    loinc: Mapped[str | None] = mapped_column(String, default=None)
+    updated_at: Mapped[str] = mapped_column(String, default="")
+
+
+# Stored in DescriptionMapping.origin — Manual Set description, or AI process label.
+DESCRIPTION_MAPPING_ORIGIN_MANUAL = "Manual"
+# Legacy cohort keys rewritten to Manual on open (pre-Origin column semantics).
+_LEGACY_DESCRIPTION_MAPPING_COHORTS = frozenset({"", "tseg", "XR", "US", "MG"})
+
+
+@dataclass(frozen=True)
+class DescriptionMappingRecord:
+    """Read-model row for description mapping list/lookup APIs."""
+
+    mapping_pk: int
+    kind: str
+    modality: str
+    origin: str
+    original_display: str
+    harmonized_description: str
+    loinc: str | None
+    updated_at: str
+    similarity: float = 1.0
+
+
+def normalize_description_for_mapping(text: str) -> str:
+    """Normalize description text for mapping keys and similarity compare."""
+    return " ".join((text or "").casefold().split())
 
 
 @dataclass(frozen=True)
@@ -271,7 +339,7 @@ class AnonymizerModel:
     """
 
     # Model Version Control
-    MODEL_VERSION = 3
+    MODEL_VERSION = 4
     MAX_PATIENTS = 1000000  # 1 million patients
     # The primary key value for the PHI record representing studies with no/empty PatientID
     DEFAULT_PHI_PATIENT_ID_PK_VALUE: ClassVar[str] = ""  # "" is used as the primary key for the default PHI record
@@ -353,7 +421,32 @@ class AnonymizerModel:
                         continue
                     conn.execute(text(add_column_sql))
                     logger.info("SQLite schema sync: added %s.%s", table.name, column.name)
+            self._migrate_description_mapping_origin_labels(conn)
             conn.commit()
+
+    def _migrate_description_mapping_origin_labels(self, conn) -> None:
+        """Rewrite legacy Harmonize cohort keys (tseg/XR/…) to Origin=Manual."""
+        exists = conn.execute(
+            text("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'description_mappings'")
+        ).fetchone()
+        if exists is None:
+            return
+        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(description_mappings)"))}
+        if "cohort" not in cols:
+            return
+        placeholders = ", ".join(f"'{v}'" for v in sorted(_LEGACY_DESCRIPTION_MAPPING_COHORTS))
+        result = conn.execute(
+            text(
+                f"UPDATE description_mappings SET cohort = :manual "
+                f"WHERE cohort IN ({placeholders}) OR cohort IS NULL"
+            ),
+            {"manual": DESCRIPTION_MAPPING_ORIGIN_MANUAL},
+        )
+        if result.rowcount:
+            logger.info(
+                "SQLite schema sync: migrated %d description_mappings cohort→Origin Manual",
+                result.rowcount,
+            )
 
     def _get_class_name(self) -> str:
         return self.__class__.__name__
@@ -1117,7 +1210,6 @@ class AnonymizerModel:
             logger.error("Series with anon_series_uid '%s' not found.", anon_series_uid)
             return False
         series.harmonized_description = description
-        series.description = description
         return True
 
     @use_session()
@@ -1187,7 +1279,7 @@ class AnonymizerModel:
 
     @use_session()
     def set_study_harmonized_description(self, anon_study_uid: str, description: str) -> bool:
-        """Persist Study.harmonized_description (and description) for an anonymized study UID."""
+        """Persist Study.harmonized_description only; sticky Study.description is unchanged."""
         description = description.strip()
         if not description:
             return False
@@ -1197,7 +1289,6 @@ class AnonymizerModel:
             logger.error("Study with anon_study_uid '%s' not found.", anon_study_uid)
             return False
         study.harmonized_description = description
-        study.description = description
         return True
 
     @use_session(is_read_only_operation=True)
@@ -1208,6 +1299,249 @@ class AnonymizerModel:
             return None
         text = str(value).strip()
         return text or None
+
+    @use_session(is_read_only_operation=True)
+    def get_study_description(self, anon_study_uid: str) -> str | None:
+        """Sticky intake Study.description (original), not the harmonized value."""
+        stmt = select(Study.description).where(Study.anon_study_uid == anon_study_uid)
+        value = self.session.execute(stmt).scalar_one_or_none()
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    @use_session(is_read_only_operation=True)
+    def get_series_description(self, anon_series_uid: str) -> str | None:
+        """Sticky intake Series.description (original), not the harmonized value."""
+        stmt = select(Series.description).where(Series.anon_series_uid == anon_series_uid)
+        value = self.session.execute(stmt).scalar_one_or_none()
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    @use_session(is_read_only_operation=True)
+    def get_series_harmonized_description(self, anon_series_uid: str) -> str | None:
+        stmt = select(Series.harmonized_description).where(Series.anon_series_uid == anon_series_uid)
+        value = self.session.execute(stmt).scalar_one_or_none()
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    @use_session()
+    def upsert_description_mapping(
+        self,
+        *,
+        kind: str,
+        original: str,
+        harmonized: str,
+        modality: str = "",
+        origin: str = DESCRIPTION_MAPPING_ORIGIN_MANUAL,
+        loinc: str | None = None,
+    ) -> bool:
+        """
+        Upsert an original→harmonized mapping from a manual Set description apply.
+
+        Study mappings require a non-empty LOINC (study = LOINC only).
+        Series mappings are RadLex Playbook strings (no LOINC).
+        ``origin`` is ``Manual`` or the AI feature / algorithm that decided the value.
+        Does nothing when original is empty, or when original and harmonized
+        are the same after normalization (no identity mappings).
+        """
+        kind_key = (kind or "").strip().lower()
+        if kind_key not in {"series", "study"}:
+            return False
+        original_display = (original or "").strip()
+        harmonized_text = (harmonized or "").strip()
+        if not original_display or not harmonized_text:
+            return False
+        original_normalized = normalize_description_for_mapping(original_display)
+        if not original_normalized:
+            return False
+        if original_normalized == normalize_description_for_mapping(harmonized_text):
+            logger.debug(
+                "Skipping identity description mapping (%s): %r",
+                kind_key,
+                original_display,
+            )
+            return False
+        loinc_code = (loinc or "").strip() or None
+        if kind_key == "study" and not loinc_code:
+            logger.error("Study description mapping requires a LOINC code")
+            return False
+        modality_key = (modality or "").strip().upper()
+        origin_key = (origin or DESCRIPTION_MAPPING_ORIGIN_MANUAL).strip() or DESCRIPTION_MAPPING_ORIGIN_MANUAL
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        stmt = select(DescriptionMapping).where(
+            DescriptionMapping.kind == kind_key,
+            DescriptionMapping.modality == modality_key,
+            DescriptionMapping.origin == origin_key,
+            DescriptionMapping.original_normalized == original_normalized,
+        )
+        row = self.session.execute(stmt).scalar_one_or_none()
+        if row is None:
+            self.session.add(
+                DescriptionMapping(
+                    kind=kind_key,
+                    modality=modality_key,
+                    origin=origin_key,
+                    original_normalized=original_normalized,
+                    original_display=original_display,
+                    harmonized_description=harmonized_text,
+                    loinc=loinc_code if kind_key == "study" else None,
+                    updated_at=now,
+                )
+            )
+        else:
+            row.original_display = original_display
+            row.harmonized_description = harmonized_text
+            row.loinc = loinc_code if kind_key == "study" else None
+            row.updated_at = now
+        return True
+
+    def remember_series_description_mapping(
+        self,
+        *,
+        series_uid: str,
+        modality: str,
+        harmonized: str,
+        origin: str = DESCRIPTION_MAPPING_ORIGIN_MANUAL,
+    ) -> bool:
+        """Persist original→harmonized series mapping using sticky intake SeriesDescription."""
+        original = (self.get_series_description(series_uid) or "").strip()
+        if not original:
+            return False
+        return self.upsert_description_mapping(
+            kind="series",
+            original=original,
+            harmonized=harmonized,
+            modality=modality,
+            origin=origin,
+        )
+
+    def remember_study_description_mapping(
+        self,
+        *,
+        anon_study_uid: str,
+        modality: str,
+        harmonized: str,
+        loinc: str,
+        origin: str = DESCRIPTION_MAPPING_ORIGIN_MANUAL,
+    ) -> bool:
+        """Persist original→harmonized study mapping using sticky intake StudyDescription."""
+        original = (self.get_study_description(anon_study_uid) or "").strip()
+        if not original:
+            return False
+        return self.upsert_description_mapping(
+            kind="study",
+            original=original,
+            harmonized=harmonized,
+            modality=modality,
+            loinc=loinc,
+            origin=origin,
+        )
+
+    @use_session(is_read_only_operation=True)
+    def list_description_mappings(self, *, kind: str | None = None) -> list[DescriptionMappingRecord]:
+        stmt = select(DescriptionMapping).order_by(DescriptionMapping.updated_at.desc(), DescriptionMapping.mapping_pk.desc())
+        if kind:
+            kind_key = kind.strip().lower()
+            stmt = stmt.where(DescriptionMapping.kind == kind_key)
+        rows = self.session.execute(stmt).scalars().all()
+        return [
+            DescriptionMappingRecord(
+                mapping_pk=row.mapping_pk,
+                kind=row.kind,
+                modality=row.modality,
+                origin=row.origin,
+                original_display=row.original_display,
+                harmonized_description=row.harmonized_description,
+                loinc=row.loinc,
+                updated_at=row.updated_at,
+            )
+            for row in rows
+        ]
+
+    @use_session()
+    def delete_description_mapping(self, mapping_pk: int) -> bool:
+        stmt = select(DescriptionMapping).where(DescriptionMapping.mapping_pk == mapping_pk)
+        row = self.session.execute(stmt).scalar_one_or_none()
+        if row is None:
+            return False
+        self.session.delete(row)
+        return True
+
+    @use_session(is_read_only_operation=True)
+    def lookup_description_mapping(
+        self,
+        *,
+        kind: str,
+        original: str,
+        modality: str = "",
+        threshold: float = 0.90,
+    ) -> DescriptionMappingRecord | None:
+        """
+        Find the best original→harmonized mapping by SequenceMatcher ratio.
+
+        Prefer exact normalized match; otherwise return the highest ratio ≥ threshold
+        within the same kind/modality. On a tie, prefer Origin=Manual.
+        """
+        kind_key = (kind or "").strip().lower()
+        if kind_key not in {"series", "study"}:
+            return None
+        needle = normalize_description_for_mapping(original)
+        if not needle:
+            return None
+        modality_key = (modality or "").strip().upper()
+        stmt = select(DescriptionMapping).where(
+            DescriptionMapping.kind == kind_key,
+            DescriptionMapping.modality == modality_key,
+        )
+        rows = self.session.execute(stmt).scalars().all()
+        if not rows:
+            return None
+
+        def _record(row: DescriptionMapping, similarity: float) -> DescriptionMappingRecord:
+            return DescriptionMappingRecord(
+                mapping_pk=row.mapping_pk,
+                kind=row.kind,
+                modality=row.modality,
+                origin=row.origin,
+                original_display=row.original_display,
+                harmonized_description=row.harmonized_description,
+                loinc=row.loinc,
+                updated_at=row.updated_at,
+                similarity=similarity,
+            )
+
+        def _prefer_manual(a: DescriptionMapping, b: DescriptionMapping) -> DescriptionMapping:
+            if a.origin == DESCRIPTION_MAPPING_ORIGIN_MANUAL and b.origin != DESCRIPTION_MAPPING_ORIGIN_MANUAL:
+                return a
+            if b.origin == DESCRIPTION_MAPPING_ORIGIN_MANUAL and a.origin != DESCRIPTION_MAPPING_ORIGIN_MANUAL:
+                return b
+            return a
+
+        exact: DescriptionMapping | None = None
+        best: DescriptionMapping | None = None
+        best_ratio = 0.0
+        for row in rows:
+            if row.original_normalized == needle:
+                exact = row if exact is None else _prefer_manual(exact, row)
+                continue
+            ratio = SequenceMatcher(None, needle, row.original_normalized).ratio()
+            if ratio < threshold:
+                continue
+            if best is None or ratio > best_ratio:
+                best = row
+                best_ratio = ratio
+            elif ratio == best_ratio and best is not None:
+                best = _prefer_manual(best, row)
+        if exact is not None:
+            return _record(exact, 1.0)
+        if best is None:
+            return None
+        return _record(best, best_ratio)
 
     @use_session(is_read_only_operation=True)
     def get_ct_series_harmonized_descriptions(self, anon_study_uid: str) -> list[str]:

@@ -30,7 +30,7 @@ flowchart TB
         C_ANON["controller.anonymizer<br/>AnonymizerController"]
         C_WORK["controller.work_state<br/>WorkState"]
         C_RUN["controller.runner<br/>Runner / RemovePixelPhiRunner / …"]
-        C_BATCH["controller.ai_batch_process / ai_batch_config"]
+        C_BATCH["controller.ai.batch_process / batch_config"]
         C_IO["controller.series_io / …"]
         C_HARM["controller.ai.harmonize"]
         C_OCR["controller.ai.remove_pixel_phi"]

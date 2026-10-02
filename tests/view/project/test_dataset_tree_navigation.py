@@ -218,8 +218,13 @@ def test_select_studies_for_patients_selects_matching_study_iids() -> None:
 def test_description_column_is_forty_chars_not_button_row() -> None:
     assert DatasetView._MIN_DESCRIPTION_CHARS == 40
     # Button strip is window minsize only, not the #0 column floor.
-    assert DatasetView._BUTTON_ROW_WIDTH_PX == 7 * 120 + 140 + 9 * 10
+    # 7×120 + Description Mappings 160 + Select Similar 140 + 10 pads.
+    assert DatasetView._BUTTON_ROW_WIDTH_PX == 7 * 120 + 160 + 140 + 10 * 10
+    assert DatasetView._BUTTON_COUNT == 9
+    assert DatasetView._MAPPINGS_BUTTON_WIDTH == 160
 
+
+def test_double_click_series_description_opens_edit() -> None:
     view = _navigation_view()
     iid = series_tree_iid("series-1")
     view._tree.identify_row.return_value = iid

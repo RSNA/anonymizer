@@ -10,11 +10,10 @@ import matplotlib
 
 matplotlib.use("Agg")
 
-from dataclasses import replace
 
 import pytest
 
-from anonymizer.controller.analytics import (
+from anonymizer.controller.analytics.dataset import (
     AnalyticsFilterIndex,
     OrganVolumeDistribution,
     OrganVolumeSample,
@@ -161,7 +160,7 @@ def test_organ_title_carries_n_xlabel_is_ml_only() -> None:
         assert "n=4" in ax.get_title()
         assert "ml" in ax.get_xlabel().casefold()
         assert "patient" in ax.get_ylabel().casefold()
-        from anonymizer.controller.analytics import organ_volume_range_ml
+        from anonymizer.controller.analytics.dataset import organ_volume_range_ml
 
         lo, hi, width = organ_volume_range_ml("brain")
         plot_lo = max(0.0, lo - width)
@@ -196,7 +195,7 @@ def test_organ_title_carries_n_xlabel_is_ml_only() -> None:
 
 
 def test_organ_bar_bin_hits_group_patient_ids() -> None:
-    from anonymizer.controller.analytics import (
+    from anonymizer.controller.analytics.dataset import (
         OrganVolumeSample,
         organ_volume_axis_span,
         organ_volume_bin_edges,
@@ -373,7 +372,7 @@ def test_figures_export_png_for_layout_review(tmp_path: Path) -> None:
 
 
 def test_extreme_hover_tip_single_and_multi_patient() -> None:
-    from anonymizer.controller.analytics import organ_volume_axis_span, organ_volume_bin_edges
+    from anonymizer.controller.analytics.dataset import organ_volume_axis_span, organ_volume_bin_edges
     from anonymizer.view.shell.analytics_charts import _organ_bar_bin_hits
 
     one = (OrganVolumeSample("p0", 380.0),)
@@ -407,7 +406,7 @@ def test_extreme_hover_tip_single_and_multi_patient() -> None:
 def test_extreme_sentinel_same_bin_width_no_hatch() -> None:
     from matplotlib.patches import Rectangle
 
-    from anonymizer.controller.analytics import organ_volume_range_ml
+    from anonymizer.controller.analytics.dataset import organ_volume_range_ml
 
     theme = load_chart_theme()
     organ = OrganVolumeDistribution(
@@ -435,12 +434,12 @@ def test_extreme_sentinel_same_bin_width_no_hatch() -> None:
 
 
 def test_bin_width_pct_widens_bins_vs_json_default() -> None:
-    from anonymizer.controller.analytics import (
+    from anonymizer.controller.analytics.dataset import (
         effective_bin_width_ml,
         organ_volume_bin_edges,
         organ_volume_range_ml,
     )
-    from anonymizer.controller.analytics_prefs import clear_analytics_preferences_cache
+    from anonymizer.controller.analytics.prefs import clear_analytics_preferences_cache
 
     clear_analytics_preferences_cache()
     _lo, _hi, json_w = organ_volume_range_ml("temporal_lobe")

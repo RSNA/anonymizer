@@ -15,7 +15,18 @@ from typing import Any
 def _slim_project(proj: Any) -> Any:
     if not isinstance(proj, dict):
         return proj
-    keep = ("project_name", "modalities", "site_id", "totals", "imported_modalities")
+    keep = (
+        "project_name",
+        "modalities",
+        "site_id",
+        "uid_root",
+        "language_code",
+        "totals",
+        "imported_modalities",
+        "network_timeouts",
+        "local_scp",
+        "transfer_syntaxes",
+    )
     return {k: proj[k] for k in keep if k in proj}
 
 

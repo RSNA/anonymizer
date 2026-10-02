@@ -394,7 +394,7 @@ class Anonymizer(ctk.CTk):
 
     def load_config(self):
         from anonymizer.controller.ai.tseg.config import apply_ai_features_preferences
-        from anonymizer.controller.analytics_prefs import apply_analytics_preferences
+        from anonymizer.controller.analytics.prefs import apply_analytics_preferences
         from anonymizer.utils.app_state import ai_features_from_state, analytics_from_state
 
         logger.info(f"Load Config (App State): {self.get_app_state_path()}")
@@ -428,7 +428,7 @@ class Anonymizer(ctk.CTk):
 
     def save_config(self):
         from anonymizer.controller.ai.tseg.config import merge_ai_features_into_state
-        from anonymizer.controller.analytics_prefs import merge_analytics_into_state
+        from anonymizer.controller.analytics.prefs import merge_analytics_into_state
 
         logger.info(f"Save Config (App State): {self.get_app_state_path()}")
         try:
@@ -762,6 +762,14 @@ class Anonymizer(ctk.CTk):
             )
         return None
 
+    def _close_registered_app_windows(self) -> None:
+        """Dismiss nested AppToplevels (settings + sub-dialogs) so wait_window returns."""
+        from anonymizer.view.common.app_window import dismiss_app_window
+
+        # Newest first: Query Server before Project Settings, etc.
+        for window in reversed(list(self._live_app_windows())):
+            dismiss_app_window(window, parent=self)
+
     def quit_app(self, event=None) -> None:
         """Gracefully stop workers and exit (File/Exit, Cmd-Q, signals)."""
         if self._shutting_down:
@@ -773,6 +781,8 @@ class Anonymizer(ctk.CTk):
             logger.info("%s, cannot quit application", title)
             messagebox.showerror(title=title, message=message, parent=self)
             return
+        # Close modal settings / other app windows before shutting down workers.
+        self._close_registered_app_windows()
         self._shutting_down = True
         try:
             if self.controller:
@@ -1514,11 +1524,13 @@ class Anonymizer(ctk.CTk):
 def run_GUI(logs_dir):
     from anonymizer.view.common.ctk_safe import (
         install_safe_scaling_tracker,
+        install_safe_scrollable_frame_widget_resolve,
         install_safe_tk_font_destructor,
         install_safe_tk_variable_destructor,
     )
 
     install_safe_scaling_tracker()
+    install_safe_scrollable_frame_widget_resolve()
     install_safe_tk_font_destructor()
     install_safe_tk_variable_destructor()
     try:
@@ -1651,13 +1663,13 @@ def create_headless_controller(project_model_path: Path) -> ProjectController | 
 
 def run_HEADLESS_AI_BATCH(project_model_path: Path, ai_batch_path: Path) -> int:
     """Run one-shot AI batch for studies in a project, then exit."""
-    from anonymizer.controller.ai_batch_config import (
+    from anonymizer.controller.ai.batch_config import (
         AiBatchConfig,
         AiBatchConfigError,
         resolve_ai_batch_studies,
         validate_ai_batch_config_gates,
     )
-    from anonymizer.controller.ai_batch_process import format_ai_batch_completion_summary
+    from anonymizer.controller.ai.batch_process import format_ai_batch_completion_summary
 
     controller = create_headless_controller(project_model_path)
     if controller is None:
@@ -1857,7 +1869,7 @@ def main(
     log_runtime_status()
 
     from anonymizer.controller.ai.tseg.config import apply_ai_features_preferences
-    from anonymizer.controller.analytics_prefs import apply_analytics_preferences
+    from anonymizer.controller.analytics.prefs import apply_analytics_preferences
 
     apply_ai_features_preferences()
     apply_analytics_preferences()

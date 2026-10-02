@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from anonymizer.controller.ai.remove_pixel_phi import _ocr_use_gpu
 from anonymizer.controller.runner import RemovePixelPhiRunner
 

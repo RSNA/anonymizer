@@ -46,6 +46,29 @@ MODALITIES_DESC = (
     'Allowed ingest modalities. Examples: ["defaults","US"], "defaults and ultrasound", '
     '"CT, MR, US". Omit for project defaults (CR, DX, CT, MR).'
 )
+SITE_ID_DESC = (
+    "Optional site id override at create only (3–20 chars; digits, hyphen, period). "
+    "Omit to auto-generate. Locked after create."
+)
+UID_ROOT_DESC = (
+    "Optional DICOM UID root at create only (3–30 chars; digits and period). "
+    "Omit for the factory default. Locked after create. Do not invent arbitrary roots."
+)
+LANGUAGE_DESC = (
+    "UI/project language code: en_US | de | es | fr. Default en_US."
+)
+SCP_DESC = (
+    "Optional local DICOM SCP (ip, port, aet). Port 104–65535; AET 3–16 chars. "
+    "Mirrored to local SCU. Omit for factory defaults (0.0.0.0:1045 / ANONYMIZER)."
+)
+TIMEOUTS_DESC = (
+    "Optional network timeouts in seconds: tcp_connection 0–15, acse 0–120, "
+    "dimse 0–120, network 0–600. Omit for defaults (5, 30, 30, 60)."
+)
+TRANSFER_SYNTAXES_DESC = (
+    "Optional list of transfer-syntax UIDs from the project default set. "
+    "Omit to keep factory defaults."
+)
 
 
 def _require_user_absolute_path(value: str) -> str:
@@ -67,27 +90,72 @@ class EmptyArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class LocalDicomNodeArgs(BaseModel):
+    """Local SCP (and mirrored SCU) address fields."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ip: str | None = Field(
+        default=None,
+        description="IPv4 address (7–15 chars, digits and dots). Omit to keep current/default.",
+    )
+    port: int | None = Field(
+        default=None,
+        description="DICOM port 104–65535. Omit to keep current/default.",
+    )
+    aet: str | None = Field(
+        default=None,
+        description="AE title 3–16 chars. Omit to keep current/default.",
+    )
+
+
+class NetworkTimeoutsArgs(BaseModel):
+    """Network timeouts in seconds (GUI ranges)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tcp_connection: float | None = Field(
+        default=None, description="TCP connect timeout 0–15 s. Omit to keep current/default."
+    )
+    acse: float | None = Field(
+        default=None, description="ACSE timeout 0–120 s. Omit to keep current/default."
+    )
+    dimse: float | None = Field(
+        default=None, description="DIMSE timeout 0–120 s. Omit to keep current/default."
+    )
+    network: float | None = Field(
+        default=None, description="Idle network timeout 0–600 s. Omit to keep current/default."
+    )
+
+
 class CreateProjectArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     project_name: str = Field(
         description=(
-            "Project display name exactly as the user stated (required). "
-            "Do not invent or rename."
+            "Project display name exactly as the user stated (required; 3–20 chars; "
+            "letters, digits, space, hyphen, period). Do not invent or rename."
         ),
     )
     storage_dir: str | None = Field(
         default=None,
         description=(
             "Optional absolute directory for the project store, only if the user provided one. "
-            "Omit to use the default under ~/Documents/RSNA Anonymizer/<project_name>."
+            "Omit to use the default under ~/Documents/RSNA Anonymizer/<project_name>. "
+            "Locked after create."
         ),
     )
     overwrite: bool = Field(
         default=False,
         description="Replace an existing project at the same location (only if the user asked).",
     )
+    site_id: str | None = Field(default=None, description=SITE_ID_DESC)
+    uid_root: str | None = Field(default=None, description=UID_ROOT_DESC)
+    language_code: str | None = Field(default=None, description=LANGUAGE_DESC)
     modalities: list[str] | str | None = Field(default=None, description=MODALITIES_DESC)
+    transfer_syntaxes: list[str] | None = Field(default=None, description=TRANSFER_SYNTAXES_DESC)
+    scp: LocalDicomNodeArgs | None = Field(default=None, description=SCP_DESC)
+    network_timeouts: NetworkTimeoutsArgs | None = Field(default=None, description=TIMEOUTS_DESC)
 
     @field_validator("storage_dir")
     @classmethod
@@ -95,6 +163,18 @@ class CreateProjectArgs(BaseModel):
         if v is None or not str(v).strip():
             return None
         return _require_user_absolute_path(str(v))
+
+
+class UpdateProjectSettingsArgs(BaseModel):
+    """Mutable settings for an open project (identity fields are refused)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    language_code: str | None = Field(default=None, description=LANGUAGE_DESC)
+    modalities: list[str] | str | None = Field(default=None, description=MODALITIES_DESC)
+    transfer_syntaxes: list[str] | None = Field(default=None, description=TRANSFER_SYNTAXES_DESC)
+    scp: LocalDicomNodeArgs | None = Field(default=None, description=SCP_DESC)
+    network_timeouts: NetworkTimeoutsArgs | None = Field(default=None, description=TIMEOUTS_DESC)
 
 
 class ProjectOpenArgs(BaseModel):
@@ -159,13 +239,38 @@ class ImportFileArgs(BaseModel):
 class ConfigureRemoteArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    ip: str = Field(description="Remote PACS host IP or hostname exactly as the user stated.")
-    port: int = Field(description="Remote DICOM port (integer from the user).")
-    aet: str = Field(description="Remote AE title exactly as the user stated.")
+    ip: str = Field(
+        description=(
+            "Remote PACS IPv4 exactly as the user stated (7–15 chars). "
+            "Ask DIMSE vs DICOMweb for this role before calling."
+        ),
+    )
+    port: int = Field(
+        description="Remote DICOM (DIMSE) port 104–65535 (integer from the user).",
+    )
+    aet: str = Field(description="Remote AE title 3–16 chars exactly as the user stated.")
     role: RemoteScpRole = Field(
         default=RemoteScpRole.QUERY,
-        description="Remote SCP role: QUERY (find/move) or EXPORT.",
+        description="Remote SCP role: QUERY (find/move) or EXPORT. Configure each role separately.",
     )
+    dicomweb: bool = Field(
+        default=False,
+        description=(
+            "true only when the user chose DICOMweb (or gave HTTP details) for this role. "
+            "false = classic DIMSE (C-FIND/C-MOVE)."
+        ),
+    )
+    http_port: int | None = Field(
+        default=None,
+        description="DICOMweb HTTP port 104–65535 (when dicomweb=true; default 8042).",
+    )
+    http_path: str | None = Field(
+        default=None,
+        description="DICOMweb path prefix 1–255 chars, e.g. /dicom-web (when dicomweb=true).",
+    )
+    use_https: bool = Field(default=False, description="Use HTTPS for DICOMweb when dicomweb=true.")
+    username: str | None = Field(default=None, description="Optional DICOMweb Basic Auth username.")
+    password: str | None = Field(default=None, description="Optional DICOMweb Basic Auth password.")
 
 
 class PacsFindArgs(BaseModel):

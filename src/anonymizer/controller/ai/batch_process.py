@@ -98,6 +98,7 @@ class AiBatchProcessOptions:
     pixel_phi_removal_mode: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT
     use_modality_whitelist: bool = True
     include_brain_structures: bool = False
+    prefer_description_mappings: bool = True
 
 
 def whitelist_for_batch_ocr(*, use_modality_whitelist: bool) -> list[str] | None:
@@ -1063,6 +1064,7 @@ def _apply_harmonize_series(
     anon_model: AnonymizerModel | None,
     progress: Callable[[HarmonizeProgress], None] | None,
     include_brain_structures: bool = False,
+    prefer_description_mappings: bool = True,
 ) -> tuple[AiBatchOutcome, list[str]]:
     from anonymizer.controller.ai.harmonize import format_harmonize_batch_contrast_log_lines
 
@@ -1071,10 +1073,15 @@ def _apply_harmonize_series(
         anon_model=anon_model,
         progress=progress,
         include_brain_structures=include_brain_structures,
+        prefer_description_mappings=prefer_description_mappings,
     )
     log_lines: list[str] = []
     if apply_outcome.status == "ok" and apply_outcome.harmonized is not None:
         log_lines = format_harmonize_batch_contrast_log_lines(apply_outcome.harmonized)
+    elif apply_outcome.status == "ok" and apply_outcome.message:
+        # Mapping short-circuit has no HarmonizedResult; surface the apply message.
+        if "mapping" in apply_outcome.message.casefold():
+            log_lines = [apply_outcome.message]
     return (
         AiBatchOutcome(
             series_path,
@@ -1687,6 +1694,7 @@ def ai_batch_process(
                         anon_model=anon_model,
                         progress=harmonize_progress,
                         include_brain_structures=options.include_brain_structures,
+                        prefer_description_mappings=options.prefer_description_mappings,
                     )
                     for line in harmonize_log_lines:
                         log_workflow(format_batch_workflow_log_line(format_batch_step_subline(line)))

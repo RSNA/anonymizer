@@ -122,16 +122,21 @@ class DatasetView(AppToplevel):
         _project_model (ProjectModel): The project model.
     """
 
-    # Tree #0 (study/series description): ~40 chars; overflow via tooltip.
+    # Tree #0 (harmonized) and Original Description: same default width; both stretch
+    # so they share leftover view width. User can still drag-resize columns.
     _MIN_DESCRIPTION_CHARS = 40
-    # Button row layout (must match `_create_widgets`): 7×120 + 1×140 + pads.
-    # Used for window minsize only — not the description column.
+    # Button row layout (must match `_create_widgets`):
+    # 7×120 + Description Mappings 160 + Select Similar 140 + pads around 9 buttons.
     _BUTTON_WIDTH = 120
+    _MAPPINGS_BUTTON_WIDTH = 160
     _SELECT_SIMILAR_WIDTH = 140
     _BUTTON_PAD = 10
-    _BUTTON_COUNT = 8
+    _BUTTON_COUNT = 9
     _BUTTON_ROW_WIDTH_PX = (
-        7 * _BUTTON_WIDTH + _SELECT_SIMILAR_WIDTH + (_BUTTON_COUNT + 1) * _BUTTON_PAD
+        7 * _BUTTON_WIDTH
+        + _MAPPINGS_BUTTON_WIDTH
+        + _SELECT_SIMILAR_WIDTH
+        + (_BUTTON_COUNT + 1) * _BUTTON_PAD
     )
 
     def __init__(
@@ -163,16 +168,24 @@ class DatasetView(AppToplevel):
         self._description_combo_suppress_focus_out_until: float = 0.0
         # True when the latest tree ButtonPress used a multi-select modifier.
         self._tree_press_was_multiselect: bool = False
+        # Column autofit runs once after first populate; user drag sizes then stick.
+        self._columns_layout_done = False
 
+        self.withdraw()
         self.title(_("View Dataset"))
         self.resizable(True, True)
-        self.lift()
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
         self._create_widgets()
-        self._update_tree_from_phi_index()
         self._enable_filesystem_drops()
+        # Autofit columns while hidden so the first paint is already correct.
+        self.update_idletasks()
+        if not self._columns_layout_done:
+            self._layout_columns_at_startup()
+        self.deiconify()
+        self.lift()
+        self.focus()
 
     def _enable_filesystem_drops(self) -> None:
         """Optional OS file/folder drop → same ImportFilesDialog path as File menu."""
@@ -218,33 +231,48 @@ class DatasetView(AppToplevel):
         self._tree.bind("<<TreeviewSelect>>", self._on_tree_select)
         MotionTooltipController(self._tree, self._tree_row_tooltip_text, parent=self).bind()
 
-        self._tree.heading("#0", text=_("Study / Series"))
+        self._tree.heading("#0", text=_("Harmonized Description"))
+        desc_px = self._MIN_DESCRIPTION_CHARS * self._char_width_px
+        min_desc_px = 8 * self._char_width_px
+        # No stretch on description cols — stretch redistributes on mouse-up and
+        # squashes earlier columns. Autofit once at startup only.
         self._tree.column(
             "#0",
-            width=self._MIN_DESCRIPTION_CHARS * self._char_width_px,
+            width=desc_px,
+            minwidth=min_desc_px,
             stretch=False,
             anchor="w",
         )
 
         col_names = PHI_IndexRecord.get_tree_display_titles()
         col_fields = PHI_IndexRecord.get_tree_display_fields()
-        # Pixel PHI: fixed to heading width (do not absorb leftover tree width).
         title_sized_fields = {"pixel_phi_removed"}
         for col_idx, title in enumerate(col_names):
             field_name = col_fields[col_idx]
             self._tree.heading(field_name, text=title)
+            if field_name == "original_description":
+                self._tree.column(
+                    field_name,
+                    width=desc_px,
+                    minwidth=min_desc_px,
+                    stretch=False,
+                    anchor="w",
+                )
+                continue
             if field_name in title_sized_fields:
                 width_chars = len(title) + 2
             else:
                 width_chars = max(len(title), 8) + 2
                 if field_name == "modality":
                     width_chars = max(width_chars, 12)
+            # Only the last column stretches so window growth does not fight user sizes.
             self._tree.column(
                 field_name,
                 width=width_chars * self._char_width_px,
-                stretch=False,
+                stretch=(field_name == "pixel_phi_removed"),
                 anchor="center",
             )
+        self._columns_layout_done = False
 
         self._tree.tag_configure("green", background="limegreen", foreground="white")
         self._tree.tag_configure("red", background="red")
@@ -292,13 +320,29 @@ class DatasetView(AppToplevel):
         )
         self._create_phi_button.grid(row=0, column=2, padx=PAD, pady=PAD, sticky="e")
 
+        self._description_mappings_button = ctk.CTkButton(
+            self._button_frame,
+            width=self._MAPPINGS_BUTTON_WIDTH,
+            text=_("Description Mappings"),
+            command=self._description_mappings_button_pressed,
+        )
+        self._description_mappings_button.grid(row=0, column=3, padx=PAD, pady=PAD, sticky="e")
+        bind_hover_tooltip(
+            self._description_mappings_button,
+            _(
+                "View and delete saved description mappings for this project: "
+                "RadLex for series, LOINC for studies."
+            ),
+            parent=self,
+        )
+
         self._refresh_button = ctk.CTkButton(
             self._button_frame,
             width=ButtonWidth,
             text=_("Refresh"),
             command=self._refresh_button_pressed,
         )
-        self._refresh_button.grid(row=0, column=3, padx=PAD, pady=PAD, sticky="e")
+        self._refresh_button.grid(row=0, column=4, padx=PAD, pady=PAD, sticky="e")
 
         self._select_similar_button = ctk.CTkButton(
             self._button_frame,
@@ -306,7 +350,7 @@ class DatasetView(AppToplevel):
             text=_("Select Similar"),
             command=self._select_similar_button_pressed,
         )
-        self._select_similar_button.grid(row=0, column=4, padx=PAD, pady=PAD, sticky="e")
+        self._select_similar_button.grid(row=0, column=5, padx=PAD, pady=PAD, sticky="e")
         bind_hover_tooltip(self._select_similar_button, self._select_similar_tooltip_text, parent=self)
 
         self._select_all_button = ctk.CTkButton(
@@ -315,7 +359,7 @@ class DatasetView(AppToplevel):
             text=_("Select All"),
             command=self._select_all_button_pressed,
         )
-        self._select_all_button.grid(row=0, column=5, padx=PAD, pady=PAD, sticky="e")
+        self._select_all_button.grid(row=0, column=6, padx=PAD, pady=PAD, sticky="e")
 
         self._clear_selection_button = ctk.CTkButton(
             self._button_frame,
@@ -323,7 +367,7 @@ class DatasetView(AppToplevel):
             text=_("Clear Selection"),
             command=self._clear_selection_button_pressed,
         )
-        self._clear_selection_button.grid(row=0, column=6, padx=PAD, pady=PAD, sticky="e")
+        self._clear_selection_button.grid(row=0, column=7, padx=PAD, pady=PAD, sticky="e")
 
         self._delete_button = ctk.CTkButton(
             self._button_frame,
@@ -331,7 +375,7 @@ class DatasetView(AppToplevel):
             text=_("Delete"),
             command=self._delete_button_pressed,
         )
-        self._delete_button.grid(row=0, column=7, padx=PAD, pady=PAD, sticky="e")
+        self._delete_button.grid(row=0, column=8, padx=PAD, pady=PAD, sticky="e")
         self._delete_button.focus_set()
         self._refresh_description_action_buttons()
 
@@ -417,12 +461,12 @@ class DatasetView(AppToplevel):
             if pair is None:
                 return None
             _study, series = pair
-            desc = (series.harmonized_description or series.description or "").strip()
+            desc = (series.description or "").strip()
             candidates = [
                 (
                     uid,
                     s.modality,
-                    (s.harmonized_description or s.description or "").strip(),
+                    (s.description or "").strip(),
                 )
                 for uid, (_st, s) in self._series_by_uid.items()
             ]
@@ -568,27 +612,40 @@ class DatasetView(AppToplevel):
         modality: str,
         expand_loader=None,
         showing_full_catalog: bool = False,
+        compose_spec=None,
+        start_in_compose: bool = False,
+        compose_full_vocab: bool = False,
+        blank_compose: bool = False,
     ) -> None:
         from anonymizer.controller.ai.harmonize import apply_series_descriptions
         from anonymizer.view.ai.set_description_dialog import (
             ExpandCatalogLoader,
+            RadLexComposeSpec,
             show_set_description_dialog,
         )
 
-        if not choices or not series_dirs:
+        if not series_dirs:
+            return
+        if not choices and not (compose_spec is not None and start_in_compose):
             return
         loader: ExpandCatalogLoader | None = expand_loader
+        spec: RadLexComposeSpec | None = compose_spec
+        choice_list = list(choices) if choices else []
         result = show_set_description_dialog(
             self,
             title=title,
             hint=hint,
-            choices=choices,
-            choice_meta={label: None for label in choices},
-            initial=initial if initial in choices else choices[0],
+            choices=choice_list,
+            choice_meta={label: None for label in choice_list},
+            initial=initial if initial in choice_list else (choice_list[0] if choice_list else ""),
             catalog_kind="radlex",
             modality=modality,
             expand_loader=loader,
             showing_full_catalog=showing_full_catalog,
+            compose_spec=spec,
+            start_in_compose=start_in_compose,
+            compose_full_vocab=compose_full_vocab,
+            blank_compose=blank_compose,
         )
         if not result.applied or not result.description:
             return
@@ -833,20 +890,57 @@ class DatasetView(AppToplevel):
                     tags=tuple(series_tags),
                 )
 
-        self._autosize_id_columns()
-        self._autosize_description_column()
+        if not self._columns_layout_done:
+            # Prefer synchronous layout while the window is still withdrawn; fall
+            # back to idle only if the tree has not been mapped yet (width == 0).
+            try:
+                width = int(self._tree.winfo_width() or 0)
+            except Exception:
+                width = 0
+            if width > 1:
+                self._layout_columns_at_startup()
+            else:
+                self.after_idle(self._layout_columns_at_startup)
         self._refresh_description_action_buttons()
 
-    def _autosize_description_column(self) -> None:
-        """Set Study/Series (#0) to a fixed ~40-character width."""
-        desc_px = self._MIN_DESCRIPTION_CHARS * self._char_width_px
-        self._tree.column("#0", width=desc_px, stretch=False, anchor="w")
-        # Window minsize: fit button strip or tree columns, whichever is wider.
+    def _layout_columns_at_startup(self) -> None:
+        """One-shot autofit: equal description widths + ID fit. Never re-run after user drag."""
+        if self._columns_layout_done:
+            return
+        self._columns_layout_done = True
+        self._autosize_id_columns()
+        self.update_idletasks()
+        min_desc_px = 8 * self._char_width_px
+        default_desc = self._MIN_DESCRIPTION_CHARS * self._char_width_px
+        try:
+            avail = int(self._tree.winfo_width() or 0)
+        except Exception:
+            avail = 0
+        fixed = 0
+        for col in self._tree["columns"]:
+            if col == "original_description":
+                continue
+            fixed += int(self._tree.column(col, "width") or 0)
+        # Leave room for scrollbar / padding inside the tree widget.
+        leftover = avail - fixed - 24 if avail > fixed else 0
+        each = max(default_desc, leftover // 2) if leftover > 0 else default_desc
+        self._tree.column("#0", width=each, minwidth=min_desc_px, stretch=False, anchor="w")
+        self._tree.column(
+            "original_description",
+            width=each,
+            minwidth=min_desc_px,
+            stretch=False,
+            anchor="w",
+        )
+        self._update_window_minsize_for_layout()
+
+    def _update_window_minsize_for_layout(self) -> None:
+        """Keep the window wide enough that the button strip does not collapse."""
         try:
             other = 0
-            for col in self._tree["columns"]:
+            for col in ("#0", *self._tree["columns"]):
                 other += int(self._tree.column(col, "width") or 0)
-            tree_w = desc_px + other + 2 * self._BUTTON_PAD + 24
+            tree_w = other + 2 * self._BUTTON_PAD + 24
             min_w = max(self._BUTTON_ROW_WIDTH_PX + 2 * self._BUTTON_PAD, tree_w)
             min_h = max(int(self.minsize()[1] or 0), 320)
             self.minsize(min_w, min_h)
@@ -1284,11 +1378,17 @@ class DatasetView(AppToplevel):
         self._cancel_description_combo_open()
         self._description_combo_open_after_id = self.after(10, open_dropdown)
 
+    def _description_mappings_button_pressed(self) -> None:
+        from anonymizer.view.project.description_mappings import show_description_mappings_dialog
+
+        show_description_mappings_dialog(self, anon_model=self._controller.anonymizer.model)
+
     def _edit_study_description(self, iid: str, anon_study_uid: str) -> None:
         from anonymizer.controller.ai.harmonize import (
             study_description_edit_choices,
             study_description_group_choices,
             study_loinc_prefix_for_edit,
+            study_ready_for_description_edit,
         )
 
         record = self._studies_by_uid.get(anon_study_uid)
@@ -1296,6 +1396,17 @@ class DatasetView(AppToplevel):
             return
 
         anon_model = self._controller.anonymizer.model
+        kind, uids, _info = self._selected_description_targets()
+        group_uids = uids if kind == "study" and anon_study_uid in uids and len(uids) > 1 else [anon_study_uid]
+        not_ready = [uid for uid in group_uids if not study_ready_for_description_edit(anon_model, uid)]
+        if not_ready:
+            messagebox.showinfo(
+                title=_("Study description"),
+                message=_("Harmonize all series in this study before setting the study description."),
+                parent=self,
+            )
+            return
+
         if study_loinc_prefix_for_edit(anon_model, anon_study_uid) is None and not (
             anon_model.get_study_harmonized_description(anon_study_uid) or ""
         ).strip():
@@ -1308,15 +1419,8 @@ class DatasetView(AppToplevel):
                 return
 
         current = (anon_model.get_study_harmonized_description(anon_study_uid) or "").strip()
-        is_harmonized = bool(current)
         if not current:
-            current = (record.study_description or "").strip()
-
-        kind, uids, _info = self._selected_description_targets()
-        group_uids = uids if kind == "study" and anon_study_uid in uids and len(uids) > 1 else [anon_study_uid]
-        # Single unharmonized may open the full catalog; multi always opens closest +
-        # Expand — same dialog state as working single-select after the list settles.
-        open_full_catalog = len(group_uids) == 1 and not is_harmonized
+            current = (anon_model.get_study_description(anon_study_uid) or record.study_description or "").strip()
 
         if len(group_uids) > 1:
             hints = []
@@ -1337,7 +1441,7 @@ class DatasetView(AppToplevel):
                 anon_model,
                 anon_study_uid,
                 hint_description=current,
-                full_catalog=open_full_catalog,
+                full_catalog=False,
             )
         if not pairs:
             return
@@ -1372,9 +1476,6 @@ class DatasetView(AppToplevel):
                 "Applies to all {n} selected {modality} studies · Expand to the full catalog "
                 "if the category is wrong"
             ).format(n=n, modality=modality)
-        elif open_full_catalog:
-            title = _("Set {modality} study description").format(modality=modality)
-            hint = _("Choose a {modality} LOINC study description").format(modality=modality)
         else:
             title = _("Set {modality} study description").format(modality=modality)
             hint = _(
@@ -1382,32 +1483,29 @@ class DatasetView(AppToplevel):
                 "if the category is wrong"
             ).format(modality=modality)
 
-        expand_loader = None
-        if not open_full_catalog:
-
-            def expand_loader() -> tuple[list[str], dict[str, str | None]]:
-                seed_uid = group_uids[0]
-                seed_hint = current
-                if len(group_uids) > 1:
-                    rec0 = self._studies_by_uid.get(seed_uid)
-                    seed_hint = (anon_model.get_study_harmonized_description(seed_uid) or "").strip()
-                    if not seed_hint and rec0 is not None:
-                        seed_hint = (rec0.study_description or "").strip()
-                full_pairs = study_description_edit_choices(
-                    anon_model,
-                    seed_uid,
-                    hint_description=seed_hint,
-                    full_catalog=True,
-                )
-                full_meta: dict[str, str | None] = {}
-                full_labels: list[str] = []
-                for name, code in full_pairs:
-                    label = f"{name}  ({code})" if code else name
-                    if label in full_meta:
-                        continue
-                    full_meta[label] = code
-                    full_labels.append(label)
-                return full_labels, full_meta
+        def expand_loader() -> tuple[list[str], dict[str, str | None]]:
+            seed_uid = group_uids[0]
+            seed_hint = current
+            if len(group_uids) > 1:
+                rec0 = self._studies_by_uid.get(seed_uid)
+                seed_hint = (anon_model.get_study_harmonized_description(seed_uid) or "").strip()
+                if not seed_hint and rec0 is not None:
+                    seed_hint = (rec0.study_description or "").strip()
+            full_pairs = study_description_edit_choices(
+                anon_model,
+                seed_uid,
+                hint_description=seed_hint,
+                full_catalog=True,
+            )
+            full_meta: dict[str, str | None] = {}
+            full_labels: list[str] = []
+            for name, code in full_pairs:
+                label = f"{name}  ({code})" if code else name
+                if label in full_meta:
+                    continue
+                full_meta[label] = code
+                full_labels.append(label)
+            return full_labels, full_meta
 
         self._apply_study_description_dialog(
             anon_study_uids=group_uids,
@@ -1418,16 +1516,20 @@ class DatasetView(AppToplevel):
             hint=hint,
             modality=modality,
             expand_loader=expand_loader,
-            showing_full_catalog=open_full_catalog,
+            showing_full_catalog=False,
         )
 
     def _edit_series_description(self, iid: str, anon_series_uid: str) -> None:
         from anonymizer.controller.ai.harmonize import (
+            format_series_playbook_fields,
             series_description_cohort_key,
             series_description_edit_choices,
             series_description_group_choices,
+            series_playbook_component_field_order,
+            series_playbook_component_initial,
+            series_playbook_component_options,
         )
-        from anonymizer.controller.ai.harmonize.pipeline import _series_description_looks_playbook
+        from anonymizer.view.ai.set_description_dialog import RadLexComposeSpec
 
         pair = self._series_by_uid.get(anon_series_uid)
         if pair is None:
@@ -1435,51 +1537,63 @@ class DatasetView(AppToplevel):
         study, series = pair
         if series_description_cohort_key(series.modality) is None:
             return
-        current = (series.harmonized_description or series.description or "").strip()
-        is_harmonized = bool((series.harmonized_description or "").strip()) or _series_description_looks_playbook(
-            modality=series.modality,
-            description=current,
-        )
+        harmonized = (series.harmonized_description or "").strip()
+        original = (series.description or "").strip()
+        current = harmonized or original
         study_hint = (study.study_description or "").strip()
 
         kind, uids, _info = self._selected_description_targets()
         group_uids = (
             uids if kind == "series" and anon_series_uid in uids and len(uids) > 1 else [anon_series_uid]
         )
-        # Multi always opens closest + Expand (same as working single). Single
-        # unharmonized may still open the full Playbook catalog.
-        open_full_catalog = len(group_uids) == 1 and not is_harmonized
         images_dir = Path(self._controller.model.images_dir())
 
         if len(group_uids) > 1:
             modalities = []
             descriptions = []
             series_dirs: list[Path] = []
+            unharm_flags: list[bool] = []
+            blank_flags: list[bool] = []
             for uid in group_uids:
                 item = self._series_by_uid.get(uid)
                 if item is None:
                     continue
                 st, ser = item
                 modalities.append(ser.modality)
-                desc = (ser.harmonized_description or ser.description or "").strip()
-                descriptions.append(desc)
+                harm = (ser.harmonized_description or "").strip()
+                orig = (ser.description or "").strip()
+                unharm_flags.append(not harm)
+                blank_flags.append(not harm and not orig)
+                descriptions.append(harm or orig)
                 series_dirs.append(series_path_for_record(images_dir, st, ser))
-            choices = series_description_group_choices(
-                modalities=modalities,
-                current_descriptions=descriptions,
-                anatomy_hint=study_hint,
-                full_catalog=False,
+            unharmonized = bool(unharm_flags) and all(unharm_flags)
+            blank_compose = bool(blank_flags) and all(blank_flags)
+            choices = (
+                []
+                if unharmonized
+                else series_description_group_choices(
+                    modalities=modalities,
+                    current_descriptions=descriptions,
+                    anatomy_hint=study_hint,
+                    full_catalog=False,
+                )
             )
         else:
-            choices = series_description_edit_choices(
-                modality=series.modality,
-                current_description=current,
-                full_catalog=open_full_catalog,
-                anatomy_hint=study_hint,
+            unharmonized = not harmonized
+            blank_compose = unharmonized and not original
+            choices = (
+                []
+                if unharmonized
+                else series_description_edit_choices(
+                    modality=series.modality,
+                    current_description=current,
+                    full_catalog=False,
+                    anatomy_hint=study_hint,
+                )
             )
             series_dirs = [series_path_for_record(images_dir, study, series)]
 
-        if not choices:
+        if not choices and not unharmonized:
             return
         if any(not path.is_dir() for path in series_dirs):
             messagebox.showerror(
@@ -1489,36 +1603,82 @@ class DatasetView(AppToplevel):
             )
             return
 
-        initial = current if current in choices else choices[0]
+        initial = current if current in choices else (choices[0] if choices else "")
         n = len(series_dirs)
         modality = str(series.modality or "").strip()
-        if n > 1:
+        if blank_compose:
+            if n > 1:
+                title = _("Set {modality} series description ({n})").format(modality=modality, n=n)
+                hint = _(
+                    "No description yet · pick each {modality} RadLex field for all {n} series"
+                ).format(modality=modality, n=n)
+            else:
+                title = _("Set {modality} series description").format(modality=modality)
+                hint = _("No description yet · pick each {modality} RadLex field").format(
+                    modality=modality
+                )
+        elif unharmonized:
+            if n > 1:
+                title = _("Set {modality} series description ({n})").format(modality=modality, n=n)
+                hint = _(
+                    "Pick each {modality} RadLex field for all {n} series"
+                ).format(modality=modality, n=n)
+            else:
+                title = _("Set {modality} series description").format(modality=modality)
+                hint = _("Pick each {modality} RadLex field").format(modality=modality)
+        elif n > 1:
             title = _("Set {modality} series description ({n})").format(modality=modality, n=n)
             hint = _(
-                "Applies to all {n} selected {modality} series · Expand to the full catalog "
-                "if the category is wrong"
+                "Applies to all {n} selected {modality} series · Compose RadLex "
+                "to pick each field when the closest list is wrong"
             ).format(n=n, modality=modality)
-        elif open_full_catalog:
-            title = _("Set {modality} series description").format(modality=modality)
-            hint = _("Choose a {modality} RadLex Playbook series description").format(modality=modality)
         else:
             title = _("Set {modality} series description").format(modality=modality)
             hint = _(
-                "Closest matches for this series · Expand to the full {modality} RadLex catalog "
-                "if the category is wrong"
-            ).format(modality=modality)
+                "Closest matches for this series · Compose RadLex to pick body part, "
+                "plane, contrast, and other fields"
+            )
 
-        expand_loader = None
-        if not open_full_catalog:
-
-            def expand_loader() -> tuple[list[str], dict[str, str | None]]:
-                full_choices = series_description_edit_choices(
-                    modality=series.modality,
-                    current_description=current,
-                    full_catalog=True,
-                    anatomy_hint=study_hint,
-                )
-                return full_choices, {label: None for label in full_choices}
+        # Unharmonized stepwise seeds empty (no invented Ch Ax WO). Closest toggle uses original.
+        seed_description = "" if unharmonized else current
+        closest_seed = (original or current) if unharmonized else current
+        seed_modality = series.modality
+        anatomy_hint = study_hint or (original if unharmonized else "")
+        field_order = series_playbook_component_field_order(seed_modality)
+        field_labels = {
+            "laterality": _("Laterality"),
+            "body_part": _("Body part"),
+            "plane": _("Plane"),
+            "contrast": _("IV contrast"),
+            "luminal": _("Luminal"),
+            "slice_thickness": _("Thickness"),
+            "series_type": _("Series type"),
+            "series_type_modifier": _("Modifier"),
+            "kernel": _("Kernel"),
+            "view": _("View"),
+            "anatomy": _("Anatomy"),
+            "mode": _("Mode"),
+        }
+        compose_spec = RadLexComposeSpec(
+            field_order=field_order,
+            field_labels={k: field_labels[k] for k in field_order if k in field_labels},
+            initial=series_playbook_component_initial(
+                modality=seed_modality,
+                current_description=closest_seed if closest_seed else seed_description,
+                anatomy_hint=anatomy_hint,
+            ),
+            load_options=lambda full_vocab: series_playbook_component_options(
+                modality=seed_modality,
+                current_description=(
+                    seed_description if full_vocab else (closest_seed or seed_description)
+                ),
+                anatomy_hint=anatomy_hint,
+                full_vocab=full_vocab,
+            ),
+            format_description=lambda fields: format_series_playbook_fields(
+                fields, modality=seed_modality
+            ),
+        )
 
         self._apply_series_description_dialog(
             series_dirs=series_dirs,
@@ -1527,8 +1687,12 @@ class DatasetView(AppToplevel):
             title=title,
             hint=hint,
             modality=modality,
-            expand_loader=expand_loader,
-            showing_full_catalog=open_full_catalog,
+            compose_spec=compose_spec,
+            showing_full_catalog=False,
+            # Unharmonized: same chrome as Compose RadLex…, stepwise all-codes.
+            start_in_compose=unharmonized,
+            compose_full_vocab=unharmonized,
+            blank_compose=blank_compose,
         )
 
     def _on_tree_right_click(self, event) -> None:

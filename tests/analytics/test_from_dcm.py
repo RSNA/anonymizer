@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from pydicom import dcmread
 
-from anonymizer.controller.analytics import build_dataset_analytics
+from anonymizer.controller.analytics.dataset import build_dataset_analytics
 from anonymizer.view.shell.analytics_charts import modality_distinct_count, select_widgets
 from docs_help.project_setup import TEST_DCM_ROOT
 from tests.analytics.conftest import require_fixture

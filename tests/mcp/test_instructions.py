@@ -14,8 +14,6 @@ _BANNED_SCHEMA_FIELDS = frozenset(
     {
         "modality_hint",
         "frame_index",
-        "site_id",
-        "uid_root",
         "image_format",
         "require_pixel_phi_scanned",
         "size",
@@ -39,6 +37,10 @@ def test_instructions_asset_is_positive_api_howto() -> None:
     assert "configure_remote" in text
     assert "pacs_find" in text
     assert "pacs_move" in text
+    assert "project_settings_defaults" in text
+    assert "update_project_settings" in text
+    assert "DIMSE" in text
+    assert "DICOMweb" in text
     assert "patient_index" in text
     assert '"series":"all"' in text.replace(" ", "") or '"series": "all"' in text
     assert "TSV" in text
@@ -153,6 +155,8 @@ def test_create_server_has_no_help_resources_or_prompts() -> None:
         tools = {t.name for t in await server.list_tools()}
         assert "read_user_manual" not in tools
         assert "create_project" in tools
+        assert "project_settings_defaults" in tools
+        assert "update_project_settings" in tools
         assert "configure_remote" in tools
         assert "pacs_find" in tools
         assert "pacs_move" in tools
@@ -182,8 +186,26 @@ def test_tool_input_schema_includes_field_descriptions() -> None:
         props = _schema(create)["properties"]
         assert "Project display name" in props["project_name"]["description"]
         assert "project_name" in _schema(create).get("required", [])
-        assert "site_id" not in props
-        assert "uid_root" not in props
+        assert "site_id" in props
+        assert "uid_root" in props
+        assert "language_code" in props
+        assert "scp" in props
+        assert "network_timeouts" in props
+
+        update = tools["update_project_settings"]
+        uprops = _schema(update)["properties"]
+        assert "site_id" not in uprops
+        assert "uid_root" not in uprops
+        assert "project_name" not in uprops
+        assert "language_code" in uprops
+        assert "scp" in uprops
+
+        defaults = tools["project_settings_defaults"]
+        assert defaults.annotations is not None
+        read_only = getattr(defaults.annotations, "read_only_hint", None)
+        if read_only is None:
+            read_only = getattr(defaults.annotations, "readOnlyHint", None)
+        assert read_only is True
 
         remove = tools["remove_pixel_phi"]
         rprops = _schema(remove)["properties"]
@@ -199,8 +221,16 @@ def test_tool_input_schema_includes_field_descriptions() -> None:
             assert "$ref" not in json.dumps(schema), f"{name} still has $ref"
             for banned in _BANNED_SCHEMA_FIELDS:
                 assert banned not in schema.get("properties", {}), f"{name} has {banned}"
+            # Identity overrides are create-only
+            if name != "create_project":
+                assert "site_id" not in schema.get("properties", {}), name
+                assert "uid_root" not in schema.get("properties", {}), name
             if name in ZERO_ARG_TOOLS:
                 assert schema.get("properties") == {} or not schema.get("properties"), name
+
+        remote_desc = (tools["configure_remote"].description or "").lower()
+        assert "dimse" in remote_desc
+        assert "dicomweb" in remote_desc
 
         pacs = _schema(tools["pacs_find"])["properties"]
         assert "modality" in pacs

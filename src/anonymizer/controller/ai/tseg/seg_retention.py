@@ -604,7 +604,7 @@ def finalize_seg_cache(
     ensure_organ_volumes_ml(cache_dir)
     # Append/replace project analytics ledger row (best-effort; never fail finalize).
     with contextlib.suppress(Exception):
-        from anonymizer.controller.analytics import upsert_series_ledger_from_cache
+        from anonymizer.controller.analytics.dataset import upsert_series_ledger_from_cache
 
         upsert_series_ledger_from_cache(cache_dir)
     # Sub-threshold detections (e.g. thin/unusual volumes) are pruned from seg/ and
