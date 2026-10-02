@@ -33,4 +33,4 @@ Les options classiques du profil « clean pixel data » et « clean recognizable
 Les groupes courbe/overlay sont supprimés. L’acceptation des objets Structured Report est contrôlée par les paramètres de classe de stockage du projet.
 
 !!! note "Pour la revue de conformité"
-    Faites revoir le script d’anonymisation et les outils IA par votre responsable de la confidentialité pour votre établissement. Ce manuel est un guide opérationnel, pas un avis juridique.
+    Faites revoir le [script d’anonymisation](05-create-project/#éditeur-du-script-danonymisation) et les outils IA par votre responsable de la confidentialité pour votre établissement. Ce manuel est un guide opérationnel, pas un avis juridique.

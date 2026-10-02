@@ -2077,6 +2077,9 @@ msgstr "Anonymisierte ID"
 msgid "Date Time"
 msgstr "Datum Uhrzeit"
 
+msgid "Segments"
+msgstr "Segmente"
+
 msgid "Images Sent"
 msgstr "Gesendete Bilder"
 
@@ -2786,3 +2789,117 @@ msgstr "License help file was not found."
 
 msgid "License"
 msgstr "Lizenz"
+
+msgid "Edit Anonymizer Script"
+msgstr "Anonymizer-Skript bearbeiten"
+
+msgid "Active"
+msgstr "Aktiv"
+
+msgid "Removed"
+msgstr "Entfernt"
+
+msgid "All"
+msgstr "Alle"
+
+msgid "Operand"
+msgstr "Operand"
+
+msgid "Add from Removed…"
+msgstr "Aus Entfernten hinzufügen…"
+
+msgid "Add from Dictionary…"
+msgstr "Aus Wörterbuch hinzufügen…"
+
+msgid "showing 0 of 0"
+msgstr "zeige 0 von 0"
+
+msgid "showing {start}–{end} of {total}"
+msgstr "zeige {start}–{end} von {total}"
+
+msgid "Previous"
+msgstr "Zurück"
+
+msgid "Next"
+msgstr "Weiter"
+
+msgid "Page {page} / {pages}"
+msgstr "Seite {page} / {pages}"
+
+msgid "Selected rule"
+msgstr "Ausgewählte Regel"
+
+msgid "Name"
+msgstr "Name"
+
+msgid "Parameter"
+msgstr "Parameter"
+
+msgid "Stored as"
+msgstr "Gespeichert als"
+
+msgid "(keep)"
+msgstr "(behalten)"
+
+msgid "Revert"
+msgstr "Zurücksetzen"
+
+msgid "Reload the script from disk and discard unsaved edits?"
+msgstr "Skript von Datenträger neu laden und ungespeicherte Änderungen verwerfen?"
+
+msgid "Script file not found:"
+msgstr "Skriptdatei nicht gefunden:"
+
+msgid "Anonymizer script was updated successfully."
+msgstr "Anonymizer-Skript wurde erfolgreich aktualisiert."
+
+msgid "Add from Removed"
+msgstr "Aus Entfernten hinzufügen"
+
+msgid "Search removed tags…"
+msgstr "Entfernte Tags suchen…"
+
+msgid "Initial operand"
+msgstr "Anfangoperand"
+
+msgid "Select a removed tag first."
+msgstr "Bitte zuerst ein entferntes Tag auswählen."
+
+msgid "Add"
+msgstr "Hinzufügen"
+
+msgid "Add from Dictionary"
+msgstr "Aus Wörterbuch hinzufügen"
+
+msgid "Search DICOM dictionary (min 2 chars)…"
+msgstr "DICOM-Wörterbuch suchen (min. 2 Zeichen)…"
+
+msgid "Only tags not already in the script can be added."
+msgstr "Nur Tags, die noch nicht im Skript sind, können hinzugefügt werden."
+
+msgid "Select a dictionary tag first."
+msgstr "Bitte zuerst ein Wörterbuch-Tag auswählen."
+
+msgid "in script"
+msgstr "im Skript"
+
+msgid "Keep"
+msgstr "Behalten"
+
+msgid "Empty"
+msgstr "Leeren"
+
+msgid "UID"
+msgstr "UID"
+
+msgid "Hash date"
+msgstr "Datum hashen"
+
+msgid "Lookup patient ID"
+msgstr "Patienten-ID nachschlagen"
+
+msgid "Lookup date offset"
+msgstr "Datumsversatz nachschlagen"
+
+msgid "Round age"
+msgstr "Alter runden"

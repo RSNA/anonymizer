@@ -2085,6 +2085,9 @@ msgstr "ID Anonymisée"
 msgid "Date Time"
 msgstr "Date Heure"
 
+msgid "Segments"
+msgstr "Segments"
+
 msgid "Images Sent"
 msgstr "Images Envoyées"
 
@@ -2792,3 +2795,117 @@ msgstr "License help file was not found."
 
 msgid "License"
 msgstr "Licence"
+
+msgid "Edit Anonymizer Script"
+msgstr "Modifier le script d'anonymisation"
+
+msgid "Active"
+msgstr "Actifs"
+
+msgid "Removed"
+msgstr "Supprimés"
+
+msgid "All"
+msgstr "Tous"
+
+msgid "Operand"
+msgstr "Opérande"
+
+msgid "Add from Removed…"
+msgstr "Ajouter depuis les supprimés…"
+
+msgid "Add from Dictionary…"
+msgstr "Ajouter depuis le dictionnaire…"
+
+msgid "showing 0 of 0"
+msgstr "affichage 0 sur 0"
+
+msgid "showing {start}–{end} of {total}"
+msgstr "affichage {start}–{end} sur {total}"
+
+msgid "Previous"
+msgstr "Précédent"
+
+msgid "Next"
+msgstr "Suivant"
+
+msgid "Page {page} / {pages}"
+msgstr "Page {page} / {pages}"
+
+msgid "Selected rule"
+msgstr "Règle sélectionnée"
+
+msgid "Name"
+msgstr "Nom"
+
+msgid "Parameter"
+msgstr "Paramètre"
+
+msgid "Stored as"
+msgstr "Enregistré comme"
+
+msgid "(keep)"
+msgstr "(conserver)"
+
+msgid "Revert"
+msgstr "Rétablir"
+
+msgid "Reload the script from disk and discard unsaved edits?"
+msgstr "Recharger le script depuis le disque et abandonner les modifications non enregistrées ?"
+
+msgid "Script file not found:"
+msgstr "Fichier de script introuvable :"
+
+msgid "Anonymizer script was updated successfully."
+msgstr "Le script d'anonymisation a été mis à jour avec succès."
+
+msgid "Add from Removed"
+msgstr "Ajouter depuis les supprimés"
+
+msgid "Search removed tags…"
+msgstr "Rechercher des balises supprimées…"
+
+msgid "Initial operand"
+msgstr "Opérande initial"
+
+msgid "Select a removed tag first."
+msgstr "Sélectionnez d'abord une balise supprimée."
+
+msgid "Add"
+msgstr "Ajouter"
+
+msgid "Add from Dictionary"
+msgstr "Ajouter depuis le dictionnaire"
+
+msgid "Search DICOM dictionary (min 2 chars)…"
+msgstr "Rechercher dans le dictionnaire DICOM (min. 2 caractères)…"
+
+msgid "Only tags not already in the script can be added."
+msgstr "Seules les balises absentes du script peuvent être ajoutées."
+
+msgid "Select a dictionary tag first."
+msgstr "Sélectionnez d'abord une balise du dictionnaire."
+
+msgid "in script"
+msgstr "dans le script"
+
+msgid "Keep"
+msgstr "Conserver"
+
+msgid "Empty"
+msgstr "Vider"
+
+msgid "UID"
+msgstr "UID"
+
+msgid "Hash date"
+msgstr "Hacher la date"
+
+msgid "Lookup patient ID"
+msgstr "Rechercher l'ID patient"
+
+msgid "Lookup date offset"
+msgstr "Rechercher le décalage de date"
+
+msgid "Round age"
+msgstr "Arrondir l'âge"

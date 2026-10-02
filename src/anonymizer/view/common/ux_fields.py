@@ -11,23 +11,52 @@ Functions:
 - int_entry() -> ctk.IntVar: Creates an integer entry field with label, initial value, and range.
 """
 
+import contextlib
 import logging
-import string
 import tkinter as tk
 
 import customtkinter as ctk
 
+from anonymizer.model.settings_limits import (
+    AET_MAX_CHARS,
+    AET_MIN_CHARS,
+    IP_MAX_CHARS,
+    IP_MIN_CHARS,
+    IP_PORT_MAX,
+    IP_PORT_MIN,
+)
 from anonymizer.view.common.fonts import default_char_width_px
 
-# Entry Limits:
+
+def _focus_entry_cursor_at_end(entry: ctk.CTkEntry) -> None:
+    """Focus ``entry`` and place the insert cursor after the last character."""
+
+    def _place() -> None:
+        with contextlib.suppress(tk.TclError):
+            entry.focus_set()
+            entry.icursor("end")
+
+    # Defer until the hosting window is mapped (e.g. modal built while withdrawn).
+    def _on_map(_event=None) -> None:
+        with contextlib.suppress(tk.TclError):
+            entry.unbind("<Map>")
+        entry.after_idle(_place)
+
+    with contextlib.suppress(tk.TclError):
+        if bool(entry.winfo_ismapped()):
+            entry.after_idle(_place)
+        else:
+            entry.bind("<Map>", _on_map, add="+")
+
+# Entry Limits (re-export from settings_limits — keystroke behavior unchanged):
 
 # Network Addresses:
-ip_min_chars = 7
-ip_max_chars = 15
-aet_min_chars = 3
-aet_max_chars = 16
-ip_port_min = 104
-ip_port_max = 65535
+ip_min_chars = IP_MIN_CHARS
+ip_max_chars = IP_MAX_CHARS
+aet_min_chars = AET_MIN_CHARS
+aet_max_chars = AET_MAX_CHARS
+ip_port_min = IP_PORT_MIN
+ip_port_max = IP_PORT_MAX
 
 # DICOM Query Fields:
 patient_name_max_chars = 30  # dicomVR PN=64 max
@@ -53,6 +82,49 @@ def validate_entry(final_value: str, allowed_chars: str, max: str | None) -> boo
     if max and max != "None" and len(final_value) > int(max):
         return False
     return all(char in allowed_chars for char in final_value)
+
+
+def validate_int_entry(final_value: str, *, allow_negative: bool, max_chars: int) -> bool:
+    """Keystroke filter for integer fields (optional leading minus when signed)."""
+    if final_value == "":
+        return True
+    if allow_negative and final_value == "-":
+        return True
+    body = final_value[1:] if allow_negative and final_value.startswith("-") else final_value
+    if not body.isdigit():
+        return False
+    return len(final_value) <= max_chars
+
+
+def _validatecommand(
+    view: ctk.CTkFrame | ctk.CTkToplevel,
+    allowed_chars: str,
+    max_chars: int | None,
+) -> tuple:
+    """Tk validatecommand that only substitutes ``%P``.
+
+    Charset / max are closed over in Python — never passed as Tcl words. That
+    avoids breakage when ``allowed_chars`` contains spaces or Tcl metacharacters
+    (e.g. ``string.printable`` used for username/password fields).
+    """
+    max_s: str | None = None if max_chars is None else str(max_chars)
+
+    def _validate(final_value: str) -> bool:
+        return validate_entry(final_value, allowed_chars, max_s)
+
+    return (view.register(_validate), "%P")
+
+
+def _int_validatecommand(
+    view: ctk.CTkFrame | ctk.CTkToplevel,
+    *,
+    allow_negative: bool,
+    max_chars: int,
+) -> tuple:
+    def _validate(final_value: str) -> bool:
+        return validate_int_entry(final_value, allow_negative=allow_negative, max_chars=max_chars)
+
+    return (view.register(_validate), "%P")
 
 
 def int_entry_change(
@@ -164,12 +236,7 @@ def str_entry(
             width=width_px,
             textvariable=str_var,
             validate="key",
-            validatecommand=(
-                view.register(validate_entry),
-                "%P",
-                charset,
-                None if max_chars is None else str(max_chars),
-            ),
+            validatecommand=_validatecommand(view, charset, max_chars),
         )
 
         if password:
@@ -188,8 +255,8 @@ def str_entry(
 
     ctk_entry.grid(row=row, column=col + 1, padx=pad, pady=(pad, 0), sticky="nw")
 
-    if focus_set:
-        ctk_entry.focus_set()
+    if focus_set and enabled:
+        _focus_entry_cursor_at_end(ctk_entry)
     return str_var
 
 
@@ -233,7 +300,11 @@ def int_entry(
     # mirror it into the returned `ctk.IntVar`.
     int_var = ctk.IntVar(view, value=initial_value)
     text_var = ctk.StringVar(view, value=str(initial_value))
-    max_chars = len(str(max))
+    allow_negative = min < 0
+    # ``min``/``max`` shadow builtins — compute char width without calling ``max()``.
+    hi_chars = len(str(max))
+    lo_chars = len(str(min))
+    max_chars = hi_chars if hi_chars >= lo_chars else lo_chars
     # TODO: why is this not accurate?
     digit_width_px = default_char_width_px()
     width = (max_chars + 3) * digit_width_px
@@ -244,18 +315,16 @@ def int_entry(
         width=width,
         textvariable=text_var,
         validate="key",
-        validatecommand=(
-            # view.winfo_toplevel().validate_entry_cmd,  # type: ignore
-            view.register(validate_entry),
-            "%P",
-            string.digits,
-            max_chars,
+        validatecommand=_int_validatecommand(
+            view, allow_negative=allow_negative, max_chars=max_chars
         ),
     )
 
     def entry_callback(event):
         # Keep empty text editable and avoid forcing a value while the user clears.
         if text_var.get() == "":
+            return
+        if text_var.get() == "-":
             return
         int_entry_change(event, int_var, min, max)
         # Normalize the visible text after range clamping on commit.
@@ -264,7 +333,7 @@ def int_entry(
     def _sync_int_from_text(*_args) -> None:
         """Keep `int_var` in sync while typing without rewriting user input."""
         text = text_var.get()
-        if text == "":
+        if text == "" or text == "-":
             return
         try:
             value = int(text)
@@ -273,13 +342,23 @@ def int_entry(
         if int_var.get() != value:
             int_var.set(value)
 
+    def _sync_text_from_int(*_args) -> None:
+        """Keep the entry text in sync when code calls ``int_var.set``."""
+        try:
+            value = int_var.get()
+        except Exception:
+            return
+        text = str(value)
+        if text_var.get() != text:
+            text_var.set(text)
+
     ctk_entry.bind("<Return>", entry_callback)
     ctk_entry.bind("<FocusOut>", entry_callback)
     ctk_entry.grid(row=row, column=col + 1, padx=pad, pady=(pad, 0), sticky="nw")
 
     if focus_set:
-        ctk_entry.focus_set()
+        _focus_entry_cursor_at_end(ctk_entry)
 
-    # Start mirroring text->int for live clamping while typing.
     text_var.trace_add("write", _sync_int_from_text)
+    int_var.trace_add("write", _sync_text_from_int)
     return int_var

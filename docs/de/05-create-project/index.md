@@ -44,7 +44,8 @@ Teilen Sie diese Ideen (Details stehen in den Dialogfenstern der Projekteinstell
 - **Export-Server** oder **AWS** — wohin anonymisierte Studien gesendet werden.
 - **Modalitäten / Speicherklassen / Transfersyntaxen** — welche Bildtypen erlaubt sind.
 - **Netzwerk-Zeitüberschreitungen** — wie lange auf langsame Archive gewartet wird.
-- **Patienten-Nachschlagetabelle** — optionales CTP-`.properties`-Mapping für PatientID und Datumsverschiebung (siehe [Nachschlagetabelle](#patient-lookup-table)).
+- **Anonymizer-Skript** — welche DICOM-Tags behalten, entfernt oder umgewandelt werden (siehe [Anonymizer-Skript-Editor](#anonymizer-skript-editor)).
+- **Patienten-Nachschlagetabelle** — optionales CTP-`.properties`-Mapping für PatientID und Datumsverschiebung (siehe [Nachschlagetabelle](#patienten-nachschlagetabelle)).
 
 Wenn das Projekt auf einem Laborserver laufen soll, weiter mit [Ohne Oberfläche ausführen](../10-headless/).
 
@@ -90,9 +91,53 @@ Welche Bildtypen und Kodierungen erlaubt sind.
 ![Speicherklassen](shots/macos/StorageClasses.png)
 ![Transfersyntaxen](shots/macos/TransferSyntaxes.png)
 
+### Anonymizer-Skript-Editor
+
+Das **Anonymizer-Skript** des Projekts ist eine CTP-kompatible XML-Datei mit jedem bekannten DICOM-Tag und der zugehörigen Aktion. Die mitgelieferte Standarddatei folgt dem DICOM Basic Application Confidentiality Profile, beschrieben unter [De-Identifikationsprotokoll](../deidentification-protocol.md).
+
+Öffnen Sie **Datei → Projekteinstellungen** (oder Neue Projekteinstellungen) und klicken Sie auf **Anonymizer-Skript bearbeiten**. Bei einem neuen Projekt können Sie zuerst mit **Durchsuchen** eine andere `.script`-Vorlage laden.
+
+#### Ansichten
+
+| Ansicht | Inhalt |
+| --- | --- |
+| **Aktiv** (Standard) | Tags, die **behalten** oder **umgewandelt** werden (nicht `@remove()`). Die alltägliche Liste — etwa 1,5k statt ~4,6k Zeilen. |
+| **Entfernt** | Tags mit `@remove()` (werden beim Anonymisieren gelöscht). |
+| **Alle** | Jede Tag-Regel im Skript. |
+
+Suche und der **Operand**-Filter gelten innerhalb der aktuellen Ansicht. Die Liste ist **paginiert** (Zurück / Weiter), damit das Fenster reaktionsschnell bleibt.
+
+#### Regel ändern
+
+1. Zeile in der Liste auswählen.
+2. **Name** (nur Beschriftung) oder **Operand** im Detailbereich bearbeiten.
+3. Unterstützte Operanden: **Behalten**, **Entfernen**, **Leeren**, **UID**, **Patienten-ID**, **Accession**, **Datum hashen**, **Patienten-ID nachschlagen**, **Datumsversatz nachschlagen**, **Alter runden** (mit Parameter für die Altersbreite).
+4. **Entfernen** stuft das Tag aus der Aktiven Ansicht heraus (bleibt im Skript als `@remove()`).
+
+#### Tag hinzufügen (üblicher Weg)
+
+1. **Aus Entfernten hinzufügen…** wählen.
+2. In der Liste der entfernten Tags suchen und ein dem Skript bekanntes Tag auswählen.
+3. Anfangsoperand wählen (Standard **Behalten**) → **Hinzufügen**.
+4. Das Tag erscheint unter **Aktiv** und ist zur weiteren Bearbeitung ausgewählt.
+
+**Aus Wörterbuch hinzufügen…** nur, wenn das Tag **noch nicht** im Skript steht (selten). Die Wörterbuchsuche ist begrenzt und entprellt.
+
+#### Speichern
+
+- **Übernehmen** prüft Operanden, schreibt eine private Kopie unter `{Speicher}/private/{Standort-ID}-anonymizer.script`, lädt die aktiven Anonymisierungsregeln neu und aktualisiert die Projekteinstellungen. Die mitgelieferte Standarddatei wird nie überschrieben.
+- **Zurücksetzen** lädt die Datei erneut vom Datenträger und verwirft ungespeicherte Änderungen.
+- **Abbrechen** schließt ohne Speichern.
+
+!!! tip "Nachschlagetabellen und Skript"
+    Das Laden einer **Patienten-Nachschlagetabelle** kann Patient-ID- / Datumsoperanden auf `@lookup(...)` umschreiben. Bearbeiten Sie das Skript danach, wenn Sie weitere Tag-Änderungen brauchen.
+
 ### Patienten-Nachschlagetabelle
 
 Optionales CTP-`.properties`-Mapping von PHI-Patienten-IDs auf anonymisierte IDs und Datumsversätze. Durchsuchen → Vorschau → Übernehmen.
+
+!!! note "Bestehende Projekte"
+    Das Laden einer Nachschlagetabelle anonymisiert vorhandene Dateien im Datensatz **nicht** erneut — sie bleiben unverändert. Bereits importierte Patienten funktionieren weiter ohne Tabelleneintrag. **Neue** Dateien, deren PHI-Patienten-ID nicht in der Tabelle steht, landen in Quarantäne als **Lookup_Miss** und werden nicht gespeichert.
 
 ![Nachschlagetabelle](shots/macos/LookupTable.png)
 
@@ -113,6 +158,7 @@ Das Dashboard zeigt die zentralen Workflow-Schaltflächen: **Suchen**, **Ansicht
 - Speicherpfad nicht beschreibbar → anderen Ordner wählen.
 - Name zu lang → Projektnamen kürzen.
 - Warnung beim Klonen zur UID-Wurzel → pro Projekt eine eindeutige Wurzel verwenden, um ID-Kollisionen zu vermeiden.
+- Skript-Editor **Übernehmen** abgelehnt → nicht unterstützte `@…`-Operanden in der Fehlermeldung korrigieren (Nicht-`@`-Literale wie seltene CTP-Konstanten sind erlaubt).
 
 ## Nächste Schritte
 

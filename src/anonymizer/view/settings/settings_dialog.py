@@ -20,14 +20,14 @@ from anonymizer.utils.storage import (
     read_java_anonymizer_index_xlsx,
 )
 from anonymizer.utils.translate import _, get_current_language_code
-from anonymizer.view.common.app_window import AppToplevel
+from anonymizer.view.common.app_window import AppToplevel, install_modal_dismiss
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import default_char_width_px
 from anonymizer.view.common.ux_fields import str_entry
+from anonymizer.view.settings.anonymizer_script_dialog import AnonymizerScriptDialog
 from anonymizer.view.settings.aws_cognito_dialog import AWSCognitoDialog
 from anonymizer.view.settings.dicom_node_dialog import DICOMNodeDialog
 from anonymizer.view.settings.logging_levels_dialog import LoggingLevelsDialog
-from anonymizer.view.settings.lookup_table_dialog import LookupTableDialog
 from anonymizer.view.settings.modalites_dialog import ModalitiesDialog
 from anonymizer.view.settings.network_timeouts_dialog import NetworkTimeoutsDialog
 from anonymizer.view.settings.sop_classes_dialog import SOPClassesDialog
@@ -74,6 +74,7 @@ class SettingsDialog(AppToplevel):
         self._create_widgets()
         self.wait_visibility()
         self.lift()
+        install_modal_dismiss(self, self._on_cancel)
         self.grab_set()  # make dialog modal
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
@@ -287,31 +288,12 @@ class SettingsDialog(AppToplevel):
 
         self._script_file_label = ctk.CTkLabel(self._frame, text=_("Script File") + ":")
         self._script_file_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
-
-        # Script File is selectable ONLY for NEW projects
-        # On project creation the script file is parsed and saved to the Anonymizer model
-        if self.new_model:
-            self._script_file_button = ctk.CTkButton(
-                self._frame,
-                text=str(self.model.abridged_script_path()),
-                command=self._script_file_dialog,
-                state=ctk.NORMAL if self.new_model else ctk.DISABLED,
-            )
-            self._script_file_button.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw")
-        else:
-            self._storage_dir_label = ctk.CTkLabel(self._frame, text=self.model.abridged_script_path())
-            self._storage_dir_label.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw")
-
-        row += 1
-
-        self._lookup_table_label = ctk.CTkLabel(self._frame, text=_("Patient Lookup Table") + ":")
-        self._lookup_table_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
-        self._lookup_table_button = ctk.CTkButton(
+        self._edit_script_button = ctk.CTkButton(
             self._frame,
-            text=_("Load Patient Lookup Table"),
-            command=self._open_lookup_table_dialog,
+            text=_("Edit Anonymizer Script"),
+            command=self._open_anonymizer_script_dialog,
         )
-        self._lookup_table_button.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw")
+        self._edit_script_button.grid(row=row, column=1, padx=PAD, pady=(PAD, 0), sticky="nw")
 
         row += 1
 
@@ -364,7 +346,9 @@ class SettingsDialog(AppToplevel):
             scp = self.model.remote_scps[_("QUERY")]
         else:
             scp = DICOMNode("127.0.0.1", 104, "", False)
-        dlg = DICOMNodeDialog(self, scp, title=_("Query Server"))
+        dlg = DICOMNodeDialog(
+            self, scp, title=_("Query Server"), controller=self.project_controller
+        )
         scp = dlg.get_input()
         if scp is None:
             logger.info("Query Server cancelled")
@@ -377,7 +361,9 @@ class SettingsDialog(AppToplevel):
             scp = self.model.remote_scps[_("EXPORT")]
         else:
             scp = DICOMNode("127.0.0.1", 104, "", False)
-        dlg = DICOMNodeDialog(self, scp, title=_("Export Server"))
+        dlg = DICOMNodeDialog(
+            self, scp, title=_("Export Server"), controller=self.project_controller
+        )
         scp = dlg.get_input()
         if scp is None:
             logger.info("Export Server cancelled")
@@ -444,37 +430,36 @@ class SettingsDialog(AppToplevel):
         self.model.transfer_syntaxes = edited_syntaxes
         logger.info(f"Transfer Syntaxes updated: {self.model.transfer_syntaxes}")
 
-    def _script_file_dialog(self):
-        path = filedialog.askopenfilename(
-            parent=self,
-            initialfile=str(self.model.anonymizer_script_path),
-            defaultextension=".script",
-            filetypes=[
-                (_("Anonymizer Script Files"), "*.script"),
-                (_("All Files"), "*.*"),
-            ],
-        )
-        if path:
-            self.model.anonymizer_script_path = Path(path)
-            self._script_file_button.configure(text=path)
-            logger.info(f"Anonymizer Script File updated: {self.model.anonymizer_script_path}")
+    def _on_script_path_changed(self, script_path: Path) -> None:
+        self.model.anonymizer_script_path = script_path
+        logger.info(f"Anonymizer Script File updated: {self.model.anonymizer_script_path}")
 
-    def _open_lookup_table_dialog(self) -> None:
-        def on_script_path_changed(script_path: Path) -> None:
-            self.model.anonymizer_script_path = script_path
-            if self.new_model:
-                return
-            if hasattr(self, "_script_file_button"):
-                self._script_file_button.configure(text=str(self.model.abridged_script_path()))
+    def _open_anonymizer_script_dialog(self) -> None:
+        script_path = Path(self.model.anonymizer_script_path)
+        if not script_path.is_file():
+            from anonymizer.controller.process_ctp_lookup import _DEFAULT_SCRIPT_PATH
 
-        def on_pending_preview(preview: CtpLookupPreview) -> None:
+            if _DEFAULT_SCRIPT_PATH.is_file():
+                script_path = _DEFAULT_SCRIPT_PATH
+        if not script_path.is_file():
+            messagebox.showerror(
+                _("Edit Anonymizer Script"),
+                _("Script file not found:") + f"\n{self.model.anonymizer_script_path}",
+                parent=self,
+            )
+            return
+
+        def on_pending_lookup_preview(preview: CtpLookupPreview) -> None:
             self._ctp_lookup_preview = preview
 
-        LookupTableDialog(
+        AnonymizerScriptDialog(
             self,
+            script_path=script_path,
+            project_model=self.model,
             project_controller=self.project_controller,
-            on_script_path_changed=on_script_path_changed,
-            on_pending_preview=on_pending_preview if self.project_controller is None else None,
+            on_script_path_changed=self._on_script_path_changed,
+            on_pending_lookup_preview=on_pending_lookup_preview if self.project_controller is None else None,
+            pending_lookup_preview=self._ctp_lookup_preview,
         )
 
     def _set_logging_levels_dialog(self):

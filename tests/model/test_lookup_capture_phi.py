@@ -137,6 +137,28 @@ def test_capture_phi_lookup_miss_raises_not_found(anonymizer_model: AnonymizerMo
         anonymizer_model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=0)
 
 
+def test_capture_phi_existing_phi_skips_lookup_requirement(
+    anonymizer_model: AnonymizerModel, mock_dataset: Dataset
+) -> None:
+    """Already-captured patients are not re-checked against the lookup table."""
+    anonymizer_model.capture_phi(source="pytest", ds=mock_dataset, date_offset_from_hash=33)
+    anonymizer_model._lookup_required = True
+    # No LookupPatient rows — would KeyError for a new patient.
+
+    second = deepcopy(mock_dataset)
+    second.StudyInstanceUID = "1.2.840.113619.2.5.1762583153.17482.978957064.4"
+    second.SeriesInstanceUID = "1.2.840.113619.2.5.1762583153.17482.978957064.5"
+    second.SOPInstanceUID = "1.2.840.113619.2.5.1762583153.17482.978957064.6"
+
+    phi_ptid, anon_ptid, _, date_offset = anonymizer_model.capture_phi(
+        source="pytest", ds=second, date_offset_from_hash=99
+    )
+    assert phi_ptid == mock_dataset.PatientID
+    assert anon_ptid  # preexisting anonymized id
+    # New study without PHI.date_offset falls back to the hash offset passed in.
+    assert date_offset == 99
+
+
 def test_capture_phi_existing_study_returns_stored_date_delta(
     anonymizer_model: AnonymizerModel, mock_dataset: Dataset
 ) -> None:

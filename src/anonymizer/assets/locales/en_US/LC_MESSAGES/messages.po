@@ -1715,6 +1715,17 @@ msgstr "Patient Lookup Table"
 msgid "Load Patient Lookup Table"
 msgstr "Load Patient Lookup Table"
 
+msgid ""
+"If this project already has anonymized data: files already in the dataset "
+"stay unchanged — they are not re-anonymized. Patients already imported keep "
+"working without a lookup-table row. New files whose Patient ID is not in the "
+"table are sent to quarantine as Lookup_Miss and are not stored."
+msgstr ""
+"If this project already has anonymized data: files already in the dataset "
+"stay unchanged — they are not re-anonymized. Patients already imported keep "
+"working without a lookup-table row. New files whose Patient ID is not in the "
+"table are sent to quarantine as Lookup_Miss and are not stored."
+
 msgid "Set Logging Levels"
 msgstr "Set Logging Levels"
 
@@ -1964,6 +1975,9 @@ msgstr "Anonymized ID"
 
 msgid "Date Time"
 msgstr "Date Time"
+
+msgid "Segments"
+msgstr "Segments"
 
 msgid "Images Sent"
 msgstr "Images Sent"
@@ -2607,3 +2621,117 @@ msgstr "License help file was not found."
 
 msgid "License"
 msgstr "License"
+
+msgid "Edit Anonymizer Script"
+msgstr "Edit Anonymizer Script"
+
+msgid "Active"
+msgstr "Active"
+
+msgid "Removed"
+msgstr "Removed"
+
+msgid "All"
+msgstr "All"
+
+msgid "Operand"
+msgstr "Operand"
+
+msgid "Add from Removed…"
+msgstr "Add from Removed…"
+
+msgid "Add from Dictionary…"
+msgstr "Add from Dictionary…"
+
+msgid "showing 0 of 0"
+msgstr "showing 0 of 0"
+
+msgid "showing {start}–{end} of {total}"
+msgstr "showing {start}–{end} of {total}"
+
+msgid "Previous"
+msgstr "Previous"
+
+msgid "Next"
+msgstr "Next"
+
+msgid "Page {page} / {pages}"
+msgstr "Page {page} / {pages}"
+
+msgid "Selected rule"
+msgstr "Selected rule"
+
+msgid "Name"
+msgstr "Name"
+
+msgid "Parameter"
+msgstr "Parameter"
+
+msgid "Stored as"
+msgstr "Stored as"
+
+msgid "(keep)"
+msgstr "(keep)"
+
+msgid "Revert"
+msgstr "Revert"
+
+msgid "Reload the script from disk and discard unsaved edits?"
+msgstr "Reload the script from disk and discard unsaved edits?"
+
+msgid "Script file not found:"
+msgstr "Script file not found:"
+
+msgid "Anonymizer script was updated successfully."
+msgstr "Anonymizer script was updated successfully."
+
+msgid "Add from Removed"
+msgstr "Add from Removed"
+
+msgid "Search removed tags…"
+msgstr "Search removed tags…"
+
+msgid "Initial operand"
+msgstr "Initial operand"
+
+msgid "Select a removed tag first."
+msgstr "Select a removed tag first."
+
+msgid "Add"
+msgstr "Add"
+
+msgid "Add from Dictionary"
+msgstr "Add from Dictionary"
+
+msgid "Search DICOM dictionary (min 2 chars)…"
+msgstr "Search DICOM dictionary (min 2 chars)…"
+
+msgid "Only tags not already in the script can be added."
+msgstr "Only tags not already in the script can be added."
+
+msgid "Select a dictionary tag first."
+msgstr "Select a dictionary tag first."
+
+msgid "in script"
+msgstr "in script"
+
+msgid "Keep"
+msgstr "Keep"
+
+msgid "Empty"
+msgstr "Empty"
+
+msgid "UID"
+msgstr "UID"
+
+msgid "Hash date"
+msgstr "Hash date"
+
+msgid "Lookup patient ID"
+msgstr "Lookup patient ID"
+
+msgid "Lookup date offset"
+msgstr "Lookup date offset"
+
+msgid "Round age"
+msgstr "Round age"

@@ -1958,6 +1958,9 @@ msgstr ""
 msgid "Date Time"
 msgstr ""
 
+msgid "Segments"
+msgstr ""
+
 msgid "Images Sent"
 msgstr ""
 
@@ -2542,4 +2545,118 @@ msgid "Also apply to other studies with the same series descriptions"
 msgstr ""
 
 msgid "Apply"
+msgstr ""
+
+msgid "Edit Anonymizer Script"
+msgstr ""
+
+msgid "Active"
+msgstr ""
+
+msgid "Removed"
+msgstr ""
+
+msgid "All"
+msgstr ""
+
+msgid "Operand"
+msgstr ""
+
+msgid "Add from Removed…"
+msgstr ""
+
+msgid "Add from Dictionary…"
+msgstr ""
+
+msgid "showing 0 of 0"
+msgstr ""
+
+msgid "showing {start}–{end} of {total}"
+msgstr ""
+
+msgid "Previous"
+msgstr ""
+
+msgid "Next"
+msgstr ""
+
+msgid "Page {page} / {pages}"
+msgstr ""
+
+msgid "Selected rule"
+msgstr ""
+
+msgid "Name"
+msgstr ""
+
+msgid "Parameter"
+msgstr ""
+
+msgid "Stored as"
+msgstr ""
+
+msgid "(keep)"
+msgstr ""
+
+msgid "Revert"
+msgstr ""
+
+msgid "Reload the script from disk and discard unsaved edits?"
+msgstr ""
+
+msgid "Script file not found:"
+msgstr ""
+
+msgid "Anonymizer script was updated successfully."
+msgstr ""
+
+msgid "Add from Removed"
+msgstr ""
+
+msgid "Search removed tags…"
+msgstr ""
+
+msgid "Initial operand"
+msgstr ""
+
+msgid "Select a removed tag first."
+msgstr ""
+
+msgid "Add"
+msgstr ""
+
+msgid "Add from Dictionary"
+msgstr ""
+
+msgid "Search DICOM dictionary (min 2 chars)…"
+msgstr ""
+
+msgid "Only tags not already in the script can be added."
+msgstr ""
+
+msgid "Select a dictionary tag first."
+msgstr ""
+
+msgid "in script"
+msgstr ""
+
+msgid "Keep"
+msgstr ""
+
+msgid "Empty"
+msgstr ""
+
+msgid "UID"
+msgstr ""
+
+msgid "Hash date"
+msgstr ""
+
+msgid "Lookup patient ID"
+msgstr ""
+
+msgid "Lookup date offset"
+msgstr ""
+
+msgid "Round age"
 msgstr ""

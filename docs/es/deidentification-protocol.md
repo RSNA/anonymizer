@@ -33,4 +33,4 @@ Las opciones clásicas del perfil “clean pixel data” y “clean recognizable
 Se eliminan los grupos de curva/superposición. Si se aceptan objetos Structured Report lo controlan los ajustes de clase de almacenamiento del proyecto.
 
 !!! note "Para revisión de cumplimiento"
-    Pida a su responsable de privacidad que revise el script del anonimizador y las herramientas de IA para su institución. Este manual es orientación operativa, no asesoramiento legal.
+    Pida a su responsable de privacidad que revise el [script del anonimizador](05-create-project/#editor-del-script-del-anonimizador) y las herramientas de IA para su institución. Este manual es orientación operativa, no asesoramiento legal.

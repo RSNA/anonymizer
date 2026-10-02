@@ -27,7 +27,9 @@ from queue import Queue
 from shutil import copyfile
 
 from pydicom import DataElement, Dataset, Sequence, dcmread
+from pydicom.datadict import dictionary_VR
 from pydicom.errors import InvalidDicomError
+from pydicom.tag import Tag
 
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.model.project import DICOMNode, ProjectModel
@@ -399,12 +401,37 @@ class AnonymizerController:
                 dataset[tag].value = ""
             elif anon_acc_no:
                 dataset[tag].value = anon_acc_no
+        elif "@incrementdate" in operation:
+            from anonymizer.controller.anonymizer_script import incrementdate_days
+
+            days = incrementdate_days(operation)
+            if days is None:
+                logger.error("Invalid incrementdate operation: %s", operation)
+                return
+            dataset[tag].value = self._apply_date_offset(
+                str(value) if value is not None else "", days
+            )
+            self._dates_shifted_this_dataset = True
+        elif "@rebasedate" in str(operation or "").lower():
+            from anonymizer.controller.anonymizer_script import rebasedate_origin
+
+            origin = rebasedate_origin(operation)
+            offset = self._rebase_offset_days_for_patient(phi_ptid, origin=origin)
+            if offset is None:
+                logger.error("@rebasedate used but no basedate/ORIGIN offset available for patient %s", phi_ptid)
+                return
+            dataset[tag].value = self._apply_date_offset(
+                str(value) if value is not None else "", int(offset)
+            )
+            self._dates_shifted_this_dataset = True
         elif "@hashdate" in operation:
             _, anon_date = self._hash_date(value, phi_ptid)
             dataset[tag].value = anon_date
+            self._dates_shifted_this_dataset = True
         elif "@lookup" in operation:
             if "dateoffset" in operation:
                 dataset[tag].value = self._apply_date_offset(str(value) if value is not None else "", date_offset)
+                self._dates_shifted_this_dataset = True
             else:
                 dataset[tag].value = anon_ptid
         elif "@round" in operation:
@@ -422,6 +449,97 @@ class AnonymizerController:
             logger.debug(f"round_age: Age:{value} Width:{width}")
             dataset[tag].value = self._round_age(value, width)
             logger.debug(f"round_age: Result:{dataset[tag].value}")
+        else:
+            # CTP fixed value: bare literal (YES) or @always()YES
+            from anonymizer.controller.anonymizer_script import always_literal_text
+
+            literal = always_literal_text(operation)
+            if literal is not None:
+                dataset[tag].value = literal
+
+    def _rebase_offset_days_for_patient(
+        self, phi_ptid: str, *, origin: str | None = None
+    ) -> int | None:
+        """Days to add for @rebasedate: ORIGIN − basedate (TCIA epoch rebase)."""
+        from anonymizer.controller.anonymizer_script import rebasedate_origin
+
+        lookup = self.model.get_lookup_patient(phi_ptid)
+        basedate = getattr(lookup, "basedate", None) if lookup is not None else None
+        if not basedate:
+            return None
+        origin_da = (origin or "").strip()
+        if len(origin_da) != 8 or not origin_da.isdigit():
+            # Fall back only if a bare @rebasedate (no origin) was used.
+            origin_da = rebasedate_origin("@rebasedate") or "19600101"
+        try:
+            base_dt = datetime.strptime(str(basedate), "%Y%m%d")
+            origin_dt = datetime.strptime(origin_da, "%Y%m%d")
+        except ValueError:
+            return None
+        return (origin_dt - base_dt).days
+
+    def _apply_longitudinal_provenance(
+        self,
+        ds: Dataset,
+        *,
+        phi_study_date: str | None,
+        phi_ptid: str,
+        dates_shifted: bool,
+    ) -> None:
+        """Write TCIA longitudinal markers when dates were shifted / rebase basedate present."""
+        if dates_shifted:
+            ds.LongitudinalTemporalInformationModified = "MODIFIED"
+        lookup = self.model.get_lookup_patient(phi_ptid)
+        basedate = getattr(lookup, "basedate", None) if lookup is not None else None
+        if not basedate or not phi_study_date:
+            return
+        study = str(phi_study_date).strip()[:8]
+        base = str(basedate).strip()[:8]
+        if len(study) != 8 or not study.isdigit() or len(base) != 8 or not base.isdigit():
+            return
+        try:
+            study_dt = datetime.strptime(study, "%Y%m%d")
+            base_dt = datetime.strptime(base, "%Y%m%d")
+        except ValueError:
+            return
+        ds.LongitudinalTemporalOffsetFromEvent = float((study_dt - base_dt).days)
+        ds.LongitudinalTemporalEventType = "REGISTRATION"
+        # Rebase implies dates were modified even if no @rebasedate tag was walked.
+        ds.LongitudinalTemporalInformationModified = "MODIFIED"
+
+    def _insert_always_missing_elements(self, ds: Dataset) -> None:
+        """Create missing non-SQ elements whose script uses ``@always()…`` (CTP create-if-missing)."""
+        from anonymizer.controller.anonymizer_script import always_literal_text
+
+        for tag_hex, operation in self.model._tag_keep.items():
+            op = str(operation or "").strip()
+            if not op.lower().startswith("@always()"):
+                continue
+            literal = always_literal_text(op)
+            if literal is None:
+                continue
+            try:
+                tag = Tag(int(tag_hex, 16))
+            except ValueError:
+                logger.warning("Invalid tag in script for @always(): %s", tag_hex)
+                continue
+            if tag in ds:
+                continue
+            try:
+                vr = dictionary_VR(tag)
+            except Exception:
+                vr = "LO"
+            if str(vr).upper() == "SQ":
+                continue
+            try:
+                ds.add_new(tag, vr, literal)
+            except Exception:
+                logger.warning(
+                    "Unable to create %s via @always(): %s",
+                    tag_hex,
+                    op,
+                    exc_info=True,
+                )
 
     def anonymize(self, source: DICOMNode | str, ds: Dataset) -> str | None:
         """
@@ -472,6 +590,9 @@ class AnonymizerController:
         try:
             # To minimize memory/computation overhead DO NOT MAKE COPY of source dataset
             # Anonymize dataset (overwrite phi dataset) (prevents dataset copy)
+            phi_study_date = str(getattr(ds, "StudyDate", "") or "").strip() or None
+            self._dates_shifted_this_dataset = False
+
             ds.remove_private_tags()  # remove all private elements (odd group number)
 
             # if ds.PatientID not present, set to '' so that anonymization script can process the element:
@@ -489,6 +610,13 @@ class AnonymizerController:
                 )
 
             ds.walk(pydicom_callback)  # recursive by default, recurses into embedded dataset sequences
+            self._insert_always_missing_elements(ds)
+            self._apply_longitudinal_provenance(
+                ds,
+                phi_study_date=phi_study_date,
+                phi_ptid=phi_ptid,
+                dates_shifted=bool(self._dates_shifted_this_dataset),
+            )
 
             # All elements now anonymized according to script, now handle Anonymization specific Tags:
             ds.PatientIdentityRemoved = "YES"  # CS: (0012, 0062)

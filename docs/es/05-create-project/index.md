@@ -44,7 +44,8 @@ Comparta estas ideas (los detalles están en los diálogos de Ajustes del Proyec
 - **Servidor de Exportación** o **AWS** — adónde se enviarán los estudios anonimizados.
 - **Modalidades / clases de almacenamiento / sintaxis de transferencia** — qué tipos de imagen se permiten.
 - **Tiempos de espera de red** — cuánto esperar ante archivos lentos.
-- **Tabla de búsqueda de pacientes** — mapeo opcional CTP `.properties` para PatientID y desplazamiento de fecha (véase [Tabla de búsqueda](#patient-lookup-table)).
+- **Script del anonimizador** — qué etiquetas DICOM se conservan, eliminan o transforman (véase [Editor del script del anonimizador](#editor-del-script-del-anonimizador)).
+- **Tabla de búsqueda de pacientes** — mapeo opcional CTP `.properties` para PatientID y desplazamiento de fecha (véase [Tabla de búsqueda de pacientes](#tabla-de-búsqueda-de-pacientes)).
 
 Si el proyecto vivirá en un servidor de laboratorio, continúe con [Ejecutar sin interfaz](../10-headless/).
 
@@ -90,9 +91,53 @@ Qué tipos de imagen y codificaciones se permiten.
 ![Clases de Almacenamiento](shots/macos/StorageClasses.png)
 ![Sintaxis de Transferencia](shots/macos/TransferSyntaxes.png)
 
+### Editor del script del anonimizador
+
+El **script del anonimizador** del proyecto es un XML compatible con CTP que enumera cada etiqueta DICOM conocida y qué hacer con ella. El valor predeterminado empaquetado sigue el perfil DICOM Basic Application Confidentiality descrito en [Protocolo de desidentificación](../deidentification-protocol.md).
+
+Abra **Archivo → Ajustes del Proyecto** (o Configuración de Nuevo Proyecto) y pulse **Editar script del anonimizador**. En un proyecto nuevo también puede **Examinar** primero otra plantilla `.script`.
+
+#### Vistas
+
+| Vista | Qué ve |
+| --- | --- |
+| **Activos** (predeterminada) | Etiquetas **conservadas** o **transformadas** (no `@remove()`). La lista cotidiana — unas 1,5k filas en lugar de ~4,6k. |
+| **Eliminados** | Etiquetas con `@remove()` (se borran al anonimizar). |
+| **Todos** | Todas las reglas de etiqueta del script. |
+
+La búsqueda y el filtro de **Operando** se aplican dentro de la vista actual. La lista está **paginada** (Anterior / Siguiente) para mantener la ventana ágil.
+
+#### Cambiar una regla
+
+1. Seleccione una fila de la lista.
+2. Edite **Nombre** (solo etiqueta) u **Operando** en el panel de detalle.
+3. Operandos admitidos: **Mantener**, **Eliminar**, **Vaciar**, **UID**, **ID de paciente**, **Accession**, **Hashear fecha**, **Buscar ID de paciente**, **Buscar desplazamiento de fecha**, **Redondear edad** (con parámetro de anchura).
+4. Elegir **Eliminar** saca la etiqueta de la vista Activos (sigue en el script como `@remove()`).
+
+#### Añadir una etiqueta (camino habitual)
+
+1. Pulse **Añadir desde eliminados…**.
+2. Busque en la lista de eliminados y seleccione una etiqueta ya conocida por el script.
+3. Elija el operando inicial (predeterminado **Mantener**) → **Añadir**.
+4. La etiqueta aparece en **Activos** y queda seleccionada para más ediciones.
+
+Use **Añadir desde diccionario…** solo si la etiqueta **no** está ya en el script (poco frecuente). La búsqueda del diccionario está limitada y con retardo.
+
+#### Guardar
+
+- **Aceptar** valida operandos, escribe una copia privada en `{almacenamiento}/private/{site_id}-anonymizer.script`, recarga las reglas activas y actualiza Ajustes del Proyecto. El recurso empaquetado predeterminado no se sobrescribe.
+- **Revertir** recarga el archivo desde el disco y descarta cambios no guardados.
+- **Cancelar** cierra sin guardar.
+
+!!! tip "Tablas de búsqueda y el script"
+    Cargar una **Tabla de búsqueda de pacientes** también puede reescribir operandos de Patient ID / fecha a `@lookup(...)`. Edite el script después si necesita más cambios a nivel de etiqueta.
+
 ### Tabla de búsqueda de pacientes
 
 Mapeo opcional CTP `.properties` de IDs PHI de paciente a IDs anonimizados y desplazamientos de fecha. Examinar → vista previa → Aceptar.
+
+!!! note "Proyectos existentes"
+    Cargar una tabla de búsqueda **no** vuelve a anonimizar los archivos ya presentes en el conjunto de datos — permanecen sin cambios. Los pacientes ya importados siguen funcionando sin una fila en la tabla. Los archivos **nuevos** cuyo ID de paciente PHI no esté en la tabla se ponen en cuarentena como **Lookup_Miss** y no se almacenan.
 
 ![Tabla de búsqueda](shots/macos/LookupTable.png)
 
@@ -113,6 +158,7 @@ El Panel de control muestra los botones principales del flujo: **Buscar**, **Vis
 - Ruta de almacenamiento no escribible → elija otra carpeta.
 - Nombre demasiado largo → acorte el nombre del proyecto.
 - Aviso al clonar sobre Raíz UID → use una raíz única por proyecto para evitar choques de ID.
+- El editor del script **Aceptar** rechazó → corrija los operandos `@…` no admitidos indicados en el error (los literales sin `@`, como constantes CTP raras, están permitidos).
 
 ## Siguientes pasos
 

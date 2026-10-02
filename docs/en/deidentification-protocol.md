@@ -11,7 +11,14 @@ This page summarizes how the Anonymizer follows the DICOM Basic Application Conf
 
 ## Dates
 
-Dates are shifted per patient (hash-based offset) so the **order and spacing** of a patient’s studies stay meaningful, but calendar dates are not the originals. Time-of-day is typically left as-is.
+Dates are shifted so the **order and spacing** of a patient’s studies stay meaningful, but calendar dates are not the originals. Time-of-day is typically left as-is. Strategies (script / lookup):
+
+- **@hashdate** — per-patient deterministic offset (default script)
+- **@lookup(this,dateoffset)** — per-patient offset from a CTP `.properties` table
+- **@incrementdate(this,n)** — fixed trial-wide day offset (CTP DATEINC; `n` set in the script editor)
+- **@rebasedate(this,origin)** — epoch rebase from registration `basedate/` + ORIGIN parameter (default `19600101`)
+
+When any of these run, the anonymizer writes `(0028,0303) LongitudinalTemporalInformationModified = MODIFIED` (DICOM option 113107). See [Create project — longitudinal dates](05-create-project/#longitudinal-dates-tcia-style).
 
 ## What may be kept (partial options)
 
@@ -33,4 +40,4 @@ The classic profile options “clean pixel data” and “clean recognizable vis
 Curve/overlay groups are removed. Whether Structured Report objects are accepted is controlled by project storage-class settings.
 
 !!! note "For compliance review"
-    Have your privacy officer review the anonymizer script and AI tools for your institution. This manual is operational guidance, not legal advice.
+    Have your privacy officer review the [anonymizer script](05-create-project/#anonymizer-script-editor) and AI tools for your institution. This manual is operational guidance, not legal advice.

@@ -33,4 +33,4 @@ Die klassischen Profiloptionen „clean pixel data“ und „clean recognizable 
 Curve-/Overlay-Gruppen werden entfernt. Ob Structured-Report-Objekte akzeptiert werden, steuern die Speicherklassen-Einstellungen des Projekts.
 
 !!! note "Für Compliance-Prüfung"
-    Lassen Sie Ihren Datenschutzbeauftragten das Anonymizer-Skript und die KI-Werkzeuge für Ihre Institution prüfen. Dieses Handbuch ist betriebliche Anleitung, keine Rechtsberatung.
+    Lassen Sie Ihren Datenschutzbeauftragten das [Anonymizer-Skript](05-create-project/#anonymizer-skript-editor) und die KI-Werkzeuge für Ihre Institution prüfen. Dieses Handbuch ist betriebliche Anleitung, keine Rechtsberatung.

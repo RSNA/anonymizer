@@ -142,6 +142,70 @@ def position_toplevel_near_parent(
         window.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
 
 
+def place_toplevel_centered_on_parent(
+    window: tk.Misc,
+    parent: tk.Misc | None = None,
+    *,
+    width: int | None = None,
+    height: int | None = None,
+) -> None:
+    """Size ``window`` (optional) and center it over ``parent``, clamped to the screen.
+
+    Call while withdrawn (then ``deiconify``) so the first paint is already centered.
+    """
+    try:
+        window.update_idletasks()
+    except tk.TclError:
+        return
+
+    try:
+        cur_w = int(window.winfo_width())
+        cur_h = int(window.winfo_height())
+    except tk.TclError:
+        return
+
+    width = width or (cur_w if cur_w > 1 else None)
+    height = height or (cur_h if cur_h > 1 else None)
+    if width is None or height is None:
+        try:
+            width = width or int(window.winfo_reqwidth())
+            height = height or int(window.winfo_reqheight())
+        except tk.TclError:
+            return
+
+    host = parent if parent is not None else getattr(window, "master", None)
+    try:
+        if host is None:
+            raise tk.TclError("no parent")
+        host.update_idletasks()
+        parent_w = int(host.winfo_width())
+        parent_h = int(host.winfo_height())
+        pos_x = int(host.winfo_rootx()) + max(0, (parent_w - width) // 2)
+        pos_y = int(host.winfo_rooty()) + max(0, (parent_h - height) // 2)
+    except tk.TclError:
+        try:
+            screen_w = int(window.winfo_screenwidth())
+            screen_h = int(window.winfo_screenheight())
+        except tk.TclError:
+            with contextlib.suppress(tk.TclError):
+                window.geometry(f"{width}x{height}")
+            return
+        pos_x = max(0, (screen_w - width) // 2)
+        pos_y = max(0, (screen_h - height) // 2)
+    else:
+        try:
+            screen_w = int(window.winfo_screenwidth())
+            screen_h = int(window.winfo_screenheight())
+        except tk.TclError:
+            screen_w = pos_x + width
+            screen_h = pos_y + height
+        pos_x = max(0, min(pos_x, screen_w - width))
+        pos_y = max(0, min(pos_y, screen_h - height))
+
+    with contextlib.suppress(tk.TclError):
+        window.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
+
+
 def _max_descendant_reqwidth(widget: tk.Misc) -> int:
     widest = 0
     stack: list[tk.Misc] = [widget]
@@ -219,6 +283,25 @@ def refresh_app_window_menu(window: tk.Misc) -> None:
         refresh()
     except Exception:
         logger.debug("refresh_window_menu failed for %s", window, exc_info=True)
+
+
+def install_modal_dismiss(window: tk.Misc, on_cancel: Any) -> None:
+    """Standard modal dismiss: title-bar close uses the same path as Escape/Cancel."""
+    window.protocol("WM_DELETE_WINDOW", on_cancel)
+
+
+def dismiss_app_window(window: tk.Misc, *, parent: tk.Misc | None = None) -> None:
+    """Cancel a registered app window (``_on_cancel`` / ``_on_close`` / teardown)."""
+    for attr in ("_on_cancel", "_on_close", "_close"):
+        handler = getattr(window, attr, None)
+        if callable(handler):
+            with contextlib.suppress(Exception):
+                handler()
+            return
+    from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
+
+    with contextlib.suppress(Exception):
+        teardown_ctk_toplevel(window, parent=parent)
 
 
 def _install_app_window(window: tk.Misc) -> None:
