@@ -1,0 +1,12 @@
+{"id": "tp_report_header", "text": "Patient Jane Doe DOB 03/14/1962 lives at 12 Oak Street, Boston, MA 02108. MRN: 4455667 Phone: (555) 123-4567 Email: jane.doe@example.org SSN: 123-45-6789", "spans": [{"label": "NAME", "start": 8, "end": 16}, {"label": "DATE", "start": 21, "end": 31}, {"label": "LOCATION", "start": 41, "end": 72}, {"label": "ID", "start": 79, "end": 86}, {"label": "PHONE", "start": 94, "end": 108}, {"label": "EMAIL", "start": 116, "end": 136}, {"label": "ID", "start": 142, "end": 153}], "notes": "mixed true positives"}
+{"id": "tp_mrn_variants", "text": "Medical Record 998877 Patient ID ABC-12345 Acct # 77721 Visit ID 9001 Accession ACC998877", "spans": [{"label": "ID", "start": 15, "end": 21}, {"label": "ID", "start": 33, "end": 42}, {"label": "ID", "start": 50, "end": 55}, {"label": "ID", "start": 65, "end": 69}, {"label": "ID", "start": 80, "end": 89}], "notes": "MRN / account / visit / accession cues"}
+{"id": "tp_ssn_bare", "text": "Social Security Number 987654321 on file.", "spans": [{"label": "ID", "start": 23, "end": 32}], "notes": "9-digit SSN with cue"}
+{"id": "tp_physician", "text": "Referring physician Dr. Alice Smith requested the exam.", "spans": [{"label": "NAME", "start": 24, "end": 35}], "notes": "physician name"}
+{"id": "hn_mr_breast", "text": "MR BREAST BILATERAL WITH AND WITHOUT CONTRAST", "spans": [], "notes": "hard negative"}
+{"id": "hn_ct_cap", "text": "CT CHEST ABDOMEN PELVIS", "spans": [], "notes": "hard negative"}
+{"id": "hn_portable", "text": "PORTABLE AP CHEST", "spans": [], "notes": "hard negative"}
+{"id": "hn_protocol_series", "text": "Protocol 12 Series 3 Instance 7 kVp 120 UID 1.2.840.113619.2.55.3.2831166119.567", "spans": [], "notes": "hard negative: protocol/UID"}
+{"id": "amb_smith_protocol", "text": "SMITH PROTOCOL T1 AXIAL", "spans": [], "notes": "ambiguous protocol name"}
+{"id": "amb_washington", "text": "Performed at Washington Hospital Center campus.", "spans": [{"label": "LOCATION", "start": 13, "end": 46}], "notes": "facility as location"}
+{"id": "amb_id_series", "text": "ID 3 is the sagittal series.", "spans": [], "notes": "series id not patient id"}
+{"id": "tp_phone_intl", "text": "Call patient at +1 555 987 6543 ext. 12 regarding results.", "spans": [{"label": "PHONE", "start": 16, "end": 39}], "notes": "intl phone + extension"}

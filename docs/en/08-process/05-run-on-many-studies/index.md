@@ -28,11 +28,11 @@ Process a cohort for burned-in text, Harmonize, and/or face blur with progress a
 1. Open **Dataset** and select studies (include `davidson_cxr` and `CT_Head_With_Contrast` for a full demo).
 2. Start **AI Batch Process**.
 3. In options, choose algorithms:
-   - Remove Pixel PHI (blackout vs blend; modality whitelist on/off) — exercises `davidson_cxr`
+   - Remove Pixel PHI (blackout vs blend; **Remove** target: PHI only / non-whitelisted text / all text) — exercises `davidson_cxr`
    - Harmonize (workstation CT/MR resolution from AI Features) — exercises `CT_Head_With_Contrast`
      - **Prefer description mappings (skip AI when matched)** (default on): when a saved original→harmonized mapping matches, apply it and skip the anatomy model for that series
    - Face blur (**Gaussian** to match chapter 8.3) — exercises `CT_Head_With_Contrast`
-4. Preview modality whitelists if offered.
+4. Preview modality whitelists with **View whitelist**. Tick **Enable Exclude Areas** if Series View **Save Changes** stored exclude areas.
 5. Confirm memory warning if shown, then start.
 
 ![AI Batch options](shots/macos/AiBatchOptions.png)

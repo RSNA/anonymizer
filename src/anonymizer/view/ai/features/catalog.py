@@ -6,6 +6,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 
+from anonymizer.controller.ai.embedded_phi.ner.cache import (
+    download_ner_models,
+    remove_ner_models,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.cache import (
+    download_ocr_models,
+    remove_ocr_models,
+)
 from anonymizer.controller.ai.harmonize.cxp_view import (
     download_cxp_view_models,
     remove_cxp_view_models,
@@ -14,7 +22,6 @@ from anonymizer.controller.ai.harmonize.xp_bodypart import (
     download_xp_bodypart_models,
     remove_xp_bodypart_models,
 )
-from anonymizer.controller.ai.remove_pixel_phi import download_ocr_models, remove_ocr_models
 from anonymizer.controller.ai.tseg.readiness import (
     TsWeightKind,
     download_segmentation_model,
@@ -26,7 +33,7 @@ from anonymizer.utils.translate import _
 class AiFeatureId(StrEnum):
     """Top-level AI Features."""
 
-    REMOVE_PIXEL_PHI = "remove_pixel_phi"
+    EMBEDDED_PHI = "embedded_phi"
     HARMONIZE = "enable_harmonize"
     FACE_BLUR = "enable_face_blur"
     BRAIN_STRUCTURES = "enable_brain_structures"
@@ -35,7 +42,7 @@ class AiFeatureId(StrEnum):
 class AiModelGroupId(StrEnum):
     """Downloadable model groups shown under a parent feature."""
 
-    OCR = "remove_pixel_phi"
+    EMBEDDED_PHI = "embedded_phi"
     HARMONIZE_CT = "harmonize_ct_models"
     HARMONIZE_MR = "harmonize_mr_models"
     HARMONIZE_XR_BODYPART = "harmonize_xr_bodypart"
@@ -45,7 +52,7 @@ class AiModelGroupId(StrEnum):
     BRAIN_STRUCTURES = "enable_brain_structures"
 
 
-DOWNLOAD_ID_OCR = AiModelGroupId.OCR.value
+DOWNLOAD_ID_EMBEDDED_PHI = AiModelGroupId.EMBEDDED_PHI.value
 DOWNLOAD_ID_HARMONIZE_CT = AiModelGroupId.HARMONIZE_CT.value
 DOWNLOAD_ID_HARMONIZE_MR = AiModelGroupId.HARMONIZE_MR.value
 DOWNLOAD_ID_HARMONIZE_XR_BODYPART = AiModelGroupId.HARMONIZE_XR_BODYPART.value
@@ -75,7 +82,7 @@ def weight_kind_for_download_id(download_id: str) -> TsWeightKind | None:
 
 def all_download_ids() -> tuple[str, ...]:
     return (
-        DOWNLOAD_ID_OCR,
+        DOWNLOAD_ID_EMBEDDED_PHI,
         DOWNLOAD_ID_HARMONIZE_CT,
         DOWNLOAD_ID_HARMONIZE_MR,
         DOWNLOAD_ID_HARMONIZE_XR_BODYPART,
@@ -116,7 +123,7 @@ class AiFeatureSpec:
 
 def feature_title(key: str) -> str:
     return {
-        AiFeatureId.REMOVE_PIXEL_PHI.value: _("Remove Burnt-in Annotation"),
+        AiFeatureId.EMBEDDED_PHI.value: _("Embedded PHI"),
         AiFeatureId.HARMONIZE.value: _("Harmonize"),
         AiFeatureId.BRAIN_STRUCTURES.value: _("Brain structures"),
         AiFeatureId.FACE_BLUR.value: _("Face De-identify"),
@@ -129,23 +136,36 @@ def feature_title(key: str) -> str:
     }[key]
 
 
-def feature_description(key: str) -> str:
+def feature_capability_description(key: str) -> str:
+    """What the feature does at runtime (AI Batch copy; no download/install wording)."""
     return {
-        AiFeatureId.REMOVE_PIXEL_PHI.value: _("OCR burnt-in text removal."),
+        AiFeatureId.EMBEDDED_PHI.value: _(
+            "Remove identifiers from burnt-in pixels and English free text."
+        ),
         AiFeatureId.HARMONIZE.value: _(
-            "Standardize SeriesDescription (CT/MR/XR/US/MG)."
+            "Harmonize Series Description using RadLex playbook and Study Description using LOINC dictionary."
         ),
         AiFeatureId.BRAIN_STRUCTURES.value: _(
             "Optional CT Head detail after total anatomy (academic license)."
         ),
-        AiFeatureId.FACE_BLUR.value: _("Blur face on head CT/MR (academic license)."),
+        AiFeatureId.FACE_BLUR.value: _(
+            "Blur faces on head CT/MR. Requires TotalSegmentator academic license."
+        ),
     }[key]
+
+
+def feature_description(key: str) -> str:
+    """Setup hover-tooltip text (includes download notes where they apply)."""
+    capability = feature_capability_description(key)
+    if key == AiFeatureId.EMBEDDED_PHI.value:
+        return capability + " " + _("Download installs OCR + NER together.")
+    return capability
 
 
 def feature_summary(key: str) -> str:
     return {
-        AiFeatureId.REMOVE_PIXEL_PHI.value: _("OCR burnt-in text removal."),
-        AiFeatureId.HARMONIZE.value: _("RadLex / planar series naming from anatomy."),
+        AiFeatureId.EMBEDDED_PHI.value: _("OCR + English PHI NER for pixels and reports."),
+        AiFeatureId.HARMONIZE.value: _("RadLex series naming from anatomy."),
         AiModelGroupId.HARMONIZE_CT.value: "",
         AiModelGroupId.HARMONIZE_MR.value: "",
         AiModelGroupId.HARMONIZE_XR_BODYPART.value: _(
@@ -161,12 +181,16 @@ def feature_summary(key: str) -> str:
     }[key]
 
 
-def download_ocr() -> object:
-    return download_ocr_models()
+def download_embedded_phi() -> object:
+    ocr_ok, ocr_msg = download_ocr_models()
+    if not ocr_ok:
+        return False, ocr_msg
+    return download_ner_models()
 
 
-def remove_ocr() -> None:
+def remove_embedded_phi() -> None:
     remove_ocr_models()
+    remove_ner_models()
 
 
 def download_xp_bodypart() -> object:
@@ -194,7 +218,7 @@ def remove_kind(kind: TsWeightKind) -> None:
 
 
 TOP_LEVEL_FEATURE_IDS: tuple[AiFeatureId, ...] = (
-    AiFeatureId.REMOVE_PIXEL_PHI,
+    AiFeatureId.EMBEDDED_PHI,
     AiFeatureId.HARMONIZE,
     AiFeatureId.FACE_BLUR,
 )
@@ -239,4 +263,4 @@ def group_by_download_id(download_id: str) -> AiModelGroupSpec | None:
 
 
 def all_model_groups() -> tuple[AiModelGroupSpec, ...]:
-    return tuple(_MODEL_GROUPS[gid] for gid in AiModelGroupId)
+    return tuple(_MODEL_GROUPS[gid] for gid in _MODEL_GROUPS)

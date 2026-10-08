@@ -1,0 +1,96 @@
+{
+  "id": "fl_health_cxr",
+  "description": "FL Health chest Encapsulated PDF letterhead + demographics (REPORT_TEST).",
+  "notes": "Co.Reg number may be DATE or ID. Hit text/rect = full overlapping OCR tokens (no char clip). PHONE regex allowed; no other regex band-aids.",
+  "entities": [
+    {
+      "id": "ocr_facility",
+      "source": "ocr",
+      "labels": ["LOCATION"],
+      "text_any": ["FL Health", "FL HEALTH"],
+      "text_contains": ["FL"]
+    },
+    {
+      "id": "ocr_coreg",
+      "source": "ocr",
+      "labels": ["DATE", "ID"],
+      "text_contains": ["2018/422778/07"],
+      "wildcard_label": true
+    },
+    {
+      "id": "ocr_vat",
+      "source": "ocr",
+      "labels": ["ID"],
+      "text_contains": ["4950294225"]
+    },
+    {
+      "id": "ocr_addr1",
+      "source": "ocr",
+      "labels": ["LOCATION"],
+      "text_contains": ["Montego"]
+    },
+    {
+      "id": "ocr_addr2",
+      "source": "ocr",
+      "labels": ["LOCATION"],
+      "text_contains_any": ["Lira Link", "Richards Bay", "3900"]
+    },
+    {
+      "id": "ocr_phone",
+      "source": "ocr",
+      "labels": ["PHONE"],
+      "text_contains": ["035"],
+      "prefer_prefix": ["Tel", "Fax"]
+    },
+    {
+      "id": "ocr_email",
+      "source": "ocr",
+      "labels": ["EMAIL"],
+      "text_contains": ["admin@flhealth.co.za"],
+      "prefer_prefix": ["E-mail", "Email", "mail"]
+    },
+    {
+      "id": "native_patient",
+      "source": "native",
+      "labels": ["NAME"],
+      "text_contains": ["Mnikathi"]
+    },
+    {
+      "id": "native_id",
+      "source": "native",
+      "labels": ["ID"],
+      "text_contains": ["0008295650082"]
+    },
+    {
+      "id": "native_referrer",
+      "source": "native",
+      "labels": ["NAME"],
+      "text_contains": ["Molife"],
+      "text_excludes": ["N."]
+    },
+    {
+      "id": "native_dob",
+      "source": "native",
+      "labels": ["DATE"],
+      "text_contains": ["2000/08/29"]
+    },
+    {
+      "id": "native_study_date",
+      "source": "native",
+      "labels": ["DATE"],
+      "text_contains": ["2026/09/29"]
+    },
+    {
+      "id": "native_signer",
+      "source": "native",
+      "labels": ["NAME"],
+      "text_contains_any": ["N. Molife", "N Molife"]
+    },
+    {
+      "id": "native_mp",
+      "source": "native",
+      "labels": ["ID"],
+      "text_contains": ["MP0574309"]
+    }
+  ]
+}

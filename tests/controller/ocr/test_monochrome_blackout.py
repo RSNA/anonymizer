@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 import pydicom
 from pydicom.data import get_testdata_file
 
-from anonymizer.controller.ai.remove_pixel_phi import (
-    PixelPhiRemovalMode,
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import PixelPhiRemovalMode
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
     blackout_rectangular_areas,
     remove_pixel_phi,
 )
@@ -46,8 +46,8 @@ def test_monochrome1_blackout_uses_viewer_space_not_stored_zero() -> None:
     assert out[0, 0] == 50
 
 
-@patch("anonymizer.controller.ai.remove_pixel_phi.dcmread")
-@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
+@patch("anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi.dcmread")
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
 def test_remove_pixel_phi_blackout_monochrome1_writes_dark_pixels(
     mock_readtext: MagicMock,
     mock_dcmread: MagicMock,

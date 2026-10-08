@@ -17,11 +17,11 @@ from typing import Any
 import numpy as np
 
 from anonymizer.controller.ai.batch_process import apply_remove_pixel_phi_series
-from anonymizer.controller.ai.harmonize import auto_apply_best_study_descriptions
-from anonymizer.controller.ai.remove_pixel_phi import (
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     PixelPhiRemovalMode,
     normalize_pixel_phi_removal_mode,
 )
+from anonymizer.controller.ai.harmonize import auto_apply_best_study_descriptions
 from anonymizer.controller.project import MoveStudiesRequest, ProjectController, StudyUIDHierarchy
 from anonymizer.controller.runner import RemovePixelPhiRunner
 from anonymizer.controller.series_io import load_series_frames
@@ -462,7 +462,7 @@ def list_inventory(controller: ProjectController) -> dict[str, Any]:
                         anon_series_uid=anon_series_uid,
                         modality=str(series.modality or "") or None,
                         instance_count=instance_count,
-                        pixel_phi_scanned=bool(series.pixel_phi_scanned),
+                        pixel_phi_scanned=bool(series.embedded_phi_scanned),
                         study_description=_study_description(study),
                         series_description=_series_description(series),
                         series_harmonized=bool(
@@ -956,7 +956,7 @@ def remove_pixel_phi(
         safe_detail = "Burnt-in text removed from one or more instances"
 
     anon_uid = path.name
-    scanned = controller.anonymizer.model.series_pixel_phi_scanned(anon_uid)
+    scanned = controller.anonymizer.model.series_embedded_phi_scanned(anon_uid)
     if outcome.status == "failed":
         raise HeadlessOpsError(outcome.message or "remove_pixel_phi failed")
 
@@ -1012,7 +1012,7 @@ def export_series_preview(
     path = Path(str(resolved["series_path"]))
 
     anon_uid = path.name
-    scanned = controller.anonymizer.model.series_pixel_phi_scanned(anon_uid)
+    scanned = controller.anonymizer.model.series_embedded_phi_scanned(anon_uid)
     if require_pixel_phi_scanned and not scanned:
         raise HeadlessOpsError(
             "Series has not been scanned for burnt-in (pixel) PHI yet. "

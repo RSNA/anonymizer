@@ -2,12 +2,37 @@
 
 This page summarizes how the Anonymizer follows the DICOM Basic Application Confidentiality Profile ([PS 3.15 Appendix E](https://dicom.nema.org/medical/dicom/2023b/output/chtml/part15/chapter_E.html)) in plain language.
 
+## Anonymization policy (ingest)
+
+Ingest uses the **anonymizer script only** (never NER/OCR). Project Settings choose:
+
+| Policy | Script | Private tags | Reports / clinical free text |
+| --- | --- | --- | --- |
+| **Strict** (default) | `default-anonymizer.script` | Wiped (`remove_private_tags`) then walk | Mostly `@remove()`; SR/PDF modalities off |
+| **Clinical** | `clinical-anonymizer.script` (compiled) | No wipe; TCIA keep/uid/date in `_tag_keep`; unknown private deleted by walk | ContentSeq / TextValue / EncapsulatedDocument / ProtocolName / comments kept |
+
+The active script is stored beside `ProjectModel.json` as `{site_id}-anonymizer.script`.
+
 ## What gets removed or replaced
 
 - Patient name and ID become project-scoped anonymized values (Site ID + sequential patient number). The same person keeps the same anonymized ID across studies in the project.
-- UIDs are replaced with new values derived for the project (hashed from originals in current versions) so links between images stay consistent without exposing source UIDs.
-- Many clinical workflow and private tags are removed.
+- UIDs, dates (via `@hashdate`), and accession numbers are replaced with **deterministic** project-scoped values so links between images stay consistent. See [Deterministic replacements](#deterministic-replacements-uids-dates-accessions) below.
+- Many clinical workflow and private tags are removed (Strict) or selectively kept (Clinical + TCIA rules).
 - The file records that patient identity was removed and names the RSNA DICOM Anonymizer as the method.
+
+## Deterministic replacements (UIDs, dates, accessions)
+
+These transforms are **intentional** and **secret-free**. Their job is **stable linkage within a project** (and a matching row in the project PHI/UID tables)—not keyed unlinkability against someone who already knows a candidate original value.
+
+| Value | How it is derived | What that means |
+| --- | --- | --- |
+| **DICOM UIDs** | Project prefix (`uid_root` + site id) + truncated MD5 of the original UID | Same original → same anon UID. Anyone who can **guess** an original UID can compute the replacement and compare. You cannot usefully **invert** an anon UID back to an unknown original from the anonymized file alone. |
+| **Dates (`@hashdate`)** | Day offset from MD5 of Patient ID (mod ~10 years) | Same patient → same offset; intervals between that patient’s studies stay meaningful. |
+| **Accession number** | SHA-256 of a **project mixer** string (`site_id` / `uid_root`) plus the original accession | Different projects produce different hashes for the same accession (useful). The mixer is **not** a secret key: site id and UID root appear in released anonymized UIDs, so someone holding released data can rebuild it and verify guessed accessions. |
+
+**Not claimed:** cryptographic resistance to online verification when the attacker already has a plausible original UID, Patient ID, or accession (for example a predictable org-root + counter pattern). That is expected for public, deterministic constructions and is common among open DICOM de-identifiers.
+
+**Do claim:** originals are not stored in the released DICOM; the authoritative map lives in the project private database—keep that database out of export/send packages.
 
 ## Dates
 
@@ -30,14 +55,16 @@ Examples of retained clinical context (depending on script / profile options):
 
 ## Pixel and face options in the DICOM profile
 
-The classic profile options “clean pixel data” and “clean recognizable visual features” are **not** claimed as automatic DICOM profile bits alone. In V19, use optional AI Features instead:
+The classic profile options “clean pixel data” and “clean recognizable visual features” are **not** claimed as automatic DICOM profile bits alone. Use optional **Embedded PHI** (OCR + English NER) after ingest instead:
 
-- [Remove burned-in text](08-process/02-remove-burned-in-text)
+- [Embedded PHI / burnt-in text](08-process/02-remove-burned-in-text) — Series View for pixels; Report Text Review for SR/PDF (Blank or Synthetic hide-in-plain-sight)
 - [Blur faces](08-process/04-blur-faces)
+
+Capture stores **removed PHI entity text only** (`EmbeddedPHI` / `EmbeddedPHIRemoved`), never full report transcripts.
 
 ## Structured reports and overlays
 
-Curve/overlay groups are removed. Whether Structured Report objects are accepted is controlled by project storage-class settings.
+Curve/overlay groups are removed. Whether Structured Report / Encapsulated PDF objects are accepted is controlled by project modalities and the Anonymization Policy (Clinical enables SR/PDF).
 
 !!! note "For compliance review"
     Have your privacy officer review the [anonymizer script](05-create-project/#anonymizer-script-editor) and AI tools for your institution. This manual is operational guidance, not legal advice.

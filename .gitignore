@@ -78,6 +78,8 @@ src/certs/
 *.dmg
 *.zip
 src/anonymizer/assets/ai/ocr/
+src/anonymizer/assets/ai/phi_ner/model/
+src/anonymizer/assets/ai/embedded_phi/model/
 src/anonymizer/assets/ai/tseg/
 src/anonymizer/assets/ai/xp_bodypart/
 src/anonymizer/assets/ai/cxp_view/

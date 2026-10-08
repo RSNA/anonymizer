@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import tkinter as tk
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,29 +12,58 @@ import customtkinter as ctk
 from anonymizer.controller.ai.batch_process import (
     AiBatchAlgorithm,
     AiBatchProcessOptions,
+    collect_exclude_areas_by_modality,
+    modalities_in_selected_studies,
     normalize_selected_algorithms,
 )
-from anonymizer.controller.ai.feature_availability import (
-    brain_structures_allowed,
-    face_blur_allowed,
-    harmonize_allowed,
-    pixel_phi_allowed,
-)
-from anonymizer.controller.ai.remove_pixel_phi import (
+from anonymizer.controller.ai.blur_face import FaceBlurMode
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     PixelPhiRemovalMode,
     normalize_pixel_phi_removal_mode,
     pixel_phi_removal_mode_menu_labels,
     pixel_phi_removal_mode_option_label,
+)
+from anonymizer.controller.ai.feature_availability import (
+    brain_structures_allowed,
+    embedded_phi_allowed,
+    face_blur_allowed,
+    harmonize_allowed,
+)
+from anonymizer.controller.runner import (
+    OcrRemoveMode,
+    normalize_ocr_remove_mode,
+    ocr_remove_mode_display_label,
+    ocr_remove_mode_menu_labels,
+    ocr_remove_mode_tooltip,
 )
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.blur_face_results import (
     face_blur_mode_from_menu_label,
     face_blur_mode_menu_values,
 )
-from anonymizer.view.ai.features.catalog import AiFeatureId, feature_description, feature_title
+from anonymizer.view.ai.features.catalog import (
+    AiFeatureId,
+    feature_capability_description,
+    feature_title,
+)
+from anonymizer.view.ai.features.look import (
+    FEATURE_ACTION_BUTTON_WIDTH,
+    FEATURE_DETAIL_PADX,
+    FEATURE_DETAIL_WRAP,
+    FEATURE_DIALOG_PAD,
+    FEATURE_INTRO_WRAP,
+    feature_title_control_kwargs,
+)
 from anonymizer.view.ai.modality_whitelist_preview_dialog import show_modality_whitelist_preview_dialog
-from anonymizer.view.common.app_window import AppToplevel
+from anonymizer.view.common.app_window import (
+    AppToplevel,
+    fit_toplevel_to_content,
+    place_toplevel_centered_on_parent,
+    present_toplevel_centered_on_parent,
+)
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
+from anonymizer.view.common.tooltip import bind_hover_tooltip
+from anonymizer.view.common.ux_fields import option_menu_width_for_labels
 
 
 @dataclass(frozen=True)
@@ -44,30 +73,30 @@ class AiBatchProcessOptionsResult:
 
 
 class AiBatchProcessOptionsDialog(AppToplevel):
-    PAD = 10
+    PAD = FEATURE_DIALOG_PAD
     SECTION_PAD = 8
-    SECTION_GAP = 10
-    BUTTON_WIDTH = 100
+    FEATURE_GAP = (0, 14)
+    BUTTON_WIDTH = FEATURE_ACTION_BUTTON_WIDTH
     BUTTON_TOP_PAD = 20
-    INTRO_WRAP = 480
+    INTRO_WRAP = FEATURE_INTRO_WRAP
 
-    _ALGORITHM_ROWS: tuple[tuple[AiBatchAlgorithm, str, str, callable], ...] = (
+    _ALGORITHM_ROWS: tuple[tuple[AiBatchAlgorithm, str, str, Callable[[], bool]], ...] = (
         (
             AiBatchAlgorithm.REMOVE_PIXEL_PHI,
-            feature_title(AiFeatureId.REMOVE_PIXEL_PHI.value),
-            feature_description(AiFeatureId.REMOVE_PIXEL_PHI.value),
-            pixel_phi_allowed,
+            feature_title(AiFeatureId.EMBEDDED_PHI.value),
+            feature_capability_description(AiFeatureId.EMBEDDED_PHI.value),
+            embedded_phi_allowed,
         ),
         (
             AiBatchAlgorithm.HARMONIZE,
             feature_title(AiFeatureId.HARMONIZE.value),
-            feature_description(AiFeatureId.HARMONIZE.value),
+            feature_capability_description(AiFeatureId.HARMONIZE.value),
             harmonize_allowed,
         ),
         (
             AiBatchAlgorithm.FACE_BLUR,
             feature_title(AiFeatureId.FACE_BLUR.value),
-            feature_description(AiFeatureId.FACE_BLUR.value),
+            feature_capability_description(AiFeatureId.FACE_BLUR.value),
             face_blur_allowed,
         ),
     )
@@ -81,6 +110,9 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         studies: Sequence[tuple[str, str]],
     ) -> None:
         super().__init__(master=parent)
+        # Build while withdrawn so the first paint is already centered (no +0+0 flash).
+        self.withdraw()
+        self._parent = parent
         self._project_dir = project_dir
         self._images_dir = images_dir
         self._studies = list(studies)
@@ -91,29 +123,32 @@ class AiBatchProcessOptionsDialog(AppToplevel):
 
         self.title(_("AI Batch Process"))
         self.resizable(False, False)
+        self.transient(parent)
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Return>", self._enter_keypress)
         self.bind("<Escape>", self._escape_keypress)
 
         self._create_widgets()
-        self.wait_visibility()
-        self.grab_set()
         self._validate_selection()
-
-    def _create_algorithm_section(self, parent: ctk.CTkFrame, row: int) -> ctk.CTkFrame:
-        section = ctk.CTkFrame(parent, border_width=1, corner_radius=8)
-        section.grid(
-            row=row,
-            column=0,
-            columnspan=2,
-            padx=self.PAD,
-            pady=(0, self.SECTION_GAP),
-            sticky="ew",
+        width, height = fit_toplevel_to_content(
+            self,
+            min_width=FEATURE_INTRO_WRAP + FEATURE_DIALOG_PAD * 4,
+            pad=FEATURE_DIALOG_PAD * 4,
         )
-        section.grid_columnconfigure(0, weight=1)
-        return section
+        present_toplevel_centered_on_parent(self, parent, width=width, height=height)
+        self.grab_set()
 
-    def _build_pixel_phi_options(self, parent: ctk.CTkFrame, pad: int) -> None:
+    def _detail_label(self, parent: ctk.CTkFrame, text: str, *, wrap: int | None = None) -> ctk.CTkLabel:
+        return ctk.CTkLabel(
+            parent,
+            text=text,
+            anchor="w",
+            justify="left",
+            wraplength=wrap if wrap is not None else FEATURE_DETAIL_WRAP,
+        )
+
+    def _build_pixel_phi_options(self, parent: ctk.CTkFrame) -> None:
+        pad = self.PAD
         removal_labels = list(pixel_phi_removal_mode_menu_labels())
         self._pixel_phi_mode_var = tk.StringVar(
             value=pixel_phi_removal_mode_option_label(PixelPhiRemovalMode.BLACKOUT)
@@ -128,83 +163,93 @@ class AiBatchProcessOptionsDialog(AppToplevel):
             variable=self._pixel_phi_mode_var,
             values=removal_labels,
             dynamic_resizing=False,
+            width=option_menu_width_for_labels(removal_labels),
         )
         self._pixel_phi_mode_menu.pack(side="left")
-        ctk.CTkLabel(
+        self._detail_label(
             mode_frame,
-            text=_("Black out is recommended for de-identification, but can influence ML training."),
-            anchor="w",
-            justify="left",
-            wraplength=self.INTRO_WRAP - pad * 4,
-            text_color="gray60",
+            _("Black out is recommended for de-identification, but can influence ML training."),
         ).pack(anchor="w", pady=(4, 0))
 
-        self._use_modality_whitelist_var = tk.IntVar(value=1)
+        remove_labels = list(ocr_remove_mode_menu_labels())
+        self._ocr_remove_mode_var = tk.StringVar(
+            value=ocr_remove_mode_display_label(OcrRemoveMode.NON_WHITELISTED)
+        )
         whitelist_frame = ctk.CTkFrame(parent, fg_color="transparent")
         whitelist_frame.grid(row=1, column=0, pady=(self.SECTION_PAD, 0), sticky="w")
         controls_row = ctk.CTkFrame(whitelist_frame, fg_color="transparent")
         controls_row.pack(anchor="w")
-        self._use_modality_whitelist_checkbox = ctk.CTkCheckBox(
+        ctk.CTkLabel(controls_row, text=_("Remove") + ":").pack(side="left", padx=(0, pad))
+        self._ocr_remove_mode_menu = ctk.CTkOptionMenu(
             controls_row,
-            text=_("Use modality whitelist"),
-            variable=self._use_modality_whitelist_var,
-            command=self._update_pixel_phi_whitelist_controls,
+            variable=self._ocr_remove_mode_var,
+            values=remove_labels,
+            command=self._on_ocr_remove_mode_changed,
+            dynamic_resizing=False,
+            width=option_menu_width_for_labels(remove_labels),
         )
-        self._use_modality_whitelist_checkbox.pack(side="left")
+        self._ocr_remove_mode_menu.pack(side="left")
+        bind_hover_tooltip(self._ocr_remove_mode_menu, lambda: ocr_remove_mode_tooltip(self._selected_ocr_remove_mode()))
         self._view_whitelist_button = ctk.CTkButton(
             controls_row,
-            text=_("View whitelist") + "…",
+            text=_("View whitelist"),
             command=self._view_whitelist_button_clicked,
         )
         self._view_whitelist_button.pack(side="left", padx=(pad, 0))
-        ctk.CTkLabel(
+        self._pixel_phi_whitelist_disabled_label = self._detail_label(
             whitelist_frame,
-            text=_(
-                "Whitelist terms combine packaged defaults with project overrides saved in Series View."
-            ),
-            anchor="w",
-            justify="left",
-            wraplength=self.INTRO_WRAP - pad * 4,
-            text_color="gray60",
-        ).pack(anchor="w", pady=(4, 0))
-        self._pixel_phi_whitelist_disabled_label = ctk.CTkLabel(
+            _("All detected OCR text will be removed; whitelist is ignored."),
+        )
+        self._pixel_phi_ner_hint_label = self._detail_label(
             whitelist_frame,
-            text=_("All detected OCR text will be removed when the whitelist is disabled."),
-            anchor="w",
-            justify="left",
-            wraplength=self.INTRO_WRAP - pad * 4,
-            text_color="gray60",
+            ocr_remove_mode_tooltip(OcrRemoveMode.PHI_ONLY),
         )
 
-    def _build_face_blur_options(self, parent: ctk.CTkFrame, pad: int) -> None:
+        self._ocr_use_exclude_areas_var = tk.IntVar(value=0)
+        modalities = modalities_in_selected_studies(self._images_dir, self._studies)
+        exclude_count = sum(
+            len(rects) for rects in collect_exclude_areas_by_modality(self._project_dir, modalities).values()
+        )
+        if exclude_count:
+            exclude_frame = ctk.CTkFrame(parent, fg_color="transparent")
+            exclude_frame.grid(row=2, column=0, pady=(self.SECTION_PAD, 0), sticky="w")
+            exclude_row = ctk.CTkFrame(exclude_frame, fg_color="transparent")
+            exclude_row.pack(anchor="w")
+            self._ocr_use_exclude_areas_checkbox = ctk.CTkCheckBox(
+                exclude_row,
+                text=_("Enable Exclude Areas"),
+                variable=self._ocr_use_exclude_areas_var,
+                **feature_title_control_kwargs(),
+            )
+            self._ocr_use_exclude_areas_checkbox.pack(side="left")
+            self._detail_label(exclude_row, _("{} defined").format(exclude_count)).pack(
+                side="left", padx=(8, 0)
+            )
+            self._detail_label(
+                exclude_frame,
+                _("Uses exclude areas saved in Series View."),
+            ).pack(anchor="w", pady=(4, 0))
+
+    def _build_face_blur_options(self, parent: ctk.CTkFrame) -> None:
         self._blur_mode_var = tk.StringVar(value=face_blur_mode_menu_values()[0])
         mode_frame = ctk.CTkFrame(parent, fg_color="transparent")
         mode_frame.grid(row=0, column=0, pady=(self.SECTION_PAD, 0), sticky="w")
         mode_row = ctk.CTkFrame(mode_frame, fg_color="transparent")
         mode_row.pack(anchor="w")
-        ctk.CTkLabel(mode_row, text=_("Face blur mode") + ":").pack(side="left", padx=(0, pad))
+        ctk.CTkLabel(mode_row, text=_("Face blur mode") + ":").pack(side="left", padx=(0, self.PAD))
+        blur_labels = list(face_blur_mode_menu_values())
         self._blur_mode_menu = ctk.CTkOptionMenu(
             mode_row,
             variable=self._blur_mode_var,
-            values=list(face_blur_mode_menu_values()),
+            values=blur_labels,
             dynamic_resizing=False,
+            width=option_menu_width_for_labels(blur_labels),
         )
         self._blur_mode_menu.pack(side="left")
 
-    def _build_harmonize_options(self, parent: ctk.CTkFrame, pad: int) -> None:
+    def _build_harmonize_options(self, parent: ctk.CTkFrame) -> None:
         frame = ctk.CTkFrame(parent, fg_color="transparent")
         frame.grid(row=0, column=0, pady=(self.SECTION_PAD, 0), sticky="w")
-
-        ctk.CTkLabel(
-            frame,
-            text=_(
-                "Uses the Harmonize resolution chosen in AI Features Setup for this workstation."
-            ),
-            anchor="w",
-            justify="left",
-            wraplength=self.INTRO_WRAP - pad * 4,
-            text_color="gray60",
-        ).pack(anchor="w", pady=(0, 4))
 
         offer_brain = brain_structures_allowed()
         self._include_brain_structures_var = tk.IntVar(value=1 if offer_brain else 0)
@@ -213,17 +258,14 @@ class AiBatchProcessOptionsDialog(AppToplevel):
             text=_("Brain structures (CT Head when present)"),
             variable=self._include_brain_structures_var,
             state="normal" if offer_brain else "disabled",
+            **feature_title_control_kwargs(),
         )
-        self._include_brain_structures_checkbox.pack(anchor="w", pady=(4, 0))
-        ctk.CTkLabel(
+        self._include_brain_structures_checkbox.pack(anchor="w")
+        self._detail_label(
             frame,
-            text=feature_description(AiFeatureId.BRAIN_STRUCTURES.value)
+            feature_capability_description(AiFeatureId.BRAIN_STRUCTURES.value)
             if offer_brain
             else _("Download Brain structures models in AI Features to use this option."),
-            anchor="w",
-            justify="left",
-            wraplength=self.INTRO_WRAP - pad * 4,
-            text_color="gray60",
         ).pack(anchor="w", pady=(4, 0))
 
         self._prefer_description_mappings_var = tk.IntVar(value=1)
@@ -231,94 +273,84 @@ class AiBatchProcessOptionsDialog(AppToplevel):
             frame,
             text=_("Prefer description mappings (skip AI when matched)"),
             variable=self._prefer_description_mappings_var,
+            **feature_title_control_kwargs(),
         ).pack(anchor="w", pady=(8, 0))
-        ctk.CTkLabel(
+        self._detail_label(
             frame,
-            text=_(
-                "When a saved original→harmonized mapping matches a series, apply it and skip the anatomy model."
-            ),
-            anchor="w",
-            justify="left",
-            wraplength=self.INTRO_WRAP - pad * 4,
-            text_color="gray60",
+            _("When a saved original→harmonized mapping matches a series, apply it and skip the anatomy model."),
         ).pack(anchor="w", pady=(4, 0))
 
     def _create_widgets(self) -> None:
         pad = self.PAD
-        section_pad = self.SECTION_PAD
 
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
         self._frame = ctk.CTkFrame(self)
-        self._frame.grid(row=0, column=0, padx=pad, pady=pad, sticky="nw")
+        self._frame.grid(row=0, column=0, padx=pad, pady=pad, sticky="nsew")
         self._frame.grid_columnconfigure(0, weight=1)
 
-        row = 0
-
-        ctk.CTkLabel(
+        self._intro_label = ctk.CTkLabel(
             self._frame,
             text=_("Select AI algorithms to run on the selected studies."),
             anchor="w",
             justify="left",
             wraplength=self.INTRO_WRAP,
-        ).grid(row=row, column=0, columnspan=2, padx=pad, pady=(pad, pad + self.SECTION_GAP), sticky="nw")
+        )
+        self._intro_label.grid(row=0, column=0, padx=pad, pady=(pad, pad), sticky="nw")
 
-        row += 1
+        self._body = ctk.CTkFrame(self._frame, fg_color="transparent")
+        self._body.grid(row=1, column=0, sticky="ew", padx=pad)
+        self._body.grid_columnconfigure(0, weight=1)
 
+        row = 0
         for algorithm, label, limitation, allowed_fn in self._ALGORITHM_ROWS:
             if not allowed_fn():
                 continue
             self._available.append(algorithm)
 
-            section = self._create_algorithm_section(self._frame, row)
+            section = ctk.CTkFrame(self._body, fg_color="transparent")
+            section.grid(row=row, column=0, pady=self.FEATURE_GAP, sticky="ew")
+            section.grid_columnconfigure(0, weight=1)
             row += 1
 
-            var = tk.IntVar(value=1)
+            var = tk.IntVar(value=0)
             self._vars[algorithm] = var
             ctk.CTkCheckBox(
                 section,
                 text=label,
                 variable=var,
                 command=self._validate_selection,
-            ).grid(row=0, column=0, padx=section_pad, pady=(section_pad, 4), sticky="w")
+                **feature_title_control_kwargs(),
+            ).grid(row=0, column=0, sticky="w")
 
             body = ctk.CTkFrame(section, fg_color="transparent")
-            body.grid(row=1, column=0, padx=section_pad, pady=(0, section_pad), sticky="nw")
+            body.grid(row=1, column=0, padx=FEATURE_DETAIL_PADX, pady=(2, 0), sticky="nw")
             body.grid_columnconfigure(0, weight=1)
             self._section_bodies[algorithm] = body
 
-            ctk.CTkLabel(
-                body,
-                text=limitation,
-                anchor="w",
-                justify="left",
-                wraplength=self.INTRO_WRAP - pad * 4,
-                text_color="gray60",
-            ).grid(row=0, column=0, sticky="nw")
+            self._detail_label(body, limitation, wrap=FEATURE_INTRO_WRAP).grid(row=0, column=0, sticky="nw")
 
+            options_parent = ctk.CTkFrame(body, fg_color="transparent")
+            options_parent.grid(row=1, column=0, sticky="nw")
+            options_parent.grid_columnconfigure(0, weight=1)
             if algorithm is AiBatchAlgorithm.REMOVE_PIXEL_PHI:
-                options_parent = ctk.CTkFrame(body, fg_color="transparent")
-                options_parent.grid(row=1, column=0, sticky="nw")
-                self._build_pixel_phi_options(options_parent, pad)
+                self._build_pixel_phi_options(options_parent)
             elif algorithm is AiBatchAlgorithm.HARMONIZE:
-                options_parent = ctk.CTkFrame(body, fg_color="transparent")
-                options_parent.grid(row=1, column=0, sticky="nw")
-                self._build_harmonize_options(options_parent, pad)
+                self._build_harmonize_options(options_parent)
             elif algorithm is AiBatchAlgorithm.FACE_BLUR:
-                options_parent = ctk.CTkFrame(body, fg_color="transparent")
-                options_parent.grid(row=1, column=0, sticky="nw")
-                self._build_face_blur_options(options_parent, pad)
+                self._build_face_blur_options(options_parent)
 
-        button_frame = ctk.CTkFrame(self._frame, fg_color="transparent")
-        button_frame.grid(
-            row=row,
+        self._button_frame = ctk.CTkFrame(self._frame, fg_color="transparent")
+        self._button_frame.grid(
+            row=2,
             column=0,
-            columnspan=2,
             padx=pad,
             pady=(self.BUTTON_TOP_PAD, pad),
             sticky="e",
         )
 
         self._cancel_button = ctk.CTkButton(
-            button_frame,
+            self._button_frame,
             width=self.BUTTON_WIDTH,
             text=_("Cancel"),
             command=self._on_cancel,
@@ -326,7 +358,7 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         self._cancel_button.grid(row=0, column=0, padx=(0, pad))
 
         self._ok_button = ctk.CTkButton(
-            button_frame,
+            self._button_frame,
             width=self.BUTTON_WIDTH,
             text=_("OK"),
             command=self._on_ok,
@@ -337,7 +369,6 @@ class AiBatchProcessOptionsDialog(AppToplevel):
             self._vars[AiBatchAlgorithm.FACE_BLUR].trace_add("write", self._update_option_visibility)
         if AiBatchAlgorithm.REMOVE_PIXEL_PHI in self._vars:
             self._vars[AiBatchAlgorithm.REMOVE_PIXEL_PHI].trace_add("write", self._update_option_visibility)
-            self._use_modality_whitelist_var.trace_add("write", self._update_pixel_phi_whitelist_controls)
         if AiBatchAlgorithm.HARMONIZE in self._vars:
             self._vars[AiBatchAlgorithm.HARMONIZE].trace_add("write", self._update_option_visibility)
         self._update_option_visibility()
@@ -355,6 +386,28 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         for algorithm, var in self._vars.items():
             self._set_section_body_visible(algorithm, visible=var.get() == 1)
         self._update_pixel_phi_whitelist_controls()
+        self._recenter_if_mapped()
+
+    def _recenter_if_mapped(self) -> None:
+        try:
+            if not self.winfo_viewable():
+                return
+        except tk.TclError:
+            return
+        width, height = fit_toplevel_to_content(
+            self,
+            min_width=FEATURE_INTRO_WRAP + FEATURE_DIALOG_PAD * 4,
+            pad=FEATURE_DIALOG_PAD * 4,
+        )
+        place_toplevel_centered_on_parent(self, self._parent, width=width, height=height)
+
+    def _selected_ocr_remove_mode(self) -> OcrRemoveMode:
+        if not hasattr(self, "_ocr_remove_mode_var"):
+            return OcrRemoveMode.NON_WHITELISTED
+        return normalize_ocr_remove_mode(self._ocr_remove_mode_var.get())
+
+    def _on_ocr_remove_mode_changed(self, _choice: str | None = None) -> None:
+        self._update_pixel_phi_whitelist_controls()
 
     def _update_pixel_phi_whitelist_controls(self, *_args) -> None:
         pixel_phi_selected = (
@@ -363,12 +416,20 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         )
         if not pixel_phi_selected or not hasattr(self, "_view_whitelist_button"):
             return
-        use_whitelist = self._use_modality_whitelist_var.get() == 1
-        self._view_whitelist_button.configure(state="normal" if use_whitelist else "disabled")
-        if use_whitelist:
-            self._pixel_phi_whitelist_disabled_label.grid_remove()
-        else:
-            self._pixel_phi_whitelist_disabled_label.pack(anchor="w", pady=(4, 0))
+        mode = self._selected_ocr_remove_mode()
+        self._view_whitelist_button.configure(
+            state="normal" if mode is OcrRemoveMode.NON_WHITELISTED else "disabled"
+        )
+        if hasattr(self, "_pixel_phi_whitelist_disabled_label"):
+            if mode is OcrRemoveMode.ALL_TEXT:
+                self._pixel_phi_whitelist_disabled_label.pack(anchor="w", pady=(4, 0))
+            else:
+                self._pixel_phi_whitelist_disabled_label.pack_forget()
+        if hasattr(self, "_pixel_phi_ner_hint_label"):
+            if mode is OcrRemoveMode.PHI_ONLY:
+                self._pixel_phi_ner_hint_label.pack(anchor="w", pady=(4, 0))
+            else:
+                self._pixel_phi_ner_hint_label.pack_forget()
 
     def _view_whitelist_button_clicked(self) -> None:
         show_modality_whitelist_preview_dialog(
@@ -395,8 +456,16 @@ class AiBatchProcessOptionsDialog(AppToplevel):
         algorithms = self._selected_algorithms()
         if not algorithms:
             return
-        blur_mode = face_blur_mode_from_menu_label(self._blur_mode_var.get())
-        pixel_phi_removal_mode = normalize_pixel_phi_removal_mode(self._pixel_phi_mode_var.get())
+        blur_mode = FaceBlurMode.GAUSSIAN
+        if hasattr(self, "_blur_mode_var"):
+            blur_mode = face_blur_mode_from_menu_label(self._blur_mode_var.get())
+        pixel_phi_removal_mode = PixelPhiRemovalMode.BLACKOUT
+        if hasattr(self, "_pixel_phi_mode_var"):
+            pixel_phi_removal_mode = normalize_pixel_phi_removal_mode(self._pixel_phi_mode_var.get())
+        ocr_remove_mode = self._selected_ocr_remove_mode()
+        ocr_use_exclude_areas = bool(
+            hasattr(self, "_ocr_use_exclude_areas_var") and self._ocr_use_exclude_areas_var.get() == 1
+        )
         include_brain = bool(
             hasattr(self, "_include_brain_structures_var") and self._include_brain_structures_var.get() == 1
         )
@@ -409,7 +478,8 @@ class AiBatchProcessOptionsDialog(AppToplevel):
                 algorithms=algorithms,
                 blur_mode=blur_mode,
                 pixel_phi_removal_mode=pixel_phi_removal_mode,
-                use_modality_whitelist=self._use_modality_whitelist_var.get() == 1,
+                ocr_remove_mode=ocr_remove_mode,
+                ocr_use_exclude_areas=ocr_use_exclude_areas,
                 include_brain_structures=include_brain,
                 prefer_description_mappings=prefer_mappings,
             ),

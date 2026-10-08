@@ -11,8 +11,10 @@ from tkinter import messagebox
 
 import customtkinter as ctk
 
-from anonymizer.controller.ai.feature_availability import face_blur_needs_license
-from anonymizer.controller.ai.remove_pixel_phi import ocr_models_ready
+from anonymizer.controller.ai.feature_availability import (
+    embedded_phi_has_models,
+    face_blur_needs_license,
+)
 from anonymizer.controller.ai.tseg.config import (
     get_ct_segmentation_mode,
     get_mr_segmentation_mode,
@@ -38,6 +40,7 @@ from anonymizer.view.ai.features.catalog import (
     AiFeatureId,
     AiModelGroupId,
     all_download_ids,
+    feature_description,
     feature_spec,
     group_by_download_id,
     groups_for,
@@ -45,12 +48,16 @@ from anonymizer.view.ai.features.catalog import (
     top_level_features,
     weight_kind_for_download_id,
 )
+from anonymizer.view.ai.features.look import (
+    FEATURE_BLOCK_PADY,
+    FEATURE_DETAIL_PADX,
+    FEATURE_DETAIL_WRAP,
+    FEATURE_INTRO_WRAP,
+    feature_title_label_kwargs,
+)
+from anonymizer.view.common.tooltip import bind_hover_tooltip
 
 logger = logging.getLogger(__name__)
-
-_FEATURE_PADY = (0, 6)
-_DETAIL_PADX = (16, 0)
-_NESTED_PADX = (8, 0)
 
 
 class AiFeaturesPanel(ctk.CTkFrame):
@@ -132,13 +139,13 @@ class AiFeaturesPanel(ctk.CTkFrame):
         group = model_group_spec(group_id)
         key = group.download_id
         frame = ctk.CTkFrame(parent, fg_color="transparent")
-        frame.grid(row=row, column=0, sticky="ew", padx=_DETAIL_PADX, pady=(4, 0))
+        frame.grid(row=row, column=0, sticky="ew", padx=FEATURE_DETAIL_PADX, pady=(4, 0))
         frame.columnconfigure(0, weight=1)
 
         header = ctk.CTkFrame(frame, fg_color="transparent")
         header.grid(row=0, column=0, sticky="ew")
         header.columnconfigure(0, weight=1)
-        ctk.CTkLabel(header, text=group.title(), anchor="w", font=ctk.CTkFont(weight="bold")).grid(
+        ctk.CTkLabel(header, text=group.title(), **feature_title_label_kwargs()).grid(
             row=0, column=0, sticky="w"
         )
 
@@ -175,7 +182,7 @@ class AiFeaturesPanel(ctk.CTkFrame):
         self._action_frames[key] = actions
 
         # Nested groups: status only (no long summary); hidden when empty.
-        summary = ctk.CTkLabel(frame, text="", anchor="w", justify="left", wraplength=460, height=1)
+        summary = ctk.CTkLabel(frame, text="", anchor="w", justify="left", wraplength=FEATURE_DETAIL_WRAP, height=1)
         summary.grid(row=1, column=0, sticky="w")
         summary.grid_remove()
         self._summary_labels[key] = summary
@@ -184,8 +191,7 @@ class AiFeaturesPanel(ctk.CTkFrame):
             text="",
             anchor="w",
             justify="left",
-            wraplength=460,
-            text_color=("gray30", "gray75"),
+            wraplength=FEATURE_DETAIL_WRAP,
         )
         status.grid(row=2, column=0, sticky="w", pady=(1, 0))
         self._status_labels[key] = status
@@ -210,15 +216,19 @@ class AiFeaturesPanel(ctk.CTkFrame):
     def _build_features(self) -> None:
         for row, feature in enumerate(top_level_features()):
             block = ctk.CTkFrame(self, fg_color="transparent")
-            block.grid(row=row, column=0, sticky="ew", pady=_FEATURE_PADY)
+            block.grid(row=row, column=0, sticky="ew", pady=FEATURE_BLOCK_PADY)
             block.columnconfigure(0, weight=1)
 
             key = feature.id.value
             header = ctk.CTkFrame(block, fg_color="transparent")
             header.grid(row=0, column=0, sticky="ew")
             header.columnconfigure(0, weight=1)
-            ctk.CTkLabel(header, text=feature.title(), anchor="w", font=ctk.CTkFont(weight="bold")).grid(
-                row=0, column=0, sticky="w"
+            title_label = ctk.CTkLabel(header, text=feature.title(), **feature_title_label_kwargs())
+            title_label.grid(row=0, column=0, sticky="w")
+            bind_hover_tooltip(
+                title_label,
+                lambda fid=feature.id: feature_description(fid.value),
+                parent=self.winfo_toplevel(),
             )
             actions = ctk.CTkFrame(header, fg_color="transparent")
             actions.grid(row=0, column=1, sticky="e")
@@ -229,21 +239,20 @@ class AiFeaturesPanel(ctk.CTkFrame):
                 text="",
                 anchor="w",
                 justify="left",
-                wraplength=480,
-                text_color=("gray30", "gray75"),
+                wraplength=FEATURE_INTRO_WRAP,
             )
-            summary.grid(row=1, column=0, sticky="w", padx=_DETAIL_PADX, pady=(1, 0))
+            summary.grid(row=1, column=0, sticky="w", padx=FEATURE_DETAIL_PADX, pady=(1, 0))
             self._summary_labels[key] = summary
-            status = ctk.CTkLabel(block, text="", anchor="w", justify="left", wraplength=480)
-            status.grid(row=2, column=0, sticky="w", padx=_DETAIL_PADX, pady=(1, 0))
+            status = ctk.CTkLabel(block, text="", anchor="w", justify="left", wraplength=FEATURE_INTRO_WRAP)
+            status.grid(row=2, column=0, sticky="w", padx=FEATURE_DETAIL_PADX, pady=(1, 0))
             self._status_labels[key] = status
             progress = ctk.CTkFrame(block, fg_color="transparent")
-            progress.grid(row=8, column=0, sticky="ew", padx=_DETAIL_PADX, pady=(2, 0))
+            progress.grid(row=8, column=0, sticky="ew", padx=FEATURE_DETAIL_PADX, pady=(2, 0))
             progress.columnconfigure(0, weight=1)
             progress.grid_remove()
             self._progress_frames[key] = progress
 
-            if feature.id == AiFeatureId.REMOVE_PIXEL_PHI:
+            if feature.id == AiFeatureId.EMBEDDED_PHI:
                 pass
             elif feature.id == AiFeatureId.HARMONIZE:
                 self._build_modality_section(block, group_id=AiModelGroupId.HARMONIZE_CT, row=3)
@@ -255,7 +264,7 @@ class AiFeaturesPanel(ctk.CTkFrame):
                 self._build_modality_section(block, group_id=AiModelGroupId.FACE_CT, row=3)
                 self._build_modality_section(block, group_id=AiModelGroupId.FACE_MR, row=4)
                 self._license_frame = ctk.CTkFrame(block, fg_color="transparent")
-                self._license_frame.grid(row=5, column=0, sticky="ew", padx=_DETAIL_PADX)
+                self._license_frame.grid(row=5, column=0, sticky="ew", padx=FEATURE_DETAIL_PADX)
                 self._license_frame.columnconfigure(0, weight=1)
                 self._license_frame.grid_remove()
 
@@ -280,8 +289,8 @@ class AiFeaturesPanel(ctk.CTkFrame):
 
         for feature in top_level_features():
             key = feature.id.value
-            if feature.id == AiFeatureId.REMOVE_PIXEL_PHI:
-                group = model_group_spec(AiModelGroupId.OCR)
+            if feature.id == AiFeatureId.EMBEDDED_PHI:
+                group = model_group_spec(AiModelGroupId.EMBEDDED_PHI)
                 self._update_feature_status(
                     key,
                     summary=feature.summary(),
@@ -347,7 +356,7 @@ class AiFeaturesPanel(ctk.CTkFrame):
         download_command: Callable[[], None],
         remove_command: Callable[[], None],
         actions_row: int = 3,
-        actions_padx: tuple[int, int] = _DETAIL_PADX,
+        actions_padx: tuple[int, int] = FEATURE_DETAIL_PADX,
     ) -> None:
         del actions_row, actions_padx  # Actions sit on the model title row.
         summary_label = self._summary_labels[key]
@@ -389,8 +398,7 @@ class AiFeaturesPanel(ctk.CTkFrame):
                 text="",
                 anchor="w",
                 justify="left",
-                wraplength=500,
-                text_color=("gray30", "gray75"),
+                wraplength=FEATURE_INTRO_WRAP,
             )
             detail.grid(row=1, column=0, sticky="w", pady=(4, 0))
             self._progress_bars[key] = progress
@@ -455,8 +463,7 @@ class AiFeaturesPanel(ctk.CTkFrame):
             text=face_license_request_instructions(),
             anchor="w",
             justify="left",
-            wraplength=500,
-            text_color=("gray30", "gray75"),
+            wraplength=FEATURE_INTRO_WRAP,
         ).grid(row=0, column=0, sticky="ew", pady=(4, 0))
 
         entry_row = ctk.CTkFrame(self._license_frame, fg_color="transparent")
@@ -601,16 +608,26 @@ class AiFeaturesPanel(ctk.CTkFrame):
                 )
             else:
                 logger.info("AI Features: XR chest view model download finished successfully")
-        else:
-            if event.error is not None or not ocr_models_ready():
-                logger.warning("AI Features: OCR model download did not complete")
+        elif event.download_id == AiModelGroupId.EMBEDDED_PHI.value:
+            ok = True
+            detail = ""
+            if isinstance(event.result, tuple) and len(event.result) >= 2:
+                ok = bool(event.result[0])
+                detail = str(event.result[1] or "")
+            if event.error is not None or not ok or not embedded_phi_has_models():
+                logger.warning("AI Features: Embedded PHI download did not complete")
                 messagebox.showerror(
-                    feature_spec(AiFeatureId.REMOVE_PIXEL_PHI).title(),
-                    _("OCR model download did not complete. Check your network connection and try again."),
+                    feature_spec(AiFeatureId.EMBEDDED_PHI).title(),
+                    detail
+                    or str(event.error)
+                    or _(
+                        "Embedded PHI model download did not complete. "
+                        "Check your network connection and try again."
+                    ),
                     parent=self.winfo_toplevel(),
                 )
             else:
-                logger.info("AI Features: OCR model download finished successfully")
+                logger.info("AI Features: Embedded PHI model download finished successfully")
         self._refresh_status()
         if self._on_flags_changed is not None:
             self._on_flags_changed()
@@ -623,8 +640,8 @@ class AiFeaturesPanel(ctk.CTkFrame):
         progress = get_model_download_progress(key)
         if progress is not None and progress.message:
             return progress.message
-        if key == AiModelGroupId.OCR.value:
-            return _("Downloading OCR models…")
+        if key == AiModelGroupId.EMBEDDED_PHI.value:
+            return _("Downloading Embedded PHI models (OCR + NER)…")
         return _("Downloading. This may take several minutes.")
 
     def _apply_download_progress(self, key: str) -> None:

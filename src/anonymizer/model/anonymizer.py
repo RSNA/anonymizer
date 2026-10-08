@@ -59,7 +59,7 @@ class Instance(Base):
     anon_sop_instance_uid: Mapped[str] = mapped_column(String, unique=True, index=True)
     series_uid: Mapped[str] = mapped_column(String, ForeignKey("series.series_uid"))
     series: Mapped["Series"] = relationship(back_populates="instances", init=False)
-    pixel_phi: Mapped[str | None] = mapped_column(String, default=None)
+    embedded_phi: Mapped[str | None] = mapped_column(String, default=None)
 
 
 class Series(Base):
@@ -73,7 +73,7 @@ class Series(Base):
     description: Mapped[str | None] = mapped_column(String, default=None)
     harmonized_description: Mapped[str | None] = mapped_column(String, default=None)
     face_blur_algorithm_applied: Mapped[str | None] = mapped_column(String, default=None)
-    pixel_phi_scanned: Mapped[bool] = mapped_column(Boolean, default=False)
+    embedded_phi_scanned: Mapped[bool] = mapped_column(Boolean, default=False)
 
     instances: Mapped[list["Instance"]] = relationship(
         back_populates="series", cascade="all, delete-orphan", init=False
@@ -233,7 +233,7 @@ class MissingSessionError(RuntimeError):
         super().__init__(message)
 
 
-def _format_pixel_phi(texts: Sequence[str]) -> str:
+def format_embedded_phi_texts(texts: Sequence[str]) -> str:
     seen: set[str] = set()
     parts: list[str] = []
     for item in texts:
@@ -248,8 +248,8 @@ def _format_pixel_phi(texts: Sequence[str]) -> str:
 
 @dataclass(frozen=True)
 class SeriesProcessingStatus:
-    pixel_phi_applied_count: int
-    pixel_phi_total_count: int
+    embedded_phi_applied_count: int
+    embedded_phi_total_count: int
     harmonized_description: str | None
     face_blur_algorithm: str | None
 
@@ -313,6 +313,13 @@ def _sqlite_column_type(column: Column) -> str | None:
         column.name,
     )
     return None
+
+
+# (table, legacy column, current column) — renamed in place so existing capture data survives.
+_LEGACY_COLUMN_RENAMES: tuple[tuple[str, str, str], ...] = (
+    ("instances", "pixel_phi", "embedded_phi"),
+    ("series", "pixel_phi_scanned", "embedded_phi_scanned"),
+)
 
 
 def _sqlite_add_column_sql(table_name: str, column: Column) -> str | None:
@@ -413,6 +420,11 @@ class AnonymizerModel:
                     continue
 
                 existing_columns = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table.name})"))}
+                for legacy_table, old_name, new_name in _LEGACY_COLUMN_RENAMES:
+                    if legacy_table == table.name and old_name in existing_columns and new_name not in existing_columns:
+                        conn.execute(text(f"ALTER TABLE {table.name} RENAME COLUMN {old_name} TO {new_name}"))
+                        existing_columns = (existing_columns - {old_name}) | {new_name}
+                        logger.info("SQLite schema sync: renamed %s.%s -> %s", table.name, old_name, new_name)
                 for column in table.columns:
                     if column.name in existing_columns:
                         continue
@@ -598,7 +610,9 @@ class AnonymizerModel:
                 tag = str(e.attrib.get("t"))
                 operation = str(e.text) if e.text is not None else ""
                 if "@remove" not in operation:
-                    self._tag_keep[tag] = operation
+                    # Store GGGGXXEE uppercase so resolve_tag_keep can match private blocks.
+                    key = tag.upper() if "XX" in tag.upper() else tag
+                    self._tag_keep[key] = operation
 
             # TODO: Handle (and TCIA required date handling, id lookups, sequences?, private tags):
             # <r en="T" t="curves">Remove curves</r>
@@ -632,6 +646,28 @@ class AnonymizerModel:
         self._script_path = script_path
         self._tag_keep.clear()
         self._load_script(script_path)
+
+    def resolve_tag_keep(self, tag: str) -> str | None:
+        """Return keep operation for ``tag``, or ``None`` if the element should be deleted.
+
+        Exact hex keys win; otherwise ``GGGGXXEE`` patterns match any byte in ``XX``.
+        """
+        import re
+
+        key = str(tag).upper()
+        if key in self._tag_keep:
+            return self._tag_keep[key]
+        # Also try original casing keys stored without XX.
+        if tag in self._tag_keep:
+            return self._tag_keep[tag]
+        for keep_tag, operation in self._tag_keep.items():
+            kt = str(keep_tag).upper()
+            if "XX" not in kt or len(kt) != 8:
+                continue
+            pattern = kt.replace("XX", "[0-9A-F]{2}")
+            if re.fullmatch(pattern, key):
+                return operation
+        return None
 
     @use_session()
     def replace_lookup_patients(self, rows: list[LookupPatient]) -> int:
@@ -727,26 +763,26 @@ class AnonymizerModel:
         return list(self.session.execute(stmt).scalars().all())
 
     @use_session(is_read_only_operation=True)
-    def study_uids_with_pixel_phi(self) -> set[str]:
-        """Study UIDs that have at least one instance with non-empty pixel_phi."""
+    def study_uids_with_embedded_phi(self) -> set[str]:
+        """Study UIDs that have at least one instance with non-empty embedded_phi."""
         stmt = (
             select(Study.study_uid)
             .join(Series, Series.study_uid == Study.study_uid)
             .join(Instance, Instance.series_uid == Series.series_uid)
-            .where(Instance.pixel_phi.is_not(None))
-            .where(Instance.pixel_phi != "")
+            .where(Instance.embedded_phi.is_not(None))
+            .where(Instance.embedded_phi != "")
             .distinct()
         )
         return set(self.session.execute(stmt).scalars().all())
 
     @use_session(is_read_only_operation=True)
-    def anon_series_uids_with_pixel_phi(self) -> set[str]:
-        """Anonymized series UIDs that have at least one instance with non-empty pixel_phi."""
+    def anon_series_uids_with_embedded_phi(self) -> set[str]:
+        """Anonymized series UIDs that have at least one instance with non-empty embedded_phi."""
         stmt = (
             select(Series.anon_series_uid)
             .join(Instance, Instance.series_uid == Series.series_uid)
-            .where(Instance.pixel_phi.is_not(None))
-            .where(Instance.pixel_phi != "")
+            .where(Instance.embedded_phi.is_not(None))
+            .where(Instance.embedded_phi != "")
             .distinct()
         )
         return set(self.session.execute(stmt).scalars().all())
@@ -1223,8 +1259,8 @@ class AnonymizerModel:
         return True
 
     @use_session()
-    def set_instance_pixel_phi(self, anon_sop_instance_uid: str, texts: Sequence[str]) -> bool:
-        formatted = _format_pixel_phi(texts)
+    def set_instance_embedded_phi(self, anon_sop_instance_uid: str, texts: Sequence[str]) -> bool:
+        formatted = format_embedded_phi_texts(texts)
         if not formatted:
             return False
         stmt = select(Instance).where(Instance.anon_sop_instance_uid == anon_sop_instance_uid)
@@ -1232,7 +1268,7 @@ class AnonymizerModel:
         if instance is None:
             logger.error("Instance with anon_sop_instance_uid '%s' not found.", anon_sop_instance_uid)
             return False
-        instance.pixel_phi = formatted
+        instance.embedded_phi = formatted
         return True
 
     @use_session()
@@ -1240,7 +1276,7 @@ class AnonymizerModel:
         """
         Clear TS-analysis harmonize metadata for a series after its on-disk cache was removed.
 
-        Clears harmonized_description only. Face blur and instance pixel_phi are unchanged.
+        Clears harmonized_description only. Face blur and instance embedded_phi are unchanged.
         """
         stmt = select(Series).where(Series.anon_series_uid == anon_series_uid)
         series = self.session.execute(stmt).scalar_one_or_none()
@@ -1728,24 +1764,24 @@ class AnonymizerModel:
         return value is not None and bool(str(value).strip())
 
     @use_session(is_read_only_operation=True)
-    def series_pixel_phi_scanned(self, anon_series_uid: str) -> bool:
-        stmt = select(Series.pixel_phi_scanned).where(Series.anon_series_uid == anon_series_uid)
+    def series_embedded_phi_scanned(self, anon_series_uid: str) -> bool:
+        stmt = select(Series.embedded_phi_scanned).where(Series.anon_series_uid == anon_series_uid)
         value = self.session.execute(stmt).scalar_one_or_none()
         return bool(value)
 
     @use_session()
-    def set_series_pixel_phi_scanned(self, anon_series_uid: str, *, scanned: bool = True) -> bool:
+    def set_series_embedded_phi_scanned(self, anon_series_uid: str, *, scanned: bool = True) -> bool:
         stmt = select(Series).where(Series.anon_series_uid == anon_series_uid)
         series = self.session.execute(stmt).scalar_one_or_none()
         if series is None:
             logger.error("Series with anon_series_uid '%s' not found.", anon_series_uid)
             return False
-        series.pixel_phi_scanned = scanned
+        series.embedded_phi_scanned = scanned
         return True
 
     @use_session()
-    def clear_series_pixel_phi_scan(self, anon_series_uid: str) -> bool:
-        return self.set_series_pixel_phi_scanned(anon_series_uid, scanned=False)
+    def clear_series_embedded_phi_scan(self, anon_series_uid: str) -> bool:
+        return self.set_series_embedded_phi_scanned(anon_series_uid, scanned=False)
 
     @use_session(is_read_only_operation=True)
     def get_series_processing_status(self, anon_series_uid: str) -> SeriesProcessingStatus | None:
@@ -1757,11 +1793,11 @@ class AnonymizerModel:
         instances = series.instances or []
         total = len(instances)
         applied = sum(
-            1 for instance in instances if instance.pixel_phi is not None and bool(str(instance.pixel_phi).strip())
+            1 for instance in instances if instance.embedded_phi is not None and bool(str(instance.embedded_phi).strip())
         )
         return SeriesProcessingStatus(
-            pixel_phi_applied_count=applied,
-            pixel_phi_total_count=total,
+            embedded_phi_applied_count=applied,
+            embedded_phi_total_count=total,
             harmonized_description=series.harmonized_description,
             face_blur_algorithm=series.face_blur_algorithm_applied,
         )

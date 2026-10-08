@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import logging
 import os
 import sys
@@ -232,6 +233,10 @@ def project_whitelist_options_path(project_dir: Path, modality_code: str) -> Pat
     return project_dir / Path("whitelists/" + modality_code.lower() + ".options.json")
 
 
+def project_exclude_zones_path(project_dir: Path, modality_code: str) -> Path:
+    return project_dir / Path("whitelists/" + modality_code.lower() + ".exclude.json")
+
+
 def project_dir_from_series_path(series_path: Path) -> Path | None:
     """Return project storage_dir from a series directory under ``public/``."""
     if len(series_path.parents) <= 3:
@@ -297,6 +302,66 @@ def load_project_whitelist(project_dir: Path, modality_code: str) -> list[str]:
         A set of whitelisted terms.
     """
     return load_whitelist_from_txt(project_whitelist_path(project_dir, modality_code))
+
+
+def _normalized_exclude_rect(rect: object) -> dict | None:
+    if not isinstance(rect, dict):
+        return None
+    try:
+        return {
+            "x1": float(rect["x1"]),
+            "y1": float(rect["y1"]),
+            "x2": float(rect["x2"]),
+            "y2": float(rect["y2"]),
+        }
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def load_project_exclude_rects(project_dir: Path, modality_code: str) -> list[dict]:
+    """Load normalized exclude rects for a modality. Missing file → empty list.
+
+    Accepts ``{"rects": [...]}`` and the older named ``{"zones": [{"rects": [...]}]}`` shape.
+    """
+    path = project_exclude_zones_path(project_dir, modality_code)
+    if not path.is_file():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(data, dict):
+        return []
+    raw: list = []
+    if isinstance(data.get("rects"), list):
+        raw = data["rects"]
+    elif isinstance(data.get("zones"), list):
+        for zone in data["zones"]:
+            if isinstance(zone, dict) and isinstance(zone.get("rects"), list):
+                raw.extend(zone["rects"])
+    out: list[dict] = []
+    for item in raw:
+        cleaned = _normalized_exclude_rect(item)
+        if cleaned:
+            out.append(cleaned)
+    return out
+
+
+def save_project_exclude_rects(project_dir: Path, modality_code: str, rects: list[dict]) -> Path:
+    """Write exclude rects for a modality (creates ``whitelists/``).
+
+    Empty ``rects`` removes the modality exclude file when present.
+    """
+    if not project_dir.is_dir():
+        raise ValueError(f"{project_dir} is not a valid directory")
+    path = project_exclude_zones_path(project_dir, modality_code)
+    if not rects:
+        if path.is_file():
+            path.unlink()
+        return path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"rects": rects}, indent=2) + "\n", encoding="utf-8")
+    return path
 
 
 def load_default_whitelist(modality_code: str) -> list[str]:

@@ -12,7 +12,7 @@ from anonymizer.controller.phi_io import build_phi_index
 from tests.opened_anonymizer_model import opened_anonymizer_model
 
 V3_METADATA_COLUMNS = (
-    ("instances", "pixel_phi"),
+    ("instances", "embedded_phi"),
     ("series", "harmonized_description"),
     ("series", "face_blur_algorithm_applied"),
     ("studies", "harmonized_description"),
@@ -138,6 +138,30 @@ def test_ensure_schema_columns_adds_v3_metadata_columns(tmp_path: Path) -> None:
 
     for table_name, column_name in V3_METADATA_COLUMNS:
         assert column_name in _column_names(db_path, table_name)
+
+
+def test_legacy_pixel_phi_columns_are_renamed_with_data(tmp_path: Path) -> None:
+    db_path = tmp_path / "legacy_pixel_phi.db"
+    _create_v2_shaped_db(db_path)
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE instances ADD COLUMN pixel_phi TEXT"))
+        conn.execute(text("ALTER TABLE series ADD COLUMN pixel_phi_scanned BOOLEAN NOT NULL DEFAULT 0"))
+        conn.execute(text("INSERT INTO studies (study_uid, anon_study_uid, patient_id, source, study_date, anon_date_delta) VALUES ('s','as','','x','20240101',0)"))
+        conn.execute(text("INSERT INTO series (series_uid, anon_series_uid, study_uid, pixel_phi_scanned) VALUES ('se','ase','s',1)"))
+        conn.execute(text("INSERT INTO instances (sop_instance_uid, anon_sop_instance_uid, series_uid, pixel_phi) VALUES ('i','ai','se','Jane Doe')"))
+        conn.commit()
+    engine.dispose()
+
+    with opened_anonymizer_model(f"sqlite:///{db_path}") as model:
+        assert model.series_embedded_phi_scanned("ase") is True
+
+    assert "pixel_phi" not in _column_names(db_path, "instances")
+    assert "pixel_phi_scanned" not in _column_names(db_path, "series")
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT embedded_phi FROM instances")).scalar() == "Jane Doe"
+    engine.dispose()
 
 
 def test_ensure_schema_columns_is_idempotent(tmp_path: Path) -> None:

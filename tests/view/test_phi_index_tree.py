@@ -41,8 +41,8 @@ def _series(uid: str, modality: str = "CT") -> PHI_SeriesIndexRecord:
         harmonized_description="",
         instance_count=5,
         face_blur_algorithm="",
-        pixel_phi_removed=False,
-        pixel_phi="",
+        embedded_phi_removed=False,
+        embedded_phi="",
     )
 
 
@@ -94,13 +94,13 @@ def test_tree_label_is_harmonized_description() -> None:
 def test_series_tree_values_align_with_study_display_columns() -> None:
     study = _study("stu")
     study.face_blurred = "Gaussian"
-    study.pixel_phi_removed = True
+    study.embedded_phi_removed = True
     study.series = [_series("ser-ct", "CT"), _series("ser-mr", "MR"), _series("ser-ct2", "CT")]
     series = study.series[1]
     series.harmonized_description = "MR Brain"
     series.face_blur_algorithm = "gaussian"
-    series.pixel_phi_removed = True
-    series.pixel_phi = "DOE, MRN"
+    series.embedded_phi_removed = True
+    series.embedded_phi = "DOE, MRN"
 
     study_vals = study.tree_values()
     series_vals = study.series_tree_values(series)
@@ -115,14 +115,14 @@ def test_series_tree_values_align_with_study_display_columns() -> None:
     assert study_by_name["num_instances"] == 10
     assert study_by_name["harmonize"] == "No"
     assert study_by_name["face_blurred"] == "Yes"
-    assert study_by_name["pixel_phi_removed"] == "Yes"
+    assert study_by_name["embedded_phi_removed"] == "Yes"
 
     series_by_name = dict(zip(fields, series_vals, strict=True))
     assert series_by_name["modality"] == "MR"
     assert series_by_name["num_instances"] == 5
     assert series_by_name["harmonize"] == "Yes"
     assert series_by_name["face_blurred"] == "Gaussian"
-    assert series_by_name["pixel_phi_removed"] == "DOE, MRN"
+    assert series_by_name["embedded_phi_removed"] == "DOE, MRN"
     assert series_by_name["phi_patient_id"] == ""
     assert series_by_name["anon_patient_id"] == ""
 

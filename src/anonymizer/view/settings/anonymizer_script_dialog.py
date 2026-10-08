@@ -14,7 +14,6 @@ from typing import Callable
 import customtkinter as ctk
 
 from anonymizer.controller.anonymizer_script import (
-    OPERANDS,
     OperandSpec,
     ScriptDocument,
     ScriptRule,
@@ -22,6 +21,7 @@ from anonymizer.controller.anonymizer_script import (
     add_rule_from_dictionary,
     always_literal_text,
     apply_incrementdate_to_rules,
+    available_operands,
     commit_script_edit,
     dicom_applicable_standard_text,
     display_operation,
@@ -35,6 +35,7 @@ from anonymizer.controller.anonymizer_script import (
     incrementdate_days,
     is_remove_operation,
     load_script_rules,
+    normalize_anonymization_policy,
     operand_id_for_operation,
     operand_id_from_syntax,
     operand_spec_by_id,
@@ -43,6 +44,7 @@ from anonymizer.controller.anonymizer_script import (
     operands_for_tag,
     rebasedate_origin,
     rules_for_incrementdate_bulk,
+    script_provenance,
     search_missing_dictionary_tags,
     stage_script_edit,
     tag_dictionary_meta,
@@ -54,7 +56,7 @@ from anonymizer.controller.process_ctp_lookup import (
     private_anonymizer_script_path,
 )
 from anonymizer.controller.project import ProjectController
-from anonymizer.model.project import ProjectModel
+from anonymizer.model.project import AnonymizationPolicy, ProjectModel
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel, install_modal_dismiss, place_toplevel_centered_on_parent
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
@@ -120,7 +122,8 @@ class AnonymizerScriptDialog(AppToplevel):
         self.bind("<Destroy>", self._on_destroy, add="+")
 
     def _available_operands(self) -> tuple[OperandSpec, ...]:
-        return OPERANDS
+        # Hide @phi / @phi(this,synth) when UI language is not English (detect v1).
+        return available_operands()
 
     def _operands_for_selected_rule(self) -> tuple[OperandSpec, ...]:
         if self._selected_tag is None:
@@ -167,20 +170,42 @@ class AnonymizerScriptDialog(AppToplevel):
             return ""
         return self.project_model.abridged_path(self._script_path, include_filename=True)
 
+    def _policy_display_label(self) -> str:
+        policy = normalize_anonymization_policy(
+            getattr(self.project_model, "anonymization_policy", AnonymizationPolicy.STRICT)
+        )
+        if policy is AnonymizationPolicy.CLINICAL:
+            return _("Clinical")
+        return _("Strict")
+
+    def _provenance_display_text(self) -> str:
+        basename, kind = script_provenance(
+            self._script_path,
+            policy=getattr(self.project_model, "anonymization_policy", AnonymizationPolicy.STRICT),
+            project_script_path=private_anonymizer_script_path(self.project_model),
+        )
+        kind_label = {
+            "packaged": _("packaged"),
+            "project": _("project"),
+            "custom": _("custom"),
+        }.get(kind, kind)
+        return f"{basename} ({kind_label})"
+
     def _refresh_path_label(self) -> None:
-        text = self._project_script_path_text()
-        self._path_label.configure(text=text)
-        if text:
-            self._path_label.grid()
-        else:
-            self._path_label.grid_remove()
+        """Refresh top-left policy / provenance chrome (path rides on provenance line)."""
+        self._policy_value_label.configure(text=self._policy_display_label())
+        provenance = _("Provenance") + ": " + self._provenance_display_text()
+        path_text = self._project_script_path_text()
+        if path_text:
+            provenance += "  " + _("Path") + ": " + path_text
+        self._provenance_meta_label.configure(text=provenance)
 
     def _create_widgets(self) -> None:
         pad = _CHILD_DIALOG_PAD
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
-        # --- Header controls (path / view / search) ---
+        # --- Header controls (policy / provenance / view / search) ---
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.grid(row=0, column=0, sticky="ew", padx=pad, pady=(pad, 0))
         header.grid_columnconfigure(0, weight=1)
@@ -188,8 +213,22 @@ class AnonymizerScriptDialog(AppToplevel):
         path_row = ctk.CTkFrame(header, fg_color="transparent")
         path_row.grid(row=0, column=0, sticky="ew", pady=(0, pad))
         path_row.grid_columnconfigure(0, weight=1)
-        self._path_label = ctk.CTkLabel(path_row, text="", anchor="w", justify="left")
-        self._path_label.grid(row=0, column=0, sticky="ew")
+        meta_col = ctk.CTkFrame(path_row, fg_color="transparent")
+        meta_col.grid(row=0, column=0, sticky="nw")
+        policy_row = ctk.CTkFrame(meta_col, fg_color="transparent")
+        policy_row.grid(row=0, column=0, sticky="w")
+        ctk.CTkLabel(policy_row, text=_("Anonymization Policy") + ":", anchor="w").pack(
+            side="left", padx=(0, 4)
+        )
+        self._policy_value_label = ctk.CTkLabel(
+            policy_row,
+            text="",
+            anchor="w",
+            font=ctk.CTkFont(weight="bold"),
+        )
+        self._policy_value_label.pack(side="left")
+        self._provenance_meta_label = ctk.CTkLabel(meta_col, text="", anchor="w", justify="left")
+        self._provenance_meta_label.grid(row=1, column=0, sticky="w")
         dicom_ver = dicom_applicable_standard_text()
         self._dicom_version_label = ctk.CTkLabel(
             path_row,
@@ -198,7 +237,7 @@ class AnonymizerScriptDialog(AppToplevel):
             anchor="e",
             justify="right",
         )
-        self._dicom_version_label.grid(row=0, column=1, sticky="e", padx=(pad, 0))
+        self._dicom_version_label.grid(row=0, column=1, sticky="ne", padx=(pad, 0))
         if not dicom_ver:
             self._dicom_version_label.grid_remove()
         self._refresh_path_label()
@@ -424,7 +463,7 @@ class AnonymizerScriptDialog(AppToplevel):
     def _operand_dropdown_width_px(self) -> int:
         """Width for toolbar + detail Operand combos: longest catalog syntax + 3 chars."""
         max_chars = len(_("All"))
-        for spec in OPERANDS:
+        for spec in self._available_operands():
             max_chars = max(max_chars, len(operand_syntax(spec)))
         return max(12, max_chars + _OPERAND_DROPDOWN_PAD_CHARS) * self._char_width_px
 
@@ -1287,9 +1326,10 @@ class AnonymizerScriptDialog(AppToplevel):
             logger.exception("Script edit commit failed")
             messagebox.showerror(_("Edit Anonymizer Script"), str(exc), parent=self)
             return
+        path_text = self.project_model.abridged_path(dest, include_filename=True)
         messagebox.showinfo(
             _("Edit Anonymizer Script"),
-            _("Anonymizer script was updated successfully."),
+            _("Anonymizer script was updated successfully.") + f"\n\n{path_text}",
             parent=self,
         )
         teardown_ctk_toplevel(self, parent=self.master)

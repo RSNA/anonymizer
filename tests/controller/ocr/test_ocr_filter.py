@@ -9,19 +9,21 @@ import numpy as np
 import pytest
 
 from anonymizer.controller.ai.batch_process import format_remove_pixel_phi_instance_detail
-from anonymizer.controller.ai.remove_pixel_phi import (
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     OcrWhitelistMatchMode,
     OcrWhitelistMatchSettings,
     PixelPhiRemovalMode,
-    _apply_frame_removal_mask,
-    _map_ocr_texts_to_source_coordinates,
-    blackout_ocr_text_areas,
     detect_text,
     filter_ocr_detections,
     filter_ocr_whitelist_only,
     load_modality_whitelist,
-    remove_pixel_phi,
     resolve_whitelist_match,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
+    _apply_frame_removal_mask,
+    _map_ocr_texts_to_source_coordinates,
+    blackout_ocr_text_areas,
+    remove_pixel_phi,
 )
 from anonymizer.controller.series_overlay import OCRText
 from anonymizer.utils.memory import MemorySnapshot, format_memory_snapshot_label
@@ -30,6 +32,11 @@ from anonymizer.utils.memory import MemorySnapshot, format_memory_snapshot_label
 def _ocr(text: str, *, prob: float = 0.9, box: tuple[int, int, int, int] = (0, 0, 20, 20)) -> OCRText:
     x1, y1, x2, y2 = box
     return OCRText(text=text, top_left=(x1, y1), bottom_right=(x2, y2), prob=prob)
+
+
+def _passthrough_phi_ner(detections, *, locale: str = "en_US"):
+    """Isolate OCR/CT filter tests from mandatory NER classification."""
+    return list(detections)
 
 
 def test_filter_ocr_detections_rejects_short_numeric_small_box() -> None:
@@ -80,10 +87,10 @@ def test_filter_ocr_detections_whitelist_filters_portable(caplog) -> None:
     detections = [_ocr("Portable", prob=0.9), _ocr("DAVIDSON", prob=0.9)]
     import logging
 
-    with caplog.at_level(logging.INFO, logger="anonymizer.controller.ai.remove_pixel_phi"):
+    with caplog.at_level(logging.INFO, logger="anonymizer.controller.ai.embedded_phi.pixel.detect_text"):
         filtered = filter_ocr_detections(detections, whitelist=["PORTABLE"])
     assert [item.text for item in filtered] == ["DAVIDSON"]
-    assert "OCR whitelist hid 'Portable'" in caplog.text
+    assert "OCR whitelist hid 1 detection(s)" in caplog.text
 
 
 def test_filter_ocr_detections_empty_whitelist_keeps_portable() -> None:
@@ -136,8 +143,12 @@ def test_load_modality_whitelist_project_file_replaces_defaults_without_removed_
     assert "BILATERAL" not in whitelist
 
 
-@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
-def test_detect_text_applies_noise_filter(mock_readtext: MagicMock) -> None:
+@patch(
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.filter_ocr_phi_ner",
+    side_effect=_passthrough_phi_ner,
+)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
+def test_detect_text_applies_noise_filter(mock_readtext: MagicMock, _mock_ner: MagicMock) -> None:
     mock_readtext.return_value = [
         ([(0, 0), (20, 0), (20, 20), (0, 20)], ";", 0.95),
         ([(0, 0), (40, 0), (40, 20), (0, 20)], "SMITH", 0.92),
@@ -148,8 +159,12 @@ def test_detect_text_applies_noise_filter(mock_readtext: MagicMock) -> None:
     assert [item.text for item in results] == ["SMITH"]
 
 
-@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
-def test_detect_text_ct_drops_single_char_spurious(mock_readtext: MagicMock) -> None:
+@patch(
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.filter_ocr_phi_ner",
+    side_effect=_passthrough_phi_ner,
+)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
+def test_detect_text_ct_drops_single_char_spurious(mock_readtext: MagicMock, _mock_ner: MagicMock) -> None:
     mock_readtext.return_value = [
         ([(0, 0), (20, 0), (20, 20), (0, 20)], "0", 0.95),
         ([(0, 0), (20, 0), (20, 20), (0, 20)], "U", 0.92),
@@ -161,8 +176,14 @@ def test_detect_text_ct_drops_single_char_spurious(mock_readtext: MagicMock) -> 
     assert [item.text for item in results] == ["SMITH"]
 
 
-@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
-def test_detect_text_ct_drops_short_numeric_and_symbol_noise(mock_readtext: MagicMock) -> None:
+@patch(
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.filter_ocr_phi_ner",
+    side_effect=_passthrough_phi_ner,
+)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
+def test_detect_text_ct_drops_short_numeric_and_symbol_noise(
+    mock_readtext: MagicMock, _mock_ner: MagicMock
+) -> None:
     """Series View CT detect (no noise filter) still drops slice/HU-style false positives."""
     mock_readtext.return_value = [
         ([(0, 0), (20, 0), (20, 20), (0, 20)], "64", 0.95),
@@ -180,8 +201,14 @@ def test_detect_text_ct_drops_short_numeric_and_symbol_noise(mock_readtext: Magi
     assert [item.text for item in results] == ["01.09.2012", "SMITH", "12345"]
 
 
-@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
-def test_detect_text_us_keeps_single_char_detections(mock_readtext: MagicMock) -> None:
+@patch(
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.filter_ocr_phi_ner",
+    side_effect=_passthrough_phi_ner,
+)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
+def test_detect_text_us_keeps_single_char_detections(
+    mock_readtext: MagicMock, _mock_ner: MagicMock
+) -> None:
     """US behavior unchanged: single-character hits are not dropped by CT veracity filter."""
     mock_readtext.return_value = [
         ([(0, 0), (20, 0), (20, 20), (0, 20)], "0", 0.95),
@@ -194,8 +221,14 @@ def test_detect_text_us_keeps_single_char_detections(mock_readtext: MagicMock) -
     assert {item.text for item in results} == {"0", "U", "SMITH"}
 
 
-@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
-def test_detect_text_us_keeps_short_numeric_without_ct_filter(mock_readtext: MagicMock) -> None:
+@patch(
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.filter_ocr_phi_ner",
+    side_effect=_passthrough_phi_ner,
+)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
+def test_detect_text_us_keeps_short_numeric_without_ct_filter(
+    mock_readtext: MagicMock, _mock_ner: MagicMock
+) -> None:
     mock_readtext.return_value = [
         ([(0, 0), (20, 0), (20, 20), (0, 20)], "64", 0.95),
         ([(0, 0), (20, 0), (20, 20), (0, 20)], "9 <", 0.91),
@@ -207,8 +240,8 @@ def test_detect_text_us_keeps_short_numeric_without_ct_filter(mock_readtext: Mag
     assert [item.text for item in results] == ["64", "9 <", "SMITH"]
 
 
-@patch("anonymizer.controller.ai.remove_pixel_phi.dcmread")
-@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
+@patch("anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi.dcmread")
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
 def test_remove_pixel_phi_all_noise_is_no_op(
     mock_readtext: MagicMock,
     mock_dcmread: MagicMock,
@@ -279,7 +312,7 @@ def test_apply_frame_removal_blackout_requires_series_view_routine() -> None:
         )
 
 
-@patch("anonymizer.controller.ai.remove_pixel_phi.inpaint")
+@patch("anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi.inpaint")
 def test_apply_frame_removal_inpaint_uses_cv2(mock_inpaint: MagicMock) -> None:
     frame = np.full((8, 8), 100, dtype=np.uint8)
     mask = np.zeros((8, 8), dtype=np.uint8)
@@ -304,9 +337,12 @@ def test_format_remove_pixel_phi_instance_detail_blackout() -> None:
         removal_mode=PixelPhiRemovalMode.BLACKOUT,
         pixels_changed=412,
     )
-    assert "blacked out" in detail.lower()
-    assert "PHI" in detail
-    assert "412 px" in detail
+    assert "Black out text" in detail
+    assert "Remove Text" in detail
+    assert "1 PHI removed" in detail
+    assert "pixels" not in detail
+    assert "text region" not in detail
+    assert "PHI" not in detail.replace("PHI removed", "")
 
 
 def test_format_memory_snapshot_label_available_only() -> None:
@@ -428,10 +464,10 @@ def test_strict_match_mode_table_does_not_hide_portable() -> None:
 
 
 def test_load_save_modality_whitelist_match_settings_round_trip(tmp_path: Path) -> None:
-    from anonymizer.controller.ai.remove_pixel_phi import (
-        load_modality_whitelist_match_settings,
-        save_modality_whitelist_match_settings,
-    )
+    from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
+    load_modality_whitelist_match_settings,
+    save_modality_whitelist_match_settings,
+)
 
     project_dir = tmp_path / "project"
     project_dir.mkdir()

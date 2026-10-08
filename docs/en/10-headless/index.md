@@ -40,7 +40,7 @@ Example AI batch config (downloadable: [`AiBatchConfig.example.json`](AiBatchCon
   "algorithms": ["harmonize", "face_blur", "remove_pixel_phi"],
   "blur_mode": "gaussian",
   "pixel_phi_removal_mode": "blackout",
-  "use_modality_whitelist": true,
+  "ocr_remove_mode": "non_whitelisted",
   "include_brain_structures": false,
   "ct_segmentation_mode": "3mm",
   "mr_segmentation_mode": "3mm",
@@ -49,7 +49,7 @@ Example AI batch config (downloadable: [`AiBatchConfig.example.json`](AiBatchCon
 }
 ```
 
-OCR whitelists remain under the project `whitelists/` directory (same as the GUI).
+OCR whitelists and exclude areas remain under the project `whitelists/` directory (same as the GUI). Set `ocr_use_exclude_areas` to true to apply saved `whitelists/{modality}.exclude.json` rectangles. `use_modality_whitelist` is still accepted and maps true to `non_whitelisted`, false to `all_text`.
 
 ## MCP server
 

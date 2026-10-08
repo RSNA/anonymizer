@@ -19,7 +19,8 @@ from anonymizer.controller.ai.batch_config import (
 )
 from anonymizer.controller.ai.batch_process import AiBatchProcessOptions, AiBatchSummary
 from anonymizer.controller.ai.blur_face import FaceBlurMode
-from anonymizer.controller.ai.remove_pixel_phi import PixelPhiRemovalMode
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import PixelPhiRemovalMode
+from anonymizer.controller.runner import OcrRemoveMode
 
 
 def test_round_trip_json_to_options() -> None:
@@ -31,7 +32,8 @@ def test_round_trip_json_to_options() -> None:
         ),
         blur_mode=FaceBlurMode.MEDIAN,
         pixel_phi_removal_mode=PixelPhiRemovalMode.INPAINT,
-        use_modality_whitelist=False,
+        ocr_remove_mode=OcrRemoveMode.ALL_TEXT,
+        ocr_use_exclude_areas=True,
         include_brain_structures=True,
         ct_segmentation_mode="1.5mm",
         mr_segmentation_mode="6mm",
@@ -45,7 +47,8 @@ def test_round_trip_json_to_options() -> None:
         algorithms=restored.algorithms,
         blur_mode=FaceBlurMode.MEDIAN,
         pixel_phi_removal_mode=PixelPhiRemovalMode.INPAINT,
-        use_modality_whitelist=False,
+        ocr_remove_mode=OcrRemoveMode.ALL_TEXT,
+        ocr_use_exclude_areas=True,
         include_brain_structures=True,
         prefer_description_mappings=True,
     )
@@ -64,6 +67,27 @@ def test_from_dict_parses_plan_example() -> None:
     )
     assert config.studies == "all"
     assert config.ct_segmentation_mode == "3mm"
+    assert config.ocr_remove_mode is OcrRemoveMode.NON_WHITELISTED
+
+
+def test_from_dict_migrates_use_modality_whitelist_false() -> None:
+    config = AiBatchConfig.from_dict(
+        {
+            "algorithms": ["remove_pixel_phi"],
+            "use_modality_whitelist": False,
+        }
+    )
+    assert config.ocr_remove_mode is OcrRemoveMode.ALL_TEXT
+
+
+def test_from_dict_migrates_ocr_exclude_zones_to_enable_flag() -> None:
+    config = AiBatchConfig.from_dict(
+        {
+            "algorithms": ["remove_pixel_phi"],
+            "ocr_exclude_zones": {"US": ["measurement panel"]},
+        }
+    )
+    assert config.ocr_use_exclude_areas is True
 
 
 def test_empty_algorithms_raises() -> None:

@@ -521,6 +521,9 @@ class Anonymizer(ctk.CTk):
             if not self.controller:
                 raise RuntimeError(_("Fatal Internal Error, Project Controller not created"))
 
+            # Install Strict/Clinical packaged script beside ProjectModel.json.
+            self.controller.apply_anonymization_policy(model.anonymization_policy)
+
             if java_phi_studies:
                 self.controller.import_java_phi_studies(java_phi_studies)
 
@@ -1830,7 +1833,12 @@ def main(
     # path[0]=="" resolves to install_dir and can shadow venv packages (e.g. totalsegmentator).
     if sys.path and sys.path[0] in ("", "."):
         sys.path.pop(0)
-    from anonymizer.controller.ai.remove_pixel_phi import OCR_MODEL_DIR, OcrModelStatus, probe_ocr_models
+    from anonymizer.controller.ai.embedded_phi.ner.cache import NerModelStatus, probe_ner_models
+    from anonymizer.controller.ai.embedded_phi.pixel.cache import (
+        OCR_MODEL_DIR,
+        OcrModelStatus,
+        probe_ocr_models,
+    )
 
     tseg_home = Path("assets/ai/tseg")
     tseg_weights = tseg_home / "nnunet" / "results"
@@ -1849,8 +1857,9 @@ def main(
     logger.info(f"Customtkinter Version: {ctk.__version__}")
     logger.info(f"pydicom Version: {pydicom_version}, pynetdicom Version: {pynetdicom_version}")
 
-    # OCR models download on demand from AI Setup dialog.
+    # Embedded PHI models download on demand from AI Features.
     ocr_status, ocr_detail = probe_ocr_models()
+    ner_status, ner_detail = probe_ner_models()
     if ocr_status == OcrModelStatus.READY:
         try:
             file_count = len([p for p in OCR_MODEL_DIR.iterdir() if not p.name.startswith(".")])
@@ -1858,10 +1867,11 @@ def main(
             file_count = 0
         logger.info("OCR models: downloaded (%d files)", file_count)
     else:
-        logger.info(
-            "OCR models: %s (enable Remove Pixel PHI in AI Features setup to download)",
-            ocr_detail,
-        )
+        logger.info("OCR models: %s (download Embedded PHI in AI Features)", ocr_detail)
+    if ner_status == NerModelStatus.READY:
+        logger.info("NER models: ready")
+    else:
+        logger.info("NER models: %s (download Embedded PHI in AI Features)", ner_detail)
 
     # TotalSegmentator runtime (Harmonize / Face Blur prerequisites and model cache).
     from anonymizer.controller.ai.tseg.readiness import log_runtime_status

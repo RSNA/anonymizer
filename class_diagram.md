@@ -33,7 +33,7 @@ flowchart TB
         C_BATCH["controller.ai.batch_process / batch_config"]
         C_IO["controller.series_io / …"]
         C_HARM["controller.ai.harmonize"]
-        C_OCR["controller.ai.remove_pixel_phi"]
+        C_OCR["controller.ai.embedded_phi.pixel.remove_pixel_phi"]
         C_PROJECT --- C_ANON
         C_PROJECT --- C_WORK
         C_PROJECT --- C_RUN

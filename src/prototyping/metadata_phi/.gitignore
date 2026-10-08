@@ -1,0 +1,13 @@
+.model_cache/
+*.pyc
+__pycache__/
+# Regenerated via `prep-real-data` from local Open-i / TCIA trees (license-bound).
+fixtures/en_US/real/*.jsonl
+# Regenerated via `prep-eval-corpus` from local trees (may include real PHI e.g. HEROLIM).
+fixtures/en_US/corpus/*.jsonl
+fixtures/en_US/corpus/MANIFEST.md
+fixtures/en_US/heldout/
+# Regenerated via `prep-phi-dataset`.
+fixtures/en_US/dataset/*.jsonl
+fixtures/en_US/dataset/*.manifest.json
+fixtures/en_US/dataset/eval_dataset.md

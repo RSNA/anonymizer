@@ -30,6 +30,8 @@ dependencies = [
     "easyocr",
     "torch",
     "torchvision",
+    "transformers>=5",
+    "huggingface-hub",
     "cryptography",
     "requests",
     "requests-oauthlib",
@@ -46,6 +48,8 @@ dependencies = [
     "nibabel",
     "dicom2nifti>=2.6",
     "tkinterdnd2>=0.6.3",
+    "pypdfium2>=5.14.0",
+    "pypdf>=6.19.0",
 ]
 
 [project.scripts]
@@ -100,6 +104,12 @@ medgemma-chat = [
     "pillow",
     "accelerate",
     "bitsandbytes>=0.50",
+]
+metadata-phi = [
+    "presidio-analyzer>=2.2",
+    "transformers>=5",
+    "spacy>=3.7",
+    "pypdf>=4.0",
 ]
 
 [tool.ruff]

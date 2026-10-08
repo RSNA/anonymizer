@@ -11,13 +11,13 @@ from anonymizer.controller.ai.batch_process import (
     format_remove_pixel_phi_instance_detail,
     format_remove_pixel_phi_series_message,
 )
-from anonymizer.controller.ai.remove_pixel_phi import (
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     PixelPhiRemovalMode,
     detect_text,
     filter_ocr_detections,
     ocr_image_for_frame,
-    remove_pixel_phi,
 )
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import remove_pixel_phi
 from anonymizer.controller.runner import RemovePixelPhiRunner
 from anonymizer.controller.series_io import load_series_frames
 from anonymizer.utils.storage import load_default_whitelist
@@ -48,15 +48,18 @@ def test_us_rgb_ux_log_lines_match_fixture() -> None:
         pixels_changed=US_RGB_BATCH_PIXELS_CHANGED,
         removal_mode=PixelPhiRemovalMode.BLACKOUT,
     )
+    region_count = len(US_RGB_BATCH_REMOVED_TEXTS)
 
     assert instance_line == (
-        'Instance 1/1: blacked out "mindray", "KMR", "X-RAYS", "26,05/2018", "13.09:16", "MI 0.9", "TIS 0.3", "AP" '
-        "(+13 more) (18,316 px)"
+        f"Instance 1/1: Remove Text · Black out text · {region_count} PHI removed"
     )
     assert series_line == (
-        'Modified 1/1 · removed: "mindray", "KMR", "X-RAYS", "26,05/2018", "13.09:16", "MI 0.9" '
-        "(+15 more) · 18,316 pixels blacked out"
+        f"PHI removed · 1/1 instance(s) · Remove Text · Black out text · "
+        f"{region_count} PHI removed"
     )
+    for token in US_RGB_BATCH_REMOVED_TEXTS:
+        assert token not in instance_line
+        assert token not in series_line
 
 
 def test_us_rgb_series_view_detect_is_not_batch_removal_list() -> None:
@@ -89,7 +92,16 @@ def test_us_rgb_series_view_after_batch_shows_no_whitelist_display_survivors(
 
         ds = pydicom.dcmread(dcm_path)
         bgr_after = ocr_image_for_frame(loaded.metadata, ds.pixel_array)
-        after_all = detect_text(bgr_after, handle.reader, modality="US", apply_noise_filter=False) or []
+        after_all = (
+            detect_text(
+                bgr_after,
+                handle.reader,
+                modality="US",
+                apply_noise_filter=False,
+                apply_phi_ner_filter=False,
+            )
+            or []
+        )
         us_wl = [item.upper() for item in load_default_whitelist("US")]
         after_display = filter_ocr_detections(after_all, whitelist=us_wl)
         display_texts = [item.text for item in after_display]

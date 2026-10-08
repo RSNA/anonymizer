@@ -40,7 +40,7 @@ Beispiel KI-Stapel-Konfiguration (herunterladbar: [`AiBatchConfig.example.json`]
   "algorithms": ["harmonize", "face_blur", "remove_pixel_phi"],
   "blur_mode": "gaussian",
   "pixel_phi_removal_mode": "blackout",
-  "use_modality_whitelist": true,
+  "ocr_remove_mode": "non_whitelisted",
   "include_brain_structures": false,
   "ct_segmentation_mode": "3mm",
   "mr_segmentation_mode": "3mm",

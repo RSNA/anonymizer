@@ -6,6 +6,7 @@ import os
 import time
 from copy import copy, deepcopy
 from dataclasses import asdict, dataclass, field
+from enum import StrEnum
 from logging import INFO, WARNING, getLevelName
 from pathlib import Path
 from pprint import pformat
@@ -17,6 +18,13 @@ from pynetdicom._globals import DEFAULT_TRANSFER_SYNTAXES  # type: ignore
 from anonymizer.utils.modalities import DEFAULT_PROJECT_MODALITIES, get_modalities
 from anonymizer.utils.translate import _
 from anonymizer.utils.version import get_version
+
+
+class AnonymizationPolicy(StrEnum):
+    """Ingest script policy: Strict (default) or Clinical (compiled script)."""
+
+    STRICT = "strict"
+    CLINICAL = "clinical"
 
 
 def _use_ascii_storage_dirs() -> bool:
@@ -118,7 +126,7 @@ class ProjectModel:
     """
 
     # Project Model Version Control
-    MODEL_VERSION = 11
+    MODEL_VERSION = 12
 
     # SQLite DB configuration for SQLAlchemy
     # TODO: expand for other supported databases (PostgreSQL, MySQL, etc.)
@@ -222,6 +230,7 @@ class ProjectModel:
     aws_cognito: AWSCognito = field(default_factory=default_aws_cognito)
     network_timeouts: NetworkTimeouts = field(default_factory=default_timeouts)
     anonymizer_script_path: Path = field(default=Path("assets/scripts/default-anonymizer.script"), metadata=path_field)
+    anonymization_policy: AnonymizationPolicy = AnonymizationPolicy.STRICT
 
     def __post_init__(self):        # Sub-directories in the storage directory:
         if _use_ascii_storage_dirs():
@@ -236,6 +245,12 @@ class ProjectModel:
             self.PHI_EXPORT_DIR = _("phi_export")
             self.QUARANTINE_DIR = _("quarantine")
             self.BATCH_RUNS_DIR = _("batch_runs")
+        # Missing / unknown policy → Strict (MODEL_VERSION 12).
+        raw_policy = getattr(self, "anonymization_policy", AnonymizationPolicy.STRICT)
+        try:
+            self.anonymization_policy = AnonymizationPolicy(str(raw_policy).strip().lower())
+        except ValueError:
+            self.anonymization_policy = AnonymizationPolicy.STRICT
         self.set_storage_classes_from_modalities()
 
     def get_class_name(self) -> str:

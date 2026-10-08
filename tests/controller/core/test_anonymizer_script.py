@@ -12,9 +12,12 @@ from anonymizer.controller.anonymizer_script import (
     ScriptViewMode,
     add_rule_from_dictionary,
     always_literal_text,
+    anonymization_policy_display_name,
+    anonymization_policy_tooltip,
     commit_script_edit,
     demote_rule,
     display_operation,
+    embedded_phi_batch_explainer,
     filter_rules,
     format_operand,
     has_missing_dictionary_tags,
@@ -23,17 +26,22 @@ from anonymizer.controller.anonymizer_script import (
     normalize_operation,
     operand_id_for_operation,
     operand_id_from_syntax,
+    packaged_script_basename_for_policy,
+    packaged_script_path_for_policy,
     page_slice,
     promote_rule,
+    script_provenance,
     search_dicom_dictionary,
     search_missing_dictionary_tags,
     search_removed_rules,
+    should_install_anonymization_policy,
     stage_script_edit,
     validate_document,
     validate_operation,
     write_script_rules,
 )
 from anonymizer.controller.process_ctp_lookup import private_anonymizer_script_path
+from anonymizer.model.project import AnonymizationPolicy
 
 
 def _mini_script(path: Path) -> Path:
@@ -347,3 +355,62 @@ def test_commit_script_edit_reloads_tag_keep(controller) -> None:
     assert dest.is_file()
     assert "00100020" not in controller.anonymizer.model._tag_keep
     assert controller.model.anonymizer_script_path == dest
+
+
+def test_packaged_script_for_policy() -> None:
+    assert packaged_script_basename_for_policy(AnonymizationPolicy.STRICT) == "default-anonymizer.script"
+    assert packaged_script_basename_for_policy(AnonymizationPolicy.CLINICAL) == "clinical-anonymizer.script"
+    strict = packaged_script_path_for_policy(AnonymizationPolicy.STRICT)
+    clinical = packaged_script_path_for_policy(AnonymizationPolicy.CLINICAL)
+    assert strict.name == "default-anonymizer.script"
+    assert clinical.name == "clinical-anonymizer.script"
+    assert strict.is_file()
+    assert clinical.is_file()
+
+
+def test_script_provenance_kinds(tmp_path: Path) -> None:
+    packaged = packaged_script_path_for_policy(AnonymizationPolicy.STRICT)
+    project = tmp_path / "SITE-anonymizer.script"
+    project.write_text(packaged.read_text(encoding="utf-8"), encoding="utf-8")
+    custom = tmp_path / "elsewhere.script"
+    custom.write_text("<script></script>\n", encoding="utf-8")
+
+    assert script_provenance(
+        packaged,
+        policy=AnonymizationPolicy.STRICT,
+        project_script_path=project,
+    ) == ("default-anonymizer.script", "packaged")
+    assert script_provenance(
+        project,
+        policy=AnonymizationPolicy.CLINICAL,
+        project_script_path=project,
+    ) == ("clinical-anonymizer.script", "project")
+    assert script_provenance(
+        custom,
+        policy=AnonymizationPolicy.STRICT,
+        project_script_path=project,
+    ) == ("elsewhere.script", "custom")
+
+
+def test_should_install_anonymization_policy() -> None:
+    assert anonymization_policy_display_name(AnonymizationPolicy.STRICT) == "Strict"
+    assert anonymization_policy_display_name(AnonymizationPolicy.CLINICAL) == "Clinical"
+    assert "Image-focused" in anonymization_policy_tooltip(AnonymizationPolicy.STRICT)
+    assert "SR and PDF" in anonymization_policy_tooltip(AnonymizationPolicy.STRICT)
+    clinical_tip = anonymization_policy_tooltip(AnonymizationPolicy.CLINICAL)
+    assert "TCIA" in clinical_tip
+    assert "SR and PDF" in clinical_tip
+    assert should_install_anonymization_policy(
+        selected=AnonymizationPolicy.CLINICAL,
+        installed=AnonymizationPolicy.STRICT,
+    )
+    assert not should_install_anonymization_policy(
+        selected=AnonymizationPolicy.CLINICAL,
+        installed=AnonymizationPolicy.CLINICAL,
+    )
+    strict_batch = embedded_phi_batch_explainer(AnonymizationPolicy.STRICT)
+    clinical_batch = embedded_phi_batch_explainer(AnonymizationPolicy.CLINICAL)
+    assert "OCR on burnt-in image pixels" in strict_batch
+    assert "OCR on burnt-in image pixels" in clinical_batch
+    assert "already removed" in strict_batch
+    assert "kept report" in clinical_batch

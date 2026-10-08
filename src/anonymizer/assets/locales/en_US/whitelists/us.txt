@@ -28,6 +28,8 @@ LLD # Left Lateral Decubitus
 RLD # Right Lateral Decubitus
 ERECT
 SEMI-ERECT
+SEMI-UPRIGHT
+UPRIGHT
 SITTING
 
 # --- Anatomy (Very General - Add specific non-PHI terms carefully) ---

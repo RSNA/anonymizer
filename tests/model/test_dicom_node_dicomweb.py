@@ -64,5 +64,5 @@ def test_dicom_node_json_roundtrip_defaults():
 
 
 def test_model_version_is_current():
-    assert ProjectModel.MODEL_VERSION == 11
+    assert ProjectModel.MODEL_VERSION == 12
     assert ProjectModel().version == ProjectModel.MODEL_VERSION

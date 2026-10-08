@@ -23,6 +23,7 @@ class OCRText:
     top_left: tuple[int, int]
     bottom_right: tuple[int, int]
     prob: float
+    phi_label: str | None = None  # NER class when classified (NAME, DATE, …)
 
     def get_bounding_box(self) -> tuple[int, int, int, int]:
         """Returns the bounding box as (x1, y1, x2, y2)."""

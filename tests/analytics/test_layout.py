@@ -75,7 +75,7 @@ def test_ai_coverage_omits_rounded_zero_percent() -> None:
         series_total=791,
         series_harmonized=310,
         series_face_blur=1,
-        series_pixel_phi=0,
+        series_embedded_phi=0,
     )
     labels = [b.label for b in dist.items]
     assert _("Harmonize") in labels

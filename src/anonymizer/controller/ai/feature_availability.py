@@ -5,6 +5,16 @@ View imports these directly. Status strings, download manager, and catalog regis
 
 from __future__ import annotations
 
+from anonymizer.controller.ai.embedded_phi.ner.cache import (
+    NerModelStatus,
+    ner_ready,
+    probe_ner_models,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.cache import (
+    OcrModelStatus,
+    ocr_models_ready,
+    probe_ocr_models,
+)
 from anonymizer.controller.ai.harmonize.cxp_view import (
     CxpViewModelStatus,
     cxp_view_ready,
@@ -14,11 +24,6 @@ from anonymizer.controller.ai.harmonize.xp_bodypart import (
     XpBodypartModelStatus,
     probe_xp_bodypart_models,
     xp_bodypart_ready,
-)
-from anonymizer.controller.ai.remove_pixel_phi import (
-    OcrModelStatus,
-    ocr_models_ready,
-    probe_ocr_models,
 )
 from anonymizer.controller.ai.tseg.config import (
     get_ct_segmentation_mode,
@@ -40,8 +45,8 @@ from anonymizer.controller.ai.tseg.readiness import (
 )
 
 
-def pixel_phi_allowed() -> bool:
-    return ocr_models_ready()
+def embedded_phi_allowed() -> bool:
+    return embedded_phi_has_models()
 
 
 def harmonize_allowed() -> bool:
@@ -82,11 +87,17 @@ def brain_structures_allowed() -> bool:
 
 
 def any_ai_batch_feature_allowed() -> bool:
-    return pixel_phi_allowed() or harmonize_allowed() or face_blur_allowed()
+    return embedded_phi_allowed() or harmonize_allowed() or face_blur_allowed()
 
 
-def remove_pixel_phi_has_models() -> bool:
-    return ocr_models_ready()
+def embedded_phi_has_models() -> bool:
+    """OCR ∧ NER — Series View / pixel_report / batch Embedded PHI."""
+    return ocr_models_ready() and ner_ready()
+
+
+def report_text_phi_ready() -> bool:
+    """NER only — Encapsulated PDF text layer and SR Report View detect."""
+    return ner_ready()
 
 
 def harmonize_has_models() -> bool:
@@ -117,9 +128,12 @@ def face_mr_has_models() -> bool:
     return face_mr_ready()
 
 
-def remove_pixel_phi_needs_download() -> bool:
+def embedded_phi_needs_download() -> bool:
     ocr_status, _ = probe_ocr_models()
-    return ocr_status in {OcrModelStatus.MISSING, OcrModelStatus.FAILED}
+    ner_status, _ = probe_ner_models()
+    ocr_needs = ocr_status in {OcrModelStatus.MISSING, OcrModelStatus.FAILED}
+    ner_needs = ner_status in {NerModelStatus.MISSING, NerModelStatus.FAILED}
+    return ocr_needs or ner_needs
 
 
 def harmonize_ct_needs_download() -> bool:

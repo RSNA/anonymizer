@@ -5,7 +5,7 @@ Esta página resume en lenguaje sencillo cómo el Anonymizer sigue el DICOM Basi
 ## Qué se elimina o se sustituye
 
 - El nombre y el ID del paciente pasan a valores anonimizados del ámbito del proyecto (ID del Sitio + número secuencial de paciente). La misma persona conserva el mismo ID anonimizado en los estudios del proyecto.
-- Los UIDs se sustituyen por valores nuevos derivados para el proyecto (hash de los originales en las versiones actuales) para que los enlaces entre imágenes se mantengan coherentes sin exponer los UIDs de origen.
+- Los UIDs se sustituyen por valores deterministas derivados para el proyecto para que los enlaces entre imágenes se mantengan coherentes. Estos hashes son **sin secreto** (enlace estable en el proyecto, no seudonimización con clave) — ver la sección en inglés [Deterministic replacements](../en/deidentification-protocol.md#deterministic-replacements-uids-dates-accessions).
 - Se eliminan muchas etiquetas de flujo clínico y privadas.
 - El archivo registra que se eliminó la identidad del paciente y nombra el RSNA DICOM Anonymizer como método.
 

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.ai.remove_pixel_phi import ocr_models_ready
+from anonymizer.controller.ai.embedded_phi.pixel.cache import ocr_models_ready
 from tests.paths import REPO_ROOT
 
 # EasyOCR cache is relative to the anonymizer package root (assets/ai/ocr/model).

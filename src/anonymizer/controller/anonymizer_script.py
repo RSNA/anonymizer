@@ -12,12 +12,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from anonymizer.controller.process_ctp_lookup import private_anonymizer_script_path
+from anonymizer.model.project import AnonymizationPolicy
 
 if TYPE_CHECKING:
     from anonymizer.controller.project import ProjectController
     from anonymizer.model.project import ProjectModel
 
 logger = logging.getLogger(__name__)
+
+_PACKAGED_SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "assets" / "scripts"
+_STRICT_SCRIPT_NAME = "default-anonymizer.script"
+_CLINICAL_SCRIPT_NAME = "clinical-anonymizer.script"
 
 _REMOVE_MARKER = "@remove"
 _ROUND_RE = re.compile(r"^@round\(\s*this\s*,\s*(\d+)\s*\)$", re.IGNORECASE)
@@ -333,6 +338,114 @@ def dicom_applicable_standard_text() -> str:
     return f"DICOM 3.0 ({edition})"
 
 
+def normalize_anonymization_policy(
+    policy: AnonymizationPolicy | str | None,
+) -> AnonymizationPolicy:
+    """Return a valid policy; unknown/missing → Strict."""
+    if policy is None:
+        return AnonymizationPolicy.STRICT
+    try:
+        return AnonymizationPolicy(str(policy).strip().lower())
+    except ValueError:
+        return AnonymizationPolicy.STRICT
+
+
+def packaged_script_basename_for_policy(
+    policy: AnonymizationPolicy | str | None,
+) -> str:
+    """Packaged script filename that backs ``policy``."""
+    policy = normalize_anonymization_policy(policy)
+    if policy is AnonymizationPolicy.CLINICAL:
+        return _CLINICAL_SCRIPT_NAME
+    return _STRICT_SCRIPT_NAME
+
+
+def packaged_script_path_for_policy(policy: AnonymizationPolicy | str | None) -> Path:
+    """Absolute path to the packaged script asset for ``policy``."""
+    return _PACKAGED_SCRIPTS_DIR / packaged_script_basename_for_policy(policy)
+
+
+def anonymization_policy_display_name(policy: AnonymizationPolicy | str | None) -> str:
+    """English UI name for ``policy`` (caller wraps with ``_`` for translation)."""
+    policy = normalize_anonymization_policy(policy)
+    if policy is AnonymizationPolicy.CLINICAL:
+        return "Clinical"
+    return "Strict"
+
+
+def anonymization_policy_tooltip(policy: AnonymizationPolicy | str | None) -> str:
+    """English hover summary for ``policy`` (caller wraps with ``_`` for translation)."""
+    policy = normalize_anonymization_policy(policy)
+    if policy is AnonymizationPolicy.CLINICAL:
+        return (
+            "Keeps report and clinical free-text tags, plus TCIA private-tag keep rules. "
+            "Enables SR and PDF modalities. Unknown private tags are still removed."
+        )
+    return (
+        "Default. Image-focused: wipes private tags and removes most report and clinical free text. "
+        "SR and PDF modalities stay off."
+    )
+
+
+def embedded_phi_batch_explainer(policy: AnonymizationPolicy | str | None) -> str:
+    """English batch-dialog sentence (caller wraps with ``_``). Pixels vs ingest text."""
+    policy = normalize_anonymization_policy(policy)
+    if policy is AnonymizationPolicy.CLINICAL:
+        return (
+            "Clinical policy kept report and clinical free text at ingest. "
+            "This step is OCR on burnt-in image pixels."
+        )
+    return (
+        "Strict policy already removed most report and clinical free text at ingest. "
+        "This step is OCR on burnt-in image pixels."
+    )
+
+
+def should_install_anonymization_policy(
+    *,
+    selected: AnonymizationPolicy | str | None,
+    installed: AnonymizationPolicy | str | None,
+) -> bool:
+    """True when Accept/Update must copy the packaged script (policy actually changed)."""
+    return normalize_anonymization_policy(selected) != normalize_anonymization_policy(installed)
+
+
+def script_provenance(
+    script_path: Path,
+    *,
+    policy: AnonymizationPolicy | str | None,
+    project_script_path: Path,
+) -> tuple[str, str]:
+    """Return ``(script_basename, kind)`` for the script being edited.
+
+    ``kind`` is one of ``packaged``, ``project``, or ``custom``.
+    """
+    policy = normalize_anonymization_policy(policy)
+    policy_basename = packaged_script_basename_for_policy(policy)
+    try:
+        resolved = Path(script_path).resolve()
+    except OSError:
+        resolved = Path(script_path)
+
+    for basename in (_STRICT_SCRIPT_NAME, _CLINICAL_SCRIPT_NAME):
+        packaged = _PACKAGED_SCRIPTS_DIR / basename
+        try:
+            if packaged.is_file() and resolved == packaged.resolve():
+                return basename, "packaged"
+        except OSError:
+            continue
+
+    try:
+        project_resolved = Path(project_script_path).resolve()
+    except OSError:
+        project_resolved = Path(project_script_path)
+    if resolved == project_resolved or Path(script_path) == Path(project_script_path):
+        return policy_basename, "project"
+
+    name = Path(script_path).name or policy_basename
+    return name, "custom"
+
+
 def tag_dictionary_vr(tag: str) -> str | None:
     """Return the DICOM dictionary VR for ``tag`` (8-hex), or None if unknown."""
     meta = tag_dictionary_meta(tag)
@@ -415,11 +528,19 @@ def operand_tag_incompatibility(
     return None
 
 
-def operands_for_tag(*, tag: str, name: str = "") -> tuple[OperandSpec, ...]:
-    """Catalog operands allowed for ``tag`` (VR / name gates only)."""
+def available_operands(*, language_code: str | None = None) -> tuple[OperandSpec, ...]:
+    """Catalog operands for the script editor."""
+    _ = language_code
+    return OPERANDS
+
+
+def operands_for_tag(
+    *, tag: str, name: str = "", language_code: str | None = None
+) -> tuple[OperandSpec, ...]:
+    """Catalog operands allowed for ``tag`` (VR / name / language gates)."""
     return tuple(
         spec
-        for spec in OPERANDS
+        for spec in available_operands(language_code=language_code)
         if operand_tag_incompatibility(spec.id, tag=tag, name=name) is None
     )
 

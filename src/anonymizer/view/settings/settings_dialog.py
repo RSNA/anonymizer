@@ -4,6 +4,7 @@ This module contains the SettingsDialog class, which is a dialog window for mana
 
 import logging
 import string
+import tkinter as tk
 from copy import copy
 from pathlib import Path
 from tkinter import filedialog, messagebox
@@ -11,9 +12,15 @@ from typing import List, Tuple
 
 import customtkinter as ctk
 
+from anonymizer.controller.anonymizer_script import (
+    anonymization_policy_display_name,
+    anonymization_policy_tooltip,
+    normalize_anonymization_policy,
+    should_install_anonymization_policy,
+)
 from anonymizer.controller.process_ctp_lookup import CtpLookupPreview
 from anonymizer.controller.project import ProjectController
-from anonymizer.model.project import AWSCognito, DICOMNode, ProjectModel
+from anonymizer.model.project import AnonymizationPolicy, AWSCognito, DICOMNode, ProjectModel
 from anonymizer.utils.logging import set_logging_levels
 from anonymizer.utils.storage import (
     JavaAnonymizerExportedStudy,
@@ -23,6 +30,7 @@ from anonymizer.utils.translate import _, get_current_language_code
 from anonymizer.view.common.app_window import AppToplevel, install_modal_dismiss
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import default_char_width_px
+from anonymizer.view.common.tooltip import bind_hover_tooltip
 from anonymizer.view.common.ux_fields import str_entry
 from anonymizer.view.settings.anonymizer_script_dialog import AnonymizerScriptDialog
 from anonymizer.view.settings.aws_cognito_dialog import AWSCognitoDialog
@@ -249,6 +257,49 @@ class SettingsDialog(AppToplevel):
 
         # row += 1
 
+        self._policy_label = ctk.CTkLabel(self._frame, text=_("Anonymization Policy") + ":")
+        self._policy_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
+        policy_frame = ctk.CTkFrame(self._frame, fg_color="transparent")
+        policy_frame.grid(row=row, column=1, pady=(PAD, 0), padx=PAD, sticky="nw")
+        initial_policy = normalize_anonymization_policy(
+            getattr(self.model, "anonymization_policy", AnonymizationPolicy.STRICT)
+        )
+        self.model.anonymization_policy = initial_policy
+        self._policy_var = tk.StringVar(value=initial_policy.value)
+        self._policy_change_guard = False
+        # Existing projects: confirm + install packaged script immediately on radio change.
+        policy_command = (
+            self._on_anonymization_policy_selected
+            if (not self.new_model and self.project_controller is not None)
+            else None
+        )
+        self._strict_policy_radio = ctk.CTkRadioButton(
+            policy_frame,
+            text=_("Strict"),
+            variable=self._policy_var,
+            value=AnonymizationPolicy.STRICT.value,
+            command=policy_command,
+        )
+        self._strict_policy_radio.pack(side="left", padx=(0, 12))
+        bind_hover_tooltip(
+            self._strict_policy_radio,
+            _(anonymization_policy_tooltip(AnonymizationPolicy.STRICT)),
+        )
+        self._clinical_policy_radio = ctk.CTkRadioButton(
+            policy_frame,
+            text=_("Clinical"),
+            variable=self._policy_var,
+            value=AnonymizationPolicy.CLINICAL.value,
+            command=policy_command,
+        )
+        self._clinical_policy_radio.pack(side="left")
+        bind_hover_tooltip(
+            self._clinical_policy_radio,
+            _(anonymization_policy_tooltip(AnonymizationPolicy.CLINICAL)),
+        )
+
+        row += 1
+
         self._modalities_label = ctk.CTkLabel(self._frame, text=_("Modalities") + ":")
         self._modalities_label.grid(row=row, column=0, pady=(PAD, 0), padx=PAD, sticky="nw")
 
@@ -434,6 +485,64 @@ class SettingsDialog(AppToplevel):
         self.model.anonymizer_script_path = script_path
         logger.info(f"Anonymizer Script File updated: {self.model.anonymizer_script_path}")
 
+    def _sync_model_from_controller_policy(self) -> None:
+        """Copy policy/script/modalities from the live controller after install."""
+        if self.project_controller is None:
+            return
+        ctrl = self.project_controller.model
+        self.model.anonymization_policy = normalize_anonymization_policy(ctrl.anonymization_policy)
+        self.model.anonymizer_script_path = Path(ctrl.anonymizer_script_path)
+        self.model.modalities = list(ctrl.modalities)
+        self.model.set_storage_classes_from_modalities()
+
+    def _on_anonymization_policy_selected(self, _value: str | None = None) -> None:
+        """Existing project: confirm, then replace project script with packaged policy script."""
+        if self._policy_change_guard or self.new_model or self.project_controller is None:
+            return
+        selected = normalize_anonymization_policy(self._policy_var.get())
+        current = normalize_anonymization_policy(self.model.anonymization_policy)
+        if selected is current:
+            return
+        policy_name = _(anonymization_policy_display_name(selected))
+        confirmed = messagebox.askyesno(
+            _("Anonymization Policy"),
+            _(
+                "Change policy to {policy}? This replaces your project anonymizer script "
+                "with the packaged {policy} script. Custom script edits will be lost. "
+                "Already anonymized data is not re-processed."
+            ).format(policy=policy_name),
+            parent=self,
+        )
+        if not confirmed:
+            self._policy_change_guard = True
+            try:
+                self._policy_var.set(current.value)
+            finally:
+                self._policy_change_guard = False
+            return
+        try:
+            self.project_controller.apply_anonymization_policy(selected)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("apply_anonymization_policy failed: %s", exc)
+            messagebox.showerror(
+                _("Anonymization Policy"),
+                _("Failed to apply anonymization policy") + f":\n{exc}",
+                parent=self,
+            )
+            self._policy_change_guard = True
+            try:
+                self._policy_var.set(current.value)
+            finally:
+                self._policy_change_guard = False
+            return
+        self._sync_model_from_controller_policy()
+        self._policy_change_guard = True
+        try:
+            self._policy_var.set(self.model.anonymization_policy.value)
+        finally:
+            self._policy_change_guard = False
+        logger.info("Anonymization policy switched to %s", selected.value)
+
     def _open_anonymizer_script_dialog(self) -> None:
         script_path = Path(self.model.anonymizer_script_path)
         if not script_path.is_file():
@@ -535,6 +644,29 @@ class SettingsDialog(AppToplevel):
         self.model.language_code = get_current_language_code()
         self.model.project_name = self.project_name_var.get()
         self.model.uid_root = self.uidroot_var.get()
+        if hasattr(self, "_policy_var"):
+            self.model.anonymization_policy = normalize_anonymization_policy(self._policy_var.get())
+        # Existing project: install packaged script only when policy still differs
+        # (radio change already applied it; re-install would wipe Edit Script customizations).
+        if self.project_controller is not None:
+            installed = normalize_anonymization_policy(
+                self.project_controller.model.anonymization_policy
+            )
+            if should_install_anonymization_policy(
+                selected=self.model.anonymization_policy,
+                installed=installed,
+            ):
+                try:
+                    self.project_controller.apply_anonymization_policy(self.model.anonymization_policy)
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception("apply_anonymization_policy failed: %s", exc)
+                    messagebox.showerror(
+                        _("Anonymization Policy"),
+                        _("Failed to apply anonymization policy") + f":\n{exc}",
+                        parent=self,
+                    )
+                    return
+            self._sync_model_from_controller_policy()
         self._user_input = self.model, self.java_phi_studies, self._ctp_lookup_preview
 
         teardown_ctk_toplevel(self, parent=self.master)

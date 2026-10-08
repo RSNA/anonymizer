@@ -8,12 +8,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydicom import Dataset
 
-from anonymizer.controller.ai.remove_pixel_phi import (
-    _dedupe_texts,
-    apply_instance_pixel_phi,
-    apply_instance_pixel_phi_for_dcm,
-    apply_series_view_pixel_phi,
-    collect_series_view_pixel_phi_texts,
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import _dedupe_texts
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
+    apply_instance_embedded_phi,
+    apply_instance_embedded_phi_for_dcm,
+    apply_series_view_embedded_phi,
+    collect_series_view_embedded_phi_texts,
     remove_pixel_phi,
 )
 from anonymizer.controller.series_overlay import OCRText, OverlayData, UserRectangle
@@ -37,7 +37,7 @@ def test_dedupe_texts_preserves_order() -> None:
     assert _dedupe_texts(["  foo ", "bar", "foo", "", "  bar  "]) == ["foo", "bar"]
 
 
-@patch("anonymizer.controller.ai.remove_pixel_phi.dcmread")
+@patch("anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi.dcmread")
 def test_remove_pixel_phi_returns_empty_tuple_when_no_text(mock_dcmread: MagicMock) -> None:
     import numpy as np
 
@@ -69,7 +69,7 @@ def test_remove_pixel_phi_returns_empty_tuple_when_no_text(mock_dcmread: MagicMo
     assert pixels_changed == 0
 
 
-def test_apply_instance_pixel_phi_delegates_to_model(mock_dataset: Dataset, tmp_path: Path) -> None:
+def test_apply_instance_embedded_phi_delegates_to_model(mock_dataset: Dataset, tmp_path: Path) -> None:
     db_path = tmp_path / "pixel_phi.db"
 
     with opened_anonymizer_model(f"sqlite:///{db_path}") as model:
@@ -78,16 +78,16 @@ def test_apply_instance_pixel_phi_delegates_to_model(mock_dataset: Dataset, tmp_
         assert phi is not None
         instance = phi.studies[0].series[0].instances[0]
 
-        assert apply_instance_pixel_phi(model, instance.anon_sop_instance_uid, ["Burned", "Burned", " Name"]) is True
+        assert apply_instance_embedded_phi(model, instance.anon_sop_instance_uid, ["Burned", "Burned", " Name"]) is True
 
         with model._get_session(read_only=True) as session:
             row = session.get(Instance, instance.sop_instance_uid)
             assert row is not None
-            assert row.pixel_phi == "Burned, Name"
+            assert row.embedded_phi == "Burned, Name"
 
 
-@patch("anonymizer.controller.ai.remove_pixel_phi.dcmread")
-def test_apply_instance_pixel_phi_for_dcm_reads_sop_uid(
+@patch("anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi.dcmread")
+def test_apply_instance_embedded_phi_for_dcm_reads_sop_uid(
     mock_dcmread: MagicMock,
     mock_dataset: Dataset,
     tmp_path: Path,
@@ -106,15 +106,15 @@ def test_apply_instance_pixel_phi_for_dcm_reads_sop_uid(
         mock_ds.SOPInstanceUID = instance.anon_sop_instance_uid
         mock_dcmread.return_value = mock_ds
 
-        assert apply_instance_pixel_phi_for_dcm(model, dcm_path, ["Left", "Right"]) is True
+        assert apply_instance_embedded_phi_for_dcm(model, dcm_path, ["Left", "Right"]) is True
 
         with model._get_session(read_only=True) as session:
             row = session.get(Instance, instance.sop_instance_uid)
             assert row is not None
-            assert row.pixel_phi == "Left, Right"
+            assert row.embedded_phi == "Left, Right"
 
 
-def test_collect_series_view_pixel_phi_texts() -> None:
+def test_collect_series_view_embedded_phi_texts() -> None:
     viewer = MagicMock()
     viewer.overlay_data = {
         0: OverlayData(
@@ -130,16 +130,16 @@ def test_collect_series_view_pixel_phi_texts() -> None:
         ),
     }
 
-    assert collect_series_view_pixel_phi_texts(viewer) == {0: ["A", "B"], 2: ["A"]}
+    assert collect_series_view_embedded_phi_texts(viewer) == {0: ["A", "B"], 2: ["A"]}
 
 
-@patch("anonymizer.controller.ai.remove_pixel_phi.apply_instance_pixel_phi_for_dcm")
-def test_apply_series_view_pixel_phi_skips_projection_frames(mock_apply: MagicMock) -> None:
+@patch("anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi.apply_instance_embedded_phi_for_dcm")
+def test_apply_series_view_embedded_phi_skips_projection_frames(mock_apply: MagicMock) -> None:
     slice_paths = [Path("/tmp/s0.dcm"), Path("/tmp/s1.dcm")]
     texts_by_frame = {0: ["proj"], 3: ["slice0"], 4: ["slice1"]}
     anon_model = MagicMock()
 
-    apply_series_view_pixel_phi(
+    apply_series_view_embedded_phi(
         anon_model,
         slice_paths,
         texts_by_frame,
@@ -151,8 +151,8 @@ def test_apply_series_view_pixel_phi_skips_projection_frames(mock_apply: MagicMo
     mock_apply.assert_any_call(anon_model, slice_paths[1], ["slice1"])
 
 
-@patch("anonymizer.controller.ai.remove_pixel_phi.apply_instance_pixel_phi_for_dcm")
-def test_apply_series_view_pixel_phi_merges_multiframe_same_path(mock_apply: MagicMock) -> None:
+@patch("anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi.apply_instance_embedded_phi_for_dcm")
+def test_apply_series_view_embedded_phi_merges_multiframe_same_path(mock_apply: MagicMock) -> None:
     """Multi-frame US repeats one path per frame; merge texts instead of overwriting."""
     multi_frame_path = Path("/tmp/us_cine.dcm")
     # Viewer stack: 3 projections + 3 cine frames all pointing at the same DICOM file.
@@ -166,7 +166,7 @@ def test_apply_series_view_pixel_phi_merges_multiframe_same_path(mock_apply: Mag
     anon_model = MagicMock()
     mock_apply.return_value = True
 
-    updated = apply_series_view_pixel_phi(
+    updated = apply_series_view_embedded_phi(
         anon_model,
         slice_paths,
         texts_by_frame,
@@ -180,4 +180,4 @@ def test_apply_series_view_pixel_phi_merges_multiframe_same_path(mock_apply: Mag
         multi_frame_path,
         ["Name", "MRN", "Acc", "DOB", "Site"],
     )
-    anon_model.set_series_pixel_phi_scanned.assert_called_once_with("1.2.3", scanned=True)
+    anon_model.set_series_embedded_phi_scanned.assert_called_once_with("1.2.3", scanned=True)

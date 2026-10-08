@@ -673,7 +673,7 @@ class _SeriesRow:
     anon_series_uid: str
     harmonized: bool
     face_blur: bool
-    pixel_phi: bool
+    embedded_phi: bool
 
 
 @dataclass(frozen=True)
@@ -836,7 +836,7 @@ def _ai_coverage_distribution(
     series_total: int,
     series_harmonized: int,
     series_face_blur: int,
-    series_pixel_phi: int,
+    series_embedded_phi: int,
 ) -> Distribution:
     """Series-level AI coverage; omit algorithms that round to 0%."""
     total = max(0, series_total)
@@ -849,7 +849,7 @@ def _ai_coverage_distribution(
     candidates = (
         (_("Harmonize"), series_harmonized),
         (_("Face blur"), series_face_blur),
-        (_("Pixel PHI"), series_pixel_phi),
+        (_("Pixel PHI"), series_embedded_phi),
     )
     items = tuple(CountBucket(label=label, count=count) for label, count in candidates if keep(count))
     return Distribution(items=items, total=total)
@@ -1433,7 +1433,7 @@ def _assemble_imaging(series_rows: Iterable[_SeriesRow]) -> ImagingAnalytics:
             series_total=series_total,
             series_harmonized=sum(1 for row in rows if row.harmonized),
             series_face_blur=sum(1 for row in rows if row.face_blur),
-            series_pixel_phi=sum(1 for row in rows if row.pixel_phi),
+            series_embedded_phi=sum(1 for row in rows if row.embedded_phi),
         ),
     )
 
@@ -1518,10 +1518,10 @@ def build_dataset_analytics(
         raise RuntimeError("analytics aborted")
 
     t_phi = time.monotonic()
-    pixel_phi_series_uids = anon_model.anon_series_uids_with_pixel_phi()
+    embedded_phi_series_uids = anon_model.anon_series_uids_with_embedded_phi()
     logger.info(
-        "Analytics build: pixel_phi series set (%d) in %.2fs",
-        len(pixel_phi_series_uids),
+        "Analytics build: embedded_phi series set (%d) in %.2fs",
+        len(embedded_phi_series_uids),
         time.monotonic() - t_phi,
     )
 
@@ -1550,7 +1550,7 @@ def build_dataset_analytics(
                         anon_series_uid=anon_uid,
                         harmonized=bool((ser.harmonized_description or "").strip()),
                         face_blur=bool((ser.face_blur_algorithm_applied or "").strip()),
-                        pixel_phi=bool(anon_uid and anon_uid in pixel_phi_series_uids),
+                        embedded_phi=bool(anon_uid and anon_uid in embedded_phi_series_uids),
                     )
                 )
 

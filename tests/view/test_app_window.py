@@ -15,6 +15,7 @@ from anonymizer.view.common.app_window import (
     attach_menubar_to_toplevels,
     find_app_menu_host,
     focus_app_window,
+    place_toplevel_centered_on_parent,
     position_toplevel_near_parent,
     refresh_app_window_menu,
     window_menu_label_for,
@@ -146,10 +147,10 @@ def test_refresh_app_window_menu_updates_label_after_title_change(menu_host: _Me
     labels = [menu_host._window_menu.entrycget(i, "label") for i in range(menu_host._window_menu.index("end") + 1)]
     assert "Series View" in labels
 
-    win.title("Series View for Doe^Jane PHI ID:P1")
+    win.title("Series View for Doe^Jane ANON1")
     refresh_app_window_menu(win)
     labels = [menu_host._window_menu.entrycget(i, "label") for i in range(menu_host._window_menu.index("end") + 1)]
-    assert "Series View for Doe^Jane PHI ID:P1" in labels
+    assert "Series View for Doe^Jane ANON1" in labels
     assert labels.count("Series View") == 0
 
     win.destroy()
@@ -166,6 +167,25 @@ def test_position_toplevel_near_parent_offsets_from_parent(menu_host: _MenuHost)
         child.update_idletasks()
         assert child.winfo_x() == parent.winfo_rootx() + 30
         assert child.winfo_y() == parent.winfo_rooty() + 30
+    finally:
+        child.destroy()
+        parent.destroy()
+
+
+def test_place_toplevel_centered_on_parent_centers_on_parent(menu_host: _MenuHost) -> None:
+    parent = tk.Toplevel(menu_host)
+    child = tk.Toplevel(parent)
+    try:
+        parent.geometry("640x480+120+80")
+        parent.update_idletasks()
+        place_toplevel_centered_on_parent(child, parent, width=400, height=300, margin=20)
+        child.update_idletasks()
+        assert child.winfo_width() == 400
+        assert child.winfo_height() == 300
+        expected_x = parent.winfo_rootx() + (parent.winfo_width() - child.winfo_width()) // 2
+        expected_y = parent.winfo_rooty() + (parent.winfo_height() - child.winfo_height()) // 2
+        assert abs(child.winfo_x() - expected_x) <= 2
+        assert abs(child.winfo_y() - expected_y) <= 2
     finally:
         child.destroy()
         parent.destroy()

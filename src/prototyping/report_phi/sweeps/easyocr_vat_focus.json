@@ -1,0 +1,104 @@
+{
+  "baseline": {
+    "aggregation_strategy": "max",
+    "min_score": 0.0,
+    "easyocr": {
+      "width_ths": 0.3,
+      "ycenter_ths": 0.5,
+      "link_threshold": 0.6,
+      "rotation_info": [0]
+    }
+  },
+  "grid": [
+    {
+      "aggregation_strategy": "max",
+      "min_score": 0.0,
+      "easyocr": {
+        "width_ths": 0.3,
+        "ycenter_ths": 0.5,
+        "link_threshold": 0.6,
+        "text_threshold": 0.5,
+        "rotation_info": [0]
+      }
+    },
+    {
+      "aggregation_strategy": "max",
+      "min_score": 0.0,
+      "easyocr": {
+        "width_ths": 0.3,
+        "ycenter_ths": 0.5,
+        "link_threshold": 0.6,
+        "text_threshold": 0.4,
+        "low_text": 0.3,
+        "rotation_info": [0]
+      }
+    },
+    {
+      "aggregation_strategy": "max",
+      "min_score": 0.0,
+      "easyocr": {
+        "width_ths": 0.35,
+        "ycenter_ths": 0.5,
+        "link_threshold": 0.6,
+        "mag_ratio": 1.5,
+        "rotation_info": [0]
+      }
+    },
+    {
+      "aggregation_strategy": "max",
+      "min_score": 0.0,
+      "easyocr": {
+        "width_ths": 0.4,
+        "ycenter_ths": 0.5,
+        "link_threshold": 0.6,
+        "mag_ratio": 2.0,
+        "rotation_info": [0]
+      }
+    },
+    {
+      "aggregation_strategy": "max",
+      "min_score": 0.0,
+      "easyocr": {
+        "width_ths": 0.3,
+        "ycenter_ths": 0.5,
+        "link_threshold": 0.7,
+        "height_ths": 0.5,
+        "rotation_info": [0]
+      }
+    },
+    {
+      "aggregation_strategy": "max",
+      "min_score": 0.0,
+      "easyocr": {
+        "width_ths": 0.25,
+        "ycenter_ths": 0.5,
+        "link_threshold": 0.6,
+        "add_margin": 0.1,
+        "rotation_info": [0]
+      }
+    },
+    {
+      "aggregation_strategy": "max",
+      "min_score": 0.0,
+      "easyocr": {
+        "width_ths": 0.5,
+        "ycenter_ths": 0.5,
+        "link_threshold": 0.6,
+        "contrast_ths": 0.1,
+        "adjust_contrast": 0.5,
+        "rotation_info": [0]
+      }
+    },
+    {
+      "aggregation_strategy": "average",
+      "min_score": 0.0,
+      "easyocr": {
+        "width_ths": 0.3,
+        "ycenter_ths": 0.5,
+        "link_threshold": 0.6,
+        "mag_ratio": 1.5,
+        "rotation_info": [0]
+      }
+    }
+  ]
+}

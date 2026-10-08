@@ -27,8 +27,8 @@ from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.fonts import AppFonts, char_width_px
 from anonymizer.view.common.tooltip import MotionTooltipController, bind_hover_tooltip
 from anonymizer.view.project.delete_studies_dialog import DeleteStudiesDialog
+from anonymizer.view.reports.open_workspace import open_series_workspace
 from anonymizer.view.series.projection import ProjectionView, projection_study_uids
-from anonymizer.view.series.series import show_series_view
 from anonymizer.view.shell.dashboard import Dashboard
 
 logger = logging.getLogger(__name__)
@@ -246,7 +246,7 @@ class DatasetView(AppToplevel):
 
         col_names = PHI_IndexRecord.get_tree_display_titles()
         col_fields = PHI_IndexRecord.get_tree_display_fields()
-        title_sized_fields = {"pixel_phi_removed"}
+        title_sized_fields = {"embedded_phi_removed"}
         for col_idx, title in enumerate(col_names):
             field_name = col_fields[col_idx]
             self._tree.heading(field_name, text=title)
@@ -269,14 +269,12 @@ class DatasetView(AppToplevel):
             self._tree.column(
                 field_name,
                 width=width_chars * self._char_width_px,
-                stretch=(field_name == "pixel_phi_removed"),
+                stretch=(field_name == "embedded_phi_removed"),
                 anchor="center",
             )
         self._columns_layout_done = False
 
-        self._tree.tag_configure("green", background="limegreen", foreground="white")
-        self._tree.tag_configure("red", background="red")
-        self._tree.tag_configure("series", foreground="#555555")
+        self._configure_tree_tags_from_theme()
 
         self._update_tree_from_phi_index()
 
@@ -382,6 +380,21 @@ class DatasetView(AppToplevel):
     @staticmethod
     def _any_ai_batch_feature_enabled() -> bool:
         return any_ai_batch_feature_allowed()
+
+    def _configure_tree_tags_from_theme(self) -> None:
+        """Tree row tags from RSNA ThemeManager only — no hardcoded lime/gray/black."""
+        # AppToplevel is not a CTk widget; Dashboard (parent) owns appearance-mode resolve.
+        apply = self._parent._apply_appearance_mode
+        theme = ctk.ThemeManager.theme
+        tv = theme.get("Treeview") or {}
+        label_fg = theme["CTkLabel"]["text_color"]
+        text_fg = apply(tv.get("text_color", label_fg))
+        selected_fg = apply(tv.get("selected_color", theme["CTkButton"]["text_color"]))
+        selected_bg = apply(tv.get("selected_bg_color", theme["CTkButton"]["fg_color"]))
+        # Harmonized rows: same selected palette as modality/SOP Treeviews.
+        self._tree.tag_configure("green", background=str(selected_bg), foreground=str(selected_fg))
+        # Series children: same body text as study rows.
+        self._tree.tag_configure("series", foreground=str(text_fg))
 
     def _on_tree_select(self, _event=None) -> None:
         self._refresh_description_action_buttons()
@@ -1744,11 +1757,12 @@ class DatasetView(AppToplevel):
                 parent=self,
             )
             return
-        show_series_view(
+        open_series_workspace(
             self,
             controller=self._controller,
             series_path=series_path,
             fonts=self._fonts,
+            modality=series.modality,
         )
 
     def _escape_keypress(self, event):

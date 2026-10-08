@@ -12,14 +12,13 @@ from anonymizer.controller.create_projections import (
     ProjectionImageSize,
     ProjectionImageSizeConfig,
     create_projection_from_series,
-    take_loaded_series_cache,
 )
 from anonymizer.controller.phi_io import PHI_IndexRecord
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel, refresh_app_window_menu
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.tooltip import bind_hover_tooltip
-from anonymizer.view.series.series import SeriesView, show_series_view
+from anonymizer.view.reports.open_workspace import open_series_workspace
 
 if TYPE_CHECKING:
     from anonymizer.controller.project import ProjectController
@@ -34,7 +33,11 @@ def format_projection_view_title(
 ) -> str:
     """Build the ProjectionView window title."""
     if len(phi_records) == 1:
-        title = _("View") + " " + phi_records[0].tree_label()
+        record = phi_records[0]
+        title = _("View") + " " + record.tree_label()
+        anon_id = (record.anon_patient_id or "").strip()
+        if anon_id:
+            title = title + f" {anon_id}"
         title = title + " " + _("with") + f" {total_series} " + _("Series")
     else:
         title = (
@@ -133,7 +136,7 @@ class ProjectionView(AppToplevel):
         self._pages = 0
         self._page_slider = None
         self._loading_page = False
-        self._series_view: SeriesView | None = None
+        self._series_view: tk.Misc | None = None
 
         self._update_title()
         self._create_widgets()
@@ -479,12 +482,11 @@ class ProjectionView(AppToplevel):
             self._series_view.focus_force()
             return
 
-        self._series_view = show_series_view(
+        self._series_view = open_series_workspace(
             self,
             controller=self._controller,
             series_path=series_path,
             fonts=self._fonts,
-            preloaded=take_loaded_series_cache(series_path),
         )
         if self._series_view is None:
             return

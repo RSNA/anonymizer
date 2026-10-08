@@ -70,7 +70,7 @@ def test_mvp_create_import_strip_export_davidson(mvp_store: Path):
     with (
         patch.object(SESSION, "ensure_ocr_reader", return_value=fake_handle),
         patch(
-            "anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext",
+            "anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext",
             side_effect=_fake_easyocr,
         ),
     ):

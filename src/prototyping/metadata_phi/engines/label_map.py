@@ -1,0 +1,94 @@
+"""Map model-specific entity labels → scored classes."""
+
+from __future__ import annotations
+
+_TO_SCORED: dict[str, str] = {
+    # Names
+    "PERSON": "NAME",
+    "PER": "NAME",
+    "PATIENT": "NAME",
+    "DOCTOR": "NAME",
+    "NAME": "NAME",
+    "PATIENTNAME": "NAME",
+    "FIRSTNAME": "NAME",
+    "FIRST_NAME": "NAME",
+    "LASTNAME": "NAME",
+    "LAST_NAME": "NAME",
+    "MIDDLENAME": "NAME",
+    "MIDDLE_NAME": "NAME",
+    "USERNAME": "NAME",
+    "USER_NAME": "NAME",
+    "COMPANY_NAME": "NAME",
+    # Dates
+    "DATE": "DATE",
+    "DATE_TIME": "DATE",
+    "TIME": "DATE",
+    "AGE": "DATE",
+    "DATE_OF_BIRTH": "DATE",
+    "DATEOFBIRTH": "DATE",
+    "DOB": "DATE",
+    # Locations
+    "LOCATION": "LOCATION",
+    "LOC": "LOCATION",
+    "GPE": "LOCATION",
+    "FAC": "LOCATION",
+    "ADDRESS": "LOCATION",
+    "HOSPITAL": "LOCATION",
+    "CITY": "LOCATION",
+    "STATE": "LOCATION",
+    "COUNTRY": "LOCATION",
+    "COUNTY": "LOCATION",
+    "ZIP": "LOCATION",
+    "ZIPCODE": "LOCATION",
+    "STREET": "LOCATION",
+    "STREET_ADDRESS": "LOCATION",
+    "CITY_STATE": "LOCATION",
+    "POSTCODE": "LOCATION",
+    # IDs
+    "ID": "ID",
+    "IDNUM": "ID",
+    "MEDICALRECORD": "ID",
+    "MEDICAL_RECORD": "ID",
+    "MEDICAL_RECORD_NUMBER": "ID",
+    "MRN": "ID",
+    "SSN": "ID",
+    "US_SSN": "ID",
+    "SOCIAL_SECURITY_NUMBER": "ID",
+    "SOCIALSECURITYNUMBER": "ID",
+    "NATIONAL_ID": "ID",
+    "PATIENT_ID": "ID",
+    "PATIENT_IDENTIFIER": "ID",
+    "ACCOUNT": "ID",
+    "ACCOUNT_NUMBER": "ID",
+    "UNIQUE_ID": "ID",
+    "CUSTOMER_ID": "ID",
+    "EMPLOYEE_ID": "ID",
+    "TAX_ID": "ID",
+    "BIOID": "ID",
+    "BIOMETRIC_IDENTIFIER": "ID",
+    "HEALTHPLAN": "ID",
+    "HEALTH_PLAN_BENEFICIARY_NUMBER": "ID",
+    "DEVICE": "ID",
+    "DEVICE_IDENTIFIER": "ID",
+    "CREDIT_CARD": "ID",
+    "CREDITCARDNUMBER": "ID",
+    "CREDIT_DEBIT_CARD": "ID",
+    "CERTIFICATE_LICENSE_NUMBER": "ID",
+    # Contact
+    "PHONE": "PHONE",
+    "PHONE_NUMBER": "PHONE",
+    "TELEPHONENUMBER": "PHONE",
+    "FAX": "PHONE",
+    "FAX_NUMBER": "PHONE",
+    "EMAIL": "EMAIL",
+    "EMAIL_ADDRESS": "EMAIL",
+    "EMAILADDRESS": "EMAIL",
+}
+
+
+def to_scored_label(raw: str) -> str | None:
+    key = raw.strip().upper().replace(" ", "_").replace("-", "_")
+    # Strip BIO prefixes from token classifiers: B-PERSON, I-DATE, …
+    if len(key) > 2 and key[1] in {"_", "-"} and key[0] in {"B", "I", "E", "S"}:
+        key = key[2:]
+    return _TO_SCORED.get(key)

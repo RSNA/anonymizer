@@ -340,7 +340,7 @@ workflows:
           edit_context: frame
           actions: [detect_text, remove_text]
           removal_mode: blackout
-        ux_elements: [Remove Text result, Black out text, Save Pixel Changes]
+        ux_elements: [Remove Text result, Black out text, Save Changes]
         caption: "davidson_cxr after Remove Text using Black out text."
       - id: Process_RemovePixel_US_Detect
         file: Process_RemovePixel_US_Detect.png

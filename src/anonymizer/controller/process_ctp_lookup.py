@@ -75,8 +75,25 @@ def private_lookup_properties_path(project_model) -> Path:
     return project_model.private_dir() / f"{project_model.site_id}-lookup.properties"
 
 
+def project_anonymizer_script_path(project_model) -> Path:
+    """Project script beside ``ProjectModel.json`` (config, not PHI)."""
+    return Path(project_model.storage_dir) / f"{project_model.site_id}-anonymizer.script"
+
+
 def private_anonymizer_script_path(project_model) -> Path:
-    return project_model.private_dir() / f"{project_model.site_id}-anonymizer.script"
+    """Legacy path under ``private/``; prefer ``project_anonymizer_script_path``."""
+    return project_anonymizer_script_path(project_model)
+
+
+def migrate_project_script_from_private(project_model) -> Path | None:
+    """If an old ``private/{site}-anonymizer.script`` exists, move it beside ProjectModel.json."""
+    dest = project_anonymizer_script_path(project_model)
+    legacy = Path(project_model.private_dir()) / f"{project_model.site_id}-anonymizer.script"
+    if dest.is_file() or not legacy.is_file():
+        return dest if dest.is_file() else None
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(legacy.read_bytes())
+    return dest
 
 
 def lookup_table_context(project_model, pending: CtpLookupPreview | None = None) -> LookupTableContext:

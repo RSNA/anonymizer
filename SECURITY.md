@@ -29,3 +29,4 @@ Include enough detail to reproduce the issue (affected version, environment, and
 - Local misconfiguration (AE Titles, network allow-lists, project folders)
 - Third-party TotalSegmentator academic-license side channels
 - Issues that exist only in deleted or experimental prototyping trees and do not ship in the published package
+- Guess-and-check of deterministic, secret-free UID / `@hashdate` / accession replacements when a candidate original is already known (see [De-identification protocol — Deterministic replacements](docs/en/deidentification-protocol.md#deterministic-replacements-uids-dates-accessions)); these are for stable project linkage, not keyed pseudonyms

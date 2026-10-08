@@ -9,7 +9,12 @@ from dataclasses import dataclass
 from functools import partial
 
 from anonymizer.controller.ai import feature_availability as feature_gates
-from anonymizer.controller.ai.remove_pixel_phi import (
+from anonymizer.controller.ai.embedded_phi.ner.cache import (
+    NerModelStatus,
+    ner_ready,
+    probe_ner_models,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.cache import (
     OcrModelStatus,
     ocr_models_ready,
     probe_ocr_models,
@@ -49,28 +54,28 @@ from anonymizer.utils.storage import (
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.features.catalog import (
     DOWNLOAD_ID_BRAIN,
+    DOWNLOAD_ID_EMBEDDED_PHI,
     DOWNLOAD_ID_FACE_CT,
     DOWNLOAD_ID_FACE_MR,
     DOWNLOAD_ID_HARMONIZE_CT,
     DOWNLOAD_ID_HARMONIZE_CXR_VIEW,
     DOWNLOAD_ID_HARMONIZE_MR,
     DOWNLOAD_ID_HARMONIZE_XR_BODYPART,
-    DOWNLOAD_ID_OCR,
     AiFeatureId,
     AiFeatureSpec,
     AiModelGroupId,
     AiModelGroupSpec,
     download_cxp_view,
+    download_embedded_phi,
     download_kind,
-    download_ocr,
     download_xp_bodypart,
     feature_description,
     feature_summary,
     feature_title,
     install_registry,
     remove_cxp_view,
+    remove_embedded_phi,
     remove_kind,
-    remove_ocr,
     remove_xp_bodypart,
 )
 
@@ -116,17 +121,18 @@ def _harmonize_resolution_status(*, active: object | None, installed: tuple[str,
     return ""
 
 
-def ai_feature_status_remove_pixel_phi() -> str:
-    ocr_status, _detail = probe_ocr_models()
-    if ocr_status == OcrModelStatus.READY:
-        return _("Installed.")
-    if ocr_status == OcrModelStatus.DOWNLOADING:
+def ai_feature_status_embedded_phi() -> str:
+    if _download_in_progress(DOWNLOAD_ID_EMBEDDED_PHI):
         return _("Downloading…")
-    if ocr_status == OcrModelStatus.MISSING:
-        return _("Not installed.")
-    if ocr_status == OcrModelStatus.FAILED:
+    ocr_status = probe_ocr_models()[0]
+    ner_status = probe_ner_models()[0]
+    if ocr_status == OcrModelStatus.READY and ner_status == NerModelStatus.READY:
+        return _("Installed (OCR + English NER).")
+    if ocr_status == OcrModelStatus.FAILED or ner_status == NerModelStatus.FAILED:
         return _("Download failed.")
-    return _("Setup required.")
+    if ocr_status == OcrModelStatus.READY or ner_status == NerModelStatus.READY:
+        return _("Partially installed — download to finish.")
+    return _("Not installed.")
 
 
 def ai_feature_status_harmonize() -> str:
@@ -294,8 +300,13 @@ def installed_task_ids(group: AiModelGroupId) -> tuple[int, ...]:
 
 def installed_model_inventory(group: AiModelGroupId) -> tuple[str, ...]:
     """Friendly inventory lines for models currently installed for ``group``."""
-    if group == AiModelGroupId.OCR:
-        return (_("OCR models"),) if ocr_models_ready() else ()
+    if group == AiModelGroupId.EMBEDDED_PHI:
+        lines: list[str] = []
+        if ocr_models_ready():
+            lines.append(_("OCR models"))
+        if ner_ready():
+            lines.append(_("OpenMed ClinicalE5-Small (English)"))
+        return tuple(lines)
     if group == AiModelGroupId.HARMONIZE_XR_BODYPART:
         return (_("XR body-part model"),) if feature_gates.harmonize_xr_bodypart_has_models() else ()
     if group == AiModelGroupId.HARMONIZE_CXR_VIEW:
@@ -320,7 +331,7 @@ def format_installed_inventory_status(
     lines: list[str] = []
     if resolution_line:
         lines.append(resolution_line)
-    if group == AiModelGroupId.OCR:
+    if group == AiModelGroupId.EMBEDDED_PHI:
         return _("Installed. Test in Series View before batch use.")
     if group == AiModelGroupId.HARMONIZE_XR_BODYPART:
         return _("Installed.")
@@ -443,16 +454,16 @@ def get_download_manager() -> AiFeatureDownloadManager:
 
 def _install_feature_registry() -> None:
     model_groups = {
-        AiModelGroupId.OCR: AiModelGroupSpec(
-            id=AiModelGroupId.OCR,
-            download_id=DOWNLOAD_ID_OCR,
-            title=partial(feature_title, AiFeatureId.REMOVE_PIXEL_PHI.value),
-            summary=partial(feature_summary, AiFeatureId.REMOVE_PIXEL_PHI.value),
-            status=ai_feature_status_remove_pixel_phi,
-            needs_download=feature_gates.remove_pixel_phi_needs_download,
-            has_models=feature_gates.remove_pixel_phi_has_models,
-            download=download_ocr,
-            remove=remove_ocr,
+        AiModelGroupId.EMBEDDED_PHI: AiModelGroupSpec(
+            id=AiModelGroupId.EMBEDDED_PHI,
+            download_id=DOWNLOAD_ID_EMBEDDED_PHI,
+            title=partial(feature_title, AiFeatureId.EMBEDDED_PHI.value),
+            summary=partial(feature_summary, AiFeatureId.EMBEDDED_PHI.value),
+            status=ai_feature_status_embedded_phi,
+            needs_download=feature_gates.embedded_phi_needs_download,
+            has_models=feature_gates.embedded_phi_has_models,
+            download=download_embedded_phi,
+            remove=remove_embedded_phi,
         ),
         AiModelGroupId.HARMONIZE_CT: AiModelGroupSpec(
             id=AiModelGroupId.HARMONIZE_CT,
@@ -535,13 +546,13 @@ def _install_feature_registry() -> None:
         ),
     }
     features = {
-        AiFeatureId.REMOVE_PIXEL_PHI: AiFeatureSpec(
-            id=AiFeatureId.REMOVE_PIXEL_PHI,
-            title=partial(feature_title, AiFeatureId.REMOVE_PIXEL_PHI.value),
-            description=partial(feature_description, AiFeatureId.REMOVE_PIXEL_PHI.value),
-            summary=partial(feature_summary, AiFeatureId.REMOVE_PIXEL_PHI.value),
-            status=ai_feature_status_remove_pixel_phi,
-            model_group_ids=(AiModelGroupId.OCR,),
+        AiFeatureId.EMBEDDED_PHI: AiFeatureSpec(
+            id=AiFeatureId.EMBEDDED_PHI,
+            title=partial(feature_title, AiFeatureId.EMBEDDED_PHI.value),
+            description=partial(feature_description, AiFeatureId.EMBEDDED_PHI.value),
+            summary=partial(feature_summary, AiFeatureId.EMBEDDED_PHI.value),
+            status=ai_feature_status_embedded_phi,
+            model_group_ids=(AiModelGroupId.EMBEDDED_PHI,),
         ),
         AiFeatureId.HARMONIZE: AiFeatureSpec(
             id=AiFeatureId.HARMONIZE,

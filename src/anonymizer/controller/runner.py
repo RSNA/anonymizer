@@ -10,19 +10,24 @@ from typing import Callable, Protocol
 
 from easyocr import Reader
 
-from anonymizer.controller.ai.remove_pixel_phi import (
+from anonymizer.controller.ai.embedded_phi.ner.cache import download_ner_models
+from anonymizer.controller.ai.embedded_phi.pixel.cache import (
     OCR_LANGS,
     OCR_MODEL_DIR,
-    OcrWhitelistMatchSettings,
-    _ocr_use_gpu,
-    detect_text,
     download_ocr_models,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
+    OcrWhitelistMatchSettings,
+    detect_text,
     load_modality_whitelist,
     load_modality_whitelist_match_settings,
     ocr_image_for_frame,
-    ocr_models_ready,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
+    _ocr_use_gpu,
     remove_pixel_phi,
 )
+from anonymizer.controller.ai.feature_availability import embedded_phi_has_models
 from anonymizer.controller.series_io import load_series_frames
 from anonymizer.controller.series_overlay import OCRText
 from anonymizer.controller.work_state import WorkState
@@ -49,6 +54,14 @@ class OcrEditContext(StrEnum):
 
     FRAME = "frame"
     SERIES = "series"
+
+
+class OcrRemoveMode(StrEnum):
+    """What Detect/Remove keeps: NER PHI, non-whitelisted OCR, or every OCR box."""
+
+    NON_WHITELISTED = "non_whitelisted"
+    PHI_ONLY = "phi_only"
+    ALL_TEXT = "all_text"
 
 
 def edit_context_menu_values() -> tuple[OcrEditContext, ...]:
@@ -92,6 +105,90 @@ def normalize_edit_context(
     return legacy.get(text, default)
 
 
+def ocr_remove_mode_menu_values() -> tuple[OcrRemoveMode, ...]:
+    return (
+        OcrRemoveMode.NON_WHITELISTED,
+        OcrRemoveMode.PHI_ONLY,
+        OcrRemoveMode.ALL_TEXT,
+    )
+
+
+def ocr_remove_mode_display_label(mode: OcrRemoveMode) -> str:
+    if mode is OcrRemoveMode.PHI_ONLY:
+        return _("PHI only")
+    if mode is OcrRemoveMode.ALL_TEXT:
+        return _("All text")
+    return _("Non-whitelisted text")
+
+
+def ocr_remove_mode_menu_labels() -> tuple[str, ...]:
+    return tuple(ocr_remove_mode_display_label(member) for member in ocr_remove_mode_menu_values())
+
+
+def ocr_remove_mode_tooltip(mode: OcrRemoveMode) -> str:
+    if mode is OcrRemoveMode.PHI_ONLY:
+        return _(
+            "Named Entity Recognition (NER) labels only: names, dates, IDs, phones, emails. "
+            "Unlabeled text is left."
+        )
+    if mode is OcrRemoveMode.ALL_TEXT:
+        return _("Remove every detected burnt-in text box; whitelist is ignored.")
+    return _("Remove detected burnt-in text except whitelist matches and exclude areas.")
+
+
+def detect_text_button_label() -> str:
+    return _("Detect Text")
+
+
+def remove_text_button_label(mode: OcrRemoveMode) -> str:
+    if mode is OcrRemoveMode.PHI_ONLY:
+        return _("Remove PHI")
+    return _("Remove Text")
+
+
+def normalize_ocr_remove_mode(
+    value: object | None,
+    *,
+    default: OcrRemoveMode = OcrRemoveMode.NON_WHITELISTED,
+) -> OcrRemoveMode:
+    text = str(value or "").strip()
+    if not text:
+        return default
+    key = text.lower().replace(" ", "_").replace("-", "_")
+    aliases = {
+        OcrRemoveMode.NON_WHITELISTED.value: OcrRemoveMode.NON_WHITELISTED,
+        "non_whitelisted_text": OcrRemoveMode.NON_WHITELISTED,
+        "whitelist": OcrRemoveMode.NON_WHITELISTED,
+        OcrRemoveMode.PHI_ONLY.value: OcrRemoveMode.PHI_ONLY,
+        "phi": OcrRemoveMode.PHI_ONLY,
+        "ner": OcrRemoveMode.PHI_ONLY,
+        OcrRemoveMode.ALL_TEXT.value: OcrRemoveMode.ALL_TEXT,
+        "all": OcrRemoveMode.ALL_TEXT,
+    }
+    if key in aliases:
+        return aliases[key]
+    for member in ocr_remove_mode_menu_values():
+        if text == ocr_remove_mode_display_label(member):
+            return member
+    return default
+
+
+def ocr_remove_mode_from_legacy_whitelist(*, use_modality_whitelist: bool) -> OcrRemoveMode:
+    """Map historic batch checkbox: True = non-whitelisted, False = all text."""
+    return OcrRemoveMode.NON_WHITELISTED if use_modality_whitelist else OcrRemoveMode.ALL_TEXT
+
+
+def whitelist_arg_for_ocr_remove_mode(mode: OcrRemoveMode) -> list[str] | None:
+    """None loads the effective modality whitelist; [] disables whitelist filtering."""
+    if mode is OcrRemoveMode.NON_WHITELISTED:
+        return None
+    return []
+
+
+def apply_phi_ner_filter_for_ocr_remove_mode(mode: OcrRemoveMode) -> bool:
+    return mode is OcrRemoveMode.PHI_ONLY
+
+
 @dataclass
 class RunOptions:
     edit_context: OcrEditContext = OcrEditContext.SERIES
@@ -132,9 +229,10 @@ class RemovePixelPhiRunner:
 
     def enter_models(self) -> ModelHandle:
         logger.info("RemovePixelPhiRunner.enter_models")
-        if not ocr_models_ready():
-            logger.info("OCR models missing; downloading to %s", OCR_MODEL_DIR)
+        if not embedded_phi_has_models():
+            logger.info("Embedded PHI models missing; downloading OCR + NER")
             download_ocr_models()
+            download_ner_models()
         reader = Reader(
             lang_list=list(OCR_LANGS),
             model_storage_directory=str(OCR_MODEL_DIR),
@@ -205,6 +303,8 @@ class RemovePixelPhiRunner:
                     draw_boxes_and_text=False,
                     modality=modality,
                     apply_noise_filter=False,
+                    apply_phi_ner_filter=False,
+                    annotate_phi_labels=True,
                     whitelist=whitelist,
                 )
             else:
@@ -217,6 +317,8 @@ class RemovePixelPhiRunner:
                     draw_boxes_and_text=False,
                     modality=modality,
                     apply_noise_filter=False,
+                    apply_phi_ner_filter=False,
+                    annotate_phi_labels=True,
                     whitelist=whitelist,
                 )
             filtered = raw or []

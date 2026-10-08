@@ -11,11 +11,13 @@ from openjpeg.utils import decode
 from pydicom import dcmread
 from pydicom.uid import JPEG2000Lossless
 
-from anonymizer.controller.ai.remove_pixel_phi import (
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     PixelPhiRemovalMode,
     _draw_text_contours_on_mask,
-    _encode_decompressed_frame_for_save,
     ocr_image_for_frame,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
+    _encode_decompressed_frame_for_save,
     remove_pixel_phi,
 )
 from anonymizer.controller.series_overlay import OCRText
@@ -76,7 +78,7 @@ def test_remove_pixel_phi_blackout_compressed_preserves_color_outside_mask(
     rows, cols = int(dcmread(dcm_path).Rows), int(dcmread(dcm_path).Columns)
 
     reader = MagicMock()
-    with patch("anonymizer.controller.ai.remove_pixel_phi.detect_text", return_value=_FAKE_OCR):
+    with patch("anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi.detect_text", return_value=_FAKE_OCR):
         modified, texts, changed = remove_pixel_phi(
             dcm_path,
             reader,
@@ -106,7 +108,7 @@ def test_remove_pixel_phi_inpaint_compressed_preserves_color_outside_mask(
     before = ds_before.pixel_array.copy()
 
     reader = MagicMock()
-    with patch("anonymizer.controller.ai.remove_pixel_phi.detect_text", return_value=_FAKE_OCR):
+    with patch("anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi.detect_text", return_value=_FAKE_OCR):
         modified, _, _ = remove_pixel_phi(
             dcm_path,
             reader,

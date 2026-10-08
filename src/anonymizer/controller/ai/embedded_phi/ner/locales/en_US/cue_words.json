@@ -1,0 +1,68 @@
+{
+  "patient_identifier": [
+    "mrn",
+    "mr #",
+    "mr#",
+    "med rec",
+    "medical record",
+    "unit number",
+    "chart number",
+    "chart #",
+    "patient id",
+    "patientid",
+    "subject id",
+    "acct",
+    "account",
+    "visit id",
+    "visit #",
+    "encounter",
+    "fin",
+    "case number",
+    "accession",
+    "acc #",
+    "ssn",
+    "social security",
+    "medicare",
+    "medicaid"
+  ],
+  "phone": [
+    "phone",
+    "tel",
+    "telephone",
+    "mobile",
+    "cell",
+    "fax",
+    "contact"
+  ],
+  "location": [
+    "lives at",
+    "address",
+    "street",
+    "avenue",
+    "blvd",
+    "boulevard",
+    "road",
+    "drive",
+    "suite",
+    "apt",
+    "city",
+    "state",
+    "zip"
+  ],
+  "name": [
+    "patient",
+    "pt",
+    "dr",
+    "doctor",
+    "md",
+    "referring",
+    "performing"
+  ],
+  "date": [
+    "dob",
+    "date of birth",
+    "born",
+    "study date",
+    "exam date"
+  ]
+}

@@ -14,9 +14,21 @@ from anonymizer.controller.ai.batch_process import (
     format_modality_whitelist_heading,
     modalities_in_selected_studies,
 )
-from anonymizer.controller.ai.remove_pixel_phi import OcrWhitelistMatchSettings, describe_match_settings
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
+    OcrWhitelistMatchSettings,
+    describe_match_settings,
+)
 from anonymizer.utils.translate import _
-from anonymizer.view.common.app_window import AppToplevel
+from anonymizer.view.ai.features.look import (
+    FEATURE_ACTION_BUTTON_WIDTH,
+    FEATURE_DIALOG_PAD,
+    FEATURE_INTRO_WRAP,
+)
+from anonymizer.view.common.app_window import (
+    AppToplevel,
+    fit_toplevel_to_content,
+    present_toplevel_centered_on_parent,
+)
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 
 
@@ -66,9 +78,9 @@ def populate_modality_whitelist_preview_textbox(
 
 
 class ModalityWhitelistPreviewDialog(AppToplevel):
-    PAD = 10
+    PAD = FEATURE_DIALOG_PAD
     TEXT_HEIGHT = 320
-    TEXT_WIDTH = 480
+    TEXT_WIDTH = FEATURE_INTRO_WRAP
 
     def __init__(
         self,
@@ -79,9 +91,11 @@ class ModalityWhitelistPreviewDialog(AppToplevel):
         studies: Sequence[tuple[str, str]],
     ) -> None:
         super().__init__(master=parent)
+        self.withdraw()
         self.title(_("Modality Whitelist"))
         self.resizable(True, True)
-        self.minsize(400, 280)
+        self.minsize(FEATURE_INTRO_WRAP, 280)
+        self.transient(parent)
 
         modalities = modalities_in_selected_studies(images_dir, studies)
         whitelists = effective_modality_whitelists(project_dir, modalities)
@@ -93,8 +107,12 @@ class ModalityWhitelistPreviewDialog(AppToplevel):
         )
         no_terms_label = _("(no whitelist terms)")
 
+        pad = self.PAD
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
         frame = ctk.CTkFrame(self)
-        frame.pack(fill="both", expand=True, padx=self.PAD, pady=self.PAD)
+        frame.grid(row=0, column=0, padx=pad, pady=pad, sticky="nsew")
         frame.grid_rowconfigure(1, weight=1)
         frame.grid_columnconfigure(0, weight=1)
 
@@ -107,10 +125,10 @@ class ModalityWhitelistPreviewDialog(AppToplevel):
             anchor="w",
             justify="left",
             wraplength=self.TEXT_WIDTH,
-        ).grid(row=0, column=0, sticky="ew", pady=(0, self.PAD))
+        ).grid(row=0, column=0, sticky="ew", padx=pad, pady=(pad, pad))
 
         text_box = ctk.CTkTextbox(frame, width=self.TEXT_WIDTH, height=self.TEXT_HEIGHT, wrap="word")
-        text_box.grid(row=1, column=0, sticky="nsew")
+        text_box.grid(row=1, column=0, sticky="nsew", padx=pad)
         populate_modality_whitelist_preview_textbox(
             text_box,
             whitelists,
@@ -126,17 +144,26 @@ class ModalityWhitelistPreviewDialog(AppToplevel):
             justify="left",
             wraplength=self.TEXT_WIDTH,
             text_color="gray60",
-        ).grid(row=2, column=0, sticky="ew", pady=(self.PAD, 0))
+        ).grid(row=2, column=0, sticky="ew", padx=pad, pady=(pad, 0))
 
         button_frame = ctk.CTkFrame(frame, fg_color="transparent")
-        button_frame.grid(row=3, column=0, sticky="e", pady=(self.PAD, 0))
-        ctk.CTkButton(button_frame, text=_("Close"), width=100, command=self._close).grid(row=0, column=0)
+        button_frame.grid(row=3, column=0, sticky="e", padx=pad, pady=(pad, pad))
+        ctk.CTkButton(
+            button_frame,
+            text=_("Close"),
+            width=FEATURE_ACTION_BUTTON_WIDTH,
+            command=self._close,
+        ).grid(row=0, column=0)
 
         self.protocol("WM_DELETE_WINDOW", self._close)
         self.bind("<Escape>", lambda _event: self._close())
 
-        self.wait_visibility()
-        self.lift()
+        width, height = fit_toplevel_to_content(
+            self,
+            min_width=FEATURE_INTRO_WRAP + FEATURE_DIALOG_PAD * 4,
+            pad=FEATURE_DIALOG_PAD * 4,
+        )
+        present_toplevel_centered_on_parent(self, parent, width=width, height=height)
         self.grab_set()
 
     def _close(self) -> None:

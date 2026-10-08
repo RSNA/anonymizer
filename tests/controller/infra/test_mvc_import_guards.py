@@ -13,7 +13,7 @@ _UTILS_ROOT = _SRC_ROOT / "utils"
 _TOUCHED_CONTROLLER_MODULES = frozenset(
     {
         _CONTROLLER_ROOT / "ai" / "tseg" / "seg_retention.py",
-        _CONTROLLER_ROOT / "ai" / "remove_pixel_phi.py",
+        _CONTROLLER_ROOT / "ai" / "embedded_phi" / "pixel" / "remove_pixel_phi.py",
     }
 )
 

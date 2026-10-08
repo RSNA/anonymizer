@@ -23,8 +23,8 @@ def _study_with_series() -> PHI_IndexRecord:
         num_instances=15,
         harmonize=False,
         face_blurred="",
-        pixel_phi_removed=False,
-        pixel_phi="",
+        embedded_phi_removed=False,
+        embedded_phi="",
         series=[
             PHI_SeriesIndexRecord(
                 anon_series_uid="ser-1",
@@ -33,8 +33,8 @@ def _study_with_series() -> PHI_IndexRecord:
                 harmonized_description="",
                 instance_count=2,
                 face_blur_algorithm="",
-                pixel_phi_removed=False,
-                pixel_phi="",
+                embedded_phi_removed=False,
+                embedded_phi="",
             ),
             PHI_SeriesIndexRecord(
                 anon_series_uid="ser-2",
@@ -43,8 +43,8 @@ def _study_with_series() -> PHI_IndexRecord:
                 harmonized_description="CT Chest Ax PortVen",
                 instance_count=13,
                 face_blur_algorithm="gaussian",
-                pixel_phi_removed=True,
-                pixel_phi="Name",
+                embedded_phi_removed=True,
+                embedded_phi="Name",
             ),
         ],
     )
@@ -81,8 +81,8 @@ def test_iter_lookup_csv_rows_one_per_series() -> None:
     assert by_name_1["SeriesHarmonized"] == "Yes"
     assert by_name_1["Instances"] == 13
     assert by_name_1["FaceBlurred"] == "Gaussian"
-    assert by_name_1["PixelPHIRemoved"] == "Yes"
-    assert by_name_1["PixelPHI"] == "Name"
+    assert by_name_1["EmbeddedPHIRemoved"] == "Yes"
+    assert by_name_1["EmbeddedPHI"] == "Name"
 
 
 def test_iter_lookup_csv_rows_empty_series_emits_study_row() -> None:
@@ -107,7 +107,7 @@ def test_iter_lookup_csv_rows_empty_series_emits_study_row() -> None:
     assert by_name["ANON-StudyUID"] == "anon-study-2"
     assert by_name["ANON-SeriesUID"] == ""
     assert by_name["SeriesHarmonized"] == "No"
-    assert by_name["PixelPHIRemoved"] == "No"
+    assert by_name["EmbeddedPHIRemoved"] == "No"
 
 
 def test_lookup_csv_row_count() -> None:
@@ -166,8 +166,8 @@ def test_lookup_csv_entity_counts() -> None:
                 harmonized_description="",
                 instance_count=2,
                 face_blur_algorithm="",
-                pixel_phi_removed=False,
-                pixel_phi="",
+                embedded_phi_removed=False,
+                embedded_phi="",
             ),
         ],
     )

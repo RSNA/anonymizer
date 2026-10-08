@@ -28,6 +28,18 @@ from anonymizer.controller.ai.blur_face import (
     preview_blurred_slice_frames,
     preview_face_blur,
 )
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
+    OcrWhitelistMatchSettings,
+    PixelPhiRemovalMode,
+    describe_match_settings,
+    load_modality_whitelist,
+    load_modality_whitelist_match_settings,
+    pixel_phi_removal_mode_option_label,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
+    apply_instance_embedded_phi_for_dcm,
+    remove_pixel_phi,
+)
 from anonymizer.controller.ai.harmonize import (
     HarmonizeProgress,
     auto_apply_best_study_descriptions,
@@ -39,26 +51,23 @@ from anonymizer.controller.ai.harmonize.pipeline import (
     _load_series_dataset,
     _load_tseg_series_dataset,
 )
-from anonymizer.controller.ai.remove_pixel_phi import (
-    OcrWhitelistMatchSettings,
-    PixelPhiRemovalMode,
-    apply_instance_pixel_phi_for_dcm,
-    describe_match_settings,
-    load_modality_whitelist,
-    load_modality_whitelist_match_settings,
-    pixel_phi_removal_mode_display_label,
-    remove_pixel_phi,
-)
 from anonymizer.controller.ai.tseg.config import segmentation_mode_for_modality
 from anonymizer.controller.ai.tseg.contrast import release_working_memory
 from anonymizer.controller.ai.tseg.dicom_geometry import resolve_series_geometry, stackable_dicom_paths
 from anonymizer.controller.runner import (
     Algorithm,
+    OcrRemoveMode,
+    apply_phi_ner_filter_for_ocr_remove_mode,
     enter_batch_phase,
     exit_batch_phase,
+    ocr_remove_mode_display_label,
+    ocr_remove_mode_from_legacy_whitelist,
+    remove_text_button_label,
+    whitelist_arg_for_ocr_remove_mode,
 )
 from anonymizer.controller.series_io import load_series_frames, save_series_frames
 from anonymizer.utils.memory import MemoryGuard, MemorySnapshot, capture_memory_snapshot, collect_garbage_safe
+from anonymizer.utils.storage import load_project_exclude_rects
 from anonymizer.utils.translate import _
 
 if TYPE_CHECKING:
@@ -96,14 +105,23 @@ class AiBatchProcessOptions:
     algorithms: tuple[AiBatchAlgorithm, ...]
     blur_mode: FaceBlurMode = FaceBlurMode.GAUSSIAN
     pixel_phi_removal_mode: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT
-    use_modality_whitelist: bool = True
+    ocr_remove_mode: OcrRemoveMode = OcrRemoveMode.NON_WHITELISTED
+    ocr_use_exclude_areas: bool = False
     include_brain_structures: bool = False
     prefer_description_mappings: bool = True
 
 
-def whitelist_for_batch_ocr(*, use_modality_whitelist: bool) -> list[str] | None:
-    """Return OCR whitelist for batch removal: None loads effective whitelist, [] disables filtering."""
-    return None if use_modality_whitelist else []
+def whitelist_for_batch_ocr(
+    *,
+    ocr_remove_mode: OcrRemoveMode | None = None,
+    use_modality_whitelist: bool | None = None,
+) -> list[str] | None:
+    """OCR whitelist arg: None loads effective whitelist, [] disables filtering."""
+    if ocr_remove_mode is None:
+        ocr_remove_mode = ocr_remove_mode_from_legacy_whitelist(
+            use_modality_whitelist=True if use_modality_whitelist is None else use_modality_whitelist
+        )
+    return whitelist_arg_for_ocr_remove_mode(ocr_remove_mode)
 
 
 def modalities_in_selected_studies(
@@ -150,6 +168,47 @@ def format_modality_whitelist_heading(modality: str, term_count: int) -> str:
     """Single-line modality section heading for whitelist preview."""
     term_label = _("term") if term_count == 1 else _("terms")
     return f"{modality} ({term_count} {term_label})"
+
+
+def format_exclude_areas_modality_detail(modality: str, rects: Sequence[dict]) -> str:
+    """One-line exclude-area summary for a modality (count only; no rect coordinates)."""
+    code = (modality or "?").strip().upper() or "?"
+    count = len(rects)
+    area_label = _("exclude area") if count == 1 else _("exclude areas")
+    return f"{code}: {count} {area_label}"
+
+
+def collect_exclude_areas_by_modality(
+    project_dir: Path | None,
+    modalities: Sequence[str],
+) -> dict[str, list[dict]]:
+    """Load saved exclude rects for each modality code (empty list when missing)."""
+    if project_dir is None:
+        return {str(m).strip().upper(): [] for m in modalities if str(m).strip()}
+    out: dict[str, list[dict]] = {}
+    for modality in modalities:
+        code = str(modality or "").strip().upper()
+        if not code:
+            continue
+        out[code] = load_project_exclude_rects(project_dir, code)
+    return out
+
+
+def format_batch_exclude_areas_log_lines(
+    project_dir: Path | None,
+    modalities: Sequence[str],
+) -> list[str]:
+    """Workflow lines when AI Batch Enable Exclude Areas is on."""
+    lines = [_("Exclude areas enabled")]
+    by_modality = collect_exclude_areas_by_modality(project_dir, modalities)
+    if not by_modality or not any(by_modality.values()):
+        lines.append(_("No saved exclude areas for modalities in this selection"))
+        return lines
+    for modality in sorted(by_modality):
+        rects = by_modality[modality]
+        if rects:
+            lines.append(format_exclude_areas_modality_detail(modality, rects))
+    return lines
 
 
 def format_modality_whitelist_preview(
@@ -612,16 +671,13 @@ def _unique_non_empty_texts(texts: Sequence[str]) -> list[str]:
     return unique
 
 
-def _format_quoted_texts(texts: Sequence[str], *, max_shown: int = 6) -> str:
-    unique = _unique_non_empty_texts(texts)
-    if not unique:
-        return ""
-    shown = unique[:max_shown]
-    parts = ", ".join(f'"{item}"' for item in shown)
-    remaining = len(unique) - len(shown)
-    if remaining > 0:
-        parts += f" (+{remaining} " + _("more") + ")"
-    return parts
+def _ocr_text_region_count(texts: Sequence[str]) -> int:
+    """Count unique non-empty OCR/removed regions without exposing their content."""
+    return len(_unique_non_empty_texts(texts))
+
+
+def _format_phi_removed_count(count: int) -> str:
+    return f"{count} " + _("PHI removed")
 
 
 def format_remove_pixel_phi_series_message(
@@ -631,17 +687,20 @@ def format_remove_pixel_phi_series_message(
     texts_removed: Sequence[str],
     pixels_changed: int = 0,
     removal_mode: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT,
+    ocr_remove_mode: OcrRemoveMode = OcrRemoveMode.NON_WHITELISTED,
 ) -> str:
-    summary = _("Modified") + f" {modified_count}/{total}"
-    text_summary = _format_quoted_texts(texts_removed)
-    if text_summary:
-        summary = f"{summary} · {_('removed')}: {text_summary}"
-    if pixels_changed > 0:
-        if removal_mode is PixelPhiRemovalMode.BLACKOUT:
-            summary += f" · {pixels_changed:,} {_('pixels blacked out')}"
-        else:
-            summary += f" · {pixels_changed:,} {_('pixels modified')}"
-    return summary
+    """Series outcome line: Series View wording, counts only (never OCR/PHI strings)."""
+    del pixels_changed  # Kept for call-site compatibility; not logged.
+    parts = [
+        _("PHI removed"),
+        f"{modified_count}/{total} " + _("instance(s)"),
+        remove_text_button_label(ocr_remove_mode),
+        pixel_phi_removal_mode_option_label(removal_mode),
+    ]
+    region_count = _ocr_text_region_count(texts_removed)
+    if region_count:
+        parts.append(_format_phi_removed_count(region_count))
+    return " · ".join(parts)
 
 
 def format_remove_pixel_phi_instance_detail(
@@ -652,17 +711,22 @@ def format_remove_pixel_phi_instance_detail(
     texts: Sequence[str],
     removal_mode: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT,
     pixels_changed: int = 0,
+    ocr_remove_mode: OcrRemoveMode = OcrRemoveMode.NON_WHITELISTED,
 ) -> str:
+    """Per-instance detail: Series View wording, counts only (never OCR/PHI strings)."""
+    del pixels_changed  # Kept for call-site compatibility; not logged.
     position = _("Instance") + f" {instance_index}/{instance_total}"
-    text_summary = _format_quoted_texts(texts, max_shown=8)
-    if modified and text_summary:
-        action = pixel_phi_removal_mode_display_label(removal_mode)
-        detail = f"{position}: {action} {text_summary}"
-        if pixels_changed > 0:
-            detail += f" ({pixels_changed:,} {_('px')})"
-        return detail
-    if text_summary:
-        return f"{position}: {_('detected')} {text_summary} ({_('pixels unchanged')})"
+    region_count = _ocr_text_region_count(texts)
+    if modified and region_count:
+        parts = [
+            position,
+            remove_text_button_label(ocr_remove_mode),
+            pixel_phi_removal_mode_option_label(removal_mode),
+            _format_phi_removed_count(region_count),
+        ]
+        return ": ".join([parts[0], " · ".join(parts[1:])])
+    if region_count:
+        return f"{position}: {_('Detect Text')} · {_format_phi_removed_count(region_count)} ({_('unchanged')})"
     return f"{position}: {_('no burnt-in text detected')}"
 
 
@@ -764,7 +828,7 @@ def series_needs_pixel_phi(anon_model: AnonymizerModel | None, series_path: Path
         return True
     with contextlib.suppress(ValueError, InvalidDicomError, AttributeError):
         ds = _load_series_dataset(series_path)
-        return not anon_model.series_pixel_phi_scanned(str(ds.SeriesInstanceUID))
+        return not anon_model.series_embedded_phi_scanned(str(ds.SeriesInstanceUID))
     return True
 
 
@@ -908,7 +972,9 @@ def _apply_remove_pixel_phi_series(
     on_log_detail: Callable[[str], None] | None = None,
     removal_mode: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT,
     project_dir: Path | None = None,
-    use_modality_whitelist: bool = True,
+    ocr_remove_mode: OcrRemoveMode | None = None,
+    use_modality_whitelist: bool | None = None,
+    ocr_use_exclude_areas: bool = False,
 ) -> AiBatchOutcome:
     try:
         ds = _load_series_dataset(series_path)
@@ -917,7 +983,7 @@ def _apply_remove_pixel_phi_series(
 
     series_uid = str(ds.SeriesInstanceUID)
     series_modality = str(ds.get("Modality", "") or "")
-    if anon_model.series_pixel_phi_scanned(series_uid):
+    if anon_model.series_embedded_phi_scanned(series_uid):
         return AiBatchOutcome(
             series_path,
             AiBatchAlgorithm.REMOVE_PIXEL_PHI,
@@ -945,8 +1011,20 @@ def _apply_remove_pixel_phi_series(
     all_removed_texts: list[str] = []
     total_pixels_changed = 0
     instance_total = len(dcm_paths)
-    ocr_whitelist = whitelist_for_batch_ocr(use_modality_whitelist=use_modality_whitelist)
+    ocr_remove_mode = ocr_remove_mode or ocr_remove_mode_from_legacy_whitelist(
+        use_modality_whitelist=True if use_modality_whitelist is None else use_modality_whitelist
+    )
+    ocr_whitelist = whitelist_arg_for_ocr_remove_mode(ocr_remove_mode)
+    apply_phi_ner = apply_phi_ner_filter_for_ocr_remove_mode(ocr_remove_mode)
     whitelist_match = load_modality_whitelist_match_settings(project_dir, series_modality or None)
+    if ocr_use_exclude_areas:
+        saved_rects = (
+            load_project_exclude_rects(project_dir, series_modality) if project_dir and series_modality else []
+        )
+        exclude_detail = format_exclude_areas_modality_detail(series_modality or "?", saved_rects)
+        logger.info("AI batch exclude areas for %s: %s", series_path, exclude_detail)
+        if on_log_detail is not None:
+            on_log_detail(exclude_detail)
     for instance_index, dcm_path in enumerate(dcm_paths, start=1):
         try:
             modified, texts, pixels_changed = remove_pixel_phi(
@@ -957,6 +1035,8 @@ def _apply_remove_pixel_phi_series(
                 modality=series_modality or None,
                 whitelist=ocr_whitelist,
                 whitelist_match_settings=whitelist_match,
+                apply_phi_ner_filter=apply_phi_ner,
+                use_exclude_areas=ocr_use_exclude_areas,
             )
         except Exception as exc:
             logger.error("Remove Pixel PHI failed for %s: %s", dcm_path, exc)
@@ -967,7 +1047,7 @@ def _apply_remove_pixel_phi_series(
                 str(exc),
             )
         if modified and pixels_changed > 0:
-            apply_instance_pixel_phi_for_dcm(anon_model, dcm_path, texts)
+            apply_instance_embedded_phi_for_dcm(anon_model, dcm_path, texts)
             all_removed_texts.extend(texts)
             modified_count += 1
             total_pixels_changed += pixels_changed
@@ -980,6 +1060,7 @@ def _apply_remove_pixel_phi_series(
                         texts=texts,
                         removal_mode=removal_mode,
                         pixels_changed=pixels_changed,
+                        ocr_remove_mode=ocr_remove_mode,
                     )
                 )
         elif texts:
@@ -992,6 +1073,7 @@ def _apply_remove_pixel_phi_series(
                         modified=False,
                         texts=texts,
                         removal_mode=removal_mode,
+                        ocr_remove_mode=ocr_remove_mode,
                     )
                 )
         else:
@@ -1004,13 +1086,14 @@ def _apply_remove_pixel_phi_series(
                         modified=False,
                         texts=texts,
                         removal_mode=removal_mode,
+                        ocr_remove_mode=ocr_remove_mode,
                     )
                 )
 
     if on_log_detail is not None and unchanged_count > 0 and modified_count > 0:
         on_log_detail(f"{unchanged_count}/{instance_total} " + _("instances") + ": " + _("no burnt-in text detected"))
 
-    anon_model.set_series_pixel_phi_scanned(series_uid, scanned=True)
+    anon_model.set_series_embedded_phi_scanned(series_uid, scanned=True)
 
     if modified_count == 0:
         message = _("No burnt-in text detected")
@@ -1032,6 +1115,7 @@ def _apply_remove_pixel_phi_series(
             texts_removed=all_removed_texts,
             pixels_changed=total_pixels_changed,
             removal_mode=removal_mode,
+            ocr_remove_mode=ocr_remove_mode,
         ),
     )
 
@@ -1044,7 +1128,9 @@ def apply_remove_pixel_phi_series(
     on_log_detail: Callable[[str], None] | None = None,
     removal_mode: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT,
     project_dir: Path | None = None,
-    use_modality_whitelist: bool = True,
+    ocr_remove_mode: OcrRemoveMode | None = None,
+    use_modality_whitelist: bool | None = None,
+    ocr_use_exclude_areas: bool = False,
 ) -> AiBatchOutcome:
     """Public series-level pixel PHI removal (wraps ``_apply_remove_pixel_phi_series``)."""
     return _apply_remove_pixel_phi_series(
@@ -1054,7 +1140,9 @@ def apply_remove_pixel_phi_series(
         on_log_detail=on_log_detail,
         removal_mode=removal_mode,
         project_dir=project_dir,
+        ocr_remove_mode=ocr_remove_mode,
         use_modality_whitelist=use_modality_whitelist,
+        ocr_use_exclude_areas=ocr_use_exclude_areas,
     )
 
 
@@ -1565,12 +1653,33 @@ def ai_batch_process(
         try:
             if algorithm is AiBatchAlgorithm.REMOVE_PIXEL_PHI:
                 log_workflow(format_batch_step_subline(_("Preparing OCR models") + "…"))
-                if not options.use_modality_whitelist:
-                    log_workflow(
-                        format_batch_step_subline(
-                            _("OCR whitelist disabled") + " — " + _("all detected text will be removed")
-                        )
+                log_workflow(
+                    format_batch_step_subline(
+                        _("Remove target")
+                        + ": "
+                        + ocr_remove_mode_display_label(options.ocr_remove_mode)
+                        + " ("
+                        + remove_text_button_label(options.ocr_remove_mode)
+                        + ")"
                     )
+                )
+                log_workflow(
+                    format_batch_step_subline(
+                        _("Removal mode")
+                        + ": "
+                        + pixel_phi_removal_mode_option_label(options.pixel_phi_removal_mode)
+                    )
+                )
+                if options.ocr_use_exclude_areas:
+                    project_dir = (
+                        anon_controller.project_model.storage_dir if anon_controller is not None else None
+                    )
+                    for line in format_batch_exclude_areas_log_lines(
+                        project_dir,
+                        modalities_in_selected_studies(images_dir, studies),
+                    ):
+                        log_workflow(format_batch_step_subline(line))
+                        logger.info("AI batch OCR: %s", line)
             elif algorithm is AiBatchAlgorithm.HARMONIZE:
                 if any(_load_tseg_series_dataset(path) is not None for path in pending_paths):
                     log_workflow(format_batch_step_subline(_("Loading anatomy analysis models") + "…"))
@@ -1644,7 +1753,14 @@ def ai_batch_process(
                     )
 
                 if algorithm is AiBatchAlgorithm.REMOVE_PIXEL_PHI:
-                    log_workflow(format_batch_step_subline(_("Scanning instances for burnt-in text") + "…"))
+                    log_workflow(
+                        format_batch_step_subline(
+                            _("Detect Text")
+                            + " / "
+                            + remove_text_button_label(options.ocr_remove_mode)
+                            + "…"
+                        )
+                    )
                     assert anon_model is not None
                     assert handle.reader is not None
                     project_dir = anon_controller.project_model.storage_dir if anon_controller is not None else None
@@ -1659,7 +1775,8 @@ def ai_batch_process(
                         on_log_detail=log_pixel_phi_detail,
                         removal_mode=options.pixel_phi_removal_mode,
                         project_dir=project_dir,
-                        use_modality_whitelist=options.use_modality_whitelist,
+                        ocr_remove_mode=options.ocr_remove_mode,
+                        ocr_use_exclude_areas=options.ocr_use_exclude_areas,
                     )
                 elif algorithm is AiBatchAlgorithm.HARMONIZE:
 

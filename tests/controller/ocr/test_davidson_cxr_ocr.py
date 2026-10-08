@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.ai.remove_pixel_phi import (
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     filter_ocr_whitelist_only,
     load_modality_whitelist,
     load_modality_whitelist_match_settings,
@@ -37,6 +37,8 @@ def test_davidson_cxr_loads_single_frame(davidson_loaded) -> None:
 @pytest.mark.usefixtures("require_ocr")
 def test_davidson_cxr_ocr_finds_burned_in_text(davidson_loaded) -> None:
     """Regression: MONOCHROME1 CXR must yield OCR boxes with an empty whitelist."""
+    from anonymizer.controller.ai.embedded_phi.ner.cache import ner_ready
+
     loaded = davidson_loaded
     ws = WorkState()
     ws.bind(
@@ -63,6 +65,14 @@ def test_davidson_cxr_ocr_finds_burned_in_text(davidson_loaded) -> None:
     assert len(ws.result[0]) > 0, "Expected burned-in text on Davidson CXR"
     texts = [t.text for t in ws.result[0]]
     assert any("portable" in t.lower() for t in texts), f"Expected Portable in OCR results, got {texts}"
+    # Series View annotate path: overlay kept; PHI strings labeled when NER is ready.
+    portable = next(t for t in ws.result[0] if "portable" in t.text.lower())
+    assert portable.phi_label is None, f"Portable must not be classified as PHI, got {portable.phi_label}"
+    if ner_ready():
+        assert any(t.phi_label in {"NAME", "DATE"} for t in ws.result[0]), (
+            f"Expected NER NAME/DATE labels on Davidson PHI, got "
+            f"{[(t.text, t.phi_label) for t in ws.result[0]]}"
+        )
 
 
 @pytest.mark.ocr_integration
@@ -159,4 +169,26 @@ def test_davidson_overlay_draw_includes_portable_when_project_whitelist_omits_it
     drawn_texts = [item.text for item in drawn]
 
     assert "Portable" in drawn_texts
+    assert "Semi-Upright" in drawn_texts
     assert "DAVIDSON" in drawn_texts
+
+
+def test_davidson_default_cr_whitelist_hides_portable_and_semi_upright() -> None:
+    """Packaged CR/DX defaults must hide common Davidson overlay markers."""
+    from anonymizer.controller.series_overlay import OCRText
+    from anonymizer.utils.storage import load_default_whitelist
+
+    detections = [
+        OCRText(text="DAVIDSON DOUGLAS [M]", top_left=(0, 0), bottom_right=(10, 10), prob=0.9),
+        OCRText(text="01.09.2012", top_left=(0, 0), bottom_right=(10, 10), prob=0.9),
+        OCRText(text="Semi-Upright", top_left=(0, 0), bottom_right=(10, 10), prob=0.9),
+        OCRText(text="Portable", top_left=(0, 0), bottom_right=(10, 10), prob=0.9),
+    ]
+    cr_wl = load_default_whitelist("CR")
+    assert "PORTABLE" in cr_wl
+    assert "SEMI-UPRIGHT" in cr_wl
+    drawn = filter_ocr_whitelist_only(detections, whitelist=cr_wl)
+    texts = [t.text for t in drawn]
+    assert "Portable" not in texts
+    assert "Semi-Upright" not in texts
+    assert "DAVIDSON DOUGLAS [M]" in texts

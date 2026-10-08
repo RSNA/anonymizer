@@ -10,11 +10,11 @@ import pydicom
 import pytest
 
 from anonymizer.controller.ai.batch_process import AiBatchAlgorithm, _apply_remove_pixel_phi_series
-from anonymizer.controller.ai.remove_pixel_phi import (
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     PixelPhiRemovalMode,
     detect_text,
-    remove_pixel_phi,
 )
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import remove_pixel_phi
 from anonymizer.controller.phi_io import build_phi_index
 from anonymizer.model.anonymizer import AnonymizerModel, Instance
 from tests.controller.support.pixel_phi_test_support import (
@@ -49,7 +49,7 @@ def _overlay_region_changed(before: np.ndarray, after: np.ndarray) -> bool:
     return not np.array_equal(before[region], after[region])
 
 
-@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
 def test_remove_pixel_phi_detects_and_blackouts_synthetic_phi(
     mock_readtext: MagicMock,
     tmp_path: Path,
@@ -77,7 +77,7 @@ def test_remove_pixel_phi_detects_and_blackouts_synthetic_phi(
     assert np.count_nonzero(before[overlay] > 2500) > np.count_nonzero(after[overlay] > 2500)
 
 
-@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
 def test_detect_text_returns_filtered_phi_from_synthetic_ct(
     mock_readtext: MagicMock,
     tmp_path: Path,
@@ -97,7 +97,7 @@ def test_detect_text_returns_filtered_phi_from_synthetic_ct(
     assert [item.text for item in results] == list(DEFAULT_BURNED_IN_PHI_LINES)
 
 
-@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
 def test_batch_pixel_phi_pipeline_updates_model_and_phi_index(
     mock_readtext: MagicMock,
     anonymizer_model: AnonymizerModel,
@@ -133,19 +133,19 @@ def test_batch_pixel_phi_pipeline_updates_model_and_phi_index(
     with anonymizer_model._get_session(read_only=True) as session:
         row = session.get(Instance, instance.sop_instance_uid)
         assert row is not None
-        assert row.pixel_phi == expected_digest
+        assert row.embedded_phi == expected_digest
 
     records = build_phi_index(anonymizer_model)
     assert records is not None
     record = next(item for item in records if item.anon_study_uid == study.anon_study_uid)
-    assert record.pixel_phi_removed is True
-    assert record.pixel_phi == expected_digest
+    assert record.embedded_phi_removed is True
+    assert record.embedded_phi == expected_digest
 
     after_phi = pydicom.dcmread(phi_path).pixel_array
     assert np.count_nonzero(before_phi[overlay] > 2500) > np.count_nonzero(after_phi[overlay] > 2500)
 
 
-@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
 def test_batch_pixel_phi_leaves_unmarked_slices_unchanged(
     mock_readtext: MagicMock,
     anonymizer_model: AnonymizerModel,
@@ -172,7 +172,7 @@ def test_batch_pixel_phi_leaves_unmarked_slices_unchanged(
     assert np.array_equal(pydicom.dcmread(clean_path).pixel_array, clean_before)
 
 
-@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
 def test_phi_index_digest_deduplicates_across_instances(
     mock_readtext: MagicMock,
     anonymizer_model: AnonymizerModel,
@@ -198,4 +198,4 @@ def test_phi_index_digest_deduplicates_across_instances(
     assert outcome.status == "ok"
     records = build_phi_index(anonymizer_model)
     assert records is not None
-    assert records[0].pixel_phi == "SMITH^JOHN, 01-Jan-2024, ACC12345"
+    assert records[0].embedded_phi == "SMITH^JOHN, 01-Jan-2024, ACC12345"

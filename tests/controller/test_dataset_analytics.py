@@ -114,7 +114,7 @@ def test_ai_coverage_omits_zero_percent() -> None:
         series_total=100,
         series_harmonized=40,
         series_face_blur=0,
-        series_pixel_phi=5,
+        series_embedded_phi=5,
     )
     labels = [b.label for b in dist.items]
     assert labels == [_("Harmonize"), _("Pixel PHI")]
@@ -126,7 +126,7 @@ def test_ai_coverage_omits_zero_percent() -> None:
         series_total=50,
         series_harmonized=0,
         series_face_blur=0,
-        series_pixel_phi=0,
+        series_embedded_phi=0,
     )
     assert empty.items == ()
     assert empty.empty

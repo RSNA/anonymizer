@@ -32,7 +32,8 @@ from anonymizer.utils.memory import (
     format_memory_snapshot_label,
 )
 from anonymizer.utils.translate import _
-from anonymizer.view.common.app_window import AppToplevel
+from anonymizer.view.ai.features.look import FEATURE_DIALOG_PAD
+from anonymizer.view.common.app_window import AppToplevel, present_toplevel_centered_on_parent
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 from anonymizer.view.common.job_poller import BATCH_POLL_MS, JobPoller
 
@@ -62,6 +63,9 @@ class AiBatchProcessDialog(AppToplevel):
         options: AiBatchProcessOptions,
     ) -> None:
         super().__init__(master=parent)
+        # Build while withdrawn so the first paint is already centered (no +0+0 flash).
+        self.withdraw()
+        self._parent = parent
         self._controller = controller
         self._studies = studies
         self._batch_options = options
@@ -90,18 +94,22 @@ class AiBatchProcessDialog(AppToplevel):
 
         self.title(_("AI Batch Process"))
         self.resizable(True, True)
+        self.transient(parent)
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Escape>", self._escape_keypress)
 
-        self.text_box_width = 800
-        self.text_box_height = 300
+        parent.update_idletasks()
+        parent_w = max(1, int(parent.winfo_width()))
+        parent_h = max(1, int(parent.winfo_height()))
+        self.text_box_width = min(800, max(400, parent_w - 80))
+        self.text_box_height = min(300, max(140, parent_h - 260))
         self._create_widgets()
-        self.wait_visibility()
+        present_toplevel_centered_on_parent(self, parent)
         self.grab_set()
         self.after(250, self._start_worker)
 
     def _create_widgets(self) -> None:
-        pad = 10
+        pad = FEATURE_DIALOG_PAD
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
 

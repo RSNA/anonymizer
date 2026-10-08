@@ -3,6 +3,8 @@ import logging
 import queue
 import threading
 import tkinter as tk
+from collections import Counter
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from pprint import pformat
@@ -26,18 +28,13 @@ from anonymizer.controller.ai.blur_face import (
     face_blur_status_applicable,
     metadata_signal,
 )
-from anonymizer.controller.ai.feature_availability import (
-    face_blur_allowed,
-    harmonize_allowed_for_modality,
-)
-from anonymizer.controller.ai.remove_pixel_phi import (
+from anonymizer.controller.ai.embedded_phi.classify_series import SeriesKind, classify_series
+from anonymizer.controller.ai.embedded_phi.ner.phi_entity import SCORED_LABELS
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     OcrWhitelistMatchMode,
     OcrWhitelistMatchSettings,
     PixelPhiRemovalMode,
-    apply_series_view_pixel_phi,
-    blackout_rectangular_areas,
     build_series_view_ocr_pixels,
-    collect_series_view_pixel_phi_texts,
     default_whitelist_match_settings,
     describe_match_settings,
     filter_ocr_outside_exclude_rects,
@@ -51,8 +48,23 @@ from anonymizer.controller.ai.remove_pixel_phi import (
     ocr_image_for_frame,
     pixel_phi_removal_mode_menu_labels,
     pixel_phi_removal_mode_option_label,
-    remove_ocr_text_from_frame,
     save_modality_whitelist_match_settings,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.exclude_zones import (
+    filter_ocr_for_remove_mode,
+    modality_exclude_rects_for_series,
+    normalize_user_rects,
+)
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
+    apply_series_view_embedded_phi,
+    blackout_rectangular_areas,
+    collect_series_view_embedded_phi_texts,
+    remove_ocr_text_from_frame,
+)
+from anonymizer.controller.ai.embedded_phi.report.report_from_ocr import cleansed_ocr_lines, write_ocr_report_sr
+from anonymizer.controller.ai.feature_availability import (
+    face_blur_allowed,
+    harmonize_allowed_for_modality,
 )
 from anonymizer.controller.ai.tseg.cache import resolve_series_cache_dir, tseg_cache_summary
 from anonymizer.controller.ai.tseg.config import TSEG_CACHE_DIRNAME
@@ -84,10 +96,17 @@ from anonymizer.controller.create_projections import invalidate_projection_cache
 from anonymizer.controller.runner import (
     Algorithm,
     OcrEditContext,
+    OcrRemoveMode,
     RunOptions,
+    detect_text_button_label,
     edit_context_display_label,
     edit_context_menu_values,
     normalize_edit_context,
+    normalize_ocr_remove_mode,
+    ocr_remove_mode_display_label,
+    ocr_remove_mode_menu_labels,
+    ocr_remove_mode_tooltip,
+    remove_text_button_label,
     run_job,
 )
 from anonymizer.controller.series_io import (
@@ -104,7 +123,9 @@ from anonymizer.utils.memory import collect_garbage_safe, log_process_memory
 from anonymizer.utils.storage import (
     get_dcm_files,
     load_default_whitelist,
+    load_project_exclude_rects,
     project_dir_from_series_path,
+    save_project_exclude_rects,
     save_project_whitelist,
 )
 from anonymizer.utils.translate import _
@@ -121,12 +142,17 @@ from anonymizer.view.ai.harmonize_results import (
     get_open_harmonize_view,
     show_harmonize_results_view,
 )
-from anonymizer.view.common.app_window import AppCTkToplevel, refresh_app_window_menu
+from anonymizer.view.common.app_window import (
+    AppCTkToplevel,
+    refresh_app_window_menu,
+)
 from anonymizer.view.common.ctk_safe import mark_ctk_window_destroyed
 from anonymizer.view.common.fonts import AppFonts
 from anonymizer.view.common.job_poller import start_background_job
 from anonymizer.view.common.navigation import find_dataset_view_parent, return_to_dataset_view
 from anonymizer.view.common.tooltip import bind_hover_tooltip
+from anonymizer.view.common.ux_fields import button_width_for_label, option_menu_width_for_labels
+from anonymizer.view.reports.entity_colors import entity_label_display
 from anonymizer.view.series.anatomy_overlay import (
     collect_primary_segment_voxels,
     color_bgr_for_structure,
@@ -176,22 +202,6 @@ def show_series_view(
     )
 
 
-def _option_menu_width_for_labels(values: list[str], *, height: int = 28) -> int:
-    """Pixel width for CTkOptionMenu to fit the widest label plus the dropdown button."""
-    if not values:
-        return height
-    font = ctk.CTkFont()
-    corner_radius = 6
-    text_width = max(int(font.measure(value)) for value in values)
-    return text_width + height + max(corner_radius, 3) + 6
-
-
-def _button_width_for_label(label: str, *, minimum: int = 100) -> int:
-    """Pixel width for a CTkButton so translated toolbar labels are not clipped."""
-    font = ctk.CTkFont()
-    return max(minimum, int(font.measure(label)) + 24)
-
-
 def ocr_results_available_for_edit_context(
     edit_context: OcrEditContext,
     *,
@@ -202,6 +212,99 @@ def ocr_results_available_for_edit_context(
     if edit_context is OcrEditContext.FRAME:
         return bool(overlay_ocr_by_frame.get(current_frame_index))
     return any(texts for texts in overlay_ocr_by_frame.values())
+
+
+def ocr_remove_toolbar_visible(
+    *,
+    interaction_allowed: bool,
+    detecting: bool,
+    results_available: bool,
+) -> bool:
+    """Show Remove Pixel PHI + mode only when detections exist for the edit context."""
+    return interaction_allowed and not detecting and results_available
+
+
+def filter_series_view_ocr_overlay(
+    detections: Sequence[OCRText],
+    *,
+    remove_mode: OcrRemoveMode,
+    whitelist: Sequence[str],
+    whitelist_match_settings: OcrWhitelistMatchSettings | None = None,
+    exclude_rects: Sequence[UserRectangle] | None = None,
+) -> list[OCRText]:
+    """WYSIWYG overlay: exclude zones, then remove-mode (PHI / whitelist / all)."""
+    return filter_ocr_for_remove_mode(
+        detections,
+        remove_mode=remove_mode,
+        whitelist=whitelist,
+        whitelist_match_settings=whitelist_match_settings,
+        exclude_rects=exclude_rects,
+    )
+
+
+def format_ocr_detection_complete_status(
+    detections_by_frame: Mapping[int, Sequence[OCRText]],
+    *,
+    whitelist: Sequence[str],
+    whitelist_match_settings: OcrWhitelistMatchSettings | None = None,
+    exclude_rects_by_frame: Mapping[int, Sequence[UserRectangle]] | None = None,
+    frames_scanned: int | None = None,
+    remove_mode: OcrRemoveMode = OcrRemoveMode.NON_WHITELISTED,
+) -> str:
+    """Status line after Series View detect: totals, NER classes, exclude/whitelist hides."""
+    exclude_map = exclude_rects_by_frame or {}
+    active: list[OCRText] = []
+    excluded = 0
+    frames_with_text = 0
+    for frame_i, texts in detections_by_frame.items():
+        if not texts:
+            continue
+        kept_spatial = filter_ocr_outside_exclude_rects(texts, exclude_map.get(frame_i))
+        excluded += len(texts) - len(kept_spatial)
+        if kept_spatial:
+            frames_with_text += 1
+            active.extend(kept_spatial)
+    total = len(active)
+    if remove_mode is OcrRemoveMode.NON_WHITELISTED:
+        shown = filter_ocr_whitelist_only(
+            active,
+            whitelist=whitelist,
+            whitelist_match_settings=whitelist_match_settings,
+        )
+        whitelisted = max(0, total - len(shown))
+    else:
+        whitelisted = 0
+
+    ner_counts: Counter[str] = Counter()
+    unlabeled = 0
+    for item in active:
+        label = (item.phi_label or "").strip().upper()
+        if label:
+            ner_counts[label] += 1
+        else:
+            unlabeled += 1
+
+    ner_parts: list[str] = []
+    for label in SCORED_LABELS:
+        n = ner_counts.get(label, 0)
+        if n:
+            ner_parts.append(f"{entity_label_display(label)} {n}")
+    for label, n in sorted(ner_counts.items()):
+        if label not in SCORED_LABELS and n:
+            ner_parts.append(f"{label} {n}")
+    if unlabeled:
+        ner_parts.append(f"{_('unlabeled')} {unlabeled}")
+
+    status = _("Text detection complete") + f": {total} " + _("detections")
+    if ner_parts:
+        status += f" ({', '.join(ner_parts)})"
+    if excluded:
+        status += f"; {excluded} " + _("excluded")
+    if whitelisted:
+        status += f"; {whitelisted} " + _("whitelisted")
+    if frames_scanned is not None:
+        status += f", {frames_with_text}/{frames_scanned} " + _("frames with text")
+    return status
 
 
 def clear_cache_button_visible(
@@ -287,10 +390,15 @@ class SeriesView(AppCTkToplevel):
         self._controller = controller
         self._series_path = series_path
         self.edit_context: OcrEditContext = OcrEditContext.FRAME
+        self.ocr_remove_mode: OcrRemoveMode = OcrRemoveMode.NON_WHITELISTED
         self.detected_text: dict[int, list[OCRText]] = {}  # Store all detected text per frame
         # Texts removed from pixels (overlay is cleared on Remove Text before Save).
         self._removed_pixel_phi_by_frame: dict[int, list[str]] = {}
         self._pixel_phi_dirty = False
+        # Fingerprint of last saved/loaded modality exclude rects (normalized).
+        self._saved_exclude_fingerprint: tuple[tuple[float, float, float, float], ...] = ()
+        # Raw OCR lines per frame; cleansed + promoted to Basic Text SR on Save for pixel text reports.
+        self._ocr_transcript_by_frame: dict[int, list[str]] = {}
         self._whitelist_changed = False
         self._whitelist_match_changed = False
         self._whitelist_match_settings = default_whitelist_match_settings()
@@ -319,6 +427,7 @@ class SeriesView(AppCTkToplevel):
         self._face_blur_eligibility_geometry: SeriesGeometryResult | None = None
         self._ocr_work_state = WorkState()
         self._ocr_poll_frame_index = -1
+        self._ocr_detecting = False
         self._rebuild_after_id: str | None = None
         self._min_window_size: tuple[int, int] | None = None
         self._rebuild_pending = False
@@ -1003,6 +1112,8 @@ class SeriesView(AppCTkToplevel):
             return
         for frame_index in self.detected_text:
             self.draw_text_overlay(frame_index)
+        self.image_viewer.refresh_current_image()
+        self._refresh_ocr_toolbar_buttons()
 
     def _restore_whitelist_items(self, items: list[str]) -> None:
         if not hasattr(self, "whitelist"):
@@ -1032,6 +1143,7 @@ class SeriesView(AppCTkToplevel):
             "detect_button",
             "blackout_button",
             "exclude_area_button",
+            "ocr_remove_mode_menu",
             "edit_context_combo_box",
             "whitelist_entry",
             "whitelist_defaults_button",
@@ -1047,9 +1159,11 @@ class SeriesView(AppCTkToplevel):
             self._refresh_ocr_toolbar_buttons()
             self._refresh_model_aware_toolbar_buttons()
         else:
+            for attr in ("remove_button", "remove_text_mode_menu"):
+                widget = getattr(self, attr, None)
+                if widget is not None:
+                    self._set_toolbar_widget_present(widget, False)
             for attr in (
-                "remove_button",
-                "remove_text_mode_menu",
                 "harmonize_button",
                 "blur_face_button",
                 "blur_face_mode_menu",
@@ -1070,6 +1184,8 @@ class SeriesView(AppCTkToplevel):
         if hasattr(self, "save_button") and busy:
             with contextlib.suppress(tk.TclError):
                 self.save_button.configure(state="disabled")
+        elif hasattr(self, "save_button"):
+            self._refresh_save_button()
 
         if hasattr(self, "image_viewer"):
             with contextlib.suppress(tk.TclError):
@@ -1243,6 +1359,7 @@ class SeriesView(AppCTkToplevel):
             on_annotate_import_segments=self._on_annotate_import_segments,
             on_annotate_target_changed=self._on_annotate_target_changed,
             on_annotate_requires_target=self._on_annotate_requires_target,
+            on_exclude_rects_changed=self._refresh_save_button,
             series_projections=self._projections,
         )
         self.image_viewer.grid(row=0, column=1, sticky="nsew")
@@ -1275,47 +1392,98 @@ class SeriesView(AppCTkToplevel):
             values=edit_context_labels,
             command=self.edit_context_change,
             dynamic_resizing=False,
-            width=_option_menu_width_for_labels(edit_context_labels),
+            width=option_menu_width_for_labels(edit_context_labels),
         )
         self.edit_context_combo_box.grid(row=0, column=1, padx=(0, 8))
+        remove_target_label = ctk.CTkLabel(text_edit_group, text=_("Remove") + ":")
+        remove_target_label.grid(row=0, column=2, padx=(0, 2))
+        remove_mode_labels = list(ocr_remove_mode_menu_labels())
+        self._ocr_remove_mode_var = tk.StringVar(
+            value=ocr_remove_mode_display_label(OcrRemoveMode.NON_WHITELISTED)
+        )
+        self.ocr_remove_mode_menu = ctk.CTkOptionMenu(
+            text_edit_group,
+            variable=self._ocr_remove_mode_var,
+            values=remove_mode_labels,
+            command=self._on_ocr_remove_mode_changed,
+            dynamic_resizing=False,
+            width=option_menu_width_for_labels(remove_mode_labels),
+        )
+        self.ocr_remove_mode_menu.grid(row=0, column=3, padx=(0, 8))
+        bind_hover_tooltip(
+            self.ocr_remove_mode_menu,
+            lambda: ocr_remove_mode_tooltip(self._selected_ocr_remove_mode()),
+        )
+        detect_label = detect_text_button_label()
         self.detect_button = ctk.CTkButton(
-            text_edit_group, width=self.BUTTON_WIDTH, text=_("Detect Text"), command=self.detect_text_button_clicked
+            text_edit_group,
+            width=button_width_for_label(detect_label, minimum=self.BUTTON_WIDTH),
+            text=detect_label,
+            command=self.detect_text_button_clicked,
         )
-        self.detect_button.grid(row=0, column=2, padx=(0, 2), pady=0)
+        self.detect_button.grid(row=0, column=4, padx=(0, 2), pady=0)
+        bind_hover_tooltip(
+            self.detect_button,
+            lambda: ocr_remove_mode_tooltip(self._selected_ocr_remove_mode()),
+        )
+        remove_label = remove_text_button_label(OcrRemoveMode.NON_WHITELISTED)
         self.remove_button = ctk.CTkButton(
-            text_edit_group, width=self.BUTTON_WIDTH, text=_("Remove Text"), command=self.remove_text_button_clicked
+            text_edit_group,
+            width=button_width_for_label(remove_label, minimum=self.BUTTON_WIDTH),
+            text=remove_label,
+            command=self.remove_text_button_clicked,
         )
-        self.remove_button.grid(row=0, column=3, padx=2, pady=0)
+        self.remove_button.grid(row=0, column=5, padx=2, pady=0)
+        bind_hover_tooltip(
+            self.remove_button,
+            lambda: ocr_remove_mode_tooltip(self._selected_ocr_remove_mode()),
+        )
         removal_mode_labels = list(pixel_phi_removal_mode_menu_labels())
         self.remove_text_mode_var = tk.StringVar(
             value=pixel_phi_removal_mode_option_label(PixelPhiRemovalMode.BLACKOUT)
         )
         self.remove_text_mode_menu = ctk.CTkOptionMenu(
             text_edit_group,
-            width=max(140, _option_menu_width_for_labels(removal_mode_labels)),
+            width=max(140, option_menu_width_for_labels(removal_mode_labels)),
             values=removal_mode_labels,
             variable=self.remove_text_mode_var,
         )
-        self.remove_text_mode_menu.grid(row=0, column=4, padx=2, pady=0)
-        # Present only after Detect Text; start hidden so window size matches available actions.
+        self.remove_text_mode_menu.grid(row=0, column=6, padx=2, pady=0)
+        # Hide until detections exist (same presence pattern as Harmonize / Face Blur).
         self.remove_button.grid_remove()
         self.remove_text_mode_menu.grid_remove()
         blackout_label = _("Blackout Area")
         self.blackout_button = ctk.CTkButton(
             text_edit_group,
-            width=_button_width_for_label(blackout_label, minimum=self.BUTTON_WIDTH),
+            width=button_width_for_label(blackout_label, minimum=self.BUTTON_WIDTH),
             text=blackout_label,
             command=self.blackout_button_clicked,
         )
-        self.blackout_button.grid(row=0, column=5, padx=2, pady=0)
+        self.blackout_button.grid(row=0, column=7, padx=2, pady=0)
+        bind_hover_tooltip(
+            self.blackout_button,
+            _(
+                "Paint drawn rectangles black on the pixels. Draw a rectangle first, then click. "
+                "Follows Text Edit Context (Frame or Series)."
+            ),
+        )
         exclude_label = _("Exclude Area")
         self.exclude_area_button = ctk.CTkButton(
             text_edit_group,
-            width=_button_width_for_label(exclude_label, minimum=self.BUTTON_WIDTH),
+            width=button_width_for_label(exclude_label, minimum=self.BUTTON_WIDTH),
             text=exclude_label,
             command=self.exclude_area_button_clicked,
         )
-        self.exclude_area_button.grid(row=0, column=6, padx=(2, self.PAD), pady=0)
+        self.exclude_area_button.grid(row=0, column=8, padx=(2, self.PAD), pady=0)
+        bind_hover_tooltip(
+            self.exclude_area_button,
+            _(
+                "Skip drawn rectangles during Detect Text and Remove. Pixels are not changed. "
+                "Draw a rectangle first, then click. Click a dotted outline to delete it. "
+                "Save Changes stores adds and removals for this modality "
+                "(AI Batch: Enable Exclude Areas)."
+            ),
+        )
 
         toolbar_spacer = ctk.CTkFrame(self.control_frame, fg_color="transparent", width=1, height=1)
         toolbar_spacer.grid(row=0, column=1, sticky="ew")
@@ -1380,14 +1548,16 @@ class SeriesView(AppCTkToplevel):
             sticky="w",
         )
 
+        save_label = _("Save Changes")
         self.save_button = ctk.CTkButton(
             self.control_frame,
-            width=130,
-            text=_("Save Pixel Changes"),
+            width=button_width_for_label(save_label, minimum=self.BUTTON_WIDTH),
+            text=save_label,
             command=self.save_series_button_clicked,
         )
         self.save_button.grid(row=2, column=2, padx=self.PAD, pady=(0, self.PAD), sticky="e")
         self.save_button.configure(state="disabled")
+        bind_hover_tooltip(self.save_button, self._save_changes_tooltip)
         self._refresh_series_processing_status()
 
         if self._ds is None or self._ds.Modality is None:
@@ -1400,6 +1570,7 @@ class SeriesView(AppCTkToplevel):
             self._sync_match_dropdown_state()
             self._log_whitelist_trace("init")
             self._load_whitelist_match_settings()
+            self._load_saved_exclude_areas()
 
     def load_frames(self, series_path: Path) -> tuple[Dataset, np.ndarray, tuple[Path, ...]]:
         """Loads anatomical frames (no projection prefix in the scroll stack)."""
@@ -1407,14 +1578,17 @@ class SeriesView(AppCTkToplevel):
         return loaded.metadata, frames, loaded.slice_paths
 
     def _update_title(self):
+        from anonymizer.view.common.ux_fields import truncate_series_description
+
         title = _("Series View")
         if self._ds:
             phi = self._controller.get_phi_by_anon_patient_id(self._ds.PatientID)
             if phi:
-                title += (
-                    f" for {phi.patient_name} PHI ID:{phi.patient_id} ANON ID: {self._ds.PatientID}"
-                    + f" {self._ds.get('SeriesDescription', '')} "
-                )
+                desc = truncate_series_description(self._ds.get("SeriesDescription", ""))
+                title += f" for {phi.patient_name} {self._ds.PatientID}"
+                if desc:
+                    title += f" {desc}"
+                title += " "
         self.title(title)
         refresh_app_window_menu(self)
 
@@ -1655,6 +1829,7 @@ class SeriesView(AppCTkToplevel):
         return False
 
     def _ensure_segmentation_overlays_for_frame(self, frame_index: int) -> None:
+        self._refresh_ocr_toolbar_buttons()
         slice_index = self._anatomical_slice_for_viewer_frame(frame_index)
         if slice_index is None:
             return
@@ -2007,9 +2182,8 @@ class SeriesView(AppCTkToplevel):
         if not hasattr(self, "image_viewer"):
             return False
         overlay_ocr_by_frame = {
-            frame_i: list(overlay.ocr_texts)
-            for frame_i, overlay in self.image_viewer.overlay_data.items()
-            if overlay.ocr_texts
+            frame_i: self.filter_text_data(frame_i)
+            for frame_i in self.detected_text
         }
         return ocr_results_available_for_edit_context(
             self.edit_context,
@@ -2018,13 +2192,17 @@ class SeriesView(AppCTkToplevel):
         )
 
     def _refresh_ocr_toolbar_buttons(self) -> None:
-        """Show Remove Text + removal mode only after Detect Text produced OCR results."""
-        present = self._series_interaction_allowed() and self._ocr_results_available_for_edit_context()
-        changed = False
-        changed |= self._set_toolbar_widget_present(getattr(self, "remove_button", None), present)
-        changed |= self._set_toolbar_widget_present(getattr(self, "remove_text_mode_menu", None), present)
-        if changed:
-            self._adapt_window_to_toolbar()
+        """Show Remove Pixel PHI + mode only when detections exist for the edit context."""
+        present = ocr_remove_toolbar_visible(
+            interaction_allowed=self._series_interaction_allowed(),
+            detecting=self._ocr_detecting,
+            results_available=self._ocr_results_available_for_edit_context(),
+        )
+        for attr in ("remove_button", "remove_text_mode_menu"):
+            widget = getattr(self, attr, None)
+            if widget is None:
+                continue
+            self._set_toolbar_widget_present(widget, present)
 
     def _selected_face_blur_mode(self) -> FaceBlurMode:
         if not hasattr(self, "blur_face_mode_var"):
@@ -2104,18 +2282,20 @@ class SeriesView(AppCTkToplevel):
         """Performs OCR on a single frame (sync fallback — prefer background detect_text job)."""
         from easyocr import Reader
 
-        from anonymizer.controller.ai.remove_pixel_phi import (
+        from anonymizer.controller.ai.embedded_phi.ner.cache import download_ner_models
+        from anonymizer.controller.ai.embedded_phi.pixel.cache import (
             OCR_LANGS,
             OCR_MODEL_DIR,
-            detect_text,
             download_ocr_models,
-            ocr_models_ready,
         )
+        from anonymizer.controller.ai.embedded_phi.pixel.detect_text import detect_text, ocr_image_for_frame
+        from anonymizer.controller.ai.feature_availability import embedded_phi_has_models
 
         if self._ds is None:
             return
-        if not ocr_models_ready():
+        if not embedded_phi_has_models():
             download_ocr_models()
+            download_ner_models()
         reader = Reader(lang_list=list(OCR_LANGS), model_storage_directory=str(OCR_MODEL_DIR))
         frame = self.image_viewer.images[frame_index]
         bgr = ocr_image_for_frame(self._ds, frame)
@@ -2125,6 +2305,8 @@ class SeriesView(AppCTkToplevel):
             draw_boxes_and_text=False,
             modality=str(self._ds.get("Modality", "") or ""),
             apply_noise_filter=False,
+            apply_phi_ner_filter=False,
+            annotate_phi_labels=True,
         )
         if results:
             logger.debug(f"OCR Results:\n{pformat(results)}")
@@ -2148,6 +2330,7 @@ class SeriesView(AppCTkToplevel):
 
     def _apply_ocr_detections_for_frame(self, frame_i: int, texts: list) -> None:
         self.detected_text[frame_i] = texts
+        self._ocr_transcript_by_frame[frame_i] = [t.text for t in texts if (t.text or "").strip()]
         logger.info(
             "Series View OCR applied %d detection(s) to frame_index=%s",
             len(texts),
@@ -2164,18 +2347,17 @@ class SeriesView(AppCTkToplevel):
             return
         _frame_index, _status, _done, result = work_state.snapshot_progress()
         logger.info("Series View OCR job done error=%s", work_state.error)
-        if hasattr(self, "detect_button"):
-            self.detect_button.configure(state="normal")
+        self._ocr_detecting = False
         if work_state.error:
             self.update_status(_("Text detection failed") + f": {work_state.error}")
             self._refresh_ocr_toolbar_buttons()
             return
-        detection_count = 0
-        frames_with_text = 0
+        detections_by_frame: dict[int, list[OCRText]] = {}
         if isinstance(result, dict):
             self._apply_ocr_detections_result(result)
-            frames_with_text = sum(1 for texts in result.values() if texts)
-            detection_count = sum(len(texts) for texts in result.values() if texts)
+            detections_by_frame = {
+                int(fi): list(texts) for fi, texts in result.items() if texts
+            }
             if hasattr(self, "image_viewer") and result:
                 if self.edit_context is OcrEditContext.FRAME:
                     detected_frame = int(next(iter(result)))
@@ -2185,17 +2367,24 @@ class SeriesView(AppCTkToplevel):
                         self.image_viewer.refresh_current_image()
                 else:
                     self.image_viewer.refresh_current_image()
-        if self.edit_context is OcrEditContext.FRAME:
-            status = _("Text detection complete") + f": {detection_count} " + _("detections")
-        else:
-            frames_scanned = self.image_viewer.num_images if hasattr(self, "image_viewer") else frames_with_text
-            status = (
-                _("Text detection complete")
-                + f": {detection_count} "
-                + _("detections")
-                + f", {frames_with_text}/{frames_scanned} "
-                + _("frames with text")
-            )
+        frames_scanned = None
+        if self.edit_context is OcrEditContext.SERIES and hasattr(self, "image_viewer"):
+            frames_scanned = self.image_viewer.num_images
+        exclude_rects_by_frame: dict[int, list[UserRectangle]] = {}
+        if hasattr(self, "image_viewer"):
+            for frame_i in detections_by_frame:
+                if frame_i in self.image_viewer.overlay_data:
+                    rects = list(self.image_viewer.overlay_data[frame_i].exclude_rects)
+                    if rects:
+                        exclude_rects_by_frame[frame_i] = rects
+        status = format_ocr_detection_complete_status(
+            detections_by_frame,
+            whitelist=self.get_whitelist_set() if hasattr(self, "whitelist") else [],
+            whitelist_match_settings=getattr(self, "_whitelist_match_settings", None),
+            exclude_rects_by_frame=exclude_rects_by_frame,
+            frames_scanned=frames_scanned,
+            remove_mode=self._selected_ocr_remove_mode(),
+        )
         self.update_status(status, debug_log=True)
         work_state.reset()
         self._ocr_poll_frame_index = -1
@@ -2236,8 +2425,7 @@ class SeriesView(AppCTkToplevel):
             whitelist=[],
             project_dir=project_dir,
         )
-        if hasattr(self, "detect_button"):
-            self.detect_button.configure(state="disabled")
+        self._ocr_detecting = True
         self._refresh_ocr_toolbar_buttons()
         self._ocr_poll_frame_index = -1
         if edit_context is OcrEditContext.FRAME:
@@ -2257,23 +2445,44 @@ class SeriesView(AppCTkToplevel):
             on_done=self._on_ocr_job_done,
         )
 
+    def _selected_ocr_remove_mode(self) -> OcrRemoveMode:
+        if hasattr(self, "_ocr_remove_mode_var"):
+            self.ocr_remove_mode = normalize_ocr_remove_mode(self._ocr_remove_mode_var.get())
+        return self.ocr_remove_mode
+
+    def _apply_ocr_remove_button_labels(self) -> None:
+        mode = self._selected_ocr_remove_mode()
+        detect_label = detect_text_button_label()
+        remove_label = remove_text_button_label(mode)
+        if hasattr(self, "detect_button"):
+            self.detect_button.configure(
+                text=detect_label,
+                width=button_width_for_label(detect_label, minimum=self.BUTTON_WIDTH),
+            )
+        if hasattr(self, "remove_button"):
+            self.remove_button.configure(
+                text=remove_label,
+                width=button_width_for_label(remove_label, minimum=self.BUTTON_WIDTH),
+            )
+
+    def _on_ocr_remove_mode_changed(self, _choice: str | None = None) -> None:
+        self._apply_ocr_remove_button_labels()
+        self._redraw_text_overlays_if_detected()
+
     def filter_text_data(self, frame_index: int) -> list[OCRText]:
-        """Hide whitelist-matched terms and exclude-rect intersections from overlay display."""
+        """Hide boxes that the current remove target would not remove."""
         if frame_index not in self.detected_text:
             return []
-
-        detections = self.detected_text[frame_index]
-        whitelist_set = self.get_whitelist_set()
-        if whitelist_set:
-            detections = filter_ocr_whitelist_only(
-                detections,
-                whitelist=whitelist_set,
-                whitelist_match_settings=self._whitelist_match_settings,
-            )
         exclude_rects: list[UserRectangle] = []
         if hasattr(self, "image_viewer") and frame_index in self.image_viewer.overlay_data:
             exclude_rects = list(self.image_viewer.overlay_data[frame_index].exclude_rects)
-        return filter_ocr_outside_exclude_rects(detections, exclude_rects)
+        return filter_series_view_ocr_overlay(
+            self.detected_text[frame_index],
+            remove_mode=self._selected_ocr_remove_mode(),
+            whitelist=self.get_whitelist_set() if hasattr(self, "whitelist") else [],
+            whitelist_match_settings=getattr(self, "_whitelist_match_settings", None),
+            exclude_rects=exclude_rects,
+        )
 
     def draw_text_overlay(self, frame_index: int):
         """Draws text boxes on the overlay for the given frame, based on filtered text_data."""
@@ -2297,6 +2506,8 @@ class SeriesView(AppCTkToplevel):
         self._start_ocr_background_job()
 
     def detect_text_button_clicked(self):
+        if self._ocr_detecting or not self._series_interaction_allowed():
+            return
         logger.info("Detect Text clicked edit_context=%s", self._resolve_edit_context())
         self._start_ocr_background_job()
 
@@ -2316,6 +2527,7 @@ class SeriesView(AppCTkToplevel):
             else apply_windowing(self.image_viewer.current_wl, self.image_viewer.current_ww, raw_frame)
         )
         removal_mode = normalize_pixel_phi_removal_mode(self.remove_text_mode_var.get())
+        removed_keys = {(t.text, t.get_bounding_box()) for t in ocr_texts}
         removed_labels = [t.text.strip() for t in ocr_texts if (t.text or "").strip()]
         if removed_labels:
             pending = self._removed_pixel_phi_by_frame.setdefault(frame_index, [])
@@ -2329,11 +2541,13 @@ class SeriesView(AppCTkToplevel):
             removal_mode=removal_mode,
         )
         self._pixel_phi_dirty = True
-        self.save_button.configure(state="enabled")
+        self._refresh_save_button()
         ocr_texts.clear()
-        # Keep Series View from redrawing removed boxes from the raw detect cache.
-        if frame_index in self.detected_text:
-            self.detected_text[frame_index] = []
+        cached = self.detected_text.get(frame_index, [])
+        if cached:
+            self.detected_text[frame_index] = [
+                item for item in cached if (item.text, item.get_bounding_box()) not in removed_keys
+            ]
 
     def remove_text_from_series(self):
         total_frames = self.image_viewer.num_images
@@ -2377,7 +2591,7 @@ class SeriesView(AppCTkToplevel):
         logger.debug(f"Blackout {len(user_rects)} rects from frame {frame_index}")
         blackout_rectangular_areas(self.image_viewer.images[frame_index], user_rects)
         self._pixel_phi_dirty = True
-        self.save_button.configure(state="enabled")
+        self._refresh_save_button()
         user_rects.clear()
 
     def blackout_areas_in_series(self):
@@ -2466,34 +2680,148 @@ class SeriesView(AppCTkToplevel):
             self.update_status(
                 _("Excluded {count} area(s) from text detection on current image").format(count=moved)
             )
-        else:
-            # Ensure SERIES propagation: if only the current frame has pending draws,
-            # copy them to every frame before committing (cine US measurement panels).
-            ndx = self.image_viewer.current_image_index
-            current_pending = (
-                list(self.image_viewer.overlay_data[ndx].user_rects)
-                if ndx in self.image_viewer.overlay_data
-                else []
+            self._refresh_save_button()
+            return
+        # Ensure SERIES propagation: if only the current frame has pending draws,
+        # copy them to every frame before committing (cine US measurement panels).
+        ndx = self.image_viewer.current_image_index
+        current_pending = (
+            list(self.image_viewer.overlay_data[ndx].user_rects)
+            if ndx in self.image_viewer.overlay_data
+            else []
+        )
+        if current_pending:
+            for i in range(self.image_viewer.num_images):
+                if i == ndx:
+                    continue
+                if i not in self.image_viewer.overlay_data:
+                    self.image_viewer.overlay_data[i] = OverlayData()
+                if not self.image_viewer.overlay_data[i].user_rects:
+                    self.image_viewer.overlay_data[i].user_rects = [
+                        UserRectangle(top_left=r.top_left, bottom_right=r.bottom_right)
+                        for r in current_pending
+                    ]
+        moved = self.exclude_areas_in_series()
+        if not moved:
+            self.update_status(_("No area(s) drawn to exclude"))
+            return
+        self.update_status(
+            _("Excluded {count} area(s) from text detection across series").format(count=moved)
+        )
+        self._refresh_save_button()
+
+    def _frame_size(self, frame_index: int) -> tuple[int, int]:
+        if not hasattr(self, "image_viewer"):
+            return (1, 1)
+        frame = self.image_viewer.images[frame_index]
+        height, width = frame.shape[:2]
+        return int(width), int(height)
+
+    def _all_active_exclude_normalized(self) -> list[dict]:
+        if not hasattr(self, "image_viewer"):
+            return []
+        seen: set[tuple[float, float, float, float]] = set()
+        unique: list[dict] = []
+        for frame_i, overlay in self.image_viewer.overlay_data.items():
+            if not overlay.exclude_rects:
+                continue
+            width, height = self._frame_size(frame_i)
+            for rect in normalize_user_rects(overlay.exclude_rects, width=width, height=height):
+                key = self._exclude_rect_key(rect)
+                if key in seen:
+                    continue
+                seen.add(key)
+                unique.append(rect)
+        return unique
+
+    @staticmethod
+    def _exclude_rect_key(rect: dict) -> tuple[float, float, float, float]:
+        return (
+            round(float(rect["x1"]), 4),
+            round(float(rect["y1"]), 4),
+            round(float(rect["x2"]), 4),
+            round(float(rect["y2"]), 4),
+        )
+
+    def _exclude_rects_fingerprint(self, rects: list[dict]) -> tuple[tuple[float, float, float, float], ...]:
+        return tuple(sorted(self._exclude_rect_key(rect) for rect in rects))
+
+    def _exclude_areas_dirty(self) -> bool:
+        return self._exclude_rects_fingerprint(self._all_active_exclude_normalized()) != self._saved_exclude_fingerprint
+
+    def _save_changes_pending(self) -> bool:
+        return bool(self._pixel_phi_dirty or self._exclude_areas_dirty())
+
+    def _save_changes_tooltip(self) -> str:
+        pixel_dirty = bool(self._pixel_phi_dirty)
+        exclude_dirty = self._exclude_areas_dirty()
+        if not pixel_dirty and not exclude_dirty:
+            return _("No unsaved pixel or exclude area changes.")
+        parts: list[str] = []
+        if pixel_dirty:
+            parts.append(_("Pixel edits (remove or blackout) will be written to this series."))
+        if exclude_dirty:
+            if pixel_dirty:
+                parts.append(
+                    _("Exclude area add/remove changes will be saved for this modality (AI Batch: Enable Exclude Areas).")
+                )
+            else:
+                parts.append(
+                    _(
+                        "Exclude area add/remove changes will be saved for this modality. "
+                        "Pixels are not changed. AI Batch: Enable Exclude Areas."
+                    )
+                )
+        return " ".join(parts)
+
+    def _refresh_save_button(self) -> None:
+        if not hasattr(self, "save_button"):
+            return
+        enabled = self._save_changes_pending() and self._series_interaction_allowed()
+        with contextlib.suppress(tk.TclError):
+            self.save_button.configure(state="enabled" if enabled else "disabled")
+
+    def _persist_active_exclude_areas(self) -> str:
+        if self._ds is None:
+            return ""
+        rects = self._all_active_exclude_normalized()
+        project_dir = project_dir_from_series_path(self._series_path)
+        modality = str(self._ds.get("Modality", "") or "")
+        save_project_exclude_rects(project_dir, modality, rects)
+        self._saved_exclude_fingerprint = self._exclude_rects_fingerprint(rects)
+        if not rects:
+            return " — " + _("cleared exclude areas for {modality}").format(
+                modality=modality.upper() or "?",
             )
-            if current_pending:
-                for i in range(self.image_viewer.num_images):
-                    if i == ndx:
-                        continue
-                    if i not in self.image_viewer.overlay_data:
-                        self.image_viewer.overlay_data[i] = OverlayData()
-                    # Replace so each frame gets the same panel region(s).
-                    if not self.image_viewer.overlay_data[i].user_rects:
-                        self.image_viewer.overlay_data[i].user_rects = [
-                            UserRectangle(top_left=r.top_left, bottom_right=r.bottom_right)
-                            for r in current_pending
-                        ]
-            moved = self.exclude_areas_in_series()
-            if not moved:
-                self.update_status(_("No area(s) drawn to exclude"))
-                return
-            self.update_status(
-                _("Excluded {count} area(s) from text detection across series").format(count=moved)
-            )
+        return " — " + _("saved {count} exclude area(s) for {modality}").format(
+            count=len(rects),
+            modality=modality.upper() or "?",
+        )
+
+    def _load_saved_exclude_areas(self) -> None:
+        if self._ds is None or not hasattr(self, "image_viewer"):
+            return
+        project_dir = project_dir_from_series_path(self._series_path)
+        modality = str(self._ds.get("Modality", "") or "")
+        stored = load_project_exclude_rects(project_dir, modality)
+        self._saved_exclude_fingerprint = self._exclude_rects_fingerprint(stored)
+        width, height = self._frame_size(self.image_viewer.current_image_index)
+        loaded = modality_exclude_rects_for_series(project_dir, modality, width=width, height=height)
+        if loaded:
+            self._apply_loaded_exclude_rects(loaded)
+            self._redraw_text_overlays_if_detected()
+        self._refresh_save_button()
+
+    def _apply_loaded_exclude_rects(self, rects: list[UserRectangle]) -> None:
+        if not rects or not hasattr(self, "image_viewer"):
+            return
+        for frame_i in range(self.image_viewer.num_images):
+            if frame_i not in self.image_viewer.overlay_data:
+                self.image_viewer.overlay_data[frame_i] = OverlayData()
+            self.image_viewer.overlay_data[frame_i].exclude_rects = [
+                UserRectangle(top_left=r.top_left, bottom_right=r.bottom_right) for r in rects
+            ]
+        self.image_viewer.refresh_current_image()
 
     def _on_harmonize_closed(self, _outcome: HarmonizeBatchOutcome) -> None:
         """Re-enable Series View after Harmonize closes (Accept, Cancel, or destroy)."""
@@ -3159,12 +3487,38 @@ class SeriesView(AppCTkToplevel):
             except Exception as e:
                 logger.error(f"Error saving whitelist match settings: {e}")
 
+    def _promote_ocr_report_note(self) -> str:
+        """For pixel text reports, write the PHI-cleansed OCR transcript as a Basic Text SR; return a status suffix."""
+        modality = str(getattr(self._ds, "Modality", "") or "")
+        if classify_series(self._series_path, modality=modality) is not SeriesKind.PIXEL_TEXT_REPORT:
+            return ""
+        lines = cleansed_ocr_lines(self._ocr_transcript_by_frame)
+        out = write_ocr_report_sr(self._series_path, lines)
+        if out is None:
+            return ""
+        self._ocr_transcript_by_frame.clear()
+        return " — " + _("Basic Text SR written for research use")
+
     def save_series_button_clicked(self):
-        if self._frames is None or self._ds is None:
+        if self._ds is None:
+            logger.error("CRITICAL: No frames or dataset to save")
+            return
+        pixel_dirty = bool(self._pixel_phi_dirty)
+        exclude_dirty = self._exclude_areas_dirty()
+        if not pixel_dirty and not exclude_dirty:
+            return
+        if pixel_dirty and self._frames is None:
             logger.error("CRITICAL: No frames or dataset to save")
             return
 
         self._persist_whitelist_if_changed()
+        exclude_note = ""
+        if not pixel_dirty:
+            exclude_note = self._persist_active_exclude_areas()
+            self._refresh_save_button()
+            self.update_status(_("Changes saved") + exclude_note)
+            return
+
         if save_series_frames(
             self._series_path,
             self._frames,
@@ -3173,7 +3527,7 @@ class SeriesView(AppCTkToplevel):
             logger.info(f"Saved series frames to {self._series_path}")
             invalidate_projection_cache(self._series_path)
             if hasattr(self, "image_viewer"):
-                texts_by_frame = collect_series_view_pixel_phi_texts(self.image_viewer)
+                texts_by_frame = collect_series_view_embedded_phi_texts(self.image_viewer)
                 for frame_index, removed in self._removed_pixel_phi_by_frame.items():
                     merged = list(texts_by_frame.get(frame_index, []))
                     for label in removed:
@@ -3183,21 +3537,23 @@ class SeriesView(AppCTkToplevel):
                         texts_by_frame[frame_index] = merged
                 anon_series_uid = str(self._ds.SeriesInstanceUID)
                 if texts_by_frame:
-                    apply_series_view_pixel_phi(
+                    apply_series_view_embedded_phi(
                         self._controller.anonymizer.model,
                         self._slice_paths,
                         texts_by_frame,
                         projection_frame_count=0,
                         anon_series_uid=anon_series_uid,
                     )
-                elif self._pixel_phi_dirty:
+                elif pixel_dirty:
                     # Blackout-only (or cleared overlays): still mark series scanned for Dataset status.
-                    self._controller.anonymizer.model.set_series_pixel_phi_scanned(anon_series_uid, scanned=True)
+                    self._controller.anonymizer.model.set_series_embedded_phi_scanned(anon_series_uid, scanned=True)
             self._removed_pixel_phi_by_frame.clear()
             self._pixel_phi_dirty = False
-            self.save_button.configure(state="disabled")
+            if exclude_dirty:
+                exclude_note = self._persist_active_exclude_areas()
+            self._refresh_save_button()
             self._refresh_series_processing_status()
-            self.update_status(_("Changes saved"))
+            self.update_status(_("Changes saved") + exclude_note + self._promote_ocr_report_note())
             self._on_cancel()
         else:
             logger.error(f"Failed to save series frames to {self._series_path}")

@@ -11,6 +11,9 @@ Short glossary for clinicians. When IT uses different terms, these are usually t
 | **De-identify / anonymize** | Remove or replace identifiers so the study is safer to share for research. |
 | **Anonymizer script** | XML rules that list DICOM tags to keep, remove, or transform. Edit from **Project Settings → Edit Anonymizer Script**. |
 | **Burned-in text** | Words drawn onto the picture itself (not only in the file labels). Common on ultrasound. |
+| **Embedded PHI** | Identifiers inside pixels (burned-in text) or free text (reports, comments), found after import with OCR and English NER. |
+| **Blank / Synthetic** | Two ways to remove text PHI: delete it, or replace it with a realistic fake of the same type (“hide in plain sight”). |
+| **Anonymization policy** | **Strict** (default, image-focused) or **Clinical** (keeps reports, clinical free text, and vetted private tags). Set in Project Settings. |
 | **Quarantine** | A holding folder for files that could not be imported (wrong type, missing IDs, lookup miss, etc.). |
 | **Dataset** | The in-app list of patients, studies, and series in your project (formerly called PHI Index). |
 | **Project** | A named workspace with its own settings and storage folder. |

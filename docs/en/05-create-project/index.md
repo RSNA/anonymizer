@@ -11,8 +11,9 @@ Open a clean project with a storage folder and site identity ready for import.
 1. From **File → New Project**, open **New Project Settings**.
 2. Choose a **Project Name** (short, under 16 characters) and confirm the **Storage Directory**.
 3. Review Site ID and UID Root (usually leave defaults unless continuing a Java Anonymizer site).
-4. Confirm modalities and network settings with IT if you will query a PACS.
-5. Save / create the project. The **Dashboard** opens.
+4. Choose **Anonymization Policy**: **Strict** (default, image-focused script) or **Clinical** (keeps report/clinical free-text tags and TCIA private-tag rules; enables SR/PDF modalities).
+5. Confirm modalities and network settings with IT if you will query a PACS.
+6. Save / create the project. The packaged script is copied beside `ProjectModel.json` as `{site_id}-anonymizer.script`. The **Dashboard** opens.
 
 ![New Project Settings](shots/macos/NewProjectSettings.png)
 
@@ -134,6 +135,8 @@ All date-shift strategies preserve intervals between a patient's studies. When a
 | Lookup offset | `@lookup(this,dateoffset)` | Controlled per-patient offset from site `.properties` |
 | Trial-wide offset | `@incrementdate(this,n)` | Same DATEINC for every patient (`n` set in the script editor) |
 | Epoch rebase | `@rebasedate(this,origin)` | TCIA/NCTN style: `origin + (date − basedate)`; needs `basedate/` rows |
+
+`@hashdate`, anonymized UIDs, and hashed accession numbers are **secret-free** by design: they keep stable links inside a project. They are not keyed against verification if someone already knows a candidate original. Details: [De-identification protocol — Deterministic replacements](../deidentification-protocol.md#deterministic-replacements-uids-dates-accessions).
 
 Lookup `.properties` may include registration/event dates:
 

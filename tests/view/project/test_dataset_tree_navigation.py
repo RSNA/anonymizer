@@ -39,8 +39,8 @@ def _series(uid: str, *, modality: str = "CT") -> PHI_SeriesIndexRecord:
         harmonized_description="Ch Ax WO",
         instance_count=5,
         face_blur_algorithm="",
-        pixel_phi_removed=False,
-        pixel_phi="",
+        embedded_phi_removed=False,
+        embedded_phi="",
     )
 
 

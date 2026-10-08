@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.ai.remove_pixel_phi import (
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     PixelPhiRemovalMode,
     normalize_pixel_phi_removal_mode,
     pixel_phi_removal_mode_menu_labels,

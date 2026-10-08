@@ -13,8 +13,6 @@ from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 
 US_RGB_DIR = CONTROLLER_TEST_DCM_FILES_DIR / "us_rgb_single_frame"
 US_RGB_DCM = US_RGB_DIR / "US_RGB_SingleFrame.dcm"
-US_RGB_PROJECT_T2_DIR = CONTROLLER_TEST_DCM_FILES_DIR / "us_rgb_single_frame_project_t2"
-US_RGB_PROJECT_T2_DCM = US_RGB_PROJECT_T2_DIR / "US_RGB_SingleFrame_project_t2_damaged.dcm"
 
 
 def make_jpeg2000_rgb_dicom(
@@ -153,19 +151,8 @@ US_RGB_SERIES_VIEW_NOT_REMOVED_BY_BATCH = [
 ]
 
 US_RGB_BATCH_LOG_TOKENS = (
-    "mindray",
-    "KMR",
-    "26,05/2018",
-    "TIS 0.3",
-    "pixels blacked out",
+    "PHI removed",
+    "Remove Text",
+    "Black out text",
+    f"{len(US_RGB_BATCH_REMOVED_TEXTS)} PHI removed",
 )
-
-US_RGB_PROJECT_T2_SERIES_VIEW_OCR_TEXTS = [
-    "1009",
-    "4-Abdomen",
-    "4",
-    "M",
-    "Dist",
-    "cm",
-    "LIVER",
-]

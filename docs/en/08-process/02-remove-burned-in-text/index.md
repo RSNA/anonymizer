@@ -1,6 +1,6 @@
-# 8.1 Remove Pixel PHI
+# 8.1 Embedded PHI (burnt-in text)
 
-Some images have **patient names or labels drawn onto the pixels**. Cleaning DICOM tags alone does not remove them.
+Some images have **patient names or labels drawn onto the pixels**. Cleaning DICOM tags alone does not remove them. **Embedded PHI** combines OCR (pixels) with English NER (free text / reports). Ingest never runs NER/OCR — use this after import.
 
 ## Demo series
 
@@ -15,7 +15,7 @@ Import each folder into your project, then open the series in **Series View**.
 
 1. On `davidson_cxr`, detect burned-in text and **black out** PHI while keeping useful markers via the default whitelist.
 2. On `us_rgb_single_frame`, detect burned-in text and remove it by **blending into the background** (inpaint).
-3. On the same color US series, mark the non-PHI machine-parameter strip with **Exclude Area** so Detect Text and Remove Text skip it.
+3. On the same color US series, mark the non-PHI machine-parameter strip with **Exclude Area** so Detect Embedded PHI and Remove Embedded PHI skip it.
 
 ## Before you start
 
@@ -29,18 +29,28 @@ Follow these steps in order. Screenshots match this fixture.
 ### 1. Default whitelist and Frame context
 
 1. Keep the **default whitelist** (do not clear it).
-2. Set edit context to **Frame** (not whole series yet).
+2. Set **Remove** to **Non-whitelisted text** (default). Set edit context to **Frame** (not whole series yet).
 
 ![Default whitelist + Frame](shots/macos/Process_RemovePixel_Whitelist.png)
 
-### 2. Detect Text
+### 2. Detect Embedded PHI
 
 1. Click **Detect Text**.
-2. Wait until detection finishes. **Green rectangles** mark text that would be removed.
+2. Wait until detection finishes. **Green rectangles** mark text that would be removed for the current **Remove** target. Named Entity Recognition (NER) labels (Name, Date, ID, Phone, Email) color the boxes; unlabeled text stays boxed when **Remove** is **Non-whitelisted text** or **All text**.
 
-![Detect Text on davidson_cxr](shots/macos/Process_RemovePixel_Detect.png)
+**Remove** (after Text Edit Context) chooses what Detect shows and what Remove deletes, without re-running OCR when you change it:
 
-On this chest X-ray you should see green boxes around the patient name, date, DOB, and similar PHI — but **not** around **Portable** or **L**. Those words are already on the default whitelist, so Detect Text leaves them alone.
+| Target | Effect |
+| --- | --- |
+| **Non-whitelisted text** (default) | Remove OCR that is not a whitelist match (and not in an exclude area) |
+| **PHI only** | Remove only NER-labeled PHI (names, dates, IDs, phones, emails). Unlabeled text is left |
+| **All text** | Remove every detected box; whitelist is ignored |
+
+The Detect button stays **Detect Text**. The remove button is **Remove Text**, or **Remove PHI** when the target is **PHI only**. Hover the Remove menu for the full Named Entity Recognition (NER) explanation. Black out vs blend (inpaint) stays a separate dropdown.
+
+![Detect Embedded PHI on davidson_cxr](shots/macos/Process_RemovePixel_Detect.png)
+
+On this chest X-ray you should see green boxes around the patient name, date, DOB, and similar PHI — but **not** around **Portable** or **L**. Those words are already on the default whitelist, so Detect Embedded PHI leaves them alone.
 
 **Whitelist match dropdown** (next to Defaults / Clear — here set to **Standard**):
 
@@ -62,14 +72,14 @@ Use a stricter setting if too much text is skipped; use a looser one if useful m
 
 On `davidson_cxr`, **Portable** and **L** are already covered by the default whitelist — you usually do not need to add them again.
 
-### 4. Remove Text using black out
+### 4. Remove Embedded PHI using black out
 
 1. Set the removal mode dropdown to **Black out text**.
 2. Click **Remove Text**.
 3. PHI regions become solid black; whitelisted keepers stay.
-4. Click **Save Pixel Changes** when you are satisfied.
+4. Click **Save Changes** when you are satisfied.
 
-![Remove Text black out on davidson_cxr](shots/macos/Process_RemovePixel_Remove.png)
+![Remove Embedded PHI black out on davidson_cxr](shots/macos/Process_RemovePixel_Remove.png)
 
 Black out is the usual choice for de-identification: removed text is clearly gone and cannot be recovered from the pixels.
 
@@ -77,25 +87,25 @@ Black out is the usual choice for de-identification: removed text is clearly gon
 
 Use this color ultrasound frame when you want removed text to look like nearby tissue instead of black bars.
 
-### 5. Remove Text using blend with background
+### 5. Remove Embedded PHI using blend with background
 
 1. Import and open **`us_rgb_single_frame`** (`US_RGB_SingleFrame.dcm`) in Series View.
 2. Keep edit context on **Frame**.
 3. Set the removal mode dropdown to **Blend into background**.
 4. Click **Detect Text** and wait for the green rectangles.
 
-![Detect Text on us_rgb_single_frame](shots/macos/Process_RemovePixel_US_Detect.png)
+![Detect Embedded PHI on us_rgb_single_frame](shots/macos/Process_RemovePixel_US_Detect.png)
 
 5. Click **Remove Text**.
-6. Detected text is painted out by blending with surrounding pixels (inpaint), then **Save Pixel Changes**.
+6. Detected text is painted out by blending with surrounding pixels (inpaint), then **Save Changes**.
 
-![Remove Text blend on us_rgb_single_frame](shots/macos/Process_RemovePixel_US_Blend.png)
+![Remove Embedded PHI blend on us_rgb_single_frame](shots/macos/Process_RemovePixel_US_Blend.png)
 
 **Black out** vs **Blend into background**: black out replaces text with black; blend fills the area so it matches the image around it. Prefer black out when you need an obvious, irreversible redaction; prefer blend when a less conspicuous result is acceptable (for example some ultrasound overlays).
 
 ## Workflow on Color US (Exclude Area)
 
-Use the same **`us_rgb_single_frame`** series when OCR boxes machine settings that are **not PHI**. **Exclude Area** skips a spatial region for Detect Text and Remove Text without changing pixels (unlike **Blackout Area**).
+Use the same **`us_rgb_single_frame`** series when OCR boxes machine settings that are **not PHI**. **Exclude Area** skips a spatial region for Detect Embedded PHI and Remove Embedded PHI without changing pixels (unlike **Blackout Area**).
 
 ### 6. Exclude the parameter block under mindray
 
@@ -103,31 +113,48 @@ On this frame, a dense block of machine parameters (gain, depth, FR, DR, and sim
 
 1. Open **`us_rgb_single_frame`** in Series View with edit context **Frame**.
 2. Draw a rectangle covering that parameter block (leave **mindray** and true PHI / site labels outside if you still want them detected). Pending draws appear as **solid blue** rectangles.
-3. Click **Exclude Area**. The rectangle moves to the exclude list and redraws as a **white dotted outline** (no fill).
+3. Click **Exclude Area**. The rectangle moves to the exclude list and redraws as a **white dotted outline** (no fill). **Save Changes** stores the current exclude set for this modality without changing pixels when that is the only pending change. Hover the button to see whether pixel edits, exclude-area edits, or both will be saved.
 
 ![Exclude Area on us_rgb_single_frame parameter block](shots/macos/Process_RemovePixel_US_Exclude_Panel.png)
 
-4. Click **Detect Text**. Green boxes should appear on PHI / vendor text **outside** the block; the parameter tokens inside the dotted region should **not** be boxed for removal.
+4. Click **Detect Embedded PHI**. Green boxes should appear on PHI / vendor text **outside** the block; the parameter tokens inside the dotted region should **not** be boxed for removal.
 
-![Detect Text after Exclude Area on us_rgb_single_frame](shots/macos/Process_RemovePixel_US_Exclude_Detect.png)
+![Detect Embedded PHI after Exclude Area on us_rgb_single_frame](shots/macos/Process_RemovePixel_US_Exclude_Detect.png)
 
-5. Optionally choose **Blend into background** or **Black out text**, then **Remove Text** and **Save Pixel Changes**.
+5. Optionally choose **Blend into background** or **Black out text**, then **Remove Embedded PHI** and **Save Changes**.
 6. Click a white dotted rectangle to remove it from the exclude list if you need to adjust.
 
-**Whitelist** vs **Exclude Area** vs **Blackout Area**: whitelist keeps specific OCR *strings*; Exclude Area skips a *region* (no pixel change); Blackout Area paints drawn rectangles black. Prefer setting exclude rectangles **before** Detect Text (or Detect again after adjusting). With **Series** edit context, drawing propagates across frames so the same panel can be excluded on a cine loop.
+**Whitelist** vs **Exclude Area** vs **Blackout Area**: whitelist keeps specific OCR *strings*; Exclude Area skips a *region* (no pixel change); Blackout Area paints drawn rectangles black. Prefer setting exclude rectangles **before** Detect Embedded PHI (or Detect again after adjusting). With **Series** edit context, drawing propagates across frames so the same panel can be excluded on a cine loop.
 
 ## After the demo
 
 - Dataset **Pixel PHI** status should update for each series you saved.
 - Modality whitelists and the match dropdown (Exact → Lenient) live in Series View; stricter matching means fewer OCR hits are treated as whitelist keepers.
-- Exclude regions are for the current Series View session (same as other canvas overlays). Re-open the series and redraw if you need them again.
+- Exclude regions are session-only until **Save Changes**. Active rectangles (including removals of previously saved ones) are written to `whitelists/{modality}.exclude.json` next to the modality whitelist. Clearing all areas removes that file. AI Batch applies those areas when **Enable Exclude Areas** is on.
 - To run the same tool on many studies, see [8.4 Run on many studies](../05-run-on-many-studies/).
 
 ## What good looks like
 
 - On `davidson_cxr`: PHI blacked out; orientation markers kept if whitelisted.
 - On `us_rgb_single_frame`: burned-in labels blended away without solid black bars; with Exclude Area, the mindray parameter block is not removed as PHI.
-- **Pixel PHI** column updates in Dataset.
+- **Embedded PHI** column updates in Dataset (removed PHI text only).
+
+## Reports and free text (Report Text Review)
+
+Structured Reports (and Encapsulated PDFs) open in **Report Text Review** instead of Series View:
+
+1. Click **Detect Embedded PHI**. Detected spans are colored by type (Name, Location, ID, Phone, Date, Email) in the text and listed in the table.
+2. Untick rows in the table to **exclude** spans you want to keep.
+3. Pick **Blank** (delete the span) or **Synthetic** (replace with a fake value of the same type and similar shape — “hide in plain sight”), then **Remove Embedded PHI**.
+4. **Save** writes the report. For Encapsulated PDF, Save replaces the PDF bytes with a plain-text de-identified document (layout is not preserved). Only the **original removed PHI text** is recorded in the Dataset’s Embedded PHI column — never the report body, and never the synthetic replacements.
+
+Synthetic values are derived deterministically from the project and the anonymized patient ID, so the same input gives the same fake every time. Pixels always use Blackout / Inpaint; Synthetic applies to text only.
+
+Free-text DICOM attributes (image comments, protocol/procedure descriptions, …) use the same detector through the text batch.
+
+### Scanned text reports
+
+If a Secondary Capture series looks like a text report (for example a dose or worksheet page), **Save** in Series View also writes the PHI-cleansed OCR transcript as a **Basic Text SR** in the same study for research use. The SR is a derivative; it is not recorded in the Embedded PHI column.
 
 ## If it fails
 

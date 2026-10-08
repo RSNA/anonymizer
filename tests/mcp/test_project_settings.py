@@ -8,9 +8,12 @@ import pytest
 
 from anonymizer.mcp import api as mcp_tools
 from anonymizer.mcp.session import SESSION
-from anonymizer.model import settings_limits as lim
 from anonymizer.model.project import ProjectModel
 from anonymizer.model.settings_validate import (
+    AET_MAX_CHARS,
+    IP_MIN_CHARS,
+    IP_PORT_MAX,
+    IP_PORT_MIN,
     SettingsValidationError,
     validate_aet,
     validate_ip,
@@ -30,11 +33,11 @@ def _isolated_session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     SESSION.close()
 
 
-def test_ux_fields_reexports_settings_limits():
-    assert ux_fields.ip_port_min == lim.IP_PORT_MIN
-    assert ux_fields.ip_port_max == lim.IP_PORT_MAX
-    assert ux_fields.aet_max_chars == lim.AET_MAX_CHARS
-    assert ux_fields.ip_min_chars == lim.IP_MIN_CHARS
+def test_ux_fields_reexports_settings_validate_limits():
+    assert ux_fields.ip_port_min == IP_PORT_MIN
+    assert ux_fields.ip_port_max == IP_PORT_MAX
+    assert ux_fields.aet_max_chars == AET_MAX_CHARS
+    assert ux_fields.ip_min_chars == IP_MIN_CHARS
 
 
 def test_validate_rejects_out_of_range():

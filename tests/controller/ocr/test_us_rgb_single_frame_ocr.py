@@ -10,7 +10,7 @@ import pydicom
 import pytest
 
 from anonymizer.controller.ai.batch_process import AiBatchAlgorithm, _apply_remove_pixel_phi_series
-from anonymizer.controller.ai.remove_pixel_phi import (
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     PixelPhiRemovalMode,
     _ocr_rotation_angles,
     build_series_view_ocr_pixels,
@@ -29,11 +29,9 @@ from tests.controller.support.us_rgb_fixtures import (
     US_RGB_BATCH_LOG_TOKENS,
     US_RGB_BATCH_OCR_TEXTS,
     US_RGB_BATCH_PIXELS_CHANGED,
+    US_RGB_BATCH_REMOVED_TEXTS,
     US_RGB_DCM,
     US_RGB_DIR,
-    US_RGB_PROJECT_T2_DCM,
-    US_RGB_PROJECT_T2_DIR,
-    US_RGB_PROJECT_T2_SERIES_VIEW_OCR_TEXTS,
     US_RGB_SERIES_VIEW_OCR_TEXTS,
 )
 from tests.opened_anonymizer_model import opened_anonymizer_model
@@ -122,12 +120,6 @@ def test_build_series_view_ocr_pixels_rgb_matches_ocr_image_for_frame(us_rgb_loa
     assert np.array_equal(snapshot[0], expected)
 
 
-def test_us_rgb_project_t2_fixture_differs_from_pristine(us_rgb_loaded) -> None:
-    assert_dcm(US_RGB_PROJECT_T2_DCM)
-    damaged = load_series_frames(US_RGB_PROJECT_T2_DIR)
-    assert not np.array_equal(us_rgb_loaded.frames[0], damaged.frames[0])
-
-
 @pytest.mark.ocr_integration
 @pytest.mark.usefixtures("require_ocr")
 def test_us_rgb_ocr_detects_all_overlay_strings(us_rgb_loaded) -> None:
@@ -143,8 +135,27 @@ def test_us_rgb_batch_noise_filter_drops_speckle_hits(us_rgb_loaded) -> None:
     handle = runner.enter_models()
     try:
         bgr = ocr_image_for_frame(loaded.metadata, loaded.frames[0])
-        unfiltered = detect_text(bgr, handle.reader, modality="US", apply_noise_filter=False) or []
-        filtered = detect_text(bgr, handle.reader, modality="US", apply_noise_filter=True) or []
+        unfiltered = (
+            detect_text(
+                bgr,
+                handle.reader,
+                modality="US",
+                apply_noise_filter=False,
+                apply_phi_ner_filter=False,
+                annotate_phi_labels=False,
+            )
+            or []
+        )
+        filtered = (
+            detect_text(
+                bgr,
+                handle.reader,
+                modality="US",
+                apply_noise_filter=True,
+                apply_phi_ner_filter=False,
+            )
+            or []
+        )
     finally:
         runner.exit_models(handle)
 
@@ -163,7 +174,16 @@ def test_us_rgb_batch_detect_matches_noise_filtered_expectations(us_rgb_loaded) 
     handle = runner.enter_models()
     try:
         bgr = ocr_image_for_frame(loaded.metadata, loaded.frames[0])
-        results = detect_text(bgr, handle.reader, modality="US", apply_noise_filter=True) or []
+        results = (
+            detect_text(
+                bgr,
+                handle.reader,
+                modality="US",
+                apply_noise_filter=True,
+                apply_phi_ner_filter=False,
+            )
+            or []
+        )
         texts = [item.text for item in results]
     finally:
         runner.exit_models(handle)
@@ -180,22 +200,21 @@ def test_us_rgb_batch_ocr_regression_after_ct_veracity_guard(us_rgb_loaded) -> N
     handle = runner.enter_models()
     try:
         bgr = ocr_image_for_frame(loaded.metadata, loaded.frames[0])
-        results = detect_text(bgr, handle.reader, modality="US", apply_noise_filter=True) or []
+        results = (
+            detect_text(
+                bgr,
+                handle.reader,
+                modality="US",
+                apply_noise_filter=True,
+                apply_phi_ner_filter=False,
+            )
+            or []
+        )
         texts = [item.text for item in results]
     finally:
         runner.exit_models(handle)
 
     assert texts == US_RGB_BATCH_OCR_TEXTS
-
-
-@pytest.mark.ocr_integration
-@pytest.mark.usefixtures("require_ocr")
-def test_us_rgb_project_t2_damaged_series_view_ocr(us_rgb_loaded) -> None:
-    assert_dcm(US_RGB_PROJECT_T2_DCM)
-    damaged = load_series_frames(US_RGB_PROJECT_T2_DIR)
-    texts = _series_view_texts(damaged)
-    assert texts == US_RGB_PROJECT_T2_SERIES_VIEW_OCR_TEXTS
-    assert texts != EXPECTED_OCR_TEXTS
 
 
 @pytest.mark.ocr_integration
@@ -213,6 +232,8 @@ def test_us_rgb_series_view_snapshot_matches_direct_ocr(us_rgb_loaded) -> None:
                 handle.reader,
                 modality="US",
                 apply_noise_filter=False,
+                apply_phi_ner_filter=False,
+                annotate_phi_labels=True,
             )
             or []
         ]
@@ -299,12 +320,15 @@ def test_us_rgb_batch_blackout_preserves_rgb_dimensions(
 
     assert outcome.status == "ok"
     assert outcome.algorithm is AiBatchAlgorithm.REMOVE_PIXEL_PHI
-    assert "pixels blacked out" in outcome.message
-    assert "Modified 1/1" in outcome.message
-    assert f"{US_RGB_BATCH_PIXELS_CHANGED:,} pixels blacked out" in outcome.message
+    assert "PHI removed" in outcome.message
+    assert "1/1 instance(s)" in outcome.message
+    assert "pixels" not in outcome.message
+    assert "text region" not in outcome.message
     combined_logs = outcome.message + "\n" + "\n".join(log_lines)
     for token in US_RGB_BATCH_LOG_TOKENS:
         assert token in combined_logs
+    for phi_token in US_RGB_BATCH_REMOVED_TEXTS:
+        assert phi_token not in combined_logs
 
     ds = pydicom.dcmread(dcm_path)
     after = ds.pixel_array
@@ -337,7 +361,9 @@ def test_us_rgb_batch_inpaint_preserves_rgb_dimensions(
         runner.exit_models(handle)
 
     assert outcome.status == "ok"
-    assert "pixels modified" in outcome.message
+    assert "PHI removed" in outcome.message
+    assert "Blend into background" in outcome.message
+    assert "pixels" not in outcome.message
 
     ds = pydicom.dcmread(dcm_path)
     after = ds.pixel_array

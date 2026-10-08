@@ -112,7 +112,7 @@ def test_implicit_series_resolve_sole_inventory_for_remove_pixel_phi():
         ) as apply_mock,
         patch.object(
             SESSION.controller.anonymizer.model,
-            "series_pixel_phi_scanned",
+            "series_embedded_phi_scanned",
             return_value=True,
         ),
     ):
@@ -139,7 +139,7 @@ def test_invented_series_path_rejected():
 
 
 @patch(
-    "anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext",
     side_effect=_fake_easyocr_results,
 )
 def test_remove_pixel_phi_then_export_davidson(mock_ocr: MagicMock):
@@ -194,7 +194,7 @@ def test_remove_pixel_phi_response_omits_ocr_message_on_ok():
         ),
         patch.object(
             SESSION.controller.anonymizer.model,
-            "series_pixel_phi_scanned",
+            "series_embedded_phi_scanned",
             return_value=True,
         ),
     ):

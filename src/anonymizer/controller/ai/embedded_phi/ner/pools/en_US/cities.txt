@@ -1,0 +1,120 @@
+Springfield|IL|62701
+Franklin|TN|37064
+Clinton|MS|39056
+Madison|WI|53703
+Georgetown|TX|78626
+Salem|OR|97301
+Fairview|NJ|07022
+Bristol|CT|06010
+Manchester|NH|03101
+Auburn|AL|36830
+Dayton|OH|45402
+Camden|NJ|08102
+Boston|MA|02108
+Austin|TX|78701
+Denver|CO|80202
+Seattle|WA|98101
+Portland|OR|97201
+Atlanta|GA|30303
+Phoenix|AZ|85001
+Chicago|IL|60601
+Miami|FL|33101
+Dallas|TX|75201
+Detroit|MI|48201
+Baltimore|MD|21201
+Philadelphia|PA|19103
+Minneapolis|MN|55401
+Nashville|TN|37201
+Raleigh|NC|27601
+Tampa|FL|33602
+Orlando|FL|32801
+Cleveland|OH|44101
+Pittsburgh|PA|15222
+Cincinnati|OH|45202
+Kansas City|MO|64101
+St Louis|MO|63101
+Milwaukee|WI|53202
+Sacramento|CA|95814
+San Diego|CA|92101
+San Jose|CA|95110
+Oakland|CA|94607
+Riverside|CA|92501
+Tucson|AZ|85701
+Mesa|AZ|85201
+Virginia Beach|VA|23451
+Omaha|NE|68102
+Colorado Springs|CO|80903
+Long Beach|CA|90802
+Helena|MT|59601
+Boise|ID|83702
+Cheyenne|WY|82001
+Pierre|SD|57501
+Bismarck|ND|58501
+Juneau|AK|99801
+Honolulu|HI|96813
+Anchorage|AK|99501
+Albuquerque|NM|87101
+Santa Fe|NM|87501
+Salt Lake City|UT|84101
+Provo|UT|84601
+Reno|NV|89501
+Las Vegas|NV|89101
+Spokane|WA|99201
+Tacoma|WA|98401
+Eugene|OR|97401
+Fresno|CA|93701
+Bakersfield|CA|93301
+Stockton|CA|95201
+Modesto|CA|95350
+Fort Worth|TX|76101
+Arlington|TX|76010
+Plano|TX|75023
+Irving|TX|75038
+El Paso|TX|79901
+San Antonio|TX|78201
+Corpus Christi|TX|78401
+Laredo|TX|78040
+New Orleans|LA|70112
+Baton Rouge|LA|70801
+Shreveport|LA|71101
+Mobile|AL|36601
+Birmingham|AL|35201
+Montgomery|AL|36101
+Jackson|MS|39201
+Little Rock|AR|72201
+Memphis|TN|38101
+Knoxville|TN|37901
+Chattanooga|TN|37401
+Louisville|KY|40201
+Lexington|KY|40501
+Indianapolis|IN|46201
+Fort Wayne|IN|46801
+Columbus|OH|43201
+Toledo|OH|43601
+Akron|OH|44301
+Grand Rapids|MI|49501
+Ann Arbor|MI|48103
+Buffalo|NY|14201
+Rochester|NY|14601
+Syracuse|NY|13201
+Albany|NY|12201
+Hartford|CT|06101
+Providence|RI|02901
+Worcester|MA|01601
+Cambridge|MA|02138
+Newark|NJ|07101
+Jersey City|NJ|07302
+Trenton|NJ|08601
+Wilmington|DE|19801
+Richmond|VA|23219
+Norfolk|VA|23501
+Chesapeake|VA|23320
+Greensboro|NC|27401
+Charlotte|NC|28201
+Columbia|SC|29201
+Charleston|SC|29401
+Savannah|GA|31401
+Jacksonville|FL|32201
+Tallahassee|FL|32301
+Gainesville|FL|32601
+Pensacola|FL|32501

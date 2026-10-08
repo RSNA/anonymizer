@@ -14,10 +14,11 @@ Functions:
 import contextlib
 import logging
 import tkinter as tk
+from collections.abc import Sequence
 
 import customtkinter as ctk
 
-from anonymizer.model.settings_limits import (
+from anonymizer.model.settings_validate import (
     AET_MAX_CHARS,
     AET_MIN_CHARS,
     IP_MAX_CHARS,
@@ -48,7 +49,7 @@ def _focus_entry_cursor_at_end(entry: ctk.CTkEntry) -> None:
         else:
             entry.bind("<Map>", _on_map, add="+")
 
-# Entry Limits (re-export from settings_limits — keystroke behavior unchanged):
+# Entry Limits (from settings_validate — keystroke behavior unchanged):
 
 # Network Addresses:
 ip_min_chars = IP_MIN_CHARS
@@ -362,3 +363,38 @@ def int_entry(
     text_var.trace_add("write", _sync_int_from_text)
     int_var.trace_add("write", _sync_text_from_int)
     return int_var
+
+
+def option_menu_width_for_labels(values: Sequence[str], *, height: int = 28) -> int:
+    """Pixel width for CTkOptionMenu so the widest option (including the selected value) is not clipped."""
+    if not values:
+        return height
+    font = ctk.CTkFont()
+    corner_radius = 6
+    text_width = max(int(font.measure(value)) for value in values)
+    # Height covers the dropdown button; extra pad is inner label + canvas gap.
+    return text_width + height + max(corner_radius, 3) + 16
+
+
+def button_width_for_label(label: str, *, minimum: int = 100) -> int:
+    """Pixel width for a CTkButton so translated labels are not clipped."""
+    font = ctk.CTkFont()
+    return max(minimum, int(font.measure(label)) + 24)
+
+
+# Window titles (Series View / Report Text Review): keep SeriesDescription short.
+SERIES_DESCRIPTION_TITLE_MAX = 30
+
+
+def truncate_series_description(
+    text: object,
+    *,
+    max_chars: int = SERIES_DESCRIPTION_TITLE_MAX,
+) -> str:
+    """Trim SeriesDescription for window titles (ellipsis when truncated)."""
+    s = str(text or "").strip()
+    if max_chars <= 0 or len(s) <= max_chars:
+        return s
+    if max_chars == 1:
+        return "…"
+    return s[: max_chars - 1].rstrip() + "…"

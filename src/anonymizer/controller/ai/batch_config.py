@@ -9,13 +9,13 @@ from typing import Any, Literal
 
 from anonymizer.controller.ai.batch_process import AiBatchAlgorithm, AiBatchProcessOptions
 from anonymizer.controller.ai.blur_face import FaceBlurMode
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import PixelPhiRemovalMode
 from anonymizer.controller.ai.feature_availability import (
     brain_structures_allowed,
+    embedded_phi_allowed,
     face_blur_allowed,
     harmonize_allowed,
-    pixel_phi_allowed,
 )
-from anonymizer.controller.ai.remove_pixel_phi import PixelPhiRemovalMode
 from anonymizer.controller.ai.tseg.config import (
     CT_SEGMENTATION_MODE_KEY,
     MR_SEGMENTATION_MODE_KEY,
@@ -23,6 +23,11 @@ from anonymizer.controller.ai.tseg.config import (
     set_mr_segmentation_mode,
 )
 from anonymizer.controller.phi_io import build_phi_index
+from anonymizer.controller.runner import (
+    OcrRemoveMode,
+    normalize_ocr_remove_mode,
+    ocr_remove_mode_from_legacy_whitelist,
+)
 from anonymizer.model.anonymizer import AnonymizerModel
 
 _ALGORITHM_ALIASES: dict[str, AiBatchAlgorithm] = {
@@ -50,7 +55,8 @@ class AiBatchConfig:
     algorithms: tuple[AiBatchAlgorithm, ...]
     blur_mode: FaceBlurMode = FaceBlurMode.GAUSSIAN
     pixel_phi_removal_mode: PixelPhiRemovalMode = PixelPhiRemovalMode.BLACKOUT
-    use_modality_whitelist: bool = True
+    ocr_remove_mode: OcrRemoveMode = OcrRemoveMode.NON_WHITELISTED
+    ocr_use_exclude_areas: bool = False
     include_brain_structures: bool = False
     prefer_description_mappings: bool = True
     ct_segmentation_mode: str | None = None
@@ -63,7 +69,8 @@ class AiBatchConfig:
             algorithms=self.algorithms,
             blur_mode=self.blur_mode,
             pixel_phi_removal_mode=self.pixel_phi_removal_mode,
-            use_modality_whitelist=self.use_modality_whitelist,
+            ocr_remove_mode=self.ocr_remove_mode,
+            ocr_use_exclude_areas=self.ocr_use_exclude_areas,
             include_brain_structures=self.include_brain_structures,
             prefer_description_mappings=self.prefer_description_mappings,
         )
@@ -87,7 +94,8 @@ class AiBatchConfig:
             "algorithms": [algorithm.value for algorithm in self.algorithms],
             "blur_mode": self.blur_mode.value,
             "pixel_phi_removal_mode": self.pixel_phi_removal_mode.value,
-            "use_modality_whitelist": self.use_modality_whitelist,
+            "ocr_remove_mode": self.ocr_remove_mode.value,
+            "ocr_use_exclude_areas": self.ocr_use_exclude_areas,
             "include_brain_structures": self.include_brain_structures,
             "prefer_description_mappings": self.prefer_description_mappings,
             "studies": studies,
@@ -112,7 +120,8 @@ class AiBatchConfig:
         pixel_phi_removal_mode = _parse_pixel_phi_removal_mode(
             data.get("pixel_phi_removal_mode", PixelPhiRemovalMode.BLACKOUT.value)
         )
-        use_modality_whitelist = _parse_bool(data.get("use_modality_whitelist", True), field="use_modality_whitelist")
+        ocr_remove_mode = _parse_ocr_remove_mode(data)
+        ocr_use_exclude_areas = _parse_ocr_use_exclude_areas(data)
         include_brain_structures = _parse_bool(
             data.get("include_brain_structures", False),
             field="include_brain_structures",
@@ -132,7 +141,8 @@ class AiBatchConfig:
             algorithms=algorithms,
             blur_mode=blur_mode,
             pixel_phi_removal_mode=pixel_phi_removal_mode,
-            use_modality_whitelist=use_modality_whitelist,
+            ocr_remove_mode=ocr_remove_mode,
+            ocr_use_exclude_areas=ocr_use_exclude_areas,
             include_brain_structures=include_brain_structures,
             prefer_description_mappings=prefer_description_mappings,
             ct_segmentation_mode=ct_segmentation_mode,
@@ -193,6 +203,26 @@ def _parse_pixel_phi_removal_mode(value: object) -> PixelPhiRemovalMode:
         ) from exc
 
 
+def _parse_ocr_remove_mode(data: dict[str, Any]) -> OcrRemoveMode:
+    if "ocr_remove_mode" in data and data.get("ocr_remove_mode") not in (None, ""):
+        return normalize_ocr_remove_mode(data.get("ocr_remove_mode"))
+    if "use_modality_whitelist" in data:
+        use_whitelist = _parse_bool(data.get("use_modality_whitelist"), field="use_modality_whitelist")
+        return ocr_remove_mode_from_legacy_whitelist(use_modality_whitelist=use_whitelist)
+    return OcrRemoveMode.NON_WHITELISTED
+
+
+def _parse_ocr_use_exclude_areas(data: dict[str, Any]) -> bool:
+    if "ocr_use_exclude_areas" in data:
+        return _parse_bool(data.get("ocr_use_exclude_areas"), field="ocr_use_exclude_areas")
+    zones = data.get("ocr_exclude_zones")
+    if isinstance(zones, dict):
+        return any(isinstance(names, list) and names for names in zones.values())
+    if isinstance(zones, list):
+        return bool(zones)
+    return False
+
+
 def _parse_bool(value: object, *, field: str) -> bool:
     if isinstance(value, bool):
         return value
@@ -226,8 +256,8 @@ def _parse_studies(value: object) -> Literal["all"] | tuple[AiBatchStudyRef, ...
 def validate_ai_batch_config_gates(config: AiBatchConfig) -> None:
     errors: list[str] = []
     for algorithm in config.algorithms:
-        if algorithm is AiBatchAlgorithm.REMOVE_PIXEL_PHI and not pixel_phi_allowed():
-            errors.append("remove_pixel_phi: OCR models are not installed")
+        if algorithm is AiBatchAlgorithm.REMOVE_PIXEL_PHI and not embedded_phi_allowed():
+            errors.append("remove_pixel_phi: Embedded PHI models are not installed")
         elif algorithm is AiBatchAlgorithm.HARMONIZE and not harmonize_allowed():
             errors.append("harmonize: TotalSegmentator anatomy models are not installed")
         elif algorithm is AiBatchAlgorithm.FACE_BLUR and not face_blur_allowed():

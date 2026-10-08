@@ -76,6 +76,7 @@ from anonymizer.controller.phi_io import (
 from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import PHI, SeriesProcessingStatus
 from anonymizer.model.project import (
+    AnonymizationPolicy,
     AuthenticationError,
     DICOMRuntimeError,
     ProjectModel,
@@ -974,3 +975,51 @@ class ProjectController(
             memory_callback=memory_callback,
             work_state=work_state,
         )
+
+    def apply_anonymization_policy(
+        self,
+        policy: AnonymizationPolicy | str | None = None,
+    ) -> Path:
+        """Install the packaged script for ``policy`` beside ProjectModel.json and reload.
+
+        Strict → ``default-anonymizer.script``; Clinical → ``clinical-anonymizer.script``.
+        Clinical also enables SR/PDF modalities when missing.
+        """
+        from anonymizer.controller.process_ctp_lookup import (
+            migrate_project_script_from_private,
+            project_anonymizer_script_path,
+        )
+        from anonymizer.utils.modalities import get_modalities
+
+        if policy is None:
+            policy = getattr(self.model, "anonymization_policy", AnonymizationPolicy.STRICT)
+        try:
+            policy = AnonymizationPolicy(str(policy).strip().lower())
+        except ValueError:
+            policy = AnonymizationPolicy.STRICT
+        self.model.anonymization_policy = policy
+
+        from anonymizer.controller.anonymizer_script import packaged_script_path_for_policy
+
+        source = packaged_script_path_for_policy(policy)
+        if not source.is_file():
+            raise FileNotFoundError(f"Packaged script missing: {source}")
+
+        migrate_project_script_from_private(self.model)
+        dest = project_anonymizer_script_path(self.model)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, dest)
+        self.model.anonymizer_script_path = dest
+        self.anonymizer.project_model.anonymizer_script_path = dest
+        self.anonymizer.model.reload_script(dest)
+
+        if policy is AnonymizationPolicy.CLINICAL:
+            catalog = get_modalities()
+            mods = list(self.model.modalities)
+            for code in ("SR", "PDF"):
+                if code in catalog and code not in mods:
+                    mods.append(code)
+            self.model.modalities = mods
+            self.model.set_storage_classes_from_modalities()
+        logger.info("Applied anonymization policy %s → %s", policy.value, dest)
+        return dest

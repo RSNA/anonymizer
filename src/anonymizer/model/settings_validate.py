@@ -1,17 +1,55 @@
-"""Plain validators for project settings (MCP / ops). Match GUI min/max/charset.
+"""Project settings limits and validators (GUI + MCP).
 
-Reject invalid values (do not clamp). Keep limits in ``settings_limits``.
+Reject invalid values (do not clamp). Limits live at the top of this module;
+``ux_fields`` imports the network address constants for keystroke widgets.
 """
 
 from __future__ import annotations
 
+import string
 from typing import Any
 
-from anonymizer.model import settings_limits as lim
 from anonymizer.model.project import DICOMNode, NetworkTimeouts
 from anonymizer.utils.modalities import get_modalities
 from anonymizer.utils.network import is_valid_ip
 from anonymizer.utils.translate import language_to_code
+
+# --- Limits (SettingsDialog / NetworkTimeoutsDialog / DICOMNodeDialog / MCP) ---
+
+# Identity (SettingsDialog)
+PROJECT_NAME_MIN_CHARS = 3
+PROJECT_NAME_MAX_CHARS = 20
+# GUI keystroke charset is uppercase-only; MCP accepts either case for letters.
+PROJECT_NAME_CHARSET = string.digits + string.ascii_letters + " -."
+SITE_ID_MIN_CHARS = 3
+SITE_ID_MAX_CHARS = 20
+SITE_ID_CHARSET = string.digits + "-."
+UID_ROOT_MIN_CHARS = 3
+UID_ROOT_MAX_CHARS = 30
+UID_ROOT_CHARSET = string.digits + "."
+
+# Network addresses (ux_fields / DICOMNodeDialog)
+IP_MIN_CHARS = 7
+IP_MAX_CHARS = 15
+IP_CHARSET = string.digits + "."
+AET_MIN_CHARS = 3
+AET_MAX_CHARS = 16
+AET_CHARSET = string.ascii_letters + string.digits + " !#$%&()#*+-.,:;_^@?~|"
+IP_PORT_MIN = 104
+IP_PORT_MAX = 65535
+HTTP_PATH_MIN_CHARS = 1
+HTTP_PATH_MAX_CHARS = 255
+HTTP_PATH_CHARSET = string.ascii_letters + string.digits + "/-_~.%"
+
+# Network timeouts in seconds (NetworkTimeoutsDialog)
+TCP_TIMEOUT_MIN = 0
+TCP_TIMEOUT_MAX = 15
+ACSE_TIMEOUT_MIN = 0
+ACSE_TIMEOUT_MAX = 120
+DIMSE_TIMEOUT_MIN = 0
+DIMSE_TIMEOUT_MAX = 120
+NETWORK_TIMEOUT_MIN = 0
+NETWORK_TIMEOUT_MAX = 600
 
 
 class SettingsValidationError(ValueError):
@@ -33,9 +71,9 @@ def _require_len(field: str, value: str, min_chars: int, max_chars: int) -> str:
 
 def validate_project_name(value: str) -> str:
     text = _require_len(
-        "project_name", value, lim.PROJECT_NAME_MIN_CHARS, lim.PROJECT_NAME_MAX_CHARS
+        "project_name", value, PROJECT_NAME_MIN_CHARS, PROJECT_NAME_MAX_CHARS
     )
-    if not _chars_ok(text, lim.PROJECT_NAME_CHARSET):
+    if not _chars_ok(text, PROJECT_NAME_CHARSET):
         raise SettingsValidationError(
             "project_name allows letters, digits, space, hyphen, and period only"
         )
@@ -43,15 +81,15 @@ def validate_project_name(value: str) -> str:
 
 
 def validate_site_id(value: str) -> str:
-    text = _require_len("site_id", value, lim.SITE_ID_MIN_CHARS, lim.SITE_ID_MAX_CHARS)
-    if not _chars_ok(text, lim.SITE_ID_CHARSET):
+    text = _require_len("site_id", value, SITE_ID_MIN_CHARS, SITE_ID_MAX_CHARS)
+    if not _chars_ok(text, SITE_ID_CHARSET):
         raise SettingsValidationError("site_id allows digits, hyphen, and period only")
     return text
 
 
 def validate_uid_root(value: str) -> str:
-    text = _require_len("uid_root", value, lim.UID_ROOT_MIN_CHARS, lim.UID_ROOT_MAX_CHARS)
-    if not _chars_ok(text, lim.UID_ROOT_CHARSET):
+    text = _require_len("uid_root", value, UID_ROOT_MIN_CHARS, UID_ROOT_MAX_CHARS)
+    if not _chars_ok(text, UID_ROOT_CHARSET):
         raise SettingsValidationError("uid_root allows digits and period only")
     return text
 
@@ -66,9 +104,24 @@ def validate_language_code(value: str) -> str:
     return code
 
 
+def validate_anonymization_policy(value: str | None) -> str:
+    """Return normalized policy value; missing/empty → strict."""
+    from anonymizer.model.project import AnonymizationPolicy
+
+    text = (value or "").strip().lower()
+    if not text:
+        return AnonymizationPolicy.STRICT.value
+    allowed = {p.value for p in AnonymizationPolicy}
+    if text not in allowed:
+        raise SettingsValidationError(
+            f"anonymization_policy must be one of {sorted(allowed)} (got {value!r})"
+        )
+    return text
+
+
 def validate_ip(value: str, *, field: str = "ip") -> str:
-    text = _require_len(field, value, lim.IP_MIN_CHARS, lim.IP_MAX_CHARS)
-    if not _chars_ok(text, lim.IP_CHARSET):
+    text = _require_len(field, value, IP_MIN_CHARS, IP_MAX_CHARS)
+    if not _chars_ok(text, IP_CHARSET):
         raise SettingsValidationError(f"{field} allows digits and period only (IPv4)")
     if not is_valid_ip(text):
         raise SettingsValidationError(f"{field} is not a valid IPv4 address: {text!r}")
@@ -80,27 +133,27 @@ def validate_port(value: int | float, *, field: str = "port") -> int:
         port = int(value)
     except (TypeError, ValueError) as exc:
         raise SettingsValidationError(f"{field} must be an integer") from exc
-    if not (lim.IP_PORT_MIN <= port <= lim.IP_PORT_MAX):
+    if not (IP_PORT_MIN <= port <= IP_PORT_MAX):
         raise SettingsValidationError(
-            f"{field} must be {lim.IP_PORT_MIN}–{lim.IP_PORT_MAX} (got {port})"
+            f"{field} must be {IP_PORT_MIN}–{IP_PORT_MAX} (got {port})"
         )
     return port
 
 
 def validate_aet(value: str, *, field: str = "aet") -> str:
-    text = _require_len(field, value, lim.AET_MIN_CHARS, lim.AET_MAX_CHARS)
-    if not _chars_ok(text, lim.AET_CHARSET):
+    text = _require_len(field, value, AET_MIN_CHARS, AET_MAX_CHARS)
+    if not _chars_ok(text, AET_CHARSET):
         raise SettingsValidationError(f"{field} contains characters not allowed for AE title")
     return text
 
 
 def validate_http_path(value: str, *, field: str = "http_path") -> str:
     text = (value or "").strip()
-    if not (lim.HTTP_PATH_MIN_CHARS <= len(text) <= lim.HTTP_PATH_MAX_CHARS):
+    if not (HTTP_PATH_MIN_CHARS <= len(text) <= HTTP_PATH_MAX_CHARS):
         raise SettingsValidationError(
-            f"{field} must be {lim.HTTP_PATH_MIN_CHARS}–{lim.HTTP_PATH_MAX_CHARS} characters"
+            f"{field} must be {HTTP_PATH_MIN_CHARS}–{HTTP_PATH_MAX_CHARS} characters"
         )
-    if not _chars_ok(text, lim.HTTP_PATH_CHARSET):
+    if not _chars_ok(text, HTTP_PATH_CHARSET):
         raise SettingsValidationError(f"{field} contains characters not allowed for HTTP path")
     return text
 
@@ -137,15 +190,15 @@ def validate_network_timeouts(
         validate_timeout(
             tcp_connection,
             field="network_timeouts.tcp_connection",
-            min_v=lim.TCP_TIMEOUT_MIN,
-            max_v=lim.TCP_TIMEOUT_MAX,
+            min_v=TCP_TIMEOUT_MIN,
+            max_v=TCP_TIMEOUT_MAX,
         )
         if tcp_connection is not None
         else float(src.tcp_connection)
     )
     acse_v = (
         validate_timeout(
-            acse, field="network_timeouts.acse", min_v=lim.ACSE_TIMEOUT_MIN, max_v=lim.ACSE_TIMEOUT_MAX
+            acse, field="network_timeouts.acse", min_v=ACSE_TIMEOUT_MIN, max_v=ACSE_TIMEOUT_MAX
         )
         if acse is not None
         else float(src.acse)
@@ -154,8 +207,8 @@ def validate_network_timeouts(
         validate_timeout(
             dimse,
             field="network_timeouts.dimse",
-            min_v=lim.DIMSE_TIMEOUT_MIN,
-            max_v=lim.DIMSE_TIMEOUT_MAX,
+            min_v=DIMSE_TIMEOUT_MIN,
+            max_v=DIMSE_TIMEOUT_MAX,
         )
         if dimse is not None
         else float(src.dimse)
@@ -164,8 +217,8 @@ def validate_network_timeouts(
         validate_timeout(
             network,
             field="network_timeouts.network",
-            min_v=lim.NETWORK_TIMEOUT_MIN,
-            max_v=lim.NETWORK_TIMEOUT_MAX,
+            min_v=NETWORK_TIMEOUT_MIN,
+            max_v=NETWORK_TIMEOUT_MAX,
         )
         if network is not None
         else float(src.network)
@@ -273,25 +326,29 @@ def settings_defaults_payload() -> dict[str, Any]:
             "language_code": model.language_code,
             "site_id": "(auto-generated at create if omitted)",
             "uid_root": model.uid_root,
+            "anonymization_policy": model.anonymization_policy.value
+            if hasattr(model.anonymization_policy, "value")
+            else str(model.anonymization_policy),
             "modalities": list(model.modalities),
             "transfer_syntaxes": list(model.transfer_syntaxes),
             "scp": {"ip": scp.ip, "port": scp.port, "aet": scp.aet},
             "network_timeouts": timeouts_dict(model.network_timeouts),
         },
         "language_codes": sorted(language_to_code.values()),
+        "anonymization_policies": ["strict", "clinical"],
         "languages": {code: name for code, name in code_to_language.items()},
         "ranges": {
-            "project_name": f"{lim.PROJECT_NAME_MIN_CHARS}–{lim.PROJECT_NAME_MAX_CHARS} chars; letters/digits/space/-/.",
-            "site_id": f"{lim.SITE_ID_MIN_CHARS}–{lim.SITE_ID_MAX_CHARS} chars; digits/-/.",
-            "uid_root": f"{lim.UID_ROOT_MIN_CHARS}–{lim.UID_ROOT_MAX_CHARS} chars; digits/.",
-            "ip": f"IPv4, {lim.IP_MIN_CHARS}–{lim.IP_MAX_CHARS} chars",
-            "port": f"{lim.IP_PORT_MIN}–{lim.IP_PORT_MAX}",
-            "aet": f"{lim.AET_MIN_CHARS}–{lim.AET_MAX_CHARS} chars",
+            "project_name": f"{PROJECT_NAME_MIN_CHARS}–{PROJECT_NAME_MAX_CHARS} chars; letters/digits/space/-/.",
+            "site_id": f"{SITE_ID_MIN_CHARS}–{SITE_ID_MAX_CHARS} chars; digits/-/.",
+            "uid_root": f"{UID_ROOT_MIN_CHARS}–{UID_ROOT_MAX_CHARS} chars; digits/.",
+            "ip": f"IPv4, {IP_MIN_CHARS}–{IP_MAX_CHARS} chars",
+            "port": f"{IP_PORT_MIN}–{IP_PORT_MAX}",
+            "aet": f"{AET_MIN_CHARS}–{AET_MAX_CHARS} chars",
             "timeouts_s": {
-                "tcp_connection": f"{lim.TCP_TIMEOUT_MIN}–{lim.TCP_TIMEOUT_MAX}",
-                "acse": f"{lim.ACSE_TIMEOUT_MIN}–{lim.ACSE_TIMEOUT_MAX}",
-                "dimse": f"{lim.DIMSE_TIMEOUT_MIN}–{lim.DIMSE_TIMEOUT_MAX}",
-                "network": f"{lim.NETWORK_TIMEOUT_MIN}–{lim.NETWORK_TIMEOUT_MAX}",
+                "tcp_connection": f"{TCP_TIMEOUT_MIN}–{TCP_TIMEOUT_MAX}",
+                "acse": f"{ACSE_TIMEOUT_MIN}–{ACSE_TIMEOUT_MAX}",
+                "dimse": f"{DIMSE_TIMEOUT_MIN}–{DIMSE_TIMEOUT_MAX}",
+                "network": f"{NETWORK_TIMEOUT_MIN}–{NETWORK_TIMEOUT_MAX}",
             },
         },
         "help": {

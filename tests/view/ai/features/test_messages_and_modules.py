@@ -35,18 +35,21 @@ _KEY_AI_MSGIDS = (
     "Harmonize",
     "Slice Thickness",
     "Series Type Modifier",
-    "Standardize SeriesDescription (CT/MR).",
+    "Harmonize Series Description using RadLex playbook and Study Description using LOINC dictionary.",
 )
 
 
 def _po_msgstr(locale: str, msgid: str) -> str | None:
     po_path = _LOCALES_ROOT / locale / "LC_MESSAGES" / "messages.po"
+    # gettext may split long msgstr across quoted lines after msgstr "".
     block_re = re.compile(
-        rf'(?:^#, fuzzy\n)?msgid "{re.escape(msgid)}"\nmsgstr "(.*)"\n',
+        rf'(?:^#, fuzzy\n)?msgid "{re.escape(msgid)}"\nmsgstr ((?:"[^"]*"\n)+)',
         re.M,
     )
     match = block_re.search(po_path.read_text(encoding="utf-8"))
-    return match.group(1) if match else None
+    if not match:
+        return None
+    return "".join(re.findall(r'"([^"]*)"', match.group(1)))
 
 
 def test_ml_env_and_readiness_modules_export_expected_symbols() -> None:
@@ -61,7 +64,9 @@ def test_ml_env_and_readiness_modules_export_expected_symbols() -> None:
 
 def test_feature_strings_use_gettext() -> None:
     assert _("Remove") == "Remove"
-    assert feature_description(AiFeatureId.HARMONIZE.value) == "Standardize SeriesDescription (CT/MR)."
+    assert feature_description(AiFeatureId.HARMONIZE.value) == (
+        "Harmonize Series Description using RadLex playbook and Study Description using LOINC dictionary."
+    )
     assert feature_summary(AiFeatureId.HARMONIZE.value) == "RadLex series naming from anatomy."
     assert _("Downloading. This may take several minutes.").startswith("Downloading")
     assert _(

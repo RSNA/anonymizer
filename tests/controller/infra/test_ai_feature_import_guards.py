@@ -22,20 +22,20 @@ _FORBIDDEN_FEATURES_PKG_EXPORTS = frozenset(
         "default_installed_segmentation_mode",
         "installed_segmentation_mode_menu_values",
         "harmonize_allowed",
-        "pixel_phi_allowed",
+        "embedded_phi_allowed",
         "face_blur_allowed",
     }
 )
 
 _MOVED_GATE_NAMES = frozenset(
     {
-        "pixel_phi_allowed",
+        "embedded_phi_allowed",
         "harmonize_allowed",
         "harmonize_allowed_for_modality",
         "face_blur_allowed",
         "brain_structures_allowed",
         "any_ai_batch_feature_allowed",
-        "remove_pixel_phi_has_models",
+        "embedded_phi_has_models",
         "harmonize_has_models",
         "harmonize_ct_has_models",
         "harmonize_mr_has_models",
@@ -43,7 +43,7 @@ _MOVED_GATE_NAMES = frozenset(
         "face_blur_has_models",
         "face_ct_has_models",
         "face_mr_has_models",
-        "remove_pixel_phi_needs_download",
+        "embedded_phi_needs_download",
         "harmonize_ct_needs_download",
         "harmonize_mr_needs_download",
         "brain_structures_needs_download",

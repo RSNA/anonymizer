@@ -379,11 +379,11 @@ class AnonymizerController:
         """
         # removes parentheses, spaces, and commas from tag
         tag = str(data_element.tag).translate(self._clean_tag_translate_table).upper()
-        # Remove data_element if not in _tag_keep:
-        if tag not in self.model._tag_keep:
+        # Remove data_element if not in _tag_keep (exact or GGGGXXEE pattern):
+        operation = self.model.resolve_tag_keep(tag)
+        if operation is None:
             del dataset[tag]
             return
-        operation = self.model._tag_keep[tag]
         value = data_element.value
         # Keep data_element if no operation:
         if operation == "" or operation == "@keep":
@@ -593,7 +593,16 @@ class AnonymizerController:
             phi_study_date = str(getattr(ds, "StudyDate", "") or "").strip() or None
             self._dates_shifted_this_dataset = False
 
-            ds.remove_private_tags()  # remove all private elements (odd group number)
+            from anonymizer.model.project import AnonymizationPolicy
+
+            raw = getattr(self.project_model, "anonymization_policy", AnonymizationPolicy.STRICT)
+            try:
+                policy = AnonymizationPolicy(str(raw).strip().lower())
+            except ValueError:
+                policy = AnonymizationPolicy.STRICT
+            if policy is AnonymizationPolicy.STRICT:
+                ds.remove_private_tags()  # wipe all private elements before walk
+            # Clinical: skip wipe; TCIA keep/uid/date rules live in _tag_keep; unknown private deleted by walk
 
             # if ds.PatientID not present, set to '' so that anonymization script can process the element:
             if not hasattr(ds, "PatientID"):

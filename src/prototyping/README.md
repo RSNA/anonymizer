@@ -10,6 +10,8 @@ src/prototyping/
 ├── ct/              # CT eval CLIs (e.g. ct_eval.py)
 ├── falcon/          # FALCON offline research (moved from product; superseded by tseg Harmonize)
 ├── ocr/             # OCR burned-in text detection / inpainting experiments
+├── metadata_phi/    # metadata / SR / PDF free-text PHI NER experiment (en_US first)
+├── report_phi/      # Encapsulated PDF letterhead OCR×OpenMed API-param sweep
 ├── ffr/             # facial feature removal (CT face blur POC, legacy volume scripts)
 │   └── face/        # face blur viz POC (QA gallery + report.html)
 ├── deid/            # deprecated shims → use ocr/ or ffr/

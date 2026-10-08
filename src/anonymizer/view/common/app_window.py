@@ -148,10 +148,12 @@ def place_toplevel_centered_on_parent(
     *,
     width: int | None = None,
     height: int | None = None,
+    margin: int = 20,
 ) -> None:
-    """Size ``window`` (optional) and center it over ``parent``, clamped to the screen.
+    """Size ``window`` (optional) and center it over ``parent``.
 
     Call while withdrawn (then ``deiconify``) so the first paint is already centered.
+    Position is clamped to the screen; size is not shrunk to the parent (that clips content).
     """
     try:
         window.update_idletasks()
@@ -173,37 +175,56 @@ def place_toplevel_centered_on_parent(
         except tk.TclError:
             return
 
+    try:
+        screen_w = int(window.winfo_screenwidth())
+        screen_h = int(window.winfo_screenheight())
+    except tk.TclError:
+        screen_w = width
+        screen_h = height
+
     host = parent if parent is not None else getattr(window, "master", None)
+    parent_w = parent_h = parent_x = parent_y = None
     try:
         if host is None:
             raise tk.TclError("no parent")
         host.update_idletasks()
         parent_w = int(host.winfo_width())
         parent_h = int(host.winfo_height())
-        pos_x = int(host.winfo_rootx()) + max(0, (parent_w - width) // 2)
-        pos_y = int(host.winfo_rooty()) + max(0, (parent_h - height) // 2)
+        parent_x = int(host.winfo_rootx())
+        parent_y = int(host.winfo_rooty())
     except tk.TclError:
-        try:
-            screen_w = int(window.winfo_screenwidth())
-            screen_h = int(window.winfo_screenheight())
-        except tk.TclError:
-            with contextlib.suppress(tk.TclError):
-                window.geometry(f"{width}x{height}")
-            return
-        pos_x = max(0, (screen_w - width) // 2)
-        pos_y = max(0, (screen_h - height) // 2)
+        parent_w = parent_h = parent_x = parent_y = None
+
+    inset = max(0, int(margin))
+    width = min(max(1, width), max(1, screen_w - inset))
+    height = min(max(1, height), max(1, screen_h - inset))
+
+    if parent_w is not None and parent_x is not None and parent_y is not None:
+        pos_x = parent_x + (parent_w - width) // 2
+        pos_y = parent_y + (parent_h - height) // 2
     else:
-        try:
-            screen_w = int(window.winfo_screenwidth())
-            screen_h = int(window.winfo_screenheight())
-        except tk.TclError:
-            screen_w = pos_x + width
-            screen_h = pos_y + height
-        pos_x = max(0, min(pos_x, screen_w - width))
-        pos_y = max(0, min(pos_y, screen_h - height))
+        pos_x = (screen_w - width) // 2
+        pos_y = (screen_h - height) // 2
+    pos_x = max(0, min(pos_x, screen_w - width))
+    pos_y = max(0, min(pos_y, screen_h - height))
 
     with contextlib.suppress(tk.TclError):
         window.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
+
+
+def present_toplevel_centered_on_parent(
+    window: tk.Misc,
+    parent: tk.Misc | None = None,
+    *,
+    width: int | None = None,
+    height: int | None = None,
+) -> None:
+    """Place while withdrawn, then show: first paint is already centered on ``parent``."""
+    place_toplevel_centered_on_parent(window, parent, width=width, height=height)
+    with contextlib.suppress(tk.TclError):
+        window.deiconify()
+        window.lift()
+        window.wait_visibility()
 
 
 def _max_descendant_reqwidth(widget: tk.Misc) -> int:

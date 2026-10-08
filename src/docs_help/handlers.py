@@ -1585,8 +1585,9 @@ def _stage_ai_batch_running(dlg: Any) -> None:
 def shot_ai_batch_running(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     """Capture AiBatchProcessDialog mid-run (staged; worker never starts)."""
     from anonymizer.controller.ai.batch_process import AiBatchAlgorithm, AiBatchProcessOptions
+    from anonymizer.controller.runner import OcrRemoveMode
     from anonymizer.controller.ai.blur_face import FaceBlurMode
-    from anonymizer.controller.ai.remove_pixel_phi import PixelPhiRemovalMode
+    from anonymizer.controller.ai.embedded_phi.pixel.detect_text import PixelPhiRemovalMode
     from anonymizer.view.ai.ai_batch_process_dialog import AiBatchProcessDialog
 
     # Always ensure both demo fixtures for a multi-study mid-run shot.
@@ -1615,7 +1616,7 @@ def shot_ai_batch_running(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
         ),
         blur_mode=FaceBlurMode.GAUSSIAN,
         pixel_phi_removal_mode=PixelPhiRemovalMode.BLACKOUT,
-        use_modality_whitelist=True,
+        ocr_remove_mode=OcrRemoveMode.NON_WHITELISTED,
     )
     parent = ctx.app.dashboard or ctx.app
 
@@ -1845,11 +1846,11 @@ def _process_before_patient_lookup(ctx: CaptureContext) -> dict[str, object]:
 
     from pydicom import dcmread
 
+    from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import apply_instance_embedded_phi_for_dcm
     from anonymizer.controller.ai.harmonize.pipeline import (
         apply_harmonized_description,
         harmonize_and_apply_series,
     )
-    from anonymizer.controller.ai.remove_pixel_phi import apply_instance_pixel_phi_for_dcm
     from docs_help.fixture_cache import cached_pixel_phi_labels, tseg_anatomy_cache_ready
 
     controller = ctx.app.controller
@@ -1889,11 +1890,11 @@ def _process_before_patient_lookup(ctx: CaptureContext) -> dict[str, object]:
         labels = cached_pixel_phi_labels(fixture)
         any_text = False
         for dcm_path in dcms:
-            if labels and apply_instance_pixel_phi_for_dcm(anon, dcm_path, labels):
+            if labels and apply_instance_embedded_phi_for_dcm(anon, dcm_path, labels):
                 pixel_instances += 1
                 any_text = True
         if series_uid:
-            anon.set_series_pixel_phi_scanned(series_uid, scanned=True)
+            anon.set_series_embedded_phi_scanned(series_uid, scanned=True)
         if any_text:
             pixel_series += 1
     stats["pixel_phi_series"] = pixel_series
@@ -1926,8 +1927,8 @@ def _render_patient_lookup_csv_preview(csv_path: Path, dest: Path, *, max_rows: 
         "Modality",
         "SeriesDescription",
         "SeriesHarmonized",
-        "PixelPHIRemoved",
-        "PixelPHI",
+        "EmbeddedPHIRemoved",
+        "EmbeddedPHI",
     ]
     indices = [header.index(name) for name in prefer if name in header]
     if not indices:
@@ -1937,7 +1938,7 @@ def _render_patient_lookup_csv_preview(csv_path: Path, dest: Path, *, max_rows: 
         if idx >= len(row):
             return ""
         text = str(row[idx] or "")
-        limit = 48 if col_name == "PixelPHI" else 26
+        limit = 48 if col_name == "EmbeddedPHI" else 26
         return text if len(text) <= limit else text[: limit - 1] + "…"
 
     display_header = [header[i] for i in indices]
@@ -1961,10 +1962,10 @@ def _render_patient_lookup_csv_preview(csv_path: Path, dest: Path, *, max_rows: 
     path_font = _font(12)
     cell_font = _font(11)
     pad = 18
-    # Wider column for PixelPHI digest of removed text.
+    # Wider column for EmbeddedPHI digest of removed text.
     col_widths = []
     for name in display_header:
-        if name == "PixelPHI":
+        if name == "EmbeddedPHI":
             col_widths.append(220)
         elif name in {"SeriesDescription", "PHI-PatientName"}:
             col_widths.append(140)
@@ -2052,8 +2053,8 @@ def shot_dataset_patient_lookup(ctx: CaptureContext, shot: ShotSpec) -> ShotResu
                 raise RuntimeError(f"Patient Lookup CSV contains synthetic data: {blob!r}")
         try:
             harm_i = header.index("SeriesHarmonized")
-            rem_i = header.index("PixelPHIRemoved")
-            phi_i = header.index("PixelPHI")
+            rem_i = header.index("EmbeddedPHIRemoved")
+            phi_i = header.index("EmbeddedPHI")
         except ValueError as exc:
             raise RuntimeError(f"Patient Lookup CSV missing AI columns: {exc}") from exc
         harm_yes = any(_csv_truthy(row[harm_i]) for row in rows[1:] if len(row) > harm_i)
@@ -2124,11 +2125,11 @@ def _series_view_for_fixture(ctx: CaptureContext, fixture: str):
 
 def shot_process_remove_pixel(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     """Series View OCR workflow: detect and/or remove burned-in text."""
-    from anonymizer.controller.ai.remove_pixel_phi import (
-        PixelPhiRemovalMode,
-        normalize_pixel_phi_removal_mode,
-        pixel_phi_removal_mode_option_label,
-    )
+    from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
+    PixelPhiRemovalMode,
+    normalize_pixel_phi_removal_mode,
+    pixel_phi_removal_mode_option_label,
+)
     from anonymizer.controller.runner import OcrEditContext, edit_context_display_label
     from anonymizer.controller.series_overlay import UserRectangle
 

@@ -19,28 +19,28 @@ from anonymizer.utils.storage import (
 
 @pytest.fixture(autouse=True)
 def _clear_progress() -> None:
-    end_model_download("remove_pixel_phi")
+    end_model_download("embedded_phi")
     end_model_download("enable_harmonize")
     end_model_download("enable_face_blur")
     yield
-    end_model_download("remove_pixel_phi")
+    end_model_download("embedded_phi")
     end_model_download("enable_harmonize")
     end_model_download("enable_face_blur")
 
 
 def test_begin_update_end_lifecycle() -> None:
-    begin_model_download("remove_pixel_phi", message="Starting OCR download")
-    progress = get_model_download_progress("remove_pixel_phi")
+    begin_model_download("embedded_phi", message="Starting OCR download")
+    progress = get_model_download_progress("embedded_phi")
     assert progress == DownloadProgress(message="Starting OCR download", fraction=None)
-    assert is_model_download_active("remove_pixel_phi")
+    assert is_model_download_active("embedded_phi")
 
-    update_model_download("remove_pixel_phi", message="Halfway", fraction=0.5)
-    progress = get_model_download_progress("remove_pixel_phi")
+    update_model_download("embedded_phi", message="Halfway", fraction=0.5)
+    progress = get_model_download_progress("embedded_phi")
     assert progress == DownloadProgress(message="Halfway", fraction=0.5)
 
-    end_model_download("remove_pixel_phi")
-    assert get_model_download_progress("remove_pixel_phi") is None
-    assert not is_model_download_active("remove_pixel_phi")
+    end_model_download("embedded_phi")
+    assert get_model_download_progress("embedded_phi") is None
+    assert not is_model_download_active("embedded_phi")
 
 
 def test_update_model_download_preserves_unset_fields() -> None:

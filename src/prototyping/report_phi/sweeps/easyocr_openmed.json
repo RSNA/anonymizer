@@ -1,0 +1,94 @@
+{
+  "baseline": {
+    "aggregation_strategy": "max",
+    "min_score": 0.0,
+    "easyocr": {
+      "width_ths": 0.3,
+      "ycenter_ths": 0.5,
+      "link_threshold": 0.6,
+      "rotation_info": [0]
+    }
+  },
+  "grid": [
+    {
+      "aggregation_strategy": "max",
+      "min_score": 0.0,
+      "easyocr": { "width_ths": 0.2, "ycenter_ths": 0.5, "rotation_info": [0] }
+    },
+    {
+      "aggregation_strategy": "max",
+      "min_score": 0.0,
+      "easyocr": { "width_ths": 0.3, "ycenter_ths": 0.5, "rotation_info": [0] }
+    },
+    {
+      "aggregation_strategy": "max",
+      "min_score": 0.0,
+      "easyocr": { "width_ths": 0.4, "ycenter_ths": 0.5, "rotation_info": [0] }
+    },
+    {
+      "aggregation_strategy": "max",
+      "min_score": 0.0,
+      "easyocr": { "width_ths": 0.5, "ycenter_ths": 0.5, "rotation_info": [0] }
+    },
+    {
+      "aggregation_strategy": "max",
+      "min_score": 0.0,
+      "easyocr": {
+        "width_ths": 0.3,
+        "ycenter_ths": 0.5,
+        "link_threshold": 0.2,
+        "rotation_info": [0]
+      }
+    },
+    {
+      "aggregation_strategy": "max",
+      "min_score": 0.0,
+      "easyocr": {
+        "width_ths": 0.3,
+        "ycenter_ths": 0.5,
+        "link_threshold": 0.6,
+        "rotation_info": [0]
+      }
+    },
+    {
+      "aggregation_strategy": "average",
+      "min_score": 0.0,
+      "easyocr": { "width_ths": 0.3, "ycenter_ths": 0.5, "rotation_info": [0] }
+    },
+    {
+      "aggregation_strategy": "first",
+      "min_score": 0.0,
+      "easyocr": { "width_ths": 0.3, "ycenter_ths": 0.5, "rotation_info": [0] }
+    },
+    {
+      "aggregation_strategy": "max",
+      "min_score": 0.3,
+      "easyocr": { "width_ths": 0.3, "ycenter_ths": 0.5, "rotation_info": [0] }
+    },
+    {
+      "aggregation_strategy": "max",
+      "min_score": 0.5,
+      "easyocr": {
+        "width_ths": 0.4,
+        "ycenter_ths": 0.5,
+        "link_threshold": 0.4,
+        "rotation_info": [0]
+      }
+    },
+    {
+      "aggregation_strategy": "max",
+      "min_score": 0.0,
+      "easyocr": { "width_ths": 0.4, "ycenter_ths": 0.7, "rotation_info": [0] }
+    },
+    {
+      "aggregation_strategy": "average",
+      "min_score": 0.0,
+      "easyocr": {
+        "width_ths": 0.5,
+        "ycenter_ths": 0.5,
+        "link_threshold": 0.4,
+        "rotation_info": [0]
+      }
+    }
+  ]
+}

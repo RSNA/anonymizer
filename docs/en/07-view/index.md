@@ -100,6 +100,16 @@ That is the main way to open a series for review and for Process tools (Remove P
 
 ![Series View on davidson_cxr](shots/macos/SeriesView_Review.png)
 
+### Which window opens?
+
+Double-click or right-click a series and the Dataset routes it by type:
+
+| Series | Opens |
+| --- | --- |
+| CT, MR, US, CR, SC and other pixel data | **Series View** (with Embedded PHI tools for burned-in text) |
+| Structured Report (SR) | **Report Text Review** |
+| Encapsulated PDF | **Report Text Review** (Save rewrites PDF as plain de-identified text) |
+
 ## Edit study and series descriptions
 
 After [Harmonize](../08-process/03-harmonize-names/) (Series View or [AI Batch](../08-process/05-run-on-many-studies/)), green **Harmonized** rows show the standardized name. You can also set RadLex / LOINC names on **unharmonized** rows from Dataset — choosing a standard name writes DICOM and marks the row harmonized (green after refresh).
@@ -170,8 +180,7 @@ Bindings follow a PACS-style map: left button is the active tool, right button i
 | **Right-drag** | Window/level — vertical = brightness (WL), horizontal = contrast (WW) |
 | **Left-click / left-drag** | **View:** draw or remove blackout / OCR boxes. **Annotate:** paint or erase on the selected segment |
 | **Fit** button or **F** | Reset zoom and pan to fit the viewport |
-| **← / →** | Previous / next frame |
-| **↑ / ↓** | Jump by a small number of frames |
+| **← / → / ↑ / ↓** | Previous / next frame (one frame)
 | **Page Up / Page Down** | Jump by a larger number of frames |
 | **Home / End** | First / last frame |
 | **Space** | Play / pause cine (multi-frame series) |

@@ -5,7 +5,7 @@ Cette page résume en langage clair comment l’Anonymizer suit le DICOM Basic A
 ## Ce qui est supprimé ou remplacé
 
 - Le nom et l’identifiant du patient deviennent des valeurs anonymisées limitées au projet (Site ID + numéro de patient séquentiel). La même personne conserve le même identifiant anonymisé d’une étude à l’autre dans le projet.
-- Les UID sont remplacés par de nouvelles valeurs dérivées pour le projet (hachées à partir des originaux dans les versions actuelles) afin que les liens entre images restent cohérents sans exposer les UID sources.
+- Les UID sont remplacés par de nouvelles valeurs déterministes dérivées pour le projet afin que les liens entre images restent cohérents. Ces hachages sont **sans secret** (liaison stable dans le projet, pas une pseudonymisation à clé) — voir la section anglaise [Deterministic replacements](../en/deidentification-protocol.md#deterministic-replacements-uids-dates-accessions).
 - De nombreux tags de flux clinique et tags privés sont supprimés.
 - Le fichier enregistre que l’identité du patient a été retirée et nomme le RSNA DICOM Anonymizer comme méthode.
 

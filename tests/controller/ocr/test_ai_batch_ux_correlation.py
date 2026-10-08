@@ -11,10 +11,8 @@ from anonymizer.controller.ai.batch_process import (
     format_remove_pixel_phi_instance_detail,
     format_remove_pixel_phi_series_message,
 )
-from anonymizer.controller.ai.remove_pixel_phi import (
-    PixelPhiRemovalMode,
-    remove_pixel_phi,
-)
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import PixelPhiRemovalMode
+from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import remove_pixel_phi
 from anonymizer.controller.runner import RemovePixelPhiRunner
 from tests.controller.ocr.conftest import assert_dcm
 from tests.controller.support.ai_batch_ux_fixtures import BATCH_UX_EXPECTATIONS, BatchUxExpectation
@@ -82,10 +80,11 @@ def test_batch_removal_matches_ux_logs(
     for token in case.series_log_tokens:
         assert token in series_log
 
-    if case.instance_log_more_count is not None:
-        assert f"(+{case.instance_log_more_count} more)" in instance_log
-    if case.series_log_more_count is not None:
-        assert f"(+{case.series_log_more_count} more)" in series_log
+    for phi_token in case.removed_texts:
+        assert phi_token not in instance_log
+        assert phi_token not in series_log
 
-    assert f"{case.pixels_changed:,} px" in instance_log
-    assert f"{case.pixels_changed:,} pixels blacked out" in series_log
+    assert "pixels" not in instance_log
+    assert "pixels" not in series_log
+    assert "text region" not in instance_log
+    assert "text region" not in series_log

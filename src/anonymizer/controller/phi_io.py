@@ -6,7 +6,7 @@ Does not own SQLite persistence — that remains on AnonymizerModel.
 
 import csv
 import logging
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import ClassVar
@@ -17,22 +17,12 @@ from anonymizer.model.anonymizer import (
     Series,
     SeriesProcessingStatus,
     Study,
+    format_embedded_phi_texts,
 )
 from anonymizer.utils.storage import JavaAnonymizerExportedStudy
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
-
-
-def _format_pixel_phi(texts: Sequence[str]) -> str:
-    seen: set[str] = set()
-    parts: list[str] = []
-    for item in texts:
-        stripped = item.strip()
-        if stripped and stripped not in seen:
-            seen.add(stripped)
-            parts.append(stripped)
-    return ", ".join(parts)
 
 
 def _format_face_blur_status_label(algorithm: str) -> str:
@@ -45,20 +35,20 @@ def format_series_processing_status(
     include_face_blur: bool = True,
 ) -> str:
     """Compact one-line series processing caption for Series View control bar."""
-    total = status.pixel_phi_total_count
-    applied = status.pixel_phi_applied_count
+    total = status.embedded_phi_total_count
+    applied = status.embedded_phi_applied_count
     if total == 0 or applied == 0:
-        pixel_phi_part = _("None removed")
+        embedded_phi_part = _("None removed")
     elif applied == total:
-        pixel_phi_part = _("Applied")
+        embedded_phi_part = _("Applied")
     else:
-        pixel_phi_part = _("Partial ({applied}/{total})").format(applied=applied, total=total)
+        embedded_phi_part = _("Partial ({applied}/{total})").format(applied=applied, total=total)
 
     harmonized = status.harmonized_description
     harmonized_part = harmonized.strip() if harmonized and harmonized.strip() else _("None")
 
-    base = _("Pixel PHI: {pixel_phi} | Harmonized: {harmonized}").format(
-        pixel_phi=pixel_phi_part,
+    base = _("Embedded PHI: {embedded_phi} | Harmonized: {harmonized}").format(
+        embedded_phi=embedded_phi_part,
         harmonized=harmonized_part,
     )
     if not include_face_blur:
@@ -79,8 +69,8 @@ class PHI_SeriesIndexRecord:
     harmonized_description: str
     instance_count: int
     face_blur_algorithm: str
-    pixel_phi_removed: bool
-    pixel_phi: str
+    embedded_phi_removed: bool
+    embedded_phi: str
 
     def tree_label(self) -> str:
         description = (self.harmonized_description or "").strip()
@@ -121,8 +111,8 @@ class PHI_IndexRecord:
     num_instances: int = 0
     harmonize: bool = False
     face_blurred: str = ""
-    pixel_phi_removed: bool = False
-    pixel_phi: str = ""
+    embedded_phi_removed: bool = False
+    embedded_phi: str = ""
     series: list[PHI_SeriesIndexRecord] = field(default_factory=list)
 
     _NESTED_FIELD_NAMES: ClassVar[frozenset[str]] = frozenset({"series"})
@@ -140,7 +130,7 @@ class PHI_IndexRecord:
         "num_instances",
         "harmonize",
         "face_blurred",
-        "pixel_phi_removed",
+        "embedded_phi_removed",
     )
     # View Dataset tree columns (see get_tree_display_titles).
 
@@ -162,8 +152,8 @@ class PHI_IndexRecord:
         "num_instances": "Instances",
         "harmonize": "Harmonized",
         "face_blurred": "FaceBlurred",
-        "pixel_phi_removed": "PixelPHIRemoved",
-        "pixel_phi": "PixelPHI",
+        "embedded_phi_removed": "EmbeddedPHIRemoved",
+        "embedded_phi": "EmbeddedPHI",
     }
 
     @staticmethod
@@ -197,7 +187,7 @@ class PHI_IndexRecord:
             "num_instances": _("Images"),
             "harmonize": _("Harmonized"),
             "face_blurred": _("Face blur"),
-            "pixel_phi_removed": _("Pixel PHI"),
+            "embedded_phi_removed": _("Embedded PHI"),
         }
         return [titles[name] for name in cls.TREE_DISPLAY_FIELDS]
 
@@ -224,8 +214,8 @@ class PHI_IndexRecord:
         values["num_instances"] = series.instance_count
         values["harmonize"] = series.harmonized_display()
         values["face_blurred"] = series.face_blur_display()
-        values["pixel_phi_removed"] = series.pixel_phi_removed
-        values["pixel_phi"] = series.pixel_phi
+        values["embedded_phi_removed"] = series.embedded_phi_removed
+        values["embedded_phi"] = series.embedded_phi
         values["study_description"] = series.description
         values["harmonized_description"] = series.harmonized_description
         return tuple(self._display_value(values[f.name]) for f in self._column_fields())
@@ -243,7 +233,7 @@ class PHI_IndexRecord:
             "num_instances": self.num_instances,
             "harmonize": self.harmonize,
             "face_blurred": bool((self.face_blurred or "").strip()),
-            "pixel_phi_removed": self.pixel_phi_removed,
+            "embedded_phi_removed": self.embedded_phi_removed,
         }
         return tuple(self._display_value(values[name]) for name in self.TREE_DISPLAY_FIELDS)
 
@@ -257,7 +247,7 @@ class PHI_IndexRecord:
         # Applied → algorithm label; unset → False so _display_value yields "No".
         face_raw = (series.face_blur_algorithm or "").strip()
         values["face_blurred"] = _format_face_blur_status_label(face_raw) if face_raw else False
-        values["pixel_phi_removed"] = series.pixel_phi
+        values["embedded_phi_removed"] = series.embedded_phi
         return tuple(self._display_value(values[name]) for name in self.TREE_DISPLAY_FIELDS)
 
     def tree_label(self) -> str:
@@ -290,8 +280,8 @@ class PHI_IndexRecord:
         "SeriesHarmonized",
         "Instances",
         "FaceBlurred",
-        "PixelPHIRemoved",
-        "PixelPHI",
+        "EmbeddedPHIRemoved",
+        "EmbeddedPHI",
     )
 
     def _lookup_csv_study_prefix(self) -> tuple[object, ...]:
@@ -324,8 +314,8 @@ class PHI_IndexRecord:
             self._display_value(series_harmonized),
             series.instance_count,
             series.face_blur_display(),
-            self._display_value(series.pixel_phi_removed),
-            series.pixel_phi,
+            self._display_value(series.embedded_phi_removed),
+            series.embedded_phi,
         )
 
     def iter_lookup_csv_rows(self) -> Iterator[tuple[object, ...]]:
@@ -401,33 +391,33 @@ def _study_face_blur_label(study: Study) -> str:
     return ", ".join(labels)
 
 
-def _series_pixel_phi_texts(series: Series) -> list[str]:
+def _series_embedded_phi_texts(series: Series) -> list[str]:
     texts: list[str] = []
     for instance in series.instances or []:
-        raw = instance.pixel_phi
+        raw = instance.embedded_phi
         if raw is None or not str(raw).strip():
             continue
         texts.extend(item.strip() for item in str(raw).split(",") if item.strip())
     return texts
 
 
-def _series_pixel_phi_digest(series: Series) -> str:
-    return _format_pixel_phi(_series_pixel_phi_texts(series))
+def _series_embedded_phi_digest(series: Series) -> str:
+    return format_embedded_phi_texts(_series_embedded_phi_texts(series))
 
 
-def _study_pixel_phi_digest(study: Study) -> str:
+def _study_embedded_phi_digest(study: Study) -> str:
     texts: list[str] = []
     for series in study.series or []:
-        texts.extend(_series_pixel_phi_texts(series))
-    return _format_pixel_phi(texts)
+        texts.extend(_series_embedded_phi_texts(series))
+    return format_embedded_phi_texts(texts)
 
 
-def _study_pixel_phi_removed(study: Study) -> bool:
-    return bool(_study_pixel_phi_digest(study))
+def _study_embedded_phi_removed(study: Study) -> bool:
+    return bool(_study_embedded_phi_digest(study))
 
 
 def _phi_series_index_record(series: Series) -> PHI_SeriesIndexRecord:
-    digest = _series_pixel_phi_digest(series)
+    digest = _series_embedded_phi_digest(series)
     return PHI_SeriesIndexRecord(
         anon_series_uid=series.anon_series_uid,
         modality=str(series.modality or ""),
@@ -435,8 +425,8 @@ def _phi_series_index_record(series: Series) -> PHI_SeriesIndexRecord:
         harmonized_description=str(series.harmonized_description or ""),
         instance_count=len(series.instances or []),
         face_blur_algorithm=str(series.face_blur_algorithm_applied or ""),
-        pixel_phi_removed=bool(digest),
-        pixel_phi=digest,
+        embedded_phi_removed=bool(digest),
+        embedded_phi=digest,
     )
 
 
@@ -471,8 +461,8 @@ def _phi_index_record_from_orm(phi: PHI, study: Study) -> PHI_IndexRecord:
         num_instances=num_instances,
         harmonize=_study_index_harmonized(study),
         face_blurred=_study_face_blur_label(study),
-        pixel_phi_removed=_study_pixel_phi_removed(study),
-        pixel_phi=_study_pixel_phi_digest(study),
+        embedded_phi_removed=_study_embedded_phi_removed(study),
+        embedded_phi=_study_embedded_phi_digest(study),
         series=series_records,
     )
 

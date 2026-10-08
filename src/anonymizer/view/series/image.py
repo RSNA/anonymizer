@@ -21,6 +21,8 @@ from anonymizer.utils.translate import _
 from anonymizer.utils.windowing import apply_windowing
 from anonymizer.view.common.ctk_safe import dispose_photo_image
 from anonymizer.view.common.tk_mouse import pointer_buttons
+from anonymizer.view.common.tooltip import MotionTooltipController
+from anonymizer.view.reports.entity_colors import entity_color_bgr, entity_label_display
 from anonymizer.view.series.anatomy_overlay import (
     bgr_to_hex,
     latch_button_width_px,
@@ -55,7 +57,6 @@ class ImageViewer(ctk.CTkFrame):
     SEGMENTATION_BUTTONS_PER_ROW = 2
     SEGMENTATION_SCROLL_MIN_HEIGHT = 80
     SEGMENTATION_SCROLL_MAX_HEIGHT = 140
-    SMALL_JUMP_PERCENTAGE = 0.01  # 1% of the total images
     LARGE_JUMP_PERCENTAGE = 0.10  # 10% of the total images
     MAX_SCREEN_PERCENTAGE = 0.7  # area of current screen available for displaying image
     TEXT_BOX_COLOR_BGR = (0, 255, 0)  # green for OpenCV BGR overlays
@@ -94,6 +95,7 @@ class ImageViewer(ctk.CTkFrame):
         on_annotate_import_segments: Callable[[], None] | None = None,
         on_annotate_target_changed: Callable[[str | None], None] | None = None,
         on_annotate_requires_target: Callable[[], None] | None = None,
+        on_exclude_rects_changed: Callable[[], None] | None = None,
         enable_interactive_editing: bool = True,
         show_playback_controls: bool = True,
         show_data_panel: bool = True,
@@ -125,6 +127,7 @@ class ImageViewer(ctk.CTkFrame):
         self.on_annotate_import_segments = on_annotate_import_segments
         self.on_annotate_target_changed = on_annotate_target_changed
         self.on_annotate_requires_target = on_annotate_requires_target
+        self.on_exclude_rects_changed = on_exclude_rects_changed
         self.enable_interactive_editing = enable_interactive_editing
         self.show_playback_controls = show_playback_controls
         self.show_data_panel = show_data_panel
@@ -163,6 +166,7 @@ class ImageViewer(ctk.CTkFrame):
         self._painting: bool = False
         self._last_paint_xy: tuple[int, int] | None = None
         self._brush_cursor_id: int | None = None
+        self._ocr_hover_tip: MotionTooltipController | None = None
         self._brush_size_label: ctk.CTkLabel | None = None
         self._view_mode_btn: ctk.CTkButton | None = None
         self._annotate_mode_btn: ctk.CTkButton | None = None
@@ -247,7 +251,6 @@ class ImageViewer(ctk.CTkFrame):
         self._update_derived_alpha_beta()  # Calculate initial derived values
 
         # --- Calculate Jump Amounts Dynamically ---
-        self.small_jump: int = max(1, int(self.num_images * self.SMALL_JUMP_PERCENTAGE))  # Ensure at least 1
         self.large_jump: int = max(1, int(self.num_images * self.LARGE_JUMP_PERCENTAGE))
 
         # --- Load Button Icons ---
@@ -495,6 +498,13 @@ class ImageViewer(ctk.CTkFrame):
             self.canvas.bind("<B1-Motion>", self._on_left_drag)  # Left-click drag
             self.canvas.bind("<ButtonRelease-1>", self._on_left_release)  # Left-click release
             self.canvas.bind("<Motion>", self._on_canvas_motion)
+            self._ocr_hover_tip = MotionTooltipController(
+                self.canvas,
+                self._ocr_hover_text,
+                parent=self,
+                debounce_ms=200,
+            )
+            self._ocr_hover_tip.bind()
         # Middle = pan; right = WW/WL (logical; Tk 8 Aqua swaps physical 2/3).
         ptr = pointer_buttons(self)
         self.canvas.bind(ptr.pan_press, self._start_pan)
@@ -1194,6 +1204,27 @@ class ImageViewer(ctk.CTkFrame):
             outline="cyan",
             width=1,
         )
+
+    def _ocr_hover_text(self, event: tk.Event) -> str | None:
+        """Tooltip for OCR boxes: text plus NER class when labeled."""
+        if not self._interaction_allowed() or not self.enable_interactive_editing:
+            return None
+        if self._annotate_mode == "annotate" or self.playing or self.drawing_rect:
+            return None
+        if LayerType.TEXT not in self.active_layers:
+            return None
+        frame = self.current_image_index
+        if frame not in self.overlay_data:
+            return None
+        texts = self.overlay_data[frame].ocr_texts
+        ndx = self._find_hit_object(int(event.x), int(event.y), texts)
+        if ndx is None:
+            return None
+        hit = texts[ndx]
+        label = (hit.phi_label or "").strip()
+        if label:
+            return f"{hit.text} — {entity_label_display(label)}"
+        return hit.text or None
 
     def _on_canvas_motion(self, event) -> None:
         if self._annotate_mode != "annotate" or self._painting:
@@ -1955,11 +1986,16 @@ class ImageViewer(ctk.CTkFrame):
                     if overlay_data.ocr_texts:
                         for text_data in overlay_data.ocr_texts:
                             x1, y1, x2, y2 = text_data.get_bounding_box()
+                            box_color = (
+                                entity_color_bgr(text_data.phi_label)
+                                if text_data.phi_label
+                                else self.TEXT_BOX_COLOR_BGR
+                            )
                             cv2.rectangle(
                                 combined_overlay,
                                 (x1, y1),
                                 (x2, y2),
-                                self.TEXT_BOX_COLOR_BGR,
+                                box_color,
                                 2,
                             )
 
@@ -2250,10 +2286,10 @@ class ImageViewer(ctk.CTkFrame):
         self.change_image(self.current_image_index - self.large_jump)
 
     def change_image_up(self, event):
-        self.change_image(self.current_image_index + self.small_jump)
+        self.change_image(self.current_image_index + 1)
 
     def change_image_down(self, event):
-        self.change_image(self.current_image_index - self.small_jump)
+        self.change_image(self.current_image_index - 1)
 
     def update_scrollbar(self):
         if not hasattr(self, "scrollbar") or self.num_images <= 1:
@@ -2430,6 +2466,8 @@ class ImageViewer(ctk.CTkFrame):
             if self.propagate_overlays:
                 self.clear_cache()
             self.refresh_current_image()
+            if self.on_exclude_rects_changed is not None:
+                self.on_exclude_rects_changed()
             return
 
         # Check User Rectangle Overlay:

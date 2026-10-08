@@ -1,0 +1,45 @@
+# Terms / phrases that must not be scored as NAME (case-insensitive).
+# Modality + body-part and common protocol language.
+mr breast
+mri breast
+ct chest
+ct abdomen
+ct pelvis
+ct chest abdomen pelvis
+portable ap chest
+portable chest
+ap chest
+pa chest
+bilateral
+with and without contrast
+without contrast
+with contrast
+t1
+t2
+flair
+dwi
+mip
+mpr
+ax
+cor
+sag
+axial
+coronal
+sagittal
+breast
+chest
+abdomen
+pelvis
+brain
+spine
+knee
+shoulder
+ankle
+wrist
+head
+neck
+protocol
+series
+localizer
+scout
+topogram

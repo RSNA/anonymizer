@@ -1,0 +1,2 @@
+{"id":"smoke_phone","text":"Call (404) 555-0162","spans":[{"label":"PHONE","start":5,"end":19}]}
+{"id":"smoke_email","text":"email a.b@example.org please","spans":[{"label":"EMAIL","start":6,"end":21}]}

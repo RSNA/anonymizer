@@ -9,7 +9,7 @@ import numpy as np
 import pydicom
 from pydicom.data import get_testdata_file
 
-from anonymizer.controller.ai.remove_pixel_phi import ocr_image_for_frame
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import ocr_image_for_frame
 from anonymizer.controller.runner import (
     Algorithm,
     OcrEditContext,

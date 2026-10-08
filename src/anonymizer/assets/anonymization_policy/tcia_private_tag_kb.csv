@@ -1,0 +1,7 @@
+group_element,creator,action,note
+0019XX10,SIEMENS,k,Keep sample Siemens private
+0019XX11,SIEMENS,d,Remove sample Siemens private
+0029XX10,SIEMENS CSA HEADER,h,UID-hash sample
+0009XX10,GEMS_IDEN_01,o,Date-offset sample aligned to StudyDate
+0009XX11,GEMS_IDEN_01,oi,Date-offset sample (increment)
+GGGG00XX,SIEMENS,k,Private creator block keep

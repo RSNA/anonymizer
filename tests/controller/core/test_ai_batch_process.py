@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydicom.dataset import Dataset
 
+from anonymizer.controller.runner import OcrRemoveMode
 from anonymizer.controller.ai.batch_process import (
     AiBatchAlgorithm,
     AiBatchOutcome,
@@ -24,11 +25,13 @@ from anonymizer.controller.ai.batch_process import (
     format_ai_batch_phase_label,
     format_ai_batch_status_line,
     format_batch_algorithm_result_line,
+    format_batch_exclude_areas_log_lines,
     format_batch_outcome_subline,
     format_batch_phase_banner,
     format_batch_series_header,
     format_batch_step_subline,
     format_batch_workflow_log_line,
+    format_exclude_areas_modality_detail,
     format_modality_whitelist_preview,
     format_remove_pixel_phi_instance_detail,
     format_remove_pixel_phi_series_message,
@@ -48,7 +51,7 @@ from anonymizer.controller.ai.blur_face import (
     FaceBlurMode,
     face_blur_gate_message,
 )
-from anonymizer.controller.ai.remove_pixel_phi import (
+from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     OcrWhitelistMatchMode,
     OcrWhitelistMatchSettings,
     PixelPhiRemovalMode,
@@ -66,7 +69,7 @@ def _batch_test_dataset(*, modality: str = "CT") -> Dataset:
 
 def _pending_anon_model() -> MagicMock:
     model = MagicMock()
-    model.series_pixel_phi_scanned.return_value = False
+    model.series_embedded_phi_scanned.return_value = False
     model.series_is_harmonized.return_value = False
     model.series_has_face_blur.return_value = False
     return model
@@ -268,8 +271,12 @@ def test_format_batch_algorithm_result_line_ok() -> None:
     )
     assert 'Study 1/1 · Series 1/1 · "Chest"\n' in line
     assert "  Applied:" in line
-    assert "Modified 28/188" in line
-    assert "JOHN DOE" in line
+    assert "PHI removed" in line
+    assert "28/188 instance(s)" in line
+    assert "2 PHI removed" in line
+    assert "text region" not in line
+    assert "JOHN DOE" not in line
+    assert "MRN 12345" not in line
     assert "Remove Burnt-in Annotation" not in line
     assert "hidden_uid" not in line
 
@@ -320,18 +327,24 @@ def test_format_batch_step_subline_indents() -> None:
     assert format_batch_step_subline("Loading anatomy analysis models…") == ("  Loading anatomy analysis models…")
 
 
-def test_format_remove_pixel_phi_series_message_lists_unique_texts() -> None:
+def test_format_remove_pixel_phi_series_message_uses_counts_not_phi_text() -> None:
     message = format_remove_pixel_phi_series_message(
         modified_count=2,
         total=5,
         texts_removed=["Name", "Name", "ID", "ID"],
         pixels_changed=1234,
         removal_mode=PixelPhiRemovalMode.BLACKOUT,
+        ocr_remove_mode=OcrRemoveMode.PHI_ONLY,
     )
-    assert "Modified 2/5" in message
-    assert '"Name"' in message
-    assert '"ID"' in message
-    assert "1,234 pixels blacked out" in message
+    assert message.startswith("PHI removed")
+    assert "2/5 instance(s)" in message
+    assert "Remove PHI" in message
+    assert "Black out text" in message
+    assert "2 PHI removed" in message
+    assert "text region" not in message
+    assert "pixels" not in message
+    assert "Name" not in message
+    assert "ID" not in message
 
 
 def test_format_remove_pixel_phi_instance_detail_inpainted() -> None:
@@ -341,10 +354,16 @@ def test_format_remove_pixel_phi_instance_detail_inpainted() -> None:
         modified=True,
         texts=["PATIENT", "DOB 1/1/80"],
         removal_mode=PixelPhiRemovalMode.INPAINT,
+        ocr_remove_mode=OcrRemoveMode.NON_WHITELISTED,
     )
     assert "Instance 12/188" in detail
-    assert "blended" in detail.lower()
-    assert "PATIENT" in detail
+    assert "Remove Text" in detail
+    assert "Blend into background" in detail
+    assert "2 PHI removed" in detail
+    assert "text region" not in detail
+    assert "pixels" not in detail
+    assert "PATIENT" not in detail
+    assert "DOB" not in detail
 
 
 def test_format_remove_pixel_phi_instance_detail_no_text() -> None:
@@ -735,7 +754,7 @@ def test_ai_batch_process_skips_pixel_phi_phase_when_all_scanned(
     images_dir, studies = images_layout
     series_path = images_dir / "anon_pt" / "anon_study" / "series_a"
     anon_model = _pending_anon_model()
-    anon_model.series_pixel_phi_scanned.return_value = True
+    anon_model.series_embedded_phi_scanned.return_value = True
 
     with (
         patch(
@@ -998,8 +1017,8 @@ def test_ai_batch_process_forwards_project_storage_dir_for_pixel_phi(
     assert mock_remove.call_args.kwargs["project_dir"] == storage_dir
 
 
-@patch("anonymizer.controller.ai.remove_pixel_phi.load_modality_whitelist", return_value=["CUSTOMTERM"])
-@patch("anonymizer.controller.ai.remove_pixel_phi._easyocr_readtext")
+@patch("anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi.load_modality_whitelist", return_value=["CUSTOMTERM"])
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text._easyocr_readtext")
 def test_apply_remove_pixel_phi_series_uses_saved_modality_whitelist(
     mock_readtext: MagicMock,
     mock_load_whitelist: MagicMock,
@@ -1035,13 +1054,15 @@ def test_apply_remove_pixel_phi_series_uses_saved_modality_whitelist(
     mock_load_whitelist.assert_called_once_with(storage_dir, "CR")
     assert outcome.status == "ok"
     assert outcome.algorithm is AiBatchAlgorithm.REMOVE_PIXEL_PHI
-    assert "SMITH" in outcome.message
+    assert "1 PHI removed" in outcome.message
+    assert "SMITH" not in outcome.message
     assert "CUSTOMTERM" not in outcome.message
 
 
 def test_whitelist_for_batch_ocr() -> None:
     assert whitelist_for_batch_ocr(use_modality_whitelist=True) is None
     assert whitelist_for_batch_ocr(use_modality_whitelist=False) == []
+    assert whitelist_for_batch_ocr(ocr_remove_mode=OcrRemoveMode.PHI_ONLY) == []
 
 
 @patch("anonymizer.controller.ai.batch_process._load_series_dataset")
@@ -1080,6 +1101,36 @@ def test_format_modality_whitelist_preview_groups_by_modality() -> None:
     assert "Match strictness" in text
     assert "US (0" in text
     assert "(empty)" in text
+
+
+def test_format_exclude_areas_modality_detail_count_only() -> None:
+    detail = format_exclude_areas_modality_detail(
+        "us",
+        [{"x1": 0.75, "y1": 0.69, "x2": 1.0, "y2": 1.0}],
+    )
+    assert detail == "US: 1 exclude area"
+    assert "(" not in detail
+
+
+def test_format_batch_exclude_areas_log_lines_lists_saved_modalities(tmp_path: Path) -> None:
+    from anonymizer.utils.storage import save_project_exclude_rects
+
+    save_project_exclude_rects(
+        tmp_path,
+        "US",
+        [{"x1": 0.1, "y1": 0.2, "x2": 0.3, "y2": 0.4}],
+    )
+    lines = format_batch_exclude_areas_log_lines(tmp_path, ["US", "CR"])
+    assert lines[0] == "Exclude areas enabled"
+    assert "US: 1 exclude area" in lines
+    assert not any("(" in line and "-" in line for line in lines)
+    assert not any(line.startswith("CR:") for line in lines)
+
+
+def test_format_batch_exclude_areas_log_lines_when_none_saved(tmp_path: Path) -> None:
+    lines = format_batch_exclude_areas_log_lines(tmp_path, ["US"])
+    assert lines[0] == "Exclude areas enabled"
+    assert "No saved exclude areas" in lines[1]
 
 
 @patch("anonymizer.controller.ai.batch_process.remove_pixel_phi", return_value=(False, [], 0))
@@ -1124,6 +1175,45 @@ def test_apply_remove_pixel_phi_series_whitelist_disabled_passes_empty_list(
     )
 
     assert mock_remove.call_args.kwargs["whitelist"] == []
+
+
+@patch("anonymizer.controller.ai.batch_process.remove_pixel_phi", return_value=(False, [], 0))
+@patch("anonymizer.controller.ai.batch_process.stackable_dicom_paths")
+@patch("anonymizer.controller.ai.batch_process._load_series_dataset")
+def test_apply_remove_pixel_phi_series_phi_only_and_named_zones(
+    mock_load: MagicMock,
+    mock_stackable: MagicMock,
+    mock_remove: MagicMock,
+    tmp_path: Path,
+) -> None:
+    from anonymizer.utils.storage import save_project_exclude_rects
+
+    ds = _batch_test_dataset(modality="US")
+    mock_load.return_value = ds
+    mock_stackable.return_value = [Path("/tmp/instance.dcm")]
+    save_project_exclude_rects(
+        tmp_path,
+        "US",
+        [{"x1": 0.75, "y1": 0.69, "x2": 1.0, "y2": 1.0}],
+    )
+    details: list[str] = []
+
+    _apply_remove_pixel_phi_series(
+        Path("/tmp/series"),
+        anon_model=_pending_anon_model(),
+        ocr_reader=MagicMock(),
+        ocr_remove_mode=OcrRemoveMode.PHI_ONLY,
+        ocr_use_exclude_areas=True,
+        project_dir=tmp_path,
+        on_log_detail=details.append,
+    )
+
+    assert mock_remove.call_args.kwargs["whitelist"] == []
+    assert mock_remove.call_args.kwargs["apply_phi_ner_filter"] is True
+    assert mock_remove.call_args.kwargs["use_exclude_areas"] is True
+    assert details
+    assert details[0].startswith("US: 1 ")
+    assert "(0.75,0.69)-(1.00,1.00)" in details[0]
 
 
 @patch("anonymizer.controller.ai.batch_process._load_harmonize_series_dataset")

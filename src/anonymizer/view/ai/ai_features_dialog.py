@@ -7,6 +7,11 @@ from collections.abc import Callable
 import customtkinter as ctk
 
 from anonymizer.utils.translate import _
+from anonymizer.view.ai.features.look import (
+    FEATURE_ACTION_BUTTON_WIDTH,
+    FEATURE_DIALOG_PAD,
+    FEATURE_INTRO_WRAP,
+)
 from anonymizer.view.ai.features.panel import AiFeaturesPanel
 from anonymizer.view.common.app_window import AppToplevel
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
@@ -32,15 +37,15 @@ class AiFeaturesSetupDialog(AppToplevel):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.bind("<Escape>", lambda _event: self._on_close())
 
-        pad = 12
+        pad = FEATURE_DIALOG_PAD
 
         frame = ctk.CTkFrame(self)
         frame.grid(row=0, column=0, padx=pad, pady=pad, sticky="nw")
         frame.columnconfigure(0, weight=1)
 
         intro = _("Download models and choose Harmonize resolution for this workstation.")
-        ctk.CTkLabel(frame, text=intro, wraplength=480, justify="left").grid(
-            row=0, column=0, padx=pad, pady=(pad, 4), sticky="nw"
+        ctk.CTkLabel(frame, text=intro, wraplength=FEATURE_INTRO_WRAP, justify="left").grid(
+            row=0, column=0, padx=pad, pady=(pad, pad), sticky="nw"
         )
 
         self._panel = AiFeaturesPanel(
@@ -50,7 +55,9 @@ class AiFeaturesSetupDialog(AppToplevel):
         )
         self._panel.grid(row=1, column=0, padx=pad, pady=(0, 4), sticky="nw")
 
-        self._close_button = ctk.CTkButton(frame, text=_("Close"), width=80, command=self._on_close)
+        self._close_button = ctk.CTkButton(
+            frame, text=_("Close"), width=FEATURE_ACTION_BUTTON_WIDTH, command=self._on_close
+        )
         self._close_button.grid(row=2, column=0, padx=pad, pady=(0, pad), sticky="e")
 
         self._fit_to_content()
@@ -58,7 +65,7 @@ class AiFeaturesSetupDialog(AppToplevel):
         self.wait_visibility()
         self.grab_set()
 
-    _MIN_WIDTH = 480
+    _MIN_WIDTH = FEATURE_INTRO_WRAP
 
     def _schedule_fit_to_content(self) -> None:
         if self._closing:

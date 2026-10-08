@@ -174,9 +174,9 @@ def export_series_view_docs_shot(series_view: Any, dest: Path) -> Path:
     except Exception:
         has_exclude = False
     if has_exclude or not ordered:
-        status = "Detect Text | Blackout Area | Exclude Area"
+        status = "Detect Pixel PHI | Blackout Area | Exclude Area"
         if has_exclude:
-            status = "Exclude Area active · Detect Text complete"
+            status = "Exclude Area active · Detect Pixel PHI complete"
     else:
         status = "Pixel PHI: None removed | Harmonized: Brain Ax EarlyArt | Face blur: None"
     draw.text((pad, canvas_h - 34), status, fill=_TEXT, font=font_sm)

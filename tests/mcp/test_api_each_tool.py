@@ -241,7 +241,7 @@ def test_api_remove_pixel_phi_ok_mocked():
         ),
         patch.object(
             SESSION.controller.anonymizer.model,
-            "series_pixel_phi_scanned",
+            "series_embedded_phi_scanned",
             return_value=True,
         ),
     ):
