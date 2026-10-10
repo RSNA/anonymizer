@@ -59,8 +59,21 @@ def projection_study_uids(phi_records: list[PHI_IndexRecord]) -> tuple[str, ...]
     return tuple(sorted(record.anon_study_uid for record in phi_records))
 
 
+def study_has_projection_series(phi_record: PHI_IndexRecord) -> bool:
+    """True when the study has at least one non-report series for Projection View."""
+    from anonymizer.utils.modalities import series_supports_projection_view
+
+    series = getattr(phi_record, "series", None) or []
+    if series:
+        return any(series_supports_projection_view(s.modality) for s in series)
+    # No nested series metadata — ProjectionView may still find imaging dirs on disk.
+    return True
+
+
 def series_paths_for_phi_records(base_dir: Path, phi_records: list[PHI_IndexRecord]) -> list[Path]:
-    """Resolve on-disk series directories for the given study index records."""
+    """Resolve on-disk series directories for Projection View (skips SR/DOC/PDF)."""
+    from anonymizer.utils.modalities import series_supports_projection_view
+
     series_paths: list[Path] = []
     for phi_record in phi_records:
         patient_dir = base_dir / Path(phi_record.anon_patient_id)
@@ -68,6 +81,18 @@ def series_paths_for_phi_records(base_dir: Path, phi_records: list[PHI_IndexReco
             continue
         study_dir = patient_dir / phi_record.anon_study_uid
         if not study_dir.is_dir():
+            continue
+        indexed = list(getattr(phi_record, "series", None) or [])
+        if indexed:
+            for series in sorted(
+                indexed,
+                key=lambda item: (str(item.modality or ""), str(item.anon_series_uid or "")),
+            ):
+                if not series_supports_projection_view(series.modality):
+                    continue
+                series_path = study_dir / series.anon_series_uid
+                if series_path.is_dir():
+                    series_paths.append(series_path)
             continue
         for series_path in sorted(study_dir.iterdir(), key=lambda path: path.name):
             if series_path.is_dir():

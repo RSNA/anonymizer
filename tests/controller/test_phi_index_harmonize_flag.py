@@ -42,3 +42,17 @@ def test_study_index_harmonized_mr() -> None:
 def test_study_index_harmonized_sc_only_false() -> None:
     study = SimpleNamespace(series=[_series("SC", "whatever")])
     assert not _study_index_harmonized(study)
+
+
+def test_study_index_harmonized_report_only_false() -> None:
+    """SR/DOC/PDF alone do not turn the study row green (imaging gate only)."""
+    study = SimpleNamespace(series=[_series("SR", "Radiation Dose Information")])
+    assert not _study_index_harmonized(study)
+
+
+def test_study_index_harmonized_planar_plus_doc_ignores_doc() -> None:
+    """DOC siblings must not block planar study green."""
+    study = SimpleNamespace(
+        series=[_series("CR", "Chest PA"), _series("DOC", None)],
+    )
+    assert _study_index_harmonized(study)

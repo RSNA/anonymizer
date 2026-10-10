@@ -28,7 +28,11 @@ from anonymizer.view.common.fonts import AppFonts, char_width_px
 from anonymizer.view.common.tooltip import MotionTooltipController, bind_hover_tooltip
 from anonymizer.view.project.delete_studies_dialog import DeleteStudiesDialog
 from anonymizer.view.reports.open_workspace import open_series_workspace
-from anonymizer.view.series.projection import ProjectionView, projection_study_uids
+from anonymizer.view.series.projection import (
+    ProjectionView,
+    projection_study_uids,
+    study_has_projection_series,
+)
 from anonymizer.view.shell.dashboard import Dashboard
 
 logger = logging.getLogger(__name__)
@@ -382,18 +386,15 @@ class DatasetView(AppToplevel):
         return any_ai_batch_feature_allowed()
 
     def _configure_tree_tags_from_theme(self) -> None:
-        """Tree row tags from RSNA ThemeManager only — no hardcoded lime/gray/black."""
+        """Harmonized = limegreen (same as Export / Query); series text from theme."""
         # AppToplevel is not a CTk widget; Dashboard (parent) owns appearance-mode resolve.
         apply = self._parent._apply_appearance_mode
         theme = ctk.ThemeManager.theme
         tv = theme.get("Treeview") or {}
         label_fg = theme["CTkLabel"]["text_color"]
         text_fg = apply(tv.get("text_color", label_fg))
-        selected_fg = apply(tv.get("selected_color", theme["CTkButton"]["text_color"]))
-        selected_bg = apply(tv.get("selected_bg_color", theme["CTkButton"]["fg_color"]))
-        # Harmonized rows: same selected palette as modality/SOP Treeviews.
-        self._tree.tag_configure("green", background=str(selected_bg), foreground=str(selected_fg))
-        # Series children: same body text as study rows.
+        # Match Export / Query Retrieve — not Treeview selected_bg (that reads as blue).
+        self._tree.tag_configure("green", background="limegreen", foreground="white")
         self._tree.tag_configure("series", foreground=str(text_fg))
 
     def _on_tree_select(self, _event=None) -> None:
@@ -629,9 +630,11 @@ class DatasetView(AppToplevel):
         start_in_compose: bool = False,
         compose_full_vocab: bool = False,
         blank_compose: bool = False,
+        catalog_kind: str = "radlex",
     ) -> None:
         from anonymizer.controller.ai.harmonize import apply_series_descriptions
         from anonymizer.view.ai.set_description_dialog import (
+            CatalogKind,
             ExpandCatalogLoader,
             RadLexComposeSpec,
             show_set_description_dialog,
@@ -644,6 +647,7 @@ class DatasetView(AppToplevel):
         loader: ExpandCatalogLoader | None = expand_loader
         spec: RadLexComposeSpec | None = compose_spec
         choice_list = list(choices) if choices else []
+        kind: CatalogKind = "series" if catalog_kind == "series" else "radlex"
         result = show_set_description_dialog(
             self,
             title=title,
@@ -651,7 +655,7 @@ class DatasetView(AppToplevel):
             choices=choice_list,
             choice_meta={label: None for label in choice_list},
             initial=initial if initial in choice_list else (choice_list[0] if choice_list else ""),
-            catalog_kind="radlex",
+            catalog_kind=kind,
             modality=modality,
             expand_loader=loader,
             showing_full_catalog=showing_full_catalog,
@@ -1031,7 +1035,16 @@ class DatasetView(AppToplevel):
             logger.error("No Studies selected")
             return
 
-        study_uids = projection_study_uids(phi_records)
+        projectable = [r for r in phi_records if study_has_projection_series(r)]
+        if not projectable:
+            messagebox.showinfo(
+                title=_("Projection View"),
+                message=_("No imaging series to project for the selected studies."),
+                parent=self,
+            )
+            return
+
+        study_uids = projection_study_uids(projectable)
         existing = self._projection_view_for(study_uids)
         if existing is not None:
             focus_app_window(existing)
@@ -1046,7 +1059,7 @@ class DatasetView(AppToplevel):
                     self,
                     controller=self._controller,
                     base_dir=self._controller.model.images_dir(),
-                    phi_records=phi_records,
+                    phi_records=projectable,
                     fonts=self._fonts,
                 )
             except Exception as e:
@@ -1181,9 +1194,15 @@ class DatasetView(AppToplevel):
             if pair is None:
                 return None
             from anonymizer.controller.ai.harmonize import series_description_cohort_key
+            from anonymizer.utils.modalities import is_report_harmonize_modality
 
             if series_description_cohort_key(pair[1].modality) is None:
                 return None
+            if is_report_harmonize_modality(pair[1].modality):
+                return _(
+                    "Double-click description to set series description "
+                    "· Right-click opens Report View"
+                )
             return _(
                 "Double-click description to choose a RadLex name "
                 "(expand to full catalog if needed) · Right-click opens Series View"
@@ -1200,14 +1219,32 @@ class DatasetView(AppToplevel):
             if study_loinc_prefix_for_edit(anon_model, study_uid) is None and not (
                 anon_model.get_study_harmonized_description(study_uid) or ""
             ).strip():
-                # Still allow tooltip when study has a display description / eligible modality.
-                if not (record.modality or "").strip():
+                # PHI_IndexRecord.modality is unused; series modalities live on nested series.
+                if not (record.modalities_display() or "").strip():
                     return None
+            right_click = self._study_right_click_hint(record)
             return _(
                 "Double-click description to choose a LOINC name "
-                "(expand to full catalog if needed) · Right-click opens projections"
-            )
+                "(expand to full catalog if needed) · {right_click}"
+            ).format(right_click=right_click)
         return None
+
+    def _study_right_click_hint(self, record: PHI_IndexRecord) -> str:
+        """Short right-click action text for a study row tooltip."""
+        from anonymizer.utils.modalities import is_report_harmonize_modality
+
+        if study_has_projection_series(record):
+            return _("Right-click opens projections")
+        report_uids = [
+            s.anon_series_uid
+            for s in (record.series or [])
+            if is_report_harmonize_modality(s.modality)
+        ]
+        if len(report_uids) == 1:
+            return _("Right-click opens Report View")
+        if report_uids:
+            return _("Right-click a series to open Report View")
+        return _("Right-click to select")
 
     def _cancel_description_combo_dismiss(self) -> None:
         after_id = self._description_combo_dismiss_after_id
@@ -1425,10 +1462,8 @@ class DatasetView(AppToplevel):
         ).strip():
             from anonymizer.controller.ai.harmonize import series_description_cohort_key
 
-            # Allow edit when study modality is Harmonize-eligible even without series yet.
-            if series_description_cohort_key(record.modality) is None and not any(
-                series_description_cohort_key(s.modality) for s in (record.series or [])
-            ):
+            # Allow edit when any child series is Harmonize-eligible (incl. SR/DOC/PDF).
+            if not any(series_description_cohort_key(s.modality) for s in (record.series or [])):
                 return
 
         current = (anon_model.get_study_harmonized_description(anon_study_uid) or "").strip()
@@ -1548,8 +1583,10 @@ class DatasetView(AppToplevel):
         if pair is None:
             return
         study, series = pair
-        if series_description_cohort_key(series.modality) is None:
+        cohort = series_description_cohort_key(series.modality)
+        if cohort is None:
             return
+        is_report = cohort == "report"
         harmonized = (series.harmonized_description or "").strip()
         original = (series.description or "").strip()
         current = harmonized or original
@@ -1581,32 +1618,33 @@ class DatasetView(AppToplevel):
                 series_dirs.append(series_path_for_record(images_dir, st, ser))
             unharmonized = bool(unharm_flags) and all(unharm_flags)
             blank_compose = bool(blank_flags) and all(blank_flags)
+            # Report series: no RadLex compose — always offer current description text.
             choices = (
-                []
-                if unharmonized
-                else series_description_group_choices(
+                series_description_group_choices(
                     modalities=modalities,
                     current_descriptions=descriptions,
                     anatomy_hint=study_hint,
                     full_catalog=False,
                 )
+                if is_report or not unharmonized
+                else []
             )
         else:
             unharmonized = not harmonized
             blank_compose = unharmonized and not original
             choices = (
-                []
-                if unharmonized
-                else series_description_edit_choices(
+                series_description_edit_choices(
                     modality=series.modality,
                     current_description=current,
                     full_catalog=False,
                     anatomy_hint=study_hint,
                 )
+                if is_report or not unharmonized
+                else []
             )
             series_dirs = [series_path_for_record(images_dir, study, series)]
 
-        if not choices and not unharmonized:
+        if not choices and not (unharmonized and not is_report):
             return
         if any(not path.is_dir() for path in series_dirs):
             messagebox.showerror(
@@ -1619,6 +1657,29 @@ class DatasetView(AppToplevel):
         initial = current if current in choices else (choices[0] if choices else "")
         n = len(series_dirs)
         modality = str(series.modality or "").strip()
+        if is_report:
+            if n > 1:
+                title = _("Set {modality} series description ({n})").format(modality=modality, n=n)
+                hint = _("Applies to all {n} selected {modality} series").format(n=n, modality=modality)
+            else:
+                title = _("Set {modality} series description").format(modality=modality)
+                hint = _("Series description from report Harmonize")
+            self._apply_series_description_dialog(
+                series_dirs=series_dirs,
+                choices=choices or ([current] if current else []),
+                initial=initial or current,
+                title=title,
+                hint=hint,
+                modality=modality,
+                compose_spec=None,
+                showing_full_catalog=False,
+                start_in_compose=False,
+                compose_full_vocab=False,
+                blank_compose=False,
+                catalog_kind="series",
+            )
+            return
+
         if blank_compose:
             if n > 1:
                 title = _("Set {modality} series description ({n})").format(modality=modality, n=n)
@@ -1732,6 +1793,7 @@ class DatasetView(AppToplevel):
         self._tree.selection_set(iid)
         series_uid = parse_series_tree_iid(iid)
         if series_uid is not None:
+            # Imaging → Series View; SR/DOC/PDF → Report View (via open_series_workspace).
             self._open_series_by_uid(series_uid)
             return
         study_uid = parse_study_tree_iid(iid)
@@ -1740,8 +1802,32 @@ class DatasetView(AppToplevel):
         record = self._studies_by_uid.get(study_uid)
         if record is None:
             return
-        # Prefer Projection View for multi-series studies.
-        self._open_projection_view([record])
+        self._open_study_from_right_click(record)
+
+    def _open_study_from_right_click(self, record: PHI_IndexRecord) -> None:
+        """
+        Study right-click: Projection View when imaging series exist; otherwise Report View
+        for a single report-only series. Never open an empty Projection View for SR/DOC/PDF-only.
+        """
+        from anonymizer.utils.modalities import is_report_harmonize_modality
+
+        if study_has_projection_series(record):
+            self._open_projection_view([record])
+            return
+        report_uids = [
+            s.anon_series_uid
+            for s in (record.series or [])
+            if is_report_harmonize_modality(s.modality)
+        ]
+        if len(report_uids) == 1:
+            self._open_series_by_uid(report_uids[0])
+            return
+        if report_uids:
+            messagebox.showinfo(
+                title=_("Report View"),
+                message=_("This study has multiple report series. Expand it and right-click a series."),
+                parent=self,
+            )
 
     def _open_series_by_uid(self, anon_series_uid: str) -> None:
         pair = self._series_by_uid.get(anon_series_uid)

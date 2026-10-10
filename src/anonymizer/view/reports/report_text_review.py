@@ -1,4 +1,4 @@
-"""Report Text Review: Series View–aligned workspace for SR / PDF / pixel reports."""
+"""Report Text Review: Detect / Remove / Save for native SR and Encapsulated PDF."""
 
 from __future__ import annotations
 
@@ -9,27 +9,34 @@ import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import customtkinter as ctk
-from pydicom import dcmread
+from pydicom import Dataset, dcmread
 
-from anonymizer.controller.ai.embedded_phi.ner.replace import (
-    REPLACE_MODE_VALUES,
-    ReplaceMode,
-    replace_mode_display_label,
+from anonymizer.controller.ai.embedded_phi.ner.ner import REPLACE_MODE_VALUES, Entity, ReplaceMode
+from anonymizer.controller.ai.embedded_phi.report.process_report_text import (
+    detect_phi,
+    encapsulated_pdf_bytes,
+    extract_report_text,
+    remove_phi,
+    write_report_text,
 )
-from anonymizer.controller.ai.embedded_phi.report.report_session import DocumentKind, ReportSession
 from anonymizer.controller.ai.feature_availability import (
-    embedded_phi_has_models,
+    harmonize_allowed_for_modality,
     report_text_phi_ready,
 )
 from anonymizer.utils.storage import get_dcm_files
 from anonymizer.utils.translate import _
+from anonymizer.view.ai.harmonize_description import (
+    harmonize_button_visible,
+    harmonize_description_button_label,
+    launch_harmonize_description,
+)
+from anonymizer.view.ai.harmonize_results import HarmonizeBatchOutcome
 from anonymizer.view.common.app_window import AppCTkToplevel, refresh_app_window_menu
 from anonymizer.view.common.ctk_safe import mark_ctk_window_destroyed
 from anonymizer.view.common.navigation import find_dataset_view_parent, return_to_dataset_view
-from anonymizer.view.common.tooltip import bind_hover_tooltip
 from anonymizer.view.reports.pdf_page_view import PdfPageView
 from anonymizer.view.reports.report_canvas import ReportCanvas
 
@@ -39,9 +46,27 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+DocumentKind = Literal["sr", "pdf"]
+
+
+def _replace_mode_display_label(mode: ReplaceMode) -> str:
+    if mode == "synth":
+        return _("Synthetic")
+    return _("Blank")
+
 
 def replace_mode_labels() -> dict[str, ReplaceMode]:
-    return {replace_mode_display_label(mode): mode for mode in REPLACE_MODE_VALUES}
+    return {_replace_mode_display_label(mode): mode for mode in REPLACE_MODE_VALUES}
+
+
+def _display_report_text(text: str) -> str:
+    """Show slot separator as newlines when extract used ``\\x1e`` (embedded newlines)."""
+    from anonymizer.controller.ai.embedded_phi.report.process_report_text import _SLOT_SEP
+
+    body = str(text or "")
+    if _SLOT_SEP in body and _SLOT_SEP != "\n":
+        return body.replace(_SLOT_SEP, "\n")
+    return body
 
 
 def detect_phi_button_label() -> str:
@@ -55,7 +80,7 @@ def remove_phi_button_label(mode: ReplaceMode) -> str:
 
 
 class ReportTextReview(AppCTkToplevel):
-    """Detect → zones → Remove (Blank|Synthetic) → Save."""
+    """Detect → Remove (Blank|Synthetic) → Save; text side panel with entity highlights."""
 
     PAD = 10
     BUTTON_WIDTH = 140
@@ -77,21 +102,32 @@ class ReportTextReview(AppCTkToplevel):
         self._fonts = fonts
         self._controller = controller
         self._series_path = Path(series_path)
+        self._document_kind: DocumentKind = document_kind
         self._destroyed = False
         self._detecting = False
         self._detect_queue: queue.Queue[tuple[str, object]] = queue.Queue()
-        self.session = ReportSession(self._series_path, document_kind)
         self._mode_labels = replace_mode_labels()
+
+        self._dcm_path: Path | None = None
+        self._ds: Dataset | None = None
+        self._text = ""
+        self._entities: list[Entity] = []
+        self._excluded_starts: set[int] = set()
+        self._dirty = False
+        self._removed_since_save = False
+        self._removed_phi_texts: list[str] = []
+        self._harmonize_view = None
+
         self.pdf_view: PdfPageView | None = None
-        self.canvas: ReportCanvas | None = None
+        self.text_panel: ReportCanvas | None = None
+        self.harmonize_button: ctk.CTkButton | None = None
 
         self._update_title()
-        self._page_kind = document_kind in {"pdf", "pixel_report"}
+        self._page_kind = document_kind == "pdf"
         self.minsize(720, 520)
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.bind("<Escape>", lambda _event: self._on_cancel())
 
-        # Page reports: hide until sized once (avoids default→resize startup flicker).
         if self._page_kind:
             self.withdraw()
         else:
@@ -101,7 +137,6 @@ class ReportTextReview(AppCTkToplevel):
         self._build_ui()
         self._load_content()
         self._refresh_state()
-        self._set_status(self._initial_status())
         if not self._page_kind:
             self.lift()
 
@@ -121,7 +156,6 @@ class ReportTextReview(AppCTkToplevel):
             return
         aspect = self.pdf_view.first_page_aspect()
         if aspect is None or aspect <= 0:
-            # Disconnect so later Remove/Save previews do not re-enter sizing.
             self.pdf_view._on_pages_ready = None
             self.deiconify()
             self.lift()
@@ -131,30 +165,27 @@ class ReportTextReview(AppCTkToplevel):
             sh = int(self.winfo_screenheight())
         except tk.TclError:
             sw, sh = 1440, 900
-        chrome_w = 2 * self.PAD + 28
+        chrome_w = 2 * self.PAD + 28 + 360  # room for text side panel
         chrome_h = 2 * self.PAD + 120
-        max_w = max(720, int(sw * 0.88) - chrome_w)
+        max_w = max(720, int(sw * 0.92) - chrome_w)
         max_h = max(520, int(sh * 0.92) - chrome_h)
         page_w = min(max_w, int(max_h / aspect))
-        page_w = max(640, page_w)
+        page_w = max(480, page_w)
         page_h = int(page_w * aspect)
         if page_h > max_h:
             page_h = max_h
-            page_w = max(640, int(page_h / aspect))
+            page_w = max(480, int(page_h / aspect))
         self.geometry(f"{page_w + chrome_w}x{page_h + chrome_h}")
         self.pdf_view._suspend_configure_refit = True
         try:
-            # Target width before map so first paint is correct while withdrawn.
             self.pdf_view._display_width = page_w
             self.update_idletasks()
             self.pdf_view._refit()
         finally:
             self.pdf_view._suspend_configure_refit = False
-        # One-shot only — Remove/Save must not re-size the window.
         self.pdf_view._on_pages_ready = None
         self.deiconify()
         self.lift()
-        # Ignore Configure storms right after map (geometry settle).
         self.pdf_view._suspend_configure_refit = True
         self.after(120, self._release_configure_refit)
 
@@ -203,23 +234,19 @@ class ReportTextReview(AppCTkToplevel):
         body = ctk.CTkFrame(self._sv_frame, fg_color="transparent")
         body.grid(row=0, column=0, sticky="nsew", padx=pad, pady=(pad, 0))
         body.grid_rowconfigure(0, weight=1)
-        body.grid_columnconfigure(0, weight=1)
 
-        is_page = self.session.document_kind in {"pdf", "pixel_report"}
-        if is_page:
-            self.pdf_view = PdfPageView(
-                body,
-                on_toggle_hit=self._on_toggle_hit,
-                on_delete_exclude=self._on_delete_exclude,
-                on_pending_rects=self._on_pending_changed,
-                on_pages_ready=self._size_window_to_page,
-            )
-            self.pdf_view.grid(row=0, column=0, sticky="nsew")
+        if self._page_kind:
+            body.grid_columnconfigure(0, weight=3)
+            body.grid_columnconfigure(1, weight=2)
+            self.pdf_view = PdfPageView(body, on_pages_ready=self._size_window_to_page)
+            self.pdf_view.grid(row=0, column=0, sticky="nsew", padx=(0, pad // 2))
+            self.text_panel = ReportCanvas(body, on_toggle=self._on_toggle_entity)
+            self.text_panel.grid(row=0, column=1, sticky="nsew", padx=(pad // 2, 0))
         else:
-            self.canvas = ReportCanvas(body, on_toggle=self._on_toggle_entity)
-            self.canvas.grid(row=0, column=0, sticky="nsew")
+            body.grid_columnconfigure(0, weight=1)
+            self.text_panel = ReportCanvas(body, on_toggle=self._on_toggle_entity)
+            self.text_panel.grid(row=0, column=0, sticky="nsew")
 
-        # Bottom control frame — Series View order
         self.control_frame = ctk.CTkFrame(self._sv_frame)
         self.control_frame.grid(row=1, column=0, sticky="ew", padx=pad, pady=pad)
         self.control_frame.grid_columnconfigure(0, weight=0)
@@ -251,71 +278,62 @@ class ReportTextReview(AppCTkToplevel):
             width=120,
             command=lambda _v: self._refresh_remove_label(),
         )
-        self.mode_menu.grid(row=0, column=2, padx=2, pady=0)
+        self.mode_menu.grid(row=0, column=2, padx=(2, pad), pady=0)
 
-        # Series View: hide Remove + mode until Detect has results.
         self.remove_button.grid_remove()
         self.mode_menu.grid_remove()
 
-        self.blackout_button = ctk.CTkButton(
-            action_group,
-            width=self.BUTTON_WIDTH,
-            text=_("Blackout Area"),
-            command=self._on_blackout,
-        )
-        self.blackout_button.grid(row=0, column=3, padx=2, pady=0)
-        bind_hover_tooltip(
-            self.blackout_button,
-            _(
-                "Fill drawn rectangles with the page background. Draw a rectangle first, then click."
-            ),
-            parent=self,
-        )
-
-        self.exclude_button = ctk.CTkButton(
-            action_group,
-            width=self.BUTTON_WIDTH,
-            text=_("Exclude Area"),
-            command=self._on_exclude,
-        )
-        self.exclude_button.grid(row=0, column=4, padx=(2, pad), pady=0)
-        bind_hover_tooltip(
-            self.exclude_button,
-            _(
-                "Skip drawn rectangles during Detect. Pixels are not changed. "
-                "Draw a rectangle first, then click. Click a dotted outline to delete it."
-            ),
-            parent=self,
-        )
-
-        if not is_page:
-            self.blackout_button.configure(state="disabled")
-            self.exclude_button.configure(state="disabled")
-
         self.status_label = ctk.CTkLabel(self.control_frame, text="", anchor="w", justify="left")
-        self.status_label.grid(row=1, column=0, columnspan=2, padx=pad, pady=(0, pad), sticky="w")
+        self.status_label.grid(row=1, column=0, padx=pad, pady=(0, pad), sticky="w")
 
-        self.save_button = ctk.CTkButton(self.control_frame, width=110, text=_("Save"), command=self._on_save)
-        self.save_button.grid(row=1, column=2, padx=pad, pady=(0, pad), sticky="e")
+        footer_right = ctk.CTkFrame(self.control_frame, fg_color="transparent")
+        footer_right.grid(row=1, column=2, padx=pad, pady=(0, pad), sticky="e")
+        self.harmonize_button = ctk.CTkButton(
+            footer_right,
+            width=160,
+            text=harmonize_description_button_label(),
+            command=self._on_harmonize_description,
+        )
+        self.harmonize_button.grid(row=0, column=0, padx=(0, 2), pady=0, sticky="e")
+        self.harmonize_button.grid_remove()
+
+        self.save_button = ctk.CTkButton(footer_right, width=110, text=_("Save"), command=self._on_save)
+        self.save_button.grid(row=0, column=1, padx=(2, 0), pady=0, sticky="e")
 
     def _load_content(self) -> None:
-        if self.pdf_view is not None and self.session.document_kind == "pdf":
-            data = self.session.pdf_bytes()
-            widths = None
-            self.pdf_view.show_pdf_bytes(data, page_widths=widths)
-        elif self.canvas is not None:
-            self.canvas.show_slots(
-                self.session.slots,
-                empty_message=_("No text found in this series."),
-                show_headers=len(self.session.slots) > 1,
+        paths = get_dcm_files(self._series_path)
+        if not paths:
+            if self.text_panel is not None:
+                self.text_panel.show_text("", empty_message=_("No DICOM files in this series."))
+            return
+        self._dcm_path = paths[0]
+        self._ds = dcmread(self._dcm_path)
+        if self.pdf_view is not None and self._document_kind == "pdf":
+            data = encapsulated_pdf_bytes(self._ds)
+            self.pdf_view.show_pdf_bytes(data)
+        try:
+            text = extract_report_text(self._ds)
+        except ValueError as exc:
+            logger.warning("report view: extract failed: %s", exc)
+            text = ""
+        self._text = text
+        self._entities = []
+        if self.text_panel is not None:
+            self.text_panel.show_text(
+                _display_report_text(text),
+                empty_message=_("No extractable report text found."),
             )
-
-    def _initial_status(self) -> str:
-        if self.session.document_kind == "pdf":
-            return _("PDF loaded. Click Detect PHI.")
-        if self.session.document_kind == "pixel_report":
-            return _("Pixel report loaded. Click Detect PHI.")
-        return _("Report text loaded. Click Detect PHI.")
+        if not str(text or "").strip():
+            logger.warning(
+                "report view: no extractable report text path=%s kind=%s",
+                self._dcm_path,
+                self._document_kind,
+            )
+            self._set_status(_("No extractable report text found."))
+        elif self._document_kind == "pdf":
+            self._set_status(_("PDF loaded. Click Detect PHI."))
+        else:
+            self._set_status(_("Report text loaded. Click Detect PHI."))
 
     def _selected_mode(self) -> ReplaceMode:
         return self._mode_labels.get(self.mode_var.get(), REPLACE_MODE_VALUES[0])
@@ -336,100 +354,117 @@ class ReportTextReview(AppCTkToplevel):
                 with contextlib.suppress(tk.TclError):
                     widget.grid_remove()
 
-    def _sync_overlays(self) -> None:
-        if self.pdf_view is not None:
-            self.pdf_view.set_overlays(
-                self.session.hits,
-                excluded_keys=self.session.excluded_hit_keys,
-                exclude_rects=self.session.exclude_rects,
-                blackout_rects=self.session.blackout_rects,
-                pending=self.session.pending_draw_rects,
-            )
-        if self.canvas is not None:
-            self.canvas.highlight(
-                self.session.scans,
-                lambda key, start: (key, start) in self.session.excluded,
-            )
+    def _active_entities(self) -> list[Entity]:
+        return [e for e in self._entities if e.start not in self._excluded_starts]
+
+    def _sync_highlights(self) -> None:
+        if self.text_panel is None:
+            return
+        self.text_panel.highlight(self._entities, lambda start: start in self._excluded_starts)
+
+    def _anon_series_uid(self) -> str | None:
+        if self._ds is None:
+            return None
+        uid = str(getattr(self._ds, "SeriesInstanceUID", "") or "").strip()
+        return uid or None
+
+    def _harmonize_button_visible(self) -> bool:
+        anon_uid = self._anon_series_uid()
+        already = anon_uid is not None and self._controller.series_is_harmonized(anon_uid)
+        modality = getattr(self._ds, "Modality", None) if self._ds is not None else None
+        return harmonize_button_visible(
+            harmonize_models_ready=harmonize_allowed_for_modality(modality),
+            modality=modality,
+            already_harmonized=already,
+        )
+
+    def _set_harmonize_button_present(self, present: bool) -> None:
+        if self.harmonize_button is None:
+            return
+        try:
+            mapped = bool(self.harmonize_button.winfo_ismapped())
+        except tk.TclError:
+            return
+        if present and not mapped:
+            with contextlib.suppress(tk.TclError):
+                self.harmonize_button.grid()
+                self.harmonize_button.configure(state="normal")
+        elif not present and mapped:
+            with contextlib.suppress(tk.TclError):
+                self.harmonize_button.grid_remove()
 
     def _refresh_state(self) -> None:
-        s = self.session
-        has_detections = bool(s.hits if s.document_kind != "sr" else s.scans)
-        has_active = bool(s.active_hits() if s.document_kind != "sr" else s.active_scans())
-        # Show Remove only after Detect produced hits (Series View parity).
-        show_remove = has_detections and s.can_edit and not self._detecting
+        has_detections = bool(self._entities)
+        has_active = bool(self._active_entities())
+        show_remove = has_detections and self._ds is not None and not self._detecting
         self._set_remove_toolbar_present(show_remove)
         self.detect_button.configure(state="disabled" if self._detecting else "normal")
         if show_remove:
             self.remove_button.configure(state="normal" if has_active else "disabled")
             self.mode_menu.configure(state="normal")
         self.save_button.configure(
-            state="normal" if (s.can_edit and (s.dirty or s.removed_since_save)) else "disabled"
+            state="normal" if (self._ds is not None and (self._dirty or self._removed_since_save)) else "disabled"
         )
+        self._set_harmonize_button_present(self._harmonize_button_visible() and not self._detecting)
         self._refresh_remove_label()
-        self._sync_overlays()
+        self._sync_highlights()
+
+    def _on_series_description_updated(self) -> None:
+        self._update_title()
+        dataset = find_dataset_view_parent(self)
+        if dataset is not None:
+            with contextlib.suppress(tk.TclError):
+                dataset._update_tree_from_phi_index()
+
+    def _on_harmonize_closed(self, _outcome: HarmonizeBatchOutcome) -> None:
+        self._harmonize_view = None
+        if self._destroyed or not self.winfo_exists():
+            return
+        # Reload header attrs (SeriesDescription) after Accept.
+        if self._dcm_path is not None:
+            with contextlib.suppress(Exception):
+                self._ds = dcmread(self._dcm_path, stop_before_pixels=True)
+        self._refresh_state()
+        self._update_title()
+
+    def _on_harmonize_description(self) -> None:
+        if not self._harmonize_button_visible():
+            return
+
+        def _before_open() -> None:
+            self._set_harmonize_button_present(False)
+
+        view = launch_harmonize_description(
+            self,
+            series_path=self._series_path,
+            ds=self._ds,
+            anon_model=self._controller.anonymizer.model,
+            fonts=self._fonts,
+            existing_view=self._harmonize_view,
+            on_series_description_updated=self._on_series_description_updated,
+            on_closed=self._on_harmonize_closed,
+            on_before_open=_before_open,
+        )
+        if view is not None:
+            self._harmonize_view = view
 
     def _set_status(self, text: str) -> None:
         if not self._destroyed:
             self.status_label.configure(text=text)
 
-    def _flush_view_pending(self) -> None:
-        if self.pdf_view is None:
-            return
-        self.session.pending_draw_rects.extend(self.pdf_view.take_pending())
-
-    def _on_pending_changed(self) -> None:
-        self._flush_view_pending()
-        self._sync_overlays()
-
-    def _on_blackout(self) -> None:
-        self._flush_view_pending()
-        n = self.session.commit_blackout_pending()
-        self._sync_overlays()
-        if n:
-            self._set_status(_("Blackout area(s) added") + f": {n}")
-            self._refresh_state()
-        else:
-            self._set_status(_("No blackout area(s) — draw a rectangle first"))
-
-    def _on_exclude(self) -> None:
-        self._flush_view_pending()
-        n = self.session.commit_exclude_pending()
-        self._sync_overlays()
-        if n:
-            self._set_status(_("Exclude area(s) added") + f": {n}")
-        else:
-            self._set_status(_("No exclude area(s) — draw a rectangle first"))
-
-    def _on_delete_exclude(self, x: int, y: int) -> bool:
-        if self.session.remove_exclude_rect_at(x, y):
-            self._sync_overlays()
-            self._set_status(_("Exclude area removed"))
-            return True
-        return False
-
-    def _on_toggle_hit(self, key: str) -> None:
-        self.session.toggle_hit_excluded(key)
-        excluded = key in self.session.excluded_hit_keys
-        self._refresh_state()
-        if excluded:
-            self._set_status(_("Excluded from Remove") + ". " + _("Click again to include."))
-        else:
+    def _on_toggle_entity(self, start: int) -> None:
+        if start in self._excluded_starts:
+            self._excluded_starts.discard(start)
             self._set_status(_("Included for Remove") + ". " + _("Click to exclude."))
-
-    def _on_toggle_entity(self, slot_key: str, start: int) -> None:
-        self.session.toggle_excluded(slot_key, start)
+        else:
+            self._excluded_starts.add(start)
+            self._set_status(_("Excluded from Remove") + ". " + _("Click again to include."))
         self._refresh_state()
 
     def _on_detect(self) -> None:
-        if self._detecting:
+        if self._detecting or self._ds is None:
             return
-        # PDF/SR: NER only. pixel_report: OCR ∧ NER.
-        ready = (
-            embedded_phi_has_models()
-            if self.session.document_kind == "pixel_report"
-            else report_text_phi_ready()
-        )
-        if not ready:
+        if not report_text_phi_ready():
             messagebox.showwarning(
                 _("Embedded PHI"),
                 _("Embedded PHI models are not downloaded. Install them under AI Features."),
@@ -439,13 +474,18 @@ class ReportTextReview(AppCTkToplevel):
         self._detecting = True
         self._refresh_state()
         self._set_status(_("Detecting…"))
-
-        def _progress(msg: str) -> None:
-            self._detect_queue.put(("progress", msg))
+        ds = self._ds
 
         def _worker() -> None:
             try:
-                self._detect_queue.put(("ok", self.session.detect(progress=_progress)))
+                phi_header = None
+                with contextlib.suppress(Exception):
+                    study_uid = str(getattr(ds, "StudyInstanceUID", "") or "")
+                    if study_uid:
+                        phi_header = self._controller.anonymizer.model.get_study_phi_header_by_anon_study_uid(
+                            study_uid
+                        )
+                self._detect_queue.put(("ok", detect_phi(ds, phi_header=phi_header)))
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Report Text Review detect failed")
                 self._detect_queue.put(("error", str(exc)))
@@ -461,58 +501,76 @@ class ReportTextReview(AppCTkToplevel):
         except queue.Empty:
             self.after(self.POLL_MS, self._poll_detect)
             return
-        if kind == "progress":
-            self._set_status(str(payload))
-            self.after(self.POLL_MS, self._poll_detect)
-            return
         self._detecting = False
         if kind == "error":
             self._set_status(_("Detection failed") + f": {payload}")
             self._refresh_state()
             return
+        text, entities = payload  # type: ignore[misc]
+        self._text = text
+        self._entities = list(entities)
+        self._excluded_starts.clear()
+        if self.text_panel is not None:
+            self.text_panel.show_text(
+                _display_report_text(text),
+                empty_message=_("No extractable report text found."),
+            )
         self._refresh_state()
-        excluded = len(self.session.exclude_rects)
-        msg = _("Detection complete. Click a highlight to exclude it from Remove.")
-        if excluded:
-            msg += f" ({excluded} " + _("exclude zone(s)") + ")"
-        self._set_status(msg)
+        if not str(text or "").strip():
+            self._set_status(_("No extractable report text found."))
+        elif not entities:
+            self._set_status(_("No PHI detected."))
+        else:
+            self._set_status(
+                _("Detection complete")
+                + f" ({len(entities)}). "
+                + _("Click a highlight to exclude it from Remove.")
+            )
 
     def _on_remove(self) -> None:
-        mode = self._selected_mode()
-        try:
-            changed = self.session.remove(
-                mode,
-                project_id=str(getattr(self._controller.model, "site_id", "default")),
-            )
-        except RuntimeError as exc:
-            messagebox.showinfo(title=_("Report Text Review"), message=str(exc), parent=self)
+        active = self._active_entities()
+        if not active:
             return
-        if self.canvas is not None:
-            self.canvas.show_slots(
-                self.session.slots,
-                show_headers=len(self.session.slots) > 1,
-            )
-        if self.pdf_view is not None and self.session.document_kind == "pdf":
-            preview = self.session.preview_redacted_pdf()
-            if preview:
-                self.pdf_view.show_pdf_bytes(
-                    preview, notify_ready=False, keep_display_width=True
-                )
-                self.pdf_view.set_overlays([], excluded_keys=set())
+        for ent in active:
+            frag = self._text[ent.start : ent.end]
+            if frag.strip() and frag not in self._removed_phi_texts:
+                self._removed_phi_texts.append(frag)
+        synthetic = self._selected_mode() == "synth"
+        self._text = remove_phi(self._text, active, synthetic=synthetic)
+        self._entities = []
+        self._excluded_starts.clear()
+        self._dirty = True
+        self._removed_since_save = True
+        if self.text_panel is not None:
+            self.text_panel.show_text(self._text)
         self._refresh_state()
-        self._set_status(_("Removed Embedded PHI") + f" ({changed}). " + _("Save to write changes."))
+        self._set_status(_("Removed Embedded PHI") + f" ({len(active)}). " + _("Save to write changes."))
 
     def _on_save(self) -> None:
-        saved = self.session.save(self._controller.anonymizer.model)
-        if self.pdf_view is not None and self.session.document_kind == "pdf":
-            self.pdf_view.show_pdf_bytes(
-                self.session.pdf_bytes(), notify_ready=False, keep_display_width=True
-            )
+        if self._ds is None or self._dcm_path is None:
+            return
+        sr = write_report_text(self._ds, self._text)
+        self._ds.save_as(self._dcm_path, enforce_file_format=True)
+        out_dir = self._series_path.parent / str(sr.SeriesInstanceUID)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        sr_path = out_dir / f"{sr.SOPInstanceUID}.dcm"
+        sr.save_as(sr_path, enforce_file_format=True)
+
+        anon_model = self._controller.anonymizer.model
+        if self._removed_since_save and self._removed_phi_texts:
+            with contextlib.suppress(Exception):
+                anon_model.set_instance_embedded_phi(str(self._ds.SOPInstanceUID), self._removed_phi_texts)
+                anon_model.set_series_embedded_phi_scanned(str(self._ds.SeriesInstanceUID), scanned=True)
+        self._removed_phi_texts.clear()
+        self._removed_since_save = False
+        self._dirty = False
+
+        if self.pdf_view is not None and self._document_kind == "pdf":
+            data = encapsulated_pdf_bytes(self._ds)
+            self.pdf_view.show_pdf_bytes(data, notify_ready=False, keep_display_width=True)
+
         self._refresh_state()
-        note = _("Changes saved")
-        if self.session.document_kind in {"pdf", "pixel_report"} and len(saved) > 1:
-            note += " — " + _("Basic Text SR written for research use")
-        self._set_status(note)
+        self._set_status(_("Changes saved") + " — " + _("Basic Text SR written for research use"))
         dataset = find_dataset_view_parent(self)
         if dataset is not None:
             with contextlib.suppress(tk.TclError):
@@ -529,7 +587,7 @@ class ReportTextReview(AppCTkToplevel):
         super().destroy()
 
     def _on_cancel(self) -> None:
-        if self.session.dirty and not messagebox.askyesno(
+        if self._dirty and not messagebox.askyesno(
             title=_("Report Text Review"),
             message=_("Discard unsaved changes?"),
             parent=self,

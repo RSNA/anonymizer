@@ -17,9 +17,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_TEXT_WORKSPACE_KINDS = frozenset(
-    {SeriesKind.NATIVE_SR, SeriesKind.NATIVE_PDF, SeriesKind.PIXEL_TEXT_REPORT}
-)
+# Native text reports only — pixel/SC “text reports” use Series View + OCR.
+_TEXT_WORKSPACE_KINDS = frozenset({SeriesKind.NATIVE_SR, SeriesKind.NATIVE_PDF})
 
 
 def workspace_kind_for_series(series_path: Path, *, modality: str | None = None) -> SeriesKind:
@@ -38,20 +37,15 @@ def open_series_workspace(
     """
     Open the workspace for ``series_path``.
 
-    * Imaging / other pixel → Series View.
-    * Native SR / Encapsulated PDF / SC pixel text reports → Report Text Review.
+    * Imaging / other pixel / SC text-like series → Series View (OCR + NER).
+    * Native SR / Encapsulated PDF → Report Text Review (text-layer NER only).
     """
     kind = classify_series(series_path, modality=modality)
     logger.info("open_series_workspace kind=%s path=%s", kind.value, series_path)
     if kind in _TEXT_WORKSPACE_KINDS:
         from anonymizer.view.reports.report_text_review import show_report_text_review
 
-        if kind is SeriesKind.NATIVE_SR:
-            document_kind = "sr"
-        elif kind is SeriesKind.NATIVE_PDF:
-            document_kind = "pdf"
-        else:
-            document_kind = "pixel_report"
+        document_kind = "sr" if kind is SeriesKind.NATIVE_SR else "pdf"
         return show_report_text_review(
             parent,
             controller=controller,

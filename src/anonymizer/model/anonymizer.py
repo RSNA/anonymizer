@@ -198,6 +198,7 @@ class StudyPhiHeader:
     study_date: str = ""
     accession_number: str = ""
     study_description: str = ""
+    patient_birth_date: str = ""
 
 
 class Totals(NamedTuple):
@@ -746,6 +747,7 @@ class AnonymizerModel:
             study_date=str(study.study_date or ""),
             accession_number=str(study.accession_number or ""),
             study_description=str(study.description or ""),
+            patient_birth_date=str(patient.dob or ""),
         )
 
     @use_session(is_read_only_operation=True)

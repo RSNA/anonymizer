@@ -29,7 +29,7 @@ from anonymizer.controller.ai.blur_face import (
     metadata_signal,
 )
 from anonymizer.controller.ai.embedded_phi.classify_series import SeriesKind, classify_series
-from anonymizer.controller.ai.embedded_phi.ner.phi_entity import SCORED_LABELS
+from anonymizer.controller.ai.embedded_phi.ner.ner import SCORED_LABELS
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     OcrWhitelistMatchMode,
     OcrWhitelistMatchSettings,
@@ -55,13 +55,13 @@ from anonymizer.controller.ai.embedded_phi.pixel.exclude_zones import (
     modality_exclude_rects_for_series,
     normalize_user_rects,
 )
+from anonymizer.controller.ai.embedded_phi.pixel.ocr_transcript_sr import cleansed_ocr_lines, write_ocr_report_sr
 from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
     apply_series_view_embedded_phi,
     blackout_rectangular_areas,
     collect_series_view_embedded_phi_texts,
     remove_ocr_text_from_frame,
 )
-from anonymizer.controller.ai.embedded_phi.report.report_from_ocr import cleansed_ocr_lines, write_ocr_report_sr
 from anonymizer.controller.ai.feature_availability import (
     face_blur_allowed,
     harmonize_allowed_for_modality,
@@ -135,13 +135,12 @@ from anonymizer.view.ai.blur_face_results import (
     face_blur_mode_menu_values,
 )
 from anonymizer.view.ai.face_blur_review_dialog import show_face_blur_review_dialog
-from anonymizer.view.ai.harmonize_results import (
-    HarmonizeBatchOutcome,
-    focus_harmonize_view,
-    get_any_open_harmonize_view,
-    get_open_harmonize_view,
-    show_harmonize_results_view,
+from anonymizer.view.ai.harmonize_description import (
+    harmonize_button_visible,
+    harmonize_description_button_label,
+    launch_harmonize_description,
 )
+from anonymizer.view.ai.harmonize_results import HarmonizeBatchOutcome
 from anonymizer.view.common.app_window import (
     AppCTkToplevel,
     refresh_app_window_menu,
@@ -331,22 +330,6 @@ def blur_face_toolbar_visible(
     if face_blur_already_applied:
         return False
     return is_head_series
-
-
-def harmonize_button_visible(
-    *,
-    harmonize_models_ready: bool,
-    modality: str | None,
-    already_harmonized: bool,
-) -> bool:
-    """Show Harmonize when models are ready and the series ORM flag is not set."""
-    from anonymizer.utils.modalities import is_harmonize_modality
-
-    if not harmonize_models_ready:
-        return False
-    if not is_harmonize_modality(modality):
-        return False
-    return not already_harmonized
 
 
 @dataclass(frozen=True)
@@ -1493,7 +1476,7 @@ class SeriesView(AppCTkToplevel):
         self.harmonize_button = ctk.CTkButton(
             harmonize_blur_group,
             width=160,
-            text=_("Harmonize Description"),
+            text=harmonize_description_button_label(),
             command=self.harmonize_description_button_clicked,
         )
         self.harmonize_button.grid(row=0, column=0, padx=(self.PAD, 2), pady=0, sticky="e")
@@ -2836,62 +2819,27 @@ class SeriesView(AppCTkToplevel):
         self._refresh_series_processing_status()
 
     def harmonize_description_button_clicked(self):
-        from anonymizer.utils.modalities import is_harmonize_modality
-
-        if self._ds is None or not is_harmonize_modality(getattr(self._ds, "Modality", None)):
-            return
         if not self._harmonize_button_visible():
             return
-        modality = getattr(self._ds, "Modality", None)
-        if not harmonize_allowed_for_modality(modality):
-            messagebox.showinfo(
-                title=_("Harmonize"),
-                message=_("Harmonize is not ready yet. Click AI Features to download models."),
-                parent=self,
-            )
-            return
 
-        existing = getattr(self, "_harmonize_view", None)
-        if existing is not None:
-            try:
-                if existing.winfo_exists():
-                    focus_harmonize_view(existing)
-                    return
-            except tk.TclError:
-                pass
-            self._harmonize_view = None
+        def _before_open() -> None:
+            with contextlib.suppress(tk.TclError):
+                self.harmonize_button.grid_remove()
+            self._set_series_interaction_enabled(False)
 
-        series_uid = str(getattr(self._ds, "SeriesInstanceUID", "") or "").strip()
-        series_key = series_uid or str(self._series_path.resolve())
-        open_elsewhere = get_open_harmonize_view(series_key) or get_any_open_harmonize_view()
-        if open_elsewhere is not None:
-            same_series = get_open_harmonize_view(series_key) is open_elsewhere
-            messagebox.showinfo(
-                title=_("Harmonize"),
-                message=(
-                    _("Harmonize is already open for this series.")
-                    if same_series
-                    else _("Harmonize is already running for another series. Finish or cancel it first.")
-                ),
-                parent=self,
-            )
-            focus_harmonize_view(open_elsewhere)
-            return
-
-        logger.info("Harmonize starting for %s", self._series_path)
-        with contextlib.suppress(tk.TclError):
-            self.harmonize_button.grid_remove()
-        self._set_series_interaction_enabled(False)
-        self._harmonize_view = show_harmonize_results_view(
+        view = launch_harmonize_description(
             self,
             series_path=self._series_path,
             ds=self._ds,
-            current_description=str(self._ds.get("SeriesDescription", "") or "").strip(),
-            fonts=self._fonts,
             anon_model=self._controller.anonymizer.model,
+            fonts=self._fonts,
+            existing_view=getattr(self, "_harmonize_view", None),
             on_series_description_updated=self._on_series_description_updated,
             on_closed=self._on_harmonize_closed,
+            on_before_open=_before_open,
         )
+        if view is not None:
+            self._harmonize_view = view
 
     def _cache_dir(self) -> Path:
         return resolve_series_cache_dir(self._series_path)

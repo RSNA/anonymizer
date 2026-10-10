@@ -1,40 +1,30 @@
-"""Deterministic synthetic PHI factory (HMAC-seeded offline pools)."""
+"""Deterministic synthetic PHI from offline locale pools (HMAC-seeded).
+
+Pools live under ``ner/pools/<locale>/`` (``first_names.txt``, ``last_names.txt``,
+``streets.txt``, ``cities.txt`` with ``city|state|zip`` rows). Unknown labels
+yield ``\"REDACTED\"``. Same ``project_id`` / ``anon_ptid`` / ``label`` /
+``ordinal`` / ``source_fragment`` → same replacement.
+
+Public API
+----------
+``generate_synthetic_phi(label, *, project_id, anon_ptid, locale, ordinal,
+source_fragment)``
+    Synthetic replacement string for a product PHI ``label``
+    (``NAME``, ``LOCATION``, ``ID``, ``PHONE``, ``EMAIL``, ``DATE``, …).
+
+Used by ``ner.replace_entities(..., mode=\"synth\")``.
+"""
 
 from __future__ import annotations
 
 import hashlib
 import hmac
 import re
-from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
 _POOLS = Path(__file__).resolve().parent / "pools"
-
-
-@lru_cache(maxsize=8)
-def _load_lines(locale: str, name: str) -> tuple[str, ...]:
-    path = _POOLS / locale / name
-    if not path.is_file():
-        path = _POOLS / "en_US" / name
-    if not path.is_file():
-        return ()
-    return tuple(
-        line.strip()
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip() and not line.strip().startswith("#")
-    )
-
-
-@lru_cache(maxsize=8)
-def _load_cities(locale: str) -> tuple[tuple[str, str, str], ...]:
-    rows: list[tuple[str, str, str]] = []
-    for line in _load_lines(locale, "cities.txt"):
-        parts = line.split("|")
-        if len(parts) >= 3:
-            rows.append((parts[0], parts[1], parts[2]))
-    return tuple(rows)
-
+_SECRET = b"embedded_phi_synth_v1"
 
 _STREET_SFX = ("Street", "Avenue", "Drive", "Road", "Lane", "Boulevard", "Court", "Way")
 _EMAIL_DOMAINS = (
@@ -58,7 +48,168 @@ _AREA_CODES = (
 )
 
 
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+def generate_synthetic_phi(
+    label: str,
+    *,
+    project_id: str = "default",
+    anon_ptid: str = "ANON0000",
+    locale: str = "en_US",
+    ordinal: int = 0,
+    source_fragment: str = "",
+) -> str:
+    """
+    Return a synthetic replacement string for a PHI ``label``.
+
+    Values are deterministic for the same ``project_id``, ``anon_ptid``,
+    ``label``, ``ordinal``, and ``source_fragment`` (shape hint).
+
+    Args:
+        label: Product PHI label (``NAME``, ``LOCATION``, ``ID``, ``PHONE``,
+            ``EMAIL``, ``DATE``, …).
+        project_id: Project / site seed namespace.
+        anon_ptid: Anonymized patient id seed.
+        locale: Pool locale directory name (falls back to ``en_US``).
+        ordinal: Occurrence index among same-label entities in one text.
+        source_fragment: Original span text used as a formatting shape hint.
+
+    Returns:
+        Synthetic replacement string.
+    """
+    first = _load_lines(locale, "first_names.txt") or ("Pat",)
+    last = _load_lines(locale, "last_names.txt") or ("Example",)
+    streets = _load_lines(locale, "streets.txt") or ("Main",)
+    cities = _load_cities(locale) or (("Springfield", "IL", "62701"),)
+
+    a, b, c, d = _seed_ints(
+        project_id,
+        anon_ptid,
+        label,
+        str(ordinal),
+        source_fragment.casefold()[:32],
+    )
+    if label == "NAME":
+        return _synth_name(first, last, a, b, source_fragment)
+    if label == "LOCATION":
+        return _synth_location(streets, cities, a, b, c, d, source_fragment)
+    if label == "ID":
+        return f"SYN{a % 10_000_000:07d}"
+    if label == "PHONE":
+        return _synth_phone(a, b, c, source_fragment)
+    if label == "EMAIL":
+        return _synth_email(first, last, a, b, c, d)
+    if label == "DATE":
+        return _synth_date(a, b, c, source_fragment)
+    return "REDACTED"
+
+
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+
+def _load_lines(locale: str, name: str) -> tuple[str, ...]:
+    """
+    Load non-comment lines from a pool file (falls back to ``en_US``).
+
+    Args:
+        locale: Pool locale directory name.
+        name: File name under ``pools/<locale>/``.
+
+    Returns:
+        Tuple of stripped non-comment lines (may be empty).
+    """
+    return _cached_load_lines(locale, name)
+
+
+@lru_cache(maxsize=8)
+def _cached_load_lines(locale: str, name: str) -> tuple[str, ...]:
+    """
+    Cached pool file read for ``locale`` / ``name``.
+
+    Args:
+        locale: Pool locale directory name.
+        name: File name under ``pools/<locale>/``.
+
+    Returns:
+        Tuple of stripped non-comment lines (may be empty).
+    """
+    path = _POOLS / locale / name
+    if not path.is_file():
+        path = _POOLS / "en_US" / name
+    if not path.is_file():
+        return ()
+    return tuple(
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    )
+
+
+def _load_cities(locale: str) -> tuple[tuple[str, str, str], ...]:
+    """
+    Load ``city|state|zip`` rows for ``locale``.
+
+    Args:
+        locale: Pool locale directory name.
+
+    Returns:
+        Tuple of ``(city, state, zip)`` triples.
+    """
+    return _cached_load_cities(locale)
+
+
+@lru_cache(maxsize=8)
+def _cached_load_cities(locale: str) -> tuple[tuple[str, str, str], ...]:
+    """
+    Cached city/state/zip triples for ``locale``.
+
+    Args:
+        locale: Pool locale directory name.
+
+    Returns:
+        Tuple of ``(city, state, zip)`` triples.
+    """
+    rows: list[tuple[str, str, str]] = []
+    for line in _cached_load_lines(locale, "cities.txt"):
+        parts = line.split("|")
+        if len(parts) >= 3:
+            rows.append((parts[0], parts[1], parts[2]))
+    return tuple(rows)
+
+
+def _seed_ints(project_id: str, *parts: str, n: int = 4) -> list[int]:
+    """
+    HMAC-derive ``n`` unsigned 32-bit ints from project id and seed parts.
+
+    Args:
+        project_id: Outer HMAC key material.
+        *parts: Additional message fragments joined with ``|``.
+        n: Number of 32-bit integers to return (default 4).
+
+    Returns:
+        List of ``n`` integers in ``[0, 2**32)``.
+    """
+    msg = "|".join(parts).encode("utf-8")
+    key = hmac.new(_SECRET, project_id.encode("utf-8"), hashlib.sha256).digest()
+    digest = hmac.new(key, msg, hashlib.sha256).digest()
+    return [int.from_bytes(digest[i * 4 : (i + 1) * 4], "big") for i in range(n)]
+
+
 def _phone_shape(source: str) -> str:
+    """
+    Classify phone formatting of ``source`` for shape-preserving synth.
+
+    Args:
+        source: Original phone span text.
+
+    Returns:
+        One of ``plus1``, ``paren``, ``dashed``, ``digits``.
+    """
     s = source.strip()
     if s.startswith("+1"):
         return "plus1"
@@ -72,6 +223,15 @@ def _phone_shape(source: str) -> str:
 
 
 def _location_shape(source: str) -> str:
+    """
+    Classify address/zip formatting of ``source`` for shape-preserving synth.
+
+    Args:
+        source: Original location span text.
+
+    Returns:
+        One of ``zip4``, ``zip_only``, ``city_state_zip``, ``full``.
+    """
     s = source.strip()
     if re.search(r"\d{5}-\d{4}\b", s):
         return "zip4"
@@ -82,92 +242,143 @@ def _location_shape(source: str) -> str:
     return "full"
 
 
-@dataclass
-class SyntheticPhiFactory:
+def _synth_name(
+    first: tuple[str, ...],
+    last: tuple[str, ...],
+    a: int,
+    b: int,
+    source_fragment: str,
+) -> str:
     """
-    Offline synthetic PHI keyed by project + anonymized patient id.
+    Build a synthetic NAME matching DICOM ``^`` or ``,`` layout when present.
 
-    Same ``anon_ptid`` + label + ordinal → same replacement across series.
-    Cross-patient NAME collisions are accepted (industry-normal).
+    Args:
+        first: Given-name pool.
+        last: Family-name pool.
+        a: Seed index into ``first``.
+        b: Seed index into ``last``.
+        source_fragment: Original name span (layout hint).
+
+    Returns:
+        Synthetic person name string.
     """
+    given = first[a % len(first)]
+    family = last[b % len(last)]
+    if "^" in source_fragment:
+        return f"{family}^{given}"
+    if "," in source_fragment:
+        return f"{family}, {given}"
+    return f"{given} {family}"
 
-    project_id: str = "default"
-    anon_ptid: str = "ANON0000"
-    locale: str = "en_US"
-    date_offset_days: int = 0
-    _secret: bytes = field(default=b"embedded_phi_synth_v1", repr=False)
 
-    def _digest(self, *parts: str) -> bytes:
-        msg = "|".join(parts).encode("utf-8")
-        key = hmac.new(self._secret, self.project_id.encode("utf-8"), hashlib.sha256).digest()
-        return hmac.new(key, msg, hashlib.sha256).digest()
+def _synth_location(
+    streets: tuple[str, ...],
+    cities: tuple[tuple[str, str, str], ...],
+    a: int,
+    b: int,
+    c: int,
+    d: int,
+    source_fragment: str,
+) -> str:
+    """
+    Build a synthetic LOCATION matching zip / city-state / full address shape.
 
-    def _ints(self, *parts: str, n: int = 4) -> list[int]:
-        d = self._digest(*parts)
-        return [int.from_bytes(d[i * 4 : (i + 1) * 4], "big") for i in range(n)]
+    Args:
+        streets: Street-name pool.
+        cities: ``(city, state, zip)`` pool.
+        a: Seed for house number / zip+4.
+        b: Seed index into ``streets``.
+        c: Seed index into street suffixes.
+        d: Seed index into ``cities``.
+        source_fragment: Original location span (shape hint).
 
-    def generate(
-        self,
-        label: str,
-        *,
-        ordinal: int = 0,
-        source_fragment: str = "",
-    ) -> str:
-        first = _load_lines(self.locale, "first_names.txt") or ("Pat",)
-        last = _load_lines(self.locale, "last_names.txt") or ("Example",)
-        streets = _load_lines(self.locale, "streets.txt") or ("Main",)
-        cities = _load_cities(self.locale) or (("Springfield", "IL", "62701"),)
+    Returns:
+        Synthetic location string.
+    """
+    num = 100 + (a % 8900)
+    street = streets[b % len(streets)]
+    sfx = _STREET_SFX[c % len(_STREET_SFX)]
+    city, state, z = cities[d % len(cities)]
+    shape = _location_shape(source_fragment)
+    if shape == "zip_only":
+        return z
+    if shape == "zip4":
+        return f"{z}-{1000 + (a % 9000):04d}"
+    if shape == "city_state_zip":
+        return f"{city}, {state} {z}"
+    return f"{num} {street} {sfx}, {city}, {state} {z}"
 
-        base = (self.anon_ptid, label, str(ordinal), source_fragment.casefold()[:32])
-        a, b, c, d = self._ints(*base, n=4)
-        if label == "NAME":
-            f = first[a % len(first)]
-            ln = last[b % len(last)]
-            if "^" in source_fragment:
-                return f"{ln}^{f}"
-            if "," in source_fragment:
-                return f"{ln}, {f}"
-            return f"{f} {ln}"
-        if label == "LOCATION":
-            num = 100 + (a % 8900)
-            street = streets[b % len(streets)]
-            sfx = _STREET_SFX[c % len(_STREET_SFX)]
-            city, state, z = cities[d % len(cities)]
-            shape = _location_shape(source_fragment)
-            if shape == "zip_only":
-                return z
-            if shape == "zip4":
-                return f"{z}-{1000 + (a % 9000):04d}"
-            if shape == "city_state_zip":
-                return f"{city}, {state} {z}"
-            return f"{num} {street} {sfx}, {city}, {state} {z}"
-        if label == "ID":
-            return f"SYN{a % 10_000_000:07d}"
-        if label == "PHONE":
-            area = _AREA_CODES[a % len(_AREA_CODES)]
-            exch = 200 + (b % 800)
-            line = c % 10000
-            shape = _phone_shape(source_fragment)
-            if shape == "plus1":
-                return f"+1{area}{exch:03d}{line:04d}"
-            if shape == "dashed":
-                return f"{area}-{exch:03d}-{line:04d}"
-            if shape == "digits":
-                return f"{area}{exch:03d}{line:04d}"
-            return f"({area}) {exch:03d}-{line:04d}"
-        if label == "EMAIL":
-            f = first[a % len(first)].lower()
-            ln = last[b % len(last)].lower()
-            dom = _EMAIL_DOMAINS[c % len(_EMAIL_DOMAINS)]
-            return f"{f}.{ln}{d % 100}@{dom}"
-        if label == "DATE":
-            year = 1950 + (a % 60)
-            month = 1 + (b % 12)
-            day = 1 + (c % 28)
-            if self.date_offset_days:
-                # Keep hash-derived date; offset reserved for patient policy wiring.
-                pass
-            if re.fullmatch(r"\d{8}", source_fragment.strip()):
-                return f"{year:04d}{month:02d}{day:02d}"
-            return f"{month:02d}/{day:02d}/{year:04d}"
-        return "REDACTED"
+
+def _synth_phone(a: int, b: int, c: int, source_fragment: str) -> str:
+    """
+    Build a synthetic PHONE matching the punctuation style of ``source_fragment``.
+
+    Args:
+        a: Seed index into area-code pool.
+        b: Seed for exchange.
+        c: Seed for line number.
+        source_fragment: Original phone span (shape hint).
+
+    Returns:
+        Synthetic phone string.
+    """
+    area = _AREA_CODES[a % len(_AREA_CODES)]
+    exch = 200 + (b % 800)
+    line = c % 10000
+    shape = _phone_shape(source_fragment)
+    if shape == "plus1":
+        return f"+1{area}{exch:03d}{line:04d}"
+    if shape == "dashed":
+        return f"{area}-{exch:03d}-{line:04d}"
+    if shape == "digits":
+        return f"{area}{exch:03d}{line:04d}"
+    return f"({area}) {exch:03d}-{line:04d}"
+
+
+def _synth_email(
+    first: tuple[str, ...],
+    last: tuple[str, ...],
+    a: int,
+    b: int,
+    c: int,
+    d: int,
+) -> str:
+    """
+    Build a synthetic EMAIL from name pools and a fixed example domain.
+
+    Args:
+        first: Given-name pool.
+        last: Family-name pool.
+        a: Seed index into ``first``.
+        b: Seed index into ``last``.
+        c: Seed index into email domains.
+        d: Numeric suffix seed.
+
+    Returns:
+        Synthetic email address.
+    """
+    given = first[a % len(first)].lower()
+    family = last[b % len(last)].lower()
+    dom = _EMAIL_DOMAINS[c % len(_EMAIL_DOMAINS)]
+    return f"{given}.{family}{d % 100}@{dom}"
+
+
+def _synth_date(a: int, b: int, c: int, source_fragment: str) -> str:
+    """
+    Build a synthetic DATE as ``YYYYMMDD`` or ``MM/DD/YYYY`` to match source shape.
+
+    Args:
+        a: Seed for year.
+        b: Seed for month.
+        c: Seed for day.
+        source_fragment: Original date span (shape hint).
+
+    Returns:
+        Synthetic date string.
+    """
+    year = 1950 + (a % 60)
+    month = 1 + (b % 12)
+    day = 1 + (c % 28)
+    if re.fullmatch(r"\d{8}", source_fragment.strip()):
+        return f"{year:04d}{month:02d}{day:02d}"
+    return f"{month:02d}/{day:02d}/{year:04d}"

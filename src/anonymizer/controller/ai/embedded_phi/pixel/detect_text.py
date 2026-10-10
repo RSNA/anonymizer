@@ -33,6 +33,8 @@ from pydicom import Dataset
 if TYPE_CHECKING:
     pass
 
+from anonymizer.controller.ai.embedded_phi.ner.cache import ner_ready
+from anonymizer.controller.ai.embedded_phi.ner.ner import detect_entities, detect_locale_supported
 from anonymizer.controller.series_io import (
     stored_monochrome_to_series_buffer,
 )
@@ -723,9 +725,6 @@ def filter_ocr_phi_ner(
     Used by batch ``remove_pixel_phi``. Series View detect does **not** use this —
     it keeps OCR hits and annotates labels via ``annotate_ocr_phi_labels``.
     """
-    from anonymizer.controller.ai.embedded_phi.ner.cache import ner_ready
-    from anonymizer.controller.ai.embedded_phi.ner.locale_registry import detect_locale_supported
-
     ready = ner_ready()
     if not ready or not detect_locale_supported(locale):
         logger.info(
@@ -747,10 +746,6 @@ def annotate_ocr_phi_labels(
     locale: str = "en_US",
 ) -> list[OCRText]:
     """Attach ``phi_label`` from NER without dropping non-PHI detections (Series View)."""
-    from anonymizer.controller.ai.embedded_phi.ner.cache import ner_ready
-    from anonymizer.controller.ai.embedded_phi.ner.detect_phi import detect_phi
-    from anonymizer.controller.ai.embedded_phi.ner.locale_registry import detect_locale_supported
-
     ready = ner_ready()
     if not ready or not detect_locale_supported(locale):
         logger.info(
@@ -761,20 +756,18 @@ def annotate_ocr_phi_labels(
         )
         return list(detections)
     out: list[OCRText] = []
-    labeled = 0
     for ocr_text in detections:
         text = (ocr_text.text or "").strip()
         label: str | None = None
         if text:
-            ents = detect_phi(text, locale=locale)
+            ents = detect_entities(text, locale=locale)
             if ents:
                 label = _best_phi_label(ents)
-                labeled += 1
                 logger.debug("OCR→NER classify → %s", label)
             else:
                 logger.debug("OCR→NER classify → overlay / not PHI")
         out.append(_ocr_copy(ocr_text, phi_label=label))
-    out = _propagate_adjacent_name_labels(out, detect_fn=detect_phi, locale=locale)
+    out = _propagate_adjacent_name_labels(out, detect_fn=detect_entities, locale=locale)
     labeled = sum(1 for item in out if (item.phi_label or "").strip())
     logger.info(
         "OCR→NER classify: %d labeled / %d text(s)",
@@ -782,7 +775,6 @@ def annotate_ocr_phi_labels(
         len(detections),
     )
     return out
-
 
 def filter_ocr_whitelist_only(
     detections: Sequence[OCRText],

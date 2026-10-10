@@ -1,7 +1,9 @@
 # Public tags to KEEP under Clinical policy (flip from @remove/@empty in default script).
 # One keyword or 8-hex tag per line. Comments start with #.
 ContentSeq
+ValueType
 TextValue
+PersonName
 EncapsulatedDocument
 MIMETypeOfEncapsulatedDocument
 EncapsulatedDocumentLength

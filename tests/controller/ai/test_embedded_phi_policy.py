@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from anonymizer.controller.ai.embedded_phi.classify_series import SeriesKind, classify_series
-from anonymizer.controller.ai.embedded_phi.ner.synthetic_phi import SyntheticPhiFactory
+from anonymizer.controller.ai.embedded_phi.ner.synthetic_phi import generate_synthetic_phi
 from anonymizer.model.project import AnonymizationPolicy, ProjectModel
 
 _ROOT = Path(__file__).resolve().parents[3]
@@ -16,14 +16,21 @@ _COMPILE = _SCRIPTS / "compile_clinical_script.py"
 
 
 def test_synth_name_stable_and_shape() -> None:
-    fac = SyntheticPhiFactory(project_id="p", anon_ptid="A1")
-    a = fac.generate("NAME", ordinal=0, source_fragment="Doe^Jane")
-    b = fac.generate("NAME", ordinal=0, source_fragment="Doe^Jane")
+    a = generate_synthetic_phi(
+        "NAME", project_id="p", anon_ptid="A1", ordinal=0, source_fragment="Doe^Jane"
+    )
+    b = generate_synthetic_phi(
+        "NAME", project_id="p", anon_ptid="A1", ordinal=0, source_fragment="Doe^Jane"
+    )
     assert a == b
     assert "^" in a
-    phone = fac.generate("PHONE", ordinal=0, source_fragment="201-555-0100")
+    phone = generate_synthetic_phi(
+        "PHONE", project_id="p", anon_ptid="A1", ordinal=0, source_fragment="201-555-0100"
+    )
     assert phone.count("-") == 2
-    loc = fac.generate("LOCATION", ordinal=0, source_fragment="90210")
+    loc = generate_synthetic_phi(
+        "LOCATION", project_id="p", anon_ptid="A1", ordinal=0, source_fragment="90210"
+    )
     assert loc.isdigit() or "-" in loc
 
 

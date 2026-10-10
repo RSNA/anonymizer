@@ -19,7 +19,7 @@ from anonymizer.view.common.tooltip import MotionTooltipController
 
 logger = logging.getLogger(__name__)
 
-CatalogKind = Literal["radlex", "loinc"]
+CatalogKind = Literal["radlex", "loinc", "series"]
 
 ExpandCatalogLoader = Callable[[], tuple[list[str], dict[str, str | None]]]
 ComposeOptionsLoader = Callable[[bool], dict[str, list[str]]]
@@ -56,6 +56,11 @@ def _catalog_label(kind: CatalogKind, modality: str = "", *, full: bool = False)
         if mod:
             return _("{modality} LOINC study descriptions (closest matches)").format(modality=mod)
         return _("LOINC study descriptions (closest matches)")
+    if kind == "series":
+        # Report Harmonize (SR/DOC/PDF): series description text, not RadLex Playbook.
+        if mod:
+            return _("{modality} series descriptions").format(modality=mod)
+        return _("Series descriptions")
     if full:
         if mod:
             return _("Compose {modality} RadLex Playbook (all codes)").format(modality=mod)
@@ -219,7 +224,11 @@ class SetDescriptionDialog(AppToplevel):
             self._enter_compose_mode(full_vocab=self._compose_full_vocab_on_open)
             self._ok_button.focus()
         else:
-            self._filter_entry.focus()
+            # Do not focus the empty Filter entry — CTk hides placeholder_text on focus,
+            # which looks like a blank description field. Keep selection on the list.
+            with contextlib.suppress(tk.TclError):
+                self._listbox.focus_set()
+            self._ok_button.focus()
 
     def _create_widgets(self, *, hint: str, initial: str) -> None:
         pad = self.PAD

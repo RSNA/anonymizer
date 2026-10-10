@@ -2407,7 +2407,7 @@
  <e en="T" t="0040A028" n="DocumentingOrganizationIdentifierCodeSequenceTrial">@remove()</e>
  <e en="T" t="0040A030" n="VerificationDateTime">@remove()</e>
  <e en="T" t="0040A032" n="ObservationDateTime">@remove()</e>
- <e en="T" t="0040A040" n="ValueType">@remove()</e>
+ <e en="T" t="0040A040" n="ValueType" />
  <e en="T" t="0040A043" n="ConceptNameCodeSeq">@remove()</e>
  <e en="T" t="0040A047" n="MeasurementPrecisionDescriptionTrial">@remove()</e>
  <e en="T" t="0040A050" n="ContinuityOfContent">@remove()</e>
@@ -2437,7 +2437,7 @@
  <e en="T" t="0040A120" n="DateTime">@remove()</e>
  <e en="T" t="0040A121" n="Date">@remove()</e>
  <e en="T" t="0040A122" n="Time">@remove()</e>
- <e en="T" t="0040A123" n="PersonName">@remove()</e>
+ <e en="T" t="0040A123" n="PersonName" />
  <e en="T" t="0040A124" n="UID">@remove()</e>
  <e en="T" t="0040A125" n="ReportStatusIDTrial">@remove()</e>
  <e en="T" t="0040A130" n="TemporalRangeType">@remove()</e>

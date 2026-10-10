@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from anonymizer.controller.ai.embedded_phi.ner.phi_entity import SCORED_LABELS
+from anonymizer.controller.ai.embedded_phi.ner.ner import SCORED_LABELS
+from anonymizer.controller.ai.embedded_phi.report.process_report_text import (
+    METADATA_LABEL_SCORED_FAMILY,
+)
 from anonymizer.utils.translate import _
 
 # Hex colors keyed by entity label. Keys must stay aligned with ``SCORED_LABELS``.
@@ -20,9 +23,15 @@ UNKNOWN_ENTITY_COLOR_HEX = "#888888"
 assert tuple(ENTITY_COLORS_HEX) == SCORED_LABELS, "entity_colors keys must match SCORED_LABELS"
 
 
+def _scored_family(label: str) -> str:
+    """Map metadata DICOM keywords (PatientID, …) onto scored color families."""
+    key = str(label).upper()
+    return METADATA_LABEL_SCORED_FAMILY.get(key, key)
+
+
 def entity_color_hex(label: str) -> str:
     """Return the ``#rrggbb`` color for ``label`` (grey for unknown labels)."""
-    return ENTITY_COLORS_HEX.get(str(label).upper(), UNKNOWN_ENTITY_COLOR_HEX)
+    return ENTITY_COLORS_HEX.get(_scored_family(label), UNKNOWN_ENTITY_COLOR_HEX)
 
 
 def entity_color_bgr(label: str) -> tuple[int, int, int]:

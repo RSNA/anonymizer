@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from anonymizer.controller.ai.embedded_phi.ner.phi_entity import PhiEntity
+from anonymizer.controller.ai.embedded_phi.ner.ner import Entity
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     annotate_ocr_phi_labels,
     detect_text,
@@ -34,16 +32,16 @@ def _davidson_detections() -> list[OCRText]:
     return [_ocr(t) for t in _DAVIDSON_TEXTS]
 
 
-def _fake_detect_phi(text: str, *, locale: str = "en_US", apply_guard: bool = True) -> list[PhiEntity]:
+def _fake_detect_phi(text: str, *, locale: str = "en_US") -> list[Entity]:
     """Deterministic PHI labels for Davidson-like strings (no model)."""
     t = text.strip()
     upper = t.upper()
     if "DAVIDSON" in upper or "DOUGLAS" in upper:
-        return [PhiEntity("NAME", 0, len(t), score=0.99)]
+        return [Entity("NAME", 0, len(t), score=0.99)]
     if "DOB" in upper or (t.count(".") == 2 and any(ch.isdigit() for ch in t)):
-        return [PhiEntity("DATE", 0, len(t), score=0.95)]
+        return [Entity("DATE", 0, len(t), score=0.95)]
     if "@" in t:
-        return [PhiEntity("EMAIL", 0, len(t), score=0.9)]
+        return [Entity("EMAIL", 0, len(t), score=0.9)]
     return []
 
 
@@ -98,12 +96,12 @@ def test_whitelist_preserves_phi_label() -> None:
 
 
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.locale_registry.detect_locale_supported",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
     return_value=True,
 )
-@patch("anonymizer.controller.ai.embedded_phi.ner.cache.ner_ready", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.detect_phi.detect_phi",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
     side_effect=_fake_detect_phi,
 )
 def test_annotate_labels_phi_without_dropping_overlay(
@@ -125,27 +123,27 @@ def test_annotate_labels_phi_without_dropping_overlay(
     assert "OCR→NER classify: 3 labeled" in caplog.text
 
 
-def _name_split_detect_phi(text: str, *, locale: str = "en_US", apply_guard: bool = True) -> list[PhiEntity]:
+def _name_split_detect_phi(text: str, *, locale: str = "en_US") -> list[Entity]:
     """Olivia is NAME alone; Diaz is not; the full phrase is NAME covering both tokens."""
     t = text.strip()
     if t == "Olivia Diaz":
-        return [PhiEntity("NAME", 0, len(t), score=0.99)]
+        return [Entity("NAME", 0, len(t), score=0.99)]
     if t == "Olivia":
         start = t.find("Olivia")
-        return [PhiEntity("NAME", start, start + 6, score=0.99)]
+        return [Entity("NAME", start, start + 6, score=0.99)]
     if t.startswith("Olivia ") and t != "Olivia Diaz":
         start = t.find("Olivia")
-        return [PhiEntity("NAME", start, start + 6, score=0.99)]
+        return [Entity("NAME", start, start + 6, score=0.99)]
     return []
 
 
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.locale_registry.detect_locale_supported",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
     return_value=True,
 )
-@patch("anonymizer.controller.ai.embedded_phi.ner.cache.ner_ready", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.detect_phi.detect_phi",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
     side_effect=_name_split_detect_phi,
 )
 def test_annotate_propagates_name_to_adjacent_unlabeled_surname(
@@ -164,12 +162,12 @@ def test_annotate_propagates_name_to_adjacent_unlabeled_surname(
 
 
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.locale_registry.detect_locale_supported",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
     return_value=True,
 )
-@patch("anonymizer.controller.ai.embedded_phi.ner.cache.ner_ready", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.detect_phi.detect_phi",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
     side_effect=_name_split_detect_phi,
 )
 def test_annotate_does_not_label_adjacent_overlay_when_span_is_first_name_only(
@@ -186,12 +184,12 @@ def test_annotate_does_not_label_adjacent_overlay_when_span_is_first_name_only(
 
 
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.locale_registry.detect_locale_supported",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
     return_value=True,
 )
-@patch("anonymizer.controller.ai.embedded_phi.ner.cache.ner_ready", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.detect_phi.detect_phi",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
     side_effect=_name_split_detect_phi,
 )
 def test_batch_ner_filter_keeps_adjacent_surname_after_context_pass(
@@ -207,10 +205,10 @@ def test_batch_ner_filter_keeps_adjacent_surname_after_context_pass(
 
 
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.locale_registry.detect_locale_supported",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
     return_value=True,
 )
-@patch("anonymizer.controller.ai.embedded_phi.ner.cache.ner_ready", return_value=False)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=False)
 def test_annotate_when_ner_missing_keeps_all_unlabeled(
     _mock_ready: MagicMock,
     _mock_locale: MagicMock,
@@ -225,12 +223,12 @@ def test_annotate_when_ner_missing_keeps_all_unlabeled(
 
 
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.locale_registry.detect_locale_supported",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
     return_value=True,
 )
-@patch("anonymizer.controller.ai.embedded_phi.ner.cache.ner_ready", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.detect_phi.detect_phi",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
     side_effect=_fake_detect_phi,
 )
 def test_batch_ner_filter_drops_portable_keeps_name_date(
@@ -249,12 +247,12 @@ def test_batch_ner_filter_drops_portable_keeps_name_date(
 
 
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.locale_registry.detect_locale_supported",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
     return_value=True,
 )
-@patch("anonymizer.controller.ai.embedded_phi.ner.cache.ner_ready", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.detect_phi.detect_phi",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
     side_effect=_fake_detect_phi,
 )
 def test_batch_whitelist_then_ner_hides_portable_before_classify(
@@ -272,10 +270,10 @@ def test_batch_whitelist_then_ner_hides_portable_before_classify(
 
 
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.locale_registry.detect_locale_supported",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
     return_value=True,
 )
-@patch("anonymizer.controller.ai.embedded_phi.ner.cache.ner_ready", return_value=False)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=False)
 def test_batch_ner_filter_drops_all_when_ner_missing(
     _mock_ready: MagicMock,
     _mock_locale: MagicMock,
@@ -297,12 +295,12 @@ def _easyocr_davidson_results():
 
 
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.locale_registry.detect_locale_supported",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
     return_value=True,
 )
-@patch("anonymizer.controller.ai.embedded_phi.ner.cache.ner_ready", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.detect_phi.detect_phi",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
     side_effect=_fake_detect_phi,
 )
 @patch(
@@ -337,12 +335,12 @@ def test_series_view_detect_mode_keeps_portable_and_labels_phi(
 
 
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.locale_registry.detect_locale_supported",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
     return_value=True,
 )
-@patch("anonymizer.controller.ai.embedded_phi.ner.cache.ner_ready", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.detect_phi.detect_phi",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
     side_effect=_fake_detect_phi,
 )
 @patch(
@@ -375,12 +373,12 @@ def test_series_view_detect_with_portable_whitelist_hides_before_classify(
 
 
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.locale_registry.detect_locale_supported",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
     return_value=True,
 )
-@patch("anonymizer.controller.ai.embedded_phi.ner.cache.ner_ready", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.detect_phi.detect_phi",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
     side_effect=_fake_detect_phi,
 )
 @patch(
@@ -432,12 +430,12 @@ def test_series_view_store_all_then_display_whitelist() -> None:
 
 
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.locale_registry.detect_locale_supported",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_locale_supported",
     return_value=True,
 )
-@patch("anonymizer.controller.ai.embedded_phi.ner.cache.ner_ready", return_value=True)
+@patch("anonymizer.controller.ai.embedded_phi.pixel.detect_text.ner_ready", return_value=True)
 @patch(
-    "anonymizer.controller.ai.embedded_phi.ner.detect_phi.detect_phi",
+    "anonymizer.controller.ai.embedded_phi.pixel.detect_text.detect_entities",
     side_effect=_fake_detect_phi,
 )
 @patch(

@@ -86,6 +86,8 @@ def test_right_click_series_opens_series_view() -> None:
 def test_right_click_study_opens_projection_view() -> None:
     view = _navigation_view()
     study = view._studies_by_uid["study-1"]
+    # Imaging child so Projection View is eligible.
+    study.series = [_series("series-1", modality="CT")]
     view._tree.identify_row.return_value = study_tree_iid("study-1")
 
     view._on_tree_right_click(SimpleNamespace(y=12))
@@ -94,6 +96,39 @@ def test_right_click_study_opens_projection_view() -> None:
     view._open_projection_view.assert_called_once_with([study])
     view._open_series_by_uid.assert_not_called()
     view._edit_study_description.assert_not_called()
+
+
+def test_right_click_report_only_study_opens_report_series() -> None:
+    view = _navigation_view()
+    study = view._studies_by_uid["study-1"]
+    sr = _series("series-sr", modality="SR")
+    study.series = [sr]
+    view._series_by_uid = {"series-sr": (study, sr)}
+    view._tree.identify_row.return_value = study_tree_iid("study-1")
+
+    view._on_tree_right_click(SimpleNamespace(y=12))
+
+    view._open_projection_view.assert_not_called()
+    view._open_series_by_uid.assert_called_once_with("series-sr")
+
+
+def test_right_click_multi_report_study_does_not_open_projection() -> None:
+    from unittest.mock import patch
+
+    view = _navigation_view()
+    study = view._studies_by_uid["study-1"]
+    sr1 = _series("series-sr1", modality="SR")
+    sr2 = _series("series-sr2", modality="DOC")
+    study.series = [sr1, sr2]
+    view._series_by_uid = {"series-sr1": (study, sr1), "series-sr2": (study, sr2)}
+    view._tree.identify_row.return_value = study_tree_iid("study-1")
+
+    with patch("anonymizer.view.project.dataset.messagebox.showinfo") as showinfo:
+        view._on_tree_right_click(SimpleNamespace(y=12))
+
+    view._open_projection_view.assert_not_called()
+    view._open_series_by_uid.assert_not_called()
+    showinfo.assert_called_once()
 
 
 def test_right_click_multi_series_opens_set_description() -> None:
@@ -151,6 +186,8 @@ def test_right_click_multi_mixed_keeps_selection() -> None:
 
 def test_tree_row_tooltip_text_by_row_type() -> None:
     view = _navigation_view()
+    study = view._studies_by_uid["study-1"]
+    study.series = [_series("series-1", modality="CT")]
 
     view._tree.identify_row.return_value = study_tree_iid("study-1")
     assert view._tree_row_tooltip_text(SimpleNamespace(y=1, x=40)) == (
@@ -163,6 +200,17 @@ def test_tree_row_tooltip_text_by_row_type() -> None:
         "Double-click description to choose a RadLex name "
         "(expand to full catalog if needed) · Right-click opens Series View"
     )
+
+    sr = _series("series-sr", modality="SR")
+    study.series = [sr]
+    view._series_by_uid["series-sr"] = (study, sr)
+    view._tree.identify_row.return_value = series_tree_iid("series-sr")
+    assert view._tree_row_tooltip_text(SimpleNamespace(y=1, x=40)) == (
+        "Double-click description to set series description · Right-click opens Report View"
+    )
+
+    view._tree.identify_row.return_value = study_tree_iid("study-1")
+    assert "Report View" in (view._tree_row_tooltip_text(SimpleNamespace(y=1, x=40)) or "")
 
     view._tree.identify_row.return_value = ""
     assert view._tree_row_tooltip_text(SimpleNamespace(y=1, x=40)) is None

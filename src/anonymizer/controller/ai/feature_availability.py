@@ -60,9 +60,14 @@ def harmonize_allowed() -> bool:
 
 def harmonize_allowed_for_modality(modality: object | None) -> bool:
     """True when Harmonize models/path for ``modality`` are ready."""
-    from anonymizer.utils.modalities import is_mr_modality, is_planar_harmonize_modality, is_tseg_modality
+    from anonymizer.utils.modalities import (
+        is_mr_modality,
+        is_planar_harmonize_modality,
+        is_report_harmonize_modality,
+        is_tseg_modality,
+    )
 
-    if is_planar_harmonize_modality(modality):
+    if is_planar_harmonize_modality(modality) or is_report_harmonize_modality(modality):
         return True
     if not is_tseg_modality(modality):
         return False

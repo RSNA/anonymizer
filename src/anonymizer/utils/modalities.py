@@ -63,11 +63,27 @@ def get_modalities() -> dict[str, tuple[str, list[str]]]:
         "SR": (
             _("Structured Report"),
             [
-                "1.2.840.10008.5.1.4.1.1.88.11",
-                "1.2.840.10008.5.1.4.1.1.88.22",
-                "1.2.840.10008.5.1.4.1.1.88.33",
-                "1.2.840.10008.5.1.4.1.1.88.34",
-                "1.2.840.10008.5.1.4.1.1.88.35",
+                # DICOM PS3.4 Table B.5-1 — all Structured Reporting Storage SOP Classes.
+                "1.2.840.10008.5.1.4.1.1.88.11",  # Basic Text SR
+                "1.2.840.10008.5.1.4.1.1.88.22",  # Enhanced SR
+                "1.2.840.10008.5.1.4.1.1.88.33",  # Comprehensive SR
+                "1.2.840.10008.5.1.4.1.1.88.34",  # Comprehensive 3D SR
+                "1.2.840.10008.5.1.4.1.1.88.35",  # Extensible SR
+                "1.2.840.10008.5.1.4.1.1.88.40",  # Procedure Log
+                "1.2.840.10008.5.1.4.1.1.88.50",  # Mammography CAD SR
+                "1.2.840.10008.5.1.4.1.1.88.59",  # Key Object Selection Document
+                "1.2.840.10008.5.1.4.1.1.88.65",  # Chest CAD SR
+                "1.2.840.10008.5.1.4.1.1.88.67",  # X-Ray Radiation Dose SR
+                "1.2.840.10008.5.1.4.1.1.88.68",  # Radiopharmaceutical Radiation Dose SR
+                "1.2.840.10008.5.1.4.1.1.88.69",  # Colon CAD SR
+                "1.2.840.10008.5.1.4.1.1.88.70",  # Implantation Plan SR
+                "1.2.840.10008.5.1.4.1.1.88.71",  # Acquisition Context SR
+                "1.2.840.10008.5.1.4.1.1.88.72",  # Simplified Adult Echo SR
+                "1.2.840.10008.5.1.4.1.1.88.73",  # Patient Radiation Dose SR
+                "1.2.840.10008.5.1.4.1.1.88.74",  # Planned Imaging Agent Administration SR
+                "1.2.840.10008.5.1.4.1.1.88.75",  # Performed Imaging Agent Administration SR
+                "1.2.840.10008.5.1.4.1.1.88.76",  # Enhanced X-Ray Radiation Dose SR
+                "1.2.840.10008.5.1.4.1.1.88.77",  # Waveform Annotation SR
             ],
         ),
         "PR": (
@@ -346,10 +362,18 @@ def series_is_tseg_eligible(modality: object | None) -> bool:
 # Planar (non-3D) Harmonize: metadata Playbook only — never TotalSegmentator.
 _PLANAR_HARMONIZE_MODALITIES = frozenset({"CR", "DX", "US", "MG"})
 
+# Native report Harmonize (Report View): SeriesDescription from SR/DOC/PDF tags only.
+_REPORT_HARMONIZE_MODALITIES = frozenset({"SR", "DOC", "PDF"})
+
 
 def is_planar_harmonize_modality(value: object | None) -> bool:
     """CR/DX (XR), US, or MG — metadata Harmonize path (isolated from TSEG)."""
     return normalize_modality(value) in _PLANAR_HARMONIZE_MODALITIES
+
+
+def is_report_harmonize_modality(value: object | None) -> bool:
+    """SR / DOC / PDF — Report View Harmonize Description (no TotalSegmentator)."""
+    return normalize_modality(value) in _REPORT_HARMONIZE_MODALITIES
 
 
 def series_is_planar_harmonize_eligible(modality: object | None) -> bool:
@@ -357,9 +381,23 @@ def series_is_planar_harmonize_eligible(modality: object | None) -> bool:
     return is_planar_harmonize_modality(modality)
 
 
+def series_is_report_harmonize_eligible(modality: object | None) -> bool:
+    """ORM helper: SR/DOC/PDF series participate in report Harmonize / Dataset description edit."""
+    return is_report_harmonize_modality(modality)
+
+
+def series_supports_projection_view(modality: object | None) -> bool:
+    """True when a series can appear in Projection View (not native SR/DOC/PDF)."""
+    return not is_report_harmonize_modality(modality)
+
+
 def is_harmonize_modality(value: object | None) -> bool:
-    """Any series Harmonize can run: CT/MR (TSEG) or CR/DX/US/MG (planar)."""
-    return is_tseg_modality(value) or is_planar_harmonize_modality(value)
+    """Any series Harmonize can run: CT/MR, planar XR/US/MG, or native report SR/DOC/PDF."""
+    return (
+        is_tseg_modality(value)
+        or is_planar_harmonize_modality(value)
+        or is_report_harmonize_modality(value)
+    )
 
 
 def series_is_harmonize_eligible(modality: object | None) -> bool:

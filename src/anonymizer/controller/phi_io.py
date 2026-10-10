@@ -360,6 +360,8 @@ def _study_index_harmonized(study: Study) -> bool:
     - Studies with CT/MR series: all CT/MR series have ``harmonized_description``
       (planar siblings do not block).
     - Pure XR/US/MG studies: all planar Harmonize series are done.
+    - Report-only (SR/DOC/PDF) studies are not study-green from series alone;
+      SR/DOC siblings never gate CT/MR or planar green.
     """
     from anonymizer.utils.modalities import (
         series_is_planar_harmonize_eligible,

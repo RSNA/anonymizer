@@ -28,6 +28,7 @@ from anonymizer.controller.ai.blur_face import (
     preview_blurred_slice_frames,
     preview_face_blur,
 )
+from anonymizer.controller.ai.embedded_phi.classify_series import SeriesKind, classify_series
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     OcrWhitelistMatchSettings,
     PixelPhiRemovalMode,
@@ -39,6 +40,11 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
 from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
     apply_instance_embedded_phi_for_dcm,
     remove_pixel_phi,
+)
+from anonymizer.controller.ai.embedded_phi.report.process_report_text import (
+    detect_phi,
+    remove_phi,
+    write_report_text,
 )
 from anonymizer.controller.ai.harmonize import (
     HarmonizeProgress,
@@ -964,6 +970,102 @@ def count_pending_series(
     return {algorithm: len(filter_pending_series(series_items, anon_model, algorithm)) for algorithm in algorithms}
 
 
+def _apply_report_text_phi_series(
+    series_path: Path,
+    *,
+    anon_model: AnonymizerModel,
+    on_log_detail: Callable[[str], None] | None = None,
+    synthetic: bool = False,
+) -> AiBatchOutcome:
+    """
+    De-identify native SR / Encapsulated PDF series via ``process_report_text``.
+
+    Args:
+        series_path: Series directory.
+        anon_model: Anonymizer model for embedded_phi flags.
+        on_log_detail: Optional per-instance log callback.
+        synthetic: If True, synthetic replacements; else blank.
+
+    Returns:
+        Batch outcome for the series.
+    """
+    from anonymizer.utils.storage import get_dcm_files
+
+    dcm_paths = sorted(get_dcm_files(series_path))
+    if not dcm_paths:
+        return AiBatchOutcome(
+            series_path,
+            AiBatchAlgorithm.REMOVE_PIXEL_PHI,
+            "failed",
+            _("No DICOM files found"),
+        )
+
+    try:
+        header = _load_series_dataset(series_path)
+    except ValueError as exc:
+        return AiBatchOutcome(series_path, AiBatchAlgorithm.REMOVE_PIXEL_PHI, "failed", str(exc))
+
+    series_uid = str(header.SeriesInstanceUID)
+    if anon_model.series_embedded_phi_scanned(series_uid):
+        return AiBatchOutcome(
+            series_path,
+            AiBatchAlgorithm.REMOVE_PIXEL_PHI,
+            "skipped",
+            _("Pixel PHI already scanned"),
+        )
+
+    modified_count = 0
+    all_removed: list[str] = []
+    for dcm_path in dcm_paths:
+        try:
+            from pydicom import dcmread
+
+            ds = dcmread(dcm_path)
+            phi_header = None
+            study_uid = str(getattr(ds, "StudyInstanceUID", "") or "")
+            if study_uid:
+                with contextlib.suppress(Exception):
+                    phi_header = anon_model.get_study_phi_header_by_anon_study_uid(study_uid)
+            text, entities = detect_phi(ds, phi_header=phi_header)
+            if not entities:
+                continue
+            removed_texts = [text[e.start : e.end] for e in entities if text[e.start : e.end].strip()]
+            cleaned = remove_phi(text, entities, synthetic=synthetic)
+            sr = write_report_text(ds, cleaned)
+            ds.save_as(dcm_path, enforce_file_format=True)
+            out_dir = series_path.parent / str(sr.SeriesInstanceUID)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            sr.save_as(out_dir / f"{sr.SOPInstanceUID}.dcm", enforce_file_format=True)
+            apply_instance_embedded_phi_for_dcm(anon_model, dcm_path, removed_texts)
+            all_removed.extend(removed_texts)
+            modified_count += 1
+            if on_log_detail is not None and removed_texts:
+                on_log_detail(f"{dcm_path.name}: " + ", ".join(removed_texts[:8]))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Report text PHI failed for %s: %s", dcm_path, exc)
+            return AiBatchOutcome(
+                series_path,
+                AiBatchAlgorithm.REMOVE_PIXEL_PHI,
+                "failed",
+                str(exc),
+            )
+
+    anon_model.set_series_embedded_phi_scanned(series_uid, scanned=True)
+    if modified_count == 0:
+        return AiBatchOutcome(
+            series_path,
+            AiBatchAlgorithm.REMOVE_PIXEL_PHI,
+            "complete",
+            _("No report PHI detected"),
+        )
+    return AiBatchOutcome(
+        series_path,
+        AiBatchAlgorithm.REMOVE_PIXEL_PHI,
+        "ok",
+        _("Report PHI removed") + f" ({modified_count})",
+    )
+
+
 def _apply_remove_pixel_phi_series(
     series_path: Path,
     *,
@@ -983,6 +1085,15 @@ def _apply_remove_pixel_phi_series(
 
     series_uid = str(ds.SeriesInstanceUID)
     series_modality = str(ds.get("Modality", "") or "")
+    kind = classify_series(series_path, modality=series_modality or None)
+    if kind in {SeriesKind.NATIVE_SR, SeriesKind.NATIVE_PDF}:
+        return _apply_report_text_phi_series(
+            series_path,
+            anon_model=anon_model,
+            on_log_detail=on_log_detail,
+            synthetic=False,
+        )
+
     if anon_model.series_embedded_phi_scanned(series_uid):
         return AiBatchOutcome(
             series_path,

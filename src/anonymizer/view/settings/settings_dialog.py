@@ -65,7 +65,11 @@ class SettingsDialog(AppToplevel):
         project_controller: ProjectController | None = None,
     ):
         super().__init__(master=parent)
+        # Shallow copy shares list fields; clone modalities / storage_classes so dialog
+        # edits (and Cancel) cannot mutate the live controller until Update.
         self.model: ProjectModel = copy(model)
+        self.model.modalities = list(model.modalities)
+        self.model.storage_classes = list(model.storage_classes)
         self.project_controller = project_controller
         self.java_phi_studies: List[JavaAnonymizerExportedStudy] = []
         self._ctp_lookup_preview: CtpLookupPreview | None = None
@@ -486,14 +490,18 @@ class SettingsDialog(AppToplevel):
         logger.info(f"Anonymizer Script File updated: {self.model.anonymizer_script_path}")
 
     def _sync_model_from_controller_policy(self) -> None:
-        """Copy policy/script/modalities from the live controller after install."""
+        """Copy policy/script/modalities/storage classes from the controller after install.
+
+        Copies ``storage_classes`` as-is (does not rebuild from modalities) so custom
+        SOP-class selections survive Clinical enablement and Update.
+        """
         if self.project_controller is None:
             return
         ctrl = self.project_controller.model
         self.model.anonymization_policy = normalize_anonymization_policy(ctrl.anonymization_policy)
         self.model.anonymizer_script_path = Path(ctrl.anonymizer_script_path)
         self.model.modalities = list(ctrl.modalities)
-        self.model.set_storage_classes_from_modalities()
+        self.model.storage_classes = list(ctrl.storage_classes)
 
     def _on_anonymization_policy_selected(self, _value: str | None = None) -> None:
         """Existing project: confirm, then replace project script with packaged policy script."""
@@ -648,6 +656,8 @@ class SettingsDialog(AppToplevel):
             self.model.anonymization_policy = normalize_anonymization_policy(self._policy_var.get())
         # Existing project: install packaged script only when policy still differs
         # (radio change already applied it; re-install would wipe Edit Script customizations).
+        # Do not sync from controller when policy is unchanged — that used to rebuild
+        # storage_classes from modalities and discard SOP classes added in this dialog.
         if self.project_controller is not None:
             installed = normalize_anonymization_policy(
                 self.project_controller.model.anonymization_policy
@@ -666,7 +676,7 @@ class SettingsDialog(AppToplevel):
                         parent=self,
                     )
                     return
-            self._sync_model_from_controller_policy()
+                self._sync_model_from_controller_policy()
         self._user_input = self.model, self.java_phi_studies, self._ctp_lookup_preview
 
         teardown_ctk_toplevel(self, parent=self.master)

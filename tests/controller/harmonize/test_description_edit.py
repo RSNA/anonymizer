@@ -126,6 +126,9 @@ def test_classify_and_group_series_choices() -> None:
 
     assert series_description_cohort_key("CT") == "tseg"
     assert series_description_cohort_key("CR") == "XR"
+    assert series_description_cohort_key("SR") == "report"
+    assert series_description_cohort_key("DOC") == "report"
+    assert series_description_cohort_key("PDF") == "report"
     info = classify_description_edit_selection(series_cohort_keys=["XR", "XR"])
     assert info.kind == "series"
     mixed = classify_description_edit_selection(series_cohort_keys=["XR", "US"])
@@ -282,6 +285,23 @@ def test_study_description_edit_offer_skips_non_loinc_current() -> None:
     names = [m.long_common_name for m in offer.matches]
     assert "Custom Study Name" not in names
     assert names[0] == "XR Chest AP"
+
+
+def test_report_only_study_skips_study_loinc_path() -> None:
+    """Orphan SR/DOC/PDF studies are anomalies — no study-LOINC offer/ready path."""
+    from anonymizer.controller.ai.harmonize.pipeline import (
+        maybe_offer_study_description_harmonize,
+        study_loinc_prefix_for_edit,
+        study_ready_for_description_edit,
+    )
+
+    model = MagicMock()
+    model.study_composition_for_harmonize.return_value = (False, False)
+    model.get_study_harmonized_description.return_value = None
+
+    assert study_ready_for_description_edit(model, "study-sr") is False
+    assert study_loinc_prefix_for_edit(model, "study-sr") is None
+    assert maybe_offer_study_description_harmonize(model, "study-sr") is None
 
 
 def test_series_description_edit_choices_raw_mr_not_in_options() -> None:
@@ -520,8 +540,8 @@ def test_phi_index_keeps_original_and_harmonized_study_descriptions() -> None:
     with (
         patch("anonymizer.controller.phi_io._study_index_harmonized", return_value=True),
         patch("anonymizer.controller.phi_io._study_face_blur_label", return_value=""),
-        patch("anonymizer.controller.phi_io._study_pixel_phi_removed", return_value=False),
-        patch("anonymizer.controller.phi_io._study_pixel_phi_digest", return_value=""),
+        patch("anonymizer.controller.phi_io._study_embedded_phi_removed", return_value=False),
+        patch("anonymizer.controller.phi_io._study_embedded_phi_digest", return_value=""),
     ):
         record = _phi_index_record_from_orm(phi, study)
 

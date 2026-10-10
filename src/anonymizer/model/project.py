@@ -251,7 +251,10 @@ class ProjectModel:
             self.anonymization_policy = AnonymizationPolicy(str(raw_policy).strip().lower())
         except ValueError:
             self.anonymization_policy = AnonymizationPolicy.STRICT
-        self.set_storage_classes_from_modalities()
+        # New / empty projects derive SOP classes from modalities; loaded projects keep
+        # persisted custom storage_classes (do not wipe on every __post_init__).
+        if not self.storage_classes:
+            self.set_storage_classes_from_modalities()
 
     def get_class_name(self) -> str:
         return self.__class__.__name__
@@ -319,12 +322,23 @@ class ProjectModel:
         self.site_id = self.default_site_id()
 
     def set_storage_classes_from_modalities(self):
+        """Replace ``storage_classes`` with the union of selected modalities' SOP classes."""
         if self.storage_classes is None:
             self.storage_classes = []
         else:
             self.storage_classes.clear()
         for modality in self.modalities:
             self.storage_classes += get_modalities()[modality][1]
+
+    def ensure_storage_classes_from_modalities(self) -> None:
+        """Add SOP classes for selected modalities without removing custom extras."""
+        if self.storage_classes is None:
+            self.storage_classes = []
+        catalog = get_modalities()
+        for modality in self.modalities:
+            for uid in catalog.get(modality, ("", []))[1]:
+                if uid not in self.storage_classes:
+                    self.storage_classes.append(uid)
 
     def add_storage_class(self, storage_class: str):
         if storage_class not in self.storage_classes:

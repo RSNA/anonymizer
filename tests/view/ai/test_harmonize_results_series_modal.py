@@ -248,19 +248,19 @@ def test_series_view_disables_interaction_while_harmonize_open(
     mock_view = MagicMock()
     mock_view.winfo_exists.return_value = True
     monkeypatch.setattr(
-        "anonymizer.view.series.series.harmonize_allowed_for_modality",
+        "anonymizer.view.ai.harmonize_description.harmonize_allowed_for_modality",
         lambda _modality: True,
     )
     monkeypatch.setattr(
-        "anonymizer.view.series.series.show_harmonize_results_view",
+        "anonymizer.view.ai.harmonize_description.show_harmonize_results_view",
         lambda *args, **kwargs: mock_view,
     )
     monkeypatch.setattr(
-        "anonymizer.view.series.series.get_open_harmonize_view",
+        "anonymizer.view.ai.harmonize_description.get_open_harmonize_view",
         lambda _key: None,
     )
     monkeypatch.setattr(
-        "anonymizer.view.series.series.get_any_open_harmonize_view",
+        "anonymizer.view.ai.harmonize_description.get_any_open_harmonize_view",
         lambda: None,
     )
 
@@ -297,11 +297,11 @@ def test_series_view_second_click_focuses_existing(
     series._harmonize_view = mock_view
     focused: list[object] = []
     monkeypatch.setattr(
-        "anonymizer.view.series.series.harmonize_allowed_for_modality",
+        "anonymizer.view.ai.harmonize_description.harmonize_allowed_for_modality",
         lambda _modality: True,
     )
     monkeypatch.setattr(
-        "anonymizer.view.series.series.focus_harmonize_view",
+        "anonymizer.view.ai.harmonize_description.focus_harmonize_view",
         lambda view: focused.append(view),
     )
 

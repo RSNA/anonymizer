@@ -718,9 +718,103 @@ def _load_planar_series_dataset(series_path: Path) -> Dataset | None:
     return ds
 
 
+def _load_report_series_dataset(series_path: Path) -> Dataset | None:
+    """Load series dataset when modality is SR / DOC / PDF (Report View Harmonize)."""
+    from pydicom.errors import InvalidDicomError
+
+    from anonymizer.utils.modalities import is_report_harmonize_modality
+
+    try:
+        ds = _load_series_dataset(series_path)
+    except (ValueError, OSError, InvalidDicomError):
+        return None
+    if not is_report_harmonize_modality(getattr(ds, "Modality", None)):
+        return None
+    return ds
+
+
 def _load_harmonize_series_dataset(series_path: Path) -> Dataset | None:
-    """Load dataset for any Harmonize-eligible series (TSEG or planar)."""
-    return _load_tseg_series_dataset(series_path) or _load_planar_series_dataset(series_path)
+    """Load dataset for any Harmonize-eligible series (TSEG, planar, or report)."""
+    return (
+        _load_tseg_series_dataset(series_path)
+        or _load_planar_series_dataset(series_path)
+        or _load_report_series_dataset(series_path)
+    )
+
+
+def build_report_harmonized_series_description(ds: Dataset) -> str:
+    """
+    Propose a SeriesDescription for native SR / DOC / PDF (no pixel / TSEG models).
+
+    Prefers existing ``SeriesDescription``, then SR ConceptName meaning,
+    then ``DocumentTitle``, then a modality default.
+    """
+    existing = str(ds.get("SeriesDescription", "") or "").strip()
+    if existing:
+        return existing
+    try:
+        cn = ds.ConceptNameCodeSequence[0]
+        meaning = str(getattr(cn, "CodeMeaning", "") or "").strip()
+        if meaning:
+            return meaning
+    except (AttributeError, IndexError, TypeError):
+        pass
+    title = str(ds.get("DocumentTitle", "") or "").strip()
+    if title:
+        return title
+    mod = str(ds.get("Modality", "") or "").strip().upper()
+    return {
+        "SR": "Structured Report",
+        "DOC": "Document",
+        "PDF": "Encapsulated PDF",
+    }.get(mod, "Report")
+
+
+def _harmonize_one_report_series(
+    series_dir: Path,
+    *,
+    progress: HarmonizeProgressCallback | None,
+    started: float,
+    cancelled: HarmonizeCancelledCallback | None,
+) -> HarmonizedResult | None:
+    """Report Harmonize: propose SeriesDescription from SR/DOC/PDF metadata only."""
+
+    def _report(stage: str, message: str, fraction: float) -> bool:
+        if harmonize_cancel_requested(cancelled):
+            return False
+        if progress is None:
+            return True
+        progress(
+            HarmonizeProgress(
+                stage=stage,
+                message=message,
+                fraction=fraction,
+                elapsed_sec=time.perf_counter() - started,
+                remaining_sec=None,
+            )
+        )
+        return not harmonize_cancel_requested(cancelled)
+
+    series_dir = Path(series_dir)
+    if not _report("merge", "Building report description", 0.3):
+        return None
+    ds = _load_report_series_dataset(series_dir)
+    if ds is None:
+        return HarmonizedResult(
+            series_directory=series_dir,
+            radlex_series_description="",
+            tseg=None,
+            error=_("Not an SR/DOC/PDF series or no DICOM files"),
+        )
+    description = build_report_harmonized_series_description(ds)
+    if not _report("done", "Report description ready", 1.0):
+        return None
+    logger.info("Harmonize report %s -> %s", series_dir.name, description)
+    return HarmonizedResult(
+        series_directory=series_dir,
+        radlex_series_description=description,
+        tseg=None,
+    )
 
 
 def enumerate_ct_series_for_studies(
@@ -892,6 +986,24 @@ def planar_series_paths_for_study(images_dir: Path, anon_patient_id: str, anon_s
     ]
 
 
+def _study_composition_flags(anon_model: AnonymizerModel, anon_study_uid: str) -> tuple[bool, bool]:
+    """
+    Unpack ``study_composition_for_harmonize`` as ``(has_tseg, has_planar)``.
+
+    Missing API defaults to CT|MR-only gate for backward compatibility.
+    Report-only studies are anomalies (dose SR usually rides a parent imaging study)
+    and do not get a separate study-LOINC offer path.
+    """
+    composition = getattr(anon_model, "study_composition_for_harmonize", None)
+    if not callable(composition):
+        return True, False
+    raw = composition(anon_study_uid)
+    try:
+        return bool(raw[0]), bool(raw[1])
+    except (TypeError, IndexError, ValueError):
+        return True, False
+
+
 def maybe_offer_study_description_harmonize(
     anon_model: AnonymizerModel,
     anon_study_uid: str,
@@ -905,6 +1017,7 @@ def maybe_offer_study_description_harmonize(
     CT|MR studies: unchanged TSEG gate + CT/MR LOINC ranking.
     Pure XR/US/MG studies: planar gate + XR/US/MG LOINC ranking.
     Mixed CT|MR + planar: only the CT|MR path (planar series must not block CT LOINC).
+    Report-only studies are skipped (dose/report SRs normally share a parent imaging study).
     """
     from anonymizer.controller.ai.harmonize.loinc_study import (
         build_study_description_ranking,
@@ -918,16 +1031,7 @@ def maybe_offer_study_description_harmonize(
     if anon_model.get_study_harmonized_description(anon_study_uid):
         return None
 
-    composition = getattr(anon_model, "study_composition_for_harmonize", None)
-    if callable(composition):
-        raw = composition(anon_study_uid)
-        try:
-            has_tseg, has_planar = bool(raw[0]), bool(raw[1])
-        except (TypeError, IndexError, ValueError):
-            # Test doubles / unexpected return: fall back to CT|MR-only gate.
-            has_tseg, has_planar = True, False
-    else:
-        has_tseg, has_planar = True, False
+    has_tseg, has_planar = _study_composition_flags(anon_model, anon_study_uid)
 
     # --- CT/MR path (behavioral freeze) ---
     if has_tseg:
@@ -974,62 +1078,63 @@ def maybe_offer_study_description_harmonize(
         )
 
     # --- Pure planar path (no CT/MR siblings) ---
-    if not has_planar:
-        return None
-    if not anon_model.study_is_planar_harmonized(anon_study_uid):
-        return None
+    if has_planar:
+        if not anon_model.study_is_planar_harmonized(anon_study_uid):
+            return None
 
-    descriptions = anon_model.get_planar_series_harmonized_descriptions(anon_study_uid)
-    if not descriptions:
-        return None
+        descriptions = anon_model.get_planar_series_harmonized_descriptions(anon_study_uid)
+        if not descriptions:
+            return None
 
-    modalities = anon_model.get_planar_series_modalities(anon_study_uid)
-    cohorts = {planar_harmonize_cohort(m) for m in modalities}
-    cohorts.discard(None)
-    if len(cohorts) != 1:
-        # Mixed XR+US etc.: skip auto LOINC for v1
-        return None
-    cohort = next(iter(cohorts))
-    assert cohort is not None
+        modalities = anon_model.get_planar_series_modalities(anon_study_uid)
+        cohorts = {planar_harmonize_cohort(m) for m in modalities}
+        cohorts.discard(None)
+        if len(cohorts) != 1:
+            # Mixed XR+US etc.: skip auto LOINC for v1
+            return None
+        cohort = next(iter(cohorts))
+        assert cohort is not None
 
-    image_count: int | None = None
-    if images_dir is not None:
-        patient_id = anon_model.get_anon_patient_id_for_study(anon_study_uid)
-        if patient_id:
-            planar_paths = planar_series_paths_for_study(Path(images_dir), patient_id, anon_study_uid)
-            counted = count_planar_study_images(planar_paths)
-            if counted > 0:
-                image_count = counted
+        image_count: int | None = None
+        if images_dir is not None:
+            patient_id = anon_model.get_anon_patient_id_for_study(anon_study_uid)
+            if patient_id:
+                planar_paths = planar_series_paths_for_study(Path(images_dir), patient_id, anon_study_uid)
+                counted = count_planar_study_images(planar_paths)
+                if counted > 0:
+                    image_count = counted
 
-    fingerprint = fingerprint_for_planar_harmonized_study(anon_model, anon_study_uid)
-    if not fingerprint:
-        return None
+        fingerprint = fingerprint_for_planar_harmonized_study(anon_model, anon_study_uid)
+        if not fingerprint:
+            return None
 
-    from anonymizer.controller.ai.harmonize.playbook_planar import planar_loinc_prefix_for_series_descriptions
+        from anonymizer.controller.ai.harmonize.playbook_planar import planar_loinc_prefix_for_series_descriptions
 
-    loinc_prefix = planar_loinc_prefix_for_series_descriptions(cohort, descriptions)
-    matches = rank_planar_loinc_study_descriptions(
-        descriptions,
-        loinc_prefix=loinc_prefix,
-        top_n=top_n,
-        image_count=image_count,
-    )
-    if not matches:
-        return None
-    ambiguous = len(matches) > 1 and (matches[0].score - matches[1].score) < 80.0
+        loinc_prefix = planar_loinc_prefix_for_series_descriptions(cohort, descriptions)
+        matches = rank_planar_loinc_study_descriptions(
+            descriptions,
+            loinc_prefix=loinc_prefix,
+            top_n=top_n,
+            image_count=image_count,
+        )
+        if not matches:
+            return None
+        ambiguous = len(matches) > 1 and (matches[0].score - matches[1].score) < 80.0
 
-    peers = [
-        uid
-        for uid in anon_model.find_studies_with_planar_series_fingerprint(fingerprint)
-        if uid != anon_study_uid and not anon_model.get_study_harmonized_description(uid)
-    ]
-    return StudyDescriptionOffer(
-        anon_study_uid=anon_study_uid,
-        fingerprint=fingerprint,
-        matches=tuple(matches),
-        peer_study_uids=tuple(peers),
-        ambiguous=ambiguous,
-    )
+        peers = [
+            uid
+            for uid in anon_model.find_studies_with_planar_series_fingerprint(fingerprint)
+            if uid != anon_study_uid and not anon_model.get_study_harmonized_description(uid)
+        ]
+        return StudyDescriptionOffer(
+            anon_study_uid=anon_study_uid,
+            fingerprint=fingerprint,
+            matches=tuple(matches),
+            peer_study_uids=tuple(peers),
+            ambiguous=ambiguous,
+        )
+
+    return None
 
 
 def _looks_like_loinc_study_description(name: str) -> bool:
@@ -1061,15 +1166,7 @@ def study_description_edit_offer(
     from anonymizer.controller.ai.harmonize.playbook_planar import planar_loinc_prefix_for_series_descriptions
     from anonymizer.utils.modalities import is_mr_modality, planar_harmonize_cohort
 
-    composition = getattr(anon_model, "study_composition_for_harmonize", None)
-    if callable(composition):
-        raw = composition(anon_study_uid)
-        try:
-            has_tseg, has_planar = bool(raw[0]), bool(raw[1])
-        except (TypeError, IndexError, ValueError):
-            has_tseg, has_planar = True, False
-    else:
-        has_tseg, has_planar = True, False
+    has_tseg, has_planar = _study_composition_flags(anon_model, anon_study_uid)
 
     current = (anon_model.get_study_harmonized_description(anon_study_uid) or "").strip()
 
@@ -1127,50 +1224,50 @@ def study_description_edit_offer(
             ambiguous=ambiguous if matches else offer.ambiguous,
         )
 
-    if not has_planar:
-        if current:
-            return _with_current([], (current,))
-        return None
+    if has_planar:
+        descriptions = anon_model.get_planar_series_harmonized_descriptions(anon_study_uid)
+        fingerprint = fingerprint_for_planar_harmonized_study(anon_model, anon_study_uid)
+        if not descriptions and not current:
+            return None
+        if not descriptions:
+            return _with_current([], fingerprint or ((current,) if current else ()))
 
-    descriptions = anon_model.get_planar_series_harmonized_descriptions(anon_study_uid)
-    fingerprint = fingerprint_for_planar_harmonized_study(anon_model, anon_study_uid)
-    if not descriptions and not current:
-        return None
-    if not descriptions:
-        return _with_current([], fingerprint or ((current,) if current else ()))
+        modalities = anon_model.get_planar_series_modalities(anon_study_uid)
+        cohorts = {planar_harmonize_cohort(m) for m in modalities}
+        cohorts.discard(None)
+        if len(cohorts) != 1:
+            return _with_current([], fingerprint or tuple(sorted(descriptions)))
 
-    modalities = anon_model.get_planar_series_modalities(anon_study_uid)
-    cohorts = {planar_harmonize_cohort(m) for m in modalities}
-    cohorts.discard(None)
-    if len(cohorts) != 1:
-        return _with_current([], fingerprint or tuple(sorted(descriptions)))
+        cohort = next(iter(cohorts))
+        assert cohort is not None
+        loinc_prefix = planar_loinc_prefix_for_series_descriptions(cohort, descriptions)
 
-    cohort = next(iter(cohorts))
-    assert cohort is not None
-    loinc_prefix = planar_loinc_prefix_for_series_descriptions(cohort, descriptions)
+        image_count: int | None = None
+        get_count = getattr(anon_model, "get_planar_series_instance_count", None)
+        if callable(get_count):
+            counted = int(get_count(anon_study_uid) or 0)
+            if counted > 0:
+                image_count = counted
 
-    image_count: int | None = None
-    get_count = getattr(anon_model, "get_planar_series_instance_count", None)
-    if callable(get_count):
-        counted = int(get_count(anon_study_uid) or 0)
-        if counted > 0:
-            image_count = counted
+        matches = rank_planar_loinc_study_descriptions(
+            descriptions,
+            loinc_prefix=loinc_prefix,
+            top_n=top_n,
+            image_count=image_count,
+        )
+        offer = _with_current(matches, fingerprint or tuple(sorted(descriptions)))
+        ambiguous = len(matches) > 1 and (matches[0].score - matches[1].score) < 80.0
+        return StudyDescriptionOffer(
+            anon_study_uid=offer.anon_study_uid,
+            fingerprint=offer.fingerprint,
+            matches=offer.matches,
+            peer_study_uids=(),
+            ambiguous=ambiguous if matches else offer.ambiguous,
+        )
 
-    matches = rank_planar_loinc_study_descriptions(
-        descriptions,
-        loinc_prefix=loinc_prefix,
-        top_n=top_n,
-        image_count=image_count,
-    )
-    offer = _with_current(matches, fingerprint or tuple(sorted(descriptions)))
-    ambiguous = len(matches) > 1 and (matches[0].score - matches[1].score) < 80.0
-    return StudyDescriptionOffer(
-        anon_study_uid=offer.anon_study_uid,
-        fingerprint=offer.fingerprint,
-        matches=offer.matches,
-        peer_study_uids=(),
-        ambiguous=ambiguous if matches else offer.ambiguous,
-    )
+    if current:
+        return _with_current([], (current,))
+    return None
 
 
 MIN_DESCRIPTION_CHOICES = 4
@@ -1599,14 +1696,7 @@ def study_loinc_prefix_for_edit(anon_model: AnonymizerModel, anon_study_uid: str
     from anonymizer.controller.ai.harmonize.playbook_planar import planar_loinc_prefix_for_series_descriptions
     from anonymizer.utils.modalities import is_mr_modality, planar_harmonize_cohort
 
-    composition = getattr(anon_model, "study_composition_for_harmonize", None)
-    has_tseg, has_planar = False, False
-    if callable(composition):
-        raw = composition(anon_study_uid)
-        try:
-            has_tseg, has_planar = bool(raw[0]), bool(raw[1])
-        except (TypeError, IndexError, ValueError):
-            has_tseg, has_planar = False, False
+    has_tseg, has_planar = _study_composition_flags(anon_model, anon_study_uid)
 
     if has_tseg:
         get_mods = getattr(anon_model, "get_tseg_series_modalities", None)
@@ -1724,10 +1814,11 @@ class DescriptionEditSelection:
 
 
 def series_description_cohort_key(modality: object | None) -> str | None:
-    """Return cohort key for series group edit (``tseg`` / ``XR`` / ``US`` / ``MG``)."""
+    """Return cohort key for series group edit (``tseg`` / ``XR`` / ``US`` / ``MG`` / ``report``)."""
     from anonymizer.utils.modalities import (
         planar_harmonize_cohort,
         series_is_planar_harmonize_eligible,
+        series_is_report_harmonize_eligible,
         series_is_tseg_eligible,
     )
 
@@ -1735,6 +1826,8 @@ def series_description_cohort_key(modality: object | None) -> str | None:
         return "tseg"
     if series_is_planar_harmonize_eligible(modality):
         return planar_harmonize_cohort(modality)
+    if series_is_report_harmonize_eligible(modality):
+        return "report"
     return None
 
 
@@ -1744,15 +1837,9 @@ def study_ready_for_description_edit(anon_model: AnonymizerModel, anon_study_uid
 
     Requires every Harmonize-eligible child series (CT/MR and/or planar) to already
     be marked harmonized — same readiness as ``maybe_offer_study_description_harmonize``.
+    Report-only studies are not study-LOINC editable (anomaly / parent imaging study).
     """
-    composition = getattr(anon_model, "study_composition_for_harmonize", None)
-    has_tseg, has_planar = False, False
-    if callable(composition):
-        raw = composition(anon_study_uid)
-        try:
-            has_tseg, has_planar = bool(raw[0]), bool(raw[1])
-        except (TypeError, IndexError, ValueError):
-            has_tseg, has_planar = False, False
+    has_tseg, has_planar = _study_composition_flags(anon_model, anon_study_uid)
     if not has_tseg and not has_planar:
         return False
     if has_tseg and not anon_model.study_is_harmonized(anon_study_uid):
@@ -2021,14 +2108,7 @@ def find_similar_study_uids(
 
     peers: set[str] = set()
 
-    composition = getattr(anon_model, "study_composition_for_harmonize", None)
-    has_tseg, has_planar = False, False
-    if callable(composition):
-        raw = composition(anon_study_uid)
-        try:
-            has_tseg, has_planar = bool(raw[0]), bool(raw[1])
-        except (TypeError, IndexError, ValueError):
-            has_tseg, has_planar = False, False
+    has_tseg, has_planar = _study_composition_flags(anon_model, anon_study_uid)
 
     if has_tseg:
         fingerprint = fingerprint_for_harmonized_study(anon_model, anon_study_uid)
@@ -2725,15 +2805,21 @@ def harmonize_series(
 
     - CT|MR → TotalSegmentator path (``_harmonize_series_tseg``).
     - CR|DX|US|MG → metadata Playbook only (never TotalSegmentator).
-    - Other modalities (SC/OT/DOC/…) → error result.
+    - SR|DOC|PDF → report metadata SeriesDescription (Report View).
+    - Other modalities (SC/OT/…) → error result.
     """
-    from anonymizer.utils.modalities import is_planar_harmonize_modality, is_tseg_modality
+    from anonymizer.utils.modalities import (
+        is_planar_harmonize_modality,
+        is_report_harmonize_modality,
+        is_tseg_modality,
+    )
 
     if not series_directories:
         return []
 
     tseg_dirs: list[Path] = []
     planar_dirs: list[Path] = []
+    report_dirs: list[Path] = []
     other_dirs: list[Path] = []
     for series_dir in series_directories:
         series_dir = Path(series_dir)
@@ -2747,6 +2833,8 @@ def harmonize_series(
             tseg_dirs.append(series_dir)
         elif is_planar_harmonize_modality(modality):
             planar_dirs.append(series_dir)
+        elif is_report_harmonize_modality(modality):
+            report_dirs.append(series_dir)
         else:
             other_dirs.append(series_dir)
 
@@ -2759,9 +2847,20 @@ def harmonize_series(
                 series_directory=Path(series_dir),
                 radlex_series_description="",
                 tseg=None,
-                error=_("Not a CT/MR/XR/US/MG series or no DICOM files"),
+                error=_("Not a CT/MR/XR/US/MG/SR/DOC/PDF series or no DICOM files"),
             )
         )
+
+    for series_dir in report_dirs:
+        result = _harmonize_one_report_series(
+            series_dir,
+            progress=progress,
+            started=started,
+            cancelled=cancelled,
+        )
+        if result is None:
+            break
+        harmonized.append(result)
 
     for series_dir in planar_dirs:
         result = _harmonize_one_planar_series(

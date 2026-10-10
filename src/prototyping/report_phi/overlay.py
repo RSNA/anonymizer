@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PIL import ImageDraw
 
-from anonymizer.controller.ai.embedded_phi.report.encapsulated_pdf import render_pdf_pages
+from anonymizer.controller.ai.embedded_phi.report.process_report_text import render_pdf_pages
 from anonymizer.view.reports.entity_colors import entity_color_hex
 from prototyping.report_phi.pipeline import PredHit
 

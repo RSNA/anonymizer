@@ -11,6 +11,7 @@ from anonymizer.utils.modalities import (
     is_harmonize_modality,
     is_mr_modality,
     is_planar_harmonize_modality,
+    is_report_harmonize_modality,
     is_tseg_modality,
     normalize_modality,
     planar_harmonize_cohort,
@@ -27,6 +28,14 @@ def test_get_modalities():
     assert isinstance(data, dict)
     expected_keys = ["CR", "DX", "IO", "MG", "CT", "MR", "US", "PT", "NM", "SC", "SR", "PR", "PDF", "OT", "DOC"]
     assert set(data.keys()) == set(expected_keys)
+    sr_uids = data["SR"][1]
+    # Clinical profile enables SR → must accept all …88.* storage classes (dose SRs included).
+    assert "1.2.840.10008.5.1.4.1.1.88.67" in sr_uids  # X-Ray Radiation Dose SR
+    assert "1.2.840.10008.5.1.4.1.1.88.68" in sr_uids  # Radiopharmaceutical Radiation Dose SR
+    assert "1.2.840.10008.5.1.4.1.1.88.73" in sr_uids  # Patient Radiation Dose SR
+    assert "1.2.840.10008.5.1.4.1.1.88.76" in sr_uids  # Enhanced X-Ray Radiation Dose SR
+    assert all(u.startswith("1.2.840.10008.5.1.4.1.1.88.") for u in sr_uids)
+    assert len(sr_uids) >= 20
 
 
 def test_normalize_and_resolve_codes() -> None:
@@ -44,6 +53,9 @@ def test_normalize_and_resolve_codes() -> None:
     assert series_is_planar_harmonize_eligible("MG")
     assert is_harmonize_modality("CT")
     assert series_is_harmonize_eligible("US")
+    assert is_report_harmonize_modality("SR")
+    assert is_report_harmonize_modality("PDF")
+    assert is_harmonize_modality("SR")
     assert planar_harmonize_cohort("CR") in ("XR", "MG", "US", None) or planar_harmonize_cohort("CR") == "XR"
 
 

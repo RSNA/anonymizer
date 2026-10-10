@@ -1,4 +1,4 @@
-"""Shared string similarity matching for OCR whitelists and NER radiology lexicon."""
+"""Shared string similarity matching for OCR modality whitelists."""
 
 from __future__ import annotations
 

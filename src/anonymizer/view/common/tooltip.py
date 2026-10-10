@@ -2,6 +2,7 @@
 
 Colors and spacing come from ``ThemeManager.theme["Tooltip"]`` (rsna_theme.json)
 so Dataset, Analytics, Series View, and settings dialogs share one look.
+Callers may override ``bg``/``fg`` via ``TooltipContent`` (e.g. entity-class chips).
 """
 
 from __future__ import annotations
@@ -9,11 +10,21 @@ from __future__ import annotations
 import contextlib
 import tkinter as tk
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 import customtkinter as ctk
 
 TooltipText = str | Callable[[], str]
+
+
+@dataclass(frozen=True, slots=True)
+class TooltipContent:
+    """Tooltip payload; optional ``bg``/``fg`` override theme colors."""
+
+    text: str
+    bg: str | None = None
+    fg: str | None = None
 
 # Fallbacks only if theme JSON is incomplete (keep in sync with rsna_theme Tooltip).
 _FALLBACK_FG = ("gray90", "gray20")
@@ -61,9 +72,19 @@ def _resolve_tooltip_text(text: TooltipText) -> str:
     return text() if callable(text) else text
 
 
-def show_tooltip(parent: tk.Misc, x_root: int, y_root: int, text: str) -> tk.Toplevel:
+def show_tooltip(
+    parent: tk.Misc,
+    x_root: int,
+    y_root: int,
+    text: str,
+    *,
+    bg: str | None = None,
+    fg: str | None = None,
+) -> tk.Toplevel:
     """Show a borderless tooltip window at screen coordinates (theme-styled)."""
     style = tooltip_style()
+    bg_color = bg or style["bg"]
+    fg_color = fg or style["fg"]
     tip = tk.Toplevel(parent)
     tip.wm_overrideredirect(True)
     # macOS: use the native help-window style (no heavy shadow / chrome).
@@ -76,12 +97,12 @@ def show_tooltip(parent: tk.Misc, x_root: int, y_root: int, text: str) -> tk.Top
             "noActivates",
         )
     tip.wm_geometry(f"+{x_root + TOOLTIP_OFFSET}+{y_root + TOOLTIP_OFFSET}")
-    tip.configure(bg=style["bg"])
+    tip.configure(bg=bg_color)
     label = tk.Label(
         tip,
         text=text,
-        bg=style["bg"],
-        fg=style["fg"],
+        bg=bg_color,
+        fg=fg_color,
         padx=style["padx"],
         pady=style["pady"],
         wraplength=style["wraplength"],
@@ -91,6 +112,15 @@ def show_tooltip(parent: tk.Misc, x_root: int, y_root: int, text: str) -> tk.Top
     )
     label.pack()
     return tip
+
+
+def _as_tooltip_content(payload: str | TooltipContent | None) -> TooltipContent | None:
+    if payload is None:
+        return None
+    if isinstance(payload, TooltipContent):
+        return payload if payload.text else None
+    text = str(payload)
+    return TooltipContent(text) if text else None
 
 
 class HoverTooltipBinding:
@@ -143,7 +173,7 @@ class MotionTooltipController:
     def __init__(
         self,
         widget: tk.Misc,
-        text_for_position: Callable[[tk.Event], str | None],
+        text_for_position: Callable[[tk.Event], str | TooltipContent | None],
         *,
         parent: tk.Misc | None = None,
         debounce_ms: int = 300,
@@ -175,13 +205,20 @@ class MotionTooltipController:
         event = self._pending_event
         if event is None:
             return
-        text = self._text_for_position(event)
-        if not text:
+        content = _as_tooltip_content(self._text_for_position(event))
+        if content is None:
             self.hide()
             return
         if self._tip is not None:
             self._tip.destroy()
-        self._tip = show_tooltip(self._tooltip_parent(), event.x_root, event.y_root, text)
+        self._tip = show_tooltip(
+            self._tooltip_parent(),
+            event.x_root,
+            event.y_root,
+            content.text,
+            bg=content.bg,
+            fg=content.fg,
+        )
 
     def on_motion(self, event: tk.Event) -> None:
         self._pending_event = event

@@ -1020,6 +1020,7 @@ class ProjectController(
                 if code in catalog and code not in mods:
                     mods.append(code)
             self.model.modalities = mods
-            self.model.set_storage_classes_from_modalities()
+            # Add SR/PDF SOP classes; keep any custom storage classes already selected.
+            self.model.ensure_storage_classes_from_modalities()
         logger.info("Applied anonymization policy %s → %s", policy.value, dest)
         return dest

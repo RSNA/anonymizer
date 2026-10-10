@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-from anonymizer.controller.ai.embedded_phi.ner.phi_entity import SCORED_LABELS
+from anonymizer.controller.ai.embedded_phi.ner.ner import SCORED_LABELS
 from anonymizer.view.reports import open_workspace
 from anonymizer.view.reports.entity_colors import ENTITY_COLORS_HEX, entity_color_bgr, entity_color_hex
 
@@ -40,6 +40,7 @@ def test_open_series_workspace_routes_by_kind(tmp_path: Path) -> None:
         assert open_workspace.open_series_workspace(None, modality="SC", **kwargs) == "series"
         assert open_workspace.open_series_workspace(None, modality="SR", **kwargs) == "report"
         assert open_workspace.open_series_workspace(None, modality="DOC", **kwargs) == "report"
-        assert open_workspace.open_series_workspace(None, modality="SC", **kwargs) == "report"
-    assert series.call_count == 2
-    assert [c.kwargs["document_kind"] for c in report.call_args_list] == ["sr", "pdf", "pixel_report"]
+        # Pixel text reports stay in Series View (OCR path), not Report Text Review.
+        assert open_workspace.open_series_workspace(None, modality="SC", **kwargs) == "series"
+    assert series.call_count == 3
+    assert [c.kwargs["document_kind"] for c in report.call_args_list] == ["sr", "pdf"]
