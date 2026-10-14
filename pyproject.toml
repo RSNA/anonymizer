@@ -18,6 +18,7 @@ dependencies = [
     "tkhtmlview",
     "pydicom>=3.0,<4",
     "pynetdicom>=3.0",
+    "dicom-validator>=0.9.0",
     "ifaddr",
     "boto3",
     "openpyxl",
@@ -111,6 +112,13 @@ metadata-phi = [
     "spacy>=3.7",
     "pypdf>=4.0",
 ]
+# Official CBIIT MIDI_validation_script (prototyping/midi_b score step).
+# pandas<3: upstream still uses DataFrame.applymap (removed in pandas 3).
+midi-b = [
+    "nltk>=3.9",
+    "pandas>=1.4,<3",
+    "tqdm>=4.66.3",
+]
 
 [tool.ruff]
 target-version = "py311"
@@ -144,12 +152,13 @@ max-complexity = 15
 
 [tool.pytest.ini_options]
 testpaths = ["tests/controller", "tests/model", "tests/mcp"]
-addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model --cov=src/anonymizer/mcp -m \"not ocr_integration and not view_dev\""
+addopts = "--verbose --cov=src/anonymizer/controller --cov=src/anonymizer/utils --cov=src/anonymizer/model --cov=src/anonymizer/mcp -m \"not ocr_integration and not view_dev and not pseudo_phi_integration\""
 pythonpath = ["src", "."]
 filterwarnings = []
 markers = [
     "tseg_integration: run TotalSegmentator inference (slow, optional)",
     "ocr_integration: EasyOCR on real burnt-in PHI fixtures under tests/controller/ocr (opt-in; excluded from default)",
+    "pseudo_phi_integration: PseudoPHI local dataset pipeline (script+KB+NER); opt-in; needs DATA/Pseudo-PHI-DICOM-Dataset",
     "dicom_integration: managed Orthanc PACS (DIMSE + DICOMweb); included in default suite; skip with -m 'not dicom_integration'",
     "rsna_local_data: requires local RSNA_TEST_DATA directory (skipped when absent)",
     "view_dev: local Series View layout tests against developer MRI_TEST fixtures (excluded from default; not in testpaths)",

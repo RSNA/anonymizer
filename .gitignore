@@ -78,13 +78,12 @@ src/certs/
 *.dmg
 *.zip
 src/anonymizer/assets/ai/ocr/
-src/anonymizer/assets/ai/phi_ner/model/
 src/anonymizer/assets/ai/embedded_phi/model/
 src/anonymizer/assets/ai/tseg/
 src/anonymizer/assets/ai/xp_bodypart/
-src/anonymizer/assets/ai/cxp_view/
-assets/ai/xp_bodypart/
-assets/ai/cxp_view/
+src/anonymizer/assets/ai/xr_chest_view/
+# Legacy cwd-relative trap (do not recreate at repo root)
+/assets/ai/
 src/prototyping/falcon/assets/models/
 phi_imgs/
 **/radon_results.txt
@@ -100,3 +99,10 @@ Pipfile.lock
 site/
 .cache/
 docs/.capture_work/
+
+# --- Pseudo-PHI de-id experiment outputs ---
+src/prototyping/pseudo_phi_deid/results/**
+!src/prototyping/pseudo_phi_deid/results/.gitkeep
+src/prototyping/midi_b/results/**
+!src/prototyping/midi_b/results/.gitkeep
+src/prototyping/midi_b/vendor/**

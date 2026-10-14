@@ -17,6 +17,8 @@ def test_loaded_series_exposes_frames_field() -> None:
     names = {f.name for f in dataclasses.fields(series_io.LoadedSeries)}
     assert "frames" in names
     assert "slices" not in names
+    assert "metadata_by_sop" in names
+    assert "metadata_unique_texts" in names
 
 
 def test_load_series_frames_and_save_roundtrip(tmp_path: Path) -> None:
@@ -26,4 +28,6 @@ def test_load_series_frames_and_save_roundtrip(tmp_path: Path) -> None:
     loaded = series_io.load_series_frames(tmp_path)
     assert loaded.frames.shape[0] >= 1
     assert loaded.frames.dtype == np.float32
+    assert loaded.metadata_by_sop
+    assert isinstance(loaded.metadata_unique_texts, tuple)
     assert series_io.save_series_frames(tmp_path, loaded.frames, loaded.metadata)

@@ -8,6 +8,7 @@ Public API::
 
     from anonymizer.controller.ai.embedded_phi.report.process_report_text import (
         detect_phi,
+        detect_phi_in_text,
         remove_phi,
         write_report_text,
         render_pdf_pages,

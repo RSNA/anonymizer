@@ -14,15 +14,19 @@ _THEME_PATH = Path(__file__).resolve().parents[3] / "src" / "anonymizer" / "asse
 
 @pytest.fixture(scope="session", autouse=True)
 def _init_customtkinter_theme() -> None:
+    """Match product light chrome so Treeview + CTk resolve the same appearance pairs."""
     import customtkinter as ctk
 
-    ctk.set_appearance_mode("dark")
+    ctk.set_appearance_mode("light")
     ctk.set_default_color_theme(str(_THEME_PATH))
 
 
 @pytest.fixture
 def tk_root():
-    root = tk.Tk()
+    """CTk root (not bare ``tk.Tk``) so nested CTkFrames get consistent theme colors."""
+    import customtkinter as ctk
+
+    root = ctk.CTk()
     root.withdraw()
     yield root
     with contextlib.suppress(tk.TclError):

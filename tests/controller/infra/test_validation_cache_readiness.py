@@ -10,7 +10,7 @@ from pydicom import Dataset
 from pydicom.dataset import FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian
 
-from anonymizer.controller.ai.harmonize.cxp_view.cache import (
+from anonymizer.controller.ai.harmonize.xr_chest_view.cache import (
     CxpViewModelStatus,
     download_cxp_view_models,
     probe_cxp_view_models,
@@ -112,10 +112,10 @@ def test_cxp_and_xp_cache_probe_and_fake_download(tmp_path: Path, monkeypatch: p
     weight = tmp_path / "w.pt"
     weight.write_bytes(b"tiny")
     monkeypatch.setattr(
-        "anonymizer.controller.ai.harmonize.cxp_view.cache.CXP_VIEW_WEIGHT_PATH", weight
+        "anonymizer.controller.ai.harmonize.xr_chest_view.cache.XR_CHEST_VIEW_WEIGHT_PATH", weight
     )
     monkeypatch.setattr(
-        "anonymizer.controller.ai.harmonize.cxp_view.cache.CXP_VIEW_DIR", tmp_path
+        "anonymizer.controller.ai.harmonize.xr_chest_view.cache.XR_CHEST_VIEW_DIR", tmp_path
     )
     status, _ = probe_cxp_view_models()
     assert status == CxpViewModelStatus.FAILED
@@ -123,11 +123,11 @@ def test_cxp_and_xp_cache_probe_and_fake_download(tmp_path: Path, monkeypatch: p
     big = tmp_path / "big.pt"
     big.write_bytes(b"x" * 1_000_001)
     monkeypatch.setattr(
-        "anonymizer.controller.ai.harmonize.cxp_view.cache.CXP_VIEW_WEIGHT_PATH", big
+        "anonymizer.controller.ai.harmonize.xr_chest_view.cache.XR_CHEST_VIEW_WEIGHT_PATH", big
     )
     assert probe_cxp_view_models()[0] == CxpViewModelStatus.READY
 
-    import anonymizer.controller.ai.harmonize.cxp_view.cache as cxp_mod
+    import anonymizer.controller.ai.harmonize.xr_chest_view.cache as cxp_mod
 
     monkeypatch.setattr(cxp_mod, "_downloading", True)
     assert probe_cxp_view_models()[0] == CxpViewModelStatus.DOWNLOADING
@@ -139,11 +139,11 @@ def test_cxp_and_xp_cache_probe_and_fake_download(tmp_path: Path, monkeypatch: p
 
     monkeypatch.setattr(cxp_mod, "_download_file", _fake_dl)
     monkeypatch.setattr(
-        "anonymizer.controller.ai.harmonize.cxp_view.predict.clear_model_cache",
+        "anonymizer.controller.ai.harmonize.xr_chest_view.predict.clear_model_cache",
         lambda: None,
     )
     missing = tmp_path / "missing.pt"
-    monkeypatch.setattr(cxp_mod, "CXP_VIEW_WEIGHT_PATH", missing)
+    monkeypatch.setattr(cxp_mod, "XR_CHEST_VIEW_WEIGHT_PATH", missing)
     ok, _msg = download_cxp_view_models()
     assert ok is True
     remove_cxp_view_models()
@@ -180,7 +180,7 @@ def test_cxp_and_xp_cache_probe_and_fake_download(tmp_path: Path, monkeypatch: p
 
 
 def test_download_file_with_mocked_requests(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    import anonymizer.controller.ai.harmonize.cxp_view.cache as cxp_mod
+    import anonymizer.controller.ai.harmonize.xr_chest_view.cache as cxp_mod
 
     class _Resp:
         headers = {"Content-Length": "10"}

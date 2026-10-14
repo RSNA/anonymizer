@@ -11,13 +11,16 @@ Modalities
 
 Public API
 ----------
-``detect_phi(ds, *, phi_header=None)``
-    Extract report unicode (unchanged). Match original PHI metadata strings from
-    ``phi_header`` in that text and tag spans with the DICOM keyword
-    (``PatientID``, ``AccessionNumber``, …) plus ``replacement`` = anonymized
-    value already on ``ds``. Then run NER on the **same original** text.
-    Metadata spans take precedence: overlapping NER hits are dropped.
-    Text is not rewritten here — NER never sees anonymized strings.
+``detect_phi_in_text(text, ds, *, phi_header=None, whitelist=())``
+    Study-PHI string match on original unicode, then NER on a same-length
+    radiology-filtered mask (anon surfaces / UIDs / dates / whitelist terms);
+    metadata spans win on overlap. Source text is never rewritten by detect.
+
+``detect_phi(ds, *, phi_header=None, whitelist=())``
+    Extract report unicode, then ``detect_phi_in_text``.
+
+``merge_phi_entities(meta, ner)``
+    Metadata spans win; drop overlapping NER spans.
 
 ``remove_phi(text, entities, *, synthetic=False)``
     Replace spans in unicode. Metadata entities (``replacement`` set) always
@@ -58,7 +61,11 @@ from anonymizer.controller.ai.embedded_phi.classify_series import (
     ENCAPSULATED_PDF_SOP_CLASS_UID,
     SR_SOP_CLASS_PREFIX,
 )
-from anonymizer.controller.ai.embedded_phi.ner.ner import Entity, detect_entities, replace_entities
+from anonymizer.controller.ai.embedded_phi.ner.engine import Entity, detect_entities, replace_entities
+from anonymizer.controller.ai.embedded_phi.ner.radiology_filters import (
+    collect_anonymized_values,
+    mask_text_for_ner,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -116,20 +123,61 @@ _LABEL_VALUE = re.compile(r"^(.+?:)\s*$")
 # ---------------------------------------------------------------------------
 
 
+def detect_phi_in_text(
+    text: str,
+    ds: Dataset,
+    *,
+    locale: str = "en_US",
+    phi_header: object | None = None,
+    whitelist: Sequence[str] | None = None,
+) -> list[Entity]:
+    """
+    Report View PHI pipeline on arbitrary unicode (source text unchanged).
+
+    1. Metadata: match original PHI strings from ``phi_header``; each hit is
+       labeled with the DICOM keyword and carries ``replacement`` = anonymized
+       value already on ``ds``.
+    2. Radiology pre-NER mask (anon surfaces / UIDs / compact dates / whitelist).
+    3. NER on the masked unicode (same length → offsets still match ``text``);
+       spans overlapping metadata are dropped.
+    """
+    body = str(text or "")
+    if not body.strip():
+        return []
+    meta_ents = entities_from_study_phi(body, ds, phi_header)
+    anon_values = collect_anonymized_values(ds)
+    masked = mask_text_for_ner(
+        body,
+        whitelist=whitelist or (),
+        anon_values=anon_values,
+        log_context="report",
+    )
+    ner_ents = detect_entities(masked.text, locale=locale)
+    entities, ner_dropped = merge_phi_entities(meta_ents, ner_ents)
+    logger.info(
+        "report: detect_phi_in_text entities=%d "
+        "(metadata=%d ner_kept=%d ner_dropped_overlap=%d masked=%d chars=%d)",
+        len(entities),
+        len(meta_ents),
+        len(ner_ents) - ner_dropped,
+        ner_dropped,
+        len(masked.hits),
+        len(body),
+    )
+    return entities
+
+
 def detect_phi(
     ds: Dataset,
     *,
     locale: str = "en_US",
     phi_header: object | None = None,
+    whitelist: Sequence[str] | None = None,
 ) -> tuple[str, list[Entity]]:
     """
     Extract report unicode from ``ds`` and find PHI spans (text unchanged).
 
-    1. Metadata: match original PHI strings from ``phi_header`` in the body;
-       each hit is labeled with the DICOM keyword (``PatientID``, …) and carries
-       ``replacement`` = anonymized value already on ``ds``.
-    2. NER on the same original text; spans overlapping metadata are dropped
-       (metadata wins — e.g. an NER ``ID`` on the PatientID string is discarded).
+    Delegates scoring to ``detect_phi_in_text`` (study-PHI match then filtered NER).
 
     SR: Modality SR or SOP Class ``1.2.840.10008.5.1.4.1.1.88.*``.
     DOC/PDF: Modality DOC|PDF or Encapsulated PDF SOP ``…104.1``.
@@ -138,6 +186,7 @@ def detect_phi(
         ds: DICOM dataset (SR or Encapsulated PDF / DOC); headers already anonymized.
         locale: NER locale pack (default ``en_US``).
         phi_header: ``StudyPhiHeader`` (or duck-type) with original PHI field strings.
+        whitelist: Optional radiology terms masked before NER.
 
     Returns:
         ``(text, entities)`` with entity offsets into ``text``.
@@ -149,7 +198,7 @@ def detect_phi(
     text = extract_report_text(ds)
     logger.info(
         "report: detect start kind=%s chars=%d phi_header=%s "
-        "(metadata then NER; text unchanged until remove)",
+        "(metadata then filtered NER; text unchanged until remove)",
         kind,
         len(text),
         "yes" if phi_header is not None else "no",
@@ -162,16 +211,16 @@ def detect_phi(
         )
         return text, []
 
-    meta_ents = entities_from_study_phi(text, ds, phi_header)
-    ner_ents = detect_entities(text, locale=locale)
-    entities, ner_dropped = _merge_phi_entities(meta_ents, ner_ents)
+    entities = detect_phi_in_text(
+        text,
+        ds,
+        locale=locale,
+        phi_header=phi_header,
+        whitelist=whitelist,
+    )
     logger.info(
-        "report: detect done text_unchanged=1 entities=%d "
-        "(metadata=%d ner_kept=%d ner_dropped_overlap=%d)",
+        "report: detect done text_unchanged=1 entities=%d",
         len(entities),
-        len(meta_ents),
-        len(ner_ents) - ner_dropped,
-        ner_dropped,
     )
     return text, entities
 
@@ -322,7 +371,7 @@ def _spans_overlap(start: int, end: int, occupied: Sequence[tuple[int, int]]) ->
     return any(start < b and end > a for a, b in occupied)
 
 
-def _merge_phi_entities(
+def merge_phi_entities(
     meta: Sequence[Entity], ner: Sequence[Entity]
 ) -> tuple[list[Entity], int]:
     """
@@ -348,6 +397,10 @@ def _merge_phi_entities(
         merged.append(ent)
     merged.sort(key=lambda e: (e.start, e.end))
     return merged, dropped
+
+
+# Back-compat alias
+_merge_phi_entities = merge_phi_entities
 
 
 def remove_phi(

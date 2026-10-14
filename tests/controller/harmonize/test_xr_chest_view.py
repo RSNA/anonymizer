@@ -1,4 +1,4 @@
-"""Unit tests for CXR projection/rotation (cxp_view)."""
+"""Unit tests for XR chest view (projection/rotation; historically cxp_view)."""
 
 from __future__ import annotations
 
@@ -10,14 +10,14 @@ import pytest
 from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, generate_uid
 
-from anonymizer.controller.ai.harmonize.cxp_view.cache import CxpViewModelStatus, probe_cxp_view_models
-from anonymizer.controller.ai.harmonize.cxp_view.fuse import fuse_xr_view
-from anonymizer.controller.ai.harmonize.cxp_view.labels import (
+from anonymizer.controller.ai.harmonize.xr_chest_view.cache import CxpViewModelStatus, probe_cxp_view_models
+from anonymizer.controller.ai.harmonize.xr_chest_view.fuse import fuse_xr_view
+from anonymizer.controller.ai.harmonize.xr_chest_view.labels import (
     CXP_PROJECTION_LABELS,
     map_projection_to_playbook_view,
 )
-from anonymizer.controller.ai.harmonize.cxp_view.predict import CxpViewPrediction
-from anonymizer.controller.ai.harmonize.cxp_view.preprocess import upright_array
+from anonymizer.controller.ai.harmonize.xr_chest_view.predict import CxpViewPrediction
+from anonymizer.controller.ai.harmonize.xr_chest_view.preprocess import upright_array
 from anonymizer.controller.ai.harmonize.playbook_planar import (
     build_planar_playbook_attributes,
     planar_harmonize_analysis_rows,
@@ -94,7 +94,7 @@ def test_fuse_agree_and_pixel_only() -> None:
 
 def test_probe_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "anonymizer.controller.ai.harmonize.cxp_view.cache.CXP_VIEW_WEIGHT_PATH",
+        "anonymizer.controller.ai.harmonize.xr_chest_view.cache.XR_CHEST_VIEW_WEIGHT_PATH",
         tmp_path / "cxp_projection_rotation.pt",
     )
     status, _ = probe_cxp_view_models()
@@ -150,7 +150,7 @@ def _stub_planar_pipeline(
 
     monkeypatch.setattr(pipe, "_load_planar_series_dataset", lambda _p: ds)
     monkeypatch.setattr(
-        "anonymizer.controller.ai.harmonize.cxp_view.cxp_view_ready",
+        "anonymizer.controller.ai.harmonize.xr_chest_view.cxp_view_ready",
         lambda: True,
     )
     monkeypatch.setattr(
@@ -159,7 +159,7 @@ def _stub_planar_pipeline(
     )
     called = MagicMock(return_value=_pred("AP", 0.95))
     monkeypatch.setattr(
-        "anonymizer.controller.ai.harmonize.cxp_view.predict_cxp_view",
+        "anonymizer.controller.ai.harmonize.xr_chest_view.predict_cxp_view",
         called,
     )
     monkeypatch.setattr(

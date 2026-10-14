@@ -11,14 +11,14 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from anonymizer.controller.ai.harmonize.cxp_view.cache import CXP_VIEW_WEIGHT_PATH, cxp_view_ready
-from anonymizer.controller.ai.harmonize.cxp_view.labels import (
+from anonymizer.controller.ai.harmonize.xr_chest_view.cache import CXP_VIEW_WEIGHT_PATH, cxp_view_ready
+from anonymizer.controller.ai.harmonize.xr_chest_view.labels import (
     CXP_PROJECTION_LABELS,
     CXP_ROTATION_LABELS,
     map_projection_to_playbook_view,
 )
-from anonymizer.controller.ai.harmonize.cxp_view.model import CxpViewNet, load_cxp_view_weights
-from anonymizer.controller.ai.harmonize.cxp_view.preprocess import (
+from anonymizer.controller.ai.harmonize.xr_chest_view.model import CxpViewNet, load_cxp_view_weights
+from anonymizer.controller.ai.harmonize.xr_chest_view.preprocess import (
     tensor_from_grayscale_array,
     upright_array,
 )

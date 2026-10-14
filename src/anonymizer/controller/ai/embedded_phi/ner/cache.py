@@ -35,13 +35,14 @@ import shutil
 from enum import StrEnum
 from pathlib import Path
 
+from anonymizer.utils.package_paths import ai_feature_dir
 from anonymizer.utils.storage import update_model_download
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
 HF_REPO_ID = "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1"
-MODEL_DIR = Path(__file__).resolve().parents[4] / "assets" / "ai" / "embedded_phi" / "model"
+MODEL_DIR = ai_feature_dir("embedded_phi", "model")
 _MIN_MODEL_FILES = 3
 DOWNLOAD_ID = "embedded_phi"
 _downloading = False

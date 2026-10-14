@@ -11,11 +11,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from anonymizer.controller.project import ProjectController
 from anonymizer.model.anonymizer import LookupPatient
 
 if TYPE_CHECKING:
     from anonymizer.controller.anonymizer_script import ScriptDocument
+    from anonymizer.controller.project import ProjectController
 
 logger = logging.getLogger(__name__)
 

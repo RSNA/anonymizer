@@ -36,6 +36,7 @@ CERVICAL
 THORACIC
 LUMBAR
 CHEST
+BREAST
 ABDOMEN
 PELVIS
 HIP
@@ -110,6 +111,10 @@ DWI # Diffusion Weighted Imaging
 ADC # Apparent Diffusion Coefficient
 B VALUE
 TRACE
+MIP
+MPR
+LOCALIZER
+SCOUT
 GRE # Gradient Echo
 SE # Spin Echo
 FSE # Fast Spin Echo

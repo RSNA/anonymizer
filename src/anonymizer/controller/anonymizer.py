@@ -31,6 +31,7 @@ from pydicom.datadict import dictionary_VR
 from pydicom.errors import InvalidDicomError
 from pydicom.tag import Tag
 
+from anonymizer.controller.anonymizer_script import always_literal_text, incrementdate_days, rebasedate_origin
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.model.project import DICOMNode, ProjectModel
 from anonymizer.utils.storage import DICOM_FILE_SUFFIX
@@ -379,14 +380,19 @@ class AnonymizerController:
         """
         # removes parentheses, spaces, and commas from tag
         tag = str(data_element.tag).translate(self._clean_tag_translate_table).upper()
+        # Clinical profile — skip private (Embedded PHI owns them).
+        if data_element.tag.is_private:
+            return
         # Remove data_element if not in _tag_keep (exact or GGGGXXEE pattern):
         operation = self.model.resolve_tag_keep(tag)
         if operation is None:
             del dataset[tag]
             return
         value = data_element.value
-        # Keep data_element if no operation:
-        if operation == "" or operation == "@keep":
+        # Keep data_element if no operation / @keep / @safe (retain; NER policy elsewhere):
+        if operation in ("", "@keep", "@safe", "@safe()"):
+            return
+        if str(operation).startswith("@safe"):
             return
         # Anonymize operations:
         if "@empty" in operation:
@@ -402,19 +408,23 @@ class AnonymizerController:
             elif anon_acc_no:
                 dataset[tag].value = anon_acc_no
         elif "@incrementdate" in operation:
-            from anonymizer.controller.anonymizer_script import incrementdate_days
-
             days = incrementdate_days(operation)
             if days is None:
                 logger.error("Invalid incrementdate operation: %s", operation)
                 return
-            dataset[tag].value = self._apply_date_offset(
-                str(value) if value is not None else "", days
-            )
+            raw = str(value) if value is not None else ""
+            # AcquisitionDateTime empty but AcquisitionDate present: PseudoPHI gold
+            # (and MIDI) fill AcqDT from the (already shifted) AcquisitionDate.
+            # Walk order hits (0008,0022) before (0008,002A), so do not shift again.
+            if not raw.strip() and tag == "0008002A":
+                acq_date = str(getattr(dataset, "AcquisitionDate", "") or "").strip()
+                if acq_date:
+                    dataset[tag].value = acq_date
+                    self._dates_shifted_this_dataset = True
+                    return
+            dataset[tag].value = self._apply_date_offset(raw, days)
             self._dates_shifted_this_dataset = True
         elif "@rebasedate" in str(operation or "").lower():
-            from anonymizer.controller.anonymizer_script import rebasedate_origin
-
             origin = rebasedate_origin(operation)
             offset = self._rebase_offset_days_for_patient(phi_ptid, origin=origin)
             if offset is None:
@@ -451,7 +461,6 @@ class AnonymizerController:
             logger.debug(f"round_age: Result:{dataset[tag].value}")
         else:
             # CTP fixed value: bare literal (YES) or @always()YES
-            from anonymizer.controller.anonymizer_script import always_literal_text
 
             literal = always_literal_text(operation)
             if literal is not None:
@@ -461,8 +470,6 @@ class AnonymizerController:
         self, phi_ptid: str, *, origin: str | None = None
     ) -> int | None:
         """Days to add for @rebasedate: ORIGIN − basedate (TCIA epoch rebase)."""
-        from anonymizer.controller.anonymizer_script import rebasedate_origin
-
         lookup = self.model.get_lookup_patient(phi_ptid)
         basedate = getattr(lookup, "basedate", None) if lookup is not None else None
         if not basedate:
@@ -509,7 +516,6 @@ class AnonymizerController:
 
     def _insert_always_missing_elements(self, ds: Dataset) -> None:
         """Create missing non-SQ elements whose script uses ``@always()…`` (CTP create-if-missing)."""
-        from anonymizer.controller.anonymizer_script import always_literal_text
 
         for tag_hex, operation in self.model._tag_keep.items():
             op = str(operation or "").strip()
@@ -600,9 +606,11 @@ class AnonymizerController:
                 policy = AnonymizationPolicy(str(raw).strip().lower())
             except ValueError:
                 policy = AnonymizationPolicy.STRICT
-            if policy is AnonymizationPolicy.STRICT:
-                ds.remove_private_tags()  # wipe all private elements before walk
-            # Clinical: skip wipe; TCIA keep/uid/date rules live in _tag_keep; unknown private deleted by walk
+
+            # Strict: wipe private before walk (fast). Clinical: keep + skip in walk.
+            self._preserve_private_tags = policy is AnonymizationPolicy.CLINICAL
+            if not self._preserve_private_tags:
+                ds.remove_private_tags()
 
             # if ds.PatientID not present, set to '' so that anonymization script can process the element:
             if not hasattr(ds, "PatientID"):

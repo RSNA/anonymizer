@@ -37,7 +37,7 @@ _DATE_VRS = frozenset({"DA", "DT"})
 _UID_VRS = frozenset({"UI"})
 _AGE_VRS = frozenset({"AS"})
 # Universal operands — never gated.
-_UNRESTRICTED_OPERAND_IDS = frozenset({"keep", "remove", "empty", "always"})
+_UNRESTRICTED_OPERAND_IDS = frozenset({"keep", "safe", "remove", "empty", "always", "process"})
 
 PAGE_SIZE = 300
 
@@ -68,8 +68,18 @@ OPERANDS: tuple[OperandSpec, ...] = (
         "Keep",
         "",
         "Leave the value unchanged. In the script this is written as @keep "
-        "(or an empty operation). Use this for tags that are not PHI and must "
-        "stay exactly as received.",
+        "(or an empty operation). Kept free-text may still be scanned by Embedded "
+        "PHI / report NER. Use @safe() for retained technical values that must "
+        "not be NER-scrubbed.",
+    ),
+    OperandSpec(
+        "safe",
+        "Safe keep",
+        "@safe()",
+        "Product extension (not a CTP operand): leave the value unchanged and "
+        "exclude it from Embedded PHI / PseudoPHI bulk NER. Use for equipment "
+        "and other technical strings that must be retained but are not free-text "
+        "PHI (for example ManufacturerModelName).",
     ),
     OperandSpec(
         "remove",
@@ -201,6 +211,15 @@ OPERANDS: tuple[OperandSpec, ...] = (
             "If the element is absent, @always() creates it."
         ),
     ),
+    OperandSpec(
+        "process",
+        "Process sequence",
+        "@process()",
+        "CTP sequence operand: keep the sequence element and recursively apply "
+        "script rules to items inside it (do not delete the SQ wrapper). "
+        "Used for sequences TCIA marks as process (e.g. Content Sequence, "
+        "Referenced Image Sequence).",
+    ),
 )
 
 _OPERAND_BY_ID = {spec.id: spec for spec in OPERANDS}
@@ -260,7 +279,12 @@ def always_literal_text(operation: str | None) -> str | None:
 def is_date_shift_operation(operation: str | None) -> bool:
     """True when the operation shifts DA/DT values (triggers MODIFIED stamp)."""
     op_id = operand_id_for_operation(operation)
-    return op_id in _DATE_SHIFT_OPERAND_IDS
+    if op_id in _DATE_SHIFT_OPERAND_IDS:
+        return True
+    # Clinical / TCIA compile emits ``@hashdate(this,StudyDate)`` which is not a
+    # bare catalog template but is a date-shift at runtime (``\"@hashdate\" in op``).
+    text = str(operation or "").strip().lower()
+    return "@hashdate" in text
 
 
 def _normalize_tag_hex(tag: str) -> str | None:

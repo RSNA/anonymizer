@@ -6,21 +6,31 @@ Burnt-in pixel OCR (`pixel/`) and free-text NER (`ner/`) for post-ingest de-iden
 
 | Module | Role |
 | --- | --- |
-| [`ner/ner.py`](ner/ner.py) | `Entity`; `detect_entities(text)` → spans; `replace_entities(...)` blank/synth |
+| [`ner/engine.py`](ner/engine.py) | `Entity`; `detect_entities` / `detect_entities_in_segments`; `replace_entities` |
 | [`ner/cache.py`](ner/cache.py) | `ner_ready` / `probe_ner_models` / `download_ner_models` / `remove_ner_models` |
 | [`ner/synthetic_phi.py`](ner/synthetic_phi.py) + `pools/` | `generate_synthetic_phi(...)` offline replacements |
-| [`report/process_report_text.py`](report/process_report_text.py) | `detect_phi(ds, *, phi_header=…)` / `remove_phi` / `write_report_text` → Basic Text SR |
+| [`report/process_report_text.py`](report/process_report_text.py) | `detect_phi_in_text` / `detect_phi` / `remove_phi` / `write_report_text` |
 | [`pixel/detect_text.py`](pixel/detect_text.py) | EasyOCR → whitelist → `detect_entities` for PHI labels |
 | [`pixel/remove_pixel_phi.py`](pixel/remove_pixel_phi.py) | Frame blackout / inpaint |
+| [`metadata/iod_allowlist.py`](metadata/iod_allowlist.py) | SOP Class IOD allow-list → `iod_unexpected` on public text/dates |
+| [`metadata/series_index.py`](metadata/series_index.py) | Per-SOP rows + interned unique free-text index for series load / Detect |
+| [`metadata/process_private_tags_tcia.py`](metadata/process_private_tags_tcia.py) | Creator-aware TCIA Private KB apply + disposition helpers |
+
+**PseudoPHI header path (no pixels / no regex):** (1) Clinical anonymizer script → (2) `process_private_tags_tcia` → (3–6) extract / prepare NER / bulk detect / scrub.
+
+IOD JSON is vendored at [`assets/dicom_standard/2025e/json/`](../../../assets/dicom_standard/2025e/json/) (~**2.4 MiB** total; see [`SOURCE.md`](../../../assets/dicom_standard/SOURCE.md)).
+
+`load_series_frames` attaches `LoadedSeries.metadata_by_sop` and `metadata_unique_texts` (dates excluded from the unique index; identical strings interned across SOPs).
 
 ### NER package (`ner/`)
 
 Each submodule documents its **Public API** at the top of the file (same layout as `process_report_text`). Import from the concrete module:
 
 ```python
-from anonymizer.controller.ai.embedded_phi.ner.ner import (
+from anonymizer.controller.ai.embedded_phi.ner.engine import (
     Entity,
     detect_entities,
+    detect_entities_in_segments,
     replace_entities,
 )
 from anonymizer.controller.ai.embedded_phi.ner.cache import ner_ready, download_ner_models
@@ -30,6 +40,7 @@ from anonymizer.controller.ai.embedded_phi.ner.synthetic_phi import generate_syn
 | Call | Returns |
 | --- | --- |
 | `detect_entities(text, *, locale="en_US")` | `list[Entity]` (offsets into `text`) |
+| `detect_entities_in_segments(segments, …)` | per-segment `list[Entity]` (chunks of whole fields; breaks only on field boundaries) |
 | `replace_entities(text, entities=None, *, mode="blank"\|"synth", …)` | `(new_text, entities_used)` |
 | `ner_ready()` | `bool` — weights present and transformers/torch import |
 | `probe_ner_models()` | `(NerModelStatus, localized_message)` |

@@ -496,7 +496,7 @@ def ensure_brain_structures_models() -> None:
 
 def ensure_xr_planar_models() -> None:
     """Download optional XR body-part + chest-view packs for CXR Harmonize shots."""
-    from anonymizer.controller.ai.harmonize.cxp_view import (
+    from anonymizer.controller.ai.harmonize.xr_chest_view import (
         cxp_view_ready,
         download_cxp_view_models,
     )

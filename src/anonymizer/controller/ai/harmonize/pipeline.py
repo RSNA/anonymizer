@@ -2722,8 +2722,8 @@ def _harmonize_one_planar_series(
     pixel_view_pred = None
     profile = planar_profile_from_dataset(ds)
     if profile is not None and profile.cohort == "XR":
-        from anonymizer.controller.ai.harmonize.cxp_view import cxp_view_ready, predict_cxp_view
         from anonymizer.controller.ai.harmonize.xp_bodypart import predict_body_part, xp_bodypart_ready
+        from anonymizer.controller.ai.harmonize.xr_chest_view import cxp_view_ready, predict_cxp_view
 
         need_body = xp_bodypart_ready()
         need_view = cxp_view_ready()

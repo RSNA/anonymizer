@@ -491,6 +491,24 @@ def test_incrementdate_negative_shifts_earlier(controller: ProjectController) ->
     assert anon._dates_shifted_this_dataset is True
 
 
+def test_incrementdate_empty_acq_datetime_fills_from_shifted_acq_date(
+    controller: ProjectController,
+) -> None:
+    """Empty AcquisitionDateTime copies already-shifted AcquisitionDate (no double shift)."""
+    anon: AnonymizerController = controller.anonymizer
+    anon._dates_shifted_this_dataset = False
+    ds = Dataset()
+    ds.add_new(0x00080022, "DA", "20130911")
+    ds.add_new(0x0008002A, "DT", "")
+    anon.model._tag_keep["00080022"] = "@incrementdate(this,-3670)"
+    anon.model._tag_keep["0008002A"] = "@incrementdate(this,-3670)"
+    anon._anonymize_element(ds, ds[0x00080022], "phi", "anon", None, 0)
+    anon._anonymize_element(ds, ds[0x0008002A], "phi", "anon", None, 0)
+    assert ds.AcquisitionDate == "20030825"
+    assert str(ds.AcquisitionDateTime) == "20030825"
+    assert anon._dates_shifted_this_dataset is True
+
+
 def test_incrementdate_is_trial_wide_same_for_all_patients(controller: ProjectController) -> None:
     """TCIA/CTP DATEINC: the same n applies to every patient."""
     anon: AnonymizerController = controller.anonymizer

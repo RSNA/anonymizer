@@ -595,10 +595,10 @@ class AiFeaturesPanel(ctk.CTkFrame):
             else:
                 logger.info("AI Features: XR body-part model download finished successfully")
         elif event.download_id == AiModelGroupId.HARMONIZE_CXR_VIEW.value:
-            from anonymizer.controller.ai.harmonize.cxp_view import cxp_view_ready
+            from anonymizer.controller.ai.harmonize.xr_chest_view import xr_chest_view_ready
 
             title = group.title() if group else event.download_id
-            if event.error is not None or not cxp_view_ready():
+            if event.error is not None or not xr_chest_view_ready():
                 logger.warning("AI Features: XR chest view download did not complete")
                 self._show_download_error_message(
                     title,

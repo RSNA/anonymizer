@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from anonymizer.controller.ai.harmonize.cxp_view.labels import is_dicom_multiview
-from anonymizer.controller.ai.harmonize.cxp_view.predict import CxpViewPrediction
+from anonymizer.controller.ai.harmonize.xr_chest_view.labels import is_dicom_multiview
+from anonymizer.controller.ai.harmonize.xr_chest_view.predict import CxpViewPrediction
 from anonymizer.utils.translate import _
 
 _HIGH_CONF = 0.8

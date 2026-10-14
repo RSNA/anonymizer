@@ -15,15 +15,15 @@ from anonymizer.controller.ai.embedded_phi.pixel.cache import (
     ocr_models_ready,
     probe_ocr_models,
 )
-from anonymizer.controller.ai.harmonize.cxp_view import (
-    CxpViewModelStatus,
-    cxp_view_ready,
-    probe_cxp_view_models,
-)
 from anonymizer.controller.ai.harmonize.xp_bodypart import (
     XpBodypartModelStatus,
     probe_xp_bodypart_models,
     xp_bodypart_ready,
+)
+from anonymizer.controller.ai.harmonize.xr_chest_view import (
+    CxpViewModelStatus,
+    cxp_view_ready,
+    probe_cxp_view_models,
 )
 from anonymizer.controller.ai.tseg.config import (
     get_ct_segmentation_mode,

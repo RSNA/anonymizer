@@ -413,8 +413,8 @@ def build_planar_playbook_attributes(
     if profile.cohort == "XR":
         view, view_ev = _map_xr_view(blob, ds)
         if pixel_view_pred is not None:
-            from anonymizer.controller.ai.harmonize.cxp_view.fuse import fuse_xr_view
-            from anonymizer.controller.ai.harmonize.cxp_view.predict import CxpViewPrediction
+            from anonymizer.controller.ai.harmonize.xr_chest_view.fuse import fuse_xr_view
+            from anonymizer.controller.ai.harmonize.xr_chest_view.predict import CxpViewPrediction
 
             if not isinstance(pixel_view_pred, CxpViewPrediction):
                 raise TypeError("pixel_view_pred must be CxpViewPrediction or None")

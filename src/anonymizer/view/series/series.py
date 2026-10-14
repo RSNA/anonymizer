@@ -29,7 +29,7 @@ from anonymizer.controller.ai.blur_face import (
     metadata_signal,
 )
 from anonymizer.controller.ai.embedded_phi.classify_series import SeriesKind, classify_series
-from anonymizer.controller.ai.embedded_phi.ner.ner import SCORED_LABELS
+from anonymizer.controller.ai.embedded_phi.ner.engine import SCORED_LABELS
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     OcrWhitelistMatchMode,
     OcrWhitelistMatchSettings,
@@ -164,6 +164,7 @@ from anonymizer.view.series.anatomy_overlay import (
     structure_button_label,
 )
 from anonymizer.view.series.image import ImageViewer
+from anonymizer.view.series.metadata_assessment_dialog import MetadataAssessmentDialog
 
 if TYPE_CHECKING:
     from anonymizer.controller.project import ProjectController
@@ -1251,21 +1252,20 @@ class SeriesView(AppCTkToplevel):
         self._sv_frame.grid_rowconfigure(0, weight=1)
         self._sv_frame.grid_columnconfigure(1, weight=1)
 
-        # Whitelist frame — single column, all widgets span full width
-        self._whitelist_frame = ctk.CTkFrame(self._sv_frame)
+        # Left column: Whitelist only (Metadata assessment is a series dialog).
+        self._sv_frame.grid_columnconfigure(0, minsize=280)
+        self._whitelist_frame = ctk.CTkFrame(self._sv_frame, width=280)
         self._whitelist_frame.grid(row=0, column=0, sticky="nsew", padx=self.PAD, pady=self.PAD)
         self._whitelist_frame.grid_columnconfigure(0, weight=1)
         self._whitelist_frame.grid_rowconfigure(3, weight=1)
 
-        # Row 0: title (same size as button text)
-        ctk.CTkLabel(
-            self._whitelist_frame,
-            text=_("WHITELIST"),
-        ).grid(row=0, column=0, sticky="w", padx=self.PAD, pady=(self.PAD, 0))
+        ctk.CTkLabel(self._whitelist_frame, text=_("Whitelist"), anchor="w").grid(
+            row=0, column=0, sticky="ew", padx=self.PAD, pady=(self.PAD, 2)
+        )
 
-        # Row 1: [Defaults] [Clear] [Match dropdown] in a toolbar sub-frame
+        # Row 1: [Defaults] [Clear] [Match dropdown]
         toolbar = ctk.CTkFrame(self._whitelist_frame, fg_color="transparent")
-        toolbar.grid(row=1, column=0, sticky="ew", padx=self.PAD, pady=(2, 2))
+        toolbar.grid(row=1, column=0, sticky="ew", padx=self.PAD, pady=(0, 2))
         toolbar.grid_columnconfigure(2, weight=1)
         self.whitelist_defaults_button = ctk.CTkButton(
             toolbar, text=_("Defaults"), width=10, command=self.whitelist_defaults_button_clicked
@@ -1303,7 +1303,7 @@ class SeriesView(AppCTkToplevel):
 
         # Row 3: listbox + scrollbar
         list_frame = ctk.CTkFrame(self._whitelist_frame, fg_color="transparent")
-        list_frame.grid(row=3, column=0, sticky="nsew", padx=self.PAD)
+        list_frame.grid(row=3, column=0, sticky="nsew", padx=self.PAD, pady=(0, self.PAD))
         list_frame.grid_columnconfigure(0, weight=1)
         list_frame.grid_rowconfigure(0, weight=1)
         scrollbar = ctk.CTkScrollbar(list_frame, orientation="vertical")
@@ -1332,7 +1332,7 @@ class SeriesView(AppCTkToplevel):
             add_to_whitelist_callback=self.add_to_whitelist,
             regenerate_series_projections_callback=self.regenerate_series_projections,
             on_segmentation_toggle=self._on_segmentation_toggle,
-            on_slice_index_changed=self._ensure_segmentation_overlays_for_frame,
+            on_slice_index_changed=self._on_slice_index_changed,
             clear_callback=self.clear_ts_cache_button_clicked,
             on_annotate_mode_changed=self._on_annotate_mode_changed,
             on_annotate_stroke=self._on_annotate_stroke,
@@ -1457,7 +1457,7 @@ class SeriesView(AppCTkToplevel):
             text=exclude_label,
             command=self.exclude_area_button_clicked,
         )
-        self.exclude_area_button.grid(row=0, column=8, padx=(2, self.PAD), pady=0)
+        self.exclude_area_button.grid(row=0, column=8, padx=(2, 2), pady=0)
         bind_hover_tooltip(
             self.exclude_area_button,
             _(
@@ -1466,6 +1466,19 @@ class SeriesView(AppCTkToplevel):
                 "Save Changes stores adds and removals for this modality "
                 "(AI Batch: Enable Exclude Areas)."
             ),
+        )
+        metadata_label = _("Metadata")
+        self.metadata_button = ctk.CTkButton(
+            text_edit_group,
+            width=button_width_for_label(metadata_label, minimum=self.BUTTON_WIDTH),
+            text=metadata_label,
+            command=self.metadata_assessment_button_clicked,
+        )
+        self.metadata_button.grid(row=0, column=9, padx=(2, self.PAD), pady=0)
+        bind_hover_tooltip(
+            self.metadata_button,
+            _("View DICOM metadata for the current slice."),
+            parent=self,
         )
 
         toolbar_spacer = ctk.CTkFrame(self.control_frame, fg_color="transparent", width=1, height=1)
@@ -1810,6 +1823,49 @@ class SeriesView(AppCTkToplevel):
         # Remember empty slices so scrub does not re-contour them.
         cache[slice_index] = []
         return False
+
+    def _on_slice_index_changed(self, frame_index: int) -> None:
+        """ImageViewer slice/cine callback: overlays for the current frame."""
+        self._ensure_segmentation_overlays_for_frame(frame_index)
+
+    def metadata_assessment_button_clicked(self) -> None:
+        """Open view-only Metadata tree for the current slice dataset."""
+
+        ds = self._current_slice_dataset()
+        if ds is None:
+            return
+        project_dir = project_dir_from_series_path(self._series_path)
+        whitelist: list[str] = []
+        if hasattr(self, "whitelist"):
+            whitelist = [str(t) for t in self.whitelist.get(0, tk.END)]
+        MetadataAssessmentDialog(
+            self,
+            dataset=ds,
+            project_dir=project_dir,
+            modality=str(getattr(ds, "Modality", "") or "") or None,
+            whitelist=whitelist,
+            whitelist_match_settings=getattr(self, "_whitelist_match_settings", None),
+        )
+
+    def _current_slice_dataset(self) -> Dataset | None:
+        """Load header for the anatomical slice under the cine index (no pixel dump)."""
+        loaded = self._loaded
+        if loaded is None:
+            return None
+        frame_index = (
+            self.image_viewer.current_image_index
+            if hasattr(self, "image_viewer")
+            else 0
+        )
+        slice_index = self._anatomical_slice_for_viewer_frame(frame_index)
+        if slice_index is None or slice_index >= len(loaded.slice_paths):
+            return loaded.metadata
+        path = loaded.slice_paths[slice_index]
+        try:
+            return dcmread(str(path), stop_before_pixels=True, force=True)
+        except Exception:
+            logger.exception("Could not read metadata for slice %s", path)
+            return loaded.metadata
 
     def _ensure_segmentation_overlays_for_frame(self, frame_index: int) -> None:
         self._refresh_ocr_toolbar_buttons()

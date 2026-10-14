@@ -16,7 +16,7 @@ from anonymizer.controller.ai.embedded_phi.classify_series import (
     SeriesKind,
     classify_series,
 )
-from anonymizer.controller.ai.embedded_phi.ner.ner import Entity, replace_entities
+from anonymizer.controller.ai.embedded_phi.ner.engine import Entity, replace_entities
 from anonymizer.controller.ai.embedded_phi.pixel.ocr_transcript_sr import (
     BASIC_TEXT_SR_SOP_CLASS_UID,
     build_basic_text_sr,

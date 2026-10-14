@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydicom import dcmread
 
-from anonymizer.controller.ai.embedded_phi.ner.ner import detect_entities
+from anonymizer.controller.ai.embedded_phi.ner.engine import detect_entities
 from anonymizer.controller.ai.embedded_phi.report.process_report_text import (
     BASIC_TEXT_SR_SOP_CLASS_UID,
     build_basic_text_sr,

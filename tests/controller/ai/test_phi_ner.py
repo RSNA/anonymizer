@@ -7,11 +7,13 @@ from unittest.mock import patch
 import pytest
 
 from anonymizer.controller.ai.embedded_phi.classify_series import SeriesKind, classify_series
-from anonymizer.controller.ai.embedded_phi.ner.ner import (
+from anonymizer.controller.ai.embedded_phi.ner.engine import (
     SCORED_LABELS,
+    SEGMENT_SEP,
     Entity,
     _format_entities_xml,
     detect_entities,
+    detect_entities_in_segments,
     detect_locale_supported,
     replace_entities,
 )
@@ -53,8 +55,8 @@ def test_detect_entities_maps_model_output() -> None:
         ]
 
     with (
-        patch("anonymizer.controller.ai.embedded_phi.ner.ner.ner_ready", return_value=True),
-        patch("anonymizer.controller.ai.embedded_phi.ner.ner._run_pipeline", side_effect=fake_run),
+        patch("anonymizer.controller.ai.embedded_phi.ner.engine.ner_ready", return_value=True),
+        patch("anonymizer.controller.ai.embedded_phi.ner.engine._run_pipeline", side_effect=fake_run),
     ):
         ents = detect_entities(text, locale="en_US")
     assert len(ents) == 1
@@ -69,8 +71,8 @@ def test_detect_entities_keeps_phone_from_model() -> None:
         return [{"entity_group": "PHONE", "start": 5, "end": 19, "score": 0.9}]
 
     with (
-        patch("anonymizer.controller.ai.embedded_phi.ner.ner.ner_ready", return_value=True),
-        patch("anonymizer.controller.ai.embedded_phi.ner.ner._run_pipeline", side_effect=fake_run),
+        patch("anonymizer.controller.ai.embedded_phi.ner.engine.ner_ready", return_value=True),
+        patch("anonymizer.controller.ai.embedded_phi.ner.engine._run_pipeline", side_effect=fake_run),
     ):
         ents = detect_entities(text, locale="en_US")
     assert any(e.label == "PHONE" for e in ents)
@@ -93,6 +95,35 @@ def test_detect_entities_does_not_fracture_names_when_model_ready() -> None:
     assert name_frags
     assert not any(f in {"Mn", "ika", "thi", "Mx", "olis", "life"} for f in name_frags)
     assert any("Mnikathi" in f for f in name_frags)
+
+
+def test_detect_entities_in_segments_chunks_on_field_breaks() -> None:
+    """Chunks may join fields but must start/end on field boundaries (never mid-field)."""
+    seen: list[str] = []
+
+    def scan(text: str) -> list[Entity]:
+        seen.append(text)
+        return []
+
+    segs = [
+        "ManufacturerModelName: GENESIS_SIGNA",
+        "GEMS_IDEN_01: Product Id: SIGNA",
+        "   ",
+    ]
+    out = detect_entities_in_segments(segs, max_chars=10_000, scan_fn=scan)
+    assert len(seen) == 1
+    assert seen[0] == SEGMENT_SEP.join(
+        [
+            "ManufacturerModelName: GENESIS_SIGNA",
+            "GEMS_IDEN_01: Product Id: SIGNA",
+        ]
+    )
+    assert out == [[], [], []]
+
+    seen.clear()
+    big = "A" * 100
+    detect_entities_in_segments([big, "B"], max_chars=50, scan_fn=scan)
+    assert seen == [big, "B"]
 
 
 def test_replace_blank_and_synth_stable() -> None:

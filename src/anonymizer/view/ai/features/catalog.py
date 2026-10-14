@@ -14,13 +14,13 @@ from anonymizer.controller.ai.embedded_phi.pixel.cache import (
     download_ocr_models,
     remove_ocr_models,
 )
-from anonymizer.controller.ai.harmonize.cxp_view import (
-    download_cxp_view_models,
-    remove_cxp_view_models,
-)
 from anonymizer.controller.ai.harmonize.xp_bodypart import (
     download_xp_bodypart_models,
     remove_xp_bodypart_models,
+)
+from anonymizer.controller.ai.harmonize.xr_chest_view import (
+    download_xr_chest_view_models,
+    remove_xr_chest_view_models,
 )
 from anonymizer.controller.ai.tseg.readiness import (
     TsWeightKind,
@@ -172,7 +172,7 @@ def feature_summary(key: str) -> str:
             "Optional pixel body-part for CR/DX (Xp-Bodypart-Checker)."
         ),
         AiModelGroupId.HARMONIZE_CXR_VIEW.value: _(
-            "Optional CXR projection/rotation for chest CR/DX (CXp-Checker)."
+            "Optional XR chest view (AP/PA/Lateral + rotation) for chest CR/DX."
         ),
         AiFeatureId.BRAIN_STRUCTURES.value: _("CT Head detail in Harmonize Description."),
         AiFeatureId.FACE_BLUR.value: _("Head CT/MR face de-identify."),
@@ -201,12 +201,17 @@ def remove_xp_bodypart() -> None:
     remove_xp_bodypart_models()
 
 
-def download_cxp_view() -> object:
-    return download_cxp_view_models()
+def download_xr_chest_view() -> object:
+    return download_xr_chest_view_models()
 
 
-def remove_cxp_view() -> None:
-    remove_cxp_view_models()
+def remove_xr_chest_view() -> None:
+    remove_xr_chest_view_models()
+
+
+# Back-compat aliases for AI Features panel wiring
+download_cxp_view = download_xr_chest_view
+remove_cxp_view = remove_xr_chest_view
 
 
 def download_kind(kind: TsWeightKind) -> object:

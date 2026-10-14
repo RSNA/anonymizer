@@ -1839,14 +1839,15 @@ def main(
         OcrModelStatus,
         probe_ocr_models,
     )
+    from anonymizer.utils.package_paths import ai_feature_dir
 
-    tseg_home = Path("assets/ai/tseg")
+    tseg_home = ai_feature_dir("tseg")
     tseg_weights = tseg_home / "nnunet" / "results"
     OCR_MODEL_DIR.mkdir(parents=True, exist_ok=True)
     tseg_home.mkdir(parents=True, exist_ok=True)
     tseg_weights.mkdir(parents=True, exist_ok=True)
-    os.environ["TOTALSEG_HOME_DIR"] = str(tseg_home.resolve())
-    os.environ["TOTALSEG_WEIGHTS_PATH"] = str(tseg_weights.resolve())
+    os.environ["TOTALSEG_HOME_DIR"] = str(tseg_home)
+    os.environ["TOTALSEG_WEIGHTS_PATH"] = str(tseg_weights)
 
     logger.info(f"Running from {install_dir}")
     logger.info(f"Python Optimization Level [0,1,2]: {sys.flags.optimize}")

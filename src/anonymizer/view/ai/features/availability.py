@@ -65,18 +65,18 @@ from anonymizer.view.ai.features.catalog import (
     AiFeatureSpec,
     AiModelGroupId,
     AiModelGroupSpec,
-    download_cxp_view,
     download_embedded_phi,
     download_kind,
     download_xp_bodypart,
+    download_xr_chest_view,
     feature_description,
     feature_summary,
     feature_title,
     install_registry,
-    remove_cxp_view,
     remove_embedded_phi,
     remove_kind,
     remove_xp_bodypart,
+    remove_xr_chest_view,
 )
 
 logger = logging.getLogger(__name__)
@@ -508,8 +508,8 @@ def _install_feature_registry() -> None:
             status=ai_feature_status_harmonize_cxr_view,
             needs_download=feature_gates.harmonize_cxr_view_needs_download,
             has_models=feature_gates.harmonize_cxr_view_has_models,
-            download=download_cxp_view,
-            remove=remove_cxp_view,
+            download=download_xr_chest_view,
+            remove=remove_xr_chest_view,
         ),
         AiModelGroupId.BRAIN_STRUCTURES: AiModelGroupSpec(
             id=AiModelGroupId.BRAIN_STRUCTURES,

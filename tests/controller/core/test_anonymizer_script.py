@@ -108,6 +108,8 @@ def test_promote_rejects_already_active(tmp_path: Path) -> None:
 def test_validate_and_format_operands() -> None:
     assert validate_operation("") is None
     assert validate_operation("@keep") is None
+    assert validate_operation("@safe()") is None
+    assert operand_id_for_operation("@safe()") == "safe"
     assert normalize_operation("@keep") == ""
     assert validate_operation("@remove()") is None
     assert validate_operation("@lookup(this,ptid)") is None

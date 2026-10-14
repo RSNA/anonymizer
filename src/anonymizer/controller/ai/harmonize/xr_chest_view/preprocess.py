@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from anonymizer.controller.ai.harmonize.cxp_view.labels import normalize_rotation_label
 from anonymizer.controller.ai.harmonize.xp_bodypart.preprocess import (
     tensor_from_grayscale_array,
     uint8_grayscale_from_array,
 )
+from anonymizer.controller.ai.harmonize.xr_chest_view.labels import normalize_rotation_label
 
 __all__ = [
     "tensor_from_grayscale_array",

@@ -16,6 +16,10 @@ Public API
 ``detect_entities(text, *, locale=\"en_US\")``
     Run the model on ``text`` → ``list[Entity]`` (offsets into ``text``).
 
+``detect_entities_in_segments(segments, *, locale=\"en_US\", max_chars=…)``
+    Join field segments into chunks (breaks only on field boundaries), run
+    NER per chunk; return per-segment entities with offsets into each field.
+
 ``replace_entities(text, entities=None, *, mode=\"blank\", …)``
     Replace spans right-to-left → ``(new_text, entities_used)``.
     If ``entities`` is omitted, runs ``detect_entities`` first.
@@ -26,7 +30,7 @@ Public API
     Whether ``locale`` has a supported detect pack (currently ``en_US``).
 
 Constants: ``SCORED_LABELS``, ``SUPPORTED_DETECT_LOCALES``, ``ReplaceMode``,
-``REPLACE_MODE_VALUES``.
+``REPLACE_MODE_VALUES``, ``SEGMENT_SEP``.
 
 Model weights live in ``ner.cache``; synthetic pools in ``ner.synthetic_phi``.
 """
@@ -35,7 +39,7 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
 from pprint import pformat
 from typing import Any, Literal
@@ -62,6 +66,11 @@ SUPPORTED_DETECT_LOCALES = frozenset({"en_US"})
 
 ReplaceMode = Literal["blank", "synth"]
 REPLACE_MODE_VALUES: tuple[ReplaceMode, ...] = ("blank", "synth")
+
+# Join short Content / OCR fragments for one model pass (ASCII RS; rare in DICOM text).
+SEGMENT_SEP = "\n\x1e\n"
+# Stay under ClinicalE5 ~512-token window with headroom for WordPieces.
+_DEFAULT_SEGMENT_MAX_CHARS = 1600
 
 # Map OpenMed / HF entity_group strings onto product labels (model decides; no regex).
 _TO_SCORED: dict[str, str] = {
@@ -199,7 +208,10 @@ def detect_entities(text: str, *, locale: str = "en_US") -> list[Entity]:
 
     Product-labeled entities with ``start``/``end`` into ``text``. No lexicon,
     phone-regex, or other post-filters — only the model (plus adjacent same-label
-    merge). Logs each pipeline step with ``<<<``/``>>>`` text traces.
+    merge).
+
+    Logging: **INFO** = I/O traces (``ner: input text``, ``ner: tagged result``);
+    **DEBUG** = internal pipeline steps (raw spans, label map, merge).
 
     Args:
         text: Source unicode to scan.
@@ -209,11 +221,11 @@ def detect_entities(text: str, *, locale: str = "en_US") -> list[Entity]:
         List of ``Entity`` spans (may be empty if models missing or text blank).
     """
     body = str(text or "")
-    logger.info("ner: detect start locale=%s chars=%d", locale, len(body))
+    logger.debug("ner: detect start locale=%s chars=%d", locale, len(body))
     logger.info("ner: input text\n%s", _trace(body))
 
     if not body.strip():
-        logger.info("ner: skip — empty / whitespace-only text")
+        logger.debug("ner: skip — empty / whitespace-only text")
         logger.info("ner: tagged result (no entities)\n%s", _trace(""))
         return []
     if not detect_locale_supported(locale):
@@ -229,9 +241,9 @@ def detect_entities(text: str, *, locale: str = "en_US") -> list[Entity]:
         logger.info("ner: tagged result (no entities)\n%s", _trace(""))
         return []
 
-    logger.info("ner: run OpenMed token-classification pipeline")
+    logger.debug("ner: run OpenMed token-classification pipeline")
     raw_ents = _run_pipeline(body, locale=locale)
-    logger.info(
+    logger.debug(
         "ner: model raw spans count=%d\n%s",
         len(raw_ents),
         pformat(_raw_ents_for_log(raw_ents), sort_dicts=False),
@@ -254,7 +266,7 @@ def detect_entities(text: str, *, locale: str = "en_US") -> list[Entity]:
                 raw_label=raw,
             )
         )
-    logger.info(
+    logger.debug(
         "ner: map HF labels → product labels "
         "(kept=%d dropped=%d; labels=%s)\n%s",
         len(mapped),
@@ -264,7 +276,7 @@ def detect_entities(text: str, *, locale: str = "en_US") -> list[Entity]:
     )
 
     entities = _merge_adjacent(body, mapped)
-    logger.info(
+    logger.debug(
         "ner: merge adjacent same-label spans (%d → %d)\n%s",
         len(mapped),
         len(entities),
@@ -273,11 +285,114 @@ def detect_entities(text: str, *, locale: str = "en_US") -> list[Entity]:
 
     tagged = _format_entities_xml(body, entities)
     logger.info(
-        "ner: detect done entities=%d\nner: tagged result\n%s",
+        "ner: tagged result entities=%d\n%s",
         len(entities),
         _trace(tagged),
     )
     return entities
+
+
+def detect_entities_in_segments(
+    segments: Sequence[str],
+    *,
+    locale: str = "en_US",
+    max_chars: int = _DEFAULT_SEGMENT_MAX_CHARS,
+    scan_fn: Callable[[str], list[Entity]] | None = None,
+) -> list[list[Entity]]:
+    """
+    Run a text PHI scanner on **chunks of whole fields**.
+
+    Joins non-empty segments with ``SEGMENT_SEP``, packs into chunks up to
+    ``max_chars``, and maps spans back to per-field offsets. Chunk boundaries
+    are always field boundaries (a field is never split mid-value). Spans that
+    cross a field separator are dropped. Empty / whitespace-only segments yield
+    ``[]``.
+
+    Default ``scan_fn`` is ``detect_entities`` (NER only). Report View / Metadata
+    pass ``detect_phi_in_text`` so study-PHI matching + NER share one join pass.
+
+    Args:
+        segments: Source strings (order preserved in the return value).
+        locale: NER locale pack (used when ``scan_fn`` is omitted).
+        max_chars: Soft cap per chunk (model context window); splits only between fields.
+        scan_fn: ``text → list[Entity]`` with offsets into that text.
+
+    Returns:
+        Parallel list: entities for each input segment (offsets into that segment).
+    """
+    scan = scan_fn or (lambda body: detect_entities(body, locale=locale))
+    bodies = [str(s or "") for s in segments]
+    out: list[list[Entity]] = [[] for _ in bodies]
+    work: list[tuple[int, str]] = [(i, b) for i, b in enumerate(bodies) if b.strip()]
+    if not work:
+        return out
+
+    sep = SEGMENT_SEP
+    sep_len = len(sep)
+    cap = max(64, int(max_chars))
+    chunks: list[list[tuple[int, str]]] = []
+    current: list[tuple[int, str]] = []
+    current_len = 0
+    for idx, text in work:
+        # Always append whole fields; never split mid-field.
+        add = len(text) if not current else sep_len + len(text)
+        if current and current_len + add > cap:
+            chunks.append(current)
+            current = []
+            current_len = 0
+            add = len(text)
+        current.append((idx, text))
+        current_len += add
+    if current:
+        chunks.append(current)
+
+    logger.debug(
+        "ner: segment detect start segments=%d nonempty=%d chunks=%d locale=%s",
+        len(bodies),
+        len(work),
+        len(chunks),
+        locale,
+    )
+    for chunk in chunks:
+        parts = [text for _i, text in chunk]
+        joined = sep.join(parts)
+        ranges: list[tuple[int, int, int]] = []
+        pos = 0
+        for i, (_seg_i, text) in enumerate(chunk):
+            if i:
+                pos += sep_len
+            start = pos
+            end = pos + len(text)
+            ranges.append((_seg_i, start, end))
+            pos = end
+        entities = scan(joined)
+        for ent in entities:
+            for seg_i, start, end in ranges:
+                if ent.start >= start and ent.end <= end:
+                    out[seg_i].append(
+                        Entity(
+                            label=ent.label,
+                            start=ent.start - start,
+                            end=ent.end - start,
+                            score=ent.score,
+                            raw_label=ent.raw_label,
+                            replacement=ent.replacement,
+                        )
+                    )
+                    break
+            else:
+                logger.debug(
+                    "ner: drop span crossing field boundary [%d:%d)",
+                    ent.start,
+                    ent.end,
+                )
+    hit_segments = sum(1 for ents in out if ents)
+    logger.debug(
+        "ner: segment detect done chunks=%d segments_with_phi=%d",
+        len(chunks),
+        hit_segments,
+    )
+    return out
 
 
 def replace_entities(
@@ -310,7 +425,7 @@ def replace_entities(
     """
     body = str(text or "")
     detect_first = entities is None
-    logger.info(
+    logger.debug(
         "ner: replace start mode=%s locale=%s detect_first=%s chars=%d",
         mode,
         locale,
@@ -319,12 +434,12 @@ def replace_entities(
     )
     used = list(entities) if entities is not None else detect_entities(body, locale=locale)
     if not used:
-        logger.info("ner: replace skip — no entities to replace")
+        logger.debug("ner: replace skip — no entities to replace")
         logger.info("ner: replace result\n%s", _trace(body))
         return body, []
 
     meta_n = sum(1 for e in used if e.replacement is not None)
-    logger.info(
+    logger.debug(
         "ner: replace apply %d span(s) right-to-left mode=%s "
         "(metadata_replacement=%d ner=%d)\n%s",
         len(used),
@@ -364,14 +479,14 @@ def replace_entities(
     if mode == "blank":
         out = re.sub(r"[ \t]{2,}", " ", out)
         out = re.sub(r" ?\n ?", "\n", out).strip(" \t")
-    logger.info(
-        "ner: replace done mode=%s entities=%d chars %d→%d\nner: replace result\n%s",
+    logger.debug(
+        "ner: replace done mode=%s entities=%d chars %d→%d",
         mode,
         len(used),
         len(body),
         len(out),
-        _trace(out),
     )
+    logger.info("ner: replace result\n%s", _trace(out))
     return out, used
 
 
@@ -394,16 +509,10 @@ def detect_locale_supported(locale: str) -> bool:
 
 
 def _trace(text: str) -> str:
-    """
-    Wrap ``text`` in ``<<<`` / ``>>>`` delimiters for log readability.
-
-    Args:
-        text: Unicode to show as a multi-line log payload.
-
-    Returns:
-        Delimited block string.
-    """
-    return f"<<<\n{text}\n>>>"
+    """Multi-line log body: segment sep → one newline; drop RS; keep real newlines."""
+    body = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
+    body = body.replace(SEGMENT_SEP, "\n").replace("\x1e", "")
+    return f"<<<\n{body}\n>>>"
 
 
 def _score_for_log(score: float) -> float:

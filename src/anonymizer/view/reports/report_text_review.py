@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Literal
 import customtkinter as ctk
 from pydicom import Dataset, dcmread
 
-from anonymizer.controller.ai.embedded_phi.ner.ner import REPLACE_MODE_VALUES, Entity, ReplaceMode
+from anonymizer.controller.ai.embedded_phi.ner.engine import REPLACE_MODE_VALUES, Entity, ReplaceMode
 from anonymizer.controller.ai.embedded_phi.report.process_report_text import (
     detect_phi,
     encapsulated_pdf_bytes,

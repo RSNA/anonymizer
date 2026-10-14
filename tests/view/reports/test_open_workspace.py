@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-from anonymizer.controller.ai.embedded_phi.ner.ner import SCORED_LABELS
+from anonymizer.controller.ai.embedded_phi.ner.engine import SCORED_LABELS
 from anonymizer.view.reports import open_workspace
 from anonymizer.view.reports.entity_colors import ENTITY_COLORS_HEX, entity_color_bgr, entity_color_hex
 

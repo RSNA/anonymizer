@@ -1,4 +1,7 @@
-"""Download / probe / remove Xp-Bodypart-Checker weights under assets/ai/xp_bodypart."""
+"""Download / probe / remove XR body-part weights under ``assets/ai/xp_bodypart``.
+
+Upstream: MedicalAILabo Xp-Bodypart-Mislabel-Checker. Product: **XR body part**.
+"""
 
 from __future__ import annotations
 
@@ -9,12 +12,13 @@ from pathlib import Path
 
 import requests
 
+from anonymizer.utils.package_paths import ai_feature_dir
 from anonymizer.utils.storage import update_model_download
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
-XP_BODYPART_DIR = Path("assets/ai/xp_bodypart")
+XP_BODYPART_DIR = ai_feature_dir("xp_bodypart")
 XP_BODYPART_WEIGHT_NAME = "xp_bodypart.pt"
 XP_BODYPART_WEIGHT_PATH = XP_BODYPART_DIR / XP_BODYPART_WEIGHT_NAME
 XP_BODYPART_PARAMS_PATH = XP_BODYPART_DIR / "parameters.json"

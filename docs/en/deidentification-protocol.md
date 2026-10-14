@@ -6,18 +6,22 @@ This page summarizes how the Anonymizer follows the DICOM Basic Application Conf
 
 Ingest uses the **anonymizer script only** (never NER/OCR). Project Settings choose:
 
-| Policy | Script | Private tags | Reports / clinical free text |
+| Policy | Script | Private tags at **ingest** (must stay fast) | Reports / clinical free text |
 | --- | --- | --- | --- |
-| **Strict** (default) | `default-anonymizer.script` | Wiped (`remove_private_tags`) then walk | Mostly `@remove()`; SR/PDF modalities off |
-| **Clinical** | `clinical-anonymizer.script` (compiled) | No wipe; TCIA keep/uid/date in `_tag_keep`; unknown private deleted by walk | ContentSeq / TextValue / EncapsulatedDocument / ProtocolName / comments kept |
+| **Strict** (default) | `default-anonymizer.script` | **All removed** (`remove_private_tags`) before walk | Mostly `@remove()`; SR/PDF modalities off |
+| **Clinical** | `clinical-anonymizer.script` (maintained public-tag script) | **Left untouched** — not wiped and not processed on the anonymize walk | Script ops; other public tags kept for Posda-style review; `@process()` sequences |
+
+**Private cleanup under Clinical** is **not** done at ingest. It is owned by optional **Embedded PHI** (metadata + TCIA Private Tag KB by private creator) after ingest — same idea as pixel OCR / report NER. The anonymize walk stays script-only and fast.
 
 The active script is stored beside `ProjectModel.json` as `{site_id}-anonymizer.script`.
+
+Clinical is seeded from the [TCIA submission / de-identification overview](https://www.cancerimagingarchive.net/submission-and-de-identification-overview/) Table 1 and then **fine-tuned** in `clinical-anonymizer.script` (Basic Profile + Clean Descriptors, Retain Longitudinal With Modified Dates, Retain Patient Characteristics, plus product keeps/`@safe()`). Retain Safe Private is applied later via Embedded PHI, not on the ingest walk. Clinical does **not** claim Retain Device Identity (Station Name and Device Serial Number are removed). Method codes written to `(0012,0064)`: `113100`, `113105`, `113107`, `113108`, `113111`.
 
 ## What gets removed or replaced
 
 - Patient name and ID become project-scoped anonymized values (Site ID + sequential patient number). The same person keeps the same anonymized ID across studies in the project.
 - UIDs, dates (via `@hashdate`), and accession numbers are replaced with **deterministic** project-scoped values so links between images stay consistent. See [Deterministic replacements](#deterministic-replacements-uids-dates-accessions) below.
-- Many clinical workflow and private tags are removed (Strict) or selectively kept (Clinical + TCIA rules).
+- Many clinical workflow tags follow the script. Private tags: removed entirely (Strict) or deferred to Embedded PHI (Clinical).
 - The file records that patient identity was removed and names the RSNA DICOM Anonymizer as the method.
 
 ## Deterministic replacements (UIDs, dates, accessions)
@@ -38,9 +42,9 @@ These transforms are **intentional** and **secret-free**. Their job is **stable 
 
 Dates are shifted so the **order and spacing** of a patient’s studies stay meaningful, but calendar dates are not the originals. Time-of-day is typically left as-is. Strategies (script / lookup):
 
-- **@hashdate** — per-patient deterministic offset (default script)
+- **@hashdate** — per-patient deterministic offset (Strict / default script)
 - **@lookup(this,dateoffset)** — per-patient offset from a CTP `.properties` table
-- **@incrementdate(this,n)** — fixed trial-wide day offset (CTP DATEINC; `n` set in the script editor)
+- **@incrementdate(this,n)** — fixed trial-wide day offset (CTP DATEINC; Clinical script and Embedded PHI private dates use `n` from `clinical_dateinc.txt`)
 - **@rebasedate(this,origin)** — epoch rebase from registration `basedate/` + ORIGIN parameter (default `19600101`)
 
 When any of these run, the anonymizer writes `(0028,0303) LongitudinalTemporalInformationModified = MODIFIED` (DICOM option 113107). See [Create project — longitudinal dates](05-create-project/#longitudinal-dates-tcia-style).

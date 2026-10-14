@@ -1,4 +1,4 @@
-"""Non-GUI tests for Embedded PHI synth, classify, clinical compiler, XX keep."""
+"""Non-GUI tests for Embedded PHI synth, classify, clinical script, XX keep."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ from anonymizer.model.project import AnonymizationPolicy, ProjectModel
 _ROOT = Path(__file__).resolve().parents[3]
 _SCRIPTS = _ROOT / "src" / "anonymizer" / "assets" / "scripts"
 _CLINICAL = _SCRIPTS / "clinical-anonymizer.script"
-_COMPILE = _SCRIPTS / "compile_clinical_script.py"
 
 
 def test_synth_name_stable_and_shape() -> None:
@@ -40,24 +39,20 @@ def test_classify_series_kinds() -> None:
     assert classify_series(".", modality="CT") is SeriesKind.IMAGING
 
 
-def test_clinical_script_compiled_and_keeps_content() -> None:
+def test_clinical_script_keeps_content() -> None:
     assert _CLINICAL.is_file()
     root = ET.parse(_CLINICAL).getroot()
-    by_name = {e.attrib.get("n"): (e.text or "") for e in root.findall("e")}
-    assert "@remove" not in by_name.get("ContentSeq", "@remove()")
+    by_name = {e.attrib.get("n"): (e.text or "").strip() for e in root.findall("e")}
+    by_tag = {e.attrib.get("t", "").upper(): (e.text or "").strip() for e in root.findall("e")}
+    assert by_name.get("ContentSeq") == "@process()"
     assert "@remove" not in by_name.get("TextValue", "@remove()")
-    assert "@remove" not in by_name.get("EncapsulatedDocument", "@remove()")
-
-
-def test_compile_clinical_check_ok() -> None:
-    import runpy
-    import sys
-
-    sys.argv = [str(_COMPILE), "--check"]
-    # Run as __main__
-    ns = runpy.run_path(str(_COMPILE), run_name="not_main")
-    rc = ns["compile_clinical"](check=True)
-    assert rc == 0
+    assert "@remove" not in by_name.get("CodeMeaning", "@remove()")
+    assert "@remove" in by_name.get("EncapsulatedDocument", "")
+    assert by_tag.get("00081090") in ("@safe()", "@safe")
+    for tag in by_tag:
+        assert "XX" not in tag, tag
+        if len(tag) >= 4:
+            assert int(tag[:4], 16) % 2 == 0, tag
 
 
 def test_anonymization_policy_default_strict() -> None:

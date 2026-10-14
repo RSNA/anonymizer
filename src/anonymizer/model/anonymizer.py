@@ -652,6 +652,7 @@ class AnonymizerModel:
         """Return keep operation for ``tag``, or ``None`` if the element should be deleted.
 
         Exact hex keys win; otherwise ``GGGGXXEE`` patterns match any byte in ``XX``.
+        Clinical walks may override XX via creator-aware TCIA KB before calling this.
         """
         import re
 
@@ -844,6 +845,7 @@ class AnonymizerModel:
         available_digits = max_len - len(prefix)
 
         # Calculate the MD5 hash (for a deterministic 128-bit mapping)
+        phi_uid = str(phi_uid or "")
         phi_uid_hash = hashlib.md5(phi_uid.encode("utf-8"))
 
         # Convert the 128-bit hash to a large integer

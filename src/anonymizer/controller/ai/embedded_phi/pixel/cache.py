@@ -1,4 +1,4 @@
-"""Download / probe / remove EasyOCR weights under assets/ai/ocr/model."""
+"""Download / probe / remove EasyOCR weights under ``assets/ai/ocr/model``."""
 
 from __future__ import annotations
 
@@ -6,17 +6,17 @@ import logging
 import os
 import shutil
 from enum import StrEnum
-from pathlib import Path
 
 from easyocr import Reader
 
 from anonymizer.utils.network import ensure_ssl_certifi
+from anonymizer.utils.package_paths import ai_feature_dir
 from anonymizer.utils.storage import update_model_download
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
-OCR_MODEL_DIR = Path("assets/ai/ocr/model")
+OCR_MODEL_DIR = ai_feature_dir("ocr", "model")
 OCR_LANGS = ("en", "de", "fr", "es")
 _MIN_OCR_MODEL_FILES = 2
 DOWNLOAD_ID = "embedded_phi"

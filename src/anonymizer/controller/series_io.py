@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 from cv2 import INTER_AREA, INTER_LINEAR, resize
@@ -26,6 +27,9 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
     list_dicom_paths,
     stackable_dicom_paths,
 )
+
+if TYPE_CHECKING:
+    from anonymizer.controller.ai.embedded_phi.metadata.extract import MetadataPhiRow
 from anonymizer.utils.dicom import SUPPORTED_PHOTOMETRIC_INTERPRETATIONS, get_wl_ww
 from anonymizer.utils.memory import log_process_memory
 from anonymizer.utils.storage import get_dcm_files
@@ -62,7 +66,10 @@ class LoadedSeries:
     metadata: Dataset
     frames: np.ndarray
     slice_paths: tuple[Path, ...]
+    sop_uids: tuple[str, ...]
     default_window: tuple[float, float]
+    metadata_by_sop: dict[str, tuple[MetadataPhiRow, ...]]
+    metadata_unique_texts: tuple[str, ...]
 
     @property
     def is_single_frame(self) -> bool:
@@ -102,14 +109,24 @@ def load_series_frames(
     dcm_paths: list[Path] | None = None,
 ) -> LoadedSeries:
     """Load a DICOM series directory (anatomical frames only, no projections)."""
+    # Lazy import: metadata.extract → anonymizer_script must not load at series_io import time.
+    from anonymizer.controller.ai.embedded_phi.metadata.series_index import (
+        unique_metadata_texts,
+    )
+
     logger.info("load_series_frames: %s", series_path)
-    metadata, frames, slice_paths = _load_series_frames(series_path, dcm_paths=dcm_paths)
+    metadata, frames, slice_paths, sop_uids, metadata_by_sop = _load_series_frames(
+        series_path, dcm_paths=dcm_paths
+    )
     default_window = get_wl_ww(metadata)
     return LoadedSeries(
         metadata=metadata,
         frames=frames,
         slice_paths=slice_paths,
+        sop_uids=sop_uids,
         default_window=default_window,
+        metadata_by_sop=metadata_by_sop,
+        metadata_unique_texts=unique_metadata_texts(metadata_by_sop),
     )
 
 
@@ -536,7 +553,13 @@ def _load_series_frames(
     series_path: Path,
     *,
     dcm_paths: list[Path] | None = None,
-) -> tuple[Dataset, ndarray, tuple[Path, ...]]:
+) -> tuple[
+    Dataset,
+    ndarray,
+    tuple[Path, ...],
+    tuple[str, ...],
+    dict[str, tuple[MetadataPhiRow, ...]],
+]:
     """
     Loads and processes DICOM series frames from a directory, resizing to match
     the first frame's dimensions.
@@ -544,6 +567,9 @@ def _load_series_frames(
     Preserves original dynamic range and data type for MONOCHROME images after
     applying Modality LUT and MONOCHROME1 inversion.
     Converts standard Color images (RGB, PALETTE_COLOR, YBR*) to uint8 RGB.
+
+    Also extracts per-SOP metadata PHI rows (interned strings) while datasets
+    are already in memory — no second pass over PixelData.
 
     Args:
         series_path: Path object for the directory containing DICOM files.
@@ -557,6 +583,8 @@ def _load_series_frames(
               Grayscale CT/MR stored-pixel stacks use float32 after modality LUT.
               Shape: (num_frames, height, width) or (num_frames, height, width, 3).
             - Source DICOM paths in the same order as stacked frames (one entry per frame).
+            - SOP Instance UIDs parallel to stacked frames.
+            - ``metadata_by_sop`` keyed by SOP Instance UID.
 
     Raises:
         ValueError: If no DICOM files are found, or if essential DICOM tags
@@ -565,6 +593,11 @@ def _load_series_frames(
         FileNotFoundError: If the series_path does not exist.
         PermissionError: If read permissions are denied.
     """
+    from anonymizer.controller.ai.embedded_phi.metadata.series_index import (
+        extract_sop_metadata_rows,
+        unique_metadata_texts,
+    )
+
     if not series_path.is_dir():
         raise FileNotFoundError(f"Provided path is not a directory: {series_path}")
 
@@ -603,6 +636,9 @@ def _load_series_frames(
     ds1: Dataset | None = None
     target_size: tuple[int, int] | None = None
     series_pi: str = ""
+    metadata_by_sop: dict[str, tuple[MetadataPhiRow, ...]] = {}
+    metadata_string_pool: dict[str, str] = {}
+    processed_sop_uids: list[str] = []
 
     # --- Loop through series files (skip non-image instances without PixelData) ---
     for dcm_path in dcm_paths:
@@ -623,6 +659,12 @@ def _load_series_frames(
                     f"Inconsistent PI in {dcm_path} ({pi}) vs first file ({series_pi}). Skipping file."
                 )
                 continue
+
+            sop_uid = str(getattr(ds, "SOPInstanceUID", "") or "").strip()
+            if sop_uid and sop_uid not in metadata_by_sop:
+                metadata_by_sop[sop_uid] = extract_sop_metadata_rows(
+                    ds, string_pool=metadata_string_pool
+                )
 
             # Check dimensions against target_size even before processing
             if (rows, cols) != target_size:
@@ -725,6 +767,7 @@ def _load_series_frames(
 
                     processed_frames.append(frame)
                     processed_paths.append(dcm_path)
+                    processed_sop_uids.append(sop_uid)
                 else:
                     raise RuntimeError(
                         f"CRITICAL Error: Frame {frame_idx} from {dcm_path} failed to process."
@@ -766,8 +809,19 @@ def _load_series_frames(
     logger.info(
         f"Final stacked array - Shape: {all_series_frames_stacked.shape}, Dtype: {all_series_frames_stacked.dtype}"
     )
+    logger.info(
+        "metadata PHI: %d SOP(s), %d unique text(s)",
+        len(metadata_by_sop),
+        len(unique_metadata_texts(metadata_by_sop)),
+    )
 
-    return ds1, all_series_frames_stacked, tuple(processed_paths)
+    return (
+        ds1,
+        all_series_frames_stacked,
+        tuple(processed_paths),
+        tuple(processed_sop_uids),
+        metadata_by_sop,
+    )
 
 
 def _modifying_system_name() -> str:

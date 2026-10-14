@@ -1,4 +1,8 @@
-"""Download / probe / remove CXp projection+rotation weights under assets/ai/cxp_view."""
+"""Download / probe / remove XR chest view weights under ``assets/ai/xr_chest_view``.
+
+Upstream model: MedicalAILabo CXp-Projection-Rotation-Mislabel-Checker
+(chest X-ray AP/PA/Lateral + rotation). Product name: **XR chest view**.
+"""
 
 from __future__ import annotations
 
@@ -9,19 +13,27 @@ from pathlib import Path
 
 import requests
 
+from anonymizer.utils.package_paths import ai_feature_dir
 from anonymizer.utils.storage import update_model_download
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)
 
-CXP_VIEW_DIR = Path("assets/ai/cxp_view")
-CXP_VIEW_WEIGHT_NAME = "cxp_projection_rotation.pt"
-CXP_VIEW_WEIGHT_PATH = CXP_VIEW_DIR / CXP_VIEW_WEIGHT_NAME
-CXP_VIEW_PARAMS_PATH = CXP_VIEW_DIR / "parameters.json"
+XR_CHEST_VIEW_DIR = ai_feature_dir("xr_chest_view")
+# Upstream weight filename (HF Space); keep name for download URL compatibility.
+XR_CHEST_VIEW_WEIGHT_NAME = "cxp_projection_rotation.pt"
+XR_CHEST_VIEW_WEIGHT_PATH = XR_CHEST_VIEW_DIR / XR_CHEST_VIEW_WEIGHT_NAME
+XR_CHEST_VIEW_PARAMS_PATH = XR_CHEST_VIEW_DIR / "parameters.json"
+
+# Back-compat aliases (older imports / docs).
+CXP_VIEW_DIR = XR_CHEST_VIEW_DIR
+CXP_VIEW_WEIGHT_NAME = XR_CHEST_VIEW_WEIGHT_NAME
+CXP_VIEW_WEIGHT_PATH = XR_CHEST_VIEW_WEIGHT_PATH
+CXP_VIEW_PARAMS_PATH = XR_CHEST_VIEW_PARAMS_PATH
 
 _HF_SPACE = "MedicalAILabo/CXp-Projection-Rotation-Mislabel-Checker"
 _HF_BASE = f"https://huggingface.co/spaces/{_HF_SPACE}/resolve/main"
-_WEIGHT_URL = f"{_HF_BASE}/{CXP_VIEW_WEIGHT_NAME}"
+_WEIGHT_URL = f"{_HF_BASE}/{XR_CHEST_VIEW_WEIGHT_NAME}"
 _PARAMS_URL = f"{_HF_BASE}/parameters.json"
 
 DOWNLOAD_ID = "harmonize_cxr_view"
@@ -29,25 +41,33 @@ DOWNLOAD_ID = "harmonize_cxr_view"
 _downloading = False
 
 
-class CxpViewModelStatus(StrEnum):
+class XrChestViewModelStatus(StrEnum):
     MISSING = "missing"
     DOWNLOADING = "downloading"
     READY = "ready"
     FAILED = "failed"
 
 
-def probe_cxp_view_models() -> tuple[CxpViewModelStatus, str]:
+# Back-compat alias
+CxpViewModelStatus = XrChestViewModelStatus
+
+
+def probe_xr_chest_view_models() -> tuple[XrChestViewModelStatus, str]:
     if _downloading:
-        return CxpViewModelStatus.DOWNLOADING, _("Downloading XR chest view model…")
-    if not CXP_VIEW_WEIGHT_PATH.is_file():
-        return CxpViewModelStatus.MISSING, _("Not downloaded")
-    if CXP_VIEW_WEIGHT_PATH.stat().st_size < 1_000_000:
-        return CxpViewModelStatus.FAILED, _("Download incomplete")
-    return CxpViewModelStatus.READY, _("Downloaded")
+        return XrChestViewModelStatus.DOWNLOADING, _("Downloading XR chest view model…")
+    if not XR_CHEST_VIEW_WEIGHT_PATH.is_file():
+        return XrChestViewModelStatus.MISSING, _("Not downloaded")
+    if XR_CHEST_VIEW_WEIGHT_PATH.stat().st_size < 1_000_000:
+        return XrChestViewModelStatus.FAILED, _("Download incomplete")
+    return XrChestViewModelStatus.READY, _("Downloaded")
 
 
-def cxp_view_ready() -> bool:
-    return probe_cxp_view_models()[0] == CxpViewModelStatus.READY
+def xr_chest_view_ready() -> bool:
+    return probe_xr_chest_view_models()[0] == XrChestViewModelStatus.READY
+
+
+probe_cxp_view_models = probe_xr_chest_view_models
+cxp_view_ready = xr_chest_view_ready
 
 
 def _download_file(url: str, dest: Path, *, label: str) -> None:
@@ -73,50 +93,55 @@ def _download_file(url: str, dest: Path, *, label: str) -> None:
     partial.replace(dest)
 
 
-def download_cxp_view_models(*, verbose: bool = False) -> tuple[bool, str]:
-    """Download CXp projection+rotation weights into assets/ai/cxp_view."""
+def download_xr_chest_view_models(*, verbose: bool = False) -> tuple[bool, str]:
+    """Download XR chest view weights into ``assets/ai/xr_chest_view``."""
     del verbose
     global _downloading
-    status, _detail = probe_cxp_view_models()
-    if status == CxpViewModelStatus.READY:
-        logger.info("CXp view models already at %s", CXP_VIEW_DIR)
+    status, _detail = probe_xr_chest_view_models()
+    if status == XrChestViewModelStatus.READY:
+        logger.info("XR chest view models already at %s", XR_CHEST_VIEW_DIR)
         return True, _("XR chest view model already downloaded.")
 
     _downloading = True
     try:
-        CXP_VIEW_DIR.mkdir(parents=True, exist_ok=True)
-        logger.info("Downloading CXp view weights to %s", CXP_VIEW_DIR)
+        XR_CHEST_VIEW_DIR.mkdir(parents=True, exist_ok=True)
+        logger.info("Downloading XR chest view weights to %s", XR_CHEST_VIEW_DIR)
         update_model_download(
             DOWNLOAD_ID,
-            message=_("Downloading XR chest view model to {path}").format(path=CXP_VIEW_DIR),
+            message=_("Downloading XR chest view model to {path}").format(path=XR_CHEST_VIEW_DIR),
         )
-        _download_file(_WEIGHT_URL, CXP_VIEW_WEIGHT_PATH, label=CXP_VIEW_WEIGHT_NAME)
+        _download_file(_WEIGHT_URL, XR_CHEST_VIEW_WEIGHT_PATH, label=XR_CHEST_VIEW_WEIGHT_NAME)
         try:
-            _download_file(_PARAMS_URL, CXP_VIEW_PARAMS_PATH, label="parameters.json")
+            _download_file(_PARAMS_URL, XR_CHEST_VIEW_PARAMS_PATH, label="parameters.json")
         except Exception:
-            logger.warning("Optional CXp parameters.json download failed", exc_info=True)
-        from anonymizer.controller.ai.harmonize.cxp_view.predict import clear_model_cache
+            logger.warning("Optional XR chest view parameters.json download failed", exc_info=True)
+        from anonymizer.controller.ai.harmonize.xr_chest_view.predict import clear_model_cache
 
         clear_model_cache()
-        # Clear before probe so READY is visible (probe treats _downloading as DOWNLOADING).
         _downloading = False
-        status, detail = probe_cxp_view_models()
-        if status == CxpViewModelStatus.READY:
-            logger.info("CXp view models ready at %s", CXP_VIEW_DIR)
+        status, detail = probe_xr_chest_view_models()
+        if status == XrChestViewModelStatus.READY:
+            logger.info("XR chest view models ready at %s", XR_CHEST_VIEW_DIR)
             return True, _("XR chest view model downloaded.")
         return False, detail or _("XR chest view download incomplete.")
     except Exception as exc:
-        logger.exception("CXp view download failed")
+        logger.exception("XR chest view download failed")
         return False, str(exc)
     finally:
         _downloading = False
 
 
-def remove_cxp_view_models() -> None:
-    from anonymizer.controller.ai.harmonize.cxp_view.predict import clear_model_cache
+download_cxp_view_models = download_xr_chest_view_models
 
-    if CXP_VIEW_DIR.is_dir():
-        shutil.rmtree(CXP_VIEW_DIR)
-    CXP_VIEW_DIR.mkdir(parents=True, exist_ok=True)
+
+def remove_xr_chest_view_models() -> None:
+    from anonymizer.controller.ai.harmonize.xr_chest_view.predict import clear_model_cache
+
+    if XR_CHEST_VIEW_DIR.is_dir():
+        shutil.rmtree(XR_CHEST_VIEW_DIR)
+    XR_CHEST_VIEW_DIR.mkdir(parents=True, exist_ok=True)
     clear_model_cache()
-    logger.info("Removed CXp view models from %s", CXP_VIEW_DIR)
+    logger.info("Removed XR chest view models from %s", XR_CHEST_VIEW_DIR)
+
+
+remove_cxp_view_models = remove_xr_chest_view_models

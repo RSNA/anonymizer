@@ -7,7 +7,7 @@ from tkinter import Misc
 
 import customtkinter as ctk
 
-from anonymizer.controller.ai.embedded_phi.ner.ner import SCORED_LABELS, Entity
+from anonymizer.controller.ai.embedded_phi.ner.engine import SCORED_LABELS, Entity
 from anonymizer.view.common.tooltip import MotionTooltipController, TooltipContent
 from anonymizer.view.reports.entity_colors import entity_color_hex
 

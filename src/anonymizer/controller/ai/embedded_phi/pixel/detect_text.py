@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     pass
 
 from anonymizer.controller.ai.embedded_phi.ner.cache import ner_ready
-from anonymizer.controller.ai.embedded_phi.ner.ner import detect_entities, detect_locale_supported
+from anonymizer.controller.ai.embedded_phi.ner.engine import detect_entities, detect_locale_supported
 from anonymizer.controller.series_io import (
     stored_monochrome_to_series_buffer,
 )

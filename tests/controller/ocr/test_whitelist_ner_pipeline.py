@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from anonymizer.controller.ai.embedded_phi.ner.ner import Entity
+from anonymizer.controller.ai.embedded_phi.ner.engine import Entity
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     annotate_ocr_phi_labels,
     detect_text,
