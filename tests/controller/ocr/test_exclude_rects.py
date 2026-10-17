@@ -6,7 +6,7 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     filter_ocr_outside_exclude_rects,
     rects_intersect,
 )
-from anonymizer.controller.series_overlay import OCRText, UserRectangle
+from anonymizer.controller.series.series_overlay import OCRText, UserRectangle
 
 
 def _ocr(text: str, x1: int, y1: int, x2: int, y2: int) -> OCRText:

@@ -9,7 +9,7 @@ from pydicom import dcmread
 from pydicom.data import get_testdata_file
 
 from anonymizer.controller.anonymizer import QuarantineDirectories
-from anonymizer.controller.process_ctp_lookup import commit_ctp_lookup, preview_ctp_lookup
+from anonymizer.controller.ingest.process_ctp_lookup import commit_ctp_lookup, preview_ctp_lookup
 from tests.controller.dicom.support.test_files import ct_small_filename
 from tests.controller.dicom.support.test_nodes import LocalSCU
 

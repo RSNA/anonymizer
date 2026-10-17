@@ -7,8 +7,8 @@ import pytest
 from pydicom import dcmread
 from pydicom.data import get_testdata_file
 
-from anonymizer.controller.runner import Algorithm
-from anonymizer.controller.work_state import WorkState
+from anonymizer.controller.jobs.runner import Algorithm
+from anonymizer.controller.jobs.work_state import WorkState
 
 
 @pytest.fixture

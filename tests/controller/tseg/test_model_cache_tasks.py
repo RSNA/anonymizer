@@ -146,11 +146,15 @@ def test_brain_structures_weights_match_totalsegmentator_api() -> None:
 
 def test_resolve_harmonize_model_folder_returns_path() -> None:
     expected = Path("/models/Dataset297_example")
-    stubs = _install_fake_totalsegmentator(
-        get_output_folder=MagicMock(return_value=str(expected)),
-    )
 
-    with patch.dict(sys.modules, stubs):
+    with (
+        patch("anonymizer.controller.ai.tseg.model_cache.setup_nnunet", MagicMock()),
+        patch("anonymizer.controller.ai.tseg.model_cache.setup_totalseg", MagicMock()),
+        patch(
+            "anonymizer.controller.ai.tseg.model_cache.get_output_folder",
+            return_value=str(expected),
+        ),
+    ):
         assert resolve_harmonize_model_folder(297) == expected
 
 
@@ -182,10 +186,12 @@ def test_ensure_pretrained_weights_removes_empty_dataset_dir(tmp_path: Path) -> 
     trainer = trainer_for_harmonize_task(297)
     model = model_for_harmonize_task(297)
     download = MagicMock()
-    stubs = _install_fake_totalsegmentator(download_pretrained_weights=download)
 
     with (
-        patch.dict(sys.modules, stubs),
+        patch(
+            "anonymizer.controller.ai.tseg.model_cache.download_pretrained_weights",
+            download,
+        ),
         patch(
             "anonymizer.controller.ai.tseg.model_cache._try_resolve_task_model_folder",
             return_value=model_folder,
@@ -194,6 +200,7 @@ def test_ensure_pretrained_weights_removes_empty_dataset_dir(tmp_path: Path) -> 
             "anonymizer.controller.ai.tseg.model_cache._task_checkpoint_ready",
             side_effect=[False, True],
         ),
+        patch("anonymizer.controller.ai.tseg.model_cache.ensure_ssl_certifi", lambda: None),
     ):
         _ensure_pretrained_weights(297, trainer=trainer, model=model)
 
@@ -206,10 +213,12 @@ def test_ensure_pretrained_weights_skips_when_checkpoint_ready(tmp_path: Path) -
     trainer = trainer_for_harmonize_task(297)
     model = model_for_harmonize_task(297)
     download = MagicMock()
-    stubs = _install_fake_totalsegmentator(download_pretrained_weights=download)
 
     with (
-        patch.dict(sys.modules, stubs),
+        patch(
+            "anonymizer.controller.ai.tseg.model_cache.download_pretrained_weights",
+            download,
+        ),
         patch(
             "anonymizer.controller.ai.tseg.model_cache._try_resolve_task_model_folder",
             return_value=model_folder,
@@ -218,6 +227,7 @@ def test_ensure_pretrained_weights_skips_when_checkpoint_ready(tmp_path: Path) -
             "anonymizer.controller.ai.tseg.model_cache._task_checkpoint_ready",
             return_value=True,
         ),
+        patch("anonymizer.controller.ai.tseg.model_cache.ensure_ssl_certifi", lambda: None),
     ):
         _ensure_pretrained_weights(297, trainer=trainer, model=model)
 
@@ -228,10 +238,12 @@ def test_ensure_pretrained_weights_downloads_when_dataset_not_on_disk() -> None:
     trainer = trainer_for_harmonize_task(297)
     model = model_for_harmonize_task(297)
     download = MagicMock()
-    stubs = _install_fake_totalsegmentator(download_pretrained_weights=download)
 
     with (
-        patch.dict(sys.modules, stubs),
+        patch(
+            "anonymizer.controller.ai.tseg.model_cache.download_pretrained_weights",
+            download,
+        ),
         patch(
             "anonymizer.controller.ai.tseg.model_cache._try_resolve_task_model_folder",
             return_value=None,
@@ -240,6 +252,7 @@ def test_ensure_pretrained_weights_downloads_when_dataset_not_on_disk() -> None:
             "anonymizer.controller.ai.tseg.model_cache._task_checkpoint_ready",
             side_effect=[False, True],
         ),
+        patch("anonymizer.controller.ai.tseg.model_cache.ensure_ssl_certifi", lambda: None),
     ):
         _ensure_pretrained_weights(297, trainer=trainer, model=model)
 

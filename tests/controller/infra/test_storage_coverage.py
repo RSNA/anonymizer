@@ -17,6 +17,7 @@ from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
     save_project_whitelist,
     save_whitelist_to_txt,
 )
+from anonymizer.controller.ai import model_download as model_download_mod
 from anonymizer.controller.ai.model_download import (
     DownloadProgress,
     any_model_download_active,
@@ -31,11 +32,9 @@ from anonymizer.utils.storage.dicom_tree import count_quarantine_images
 
 @pytest.fixture(autouse=True)
 def _clear_progress() -> None:
-    for key in ("embedded_phi", "enable_harmonize", "enable_face_blur", "custom_model_key"):
-        end_model_download(key)
+    model_download_mod._download_progress.clear()
     yield
-    for key in ("embedded_phi", "enable_harmonize", "enable_face_blur", "custom_model_key"):
-        end_model_download(key)
+    model_download_mod._download_progress.clear()
 
 
 def test_model_download_lifecycle_and_any_active() -> None:

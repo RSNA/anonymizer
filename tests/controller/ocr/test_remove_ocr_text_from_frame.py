@@ -8,7 +8,7 @@ import numpy as np
 
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import PixelPhiRemovalMode
 from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import remove_ocr_text_from_frame
-from anonymizer.controller.series_overlay import OCRText
+from anonymizer.controller.series.series_overlay import OCRText
 
 
 def _ocr_texts() -> list[OCRText]:

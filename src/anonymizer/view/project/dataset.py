@@ -35,7 +35,7 @@ from anonymizer.controller.ai.harmonize import (
     study_loinc_prefix_for_edit,
     study_ready_for_description_edit,
 )
-from anonymizer.controller.phi_io import PHI_IndexRecord, PHI_SeriesIndexRecord
+from anonymizer.controller.phi.phi_io import PHI_IndexRecord, PHI_SeriesIndexRecord
 from anonymizer.controller.project import ProjectController
 from anonymizer.utils.modalities import ContentClass, Modality, get_modality_catalog
 from anonymizer.utils.translate import _

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from anonymizer.controller.phi_io import PHI_IndexRecord
+from anonymizer.controller.phi.phi_io import PHI_IndexRecord
 from anonymizer.view.project.dataset import DatasetView
 
 

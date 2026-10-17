@@ -5,7 +5,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-from anonymizer.controller.series_overlay import Segmentation
+from anonymizer.controller.series.series_overlay import Segmentation
 
 # Single-pixel opaque color stroke (no dark understroke — that exaggerates contour jaggedness).
 COLORED_SEGMENTATION_OUTLINE_THICKNESS = 1

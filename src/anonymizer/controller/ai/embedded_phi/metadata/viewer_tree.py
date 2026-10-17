@@ -13,7 +13,7 @@ from pydicom.tag import Tag
 from pydicom.valuerep import PersonName
 
 from anonymizer.controller.ai.embedded_phi.metadata.extract import element_display_name
-from anonymizer.controller.anonymizer_script import format_dicom_tag
+from anonymizer.controller.ingest.anonymizer_script import format_dicom_tag
 
 STRUCTURAL_TAG = "-"
 ITEM_NAME = "item"

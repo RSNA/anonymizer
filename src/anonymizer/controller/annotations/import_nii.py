@@ -29,7 +29,7 @@ from anonymizer.controller.annotations.store import (
     resolve_normative_organ,
     save_annotate_session,
 )
-from anonymizer.controller.series_io import load_series_frames
+from anonymizer.controller.series.series_io import load_series_frames
 from anonymizer.utils.modalities import ContentClass, Modality, get_modality_catalog
 
 logger = logging.getLogger(__name__)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from anonymizer.controller.runner import (
+from anonymizer.controller.jobs.runner import (
     OcrRemoveMode,
     apply_phi_ner_filter_for_ocr_remove_mode,
     normalize_ocr_remove_mode,

@@ -47,7 +47,6 @@ from anonymizer.controller.analytics.dataset import build_dataset_analytics
 from anonymizer.controller.annotations import export_dicom_seg
 from anonymizer.controller.annotations.export_dicom_seg import build_dicom_seg_export_session
 from anonymizer.controller.anonymizer import AnonymizerController
-from anonymizer.controller.anonymizer_script import packaged_script_path_for_policy
 from anonymizer.controller.dicom import dicomweb as dicomweb_api
 from anonymizer.controller.dicom.association import AssociationMixin
 from anonymizer.controller.dicom.echo_scu import EchoMixin
@@ -65,17 +64,21 @@ from anonymizer.controller.dicom.requests import (
 from anonymizer.controller.dicom.retrieve_scu import RetrieveMixin
 from anonymizer.controller.dicom.scp import ScpMixin
 from anonymizer.controller.dicom.store_scu import StoreMixin
-from anonymizer.controller.phi_io import (
+from anonymizer.controller.ingest.anonymizer_script import (
+    packaged_script_path_for_policy,
+    project_anonymizer_script_path,
+)
+from anonymizer.controller.ingest.process_ctp_lookup import migrate_project_script_from_private
+from anonymizer.controller.jobs.work_state import WorkState
+from anonymizer.controller.phi.phi_io import (
     PHI_IndexRecord,
     build_phi_index,
     format_series_processing_status,
     write_lookup_csv,
 )
-from anonymizer.controller.phi_io import (
+from anonymizer.controller.phi.phi_io import (
     import_java_phi_studies as phi_io_import_java_phi_studies,
 )
-from anonymizer.controller.process_ctp_lookup import migrate_project_script_from_private, project_anonymizer_script_path
-from anonymizer.controller.work_state import WorkState
 from anonymizer.model.anonymizer import PHI, SeriesProcessingStatus
 from anonymizer.model.project import AnonymizationPolicy, AuthenticationError, DICOMRuntimeError, ProjectModel
 from anonymizer.utils.logging import set_logging_levels

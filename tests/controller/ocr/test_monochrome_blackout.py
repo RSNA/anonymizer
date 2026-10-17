@@ -13,11 +13,11 @@ from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
     blackout_rectangular_areas,
     remove_pixel_phi,
 )
-from anonymizer.controller.series_io import (
+from anonymizer.controller.series.series_io import (
     series_buffer_monochrome_to_stored,
     stored_monochrome_to_series_buffer,
 )
-from anonymizer.controller.series_overlay import UserRectangle
+from anonymizer.controller.series.series_overlay import UserRectangle
 
 
 def _monochrome1_dataset() -> pydicom.Dataset:

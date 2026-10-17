@@ -41,8 +41,8 @@ from anonymizer.controller.ai.tseg.segment import (
     invalidate_stale_tseg_volume_cache,
     series_cache_dir,
 )
-from anonymizer.controller.series_io import load_series_frames
-from anonymizer.controller.series_overlay import PolygonPoint, Segmentation
+from anonymizer.controller.series.series_io import load_series_frames
+from anonymizer.controller.series.series_overlay import PolygonPoint, Segmentation
 from anonymizer.utils.modalities import Modality
 
 logger = logging.getLogger(__name__)

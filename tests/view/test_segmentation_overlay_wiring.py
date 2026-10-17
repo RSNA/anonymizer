@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import numpy as np
 
-from anonymizer.controller.series_overlay import PolygonPoint, Segmentation
+from anonymizer.controller.series.series_overlay import PolygonPoint, Segmentation
 from anonymizer.view.series.anatomy_overlay import (
     contour_mask_slice,
     merge_structure_overlays,

@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from pydicom import dcmread
 
-from anonymizer.controller.series_io import (
+from anonymizer.controller.series.series_io import (
     apply_series_description,
     apply_study_description,
     clip_and_cast_to_int,

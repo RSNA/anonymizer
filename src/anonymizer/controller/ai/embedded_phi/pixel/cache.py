@@ -9,9 +9,9 @@ from enum import StrEnum
 
 from easyocr import Reader
 
+from anonymizer.controller.ai.model_download import update_model_download
 from anonymizer.utils.network import ensure_ssl_certifi
 from anonymizer.utils.package_paths import ai_feature_dir
-from anonymizer.controller.ai.model_download import update_model_download
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)

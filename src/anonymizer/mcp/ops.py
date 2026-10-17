@@ -24,9 +24,10 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
 )
 from anonymizer.controller.ai.harmonize import auto_apply_best_study_descriptions
 from anonymizer.controller.ai.harmonize.xp_bodypart.preprocess import uint8_grayscale_from_array
+from anonymizer.controller.jobs.runner import RemovePixelPhiRunner
 from anonymizer.controller.project import MoveStudiesRequest, ProjectController, StudyUIDHierarchy
-from anonymizer.controller.runner import RemovePixelPhiRunner
-from anonymizer.controller.series_io import load_series_frames
+from anonymizer.controller.series.series_io import load_series_frames
+from anonymizer.mcp.modality_tokens import resolve_project_modalities
 from anonymizer.mcp.session import HeadlessSessionError, ProjectSession
 from anonymizer.mcp.snapshots import (
     abridged_path,
@@ -50,7 +51,6 @@ from anonymizer.model.settings_validate import (
     validate_transfer_syntaxes,
     validate_uid_root,
 )
-from anonymizer.mcp.modality_tokens import resolve_project_modalities
 from anonymizer.utils.storage.dicom_tree import (
     get_dcm_files,
     list_import_directory_files,

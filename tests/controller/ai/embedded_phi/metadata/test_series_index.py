@@ -11,7 +11,7 @@ from pydicom import dcmread
 from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, SecondaryCaptureImageStorage, generate_uid
 
-from anonymizer.controller import series_io
+from anonymizer.controller.series import series_io
 from anonymizer.controller.ai.embedded_phi.metadata.extract import MetadataPhiRow
 from anonymizer.controller.ai.embedded_phi.metadata.series_index import (
     extract_sop_metadata_rows,
@@ -111,7 +111,7 @@ def _write_series(tmp: Path, count: int, *, shared_study: str = "SHARED STUDY") 
             image_comments=f"slice-{i}-comment",
         )
         ds.InstanceNumber = i + 1
-        ds.save_as(series / f"slice_{i:03d}.dcm", write_like_original=False)
+        ds.save_as(series / f"slice_{i:03d}.dcm", enforce_file_format=True)
     return series
 
 

@@ -16,7 +16,7 @@ from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
     collect_series_view_embedded_phi_texts,
     remove_pixel_phi,
 )
-from anonymizer.controller.series_overlay import OCRText, OverlayData, UserRectangle
+from anonymizer.controller.series.series_overlay import OCRText, OverlayData, UserRectangle
 from anonymizer.model.anonymizer import Instance
 from tests.opened_anonymizer_model import opened_anonymizer_model
 

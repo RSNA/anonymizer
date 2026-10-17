@@ -34,12 +34,12 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     ocr_image_for_frame,
 )
 from anonymizer.controller.ai.embedded_phi.pixel.exclude_zones import modality_exclude_rects_for_series
-from anonymizer.controller.create_projections import invalidate_projection_cache
-from anonymizer.controller.series_io import (
+from anonymizer.controller.series.create_projections import invalidate_projection_cache
+from anonymizer.controller.series.series_io import (
     series_buffer_monochrome_to_stored,
     stored_monochrome_to_series_buffer,
 )
-from anonymizer.controller.series_overlay import OCRText, UserRectangle
+from anonymizer.controller.series.series_overlay import OCRText, UserRectangle
 from anonymizer.utils.dicom import SUPPORTED_PHOTOMETRIC_INTERPRETATIONS
 
 logging.getLogger("openjpeg").setLevel(logging.WARNING)

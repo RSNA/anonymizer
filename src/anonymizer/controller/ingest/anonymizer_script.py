@@ -11,12 +11,10 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from anonymizer.controller.anonymizer_script_paths import private_anonymizer_script_path
-from anonymizer.model.project import AnonymizationPolicy
+from anonymizer.model.project import AnonymizationPolicy, ProjectModel
 
 if TYPE_CHECKING:
     from anonymizer.controller.project import ProjectController
-    from anonymizer.model.project import ProjectModel
 try:
     from pydicom._version import __dicom_version__
 except Exception:
@@ -25,9 +23,20 @@ from pydicom.datadict import DicomDictionary, keyword_dict
 
 logger = logging.getLogger(__name__)
 
-_PACKAGED_SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "assets" / "scripts"
+_PACKAGED_SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "assets" / "scripts"
 _STRICT_SCRIPT_NAME = "default-anonymizer.script"
 _CLINICAL_SCRIPT_NAME = "clinical-anonymizer.script"
+
+
+def project_anonymizer_script_path(project_model: ProjectModel) -> Path:
+    """Project script beside ``ProjectModel.json`` (config, not PHI)."""
+    return Path(project_model.storage_dir) / f"{project_model.site_id}-anonymizer.script"
+
+
+def private_anonymizer_script_path(project_model: ProjectModel) -> Path:
+    """Legacy name; same path as ``project_anonymizer_script_path``."""
+    return project_anonymizer_script_path(project_model)
+
 
 _REMOVE_MARKER = "@remove"
 _ROUND_RE = re.compile(r"^@round\(\s*this\s*,\s*(\d+)\s*\)$", re.IGNORECASE)
@@ -408,6 +417,51 @@ def anonymization_policy_tooltip(policy: AnonymizationPolicy | str | None) -> st
     return (
         "Default. Image-focused: wipes private tags and removes most report and clinical free text. "
         "SR and PDF modalities stay off."
+    )
+
+
+def anonymization_policy_switch_confirm_message(
+    selected: AnonymizationPolicy | str | None,
+    *,
+    policy_display_name: str,
+) -> str:
+    """
+    English confirmation body when switching an existing project's policy.
+
+    Caller wraps with ``_`` for translation. ``policy_display_name`` is the
+    already-translated display name (e.g. Clinical / Strict).
+
+    Args:
+        selected: Policy being switched to.
+        policy_display_name: Localized policy label for the lead-in sentence.
+
+    Returns:
+        Full confirmation message including lead-in and consequences.
+    """
+    policy = normalize_anonymization_policy(selected)
+    lead = f"Change policy to {policy_display_name}?"
+    if policy is AnonymizationPolicy.CLINICAL:
+        return (
+            f"{lead} This replaces your project anonymizer script with the packaged "
+            f"{policy_display_name} script. Custom script edits will be lost.\n\n"
+            "What changes:\n"
+            "• More report and clinical free-text tags are kept at ingest.\n"
+            "• Private tags are left untouched at ingest (for later Embedded PHI / TCIA KB cleanup).\n"
+            "• SR and PDF modalities are enabled if they are not already selected.\n\n"
+            "What does not change:\n"
+            "• Already anonymized data is not re-processed.\n\n"
+            "Recommendation: enable Embedded PHI under AI Features for private-tag cleanup, "
+            "burnt-in pixel text, and SR/PDF report text."
+        )
+    return (
+        f"{lead} This replaces your project anonymizer script with the packaged "
+        f"{policy_display_name} script. Custom script edits will be lost.\n\n"
+        "What changes:\n"
+        "• Private tags are wiped at ingest.\n"
+        "• Most report and clinical free-text tags are removed at ingest.\n\n"
+        "What does not change:\n"
+        "• Already anonymized data is not re-processed.\n"
+        "• SR and PDF modalities already enabled for this project are left as-is."
     )
 
 

@@ -95,8 +95,7 @@ from anonymizer.controller.annotations import (
     undo_last_stroke,
 )
 from anonymizer.controller.annotations.import_nii import AnnotationGeometryUnsupported
-from anonymizer.controller.create_projections import invalidate_projection_cache
-from anonymizer.controller.runner import (
+from anonymizer.controller.jobs.runner import (
     Algorithm,
     OcrEditContext,
     OcrRemoveMode,
@@ -112,15 +111,16 @@ from anonymizer.controller.runner import (
     remove_text_button_label,
     run_job,
 )
-from anonymizer.controller.series_io import (
+from anonymizer.controller.jobs.work_state import WorkState
+from anonymizer.controller.series.create_projections import invalidate_projection_cache
+from anonymizer.controller.series.series_io import (
     LoadedSeries,
     SeriesProjections,
     compute_series_projections,
     load_series_frames,
     save_series_frames,
 )
-from anonymizer.controller.series_overlay import LayerType, OCRText, OverlayData, Segmentation, UserRectangle
-from anonymizer.controller.work_state import WorkState
+from anonymizer.controller.series.series_overlay import LayerType, OCRText, OverlayData, Segmentation, UserRectangle
 from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.memory import collect_garbage_safe, log_process_memory
 from anonymizer.utils.storage.dicom_tree import get_dcm_files

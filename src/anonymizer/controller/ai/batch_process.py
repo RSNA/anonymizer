@@ -57,7 +57,7 @@ from anonymizer.controller.ai.harmonize.pipeline import (
 from anonymizer.controller.ai.tseg.config import segmentation_mode_for_modality
 from anonymizer.controller.ai.tseg.contrast import release_working_memory
 from anonymizer.controller.ai.tseg.dicom_geometry import resolve_series_geometry, stackable_dicom_paths
-from anonymizer.controller.runner import (
+from anonymizer.controller.jobs.runner import (
     Algorithm,
     OcrRemoveMode,
     apply_phi_ner_filter_for_ocr_remove_mode,
@@ -68,7 +68,7 @@ from anonymizer.controller.runner import (
     remove_text_button_label,
     whitelist_arg_for_ocr_remove_mode,
 )
-from anonymizer.controller.series_io import load_series_frames, save_series_frames
+from anonymizer.controller.series.series_io import load_series_frames, save_series_frames
 from anonymizer.utils.memory import MemoryGuard, MemorySnapshot, capture_memory_snapshot, collect_garbage_safe
 from anonymizer.utils.translate import _
 
@@ -76,13 +76,13 @@ if TYPE_CHECKING:
     from easyocr import Reader
 
     from anonymizer.controller.anonymizer import AnonymizerController
-    from anonymizer.controller.work_state import WorkState
+    from anonymizer.controller.jobs.work_state import WorkState
     from anonymizer.model.anonymizer import AnonymizerModel
     from anonymizer.model.project import ProjectModel
 from pydicom import dcmread
 
 from anonymizer.controller.ai.harmonize import format_harmonize_batch_contrast_log_lines
-from anonymizer.controller.create_projections import invalidate_projection_cache
+from anonymizer.controller.series.create_projections import invalidate_projection_cache
 from anonymizer.utils.storage.dicom_tree import get_dcm_files
 
 logger = logging.getLogger(__name__)

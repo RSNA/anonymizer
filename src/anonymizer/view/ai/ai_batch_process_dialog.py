@@ -22,8 +22,8 @@ from anonymizer.controller.ai.batch_process import (
     normalize_selected_algorithms,
 )
 from anonymizer.controller.ai.tseg.config import BATCH_MEMORY_POLL_INTERVAL_SEC
+from anonymizer.controller.jobs.work_state import WorkState
 from anonymizer.controller.project import ProjectController
-from anonymizer.controller.work_state import WorkState
 from anonymizer.utils.memory import (
     MemoryGuard,
     MemorySnapshot,

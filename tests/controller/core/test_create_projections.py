@@ -15,7 +15,7 @@ from pydicom.dataset import FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian
 
 # Local Application/Library Specific Imports
-from anonymizer.controller.create_projections import (
+from anonymizer.controller.series.create_projections import (
     Projection,  # Tested
     ProjectionImageSize,  # Tested
     ProjectionImageSizeConfig,  # Tested
@@ -63,7 +63,7 @@ class TestProjectionDataclassPytest:
 
     def test_projection_context_manager(self, monkeypatch):
         mock_cleanup = MagicMock()
-        monkeypatch.setattr("anonymizer.controller.create_projections.Projection.cleanup", mock_cleanup)
+        monkeypatch.setattr("anonymizer.controller.series.create_projections.Projection.cleanup", mock_cleanup)
         projection_instance = Projection("pid", "study", "series", "desc")
         with projection_instance as p:
             assert p is projection_instance
@@ -74,7 +74,7 @@ class TestProjectionDataclassPytest:
 @pytest.fixture
 def reset_scaling_factor_fixture():
     # Ensure the config is imported from the correct new path if it's not already
-    from anonymizer.controller.create_projections import ProjectionImageSizeConfig
+    from anonymizer.controller.series.create_projections import ProjectionImageSizeConfig
 
     original_factor = ProjectionImageSizeConfig._scaling_factor
     ProjectionImageSizeConfig._scaling_factor = 1.0  # Setup
@@ -97,7 +97,7 @@ class TestProjectionImageSizeConfigPytest:
     def test_set_scaling_factor_if_needed_scaling_required(self, monkeypatch, caplog):
         mock_set_factor = MagicMock()
         monkeypatch.setattr(
-            "anonymizer.controller.create_projections.ProjectionImageSizeConfig.set_scaling_factor",
+            "anonymizer.controller.series.create_projections.ProjectionImageSizeConfig.set_scaling_factor",
             mock_set_factor,
         )
         original_large_width = ProjectionImageSize.LARGE.value[0]
@@ -113,7 +113,7 @@ class TestProjectionImageSizeConfigPytest:
     def test_set_scaling_factor_if_needed_no_scaling(self, monkeypatch, caplog):
         mock_set_factor = MagicMock()
         monkeypatch.setattr(
-            "anonymizer.controller.create_projections.ProjectionImageSizeConfig.set_scaling_factor",
+            "anonymizer.controller.series.create_projections.ProjectionImageSizeConfig.set_scaling_factor",
             mock_set_factor,
         )
         original_large_width = ProjectionImageSize.LARGE.value[0]
@@ -145,7 +145,7 @@ class TestProjectionImageSizeEnum:
 class TestNormalizeUint8:
     def test_normalize_uint8_call(self):
         input_array = np.array([[0, 1000]], dtype=np.float32)
-        with patch("anonymizer.controller.create_projections.normalize") as mock_cv2_normalize:
+        with patch("anonymizer.controller.series.create_projections.normalize") as mock_cv2_normalize:
             mock_cv2_normalize.return_value = np.array([[0, 255]], dtype=np.float32)
 
             result = normalize_uint8(input_array)
@@ -170,8 +170,8 @@ class TestCacheProjection:
         mock_path_obj = MagicMock(spec=Path)
         mock_open_func = mock_open()
         with (
-            patch("anonymizer.controller.create_projections.open", mock_open_func),
-            patch("anonymizer.controller.create_projections.pickle.dump") as mock_pickle_dump,
+            patch("anonymizer.controller.series.create_projections.open", mock_open_func),
+            patch("anonymizer.controller.series.create_projections.pickle.dump") as mock_pickle_dump,
         ):
             with caplog.at_level(logging.WARNING):
                 cache_projection(mock_proj, mock_path_obj)
@@ -185,9 +185,9 @@ class TestCacheProjection:
         mock_path_obj = MagicMock(spec=Path)
         mock_open_func = mock_open()
         with (
-            patch("anonymizer.controller.create_projections.open", mock_open_func),
+            patch("anonymizer.controller.series.create_projections.open", mock_open_func),
             patch(
-                "anonymizer.controller.create_projections.pickle.dump",
+                "anonymizer.controller.series.create_projections.pickle.dump",
                 side_effect=pickle.PicklingError("Test pickle error"),
             ),
         ):
@@ -213,28 +213,28 @@ class TestCreateProjectionFromSingleFrame:
         mock_pil_image_instance = MagicMock()
 
         with (
-            patch("anonymizer.controller.create_projections.ProjectionImageSize", new=mock_enum_class),
+            patch("anonymizer.controller.series.create_projections.ProjectionImageSize", new=mock_enum_class),
             patch(
-                "anonymizer.controller.create_projections.createCLAHE",
+                "anonymizer.controller.series.create_projections.createCLAHE",
                 return_value=MagicMock(apply=mock_clahe_apply),
             ) as mock_create_clahe,
             patch(
-                "anonymizer.controller.create_projections.GaussianBlur",
+                "anonymizer.controller.series.create_projections.GaussianBlur",
                 return_value=np.zeros((50, 50), np.uint8),
             ) as mock_gaussian_blur,
             patch(
-                "anonymizer.controller.create_projections.Canny",
+                "anonymizer.controller.series.create_projections.Canny",
                 return_value=np.zeros((50, 50), np.uint8),
             ) as mock_canny,
             patch(
-                "anonymizer.controller.create_projections.getStructuringElement",
+                "anonymizer.controller.series.create_projections.getStructuringElement",
                 return_value=np.array([]),
             ) as mock_get_struct_element,
             patch(
-                "anonymizer.controller.create_projections.dilate",
+                "anonymizer.controller.series.create_projections.dilate",
                 return_value=np.zeros((50, 50), np.uint8),
             ) as mock_dilate,
-            patch("anonymizer.controller.create_projections.Image.fromarray") as mock_pil_fromarray,
+            patch("anonymizer.controller.series.create_projections.Image.fromarray") as mock_pil_fromarray,
         ):
             mock_pil_fromarray.return_value.convert.return_value.resize.return_value = mock_pil_image_instance
             projection = create_projection_from_single_frame(ds, frame_data)

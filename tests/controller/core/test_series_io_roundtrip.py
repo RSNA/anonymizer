@@ -8,7 +8,7 @@ import pytest
 from pydicom import dcmread
 from pydicom.data import get_testdata_file
 
-from anonymizer.controller.series_io import (
+from anonymizer.controller.series.series_io import (
     apply_series_description,
     apply_study_description,
     load_series_frames,

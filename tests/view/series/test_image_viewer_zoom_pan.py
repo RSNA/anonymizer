@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from anonymizer.controller.series_overlay import PolygonPoint, Segmentation
+from anonymizer.controller.series.series_overlay import PolygonPoint, Segmentation
 from anonymizer.view.series.image import ImageViewer
 
 

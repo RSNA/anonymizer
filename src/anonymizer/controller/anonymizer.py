@@ -29,8 +29,8 @@ from pydicom.datadict import dictionary_VR
 from pydicom.errors import InvalidDicomError
 from pydicom.tag import Tag
 
-from anonymizer.controller.anonymizer_script import always_literal_text, incrementdate_days, rebasedate_origin
-from anonymizer.controller.dates import (
+from anonymizer.controller.ingest.anonymizer_script import always_literal_text, incrementdate_days, rebasedate_origin
+from anonymizer.controller.ingest.dates import (
     DEFAULT_ANON_DATE,
     apply_day_delta,
     hash_date,
@@ -85,7 +85,7 @@ class AnonymizerController:
         ("113108", "Retain Patient Characteristics Option"),
     ]
     PRIVATE_BLOCK_NAME = "RSNA"
-    DEFAULT_ANON_DATE = DEFAULT_ANON_DATE  # from controller.dates
+    DEFAULT_ANON_DATE = DEFAULT_ANON_DATE  # from controller.ingest.dates
 
     NUMBER_OF_DATASET_WORKER_THREADS = 1
     WORKER_THREAD_SLEEP_SECS = 0.075  # for UX responsiveness

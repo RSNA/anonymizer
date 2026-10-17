@@ -16,7 +16,7 @@ from pprint import pformat
 from typing import TYPE_CHECKING, List, Optional
 
 if TYPE_CHECKING:
-    from anonymizer.controller.series_io import LoadedSeries
+    from anonymizer.controller.series.series_io import LoadedSeries
 
 import numpy as np
 from cv2 import (
@@ -35,8 +35,8 @@ from numpy import ndarray
 from PIL import Image
 from pydicom import Dataset
 
-from anonymizer.controller.series_io import load_series_frames
-from anonymizer.controller.series_overlay import OCRText
+from anonymizer.controller.series.series_io import load_series_frames
+from anonymizer.controller.series.series_overlay import OCRText
 from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.windowing import apply_windowing
 

@@ -12,13 +12,14 @@ from typing import List, Tuple
 
 import customtkinter as ctk
 
-from anonymizer.controller.anonymizer_script import (
+from anonymizer.controller.ingest.anonymizer_script import (
     anonymization_policy_display_name,
+    anonymization_policy_switch_confirm_message,
     anonymization_policy_tooltip,
     normalize_anonymization_policy,
     should_install_anonymization_policy,
 )
-from anonymizer.controller.process_ctp_lookup import _DEFAULT_SCRIPT_PATH, CtpLookupPreview
+from anonymizer.controller.ingest.process_ctp_lookup import _DEFAULT_SCRIPT_PATH, CtpLookupPreview
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.project import AnonymizationPolicy, AWSCognito, DICOMNode, ProjectModel
 from anonymizer.utils.logging import set_logging_levels
@@ -515,10 +516,11 @@ class SettingsDialog(AppToplevel):
         confirmed = messagebox.askyesno(
             _("Anonymization Policy"),
             _(
-                "Change policy to {policy}? This replaces your project anonymizer script "
-                "with the packaged {policy} script. Custom script edits will be lost. "
-                "Already anonymized data is not re-processed."
-            ).format(policy=policy_name),
+                anonymization_policy_switch_confirm_message(
+                    selected,
+                    policy_display_name=policy_name,
+                )
+            ),
             parent=self,
         )
         if not confirmed:

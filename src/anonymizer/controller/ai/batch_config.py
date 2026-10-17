@@ -23,8 +23,12 @@ from anonymizer.controller.ai.tseg.config import (
     set_ct_segmentation_mode,
     set_mr_segmentation_mode,
 )
-from anonymizer.controller.phi_io import build_phi_index
-from anonymizer.controller.runner import OcrRemoveMode, normalize_ocr_remove_mode, ocr_remove_mode_from_legacy_whitelist
+from anonymizer.controller.jobs.runner import (
+    OcrRemoveMode,
+    normalize_ocr_remove_mode,
+    ocr_remove_mode_from_legacy_whitelist,
+)
+from anonymizer.controller.phi.phi_io import build_phi_index
 from anonymizer.model.anonymizer import AnonymizerModel
 
 _ALGORITHM_ALIASES: dict[str, AiBatchAlgorithm] = {

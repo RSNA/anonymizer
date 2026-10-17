@@ -10,10 +10,12 @@ from pydicom.uid import ExplicitVRLittleEndian, SecondaryCaptureImageStorage, ge
 
 from anonymizer.assets.scripts.diff_clinical_table1 import diff_vs_table1
 from anonymizer.controller.ai.embedded_phi.metadata.process_private_tags_tcia import (
-    collapse_retain_safe_action,
     tcia_disposition_to_operand,
 )
-from anonymizer.controller.ai.embedded_phi.metadata.tcia_kb import match_tcia_private
+from anonymizer.controller.ai.embedded_phi.metadata.tcia_kb import (
+    collapse_retain_safe_action,
+    match_tcia_private,
+)
 from anonymizer.controller.anonymizer import AnonymizerController
 from anonymizer.model.project import AnonymizationPolicy, ProjectModel
 

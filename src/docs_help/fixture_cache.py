@@ -13,7 +13,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from anonymizer.controller.series_overlay import OCRText
+from anonymizer.controller.series.series_overlay import OCRText
 
 logger = logging.getLogger(__name__)
 

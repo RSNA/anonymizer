@@ -530,7 +530,7 @@ def test_build_sitk_volume_from_pydicom_matches_stackable_paths(tmp_path: Path) 
 
 
 def test_build_sitk_volume_from_series_frames_matches_load_series(tmp_path: Path) -> None:
-    from anonymizer.controller.series_io import load_series_frames
+    from anonymizer.controller.series.series_io import load_series_frames
 
     series_dir = build_synthetic_chest_ct_series(tmp_path / "chest")
     loaded = load_series_frames(series_dir)
@@ -591,7 +591,7 @@ def test_itk_direction_matrix_uses_axis_vectors_as_columns() -> None:
 
 
 def test_build_sitk_volume_direction_axial_identity() -> None:
-    from anonymizer.controller.series_io import load_series_frames
+    from anonymizer.controller.series.series_io import load_series_frames
     from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 
     series = CONTROLLER_TEST_DCM_FILES_DIR / "CT_Head_With_Contrast"
@@ -603,7 +603,7 @@ def test_build_sitk_volume_direction_axial_identity() -> None:
 
 
 def test_build_sitk_volume_direction_sagittal_head() -> None:
-    from anonymizer.controller.series_io import load_series_frames
+    from anonymizer.controller.series.series_io import load_series_frames
     from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 
     series = CONTROLLER_TEST_DCM_FILES_DIR / "CT_Head_Without_Contrast_Sagittal"

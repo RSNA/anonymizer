@@ -124,7 +124,7 @@ def test_harmonize_series_cancel_before_ts(work_dir: Path) -> None:
 
 def test_work_state_finish_on_cancel_pattern() -> None:
     """Mirror HarmonizeResultsView worker: cancelled jobs must still mark WorkState done."""
-    from anonymizer.controller.work_state import WorkState
+    from anonymizer.controller.jobs.work_state import WorkState
 
     work_state = WorkState()
     work_state.prepare_job()

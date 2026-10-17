@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pydicom import dcmread
 
-from anonymizer.controller import series_io
+from anonymizer.controller.series import series_io
 from tests.controller.ocr.conftest import assert_dcm, assert_dcm_dir
 from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 from tests.controller.support.us_rgb_fixtures import US_RGB_DCM

@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 from pydicom import dcmread
 
-from anonymizer.controller.series_io import load_series_frames
+from anonymizer.controller.series.series_io import load_series_frames
 from anonymizer.view.series.image import ImageViewer
 from anonymizer.view.series.series import SeriesView
 from tests.controller.ocr.conftest import assert_dcm_dir

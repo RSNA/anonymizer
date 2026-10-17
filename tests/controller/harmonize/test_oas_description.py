@@ -10,7 +10,7 @@ from pydicom import Dataset, dcmread
 from pydicom.dataset import FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, generate_uid
 
-from anonymizer.controller.series_io import apply_series_description
+from anonymizer.controller.series.series_io import apply_series_description
 from anonymizer.utils.version import get_version
 
 

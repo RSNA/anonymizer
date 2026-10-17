@@ -225,6 +225,8 @@ class ProjectModel:
         self.PHI_EXPORT_DIR = _("phi_export")
         self.QUARANTINE_DIR = _("quarantine")
         self.BATCH_RUNS_DIR = _("batch_runs")
+        if not isinstance(self.anonymization_policy, AnonymizationPolicy):
+            self.anonymization_policy = AnonymizationPolicy(self.anonymization_policy)
         # New / empty projects derive SOP classes from modalities; loaded projects keep
         # persisted custom storage_classes (do not wipe on every __post_init__).
         if not self.storage_classes:

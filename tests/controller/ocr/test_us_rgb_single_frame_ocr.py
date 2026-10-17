@@ -18,9 +18,9 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     filter_ocr_whitelist_only,
     ocr_image_for_frame,
 )
-from anonymizer.controller.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
-from anonymizer.controller.series_io import load_series_frames
-from anonymizer.controller.work_state import WorkState
+from anonymizer.controller.jobs.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
+from anonymizer.controller.series.series_io import load_series_frames
+from anonymizer.controller.jobs.work_state import WorkState
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_default_whitelist
 from tests.controller.ocr.conftest import assert_dcm

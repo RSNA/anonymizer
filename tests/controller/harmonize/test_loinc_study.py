@@ -27,7 +27,7 @@ from anonymizer.controller.ai.harmonize.loinc_study import (
     ranking_is_ambiguous,
     study_series_description_fingerprint,
 )
-from anonymizer.controller.series_io import apply_study_description
+from anonymizer.controller.series.series_io import apply_study_description
 
 _CSV = loinc_study_description_csv_path()
 

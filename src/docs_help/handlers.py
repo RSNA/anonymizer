@@ -155,7 +155,7 @@ def shot_anonymizer_script_editor(ctx: CaptureContext, shot: ShotSpec) -> ShotRe
     model = ctx.app.controller.model
     script_path = Path(model.anonymizer_script_path)
     if not script_path.is_file():
-        from anonymizer.controller.process_ctp_lookup import _DEFAULT_SCRIPT_PATH
+        from anonymizer.controller.ingest.process_ctp_lookup import _DEFAULT_SCRIPT_PATH
 
         script_path = _DEFAULT_SCRIPT_PATH
     parent = ctx.app.dashboard or ctx.app
@@ -1353,7 +1353,7 @@ def _open_dataset_for_projections(ctx: CaptureContext) -> Any:
 
 def _fit_projection_view_column(proj: Any, *, size: str = "S") -> None:
     """Stack series tiles in one column so multi-study shots stay readable at docs width."""
-    from anonymizer.controller.create_projections import ProjectionImageSize, ProjectionImageSizeConfig
+    from anonymizer.controller.series.create_projections import ProjectionImageSize, ProjectionImageSizeConfig
 
     mapping = {
         "S": ProjectionImageSize.SMALL,
@@ -1585,7 +1585,7 @@ def _stage_ai_batch_running(dlg: Any) -> None:
 def shot_ai_batch_running(ctx: CaptureContext, shot: ShotSpec) -> ShotResult:
     """Capture AiBatchProcessDialog mid-run (staged; worker never starts)."""
     from anonymizer.controller.ai.batch_process import AiBatchAlgorithm, AiBatchProcessOptions
-    from anonymizer.controller.runner import OcrRemoveMode
+    from anonymizer.controller.jobs.runner import OcrRemoveMode
     from anonymizer.controller.ai.blur_face import FaceBlurMode
     from anonymizer.controller.ai.embedded_phi.pixel.detect_text import PixelPhiRemovalMode
     from anonymizer.view.ai.ai_batch_process_dialog import AiBatchProcessDialog
@@ -2130,8 +2130,8 @@ def shot_process_remove_pixel(ctx: CaptureContext, shot: ShotSpec) -> ShotResult
     normalize_pixel_phi_removal_mode,
     pixel_phi_removal_mode_option_label,
 )
-    from anonymizer.controller.runner import OcrEditContext, edit_context_display_label
-    from anonymizer.controller.series_overlay import UserRectangle
+    from anonymizer.controller.jobs.runner import OcrEditContext, edit_context_display_label
+    from anonymizer.controller.series.series_overlay import UserRectangle
 
     fixture = _fixture_from_deps(shot.deps) or "davidson_cxr"
     recipe = shot.recipe or {}

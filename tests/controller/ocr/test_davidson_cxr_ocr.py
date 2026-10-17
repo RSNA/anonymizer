@@ -11,9 +11,9 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     load_modality_whitelist,
     load_modality_whitelist_match_settings,
 )
-from anonymizer.controller.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
-from anonymizer.controller.series_io import load_series_frames
-from anonymizer.controller.work_state import WorkState
+from anonymizer.controller.jobs.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
+from anonymizer.controller.series.series_io import load_series_frames
+from anonymizer.controller.jobs.work_state import WorkState
 from tests.controller.ocr.conftest import assert_dcm
 from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 
@@ -144,7 +144,7 @@ def test_davidson_overlay_draw_includes_portable_when_project_whitelist_omits_it
     tmp_path: Path,
 ) -> None:
     """Detect-all + draw-filter: project cr.txt without PORTABLE must still draw Portable."""
-    from anonymizer.controller.series_overlay import OCRText
+    from anonymizer.controller.series.series_overlay import OCRText
 
     project_dir = tmp_path / "project"
     project_whitelist = project_dir / "whitelists" / "cr.txt"
@@ -175,7 +175,7 @@ def test_davidson_overlay_draw_includes_portable_when_project_whitelist_omits_it
 
 def test_davidson_default_cr_whitelist_hides_portable_and_semi_upright() -> None:
     """Packaged CR/DX defaults must hide common Davidson overlay markers."""
-    from anonymizer.controller.series_overlay import OCRText
+    from anonymizer.controller.series.series_overlay import OCRText
     from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_default_whitelist
 
     detections = [

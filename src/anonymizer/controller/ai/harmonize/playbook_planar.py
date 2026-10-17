@@ -14,18 +14,18 @@ from dataclasses import dataclass
 
 from pydicom import Dataset
 
+from anonymizer.controller.ai.harmonize.playbook import map_body_part_from_dicom
 from anonymizer.controller.ai.harmonize.profile_2d import (
     Profile2D,
     loinc_prefix_for_2d_modality,
     normalize_2d_modality_label,
     profile_2d_from_dataset,
 )
-from anonymizer.controller.ai.harmonize.playbook import map_body_part_from_dicom
-from anonymizer.utils.modalities import Modality
 from anonymizer.controller.ai.harmonize.xp_bodypart.fuse import fuse_planar_anatomy
 from anonymizer.controller.ai.harmonize.xp_bodypart.predict import XpBodypartPrediction
 from anonymizer.controller.ai.harmonize.xr_chest_view.fuse import fuse_xr_view
 from anonymizer.controller.ai.harmonize.xr_chest_view.predict import CxpViewPrediction
+from anonymizer.utils.modalities import Modality
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)

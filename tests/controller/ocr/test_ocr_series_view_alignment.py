@@ -10,7 +10,7 @@ from pydicom.data import get_testdata_file
 
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import _ocr_bgr_from_stored_monochrome
 from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import remove_pixel_phi
-from anonymizer.controller.series_io import stored_monochrome_to_series_buffer
+from anonymizer.controller.series.series_io import stored_monochrome_to_series_buffer
 from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.windowing import apply_windowing
 

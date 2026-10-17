@@ -10,7 +10,7 @@ from pathlib import Path
 from pydicom.dataset import Dataset
 
 from anonymizer.controller.anonymizer import AnonymizerController
-from anonymizer.controller.anonymizer_script import packaged_script_path_for_policy
+from anonymizer.controller.ingest.anonymizer_script import packaged_script_path_for_policy
 from anonymizer.model.project import AnonymizationPolicy, DICOMNode, ProjectModel
 
 from prototyping.pseudo_phi_deid.paths import SCRIPTS_DIR

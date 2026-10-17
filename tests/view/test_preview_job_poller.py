@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 from anonymizer.controller.ai.blur_face import FaceBlurMode
 from anonymizer.controller.ai.harmonize import HarmonizeProgress
-from anonymizer.controller.runner import Algorithm
-from anonymizer.controller.work_state import WorkState
+from anonymizer.controller.jobs.runner import Algorithm
+from anonymizer.controller.jobs.work_state import WorkState
 from anonymizer.view.ai.face_blur_review_dialog import FaceBlurReviewDialog
 from anonymizer.view.ai.harmonize_results import HarmonizeResultsView
 

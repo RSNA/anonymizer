@@ -71,23 +71,23 @@ def test_remove_segmentation_model_branches(monkeypatch: pytest.MonkeyPatch, tmp
     folder = tmp_path / "weights"
     folder.mkdir()
     monkeypatch.setattr(
-        "anonymizer.controller.ai.tseg.model_cache.harmonize_ts_task_ids",
+        "anonymizer.controller.ai.tseg.readiness.harmonize_ts_task_ids",
         lambda: (1,),
     )
     monkeypatch.setattr(
-        "anonymizer.controller.ai.tseg.model_cache.mr_anatomy_task_ids",
+        "anonymizer.controller.ai.tseg.readiness.mr_anatomy_task_ids",
         lambda: (2,),
     )
     monkeypatch.setattr(
-        "anonymizer.controller.ai.tseg.model_cache.face_task_ids",
+        "anonymizer.controller.ai.tseg.readiness.face_task_ids",
         lambda: (3,),
     )
     monkeypatch.setattr(
-        "anonymizer.controller.ai.tseg.model_cache.mr_face_task_ids",
+        "anonymizer.controller.ai.tseg.readiness.mr_face_task_ids",
         lambda: (4,),
     )
     monkeypatch.setattr(
-        "anonymizer.controller.ai.tseg.model_cache.resolve_harmonize_model_folder",
+        "anonymizer.controller.ai.tseg.readiness.resolve_harmonize_model_folder",
         lambda task_id: folder,
     )
     monkeypatch.setattr(
@@ -95,7 +95,7 @@ def test_remove_segmentation_model_branches(monkeypatch: pytest.MonkeyPatch, tmp
         lambda *a, **k: folder,
     )
     monkeypatch.setattr(
-        "anonymizer.controller.ai.tseg.model_cache.clear_predictor_cache",
+        "anonymizer.controller.ai.tseg.readiness.clear_predictor_cache",
         lambda: None,
     )
     # Each call removes the folder; recreate between kinds
@@ -115,6 +115,10 @@ def test_remove_segmentation_model_branches(monkeypatch: pytest.MonkeyPatch, tmp
 def test_face_license_getters(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "anonymizer.controller.ai.tseg.readiness.totalsegmentator_available",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        "anonymizer.controller.ai.tseg.ts_probe.totalsegmentator_available",
         lambda: False,
     )
     assert get_stored_face_license() == ""
@@ -145,8 +149,10 @@ def test_version_helpers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_apply_face_license_mocked_totalseg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from anonymizer.controller.ai.tseg import readiness as ready_mod
+    from anonymizer.controller.ai.tseg import ts_probe
 
     monkeypatch.setattr(ready_mod, "totalsegmentator_available", lambda: True)
+    monkeypatch.setattr(ts_probe, "totalsegmentator_available", lambda: True)
 
     cfg = MagicMock()
     cfg.get_totalseg_dir.return_value = tmp_path
@@ -155,8 +161,15 @@ def test_apply_face_license_mocked_totalseg(tmp_path: Path, monkeypatch: pytest.
     cfg.has_valid_license_offline.return_value = ("yes", "ok")
     cfg.get_license_number.return_value = "aca_" + "y" * 14
 
-    monkeypatch.setitem(__import__("sys").modules, "totalsegmentator", MagicMock())
+    ts_pkg = MagicMock()
+    ts_pkg.__spec__ = MagicMock()
+    monkeypatch.setitem(__import__("sys").modules, "totalsegmentator", ts_pkg)
     monkeypatch.setitem(__import__("sys").modules, "totalsegmentator.config", cfg)
+    monkeypatch.setattr(ready_mod, "is_valid_license", cfg.is_valid_license)
+    monkeypatch.setattr(ready_mod, "setup_totalseg", cfg.setup_totalseg)
+    monkeypatch.setattr(ready_mod, "get_totalseg_dir", cfg.get_totalseg_dir)
+    monkeypatch.setattr(ready_mod, "get_license_number", cfg.get_license_number)
+    monkeypatch.setattr(ts_probe, "has_valid_license_offline", cfg.has_valid_license_offline)
 
     ok, _msg = ready_mod.apply_face_license("aca_" + "x" * 14)
     assert isinstance(ok, bool)

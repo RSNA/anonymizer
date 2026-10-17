@@ -25,7 +25,7 @@ from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
     blackout_ocr_text_areas,
     remove_pixel_phi,
 )
-from anonymizer.controller.series_overlay import OCRText
+from anonymizer.controller.series.series_overlay import OCRText
 from anonymizer.utils.memory import MemorySnapshot, format_memory_snapshot_label
 
 

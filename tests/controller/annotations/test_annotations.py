@@ -186,7 +186,7 @@ def test_ct_head_annotate_five_slices_exports_both_formats(tmp_path: Path) -> No
         MASK_GEOMETRY_FILENAME,
         mask_geometry_from_image,
     )
-    from anonymizer.controller.series_io import load_series_frames
+    from anonymizer.controller.series.series_io import load_series_frames
     from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 
     series = CONTROLLER_TEST_DCM_FILES_DIR / "CT_Head_With_Contrast"

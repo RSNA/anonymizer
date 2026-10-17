@@ -37,17 +37,17 @@ from anonymizer.controller.ai.tseg.config import apply_ai_features_preferences, 
 from anonymizer.controller.ai.tseg.readiness import log_runtime_status
 from anonymizer.controller.analytics.prefs import apply_analytics_preferences, merge_analytics_into_state
 from anonymizer.controller.headless import create_headless_controller, load_model
-from anonymizer.controller.process_ctp_lookup import commit_ctp_lookup
+from anonymizer.controller.ingest.process_ctp_lookup import commit_ctp_lookup
 from anonymizer.controller.project import ProjectController
 from anonymizer.mcp.server import MCP_HTTP_PATH, run_MCP
 from anonymizer.model.project import DICOMRuntimeError, ProjectModel
 from anonymizer.utils.app_state import ai_features_from_state, analytics_from_state, get_app_state_path
 from anonymizer.utils.logging import init_logging
+from anonymizer.utils.package_paths import ai_feature_dir
 from anonymizer.utils.storage.dicom_tree import (
     is_hidden_path,
     list_import_directory_files,
 )
-from anonymizer.utils.package_paths import ai_feature_dir
 from anonymizer.utils.translate import _, get_current_language, get_current_language_code, set_language
 from anonymizer.utils.version import get_version
 from anonymizer.view.ai.ai_features_dialog import show_ai_features_setup_dialog

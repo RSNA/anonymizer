@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from anonymizer.controller.phi_io import PHI_IndexRecord
+from anonymizer.controller.phi.phi_io import PHI_IndexRecord
 from anonymizer.view.project.dataset import DatasetView
 from anonymizer.view.series.projection import ProjectionView, series_paths_for_phi_records
 from tests.controller.tseg.support.synthetic_ct import SYNTHETIC_VOLUME_MIN_SLICES, build_synthetic_chest_ct_series

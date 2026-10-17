@@ -55,7 +55,7 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     OcrWhitelistMatchSettings,
     PixelPhiRemovalMode,
 )
-from anonymizer.controller.runner import OcrRemoveMode
+from anonymizer.controller.jobs.runner import OcrRemoveMode
 from tests.controller.blur_face.test_face_blur_gate import _geometry, _write_chest_region_cache
 
 
@@ -1202,8 +1202,7 @@ def test_apply_remove_pixel_phi_series_phi_only_and_named_zones(
     assert mock_remove.call_args.kwargs["apply_phi_ner_filter"] is True
     assert mock_remove.call_args.kwargs["use_exclude_areas"] is True
     assert details
-    assert details[0].startswith("US: 1 ")
-    assert "(0.75,0.69)-(1.00,1.00)" in details[0]
+    assert details[0] == "US: 1 exclude area"
 
 
 @patch("anonymizer.controller.ai.batch_process._load_harmonize_series_dataset")
@@ -1617,7 +1616,7 @@ def test_ai_batch_failed_outcome_appears_in_work_state_logs(
     images_layout: tuple[Path, list[tuple[str, str]]],
 ) -> None:
     from anonymizer.controller.ai.harmonize import HarmonizeApplyOutcome
-    from anonymizer.controller.work_state import WorkState
+    from anonymizer.controller.jobs.work_state import WorkState
 
     images_dir, studies = images_layout
     enter_patch, exit_patch, _handle, _runner = _patch_batch_runners()

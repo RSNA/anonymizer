@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from anonymizer.controller.phi_io import PHI_IndexRecord, PHI_SeriesIndexRecord
+from anonymizer.controller.phi.phi_io import PHI_IndexRecord, PHI_SeriesIndexRecord
 
 
 def _study_with_series() -> PHI_IndexRecord:

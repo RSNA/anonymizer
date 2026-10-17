@@ -72,7 +72,12 @@ def test_verify_xgboost_runtime_ok() -> None:
 
 
 def test_verify_xgboost_runtime_missing() -> None:
-    with patch.dict("sys.modules", {"xgboost": None}):
+    class _MissingXgboost:
+        @property
+        def __version__(self) -> str:
+            raise ImportError("No module named 'xgboost'")
+
+    with patch("anonymizer.controller.ai.tseg.contrast.xgboost", _MissingXgboost()):
         with pytest.raises(RuntimeError, match="pip install rsna-anonymizer"):
             verify_xgboost_runtime()
 

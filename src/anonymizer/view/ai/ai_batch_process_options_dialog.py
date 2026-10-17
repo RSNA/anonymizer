@@ -29,7 +29,7 @@ from anonymizer.controller.ai.feature_availability import (
     face_blur_allowed,
     harmonize_allowed,
 )
-from anonymizer.controller.runner import (
+from anonymizer.controller.jobs.runner import (
     OcrRemoveMode,
     normalize_ocr_remove_mode,
     ocr_remove_mode_display_label,

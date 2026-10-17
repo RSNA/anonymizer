@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import _ocr_use_gpu
-from anonymizer.controller.runner import RemovePixelPhiRunner
+from anonymizer.controller.jobs.runner import RemovePixelPhiRunner
 
 
 def test_ocr_use_gpu_follows_cuda_or_mps_availability() -> None:
@@ -26,8 +26,8 @@ def test_ocr_use_gpu_follows_cuda_or_mps_availability() -> None:
         assert _ocr_use_gpu() is False
 
 
-@patch("anonymizer.controller.runner.Reader")
-@patch("anonymizer.controller.runner.embedded_phi_has_models", return_value=True)
+@patch("anonymizer.controller.jobs.runner.Reader")
+@patch("anonymizer.controller.jobs.runner.embedded_phi_has_models", return_value=True)
 def test_remove_pixel_phi_runner_enter_exit_models(
     _mock_ready: MagicMock,
     mock_reader_cls: MagicMock,
@@ -42,15 +42,15 @@ def test_remove_pixel_phi_runner_enter_exit_models(
     assert handle.reader is None
 
 
-@patch("anonymizer.controller.runner.download_ocr_models")
-@patch("anonymizer.controller.runner.download_ner_models")
-@patch("anonymizer.controller.runner.embedded_phi_has_models", return_value=False)
+@patch("anonymizer.controller.jobs.runner.download_ocr_models")
+@patch("anonymizer.controller.jobs.runner.download_ner_models")
+@patch("anonymizer.controller.jobs.runner.embedded_phi_has_models", return_value=False)
 def test_remove_pixel_phi_runner_downloads_when_models_missing(
     _mock_ready: MagicMock,
     mock_ner_download: MagicMock,
     mock_download: MagicMock,
 ) -> None:
-    with patch("anonymizer.controller.runner.Reader", return_value=MagicMock()):
+    with patch("anonymizer.controller.jobs.runner.Reader", return_value=MagicMock()):
         runner = RemovePixelPhiRunner()
         handle = runner.enter_models()
         mock_download.assert_called_once()

@@ -158,14 +158,8 @@ def _stub_planar_pipeline(
         lambda: False,
     )
     called = MagicMock(return_value=_pred("AP", 0.95))
-    monkeypatch.setattr(
-        "anonymizer.controller.ai.harmonize.xr_chest_view.predict_cxp_view",
-        called,
-    )
-    monkeypatch.setattr(
-        "anonymizer.controller.ai.tseg.dicom_geometry.sorted_dicom_paths",
-        lambda _p: [series / "slice.dcm"],
-    )
+    monkeypatch.setattr(pipe, "predict_cxp_view", called)
+    monkeypatch.setattr(pipe, "sorted_dicom_paths", lambda _p: [series / "slice.dcm"])
     fake_ds = MagicMock()
     fake_ds.pixel_array = np.zeros((32, 32), dtype=np.uint8)
     monkeypatch.setattr(pipe, "dcmread", lambda *_a, **_k: fake_ds)

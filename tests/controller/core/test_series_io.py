@@ -8,7 +8,7 @@ from pydicom import Dataset
 from pydicom.dataset import FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian
 
-from anonymizer.controller.series_io import (
+from anonymizer.controller.series.series_io import (
     _rows_cols_from_pixel_array,
     apply_series_description,
     clip_and_cast_to_int,
@@ -70,7 +70,7 @@ class TestClipAndCastToInt:
         def _raise_iinfo_error(*_args, **_kwargs):
             raise Exception("Test iinfo error")
 
-        monkeypatch.setattr("anonymizer.controller.series_io.np.iinfo", _raise_iinfo_error)
+        monkeypatch.setattr("anonymizer.controller.series.series_io.np.iinfo", _raise_iinfo_error)
         float_arr = np.array([0.0, 1.0], dtype=np.float32)
         result = clip_and_cast_to_int(float_arr, np.uint16)
         assert result is None

@@ -147,7 +147,7 @@ def assert_aspect_preserved(viewer: ImageViewer, *, tol: float = 0.02) -> None:
 
 def open_series_view(tk_root: tk.Tk, controller, series_path) -> SeriesView:
     """Open a SeriesView through the production startup path and let it settle."""
-    from anonymizer.controller.series_io import load_series_frames
+    from anonymizer.controller.series.series_io import load_series_frames
 
     view = SeriesView(
         tk_root,

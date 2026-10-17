@@ -10,7 +10,6 @@ import xml.etree.ElementTree as ET
 from collections.abc import Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
 from pprint import pformat
@@ -19,7 +18,6 @@ from typing import ClassVar, NamedTuple
 from pydicom import Dataset
 from sqlalchemy import (
     Boolean,
-    Column,
     ForeignKey,
     Integer,
     String,
@@ -27,7 +25,6 @@ from sqlalchemy import (
     delete,
     func,
     select,
-    text,
 )
 from sqlalchemy.orm import (
     DeclarativeBase,
@@ -43,10 +40,10 @@ from sqlalchemy.orm import (
 )
 
 from anonymizer.utils.modalities import (
+    XR_MODALITIES,
     ContentClass,
     Modality,
     StudyImagingComposition,
-    XR_MODALITIES,
     get_modality_catalog,
 )
 from anonymizer.utils.storage.java_index import JavaAnonymizerExportedStudy
@@ -319,6 +316,9 @@ class AnonymizerModel:
 
         # Construct Thread Local Scoped Session Factory
         self.session_factory = scoped_session(sessionmaker(bind=self.engine))
+
+        # Create tables IFF they don't exist
+        Base.metadata.create_all(self.engine)
 
         # Default PHI record: (patient_id=DEFAULT_PHI_PATIENT_ID_PK_VALUE, anon_patient_id = site_id + "-000000")
         self._add_default_PHI()

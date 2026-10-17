@@ -4,7 +4,7 @@ import pytest
 from pydicom import Dataset
 from pydicom.data import get_testdata_file
 
-from anonymizer.controller.phi_io import build_phi_index, format_series_processing_status
+from anonymizer.controller.phi.phi_io import build_phi_index, format_series_processing_status
 from anonymizer.model.anonymizer import PHI, AnonymizerModel, Series, Study
 from tests.controller.dicom.support.test_files import ct_small_filename, mr_brain_filename
 from tests.controller.dicom.support.test_nodes import TEST_SITEID

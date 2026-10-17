@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.runner import (
+from anonymizer.controller.jobs.runner import (
     OcrEditContext,
     edit_context_menu_labels,
     edit_context_menu_values,

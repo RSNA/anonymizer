@@ -14,6 +14,7 @@ import customtkinter as ctk
 from anonymizer.controller.ai.feature_availability import embedded_phi_has_models, face_blur_needs_license
 from anonymizer.controller.ai.harmonize.xp_bodypart import xp_bodypart_ready
 from anonymizer.controller.ai.harmonize.xr_chest_view import xr_chest_view_ready
+from anonymizer.controller.ai.model_download import get_model_download_progress
 from anonymizer.controller.ai.tseg.config import (
     get_ct_segmentation_mode,
     get_mr_segmentation_mode,
@@ -23,7 +24,6 @@ from anonymizer.controller.ai.tseg.config import (
     set_mr_segmentation_mode,
 )
 from anonymizer.controller.ai.tseg.readiness import apply_face_license, get_stored_face_license, weight_kind_ready
-from anonymizer.controller.ai.model_download import get_model_download_progress
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.features.availability import (
     DownloadCompleteEvent,

@@ -10,15 +10,15 @@ import pydicom
 from pydicom.data import get_testdata_file
 
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import ocr_image_for_frame
-from anonymizer.controller.runner import (
+from anonymizer.controller.jobs.runner import (
     Algorithm,
     OcrEditContext,
     RemovePixelPhiRunner,
     RunOptions,
     run_job,
 )
-from anonymizer.controller.series_overlay import OCRText
-from anonymizer.controller.work_state import WorkState
+from anonymizer.controller.series.series_overlay import OCRText
+from anonymizer.controller.jobs.work_state import WorkState
 from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.windowing import apply_windowing
 
@@ -32,10 +32,10 @@ def test_ocr_image_for_frame_uses_dicom_window_not_viewer_wl() -> None:
     assert np.array_equal(actual, expected)
 
 
-@patch("anonymizer.controller.runner.RemovePixelPhiRunner.enter_models")
-@patch("anonymizer.controller.runner.RemovePixelPhiRunner.exit_models")
-@patch("anonymizer.controller.runner.detect_text")
-@patch("anonymizer.controller.runner.ocr_image_for_frame")
+@patch("anonymizer.controller.jobs.runner.RemovePixelPhiRunner.enter_models")
+@patch("anonymizer.controller.jobs.runner.RemovePixelPhiRunner.exit_models")
+@patch("anonymizer.controller.jobs.runner.detect_text")
+@patch("anonymizer.controller.jobs.runner.ocr_image_for_frame")
 def test_run_job_ocr_detect_uses_series_view_pixels_when_bound(
     mock_ocr_bgr: MagicMock,
     mock_detect: MagicMock,
@@ -62,10 +62,10 @@ def test_run_job_ocr_detect_uses_series_view_pixels_when_bound(
     mock_ocr_bgr.assert_not_called()
 
 
-@patch("anonymizer.controller.runner.RemovePixelPhiRunner.enter_models")
-@patch("anonymizer.controller.runner.RemovePixelPhiRunner.exit_models")
-@patch("anonymizer.controller.runner.detect_text")
-@patch("anonymizer.controller.runner.ocr_image_for_frame")
+@patch("anonymizer.controller.jobs.runner.RemovePixelPhiRunner.enter_models")
+@patch("anonymizer.controller.jobs.runner.RemovePixelPhiRunner.exit_models")
+@patch("anonymizer.controller.jobs.runner.detect_text")
+@patch("anonymizer.controller.jobs.runner.ocr_image_for_frame")
 def test_run_job_ocr_detect_series(
     mock_ocr_bgr: MagicMock,
     mock_detect: MagicMock,
@@ -103,8 +103,8 @@ def test_remove_pixel_phi_runner_frame_context_single_index() -> None:
     with (
         patch.object(runner, "enter_models", return_value=MagicMock(reader=MagicMock())),
         patch.object(runner, "exit_models"),
-        patch("anonymizer.controller.runner.detect_text", return_value=[]),
-        patch("anonymizer.controller.runner.ocr_image_for_frame", return_value=np.zeros((1, 1, 3), dtype=np.uint8)),
+        patch("anonymizer.controller.jobs.runner.detect_text", return_value=[]),
+        patch("anonymizer.controller.jobs.runner.ocr_image_for_frame", return_value=np.zeros((1, 1, 3), dtype=np.uint8)),
     ):
         runner.process_series(
             ws,
@@ -113,9 +113,9 @@ def test_remove_pixel_phi_runner_frame_context_single_index() -> None:
         )
 
 
-@patch("anonymizer.controller.runner.load_modality_whitelist", return_value=["PORTABLE"])
-@patch("anonymizer.controller.runner.detect_text")
-@patch("anonymizer.controller.runner.ocr_image_for_frame")
+@patch("anonymizer.controller.jobs.runner.load_modality_whitelist", return_value=["PORTABLE"])
+@patch("anonymizer.controller.jobs.runner.detect_text")
+@patch("anonymizer.controller.jobs.runner.ocr_image_for_frame")
 def test_runner_cleared_whitelist_does_not_load_modality_defaults(
     mock_ocr_bgr: MagicMock,
     mock_detect: MagicMock,
@@ -147,9 +147,9 @@ def test_runner_cleared_whitelist_does_not_load_modality_defaults(
     assert mock_detect.call_args.kwargs["whitelist"] == []
 
 
-@patch("anonymizer.controller.runner.load_modality_whitelist", return_value=["PORTABLE"])
-@patch("anonymizer.controller.runner.detect_text", return_value=[])
-@patch("anonymizer.controller.runner.ocr_image_for_frame")
+@patch("anonymizer.controller.jobs.runner.load_modality_whitelist", return_value=["PORTABLE"])
+@patch("anonymizer.controller.jobs.runner.detect_text", return_value=[])
+@patch("anonymizer.controller.jobs.runner.ocr_image_for_frame")
 def test_runner_none_whitelist_loads_modality_defaults(
     mock_ocr_bgr: MagicMock,
     mock_detect: MagicMock,

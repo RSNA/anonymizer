@@ -10,7 +10,7 @@ import pytest
 import SimpleITK as sitk
 
 from anonymizer.controller.ai.tseg.config import PRIMARY_SEGMENT_GROUPS, PRIMARY_SEGMENT_ORDER, ROI_SUBSET
-from anonymizer.controller.series_overlay import PolygonPoint, Segmentation
+from anonymizer.controller.series.series_overlay import PolygonPoint, Segmentation
 from anonymizer.view.series.anatomy_overlay import (
     PRIMARY_SEGMENT_COLORS_BGR,
     color_bgr_for_structure,

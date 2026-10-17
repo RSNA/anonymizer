@@ -8,7 +8,7 @@ import numpy as np
 import pydicom
 from pydicom.data import get_testdata_file
 
-from anonymizer.controller import series_io
+from anonymizer.controller.series import series_io
 
 
 def test_loaded_series_exposes_frames_field() -> None:

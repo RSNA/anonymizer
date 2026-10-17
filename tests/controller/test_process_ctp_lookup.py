@@ -7,11 +7,11 @@ from pathlib import Path
 import pytest
 from sqlalchemy import create_engine, text
 
-from anonymizer.controller.process_ctp_lookup import (
+from anonymizer.controller.ingest.anonymizer_script import private_anonymizer_script_path
+from anonymizer.controller.ingest.process_ctp_lookup import (
     LookupPropertiesError,
     commit_ctp_lookup,
     preview_ctp_lookup,
-    private_anonymizer_script_path,
     private_lookup_properties_path,
 )
 from anonymizer.model.anonymizer import AnonymizerModel
@@ -233,8 +233,8 @@ def test_basedate_only_does_not_patch_hashdate(tmp_path: Path) -> None:
 
 
 def test_apply_lookup_operands_preserves_incrementdate_and_rebasedate() -> None:
-    from anonymizer.controller.anonymizer_script import ScriptDocument, ScriptRule
-    from anonymizer.controller.process_ctp_lookup import apply_lookup_operands
+    from anonymizer.controller.ingest.anonymizer_script import ScriptDocument, ScriptRule
+    from anonymizer.controller.ingest.process_ctp_lookup import apply_lookup_operands
 
     doc = ScriptDocument(
         rules=[
@@ -252,7 +252,7 @@ def test_apply_lookup_operands_preserves_incrementdate_and_rebasedate() -> None:
 
 
 def test_full_load_with_basedates_into_model(controller, tmp_path: Path) -> None:
-    from anonymizer.controller.process_ctp_lookup import lookup_table_context
+    from anonymizer.controller.ingest.process_ctp_lookup import lookup_table_context
 
     props = tmp_path / "basedates.properties"
     _write_properties(
@@ -389,8 +389,8 @@ def test_commit_writes_files_and_sql(controller, tmp_path: Path) -> None:
 
 
 def test_apply_lookup_operands_preserves_custom_rules() -> None:
-    from anonymizer.controller.anonymizer_script import ScriptDocument, ScriptRule
-    from anonymizer.controller.process_ctp_lookup import apply_lookup_operands
+    from anonymizer.controller.ingest.anonymizer_script import ScriptDocument, ScriptRule
+    from anonymizer.controller.ingest.process_ctp_lookup import apply_lookup_operands
 
     doc = ScriptDocument(
         rules=[
@@ -408,8 +408,8 @@ def test_apply_lookup_operands_preserves_custom_rules() -> None:
 
 
 def test_lookup_table_context_and_operands(tmp_path: Path, controller) -> None:
-    from anonymizer.controller.anonymizer_script import OPERANDS, operands_for_tag
-    from anonymizer.controller.process_ctp_lookup import LookupTableContext, lookup_table_context
+    from anonymizer.controller.ingest.anonymizer_script import OPERANDS, operands_for_tag
+    from anonymizer.controller.ingest.process_ctp_lookup import LookupTableContext, lookup_table_context
 
     # Lookup / rebase stay in the catalog; the view prompts to load a table on Apply.
     ids = {s.id for s in OPERANDS}
@@ -441,10 +441,10 @@ def test_lookup_table_context_and_operands(tmp_path: Path, controller) -> None:
 
 def test_commit_preserves_custom_operand_on_private_script(controller, tmp_path: Path) -> None:
     """Lookup commit must patch the current private script, not wipe custom operands."""
-    from anonymizer.controller.anonymizer_script import load_script_rules, stage_script_edit
+    from anonymizer.controller.ingest.anonymizer_script import load_script_rules, stage_script_edit
 
     src = Path(controller.model.anonymizer_script_path)
-    from anonymizer.controller.process_ctp_lookup import _DEFAULT_SCRIPT_PATH
+    from anonymizer.controller.ingest.process_ctp_lookup import _DEFAULT_SCRIPT_PATH
 
     if not src.is_file():
         src = _DEFAULT_SCRIPT_PATH

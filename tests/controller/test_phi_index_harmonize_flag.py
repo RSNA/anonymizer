@@ -5,7 +5,7 @@ from __future__ import annotations
 import types
 from types import SimpleNamespace
 
-from anonymizer.controller.phi_io import _study_index_harmonized
+from anonymizer.controller.phi.phi_io import _study_index_harmonized
 from anonymizer.model.anonymizer import Study
 
 

@@ -15,7 +15,7 @@ from anonymizer.controller.ai.harmonize.pipeline import (
     study_description_group_choices,
     study_ready_for_description_edit,
 )
-from anonymizer.controller.series_io import apply_series_description, apply_study_description
+from anonymizer.controller.series.series_io import apply_series_description, apply_study_description
 from anonymizer.mcp.ops import HeadlessOpsError, _looks_like_filesystem_path, _study_order
 from tests.controller.tseg.support.synthetic_ct import build_synthetic_ct_small_series
 from tests.opened_anonymizer_model import opened_anonymizer_model
@@ -81,9 +81,10 @@ def test_log_playbook_rows_and_progress_geometry() -> None:
 
 def test_model_cache_task_id_helpers() -> None:
     from anonymizer.controller.ai.tseg import model_cache as mc
+    from anonymizer.controller.ai.tseg.ml_env import preserve_accelerator_memory
 
     assert mc.session_active() is False
-    assert mc.preserve_accelerator_memory() is False
+    assert preserve_accelerator_memory() is False
     mc.clear_predictor_cache()
     assert isinstance(mc.harmonize_anatomy_task_ids(), tuple)
     assert isinstance(mc.mr_anatomy_task_ids(), tuple)

@@ -200,5 +200,5 @@ def scrub_dicom_file(
                 n_spans += len(spans)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    ds.save_as(str(out_path), write_like_original=False)
+    ds.save_as(str(out_path), enforce_file_format=True)
     return {"input": str(path), "output": str(out_path), "spans_redacted": n_spans}

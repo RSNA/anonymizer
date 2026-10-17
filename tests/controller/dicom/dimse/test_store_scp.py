@@ -8,9 +8,9 @@ from pydicom.data import get_testdata_file
 from pydicom.dataset import Dataset
 from pynetdicom.presentation import build_context
 
-from anonymizer.controller.create_projections import PROJECTION_FILENAME, create_projection_from_series
-from anonymizer.controller.dates import hash_date
-from anonymizer.controller.phi_io import build_phi_index
+from anonymizer.controller.series.create_projections import PROJECTION_FILENAME, create_projection_from_series
+from anonymizer.controller.ingest.dates import hash_date
+from anonymizer.controller.phi.phi_io import build_phi_index
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.anonymizer import AnonymizerModel
 from tests.controller.dicom.support.helpers import send_file_to_scp, send_files_to_scp

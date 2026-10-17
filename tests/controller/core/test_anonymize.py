@@ -13,7 +13,7 @@ from pydicom.data import get_testdata_file
 from pydicom.dataset import Dataset
 
 from anonymizer.controller.anonymizer import AnonymizerController, QuarantineDirectories
-from anonymizer.controller.dates import (
+from anonymizer.controller.ingest.dates import (
     DEFAULT_ANON_DATE,
     apply_day_delta,
     hash_date,
@@ -711,7 +711,7 @@ def test_rebasedate_longitudinal_provenance_registration(controller: ProjectCont
 
 def test_rebasedate_full_anonymize_with_ctp_basedate(controller: ProjectController, tmp_path: Path) -> None:
     """End-to-end: load basedate table, @rebasedate StudyDate, anonymize real DICOM."""
-    from anonymizer.controller.process_ctp_lookup import commit_ctp_lookup, preview_ctp_lookup
+    from anonymizer.controller.ingest.process_ctp_lookup import commit_ctp_lookup, preview_ctp_lookup
 
     props = tmp_path / "rebase.properties"
     props.write_text(

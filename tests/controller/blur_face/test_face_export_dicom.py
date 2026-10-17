@@ -15,7 +15,7 @@ from anonymizer.controller.ai.blur_face import (
     load_hu_stack,
     write_blurred_dicom_series,
 )
-from anonymizer.controller.series_io import load_series_frames, save_series_frames
+from anonymizer.controller.series.series_io import load_series_frames, save_series_frames
 
 
 def _write_template_slice(path: Path, *, hu_value: float, instance_number: int) -> None:

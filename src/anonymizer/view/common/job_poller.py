@@ -10,8 +10,8 @@ from collections.abc import Callable
 
 import customtkinter as ctk
 
-from anonymizer.controller.runner import Algorithm
-from anonymizer.controller.work_state import WorkState
+from anonymizer.controller.jobs.runner import Algorithm
+from anonymizer.controller.jobs.work_state import WorkState
 
 logger = logging.getLogger(__name__)
 

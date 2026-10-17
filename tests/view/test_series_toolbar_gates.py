@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from anonymizer.controller.runner import OcrEditContext
-from anonymizer.controller.series_overlay import OCRText, UserRectangle
+from anonymizer.controller.jobs.runner import OcrEditContext
+from anonymizer.controller.series.series_overlay import OCRText, UserRectangle
 from anonymizer.view.series.series import (
     blur_face_toolbar_visible,
     clear_cache_button_visible,

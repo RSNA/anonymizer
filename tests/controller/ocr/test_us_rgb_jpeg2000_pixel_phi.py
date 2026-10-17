@@ -20,7 +20,7 @@ from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import (
     _encode_decompressed_frame_for_save,
     remove_pixel_phi,
 )
-from anonymizer.controller.series_overlay import OCRText
+from anonymizer.controller.series.series_overlay import OCRText
 from tests.controller.ocr.conftest import assert_dcm
 from tests.controller.support.us_rgb_fixtures import US_RGB_DCM, make_jpeg2000_rgb_dicom
 

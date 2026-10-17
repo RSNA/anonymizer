@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from anonymizer.controller.series_overlay import (
+from anonymizer.controller.series.series_overlay import (
     LayerType,
     OCRText,
     OverlayData,

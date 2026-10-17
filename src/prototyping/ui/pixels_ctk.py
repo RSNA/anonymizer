@@ -6,8 +6,8 @@ from pathlib import Path
 import customtkinter as ctk
 from PIL import Image
 
-from anonymizer.controller.create_projections import Projection, ProjectionImageSize, create_projection_from_series
-from anonymizer.controller.phi_io import PHI_IndexRecord
+from anonymizer.controller.series.create_projections import Projection, ProjectionImageSize, create_projection_from_series
+from anonymizer.controller.phi.phi_io import PHI_IndexRecord
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)

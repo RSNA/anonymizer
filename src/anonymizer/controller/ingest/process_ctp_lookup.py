@@ -11,21 +11,22 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from anonymizer.controller.anonymizer_script import load_script_rules, write_script_rules
-from anonymizer.controller.anonymizer_script_paths import (
+from anonymizer.controller.ingest.anonymizer_script import (
+    load_script_rules,
     private_anonymizer_script_path,
     project_anonymizer_script_path,
+    write_script_rules,
 )
 from anonymizer.model.anonymizer import CtpLookupPhiRow
 
 if TYPE_CHECKING:
-    from anonymizer.controller.anonymizer_script import ScriptDocument
+    from anonymizer.controller.ingest.anonymizer_script import ScriptDocument
     from anonymizer.controller.project import ProjectController
 
 logger = logging.getLogger(__name__)
 
 _PROPERTIES_LINE = re.compile(r"^\s*([^#/][^/]*)/([^=]+)=(.*)$")
-_DEFAULT_SCRIPT_PATH = Path(__file__).resolve().parents[1] / "assets" / "scripts" / "default-anonymizer.script"
+_DEFAULT_SCRIPT_PATH = Path(__file__).resolve().parents[2] / "assets" / "scripts" / "default-anonymizer.script"
 _PATIENT_TAGS = frozenset({"00100010", "00100020"})
 _LOOKUP_PTID = "@lookup(this,ptid)"
 _LOOKUP_DATEOFFSET = "@lookup(this,dateoffset)"

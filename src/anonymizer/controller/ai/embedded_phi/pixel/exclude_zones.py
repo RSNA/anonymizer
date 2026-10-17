@@ -9,8 +9,8 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     filter_ocr_outside_exclude_rects,
     filter_ocr_whitelist_only,
 )
-from anonymizer.controller.series_overlay import OCRText, UserRectangle
 from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import load_project_exclude_rects
+from anonymizer.controller.series.series_overlay import OCRText, UserRectangle
 
 
 def normalize_user_rects(

@@ -91,12 +91,12 @@ def test_anatomy_ct_ready_when_all_task_checkpoints_exist(tmp_path: Path) -> Non
     with (
         patch("anonymizer.controller.ai.tseg.readiness.totalsegmentator_available", return_value=True),
         patch(
-            "anonymizer.controller.ai.tseg.model_cache.ct_anatomy_task_ids_for_mode",
+            "anonymizer.controller.ai.tseg.readiness.ct_anatomy_task_ids_for_mode",
             return_value=(297, 298),
         ),
-        patch("anonymizer.controller.ai.tseg.config.ENABLE_TS_CONTRAST", False),
+        patch("anonymizer.controller.ai.tseg.readiness.ENABLE_TS_CONTRAST", False),
         patch(
-            "anonymizer.controller.ai.tseg.model_cache.resolve_harmonize_model_folder",
+            "anonymizer.controller.ai.tseg.readiness.resolve_harmonize_model_folder",
             return_value=model_folder,
         ),
     ):
@@ -116,12 +116,12 @@ def test_anatomy_ct_ready_false_when_any_checkpoint_missing(tmp_path: Path) -> N
     with (
         patch("anonymizer.controller.ai.tseg.readiness.totalsegmentator_available", return_value=True),
         patch(
-            "anonymizer.controller.ai.tseg.model_cache.ct_anatomy_task_ids_for_mode",
+            "anonymizer.controller.ai.tseg.readiness.ct_anatomy_task_ids_for_mode",
             return_value=(297, 298),
         ),
-        patch("anonymizer.controller.ai.tseg.config.ENABLE_TS_CONTRAST", False),
+        patch("anonymizer.controller.ai.tseg.readiness.ENABLE_TS_CONTRAST", False),
         patch(
-            "anonymizer.controller.ai.tseg.model_cache.resolve_harmonize_model_folder",
+            "anonymizer.controller.ai.tseg.readiness.resolve_harmonize_model_folder",
             side_effect=_resolve,
         ),
     ):
@@ -197,7 +197,7 @@ def test_download_segmentation_model_runs_and_rechecks() -> None:
         patch("anonymizer.controller.ai.tseg.readiness.weight_kind_ready", side_effect=[False, True]),
         patch("anonymizer.controller.ai.tseg.readiness.totalsegmentator_available", return_value=True),
         patch(
-            "anonymizer.controller.ai.tseg.model_cache.download_segmentation_model_weights"
+            "anonymizer.controller.ai.tseg.readiness.download_segmentation_model_weights"
         ) as mock_download,
     ):
         assert download_segmentation_model(TsWeightKind.FACE) is True

@@ -46,7 +46,7 @@ from anonymizer.controller.ai.blur_face import (
     read_reference_volume,
     resolve_face_mask_path,
 )
-from anonymizer.controller.series_io import (
+from anonymizer.controller.series.series_io import (
     load_series_frames,
     ordered_series_dcm_paths,
     save_series_frames,

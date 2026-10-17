@@ -24,7 +24,7 @@ from anonymizer.controller.ai.tseg.seg_retention import (
     sitk_image_from_mask_geometry,
     write_primary_segment_voxels,
 )
-from anonymizer.controller.series_overlay import PolygonPoint, Segmentation
+from anonymizer.controller.series.series_overlay import PolygonPoint, Segmentation
 
 # Distinct saturated BGR colors for latch overlays (visually separable on CT).
 PRIMARY_SEGMENT_COLORS_BGR: dict[str, tuple[int, int, int]] = {

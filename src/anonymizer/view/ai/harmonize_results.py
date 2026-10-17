@@ -44,8 +44,8 @@ from anonymizer.controller.ai.harmonize.playbook import (
 from anonymizer.controller.ai.harmonize.playbook_planar import planar_harmonize_analysis_rows
 from anonymizer.controller.ai.tseg.config import segmentation_mode_for_modality
 from anonymizer.controller.ai.tseg.model_cache import tseg_batch_session
-from anonymizer.controller.runner import Algorithm
-from anonymizer.controller.work_state import WorkState
+from anonymizer.controller.jobs.runner import Algorithm
+from anonymizer.controller.jobs.work_state import WorkState
 from anonymizer.model.anonymizer import StudyPhiHeader
 from anonymizer.utils.modalities import Modality
 from anonymizer.utils.translate import _

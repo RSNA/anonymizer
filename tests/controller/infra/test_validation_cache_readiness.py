@@ -35,7 +35,7 @@ from anonymizer.controller.ai.tseg.readiness import (
     weight_kind_ready,
     xgboost_available,
 )
-from anonymizer.controller.series_io import (
+from anonymizer.controller.series.series_io import (
     _rows_cols_from_pixel_array,
     _validate_dicom_pixel_array,
 )

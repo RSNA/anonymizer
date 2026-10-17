@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Callable
 
 import customtkinter as ctk
 
-from anonymizer.controller.process_ctp_lookup import (
+from anonymizer.controller.ingest.process_ctp_lookup import (
     CtpLookupPreview,
     LookupPropertiesError,
     commit_ctp_lookup,
@@ -23,8 +23,8 @@ from anonymizer.view.common.app_window import AppToplevel, install_modal_dismiss
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel
 
 if TYPE_CHECKING:
-    from anonymizer.controller.anonymizer_script import ScriptDocument
-from anonymizer.controller.process_ctp_lookup import apply_lookup_operands
+    from anonymizer.controller.ingest.anonymizer_script import ScriptDocument
+from anonymizer.controller.ingest.process_ctp_lookup import apply_lookup_operands
 
 logger = logging.getLogger(__name__)
 

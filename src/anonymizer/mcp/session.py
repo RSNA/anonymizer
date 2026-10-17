@@ -7,8 +7,8 @@ import shutil
 from pathlib import Path
 
 from anonymizer.controller.headless import create_headless_controller
+from anonymizer.controller.jobs.runner import RemovePixelPhiRunner
 from anonymizer.controller.project import ProjectController
-from anonymizer.controller.runner import RemovePixelPhiRunner
 from anonymizer.model.project import ProjectModel
 
 logger = logging.getLogger(__name__)

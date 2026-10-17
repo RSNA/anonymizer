@@ -15,7 +15,7 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     detect_text,
 )
 from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import remove_pixel_phi
-from anonymizer.controller.phi_io import build_phi_index
+from anonymizer.controller.phi.phi_io import build_phi_index
 from anonymizer.model.anonymizer import AnonymizerModel, Instance
 from tests.controller.support.pixel_phi_test_support import (
     build_synthetic_chest_ct_series_with_two_phi_slices,

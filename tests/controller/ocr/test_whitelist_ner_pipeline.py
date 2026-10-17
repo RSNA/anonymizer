@@ -11,7 +11,7 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     filter_ocr_phi_ner,
     filter_ocr_whitelist_only,
 )
-from anonymizer.controller.series_overlay import OCRText
+from anonymizer.controller.series.series_overlay import OCRText
 
 # Davidson-like overlay corpus (controller-level, no EasyOCR).
 _DAVIDSON_TEXTS = (

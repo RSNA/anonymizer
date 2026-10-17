@@ -10,8 +10,8 @@ import numpy as np
 from PIL import Image, ImageTk
 
 from anonymizer.controller.ai.tseg.config import segmentation_mode_display
-from anonymizer.controller.series_io import SeriesProjections
-from anonymizer.controller.series_overlay import LayerType, OCRText, OverlayData, Segmentation, UserRectangle
+from anonymizer.controller.series.series_io import SeriesProjections
+from anonymizer.controller.series.series_overlay import LayerType, OCRText, OverlayData, Segmentation, UserRectangle
 from anonymizer.utils.translate import _
 from anonymizer.utils.windowing import apply_windowing
 from anonymizer.view.common.ctk_safe import dispose_photo_image

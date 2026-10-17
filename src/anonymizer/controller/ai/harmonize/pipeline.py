@@ -7,8 +7,8 @@ import re
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
 from enum import StrEnum
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pydicom import Dataset, dcmread
@@ -100,17 +100,17 @@ from anonymizer.controller.ai.harmonize.loinc_study import (
     rank_loinc_study_descriptions_from_hint,
     rank_planar_loinc_study_descriptions,
 )
-from anonymizer.controller.ai.harmonize.profile_2d import (
-    is_2d_harmonize_modality,
-    normalize_2d_modality_label,
-    profile_2d_for_modality,
-    profile_2d_from_dataset,
-)
 from anonymizer.controller.ai.harmonize.playbook import BODY_PART_PLAYBOOK_CODES, playbook_iv_contrast_row_values
 from anonymizer.controller.ai.harmonize.playbook_planar import (
     build_planar_harmonized_series_description,
     build_planar_playbook_attributes,
     planar_loinc_prefix_for_series_descriptions,
+)
+from anonymizer.controller.ai.harmonize.profile_2d import (
+    is_2d_harmonize_modality,
+    normalize_2d_modality_label,
+    profile_2d_for_modality,
+    profile_2d_from_dataset,
 )
 from anonymizer.controller.ai.harmonize.xp_bodypart import predict_body_part, xp_bodypart_ready
 from anonymizer.controller.ai.harmonize.xr_chest_view import cxp_view_ready, predict_cxp_view
@@ -124,8 +124,8 @@ from anonymizer.controller.ai.tseg.contrast import (
 )
 from anonymizer.controller.ai.tseg.modality_profile import profile_for_modality
 from anonymizer.controller.ai.tseg.seg_retention import evict_tseg_volume
-from anonymizer.controller.create_projections import invalidate_projection_cache
-from anonymizer.controller.series_io import apply_series_description, apply_study_description
+from anonymizer.controller.series.create_projections import invalidate_projection_cache
+from anonymizer.controller.series.series_io import apply_series_description, apply_study_description
 from anonymizer.utils.modalities import (
     ContentClass,
     Modality,

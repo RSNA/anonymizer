@@ -12,7 +12,7 @@ from numpy import ndarray
 from pydicom import Dataset
 
 if TYPE_CHECKING:
-    from anonymizer.controller.runner import Algorithm
+    from anonymizer.controller.jobs.runner import Algorithm
 
 logger = logging.getLogger(__name__)
 

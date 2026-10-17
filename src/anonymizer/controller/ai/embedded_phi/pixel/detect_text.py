@@ -35,18 +35,18 @@ if TYPE_CHECKING:
 
 from anonymizer.controller.ai.embedded_phi.ner.cache import ner_ready
 from anonymizer.controller.ai.embedded_phi.ner.engine import detect_entities, detect_locale_supported
-from anonymizer.controller.ai.embedded_phi.term_similarity import similarity_term_match
-from anonymizer.controller.series_io import (
-    stored_monochrome_to_series_buffer,
-)
-from anonymizer.controller.series_overlay import OCRText, UserRectangle
-from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
     load_default_whitelist,
     load_project_whitelist,
     project_whitelist_options_path,
     project_whitelist_path,
 )
+from anonymizer.controller.ai.embedded_phi.term_similarity import similarity_term_match
+from anonymizer.controller.series.series_io import (
+    stored_monochrome_to_series_buffer,
+)
+from anonymizer.controller.series.series_overlay import OCRText, UserRectangle
+from anonymizer.utils.dicom import get_wl_ww
 from anonymizer.utils.translate import _
 from anonymizer.utils.windowing import apply_windowing
 

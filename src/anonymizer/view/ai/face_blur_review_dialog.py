@@ -28,11 +28,11 @@ from anonymizer.controller.ai.tseg.dicom_geometry import (
     ensure_series_geometry,
     load_geometry_cache,
 )
-from anonymizer.controller.create_projections import invalidate_projection_cache
-from anonymizer.controller.runner import Algorithm
-from anonymizer.controller.series_io import load_series_frames, save_series_frames
-from anonymizer.controller.series_overlay import LayerType
-from anonymizer.controller.work_state import WorkState
+from anonymizer.controller.jobs.runner import Algorithm
+from anonymizer.controller.jobs.work_state import WorkState
+from anonymizer.controller.series.create_projections import invalidate_projection_cache
+from anonymizer.controller.series.series_io import load_series_frames, save_series_frames
+from anonymizer.controller.series.series_overlay import LayerType
 from anonymizer.model.anonymizer import AnonymizerModel
 from anonymizer.utils.translate import _
 from anonymizer.view.ai.blur_face_results import (

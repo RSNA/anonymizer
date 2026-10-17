@@ -8,7 +8,7 @@ import numpy as np
 from pydicom import dcmread
 
 from anonymizer.controller.ai.harmonize import apply_harmonized_description
-from anonymizer.controller.series_io import (
+from anonymizer.controller.series.series_io import (
     apply_series_description,
     load_series_frames,
     save_series_frames,

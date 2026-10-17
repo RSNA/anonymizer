@@ -13,7 +13,7 @@ from anonymizer.controller.ai.batch_process import (
 )
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import PixelPhiRemovalMode
 from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import remove_pixel_phi
-from anonymizer.controller.runner import RemovePixelPhiRunner
+from anonymizer.controller.jobs.runner import RemovePixelPhiRunner
 from tests.controller.ocr.conftest import assert_dcm
 from tests.controller.support.ai_batch_ux_fixtures import BATCH_UX_EXPECTATIONS, BatchUxExpectation
 

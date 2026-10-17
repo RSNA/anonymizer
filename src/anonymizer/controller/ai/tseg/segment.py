@@ -74,7 +74,7 @@ from anonymizer.controller.ai.tseg.seg_retention import (
     write_binary_masks_from_multilabel,
 )
 from anonymizer.controller.analytics.dataset import finalize_seg_cache_with_ledger
-from anonymizer.controller.series_io import load_series_frames
+from anonymizer.controller.series.series_io import load_series_frames
 from anonymizer.utils.translate import _
 
 try:

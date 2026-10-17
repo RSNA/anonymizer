@@ -7,8 +7,8 @@ import time
 from unittest.mock import MagicMock
 
 from anonymizer.controller.ai.harmonize import HarmonizeProgress
-from anonymizer.controller.runner import Algorithm
-from anonymizer.controller.work_state import WorkState
+from anonymizer.controller.jobs.runner import Algorithm
+from anonymizer.controller.jobs.work_state import WorkState
 from anonymizer.view.common.job_poller import JobPoller, start_background_job
 
 

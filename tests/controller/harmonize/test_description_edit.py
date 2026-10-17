@@ -12,7 +12,7 @@ from anonymizer.controller.ai.harmonize.pipeline import (
     study_description_edit_choices,
     study_description_edit_offer,
 )
-from anonymizer.controller.phi_io import PHI_IndexRecord
+from anonymizer.controller.phi.phi_io import PHI_IndexRecord
 from anonymizer.utils.modalities import StudyImagingComposition
 
 
@@ -537,13 +537,13 @@ def test_phi_index_keeps_original_and_harmonized_study_descriptions() -> None:
         patient_id="phi-pt",
         patient_name="Name",
     )
-    from anonymizer.controller.phi_io import _phi_index_record_from_orm
+    from anonymizer.controller.phi.phi_io import _phi_index_record_from_orm
 
     with (
-        patch("anonymizer.controller.phi_io._study_index_harmonized", return_value=True),
-        patch("anonymizer.controller.phi_io._study_face_blur_label", return_value=""),
-        patch("anonymizer.controller.phi_io._study_embedded_phi_removed", return_value=False),
-        patch("anonymizer.controller.phi_io._study_embedded_phi_digest", return_value=""),
+        patch("anonymizer.controller.phi.phi_io._study_index_harmonized", return_value=True),
+        patch("anonymizer.controller.phi.phi_io._study_face_blur_label", return_value=""),
+        patch("anonymizer.controller.phi.phi_io._study_embedded_phi_removed", return_value=False),
+        patch("anonymizer.controller.phi.phi_io._study_embedded_phi_digest", return_value=""),
     ):
         record = _phi_index_record_from_orm(phi, study)
 

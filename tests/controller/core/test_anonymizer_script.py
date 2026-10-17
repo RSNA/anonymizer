@@ -6,13 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from anonymizer.controller.anonymizer_script import (
+from anonymizer.controller.ingest.anonymizer_script import (
     PAGE_SIZE,
     ScriptRule,
     ScriptViewMode,
     add_rule_from_dictionary,
     always_literal_text,
     anonymization_policy_display_name,
+    anonymization_policy_switch_confirm_message,
     anonymization_policy_tooltip,
     commit_script_edit,
     demote_rule,
@@ -28,6 +29,7 @@ from anonymizer.controller.anonymizer_script import (
     operand_id_from_syntax,
     packaged_script_basename_for_policy,
     packaged_script_path_for_policy,
+    private_anonymizer_script_path,
     page_slice,
     promote_rule,
     script_provenance,
@@ -40,7 +42,6 @@ from anonymizer.controller.anonymizer_script import (
     validate_operation,
     write_script_rules,
 )
-from anonymizer.controller.process_ctp_lookup import private_anonymizer_script_path
 from anonymizer.model.project import AnonymizationPolicy
 
 
@@ -156,7 +157,7 @@ def test_validate_and_format_operands() -> None:
     assert operand_id_from_syntax("@always()") == "always"
     assert operand_id_from_syntax("@incrementdate(this,n)") == "incrementdate"
     assert operand_id_from_syntax("@rebasedate(this,origin)") == "rebasedate"
-    from anonymizer.controller.anonymizer_script import (
+    from anonymizer.controller.ingest.anonymizer_script import (
         incrementdate_days,
         is_date_shift_operation,
         rebasedate_origin,
@@ -173,7 +174,7 @@ def test_validate_and_format_operands() -> None:
 
 
 def test_tag_dictionary_meta_and_dicom_version() -> None:
-    from anonymizer.controller.anonymizer_script import (
+    from anonymizer.controller.ingest.anonymizer_script import (
         dicom_applicable_standard_text,
         dicom_standard_version,
         format_tag_description_line,
@@ -210,7 +211,7 @@ def test_tag_dictionary_meta_and_dicom_version() -> None:
 
 
 def test_operand_tag_incompatibility_gates() -> None:
-    from anonymizer.controller.anonymizer_script import (
+    from anonymizer.controller.ingest.anonymizer_script import (
         format_dicom_tag,
         operand_tag_incompatibility,
         operands_for_tag,
@@ -246,7 +247,7 @@ def test_operand_tag_incompatibility_gates() -> None:
 
 
 def test_incrementdate_bulk_updates_all_date_shift_fields() -> None:
-    from anonymizer.controller.anonymizer_script import (
+    from anonymizer.controller.ingest.anonymizer_script import (
         ScriptDocument,
         ScriptRule,
         apply_incrementdate_to_rules,
@@ -341,7 +342,7 @@ def test_stage_script_edit(controller, tmp_path: Path) -> None:
 
 
 def test_commit_script_edit_reloads_tag_keep(controller) -> None:
-    from anonymizer.controller.process_ctp_lookup import _DEFAULT_SCRIPT_PATH
+    from anonymizer.controller.ingest.process_ctp_lookup import _DEFAULT_SCRIPT_PATH
 
     src = Path(controller.model.anonymizer_script_path)
     if not src.is_file():
@@ -416,3 +417,29 @@ def test_should_install_anonymization_policy() -> None:
     assert "OCR on burnt-in image pixels" in clinical_batch
     assert "already removed" in strict_batch
     assert "kept report" in clinical_batch
+
+
+def test_anonymization_policy_switch_confirm_message() -> None:
+    clinical = anonymization_policy_switch_confirm_message(
+        AnonymizationPolicy.CLINICAL,
+        policy_display_name="Clinical",
+    )
+    assert clinical.startswith("Change policy to Clinical?")
+    assert "packaged Clinical script" in clinical
+    assert "Custom script edits will be lost" in clinical
+    assert "Private tags are left untouched" in clinical
+    assert "Embedded PHI" in clinical
+    assert "SR and PDF" in clinical
+    assert "not re-processed" in clinical
+    assert "Recommendation:" in clinical
+    assert "burnt-in" in clinical
+
+    strict = anonymization_policy_switch_confirm_message(
+        AnonymizationPolicy.STRICT,
+        policy_display_name="Strict",
+    )
+    assert strict.startswith("Change policy to Strict?")
+    assert "packaged Strict script" in strict
+    assert "Private tags are wiped" in strict
+    assert "not re-processed" in strict
+    assert "left as-is" in strict

@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 
 from pydicom import Dataset
 
-from anonymizer.controller.anonymizer_script import rebasedate_origin
+from anonymizer.controller.ingest.anonymizer_script import rebasedate_origin
 
 DEFAULT_ANON_DATE = "20000101"  # if source date is invalid or before 19000101
 

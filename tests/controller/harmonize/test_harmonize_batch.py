@@ -147,7 +147,7 @@ def test_harmonize_and_apply_series_applies_merged_description(
     assert outcome.message == "Ch Ax PortVen"
 
 
-@patch("anonymizer.controller.series_io.apply_series_description", return_value=True)
+@patch("anonymizer.controller.ai.harmonize.pipeline.apply_series_description", return_value=True)
 @patch("anonymizer.controller.ai.harmonize.pipeline._load_series_dataset")
 def test_apply_harmonized_description_uses_set_series_harmonized_description(
     mock_load: MagicMock,
@@ -166,7 +166,7 @@ def test_apply_harmonized_description_uses_set_series_harmonized_description(
     anon_model.set_series_harmonized_description.assert_called_once_with("1.2.3", "Ch Ax PortVen")
 
 
-@patch("anonymizer.controller.series_io.apply_series_description", return_value=True)
+@patch("anonymizer.controller.ai.harmonize.pipeline.apply_series_description", return_value=True)
 @patch("anonymizer.controller.ai.harmonize.pipeline._load_series_dataset")
 def test_apply_harmonized_description_skips_dicom_when_unchanged(
     mock_load: MagicMock,

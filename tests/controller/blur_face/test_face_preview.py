@@ -140,7 +140,7 @@ def test_apply_face_blur_preview_to_series_frames(
     assert preview.error is None
     assert preview.hu_after is not None
 
-    from anonymizer.controller.series_io import load_series_frames
+    from anonymizer.controller.series.series_io import load_series_frames
 
     loaded = load_series_frames(synthetic_head_series)
 
@@ -170,7 +170,7 @@ def test_preview_face_blur_uses_series_volume_context(
     mock_resolve: MagicMock,
     synthetic_head_series: Path,
 ) -> None:
-    from anonymizer.controller.series_io import load_series_frames
+    from anonymizer.controller.series.series_io import load_series_frames
 
     loaded = load_series_frames(synthetic_head_series)
 

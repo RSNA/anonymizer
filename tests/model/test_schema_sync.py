@@ -8,7 +8,7 @@ import pytest
 from pydicom import Dataset
 from sqlalchemy import create_engine, text
 
-from anonymizer.controller.phi_io import build_phi_index
+from anonymizer.controller.phi.phi_io import build_phi_index
 from tests.opened_anonymizer_model import opened_anonymizer_model
 
 V3_METADATA_COLUMNS = (

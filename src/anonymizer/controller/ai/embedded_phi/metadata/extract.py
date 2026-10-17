@@ -13,7 +13,7 @@ from pydicom.sequence import Sequence as DicomSequence
 from pydicom.tag import BaseTag, Tag
 
 from anonymizer.controller.ai.embedded_phi.metadata.tcia_kb import match_tcia_private, private_creator_string
-from anonymizer.controller.anonymizer_script import display_tag_vr, format_dicom_tag, is_date_shift_operation
+from anonymizer.controller.ingest.anonymizer_script import display_tag_vr, format_dicom_tag, is_date_shift_operation
 
 logger = logging.getLogger(__name__)
 

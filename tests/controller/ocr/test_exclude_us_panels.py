@@ -11,10 +11,10 @@ from anonymizer.controller.ai.embedded_phi.pixel.detect_text import (
     ocr_image_for_frame,
 )
 from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import remove_ocr_text_from_frame
-from anonymizer.controller.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
-from anonymizer.controller.series_io import load_series_frames
-from anonymizer.controller.series_overlay import UserRectangle
-from anonymizer.controller.work_state import WorkState
+from anonymizer.controller.jobs.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
+from anonymizer.controller.series.series_io import load_series_frames
+from anonymizer.controller.series.series_overlay import UserRectangle
+from anonymizer.controller.jobs.work_state import WorkState
 from tests.controller.ocr.conftest import assert_dcm
 from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 from tests.controller.support.us_rgb_fixtures import US_RGB_DCM, US_RGB_DIR

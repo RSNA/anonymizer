@@ -10,8 +10,8 @@ from anonymizer.controller.ai.embedded_phi.pixel.exclude_zones import (
     normalize_user_rects,
     user_rects_from_normalized,
 )
-from anonymizer.controller.runner import OcrRemoveMode
-from anonymizer.controller.series_overlay import OCRText, UserRectangle
+from anonymizer.controller.jobs.runner import OcrRemoveMode
+from anonymizer.controller.series.series_overlay import OCRText, UserRectangle
 from anonymizer.controller.ai.embedded_phi.pixel.whitelist_io import (
     load_project_exclude_rects,
     save_project_exclude_rects,

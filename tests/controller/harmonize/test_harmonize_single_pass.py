@@ -169,7 +169,7 @@ def _anatomy_only_series(tmp_path: Path) -> Path:
 @patch("anonymizer.controller.ai.tseg.segment.load_contrast_statistics", return_value={"brain": {"volume": 200000}})
 @patch("anonymizer.controller.ai.tseg.segment.ts_regions_eligible", return_value=True)
 @patch("anonymizer.controller.ai.tseg.segment.resolve_series_geometry")
-@patch("anonymizer.controller.ai.tseg.modality_profile.resolve_profile_for_series")
+@patch("anonymizer.controller.ai.tseg.segment.resolve_profile_for_series")
 def test_single_pass_reuses_anatomy_when_only_brain_missing(
     mock_profile: MagicMock,
     mock_geometry: MagicMock,
@@ -214,7 +214,7 @@ def test_single_pass_reuses_anatomy_when_only_brain_missing(
 @patch("anonymizer.controller.ai.tseg.segment.load_contrast_statistics", return_value={"brain": {"volume": 200000}})
 @patch("anonymizer.controller.ai.tseg.segment.ts_regions_eligible", return_value=True)
 @patch("anonymizer.controller.ai.tseg.segment.resolve_series_geometry")
-@patch("anonymizer.controller.ai.tseg.modality_profile.resolve_profile_for_series")
+@patch("anonymizer.controller.ai.tseg.segment.resolve_profile_for_series")
 def test_single_pass_reuses_full_cache_including_brain(
     mock_profile: MagicMock,
     mock_geometry: MagicMock,

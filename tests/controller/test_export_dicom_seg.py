@@ -146,7 +146,7 @@ def test_dicom_seg_iod_compliance_referenced_series_and_dimensions(tmp_path: Pat
     )
     from anonymizer.controller.ai.tseg.seg_retention import MASK_GEOMETRY_FILENAME, mask_geometry_from_image
     from anonymizer.controller.annotations import export_dicom_seg
-    from anonymizer.controller.series_io import load_series_frames
+    from anonymizer.controller.series.series_io import load_series_frames
     from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 
     fixture = CONTROLLER_TEST_DCM_FILES_DIR / "CT_Head_With_Contrast"

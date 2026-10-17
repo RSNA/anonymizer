@@ -23,9 +23,9 @@ from anonymizer.controller.ai.embedded_phi.pixel.remove_pixel_phi import _ocr_us
 from anonymizer.controller.ai.feature_availability import embedded_phi_has_models
 from anonymizer.controller.ai.tseg.contrast import release_working_memory
 from anonymizer.controller.ai.tseg.model_cache import clear_predictor_cache, preload_face_models, tseg_batch_session
-from anonymizer.controller.series_io import load_series_frames
-from anonymizer.controller.series_overlay import OCRText
-from anonymizer.controller.work_state import WorkState
+from anonymizer.controller.jobs.work_state import WorkState
+from anonymizer.controller.series.series_io import load_series_frames
+from anonymizer.controller.series.series_overlay import OCRText
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)

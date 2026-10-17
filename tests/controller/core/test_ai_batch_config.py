@@ -21,7 +21,7 @@ from anonymizer.controller.ai.batch_config import (
 from anonymizer.controller.ai.batch_process import AiBatchProcessOptions, AiBatchSummary
 from anonymizer.controller.ai.blur_face import FaceBlurMode
 from anonymizer.controller.ai.embedded_phi.pixel.detect_text import PixelPhiRemovalMode
-from anonymizer.controller.runner import OcrRemoveMode
+from anonymizer.controller.jobs.runner import OcrRemoveMode
 
 
 def test_round_trip_json_to_options() -> None:

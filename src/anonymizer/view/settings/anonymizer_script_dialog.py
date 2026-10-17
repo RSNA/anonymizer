@@ -14,7 +14,7 @@ from typing import Callable
 
 import customtkinter as ctk
 
-from anonymizer.controller.anonymizer_script import (
+from anonymizer.controller.ingest.anonymizer_script import (
     OperandSpec,
     ScriptDocument,
     ScriptRule,
@@ -43,6 +43,7 @@ from anonymizer.controller.anonymizer_script import (
     operand_syntax,
     operand_tag_incompatibility,
     operands_for_tag,
+    private_anonymizer_script_path,
     rebasedate_origin,
     rules_for_incrementdate_bulk,
     script_provenance,
@@ -51,10 +52,9 @@ from anonymizer.controller.anonymizer_script import (
     tag_dictionary_meta,
     validate_operation,
 )
-from anonymizer.controller.process_ctp_lookup import (
+from anonymizer.controller.ingest.process_ctp_lookup import (
     CtpLookupPreview,
     lookup_table_context,
-    private_anonymizer_script_path,
 )
 from anonymizer.controller.project import ProjectController
 from anonymizer.model.project import AnonymizationPolicy, ProjectModel

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from anonymizer.controller.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
-from anonymizer.controller.series_io import load_series_frames
-from anonymizer.controller.work_state import WorkState
+from anonymizer.controller.jobs.runner import OcrEditContext, RemovePixelPhiRunner, RunOptions
+from anonymizer.controller.series.series_io import load_series_frames
+from anonymizer.controller.jobs.work_state import WorkState
 from tests.controller.ocr.conftest import assert_dcm
 from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 

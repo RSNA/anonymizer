@@ -28,7 +28,7 @@ from anonymizer.controller.annotations.planar_geometry import (
     annotation_source_dicom_paths,
     is_planar_pixel_space_geometry,
 )
-from anonymizer.controller.series_io import load_series_frames
+from anonymizer.controller.series.series_io import load_series_frames
 from tests.controller.paths import CONTROLLER_TEST_DCM_FILES_DIR
 from tests.controller.tseg.support.synthetic_ct import build_synthetic_ct_small_series
 

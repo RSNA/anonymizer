@@ -34,6 +34,7 @@ except ImportError:
 import totalsegmentator.libs as ts_libs
 from totalsegmentator.libs import download_pretrained_weights
 
+from anonymizer.controller.ai.model_download import track_tqdm_model_download
 from anonymizer.controller.ai.tseg.config import is_multi_model_segmentation_mode
 from anonymizer.controller.ai.tseg.contrast import log_memory_usage, release_working_memory
 from anonymizer.controller.ai.tseg.ml_env import (
@@ -49,7 +50,6 @@ from anonymizer.controller.ai.tseg.ts_probe import (
     verify_face_license,
 )
 from anonymizer.utils.network import ensure_ssl_certifi
-from anonymizer.controller.ai.model_download import track_tqdm_model_download
 from anonymizer.utils.translate import _
 
 logger = logging.getLogger(__name__)

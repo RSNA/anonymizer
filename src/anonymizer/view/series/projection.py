@@ -7,13 +7,13 @@ from typing import TYPE_CHECKING
 import customtkinter as ctk
 from PIL import Image, ImageDraw, ImageTk
 
-from anonymizer.controller.create_projections import (
+from anonymizer.controller.phi.phi_io import PHI_IndexRecord
+from anonymizer.controller.series.create_projections import (
     Projection,
     ProjectionImageSize,
     ProjectionImageSizeConfig,
     create_projection_from_series,
 )
-from anonymizer.controller.phi_io import PHI_IndexRecord
 from anonymizer.utils.translate import _
 from anonymizer.view.common.app_window import AppToplevel, refresh_app_window_menu
 from anonymizer.view.common.ctk_safe import teardown_ctk_toplevel

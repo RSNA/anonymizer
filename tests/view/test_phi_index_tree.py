@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from anonymizer.controller.phi_io import PHI_IndexRecord, PHI_SeriesIndexRecord
+from anonymizer.controller.phi.phi_io import PHI_IndexRecord, PHI_SeriesIndexRecord
 from anonymizer.view.project.dataset import (
     parse_series_tree_iid,
     parse_study_tree_iid,

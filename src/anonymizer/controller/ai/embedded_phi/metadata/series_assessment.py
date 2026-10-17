@@ -6,7 +6,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from anonymizer.controller.ai.embedded_phi.metadata.extract import VR_SEQ_TEXT, MetadataPhiRow, is_anonymizer_stamp_row
-from anonymizer.controller.anonymizer_script import (
+from anonymizer.controller.ingest.anonymizer_script import (
     incrementdate_days,
     is_date_shift_operation,
     operand_id_for_operation,
